@@ -1,0 +1,20 @@
+[package]
+name = "bevy-react"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1.0.102"
+bevy = "0.19"
+crossbeam-channel = "0.5.15"
+deno_core = "0.404.0"
+serde = { version = "1.0.228", features = ["derive"] }
+tokio = { version = "1.52.3", features = ["rt", "macros", "sync"] }
+
+# Bevy compiles much faster to run and renders smoothly when its (and our) deps
+# are optimized even in dev builds.
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 3
