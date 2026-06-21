@@ -16,6 +16,7 @@ export const ROOT_ID = 0;
 
 // Mirrors `protocol::Op` on the Rust side (tag = "op").
 export type Op =
+  | { op: "reset" }
   | { op: "create"; id: number; kind: string; props: SerializedProps }
   | { op: "createText"; id: number; text: string }
   | { op: "append"; parent: number; child: number }
@@ -51,6 +52,12 @@ export function allocId(): number {
 
 export function push(op: Op): void {
   pending.push(op);
+}
+
+// Queue a teardown of the previous tree. A fresh runtime calls this before its
+// first render so a hot reload replaces (rather than duplicates) the UI.
+export function reset(): void {
+  pending.push({ op: "reset" });
 }
 
 export function flush(): void {
@@ -100,7 +107,8 @@ export async function runEventLoop(
 ): Promise<void> {
   for (;;) {
     const ev = await Deno.core.ops.op_next_event();
-    if (ev == null) break;
+    if (ev == null) break; // shutdown
+    if (ev.kind === "__reload__") break; // runtime is being rebuilt
     const h = handlers.get(ev.id);
     const fn = h?.[ev.kind];
     if (fn) {

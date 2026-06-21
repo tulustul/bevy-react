@@ -18,6 +18,9 @@ pub const ROOT_ID: NodeId = 0;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "op", rename_all = "camelCase")]
 pub enum Op {
+    /// Tear down the entire current tree. Emitted first by every fresh runtime
+    /// so a hot reload clears the previous UI before the new render is applied.
+    Reset,
     /// Spawn a host element (`node` or `button`).
     Create {
         id: NodeId,

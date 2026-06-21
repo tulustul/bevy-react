@@ -5,13 +5,17 @@
 use bevy::prelude::*;
 
 use crate::bridge::{JsBridge, RNode};
-use crate::protocol::{NodeId, Op, Props, UiEvent};
+use crate::protocol::{NodeId, Op, Props, UiEvent, ROOT_ID};
 use crate::ui_map::{background, node_from_style};
 
 /// Apply every queued reconciler op to the ECS. Runs in `Update`; ops simply
 /// queue in the channel until this drains them, so startup ordering is a
 /// non-issue.
-pub fn apply_js_ops(mut commands: Commands, mut bridge: ResMut<JsBridge>) {
+pub fn apply_js_ops(
+    mut commands: Commands,
+    mut bridge: ResMut<JsBridge>,
+    children: Query<&Children>,
+) {
     // Drain all pending batches first so we don't hold an immutable borrow of
     // `bridge` while mutating `bridge.nodes` below.
     let mut ops: Vec<Op> = Vec::new();
@@ -25,6 +29,19 @@ pub fn apply_js_ops(mut commands: Commands, mut bridge: ResMut<JsBridge>) {
 
     for op in ops {
         match op {
+            Op::Reset => {
+                // Despawn the whole tree under the root (recursive), then reset
+                // the id map to just the root. Stale ops referencing despawned
+                // ids resolve to None afterwards and are skipped harmlessly.
+                if let Some(&root) = bridge.nodes.get(&ROOT_ID) {
+                    if let Ok(kids) = children.get(root) {
+                        for child in kids.iter() {
+                            commands.entity(child).despawn();
+                        }
+                    }
+                }
+                bridge.nodes.retain(|&id, _| id == ROOT_ID);
+            }
             Op::Create { id, kind, props } => {
                 let entity = spawn_element(&mut commands, id, &kind, &props);
                 bridge.nodes.insert(id, entity);

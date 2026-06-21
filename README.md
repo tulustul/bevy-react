@@ -61,6 +61,35 @@ cargo run
 
 Click the button → the count increments, round-tripping through the full bridge.
 
+### Hot reload
+
+Edits to the React app reload live in the running Bevy window. Run the bundler
+in watch mode in one terminal and the app in another:
+
+```bash
+cd js && npm run watch    # esbuild rebuilds dist/bundle.js on every save
+cargo run                 # in another terminal
+```
+
+Now edit anything under `js/src/` (e.g. the label in `app.tsx`). esbuild
+rebuilds the bundle; the Bevy host polls its mtime, signals the JS thread, which
+tears down and rebuilds the V8 runtime from the new bundle. The new runtime
+emits a `reset` op first, so the host clears the old UI before applying the
+fresh render.
+
+How it works:
+
+```
+edit js/src/*.tsx → esbuild --watch rewrites dist/bundle.js
+   → Bevy watch_bundle sees new mtime → reload signal (tokio channel)
+   → JS thread drops the V8 runtime, builds a new one from the bundle
+   → new runtime: reset op (clear) + fresh render → host updates
+```
+
+**Limitation:** this is a full reload, so React state resets (the counter goes
+back to 0). State-preserving Fast Refresh would need the `react-refresh` runtime
+plus an esbuild transform — a worthwhile follow-up, not in this PoC.
+
 ### Headless self-test
 
 Verifies the whole JS↔Rust round trip without a GPU/display (plays the role of

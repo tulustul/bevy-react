@@ -3,9 +3,12 @@
 
 import React from "react";
 import { App } from "./app";
-import { runEventLoop } from "./bridge";
+import { reset, runEventLoop } from "./bridge";
 import { flushSync, render } from "./renderer";
 
+// Clear any previous tree (a no-op on first load, the teardown on hot reload),
+// then render. Both are flushed together in the first commit.
+reset();
 render(<App />);
 
 // Top-level await keeps an op_next_event future pending, so deno_core's

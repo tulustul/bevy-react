@@ -31,13 +31,15 @@ fn main() {
 }
 
 fn run_app() {
-    // Channels: op batches flow JS -> Bevy; UI events flow Bevy -> JS.
+    // Channels: op batches flow JS -> Bevy; UI events and reload signals flow
+    // Bevy -> JS.
     let (ops_tx, ops_rx) = crossbeam_channel::unbounded::<Vec<Op>>();
     let (events_tx, events_rx) = tokio::sync::mpsc::unbounded_channel::<UiEvent>();
+    let (reload_tx, reload_rx) = tokio::sync::mpsc::unbounded_channel::<()>();
 
-    // Launch the JS thread up front. It only needs the op sender and event
-    // receiver — not the ECS — so it can start rendering immediately. Its first
-    // ops just queue in the channel until Bevy's `setup` builds the root.
+    // Launch the JS thread up front. It only needs the channels — not the ECS —
+    // so it can start rendering immediately. Its first ops just queue until
+    // Bevy's `setup` builds the root.
     let bundle = bundle_path();
     if !bundle.exists() {
         panic!(
@@ -45,7 +47,8 @@ fn run_app() {
             bundle.display()
         );
     }
-    js_thread::spawn_js_thread(bundle, ops_tx, events_rx);
+    let last_modified = file_mtime(&bundle);
+    js_thread::spawn_js_thread(bundle.clone(), ops_tx, events_rx, reload_rx);
 
     App::new()
         .add_plugins(DefaultPlugins.set(WindowPlugin {
@@ -61,9 +64,42 @@ fn run_app() {
             ops_rx: Some(ops_rx),
             events_tx,
         })
+        .insert_resource(BundleWatch {
+            path: bundle,
+            last_modified,
+            timer: Timer::from_seconds(0.3, TimerMode::Repeating),
+            reload_tx,
+        })
         .add_systems(Startup, setup)
-        .add_systems(Update, (apply_js_ops, collect_ui_events))
+        .add_systems(Update, (apply_js_ops, collect_ui_events, watch_bundle))
         .run();
+}
+
+/// Polls the built bundle's mtime and signals the JS thread to hot reload when
+/// it changes (e.g. after `esbuild --watch` rebuilds it).
+#[derive(Resource)]
+struct BundleWatch {
+    path: PathBuf,
+    last_modified: Option<std::time::SystemTime>,
+    timer: Timer,
+    reload_tx: tokio::sync::mpsc::UnboundedSender<()>,
+}
+
+fn watch_bundle(time: Res<Time>, mut watch: ResMut<BundleWatch>) {
+    watch.timer.tick(time.delta());
+    if !watch.timer.just_finished() {
+        return;
+    }
+    let current = file_mtime(&watch.path);
+    if current.is_some() && current != watch.last_modified {
+        watch.last_modified = current;
+        info!("bundle changed — hot reloading React app");
+        let _ = watch.reload_tx.send(());
+    }
+}
+
+fn file_mtime(path: &std::path::Path) -> Option<std::time::SystemTime> {
+    std::fs::metadata(path).and_then(|m| m.modified()).ok()
 }
 
 /// Carries the Bevy-side channel ends from `main` into `setup`.
@@ -111,13 +147,15 @@ fn selftest() -> i32 {
 
     let (ops_tx, ops_rx) = crossbeam_channel::unbounded::<Vec<Op>>();
     let (events_tx, events_rx) = tokio::sync::mpsc::unbounded_channel::<UiEvent>();
+    // Held for the duration: dropping the reload sender would look like shutdown.
+    let (_reload_tx, reload_rx) = tokio::sync::mpsc::unbounded_channel::<()>();
 
     let bundle = bundle_path();
     if !bundle.exists() {
         eprintln!("bundle missing: {}", bundle.display());
         return 1;
     }
-    js_thread::spawn_js_thread(bundle, ops_tx, events_rx);
+    js_thread::spawn_js_thread(bundle, ops_tx, events_rx, reload_rx);
 
     // Phase 1: collect the initial render. Expect a `button` (with onClick) and
     // a `Count: 0` text node.
