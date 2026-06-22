@@ -1,14 +1,30 @@
+[workspace]
+members = ["macros"]
+
 [package]
 name = "bevy-react"
 version = "0.1.0"
 edition = "2024"
 
+[lib]
+name = "bevy_react"
+path = "src/lib.rs"
+
 [dependencies]
 anyhow = "1.0.102"
 bevy = "0.19"
+bevy-react-macros = { path = "macros" }
 crossbeam-channel = "0.5.15"
 deno_core = "0.404.0"
 serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.150"
+tokio = { version = "1.52.3", features = ["rt", "macros", "sync"] }
+# Generates the TypeScript message types `emit` is checked against. `#[react_message]`
+# derives `TS`; `App::export_react_typescript` walks registered payloads to emit them.
+ts-rs = "10"
+
+[dev-dependencies]
+crossbeam-channel = "0.5.15"
 tokio = { version = "1.52.3", features = ["rt", "macros", "sync"] }
 
 # Bevy compiles much faster to run and renders smoothly when its (and our) deps

@@ -1,5 +1,6 @@
 /target
 
+
 # JS
-js/node_modules/
-js/dist/
+node_modules/
+examples/counter/app/dist/

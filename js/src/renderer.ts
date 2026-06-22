@@ -3,6 +3,7 @@
 // DOM. Configured for synchronous (legacy) rendering so event-handler setState
 // flushes immediately.
 
+import type { ReactNode } from "react";
 import Reconciler from "react-reconciler";
 import { DefaultEventPriority } from "react-reconciler/constants";
 import {
@@ -24,6 +25,9 @@ interface TextInstance {
 interface Container {
   id: number;
 }
+interface HostContext {
+  inText: boolean;
+}
 
 // Most host-config callbacks are intentionally trivial for a UI-only renderer.
 const hostConfig: any = {
@@ -36,8 +40,12 @@ const hostConfig: any = {
     setTimeout(fn, delay),
   cancelTimeout: (handle: number) => clearTimeout(handle),
 
-  getRootHostContext: () => ({}),
-  getChildHostContext: (parent: unknown) => parent,
+  // Track whether we're inside a `<text>`, so nested `<text>` becomes a span and
+  // bare strings inside become inheriting `TextSpan` runs (Bevy's text model).
+  getRootHostContext: (): HostContext => ({ inText: false }),
+  getChildHostContext: (parent: HostContext, type: string): HostContext => ({
+    inText: parent.inText || type === "text",
+  }),
   getPublicInstance: (instance: Instance) => instance,
   prepareForCommit: () => null,
   resetAfterCommit: () => flush(),
@@ -47,15 +55,32 @@ const hostConfig: any = {
   // Text always becomes a separate text node, never inlined into a host node.
   shouldSetTextContent: () => false,
 
-  createInstance(type: string, props: Record<string, unknown>): Instance {
+  createInstance(
+    type: string,
+    props: Record<string, unknown>,
+    _root: Container,
+    hostContext: HostContext,
+  ): Instance {
     const id = allocId();
-    push({ op: "create", id, kind: type, props: serializeProps(id, props) });
+    // A nested `<text>` is a styled span; a top-level one is a text block root.
+    const kind = type === "text" && hostContext.inText ? "textSpan" : type;
+    push({ op: "create", id, kind, props: serializeProps(id, props) });
     return { id, type };
   },
 
-  createTextInstance(text: string): TextInstance {
+  createTextInstance(
+    text: string,
+    _root: Container,
+    hostContext: HostContext,
+  ): TextInstance {
     const id = allocId();
-    push({ op: "createText", id, text });
+    // A bare string inside a `<text>` is an inheriting run; elsewhere it's a
+    // standalone (default-styled) text node.
+    push(
+      hostContext.inText
+        ? { op: "createTextSpan", id, text }
+        : { op: "createText", id, text },
+    );
     return { id };
   },
 
@@ -67,7 +92,10 @@ const hostConfig: any = {
   appendChild(parent: Instance, child: Instance | TextInstance) {
     push({ op: "append", parent: parent.id, child: child.id });
   },
-  appendChildToContainer(_container: Container, child: Instance | TextInstance) {
+  appendChildToContainer(
+    _container: Container,
+    child: Instance | TextInstance,
+  ) {
     push({ op: "append", parent: ROOT_ID, child: child.id });
   },
 
@@ -76,7 +104,12 @@ const hostConfig: any = {
     child: Instance | TextInstance,
     before: Instance | TextInstance,
   ) {
-    push({ op: "insert", parent: parent.id, child: child.id, before: before.id });
+    push({
+      op: "insert",
+      parent: parent.id,
+      child: child.id,
+      before: before.id,
+    });
   },
   insertInContainerBefore(
     _container: Container,
@@ -90,13 +123,17 @@ const hostConfig: any = {
     push({ op: "remove", parent: parent.id, child: child.id });
     dropHandlers(child.id);
   },
-  removeChildFromContainer(_container: Container, child: Instance | TextInstance) {
+  removeChildFromContainer(
+    _container: Container,
+    child: Instance | TextInstance,
+  ) {
     push({ op: "remove", parent: ROOT_ID, child: child.id });
     dropHandlers(child.id);
   },
 
   // We return the new props as the payload so commitUpdate always runs.
-  prepareUpdate: (_i: Instance, _t: string, _old: unknown, next: unknown) => next,
+  prepareUpdate: (_i: Instance, _t: string, _old: unknown, next: unknown) =>
+    next,
 
   commitUpdate(
     instance: Instance,
@@ -137,7 +174,7 @@ export function flushSync(fn: () => void): void {
 const LegacyRoot = 0;
 
 /** Mount a React element tree against the Bevy root container. */
-export function render(element: React.ReactNode): void {
+export function render(element: ReactNode): void {
   const container: Container = { id: ROOT_ID };
   const root = reconciler.createContainer(
     container,

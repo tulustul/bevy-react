@@ -14,18 +14,22 @@ use deno_core::{
 use tokio::sync::Mutex;
 use tokio::sync::mpsc::UnboundedReceiver;
 
-use crate::protocol::{Op, UiEvent};
-
-/// Sentinel `kind` returned by `op_next_event` to make the JS event loop exit so
-/// the runtime can be rebuilt. Never produced by Bevy.
-const RELOAD_KIND: &str = "__reload__";
+use crate::message::ReactMessage;
+use crate::protocol::{Op, Outbound};
+use crate::request::RawRequest;
 
 /// Sender half stored in `OpState` so `op_flush` can hand op batches to Bevy.
 struct OpSender(Sender<Vec<Op>>);
 
+/// Sender half stored in `OpState` so `op_emit` can hand app messages to Bevy.
+struct EmitSender(Sender<ReactMessage>);
+
+/// Sender half stored in `OpState` so `op_request` can hand requests to Bevy.
+struct RequestSender(Sender<RawRequest>);
+
 /// Receivers shared (by `Rc`) into each runtime's `OpState`. The async op clones
 /// the `Rc` out and awaits without holding the `OpState` borrow.
-struct EventReceiver(Rc<Mutex<UnboundedReceiver<UiEvent>>>);
+struct OutboundReceiver(Rc<Mutex<UnboundedReceiver<Outbound>>>);
 struct ReloadReceiver(Rc<Mutex<UnboundedReceiver<()>>>);
 
 /// Set true when a reload was requested, so the outer loop rebuilds rather than
@@ -39,15 +43,38 @@ fn op_flush(state: &mut OpState, #[serde] ops: Vec<Op>) {
     let _ = sender.0.send(ops);
 }
 
-/// Bevy -> JS: resolve with the next UI event, the reload sentinel, or `null`
-/// on shutdown (all senders dropped). Async so the JS loop parks here cheaply.
+/// JS -> Bevy: emit a named app message (e.g. "count") for ECS systems to read.
+#[op2]
+fn op_emit(state: &mut OpState, #[string] name: String, #[serde] value: serde_json::Value) {
+    let sender = state.borrow::<EmitSender>();
+    let _ = sender.0.send(ReactMessage { name, value });
+}
+
+/// JS -> Bevy: send a correlated request. The reply comes back asynchronously as
+/// an [`Outbound::Response`](crate::protocol::Outbound) with the same `id`, which
+/// the JS event loop matches to the pending promise. `id` is a `BigInt` on the JS
+/// side (well under 2^53 in practice).
+#[op2]
+fn op_request(
+    state: &mut OpState,
+    #[bigint] id: u64,
+    #[string] name: String,
+    #[serde] value: serde_json::Value,
+) {
+    let sender = state.borrow::<RequestSender>();
+    let _ = sender.0.send(RawRequest { id, name, value });
+}
+
+/// Bevy -> JS: resolve with the next outbound message (UI event, app event,
+/// request response), the reload sentinel, or `null` on shutdown (all senders
+/// dropped). Async so the JS loop parks here cheaply.
 #[op2]
 #[serde]
-async fn op_next_event(state: Rc<RefCell<OpState>>) -> Option<UiEvent> {
+async fn op_next_event(state: Rc<RefCell<OpState>>) -> Option<Outbound> {
     let (events, reload, flag) = {
         let state = state.borrow();
         (
-            state.borrow::<EventReceiver>().0.clone(),
+            state.borrow::<OutboundReceiver>().0.clone(),
             state.borrow::<ReloadReceiver>().0.clone(),
             state.borrow::<ReloadFlag>().0.clone(),
         )
@@ -55,11 +82,11 @@ async fn op_next_event(state: Rc<RefCell<OpState>>) -> Option<UiEvent> {
     let mut events = events.lock().await;
     let mut reload = reload.lock().await;
     tokio::select! {
-        ev = events.recv() => ev, // Some(event), or None on shutdown
+        ev = events.recv() => ev, // Some(outbound), or None on shutdown
         r = reload.recv() => match r {
             Some(()) => {
                 flag.set(true);
-                Some(UiEvent { id: 0, kind: RELOAD_KIND.to_string() })
+                Some(Outbound::Reload)
             }
             None => None, // reload sender dropped => shutdown
         }
@@ -77,10 +104,13 @@ globalThis.queueMicrotask = globalThis.queueMicrotask || ((cb) => { Promise.reso
 
 /// Spawn the JS thread. Runs until shutdown (Bevy drops the senders); rebuilds
 /// the runtime each time a reload is signalled.
+#[allow(clippy::too_many_arguments)]
 pub fn spawn_js_thread(
     bundle_path: PathBuf,
     ops_tx: Sender<Vec<Op>>,
-    events_rx: UnboundedReceiver<UiEvent>,
+    emit_tx: Sender<ReactMessage>,
+    request_tx: Sender<RawRequest>,
+    outbound_rx: UnboundedReceiver<Outbound>,
     reload_rx: UnboundedReceiver<()>,
 ) {
     std::thread::Builder::new()
@@ -94,7 +124,7 @@ pub fn spawn_js_thread(
             rt.block_on(async move {
                 // These outlive individual runtimes so events/reload signals
                 // survive across reloads.
-                let events_rx = Rc::new(Mutex::new(events_rx));
+                let outbound_rx = Rc::new(Mutex::new(outbound_rx));
                 let reload_rx = Rc::new(Mutex::new(reload_rx));
 
                 loop {
@@ -102,7 +132,9 @@ pub fn spawn_js_thread(
                     if let Err(e) = run_once(
                         &bundle_path,
                         ops_tx.clone(),
-                        events_rx.clone(),
+                        emit_tx.clone(),
+                        request_tx.clone(),
+                        outbound_rx.clone(),
                         reload_rx.clone(),
                         reload_flag.clone(),
                     )
@@ -122,18 +154,23 @@ pub fn spawn_js_thread(
 
 /// Build one runtime, run the (re-read) bundle, and pump its event loop until
 /// the JS event loop exits (reload or shutdown).
+#[allow(clippy::too_many_arguments)]
 async fn run_once(
     bundle_path: &PathBuf,
     ops_tx: Sender<Vec<Op>>,
-    events_rx: Rc<Mutex<UnboundedReceiver<UiEvent>>>,
+    emit_tx: Sender<ReactMessage>,
+    request_tx: Sender<RawRequest>,
+    outbound_rx: Rc<Mutex<UnboundedReceiver<Outbound>>>,
     reload_rx: Rc<Mutex<UnboundedReceiver<()>>>,
     reload_flag: Rc<Cell<bool>>,
 ) -> anyhow::Result<()> {
     const FLUSH: OpDecl = op_flush();
+    const EMIT: OpDecl = op_emit();
+    const REQUEST: OpDecl = op_request();
     const NEXT: OpDecl = op_next_event();
     let ext = Extension {
         name: "bevy_react_bridge",
-        ops: std::borrow::Cow::Borrowed(&[FLUSH, NEXT]),
+        ops: std::borrow::Cow::Borrowed(&[FLUSH, EMIT, REQUEST, NEXT]),
         ..Default::default()
     };
 
@@ -147,7 +184,9 @@ async fn run_once(
         let op_state = runtime.op_state();
         let mut op_state = op_state.borrow_mut();
         op_state.put(OpSender(ops_tx));
-        op_state.put(EventReceiver(events_rx));
+        op_state.put(EmitSender(emit_tx));
+        op_state.put(RequestSender(request_tx));
+        op_state.put(OutboundReceiver(outbound_rx));
         op_state.put(ReloadReceiver(reload_rx));
         op_state.put(ReloadFlag(reload_flag));
     }

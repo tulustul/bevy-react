@@ -1,20 +1,27 @@
 {
-  "name": "bevy-react-js",
+  "name": "bevy-react",
   "version": "0.1.0",
-  "private": true,
+  "description": "Drive bevy_ui from React via a custom reconciler over an embedded V8 runtime.",
   "type": "module",
-  "scripts": {
-    "build": "esbuild src/index.tsx --bundle --format=esm --platform=neutral --target=es2022 --define:process.env.NODE_ENV='\"production\"' --outfile=dist/bundle.js",
-    "watch": "npm run build -- --watch"
+  "exports": {
+    ".": "./src/index.ts",
+    "./jsx": "./src/jsx.d.ts",
+    "./jsx-runtime": "./src/jsx-runtime.ts",
+    "./jsx-dev-runtime": "./src/jsx-dev-runtime.ts"
   },
-  "dependencies": {
-    "react": "18.3.1",
-    "react-reconciler": "0.29.2"
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "peerDependencies": {
+    "react": "^18.3.1",
+    "react-reconciler": "^0.29.2"
   },
   "devDependencies": {
     "@types/react": "18.3.12",
     "@types/react-reconciler": "0.28.9",
-    "esbuild": "0.24.0",
     "typescript": "5.6.3"
   }
 }
