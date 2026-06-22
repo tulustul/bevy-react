@@ -8,12 +8,14 @@ import { BasicUiDemo } from "./demos/BasicUiDemo";
 import { EventsDemo } from "./demos/EventsDemo";
 import { RequestResponseDemo } from "./demos/RequestResponseDemo";
 import { AnimationsDemo } from "./demos/AnimationsDemo";
+import { AnchoredDemo } from "./demos/AnchoredDemo";
 
 const DEMOS: { id: DemoId; label: string }[] = [
   { id: "BasicUi", label: "Basic UI" },
   { id: "Events", label: "Events" },
   { id: "RequestResponse", label: "Request/Response" },
   { id: "Animations", label: "Animations" },
+  { id: "Anchored", label: "Anchored" },
 ];
 
 export function App() {
@@ -64,6 +66,7 @@ export function App() {
         {active === "Events" && <EventsDemo />}
         {active === "RequestResponse" && <RequestResponseDemo />}
         {active === "Animations" && <AnimationsDemo />}
+        {active === "Anchored" && <AnchoredDemo />}
       </node>
     </node>
   );
@@ -83,6 +86,7 @@ const navStyle: BevyStyle = {
   gap: 12,
   padding: 20,
   backgroundColor: "#181825",
+  zIndex: 100,
 };
 
 const titleStyle: BevyStyle = {

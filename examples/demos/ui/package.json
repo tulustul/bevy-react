@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "esbuild src/index.tsx --bundle --format=esm --platform=neutral --target=es2022 --jsx=automatic --jsx-import-source=bevy-react --define:process.env.NODE_ENV='\"production\"' --outfile=dist/bundle.js",
+    "build": "esbuild src/index.tsx --bundle --format=esm --platform=neutral --target=es2022 --jsx=automatic --jsx-import-source=bevy-react --define:process.env.NODE_ENV='\"development\"' --sourcemap=inline --outfile=dist/bundle.js",
+    "build:prod": "esbuild src/index.tsx --bundle --format=esm --platform=neutral --target=es2022 --jsx=automatic --jsx-import-source=bevy-react --define:process.env.NODE_ENV='\"production\"' --outfile=dist/bundle.js",
     "watch": "npm run build -- --watch",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "gen:bindings": "cargo run --manifest-path ../../../Cargo.toml --example demos -- --export-bindings src/generated.ts"

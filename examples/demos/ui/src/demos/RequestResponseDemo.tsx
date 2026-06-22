@@ -3,6 +3,8 @@ import { bevy } from "../generated";
 import type { BallState } from "../generated";
 import { cardStyle, headingStyle, labelStyle } from "./styles";
 
+const HINT = "const ballInfo = await bevy.ball.get()";
+
 export function RequestResponseDemo() {
   const [state, setState] = useState<BallState | null>(null);
 
@@ -36,7 +38,7 @@ export function RequestResponseDemo() {
   return (
     <node style={cardStyle}>
       <text style={headingStyle}>Ball telemetry</text>
-      <text style={labelStyle}>await bevy.ball.get()</text>
+      <text style={labelStyle}>{HINT}</text>
 
       {state ? (
         <node style={{ flexDirection: "column", gap: 8, alignItems: "start" }}>

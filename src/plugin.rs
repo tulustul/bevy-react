@@ -120,6 +120,9 @@ impl Plugin for ReactUiPlugin {
                 // After the op drain so this frame's `StyleVariants` writes are
                 // visible; the ordering forces a command sync point first.
                 apply_interaction_styles.after(apply_js_ops),
+                // World-anchored overlays reposition after the op drain so they
+                // override this frame's static `left`/`top`.
+                crate::anchor::position_anchored_nodes.after(apply_js_ops),
             ),
         );
 

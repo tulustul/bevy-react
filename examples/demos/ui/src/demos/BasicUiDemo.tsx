@@ -3,6 +3,7 @@ import { bevy } from "../generated";
 import { buttonStyle, cardStyle, headingStyle, labelStyle } from "./styles";
 
 const MAX = 8;
+const HINT = 'bevy.emit("count", n)';
 
 /**
  * One-way `emit`: push the count to Bevy whenever it changes,
@@ -21,7 +22,7 @@ export function BasicUiDemo() {
       <text style={headingStyle}>
         Cubes: <text style={{ color: "#7aa2f7" }}>{count}</text>
       </text>
-      <text style={labelStyle}>bevy.emit(&quot;count&quot;, n)</text>
+      <text style={labelStyle}>{HINT}</text>
 
       <node style={{ flexDirection: "row", gap: 12 }}>
         <button

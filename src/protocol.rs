@@ -85,6 +85,11 @@ pub struct Props {
     /// Bevy-free, pure-serde, like the rest of the protocol.
     #[serde(default)]
     pub animated: Option<bevy_react_animations::AnimatedBindings>,
+    /// World-anchor binding for an `Anchored.node`: the Bevy entity to follow and
+    /// an optional offset. Present → the reconciler stamps a [`crate::anchor::Anchored`]
+    /// so the per-frame positioning system tracks it. Pure-serde, Bevy-free.
+    #[serde(default)]
+    pub anchor: Option<crate::anchor::Anchor>,
 
     // --- `image` element attributes ---
     /// Asset path for an `image`, resolved by Bevy's `AssetServer` (relative to

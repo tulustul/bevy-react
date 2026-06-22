@@ -1,0 +1,250 @@
+//! Headless reproduction of the `Anchored -> Basic -> Anchored` demo-switch crash
+//! (React #327 "Should not already be working"). Like `roundtrip.rs`, this drives
+//! the real JS thread over channels — no GPU/window — so the bug is observable in
+//! `cargo test` instead of only in the live app.
+//!
+//! Requires the example bundle (prefer the dev build for readable errors):
+//!   npm run build -w demos-app
+//! Run with `--nocapture` to see the real `[js]` error + bridge instrumentation:
+//!   cargo test --test demo_switch -- --nocapture
+
+use std::collections::{HashMap, HashSet};
+use std::path::PathBuf;
+use std::time::{Duration, Instant};
+
+use crossbeam_channel::{Receiver, RecvTimeoutError, TryRecvError};
+
+use bevy_react::js_thread::spawn_js_thread;
+use bevy_react::protocol::{Op, Outbound, ResponseResult, UiEvent};
+use bevy_react::{RawRequest, ReactMessage};
+
+fn example_bundle() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("examples/demos/ui/dist/bundle.js")
+}
+
+/// Fold one op into the lookup maps we use to locate nav buttons by their label.
+fn accumulate(
+    op: &Op,
+    buttons: &mut HashSet<u32>,
+    parent_of: &mut HashMap<u32, u32>,
+    text_of: &mut HashMap<u32, String>,
+) {
+    match op {
+        Op::Create { id, kind, .. } if kind == "button" => {
+            buttons.insert(*id);
+        }
+        Op::CreateTextSpan { id, text } | Op::CreateText { id, text } => {
+            text_of.insert(*id, text.clone());
+        }
+        Op::Append { parent, child } => {
+            parent_of.insert(*child, *parent);
+        }
+        Op::Insert { parent, child, .. } => {
+            parent_of.insert(*child, *parent);
+        }
+        _ => {}
+    }
+}
+
+/// A nav entry renders `<button><text>{label}</text></button>`, so the button id
+/// is the grandparent of the label's text run.
+fn find_button(
+    label: &str,
+    buttons: &HashSet<u32>,
+    parent_of: &HashMap<u32, u32>,
+    text_of: &HashMap<u32, String>,
+) -> Option<u32> {
+    for (span, text) in text_of {
+        if text.trim() == label {
+            if let Some(&text_node) = parent_of.get(span) {
+                if let Some(&button) = parent_of.get(&text_node) {
+                    if buttons.contains(&button) {
+                        return Some(button);
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Drain ops for `dur`, keeping the lookup maps current. Panics if the JS thread
+/// dies (channel disconnects) — that's the crash we're hunting.
+fn pump(
+    ops_rx: &Receiver<Vec<Op>>,
+    dur: Duration,
+    buttons: &mut HashSet<u32>,
+    parent_of: &mut HashMap<u32, u32>,
+    text_of: &mut HashMap<u32, String>,
+) {
+    let deadline = Instant::now() + dur;
+    while Instant::now() < deadline {
+        match ops_rx.recv_timeout(Duration::from_millis(25)) {
+            Ok(batch) => {
+                for op in &batch {
+                    accumulate(op, buttons, parent_of, text_of);
+                }
+            }
+            Err(RecvTimeoutError::Timeout) => {}
+            Err(RecvTimeoutError::Disconnected) => {
+                panic!("JS thread died (runtime crashed) — see the `[js] runtime error` above");
+            }
+        }
+    }
+}
+
+/// Wait for the next `cubes.list` request and answer it with a small non-empty
+/// list (so `AnchoredDemo`'s poll stops). Drains ops meanwhile to catch a crash.
+fn answer_cubes_list(
+    request_rx: &Receiver<RawRequest>,
+    ops_rx: &Receiver<Vec<Op>>,
+    outbound_tx: &tokio::sync::mpsc::UnboundedSender<Outbound>,
+) {
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        assert!(
+            Instant::now() < deadline,
+            "no `cubes.list` request arrived after clicking Anchored"
+        );
+        match ops_rx.try_recv() {
+            Ok(_) => {}
+            Err(TryRecvError::Empty) => {}
+            Err(TryRecvError::Disconnected) => {
+                panic!("JS thread died while awaiting cubes.list — see `[js] runtime error` above");
+            }
+        }
+        match request_rx.recv_timeout(Duration::from_millis(25)) {
+            Ok(req) if req.name == "cubes.list" => {
+                let value = serde_json::json!([
+                    { "entity": 4_294_967_297u64, "label": "#0" },
+                    { "entity": 4_294_967_298u64, "label": "#1" },
+                    { "entity": 4_294_967_299u64, "label": "#2" },
+                ]);
+                outbound_tx
+                    .send(Outbound::Response {
+                        id: req.id,
+                        result: ResponseResult::Ok { value },
+                    })
+                    .expect("JS thread gone before response");
+                return;
+            }
+            Ok(_) => {}
+            Err(RecvTimeoutError::Timeout) => {}
+            Err(RecvTimeoutError::Disconnected) => {
+                panic!("JS thread died while awaiting cubes.list request");
+            }
+        }
+    }
+}
+
+#[test]
+fn demo_switch_anchored_survives() {
+    let bundle = example_bundle();
+    if !bundle.exists() {
+        eprintln!(
+            "skipping demo_switch_anchored_survives: bundle not built at {}\n  run: npm run build -w demos-app",
+            bundle.display()
+        );
+        return;
+    }
+
+    let (ops_tx, ops_rx) = crossbeam_channel::unbounded::<Vec<Op>>();
+    let (emit_tx, _emit_rx) = crossbeam_channel::unbounded::<ReactMessage>();
+    let (request_tx, request_rx) = crossbeam_channel::unbounded::<RawRequest>();
+    let (anim_tx, _anim_rx) = crossbeam_channel::unbounded();
+    let (outbound_tx, outbound_rx) = tokio::sync::mpsc::unbounded_channel::<Outbound>();
+    let (_reload_tx, reload_rx) = tokio::sync::mpsc::unbounded_channel::<()>();
+
+    spawn_js_thread(
+        bundle,
+        ops_tx,
+        emit_tx,
+        request_tx,
+        anim_tx,
+        outbound_rx,
+        reload_rx,
+    );
+
+    let mut buttons: HashSet<u32> = HashSet::new();
+    let mut parent_of: HashMap<u32, u32> = HashMap::new();
+    let mut text_of: HashMap<u32, String> = HashMap::new();
+
+    // Wait for the initial render and locate the two nav buttons we'll toggle.
+    let mut anchored_btn = None;
+    let mut basic_btn = None;
+    let deadline = Instant::now() + Duration::from_secs(20);
+    while Instant::now() < deadline && (anchored_btn.is_none() || basic_btn.is_none()) {
+        match ops_rx.recv_timeout(Duration::from_millis(500)) {
+            Ok(batch) => {
+                for op in &batch {
+                    accumulate(op, &mut buttons, &mut parent_of, &mut text_of);
+                }
+                anchored_btn = anchored_btn
+                    .or_else(|| find_button("Anchored", &buttons, &parent_of, &text_of));
+                basic_btn =
+                    basic_btn.or_else(|| find_button("Basic UI", &buttons, &parent_of, &text_of));
+            }
+            Err(RecvTimeoutError::Timeout) => {}
+            Err(RecvTimeoutError::Disconnected) => panic!("JS thread died during initial render"),
+        }
+    }
+
+    let anchored_btn = anchored_btn.expect("no 'Anchored' nav button in initial render");
+    let basic_btn = basic_btn.expect("no 'Basic UI' nav button in initial render");
+    eprintln!("OK   nav buttons: anchored={anchored_btn}, basic={basic_btn}");
+
+    let click = |id: u32| {
+        outbound_tx
+            .send(Outbound::UiEvent {
+                event: UiEvent {
+                    id,
+                    kind: "click".into(),
+                },
+            })
+            .expect("JS thread gone before click");
+    };
+
+    // The failing user flow, repeated a few times to shake out timing races.
+    for round in 0..3 {
+        eprintln!("--- round {round}: -> Anchored");
+        click(anchored_btn);
+        answer_cubes_list(&request_rx, &ops_rx, &outbound_tx);
+        pump(
+            &ops_rx,
+            Duration::from_millis(200),
+            &mut buttons,
+            &mut parent_of,
+            &mut text_of,
+        );
+
+        eprintln!("--- round {round}: -> Basic");
+        click(basic_btn);
+        pump(
+            &ops_rx,
+            Duration::from_millis(200),
+            &mut buttons,
+            &mut parent_of,
+            &mut text_of,
+        );
+    }
+
+    // Final liveness check: a live runtime keeps emitting ops for a click.
+    eprintln!("--- final liveness probe");
+    click(anchored_btn);
+    let saw_ops = {
+        let deadline = Instant::now() + Duration::from_secs(2);
+        let mut any = false;
+        while Instant::now() < deadline && !any {
+            match ops_rx.recv_timeout(Duration::from_millis(100)) {
+                Ok(_) => any = true,
+                Err(RecvTimeoutError::Timeout) => {}
+                Err(RecvTimeoutError::Disconnected) => {
+                    panic!("JS thread crashed during demo switching (#327)")
+                }
+            }
+        }
+        any
+    };
+    assert!(saw_ops, "runtime stopped responding after demo switching");
+    eprintln!("PASS demo switching survived");
+}

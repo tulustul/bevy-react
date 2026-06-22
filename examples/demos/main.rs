@@ -15,6 +15,7 @@
 //! For hot reload, run `npm run watch -w demos-app` in another terminal and edit
 //! the files under `ui/src/`.
 
+mod anchored;
 mod animations;
 mod basic_ui;
 mod events;
@@ -27,6 +28,7 @@ use bevy::asset::AssetPlugin;
 use bevy::prelude::*;
 use bevy_react::{ReactAppExt, ReactUiPlugin};
 
+use anchored::AnchoredPlugin;
 use animations::AnimationsPlugin;
 use basic_ui::BasicUiPlugin;
 use events::EventsPlugin;
@@ -75,12 +77,17 @@ fn main() {
     // State must be registered after DefaultPlugins (which brings StatesPlugin).
     .init_state::<Demo>()
     .add_systems(Startup, shared::setup_camera_and_light)
-    .add_systems(Update, shared::orbit_camera)
+    // The Anchored demo drives the camera with the mouse, so suppress auto-orbit there.
+    .add_systems(
+        Update,
+        shared::orbit_camera.run_if(not(in_state(Demo::Anchored))),
+    )
     .add_plugins((
         BasicUiPlugin,
         EventsPlugin,
         RequestResponsePlugin,
         AnimationsPlugin,
+        AnchoredPlugin,
     ));
     // Each demo plugin registers its own bindings in `build`; only the global
     // demo-selection handler is left to register here.
@@ -98,4 +105,5 @@ fn register_react_bindings(app: &mut App) {
     basic_ui::register_bindings(app);
     events::register_bindings(app);
     request_response::register_bindings(app);
+    anchored::register_bindings(app);
 }

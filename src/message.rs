@@ -415,7 +415,11 @@ impl TsCollector {
             if T::output_path().is_some() {
                 self.decls.insert(T::name(), T::decl());
             }
+            // `visit_dependencies` surfaces named types referenced by fields; a
+            // container's *inner* type (e.g. `Vec<CubeInfo>` → `CubeInfo`) is surfaced
+            // by `visit_generics` instead, so we must walk both to be self-contained.
             T::visit_dependencies(self);
+            T::visit_generics(self);
         }
     }
 }
@@ -697,6 +701,18 @@ mod tests {
         fen: String,
     }
 
+    // A request whose response is a `Vec` of a custom struct, to exercise that the
+    // collector declares a container's *inner* named type (surfaced via generics).
+    #[crate::react_request(name = "pieces.list", response = Vec<PieceInfo>)]
+    #[allow(dead_code)]
+    struct PiecesList;
+
+    #[derive(serde::Serialize, ts_rs::TS)]
+    #[allow(dead_code)]
+    struct PieceInfo {
+        kind: String,
+    }
+
     #[derive(serde::Serialize, ts_rs::TS)]
     #[allow(dead_code)]
     struct MoveStatus {
@@ -719,6 +735,7 @@ mod tests {
         app.add_react_message::<Move>();
         app.add_react_request::<BoardGet>();
         app.add_react_request::<PiecesMove>();
+        app.add_react_request::<PiecesList>();
         app.add_react_event::<UserDisconnected>();
 
         let world = app.world();
@@ -748,6 +765,12 @@ mod tests {
         );
         assert!(
             ts.contains(r#""user.disconnected": UserDisconnected;"#),
+            "{ts}"
+        );
+        // A `Vec<PieceInfo>` response declares its inner struct and types as an array.
+        assert!(ts.contains("export type PieceInfo = "), "{ts}");
+        assert!(
+            ts.contains(r#""pieces.list": { request: null; response: Array<PieceInfo> };"#),
             "{ts}"
         );
         // Typed wrappers + the nested proxy (void request → no-arg method).

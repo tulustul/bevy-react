@@ -23,6 +23,7 @@
 // inside this crate too (e.g. in our own tests and examples).
 extern crate self as bevy_react;
 
+mod anchor;
 mod bridge;
 mod event;
 mod message;
@@ -36,6 +37,7 @@ pub mod protocol;
 
 // The Reanimated-style animation engine lives in its own crate (this crate
 // depends on it). Re-exported so consumers can add/configure it directly.
+pub use anchor::{Anchor, AnchorScale, Anchored};
 pub use bevy_react_animations::{self, ReactUiAnimationsPlugin};
 pub use bevy_react_macros::{react_event, react_message, react_request};
 pub use event::{ReactEvent, ReactEvents};

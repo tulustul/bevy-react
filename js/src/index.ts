@@ -42,3 +42,7 @@ export type {
   AnimatedStyle,
   EasingName,
 } from "./animated";
+
+// World-anchored overlays (`<Anchored.node entity={…} offset={…}/>`).
+export { Anchored } from "./anchored";
+export type { AnchorProps, AnchorScale, Vec3 } from "./anchored";

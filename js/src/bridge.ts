@@ -56,6 +56,9 @@ export interface SerializedProps {
   // Animation bindings (an `Animated.node`'s `animatedStyle`), opaque like style;
   // decoded on the Rust side into `AnimatedBindings`.
   animated?: Record<string, unknown>;
+  // World-anchor binding (an `Anchored.node`'s entity + offset), opaque like style;
+  // decoded on the Rust side into `Anchor`.
+  anchor?: Record<string, unknown>;
   color?: string;
   fontSize?: number;
   onClick?: boolean;
@@ -203,6 +206,12 @@ export function serializeProps(
     // binding; `interpolate`/`interpolateColor` results pass through as-is.
     if (key === "animatedStyle" && value && typeof value === "object") {
       out.animated = serializeAnimatedStyle(value as Record<string, unknown>);
+      continue;
+    }
+    // An `Anchored.node`'s `anchor` (entity + optional offset) rides across opaque;
+    // Bevy projects the entity's world position to the screen each frame.
+    if (key === "anchor" && value && typeof value === "object") {
+      out.anchor = value as Record<string, unknown>;
       continue;
     }
     // Text + `image` element attributes pass through by name.

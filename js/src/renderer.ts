@@ -1,7 +1,9 @@
 // The custom React renderer ("react backend"): a react-reconciler HostConfig
 // whose host operations record ops into the bridge buffer instead of touching a
-// DOM. Configured for synchronous (legacy) rendering so event-handler setState
-// flushes immediately.
+// DOM. Mounted as a concurrent root; event dispatch wraps handlers in `flushSync`
+// so a handler's setState commits (and flushes its ops) before the next event.
+// A legacy root would re-enter the reconciler's sync-callback path on async
+// `setState` (e.g. a request continuation) and throw React #327.
 
 import type { ReactNode } from "react";
 import Reconciler from "react-reconciler";
@@ -171,14 +173,14 @@ export function flushSync(fn: () => void): void {
   reconciler.flushSync(fn);
 }
 
-const LegacyRoot = 0;
+const ConcurrentRoot = 1;
 
 /** Mount a React element tree against the Bevy root container. */
 export function render(element: ReactNode): void {
   const container: Container = { id: ROOT_ID };
   const root = reconciler.createContainer(
     container,
-    LegacyRoot,
+    ConcurrentRoot,
     null, // hydrationCallbacks
     false, // isStrictMode
     null, // concurrentUpdatesByDefaultOverride
@@ -186,5 +188,9 @@ export function render(element: ReactNode): void {
     (e: unknown) => console.error("[js] recoverable error:", e),
     null, // transitionCallbacks
   );
-  reconciler.updateContainer(element, root, null, null);
+  // Commit the initial mount synchronously: a concurrent root schedules the first
+  // render asynchronously otherwise, delaying the initial op flush.
+  reconciler.flushSync(() => {
+    reconciler.updateContainer(element, root, null, null);
+  });
 }

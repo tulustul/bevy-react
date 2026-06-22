@@ -12,6 +12,7 @@ export const cardStyle: BevyStyle = {
   borderRadius: 16,
   border: 2,
   borderColor: "#7aa2f7",
+  zIndex: 1000,
 };
 
 export const headingStyle: BevyStyle = {

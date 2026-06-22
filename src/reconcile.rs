@@ -5,6 +5,7 @@
 use bevy::prelude::*;
 use bevy_react_animations::AnimatedNode;
 
+use crate::anchor::Anchored;
 use crate::bridge::{JsBridge, RNode, StyleVariants};
 use crate::protocol::{NodeId, Op, Outbound, Props, ROOT_ID, UiEvent};
 use crate::ui_map::{
@@ -60,6 +61,7 @@ pub fn apply_js_ops(
                         if let Some(layout) = text_layout(&props.style) {
                             ec.insert(layout);
                         }
+                        apply_anchor(&mut ec, &props);
                         ec.id()
                     }
                     // A nested `<text>`: a styled span (no layout box of its own).
@@ -132,6 +134,7 @@ pub fn apply_js_ops(
                     if let Some(layout) = text_layout(&props.style) {
                         ec.insert(layout);
                     }
+                    apply_anchor(&mut ec, &props);
                     if let Ok(kids) = children.get(e) {
                         for child in kids.iter() {
                             if let Ok(rnode) = rnodes.get(child) {
@@ -151,6 +154,7 @@ pub fn apply_js_ops(
                     }
                     apply_style_variants(&mut ec, &props);
                     apply_animated(&mut ec, &props);
+                    apply_anchor(&mut ec, &props);
                 }
             }
             Op::UpdateText { id, text } => {
@@ -208,6 +212,7 @@ fn spawn_element(
     }
     apply_style_variants(&mut ec, props);
     apply_animated(&mut ec, props);
+    apply_anchor(&mut ec, props);
     ec.id()
 }
 
@@ -221,6 +226,31 @@ fn apply_animated(ec: &mut EntityCommands, props: &Props) {
         }
         None => {
             ec.remove::<AnimatedNode>();
+        }
+    }
+}
+
+/// Stamp (or clear) the [`Anchored`] binding on a host element. Present → the
+/// positioning system projects the target entity's world position to the screen
+/// each frame and writes this node's `left`/`top`. A malformed/dead entity id is
+/// ignored (the binding is simply not applied).
+fn apply_anchor(ec: &mut EntityCommands, props: &Props) {
+    match &props.anchor {
+        Some(anchor) => match Entity::try_from_bits(anchor.entity as u64) {
+            Some(target) => {
+                let offset = anchor.offset.map(Vec3::from).unwrap_or(Vec3::ZERO);
+                ec.insert(Anchored {
+                    target,
+                    offset,
+                    scale: anchor.scale,
+                });
+            }
+            None => {
+                ec.remove::<Anchored>();
+            }
+        },
+        None => {
+            ec.remove::<Anchored>();
         }
     }
 }
