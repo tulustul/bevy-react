@@ -9,10 +9,19 @@ declare const Deno: {
       op_flush(ops: Op[]): void;
       op_emit(name: string, value: unknown): void;
       op_request(id: bigint, name: string, value: unknown): void;
+      op_animate(cmd: AnimationCommand): void;
       op_next_event(): Promise<Outbound | null>;
     };
   };
 };
+
+// Mirrors `bevy_react_animations::protocol::AnimationCommand` (tag = "kind").
+export type AnimationCommand =
+  | { kind: "declare"; id: number; initial: number }
+  | { kind: "set"; id: number; value: number }
+  | { kind: "animate"; id: number; driver: unknown }
+  | { kind: "cancel"; id: number }
+  | { kind: "clear" };
 
 // Mirrors `protocol::Outbound` on the Rust side (internally tagged with `t`).
 type Outbound =
@@ -44,6 +53,9 @@ export interface SerializedProps {
   style?: Record<string, unknown>;
   hoverStyle?: Record<string, unknown>;
   pressStyle?: Record<string, unknown>;
+  // Animation bindings (an `Animated.node`'s `animatedStyle`), opaque like style;
+  // decoded on the Rust side into `AnimatedBindings`.
+  animated?: Record<string, unknown>;
   color?: string;
   fontSize?: number;
   onClick?: boolean;
@@ -80,9 +92,19 @@ export function push(op: Op): void {
 }
 
 // Queue a teardown of the previous tree. A fresh runtime calls this before its
-// first render so a hot reload replaces (rather than duplicates) the UI.
+// first render so a hot reload replaces (rather than duplicates) the UI. Also
+// clears the Bevy-side shared-value table (which persists across reloads) so
+// stale animated values don't linger.
 export function reset(): void {
   pending.push({ op: "reset" });
+  Deno.core.ops.op_animate({ kind: "clear" });
+}
+
+// Send an animation command to the animations plugin (declare/set/animate/
+// cancel/clear). Synchronous and fire-and-forget, like `emit`. Low-level — apps
+// use the `useSharedValue` / `with*` helpers from `./animated`.
+export function animate(cmd: AnimationCommand): void {
+  Deno.core.ops.op_animate(cmd);
 }
 
 export function flush(): void {
@@ -176,6 +198,13 @@ export function serializeProps(
       out.pressStyle = value as Record<string, unknown>;
       continue;
     }
+    // An `Animated.node`'s `animatedStyle`: each property is bound to a shared
+    // value (or an interpolation). A bare `SharedValue` becomes a `shared`
+    // binding; `interpolate`/`interpolateColor` results pass through as-is.
+    if (key === "animatedStyle" && value && typeof value === "object") {
+      out.animated = serializeAnimatedStyle(value as Record<string, unknown>);
+      continue;
+    }
     // Text + `image` element attributes pass through by name.
     if (key === "color") out.color = value as string;
     else if (key === "fontSize") out.fontSize = value as number;
@@ -189,6 +218,24 @@ export function serializeProps(
   if (Object.keys(hs).length > 0) handlers.set(id, hs);
   else handlers.delete(id);
 
+  return out;
+}
+
+// Convert an `animatedStyle` object into its wire form. Each property value is
+// either a `SharedValue` (carries an `id`) → a `shared` binding, or an already-
+// built binding descriptor (carries a `type`) → passed through unchanged.
+function serializeAnimatedStyle(
+  style: Record<string, unknown>,
+): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(style)) {
+    if (!value || typeof value !== "object") continue;
+    if ("type" in value) {
+      out[key] = value; // an interpolate / interpolateColor binding
+    } else if ("id" in value) {
+      out[key] = { type: "shared", id: (value as { id: number }).id };
+    }
+  }
   return out;
 }
 

@@ -17,6 +17,7 @@ pub enum Demo {
     BasicUi,
     Events,
     RequestResponse,
+    Animations,
 }
 
 /// The wire form of [`Demo`] — what React sends with `emit("selectDemo", id)`.
@@ -27,6 +28,7 @@ pub enum DemoId {
     BasicUi,
     Events,
     RequestResponse,
+    Animations,
 }
 
 /// React picks the active demo from the left-nav: `emit("selectDemo", id)`.
@@ -45,6 +47,7 @@ fn apply_select_demo(on: On<SelectDemo>, mut next: ResMut<NextState<Demo>>) {
         DemoId::BasicUi => Demo::BasicUi,
         DemoId::Events => Demo::Events,
         DemoId::RequestResponse => Demo::RequestResponse,
+        DemoId::Animations => Demo::Animations,
     });
 }
 

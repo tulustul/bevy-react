@@ -20,7 +20,7 @@ wall: Wall,
 speed: number, };
 export type BallState = { x: number, y: number, vx: number, vy: number, };
 export type Count = number;
-export type DemoId = "BasicUi" | "Events" | "RequestResponse";
+export type DemoId = "BasicUi" | "Events" | "RequestResponse" | "Animations";
 export type SelectDemo = DemoId;
 export type Wall = "Left" | "Right" | "Top" | "Bottom" | "Front" | "Back";
 

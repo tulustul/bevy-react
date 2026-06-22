@@ -4,6 +4,7 @@
 // Import `BevyStyle` here to type a shared style object.
 
 import type { Key, ReactNode } from "react";
+import type { AnimatedStyle } from "./animated";
 
 /** Attributes React manages itself (not real host props — React strips `key`
  *  before props reach the reconciler). Shared by every host element so keyed
@@ -155,6 +156,9 @@ export interface BevyNodeProps extends BevyAttributes {
   hoverStyle?: BevyStyle;
   /** Style overlaid on `style` (and `hoverStyle`) while the element is pressed. */
   pressStyle?: BevyStyle;
+  /** Reanimated-style animation bindings (see `Animated.node`). Each property is
+   *  driven by a shared value and updated every frame on the Bevy side. */
+  animatedStyle?: AnimatedStyle;
   onClick?: () => void;
   children?: ReactNode;
 }
@@ -174,6 +178,8 @@ export interface BevyImageProps extends BevyAttributes {
   hoverStyle?: BevyStyle;
   /** Style overlaid on `style` (and `hoverStyle`) while the element is pressed. */
   pressStyle?: BevyStyle;
+  /** Reanimated-style animation bindings (see `Animated.image`). */
+  animatedStyle?: AnimatedStyle;
   /** Asset path resolved by Bevy's `AssetServer` (relative to `assets/`). */
   src?: string;
   /** Tint multiplied with the image (hex); also the fill of a `src`-less image. */

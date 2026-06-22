@@ -19,3 +19,26 @@ export {
   runEventLoop,
 } from "./bridge";
 export type { Op, SerializedProps, UiEvent } from "./bridge";
+
+// Reanimated-style animations.
+export {
+  Animated,
+  Easing,
+  useSharedValue,
+  withTiming,
+  withSpring,
+  withRepeat,
+  withSequence,
+  withDelay,
+  interpolate,
+  interpolateColor,
+  cancelAnimation,
+} from "./animated";
+export type {
+  SharedValue,
+  Driver,
+  Binding,
+  AnimatedValue,
+  AnimatedStyle,
+  EasingName,
+} from "./animated";

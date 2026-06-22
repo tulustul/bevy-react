@@ -3,6 +3,7 @@
 //! - [`collect_ui_events`] reports interactions back to the JS thread.
 
 use bevy::prelude::*;
+use bevy_react_animations::AnimatedNode;
 
 use crate::bridge::{JsBridge, RNode, StyleVariants};
 use crate::protocol::{NodeId, Op, Outbound, Props, ROOT_ID, UiEvent};
@@ -149,6 +150,7 @@ pub fn apply_js_ops(
                         ec.insert(image_node(&props, &assets));
                     }
                     apply_style_variants(&mut ec, &props);
+                    apply_animated(&mut ec, &props);
                 }
             }
             Op::UpdateText { id, text } => {
@@ -205,7 +207,22 @@ fn spawn_element(
         _ => {}
     }
     apply_style_variants(&mut ec, props);
+    apply_animated(&mut ec, props);
     ec.id()
+}
+
+/// Stamp (or clear) the [`AnimatedNode`] bindings on a host element. Present →
+/// the animations plugin drives the listed props each frame (no-op if animations
+/// are disabled — nothing reads the component).
+fn apply_animated(ec: &mut EntityCommands, props: &Props) {
+    match &props.animated {
+        Some(bindings) => {
+            ec.insert(AnimatedNode(bindings.clone()));
+        }
+        None => {
+            ec.remove::<AnimatedNode>();
+        }
+    }
 }
 
 /// Stamp (or clear) the hover/press [`StyleVariants`] on a host element. When

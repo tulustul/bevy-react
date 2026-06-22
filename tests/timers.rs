@@ -32,11 +32,20 @@ fn set_timeout_honors_delay() {
     let (ops_tx, _ops_rx) = crossbeam_channel::unbounded::<Vec<Op>>();
     let (emit_tx, emit_rx) = crossbeam_channel::unbounded::<ReactMessage>();
     let (request_tx, _request_rx) = crossbeam_channel::unbounded::<RawRequest>();
+    let (anim_tx, _anim_rx) = crossbeam_channel::unbounded();
     let (_outbound_tx, outbound_rx) = tokio::sync::mpsc::unbounded_channel::<Outbound>();
     // Held for the duration: dropping the reload sender would look like shutdown.
     let (_reload_tx, reload_rx) = tokio::sync::mpsc::unbounded_channel::<()>();
 
-    spawn_js_thread(bundle, ops_tx, emit_tx, request_tx, outbound_rx, reload_rx);
+    spawn_js_thread(
+        bundle,
+        ops_tx,
+        emit_tx,
+        request_tx,
+        anim_tx,
+        outbound_rx,
+        reload_rx,
+    );
 
     let early = emit_rx
         .recv_timeout(Duration::from_secs(10))

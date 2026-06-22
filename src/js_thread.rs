@@ -14,6 +14,8 @@ use deno_core::{
 use tokio::sync::Mutex;
 use tokio::sync::mpsc::UnboundedReceiver;
 
+use bevy_react_animations::AnimationCommand;
+
 use crate::message::ReactMessage;
 use crate::protocol::{Op, Outbound};
 use crate::request::RawRequest;
@@ -26,6 +28,11 @@ struct EmitSender(Sender<ReactMessage>);
 
 /// Sender half stored in `OpState` so `op_request` can hand requests to Bevy.
 struct RequestSender(Sender<RawRequest>);
+
+/// Sender half stored in `OpState` so `op_animate` can hand animation commands to
+/// the animations plugin. Always present; if animations are disabled the receiver
+/// is dropped and sends are silently discarded.
+struct AnimSender(Sender<AnimationCommand>);
 
 /// Receivers shared (by `Rc`) into each runtime's `OpState`. The async op clones
 /// the `Rc` out and awaits without holding the `OpState` borrow.
@@ -48,6 +55,15 @@ fn op_flush(state: &mut OpState, #[serde] ops: Vec<Op>) {
 fn op_emit(state: &mut OpState, #[string] name: String, #[serde] value: serde_json::Value) {
     let sender = state.borrow::<EmitSender>();
     let _ = sender.0.send(ReactMessage { name, value });
+}
+
+/// JS -> Bevy: declare/start/stop a shared-value animation. Synchronous,
+/// fire-and-forget (like `op_emit`); the animations plugin drains the channel and
+/// drives the value each frame, so per-frame interpolation never crosses back.
+#[op2]
+fn op_animate(state: &mut OpState, #[serde] cmd: AnimationCommand) {
+    let sender = state.borrow::<AnimSender>();
+    let _ = sender.0.send(cmd);
 }
 
 /// JS -> Bevy: send a correlated request. The reply comes back asynchronously as
@@ -145,6 +161,7 @@ pub fn spawn_js_thread(
     ops_tx: Sender<Vec<Op>>,
     emit_tx: Sender<ReactMessage>,
     request_tx: Sender<RawRequest>,
+    anim_tx: Sender<AnimationCommand>,
     outbound_rx: UnboundedReceiver<Outbound>,
     reload_rx: UnboundedReceiver<()>,
 ) {
@@ -169,6 +186,7 @@ pub fn spawn_js_thread(
                         ops_tx.clone(),
                         emit_tx.clone(),
                         request_tx.clone(),
+                        anim_tx.clone(),
                         outbound_rx.clone(),
                         reload_rx.clone(),
                         reload_flag.clone(),
@@ -195,6 +213,7 @@ async fn run_once(
     ops_tx: Sender<Vec<Op>>,
     emit_tx: Sender<ReactMessage>,
     request_tx: Sender<RawRequest>,
+    anim_tx: Sender<AnimationCommand>,
     outbound_rx: Rc<Mutex<UnboundedReceiver<Outbound>>>,
     reload_rx: Rc<Mutex<UnboundedReceiver<()>>>,
     reload_flag: Rc<Cell<bool>>,
@@ -202,11 +221,12 @@ async fn run_once(
     const FLUSH: OpDecl = op_flush();
     const EMIT: OpDecl = op_emit();
     const REQUEST: OpDecl = op_request();
+    const ANIMATE: OpDecl = op_animate();
     const NEXT: OpDecl = op_next_event();
     const SLEEP: OpDecl = op_sleep();
     let ext = Extension {
         name: "bevy_react_bridge",
-        ops: std::borrow::Cow::Borrowed(&[FLUSH, EMIT, REQUEST, NEXT, SLEEP]),
+        ops: std::borrow::Cow::Borrowed(&[FLUSH, EMIT, REQUEST, ANIMATE, NEXT, SLEEP]),
         ..Default::default()
     };
 
@@ -222,6 +242,7 @@ async fn run_once(
         op_state.put(OpSender(ops_tx));
         op_state.put(EmitSender(emit_tx));
         op_state.put(RequestSender(request_tx));
+        op_state.put(AnimSender(anim_tx));
         op_state.put(OutboundReceiver(outbound_rx));
         op_state.put(ReloadReceiver(reload_rx));
         op_state.put(ReloadFlag(reload_flag));

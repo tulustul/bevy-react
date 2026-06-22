@@ -1,5 +1,5 @@
 [workspace]
-members = ["macros"]
+members = ["animations", "macros"]
 
 [package]
 name = "bevy-react"
@@ -13,6 +13,7 @@ path = "src/lib.rs"
 [dependencies]
 anyhow = "1.0.102"
 bevy = "0.19"
+bevy-react-animations = { path = "animations" }
 bevy-react-macros = { path = "macros" }
 crossbeam-channel = "0.5.15"
 deno_core = "0.404.0"

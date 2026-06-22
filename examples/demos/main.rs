@@ -5,6 +5,7 @@
 //!   * Basic UI         — React `emit`s a count → that many spinning cubes.
 //!   * Events           — a bouncing ball sends `ball.bounced` events → React toasts.
 //!   * Request/Response — React polls `bevy.ball.get()` and shows the ball's state.
+//!   * Animations       — Reanimated-style shared values + `Animated.node`, driven by a Bevy system.
 //!
 //! Run with:
 //!
@@ -14,6 +15,7 @@
 //! For hot reload, run `npm run watch -w demos-app` in another terminal and edit
 //! the files under `ui/src/`.
 
+mod animations;
 mod basic_ui;
 mod events;
 mod request_response;
@@ -25,6 +27,7 @@ use bevy::asset::AssetPlugin;
 use bevy::prelude::*;
 use bevy_react::{ReactAppExt, ReactUiPlugin};
 
+use animations::AnimationsPlugin;
 use basic_ui::BasicUiPlugin;
 use events::EventsPlugin;
 use request_response::RequestResponsePlugin;
@@ -73,7 +76,12 @@ fn main() {
     .init_state::<Demo>()
     .add_systems(Startup, shared::setup_camera_and_light)
     .add_systems(Update, shared::orbit_camera)
-    .add_plugins((BasicUiPlugin, EventsPlugin, RequestResponsePlugin));
+    .add_plugins((
+        BasicUiPlugin,
+        EventsPlugin,
+        RequestResponsePlugin,
+        AnimationsPlugin,
+    ));
     // Each demo plugin registers its own bindings in `build`; only the global
     // demo-selection handler is left to register here.
     shared::register_bindings(&mut app);

@@ -386,6 +386,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bevy",
+ "bevy-react-animations",
  "bevy-react-macros",
  "crossbeam-channel",
  "deno_core",
@@ -393,6 +394,16 @@ dependencies = [
  "serde_json",
  "tokio",
  "ts-rs",
+]
+
+[[package]]
+name = "bevy-react-animations"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "crossbeam-channel",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

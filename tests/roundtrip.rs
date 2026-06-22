@@ -32,11 +32,21 @@ fn bridge_round_trip() {
     // Held for the duration so emits/requests from the app go nowhere harmlessly.
     let (emit_tx, _emit_rx) = crossbeam_channel::unbounded::<ReactMessage>();
     let (request_tx, _request_rx) = crossbeam_channel::unbounded::<RawRequest>();
+    // Held for the duration so animation commands go nowhere harmlessly.
+    let (anim_tx, _anim_rx) = crossbeam_channel::unbounded();
     let (outbound_tx, outbound_rx) = tokio::sync::mpsc::unbounded_channel::<Outbound>();
     // Held for the duration: dropping the reload sender would look like shutdown.
     let (_reload_tx, reload_rx) = tokio::sync::mpsc::unbounded_channel::<()>();
 
-    spawn_js_thread(bundle, ops_tx, emit_tx, request_tx, outbound_rx, reload_rx);
+    spawn_js_thread(
+        bundle,
+        ops_tx,
+        emit_tx,
+        request_tx,
+        anim_tx,
+        outbound_rx,
+        reload_rx,
+    );
 
     // Phase 1: the default demo (Basic UI) renders an increment button labelled
     // `+` and the count run `3` (from `Cubes: <text>{count}</text>`, so the count

@@ -79,6 +79,12 @@ pub struct Props {
     /// Whether this element has an `onClick` handler registered in JS.
     #[serde(default)]
     pub on_click: bool,
+    /// Per-property animation bindings for an `Animated.node` (Reanimated-style).
+    /// Present → the main reconciler stamps a `bevy_react_animations::AnimatedNode`
+    /// on the entity so the animations plugin drives the listed props each frame.
+    /// Bevy-free, pure-serde, like the rest of the protocol.
+    #[serde(default)]
+    pub animated: Option<bevy_react_animations::AnimatedBindings>,
 
     // --- `image` element attributes ---
     /// Asset path for an `image`, resolved by Bevy's `AssetServer` (relative to

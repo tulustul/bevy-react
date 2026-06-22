@@ -4,6 +4,7 @@
 use std::path::PathBuf;
 
 use bevy::prelude::*;
+use bevy_react_animations::{AnimationCommand, AnimationSet, ReactUiAnimationsPlugin};
 
 use crate::bridge::{JsBridge, OpReceiver, OutboundResource, OutboundSender};
 use crate::event::ReactEventRegistry;
@@ -23,16 +24,19 @@ pub struct ReactUiPlugin {
     bundle: PathBuf,
     hot_reload: bool,
     spawn_camera: bool,
+    animations: bool,
 }
 
 impl ReactUiPlugin {
-    /// Create the plugin for the given built JS bundle path. Hot reload and a
-    /// default 2D UI camera are enabled by default.
+    /// Create the plugin for the given built JS bundle path. Hot reload, a default
+    /// 2D UI camera, and the Reanimated-style animations engine are all enabled by
+    /// default.
     pub fn new(bundle: impl Into<PathBuf>) -> Self {
         Self {
             bundle: bundle.into(),
             hot_reload: true,
             spawn_camera: true,
+            animations: true,
         }
     }
 
@@ -47,6 +51,14 @@ impl ReactUiPlugin {
         self.spawn_camera = yes;
         self
     }
+
+    /// Enable/disable the bundled [`ReactUiAnimationsPlugin`] (the `Animated.node`
+    /// / shared-value engine). On by default; disable to drop it entirely — the
+    /// `op_animate` op stays registered but its commands are discarded.
+    pub fn with_animations(mut self, yes: bool) -> Self {
+        self.animations = yes;
+        self
+    }
 }
 
 impl Plugin for ReactUiPlugin {
@@ -57,6 +69,7 @@ impl Plugin for ReactUiPlugin {
         let (ops_tx, ops_rx) = crossbeam_channel::unbounded::<Vec<Op>>();
         let (emit_tx, emit_rx) = crossbeam_channel::unbounded::<ReactMessage>();
         let (request_tx, request_rx) = crossbeam_channel::unbounded::<RawRequest>();
+        let (anim_tx, anim_rx) = crossbeam_channel::unbounded::<AnimationCommand>();
         let (outbound_tx, outbound_rx) = tokio::sync::mpsc::unbounded_channel::<Outbound>();
         let (reload_tx, reload_rx) = tokio::sync::mpsc::unbounded_channel::<()>();
 
@@ -74,6 +87,7 @@ impl Plugin for ReactUiPlugin {
             ops_tx,
             emit_tx,
             request_tx,
+            anim_tx,
             outbound_rx,
             reload_rx,
         );
@@ -108,6 +122,16 @@ impl Plugin for ReactUiPlugin {
                 apply_interaction_styles.after(apply_js_ops),
             ),
         );
+
+        // The animations engine is a separate plugin (its crate can't depend on
+        // this one). We add it and, as the only crate that sees both sides, order
+        // its `Apply` set after `apply_js_ops` so per-frame animation writes win
+        // over this frame's static style. Disabled → `anim_rx` drops here and
+        // `op_animate` sends are discarded.
+        if self.animations {
+            app.add_plugins(ReactUiAnimationsPlugin::new(anim_rx))
+                .configure_sets(Update, AnimationSet::Apply.after(apply_js_ops));
+        }
 
         if self.hot_reload {
             app.insert_resource(BundleWatch {

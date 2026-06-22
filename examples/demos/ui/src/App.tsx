@@ -7,11 +7,13 @@ import type { DemoId } from "./generated";
 import { BasicUiDemo } from "./demos/BasicUiDemo";
 import { EventsDemo } from "./demos/EventsDemo";
 import { RequestResponseDemo } from "./demos/RequestResponseDemo";
+import { AnimationsDemo } from "./demos/AnimationsDemo";
 
 const DEMOS: { id: DemoId; label: string }[] = [
   { id: "BasicUi", label: "Basic UI" },
   { id: "Events", label: "Events" },
   { id: "RequestResponse", label: "Request/Response" },
+  { id: "Animations", label: "Animations" },
 ];
 
 export function App() {
@@ -61,6 +63,7 @@ export function App() {
         {active === "BasicUi" && <BasicUiDemo />}
         {active === "Events" && <EventsDemo />}
         {active === "RequestResponse" && <RequestResponseDemo />}
+        {active === "Animations" && <AnimationsDemo />}
       </node>
     </node>
   );
