@@ -6,7 +6,7 @@ use bevy::prelude::*;
 use crossbeam_channel::Receiver;
 use tokio::sync::mpsc::UnboundedSender;
 
-use crate::protocol::{NodeId, Op, Outbound};
+use crate::protocol::{NodeId, Op, Outbound, Style};
 
 /// The text appearance a `<text>` element/span carries, kept so inheriting child
 /// runs (bare strings) can copy it on append without an ECS query (Bevy commands
@@ -23,6 +23,17 @@ pub type OutboundSender = UnboundedSender<Outbound>;
 /// node id so interaction events can be reported back with the right identity.
 #[derive(Component, Debug, Clone, Copy)]
 pub struct RNode(pub NodeId);
+
+/// Base + hover + press styles kept on an element that declares `hoverStyle`
+/// and/or `pressStyle`. The interaction system re-applies the merged style as
+/// the node's `Interaction` changes, entirely on the Bevy side (no round-trip
+/// to JS). Absent on elements without variants — they style as before.
+#[derive(Component, Debug, Clone, Default)]
+pub struct StyleVariants {
+    pub base: Option<Style>,
+    pub hover: Option<Style>,
+    pub press: Option<Style>,
+}
 
 /// A standalone clone of the outbound sender, inserted in [`Plugin::build`] so
 /// the request dispatcher and the [`ReactEvents`](crate::ReactEvents) system

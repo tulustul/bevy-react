@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { bevy, emit } from "../generated";
+import { bevy } from "../generated";
 import { buttonStyle, cardStyle, headingStyle, labelStyle } from "./styles";
 
 const MAX = 8;
@@ -27,18 +27,24 @@ export function BasicUiDemo() {
         <button
           onClick={() => setCount((c) => Math.min(MAX, c + 1))}
           style={{ ...buttonStyle, backgroundColor: "#7aa2f7" }}
+          hoverStyle={{ backgroundColor: "#89b4fa" }}
+          pressStyle={{ backgroundColor: "#5a7fd6" }}
         >
           +
         </button>
         <button
           onClick={() => setCount((c) => Math.max(0, c - 1))}
           style={{ ...buttonStyle, backgroundColor: "#f7768e" }}
+          hoverStyle={{ backgroundColor: "#ff8fa3" }}
+          pressStyle={{ backgroundColor: "#d65a72" }}
         >
           -
         </button>
         <button
           onClick={() => setCount(3)}
           style={{ ...buttonStyle, width: 96, backgroundColor: "#414868" }}
+          hoverStyle={{ backgroundColor: "#545c7e" }}
+          pressStyle={{ backgroundColor: "#2f3450" }}
         >
           reset
         </button>

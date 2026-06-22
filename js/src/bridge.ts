@@ -42,6 +42,8 @@ export type Op =
 
 export interface SerializedProps {
   style?: Record<string, unknown>;
+  hoverStyle?: Record<string, unknown>;
+  pressStyle?: Record<string, unknown>;
   color?: string;
   fontSize?: number;
   onClick?: boolean;
@@ -162,6 +164,16 @@ export function serializeProps(
       // Style is opaque: every CSS-like key (incl. backgroundColor, border,
       // grid, …) rides across inside this object, decoded on the Rust side.
       out.style = value as Record<string, unknown>;
+      continue;
+    }
+    // Hover/press variant styles ride across opaque, like `style`. Bevy overlays
+    // them onto the base style from the node's interaction state.
+    if (key === "hoverStyle" && value && typeof value === "object") {
+      out.hoverStyle = value as Record<string, unknown>;
+      continue;
+    }
+    if (key === "pressStyle" && value && typeof value === "object") {
+      out.pressStyle = value as Record<string, unknown>;
       continue;
     }
     // Text + `image` element attributes pass through by name.

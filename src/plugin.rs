@@ -10,7 +10,7 @@ use crate::event::ReactEventRegistry;
 use crate::js_thread::spawn_js_thread;
 use crate::message::{ReactMessage, ReactRegistry};
 use crate::protocol::{Op, Outbound};
-use crate::reconcile::{apply_js_ops, collect_ui_events};
+use crate::reconcile::{apply_interaction_styles, apply_js_ops, collect_ui_events};
 use crate::request::{RawRequest, ReactRequestRegistry, RequestReceiver, dispatch_react_requests};
 
 /// Adds a React-driven `bevy_ui` layer to a Bevy `App`.
@@ -98,7 +98,16 @@ impl Plugin for ReactUiPlugin {
             PreUpdate,
             (dispatch_react_messages, dispatch_react_requests),
         )
-        .add_systems(Update, (apply_js_ops, collect_ui_events));
+        .add_systems(
+            Update,
+            (
+                apply_js_ops,
+                collect_ui_events,
+                // After the op drain so this frame's `StyleVariants` writes are
+                // visible; the ordering forces a command sync point first.
+                apply_interaction_styles.after(apply_js_ops),
+            ),
+        );
 
         if self.hot_reload {
             app.insert_resource(BundleWatch {

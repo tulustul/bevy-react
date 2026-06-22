@@ -4,9 +4,11 @@
 
 use bevy::prelude::*;
 
-use crate::bridge::{JsBridge, RNode};
+use crate::bridge::{JsBridge, RNode, StyleVariants};
 use crate::protocol::{NodeId, Op, Outbound, Props, ROOT_ID, UiEvent};
-use crate::ui_map::{apply_style, apply_text_style, image_node, resolved_text_style, text_layout};
+use crate::ui_map::{
+    apply_style, apply_text_style, image_node, overlay_style, resolved_text_style, text_layout,
+};
 
 /// Apply every queued reconciler op to the ECS. Runs in `Update`; ops simply
 /// queue in the channel until this drains them, so startup ordering is a
@@ -146,6 +148,7 @@ pub fn apply_js_ops(
                     if is_image(&props) {
                         ec.insert(image_node(&props, &assets));
                     }
+                    apply_style_variants(&mut ec, &props);
                 }
             }
             Op::UpdateText { id, text } => {
@@ -201,7 +204,26 @@ fn spawn_element(
         }
         _ => {}
     }
+    apply_style_variants(&mut ec, props);
     ec.id()
+}
+
+/// Stamp (or clear) the hover/press [`StyleVariants`] on a host element. When
+/// either variant is present the element also gets an `Interaction` so the focus
+/// system tracks hover/press for it; `insert_if_new` leaves any existing
+/// `Interaction` untouched (a `button`'s, or a node already mid-hover) so we
+/// never reset its state on a re-render.
+fn apply_style_variants(ec: &mut EntityCommands, props: &Props) {
+    if props.hover_style.is_some() || props.press_style.is_some() {
+        ec.insert(StyleVariants {
+            base: props.style.clone(),
+            hover: props.hover_style.clone(),
+            press: props.press_style.clone(),
+        });
+        ec.insert_if_new(Interaction::default());
+    } else {
+        ec.remove::<StyleVariants>();
+    }
 }
 
 /// Whether these props carry any `image` element attribute.
@@ -232,5 +254,30 @@ pub fn collect_ui_events(
                 },
             });
         }
+    }
+}
+
+/// Re-apply the merged style for any element with [`StyleVariants`] whose
+/// `Interaction` changed (hover/press in or out) — or whose variants changed from
+/// a React re-render while still hovered. `None` → base, `Hovered` → base+hover,
+/// `Pressed` → base+hover+press. Runs entirely on the Bevy side: no round-trip to
+/// JS, no React re-render on mouse move.
+pub fn apply_interaction_styles(
+    mut commands: Commands,
+    query: Query<
+        (Entity, &Interaction, &StyleVariants),
+        Or<(Changed<Interaction>, Changed<StyleVariants>)>,
+    >,
+) {
+    for (entity, interaction, variants) in &query {
+        let style = match *interaction {
+            Interaction::Pressed => overlay_style(
+                &overlay_style(&variants.base, &variants.hover),
+                &variants.press,
+            ),
+            Interaction::Hovered => overlay_style(&variants.base, &variants.hover),
+            Interaction::None => variants.base.clone(),
+        };
+        apply_style(&mut commands.entity(entity), &style);
     }
 }

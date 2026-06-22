@@ -3,11 +3,6 @@ import { bevy } from "../generated";
 import type { BallState } from "../generated";
 import { cardStyle, headingStyle, labelStyle } from "./styles";
 
-/**
- * Poll Bevy ~10×/sec for the ball's live position and
- * velocity and display them. A self-rescheduling timeout (not setInterval) keeps
- * requests from overlapping; the `alive` flag + clearTimeout stop it on unmount.
- */
 export function RequestResponseDemo() {
   const [state, setState] = useState<BallState | null>(null);
 
@@ -27,7 +22,7 @@ export function RequestResponseDemo() {
         // rejected. Ignore — the cleanup below stops the loop.
       }
       if (alive) {
-        handle = setTimeout(tick, 1000);
+        handle = setTimeout(tick, 50);
       }
     };
     tick();
@@ -41,7 +36,7 @@ export function RequestResponseDemo() {
   return (
     <node style={cardStyle}>
       <text style={headingStyle}>Ball telemetry</text>
-      <text style={labelStyle}>await bevy.ball.get() - polled ~10 times/s</text>
+      <text style={labelStyle}>await bevy.ball.get()</text>
 
       {state ? (
         <node style={{ flexDirection: "column", gap: 8, alignItems: "start" }}>

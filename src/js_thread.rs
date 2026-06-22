@@ -93,12 +93,47 @@ async fn op_next_event(state: Rc<RefCell<OpState>>) -> Option<Outbound> {
     }
 }
 
-/// JS globals deno_core does not provide on its own (see prior notes).
+/// JS -> (no Bevy): sleep `ms` milliseconds, then resolve. Backs the real
+/// `setTimeout`/`setInterval` polyfills below; driven by `run_event_loop` (kept
+/// alive by the always-pending `op_next_event`), so timers fire even when the app
+/// is otherwise idle.
+#[op2]
+async fn op_sleep(ms: f64) {
+    let ms = ms.max(0.0) as u64;
+    tokio::time::sleep(std::time::Duration::from_millis(ms)).await;
+}
+
+/// JS globals deno_core does not provide on its own. `setTimeout`/`setInterval`
+/// honor their delay via the async `op_sleep`; a `0`ms timeout stays on the
+/// microtask queue so React's scheduler (which yields with `setTimeout(_, 0)`)
+/// stays cheap. Cancellation is observable (a cleared callback never runs), even
+/// though the underlying sleep still completes.
 const PRELUDE: &str = r#"
-globalThis.setTimeout = (cb, _ms, ...args) => { Promise.resolve().then(() => cb(...args)); return 0; };
-globalThis.clearTimeout = () => {};
-globalThis.setInterval = () => 0;
-globalThis.clearInterval = () => {};
+let __nextTimer = 1;
+const __cancelled = new Set();
+globalThis.setTimeout = (cb, ms = 0, ...args) => {
+  const id = __nextTimer++;
+  const delay = Math.max(0, +ms || 0);
+  const run = () => { if (!__cancelled.delete(id)) cb(...args); };
+  if (delay === 0) Promise.resolve().then(run);
+  else Deno.core.ops.op_sleep(delay).then(run);
+  return id;
+};
+globalThis.clearTimeout = (id) => { if (id != null) __cancelled.add(id); };
+globalThis.setInterval = (cb, ms = 0, ...args) => {
+  const id = __nextTimer++;
+  const delay = Math.max(0, +ms || 0);
+  (async () => {
+    while (!__cancelled.has(id)) {
+      await Deno.core.ops.op_sleep(delay);
+      if (__cancelled.has(id)) break;
+      cb(...args);
+    }
+    __cancelled.delete(id);
+  })();
+  return id;
+};
+globalThis.clearInterval = (id) => { if (id != null) __cancelled.add(id); };
 globalThis.queueMicrotask = globalThis.queueMicrotask || ((cb) => { Promise.resolve().then(cb); });
 "#;
 
@@ -168,9 +203,10 @@ async fn run_once(
     const EMIT: OpDecl = op_emit();
     const REQUEST: OpDecl = op_request();
     const NEXT: OpDecl = op_next_event();
+    const SLEEP: OpDecl = op_sleep();
     let ext = Extension {
         name: "bevy_react_bridge",
-        ops: std::borrow::Cow::Borrowed(&[FLUSH, EMIT, REQUEST, NEXT]),
+        ops: std::borrow::Cow::Borrowed(&[FLUSH, EMIT, REQUEST, NEXT, SLEEP]),
         ..Default::default()
     };
 

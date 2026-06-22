@@ -151,6 +151,10 @@ export interface BevyStyle {
 /** Props common to `node` and `button`. */
 export interface BevyNodeProps extends BevyAttributes {
   style?: BevyStyle;
+  /** Style overlaid on `style` while the element is hovered. */
+  hoverStyle?: BevyStyle;
+  /** Style overlaid on `style` (and `hoverStyle`) while the element is pressed. */
+  pressStyle?: BevyStyle;
   onClick?: () => void;
   children?: ReactNode;
 }
@@ -166,6 +170,10 @@ export interface BevyTextProps extends BevyAttributes {
 /** Props for the `image` element (maps to `bevy_ui::ImageNode`). */
 export interface BevyImageProps extends BevyAttributes {
   style?: BevyStyle;
+  /** Style overlaid on `style` while the element is hovered. */
+  hoverStyle?: BevyStyle;
+  /** Style overlaid on `style` (and `hoverStyle`) while the element is pressed. */
+  pressStyle?: BevyStyle;
   /** Asset path resolved by Bevy's `AssetServer` (relative to `assets/`). */
   src?: string;
   /** Tint multiplied with the image (hex); also the fill of a `src`-less image. */

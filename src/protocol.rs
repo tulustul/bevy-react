@@ -69,6 +69,13 @@ pub struct Props {
     /// CSS-like layout + visual style, mapped onto `bevy_ui` components.
     #[serde(default)]
     pub style: Option<Style>,
+    /// Style overlaid on `style` while the element is hovered. Decoded exactly
+    /// like `style`; applied on the Bevy side from the node's `Interaction`.
+    #[serde(default)]
+    pub hover_style: Option<Style>,
+    /// Style overlaid on `style` (and `hover_style`) while the element is pressed.
+    #[serde(default)]
+    pub press_style: Option<Style>,
     /// Whether this element has an `onClick` handler registered in JS.
     #[serde(default)]
     pub on_click: bool,

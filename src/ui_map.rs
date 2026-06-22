@@ -532,6 +532,78 @@ pub fn apply_style(ec: &mut EntityCommands, style: &Option<Style>) {
     }
 }
 
+/// Overlay `overlay` onto `base`, producing the style to apply: every field the
+/// overlay sets wins, the rest fall through to `base`. A `None` overlay leaves
+/// `base` untouched. Used to merge `hoverStyle`/`pressStyle` onto the base style
+/// for the current `Interaction` state.
+pub fn overlay_style(base: &Option<Style>, overlay: &Option<Style>) -> Option<Style> {
+    let Some(overlay) = overlay else {
+        return base.clone();
+    };
+    let mut merged = base.clone().unwrap_or_default();
+    // One arm per `Style` field; kept in struct order so it's easy to audit that
+    // every field is overlaid.
+    macro_rules! overlay_field {
+        ($($f:ident),* $(,)?) => {
+            $( if overlay.$f.is_some() { merged.$f = overlay.$f.clone(); } )*
+        };
+    }
+    overlay_field!(
+        display,
+        box_sizing,
+        position_type,
+        overflow_x,
+        overflow_y,
+        scrollbar_width,
+        left,
+        right,
+        top,
+        bottom,
+        width,
+        height,
+        min_width,
+        min_height,
+        max_width,
+        max_height,
+        aspect_ratio,
+        align_items,
+        justify_items,
+        align_self,
+        justify_self,
+        align_content,
+        justify_content,
+        margin,
+        padding,
+        border,
+        flex_direction,
+        flex_wrap,
+        flex_grow,
+        flex_shrink,
+        flex_basis,
+        gap,
+        row_gap,
+        column_gap,
+        grid_auto_flow,
+        grid_template_rows,
+        grid_template_columns,
+        grid_auto_rows,
+        grid_auto_columns,
+        grid_row,
+        grid_column,
+        background_color,
+        border_color,
+        border_radius,
+        outline,
+        box_shadow,
+        z_index,
+        color,
+        font_size,
+        font_weight,
+        text_align,
+    );
+    Some(merged)
+}
+
 /// Build an `ImageNode` from an `image` element's props. `src` loads a texture
 /// via the asset server; without it, a solid-color (tinted) image is used.
 pub fn image_node(props: &Props, assets: &AssetServer) -> ImageNode {
@@ -655,6 +727,30 @@ mod tests {
         let margin = rect_to_uirect(s.margin.unwrap());
         assert_eq!(margin.top, Val::Px(1.0));
         assert_eq!(margin.left, Val::Px(2.0));
+    }
+
+    #[test]
+    fn overlay_merges_fields() {
+        let base = Some(style(serde_json::json!({
+            "backgroundColor": "#111111",
+            "width": 64,
+            "color": "#ffffff",
+        })));
+
+        // None overlay leaves base untouched.
+        let unchanged = overlay_style(&base, &None).unwrap();
+        assert_eq!(unchanged.background_color.as_deref(), Some("#111111"));
+
+        // Overlaid fields win; unset overlay fields fall through to base.
+        let overlay = Some(style(serde_json::json!({ "backgroundColor": "#89b4fa" })));
+        let merged = overlay_style(&base, &overlay).unwrap();
+        assert_eq!(merged.background_color.as_deref(), Some("#89b4fa")); // overridden
+        assert_eq!(length_to_val(merged.width.unwrap()), Val::Px(64.0)); // kept from base
+        assert_eq!(merged.color.as_deref(), Some("#ffffff")); // kept from base
+
+        // Overlay onto an absent base still yields the overlay's fields.
+        let from_none = overlay_style(&None, &overlay).unwrap();
+        assert_eq!(from_none.background_color.as_deref(), Some("#89b4fa"));
     }
 
     #[test]

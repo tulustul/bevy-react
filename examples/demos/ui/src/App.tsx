@@ -39,6 +39,9 @@ export function App() {
                 ...navButtonStyle,
                 backgroundColor: selected ? "#7aa2f7" : "#2a2a3c",
               }}
+              hoverStyle={{
+                backgroundColor: selected ? "#7aa2f7" : "#42425e",
+              }}
             >
               <text
                 style={{
