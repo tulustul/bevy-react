@@ -1,5 +1,5 @@
 {
-  "name": "counter-app",
+  "name": "demos-app",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -7,7 +7,7 @@
     "build": "esbuild src/index.tsx --bundle --format=esm --platform=neutral --target=es2022 --jsx=automatic --jsx-import-source=bevy-react --define:process.env.NODE_ENV='\"production\"' --outfile=dist/bundle.js",
     "watch": "npm run build -- --watch",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "gen:bindings": "cargo run --manifest-path ../../../Cargo.toml --example counter -- --export-bindings src/generated.ts"
+    "gen:bindings": "cargo run --manifest-path ../../../Cargo.toml --example demos -- --export-bindings src/generated.ts"
   },
   "dependencies": {
     "bevy-react": "*",

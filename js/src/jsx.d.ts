@@ -3,7 +3,14 @@
 // your tsconfig at it with `"jsx": "react-jsx"` + `"jsxImportSource": "bevy-react"`.
 // Import `BevyStyle` here to type a shared style object.
 
-import type { ReactNode } from "react";
+import type { Key, ReactNode } from "react";
+
+/** Attributes React manages itself (not real host props — React strips `key`
+ *  before props reach the reconciler). Shared by every host element so keyed
+ *  lists type-check. Host elements take no `ref`, so `key` is all that's here. */
+export interface BevyAttributes {
+  key?: Key | null | undefined;
+}
 
 /** A length: a bare number is logical pixels; a string carries a unit
  *  (`"50%"`, `"100vw"`, `"100vh"`, `"50vmin"`, `"50vmax"`, `"10px"`, `"auto"`). */
@@ -142,7 +149,7 @@ export interface BevyStyle {
 }
 
 /** Props common to `node` and `button`. */
-export interface BevyNodeProps {
+export interface BevyNodeProps extends BevyAttributes {
   style?: BevyStyle;
   onClick?: () => void;
   children?: ReactNode;
@@ -151,13 +158,13 @@ export interface BevyNodeProps {
 /** Props for the `text` element (maps to `bevy_ui::Text` / `TextSpan`). Style
  *  its `color`/`fontSize`/`fontWeight`/`textAlign` via `style`; nest `<text>`
  *  to restyle a run. */
-export interface BevyTextProps {
+export interface BevyTextProps extends BevyAttributes {
   style?: BevyStyle;
   children?: ReactNode;
 }
 
 /** Props for the `image` element (maps to `bevy_ui::ImageNode`). */
-export interface BevyImageProps {
+export interface BevyImageProps extends BevyAttributes {
   style?: BevyStyle;
   /** Asset path resolved by Bevy's `AssetServer` (relative to `assets/`). */
   src?: string;

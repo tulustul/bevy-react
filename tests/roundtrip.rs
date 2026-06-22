@@ -3,7 +3,7 @@
 //! render plus a click round trip.
 //!
 //! Requires the example bundle to be built first:
-//!   npm install && npm run build -w counter-app
+//!   npm install && npm run build -w demos-app
 //! If the bundle is missing the test skips (passes) with a notice.
 
 use std::path::PathBuf;
@@ -14,7 +14,7 @@ use bevy_react::protocol::{Op, Outbound, UiEvent};
 use bevy_react::{RawRequest, ReactMessage};
 
 fn example_bundle() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("examples/counter/ui/dist/bundle.js")
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("examples/demos/ui/dist/bundle.js")
 }
 
 #[test]
@@ -22,7 +22,7 @@ fn bridge_round_trip() {
     let bundle = example_bundle();
     if !bundle.exists() {
         eprintln!(
-            "skipping bridge_round_trip: bundle not built at {}\n  run: npm install && npm run build -w counter-app",
+            "skipping bridge_round_trip: bundle not built at {}\n  run: npm install && npm run build -w demos-app",
             bundle.display()
         );
         return;
@@ -38,9 +38,15 @@ fn bridge_round_trip() {
 
     spawn_js_thread(bundle, ops_tx, emit_tx, request_tx, outbound_rx, reload_rx);
 
-    // Phase 1: initial render must include a `button` (with onClick) and the
-    // default count. The example renders `Cubes: <text>{count}</text>`, so the
-    // count is its own run (a `3` text node/span), separate from the "Cubes: " label.
+    // Phase 1: the default demo (Basic UI) renders an increment button labelled
+    // `+` and the count run `3` (from `Cubes: <text>{count}</text>`, so the count
+    // is its own span, separate from the "Cubes: " label). The left-nav buttons
+    // are created first, so we can't take the first button — find the one whose
+    // bare-text child is `+` (nav buttons wrap their labels in `<text>` spans).
+    use std::collections::{HashMap, HashSet};
+    let mut buttons: HashSet<u32> = HashSet::new(); // button ids (with onClick)
+    let mut plus_text: Option<u32> = None; // id of the bare `+` text node
+    let mut parent_of: HashMap<u32, u32> = HashMap::new(); // child -> parent
     let mut button_id: Option<u32> = None;
     let mut saw_initial = false;
     let deadline = Instant::now() + Duration::from_secs(15);
@@ -48,25 +54,40 @@ fn bridge_round_trip() {
         if let Ok(batch) = ops_rx.recv_timeout(Duration::from_millis(500)) {
             for op in &batch {
                 match op {
-                    // Keep the first button (the leading `+` in the example).
-                    Op::Create { id, kind, props } if kind == "button" && button_id.is_none() => {
-                        button_id = Some(*id);
+                    Op::Create { id, kind, props } if kind == "button" => {
                         assert!(props.on_click, "button created without onClick");
+                        buttons.insert(*id);
+                    }
+                    Op::CreateText { id, text } if text.trim() == "+" => {
+                        plus_text = Some(*id);
                     }
                     Op::CreateText { text, .. } | Op::CreateTextSpan { text, .. }
                         if text.trim() == "3" =>
                     {
                         saw_initial = true;
                     }
+                    Op::Append { parent, child } => {
+                        parent_of.insert(*child, *parent);
+                    }
+                    Op::Insert { parent, child, .. } => {
+                        parent_of.insert(*child, *parent);
+                    }
                     _ => {}
                 }
+            }
+            // The increment button is the parent of the bare `+` text node.
+            if button_id.is_none()
+                && let Some(parent) = plus_text.and_then(|t| parent_of.get(&t))
+                && buttons.contains(parent)
+            {
+                button_id = Some(*parent);
             }
         }
     }
 
-    let button_id = button_id.expect("no button in initial render");
+    let button_id = button_id.expect("no '+' button in initial render");
     assert!(saw_initial, "initial count '3' not rendered");
-    eprintln!("OK   initial render: button id={button_id}, count '3' present");
+    eprintln!("OK   initial render: '+' button id={button_id}, count '3' present");
 
     // Phase 2: report a click on the button.
     outbound_tx
@@ -83,12 +104,12 @@ fn bridge_round_trip() {
     while Instant::now() < deadline {
         if let Ok(batch) = ops_rx.recv_timeout(Duration::from_millis(500)) {
             for op in &batch {
-                if let Op::UpdateText { text, .. } = op {
-                    if text.trim() == "4" {
-                        eprintln!("OK   click round trip: count updated to '4'");
-                        eprintln!("PASS bridge end-to-end");
-                        return;
-                    }
+                if let Op::UpdateText { text, .. } = op
+                    && text.trim() == "4"
+                {
+                    eprintln!("OK   click round trip: count updated to '4'");
+                    eprintln!("PASS bridge end-to-end");
+                    return;
                 }
             }
         }

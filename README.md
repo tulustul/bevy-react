@@ -167,7 +167,7 @@ structured **`bevy` proxy** whose nested methods come from dotted request names
 (`"board.get"` → `bevy.board.get()`).
 
 Add a small exporter entry point that registers the same handlers as your app and call
-the exporter (see `examples/counter/main.rs`'s `--export-bindings` flag and the
+the exporter (see `examples/demos/main.rs`'s `--export-bindings` flag and the
 `gen:bindings` npm script):
 
 ```tsx
@@ -181,7 +181,7 @@ const stop = bevy.on("user.disconnected", (e) => console.log(e.userId)); // Bevy
 
 ```sh
 # regenerate after changing the Rust types
-cargo run --example counter -- --export-bindings examples/counter/ui/src/generated.ts
+cargo run --example demos -- --export-bindings examples/demos/ui/src/generated.ts
 ```
 
 Commit the generated file and, in CI, regenerate then `git diff --exit-code` it: if a
@@ -247,16 +247,16 @@ Import `BevyStyle` from `bevy-react/jsx` for the full typed key list.
 
 ## Repo layout
 
-| Path                                                  | Role                                                         |
-| ----------------------------------------------------- | ------------------------------------------------------------ |
-| `src/lib.rs`                                          | crate root; public `ReactUiPlugin`                           |
-| `src/plugin.rs`                                       | the plugin: JS thread, systems, UI root, hot-reload watcher  |
-| `src/{protocol,bridge,js_thread,reconcile,ui_map}.rs` | the bridge internals                                         |
-| `tests/roundtrip.rs`                                  | headless end-to-end bridge test                              |
-| `js/`                                                 | the `bevy-react` JS library (reconciler, `mount`, JSX types) |
-| `examples/counter/`                                   | example: Rust binary (`main.rs`) + React app (`app/`)        |
+| Path                                                  | Role                                                                    |
+| ----------------------------------------------------- | ----------------------------------------------------------------------- |
+| `src/lib.rs`                                          | crate root; public `ReactUiPlugin`                                      |
+| `src/plugin.rs`                                       | the plugin: JS thread, systems, UI root, hot-reload watcher             |
+| `src/{protocol,bridge,js_thread,reconcile,ui_map}.rs` | the bridge internals                                                    |
+| `tests/roundtrip.rs`                                  | headless end-to-end bridge test                                         |
+| `js/`                                                 | the `bevy-react` JS library (reconciler, `mount`, JSX types)            |
+| `examples/demos/`                                     | example: Rust binary (`main.rs` + per-demo plugins) + React app (`ui/`) |
 
-It's an npm workspace (`js` + `examples/counter/app`) so React resolves to one
+It's an npm workspace (`js` + `examples/demos/ui`) so React resolves to one
 copy.
 
 ## Build, run, verify
@@ -266,38 +266,44 @@ Requires Rust ≥ 1.95 (Bevy 0.19) and Node.
 ```bash
 # 1. Install JS deps (workspace) and build the example bundle
 npm install
-npm run build -w counter-app
+npm run build -w demos-app
 
 # 2. Headless bridge test (no GPU needed)
 cargo test            # tests/roundtrip.rs → PASS
 
 # 3. Run the example (opens a window)
-cargo run --example counter
+cargo run --example demos
 ```
 
-The example overlays the React UI (top of the window) on a live 3D scene; the
-counter (`+`/`-`/`reset`, clamped to 0–8, default 3) drives how many spinning
-cubes are in the scene — `emit("count", n)` → `ReactMessage` → cubes. This shows
-React rendering UI _and_ steering the Bevy world.
+The example overlays the React UI on a live 3D scene, with a left-nav that
+switches between three demos — each a separate Bevy plugin showing one direction
+of the bridge:
+
+- **Basic UI** — the counter (`+`/`-`/`reset`, clamped to 0–8, default 3) drives
+  how many spinning cubes exist: `emit("count", n)` → `ReactMessage` → cubes.
+- **Events** — a ball bounces off the walls; each bounce sends a `ball.bounced`
+  event to React, which pops a transient toast: Bevy → React via `ReactEvents`.
+- **Request/Response** — React polls `bevy.ball.get()` ~10×/sec and displays the
+  ball's live position and velocity: a correlated request/response round trip.
 
 ### Hot reload
 
 Run the bundler in watch mode and the app side by side:
 
 ```bash
-npm run watch -w counter-app   # esbuild rebuilds dist/bundle.js on save
-cargo run --example counter    # in another terminal
+npm run watch -w demos-app   # esbuild rebuilds dist/bundle.js on save
+cargo run --example demos    # in another terminal
 ```
 
-Edit `examples/counter/app/src/App.tsx`; esbuild rebuilds, the host polls the
-bundle's mtime, and the JS runtime is rebuilt from the new bundle:
+Edit any file under `examples/demos/ui/src/`; esbuild rebuilds, the host polls
+the bundle's mtime, and the JS runtime is rebuilt from the new bundle:
 
 ```
-edit app → esbuild --watch rewrites dist/bundle.js
+edit ui → esbuild --watch rewrites dist/bundle.js
   → ReactUiPlugin watcher sees new mtime → reload signal
   → JS thread rebuilds the V8 runtime → reset op + fresh render → host updates
 ```
 
-**Limitation:** full reload, so React state resets (the counter returns to 0 on
-edit). State-preserving Fast Refresh (react-refresh runtime + transform) is a
+**Limitation:** full reload, so React state resets (the counter returns to its
+default on edit). State-preserving Fast Refresh (react-refresh runtime + transform) is a
 worthwhile follow-up, not yet implemented.

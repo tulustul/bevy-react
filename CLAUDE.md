@@ -6,7 +6,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 `bevy-react` drives **`bevy_ui` from a React app** running on an embedded V8 (deno_core) runtime. It is a **Rust crate + JS package** (one repo) plus an example app. React renders through a custom reconciler that emits UI-mutation ops; Rust applies them to the Bevy ECS; interactions and app-level messages flow back.
 
-This is a Cargo workspace (`bevy-react` lib + `macros/` proc-macro crate) **and** an npm workspace (root `package.json` with members `js` and `examples/counter/ui`). The two halves are developed together.
+This is a Cargo workspace (`bevy-react` lib + `macros/` proc-macro crate) **and** an npm workspace (root `package.json` with members `js` and `examples/demos/ui`). The two halves are developed together.
+
+The example (`examples/demos`) is a gallery: a left-nav switches between three demos, each a **separate Bevy plugin** (`basic_ui.rs`, `events.rs`, `request_response.rs`) showing one direction of the bridge — `emit` (cubes), Bevy→React events (bouncing-ball toasts), and request/response (polling the ball). Only one demo's scene runs at a time: React `emit`s the selection, and a `States` enum (`Demo` in `shared.rs`) gates each demo's systems, with `DespawnOnExit(Demo::…)` scoping its entities.
 
 ## Commands
 
@@ -14,9 +16,9 @@ Build / run the example (this is the main way to see it working):
 
 ```sh
 npm install                          # once
-npm run build -w counter-app         # build the React bundle — REQUIRED before running
-cargo run --example counter          # run the Bevy app (needs a GPU/window)
-npm run watch -w counter-app         # rebuild bundle on change → hot reloads the running app
+npm run build -w demos-app           # build the React bundle — REQUIRED before running
+cargo run --example demos            # run the Bevy app (needs a GPU/window)
+npm run watch -w demos-app           # rebuild bundle on change → hot reloads the running app
 ```
 
 Tests:
@@ -28,7 +30,7 @@ cargo test --lib message::tests::exports_typescript   # a single test by path
 cargo test --test roundtrip          # headless end-to-end bridge test (real JS runtime)
 ```
 
-The `roundtrip` test drives the JS thread directly and asserts an initial render + click round trip. **It requires the bundle to be built first** (`npm run build -w counter-app`); if the bundle is missing it skips (passes) with a notice.
+The `roundtrip` test drives the JS thread directly and asserts an initial render + click round trip. **It requires the bundle to be built first** (`npm run build -w demos-app`); if the bundle is missing it skips (passes) with a notice.
 
 Lint / format / typecheck (run from repo root):
 
@@ -68,7 +70,7 @@ Three app-level channels, all **typed in Rust and mirrored to TypeScript by code
 
 The Rust binding structs are the **single source of truth**. `App::export_react_typescript(path)` (`src/message.rs::render_typescript`) walks all three registries in one pass and writes a self-contained `generated.ts`: per-payload type declarations, the `ReactMessages`/`ReactRequests`/`ReactEvents` maps, typed `emit`/`request`/`on` wrappers, and a structured **`bevy` proxy** whose nested methods come from dotted request names (`"board.get"` → `bevy.board.get()`; a void/unit request payload → a zero-arg method).
 
-- The example exposes this via `cargo run --example counter -- --export-bindings <path>` (a flag handled in `examples/counter/main.rs` that builds a bare `App`, runs the shared `register_react_bindings`, exports, and returns without `app.run()`). The npm convenience is `npm run gen:bindings -w counter-app`.
+- The example exposes this via `cargo run --example demos -- --export-bindings <path>` (a flag handled in `examples/demos/main.rs` that builds a bare `App`, runs the shared `register_react_bindings` aggregating every demo's bindings, exports, and returns without `app.run()`). The npm convenience is `npm run gen:bindings -w demos-app`.
 - **After changing any `#[react_message]`/`#[react_request]`/`#[react_event]` type, regenerate** and commit `generated.ts`. Output is deterministic (sorted); the CI guarantee is regenerate-then-`git diff --exit-code`. `generated.ts` is `.prettierignore`d so prettier never fights the generator.
 - App code imports the typed surface from `./generated` (e.g. `import { bevy, emit } from "./generated"`), **not** the untyped functions from `"bevy-react"`.
 
@@ -78,4 +80,4 @@ The Rust binding structs are the **single source of truth**. `App::export_react_
 - Macro-default names lowercase the **first letter** of the struct ident (`Count` → `"count"`); override with `name = "..."`. Dotted names (`"board.get"`) only make sense as explicit overrides and drive the nested proxy.
 - `ts-rs` maps Rust integers to TS `number` (precision loss above 2^53 for `i64`/`u64`/`usize`). Newtype/unit structs flatten: `struct Count(usize)` → `type Count = number`, unit structs inline to `null`.
 - `#[react_request]`/`#[react_event]` (like `#[react_message]`) expand to `::ts_rs::` and `::serde::` paths, so an external consumer crate must have those as direct deps. Works seamlessly in-repo because examples share the package's deps.
-- The example UI lives in `examples/counter/ui` (the dir is `ui`, not `app`). It bundles with esbuild (`build` script in its `package.json`) to a single ESM file that `ReactUiPlugin` loads.
+- The example UI lives in `examples/demos/ui` (the dir is `ui`, not `app`); the per-demo React components are under `ui/src/demos/`. It bundles with esbuild (`build` script in its `package.json`) to a single ESM file that `ReactUiPlugin` loads.
