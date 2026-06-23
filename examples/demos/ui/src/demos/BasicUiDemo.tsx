@@ -1,24 +1,20 @@
 import { useEffect, useState } from "react";
 import { bevy } from "../generated";
-import { buttonStyle, cardStyle, headingStyle, labelStyle } from "./styles";
+import { buttonStyle, headingStyle, labelStyle } from "./styles";
+import { Card } from "../components";
 
 const MAX = 8;
 const HINT = 'bevy.emit("count", n)';
 
-/**
- * One-way `emit`: push the count to Bevy whenever it changes,
- * and Bevy renders that many spinning cubes. No requests, no events.
- */
 export function BasicUiDemo() {
   const [count, setCount] = useState(3);
 
-  // React -> Bevy notify: push the count whenever it changes.
   useEffect(() => {
     bevy.emit("count", count);
   }, [count]);
 
   return (
-    <node style={cardStyle}>
+    <Card>
       <text style={headingStyle}>
         Cubes: <text style={{ color: "#7aa2f7" }}>{count}</text>
       </text>
@@ -41,15 +37,7 @@ export function BasicUiDemo() {
         >
           -
         </button>
-        <button
-          onClick={() => setCount(3)}
-          style={{ ...buttonStyle, width: 96, backgroundColor: "#414868" }}
-          hoverStyle={{ backgroundColor: "#545c7e" }}
-          pressStyle={{ backgroundColor: "#2f3450" }}
-        >
-          reset
-        </button>
       </node>
-    </node>
+    </Card>
   );
 }

@@ -26,21 +26,25 @@ pub struct Anchor {
     pub offset: Option<[f32; 3]>,
     /// When set, the overlay scales with camera distance (else stays at scale 1).
     #[serde(default)]
-    pub scale: Option<AnchorScale>,
+    pub scale: Option<AnchorScaling>,
 }
 
 /// Distance-based scaling config for an anchored overlay. The applied scale is
-/// `clamp(1 - distance * factor, min, max)`, so closer overlays grow and far ones
-/// shrink, bounded by `min`/`max`.
+/// `clamp(1 + factor * (base_distance / distance - 1), min, max)`, so the overlay
+/// renders at scale 1 when the camera is exactly `base_distance` away, grows as it
+/// gets closer, and shrinks farther out — bounded by `min`/`max`.
 #[derive(Debug, Clone, Copy, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct AnchorScale {
+pub struct AnchorScaling {
     /// Lower bound on the applied scale.
     pub min: f32,
     /// Upper bound on the applied scale.
     pub max: f32,
-    /// Per-world-unit shrink rate (larger → shrinks faster with distance).
+    /// Scaling strength: `0` disables scaling (always 1), `1` is true perspective
+    /// (apparent size halves at twice `base_distance`), `2` scales twice as fast.
     pub factor: f32,
+    /// Camera distance at which the overlay renders at scale 1.
+    pub base_distance: f32,
 }
 
 /// Component stamped (by the main reconciler) on any `Anchored.node`. Carries the
@@ -55,13 +59,14 @@ pub struct Anchored {
     /// World-space offset added to the target's translation before projecting.
     pub offset: Vec3,
     /// Distance-based scaling, or `None` to keep the overlay at scale 1.
-    pub scale: Option<AnchorScale>,
+    pub scale: Option<AnchorScaling>,
 }
 
 /// Reposition every [`Anchored`] node each frame: project its target's world
 /// position through the UI camera and write the result into the node's
-/// `left`/`top`, centered on the anchor point. Hides the overlay when the target
-/// has despawned or its anchor point is behind the camera / off-screen.
+/// `left`/`top`, centered on the anchor point. Hides the overlay until it has been
+/// laid out (so it never flashes uncentered on spawn), and when the target has
+/// despawned or its anchor point is behind the camera / off-screen.
 ///
 /// Registered in `Update` ordered after the op drain so it overrides this frame's
 /// static style. A no-op when no anchored nodes exist.
@@ -91,6 +96,24 @@ pub fn position_anchored_nodes(
     };
 
     for (entity, anchor, child_of, mut node, mut visibility, mut transform) in &mut anchored {
+        // Always absolute, so a hidden overlay never takes flex-flow space in its
+        // parent (e.g. while it waits to be positioned below).
+        node.position_type = PositionType::Absolute;
+
+        // Center the overlay on the anchor using its own laid-out size. On the frame
+        // it spawns, `bevy_ui` layout hasn't produced a size yet (it runs later, in
+        // `PostUpdate`) and the target's transform may not have propagated — so stay
+        // hidden one frame rather than flash uncentered at a stale position. By the
+        // next frame the size is real and the transforms have settled.
+        let Ok((computed, _)) = ui_nodes.get(entity) else {
+            set_visibility(&mut visibility, Visibility::Hidden);
+            continue;
+        };
+        if computed.size().x <= 0.0 {
+            set_visibility(&mut visibility, Visibility::Hidden);
+            continue;
+        }
+
         // The target may have despawned (or not exist yet): hide until it returns.
         let Ok(target_tf) = targets.get(anchor.target) else {
             set_visibility(&mut visibility, Visibility::Hidden);
@@ -105,9 +128,13 @@ pub fn position_anchored_nodes(
         };
 
         // Distance-based scaling (applied via `UiTransform`, which scales about the
-        // node center, so the overlay stays centered on its anchor). `None` → 1.
+        // node center, so the overlay stays centered on its anchor). `None` → 1. At
+        // `dist == 0` the ratio is `inf`, which `clamp` pins to `max` (closest → largest).
         let scale = match anchor.scale {
-            Some(c) => (1.0 - world.distance(cam_tf.translation()) * c.factor).clamp(c.min, c.max),
+            Some(c) => {
+                let dist = world.distance(cam_tf.translation());
+                (1.0 + c.factor * (c.base_distance / dist - 1.0)).clamp(c.min, c.max)
+            }
             None => 1.0,
         };
         if transform.scale != Vec2::splat(scale) {
@@ -121,13 +148,9 @@ pub fn position_anchored_nodes(
             .and_then(|c| ui_nodes.get(c.parent()).ok())
             .map(|(n, gt)| logical_top_left(n, gt))
             .unwrap_or(Vec2::ZERO);
-        let half = ui_nodes
-            .get(entity)
-            .map(|(n, _)| n.size() * n.inverse_scale_factor() / 2.0)
-            .unwrap_or(Vec2::ZERO);
+        let half = computed.size() * computed.inverse_scale_factor() / 2.0;
         let local = viewport - parent_top_left - half;
 
-        node.position_type = PositionType::Absolute;
         node.left = Val::Px(local.x);
         node.top = Val::Px(local.y);
         set_visibility(&mut visibility, Visibility::Inherited);
@@ -162,7 +185,7 @@ mod tests {
             "anchor": {
                 "entity": 4294967297u64,
                 "offset": [0.0, 1.0, 0.0],
-                "scale": { "min": 0.4, "max": 2.0, "factor": 0.03 }
+                "scale": { "min": 0.4, "max": 2.0, "factor": 1.0, "baseDistance": 24.0 }
             }
         }))
         .unwrap();
@@ -170,7 +193,10 @@ mod tests {
         assert_eq!(anchor.entity as u64, 4_294_967_297);
         assert_eq!(anchor.offset, Some([0.0, 1.0, 0.0]));
         let scale = anchor.scale.expect("scale present");
-        assert_eq!((scale.min, scale.max, scale.factor), (0.4, 2.0, 0.03));
+        assert_eq!(
+            (scale.min, scale.max, scale.factor, scale.base_distance),
+            (0.4, 2.0, 1.0, 24.0)
+        );
     }
 
     #[test]

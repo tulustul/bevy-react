@@ -16,12 +16,17 @@ import type { BevyImageProps, BevyNodeProps, BevyTextProps } from "./jsx";
 export type Vec3 = [number, number, number];
 
 /** Distance-based scaling for an anchored overlay. The Bevy side applies
- *  `clamp(1 - distance * factor, min, max)`, so nearer overlays grow and far ones
- *  shrink. Omit `scale` entirely to keep the overlay at a constant size. */
-export interface AnchorScale {
+ *  `clamp(1 + factor * (baseDistance / distance - 1), min, max)`, so the overlay
+ *  renders at scale 1 when the camera is `baseDistance` away, grows as it gets
+ *  closer, and shrinks farther out. Omit `scale` entirely to keep a constant size. */
+export interface AnchorScaling {
   min: number;
   max: number;
+  /** Scaling strength: `0` disables scaling, `1` is true perspective (apparent
+   *  size halves at twice `baseDistance`), `2` scales twice as fast. */
   factor: number;
+  /** Camera distance at which the overlay renders at scale 1. */
+  baseDistance: number;
 }
 
 /** Extra props every `Anchored.*` element accepts: which Bevy entity to follow,
@@ -32,8 +37,8 @@ export interface AnchorProps {
   entity: number | bigint;
   /** World-space offset added to the entity's position before projecting. */
   offset?: Vec3;
-  /** When set, the overlay scales with camera distance (see `AnchorScale`). */
-  scale?: AnchorScale;
+  /** When set, the overlay scales with camera distance (see `AnchorScaling`). */
+  scale?: AnchorScaling;
 }
 
 // Thin host wrappers, so apps write `<Anchored.node entity={e} offset={…}/>`. The

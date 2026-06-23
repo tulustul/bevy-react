@@ -1,15 +1,15 @@
 //! Demo 5 — **World-anchored UI**. A field of ~100 cubes wanders on a plane, and
 //! React renders a badge floating above each one via `<Anchored.node entity={…}/>`.
-//! React fetches the cube entities with a single `bevy.cubes.list()` request, then
-//! the anchor positioning system projects each entity's world position to the
-//! screen every frame. Left-drag orbits the camera; a checkbox toggles
-//! distance-based scaling of the badges.
+//! When the cubes spawn, Bevy pushes their entity ids to React in one
+//! `anchoredDemo.cubesSpawned` event; the anchor positioning system then projects
+//! each entity's world position to the screen every frame. Left-drag orbits the
+//! camera; a checkbox toggles distance-based scaling of the badges.
 
 use std::f32::consts::{PI, TAU};
 
 use bevy::input::mouse::AccumulatedMouseMotion;
 use bevy::prelude::*;
-use bevy_react::{ReactAppExt, Request, react_request};
+use bevy_react::{ReactAppExt, ReactEvents, react_event};
 use serde::Serialize;
 use ts_rs::TS;
 
@@ -42,27 +42,23 @@ impl Plugin for AnchoredPlugin {
 
 /// Register this demo's React bindings (shared with the `--export-bindings` path).
 pub fn register_bindings(app: &mut App) {
-    // React -> Bevy request: `await bevy.cubes.list()` → typed `Vec<CubeInfo>`.
-    app.add_react_request_handler(list_cubes);
+    // Bevy -> React event: hands React every cube's entity so it can anchor a badge.
+    app.add_react_event::<CubesSpawned>();
 }
 
-/// React asks for every cube's entity id so it can anchor a badge to each:
-/// `await bevy.cubes.list()`. A unit payload, so the proxy method takes no args.
-#[react_request(name = "cubes.list", response = Vec<CubeInfo>)]
-struct CubesList;
+/// Bevy tells React the cubes are ready: `bevy.on("anchoredDemo.cubesSpawned", …)`.
+/// Carries the whole list so React can render the badges in one go, with no poll.
+#[react_event(name = "anchoredDemo.cubesSpawned")]
+struct CubesSpawned {
+    cubes: Vec<CubeInfo>,
+}
 
-/// One cube in the [`CubesList`] reply: its `Entity` (as bits, for `Anchored.node`)
-/// and a short label to show in the badge.
+/// One cube in [`CubesSpawned`]: its `Entity` (as bits, for `Anchored.node`) and a
+/// short label to show in the badge.
 #[derive(Serialize, TS)]
 struct CubeInfo {
     entity: u64,
     label: String,
-}
-
-/// A wandering cube; `index` drives its label and seeds its motion.
-#[derive(Component)]
-struct Cube {
-    index: usize,
 }
 
 /// Per-cube random-walk state: a heading that gently wobbles over time.
@@ -97,22 +93,6 @@ struct CubeAssets {
     materials: Vec<Handle<StandardMaterial>>,
     ground: Handle<Mesh>,
     ground_material: Handle<StandardMaterial>,
-}
-
-/// Answer `bevy.cubes.list()` with every cube's entity id + label, ordered by
-/// index. Responds with an empty list when the demo's cubes aren't spawned yet, so
-/// React can poll until they appear rather than getting a rejection.
-fn list_cubes(req: On<Request<CubesList>>, cubes: Query<(Entity, &Cube)>) {
-    let mut by_index: Vec<(usize, Entity)> = cubes.iter().map(|(e, c)| (c.index, e)).collect();
-    by_index.sort_by_key(|(i, _)| *i);
-    let list = by_index
-        .into_iter()
-        .map(|(i, e)| CubeInfo {
-            entity: e.to_bits(),
-            label: format!("#{i}"),
-        })
-        .collect::<Vec<_>>();
-    req.respond(list);
 }
 
 /// Create the shared cube mesh, color palette, and ground plane once at startup.
@@ -155,8 +135,11 @@ fn setup_cube_assets(
 }
 
 /// Spawn the ground plane and `CUBE_COUNT` cubes at pseudo-random positions and
-/// headings (seeded by index, so no `rand` dependency). All scoped to the demo.
-fn spawn_cubes(mut commands: Commands, assets: Res<CubeAssets>) {
+/// headings (seeded by index, so no `rand` dependency), then push their entity ids
+/// to React in one `anchoredDemo.cubesSpawned` event. All cubes are scoped to the
+/// demo. React subscribed on mount (before it emitted `selectDemo`, which drove this
+/// `OnEnter`), so the event always lands.
+fn spawn_cubes(mut commands: Commands, assets: Res<CubeAssets>, events: ReactEvents) {
     commands.spawn((
         Mesh3d(assets.ground.clone()),
         MeshMaterial3d(assets.ground_material.clone()),
@@ -164,24 +147,32 @@ fn spawn_cubes(mut commands: Commands, assets: Res<CubeAssets>) {
         DespawnOnExit(Demo::Anchored),
     ));
 
+    let mut cubes = Vec::with_capacity(CUBE_COUNT);
     for i in 0..CUBE_COUNT {
         let seed = i as u32;
         let x = (hash01(seed.wrapping_mul(2).wrapping_add(1)) * 2.0 - 1.0) * PLANE_HALF;
         let z = (hash01(seed.wrapping_mul(2).wrapping_add(7)) * 2.0 - 1.0) * PLANE_HALF;
-        commands.spawn((
-            Mesh3d(assets.mesh.clone()),
-            MeshMaterial3d(assets.materials[i % assets.materials.len()].clone()),
-            Transform::from_xyz(x, CUBE_SIZE / 2.0, z),
-            Cube { index: i },
-            Wander {
-                heading: hash01(seed.wrapping_mul(3).wrapping_add(11)) * TAU,
-                speed: 1.0 + hash01(seed.wrapping_mul(5).wrapping_add(13)) * 1.5,
-                wobble_freq: 0.5 + hash01(seed.wrapping_mul(11).wrapping_add(19)),
-                phase: hash01(seed.wrapping_mul(7).wrapping_add(17)) * TAU,
-            },
-            DespawnOnExit(Demo::Anchored),
-        ));
+        let entity = commands
+            .spawn((
+                Mesh3d(assets.mesh.clone()),
+                MeshMaterial3d(assets.materials[i % assets.materials.len()].clone()),
+                Transform::from_xyz(x, CUBE_SIZE / 2.0, z),
+                Wander {
+                    heading: hash01(seed.wrapping_mul(3).wrapping_add(11)) * TAU,
+                    speed: 1.0 + hash01(seed.wrapping_mul(5).wrapping_add(13)) * 1.5,
+                    wobble_freq: 0.5 + hash01(seed.wrapping_mul(11).wrapping_add(19)),
+                    phase: hash01(seed.wrapping_mul(7).wrapping_add(17)) * TAU,
+                },
+                DespawnOnExit(Demo::Anchored),
+            ))
+            .id();
+        cubes.push(CubeInfo {
+            entity: entity.to_bits(),
+            label: format!("#{i}"),
+        });
     }
+
+    events.send(&CubesSpawned { cubes });
 }
 
 /// Advance each cube along its heading, wobbling the heading over time so the path

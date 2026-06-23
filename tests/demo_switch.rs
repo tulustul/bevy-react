@@ -12,10 +12,10 @@ use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
-use crossbeam_channel::{Receiver, RecvTimeoutError, TryRecvError};
+use crossbeam_channel::{Receiver, RecvTimeoutError};
 
 use bevy_react::js_thread::spawn_js_thread;
-use bevy_react::protocol::{Op, Outbound, ResponseResult, UiEvent};
+use bevy_react::protocol::{Op, Outbound, UiEvent};
 use bevy_react::{RawRequest, ReactMessage};
 
 fn example_bundle() -> PathBuf {
@@ -55,14 +55,12 @@ fn find_button(
     text_of: &HashMap<u32, String>,
 ) -> Option<u32> {
     for (span, text) in text_of {
-        if text.trim() == label {
-            if let Some(&text_node) = parent_of.get(span) {
-                if let Some(&button) = parent_of.get(&text_node) {
-                    if buttons.contains(&button) {
-                        return Some(button);
-                    }
-                }
-            }
+        if text.trim() == label
+            && let Some(&text_node) = parent_of.get(span)
+            && let Some(&button) = parent_of.get(&text_node)
+            && buttons.contains(&button)
+        {
+            return Some(button);
         }
     }
     None
@@ -93,48 +91,22 @@ fn pump(
     }
 }
 
-/// Wait for the next `cubes.list` request and answer it with a small non-empty
-/// list (so `AnchoredDemo`'s poll stops). Drains ops meanwhile to catch a crash.
-fn answer_cubes_list(
-    request_rx: &Receiver<RawRequest>,
-    ops_rx: &Receiver<Vec<Op>>,
-    outbound_tx: &tokio::sync::mpsc::UnboundedSender<Outbound>,
-) {
-    let deadline = Instant::now() + Duration::from_secs(5);
-    loop {
-        assert!(
-            Instant::now() < deadline,
-            "no `cubes.list` request arrived after clicking Anchored"
-        );
-        match ops_rx.try_recv() {
-            Ok(_) => {}
-            Err(TryRecvError::Empty) => {}
-            Err(TryRecvError::Disconnected) => {
-                panic!("JS thread died while awaiting cubes.list — see `[js] runtime error` above");
-            }
-        }
-        match request_rx.recv_timeout(Duration::from_millis(25)) {
-            Ok(req) if req.name == "cubes.list" => {
-                let value = serde_json::json!([
-                    { "entity": 4_294_967_297u64, "label": "#0" },
-                    { "entity": 4_294_967_298u64, "label": "#1" },
-                    { "entity": 4_294_967_299u64, "label": "#2" },
-                ]);
-                outbound_tx
-                    .send(Outbound::Response {
-                        id: req.id,
-                        result: ResponseResult::Ok { value },
-                    })
-                    .expect("JS thread gone before response");
-                return;
-            }
-            Ok(_) => {}
-            Err(RecvTimeoutError::Timeout) => {}
-            Err(RecvTimeoutError::Disconnected) => {
-                panic!("JS thread died while awaiting cubes.list request");
-            }
-        }
-    }
+/// Play Bevy's `spawn_cubes`: push the `anchoredDemo.cubesSpawned` event with a
+/// small cube list, which `AnchoredDemo` (subscribed on mount) renders as badges.
+fn send_cubes_spawned(outbound_tx: &tokio::sync::mpsc::UnboundedSender<Outbound>) {
+    let value = serde_json::json!({
+        "cubes": [
+            { "entity": 4_294_967_297u64, "label": "#0" },
+            { "entity": 4_294_967_298u64, "label": "#1" },
+            { "entity": 4_294_967_299u64, "label": "#2" },
+        ]
+    });
+    outbound_tx
+        .send(Outbound::Event {
+            name: "anchoredDemo.cubesSpawned".into(),
+            value,
+        })
+        .expect("JS thread gone before event");
 }
 
 #[test]
@@ -150,7 +122,7 @@ fn demo_switch_anchored_survives() {
 
     let (ops_tx, ops_rx) = crossbeam_channel::unbounded::<Vec<Op>>();
     let (emit_tx, _emit_rx) = crossbeam_channel::unbounded::<ReactMessage>();
-    let (request_tx, request_rx) = crossbeam_channel::unbounded::<RawRequest>();
+    let (request_tx, _request_rx) = crossbeam_channel::unbounded::<RawRequest>();
     let (anim_tx, _anim_rx) = crossbeam_channel::unbounded();
     let (outbound_tx, outbound_rx) = tokio::sync::mpsc::unbounded_channel::<Outbound>();
     let (_reload_tx, reload_rx) = tokio::sync::mpsc::unbounded_channel::<()>();
@@ -208,7 +180,7 @@ fn demo_switch_anchored_survives() {
     for round in 0..3 {
         eprintln!("--- round {round}: -> Anchored");
         click(anchored_btn);
-        answer_cubes_list(&request_rx, &ops_rx, &outbound_tx);
+        send_cubes_spawned(&outbound_tx);
         pump(
             &ops_rx,
             Duration::from_millis(200),

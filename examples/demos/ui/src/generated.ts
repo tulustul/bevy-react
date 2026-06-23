@@ -21,6 +21,7 @@ speed: number, };
 export type BallState = { x: number, y: number, vx: number, vy: number, };
 export type Count = number;
 export type CubeInfo = { entity: bigint, label: string, };
+export type CubesSpawned = { cubes: Array<CubeInfo>, };
 export type DemoId = "BasicUi" | "Events" | "RequestResponse" | "Animations" | "Anchored";
 export type SelectDemo = DemoId;
 export type Wall = "Left" | "Right" | "Top" | "Bottom" | "Front" | "Back";
@@ -34,11 +35,11 @@ export interface ReactMessages {
 /** Every `request` name and its request/response types. */
 export interface ReactRequests {
   "ball.get": { request: null; response: BallState };
-  "cubes.list": { request: null; response: Array<CubeInfo> };
 }
 
 /** Every Bevy → React event name and the payload it carries. */
 export interface ReactEvents {
+  "anchoredDemo.cubesSpawned": CubesSpawned;
   "ball.bounced": BallBounced;
 }
 
@@ -81,8 +82,5 @@ export const bevy = {
   removeEventListener,
   ball: {
     get(): Promise<BallState> { return request("ball.get", null); },
-  },
-  cubes: {
-    list(): Promise<Array<CubeInfo>> { return request("cubes.list", null); },
   },
 } as const;

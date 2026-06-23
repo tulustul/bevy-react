@@ -45,4 +45,4 @@ export type {
 
 // World-anchored overlays (`<Anchored.node entity={…} offset={…}/>`).
 export { Anchored } from "./anchored";
-export type { AnchorProps, AnchorScale, Vec3 } from "./anchored";
+export type { AnchorProps, AnchorScaling, Vec3 } from "./anchored";

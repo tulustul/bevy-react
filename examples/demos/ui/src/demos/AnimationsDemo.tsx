@@ -11,7 +11,8 @@ import {
   withTiming,
 } from "bevy-react";
 import { BevyStyle } from "bevy-react/jsx";
-import { cardStyle, headingStyle, labelStyle } from "./styles";
+import { headingStyle, labelStyle } from "./styles";
+import { Card } from "../components";
 
 // Five squares, each backed by its own Bevy-resident shared values, bouncing
 // left↔right with a short stop at each end and staggered so they cascade. Each
@@ -38,7 +39,7 @@ export function AnimationsDemo() {
   const [mode, setMode] = useState<Mode>("easeInOut");
 
   return (
-    <node style={cardStyle}>
+    <Card>
       <text style={headingStyle}>Animations</text>
 
       <node style={lanesStyle}>
@@ -57,7 +58,7 @@ export function AnimationsDemo() {
           />
         ))}
       </node>
-    </node>
+    </Card>
   );
 }
 

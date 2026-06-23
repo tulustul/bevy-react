@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { bevy } from "../generated";
 import type { BallState } from "../generated";
-import { cardStyle, headingStyle, labelStyle } from "./styles";
+import { headingStyle, labelStyle } from "./styles";
+import { Card } from "../components";
 
 const HINT = "const ballInfo = await bevy.ball.get()";
 
@@ -36,7 +37,7 @@ export function RequestResponseDemo() {
   }, []);
 
   return (
-    <node style={cardStyle}>
+    <Card>
       <text style={headingStyle}>Ball telemetry</text>
       <text style={labelStyle}>{HINT}</text>
 
@@ -50,7 +51,7 @@ export function RequestResponseDemo() {
           waiting for the ball…
         </text>
       )}
-    </node>
+    </Card>
   );
 }
 

@@ -37,7 +37,7 @@ pub mod protocol;
 
 // The Reanimated-style animation engine lives in its own crate (this crate
 // depends on it). Re-exported so consumers can add/configure it directly.
-pub use anchor::{Anchor, AnchorScale, Anchored};
+pub use anchor::{Anchor, AnchorScaling, Anchored};
 pub use bevy_react_animations::{self, ReactUiAnimationsPlugin};
 pub use bevy_react_macros::{react_event, react_message, react_request};
 pub use event::{ReactEvent, ReactEvents};

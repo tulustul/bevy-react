@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { bevy } from "../generated";
-import { cardStyle, headingStyle, labelStyle } from "./styles";
+import { headingStyle, labelStyle } from "./styles";
+import { Card } from "../components";
 
 const HINT = 'bevy.on("ball.bounced", () => {})';
 
@@ -20,23 +21,13 @@ export function EventsDemo() {
   }, []);
 
   return (
-    <node style={cardStyle}>
+    <Card>
       <text style={headingStyle}>Bounce events</text>
       <text style={labelStyle}>{HINT}</text>
 
-      <node style={toastColumn}>
-        <text style={{ color: "#6c7086", fontSize: 14 }}>
-          Number of bounces: {bounces}
-          <text style={{ color: "#1e1e2e", fontSize: 15 }}>{bounces}</text>
-        </text>
-      </node>
-    </node>
+      <text style={{ color: "#6c7086", fontSize: 14 }}>
+        Number of bounces: {bounces}
+      </text>
+    </Card>
   );
 }
-
-const toastColumn = {
-  flexDirection: "column" as const,
-  alignItems: "center" as const,
-  gap: 8,
-  justifyContent: "start" as const,
-};
