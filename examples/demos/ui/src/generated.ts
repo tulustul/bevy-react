@@ -21,7 +21,7 @@ speed: number, };
 export type BallState = { x: number, y: number, vx: number, vy: number, };
 export type CubeInfo = { entity: bigint, label: string, };
 export type CubesSpawned = { cubes: Array<CubeInfo>, };
-export type DemoId = "BasicUi" | "BevyEvents" | "Polling" | "Animations" | "WorldAnchors" | "Interactions" | "Canvas";
+export type DemoId = "BasicUi" | "BevyEvents" | "Polling" | "Animations" | "WorldAnchors" | "Interactions" | "Canvas" | "Scroll";
 export type SelectDemo = DemoId;
 export type SetCount = number;
 export type Wall = "Left" | "Right" | "Top" | "Bottom" | "Front" | "Back";

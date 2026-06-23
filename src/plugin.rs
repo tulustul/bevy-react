@@ -158,6 +158,13 @@ impl Plugin for ReactUiPlugin {
                 apply_js_ops,
                 collect_ui_events,
                 collect_pointer_events.in_set(PointerCaptureSet),
+                // Wheel-scroll any `overflow: scroll` node under the cursor. In the
+                // same set, after `collect_pointer_events`, so it ORs into this
+                // frame's `PointerCapture::over_ui` before world systems (ordered
+                // `.after(PointerCaptureSet)`) read it.
+                crate::scroll::apply_scroll
+                    .in_set(PointerCaptureSet)
+                    .after(collect_pointer_events),
                 // After the op drain so this frame's `StyleVariants` writes are
                 // visible; the ordering forces a command sync point first.
                 apply_interaction_styles.after(apply_js_ops),

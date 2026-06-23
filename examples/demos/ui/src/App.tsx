@@ -11,6 +11,7 @@ import { AnimationsDemo } from "./demos/AnimationsDemo";
 import { AnchoredDemo } from "./demos/AnchoredDemo";
 import { InteractionsDemo } from "./demos/InteractionsDemo";
 import { CanvasDemo } from "./demos/CanvasDemo";
+import { ScrollDemo } from "./demos/ScrollDemo";
 
 // A nav entry is a top-level demo; one (Animations) carries a submenu of
 // React-side example variants that all share the same `Demo` scene.
@@ -32,6 +33,7 @@ const DEMOS: NavItem[] = [
   { id: "WorldAnchors", label: "World Anchors" },
   { id: "Interactions", label: "Interactions" },
   { id: "Canvas", label: "Canvas" },
+  { id: "Scroll", label: "Scroll" },
 ];
 
 export function App() {
@@ -51,27 +53,29 @@ export function App() {
       <node style={navStyle}>
         <image src="bevy-logo.png" style={{ width: 100 }} />
         <text style={titleStyle}>bevy-react</text>
-        {DEMOS.map((d) => (
-          <node key={d.id} style={navGroupStyle}>
-            <NavButton
-              label={d.label}
-              selected={d.id === active}
-              onPress={() => setActive(d.id)}
-            />
-            {d.children?.map((c) => (
+        <node style={itemsStyle}>
+          {DEMOS.map((d) => (
+            <node key={d.id} style={navGroupStyle}>
               <NavButton
-                key={c.key}
-                label={c.label}
-                selected={d.id === active && c.key === animExample}
-                indent
-                onPress={() => {
-                  setActive(d.id);
-                  setAnimExample(c.key);
-                }}
+                label={d.label}
+                selected={d.id === active}
+                onPress={() => setActive(d.id)}
               />
-            ))}
-          </node>
-        ))}
+              {d.children?.map((c) => (
+                <NavButton
+                  key={c.key}
+                  label={c.label}
+                  selected={d.id === active && c.key === animExample}
+                  indent
+                  onPress={() => {
+                    setActive(d.id);
+                    setAnimExample(c.key);
+                  }}
+                />
+              ))}
+            </node>
+          ))}
+        </node>
       </node>
 
       <node style={contentStyle}>
@@ -82,6 +86,7 @@ export function App() {
         {active === "WorldAnchors" && <AnchoredDemo />}
         {active === "Interactions" && <InteractionsDemo />}
         {active === "Canvas" && <CanvasDemo />}
+        {active === "Scroll" && <ScrollDemo />}
       </node>
     </node>
   );
@@ -138,6 +143,15 @@ const navStyle: BevyStyle = {
   backgroundColor: "#181825",
   zIndex: 100,
   boxShadow: { blurRadius: 15, spreadRadius: 0, color: "#00000088" },
+};
+
+const itemsStyle: BevyStyle = {
+  flexDirection: "column",
+  alignItems: "stretch",
+  width: "100%",
+  height: "100%",
+  gap: 8,
+  overflowY: "scroll",
 };
 
 const navGroupStyle: BevyStyle = {

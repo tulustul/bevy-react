@@ -24,6 +24,8 @@ pub enum Demo {
     Interactions,
     /// Pure-UI demo (a `<canvas>` line chart drawn with vector commands); no 3D scene.
     Canvas,
+    /// Pure-UI demo (a wheel-scrollable list); no 3D scene.
+    Scroll,
 }
 
 /// The wire form of [`Demo`] — what React sends with `emit("selectDemo", id)`.
@@ -38,6 +40,7 @@ pub enum DemoId {
     WorldAnchors,
     Interactions,
     Canvas,
+    Scroll,
 }
 
 /// React picks the active demo from the left-nav: `emit("selectDemo", id)`.
@@ -60,6 +63,7 @@ fn apply_select_demo(on: On<SelectDemo>, mut next: ResMut<NextState<Demo>>) {
         DemoId::WorldAnchors => Demo::WorldAnchors,
         DemoId::Interactions => Demo::Interactions,
         DemoId::Canvas => Demo::Canvas,
+        DemoId::Scroll => Demo::Scroll,
     });
 }
 

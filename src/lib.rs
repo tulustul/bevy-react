@@ -31,6 +31,7 @@ mod message;
 mod plugin;
 mod reconcile;
 mod request;
+mod scroll;
 mod ui_map;
 
 pub mod js_thread;
