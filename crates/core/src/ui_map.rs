@@ -5,6 +5,7 @@
 use bevy::prelude::*;
 use bevy::ui::widget::NodeImageMode;
 
+use crate::plugin::Fonts;
 use crate::protocol::{Length, Props, Rect, Style};
 
 /// Parse a `#rrggbb`/`rrggbb` (or 8-digit alpha) hex string into a `Color`.
@@ -662,9 +663,14 @@ fn justify(s: &str) -> Justify {
 /// Resolve a style's text appearance into the `TextColor` + `TextFont` a text
 /// run carries. Unset fields fall back to white / Bevy's default font. Returned
 /// as concrete components so they can be copied onto inheriting child spans.
-pub fn resolved_text_style(style: &Option<Style>) -> (TextColor, TextFont) {
+pub fn resolved_text_style(style: &Option<Style>, fonts: &Fonts) -> (TextColor, TextFont) {
     let mut color = TextColor(Color::WHITE);
     let mut font = TextFont::default();
+    // Default font face; a `fontFamily` below overrides it. Unset on both → leave
+    // `TextFont::default()`'s empty handle (Bevy's built-in font).
+    if let Some(h) = &fonts.default {
+        font.font = FontSource::Handle(h.clone());
+    }
     if let Some(s) = style.as_ref() {
         if let Some(c) = &s.color {
             color = TextColor(parse_color(c));
@@ -675,13 +681,19 @@ pub fn resolved_text_style(style: &Option<Style>) -> (TextColor, TextFont) {
         if let Some(w) = &s.font_weight {
             font.weight = font_weight(w);
         }
+        if let Some(family) = &s.font_family {
+            match fonts.named.get(family) {
+                Some(h) => font.font = FontSource::Handle(h.clone()),
+                None => warn!("unknown fontFamily {family:?}; using the default font"),
+            }
+        }
     }
     (color, font)
 }
 
 /// Insert the `TextColor` + `TextFont` for a `<text>` element or span.
-pub fn apply_text_style(ec: &mut EntityCommands, style: &Option<Style>) {
-    ec.insert(resolved_text_style(style));
+pub fn apply_text_style(ec: &mut EntityCommands, style: &Option<Style>, fonts: &Fonts) {
+    ec.insert(resolved_text_style(style, fonts));
 }
 
 /// The `TextLayout` for a `<text>` root, if `textAlign` is set (root only).
@@ -790,7 +802,7 @@ mod tests {
         let s = style(serde_json::json!({
             "color": "#7aa2f7", "fontSize": 20, "fontWeight": "bold"
         }));
-        let (color, font) = resolved_text_style(&Some(s));
+        let (color, font) = resolved_text_style(&Some(s), &Fonts::default());
         assert_eq!(color.0, parse_color("#7aa2f7"));
         assert_eq!(font.font_size, (20.0f32).into());
         assert_eq!(font.weight, FontWeight::BOLD);

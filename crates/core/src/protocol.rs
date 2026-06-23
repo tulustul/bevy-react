@@ -284,6 +284,11 @@ pub struct Style {
     /// or a numeric weight string (e.g. `"600"`).
     #[serde(default)]
     pub font_weight: Option<String>,
+    /// Registered font-family name to render this text with (see the plugin's
+    /// `default_font`/`font` config). Unknown or unset → the configured default
+    /// font.
+    #[serde(default)]
+    pub font_family: Option<String>,
     /// Horizontal alignment of the text block (`<text>` root only):
     /// `"left" | "center" | "right" | "justify" | "start" | "end"`.
     #[serde(default)]

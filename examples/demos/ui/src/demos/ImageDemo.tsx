@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { BevyStyle } from "bevy-react/jsx";
 import { headingStyle, labelStyle } from "./styles";
-import { Card } from "../components";
+import { Button, Card } from "../components";
 
 // A pure-UI demo of the `<image>` host element: an asset loaded by `src`, plus
 // `tint`, `flipX`, and `flipY`. The same `bevy-logo.png` is shown untinted and
@@ -40,20 +40,12 @@ export function ImageDemo() {
       </node>
 
       <node style={{ flexDirection: "row", gap: 12 }}>
-        <button
-          onClick={() => setFlipX((f) => !f)}
-          style={toggleStyle}
-          hoverStyle={toggleHoverStyle}
-        >
-          <text style={toggleLabelStyle}>flipX: {flipX ? "on" : "off"}</text>
-        </button>
-        <button
-          onClick={() => setFlipY((f) => !f)}
-          style={toggleStyle}
-          hoverStyle={toggleHoverStyle}
-        >
-          <text style={toggleLabelStyle}>flipY: {flipY ? "on" : "off"}</text>
-        </button>
+        <Button onClick={() => setFlipX((f) => !f)}>
+          flipX: {flipX ? "on" : "off"}
+        </Button>
+        <Button onClick={() => setFlipY((f) => !f)}>
+          flipY: {flipY ? "on" : "off"}
+        </Button>
       </node>
     </Card>
   );
@@ -67,20 +59,4 @@ const logoStyle: BevyStyle = {
 const captionStyle: BevyStyle = {
   color: "#a6adc8",
   fontSize: 13,
-};
-
-const toggleStyle: BevyStyle = {
-  padding: { top: 8, right: 12, bottom: 8, left: 12 },
-  borderRadius: 8,
-  backgroundColor: "#2a2a3c",
-};
-
-const toggleHoverStyle: BevyStyle = {
-  backgroundColor: "#42425e",
-};
-
-const toggleLabelStyle: BevyStyle = {
-  color: "#cdd6f4",
-  fontSize: 14,
-  fontWeight: "bold",
 };

@@ -146,6 +146,9 @@ export interface BevyStyle {
     | "bold"
     | "black"
     | (string & {});
+  /** Registered font-family name to render with (see the plugin's
+   * `default_font`/`font` config). Unknown or unset → the configured default. */
+  fontFamily?: string;
   /** Horizontal alignment of the text block (`<text>` root only). */
   textAlign?: "left" | "center" | "right" | "justify" | "start" | "end";
 }

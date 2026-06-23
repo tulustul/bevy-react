@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { bevy } from "../generated";
 import { Example } from "../components";
 
 const TYPESCRIPT = `bevy.on(
   "bouncingBall.bounced",
-  () => setBounces(bounces + 1)
+  () => setBounces((bounces) => bounces + 1);
 )`;
 
 const RUST = `#[react_event(name = "bouncingBall.bounced")]
@@ -20,13 +20,11 @@ app.add_systems(Update, bounce);
 `;
 
 export function EventsDemo() {
-  const bouncesRef = useRef(0);
   const [bounces, setBounces] = useState(0);
 
   useEffect(() => {
     const off = bevy.on("bevyEventsDemo.ballBounced", () => {
-      bouncesRef.current++;
-      setBounces(bouncesRef.current);
+      setBounces((bounces) => bounces + 1);
     });
 
     return () => {

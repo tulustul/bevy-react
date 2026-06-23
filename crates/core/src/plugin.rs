@@ -65,6 +65,8 @@ pub struct ReactUiPlugin {
     hot_reload: bool,
     spawn_camera: bool,
     animations: bool,
+    default_font: Option<PathBuf>,
+    named_fonts: Vec<(String, PathBuf)>,
 }
 
 impl ReactUiPlugin {
@@ -79,6 +81,8 @@ impl ReactUiPlugin {
             hot_reload: true,
             spawn_camera: true,
             animations: true,
+            default_font: None,
+            named_fonts: Vec::new(),
         }
     }
 
@@ -99,6 +103,22 @@ impl ReactUiPlugin {
     /// `op_animate` op stays registered but its commands are discarded.
     pub fn with_animations(mut self, yes: bool) -> Self {
         self.animations = yes;
+        self
+    }
+
+    /// Set the app-wide default font, loaded via the `AssetServer` (path relative
+    /// to your `AssetPlugin.file_path`, e.g. `"fonts/Roboto.ttf"`). Every `<text>`
+    /// run uses it unless its style names another family via [`Self::font`].
+    pub fn default_font(mut self, path: impl Into<PathBuf>) -> Self {
+        self.default_font = Some(path.into());
+        self
+    }
+
+    /// Register a named font family. React selects it per element with
+    /// `style={{ fontFamily: name }}`; the path is loaded via the `AssetServer`
+    /// (relative to your `AssetPlugin.file_path`).
+    pub fn font(mut self, name: impl Into<String>, path: impl Into<PathBuf>) -> Self {
+        self.named_fonts.push((name.into(), path.into()));
         self
     }
 }
@@ -151,11 +171,14 @@ impl Plugin for ReactUiPlugin {
         .insert_resource(RequestReceiver(request_rx))
         .insert_resource(ReactUiConfig {
             spawn_camera: self.spawn_camera,
+            default_font: self.default_font.clone(),
+            named_fonts: self.named_fonts.clone(),
         })
         .init_resource::<ReactRegistry>()
         .init_resource::<ReactRequestRegistry>()
         .init_resource::<ReactEventRegistry>()
         .init_resource::<PointerCapture>()
+        .init_resource::<Fonts>()
         .add_systems(Startup, setup)
         .add_systems(
             PreUpdate,
@@ -222,6 +245,17 @@ struct UiRoot;
 #[derive(Resource)]
 struct ReactUiConfig {
     spawn_camera: bool,
+    default_font: Option<PathBuf>,
+    named_fonts: Vec<(String, PathBuf)>,
+}
+
+/// Fonts loaded from the plugin config, resolved to handles at startup. The
+/// default backs every `<text>` run; named entries are selected per element via
+/// the `fontFamily` style prop. Empty (unconfigured) → Bevy's built-in font.
+#[derive(Resource, Default)]
+pub struct Fonts {
+    pub default: Option<Handle<Font>>,
+    pub named: std::collections::HashMap<String, Handle<Font>>,
 }
 
 /// Carries the Bevy-side channel ends from `build` into `setup`.
@@ -254,10 +288,26 @@ fn dispatch_react_messages(
 #[derive(Resource)]
 struct ReloadKeepAlive(#[allow(dead_code)] tokio::sync::mpsc::UnboundedSender<()>);
 
-fn setup(mut commands: Commands, mut channels: ResMut<BridgeChannels>, config: Res<ReactUiConfig>) {
+fn setup(
+    mut commands: Commands,
+    mut channels: ResMut<BridgeChannels>,
+    config: Res<ReactUiConfig>,
+    assets: Res<AssetServer>,
+) {
     if config.spawn_camera {
         commands.spawn(Camera2d);
     }
+
+    // Load configured fonts into the `Fonts` resource before the first
+    // `apply_js_ops` (Update) creates any text.
+    commands.insert_resource(Fonts {
+        default: config.default_font.as_ref().map(|p| assets.load(p.clone())),
+        named: config
+            .named_fonts
+            .iter()
+            .map(|(name, path)| (name.clone(), assets.load(path.clone())))
+            .collect(),
+    });
 
     // The root container: a full-window flex column the reconciler appends
     // top-level children into (it is reconciler node id 0). Children stack from

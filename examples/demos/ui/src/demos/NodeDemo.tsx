@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { BevyStyle } from "bevy-react/jsx";
-import { headingStyle, labelStyle } from "./styles";
-import { Card } from "../components";
+import { codeStyle, headingStyle, labelStyle } from "./styles";
+import { Button, Card } from "../components";
 
 // A pure-UI demo of the `<node>` host element: the flex/grid layout primitive.
 // Toggle the container's `flexDirection` and cycle its `justifyContent` to see
@@ -24,7 +24,9 @@ export function NodeDemo() {
   return (
     <Card>
       <text style={headingStyle}>Node</text>
-      <text style={labelStyle}>{"<node style={{ flexDirection, gap }} />"}</text>
+      <text style={{ ...labelStyle, ...codeStyle }}>
+        {"<node style={{ flexDirection, gap }} />"}
+      </text>
 
       <node
         style={{
@@ -34,27 +36,22 @@ export function NodeDemo() {
         }}
       >
         {SWATCHES.map((color) => (
-          <node key={color} style={{ ...swatchStyle, backgroundColor: color }} />
+          <node
+            key={color}
+            style={{ ...swatchStyle, backgroundColor: color }}
+          />
         ))}
       </node>
 
       <node style={{ flexDirection: "row", gap: 12 }}>
-        <button
-          onClick={() => setRow((r) => !r)}
-          style={toggleStyle}
-          hoverStyle={toggleHoverStyle}
-        >
-          <text style={toggleLabelStyle}>
-            flexDirection: {row ? "row" : "column"}
-          </text>
-        </button>
-        <button
+        <Button onClick={() => setRow((r) => !r)}>
+          flexDirection: {row ? "row" : "column"}
+        </Button>
+        <Button
           onClick={() => setJustifyIndex((i) => (i + 1) % JUSTIFY.length)}
-          style={toggleStyle}
-          hoverStyle={toggleHoverStyle}
         >
-          <text style={toggleLabelStyle}>justify: {justifyContent}</text>
-        </button>
+          justify: {justifyContent}
+        </Button>
       </node>
     </Card>
   );
@@ -74,20 +71,4 @@ const swatchStyle: BevyStyle = {
   width: 48,
   height: 48,
   borderRadius: 8,
-};
-
-const toggleStyle: BevyStyle = {
-  padding: { top: 8, right: 12, bottom: 8, left: 12 },
-  borderRadius: 8,
-  backgroundColor: "#2a2a3c",
-};
-
-const toggleHoverStyle: BevyStyle = {
-  backgroundColor: "#42425e",
-};
-
-const toggleLabelStyle: BevyStyle = {
-  color: "#cdd6f4",
-  fontSize: 14,
-  fontWeight: "bold",
 };

@@ -1,6 +1,5 @@
 import { BevyStyle } from "bevy-react/jsx";
 
-/** The panel each demo renders its controls inside. */
 export const cardStyle: BevyStyle = {
   flexDirection: "column",
   alignItems: "center",
@@ -24,6 +23,10 @@ export const headingStyle: BevyStyle = {
 export const labelStyle: BevyStyle = {
   color: "#a6adc8",
   fontSize: 15,
+};
+
+export const codeStyle: BevyStyle = {
+  fontFamily: "Noto Sans Mono",
 };
 
 export const buttonStyle: BevyStyle = {

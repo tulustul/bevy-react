@@ -13,6 +13,7 @@ use bevy_react_canvas::{CanvasSurface, blank_canvas_image};
 
 use crate::anchor::Anchored;
 use crate::bridge::{JsBridge, PointerHandlers, RNode, StyleVariants};
+use crate::plugin::Fonts;
 use crate::protocol::{NodeId, Op, Outbound, Props, ROOT_ID, UiEvent};
 use crate::ui_map::{
     apply_style, apply_text_style, image_node, overlay_style, resolved_text_style, text_layout,
@@ -25,6 +26,7 @@ pub fn apply_js_ops(
     mut commands: Commands,
     mut bridge: ResMut<JsBridge>,
     assets: Res<AssetServer>,
+    fonts: Res<Fonts>,
     mut images: ResMut<Assets<Image>>,
     children: Query<&Children>,
     rnodes: Query<&RNode>,
@@ -67,7 +69,7 @@ pub fn apply_js_ops(
                         let mut ec = commands.spawn(RNode(id));
                         apply_style(&mut ec, &props.style);
                         ec.insert(Text::new(String::new()));
-                        apply_text_style(&mut ec, &props.style);
+                        apply_text_style(&mut ec, &props.style, &fonts);
                         if let Some(layout) = text_layout(&props.style) {
                             ec.insert(layout);
                         }
@@ -77,7 +79,7 @@ pub fn apply_js_ops(
                     // A nested `<text>`: a styled span (no layout box of its own).
                     "textSpan" => {
                         let mut ec = commands.spawn((RNode(id), TextSpan(String::new())));
-                        apply_text_style(&mut ec, &props.style);
+                        apply_text_style(&mut ec, &props.style, &fonts);
                         ec.id()
                     }
                     // A `<canvas>`: a styled node carrying an `ImageNode` whose
@@ -110,7 +112,7 @@ pub fn apply_js_ops(
                             EditableText::new(props.value.as_deref().unwrap_or_default());
                         editable.max_characters = props.max_length;
                         editable.allow_newlines = props.multiline;
-                        let (text_color, font) = resolved_text_style(&props.style);
+                        let (text_color, font) = resolved_text_style(&props.style, &fonts);
                         ec.insert((
                             editable,
                             text_color,
@@ -141,7 +143,7 @@ pub fn apply_js_ops(
                 if matches!(kind.as_str(), "text" | "textSpan") {
                     bridge
                         .text_styles
-                        .insert(id, resolved_text_style(&props.style));
+                        .insert(id, resolved_text_style(&props.style, &fonts));
                 }
                 if kind == "editableText" {
                     bridge.editable_inputs.insert(id);
@@ -201,7 +203,7 @@ pub fn apply_js_ops(
                 if bridge.text_styles.contains_key(&id) {
                     // A `<text>` element: refresh its style and re-propagate to
                     // any bare-string children that inherit it.
-                    let style = resolved_text_style(&props.style);
+                    let style = resolved_text_style(&props.style, &fonts);
                     bridge.text_styles.insert(id, style.clone());
                     let mut ec = commands.entity(e);
                     ec.insert(style.clone());

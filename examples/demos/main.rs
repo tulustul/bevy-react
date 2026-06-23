@@ -74,7 +74,15 @@ fn main() {
             }),
     )
     // We provide our own (3D) camera, so tell the plugin not to spawn a 2D one.
-    .add_plugins(ReactUiPlugin::new(bundle).spawn_camera(false))
+    // Roboto is the app-wide default font; DancingScript is a named family the UI
+    // can select per element via `style={{ fontFamily: "DancingScript" }}`.
+    .add_plugins(
+        ReactUiPlugin::new(bundle)
+            .spawn_camera(false)
+            .default_font("fonts/NotoSans-VariableFont_wdth,wght.ttf")
+            .font("DancingScript", "fonts/DancingScript-VariableFont_wght.ttf")
+            .font("Noto Sans Mono", "fonts/NotoSansMono-VariableFont_wdth,wght.ttf"),
+    )
     // State must be registered after DefaultPlugins (which brings StatesPlugin).
     .init_state::<Scene>()
     .init_resource::<shared::CameraRig>()

@@ -1,5 +1,6 @@
 import { PropsWithChildren } from "react";
 import { BevyStyle } from "bevy-react/jsx";
+import { codeStyle } from "../demos/styles";
 
 export type ExampleProps = PropsWithChildren & {
   typescript?: string;
@@ -43,8 +44,10 @@ type CodeProps = {
 function Code({ lang, code }: CodeProps) {
   return (
     <node style={{ flexDirection: "column" }}>
-      <text style={{ fontSize: 14, padding: 5 }}>{lang}</text>
-      <text style={{ fontSize: 12, color: "#aaa", padding: 10 }}>{code}</text>
+      <text style={{ ...codeStyle, fontSize: 14, padding: 5 }}>{lang}</text>
+      <text style={{ ...codeStyle, fontSize: 12, color: "#aaa", padding: 10 }}>
+        {code}
+      </text>
     </node>
   );
 }

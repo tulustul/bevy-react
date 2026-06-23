@@ -5,10 +5,6 @@ import type { SceneId } from "./generated";
 import { BasicUiDemo } from "./demos/BasicUiDemo";
 import { EventsDemo } from "./demos/EventsDemo";
 import { PollingDataDemo } from "./demos/PollingDataDemo";
-import {
-  BouncingBallsAnimationDemo,
-  FadeAnimationDemo,
-} from "./demos/AnimationsDemo";
 import { AnchoredDemo } from "./demos/AnchoredDemo";
 import { InteractionsDemo } from "./demos/InteractionsDemo";
 import { CanvasDemo } from "./demos/CanvasDemo";
@@ -18,6 +14,8 @@ import { NodeDemo } from "./demos/NodeDemo";
 import { ButtonDemo } from "./demos/ButtonDemo";
 import { TextDemo } from "./demos/TextDemo";
 import { ImageDemo } from "./demos/ImageDemo";
+import { FadeAnimationDemo } from "./demos/FadeAnimationDemo";
+import { BouncingBallsAnimationDemo } from "./demos/BouncingBallsAnimationDemo";
 
 type BaseDemoItem = { label: string; scene?: SceneId };
 type DemoItem = BaseDemoItem &
@@ -119,10 +117,12 @@ function Item({ item, selectedItem, isChild, onSelected }: ItemProps) {
   return (
     <node style={{ flexDirection: "column", gap: 8 }}>
       <ItemButton
-        isActive={item === selectedItem}
+        isActive={item.label === selectedItem.label}
+        isExpanded={expanded}
         label={item.label}
         onPress={onPress}
         isChild={isChild ?? false}
+        hasChildren={!!item.children?.length}
       />
 
       {expanded && item.children?.length && (
@@ -145,10 +145,19 @@ function Item({ item, selectedItem, isChild, onSelected }: ItemProps) {
 type ItemButtonProps = {
   label: string;
   isActive: boolean;
+  isExpanded: boolean;
   isChild: boolean;
+  hasChildren: boolean;
   onPress: () => void;
 };
-function ItemButton({ isActive, isChild, label, onPress }: ItemButtonProps) {
+function ItemButton({
+  isActive,
+  isExpanded,
+  isChild,
+  hasChildren,
+  label,
+  onPress,
+}: ItemButtonProps) {
   return (
     <button
       onClick={onPress}
@@ -159,15 +168,28 @@ function ItemButton({ isActive, isChild, label, onPress }: ItemButtonProps) {
       }}
       hoverStyle={{ backgroundColor: isActive ? "#7aa2f7" : "#42425e" }}
     >
-      <text
+      <node
         style={{
-          color: isActive ? "#1e1e2e" : "#cdd6f4",
-          fontSize: isChild ? 14 : 16,
-          fontWeight: "bold",
+          justifyContent: "spaceBetween",
+          alignItems: "center",
+          width: "100%",
         }}
       >
-        {label}
-      </text>
+        <text
+          style={{
+            color: isActive ? "#1e1e2e" : "#cdd6f4",
+            fontSize: isChild ? 14 : 16,
+            fontWeight: "bold",
+          }}
+        >
+          {label}
+        </text>
+        {hasChildren && (
+          <text style={{ fontFamily: "Noto Sans Mono" }}>
+            {isExpanded ? "▲" : "▼"}
+          </text>
+        )}
+      </node>
     </button>
   );
 }

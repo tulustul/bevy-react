@@ -44,5 +44,5 @@ pub use bevy_react_canvas::{self, CanvasSurface};
 pub use bevy_react_macros::{react_event, react_message, react_request};
 pub use event::{ReactEvent, ReactEvents};
 pub use message::{ReactAppExt, ReactMessage, ReactPayload};
-pub use plugin::{PointerCapture, PointerCaptureSet, ReactUiPlugin};
+pub use plugin::{Fonts, PointerCapture, PointerCaptureSet, ReactUiPlugin};
 pub use request::{RawRequest, ReactRequest, Request, RequestEvent, Responder};
