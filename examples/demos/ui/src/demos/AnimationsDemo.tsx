@@ -19,18 +19,11 @@ import { Card } from "../components";
 // The left-nav "Animations" submenu switches between these examples (purely on the
 // React side; this demo has no 3D scene).
 
-export function AnimationsDemo({ example }: { example: string }) {
-  if (example === "bouncing") {
-    return <BouncingExample />;
-  }
-  return <FadeExample />;
-}
-
 const FADE_MS = 500;
 
 const HINT = "<Animated.node animatedStyle={{opacity}} />";
 
-function FadeExample() {
+export function FadeAnimationDemo() {
   const opacity = useSharedValue(1);
 
   useEffect(() => {
@@ -84,7 +77,7 @@ const RETARGET_MS = 280; // glide back to the loop start on a mode change
 const COOL = ["#7aa2f7", "#f7768e", "#9ece6a", "#e0af68", "#bb9af7"];
 const WARM = ["#bb9af7", "#ff9e64", "#73daca", "#f7768e", "#7dcfff"];
 
-function BouncingExample() {
+export function BouncingBallsAnimationDemo() {
   const [mode, setMode] = useState<Mode>("easeInOut");
 
   return (

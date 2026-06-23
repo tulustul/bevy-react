@@ -1,4 +1,4 @@
-//! Demo 1 — **Basic UI**. The React counter emits a number
+//! **Cubes** scene (Basic UI). The React counter emits a number
 //! (`bevy.basicDemo.setCount(n)`) and Bevy shows that many spinning cubes. Pure
 //! one-way `emit`; no requests or events. This is the original counter example,
 //! now a state-scoped plugin.
@@ -6,7 +6,7 @@
 use bevy::prelude::*;
 use bevy_react::{ReactAppExt, react_message};
 
-use crate::shared::Demo;
+use crate::shared::Scene;
 
 /// Upper bound on the cube count (the React UI clamps to the same range).
 const MAX_CUBES: usize = 8;
@@ -19,7 +19,7 @@ impl Plugin for BasicUiPlugin {
         register_bindings(app);
         app.insert_resource(DesiredCubes(3))
             .add_systems(Startup, setup_cube_assets)
-            .add_systems(Update, (sync_cubes, spin).run_if(in_state(Demo::BasicUi)));
+            .add_systems(Update, (sync_cubes, spin).run_if(in_state(Scene::Cubes)));
     }
 }
 
@@ -92,7 +92,7 @@ fn setup_cube_assets(
 
 /// Rebuild the row of cubes whenever the live count differs from the desired
 /// count, spreading them evenly along X and centered on the origin. Cubes are
-/// scoped to `Demo::BasicUi` so they despawn when another demo is selected.
+/// scoped to `Scene::Cubes` so they despawn when another scene is selected.
 fn sync_cubes(
     mut commands: Commands,
     desired: Res<DesiredCubes>,
@@ -118,7 +118,7 @@ fn sync_cubes(
                 x_speed: 0.4 + i as f32 * 0.15,
                 y_speed: 0.9 - i as f32 * 0.08,
             },
-            DespawnOnExit(Demo::BasicUi),
+            DespawnOnExit(Scene::Cubes),
         ));
     }
 }

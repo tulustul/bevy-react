@@ -1,9 +1,23 @@
 import { useEffect, useRef, useState } from "react";
 import { bevy } from "../generated";
-import { headingStyle, labelStyle } from "./styles";
-import { Card } from "../components";
+import { Example } from "../components";
 
-const HINT = 'bevy.on("bevyEventsDemo.ballBounced", () => {})';
+const TYPESCRIPT = `bevy.on(
+  "bouncingBall.bounced",
+  () => setBounces(bounces + 1)
+)`;
+
+const RUST = `#[react_event(name = "bouncingBall.bounced")]
+struct BallBounced {
+  // data
+}
+
+fn bounce(events: ReactEvents) {
+    events.send(&BallBounced { });
+}
+
+app.add_systems(Update, bounce);
+`;
 
 export function EventsDemo() {
   const bouncesRef = useRef(0);
@@ -21,11 +35,8 @@ export function EventsDemo() {
   }, []);
 
   return (
-    <Card>
-      <text style={headingStyle}>Bounce events</text>
-      <text style={labelStyle}>{HINT}</text>
-
-      <text style={{ fontSize: 18 }}>Number of bounces: {bounces}</text>
-    </Card>
+    <Example typescript={TYPESCRIPT} rust={RUST}>
+      <text style={{ fontSize: 18 }}>Bounces: {bounces}</text>
+    </Example>
   );
 }

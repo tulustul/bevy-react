@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This is a Cargo workspace (`bevy-react` lib + `macros/` proc-macro crate) **and** an npm workspace (root `package.json` with members `js` and `examples/demos/ui`). The two halves are developed together.
 
-The example (`examples/demos`) is a gallery: a left-nav switches between three demos, each a **separate Bevy plugin** (`basic_ui.rs`, `events.rs`, `request_response.rs`) showing one direction of the bridge — `emit` (cubes), Bevy→React events (bouncing-ball toasts), and request/response (polling the ball). Only one demo's scene runs at a time: React `emit`s the selection, and a `States` enum (`Demo` in `shared.rs`) gates each demo's systems, with `DespawnOnExit(Demo::…)` scoping its entities.
+The example (`examples/demos`) is a gallery: a left-nav switches between demos, and React drives the active 3D scene with `bevy.selectScene(id)` (or `null` for an empty viewport). There are three scenes, each a **separate Bevy plugin**: `basic_ui.rs` (cubes driven by `emit`), `bouncing_ball.rs` (one ball that both pushes Bevy→React events as toasts and answers request/response polls), and `anchored.rs` (crowded cubes with world-anchored badges). Only one scene runs at a time: React `emit`s the selection, and a `States` enum (`Scene` in `shared.rs`, variants `None | Cubes | BouncingBall | CrowdedCubes`) gates each scene's systems, with `DespawnOnExit(Scene::…)` scoping its entities.
 
 ## Commands
 

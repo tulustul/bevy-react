@@ -6,8 +6,11 @@
 //!   npm install && npm run build -w demos-app
 //! If the bundle is missing the test skips (passes) with a notice.
 
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
+
+use crossbeam_channel::{Receiver, RecvTimeoutError};
 
 use bevy_react::js_thread::spawn_js_thread;
 use bevy_react::protocol::{Op, Outbound, UiEvent};
@@ -15,6 +18,80 @@ use bevy_react::{RawRequest, ReactMessage};
 
 fn example_bundle() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("examples/demos/ui/dist/bundle.js")
+}
+
+/// Fold one op into the lookup maps we use to locate nav buttons by their label.
+fn accumulate(
+    op: &Op,
+    buttons: &mut HashSet<u32>,
+    parent_of: &mut HashMap<u32, u32>,
+    text_of: &mut HashMap<u32, String>,
+) {
+    match op {
+        Op::Create { id, kind, .. } if kind == "button" => {
+            buttons.insert(*id);
+        }
+        Op::CreateTextSpan { id, text } | Op::CreateText { id, text } => {
+            text_of.insert(*id, text.clone());
+        }
+        Op::Append { parent, child } => {
+            parent_of.insert(*child, *parent);
+        }
+        Op::Insert { parent, child, .. } => {
+            parent_of.insert(*child, *parent);
+        }
+        _ => {}
+    }
+}
+
+/// A nav entry renders `<button><text>{label}</text></button>`, so the button id
+/// is the grandparent of the label's text run.
+fn find_button(
+    label: &str,
+    buttons: &HashSet<u32>,
+    parent_of: &HashMap<u32, u32>,
+    text_of: &HashMap<u32, String>,
+) -> Option<u32> {
+    for (span, text) in text_of {
+        if text.trim() == label
+            && let Some(&text_node) = parent_of.get(span)
+            && let Some(&button) = parent_of.get(&text_node)
+            && buttons.contains(&button)
+        {
+            return Some(button);
+        }
+    }
+    None
+}
+
+/// Drain ops (keeping the lookup maps current) until a button with `label` exists
+/// or `dur` elapses.
+fn drain_until_button(
+    ops_rx: &Receiver<Vec<Op>>,
+    label: &str,
+    dur: Duration,
+    buttons: &mut HashSet<u32>,
+    parent_of: &mut HashMap<u32, u32>,
+    text_of: &mut HashMap<u32, String>,
+) -> Option<u32> {
+    let deadline = Instant::now() + dur;
+    loop {
+        if let Some(button) = find_button(label, buttons, parent_of, text_of) {
+            return Some(button);
+        }
+        if Instant::now() >= deadline {
+            return None;
+        }
+        match ops_rx.recv_timeout(Duration::from_millis(100)) {
+            Ok(batch) => {
+                for op in &batch {
+                    accumulate(op, buttons, parent_of, text_of);
+                }
+            }
+            Err(RecvTimeoutError::Timeout) => {}
+            Err(RecvTimeoutError::Disconnected) => panic!("JS thread died during nav"),
+        }
+    }
 }
 
 #[test]
@@ -48,25 +125,65 @@ fn bridge_round_trip() {
         reload_rx,
     );
 
-    // Phase 1: the default demo (Basic UI) renders an increment button labelled
-    // `+` and the count run `3` (from `Cubes: <text>{count}</text>`, so the count
-    // is its own span, separate from the "Cubes: " label). The left-nav buttons
-    // are created first, so we can't take the first button — find the one whose
-    // bare-text child is `+` (nav buttons wrap their labels in `<text>` spans).
-    use std::collections::{HashMap, HashSet};
-    let mut buttons: HashSet<u32> = HashSet::new(); // button ids (with onClick)
-    let mut plus_text: Option<u32> = None; // id of the bare `+` text node
-    let mut parent_of: HashMap<u32, u32> = HashMap::new(); // child -> parent
+    let mut buttons: HashSet<u32> = HashSet::new();
+    let mut parent_of: HashMap<u32, u32> = HashMap::new();
+    let mut text_of: HashMap<u32, String> = HashMap::new();
+
+    let click = |id: u32| {
+        outbound_tx
+            .send(Outbound::UiEvent {
+                event: UiEvent {
+                    id,
+                    kind: "click".into(),
+                    x: None,
+                    y: None,
+                    client_x: None,
+                    client_y: None,
+                    value: None,
+                },
+            })
+            .expect("JS thread gone before click");
+    };
+
+    // Phase 0: the gallery starts on another demo, so navigate the left-nav to the
+    // counter demo — expand the "Communication" submenu, then select "Bevy <- React"
+    // (the `bevy.basicDemo.setCount` counter) — before asserting the round trip.
+    let comm = drain_until_button(
+        &ops_rx,
+        "Communication",
+        Duration::from_secs(15),
+        &mut buttons,
+        &mut parent_of,
+        &mut text_of,
+    )
+    .expect("no 'Communication' nav button in initial render");
+    click(comm);
+
+    let basic = drain_until_button(
+        &ops_rx,
+        "Bevy <- React",
+        Duration::from_secs(10),
+        &mut buttons,
+        &mut parent_of,
+        &mut text_of,
+    )
+    .expect("no 'Bevy <- React' nav button after expanding 'Communication'");
+    click(basic);
+
+    // Phase 1: the counter renders an increment button labelled `+` and the count
+    // run `3` (from `Cubes: <text>{count}</text>`, so the count is its own span).
+    // The increment button is the parent of the bare `+` text node.
+    let mut plus_text: Option<u32> = None;
     let mut button_id: Option<u32> = None;
     let mut saw_initial = false;
-    let deadline = Instant::now() + Duration::from_secs(15);
+    let deadline = Instant::now() + Duration::from_secs(10);
     while Instant::now() < deadline && !(button_id.is_some() && saw_initial) {
         if let Ok(batch) = ops_rx.recv_timeout(Duration::from_millis(500)) {
             for op in &batch {
+                accumulate(op, &mut buttons, &mut parent_of, &mut text_of);
                 match op {
-                    Op::Create { id, kind, props } if kind == "button" => {
+                    Op::Create { props, kind, .. } if kind == "button" => {
                         assert!(props.on_click, "button created without onClick");
-                        buttons.insert(*id);
                     }
                     Op::CreateText { id, text } if text.trim() == "+" => {
                         plus_text = Some(*id);
@@ -75,12 +192,6 @@ fn bridge_round_trip() {
                         if text.trim() == "3" =>
                     {
                         saw_initial = true;
-                    }
-                    Op::Append { parent, child } => {
-                        parent_of.insert(*child, *parent);
-                    }
-                    Op::Insert { parent, child, .. } => {
-                        parent_of.insert(*child, *parent);
                     }
                     _ => {}
                 }
@@ -95,24 +206,12 @@ fn bridge_round_trip() {
         }
     }
 
-    let button_id = button_id.expect("no '+' button in initial render");
+    let button_id = button_id.expect("no '+' button in counter demo");
     assert!(saw_initial, "initial count '3' not rendered");
-    eprintln!("OK   initial render: '+' button id={button_id}, count '3' present");
+    eprintln!("OK   counter render: '+' button id={button_id}, count '3' present");
 
     // Phase 2: report a click on the button.
-    outbound_tx
-        .send(Outbound::UiEvent {
-            event: UiEvent {
-                id: button_id,
-                kind: "click".into(),
-                x: None,
-                y: None,
-                client_x: None,
-                client_y: None,
-                value: None,
-            },
-        })
-        .expect("JS thread gone before click");
+    click(button_id);
 
     // Phase 3: clicking `+` from the default 3 should update the count run to '4'.
     let deadline = Instant::now() + Duration::from_secs(10);

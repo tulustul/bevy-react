@@ -1,4 +1,4 @@
-//! Demo 5 — **World-anchored UI**. A field of ~100 cubes wanders on a plane, and
+//! **Crowded cubes** scene (world-anchored UI). A field of ~100 cubes wanders on a plane, and
 //! React renders a badge floating above each one via `<Anchored.node entity={…}/>`.
 //! When the cubes spawn, Bevy pushes their entity ids to React in one
 //! `anchoredDemo.cubesSpawned` event; the anchor positioning system then projects
@@ -12,7 +12,7 @@ use bevy_react::{ReactAppExt, ReactEvents, react_event};
 use serde::Serialize;
 use ts_rs::TS;
 
-use crate::shared::Demo;
+use crate::shared::Scene;
 
 /// How many cubes wander the plane (each gets its own anchored badge).
 const CUBE_COUNT: usize = 100;
@@ -26,8 +26,8 @@ impl Plugin for AnchoredPlugin {
     fn build(&self, app: &mut App) {
         register_bindings(app);
         app.add_systems(Startup, setup_cube_assets)
-            .add_systems(OnEnter(Demo::WorldAnchors), spawn_cubes)
-            .add_systems(Update, wander.run_if(in_state(Demo::WorldAnchors)));
+            .add_systems(OnEnter(Scene::CrowdedCubes), spawn_cubes)
+            .add_systems(Update, wander.run_if(in_state(Scene::CrowdedCubes)));
     }
 }
 
@@ -112,14 +112,14 @@ fn setup_cube_assets(
 /// Spawn the ground plane and `CUBE_COUNT` cubes at pseudo-random positions and
 /// headings (seeded by index, so no `rand` dependency), then push their entity ids
 /// to React in one `anchoredDemo.cubesSpawned` event. All cubes are scoped to the
-/// demo. React subscribed on mount (before it emitted `selectDemo`, which drove this
-/// `OnEnter`), so the event always lands.
+/// scene. React subscribed on mount (before it emitted `selectScene`, which drove
+/// this `OnEnter`), so the event always lands.
 fn spawn_cubes(mut commands: Commands, assets: Res<CubeAssets>, events: ReactEvents) {
     commands.spawn((
         Mesh3d(assets.ground.clone()),
         MeshMaterial3d(assets.ground_material.clone()),
         Transform::from_xyz(0.0, 0.0, 0.0),
-        DespawnOnExit(Demo::WorldAnchors),
+        DespawnOnExit(Scene::CrowdedCubes),
     ));
 
     let mut cubes = Vec::with_capacity(CUBE_COUNT);
@@ -138,7 +138,7 @@ fn spawn_cubes(mut commands: Commands, assets: Res<CubeAssets>, events: ReactEve
                     wobble_freq: 0.5 + hash01(seed.wrapping_mul(11).wrapping_add(19)),
                     phase: hash01(seed.wrapping_mul(7).wrapping_add(17)) * TAU,
                 },
-                DespawnOnExit(Demo::WorldAnchors),
+                DespawnOnExit(Scene::CrowdedCubes),
             ))
             .id();
         cubes.push(CubeInfo {

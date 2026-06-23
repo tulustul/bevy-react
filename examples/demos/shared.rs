@@ -1,4 +1,4 @@
-//! Pieces shared across the demos: the active-demo state machine that React
+//! Pieces shared across the demos: the active-scene state machine that React
 //! drives, the shared 3D camera/light, and the bouncing-ball physics the Bevy
 //! Events and Polling demos both reuse.
 
@@ -9,65 +9,48 @@ use bevy_react::{ReactAppExt, react_message};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-/// Which demo's scene is live. Only one runs at a time so cubes and balls never
-/// share the screen; each demo plugin gates its systems on this state and tags
-/// its entities with `DespawnOnExit(Demo::…)` so they vanish on switch.
+/// Which 3D scene is live. Only one runs at a time so cubes and balls never
+/// share the screen; each scene's plugin gates its systems on this state and tags
+/// its entities with `DespawnOnExit(Scene::…)` so they vanish on switch. `None`
+/// is the empty viewport React selects with `selectScene(null)`.
 #[derive(States, Default, Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum Demo {
+pub enum Scene {
     #[default]
-    BasicUi,
-    BevyEvents,
-    Polling,
-    Animations,
-    WorldAnchors,
-    /// Pure-UI demo (a draggable node showcasing pointer events); no 3D scene.
-    Interactions,
-    /// Pure-UI demo (a `<canvas>` line chart drawn with vector commands); no 3D scene.
-    Canvas,
-    /// Pure-UI demo (a wheel-scrollable list); no 3D scene.
-    Scroll,
-    /// Pure-UI demo (a native `<editableText>` field echoed onto a label); no 3D scene.
-    EditableText,
+    None,
+    Cubes,
+    BouncingBall,
+    CrowdedCubes,
 }
 
-/// The wire form of [`Demo`] — what React sends with `emit("selectDemo", id)`.
+/// The wire form of [`Scene`] — what React sends with `emit("selectScene", id)`.
 /// A fieldless enum serializes as a plain string, so the generated TS is a
-/// `"BasicUi" | "BevyEvents" | "Polling"` union.
+/// `"Cubes" | "BouncingBall" | "CrowdedCubes"` union. There is no `None`: a null on
+/// the wire maps to [`Scene::None`].
 #[derive(Deserialize, TS)]
-pub enum DemoId {
-    BasicUi,
-    BevyEvents,
-    Polling,
-    Animations,
-    WorldAnchors,
-    Interactions,
-    Canvas,
-    Scroll,
-    EditableText,
+pub enum SceneId {
+    Cubes,
+    BouncingBall,
+    CrowdedCubes,
 }
 
-/// React picks the active demo from the left-nav: `emit("selectDemo", id)`.
-#[react_message(name = "selectDemo")]
-pub struct SelectDemo(DemoId);
+/// React picks the active scene from the left-nav: `emit("selectScene", id)`. A
+/// `null` clears the viewport (no scene).
+#[react_message(name = "selectScene")]
+pub struct SelectScene(Option<SceneId>);
 
-/// Register the global demo-selection handler (shared by the live app and the
+/// Register the global scene-selection handler (shared by the live app and the
 /// `--export-bindings` exporter).
 pub fn register_bindings(app: &mut App) {
-    app.add_react_handler(apply_select_demo);
+    app.add_react_handler(apply_select_scene);
 }
 
-/// Switch the active demo when React emits a selection.
-fn apply_select_demo(on: On<SelectDemo>, mut next: ResMut<NextState<Demo>>) {
+/// Switch the active scene when React emits a selection; `None` clears it.
+fn apply_select_scene(on: On<SelectScene>, mut next: ResMut<NextState<Scene>>) {
     next.set(match on.event().0 {
-        DemoId::BasicUi => Demo::BasicUi,
-        DemoId::BevyEvents => Demo::BevyEvents,
-        DemoId::Polling => Demo::Polling,
-        DemoId::Animations => Demo::Animations,
-        DemoId::WorldAnchors => Demo::WorldAnchors,
-        DemoId::Interactions => Demo::Interactions,
-        DemoId::Canvas => Demo::Canvas,
-        DemoId::Scroll => Demo::Scroll,
-        DemoId::EditableText => Demo::EditableText,
+        Some(SceneId::Cubes) => Scene::Cubes,
+        Some(SceneId::BouncingBall) => Scene::BouncingBall,
+        Some(SceneId::CrowdedCubes) => Scene::CrowdedCubes,
+        None => Scene::None,
     });
 }
 
@@ -97,8 +80,8 @@ const MOUSE_SENS: f32 = 0.005; // mouse drag → radians
 const ZOOM_SENS: f32 = 1.5; // scroll notch → world units of distance
 const MIN_RADIUS: f32 = 6.0;
 const MAX_RADIUS: f32 = 40.0;
-/// Default orbit distance — close enough for the small demos; the World Anchors
-/// demo reframes wider (see [`reframe_camera`]).
+/// Default orbit distance — close enough for the small scenes; the cube-field
+/// scene reframes wider (see [`reframe_camera`]).
 const DEFAULT_RADIUS: f32 = 14.0;
 
 /// Orbit angles + distance for the shared camera. Driven automatically and by the
@@ -161,12 +144,12 @@ pub fn orbit_camera(
     }
 }
 
-/// Reset the orbit distance to suit the active demo whenever it changes (and on
-/// startup): the World Anchors demo's cube field needs a wider frame than the small
+/// Reset the orbit distance to suit the active scene whenever it changes (and on
+/// startup): the cube-field scene needs a wider frame than the small
 /// origin-centered scenes. The user can zoom from there.
-pub fn reframe_camera(state: Res<State<Demo>>, mut rig: ResMut<CameraRig>) {
+pub fn reframe_camera(state: Res<State<Scene>>, mut rig: ResMut<CameraRig>) {
     rig.radius = match state.get() {
-        Demo::WorldAnchors => 24.0,
+        Scene::CrowdedCubes => 24.0,
         _ => DEFAULT_RADIUS,
     };
 }
@@ -198,13 +181,13 @@ pub enum Wall {
 }
 
 /// Spawn a ball moving diagonally inside a translucent cube that shows the walls
-/// it bounces off. Both are scoped to `scope` so they despawn when that demo is
+/// it bounces off. Both are scoped to `scope` so they despawn when that scene is
 /// left. Returns the ball entity so the caller can add markers.
 pub fn spawn_ball(
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
     materials: &mut Assets<StandardMaterial>,
-    scope: Demo,
+    scope: Scene,
 ) -> Entity {
     // The translucent enclosure: a glass cube around the play area. All faces are
     // drawn (no culling) so the box reads as a 3D volume from any angle.

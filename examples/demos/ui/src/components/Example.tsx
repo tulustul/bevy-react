@@ -1,5 +1,4 @@
 import { PropsWithChildren } from "react";
-import { Card } from "./Card";
 import { BevyStyle } from "bevy-react/jsx";
 
 export type ExampleProps = PropsWithChildren & {
@@ -29,8 +28,8 @@ export function Example({ children, typescript, rust }: ExampleProps) {
             flexDirection: "column",
           }}
         >
-          {typescript && <Code lang="typescript" code={typescript} />}
           {rust && <Code lang="rust" code={rust} />}
+          {typescript && <Code lang="typescript" code={typescript} />}
         </node>
       )}
     </node>
@@ -44,16 +43,14 @@ type CodeProps = {
 function Code({ lang, code }: CodeProps) {
   return (
     <node style={{ flexDirection: "column" }}>
-      <text style={{ fontSize: 14, backgroundColor: "#3e4657ff", padding: 5 }}>
-        {lang}
-      </text>
+      <text style={{ fontSize: 14, padding: 5 }}>{lang}</text>
       <text style={{ fontSize: 12, color: "#aaa", padding: 10 }}>{code}</text>
     </node>
   );
 }
 
-export const cardStyle: BevyStyle = {
-  alignItems: "flexStart",
+const cardStyle: BevyStyle = {
+  alignItems: "stretch",
   justifyContent: "center",
   minWidth: 320,
   backgroundColor: "#1e1e2e",
@@ -62,6 +59,4 @@ export const cardStyle: BevyStyle = {
   borderColor: "#7aa2f7",
   zIndex: 1000,
   boxShadow: { blurRadius: 15, spreadRadius: 5, color: "#00000088" },
-  overflowY: "clip",
-  overflowX: "clip",
 };

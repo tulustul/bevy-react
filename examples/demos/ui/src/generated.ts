@@ -21,15 +21,15 @@ speed: number, };
 export type BallState = { x: number, y: number, vx: number, vy: number, };
 export type CubeInfo = { entity: bigint, label: string, };
 export type CubesSpawned = { cubes: Array<CubeInfo>, };
-export type DemoId = "BasicUi" | "BevyEvents" | "Polling" | "Animations" | "WorldAnchors" | "Interactions" | "Canvas" | "Scroll" | "EditableText";
-export type SelectDemo = DemoId;
+export type SceneId = "Cubes" | "BouncingBall" | "CrowdedCubes";
+export type SelectScene = SceneId | null;
 export type SetCount = number;
 export type Wall = "Left" | "Right" | "Top" | "Bottom" | "Front" | "Back";
 
 /** Every `emit` name and the payload type it carries. */
 export interface ReactMessages {
   "basicDemo.setCount": SetCount;
-  selectDemo: SelectDemo;
+  selectScene: SelectScene;
 }
 
 /** Every `request` name and its request/response types. */
@@ -86,5 +86,5 @@ export const bevy = {
   pollingDemo: {
     getBall(): Promise<BallState> { return request("pollingDemo.getBall", null); },
   },
-  selectDemo(value: SelectDemo): void { emit("selectDemo", value); },
+  selectScene(value: SelectScene): void { emit("selectScene", value); },
 } as const;

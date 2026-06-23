@@ -1,4 +1,4 @@
-//! Headless reproduction of the `Anchored -> Basic -> Anchored` demo-switch crash
+//! Headless reproduction of the `Anchored -> other -> Anchored` demo-switch crash
 //! (React #327 "Should not already be working"). Like `roundtrip.rs`, this drives
 //! the real JS thread over channels — no GPU/window — so the bug is observable in
 //! `cargo test` instead of only in the live app.
@@ -141,11 +141,12 @@ fn demo_switch_anchored_survives() {
     let mut parent_of: HashMap<u32, u32> = HashMap::new();
     let mut text_of: HashMap<u32, String> = HashMap::new();
 
-    // Wait for the initial render and locate the two nav buttons we'll toggle.
+    // Wait for the initial render and locate the two top-level nav buttons we'll
+    // toggle (both render immediately, unlike the collapsed submenu entries).
     let mut anchored_btn = None;
-    let mut basic_btn = None;
+    let mut other_btn = None;
     let deadline = Instant::now() + Duration::from_secs(20);
-    while Instant::now() < deadline && (anchored_btn.is_none() || basic_btn.is_none()) {
+    while Instant::now() < deadline && (anchored_btn.is_none() || other_btn.is_none()) {
         match ops_rx.recv_timeout(Duration::from_millis(500)) {
             Ok(batch) => {
                 for op in &batch {
@@ -153,8 +154,8 @@ fn demo_switch_anchored_survives() {
                 }
                 anchored_btn = anchored_btn
                     .or_else(|| find_button("World Anchors", &buttons, &parent_of, &text_of));
-                basic_btn =
-                    basic_btn.or_else(|| find_button("Basic UI", &buttons, &parent_of, &text_of));
+                other_btn = other_btn
+                    .or_else(|| find_button("Interactions", &buttons, &parent_of, &text_of));
             }
             Err(RecvTimeoutError::Timeout) => {}
             Err(RecvTimeoutError::Disconnected) => panic!("JS thread died during initial render"),
@@ -162,8 +163,8 @@ fn demo_switch_anchored_survives() {
     }
 
     let anchored_btn = anchored_btn.expect("no 'World Anchors' nav button in initial render");
-    let basic_btn = basic_btn.expect("no 'Basic UI' nav button in initial render");
-    eprintln!("OK   nav buttons: anchored={anchored_btn}, basic={basic_btn}");
+    let other_btn = other_btn.expect("no 'Interactions' nav button in initial render");
+    eprintln!("OK   nav buttons: anchored={anchored_btn}, other={other_btn}");
 
     let click = |id: u32| {
         outbound_tx
@@ -194,8 +195,8 @@ fn demo_switch_anchored_survives() {
             &mut text_of,
         );
 
-        eprintln!("--- round {round}: -> Basic");
-        click(basic_btn);
+        eprintln!("--- round {round}: -> Interactions");
+        click(other_btn);
         pump(
             &ops_rx,
             Duration::from_millis(200),

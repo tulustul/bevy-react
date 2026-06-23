@@ -1,13 +1,14 @@
 //! Example consumer of the `bevy_react` library: one Bevy app whose UI is a React
 //! app (see `ui/`), overlaid on a live 3D scene. A left-nav switches between the
-//! demos, each a separate Bevy plugin, each showing one direction of the bridge:
+//! demos; React drives the active 3D scene with `bevy.selectScene(id)` (or
+//! `null` for an empty viewport). There are three scenes, each its own plugin:
 //!
-//!   * Basic UI      — React `bevy.basicDemo.setCount(n)` → that many spinning cubes.
-//!   * Bevy Events   — a bouncing ball sends `bevyEventsDemo.ballBounced` → React toasts.
-//!   * Polling data  — React polls `bevy.pollingDemo.getBall()` and shows the ball's state.
-//!   * Animations    — Reanimated-style shared values + `Animated.node` (submenu of examples).
-//!   * World Anchors — UI badges anchored to wandering 3D cubes.
-//!   * Interactions  — a draggable node showcasing the raw pointer events.
+//!   * Cubes         — React `bevy.basicDemo.setCount(n)` → that many spinning cubes.
+//!   * Bouncing ball — a ball pushes `bevyEventsDemo.ballBounced` toasts and answers
+//!     `bevy.pollingDemo.getBall()` polls (one scene, both bridge directions).
+//!   * Crowded cubes — UI badges anchored to ~100 wandering 3D cubes on a plane.
+//!
+//! Pure-UI demos (Animations, Interactions, …) declare no scene and select `null`.
 //!
 //! Run with:
 //!
@@ -18,10 +19,8 @@
 //! the files under `ui/src/`.
 
 mod anchored;
-mod animations;
 mod basic_ui;
-mod events;
-mod request_response;
+mod bouncing_ball;
 mod shared;
 
 use std::path::PathBuf;
@@ -31,11 +30,9 @@ use bevy::prelude::*;
 use bevy_react::{ReactAppExt, ReactUiPlugin};
 
 use anchored::AnchoredPlugin;
-use animations::AnimationsPlugin;
 use basic_ui::BasicUiPlugin;
-use events::EventsPlugin;
-use request_response::RequestResponsePlugin;
-use shared::Demo;
+use bouncing_ball::BouncingBallPlugin;
+use shared::Scene;
 
 fn main() {
     // `cargo run --example demos -- --export-bindings <path>` writes the TypeScript
@@ -77,29 +74,23 @@ fn main() {
     // We provide our own (3D) camera, so tell the plugin not to spawn a 2D one.
     .add_plugins(ReactUiPlugin::new(bundle).spawn_camera(false))
     // State must be registered after DefaultPlugins (which brings StatesPlugin).
-    .init_state::<Demo>()
+    .init_state::<Scene>()
     .init_resource::<shared::CameraRig>()
     .add_systems(Startup, shared::setup_camera_and_light)
     // One shared camera controller (auto-orbit + mouse-drag + wheel-zoom) for every
-    // demo; reframe the orbit distance to suit each demo as it becomes active.
+    // scene; reframe the orbit distance to suit each scene as it becomes active.
     .add_systems(
         Update,
         (
             // After the React UI refreshes `PointerCapture` so the camera sees this
             // frame's state and ignores the mouse while the UI owns it.
             shared::orbit_camera.after(bevy_react::PointerCaptureSet),
-            shared::reframe_camera.run_if(state_changed::<Demo>),
+            shared::reframe_camera.run_if(state_changed::<Scene>),
         ),
     )
-    .add_plugins((
-        BasicUiPlugin,
-        EventsPlugin,
-        RequestResponsePlugin,
-        AnimationsPlugin,
-        AnchoredPlugin,
-    ));
-    // Each demo plugin registers its own bindings in `build`; only the global
-    // demo-selection handler is left to register here.
+    .add_plugins((BasicUiPlugin, BouncingBallPlugin, AnchoredPlugin));
+    // Each scene's plugin registers its own bindings in `build`; only the global
+    // scene-selection handler is left to register here.
     shared::register_bindings(&mut app);
     app.run();
 }
@@ -112,7 +103,6 @@ fn main() {
 fn register_react_bindings(app: &mut App) {
     shared::register_bindings(app);
     basic_ui::register_bindings(app);
-    events::register_bindings(app);
-    request_response::register_bindings(app);
+    bouncing_ball::register_bindings(app);
     anchored::register_bindings(app);
 }

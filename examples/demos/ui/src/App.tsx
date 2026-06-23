@@ -1,54 +1,78 @@
-import { useEffect, useState } from "react";
+import { ComponentType, useEffect, useState } from "react";
 import { BevyStyle } from "bevy-react/jsx";
-// Typed `bevy` proxy, generated from the Rust `#[react_message]` /
-// `#[react_request]` / `#[react_event]` types. Regenerate with `npm run gen:bindings`.
 import { bevy } from "./generated";
-import type { DemoId } from "./generated";
+import type { SceneId } from "./generated";
 import { BasicUiDemo } from "./demos/BasicUiDemo";
 import { EventsDemo } from "./demos/EventsDemo";
 import { PollingDataDemo } from "./demos/PollingDataDemo";
-import { AnimationsDemo } from "./demos/AnimationsDemo";
+import {
+  BouncingBallsAnimationDemo,
+  FadeAnimationDemo,
+} from "./demos/AnimationsDemo";
 import { AnchoredDemo } from "./demos/AnchoredDemo";
 import { InteractionsDemo } from "./demos/InteractionsDemo";
 import { CanvasDemo } from "./demos/CanvasDemo";
 import { ScrollDemo } from "./demos/ScrollDemo";
 import { EditableTextDemo } from "./demos/EditableTextDemo";
+import { NodeDemo } from "./demos/NodeDemo";
+import { ButtonDemo } from "./demos/ButtonDemo";
+import { TextDemo } from "./demos/TextDemo";
+import { ImageDemo } from "./demos/ImageDemo";
 
-// A nav entry is a top-level demo; one (Animations) carries a submenu of
-// React-side example variants that all share the same `Demo` scene.
-type NavChild = { key: string; label: string };
-type NavItem = { id: DemoId; label: string; children?: NavChild[] };
+type BaseDemoItem = { label: string; scene?: SceneId };
+type DemoItem = BaseDemoItem &
+  (
+    | { component: ComponentType; children?: undefined }
+    | { children: DemoItem[]; component?: undefined }
+  );
 
-const DEMOS: NavItem[] = [
-  { id: "BasicUi", label: "Basic UI" },
-  { id: "BevyEvents", label: "Bevy Events" },
-  { id: "Polling", label: "Polling data" },
+const DEMOS: DemoItem[] = [
   {
-    id: "Animations",
-    label: "Animations",
+    label: "Elements",
     children: [
-      { key: "fade", label: "Fade" },
-      { key: "bouncing", label: "Bouncing Squares" },
+      { label: "<node>", component: NodeDemo },
+      { label: "<button>", component: ButtonDemo },
+      { label: "<text>", component: TextDemo },
+      { label: "<editableText>", component: EditableTextDemo },
+      { label: "<image>", component: ImageDemo },
+      { label: "<canvas>", component: CanvasDemo },
     ],
   },
-  { id: "WorldAnchors", label: "World Anchors" },
-  { id: "Interactions", label: "Interactions" },
-  { id: "Canvas", label: "Canvas" },
-  { id: "Scroll", label: "Scroll" },
-  { id: "EditableText", label: "Editable Text" },
+  {
+    label: "Styling",
+    children: [{ label: "Scroll", component: ScrollDemo }],
+  },
+  {
+    label: "Communication",
+    children: [
+      { label: "Bevy -> React", scene: "BouncingBall", component: EventsDemo },
+      { label: "Bevy <- React", scene: "Cubes", component: BasicUiDemo },
+      {
+        label: "Bevy <-> React",
+        scene: "BouncingBall",
+        component: PollingDataDemo,
+      },
+    ],
+  },
+  {
+    label: "Animations",
+    children: [
+      { label: "Fade", component: FadeAnimationDemo },
+      { label: "Bouncing Squares", component: BouncingBallsAnimationDemo },
+    ],
+  },
+  { scene: "CrowdedCubes", label: "World Anchors", component: AnchoredDemo },
+  { label: "Interactions", component: InteractionsDemo },
 ];
 
 export function App() {
-  const [active, setActive] = useState<DemoId>("BasicUi");
-  // Which Animations example is shown (purely React-side — no scene to gate).
-  const [animExample, setAnimExample] = useState("fade");
+  const [selectedDemo, setSelectedDemo] = useState<DemoItem>(
+    DEMOS[0].children![0],
+  );
 
-  // React -> Bevy notify: tell Bevy which demo's scene should be live. Switching
-  // also unmounts the previous demo component, so its effects (listeners, polling
-  // loops) clean up on their own.
   useEffect(() => {
-    bevy.selectDemo(active);
-  }, [active]);
+    bevy.selectScene(selectedDemo.scene ?? null);
+  }, [selectedDemo]);
 
   return (
     <node style={rootStyle}>
@@ -56,71 +80,88 @@ export function App() {
         <image src="bevy-logo.png" style={{ width: 100 }} />
         <text style={titleStyle}>bevy-react</text>
         <node style={itemsStyle}>
-          {DEMOS.map((d) => (
-            <node key={d.id} style={navGroupStyle}>
-              <NavButton
-                label={d.label}
-                selected={d.id === active}
-                onPress={() => setActive(d.id)}
-              />
-              {d.children?.map((c) => (
-                <NavButton
-                  key={c.key}
-                  label={c.label}
-                  selected={d.id === active && c.key === animExample}
-                  indent
-                  onPress={() => {
-                    setActive(d.id);
-                    setAnimExample(c.key);
-                  }}
-                />
-              ))}
-            </node>
+          {DEMOS.map((demo) => (
+            <Item
+              item={demo}
+              selectedItem={selectedDemo}
+              onSelected={setSelectedDemo}
+            />
           ))}
         </node>
       </node>
 
       <node style={contentStyle}>
-        {active === "BasicUi" && <BasicUiDemo />}
-        {active === "BevyEvents" && <EventsDemo />}
-        {active === "Polling" && <PollingDataDemo />}
-        {active === "Animations" && <AnimationsDemo example={animExample} />}
-        {active === "WorldAnchors" && <AnchoredDemo />}
-        {active === "Interactions" && <InteractionsDemo />}
-        {active === "Canvas" && <CanvasDemo />}
-        {active === "Scroll" && <ScrollDemo />}
-        {active === "EditableText" && <EditableTextDemo />}
+        {selectedDemo.component && <selectedDemo.component />}
       </node>
     </node>
   );
 }
 
-function NavButton({
-  label,
-  selected,
-  onPress,
-  indent = false,
-}: {
+type ItemProps = {
+  item: DemoItem;
+  selectedItem: DemoItem;
+  isChild?: boolean;
+  onSelected: (item: DemoItem) => void;
+};
+
+function Item({ item, selectedItem, isChild, onSelected }: ItemProps) {
+  const [expanded, setExpanded] = useState(false);
+
+  function onPress() {
+    if (item.children?.length) {
+      setExpanded(!expanded);
+    } else if (item.component) {
+      onSelected(item);
+    }
+  }
+
+  return (
+    <node style={{ flexDirection: "column", gap: 8 }}>
+      <ItemButton
+        isActive={item === selectedItem}
+        label={item.label}
+        onPress={onPress}
+        isChild={isChild ?? false}
+      />
+
+      {expanded && item.children?.length && (
+        <node style={{ flexDirection: "column", gap: 8, margin: { left: 15 } }}>
+          {item.children.map((child) => (
+            <Item
+              key={item.label}
+              item={child}
+              isChild={true}
+              onSelected={onSelected}
+              selectedItem={selectedItem}
+            />
+          ))}
+        </node>
+      )}
+    </node>
+  );
+}
+
+type ItemButtonProps = {
   label: string;
-  selected: boolean;
+  isActive: boolean;
+  isChild: boolean;
   onPress: () => void;
-  indent?: boolean;
-}) {
+};
+function ItemButton({ isActive, isChild, label, onPress }: ItemButtonProps) {
   return (
     <button
       onClick={onPress}
       style={{
         ...navButtonStyle,
-        // Indent submenu items via left padding (full-width button, no overflow).
-        padding: indent ? { top: 8, right: 12, bottom: 8, left: 28 } : 12,
-        backgroundColor: selected ? "#7aa2f7" : "#2a2a3c",
+        padding: isChild ? 6 : 12,
+        backgroundColor: isActive ? "#7aa2f7" : "#2a2a3c",
       }}
-      hoverStyle={{ backgroundColor: selected ? "#7aa2f7" : "#42425e" }}
+      hoverStyle={{ backgroundColor: isActive ? "#7aa2f7" : "#42425e" }}
     >
       <text
         style={{
-          color: selected ? "#1e1e2e" : "#cdd6f4",
-          fontSize: indent ? 14 : 16,
+          color: isActive ? "#1e1e2e" : "#cdd6f4",
+          fontSize: isChild ? 14 : 16,
           fontWeight: "bold",
         }}
       >
@@ -138,7 +179,7 @@ const rootStyle: BevyStyle = {
 
 const navStyle: BevyStyle = {
   flexDirection: "column",
-  alignItems: "stretch",
+  alignItems: "center",
   width: 220,
   height: "100%",
   gap: 8,
@@ -155,12 +196,6 @@ const itemsStyle: BevyStyle = {
   height: "100%",
   gap: 8,
   overflowY: "scroll",
-};
-
-const navGroupStyle: BevyStyle = {
-  flexDirection: "column",
-  gap: 6,
-  width: "100%",
 };
 
 const titleStyle: BevyStyle = {
