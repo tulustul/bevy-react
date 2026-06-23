@@ -19,7 +19,8 @@ use bevy_react::protocol::{Op, Outbound, UiEvent};
 use bevy_react::{RawRequest, ReactMessage};
 
 fn example_bundle() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("examples/demos/ui/dist/bundle.js")
+    // CARGO_MANIFEST_DIR is crates/core; the example bundle is at the repo root.
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../examples/demos/ui/dist/bundle.js")
 }
 
 /// Fold one op into the lookup maps we use to locate nav buttons by their label.

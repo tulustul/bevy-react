@@ -63,7 +63,12 @@ fn spawn_ball(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    shared::spawn_ball(&mut commands, &mut meshes, &mut materials, Scene::BouncingBall);
+    shared::spawn_ball(
+        &mut commands,
+        &mut meshes,
+        &mut materials,
+        Scene::BouncingBall,
+    );
 }
 
 /// Advance the ball and, on each wall hit, send a `bevyEventsDemo.ballBounced`

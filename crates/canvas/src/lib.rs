@@ -3,7 +3,7 @@
 //! A `<canvas>` is a normal styled UI node carrying an [`ImageNode`] whose
 //! texture this module paints. React records an HTML-`<canvas>`-style display
 //! list (`ctx.moveTo`/`lineTo`/`bezierTo`/`fill`/`stroke`/…), it crosses the
-//! bridge as [`Props::draw`](crate::protocol::Props::draw), the reconciler stamps
+//! bridge as a `Props::draw` display list of [`DrawCmd`]s, the reconciler stamps
 //! it onto a [`CanvasSurface`], and [`update_canvas_surfaces`] rasterizes the
 //! commands into the backing image at the node's laid-out pixel size.
 //!
@@ -19,9 +19,59 @@ use bevy::prelude::*;
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 use bevy::ui::ComputedNode;
 use bevy::ui::widget::ImageNode;
+use serde::Deserialize;
 use tiny_skia::{FillRule, Paint, PathBuilder, Pixmap, Stroke, Transform};
 
-use crate::protocol::DrawCmd;
+/// One vector drawing command in a `canvas` element's display list. Mirrors a
+/// subset of the HTML `CanvasRenderingContext2D` path API; coordinates are in
+/// logical (CSS) pixels matching the node's layout size, top-left origin — the
+/// rasterizer scales them to physical pixels by the device pixel ratio. Bevy-free,
+/// decoded on the Rust side and replayed into the rasterizer by
+/// [`update_canvas_surfaces`].
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(tag = "cmd", rename_all = "camelCase")]
+pub enum DrawCmd {
+    /// Start a fresh (empty) path, discarding the current one.
+    BeginPath,
+    /// Move the pen to `(x, y)`, beginning a new subpath.
+    MoveTo { x: f32, y: f32 },
+    /// Add a straight segment from the current point to `(x, y)`.
+    LineTo { x: f32, y: f32 },
+    /// Add a quadratic Bézier to `(x, y)` with control point `(cx, cy)`.
+    QuadTo { cx: f32, cy: f32, x: f32, y: f32 },
+    /// Add a cubic Bézier to `(x, y)` with controls `(c1x, c1y)`, `(c2x, c2y)`.
+    BezierTo {
+        c1x: f32,
+        c1y: f32,
+        c2x: f32,
+        c2y: f32,
+        x: f32,
+        y: f32,
+    },
+    /// Add a circular arc centered at `(x, y)`, radius `r`, from `start` to `end`
+    /// radians (clockwise). Approximated by short segments.
+    Arc {
+        x: f32,
+        y: f32,
+        r: f32,
+        start: f32,
+        end: f32,
+    },
+    /// Add an axis-aligned rectangle subpath.
+    Rect { x: f32, y: f32, w: f32, h: f32 },
+    /// Close the current subpath back to its start.
+    ClosePath,
+    /// Set the fill color (hex `#rgb` / `#rrggbb` / `#rrggbbaa`).
+    FillStyle { color: String },
+    /// Set the stroke color (hex, same forms as `FillStyle`).
+    StrokeStyle { color: String },
+    /// Set the stroke width in canvas pixels.
+    LineWidth { w: f32 },
+    /// Fill the current path with the current fill color.
+    Fill,
+    /// Stroke the current path with the current stroke color and line width.
+    Stroke,
+}
 
 /// Largest backing-texture dimension we allocate, in physical pixels. A guard
 /// against a degenerate layout asking for an enormous buffer.

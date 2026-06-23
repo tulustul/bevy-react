@@ -1,0 +1,31 @@
+[package]
+name = "bevy-react"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+name = "bevy_react"
+path = "src/lib.rs"
+
+# The example and its React UI live at the repo root (`examples/`), so declare it
+# explicitly rather than relying on the default `examples/` directory lookup.
+[[example]]
+name = "demos"
+path = "../../examples/demos/main.rs"
+
+[dependencies]
+anyhow = { workspace = true }
+bevy = { workspace = true }
+bevy-react-animations = { workspace = true }
+bevy-react-canvas = { workspace = true }
+bevy-react-macros = { workspace = true }
+crossbeam-channel = { workspace = true }
+deno_core = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+ts-rs = { workspace = true }
+
+[dev-dependencies]
+crossbeam-channel = { workspace = true }
+tokio = { workspace = true }

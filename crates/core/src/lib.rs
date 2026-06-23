@@ -25,7 +25,6 @@ extern crate self as bevy_react;
 
 mod anchor;
 mod bridge;
-mod canvas;
 mod event;
 mod message;
 mod plugin;
@@ -37,10 +36,11 @@ mod ui_map;
 pub mod js_thread;
 pub mod protocol;
 
-// The Reanimated-style animation engine lives in its own crate (this crate
-// depends on it). Re-exported so consumers can add/configure it directly.
+// The animation engine and the canvas host element each live in their own crate
+// (this crate depends on both). Re-exported so consumers can reach them directly.
 pub use anchor::{Anchor, AnchorScaling, Anchored};
 pub use bevy_react_animations::{self, ReactUiAnimationsPlugin};
+pub use bevy_react_canvas::{self, CanvasSurface};
 pub use bevy_react_macros::{react_event, react_message, react_request};
 pub use event::{ReactEvent, ReactEvents};
 pub use message::{ReactAppExt, ReactMessage, ReactPayload};

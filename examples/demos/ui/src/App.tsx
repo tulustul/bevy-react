@@ -80,8 +80,9 @@ export function App() {
         <image src="bevy-logo.png" style={{ width: 100 }} />
         <text style={titleStyle}>bevy-react</text>
         <node style={itemsStyle}>
-          {DEMOS.map((demo) => (
+          {DEMOS.map((demo, index) => (
             <Item
+              key={index}
               item={demo}
               selectedItem={selectedDemo}
               onSelected={setSelectedDemo}
@@ -126,9 +127,9 @@ function Item({ item, selectedItem, isChild, onSelected }: ItemProps) {
 
       {expanded && item.children?.length && (
         <node style={{ flexDirection: "column", gap: 8, margin: { left: 15 } }}>
-          {item.children.map((child) => (
+          {item.children.map((child, index) => (
             <Item
-              key={item.label}
+              key={index}
               item={child}
               isChild={true}
               onSelected={onSelected}

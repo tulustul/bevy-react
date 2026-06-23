@@ -144,55 +144,10 @@ pub struct Props {
     pub on_change: bool,
 }
 
-/// One vector drawing command in a `canvas` element's display list. Mirrors a
-/// subset of the HTML `CanvasRenderingContext2D` path API; coordinates are in
-/// logical (CSS) pixels matching the node's layout size, top-left origin — the
-/// rasterizer scales them to physical pixels by the device pixel ratio. Bevy-free,
-/// decoded on the Rust side and replayed into the rasterizer by [`crate::canvas`].
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(tag = "cmd", rename_all = "camelCase")]
-pub enum DrawCmd {
-    /// Start a fresh (empty) path, discarding the current one.
-    BeginPath,
-    /// Move the pen to `(x, y)`, beginning a new subpath.
-    MoveTo { x: f32, y: f32 },
-    /// Add a straight segment from the current point to `(x, y)`.
-    LineTo { x: f32, y: f32 },
-    /// Add a quadratic Bézier to `(x, y)` with control point `(cx, cy)`.
-    QuadTo { cx: f32, cy: f32, x: f32, y: f32 },
-    /// Add a cubic Bézier to `(x, y)` with controls `(c1x, c1y)`, `(c2x, c2y)`.
-    BezierTo {
-        c1x: f32,
-        c1y: f32,
-        c2x: f32,
-        c2y: f32,
-        x: f32,
-        y: f32,
-    },
-    /// Add a circular arc centered at `(x, y)`, radius `r`, from `start` to `end`
-    /// radians (clockwise). Approximated by short segments.
-    Arc {
-        x: f32,
-        y: f32,
-        r: f32,
-        start: f32,
-        end: f32,
-    },
-    /// Add an axis-aligned rectangle subpath.
-    Rect { x: f32, y: f32, w: f32, h: f32 },
-    /// Close the current subpath back to its start.
-    ClosePath,
-    /// Set the fill color (hex `#rgb` / `#rrggbb` / `#rrggbbaa`).
-    FillStyle { color: String },
-    /// Set the stroke color (hex, same forms as `FillStyle`).
-    StrokeStyle { color: String },
-    /// Set the stroke width in canvas pixels.
-    LineWidth { w: f32 },
-    /// Fill the current path with the current fill color.
-    Fill,
-    /// Stroke the current path with the current stroke color and line width.
-    Stroke,
-}
+/// The `canvas` display-list command type. It lives in the `bevy-react-canvas`
+/// crate (which owns the host element and its rasterizer), and is re-exported here
+/// so it stays reachable as `protocol::DrawCmd` and so [`Props::draw`] can name it.
+pub use bevy_react_canvas::DrawCmd;
 
 /// A CSS-like style object mapped onto `bevy_ui::Node` and its sibling visual
 /// components. Every field is optional; unset fields keep Bevy's defaults.

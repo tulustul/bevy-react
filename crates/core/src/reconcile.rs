@@ -9,10 +9,10 @@ use bevy::text::{EditableText, TextCursorStyle, TextEdit, TextEditChange};
 use bevy::ui::RelativeCursorPosition;
 use bevy::ui::widget::NodeImageMode;
 use bevy_react_animations::AnimatedNode;
+use bevy_react_canvas::{CanvasSurface, blank_canvas_image};
 
 use crate::anchor::Anchored;
 use crate::bridge::{JsBridge, PointerHandlers, RNode, StyleVariants};
-use crate::canvas::{CanvasSurface, blank_canvas_image};
 use crate::protocol::{NodeId, Op, Outbound, Props, ROOT_ID, UiEvent};
 use crate::ui_map::{
     apply_style, apply_text_style, image_node, overlay_style, resolved_text_style, text_layout,

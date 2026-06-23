@@ -173,7 +173,7 @@ impl Plugin for ReactUiPlugin {
                 // override this frame's static `left`/`top`.
                 crate::anchor::position_anchored_nodes.after(apply_js_ops),
                 // Repaint `<canvas>` textures after their surfaces/sizes update.
-                crate::canvas::update_canvas_surfaces.after(apply_js_ops),
+                bevy_react_canvas::update_canvas_surfaces.after(apply_js_ops),
             ),
         );
 

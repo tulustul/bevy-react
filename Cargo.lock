@@ -387,12 +387,12 @@ dependencies = [
  "anyhow",
  "bevy",
  "bevy-react-animations",
+ "bevy-react-canvas",
  "bevy-react-macros",
  "crossbeam-channel",
  "deno_core",
  "serde",
  "serde_json",
- "tiny-skia",
  "tokio",
  "ts-rs",
 ]
@@ -405,6 +405,15 @@ dependencies = [
  "crossbeam-channel",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "bevy-react-canvas"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "serde",
+ "tiny-skia",
 ]
 
 [[package]]

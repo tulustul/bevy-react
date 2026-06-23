@@ -1,0 +1,13 @@
+[package]
+name = "bevy-react-canvas"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+name = "bevy_react_canvas"
+path = "src/lib.rs"
+
+[dependencies]
+bevy = { workspace = true }
+serde = { workspace = true }
+tiny-skia = { workspace = true }

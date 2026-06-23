@@ -13,7 +13,7 @@
 //! Run with:
 //!
 //!   npm install && npm run build -w demos-app   # build the React bundle
-//!   cargo run --example demos
+//!   cargo run -p bevy-react --example demos
 //!
 //! For hot reload, run `npm run watch -w demos-app` in another terminal and edit
 //! the files under `ui/src/`.
@@ -35,7 +35,7 @@ use bouncing_ball::BouncingBallPlugin;
 use shared::Scene;
 
 fn main() {
-    // `cargo run --example demos -- --export-bindings <path>` writes the TypeScript
+    // `cargo run -p bevy-react --example demos -- --export-bindings <path>` writes the TypeScript
     // message types instead of running the app, keeping `ui/src/generated.ts` in sync
     // with the Rust `#[react_*]` structs. It needs only the handler registrations, so
     // it skips DefaultPlugins/ReactUiPlugin (no window, no JS runtime).
@@ -52,8 +52,10 @@ fn main() {
         return;
     }
 
-    // CARGO_MANIFEST_DIR is the package root, so the example's bundle lives here.
-    let bundle = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("examples/demos/ui/dist/bundle.js");
+    // CARGO_MANIFEST_DIR is the `bevy-react` crate (crates/core); the example and
+    // its bundle live at the repo root, two levels up.
+    let bundle =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../examples/demos/ui/dist/bundle.js");
 
     let mut app = App::new();
     app.add_plugins(
@@ -67,7 +69,7 @@ fn main() {
             })
             // The example's assets (e.g. the logo) live alongside it.
             .set(AssetPlugin {
-                file_path: "examples/assets".into(),
+                file_path: "../../examples/assets".into(),
                 ..default()
             }),
     )

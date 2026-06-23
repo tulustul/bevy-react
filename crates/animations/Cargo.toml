@@ -1,0 +1,16 @@
+[package]
+name = "bevy-react-animations"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+name = "bevy_react_animations"
+path = "src/lib.rs"
+
+[dependencies]
+bevy = { workspace = true }
+crossbeam-channel = { workspace = true }
+serde = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }
