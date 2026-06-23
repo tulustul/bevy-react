@@ -13,6 +13,7 @@ export { Fragment, jsx, jsxs } from "react/jsx-runtime";
 
 import type {
   BevyCanvasProps,
+  BevyEditableTextProps,
   BevyImageProps,
   BevyNodeProps,
   BevyTextProps,
@@ -44,5 +45,7 @@ export namespace JSX {
     canvas: BevyCanvasProps;
     /** Styled, nestable text (maps to `bevy_ui::Text` / `TextSpan`). */
     text: BevyTextProps;
+    /** A focusable, editable text field (maps to `bevy_text::EditableText`). */
+    editableText: BevyEditableTextProps;
   }
 }

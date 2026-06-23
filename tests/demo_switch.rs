@@ -175,6 +175,7 @@ fn demo_switch_anchored_survives() {
                     y: None,
                     client_x: None,
                     client_y: None,
+                    value: None,
                 },
             })
             .expect("JS thread gone before click");

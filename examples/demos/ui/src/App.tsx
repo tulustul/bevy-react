@@ -12,6 +12,7 @@ import { AnchoredDemo } from "./demos/AnchoredDemo";
 import { InteractionsDemo } from "./demos/InteractionsDemo";
 import { CanvasDemo } from "./demos/CanvasDemo";
 import { ScrollDemo } from "./demos/ScrollDemo";
+import { EditableTextDemo } from "./demos/EditableTextDemo";
 
 // A nav entry is a top-level demo; one (Animations) carries a submenu of
 // React-side example variants that all share the same `Demo` scene.
@@ -34,6 +35,7 @@ const DEMOS: NavItem[] = [
   { id: "Interactions", label: "Interactions" },
   { id: "Canvas", label: "Canvas" },
   { id: "Scroll", label: "Scroll" },
+  { id: "EditableText", label: "Editable Text" },
 ];
 
 export function App() {
@@ -87,6 +89,7 @@ export function App() {
         {active === "Interactions" && <InteractionsDemo />}
         {active === "Canvas" && <CanvasDemo />}
         {active === "Scroll" && <ScrollDemo />}
+        {active === "EditableText" && <EditableTextDemo />}
       </node>
     </node>
   );

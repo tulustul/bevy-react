@@ -66,6 +66,12 @@ pub struct JsBridge {
     pub text_styles: HashMap<NodeId, ResolvedTextStyle>,
     /// Node ids that are bare-string runs inheriting their parent's text style.
     pub raw_spans: HashSet<NodeId>,
+    /// Node ids that are `editableText` inputs, so an `Update` knows to push a
+    /// diverging `value` into the live `EditableText` buffer.
+    pub editable_inputs: HashSet<NodeId>,
+    /// The last text value emitted to JS for each `editableText`, used to dedup
+    /// `TextEditChange` (which also fires on cursor moves) into real `"change"`s.
+    pub editable_values: HashMap<NodeId, String>,
 }
 
 impl JsBridge {
@@ -79,6 +85,8 @@ impl JsBridge {
             nodes,
             text_styles: HashMap::new(),
             raw_spans: HashSet::new(),
+            editable_inputs: HashSet::new(),
+            editable_values: HashMap::new(),
         }
     }
 }

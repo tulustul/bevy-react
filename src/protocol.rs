@@ -126,6 +126,22 @@ pub struct Props {
     /// `Some(vec![])` clears the canvas; absent leaves the previous drawing.
     #[serde(default)]
     pub draw: Option<Vec<DrawCmd>>,
+
+    // --- `editableText` element attributes ---
+    /// The controlled text value of an `editableText`. Seeds the field on create;
+    /// on update it's pushed into the widget only when it diverges from the live
+    /// buffer (so normal typing is never clobbered — see [`crate::reconcile`]).
+    #[serde(default)]
+    pub value: Option<String>,
+    /// Maximum number of characters an `editableText` accepts.
+    #[serde(default)]
+    pub max_length: Option<usize>,
+    /// Whether an `editableText` accepts newlines (multi-line input).
+    #[serde(default)]
+    pub multiline: bool,
+    /// Whether this element has an `onChange` handler registered in JS.
+    #[serde(default)]
+    pub on_change: bool,
 }
 
 /// One vector drawing command in a `canvas` element's display list. Mirrors a
@@ -519,12 +535,12 @@ impl<'de> Deserialize<'de> for Rect {
 
 /// An interaction event sent from Bevy back into JS, where the reconciler
 /// dispatches it to the matching React handler.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UiEvent {
     pub id: NodeId,
-    /// `"click"`, or a pointer kind: `"pointerDown"` / `"pointerMove"` /
-    /// `"pointerUp"`.
+    /// `"click"`, a pointer kind (`"pointerDown"` / `"pointerMove"` /
+    /// `"pointerUp"`), or `"change"` for an `editableText` value edit.
     pub kind: String,
     /// Cursor x within the node, normalized to `0..1` (left→right). Present only
     /// for pointer events; `None` for `"click"`.
@@ -543,6 +559,9 @@ pub struct UiEvent {
     /// pointer events; see [`client_x`](Self::client_x).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub client_y: Option<f32>,
+    /// The new text of an `editableText`. Present only for `"change"` events.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub value: Option<String>,
 }
 
 /// Everything that flows Bevy -> JS over the single outbound channel. Internally
@@ -573,4 +592,43 @@ pub enum Outbound {
 pub enum ResponseResult {
     Ok { value: serde_json::Value },
     Err { message: String },
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// An `<editableText>` create op carries its controlled value and attributes.
+    #[test]
+    fn deserializes_editable_text_create() {
+        let json = r#"{"op":"create","id":7,"kind":"editableText","props":{
+            "value":"hi","maxLength":40,"multiline":true,"onChange":true}}"#;
+        match serde_json::from_str::<Op>(json).expect("valid op") {
+            Op::Create { id, kind, props } => {
+                assert_eq!(id, 7);
+                assert_eq!(kind, "editableText");
+                assert_eq!(props.value.as_deref(), Some("hi"));
+                assert_eq!(props.max_length, Some(40));
+                assert!(props.multiline);
+                assert!(props.on_change);
+            }
+            other => panic!("expected create, got {other:?}"),
+        }
+    }
+
+    /// A `change` event serializes its new text as camelCase `value`, while the
+    /// pointer-only fields stay omitted.
+    #[test]
+    fn serializes_change_event_with_value() {
+        let ev = UiEvent {
+            id: 7,
+            kind: "change".into(),
+            value: Some("hello".into()),
+            ..Default::default()
+        };
+        let v = serde_json::to_value(&ev).expect("serializable");
+        assert_eq!(v["kind"], "change");
+        assert_eq!(v["value"], "hello");
+        assert!(v.get("clientX").is_none(), "pointer fields omitted");
+    }
 }

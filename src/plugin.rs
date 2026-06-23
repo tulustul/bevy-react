@@ -13,6 +13,7 @@ use crate::message::{ReactMessage, ReactRegistry};
 use crate::protocol::{Op, Outbound};
 use crate::reconcile::{
     apply_interaction_styles, apply_js_ops, collect_pointer_events, collect_ui_events,
+    on_text_edit_change,
 };
 use crate::request::{RawRequest, ReactRequestRegistry, RequestReceiver, dispatch_react_requests};
 
@@ -175,6 +176,10 @@ impl Plugin for ReactUiPlugin {
                 crate::canvas::update_canvas_surfaces.after(apply_js_ops),
             ),
         );
+
+        // `editableText` value edits arrive as Bevy's `TextEditChange` trigger; an
+        // observer turns each real change into an outbound `"change"` UI event.
+        app.add_observer(on_text_edit_change);
 
         // The animations engine is a separate plugin (its crate can't depend on
         // this one). We add it and, as the only crate that sees both sides, order

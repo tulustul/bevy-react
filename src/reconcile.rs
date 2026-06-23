@@ -3,7 +3,9 @@
 //! - [`collect_ui_events`] reports interactions back to the JS thread.
 
 use bevy::image::Image;
+use bevy::input_focus::tab_navigation::TabIndex;
 use bevy::prelude::*;
+use bevy::text::{EditableText, TextCursorStyle, TextEdit, TextEditChange};
 use bevy::ui::RelativeCursorPosition;
 use bevy::ui::widget::NodeImageMode;
 use bevy_react_animations::AnimatedNode;
@@ -26,6 +28,7 @@ pub fn apply_js_ops(
     mut images: ResMut<Assets<Image>>,
     children: Query<&Children>,
     rnodes: Query<&RNode>,
+    mut editables: Query<&mut EditableText>,
 ) {
     // Drain all pending batches first so we don't hold an immutable borrow of
     // `bridge` while mutating `bridge.nodes` below.
@@ -54,6 +57,8 @@ pub fn apply_js_ops(
                 bridge.nodes.retain(|&id, _| id == ROOT_ID);
                 bridge.text_styles.clear();
                 bridge.raw_spans.clear();
+                bridge.editable_inputs.clear();
+                bridge.editable_values.clear();
             }
             Op::Create { id, kind, props } => {
                 let entity = match kind.as_str() {
@@ -94,12 +99,55 @@ pub fn apply_js_ops(
                         apply_anchor(&mut ec, &props);
                         ec.id()
                     }
+                    // An `<editableText>`: a focusable native text input. Bevy's
+                    // `EditableTextInputPlugin` (registered by `DefaultPlugins`)
+                    // drives keyboard/focus/cursor/selection/clipboard; we just
+                    // spawn the widget and observe `TextEditChange` for `onChange`.
+                    "editableText" => {
+                        let mut ec = commands.spawn(RNode(id));
+                        apply_style(&mut ec, &props.style);
+                        let mut editable =
+                            EditableText::new(props.value.as_deref().unwrap_or_default());
+                        editable.max_characters = props.max_length;
+                        editable.allow_newlines = props.multiline;
+                        let (text_color, font) = resolved_text_style(&props.style);
+                        ec.insert((
+                            editable,
+                            text_color,
+                            font,
+                            TextLayout {
+                                linebreak: if props.multiline {
+                                    LineBreak::WordBoundary
+                                } else {
+                                    LineBreak::NoWrap
+                                },
+                                ..default()
+                            },
+                            // Caret follows the text color so it stays visible on
+                            // any themed background (the default is a dark slate).
+                            TextCursorStyle {
+                                color: text_color.0,
+                                ..default()
+                            },
+                            // Focusable via click (the widget's picking observers)
+                            // and Tab navigation.
+                            TabIndex(0),
+                        ));
+                        apply_anchor(&mut ec, &props);
+                        ec.id()
+                    }
                     _ => spawn_element(&mut commands, id, &kind, &props, &assets),
                 };
                 if matches!(kind.as_str(), "text" | "textSpan") {
                     bridge
                         .text_styles
                         .insert(id, resolved_text_style(&props.style));
+                }
+                if kind == "editableText" {
+                    bridge.editable_inputs.insert(id);
+                    bridge
+                        .editable_values
+                        .insert(id, props.value.clone().unwrap_or_default());
                 }
                 bridge.nodes.insert(id, entity);
             }
@@ -142,6 +190,8 @@ pub fn apply_js_ops(
                     bridge.nodes.remove(&child);
                     bridge.text_styles.remove(&child);
                     bridge.raw_spans.remove(&child);
+                    bridge.editable_inputs.remove(&child);
+                    bridge.editable_values.remove(&child);
                 }
             }
             Op::Update { id, props } => {
@@ -168,6 +218,22 @@ pub fn apply_js_ops(
                             }
                         }
                     }
+                } else if bridge.editable_inputs.contains(&id) {
+                    // Controlled `editableText`: push `value` into the live buffer
+                    // only when it diverges from what the widget already holds, so
+                    // a re-render echoing the user's own keystrokes is a no-op and
+                    // never resets the cursor. Re-applying baseline keeps the
+                    // `onChange` dedup from echoing this programmatic set back.
+                    if let Some(new_val) = &props.value {
+                        if let Ok(mut editable) = editables.get_mut(e) {
+                            if editable.value().to_string() != *new_val {
+                                editable.editor_mut().set_text(new_val);
+                                editable.queue_edit(TextEdit::TextEnd(false));
+                            }
+                        }
+                        bridge.editable_values.insert(id, new_val.clone());
+                    }
+                    apply_style(&mut commands.entity(e), &props.style);
                 } else {
                     let mut ec = commands.entity(e);
                     apply_style(&mut ec, &props.style);
@@ -354,10 +420,43 @@ pub fn collect_ui_events(
                     y: None,
                     client_x: None,
                     client_y: None,
+                    value: None,
                 },
             });
         }
     }
+}
+
+/// Report `editableText` value edits back to JS as `"change"` UI events. Bevy
+/// triggers [`TextEditChange`] after applying edits — but also on cursor moves and
+/// selection changes, so we dedup against the last value emitted for the node and
+/// only fire when the text actually changed. The matching React `onChange` is
+/// looked up by node id + `"change"` kind in the JS event-loop router.
+pub fn on_text_edit_change(
+    change: On<TextEditChange>,
+    mut bridge: ResMut<JsBridge>,
+    editables: Query<(&EditableText, &RNode)>,
+) {
+    let Ok((editable, rnode)) = editables.get(change.event_target()) else {
+        return;
+    };
+    let value = editable.value().to_string();
+    if bridge.editable_values.get(&rnode.0) == Some(&value) {
+        return; // cursor/selection move, or an echo of a programmatic set
+    }
+    bridge.editable_values.insert(rnode.0, value.clone());
+    debug!("change -> reconciler node {}", rnode.0);
+    let _ = bridge.outbound_tx.send(Outbound::UiEvent {
+        event: UiEvent {
+            id: rnode.0,
+            kind: "change".to_string(),
+            x: None,
+            y: None,
+            client_x: None,
+            client_y: None,
+            value: Some(value),
+        },
+    });
 }
 
 /// The node currently being dragged (an `onPointer*` element pressed with the
@@ -404,6 +503,7 @@ pub fn collect_pointer_events(
                 y: Some(pos.y),
                 client_x: Some(abs.x),
                 client_y: Some(abs.y),
+                value: None,
             },
         });
     };

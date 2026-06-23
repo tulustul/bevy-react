@@ -76,6 +76,11 @@ export interface SerializedProps {
   imageMode?: string;
   // `canvas` element: the recorded vector display list, rasterized on the Bevy side.
   draw?: DrawCmd[];
+  // `editableText` element attributes
+  value?: string;
+  maxLength?: number;
+  multiline?: boolean;
+  onChange?: boolean;
 }
 
 export interface UiEvent {
@@ -89,6 +94,8 @@ export interface UiEvent {
   // Present only for pointer events; absent for "click".
   clientX?: number;
   clientY?: number;
+  // The new text. Present only for an `editableText`'s "change" event.
+  value?: string;
 }
 
 // Ops accumulated during the current commit, flushed in resetAfterCommit.
@@ -219,6 +226,13 @@ export function serializeProps(
       out.onPointerUp = true;
       continue;
     }
+    // An `editableText`'s `onChange`. The function stays in JS; Bevy reports back
+    // a `change` event (carrying the new text) the event loop routes here.
+    if (key === "onChange" && typeof value === "function") {
+      hs.change = value as (...args: unknown[]) => void;
+      out.onChange = true;
+      continue;
+    }
     if (key === "style" && value && typeof value === "object") {
       // Style is opaque: every CSS-like key (incl. backgroundColor, border,
       // grid, …) rides across inside this object, decoded on the Rust side.
@@ -257,7 +271,7 @@ export function serializeProps(
           : (value as DrawCmd[]);
       continue;
     }
-    // Text + `image` element attributes pass through by name.
+    // Text + `image` + `editableText` element attributes pass through by name.
     if (key === "color") out.color = value as string;
     else if (key === "fontSize") out.fontSize = value as number;
     else if (key === "src") out.src = value as string;
@@ -265,6 +279,9 @@ export function serializeProps(
     else if (key === "flipX") out.flipX = value as boolean;
     else if (key === "flipY") out.flipY = value as boolean;
     else if (key === "imageMode") out.imageMode = value as string;
+    else if (key === "value") out.value = value as string;
+    else if (key === "maxLength") out.maxLength = value as number;
+    else if (key === "multiline") out.multiline = value as boolean;
   }
 
   if (Object.keys(hs).length > 0) handlers.set(id, hs);
@@ -317,8 +334,9 @@ export async function runEventLoop(
           const event = msg.event;
           wrap(() => {
             try {
-              // Click handlers ignore the arg; pointer handlers read x/y.
-              fn(event);
+              // Click handlers ignore the arg; pointer handlers read x/y; an
+              // `editableText`'s onChange receives the new text directly.
+              fn(event.kind === "change" ? event.value : event);
             } catch (e) {
               console.error("[js] handler error:", e);
             }

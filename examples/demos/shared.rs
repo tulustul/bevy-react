@@ -26,6 +26,8 @@ pub enum Demo {
     Canvas,
     /// Pure-UI demo (a wheel-scrollable list); no 3D scene.
     Scroll,
+    /// Pure-UI demo (a native `<editableText>` field echoed onto a label); no 3D scene.
+    EditableText,
 }
 
 /// The wire form of [`Demo`] — what React sends with `emit("selectDemo", id)`.
@@ -41,6 +43,7 @@ pub enum DemoId {
     Interactions,
     Canvas,
     Scroll,
+    EditableText,
 }
 
 /// React picks the active demo from the left-nav: `emit("selectDemo", id)`.
@@ -64,6 +67,7 @@ fn apply_select_demo(on: On<SelectDemo>, mut next: ResMut<NextState<Demo>>) {
         DemoId::Interactions => Demo::Interactions,
         DemoId::Canvas => Demo::Canvas,
         DemoId::Scroll => Demo::Scroll,
+        DemoId::EditableText => Demo::EditableText,
     });
 }
 

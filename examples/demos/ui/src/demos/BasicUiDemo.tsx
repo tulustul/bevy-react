@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import { bevy } from "../generated";
-import { buttonStyle, headingStyle, labelStyle } from "./styles";
-import { Card } from "../components";
+import { buttonStyle, headingStyle } from "./styles";
+import { Example } from "../components";
 
 const MAX = 8;
-const HINT = "bevy.basicDemo.setCount(n)";
+const TYPESCRIPT = "bevy.basicDemo.setCount(n)";
 
 export function BasicUiDemo() {
   const [count, setCount] = useState(3);
@@ -14,11 +14,10 @@ export function BasicUiDemo() {
   }, [count]);
 
   return (
-    <Card>
+    <Example typescript={TYPESCRIPT}>
       <text style={headingStyle}>
         Cubes: <text style={{ color: "#7aa2f7" }}>{count}</text>
       </text>
-      <text style={labelStyle}>{HINT}</text>
 
       <node style={{ flexDirection: "row", gap: 12 }}>
         <button
@@ -38,6 +37,6 @@ export function BasicUiDemo() {
           -
         </button>
       </node>
-    </Card>
+    </Example>
   );
 }

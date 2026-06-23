@@ -234,3 +234,21 @@ export interface BevyImageProps extends BevyAttributes {
   imageMode?: "auto" | "stretch";
   onClick?: () => void;
 }
+
+/** Props for the `editableText` element: a focusable, editable text field (maps
+ *  to Bevy's native `bevy_text::EditableText`, which handles keyboard input,
+ *  cursor, selection, clipboard, and word navigation). Controlled: pass `value`
+ *  and update it from `onChange`. Style `color`/`fontSize`/`fontWeight` via
+ *  `style`, like `<text>`. */
+export interface BevyEditableTextProps extends BevyAttributes {
+  style?: BevyStyle;
+  /** The current text. Pushed into the field only when it differs from what the
+   *  widget already holds, so it never disrupts the caret while typing. */
+  value?: string;
+  /** Fires on every edit with the field's new text. */
+  onChange?: (value: string) => void;
+  /** Maximum number of characters accepted. */
+  maxLength?: number;
+  /** Allow newlines (multi-line input). Defaults to single-line. */
+  multiline?: boolean;
+}

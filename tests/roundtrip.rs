@@ -109,6 +109,7 @@ fn bridge_round_trip() {
                 y: None,
                 client_x: None,
                 client_y: None,
+                value: None,
             },
         })
         .expect("JS thread gone before click");
