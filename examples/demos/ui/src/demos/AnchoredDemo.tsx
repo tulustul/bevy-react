@@ -4,13 +4,15 @@ import { BevyStyle } from "bevy-react/jsx";
 import { bevy } from "../generated";
 import type { CubeInfo } from "../generated";
 import { headingStyle, labelStyle } from "./styles";
-import { Card, Checkbox } from "../components";
+import { Card, Checkbox, Slider } from "../components";
 
 const HINT = "<Anchored.node entity={cube}>";
 
 export function AnchoredDemo() {
   const [cubes, setCubes] = useState<CubeInfo[]>([]);
-  const [scaleEnabled, setScaleEnabled] = useState(true);
+  const [scalingEnabled, setScalingEnabled] = useState(true);
+  const [baseDistance, setBaseDistance] = useState(24);
+  const [scaleFactor, setScaleFactor] = useState(1);
 
   useEffect(() => {
     const off = bevy.on("anchoredDemo.cubesSpawned", (e) => setCubes(e.cubes));
@@ -20,12 +22,12 @@ export function AnchoredDemo() {
     };
   }, []);
 
-  const scaling: AnchorScaling | undefined = scaleEnabled
+  const scaling: AnchorScaling | undefined = scalingEnabled
     ? {
-        min: 0.001,
-        max: 20.0,
-        factor: 1,
-        baseDistance: 24.0,
+        min: 0.4,
+        max: 3,
+        factor: scaleFactor,
+        baseDistance: baseDistance,
       }
     : undefined;
 
@@ -37,9 +39,28 @@ export function AnchoredDemo() {
 
         <Checkbox
           label="Scale with distance"
-          enabled={scaleEnabled}
-          onChange={setScaleEnabled}
+          enabled={scalingEnabled}
+          onChange={setScalingEnabled}
         />
+
+        {scalingEnabled && (
+          <>
+            <Slider
+              value={scaleFactor}
+              onChange={setScaleFactor}
+              label={`Scale factor ${scaleFactor.toFixed(1)}`}
+              min={0}
+              max={3}
+            />
+            <Slider
+              value={baseDistance}
+              onChange={setBaseDistance}
+              label={`Base distance ${baseDistance.toFixed(1)}`}
+              min={1}
+              max={50}
+            />
+          </>
+        )}
       </Card>
 
       {cubes.map((cube) => (

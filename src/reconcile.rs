@@ -2,11 +2,15 @@
 //! - [`apply_js_ops`] drains reconciler op batches and mutates the UI tree.
 //! - [`collect_ui_events`] reports interactions back to the JS thread.
 
+use bevy::image::Image;
 use bevy::prelude::*;
+use bevy::ui::RelativeCursorPosition;
+use bevy::ui::widget::NodeImageMode;
 use bevy_react_animations::AnimatedNode;
 
 use crate::anchor::Anchored;
-use crate::bridge::{JsBridge, RNode, StyleVariants};
+use crate::bridge::{JsBridge, PointerHandlers, RNode, StyleVariants};
+use crate::canvas::{CanvasSurface, blank_canvas_image};
 use crate::protocol::{NodeId, Op, Outbound, Props, ROOT_ID, UiEvent};
 use crate::ui_map::{
     apply_style, apply_text_style, image_node, overlay_style, resolved_text_style, text_layout,
@@ -19,6 +23,7 @@ pub fn apply_js_ops(
     mut commands: Commands,
     mut bridge: ResMut<JsBridge>,
     assets: Res<AssetServer>,
+    mut images: ResMut<Assets<Image>>,
     children: Query<&Children>,
     rnodes: Query<&RNode>,
 ) {
@@ -68,6 +73,25 @@ pub fn apply_js_ops(
                     "textSpan" => {
                         let mut ec = commands.spawn((RNode(id), TextSpan(String::new())));
                         apply_text_style(&mut ec, &props.style);
+                        ec.id()
+                    }
+                    // A `<canvas>`: a styled node carrying an `ImageNode` whose
+                    // texture the canvas system paints from the display list. The
+                    // image stretches to fill the node's laid-out box.
+                    "canvas" => {
+                        let handle = images.add(blank_canvas_image());
+                        let mut node_img = ImageNode::new(handle);
+                        node_img.image_mode = NodeImageMode::Stretch;
+                        let mut ec = commands.spawn(RNode(id));
+                        apply_style(&mut ec, &props.style);
+                        ec.insert((
+                            node_img,
+                            CanvasSurface::new(props.draw.clone().unwrap_or_default()),
+                        ));
+                        apply_style_variants(&mut ec, &props);
+                        apply_pointer_handlers(&mut ec, &props);
+                        apply_animated(&mut ec, &props);
+                        apply_anchor(&mut ec, &props);
                         ec.id()
                     }
                     _ => spawn_element(&mut commands, id, &kind, &props, &assets),
@@ -152,7 +176,13 @@ pub fn apply_js_ops(
                     if is_image(&props) {
                         ec.insert(image_node(&props, &assets));
                     }
+                    // A `<canvas>`'s new display list: replace the surface (the
+                    // canvas system keeps the same `ImageNode` handle and repaints).
+                    if let Some(cmds) = &props.draw {
+                        ec.insert(CanvasSurface::new(cmds.clone()));
+                    }
                     apply_style_variants(&mut ec, &props);
+                    apply_pointer_handlers(&mut ec, &props);
                     apply_animated(&mut ec, &props);
                     apply_anchor(&mut ec, &props);
                 }
@@ -211,6 +241,7 @@ fn spawn_element(
         _ => {}
     }
     apply_style_variants(&mut ec, props);
+    apply_pointer_handlers(&mut ec, props);
     apply_animated(&mut ec, props);
     apply_anchor(&mut ec, props);
     ec.id()
@@ -273,6 +304,27 @@ fn apply_style_variants(ec: &mut EntityCommands, props: &Props) {
     }
 }
 
+/// Stamp (or clear) the [`PointerHandlers`] marker plus the components the
+/// drag-capture system needs. When any `onPointer*` handler is declared the
+/// element also gets an `Interaction` (so the focus system tracks the press that
+/// starts a drag) and a [`RelativeCursorPosition`] (so we can read the cursor's
+/// normalized position within it). `insert_if_new` leaves an existing
+/// `Interaction` (a `button`'s, or a hover/press variant's) untouched.
+fn apply_pointer_handlers(ec: &mut EntityCommands, props: &Props) {
+    if props.on_pointer_down || props.on_pointer_move || props.on_pointer_up {
+        ec.insert(PointerHandlers {
+            down: props.on_pointer_down,
+            moved: props.on_pointer_move,
+            up: props.on_pointer_up,
+        });
+        ec.insert_if_new(Interaction::default());
+        ec.insert_if_new(RelativeCursorPosition::default());
+    } else {
+        ec.remove::<PointerHandlers>();
+        ec.remove::<RelativeCursorPosition>();
+    }
+}
+
 /// Whether these props carry any `image` element attribute.
 fn is_image(props: &Props) -> bool {
     props.src.is_some()
@@ -298,10 +350,126 @@ pub fn collect_ui_events(
                 event: UiEvent {
                     id: rnode.0,
                     kind: "click".to_string(),
+                    x: None,
+                    y: None,
+                    client_x: None,
+                    client_y: None,
                 },
             });
         }
     }
+}
+
+/// The node currently being dragged (an `onPointer*` element pressed with the
+/// left mouse button), plus the last cursor positions we read for it — used as a
+/// fallback when the cursor leaves the window mid-drag. `last_pos` is the
+/// node-relative `0..1` position; `last_abs` is the absolute window position.
+#[derive(Default)]
+pub struct ActiveDrag {
+    entity: Option<Entity>,
+    last_pos: Vec2,
+    last_abs: Vec2,
+}
+
+/// Drive native pointer/drag events for elements that declared `onPointer*`
+/// handlers. Unlike the discrete click path, this follows the cursor across
+/// frames so a dragged control (e.g. a slider) keeps updating even when the
+/// pointer leaves its bounds — `RelativeCursorPosition` keeps reporting while the
+/// cursor is anywhere in the window, and we clamp to `0..1`.
+///
+/// `RelativeCursorPosition::normalized` is centered (`-0.5` = left/top edge,
+/// `0.5` = right/bottom); we shift it to a `0..1` top-left origin to match the
+/// CSS-like coordinates the JS handlers expect.
+pub fn collect_pointer_events(
+    bridge: Res<JsBridge>,
+    buttons: Res<ButtonInput<MouseButton>>,
+    windows: Query<&Window>,
+    nodes: Query<(
+        Entity,
+        &RNode,
+        &Interaction,
+        &RelativeCursorPosition,
+        &PointerHandlers,
+    )>,
+    interactions: Query<&Interaction>,
+    mut capture: ResMut<crate::PointerCapture>,
+    mut drag: Local<ActiveDrag>,
+) {
+    let emit = |rnode: &RNode, kind: &str, pos: Vec2, abs: Vec2| {
+        let _ = bridge.outbound_tx.send(Outbound::UiEvent {
+            event: UiEvent {
+                id: rnode.0,
+                kind: kind.to_string(),
+                x: Some(pos.x),
+                y: Some(pos.y),
+                client_x: Some(abs.x),
+                client_y: Some(abs.y),
+            },
+        });
+    };
+
+    // Absolute cursor position in window logical pixels; `None` when the cursor
+    // is outside the window (mid-drag), where we fall back to the last reading.
+    let cursor_abs = windows.iter().next().and_then(|w| w.cursor_position());
+
+    // Begin a drag on the frame the button goes down, over a pressed handler node.
+    if buttons.just_pressed(MouseButton::Left) {
+        for (entity, rnode, interaction, rel, handlers) in &nodes {
+            if *interaction == Interaction::Pressed {
+                let pos = normalized_01(rel).unwrap_or(drag.last_pos);
+                let abs = cursor_abs.unwrap_or(drag.last_abs);
+                drag.entity = Some(entity);
+                drag.last_pos = pos;
+                drag.last_abs = abs;
+                if handlers.down {
+                    emit(rnode, "pointerDown", pos, abs);
+                }
+                break;
+            }
+        }
+    }
+
+    // While held, follow the cursor and emit move events (a drag).
+    if buttons.pressed(MouseButton::Left) {
+        if let Some(entity) = drag.entity {
+            if let Ok((_, rnode, _, rel, handlers)) = nodes.get(entity) {
+                let pos = normalized_01(rel).unwrap_or(drag.last_pos);
+                let abs = cursor_abs.unwrap_or(drag.last_abs);
+                drag.last_pos = pos;
+                drag.last_abs = abs;
+                if handlers.moved {
+                    emit(rnode, "pointerMove", pos, abs);
+                }
+            }
+        }
+    }
+
+    // End the drag on release.
+    if buttons.just_released(MouseButton::Left) {
+        if let Some(entity) = drag.entity.take() {
+            if let Ok((_, rnode, _, rel, handlers)) = nodes.get(entity) {
+                let pos = normalized_01(rel).unwrap_or(drag.last_pos);
+                let abs = cursor_abs.unwrap_or(drag.last_abs);
+                if handlers.up {
+                    emit(rnode, "pointerUp", pos, abs);
+                }
+            }
+        }
+    }
+
+    // Publish whether the UI owns the pointer so world systems (e.g. a camera
+    // controller) can ignore the mouse. `dragging` spans the whole gesture even
+    // once the cursor leaves the element; `over_ui` covers hover/press on any
+    // interactive node (so e.g. wheel-zoom over UI can be trapped too).
+    capture.dragging = drag.entity.is_some();
+    capture.over_ui = interactions.iter().any(|i| *i != Interaction::None);
+}
+
+/// Shift `RelativeCursorPosition`'s centered, unclamped position to a clamped
+/// `0..1` top-left-origin coordinate. `None` when the cursor position is unknown.
+fn normalized_01(rel: &RelativeCursorPosition) -> Option<Vec2> {
+    rel.normalized
+        .map(|n| Vec2::new((n.x + 0.5).clamp(0.0, 1.0), (n.y + 0.5).clamp(0.0, 1.0)))
 }
 
 /// Re-apply the merged style for any element with [`StyleVariants`] whose

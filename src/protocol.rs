@@ -79,6 +79,16 @@ pub struct Props {
     /// Whether this element has an `onClick` handler registered in JS.
     #[serde(default)]
     pub on_click: bool,
+    /// Whether this element has an `onPointerDown` handler registered in JS.
+    #[serde(default)]
+    pub on_pointer_down: bool,
+    /// Whether this element has an `onPointerMove` handler registered in JS.
+    /// Fires each frame while the pointer is held down (a drag).
+    #[serde(default)]
+    pub on_pointer_move: bool,
+    /// Whether this element has an `onPointerUp` handler registered in JS.
+    #[serde(default)]
+    pub on_pointer_up: bool,
     /// Per-property animation bindings for an `Animated.node` (Reanimated-style).
     /// Present → the main reconciler stamps a `bevy_react_animations::AnimatedNode`
     /// on the entity so the animations plugin drives the listed props each frame.
@@ -108,6 +118,64 @@ pub struct Props {
     /// How the image fits its box: `"auto"` or `"stretch"`.
     #[serde(default)]
     pub image_mode: Option<String>,
+
+    // --- `canvas` element attribute ---
+    /// The display list for a `canvas` element: an ordered batch of vector draw
+    /// commands (the recorded form of an HTML-canvas-like `ctx.moveTo/lineTo/…`
+    /// session). Present → the canvas re-rasterizes into its backing texture.
+    /// `Some(vec![])` clears the canvas; absent leaves the previous drawing.
+    #[serde(default)]
+    pub draw: Option<Vec<DrawCmd>>,
+}
+
+/// One vector drawing command in a `canvas` element's display list. Mirrors a
+/// subset of the HTML `CanvasRenderingContext2D` path API; coordinates are in
+/// logical (CSS) pixels matching the node's layout size, top-left origin — the
+/// rasterizer scales them to physical pixels by the device pixel ratio. Bevy-free,
+/// decoded on the Rust side and replayed into the rasterizer by [`crate::canvas`].
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(tag = "cmd", rename_all = "camelCase")]
+pub enum DrawCmd {
+    /// Start a fresh (empty) path, discarding the current one.
+    BeginPath,
+    /// Move the pen to `(x, y)`, beginning a new subpath.
+    MoveTo { x: f32, y: f32 },
+    /// Add a straight segment from the current point to `(x, y)`.
+    LineTo { x: f32, y: f32 },
+    /// Add a quadratic Bézier to `(x, y)` with control point `(cx, cy)`.
+    QuadTo { cx: f32, cy: f32, x: f32, y: f32 },
+    /// Add a cubic Bézier to `(x, y)` with controls `(c1x, c1y)`, `(c2x, c2y)`.
+    BezierTo {
+        c1x: f32,
+        c1y: f32,
+        c2x: f32,
+        c2y: f32,
+        x: f32,
+        y: f32,
+    },
+    /// Add a circular arc centered at `(x, y)`, radius `r`, from `start` to `end`
+    /// radians (clockwise). Approximated by short segments.
+    Arc {
+        x: f32,
+        y: f32,
+        r: f32,
+        start: f32,
+        end: f32,
+    },
+    /// Add an axis-aligned rectangle subpath.
+    Rect { x: f32, y: f32, w: f32, h: f32 },
+    /// Close the current subpath back to its start.
+    ClosePath,
+    /// Set the fill color (hex `#rgb` / `#rrggbb` / `#rrggbbaa`).
+    FillStyle { color: String },
+    /// Set the stroke color (hex, same forms as `FillStyle`).
+    StrokeStyle { color: String },
+    /// Set the stroke width in canvas pixels.
+    LineWidth { w: f32 },
+    /// Fill the current path with the current fill color.
+    Fill,
+    /// Stroke the current path with the current stroke color and line width.
+    Stroke,
 }
 
 /// A CSS-like style object mapped onto `bevy_ui::Node` and its sibling visual
@@ -455,8 +523,26 @@ impl<'de> Deserialize<'de> for Rect {
 #[serde(rename_all = "camelCase")]
 pub struct UiEvent {
     pub id: NodeId,
-    /// Currently only `"click"`.
+    /// `"click"`, or a pointer kind: `"pointerDown"` / `"pointerMove"` /
+    /// `"pointerUp"`.
     pub kind: String,
+    /// Cursor x within the node, normalized to `0..1` (left→right). Present only
+    /// for pointer events; `None` for `"click"`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub x: Option<f32>,
+    /// Cursor y within the node, normalized to `0..1` (top→bottom). Present only
+    /// for pointer events; `None` for `"click"`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub y: Option<f32>,
+    /// Absolute cursor x in window logical pixels (left→right, top-left origin).
+    /// Present only for pointer events; lets a handler drag a node across the
+    /// screen (the normalized `x`/`y` are clamped to the node and can't).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub client_x: Option<f32>,
+    /// Absolute cursor y in window logical pixels (top→bottom). Present only for
+    /// pointer events; see [`client_x`](Self::client_x).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub client_y: Option<f32>,
 }
 
 /// Everything that flows Bevy -> JS over the single outbound channel. Internally

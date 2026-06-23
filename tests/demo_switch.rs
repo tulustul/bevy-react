@@ -152,7 +152,7 @@ fn demo_switch_anchored_survives() {
                     accumulate(op, &mut buttons, &mut parent_of, &mut text_of);
                 }
                 anchored_btn = anchored_btn
-                    .or_else(|| find_button("Anchored", &buttons, &parent_of, &text_of));
+                    .or_else(|| find_button("World Anchors", &buttons, &parent_of, &text_of));
                 basic_btn =
                     basic_btn.or_else(|| find_button("Basic UI", &buttons, &parent_of, &text_of));
             }
@@ -161,7 +161,7 @@ fn demo_switch_anchored_survives() {
         }
     }
 
-    let anchored_btn = anchored_btn.expect("no 'Anchored' nav button in initial render");
+    let anchored_btn = anchored_btn.expect("no 'World Anchors' nav button in initial render");
     let basic_btn = basic_btn.expect("no 'Basic UI' nav button in initial render");
     eprintln!("OK   nav buttons: anchored={anchored_btn}, basic={basic_btn}");
 
@@ -171,6 +171,10 @@ fn demo_switch_anchored_survives() {
                 event: UiEvent {
                     id,
                     kind: "click".into(),
+                    x: None,
+                    y: None,
+                    client_x: None,
+                    client_y: None,
                 },
             })
             .expect("JS thread gone before click");

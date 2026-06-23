@@ -7,7 +7,6 @@
 
 use std::f32::consts::{PI, TAU};
 
-use bevy::input::mouse::AccumulatedMouseMotion;
 use bevy::prelude::*;
 use bevy_react::{ReactAppExt, ReactEvents, react_event};
 use serde::Serialize;
@@ -20,23 +19,15 @@ const CUBE_COUNT: usize = 100;
 /// Half-extent of the square the cubes roam, in world units.
 const PLANE_HALF: f32 = 12.0;
 const CUBE_SIZE: f32 = 0.6;
-/// Camera orbit distance — far enough to frame the whole field.
-const ORBIT_RADIUS: f32 = 24.0;
-/// Mouse drag → radians of camera rotation.
-const MOUSE_SENS: f32 = 0.005;
 
 pub struct AnchoredPlugin;
 
 impl Plugin for AnchoredPlugin {
     fn build(&self, app: &mut App) {
         register_bindings(app);
-        app.init_resource::<OrbitState>()
-            .add_systems(Startup, setup_cube_assets)
-            .add_systems(OnEnter(Demo::Anchored), spawn_cubes)
-            .add_systems(
-                Update,
-                (wander, mouse_orbit_camera).run_if(in_state(Demo::Anchored)),
-            );
+        app.add_systems(Startup, setup_cube_assets)
+            .add_systems(OnEnter(Demo::WorldAnchors), spawn_cubes)
+            .add_systems(Update, wander.run_if(in_state(Demo::WorldAnchors)));
     }
 }
 
@@ -68,22 +59,6 @@ struct Wander {
     speed: f32,
     wobble_freq: f32,
     phase: f32,
-}
-
-/// Camera orbit angles, driven by left-mouse drag in this demo.
-#[derive(Resource)]
-struct OrbitState {
-    yaw: f32,
-    pitch: f32,
-}
-
-impl Default for OrbitState {
-    fn default() -> Self {
-        Self {
-            yaw: 0.7,
-            pitch: 0.55,
-        }
-    }
 }
 
 /// Shared cube mesh + color palette and the ground plane, created once.
@@ -144,7 +119,7 @@ fn spawn_cubes(mut commands: Commands, assets: Res<CubeAssets>, events: ReactEve
         Mesh3d(assets.ground.clone()),
         MeshMaterial3d(assets.ground_material.clone()),
         Transform::from_xyz(0.0, 0.0, 0.0),
-        DespawnOnExit(Demo::Anchored),
+        DespawnOnExit(Demo::WorldAnchors),
     ));
 
     let mut cubes = Vec::with_capacity(CUBE_COUNT);
@@ -163,7 +138,7 @@ fn spawn_cubes(mut commands: Commands, assets: Res<CubeAssets>, events: ReactEve
                     wobble_freq: 0.5 + hash01(seed.wrapping_mul(11).wrapping_add(19)),
                     phase: hash01(seed.wrapping_mul(7).wrapping_add(17)) * TAU,
                 },
-                DespawnOnExit(Demo::Anchored),
+                DespawnOnExit(Demo::WorldAnchors),
             ))
             .id();
         cubes.push(CubeInfo {
@@ -193,29 +168,6 @@ fn wander(time: Res<Time>, mut cubes: Query<(&mut Transform, &mut Wander)>) {
             transform.translation.z = transform.translation.z.clamp(-PLANE_HALF, PLANE_HALF);
             w.heading = -w.heading; // reflect the Z component of the heading
         }
-    }
-}
-
-/// Orbit the shared 3D camera while the left mouse button is held; otherwise hold
-/// it steady at the current angles. Replaces the auto-orbit for this demo.
-fn mouse_orbit_camera(
-    motion: Res<AccumulatedMouseMotion>,
-    buttons: Res<ButtonInput<MouseButton>>,
-    mut orbit: ResMut<OrbitState>,
-    mut cam: Query<&mut Transform, With<Camera3d>>,
-) {
-    if buttons.pressed(MouseButton::Left) {
-        orbit.yaw += motion.delta.x * MOUSE_SENS;
-        orbit.pitch = (orbit.pitch + motion.delta.y * MOUSE_SENS).clamp(-1.4, 1.4);
-    }
-    let pos = Vec3::new(
-        ORBIT_RADIUS * orbit.yaw.cos() * orbit.pitch.cos(),
-        ORBIT_RADIUS * orbit.pitch.sin(),
-        ORBIT_RADIUS * orbit.yaw.sin() * orbit.pitch.cos(),
-    );
-    for mut transform in &mut cam {
-        transform.translation = pos;
-        transform.look_at(Vec3::ZERO, Vec3::Y);
     }
 }
 

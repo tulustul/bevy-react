@@ -11,8 +11,47 @@ use crate::event::ReactEventRegistry;
 use crate::js_thread::spawn_js_thread;
 use crate::message::{ReactMessage, ReactRegistry};
 use crate::protocol::{Op, Outbound};
-use crate::reconcile::{apply_interaction_styles, apply_js_ops, collect_ui_events};
+use crate::reconcile::{
+    apply_interaction_styles, apply_js_ops, collect_pointer_events, collect_ui_events,
+};
 use crate::request::{RawRequest, ReactRequestRegistry, RequestReceiver, dispatch_react_requests};
+
+/// Whether the React UI currently owns the mouse pointer. Refreshed every frame
+/// in [`PointerCaptureSet`]; world-input systems (a 3D camera controller, picking,
+/// …) should consult it and ignore the mouse when it reports captured, so a UI
+/// drag or click doesn't also drive the scene.
+///
+/// Order such a system after the set to read the current frame's state:
+/// ```no_run
+/// # use bevy::prelude::*;
+/// # use bevy_react::PointerCaptureSet;
+/// # fn orbit_camera() {}
+/// # let mut app = App::new();
+/// app.add_systems(Update, orbit_camera.after(PointerCaptureSet));
+/// ```
+#[derive(Resource, Default, Debug, Clone, Copy)]
+pub struct PointerCapture {
+    /// A bevy-react element is being dragged (an `onPointer*` press is in
+    /// progress). Stays true for the whole gesture — even after the cursor leaves
+    /// the element's bounds — until the button is released.
+    pub dragging: bool,
+    /// The pointer is over an interactive UI element (its `Interaction` is
+    /// `Hovered` or `Pressed`).
+    pub over_ui: bool,
+}
+
+impl PointerCapture {
+    /// The UI owns the current pointer input; world systems should ignore the
+    /// mouse. True while dragging a UI element or while over interactive UI.
+    pub fn is_captured(&self) -> bool {
+        self.dragging || self.over_ui
+    }
+}
+
+/// System set in which [`PointerCapture`] is refreshed each frame. Order your
+/// world-input systems `.after(PointerCaptureSet)` so they see this frame's state.
+#[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct PointerCaptureSet;
 
 /// Adds a React-driven `bevy_ui` layer to a Bevy `App`.
 ///
@@ -107,6 +146,7 @@ impl Plugin for ReactUiPlugin {
         .init_resource::<ReactRegistry>()
         .init_resource::<ReactRequestRegistry>()
         .init_resource::<ReactEventRegistry>()
+        .init_resource::<PointerCapture>()
         .add_systems(Startup, setup)
         .add_systems(
             PreUpdate,
@@ -117,12 +157,15 @@ impl Plugin for ReactUiPlugin {
             (
                 apply_js_ops,
                 collect_ui_events,
+                collect_pointer_events.in_set(PointerCaptureSet),
                 // After the op drain so this frame's `StyleVariants` writes are
                 // visible; the ordering forces a command sync point first.
                 apply_interaction_styles.after(apply_js_ops),
                 // World-anchored overlays reposition after the op drain so they
                 // override this frame's static `left`/`top`.
                 crate::anchor::position_anchored_nodes.after(apply_js_ops),
+                // Repaint `<canvas>` textures after their surfaces/sizes update.
+                crate::canvas::update_canvas_surfaces.after(apply_js_ops),
             ),
         );
 

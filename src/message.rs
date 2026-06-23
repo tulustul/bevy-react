@@ -269,7 +269,7 @@ pub(crate) fn render_typescript(
     );
 
     // The structured `bevy` proxy object.
-    out.push_str(&render_bevy_object(&request_rows));
+    out.push_str(&render_bevy_object(&request_rows, &message_names));
     out
 }
 
@@ -281,16 +281,24 @@ struct RequestRow<'a> {
     void: bool,
 }
 
-/// A node in the nested proxy tree built from dotted request names.
+/// A node in the nested proxy tree built from dotted request/message names.
 enum ProxyNode<'a> {
     Namespace(BTreeMap<String, ProxyNode<'a>>),
-    Leaf(&'a RequestRow<'a>),
+    Leaf(ProxyLeaf<'a>),
+}
+
+/// A leaf method in the proxy: a request (awaits a typed response) or a
+/// fire-and-forget message (returns `void`).
+enum ProxyLeaf<'a> {
+    Request(&'a RequestRow<'a>),
+    Message { name: &'a str, ts_name: &'a str },
 }
 
 /// Build the `bevy` object literal: the typed wrappers plus a nested proxy where a
-/// request `"board.get"` becomes `bevy.board.get(...)`.
-fn render_bevy_object(requests: &[RequestRow]) -> String {
-    // Reserved top-level keys the wrappers occupy; a request must not collide.
+/// request `"board.get"` becomes `bevy.board.get(...)` and a message
+/// `"basicDemo.setCount"` becomes `bevy.basicDemo.setCount(...)`.
+fn render_bevy_object(requests: &[RequestRow], messages: &[(&str, String)]) -> String {
+    // Reserved top-level keys the wrappers occupy; a binding must not collide.
     const RESERVED: [&str; 5] = [
         "emit",
         "request",
@@ -302,12 +310,24 @@ fn render_bevy_object(requests: &[RequestRow]) -> String {
     let mut root: BTreeMap<String, ProxyNode> = BTreeMap::new();
     for row in requests {
         let segments: Vec<&str> = row.name.split('.').collect();
-        insert_proxy(&mut root, &segments, row);
+        insert_proxy(&mut root, &segments, ProxyLeaf::Request(row), row.name);
+    }
+    for &(name, ref ts_name) in messages {
+        let segments: Vec<&str> = name.split('.').collect();
+        insert_proxy(
+            &mut root,
+            &segments,
+            ProxyLeaf::Message {
+                name,
+                ts_name: ts_name.as_str(),
+            },
+            name,
+        );
     }
     for key in root.keys() {
         if RESERVED.contains(&key.as_str()) {
             panic!(
-                "react request {key:?} collides with a reserved `bevy` method; rename it (e.g. give it a dotted namespace)"
+                "react binding {key:?} collides with a reserved `bevy` method; rename it (e.g. give it a dotted namespace)"
             );
         }
     }
@@ -329,21 +349,23 @@ fn render_bevy_object(requests: &[RequestRow]) -> String {
     out
 }
 
-/// Insert a request leaf at its dotted path, panicking on a namespace/leaf clash.
+/// Insert a request/message leaf at its dotted path, panicking on a
+/// namespace/leaf clash (a name used as both a method and a namespace, or claimed
+/// by two bindings).
 fn insert_proxy<'a>(
     tree: &mut BTreeMap<String, ProxyNode<'a>>,
     segments: &[&str],
-    row: &'a RequestRow<'a>,
+    leaf: ProxyLeaf<'a>,
+    full_name: &str,
 ) {
-    let (head, rest) = segments.split_first().expect("request name is non-empty");
+    let (head, rest) = segments.split_first().expect("binding name is non-empty");
     if rest.is_empty() {
         if tree
-            .insert((*head).to_string(), ProxyNode::Leaf(row))
+            .insert((*head).to_string(), ProxyNode::Leaf(leaf))
             .is_some()
         {
             panic!(
-                "react request name {:?} is ambiguous (used as both a method and a namespace)",
-                row.name
+                "react binding name {full_name:?} is ambiguous (used as both a method and a namespace, or claimed by two bindings)"
             );
         }
         return;
@@ -352,20 +374,20 @@ fn insert_proxy<'a>(
         .entry((*head).to_string())
         .or_insert_with(|| ProxyNode::Namespace(BTreeMap::new()));
     match child {
-        ProxyNode::Namespace(children) => insert_proxy(children, rest, row),
+        ProxyNode::Namespace(children) => insert_proxy(children, rest, leaf, full_name),
         ProxyNode::Leaf(_) => panic!(
-            "react request name {:?} is ambiguous (used as both a method and a namespace)",
-            row.name
+            "react binding name {full_name:?} is ambiguous (used as both a method and a namespace)"
         ),
     }
 }
 
-/// Render one proxy node (a namespace object or a request method) at `depth`.
+/// Render one proxy node (a namespace object, a request method, or a message
+/// method) at `depth`.
 fn render_proxy_node(out: &mut String, key: &str, node: &ProxyNode, depth: usize) {
     let indent = "  ".repeat(depth);
     let method = json_key(key);
     match node {
-        ProxyNode::Leaf(row) => {
+        ProxyNode::Leaf(ProxyLeaf::Request(row)) => {
             if row.void {
                 writeln!(
                     out,
@@ -381,6 +403,13 @@ fn render_proxy_node(out: &mut String, key: &str, node: &ProxyNode, depth: usize
                 )
                 .unwrap();
             }
+        }
+        ProxyNode::Leaf(ProxyLeaf::Message { name, ts_name }) => {
+            writeln!(
+                out,
+                "{indent}{method}(value: {ts_name}): void {{ emit({name:?}, value); }},",
+            )
+            .unwrap();
         }
         ProxyNode::Namespace(children) => {
             writeln!(out, "{indent}{method}: {{").unwrap();
@@ -786,6 +815,15 @@ mod tests {
             ts.contains(
                 r#"move(value: PiecesMove): Promise<MoveStatus> { return request("pieces.move", value); }"#
             ),
+            "{ts}"
+        );
+        // Messages fold into the proxy too, as fire-and-forget `void` methods.
+        assert!(
+            ts.contains(r#"count(value: Count): void { emit("count", value); }"#),
+            "{ts}"
+        );
+        assert!(
+            ts.contains(r#"move(value: Move): void { emit("move", value); }"#),
             "{ts}"
         );
         // Output is stable across runs (no HashMap iteration order leaking in).

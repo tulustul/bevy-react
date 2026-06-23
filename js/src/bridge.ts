@@ -2,6 +2,9 @@
 // registry of event handlers (which never cross into Rust), and the event loop
 // that pulls UI events back from Bevy.
 
+import { recordDrawing } from "./canvas";
+import type { CanvasPainter, DrawCmd } from "./canvas";
+
 // deno_core exposes registered ops under `Deno.core.ops`.
 declare const Deno: {
   core: {
@@ -62,17 +65,30 @@ export interface SerializedProps {
   color?: string;
   fontSize?: number;
   onClick?: boolean;
+  onPointerDown?: boolean;
+  onPointerMove?: boolean;
+  onPointerUp?: boolean;
   // `image` element attributes
   src?: string;
   tint?: string;
   flipX?: boolean;
   flipY?: boolean;
   imageMode?: string;
+  // `canvas` element: the recorded vector display list, rasterized on the Bevy side.
+  draw?: DrawCmd[];
 }
 
 export interface UiEvent {
   id: number;
   kind: string;
+  // Cursor position within the node, normalized to 0..1 (top-left origin).
+  // Present only for pointer events; absent for "click".
+  x?: number;
+  y?: number;
+  // Absolute cursor position in window logical pixels (top-left origin).
+  // Present only for pointer events; absent for "click".
+  clientX?: number;
+  clientY?: number;
 }
 
 // Ops accumulated during the current commit, flushed in resetAfterCommit.
@@ -185,6 +201,24 @@ export function serializeProps(
       out.onClick = true;
       continue;
     }
+    // Pointer/drag handlers. Like onClick, the function stays in JS and only a
+    // boolean crosses; Bevy reports back `pointerDown`/`pointerMove`/`pointerUp`
+    // events (with a normalized cursor position) the event loop routes here.
+    if (key === "onPointerDown" && typeof value === "function") {
+      hs.pointerDown = value as (...args: unknown[]) => void;
+      out.onPointerDown = true;
+      continue;
+    }
+    if (key === "onPointerMove" && typeof value === "function") {
+      hs.pointerMove = value as (...args: unknown[]) => void;
+      out.onPointerMove = true;
+      continue;
+    }
+    if (key === "onPointerUp" && typeof value === "function") {
+      hs.pointerUp = value as (...args: unknown[]) => void;
+      out.onPointerUp = true;
+      continue;
+    }
     if (key === "style" && value && typeof value === "object") {
       // Style is opaque: every CSS-like key (incl. backgroundColor, border,
       // grid, …) rides across inside this object, decoded on the Rust side.
@@ -212,6 +246,15 @@ export function serializeProps(
     // Bevy projects the entity's world position to the screen each frame.
     if (key === "anchor" && value && typeof value === "object") {
       out.anchor = value as Record<string, unknown>;
+      continue;
+    }
+    // A `canvas`'s `draw`: a painter callback (recorded against a fresh context)
+    // or an already-built `DrawCmd[]` display list. Either way it crosses as data.
+    if (key === "draw") {
+      out.draw =
+        typeof value === "function"
+          ? recordDrawing(value as CanvasPainter)
+          : (value as DrawCmd[]);
       continue;
     }
     // Text + `image` element attributes pass through by name.
@@ -271,9 +314,11 @@ export async function runEventLoop(
       case "uiEvent": {
         const fn = handlers.get(msg.event.id)?.[msg.event.kind];
         if (fn) {
+          const event = msg.event;
           wrap(() => {
             try {
-              fn();
+              // Click handlers ignore the arg; pointer handlers read x/y.
+              fn(event);
             } catch (e) {
               console.error("[js] handler error:", e);
             }

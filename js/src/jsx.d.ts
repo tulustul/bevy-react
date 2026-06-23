@@ -5,6 +5,7 @@
 
 import type { Key, ReactNode } from "react";
 import type { AnimatedStyle } from "./animated";
+import type { CanvasPainter, DrawCmd } from "./canvas";
 
 /** Attributes React manages itself (not real host props — React strips `key`
  *  before props reach the reconciler). Shared by every host element so keyed
@@ -149,6 +150,18 @@ export interface BevyStyle {
   textAlign?: "left" | "center" | "right" | "justify" | "start" | "end";
 }
 
+/** Payload for the pointer handlers: the cursor position within the element,
+ *  normalized to `0..1` from a top-left origin (`x` left→right, `y` top→bottom),
+ *  clamped to the element's bounds even while dragging outside it. `clientX` /
+ *  `clientY` give the absolute cursor position in window logical pixels (also a
+ *  top-left origin), unclamped — use those to drag a node across the screen. */
+export interface PointerEventData {
+  x: number;
+  y: number;
+  clientX: number;
+  clientY: number;
+}
+
 /** Props common to `node` and `button`. */
 export interface BevyNodeProps extends BevyAttributes {
   style?: BevyStyle;
@@ -160,6 +173,14 @@ export interface BevyNodeProps extends BevyAttributes {
    *  driven by a shared value and updated every frame on the Bevy side. */
   animatedStyle?: AnimatedStyle;
   onClick?: () => void;
+  /** Pointer pressed on this element (a drag begins). Receives the cursor's
+   *  normalized position within the element. */
+  onPointerDown?: (e: PointerEventData) => void;
+  /** Pointer moved while held down (a drag). Fires each frame the button stays
+   *  down — even when the cursor leaves the element — until release. */
+  onPointerMove?: (e: PointerEventData) => void;
+  /** Pointer released after a press/drag that began on this element. */
+  onPointerUp?: (e: PointerEventData) => void;
   children?: ReactNode;
 }
 
@@ -169,6 +190,30 @@ export interface BevyNodeProps extends BevyAttributes {
 export interface BevyTextProps extends BevyAttributes {
   style?: BevyStyle;
   children?: ReactNode;
+}
+
+/** Props for the `canvas` element: an arbitrary anti-aliased vector drawing
+ *  surface (maps to a `bevy_ui::ImageNode` whose texture is rasterized from the
+ *  display list). Style it like any node; size it via `style.width`/`height`. */
+export interface BevyCanvasProps extends BevyAttributes {
+  style?: BevyStyle;
+  /** Style overlaid on `style` while the element is hovered. */
+  hoverStyle?: BevyStyle;
+  /** Style overlaid on `style` (and `hoverStyle`) while the element is pressed. */
+  pressStyle?: BevyStyle;
+  /** Reanimated-style animation bindings (see `Animated.node`). */
+  animatedStyle?: AnimatedStyle;
+  /** The drawing: either a painter that receives an HTML-canvas-like context
+   *  (`CanvasContext`), or a pre-recorded `DrawCmd[]` display list. Re-rasterized
+   *  whenever this prop changes. */
+  draw?: DrawCmd[] | CanvasPainter;
+  onClick?: () => void;
+  /** Pointer pressed on the canvas. Receives the cursor's normalized position. */
+  onPointerDown?: (e: PointerEventData) => void;
+  /** Pointer moved while held (a drag). Fires each frame until release. */
+  onPointerMove?: (e: PointerEventData) => void;
+  /** Pointer released after a press/drag that began on the canvas. */
+  onPointerUp?: (e: PointerEventData) => void;
 }
 
 /** Props for the `image` element (maps to `bevy_ui::ImageNode`). */

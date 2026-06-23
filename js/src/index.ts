@@ -46,3 +46,8 @@ export type {
 // World-anchored overlays (`<Anchored.node entity={…} offset={…}/>`).
 export { Anchored } from "./anchored";
 export type { AnchorProps, AnchorScaling, Vec3 } from "./anchored";
+
+// Canvas drawing (`<canvas draw={(ctx) => …}/>`). `CanvasContext` records an
+// HTML-canvas-like display list rasterized on the Bevy side.
+export { CanvasContext, recordDrawing } from "./canvas";
+export type { CanvasPainter, DrawCmd } from "./canvas";

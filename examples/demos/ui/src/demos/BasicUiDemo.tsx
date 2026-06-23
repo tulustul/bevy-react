@@ -4,13 +4,13 @@ import { buttonStyle, headingStyle, labelStyle } from "./styles";
 import { Card } from "../components";
 
 const MAX = 8;
-const HINT = 'bevy.emit("count", n)';
+const HINT = "bevy.basicDemo.setCount(n)";
 
 export function BasicUiDemo() {
   const [count, setCount] = useState(3);
 
   useEffect(() => {
-    bevy.emit("count", count);
+    bevy.basicDemo.setCount(count);
   }, [count]);
 
   return (

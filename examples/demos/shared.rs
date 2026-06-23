@@ -1,7 +1,8 @@
-//! Pieces shared across the three demos: the active-demo state machine that
-//! React drives, the shared 3D camera/light, and the bouncing-ball physics the
-//! Events and Request/Response demos both reuse.
+//! Pieces shared across the demos: the active-demo state machine that React
+//! drives, the shared 3D camera/light, and the bouncing-ball physics the Bevy
+//! Events and Polling demos both reuse.
 
+use bevy::input::mouse::{AccumulatedMouseMotion, AccumulatedMouseScroll};
 use bevy::prelude::*;
 use bevy::ui::IsDefaultUiCamera;
 use bevy_react::{ReactAppExt, react_message};
@@ -15,22 +16,28 @@ use ts_rs::TS;
 pub enum Demo {
     #[default]
     BasicUi,
-    Events,
-    RequestResponse,
+    BevyEvents,
+    Polling,
     Animations,
-    Anchored,
+    WorldAnchors,
+    /// Pure-UI demo (a draggable node showcasing pointer events); no 3D scene.
+    Interactions,
+    /// Pure-UI demo (a `<canvas>` line chart drawn with vector commands); no 3D scene.
+    Canvas,
 }
 
 /// The wire form of [`Demo`] — what React sends with `emit("selectDemo", id)`.
 /// A fieldless enum serializes as a plain string, so the generated TS is a
-/// `"BasicUi" | "Events" | "RequestResponse"` union.
+/// `"BasicUi" | "BevyEvents" | "Polling"` union.
 #[derive(Deserialize, TS)]
 pub enum DemoId {
     BasicUi,
-    Events,
-    RequestResponse,
+    BevyEvents,
+    Polling,
     Animations,
-    Anchored,
+    WorldAnchors,
+    Interactions,
+    Canvas,
 }
 
 /// React picks the active demo from the left-nav: `emit("selectDemo", id)`.
@@ -47,10 +54,12 @@ pub fn register_bindings(app: &mut App) {
 fn apply_select_demo(on: On<SelectDemo>, mut next: ResMut<NextState<Demo>>) {
     next.set(match on.event().0 {
         DemoId::BasicUi => Demo::BasicUi,
-        DemoId::Events => Demo::Events,
-        DemoId::RequestResponse => Demo::RequestResponse,
+        DemoId::BevyEvents => Demo::BevyEvents,
+        DemoId::Polling => Demo::Polling,
         DemoId::Animations => Demo::Animations,
-        DemoId::Anchored => Demo::Anchored,
+        DemoId::WorldAnchors => Demo::WorldAnchors,
+        DemoId::Interactions => Demo::Interactions,
+        DemoId::Canvas => Demo::Canvas,
     });
 }
 
@@ -59,7 +68,7 @@ fn apply_select_demo(on: On<SelectDemo>, mut next: ResMut<NextState<Demo>>) {
 pub fn setup_camera_and_light(mut commands: Commands) {
     commands.spawn((
         Camera3d::default(),
-        Transform::from_xyz(0.0, ORBIT_HEIGHT, ORBIT_RADIUS).looking_at(Vec3::ZERO, Vec3::Y),
+        Transform::from_xyz(0.0, 4.0, DEFAULT_RADIUS).looking_at(Vec3::ZERO, Vec3::Y),
         IsDefaultUiCamera,
     ));
 
@@ -73,23 +82,88 @@ pub fn setup_camera_and_light(mut commands: Commands) {
     ));
 }
 
-/// Camera orbit parameters: a slow turntable around the origin.
-const ORBIT_SPEED: f32 = 0.3; // radians/sec
-const ORBIT_RADIUS: f32 = 14.0;
-const ORBIT_HEIGHT: f32 = 4.0;
+/// Camera orbit parameters: a slow turntable around the origin that the user can
+/// grab with the mouse.
+const ORBIT_SPEED: f32 = 0.3; // radians/sec of automatic orbit
+const MOUSE_SENS: f32 = 0.005; // mouse drag → radians
+const ZOOM_SENS: f32 = 1.5; // scroll notch → world units of distance
+const MIN_RADIUS: f32 = 6.0;
+const MAX_RADIUS: f32 = 40.0;
+/// Default orbit distance — close enough for the small demos; the World Anchors
+/// demo reframes wider (see [`reframe_camera`]).
+const DEFAULT_RADIUS: f32 = 14.0;
 
-/// Slowly orbit the camera around the scene, always looking at the origin, so the
-/// translucent cube reads as a 3D volume. Runs in every demo.
-pub fn orbit_camera(time: Res<Time>, mut cam: Query<&mut Transform, With<Camera3d>>) {
-    let a = time.elapsed_secs() * ORBIT_SPEED;
+/// Orbit angles + distance for the shared camera. Driven automatically and by the
+/// mouse; one rig is shared by every demo.
+#[derive(Resource)]
+pub struct CameraRig {
+    yaw: f32,
+    pitch: f32,
+    radius: f32,
+}
+
+impl Default for CameraRig {
+    fn default() -> Self {
+        Self {
+            yaw: 0.6,
+            pitch: 0.3,
+            radius: DEFAULT_RADIUS,
+        }
+    }
+}
+
+/// The shared camera controller, run in every demo: the camera orbits the origin
+/// automatically, the user can grab the orbit with left-drag (auto-orbit resumes
+/// from the current angle on release), and the mouse wheel zooms within
+/// `[MIN_RADIUS, MAX_RADIUS]`. Always looks at the origin so the scene reads as a
+/// 3D volume from any angle.
+pub fn orbit_camera(
+    time: Res<Time>,
+    motion: Res<AccumulatedMouseMotion>,
+    scroll: Res<AccumulatedMouseScroll>,
+    buttons: Res<ButtonInput<MouseButton>>,
+    capture: Res<bevy_react::PointerCapture>,
+    mut rig: ResMut<CameraRig>,
+    mut cam: Query<&mut Transform, With<Camera3d>>,
+) {
+    // When the React UI owns the pointer (a drag, or hovering/pressing UI), don't
+    // let the same mouse input drive the camera too.
+    let captured = capture.is_captured();
+
+    if buttons.pressed(MouseButton::Left) && !captured {
+        rig.yaw += motion.delta.x * MOUSE_SENS;
+        rig.pitch = (rig.pitch + motion.delta.y * MOUSE_SENS).clamp(-1.4, 1.4);
+    } else {
+        // Auto-orbit resumes from wherever the user left it.
+        rig.yaw += ORBIT_SPEED * time.delta_secs();
+    }
+
+    if scroll.delta.y != 0.0 && !captured {
+        rig.radius = (rig.radius - scroll.delta.y * ZOOM_SENS).clamp(MIN_RADIUS, MAX_RADIUS);
+    }
+
+    let pos = Vec3::new(
+        rig.radius * rig.yaw.cos() * rig.pitch.cos(),
+        rig.radius * rig.pitch.sin(),
+        rig.radius * rig.yaw.sin() * rig.pitch.cos(),
+    );
     for mut transform in &mut cam {
-        transform.translation =
-            Vec3::new(a.sin() * ORBIT_RADIUS, ORBIT_HEIGHT, a.cos() * ORBIT_RADIUS);
+        transform.translation = pos;
         transform.look_at(Vec3::ZERO, Vec3::Y);
     }
 }
 
-// --- Bouncing ball (Events + Request/Response demos) ---
+/// Reset the orbit distance to suit the active demo whenever it changes (and on
+/// startup): the World Anchors demo's cube field needs a wider frame than the small
+/// origin-centered scenes. The user can zoom from there.
+pub fn reframe_camera(state: Res<State<Demo>>, mut rig: ResMut<CameraRig>) {
+    rig.radius = match state.get() {
+        Demo::WorldAnchors => 24.0,
+        _ => DEFAULT_RADIUS,
+    };
+}
+
+// --- Bouncing ball (Bevy Events + Polling demos) ---
 
 /// Half-extent of the cubic play area, in world units. The ball bounces inside a
 /// cube of side `2 * PLAY_HALF` centered on the origin, in all three dimensions,
@@ -102,8 +176,8 @@ pub const BALL_RADIUS: f32 = 0.5;
 #[derive(Component)]
 pub struct Velocity(pub Vec3);
 
-/// Which wall a ball just bounced off. Lives here (not in the Events demo) so the
-/// shared [`step_ball`] integrator can report it; the Events demo forwards it to
+/// Which wall a ball just bounced off. Lives here (not in the Bevy Events demo) so
+/// the shared [`step_ball`] integrator can report it; the Bevy Events demo forwards it to
 /// React as part of `ball.bounced`.
 #[derive(Serialize, TS, Clone, Copy, Debug)]
 pub enum Wall {

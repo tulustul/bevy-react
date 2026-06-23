@@ -1,6 +1,7 @@
-//! Demo 1 — **Basic UI**. The React counter emits a number (`emit("count", n)`)
-//! and Bevy shows that many spinning cubes. Pure one-way `emit`; no requests or
-//! events. This is the original counter example, now a state-scoped plugin.
+//! Demo 1 — **Basic UI**. The React counter emits a number
+//! (`bevy.basicDemo.setCount(n)`) and Bevy shows that many spinning cubes. Pure
+//! one-way `emit`; no requests or events. This is the original counter example,
+//! now a state-scoped plugin.
 
 use bevy::prelude::*;
 use bevy_react::{ReactAppExt, react_message};
@@ -24,14 +25,16 @@ impl Plugin for BasicUiPlugin {
 
 /// Register this demo's React bindings (shared with the `--export-bindings` path).
 pub fn register_bindings(app: &mut App) {
-    // React -> Bevy notify: `emit("count", n)` → typed `Count`, handled by `apply_count`.
-    app.add_react_handler(apply_count);
+    // React -> Bevy notify: `bevy.basicDemo.setCount(n)` → typed `SetCount`,
+    // handled by `apply_set_count`.
+    app.add_react_handler(apply_set_count);
 }
 
-/// The React counter value, emitted as `emit("count", n)`. A newtype because the
-/// payload is a bare JSON number; `#[react_message]` defaults the name to `"count"`.
-#[react_message]
-struct Count(usize);
+/// The React counter value, sent as `bevy.basicDemo.setCount(n)`. A newtype
+/// because the payload is a bare JSON number; the dotted name nests the method
+/// under `bevy.basicDemo` in the generated proxy.
+#[react_message(name = "basicDemo.setCount")]
+struct SetCount(usize);
 
 /// How many cubes should currently exist, driven by the React count.
 #[derive(Resource)]
@@ -51,8 +54,8 @@ struct Spinner {
     y_speed: f32,
 }
 
-/// Update the desired cube count when a typed `Count` is triggered.
-fn apply_count(count: On<Count>, mut desired: ResMut<DesiredCubes>) {
+/// Update the desired cube count when a typed `SetCount` is triggered.
+fn apply_set_count(count: On<SetCount>, mut desired: ResMut<DesiredCubes>) {
     desired.0 = count.event().0.min(MAX_CUBES);
     debug!("react count -> desired cubes {}", desired.0);
 }

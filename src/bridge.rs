@@ -35,6 +35,17 @@ pub struct StyleVariants {
     pub press: Option<Style>,
 }
 
+/// Records which pointer handlers a node declared in JS, so the drag-capture
+/// system knows whether to emit `pointerDown` / `pointerMove` / `pointerUp` for
+/// it. Stamped (or removed) alongside the node's `Interaction` +
+/// `RelativeCursorPosition` whenever any `onPointer*` handler is present.
+#[derive(Component, Debug, Clone, Copy, Default)]
+pub struct PointerHandlers {
+    pub down: bool,
+    pub moved: bool,
+    pub up: bool,
+}
+
 /// A standalone clone of the outbound sender, inserted in [`Plugin::build`] so
 /// the request dispatcher and the [`ReactEvents`](crate::ReactEvents) system
 /// param can push to JS without depending on [`JsBridge`], which only exists

@@ -19,28 +19,28 @@ wall: Wall,
  */
 speed: number, };
 export type BallState = { x: number, y: number, vx: number, vy: number, };
-export type Count = number;
 export type CubeInfo = { entity: bigint, label: string, };
 export type CubesSpawned = { cubes: Array<CubeInfo>, };
-export type DemoId = "BasicUi" | "Events" | "RequestResponse" | "Animations" | "Anchored";
+export type DemoId = "BasicUi" | "BevyEvents" | "Polling" | "Animations" | "WorldAnchors" | "Interactions" | "Canvas";
 export type SelectDemo = DemoId;
+export type SetCount = number;
 export type Wall = "Left" | "Right" | "Top" | "Bottom" | "Front" | "Back";
 
 /** Every `emit` name and the payload type it carries. */
 export interface ReactMessages {
-  count: Count;
+  "basicDemo.setCount": SetCount;
   selectDemo: SelectDemo;
 }
 
 /** Every `request` name and its request/response types. */
 export interface ReactRequests {
-  "ball.get": { request: null; response: BallState };
+  "pollingDemo.getBall": { request: null; response: BallState };
 }
 
 /** Every Bevy → React event name and the payload it carries. */
 export interface ReactEvents {
   "anchoredDemo.cubesSpawned": CubesSpawned;
-  "ball.bounced": BallBounced;
+  "bevyEventsDemo.ballBounced": BallBounced;
 }
 
 /** Send a typed app message to the Bevy side. */
@@ -80,7 +80,11 @@ export const bevy = {
   on,
   addEventListener: on,
   removeEventListener,
-  ball: {
-    get(): Promise<BallState> { return request("ball.get", null); },
+  basicDemo: {
+    setCount(value: SetCount): void { emit("basicDemo.setCount", value); },
   },
+  pollingDemo: {
+    getBall(): Promise<BallState> { return request("pollingDemo.getBall", null); },
+  },
+  selectDemo(value: SelectDemo): void { emit("selectDemo", value); },
 } as const;

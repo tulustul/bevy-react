@@ -4,9 +4,9 @@ import type { BallState } from "../generated";
 import { headingStyle, labelStyle } from "./styles";
 import { Card } from "../components";
 
-const HINT = "const ballInfo = await bevy.ball.get()";
+const HINT = "const ballInfo = await bevy.pollingDemo.getBall()";
 
-export function RequestResponseDemo() {
+export function PollingDataDemo() {
   const [state, setState] = useState<BallState | null>(null);
 
   useEffect(() => {
@@ -15,7 +15,7 @@ export function RequestResponseDemo() {
 
     const tick = async () => {
       try {
-        const ball = await bevy.ball.get();
+        const ball = await bevy.pollingDemo.getBall();
         if (!alive) {
           return;
         }

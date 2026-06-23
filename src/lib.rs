@@ -25,6 +25,7 @@ extern crate self as bevy_react;
 
 mod anchor;
 mod bridge;
+mod canvas;
 mod event;
 mod message;
 mod plugin;
@@ -42,5 +43,5 @@ pub use bevy_react_animations::{self, ReactUiAnimationsPlugin};
 pub use bevy_react_macros::{react_event, react_message, react_request};
 pub use event::{ReactEvent, ReactEvents};
 pub use message::{ReactAppExt, ReactMessage, ReactPayload};
-pub use plugin::ReactUiPlugin;
+pub use plugin::{PointerCapture, PointerCaptureSet, ReactUiPlugin};
 pub use request::{RawRequest, ReactRequest, Request, RequestEvent, Responder};

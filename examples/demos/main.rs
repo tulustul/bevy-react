@@ -1,11 +1,13 @@
 //! Example consumer of the `bevy_react` library: one Bevy app whose UI is a React
-//! app (see `ui/`), overlaid on a live 3D scene. A left-nav switches between three
+//! app (see `ui/`), overlaid on a live 3D scene. A left-nav switches between the
 //! demos, each a separate Bevy plugin, each showing one direction of the bridge:
 //!
-//!   * Basic UI         — React `emit`s a count → that many spinning cubes.
-//!   * Events           — a bouncing ball sends `ball.bounced` events → React toasts.
-//!   * Request/Response — React polls `bevy.ball.get()` and shows the ball's state.
-//!   * Animations       — Reanimated-style shared values + `Animated.node`, driven by a Bevy system.
+//!   * Basic UI      — React `bevy.basicDemo.setCount(n)` → that many spinning cubes.
+//!   * Bevy Events   — a bouncing ball sends `bevyEventsDemo.ballBounced` → React toasts.
+//!   * Polling data  — React polls `bevy.pollingDemo.getBall()` and shows the ball's state.
+//!   * Animations    — Reanimated-style shared values + `Animated.node` (submenu of examples).
+//!   * World Anchors — UI badges anchored to wandering 3D cubes.
+//!   * Interactions  — a draggable node showcasing the raw pointer events.
 //!
 //! Run with:
 //!
@@ -76,11 +78,18 @@ fn main() {
     .add_plugins(ReactUiPlugin::new(bundle).spawn_camera(false))
     // State must be registered after DefaultPlugins (which brings StatesPlugin).
     .init_state::<Demo>()
+    .init_resource::<shared::CameraRig>()
     .add_systems(Startup, shared::setup_camera_and_light)
-    // The Anchored demo drives the camera with the mouse, so suppress auto-orbit there.
+    // One shared camera controller (auto-orbit + mouse-drag + wheel-zoom) for every
+    // demo; reframe the orbit distance to suit each demo as it becomes active.
     .add_systems(
         Update,
-        shared::orbit_camera.run_if(not(in_state(Demo::Anchored))),
+        (
+            // After the React UI refreshes `PointerCapture` so the camera sees this
+            // frame's state and ignores the mouse while the UI owns it.
+            shared::orbit_camera.after(bevy_react::PointerCaptureSet),
+            shared::reframe_camera.run_if(state_changed::<Demo>),
+        ),
     )
     .add_plugins((
         BasicUiPlugin,

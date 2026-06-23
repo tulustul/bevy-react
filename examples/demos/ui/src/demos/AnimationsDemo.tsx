@@ -14,11 +14,60 @@ import { BevyStyle } from "bevy-react/jsx";
 import { headingStyle, labelStyle } from "./styles";
 import { Card } from "../components";
 
-// Five squares, each backed by its own Bevy-resident shared values, bouncing
-// left↔right with a short stop at each end and staggered so they cascade. Each
-// square also continuously pulses its scale + hue. Every value is ticked by the
-// one animation system in Bevy — React never re-renders per frame; it only
-// declares the drivers (once for the pulse, again on a mode change for the bounce).
+// Reanimated-style animations declared in React and ticked by the one animation
+// system in Bevy — React never re-renders per frame; it only declares the drivers.
+// The left-nav "Animations" submenu switches between these examples (purely on the
+// React side; this demo has no 3D scene).
+
+export function AnimationsDemo({ example }: { example: string }) {
+  if (example === "bouncing") {
+    return <BouncingExample />;
+  }
+  return <FadeExample />;
+}
+
+const FADE_MS = 500;
+
+const HINT = "<Animated.node animatedStyle={{opacity}} />";
+
+function FadeExample() {
+  const opacity = useSharedValue(1);
+
+  useEffect(() => {
+    opacity.value = withRepeat(
+      withTiming(0, { duration: FADE_MS, easing: "easeInOut" }),
+      -1,
+      true, // ping-pong back to 1
+    );
+  }, [opacity]);
+
+  return (
+    <Card>
+      <text style={headingStyle}>Fade</text>
+      <text style={labelStyle}>{HINT}</text>
+
+      <node style={fadeStageStyle}>
+        <Animated.node style={fadeSquareStyle} animatedStyle={{ opacity }} />
+      </node>
+    </Card>
+  );
+}
+
+const fadeStageStyle: BevyStyle = {
+  width: 160,
+  height: 160,
+  justifyContent: "center",
+  alignItems: "center",
+};
+
+const fadeSquareStyle: BevyStyle = {
+  width: 88,
+  height: 88,
+  borderRadius: 16,
+  backgroundColor: "#7aa2f7",
+};
+
+// --- Bouncing squares: a richer example (timing/spring + sequence + stagger). ---
 
 type Mode = "linear" | "easeInOut" | "spring";
 
@@ -35,12 +84,12 @@ const RETARGET_MS = 280; // glide back to the loop start on a mode change
 const COOL = ["#7aa2f7", "#f7768e", "#9ece6a", "#e0af68", "#bb9af7"];
 const WARM = ["#bb9af7", "#ff9e64", "#73daca", "#f7768e", "#7dcfff"];
 
-export function AnimationsDemo() {
+function BouncingExample() {
   const [mode, setMode] = useState<Mode>("easeInOut");
 
   return (
     <Card>
-      <text style={headingStyle}>Animations</text>
+      <text style={headingStyle}>Bouncing Squares</text>
 
       <node style={lanesStyle}>
         {Array.from({ length: COUNT }, (_, i) => (

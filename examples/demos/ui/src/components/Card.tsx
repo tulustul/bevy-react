@@ -17,4 +17,5 @@ export const cardStyle: BevyStyle = {
   border: 2,
   borderColor: "#7aa2f7",
   zIndex: 1000,
+  boxShadow: { blurRadius: 15, spreadRadius: 5, color: "#00000088" },
 };

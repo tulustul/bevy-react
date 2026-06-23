@@ -11,7 +11,12 @@ import type * as React from "react";
 
 export { Fragment, jsx, jsxs } from "react/jsx-runtime";
 
-import type { BevyImageProps, BevyNodeProps, BevyTextProps } from "./jsx";
+import type {
+  BevyCanvasProps,
+  BevyImageProps,
+  BevyNodeProps,
+  BevyTextProps,
+} from "./jsx";
 
 // Note: in a regular `.ts` module, namespace members must be `export`ed to be
 // visible as `JSX.IntrinsicElements` (unlike an ambient `.d.ts`).
@@ -35,6 +40,8 @@ export namespace JSX {
     button: BevyNodeProps;
     /** An image (maps to `bevy_ui::ImageNode`). */
     image: BevyImageProps;
+    /** An anti-aliased vector drawing surface (HTML-`<canvas>`-style). */
+    canvas: BevyCanvasProps;
     /** Styled, nestable text (maps to `bevy_ui::Text` / `TextSpan`). */
     text: BevyTextProps;
   }
