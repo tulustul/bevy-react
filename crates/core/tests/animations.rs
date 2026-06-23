@@ -2,21 +2,21 @@
 //! be opted out with `.with_animations(false)`. We only inspect resources after
 //! the plugin builds (no `app.update()`), so no GPU/window is needed.
 
-use std::io::Write;
-
 use bevy::prelude::*;
 use bevy_react::ReactUiPlugin;
 use bevy_react::bevy_react_animations::SharedValues;
 
-/// A minimal, loadable ES-module bundle so `ReactUiPlugin::build` (which panics
-/// on a missing bundle) is satisfied. Unique per test to avoid races.
+/// Minimal app + vendor bundles so `ReactUiPlugin::build` (which panics on a
+/// missing bundle) is satisfied. The plugin loads `vendor.js` beside the app
+/// bundle, so we create both. Classic scripts (no ES-module syntax), since the
+/// runtime runs them via `execute_script`. Unique per test to avoid races.
 fn temp_bundle(tag: &str) -> std::path::PathBuf {
-    let path = std::env::temp_dir().join(format!("bevy_react_anim_{tag}.mjs"));
-    std::fs::File::create(&path)
-        .expect("create temp bundle")
-        .write_all(b"export {};\n")
-        .expect("write temp bundle");
-    path
+    let dir = std::env::temp_dir().join(format!("bevy_react_anim_{tag}"));
+    std::fs::create_dir_all(&dir).expect("create temp bundle dir");
+    let app = dir.join("app.js");
+    std::fs::write(&app, b"// no-op test app\n").expect("write temp app");
+    std::fs::write(dir.join("vendor.js"), b"// no-op vendor\n").expect("write temp vendor");
+    app
 }
 
 #[test]

@@ -16,6 +16,17 @@ import {
   ROOT_ID,
   serializeProps,
 } from "./bridge";
+import { setupRefreshRuntime } from "./hmr";
+
+// `process.env.NODE_ENV` is replaced at build time by esbuild's `define`; the
+// declaration is type-only (erased) and keeps tsc happy without @types/node.
+declare const process: { env: { NODE_ENV?: string } };
+const DEV = process.env.NODE_ENV !== "production";
+
+// Install the react-refresh runtime BEFORE the reconciler is created, so the
+// reconciler's `injectIntoDevTools` (below) registers against a global hook the
+// refresh runtime has already patched. No-op in production builds.
+if (DEV) setupRefreshRuntime();
 
 interface Instance {
   id: number;
@@ -168,6 +179,19 @@ const hostConfig: any = {
 
 const reconciler = Reconciler(hostConfig);
 
+// Register the reconciler with the devtools global hook. This is what gives the
+// react-refresh runtime a `scheduleRefresh` handler for our renderer; without
+// it `performReactRefresh()` is a silent no-op. The return value is `false`
+// (no real DevTools backend) — only the side effect matters. Dev only.
+if (DEV) {
+  reconciler.injectIntoDevTools({
+    bundleType: 1,
+    version: "18.3.1",
+    rendererPackageName: "bevy-react",
+    findFiberByHostInstance: () => null,
+  });
+}
+
 /** Run `fn` and synchronously commit any state updates it triggers. */
 export function flushSync(fn: () => void): void {
   reconciler.flushSync(fn);
@@ -175,19 +199,26 @@ export function flushSync(fn: () => void): void {
 
 const ConcurrentRoot = 1;
 
-/** Mount a React element tree against the Bevy root container. */
+// The persistent React root. Created once on the first mount and reused for the
+// isolate's lifetime so a hot update re-renders the existing fiber tree (hook
+// state intact) instead of remounting.
+let root: ReturnType<typeof reconciler.createContainer> | null = null;
+
+/** Mount a React element tree against the Bevy root container (first load). */
 export function render(element: ReactNode): void {
-  const container: Container = { id: ROOT_ID };
-  const root = reconciler.createContainer(
-    container,
-    ConcurrentRoot,
-    null, // hydrationCallbacks
-    false, // isStrictMode
-    null, // concurrentUpdatesByDefaultOverride
-    "", // identifierPrefix
-    (e: unknown) => console.error("[js] recoverable error:", e),
-    null, // transitionCallbacks
-  );
+  if (root === null) {
+    const container: Container = { id: ROOT_ID };
+    root = reconciler.createContainer(
+      container,
+      ConcurrentRoot,
+      null, // hydrationCallbacks
+      false, // isStrictMode
+      null, // concurrentUpdatesByDefaultOverride
+      "", // identifierPrefix
+      (e: unknown) => console.error("[js] recoverable error:", e),
+      null, // transitionCallbacks
+    );
+  }
   // Commit the initial mount synchronously: a concurrent root schedules the first
   // render asynchronously otherwise, delaying the initial op flush.
   reconciler.flushSync(() => {

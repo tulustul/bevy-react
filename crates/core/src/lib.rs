@@ -12,7 +12,7 @@
 //!
 //! App::new()
 //!     .add_plugins(DefaultPlugins)
-//!     .add_plugins(ReactUiPlugin::new("path/to/dist/bundle.js"))
+//!     .add_plugins(ReactUiPlugin::new("path/to/dist/app.js"))
 //!     .run();
 //! ```
 //!

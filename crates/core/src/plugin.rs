@@ -68,9 +68,11 @@ pub struct ReactUiPlugin {
 }
 
 impl ReactUiPlugin {
-    /// Create the plugin for the given built JS bundle path. Hot reload, a default
-    /// 2D UI camera, and the Reanimated-style animations engine are all enabled by
-    /// default.
+    /// Create the plugin for the given built app bundle (`app.js`). The build
+    /// emits a `vendor.js` beside it (react + the bevy-react runtime, loaded once);
+    /// both must exist. Hot reload (React Fast Refresh — edits preserve component
+    /// state), a default 2D UI camera, and the Reanimated-style animations engine
+    /// are all enabled by default.
     pub fn new(bundle: impl Into<PathBuf>) -> Self {
         Self {
             bundle: bundle.into(),
@@ -113,16 +115,22 @@ impl Plugin for ReactUiPlugin {
         let (outbound_tx, outbound_rx) = tokio::sync::mpsc::unbounded_channel::<Outbound>();
         let (reload_tx, reload_rx) = tokio::sync::mpsc::unbounded_channel::<()>();
 
-        if !self.bundle.exists() {
-            panic!(
-                "JS bundle not found at {}.\nBuild your app bundle first (e.g. `npm run build`).",
-                self.bundle.display()
-            );
+        // The build emits two files side by side: `vendor.js` (loaded once) and
+        // the app bundle (`self.bundle`, re-executed on each hot reload).
+        let vendor = self.bundle.with_file_name("vendor.js");
+        for (label, path) in [("app bundle", &self.bundle), ("vendor bundle", &vendor)] {
+            if !path.exists() {
+                panic!(
+                    "JS {label} not found at {}.\nBuild your app first (e.g. `npm run build`).",
+                    path.display()
+                );
+            }
         }
 
         // The JS thread only needs the channels — not the ECS — so it can start
         // rendering immediately. Its first ops queue until `setup` builds the root.
         spawn_js_thread(
+            vendor,
             self.bundle.clone(),
             ops_tx,
             emit_tx,

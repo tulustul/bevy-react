@@ -27,7 +27,7 @@ export function ButtonDemo() {
         hoverStyle={{ backgroundColor: "#89b4fa" }}
         pressStyle={{ backgroundColor: "#5a7fd6" }}
       >
-        <text style={clickLabelStyle}>Click me</text>
+        <text style={clickLabelStyle}>Click measds</text>
       </button>
     </Card>
   );

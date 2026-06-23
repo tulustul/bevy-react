@@ -44,5 +44,22 @@ export default tseslint.config(
       "@typescript-eslint/no-empty-object-type": "off",
     },
   },
+  {
+    // Node-run build scripts (esbuild + SWC pipeline for Fast Refresh).
+    files: ["**/build.mjs", "**/build-lib.mjs"],
+    languageOptions: {
+      globals: {
+        ...globals.node,
+      },
+    },
+  },
+  {
+    // A triple-slash reference is the idiomatic way to pull in the ambient
+    // declaration for the untyped `react-refresh/runtime` module.
+    files: ["**/hmr.ts"],
+    rules: {
+      "@typescript-eslint/triple-slash-reference": "off",
+    },
+  },
   prettier,
 );

@@ -55,7 +55,7 @@ fn main() {
     // CARGO_MANIFEST_DIR is the `bevy-react` crate (crates/core); the example and
     // its bundle live at the repo root, two levels up.
     let bundle =
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../examples/demos/ui/dist/bundle.js");
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../examples/demos/ui/dist/app.js");
 
     let mut app = App::new();
     app.add_plugins(

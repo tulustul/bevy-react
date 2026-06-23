@@ -1,16 +1,20 @@
 //! The dedicated JS thread: owns the V8 isolate, runs the React bundle, and
-//! exposes exactly two ops that form the whole Rust<->JS boundary. On a hot
-//! reload it tears the runtime down and builds a fresh one from the rebuilt
-//! bundle, all on this same thread.
+//! exposes the ops that form the whole Rust<->JS boundary.
+//!
+//! The bundle is split in two (see `examples/.../build.mjs`): a **vendor**
+//! script (react, react-reconciler, the bevy-react runtime) executed once and
+//! never re-run, and an **app** script (the user's components) re-executed on
+//! every edit. On a hot reload the isolate is KEPT ALIVE: we re-`execute_script`
+//! the rebuilt app, which re-registers components and drives a React Fast
+//! Refresh (hook state preserved). Only if that fails do we fall back to tearing
+//! the whole runtime down and rebuilding it.
 
 use std::cell::{Cell, RefCell};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 use crossbeam_channel::Sender;
-use deno_core::{
-    Extension, FsModuleLoader, JsRuntime, OpDecl, OpState, RuntimeOptions, op2, resolve_path,
-};
+use deno_core::{Extension, JsRuntime, OpDecl, OpState, RuntimeOptions, op2};
 use tokio::sync::Mutex;
 use tokio::sync::mpsc::UnboundedReceiver;
 
@@ -153,11 +157,29 @@ globalThis.clearInterval = (id) => { if (id != null) __cancelled.add(id); };
 globalThis.queueMicrotask = globalThis.queueMicrotask || ((cb) => { Promise.resolve().then(cb); });
 "#;
 
-/// Spawn the JS thread. Runs until shutdown (Bevy drops the senders); rebuilds
-/// the runtime each time a reload is signalled.
+/// What ended a pump of the JS event loop.
+enum Pumped {
+    /// A reload was signalled; the app bundle should be re-executed.
+    Reload,
+    /// All senders dropped — Bevy is shutting down.
+    Shutdown,
+}
+
+/// The senders the runtime needs; cloned into each (re)build of the isolate.
+#[derive(Clone)]
+struct Senders {
+    ops: Sender<Vec<Op>>,
+    emit: Sender<ReactMessage>,
+    request: Sender<RawRequest>,
+    anim: Sender<AnimationCommand>,
+}
+
+/// Spawn the JS thread. Builds the isolate once and keeps it alive across hot
+/// reloads (re-executing only the app bundle); runs until shutdown.
 #[allow(clippy::too_many_arguments)]
 pub fn spawn_js_thread(
-    bundle_path: PathBuf,
+    vendor_path: PathBuf,
+    app_path: PathBuf,
     ops_tx: Sender<Vec<Op>>,
     emit_tx: Sender<ReactMessage>,
     request_tx: Sender<RawRequest>,
@@ -174,50 +196,82 @@ pub fn spawn_js_thread(
                 .expect("build current-thread tokio runtime");
 
             rt.block_on(async move {
+                let senders = Senders {
+                    ops: ops_tx,
+                    emit: emit_tx,
+                    request: request_tx,
+                    anim: anim_tx,
+                };
                 // These outlive individual runtimes so events/reload signals
-                // survive across reloads.
+                // survive across a full-reload rebuild.
                 let outbound_rx = Rc::new(Mutex::new(outbound_rx));
                 let reload_rx = Rc::new(Mutex::new(reload_rx));
+                let reload_flag = Rc::new(Cell::new(false));
+
+                let mut runtime = match build_runtime(
+                    &vendor_path,
+                    &app_path,
+                    &senders,
+                    outbound_rx.clone(),
+                    reload_rx.clone(),
+                    reload_flag.clone(),
+                ) {
+                    Ok(rt) => rt,
+                    Err(e) => {
+                        eprintln!("[js] initial runtime build failed: {e:?}");
+                        return;
+                    }
+                };
 
                 loop {
-                    let reload_flag = Rc::new(Cell::new(false));
-                    if let Err(e) = run_once(
-                        &bundle_path,
-                        ops_tx.clone(),
-                        emit_tx.clone(),
-                        request_tx.clone(),
-                        anim_tx.clone(),
-                        outbound_rx.clone(),
-                        reload_rx.clone(),
-                        reload_flag.clone(),
-                    )
-                    .await
-                    {
-                        eprintln!("[js] runtime error: {e:?}");
+                    reload_flag.set(false);
+                    // `pump` drives the JS event loop: the initial/refreshed
+                    // render commits, then it parks on `op_next_event` until a
+                    // reload or shutdown.
+                    match pump(&mut runtime, &reload_flag).await {
+                        Pumped::Shutdown => break,
+                        Pumped::Reload => {
+                            // Re-execute the rebuilt app in the LIVE isolate. The
+                            // next `pump` drives the resulting Fast Refresh.
+                            if let Err(e) = apply_update(&mut runtime, &app_path) {
+                                // The update threw synchronously (e.g. a syntax
+                                // error in the bundle). Fall back to a full
+                                // isolate rebuild.
+                                eprintln!("[js] fast refresh failed ({e}); full reload");
+                                match build_runtime(
+                                    &vendor_path,
+                                    &app_path,
+                                    &senders,
+                                    outbound_rx.clone(),
+                                    reload_rx.clone(),
+                                    reload_flag.clone(),
+                                ) {
+                                    Ok(rt) => runtime = rt,
+                                    Err(e) => {
+                                        eprintln!("[js] full reload failed: {e:?}");
+                                        break;
+                                    }
+                                }
+                            }
+                        }
                     }
-                    if !reload_flag.get() {
-                        break; // shutdown
-                    }
-                    eprintln!("[js] hot reloading bundle");
                 }
             });
         })
         .expect("spawn js-runtime thread");
 }
 
-/// Build one runtime, run the (re-read) bundle, and pump its event loop until
-/// the JS event loop exits (reload or shutdown).
-#[allow(clippy::too_many_arguments)]
-async fn run_once(
-    bundle_path: &PathBuf,
-    ops_tx: Sender<Vec<Op>>,
-    emit_tx: Sender<ReactMessage>,
-    request_tx: Sender<RawRequest>,
-    anim_tx: Sender<AnimationCommand>,
+/// Build a fresh isolate: register ops, run the prelude, then execute the vendor
+/// and app scripts. The app's `mount()` renders the initial tree synchronously
+/// (via `flushSync`) and parks on `op_next_event`; the caller's `pump` drives it.
+fn build_runtime(
+    vendor_path: &Path,
+    app_path: &Path,
+    senders: &Senders,
     outbound_rx: Rc<Mutex<UnboundedReceiver<Outbound>>>,
     reload_rx: Rc<Mutex<UnboundedReceiver<()>>>,
     reload_flag: Rc<Cell<bool>>,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<JsRuntime> {
     const FLUSH: OpDecl = op_flush();
     const EMIT: OpDecl = op_emit();
     const REQUEST: OpDecl = op_request();
@@ -231,7 +285,6 @@ async fn run_once(
     };
 
     let mut runtime = JsRuntime::new(RuntimeOptions {
-        module_loader: Some(Rc::new(FsModuleLoader)),
         extensions: vec![ext],
         ..Default::default()
     });
@@ -239,10 +292,10 @@ async fn run_once(
     {
         let op_state = runtime.op_state();
         let mut op_state = op_state.borrow_mut();
-        op_state.put(OpSender(ops_tx));
-        op_state.put(EmitSender(emit_tx));
-        op_state.put(RequestSender(request_tx));
-        op_state.put(AnimSender(anim_tx));
+        op_state.put(OpSender(senders.ops.clone()));
+        op_state.put(EmitSender(senders.emit.clone()));
+        op_state.put(RequestSender(senders.request.clone()));
+        op_state.put(AnimSender(senders.anim.clone()));
         op_state.put(OutboundReceiver(outbound_rx));
         op_state.put(ReloadReceiver(reload_rx));
         op_state.put(ReloadFlag(reload_flag));
@@ -250,19 +303,43 @@ async fn run_once(
 
     runtime.execute_script("[prelude]", PRELUDE)?;
 
-    // Re-read each time so reloads pick up the rebuilt bundle.
-    let bundle_code = std::fs::read_to_string(bundle_path)
-        .map_err(|e| anyhow::anyhow!("reading bundle {}: {e}", bundle_path.display()))?;
-    let main_module = resolve_path(
-        bundle_path.to_string_lossy().as_ref(),
-        &std::env::current_dir()?,
-    )?;
+    let vendor_code = std::fs::read_to_string(vendor_path)
+        .map_err(|e| anyhow::anyhow!("reading vendor {}: {e}", vendor_path.display()))?;
+    runtime.execute_script("[vendor]", vendor_code)?;
 
-    let mod_id = runtime
-        .load_main_es_module_from_code(&main_module, bundle_code)
-        .await?;
-    let eval = runtime.mod_evaluate(mod_id);
-    runtime.run_event_loop(Default::default()).await?;
-    eval.await?;
+    let app_code = std::fs::read_to_string(app_path)
+        .map_err(|e| anyhow::anyhow!("reading app {}: {e}", app_path.display()))?;
+    runtime.execute_script("[app]", app_code)?;
+
+    Ok(runtime)
+}
+
+/// Drive the JS event loop until it yields control back to Rust: either a reload
+/// was signalled (`op_next_event` returned the reload sentinel, so the JS event
+/// loop returned) or all senders dropped (shutdown).
+async fn pump(runtime: &mut JsRuntime, reload_flag: &Rc<Cell<bool>>) -> Pumped {
+    if let Err(e) = runtime.run_event_loop(Default::default()).await {
+        // Steady-state errors are caught inside the JS event loop, so this is
+        // rare; treat it like a reload so we rebuild rather than wedge.
+        eprintln!("[js] event loop error: {e}");
+        return Pumped::Reload;
+    }
+    if reload_flag.get() {
+        Pumped::Reload
+    } else {
+        Pumped::Shutdown
+    }
+}
+
+/// Re-execute the (rebuilt) app bundle in the LIVE isolate. The app IIFE
+/// re-registers its components and calls `mount()`, which — seeing the isolate
+/// already mounted — triggers `performReactRefresh()` and re-parks the event
+/// loop on `op_next_event`. Synchronous: the caller's next `pump` drives the
+/// refresh render (and the re-park). Returns `Err` only if the script threw
+/// synchronously (e.g. a syntax error), which the caller treats as "full reload".
+fn apply_update(runtime: &mut JsRuntime, app_path: &Path) -> anyhow::Result<()> {
+    let app_code = std::fs::read_to_string(app_path)
+        .map_err(|e| anyhow::anyhow!("reading app {}: {e}", app_path.display()))?;
+    runtime.execute_script("[app-update]", app_code)?;
     Ok(())
 }

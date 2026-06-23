@@ -16,10 +16,16 @@ Build / run the example (this is the main way to see it working):
 
 ```sh
 npm install                          # once
-npm run build -w demos-app           # build the React bundle — REQUIRED before running
+npm run build -w demos-app           # build the React bundles — REQUIRED before running
 cargo run -p bevy-react --example demos   # run the Bevy app (needs a GPU/window)
-npm run watch -w demos-app           # rebuild bundle on change → hot reloads the running app
+npm run watch -w demos-app           # rebuild app bundle on change → React Fast Refresh
 ```
+
+The build (`examples/demos/ui/build.mjs`, via `bevy-react/build-lib`) emits **two**
+bundles into `dist/`: `vendor.js` (react + react-reconciler + the bevy-react runtime,
+loaded into the isolate once and never re-run) and `app.js` (the app's own components,
+an IIFE re-executed on each edit). Editing a component preserves its `useState`/hook
+state — see "Hot reload: React Fast Refresh" below.
 
 Tests:
 
@@ -57,6 +63,16 @@ The whole boundary is a dedicated **JS thread** (owns the V8 isolate, runs a `cu
 **`Outbound`** (`crates/core/src/protocol.rs`) is one internally-tagged enum (`uiEvent | event | response | reload`) carrying _everything_ Bevy sends to JS over a single channel. `js/src/bridge.ts`'s `runEventLoop` is a **router**: it `switch`es on the tag and dispatches UI events to React handlers (keyed by node id), named events to listeners, and responses to the awaiting promise. The reconciler→Bevy identity map is `NodeId(u32) → Entity` (`crates/core/src/bridge.rs`); node id `0` is the UI root. Requests carry their own `u64` correlation id.
 
 The reconciler/render side lives in `js/src/` (`renderer.ts`, `mount.ts`, `bridge.ts`). The Bevy side that consumes ops and produces events: `crates/core/src/reconcile.rs` (`apply_js_ops`, `collect_ui_events`) and `crates/core/src/ui_map.rs` (op→`bevy_ui` component mapping).
+
+## Architecture: hot reload (React Fast Refresh)
+
+Editing a component **preserves its `useState`/hook state** (and live animations); only non-component edits or errors fall back to a full reload. The mechanism spans three layers — read `js_thread.rs`, `js/src/hmr.ts` + `renderer.ts` + `mount.ts`, and `js/build-lib.mjs` together:
+
+- **The isolate stays alive.** `spawn_js_thread` builds the V8 isolate once (`build_runtime`: prelude → `vendor.js` → `app.js`, all via `execute_script` — the app bundle is a classic-script IIFE, **not** an ES module, so it can be re-run). On a reload signal it does **not** rebuild: `pump` returns control to Rust, `apply_update` re-`execute_script`s the rebuilt `app.js` into the **live** context, and the next `pump` drives the refresh. Only a sync error in the new bundle triggers a full `build_runtime` rebuild. The bundle path is the **app** bundle; `vendor.js` is its sibling.
+- **The React root persists.** `renderer.ts` keeps the `reconciler` + `root` module-level (they live in the never-re-executed `vendor.js`) and calls **`reconciler.injectIntoDevTools(...)`** — required, or `performReactRefresh` is a silent no-op. `mount.ts` runs `reset()` + `createContainer` only on the **first** call (guarded by `globalThis.__hmr.mounted`); a re-execution instead calls `__hmr.applyUpdate()` (→ `performReactRefresh`) and re-parks the event loop.
+- **Components are instrumented.** `build-lib.mjs` runs each app source through **SWC's react-refresh transform** (`jsc.transform.react.refresh`) in an esbuild `onLoad` plugin, post-processing `$RefreshReg$` ids to be module-unique. `app.js` externalizes react/bevy-react to `globalThis.__bevyVendor` (set by `vendor.js`) so re-running it does **not** recreate the reconciler. `hmr.ts` installs the refresh runtime (`injectIntoGlobalHook`) before the reconciler is created.
+
+Because the whole app bundle is re-executed (every component becomes a fresh function), `performReactRefresh` re-renders the tree — picking up non-component edits too — while preserving hook state for signature-stable components. Headless coverage: `crates/core/tests/hot_reload.rs` (Rust isolate-persistence) and the cold path in `roundtrip.rs`.
 
 ## Architecture: typed, codegen-synced app messaging
 

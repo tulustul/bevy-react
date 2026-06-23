@@ -18,7 +18,8 @@ use bevy_react::{RawRequest, ReactMessage};
 
 fn example_bundle() -> PathBuf {
     // CARGO_MANIFEST_DIR is crates/core; the example bundle is at the repo root.
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../examples/demos/ui/dist/bundle.js")
+    // The build emits vendor.js + app.js; the app bundle is what we point at.
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../examples/demos/ui/dist/app.js")
 }
 
 /// Fold one op into the lookup maps we use to locate nav buttons by their label.
@@ -116,7 +117,9 @@ fn bridge_round_trip() {
     // Held for the duration: dropping the reload sender would look like shutdown.
     let (_reload_tx, reload_rx) = tokio::sync::mpsc::unbounded_channel::<()>();
 
+    let vendor = bundle.with_file_name("vendor.js");
     spawn_js_thread(
+        vendor,
         bundle,
         ops_tx,
         emit_tx,

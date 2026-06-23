@@ -17,14 +17,20 @@ use bevy_react::{RawRequest, ReactMessage};
 fn set_timeout_honors_delay() {
     // Emit "early" synchronously, schedule "late" 300ms out, then park on
     // op_next_event so the runtime's event loop stays alive to pump the timer.
-    let bundle = std::env::temp_dir().join("bevy_react_timer_test.mjs");
+    // The app bundle is a classic script (no top-level await), so the body runs
+    // in an async IIFE. An empty vendor script stands in for the react bundle.
+    let vendor = std::env::temp_dir().join("bevy_react_timer_vendor.js");
+    std::fs::write(&vendor, b"").expect("write temp vendor");
+    let bundle = std::env::temp_dir().join("bevy_react_timer_test.js");
     std::fs::File::create(&bundle)
         .expect("create temp bundle")
         .write_all(
             br#"
-            Deno.core.ops.op_emit("early", null);
-            setTimeout(() => { Deno.core.ops.op_emit("late", null); }, 300);
-            for (;;) { const m = await Deno.core.ops.op_next_event(); if (m == null) break; }
+            (async () => {
+              Deno.core.ops.op_emit("early", null);
+              setTimeout(() => { Deno.core.ops.op_emit("late", null); }, 300);
+              for (;;) { const m = await Deno.core.ops.op_next_event(); if (m == null) break; }
+            })();
             "#,
         )
         .expect("write temp bundle");
@@ -38,6 +44,7 @@ fn set_timeout_honors_delay() {
     let (_reload_tx, reload_rx) = tokio::sync::mpsc::unbounded_channel::<()>();
 
     spawn_js_thread(
+        vendor,
         bundle,
         ops_tx,
         emit_tx,
