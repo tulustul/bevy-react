@@ -1,4 +1,5 @@
 import { BevyStyle } from "bevy-react/jsx";
+import { Colors, FontSizes } from "../theme";
 
 export type CheckboxProps = {
   label: string;
@@ -13,12 +14,20 @@ export function Checkbox({ label, enabled, onChange }: CheckboxProps) {
 
   return (
     <button style={wrapper} hoverStyle={wrapperHovered} onClick={_onChange}>
-      <node
-        style={{
-          ...box,
-          ...(enabled ? boxChecked : {}),
-        }}
-      />
+      <node style={box}>
+        <node
+          style={{
+            backgroundColor: Colors.textColor100,
+            width: 22,
+            height: 22,
+            borderRadius: 5,
+            transform: { scale: enabled ? 1 : 0 },
+            transition: {
+              transform: { duration: 150 },
+            },
+          }}
+        />
+      </node>
       <text style={checkboxLabel}>{label}</text>
     </button>
   );
@@ -30,26 +39,27 @@ const wrapper: BevyStyle = {
   gap: 8,
   padding: { top: 8, right: 12, bottom: 8, left: 12 },
   borderRadius: 8,
+  backgroundColor: Colors.transparent,
+  transition: {
+    backgroundColor: { duration: 150 },
+  },
 };
 
 const wrapperHovered: BevyStyle = {
-  backgroundColor: "#2a2a3c",
+  backgroundColor: Colors.surface300,
 };
 
 const box: BevyStyle = {
   width: 30,
   height: 30,
   borderRadius: 7,
-  borderColor: "#505072",
+  borderColor: Colors.surface600,
   border: 2,
-};
-
-const boxChecked: BevyStyle = {
-  backgroundColor: "#c7c7e6ff",
-  border: 0,
+  alignItems: "center",
+  justifyContent: "center",
 };
 
 const checkboxLabel: BevyStyle = {
-  color: "#cdd6f4",
-  fontSize: 15,
+  color: Colors.textColor100,
+  fontSize: FontSizes.sm,
 };

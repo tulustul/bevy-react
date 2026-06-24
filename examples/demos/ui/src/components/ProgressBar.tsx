@@ -1,4 +1,5 @@
 import { BevyStyle } from "bevy-react/jsx";
+import { Colors, FontSizes } from "../theme";
 
 export type ProgressBarProps = {
   /** Fill end, 0..1. */
@@ -14,7 +15,7 @@ const clamp = (v: number, lo: number, hi: number) =>
   Math.min(Math.max(v, lo), hi);
 
 /** A horizontal bar with a colored fill segment and an optional centered label.
- *  Mirrors the Slint `ProgressBar`: track `#888`, fill `#007acc`, white label. */
+ *  Themed from the global tokens: surface track, primary fill, light label. */
 export function ProgressBar({
   progress,
   from = 0,
@@ -44,16 +45,16 @@ const track: BevyStyle = {
   positionType: "relative",
   width: "100%",
   height: 20,
-  borderRadius: 4,
-  backgroundColor: "#888",
+  borderRadius: 6,
+  backgroundColor: Colors.surface400,
 };
 
 const fillStyle: BevyStyle = {
   positionType: "absolute",
   top: 0,
   height: "100%",
-  borderRadius: 4,
-  backgroundColor: "#007acc",
+  borderRadius: 6,
+  backgroundColor: Colors.primary100,
 };
 
 const labelWrap: BevyStyle = {
@@ -67,8 +68,8 @@ const labelWrap: BevyStyle = {
 };
 
 const labelText: BevyStyle = {
-  color: "white",
-  fontSize: 12,
+  color: Colors.textColor100,
+  fontSize: FontSizes.xs,
   fontWeight: "semibold",
   textAlign: "center",
 };

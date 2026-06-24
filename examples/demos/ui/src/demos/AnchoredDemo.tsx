@@ -3,10 +3,12 @@ import { Anchored, AnchorScaling } from "bevy-react";
 import { BevyStyle } from "bevy-react/jsx";
 import { bevy } from "../generated";
 import type { CubeInfo } from "../generated";
-import { headingStyle, labelStyle } from "./styles";
-import { Card, Checkbox, Slider } from "../components";
+import { Checkbox, Example, Slider } from "../components";
+import { Colors, FontSizes } from "../theme";
 
-const HINT = "<Anchored.node entity={cube}>";
+const TYPESCRIPT = `<Anchored.node entity={cube.entity} offset={[0, 0.8, 0]}>
+  <text>{cube.label}</text>
+</Anchored.node>`;
 
 export function AnchoredDemo() {
   const [cubes, setCubes] = useState<CubeInfo[]>([]);
@@ -33,10 +35,10 @@ export function AnchoredDemo() {
 
   return (
     <>
-      <Card>
-        <text style={headingStyle}>World-anchored UI</text>
-        <text style={labelStyle}>{HINT}</text>
-
+      <Example
+        description="UI nodes pinned to a 3D entity, tracking it on screen and optionally scaling with distance."
+        typescript={TYPESCRIPT}
+      >
         <Checkbox
           label="Scale with distance"
           enabled={scalingEnabled}
@@ -61,7 +63,7 @@ export function AnchoredDemo() {
             />
           </>
         )}
-      </Card>
+      </Example>
 
       {cubes.map((cube) => (
         <Badge key={String(cube.entity)} cube={cube} scaling={scaling} />
@@ -93,17 +95,17 @@ const badgeStyle: BevyStyle = {
   alignItems: "center",
   justifyContent: "center",
   padding: { top: 3, right: 8, bottom: 3, left: 8 },
-  backgroundColor: "#7aa2f7",
+  backgroundColor: Colors.primary100,
   borderRadius: 999,
   boxShadow: {
-    color: "#000000",
+    color: Colors.shadow100,
     blurRadius: 4,
     spreadRadius: 2,
   },
 };
 
 const badgeText: BevyStyle = {
-  color: "#1e1e2e",
-  fontSize: 12,
+  color: Colors.textColor400,
+  fontSize: FontSizes.xs,
   fontWeight: "bold",
 };

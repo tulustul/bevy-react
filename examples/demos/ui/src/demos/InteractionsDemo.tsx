@@ -1,7 +1,14 @@
 import { useRef, useState } from "react";
 import { BevyStyle, PointerEventData } from "bevy-react/jsx";
-import { headingStyle, labelStyle } from "./styles";
-import { Card } from "../components";
+import { Example } from "../components";
+import { Colors, FontSizes } from "../theme";
+
+const TYPESCRIPT = `<node
+  onClick={...}
+  onPointerDown={...}
+  onPointerMove={...}
+  onPointerUp={...}
+/>`;
 
 // A pure-UI demo of the raw pointer events the bridge reports: `click`,
 // `pointerDown`, `pointerMove`, `pointerUp`. Grab the box and drag it around —
@@ -24,7 +31,7 @@ export function InteractionsDemo() {
     top: (STAGE_H - BOX) / 2,
   });
   const [pressed, setPressed] = useState(false);
-  const [last, setLast] = useState("—");
+  const [last, setLast] = useState("-");
   const [log, setLog] = useState<LogLine[]>([]);
 
   // Cursor position at the previous drag frame, so we move the box by the delta.
@@ -40,7 +47,7 @@ export function InteractionsDemo() {
   };
 
   const fmt = (e: PointerEventData) =>
-    `x=${e.x.toFixed(2)} y=${e.y.toFixed(2)} · client=(${Math.round(
+    `x=${e.x.toFixed(2)} y=${e.y.toFixed(2)} | client=(${Math.round(
       e.clientX,
     )}, ${Math.round(e.clientY)})`;
 
@@ -67,19 +74,17 @@ export function InteractionsDemo() {
   };
 
   return (
-    <Card>
-      <text style={headingStyle}>Interactions</text>
-      <text style={labelStyle}>
-        grab the box and drag it — click, pointerDown/Move/Up
-      </text>
-
+    <Example
+      description="Raw pointer events the bridge reports. Grab the box and drag it around the stage."
+      typescript={TYPESCRIPT}
+    >
       <node style={stageStyle}>
         <node
           style={{
             ...boxStyle,
             left: pos.left,
             top: pos.top,
-            backgroundColor: pressed ? "#bb9af7" : "#7aa2f7",
+            backgroundColor: pressed ? Colors.purple100 : Colors.primary100,
           }}
           onClick={() => record("click")}
           onPointerDown={onPointerDown}
@@ -90,7 +95,13 @@ export function InteractionsDemo() {
         </node>
       </node>
 
-      <text style={{ color: "#7aa2f7", fontSize: 15, fontWeight: "bold" }}>
+      <text
+        style={{
+          color: Colors.primary100,
+          fontSize: FontSizes.sm,
+          fontWeight: "bold",
+        }}
+      >
         {last}
       </text>
 
@@ -101,7 +112,7 @@ export function InteractionsDemo() {
           </text>
         ))}
       </node>
-    </Card>
+    </Example>
   );
 }
 
@@ -109,10 +120,10 @@ const stageStyle: BevyStyle = {
   width: STAGE_W,
   height: STAGE_H,
   positionType: "relative",
-  backgroundColor: "#11111b",
+  backgroundColor: Colors.surface100,
   borderRadius: 12,
   border: 1,
-  borderColor: "#313244",
+  borderColor: Colors.surface400,
   overflowX: "hidden",
   overflowY: "hidden",
 };
@@ -127,8 +138,8 @@ const boxStyle: BevyStyle = {
 };
 
 const boxLabelStyle: BevyStyle = {
-  color: "#1e1e2e",
-  fontSize: 14,
+  color: Colors.textColor400,
+  fontSize: FontSizes.sm,
   fontWeight: "bold",
 };
 
@@ -141,6 +152,6 @@ const logStyle: BevyStyle = {
 };
 
 const logLineStyle: BevyStyle = {
-  color: "#6c7086",
-  fontSize: 13,
+  color: Colors.textColor300,
+  fontSize: FontSizes.xs,
 };

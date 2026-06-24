@@ -1,12 +1,17 @@
 import { useEffect } from "react";
 import { Animated, useSharedValue, withRepeat, withTiming } from "bevy-react";
 import { BevyStyle } from "bevy-react/jsx";
-import { headingStyle, labelStyle } from "./styles";
-import { Card } from "../components";
+import { Example } from "../../components";
+import { Colors } from "../../theme";
 
 const FADE_MS = 500;
 
-const HINT = "<Animated.node animatedStyle={{opacity}} />";
+const TYPESCRIPT = `const opacity = useSharedValue(1);
+opacity.value = withRepeat(
+  withTiming(0, { duration: 500 }),
+  -1, true, // ping-pong
+);
+<Animated.node animatedStyle={{ opacity }} />`;
 
 export function FadeAnimationDemo() {
   const opacity = useSharedValue(1);
@@ -20,14 +25,14 @@ export function FadeAnimationDemo() {
   }, [opacity]);
 
   return (
-    <Card>
-      <text style={headingStyle}>Fade</text>
-      <text style={labelStyle}>{HINT}</text>
-
+    <Example
+      description="A shared value drives animatedStyle imperatively, looped, ping-ponging opacity."
+      typescript={TYPESCRIPT}
+    >
       <node style={fadeStageStyle}>
         <Animated.node style={fadeSquareStyle} animatedStyle={{ opacity }} />
       </node>
-    </Card>
+    </Example>
   );
 }
 
@@ -42,5 +47,5 @@ const fadeSquareStyle: BevyStyle = {
   width: 88,
   height: 88,
   borderRadius: 16,
-  backgroundColor: "#7aa2f7",
+  backgroundColor: Colors.primary100,
 };

@@ -11,10 +11,16 @@ import {
   withTiming,
 } from "bevy-react";
 import { BevyStyle } from "bevy-react/jsx";
-import { headingStyle } from "./styles";
-import { Card } from "../components";
+import { Example } from "../../components";
+import { Colors, FontSizes } from "../../theme";
 
 type Mode = "linear" | "easeInOut" | "spring";
+
+const TYPESCRIPT = `withRepeat(withSequence(
+  withDelay(280, withTiming(110)),
+  withDelay(280, withTiming(-110)),
+), -1);
+animatedStyle={{ translateX, scale, backgroundColor }}`;
 
 const COUNT = 4;
 const AMP = 110; // horizontal travel, ± from center (px)
@@ -26,16 +32,29 @@ const PULSE_MS = 600; // scale/hue pulse half-period
 const RETARGET_MS = 280; // glide back to the loop start on a mode change
 
 // Each square pulses from its cool base color to a warm partner.
-const COOL = ["#7aa2f7", "#f7768e", "#9ece6a", "#e0af68", "#bb9af7"];
-const WARM = ["#bb9af7", "#ff9e64", "#73daca", "#f7768e", "#7dcfff"];
+const COOL = [
+  Colors.primary100,
+  Colors.red100,
+  Colors.green100,
+  Colors.yellow100,
+  Colors.purple100,
+];
+const WARM = [
+  Colors.purple100,
+  Colors.orange100,
+  Colors.teal100,
+  Colors.red100,
+  Colors.sky100,
+];
 
 export function BouncingBallsAnimationDemo() {
   const [mode, setMode] = useState<Mode>("easeInOut");
 
   return (
-    <Card>
-      <text style={headingStyle}>Bouncing Squares</text>
-
+    <Example
+      description="Staggered squares compose sequence/repeat/delay drivers; switch the easing live."
+      typescript={TYPESCRIPT}
+    >
       <node style={lanesStyle}>
         {Array.from({ length: COUNT }, (_, i) => (
           <BouncingSquare key={i} index={i} mode={mode} />
@@ -52,7 +71,7 @@ export function BouncingBallsAnimationDemo() {
           />
         ))}
       </node>
-    </Card>
+    </Example>
   );
 }
 
@@ -138,11 +157,18 @@ function ModeButton({
       onClick={onPress}
       style={{
         ...modeButtonStyle,
-        backgroundColor: selected ? "#7aa2f7" : "#2a2a3c",
+        backgroundColor: selected ? Colors.primary100 : Colors.surface300,
       }}
-      hoverStyle={{ backgroundColor: selected ? "#7aa2f7" : "#42425e" }}
+      hoverStyle={{
+        backgroundColor: selected ? Colors.primary100 : Colors.surface500,
+      }}
     >
-      <text style={{ color: selected ? "#1e1e2e" : "#cdd6f4", fontSize: 14 }}>
+      <text
+        style={{
+          color: selected ? Colors.textColor400 : Colors.textColor100,
+          fontSize: FontSizes.sm,
+        }}
+      >
         {label}
       </text>
     </button>
@@ -166,7 +192,7 @@ const squareStyle: BevyStyle = {
   width: SQUARE,
   height: SQUARE,
   borderRadius: 10,
-  backgroundColor: "#7aa2f7",
+  backgroundColor: Colors.primary100,
 };
 
 const rowStyle: BevyStyle = {
@@ -178,7 +204,7 @@ const rowStyle: BevyStyle = {
 const modeButtonStyle: BevyStyle = {
   padding: { top: 8, right: 14, bottom: 8, left: 14 },
   borderRadius: 8,
-  backgroundColor: "#2a2a3c",
+  backgroundColor: Colors.surface300,
   justifyContent: "center",
   alignItems: "center",
 };

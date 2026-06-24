@@ -2,21 +2,36 @@ import { ComponentType, useEffect, useState } from "react";
 import { BevyStyle } from "bevy-react/jsx";
 import { bevy } from "./generated";
 import type { SceneId } from "./generated";
-import { BasicUiDemo } from "./demos/BasicUiDemo";
-import { EventsDemo } from "./demos/EventsDemo";
-import { PollingDataDemo } from "./demos/PollingDataDemo";
+import { Colors, FontSizes } from "./theme";
+import { ReactToBevyDemo } from "./demos/communication/ReactToBevyDemo";
+import { BevyToReactDemo } from "./demos/communication/BevyToReactDemo";
+import { BidirectionCommunicationDemo } from "./demos/communication/BidirectionCommunicationDemo";
 import { AnchoredDemo } from "./demos/AnchoredDemo";
 import { InteractionsDemo } from "./demos/InteractionsDemo";
-import { CanvasDemo } from "./demos/CanvasDemo";
-import { ScrollDemo } from "./demos/ScrollDemo";
-import { TransitionDemo } from "./demos/TransitionDemo";
-import { EditableTextDemo } from "./demos/EditableTextDemo";
-import { NodeDemo } from "./demos/NodeDemo";
-import { ButtonDemo } from "./demos/ButtonDemo";
-import { TextDemo } from "./demos/TextDemo";
-import { ImageDemo } from "./demos/ImageDemo";
-import { FadeAnimationDemo } from "./demos/FadeAnimationDemo";
-import { BouncingBallsAnimationDemo } from "./demos/BouncingBallsAnimationDemo";
+import { CanvasDemo } from "./demos/elements/CanvasDemo";
+import { ScrollDemo } from "./demos/layout/ScrollDemo";
+import { EditableTextDemo } from "./demos/elements/EditableTextDemo";
+import { NodeDemo } from "./demos/elements/NodeDemo";
+import { FlexDemo } from "./demos/layout/FlexDemo";
+import { GridDemo } from "./demos/layout/GridDemo";
+import { ButtonDemo } from "./demos/elements/ButtonDemo";
+import { TextDemo } from "./demos/elements/TextDemo";
+import { ImageDemo } from "./demos/elements/ImageDemo";
+import { FadeAnimationDemo } from "./demos/animations/FadeAnimationDemo";
+import { BouncingBallsAnimationDemo } from "./demos/animations/BouncingBallsAnimationDemo";
+import { TransitionDemo } from "./demos/animations/TransitionDemo";
+import { EasingDemo } from "./demos/animations/EasingDemo";
+import { SpringDemo } from "./demos/animations/SpringDemo";
+import { SequenceDemo } from "./demos/animations/SequenceDemo";
+import { SpinDemo } from "./demos/animations/SpinDemo";
+import { InterpolateDemo } from "./demos/animations/InterpolateDemo";
+import { ColorsDemo } from "./demos/styling/ColorsDemo";
+import { BordersDemo } from "./demos/styling/BordersDemo";
+import { SpacingDemo } from "./demos/styling/SpacingDemo";
+import { SizingDemo } from "./demos/styling/SizingDemo";
+import { TransformDemo } from "./demos/styling/TransformDemo";
+import { ShadowDemo } from "./demos/styling/ShadowDemo";
+import { OpacityDemo } from "./demos/styling/OpacityDemo";
 
 type BaseDemoItem = { label: string; scene?: SceneId };
 type DemoItem = BaseDemoItem &
@@ -47,21 +62,38 @@ const DEMOS: DemoItem[] = [
     ],
   },
   {
+    label: "Layout",
+    children: [
+      { label: "Flex", component: FlexDemo },
+      { label: "Grid", component: GridDemo },
+      { label: "Scroll", component: ScrollDemo },
+    ],
+  },
+  {
     label: "Styling",
     children: [
-      { label: "Scroll", component: ScrollDemo },
-      { label: "Transition", component: TransitionDemo },
+      { label: "Colors", component: ColorsDemo },
+      { label: "Borders", component: BordersDemo },
+      { label: "Spacing", component: SpacingDemo },
+      { label: "Sizing", component: SizingDemo },
+      { label: "Transform", component: TransformDemo },
+      { label: "Shadow", component: ShadowDemo },
+      { label: "Opacity", component: OpacityDemo },
     ],
   },
   {
     label: "Communication",
     children: [
-      { label: "Bevy -> React", scene: "BouncingBall", component: EventsDemo },
-      { label: "Bevy <- React", scene: "Cubes", component: BasicUiDemo },
+      {
+        label: "Bevy -> React",
+        scene: "BouncingBall",
+        component: BevyToReactDemo,
+      },
+      { label: "Bevy <- React", scene: "Cubes", component: ReactToBevyDemo },
       {
         label: "Bevy <-> React",
         scene: "BouncingBall",
-        component: PollingDataDemo,
+        component: BidirectionCommunicationDemo,
       },
     ],
   },
@@ -69,7 +101,13 @@ const DEMOS: DemoItem[] = [
     label: "Animations",
     children: [
       { label: "Fade", component: FadeAnimationDemo },
+      { label: "Easing", component: EasingDemo },
+      { label: "Spring", component: SpringDemo },
+      { label: "Sequence", component: SequenceDemo },
+      { label: "Spin", component: SpinDemo },
+      { label: "Interpolate", component: InterpolateDemo },
       { label: "Bouncing Squares", component: BouncingBallsAnimationDemo },
+      { label: "Style Transition", component: TransitionDemo },
     ],
   },
   { scene: "CrowdedCubes", label: "World Anchors", component: AnchoredDemo },
@@ -200,9 +238,11 @@ function ItemButton({
       style={{
         ...navButtonStyle,
         padding: isChild ? 6 : 12,
-        backgroundColor: isActive ? "#7aa2f7" : "#2a2a3c",
+        backgroundColor: isActive ? Colors.primary100 : Colors.surface300,
       }}
-      hoverStyle={{ backgroundColor: isActive ? "#7aa2f7" : "#42425e" }}
+      hoverStyle={{
+        backgroundColor: isActive ? Colors.primary100 : Colors.surface500,
+      }}
     >
       <node
         style={{
@@ -213,8 +253,8 @@ function ItemButton({
       >
         <text
           style={{
-            color: isActive ? "#1e1e2e" : "#cdd6f4",
-            fontSize: isChild ? 14 : 16,
+            color: isActive ? Colors.textColor400 : Colors.textColor100,
+            fontSize: isChild ? FontSizes.sm : FontSizes.base,
             fontWeight: "bold",
           }}
         >
@@ -226,7 +266,7 @@ function ItemButton({
               fontFamily: "Noto Sans Mono",
             }}
           >
-            {isExpanded ? "▲" : "▼"}
+            {isExpanded ? "-" : "+"}
           </text>
         )}
       </node>
@@ -247,9 +287,9 @@ const navStyle: BevyStyle = {
   height: "100%",
   gap: 8,
   padding: 20,
-  backgroundColor: "#181825",
+  backgroundColor: Colors.surface100,
   zIndex: 100,
-  boxShadow: { blurRadius: 15, spreadRadius: 0, color: "#00000088" },
+  boxShadow: { blurRadius: 15, spreadRadius: 0, color: Colors.shadow100 },
 };
 
 const itemsStyle: BevyStyle = {
@@ -262,8 +302,8 @@ const itemsStyle: BevyStyle = {
 };
 
 const titleStyle: BevyStyle = {
-  color: "#7aa2f7",
-  fontSize: 22,
+  color: Colors.primary100,
+  fontSize: FontSizes.xl,
   fontWeight: "bold",
   margin: { top: 0, right: 0, bottom: 12, left: 0 },
 };
@@ -280,7 +320,9 @@ const navButtonStyle: BevyStyle = {
 const contentStyle: BevyStyle = {
   flexGrow: 1,
   height: "100%",
-  alignItems: "flexStart",
-  justifyContent: "center",
+  flexDirection: "column",
+  alignItems: "center",
+  gap: 20,
   padding: 24,
+  overflowY: "scroll",
 };

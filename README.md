@@ -1,82 +1,31 @@
 # bevy-react
 
-Drive **`bevy_ui` from a React app** running on an embedded V8
-([deno_core](https://crates.io/crates/deno_core)) runtime. React renders through
-a custom reconciler ("react backend") that emits UI mutation ops instead of
-touching a DOM; Rust applies them to the Bevy ECS. Clicks flow back so React can
-re-render. Includes hot reload.
+Build [`bevy_ui`](https://docs.rs/bevy/latest/bevy/ui/index.html) interfaces with
+**React**. You write components in React/TSX and they render to native Bevy UI —
+no web view, no DOM. State and interactions flow both ways between your Bevy app
+and React, and edits hot-reload live while keeping component state.
 
-This repo is a **library** (Rust crate + JS package) plus an example app.
+## Project status
 
-## How the Rust↔JS bridge works
+Currently, the project is a **quick, vibecoded proof of concept** demonstrating the idea. The API is very unstable and will change, the code quality is not satisfying.
+**Do not use it in production**
 
-The UI core is **two channels and two ops** (app-level messaging — `emit`,
-requests, events — adds two more ops over the same threads; see below):
-
-```
-  Bevy main thread                         JS thread (owns the V8 isolate)
-  ─────────────────                        ───────────────────────────────
-  apply_js_ops  ◀── ops (crossbeam) ─────  resetAfterCommit → op_flush(ops)
-   spawn/patch/despawn bevy_ui              React + react-reconciler
-  collect_ui_events ── outbound (tokio) ─▶ op_next_event() → route by kind
-   Interaction → UiEvent                    → setState → re-render → flush
-```
-
-- **JS → Rust:** the reconciler records ops during a commit and flushes the
-  batch in `resetAfterCommit` via the sync op `op_flush`. deno_core's `serde_v8`
-  deserializes the JS objects straight into the `Op` enum.
-- **Rust → JS:** Bevy pushes a single `Outbound` stream onto a tokio channel; the
-  async op `op_next_event` awaits the next one (Rust Future → JS Promise) and the
-  JS loop routes it by kind — UI events to React handlers, named events to
-  listeners, request responses to the awaiting promise. Handlers never cross the
-  boundary — only a `{ onClick: true }` marker does.
-- **Identity:** the reconciler assigns each node a `u32`; Rust keeps a
-  `NodeId → Entity` map. Node id `0` is the Bevy UI root. Requests carry their own
-  `u64` correlation id.
-
-The V8 isolate is single-thread-bound, so it lives on its own thread with a
-`current_thread` tokio runtime pumping its event loop.
-
-## Using the library
-
-### Rust (the host)
-
-Add the plugin and point it at a built JS bundle:
-
-```rust
-use bevy::prelude::*;
-use bevy_react::ReactUiPlugin;
-
-fn main() {
-    App::new()
-        .add_plugins(DefaultPlugins)
-        .add_plugins(ReactUiPlugin::new("path/to/dist/bundle.js"))
-        // .hot_reload(false)  // default: true
-        // .spawn_camera(false) // default: true (spawns a Camera2d)
-        .run();
-}
-```
-
-`ReactUiPlugin` owns the JS thread, the op/event channels, the UI root entity,
-and (by default) hot reload.
-
-### JS (the app)
-
-Install `bevy-react` + `react` + `react-reconciler`, write components with the
-`node`/`button` host elements, and `mount` your tree:
+<!-- TODO: screenshots / demo gif -->
 
 ```tsx
 import { mount } from "bevy-react";
-import "bevy-react/jsx"; // <node>/<button> JSX typings
-import React, { useState } from "react";
+import { useState } from "react";
 
 function App() {
   const [n, setN] = useState(0);
   return (
-    <node style={{ padding: 20, gap: 12 }} backgroundColor="#1e1e2e">
-      {`Count: ${n}`}
-      <button onClick={() => setN((c) => c + 1)} backgroundColor="#7aa2f7">
-        +
+    <node style={{ padding: 20, gap: 12, flexDirection: "column" }}>
+      <text>{`Count: ${n}`}</text>
+      <button
+        onClick={() => setN((c) => c + 1)}
+        style={{ backgroundColor: "#7aa2f7" }}
+      >
+        <text>+</text>
       </button>
     </node>
   );
@@ -85,225 +34,259 @@ function App() {
 await mount(<App />);
 ```
 
-Bundle it to a single ESM file with esbuild (see the example's `build` script)
-and hand that path to `ReactUiPlugin`.
+That's a real component — `<node>` and `<button>` render to actual `bevy_ui`
+nodes, `useState` works as you'd expect, and saving the file updates the running
+app without losing the count.
 
-### React → Bevy messages
+## Why bevy-react
 
-Beyond UI, React can push app-level signals into the ECS with `emit(name,
-value)`:
+- **React, not a bespoke UI DSL.** Hooks, components, conditional rendering, lists —
+  everything you already know.
+- **Native Bevy UI.** No browser, no web view. Your UI is `bevy_ui` entities in the
+  same world as your game.
+- **Hot reload that keeps state.** Edit a component and it re-renders live with hook
+  state and running animations intact.
+- **Typed, two-way messaging.** React and the ECS talk over typed channels generated
+  straight from your Rust types.
 
-```tsx
-// JS: send the current count whenever it changes
-import { emit } from "bevy-react";
-useLayoutEffect(() => emit("count", count), [count]);
-```
+## Features
 
-On the Rust side you tag a payload struct with `#[react_message]` and handle it
-with a normal Bevy observer. The plugin owns the single channel read: it routes
-each message by name, deserializes the JSON into your type, and triggers it — no
-manual read-loop or `serde_json::Value` juggling. The payload deserializes
-straight from the emitted value, so its shape must match what JS sends
-(`emit("count", 5)` → a number, so a newtype):
+### Elements & styling
 
-```rust
-use bevy_react::{react_message, ReactAppExt};
-
-#[react_message]              // emit name defaults to "count" (struct name, lowercased)
-struct Count(usize);          // use #[react_message(name = "...")] to override
-
-// register the payload and attach the observer in one call:
-app.add_react_handler(|count: On<Count>, /* ...any system params... */| {
-    let n = count.event().0;  // typed
-});
-```
-
-An `emit` with no registered name logs a warning; a payload that fails to
-deserialize logs an error — neither panics.
-
-### Requests and events (the full duplex)
-
-`emit` is one of three app-level channels. The other two:
-
-**React → Bevy requests** — an awaitable call with a typed reply. Tag a request
-struct with `#[react_request]` (giving it a response type), register an observer,
-and answer it with `req.respond(...)` (synchronously, or later — the `Responder`
-is `Clone + Send`, so you can store it and reply across frames):
-
-```rust
-#[react_request(name = "board.get", response = Board)]
-struct BoardGet;                       // unit payload → `bevy.board.get()` takes no args
-
-app.add_react_request_handler(|req: On<Request<BoardGet>>, board: Res<Board>| {
-    req.respond(board.clone());
-});
-```
-
-An unknown request name or a malformed payload replies with an error (the JS
-promise rejects) rather than hanging.
-
-**Bevy → React events** — a named broadcast React subscribes to. Tag the payload
-with `#[react_event]`, register it, and send it from any system:
-
-```rust
-#[react_event(name = "user.disconnected")]
-struct UserDisconnected { user_id: String }
-
-app.add_react_event::<UserDisconnected>();
-
-fn on_drop(mut events: ReactEvents) {
-    events.send(&UserDisconnected { user_id: "abc".into() });
-}
-```
-
-### Typed bindings, synced from Rust
-
-The Rust `#[react_message]` / `#[react_request]` / `#[react_event]` types are the single
-source of truth. Each derives [`ts-rs`](https://docs.rs/ts-rs)' `TS`, and
-`App::export_react_typescript(path)` walks everything you've registered and writes one
-self-contained TypeScript module: a type per payload, the `ReactMessages` /
-`ReactRequests` / `ReactEvents` maps, typed `emit` / `request` / `on` wrappers, and a
-structured **`bevy` proxy** whose nested methods come from dotted request names
-(`"board.get"` → `bevy.board.get()`).
-
-Add a small exporter entry point that registers the same handlers as your app and call
-the exporter (see `examples/demos/main.rs`'s `--export-bindings` flag and the
-`gen:bindings` npm script):
-
-```tsx
-// JS: every call below is type-checked against the Rust types.
-import { bevy, emit } from "./generated"; // generated; do not edit
-
-emit("count", count); // React → Bevy notify
-const board = await bevy.board.get(); // React → Bevy request (awaited)
-const stop = bevy.on("user.disconnected", (e) => console.log(e.userId)); // Bevy → React
-```
-
-```sh
-# regenerate after changing the Rust types
-cargo run --example demos -- --export-bindings examples/demos/ui/src/generated.ts
-```
-
-Commit the generated file and, in CI, regenerate then `git diff --exit-code` it: if a
-Rust type changes without regenerating, the build fails — so the TypeScript can never
-drift from Rust.
-
-### Host elements & styling
-
-Host elements: `node` (flex/grid container), `button`, `image`, and `text`; a
-bare string outside any `<text>` becomes a default (white) text node. An `image`
-takes `src` (an asset path resolved by Bevy's `AssetServer`, relative to your
-app's `assets/` folder), or renders a solid `tint` color when `src` is omitted
-(plus `flipX`/`flipY`/`imageMode`).
-
-**Text.** Like React Native, text is styled through a `<text>` element (Bevy
-puts styling on the text entity, not the parent, with no inheritance). `<text>`
-is nestable — a nested `<text>` restyles a run, mapping to Bevy's `Text` /
-`TextSpan` hierarchy. Text style keys live in `style`: `color`, `fontSize`,
-`fontWeight`, and `textAlign` (`textAlign` applies to the `<text>` root only):
-
-```tsx
-<text style={{ color: "#cdd6f4", fontSize: 22, fontWeight: "bold" }}>
-  Cubes: <text style={{ color: "#7aa2f7" }}>{count}</text>
-</text>
-```
-
-Styling is **CSS-like** and covers essentially all of `bevy_ui::Node` plus its
-sibling visual components:
+Host elements `<node>`, `<button>`, `<text>`, `<image>`, `<editableText>`, and
+`<canvas>` cover layout, input, and drawing. Style them with a flexbox/grid object
+(colors, spacing, borders, radius, shadows, transforms).
 
 ```tsx
 <node
   style={{
-    // lengths: a number = px; strings carry units
-    width: 380,
-    height: "50%",
-    maxWidth: "100vw",
-    flexBasis: "auto",
-    // flexbox + alignment
-    flexDirection: "column",
-    justifyContent: "center",
-    alignItems: "center",
-    gap: 20,
-    // CSS grid
-    display: "grid",
-    gridTemplateColumns: "repeat(3, 1fr)",
-    gridColumn: "1 / 3",
-    // box: rects accept a number, "8px 16px" shorthand, or {top,right,bottom,left}
-    padding: "8px 16px",
-    margin: 24,
-    border: 2,
-    borderRadius: 12,
-    // visual components
+    flexDirection: "row",
+    gap: 16,
+    padding: 20,
     backgroundColor: "#1e1e2e",
-    borderColor: "#7aa2f7",
-    zIndex: 10,
-    outline: { width: 2, color: "#fff" },
-    boxShadow: { color: "#0008", xOffset: 0, yOffset: 4, blurRadius: 8 },
+    borderRadius: 8,
+  }}
+>
+  <text style={{ fontSize: 18, color: "#cdd6f4" }}>Hello</text>
+</node>
+```
+
+### Hover & press states
+
+Overlay extra style while an element is hovered or pressed — no state wiring needed.
+
+```tsx
+<button
+  onClick={() => save()}
+  style={{ backgroundColor: "#7aa2f7" }}
+  hoverStyle={{ backgroundColor: "#89b4fa" }}
+  pressStyle={{ backgroundColor: "#5a7fd6" }}
+>
+  <text>Save</text>
+</button>
+```
+
+### Pointer & drag
+
+`onPointerDown` / `onPointerMove` / `onPointerUp` give you drag gestures, with both
+element-normalized (`x`, `y`) and window (`clientX`, `clientY`) coordinates.
+
+```tsx
+<node
+  onPointerDown={(e) => start(e.clientX, e.clientY)}
+  onPointerMove={(e) => drag(e.clientX, e.clientY)}
+  onPointerUp={() => drop()}
+/>
+```
+
+### Transitions
+
+Ease changes to a style by listing which properties should animate, with timing or
+spring config.
+
+```tsx
+<button
+  onClick={() => setOn((v) => !v)}
+  style={{
+    backgroundColor: on ? "#a6e3a1" : "#45475a",
+    transform: { translateX: on ? 36 : -36 },
+    transition: {
+      transform: { stiffness: 180, damping: 14 }, // spring
+      backgroundColor: { duration: 200 }, // timing (ms)
+    },
+  }}
+>
+  <text>{on ? "ON" : "OFF"}</text>
+</button>
+```
+
+### Animations
+
+For richer motion, use Reanimated-style shared values driven on the Bevy side (no
+per-frame JS). Create a value with `useSharedValue`, assign it a driver, and bind it
+through `animatedStyle` on an `Animated.*` element.
+
+```tsx
+import { Animated, useSharedValue, withRepeat, withTiming } from "bevy-react";
+import { useEffect } from "react";
+
+function Pulse() {
+  const opacity = useSharedValue(1);
+  useEffect(() => {
+    opacity.value = withRepeat(
+      withTiming(0, { duration: 500, easing: "easeInOut" }),
+      -1, // repeat forever
+      true, // ping-pong
+    );
+  }, [opacity]);
+
+  return (
+    <Animated.node
+      style={{ width: 80, height: 80 }}
+      animatedStyle={{ opacity }}
+    />
+  );
+}
+```
+
+Drivers: `withTiming`, `withSpring`, `withRepeat`, `withSequence`, `withDelay`, plus
+`interpolate` / `interpolateColor` to map one value through a curve.
+
+### Fonts
+
+Register a font on the host, then select it by name in any `<text>` style.
+
+```rust
+ReactUiPlugin::new("ui/dist/app.js").font("DancingScript", "assets/dancing.ttf")
+```
+
+```tsx
+<text style={{ fontFamily: "DancingScript", fontSize: 34 }}>Fancy</text>
+```
+
+### Canvas drawing
+
+`<canvas>` takes a `draw` callback with an HTML-canvas-like context; the result is
+rasterized into a texture. Returning fresh drawing each render makes it reactive.
+
+```tsx
+<canvas
+  style={{ width: 460, height: 260 }}
+  draw={(ctx) => {
+    ctx.strokeStyle = "#89b4fa";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(0, 150);
+    ctx.bezierCurveTo(100, 0, 200, 150, 300, 20);
+    ctx.stroke();
   }}
 />
 ```
 
-Import `BevyStyle` from `bevy-react/jsx` for the full typed key list.
+### World-anchored overlays
 
-## Repo layout
+Pin UI to a 3D entity so it tracks the entity on screen as the camera moves.
 
-| Path                                                  | Role                                                                    |
-| ----------------------------------------------------- | ----------------------------------------------------------------------- |
-| `src/lib.rs`                                          | crate root; public `ReactUiPlugin`                                      |
-| `src/plugin.rs`                                       | the plugin: JS thread, systems, UI root, hot-reload watcher             |
-| `src/{protocol,bridge,js_thread,reconcile,ui_map}.rs` | the bridge internals                                                    |
-| `tests/roundtrip.rs`                                  | headless end-to-end bridge test                                         |
-| `js/`                                                 | the `bevy-react` JS library (reconciler, `mount`, JSX types)            |
-| `examples/demos/`                                     | example: Rust binary (`main.rs` + per-demo plugins) + React app (`ui/`) |
+```tsx
+import { Anchored } from "bevy-react";
 
-It's an npm workspace (`js` + `examples/demos/ui`) so React resolves to one
-copy.
+<Anchored.node entity={cube} offset={[0, 1, 0]} style={{ padding: 8 }}>
+  <text>Label</text>
+</Anchored.node>;
+```
 
-## Build, run, verify
+### Talking to Bevy
 
-Requires Rust ≥ 1.95 (Bevy 0.19) and Node.
+Three typed channels connect React and the ECS:
 
-```bash
-# 1. Install JS deps (workspace) and build the example bundle
+- **Notify** — `bevy.foo.set(value)` (or `emit(name, value)`): fire-and-forget
+  React → Bevy.
+- **Request** — `await bevy.foo.get()` (or `request(name, value)`): ask Bevy and
+  await a reply.
+- **Subscribe** — `bevy.on(name, cb)`: receive Bevy → React events; returns an
+  unsubscribe function.
+
+**1. Define the channel in Rust** with a macro and register it on the `App`:
+
+```rust
+use bevy::prelude::*;
+use bevy_react::{ReactAppExt, ReactEvents, react_event, react_message};
+
+// React → Bevy: `bevy.game.reset()`.
+#[react_message(name = "game.reset")]
+struct Reset;
+
+fn on_reset(_: On<Reset>, /* queries, resources… */) {
+    // reset the game
+}
+
+// Bevy → React: `bevy.on("game.scored", …)`.
+#[react_event(name = "game.scored")]
+struct Scored;
+
+fn award_point(events: ReactEvents) {
+    events.send(&Scored);
+}
+
+app.add_react_handler(on_reset);
+app.add_react_event::<Scored>();
+```
+
+**2. Generate the typed client** that React imports from `./generated`. Add an export
+path to your app — typically a flag that builds the `App`, registers your channels,
+and calls `app.export_react_typescript("ui/src/generated.ts")` (see
+[SETUP.md](./SETUP.md#talking-to-bevy-typed-channels)) — then run it (re-run whenever
+you add or change a channel):
+
+```sh
+cargo run -- --export-bindings ui/src/generated.ts
+```
+
+**3. Use it from React:**
+
+```tsx
+import { bevy } from "./generated";
+import { useEffect, useState } from "react";
+
+function Score() {
+  const [hits, setHits] = useState(0);
+
+  useEffect(() => bevy.on("game.scored", () => setHits((h) => h + 1)), []);
+
+  return (
+    <button onClick={() => bevy.game.reset()}>
+      <text>{`Hits: ${hits}`}</text>
+    </button>
+  );
+}
+```
+
+See [SETUP.md](./SETUP.md#talking-to-bevy-typed-channels) for the request (await a
+reply) and event (Bevy → React) channels.
+
+## Getting started
+
+See **[SETUP.md](./SETUP.md)** for setting up a new project end to end — the Rust
+host, the React app, bundling, and typed bindings.
+
+bevy-react is a Rust crate (`bevy-react`) plus an npm package (`bevy-react`),
+developed together. Both are `0.1.0` and not yet published, so for now you depend on
+them by path or git.
+
+## The demos app
+
+[`examples/demos`](./examples/demos) is a gallery that exercises every feature above,
+with a left-nav that switches between live demos. It's the best **reference
+implementation** — each demo is a small, self-contained component you can read and
+copy when wiring up your own UI, messaging, or animations.
+
+```sh
 npm install
 npm run build -w demos-app
-
-# 2. Headless bridge test (no GPU needed)
-cargo test            # tests/roundtrip.rs → PASS
-
-# 3. Run the example (opens a window)
 cargo run --example demos
 ```
 
-The example overlays the React UI on a live 3D scene, with a left-nav that
-switches between three demos — each a separate Bevy plugin showing one direction
-of the bridge:
+## Contributing
 
-- **Basic UI** — the counter (`+`/`-`/`reset`, clamped to 0–8, default 3) drives
-  how many spinning cubes exist: `emit("count", n)` → `ReactMessage` → cubes.
-- **Events** — a ball bounces off the walls; each bounce sends a `ball.bounced`
-  event to React, which pops a transient toast: Bevy → React via `ReactEvents`.
-- **Request/Response** — React polls `bevy.ball.get()` ~10×/sec and displays the
-  ball's live position and velocity: a correlated request/response round trip.
-
-### Hot reload
-
-Run the bundler in watch mode and the app side by side:
-
-```bash
-npm run watch -w demos-app   # esbuild rebuilds dist/bundle.js on save
-cargo run --example demos    # in another terminal
-```
-
-Edit any file under `examples/demos/ui/src/`; esbuild rebuilds, the host polls
-the bundle's mtime, and the JS runtime is rebuilt from the new bundle:
-
-```
-edit ui → esbuild --watch rewrites dist/bundle.js
-  → ReactUiPlugin watcher sees new mtime → reload signal
-  → JS thread rebuilds the V8 runtime → reset op + fresh render → host updates
-```
-
-**Limitation:** full reload, so React state resets (the counter returns to its
-default on edit). State-preserving Fast Refresh (react-refresh runtime + transform) is a
-worthwhile follow-up, not yet implemented.
+The internals — the Rust↔JS bridge, hot-reload mechanics, and codegen — are
+documented in [`CLAUDE.md`](./CLAUDE.md).

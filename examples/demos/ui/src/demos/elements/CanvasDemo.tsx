@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { CanvasContext } from "bevy-react";
 import { BevyStyle } from "bevy-react/jsx";
-import { headingStyle, labelStyle } from "./styles";
-import { Card } from "../components";
+import { Example } from "../../components";
+import { Colors } from "../../theme";
 
 // A pure-UI demo of the `<canvas>` host element: an anti-aliased vector line
 // chart drawn entirely with HTML-canvas-style commands (axes, gridlines, a
@@ -19,7 +19,13 @@ const PERIOD_MS = 1500; // auto-shuffle cadence
 const DURATION_MS = 500; // tween length
 const FRAME_MS = 16; // ~60fps; the runtime has no Date.now, so we accumulate this
 
-const HINT = "<canvas draw={(ctx) => {} />";
+const TYPESCRIPT = `<canvas
+  draw={(ctx) => {
+    ctx.strokeStyle = "#7aa2f7";
+    ctx.bezierCurveTo(/* ... */);
+    ctx.stroke();
+  }}
+/>`;
 
 type Pt = { x: number; y: number };
 
@@ -79,12 +85,12 @@ export function CanvasDemo() {
 
   const draw = (ctx: CanvasContext) => {
     // Background panel.
-    ctx.fillStyle = "#11111b";
+    ctx.fillStyle = Colors.surface100;
     ctx.rect(0, 0, W, H);
     ctx.fill();
 
     // Horizontal gridlines.
-    ctx.strokeStyle = "#313244";
+    ctx.strokeStyle = Colors.surface400;
     ctx.lineWidth = 1;
     for (let i = 0; i <= 4; i++) {
       const y = PAD + ((H - 2 * PAD) * i) / 4;
@@ -101,7 +107,7 @@ export function CanvasDemo() {
     }));
 
     // Translucent area under the smooth curve.
-    ctx.fillStyle = "#7aa2f733";
+    ctx.fillStyle = Colors.primaryOverlay;
     smoothPath(ctx, pts);
     ctx.lineTo(pts[pts.length - 1].x, H - PAD);
     ctx.lineTo(pts[0].x, H - PAD);
@@ -109,13 +115,13 @@ export function CanvasDemo() {
     ctx.fill();
 
     // The smooth curve itself.
-    ctx.strokeStyle = "#7aa2f7";
+    ctx.strokeStyle = Colors.primary100;
     ctx.lineWidth = 3;
     smoothPath(ctx, pts);
     ctx.stroke();
 
     // Point markers.
-    ctx.fillStyle = "#bb9af7";
+    ctx.fillStyle = Colors.purple100;
     for (const p of pts) {
       ctx.beginPath();
       ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
@@ -124,12 +130,12 @@ export function CanvasDemo() {
   };
 
   return (
-    <Card>
-      <text style={headingStyle}>Canvas</text>
-      <text style={labelStyle}>{HINT}</text>
-
+    <Example
+      description="An immediate-mode raster surface."
+      typescript={TYPESCRIPT}
+    >
       <canvas style={canvasStyle} draw={draw} onClick={shuffle} />
-    </Card>
+    </Example>
   );
 }
 
@@ -159,5 +165,5 @@ const canvasStyle: BevyStyle = {
   height: H,
   borderRadius: 12,
   border: 1,
-  borderColor: "#313244",
+  borderColor: Colors.surface400,
 };
