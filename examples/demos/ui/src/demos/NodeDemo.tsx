@@ -1,25 +1,38 @@
 import { useState } from "react";
 import { BevyStyle } from "bevy-react/jsx";
 import { codeStyle, headingStyle, labelStyle } from "./styles";
-import { Button, Card } from "../components";
+import { Card, Radio, RadioOption } from "../components";
 
-// A pure-UI demo of the `<node>` host element: the flex/grid layout primitive.
-// Toggle the container's `flexDirection` and cycle its `justifyContent` to see
-// the colored child nodes re-flow. No 3D scene: the viewport stays empty.
+type FlexDirection = Required<BevyStyle>["flexDirection"];
+type JustifyContent = Required<BevyStyle>["justifyContent"];
+type AlignItems = Required<BevyStyle>["alignItems"];
 
-const JUSTIFY: BevyStyle["justifyContent"][] = [
-  "flexStart",
-  "center",
-  "flexEnd",
-  "spaceBetween",
+const JUSTIFY_OPTIONS: RadioOption<JustifyContent>[] = [
+  { label: "center", value: "center" },
+  { label: "flexStart", value: "flexStart" },
+  { label: "flexEnd", value: "flexEnd" },
+  { label: "spaceBetween", value: "spaceBetween" },
+];
+
+const ALIGN_OPTIONS: RadioOption<AlignItems>[] = [
+  { label: "center", value: "center" },
+  { label: "flexStart", value: "flexStart" },
+  { label: "flexEnd", value: "flexEnd" },
+  { label: "stretch", value: "stretch" },
+];
+
+const DIRECTION_OPTIONS: RadioOption<FlexDirection>[] = [
+  { label: "row", value: "row" },
+  { label: "column", value: "column" },
 ];
 
 const SWATCHES = ["#7aa2f7", "#9ece6a", "#f7768e", "#e0af68"];
 
 export function NodeDemo() {
-  const [row, setRow] = useState(true);
-  const [justifyIndex, setJustifyIndex] = useState(0);
-  const justifyContent = JUSTIFY[justifyIndex];
+  const [justifyContent, setJustifyContent] =
+    useState<JustifyContent>("center");
+  const [alignItems, setAlignItems] = useState<AlignItems>("center");
+  const [flexDirection, setFlexDirection] = useState<FlexDirection>("row");
 
   return (
     <Card>
@@ -31,8 +44,9 @@ export function NodeDemo() {
       <node
         style={{
           ...containerStyle,
-          flexDirection: row ? "row" : "column",
+          flexDirection,
           justifyContent,
+          alignItems,
         }}
       >
         {SWATCHES.map((color) => (
@@ -43,16 +57,21 @@ export function NodeDemo() {
         ))}
       </node>
 
-      <node style={{ flexDirection: "row", gap: 12 }}>
-        <Button onClick={() => setRow((r) => !r)}>
-          flexDirection: {row ? "row" : "column"}
-        </Button>
-        <Button
-          onClick={() => setJustifyIndex((i) => (i + 1) % JUSTIFY.length)}
-        >
-          justify: {justifyContent}
-        </Button>
-      </node>
+      <Radio
+        options={JUSTIFY_OPTIONS}
+        value={justifyContent}
+        onChange={setJustifyContent}
+      />
+      <Radio
+        options={ALIGN_OPTIONS}
+        value={alignItems}
+        onChange={setAlignItems}
+      />
+      <Radio
+        options={DIRECTION_OPTIONS}
+        value={flexDirection}
+        onChange={setFlexDirection}
+      />
     </Card>
   );
 }

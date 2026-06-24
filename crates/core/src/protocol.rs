@@ -273,6 +273,23 @@ pub struct Style {
     #[serde(default)]
     pub z_index: Option<i32>,
 
+    // --- transform / opacity (drive `UiTransform` and color alpha) ---
+    /// Static transform (translate/scale/rotate). Mirrors the animated transform
+    /// channels; written to `UiTransform`. With a [`transition`](Self::transition)
+    /// a change eases instead of snapping.
+    #[serde(default)]
+    pub transform: Option<Transform>,
+    /// Opacity in `0.0..=1.0`, multiplied into the alpha of the background (and
+    /// text) color. With a [`transition`](Self::transition) a change eases.
+    #[serde(default)]
+    pub opacity: Option<f32>,
+    /// CSS-like per-channel transition timing. Present → a change to `transform` /
+    /// `opacity` / `backgroundColor` (via re-render or hover/press) animates over
+    /// time using the same driver/easing engine as `animatedStyle`, rather than
+    /// snapping. See [`crate::transition`].
+    #[serde(default)]
+    pub transition: Option<crate::transition::Transition>,
+
     // --- text (only meaningful on `<text>` elements/spans) ---
     /// Hex text color.
     #[serde(default)]
@@ -321,6 +338,24 @@ pub struct BoxShadowSpec {
     pub spread_radius: Option<Length>,
     #[serde(default)]
     pub blur_radius: Option<Length>,
+}
+
+/// A static 2D transform mirroring the animated transform channels. Every field
+/// is optional; unset channels stay at identity (no translation, unit scale, no
+/// rotation). `scale` is uniform; `scaleX`/`scaleY` override a single axis.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Transform {
+    /// Translation along x, in logical pixels.
+    pub translate_x: Option<f32>,
+    /// Translation along y, in logical pixels.
+    pub translate_y: Option<f32>,
+    /// Uniform scale (both axes), unless overridden by `scale_x`/`scale_y`.
+    pub scale: Option<f32>,
+    pub scale_x: Option<f32>,
+    pub scale_y: Option<f32>,
+    /// Clockwise rotation in radians.
+    pub rotate: Option<f32>,
 }
 
 /// A length value mirroring `bevy_ui::Val`, parsed from the wire form (a number
@@ -574,6 +609,28 @@ mod tests {
             }
             other => panic!("expected create, got {other:?}"),
         }
+    }
+
+    /// A style carries `transform`/`opacity`/`transition` over the wire (transform
+    /// as a nested object, transition's `transform` entry resolving to a timing).
+    #[test]
+    fn deserializes_transform_opacity_and_transition() {
+        let s: Style = serde_json::from_str(
+            r#"{
+                "transform": { "scale": 0.95, "translateX": 4 },
+                "opacity": 0.5,
+                "transition": { "transform": { "duration": 0.15, "easing": "easeOut" } }
+            }"#,
+        )
+        .expect("style decodes");
+        let t = s.transform.expect("transform present");
+        assert_eq!(t.scale, Some(0.95));
+        assert_eq!(t.translate_x, Some(4.0));
+        assert_eq!(t.scale_x, None);
+        assert_eq!(s.opacity, Some(0.5));
+        let transition = s.transition.expect("transition present");
+        assert!(transition.for_transform().is_some());
+        assert!(transition.for_opacity().is_none());
     }
 
     /// A `change` event serializes its new text as camelCase `value`, while the

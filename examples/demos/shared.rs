@@ -161,7 +161,7 @@ pub fn reframe_camera(state: Res<State<Scene>>, mut rig: ResMut<CameraRig>) {
 /// so it can hit any of the six faces.
 pub const PLAY_HALF: f32 = 3.0;
 /// Ball radius, used both for the mesh and to keep it inside the walls.
-pub const BALL_RADIUS: f32 = 0.5;
+pub const BALL_RADIUS: f32 = 0.3;
 
 /// A ball's velocity in world units per second (3D — it bounces off every face).
 #[derive(Component)]
@@ -195,7 +195,7 @@ pub fn spawn_ball(
     commands.spawn((
         Mesh3d(meshes.add(Cuboid::new(side, side, side))),
         MeshMaterial3d(materials.add(StandardMaterial {
-            base_color: Color::srgba(0.48, 0.64, 0.97, 0.12),
+            base_color: Color::srgba(0.48, 0.64, 0.97, 0.04),
             alpha_mode: AlphaMode::Blend,
             cull_mode: None,
             double_sided: true,

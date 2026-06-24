@@ -200,6 +200,11 @@ impl Plugin for ReactUiPlugin {
                 // After the op drain so this frame's `StyleVariants` writes are
                 // visible; the ordering forces a command sync point first.
                 apply_interaction_styles.after(apply_js_ops),
+                // Ease `transform`/`opacity`/`backgroundColor` toward the target the
+                // style appliers just wrote. After `apply_interaction_styles` (and
+                // thus the op drain) so the eased value lands last and a coincident
+                // re-render's snap never wins.
+                crate::transition::drive_transitions.after(apply_interaction_styles),
                 // World-anchored overlays reposition after the op drain so they
                 // override this frame's static `left`/`top`.
                 crate::anchor::position_anchored_nodes.after(apply_js_ops),

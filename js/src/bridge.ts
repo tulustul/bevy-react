@@ -236,17 +236,19 @@ export function serializeProps(
     if (key === "style" && value && typeof value === "object") {
       // Style is opaque: every CSS-like key (incl. backgroundColor, border,
       // grid, …) rides across inside this object, decoded on the Rust side.
-      out.style = value as Record<string, unknown>;
+      // The one exception is `transition` timings, normalized ms→s here so the
+      // Rust side stays in the animation engine's native seconds.
+      out.style = withTransitionSeconds(value as Record<string, unknown>);
       continue;
     }
     // Hover/press variant styles ride across opaque, like `style`. Bevy overlays
     // them onto the base style from the node's interaction state.
     if (key === "hoverStyle" && value && typeof value === "object") {
-      out.hoverStyle = value as Record<string, unknown>;
+      out.hoverStyle = withTransitionSeconds(value as Record<string, unknown>);
       continue;
     }
     if (key === "pressStyle" && value && typeof value === "object") {
-      out.pressStyle = value as Record<string, unknown>;
+      out.pressStyle = withTransitionSeconds(value as Record<string, unknown>);
       continue;
     }
     // An `Animated.node`'s `animatedStyle`: each property is bound to a shared
@@ -288,6 +290,30 @@ export function serializeProps(
   else handlers.delete(id);
 
   return out;
+}
+
+// Normalize a style's `transition` timings from milliseconds (the JS-facing unit)
+// to seconds (the Rust animation engine's unit). Returns the style unchanged when
+// it has no transition; otherwise a shallow copy so the caller's object is never
+// mutated. The rest of the style stays opaque.
+function withTransitionSeconds(
+  style: Record<string, unknown>,
+): Record<string, unknown> {
+  const transition = style.transition;
+  if (!transition || typeof transition !== "object") return style;
+  const convert = (spec: unknown): unknown => {
+    if (!spec || typeof spec !== "object") return spec;
+    const s = spec as Record<string, unknown>;
+    const out: Record<string, unknown> = { ...s };
+    if (typeof s.duration === "number") out.duration = s.duration / 1000;
+    if (typeof s.delay === "number") out.delay = s.delay / 1000;
+    return out;
+  };
+  const channels: Record<string, unknown> = {};
+  for (const [key, spec] of Object.entries(transition)) {
+    channels[key] = convert(spec);
+  }
+  return { ...style, transition: channels };
 }
 
 // Convert an `animatedStyle` object into its wire form. Each property value is

@@ -179,6 +179,7 @@ fn tick_animations(time: Res<Time>, mut values: ResMut<SharedValues>) {
     values.tick(time.delta_secs());
 }
 
+#[allow(clippy::type_complexity)]
 fn apply_animated_nodes(
     mut commands: Commands,
     values: Res<SharedValues>,
@@ -188,38 +189,23 @@ fn apply_animated_nodes(
         &mut UiTransform,
         Option<&mut BackgroundColor>,
         Option<&mut TextColor>,
+        Option<&mut ImageNode>,
     )>,
 ) {
-    for (entity, anim, mut transform, bg, text_color) in &mut query {
+    for (entity, anim, mut transform, bg, text_color, image) in &mut query {
         let b = &anim.0;
 
         // Transform channels rebuild the whole `UiTransform` from bindings each
         // frame (unbound channels stay at identity).
         if b.has_transform() {
-            let mut t = UiTransform::IDENTITY;
-            if let Some(v) = b.translate_x.as_ref().and_then(|x| eval_scalar(x, &values)) {
-                t.translation.x = Val::Px(v);
-            }
-            if let Some(v) = b.translate_y.as_ref().and_then(|x| eval_scalar(x, &values)) {
-                t.translation.y = Val::Px(v);
-            }
-            let mut sx = 1.0;
-            let mut sy = 1.0;
-            if let Some(v) = b.scale.as_ref().and_then(|x| eval_scalar(x, &values)) {
-                sx = v;
-                sy = v;
-            }
-            if let Some(v) = b.scale_x.as_ref().and_then(|x| eval_scalar(x, &values)) {
-                sx = v;
-            }
-            if let Some(v) = b.scale_y.as_ref().and_then(|x| eval_scalar(x, &values)) {
-                sy = v;
-            }
-            t.scale = Vec2::new(sx, sy);
-            if let Some(v) = b.rotate.as_ref().and_then(|x| eval_scalar(x, &values)) {
-                t.rotation = Rot2::radians(v);
-            }
-            *transform = t;
+            *transform = build_ui_transform(
+                b.translate_x.as_ref().and_then(|x| eval_scalar(x, &values)),
+                b.translate_y.as_ref().and_then(|x| eval_scalar(x, &values)),
+                b.scale.as_ref().and_then(|x| eval_scalar(x, &values)),
+                b.scale_x.as_ref().and_then(|x| eval_scalar(x, &values)),
+                b.scale_y.as_ref().and_then(|x| eval_scalar(x, &values)),
+                b.rotate.as_ref().and_then(|x| eval_scalar(x, &values)),
+            );
         }
 
         let mut bg = bg;
@@ -249,9 +235,53 @@ fn apply_animated_nodes(
                     s.alpha = alpha;
                     tc.0 = Color::Srgba(s);
                 }
+                if let Some(mut img) = image {
+                    let mut s = img.color.to_srgba();
+                    s.alpha = alpha;
+                    img.color = Color::Srgba(s);
+                }
             }
         }
     }
+}
+
+/// Build a `UiTransform` from the six scalar transform channels (each `None`
+/// stays at identity: no translation, unit scale, no rotation). `scale` is
+/// uniform; `scale_x`/`scale_y` override a single axis. Shared by the animated
+/// node apply and `bevy-react`'s static/transition transform path so the channel
+/// semantics stay identical across both.
+pub fn build_ui_transform(
+    translate_x: Option<f32>,
+    translate_y: Option<f32>,
+    scale: Option<f32>,
+    scale_x: Option<f32>,
+    scale_y: Option<f32>,
+    rotate: Option<f32>,
+) -> UiTransform {
+    let mut t = UiTransform::IDENTITY;
+    if let Some(v) = translate_x {
+        t.translation.x = Val::Px(v);
+    }
+    if let Some(v) = translate_y {
+        t.translation.y = Val::Px(v);
+    }
+    let mut sx = 1.0;
+    let mut sy = 1.0;
+    if let Some(v) = scale {
+        sx = v;
+        sy = v;
+    }
+    if let Some(v) = scale_x {
+        sx = v;
+    }
+    if let Some(v) = scale_y {
+        sy = v;
+    }
+    t.scale = Vec2::new(sx, sy);
+    if let Some(v) = rotate {
+        t.rotation = Rot2::radians(v);
+    }
+    t
 }
 
 // --- Binding evaluation --------------------------------------------------------
@@ -362,8 +392,12 @@ const SPRING_SUBSTEP: f32 = 0.001;
 const SPRING_MAX_SUBSTEPS: u32 = 64;
 
 /// The stateful evaluation of a [`Driver`] over time. Built from a driver + the
-/// value's live reading; advanced by `step(dt)`.
-enum Runner {
+/// value's live reading; advanced by [`Runner::step`].
+///
+/// Public so `bevy-react`'s CSS-like `transition` engine can reuse the exact same
+/// driver runtime (the per-entity transition state holds a `Runner` per channel),
+/// rather than re-implementing easing/spring integration.
+pub enum Runner {
     /// Degenerate (empty sequence / zero-count repeat): already settled.
     Done(f32),
     Timing {
@@ -403,7 +437,9 @@ enum Runner {
     },
 }
 
-fn build_runner(driver: &Driver, from: f32) -> Runner {
+/// Build a [`Runner`] for `driver` starting from the value `from`. Public for the
+/// `bevy-react` transition engine (see [`Runner`]).
+pub fn build_runner(driver: &Driver, from: f32) -> Runner {
     build_runner_with_target(driver, from, None)
 }
 
@@ -500,7 +536,7 @@ fn terminal_value(driver: &Driver, from: f32) -> f32 {
 
 impl Runner {
     /// Advance by `dt` seconds, returning `(value, finished)`.
-    fn step(&mut self, dt: f32) -> (f32, bool) {
+    pub fn step(&mut self, dt: f32) -> (f32, bool) {
         match self {
             Runner::Done(v) => (*v, true),
             Runner::Timing {

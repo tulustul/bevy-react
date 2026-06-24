@@ -4,6 +4,7 @@
 
 use bevy::prelude::*;
 use bevy::ui::widget::NodeImageMode;
+use bevy_react_animations::build_ui_transform;
 
 use crate::plugin::Fonts;
 use crate::protocol::{Length, Props, Rect, Style};
@@ -15,6 +16,15 @@ pub fn parse_color(hex: &str) -> Color {
     bevy::color::Srgba::hex(s)
         .map(Color::from)
         .unwrap_or(Color::WHITE)
+}
+
+/// Multiply a color's alpha by `opacity` (if any). Shared by the background and
+/// text color paths so a static `opacity` fades both, like the animated path.
+pub fn apply_opacity(color: Color, opacity: Option<f32>) -> Color {
+    match opacity {
+        Some(o) => color.with_alpha(color.alpha() * o),
+        None => color,
+    }
 }
 
 /// Convert a wire [`Length`] into a `bevy_ui::Val`.
@@ -481,13 +491,31 @@ pub fn apply_style(ec: &mut EntityCommands, style: &Option<Style>) {
     ec.insert(node_from_style(style));
     let s = style.as_ref();
 
+    // `opacity` multiplies into the background (and text) alpha — color before
+    // opacity, mirroring the animated path.
+    let opacity = s.and_then(|s| s.opacity);
     match s.and_then(|s| s.background_color.as_deref()) {
         Some(hex) => {
-            ec.insert(BackgroundColor(parse_color(hex)));
+            ec.insert(BackgroundColor(apply_opacity(parse_color(hex), opacity)));
         }
         None => {
             ec.remove::<BackgroundColor>();
         }
+    }
+
+    // A static `transform` writes `UiTransform`. When absent we *leave it
+    // untouched* (never remove) so the `#[require(UiTransform)]` invariant on
+    // `AnimatedNode`/transition entities is never violated, and an in-flight
+    // animation/transition isn't reset by a coincident re-render.
+    if let Some(t) = s.and_then(|s| s.transform) {
+        ec.insert(build_ui_transform(
+            t.translate_x,
+            t.translate_y,
+            t.scale,
+            t.scale_x,
+            t.scale_y,
+            t.rotate,
+        ));
     }
     match s.and_then(|s| s.border_color.as_deref()) {
         Some(hex) => {
@@ -531,6 +559,11 @@ pub fn apply_style(ec: &mut EntityCommands, style: &Option<Style>) {
             ec.remove::<ZIndex>();
         }
     }
+
+    // Stamp the transition engine's input from this (possibly hover/press-merged)
+    // style. `drive_transitions` eases the snap values written above to their new
+    // targets; see [`crate::transition`].
+    crate::transition::apply_transition(ec, style);
 }
 
 /// Overlay `overlay` onto `base`, producing the style to apply: every field the
@@ -597,6 +630,9 @@ pub fn overlay_style(base: &Option<Style>, overlay: &Option<Style>) -> Option<St
         outline,
         box_shadow,
         z_index,
+        transform,
+        opacity,
+        transition,
         color,
         font_size,
         font_weight,
@@ -621,6 +657,10 @@ pub fn image_node(props: &Props, assets: &AssetServer) -> ImageNode {
     if let Some(tint) = &props.tint {
         image.color = parse_color(tint);
     }
+    // `opacity` multiplies into the image's tint alpha (the tint is multiplied with
+    // the texture), so it fades a `src` image too — mirroring how it fades a
+    // background/text color.
+    image.color = apply_opacity(image.color, props.style.as_ref().and_then(|s| s.opacity));
     image.flip_x = props.flip_x;
     image.flip_y = props.flip_y;
     if let Some(mode) = &props.image_mode {
@@ -675,6 +715,9 @@ pub fn resolved_text_style(style: &Option<Style>, fonts: &Fonts) -> (TextColor, 
         if let Some(c) = &s.color {
             color = TextColor(parse_color(c));
         }
+        if s.opacity.is_some() {
+            color = TextColor(apply_opacity(color.0, s.opacity));
+        }
         if let Some(size) = s.font_size {
             font.font_size = size.into();
         }
@@ -708,7 +751,31 @@ pub fn text_layout(style: &Option<Style>) -> Option<TextLayout> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::protocol::Style;
+    use crate::protocol::{Props, Style};
+
+    /// `opacity` fades an `<image>` by multiplying into its tint alpha (so a `src`
+    /// image dims too, not just colored boxes/text).
+    #[test]
+    fn image_opacity_fades_tint_alpha() {
+        let mut app = App::new();
+        app.add_plugins((MinimalPlugins, AssetPlugin::default()));
+        app.init_asset::<Image>();
+        let assets = app.world().resource::<AssetServer>();
+
+        let props: Props = serde_json::from_value(serde_json::json!({
+            "tint": "#ff0000",
+            "style": { "opacity": 0.5 },
+        }))
+        .unwrap();
+        let image = image_node(&props, assets);
+        let c = image.color.to_srgba();
+        assert!(
+            (c.alpha - 0.5).abs() < 1e-6,
+            "alpha should be 0.5, got {}",
+            c.alpha
+        );
+        assert!((c.red - 1.0).abs() < 1e-6, "tint hue preserved");
+    }
 
     fn style(json: serde_json::Value) -> Style {
         serde_json::from_value(json).unwrap()
@@ -763,6 +830,20 @@ mod tests {
         // Overlay onto an absent base still yields the overlay's fields.
         let from_none = overlay_style(&None, &overlay).unwrap();
         assert_eq!(from_none.background_color.as_deref(), Some("#89b4fa"));
+    }
+
+    #[test]
+    fn overlay_replaces_transform_wholesale() {
+        let base = Some(style(serde_json::json!({
+            "transform": { "translateX": 10, "scale": 1 },
+        })));
+        // Whole-object replace (CSS shorthand semantics): press's transform wins
+        // entirely, dropping the base's translateX.
+        let press = Some(style(serde_json::json!({ "transform": { "scale": 0.95 } })));
+        let merged = overlay_style(&base, &press).unwrap();
+        let t = merged.transform.unwrap();
+        assert_eq!(t.scale, Some(0.95));
+        assert_eq!(t.translate_x, None);
     }
 
     #[test]

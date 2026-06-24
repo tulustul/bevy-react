@@ -81,7 +81,10 @@ fn main() {
             .spawn_camera(false)
             .default_font("fonts/NotoSans-VariableFont_wdth,wght.ttf")
             .font("DancingScript", "fonts/DancingScript-VariableFont_wght.ttf")
-            .font("Noto Sans Mono", "fonts/NotoSansMono-VariableFont_wdth,wght.ttf"),
+            .font(
+                "Noto Sans Mono",
+                "fonts/NotoSansMono-VariableFont_wdth,wght.ttf",
+            ),
     )
     // State must be registered after DefaultPlugins (which brings StatesPlugin).
     .init_state::<Scene>()

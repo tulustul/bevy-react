@@ -34,7 +34,10 @@ export function EventsDemo() {
 
   return (
     <Example typescript={TYPESCRIPT} rust={RUST}>
-      <text style={{ fontSize: 18 }}>Bounces: {bounces}</text>
+      <text style={{ fontSize: 18 }}>Bounces</text>
+      <text style={{ fontSize: 45, fontWeight: "bold", color: "#f5df66ff" }}>
+        {bounces}
+      </text>
     </Example>
   );
 }

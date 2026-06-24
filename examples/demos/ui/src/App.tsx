@@ -9,6 +9,7 @@ import { AnchoredDemo } from "./demos/AnchoredDemo";
 import { InteractionsDemo } from "./demos/InteractionsDemo";
 import { CanvasDemo } from "./demos/CanvasDemo";
 import { ScrollDemo } from "./demos/ScrollDemo";
+import { TransitionDemo } from "./demos/TransitionDemo";
 import { EditableTextDemo } from "./demos/EditableTextDemo";
 import { NodeDemo } from "./demos/NodeDemo";
 import { ButtonDemo } from "./demos/ButtonDemo";
@@ -20,13 +21,22 @@ import { BouncingBallsAnimationDemo } from "./demos/BouncingBallsAnimationDemo";
 type BaseDemoItem = { label: string; scene?: SceneId };
 type DemoItem = BaseDemoItem &
   (
-    | { component: ComponentType; children?: undefined }
-    | { children: DemoItem[]; component?: undefined }
+    | {
+        component: ComponentType;
+        children?: undefined;
+        expandedByDefault?: undefined;
+      }
+    | {
+        children: DemoItem[];
+        component?: undefined;
+        expandedByDefault?: boolean;
+      }
   );
 
 const DEMOS: DemoItem[] = [
   {
     label: "Elements",
+    expandedByDefault: true,
     children: [
       { label: "<node>", component: NodeDemo },
       { label: "<button>", component: ButtonDemo },
@@ -38,7 +48,10 @@ const DEMOS: DemoItem[] = [
   },
   {
     label: "Styling",
-    children: [{ label: "Scroll", component: ScrollDemo }],
+    children: [
+      { label: "Scroll", component: ScrollDemo },
+      { label: "Transition", component: TransitionDemo },
+    ],
   },
   {
     label: "Communication",
@@ -104,7 +117,7 @@ type ItemProps = {
 };
 
 function Item({ item, selectedItem, isChild, onSelected }: ItemProps) {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(item.expandedByDefault ?? false);
 
   function onPress() {
     if (item.children?.length) {
@@ -114,8 +127,14 @@ function Item({ item, selectedItem, isChild, onSelected }: ItemProps) {
     }
   }
 
+  function onChildSelected(item: DemoItem) {
+    if (expanded) {
+      onSelected(item);
+    }
+  }
+
   return (
-    <node style={{ flexDirection: "column", gap: 8 }}>
+    <node style={{ flexDirection: "column" }}>
       <ItemButton
         isActive={item.label === selectedItem.label}
         isExpanded={expanded}
@@ -125,22 +144,39 @@ function Item({ item, selectedItem, isChild, onSelected }: ItemProps) {
         hasChildren={!!item.children?.length}
       />
 
-      {expanded && item.children?.length && (
-        <node style={{ flexDirection: "column", gap: 8, margin: { left: 15 } }}>
+      {item.children?.length ? (
+        <node
+          style={{
+            flexDirection: "column",
+            gap: 8,
+            margin: { left: 15 },
+            overflowY: "clip",
+            maxHeight: expanded ? item.children.length * NAV_ITEM_PX : 0,
+            transition: {
+              size: { duration: 300, easing: "easeOut" },
+            },
+          }}
+        >
+          <node />
           {item.children.map((child, index) => (
             <Item
               key={index}
               item={child}
               isChild={true}
-              onSelected={onSelected}
+              onSelected={onChildSelected}
               selectedItem={selectedItem}
             />
           ))}
         </node>
-      )}
+      ) : null}
     </node>
   );
 }
+
+// Estimated height of one (leaf) submenu row — child button plus the column gap.
+// A slight overshoot is fine (hidden by `overflowY: clip`); undershoot would clip
+// the last row, so round up.
+const NAV_ITEM_PX = 42;
 
 type ItemButtonProps = {
   label: string;
@@ -185,7 +221,11 @@ function ItemButton({
           {label}
         </text>
         {hasChildren && (
-          <text style={{ fontFamily: "Noto Sans Mono" }}>
+          <text
+            style={{
+              fontFamily: "Noto Sans Mono",
+            }}
+          >
             {isExpanded ? "▲" : "▼"}
           </text>
         )}

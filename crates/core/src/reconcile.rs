@@ -22,6 +22,7 @@ use crate::ui_map::{
 /// Apply every queued reconciler op to the ECS. Runs in `Update`; ops simply
 /// queue in the channel until this drains them, so startup ordering is a
 /// non-issue.
+#[allow(clippy::too_many_arguments)]
 pub fn apply_js_ops(
     mut commands: Commands,
     mut bridge: ResMut<JsBridge>,
@@ -31,6 +32,10 @@ pub fn apply_js_ops(
     children: Query<&Children>,
     rnodes: Query<&RNode>,
     mut editables: Query<&mut EditableText>,
+    // A `<text>` *root* carries a layout `Node`; a span (nested `<text>` or a
+    // bare string) does not. Used on update to re-apply layout/visual/transform
+    // style to roots only — spans must never get a `Node`.
+    text_roots: Query<(), With<Node>>,
 ) {
     // Drain all pending batches first so we don't hold an immutable borrow of
     // `bridge` while mutating `bridge.nodes` below.
@@ -206,6 +211,14 @@ pub fn apply_js_ops(
                     let style = resolved_text_style(&props.style, &fonts);
                     bridge.text_styles.insert(id, style.clone());
                     let mut ec = commands.entity(e);
+                    // A text *root* (has a `Node`) also gets the layout/visual/
+                    // transform style + transition, mirroring its create path —
+                    // otherwise a `transform`/`transition` on a `<text>` would only
+                    // apply on mount and never animate. Spans have no `Node` and are
+                    // skipped so they never gain a layout box.
+                    if text_roots.contains(e) {
+                        apply_style(&mut ec, &props.style);
+                    }
                     ec.insert(style.clone());
                     if let Some(layout) = text_layout(&props.style) {
                         ec.insert(layout);
@@ -596,5 +609,79 @@ pub fn apply_interaction_styles(
             Interaction::None => variants.base.clone(),
         };
         apply_style(&mut commands.entity(entity), &style);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::bridge::JsBridge;
+    use crate::transition::TransitionInput;
+    use std::f32::consts::PI;
+
+    fn text_props(rotate: f32) -> Props {
+        serde_json::from_value(serde_json::json!({
+            "style": {
+                "transform": { "rotate": rotate },
+                "transition": { "transform": { "duration": 0.3 } },
+            }
+        }))
+        .expect("valid text props")
+    }
+
+    /// A `<text>` root's `transform`/`transition` must update on re-render — not
+    /// just at mount. Regression: the text-update branch skipped `apply_style`, so
+    /// a rotating chevron's target never changed and the animation never ran.
+    #[test]
+    fn text_update_reapplies_transform_target() {
+        let mut app = App::new();
+        app.add_plugins((MinimalPlugins, AssetPlugin::default()));
+        app.init_asset::<Image>();
+        app.init_resource::<Fonts>();
+
+        let (ops_tx, ops_rx) = crossbeam_channel::unbounded::<Vec<Op>>();
+        // Keep the outbound receiver alive so the sender stays open.
+        let (out_tx, _out_rx) = tokio::sync::mpsc::unbounded_channel::<Outbound>();
+        let root = app.world_mut().spawn_empty().id();
+        app.insert_resource(JsBridge::new(ops_rx, out_tx, root));
+        app.add_systems(Update, apply_js_ops);
+
+        // Mount a `<text>` with rotate 0.
+        ops_tx
+            .send(vec![Op::Create {
+                id: 1,
+                kind: "text".into(),
+                props: text_props(0.0),
+            }])
+            .unwrap();
+        app.update();
+        let e = app.world().resource::<JsBridge>().nodes[&1];
+        assert_eq!(
+            app.world()
+                .entity(e)
+                .get::<TransitionInput>()
+                .unwrap()
+                .rotate,
+            Some(0.0),
+            "create stamps the initial transform target"
+        );
+
+        // Re-render with rotate π — the transition target must follow.
+        ops_tx
+            .send(vec![Op::Update {
+                id: 1,
+                props: text_props(PI),
+            }])
+            .unwrap();
+        app.update();
+        assert_eq!(
+            app.world()
+                .entity(e)
+                .get::<TransitionInput>()
+                .unwrap()
+                .rotate,
+            Some(PI),
+            "a text re-render must refresh the transform target so it animates"
+        );
     }
 }

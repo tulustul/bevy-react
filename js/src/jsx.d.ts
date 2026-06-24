@@ -25,6 +25,35 @@ export type Rect =
   | string
   | { top?: Length; right?: Length; bottom?: Length; left?: Length };
 
+/** Timing for one transition channel: a timing curve (default) or, if `stiffness`
+ *  or `damping` is given, a spring. `duration`/`delay` are in **milliseconds**
+ *  (the renderer converts them to seconds before they cross to Rust). */
+export type BevyTransitionSpec = {
+  /** Timing duration in ms (default 300). Ignored for a spring. */
+  duration?: number;
+  easing?: "linear" | "easeIn" | "easeOut" | "easeInOut";
+  /** Hold this many ms before easing (default 0). */
+  delay?: number;
+  /** Spring stiffness; its presence (with/without `damping`) selects a spring. */
+  stiffness?: number;
+  damping?: number;
+  mass?: number;
+};
+
+/** Per-channel transition timing. `transform` covers all transform channels;
+ *  `all` is the fallback for any channel without its own entry. */
+export interface BevyTransition {
+  all?: BevyTransitionSpec;
+  transform?: BevyTransitionSpec;
+  opacity?: BevyTransitionSpec;
+  backgroundColor?: BevyTransitionSpec;
+  /** Covers the size channels (`width`/`height`/`maxWidth`/`maxHeight`). These are
+   * layout properties, so easing one re-flows surrounding content — a real
+   * accordion. Needs an explicit pixel target (e.g. `maxHeight: open ? 300 : 0`);
+   * `auto`/unknown heights snap. Pair with `overflowY: "clip"`. */
+  size?: BevyTransitionSpec;
+}
+
 /** A CSS-like style object mapped onto `bevy_ui::Node` and its sibling visual
  *  components. Every field is optional; unset fields keep Bevy's defaults. */
 export interface BevyStyle {
@@ -131,6 +160,25 @@ export interface BevyStyle {
     blurRadius?: Length;
   };
   zIndex?: number;
+
+  // transform / opacity
+  /** Static 2D transform. With `transition` a change eases instead of snapping.
+   * `scale` is uniform; `scaleX`/`scaleY` override one axis. `rotate` is radians. */
+  transform?: {
+    translateX?: number;
+    translateY?: number;
+    scale?: number;
+    scaleX?: number;
+    scaleY?: number;
+    rotate?: number;
+  };
+  /** Opacity in `0..1`, multiplied into the background (and text) alpha. With a
+   * `transition` a change eases. */
+  opacity?: number;
+  /** CSS-like transition timing. When a `transform` / `opacity` / `backgroundColor`
+   * change occurs — via re-render or `hoverStyle`/`pressStyle` — it eases over time
+   * (using the same driver/easing engine as `animatedStyle`) instead of snapping. */
+  transition?: BevyTransition;
 
   // text (only meaningful on `<text>` elements/spans)
   /** Hex text color. */
