@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { Example, Radio, RadioOption, Slider } from "../../components";
-import { Colors, FontSizes } from "../../theme";
+import { Example, Radio, RadioOption, Slider } from "@/components";
+import { Colors, FontSizes } from "@/theme";
 import { box, controlColumn } from "./shared";
 
 const toHex = (n: number) => Math.round(n).toString(16).padStart(2, "0");

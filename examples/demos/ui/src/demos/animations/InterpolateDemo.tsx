@@ -6,9 +6,9 @@ import {
   useSharedValue,
 } from "bevy-react";
 import { BevyStyle } from "bevy-react/jsx";
-import { Example, Slider } from "../../components";
+import { Example, Slider } from "@/components";
 import { column } from "./shared";
-import { Colors } from "../../theme";
+import { Colors } from "@/theme";
 
 // One shared value, many outputs: a slider sets it directly, and interpolate /
 // interpolateColor map it onto scale and background color each frame in Bevy.

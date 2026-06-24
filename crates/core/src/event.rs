@@ -26,8 +26,8 @@ use serde::Serialize;
 use ts_rs::TS;
 
 use crate::bridge::OutboundResource;
-use crate::message::TsCollector;
 use crate::protocol::Outbound;
+use crate::ts_codegen::TsCollector;
 
 /// A typed payload Bevy sends to React as a named event. Out-only — it is never
 /// deserialized on the Rust side, so it derives `Serialize` (not `Deserialize`).
@@ -47,6 +47,10 @@ pub struct ReactEvents<'w> {
 
 impl ReactEvents<'_> {
     /// Push `event` to every React listener registered for `E::NAME`.
+    // TODO(review): `send` works whether or not `E` was registered via `add_react_event`, but
+    // the generated TS typings only include REGISTERED events — so you can ship an event that
+    // never appears in `bevy.on`'s types (silent drift, in the untyped-works direction).
+    // Consider a debug-only warning when sending an unregistered event.
     pub fn send<E: ReactEvent>(&self, event: &E) {
         match serde_json::to_value(event) {
             Ok(value) => {

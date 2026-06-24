@@ -9,18 +9,19 @@ import {
   removeEventListener as rawRemoveEventListener,
 } from "bevy-react";
 
-export type BallBounced = { 
-/**
- * Which wall it hit.
- */
-wall: Wall, 
-/**
- * Impact speed (world units/sec), for flavor in the toast.
- */
-speed: number, };
-export type BallState = { x: number, y: number, vx: number, vy: number, };
-export type CubeInfo = { entity: bigint, label: string, };
-export type CubesSpawned = { cubes: Array<CubeInfo>, };
+export type BallBounced = {
+  /**
+   * Which wall it hit.
+   */
+  wall: Wall;
+  /**
+   * Impact speed (world units/sec), for flavor in the toast.
+   */
+  speed: number;
+};
+export type BallState = { x: number; y: number; vx: number; vy: number };
+export type CubeInfo = { entity: bigint; label: string };
+export type CubesSpawned = { cubes: Array<CubeInfo> };
 export type SceneId = "Cubes" | "BouncingBall" | "CrowdedCubes";
 export type SelectScene = SceneId | null;
 export type SetCount = number;
@@ -39,12 +40,15 @@ export interface ReactRequests {
 
 /** Every Bevy → React event name and the payload it carries. */
 export interface ReactEvents {
-  "anchoredDemo.cubesSpawned": CubesSpawned;
   "bevyEventsDemo.ballBounced": BallBounced;
+  "crowdedCubes.spawned": CubesSpawned;
 }
 
 /** Send a typed app message to the Bevy side. */
-export function emit<K extends keyof ReactMessages>(name: K, value: ReactMessages[K]): void {
+export function emit<K extends keyof ReactMessages>(
+  name: K,
+  value: ReactMessages[K],
+): void {
   rawEmit(name, value);
 }
 
@@ -81,10 +85,16 @@ export const bevy = {
   addEventListener: on,
   removeEventListener,
   basicDemo: {
-    setCount(value: SetCount): void { emit("basicDemo.setCount", value); },
+    setCount(value: SetCount): void {
+      emit("basicDemo.setCount", value);
+    },
   },
   pollingDemo: {
-    getBall(): Promise<BallState> { return request("pollingDemo.getBall", null); },
+    getBall(): Promise<BallState> {
+      return request("pollingDemo.getBall", null);
+    },
   },
-  selectScene(value: SelectScene): void { emit("selectScene", value); },
+  selectScene(value: SelectScene): void {
+    emit("selectScene", value);
+  },
 } as const;

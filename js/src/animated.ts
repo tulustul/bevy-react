@@ -90,6 +90,10 @@ let nextSharedId = 1;
  * Declare a shared value with an `initial` reading. Stable across re-renders
  * (the id is allocated once per component instance).
  */
+// TODO(review): this performs a bridge side-effect (`animate({kind:"declare"})`) DURING
+// render. It's safe today only because StrictMode is off and the root is driven synchronously;
+// under StrictMode or a discarded/double-invoked render it would allocate (and leak) a shared
+// id in the Bevy table until the next `clear`. Move the declare into an effect.
 export function useSharedValue(initial: number): SharedValue {
   const ref = useRef<SharedValue | null>(null);
   if (ref.current === null) {

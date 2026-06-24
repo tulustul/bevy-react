@@ -72,6 +72,18 @@ pub struct JsBridge {
     /// The last text value emitted to JS for each `editableText`, used to dedup
     /// `TextEditChange` (which also fires on cursor moves) into real `"change"`s.
     pub editable_values: HashMap<NodeId, String>,
+    /// Authoritative ordered children per parent (incl. `ROOT_ID`). Bevy's `Children`
+    /// component can't be read mid-batch — `Commands` hierarchy ops are deferred to the
+    /// next sync point — so this mirror is the source of truth for computing ordered
+    /// insertion indices. Kept in lock-step with the ECS by `apply_js_ops`.
+    pub child_order: HashMap<NodeId, Vec<NodeId>>,
+    /// Reverse lookup (child → its current parent) so a re-parent or reorder can detach
+    /// the child from its old parent's ordered list before re-inserting it.
+    pub parent_of: HashMap<NodeId, NodeId>,
+    // TODO(review): JsBridge now holds several parallel NodeId-keyed side-tables
+    // (nodes/text_styles/raw_spans/editable_*/child_order/parent_of), and every `Remove`
+    // must remember to clear each one. Consider moving per-node metadata onto the entities
+    // as components so `despawn` cleans up for free and the maps can't drift.
 }
 
 impl JsBridge {
@@ -87,6 +99,31 @@ impl JsBridge {
             raw_spans: HashSet::new(),
             editable_inputs: HashSet::new(),
             editable_values: HashMap::new(),
+            child_order: HashMap::new(),
+            parent_of: HashMap::new(),
+        }
+    }
+
+    /// Unlink `child` from its current parent's ordered children list (if any). Called
+    /// before an `Append`/`Insert` so a reorder or re-parent doesn't leave a stale
+    /// duplicate in the shadow tree.
+    pub fn detach(&mut self, child: NodeId) {
+        if let Some(parent) = self.parent_of.remove(&child)
+            && let Some(siblings) = self.child_order.get_mut(&parent)
+        {
+            siblings.retain(|&id| id != child);
+        }
+    }
+
+    /// Drop `child` and its whole subtree from the shadow tree. React emits a `Remove`
+    /// only for the root of a removed subtree (Bevy despawns the descendants
+    /// recursively), so we recurse to keep `child_order`/`parent_of` bounded.
+    pub fn forget_subtree(&mut self, child: NodeId) {
+        if let Some(grandkids) = self.child_order.remove(&child) {
+            for grandkid in grandkids {
+                self.parent_of.remove(&grandkid);
+                self.forget_subtree(grandkid);
+            }
         }
     }
 }

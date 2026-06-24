@@ -8,7 +8,7 @@
     "build:prod": "node build.mjs --prod",
     "watch": "node build.mjs --watch",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "gen:bindings": "cargo run --manifest-path ../../../crates/core/Cargo.toml --example demos -- --export-bindings src/generated.ts"
+    "bevy:generate": "cargo run --manifest-path ../../../crates/core/Cargo.toml --example demos -- --export-bindings src/bevy.ts"
   },
   "dependencies": {
     "bevy-react": "*",

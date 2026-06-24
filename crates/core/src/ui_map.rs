@@ -11,6 +11,11 @@ use crate::protocol::{Length, Props, Rect, Style};
 
 /// Parse a `#rrggbb`/`rrggbb` (or 8-digit alpha) hex string into a `Color`.
 /// Falls back to opaque white on parse failure so a typo never panics.
+//
+// TODO(review): silent fallbacks here and in the enum mappers below (a typo'd color → white,
+// an unknown enum token → the Bevy default) hide styling bugs from app authors. Consider a
+// `debug!`/`warn!` on an unrecognized value (as `resolved_text_style` already does for an
+// unknown `fontFamily`).
 pub fn parse_color(hex: &str) -> Color {
     let s = hex.strip_prefix('#').unwrap_or(hex);
     bevy::color::Srgba::hex(s)
@@ -246,10 +251,8 @@ fn single_track(token: &str) -> Option<GridTrack> {
         Some(GridTrack::flex(v))
     } else if let Some(v) = t.strip_suffix("px").and_then(parse) {
         Some(GridTrack::px(v))
-    } else if let Some(v) = t.strip_suffix('%').and_then(parse) {
-        Some(GridTrack::percent(v))
     } else {
-        None
+        t.strip_suffix('%').and_then(parse).map(GridTrack::percent)
     }
 }
 
@@ -269,10 +272,10 @@ fn repeated_track(count: u16, token: &str) -> Option<RepeatedGridTrack> {
         Some(RepeatedGridTrack::flex(count, v))
     } else if let Some(v) = t.strip_suffix("px").and_then(parse) {
         Some(RepeatedGridTrack::px(count as usize, v))
-    } else if let Some(v) = t.strip_suffix('%').and_then(parse) {
-        Some(RepeatedGridTrack::percent(count as usize, v))
     } else {
-        None
+        t.strip_suffix('%')
+            .and_then(parse)
+            .map(|v| RepeatedGridTrack::percent(count as usize, v))
     }
 }
 
@@ -487,6 +490,12 @@ pub fn node_from_style(style: &Option<Style>) -> Node {
 /// Apply a style to an element: insert its `Node` plus the sibling visual
 /// components present in the style (and remove ones that are absent, so toggling
 /// a style key off clears the component).
+//
+// TODO(review): every `Op::Update` re-inserts a freshly-built `Node` wholesale, marking
+// it changed and forcing a layout pass for the subtree — even when only a paint-only prop
+// (e.g. backgroundColor) changed. Combined with the lack of prop diffing in the reconciler
+// (see renderer.prepareUpdate), frequent re-renders thrash layout. Split layout-affecting
+// from paint-only props and skip the `Node` re-insert when no layout field changed.
 pub fn apply_style(ec: &mut EntityCommands, style: &Option<Style>) {
     ec.insert(node_from_style(style));
     let s = style.as_ref();
@@ -577,6 +586,9 @@ pub fn overlay_style(base: &Option<Style>, overlay: &Option<Style>) -> Option<St
     let mut merged = base.clone().unwrap_or_default();
     // One arm per `Style` field; kept in struct order so it's easy to audit that
     // every field is overlaid.
+    // TODO(review): this hand-maintained field list must mirror `Style` exactly — omit a
+    // field when adding it to `Style` and it's SILENTLY dropped from hover/press merging,
+    // with no compile error. Add a field-coverage test (or derive the overlay) to enforce it.
     macro_rules! overlay_field {
         ($($f:ident),* $(,)?) => {
             $( if overlay.$f.is_some() { merged.$f = overlay.$f.clone(); } )*

@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { Example, Slider } from "../../components";
-import { Colors, FontSizes } from "../../theme";
+import { Example, Slider } from "@/components";
+import { Colors, FontSizes } from "@/theme";
 
 const SIZE_TS = `<text style={{ fontSize: 28, fontWeight: "bold" }}>
   Big & bold

@@ -1,6 +1,6 @@
 import { BevyStyle } from "bevy-react/jsx";
-import { Example } from "../../components";
-import { Colors, FontSizes } from "../../theme";
+import { Example } from "@/components";
+import { Colors, FontSizes } from "@/theme";
 
 // A longer-than-its-box list to demonstrate wheel scrolling. The container sets
 // `overflowY: "scroll"`; hovering anywhere over it (including a row) scrolls it.

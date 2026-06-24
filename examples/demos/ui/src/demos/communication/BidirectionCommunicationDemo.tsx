@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
-import { bevy } from "../../generated";
-import type { BallState } from "../../generated";
-import { Example } from "../../components";
-import { Colors, FontSizes } from "../../theme";
+import { bevy } from "@/bevy";
+import type { BallState } from "@/bevy";
+import { Example } from "@/components";
+import { Colors, FontSizes } from "@/theme";
 
 const TYPESCRIPT = "const ball = await bevy.pollingDemo.getBall();";
 

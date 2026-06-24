@@ -55,6 +55,11 @@ fn op_flush(state: &mut OpState, #[serde] ops: Vec<Op>) {
 }
 
 /// JS -> Bevy: emit a named app message (e.g. "count") for ECS systems to read.
+// TODO(review): the app-message path (emit/request/event) double-converts v8 →
+// `serde_json::Value` → the typed `T` (here, and again in message::dispatch /
+// request::dispatch; outbound mirrors it in event::send), two extra allocations per
+// message — unlike the `op_flush` hot path, which deserializes straight into `protocol::Op`.
+// Routing-by-name needs the type erased, but high-frequency events still pay for it.
 #[op2]
 fn op_emit(state: &mut OpState, #[string] name: String, #[serde] value: serde_json::Value) {
     let sender = state.borrow::<EmitSender>();
@@ -128,6 +133,10 @@ async fn op_sleep(ms: f64) {
 /// microtask queue so React's scheduler (which yields with `setTimeout(_, 0)`)
 /// stays cheap. Cancellation is observable (a cleared callback never runs), even
 /// though the underlying sleep still completes.
+// TODO(review): the runtime code calls `console.error`/`console.log` (bridge.ts,
+// renderer.ts) but this prelude only polyfills timers + queueMicrotask. Confirm deno_core
+// provides `console` in this config; if not, the FIRST handler error throws on
+// `console.error` (masking the real error) instead of logging it — add a `console` shim here.
 const PRELUDE: &str = r#"
 let __nextTimer = 1;
 const __cancelled = new Set();

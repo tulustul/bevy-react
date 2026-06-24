@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import { Anchored, AnchorScaling } from "bevy-react";
 import { BevyStyle } from "bevy-react/jsx";
-import { bevy } from "../generated";
-import type { CubeInfo } from "../generated";
-import { Checkbox, Example, Slider } from "../components";
-import { Colors, FontSizes } from "../theme";
+import { bevy } from "@/bevy";
+import type { CubeInfo } from "@/bevy";
+import { Checkbox, Example, Slider } from "@/components";
+import { Colors, FontSizes } from "@/theme";
 
 const TYPESCRIPT = `<Anchored.node entity={cube.entity} offset={[0, 0.8, 0]}>
   <text>{cube.label}</text>
@@ -17,7 +17,7 @@ export function AnchoredDemo() {
   const [scaleFactor, setScaleFactor] = useState(1);
 
   useEffect(() => {
-    const off = bevy.on("anchoredDemo.cubesSpawned", (e) => setCubes(e.cubes));
+    const off = bevy.on("crowdedCubes.spawned", (e) => setCubes(e.cubes));
 
     return () => {
       off();

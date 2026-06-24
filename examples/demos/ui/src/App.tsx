@@ -1,8 +1,8 @@
 import { ComponentType, useEffect, useState } from "react";
 import { BevyStyle } from "bevy-react/jsx";
-import { bevy } from "./generated";
-import type { SceneId } from "./generated";
-import { Colors, FontSizes } from "./theme";
+import { bevy } from "@/bevy";
+import type { SceneId } from "@/bevy";
+import { Colors, FontSizes } from "@/theme";
 import { ReactToBevyDemo } from "./demos/communication/ReactToBevyDemo";
 import { BevyToReactDemo } from "./demos/communication/BevyToReactDemo";
 import { BidirectionCommunicationDemo } from "./demos/communication/BidirectionCommunicationDemo";

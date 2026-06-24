@@ -1,10 +1,3 @@
-//! **Crowded cubes** scene (world-anchored UI). A field of ~100 cubes wanders on a plane, and
-//! React renders a badge floating above each one via `<Anchored.node entity={…}/>`.
-//! When the cubes spawn, Bevy pushes their entity ids to React in one
-//! `anchoredDemo.cubesSpawned` event; the anchor positioning system then projects
-//! each entity's world position to the screen every frame. Left-drag orbits the
-//! camera; a checkbox toggles distance-based scaling of the badges.
-
 use std::f32::consts::{PI, TAU};
 
 use bevy::prelude::*;
@@ -12,7 +5,7 @@ use bevy_react::{ReactAppExt, ReactEvents, react_event};
 use serde::Serialize;
 use ts_rs::TS;
 
-use crate::shared::Scene;
+use crate::scene::Scene;
 
 /// How many cubes wander the plane (each gets its own anchored badge).
 const CUBE_COUNT: usize = 100;
@@ -20,9 +13,9 @@ const CUBE_COUNT: usize = 100;
 const PLANE_HALF: f32 = 12.0;
 const CUBE_SIZE: f32 = 0.6;
 
-pub struct AnchoredPlugin;
+pub struct CrowdedCubesScenePlugin;
 
-impl Plugin for AnchoredPlugin {
+impl Plugin for CrowdedCubesScenePlugin {
     fn build(&self, app: &mut App) {
         register_bindings(app);
         app.add_systems(Startup, setup_cube_assets)
@@ -37,9 +30,7 @@ pub fn register_bindings(app: &mut App) {
     app.add_react_event::<CubesSpawned>();
 }
 
-/// Bevy tells React the cubes are ready: `bevy.on("anchoredDemo.cubesSpawned", …)`.
-/// Carries the whole list so React can render the badges in one go, with no poll.
-#[react_event(name = "anchoredDemo.cubesSpawned")]
+#[react_event(name = "crowdedCubes.spawned")]
 struct CubesSpawned {
     cubes: Vec<CubeInfo>,
 }
@@ -109,11 +100,6 @@ fn setup_cube_assets(
     });
 }
 
-/// Spawn the ground plane and `CUBE_COUNT` cubes at pseudo-random positions and
-/// headings (seeded by index, so no `rand` dependency), then push their entity ids
-/// to React in one `anchoredDemo.cubesSpawned` event. All cubes are scoped to the
-/// scene. React subscribed on mount (before it emitted `selectScene`, which drove
-/// this `OnEnter`), so the event always lands.
 fn spawn_cubes(mut commands: Commands, assets: Res<CubeAssets>, events: ReactEvents) {
     commands.spawn((
         Mesh3d(assets.ground.clone()),

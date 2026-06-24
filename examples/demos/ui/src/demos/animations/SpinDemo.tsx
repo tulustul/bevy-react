@@ -7,9 +7,9 @@ import {
   withTiming,
 } from "bevy-react";
 import { BevyStyle } from "bevy-react/jsx";
-import { Example } from "../../components";
+import { Example } from "@/components";
 import { column, playButton, playLabel } from "./shared";
-import { Colors, FontSizes } from "../../theme";
+import { Colors, FontSizes } from "@/theme";
 
 // withRepeat loops a driver forever (count -1); cancelAnimation freezes the
 // shared value wherever it currently is.

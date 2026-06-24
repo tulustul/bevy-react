@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { BevyStyle, PointerEventData } from "bevy-react/jsx";
-import { Example } from "../components";
-import { Colors, FontSizes } from "../theme";
+import { Example } from "@/components";
+import { Colors, FontSizes } from "@/theme";
 
 const TYPESCRIPT = `<node
   onClick={...}

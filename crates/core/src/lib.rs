@@ -32,6 +32,7 @@ mod reconcile;
 mod request;
 mod scroll;
 mod transition;
+mod ts_codegen;
 mod ui_map;
 
 pub mod js_thread;

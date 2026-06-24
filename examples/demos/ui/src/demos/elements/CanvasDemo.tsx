@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { CanvasContext } from "bevy-react";
 import { BevyStyle } from "bevy-react/jsx";
-import { Example } from "../../components";
-import { Colors } from "../../theme";
+import { Example } from "@/components";
+import { Colors } from "@/theme";
 
 // A pure-UI demo of the `<canvas>` host element: an anti-aliased vector line
 // chart drawn entirely with HTML-canvas-style commands (axes, gridlines, a

@@ -370,7 +370,7 @@ mod tests {
         let buf = rasterize(&cmds, width as u32, 4, 1.0);
         assert_eq!(buf.len(), width * 4 * 4);
         // An interior pixel (x=1, y=1) is solid red.
-        let i = (1 * width + 1) * 4;
+        let i = (width + 1) * 4;
         assert_eq!(&buf[i..i + 4], &[255, 0, 0, 255]);
     }
 

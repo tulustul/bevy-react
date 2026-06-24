@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { BevyStyle } from "bevy-react/jsx";
 
-import { Example } from "../../components";
-import { Colors, FontSizes } from "../../theme";
+import { Example } from "@/components";
+import { Colors, FontSizes } from "@/theme";
 
 // A pure-UI demo of CSS-like `transition`: a style change (hover/press, or React
 // state) *eases* instead of snapping, governed by the same Bevy animation engine

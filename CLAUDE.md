@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This is a virtual Cargo workspace whose crates all live under `crates/`: `core` (the `bevy-react` lib), `canvas` (the `bevy-react-canvas` rasterizer host element), `animations` (the `bevy-react-animations` engine), and `macros` (the `bevy-react-macros` proc-macro crate). It is **also** an npm workspace (root `package.json` with members `js` and `examples/demos/ui`). The two halves are developed together. The example (`examples/`) and the JS runtime (`js/`) stay at the repo root; `core` declares the `demos` example via an explicit `[[example]] path`.
 
-The example (`examples/demos`) is a gallery: a left-nav switches between demos, and React drives the active 3D scene with `bevy.selectScene(id)` (or `null` for an empty viewport). There are three scenes, each a **separate Bevy plugin**: `basic_ui.rs` (cubes driven by `emit`), `bouncing_ball.rs` (one ball that both pushes Bevy→React events as toasts and answers request/response polls), and `anchored.rs` (crowded cubes with world-anchored badges). Only one scene runs at a time: React `emit`s the selection, and a `States` enum (`Scene` in `shared.rs`, variants `None | Cubes | BouncingBall | CrowdedCubes`) gates each scene's systems, with `DespawnOnExit(Scene::…)` scoping its entities.
+The example (`examples/demos`) is a gallery: a left-nav switches between demos, and React drives the active 3D scene with `bevy.selectScene(id)` (or `null` for an empty viewport). The three scenes each live under `examples/demos/scenes/` as a **separate Bevy plugin**: `cubes.rs` (cubes driven by `emit`), `bouncing_ball.rs` (one ball that both pushes Bevy→React events as toasts and answers request/response polls, and owns its own ball physics), and `crowded_cubes.rs` (crowded cubes with world-anchored badges). Only one scene runs at a time: React `emit`s the selection, and a `States` enum (`Scene` in `examples/demos/scene.rs`, variants `None | Cubes | BouncingBall | CrowdedCubes`) gates each scene's systems, with `DespawnOnExit(Scene::…)` scoping its entities. The shared 3D camera (auto-orbit + drag + zoom) is bundled as `CameraPlugin` in `examples/demos/camera.rs`.
 
 ## Commands
 
@@ -32,7 +32,7 @@ Tests:
 ```sh
 cargo test                           # all Rust tests (whole workspace)
 cargo test -p bevy-react --lib       # just the core library unit tests
-cargo test -p bevy-react --lib message::tests::exports_typescript   # a single test by path
+cargo test -p bevy-react --lib ts_codegen::tests::exports_typescript   # a single test by path
 cargo test -p bevy-react --test roundtrip   # headless end-to-end bridge test (real JS runtime)
 ```
 

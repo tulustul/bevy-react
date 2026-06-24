@@ -6,9 +6,9 @@ import {
   withTiming,
 } from "bevy-react";
 import { BevyStyle } from "bevy-react/jsx";
-import { Example } from "../../components";
+import { Example } from "@/components";
 import { column, playButton, playLabel } from "./shared";
-import { Colors } from "../../theme";
+import { Colors } from "@/theme";
 
 // withSequence chains drivers — each starts where the previous ended — and
 // withDelay inserts the pauses between them.

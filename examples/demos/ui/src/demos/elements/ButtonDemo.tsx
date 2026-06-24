@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { BevyStyle } from "bevy-react/jsx";
-import { Example } from "../../components";
-import { Colors, FontSizes } from "../../theme";
+import { Example } from "@/components";
+import { Colors, FontSizes } from "@/theme";
 
 // A pure-UI demo of the `<button>` host element: a clickable container that
 // reacts to hover and press via `hoverStyle` / `pressStyle`, driving a React

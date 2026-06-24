@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { BevyStyle } from "bevy-react/jsx";
-import { Example, Radio, RadioOption } from "../../components";
-import { Colors } from "../../theme";
+import { Example, Radio, RadioOption } from "@/components";
+import { Colors } from "@/theme";
 
 // `<node>` is a flexbox container by default. These snippets show the main flex
 // knobs; see Layout → Grid for `display: "grid"`.

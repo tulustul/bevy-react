@@ -1,16 +1,13 @@
 # bevy-react
 
 Build [`bevy_ui`](https://docs.rs/bevy/latest/bevy/ui/index.html) interfaces with
-**React**. You write components in React/TSX and they render to native Bevy UI —
-no web view, no DOM. State and interactions flow both ways between your Bevy app
-and React, and edits hot-reload live while keeping component state.
+**React**. You write components in React/TSX and they render to native Bevy UI
+through a **React Native-style bridge** - **no web view, no DOM**. The JS side stays
+purely declarative; Rust and Bevy do the heavy lifting. State and interactions flow
+both ways between your Bevy app and React, and edits hot-reload live while keeping
+component state.
 
-## Project status
-
-Currently, the project is a **quick, vibecoded proof of concept** demonstrating the idea. The API is very unstable and will change, the code quality is not satisfying.
-**Do not use it in production**
-
-<!-- TODO: screenshots / demo gif -->
+![The bevy-react demos app: a React-driven left-nav over a live 3D Bevy scene, with a world-tracking "Bounces" panel anchored above a bouncing ball.](./screenshots/example-app.png)
 
 ```tsx
 import { mount } from "bevy-react";
@@ -31,16 +28,16 @@ function App() {
   );
 }
 
-await mount(<App />);
+mount(<App />);
 ```
 
-That's a real component — `<node>` and `<button>` render to actual `bevy_ui`
+That's a real component - `<node>` and `<button>` render to actual `bevy_ui`
 nodes, `useState` works as you'd expect, and saving the file updates the running
 app without losing the count.
 
 ## Why bevy-react
 
-- **React, not a bespoke UI DSL.** Hooks, components, conditional rendering, lists —
+- **React, not a bespoke UI DSL.** Hooks, components, conditional rendering, lists -
   everything you already know.
 - **Native Bevy UI.** No browser, no web view. Your UI is `bevy_ui` entities in the
   same world as your game.
@@ -48,6 +45,48 @@ app without losing the count.
   state and running animations intact.
 - **Typed, two-way messaging.** React and the ECS talk over typed channels generated
   straight from your Rust types.
+
+## How it works
+
+bevy-react uses a **bridge architecture**, much like old versions of React Native - but the native
+side is Bevy and the ECS instead of iOS/Android views.
+
+- **React runs on embedded V8.** The JS runs in a V8 isolate via
+  [`deno_core`](https://crates.io/crates/deno_core) - no Node, no browser.
+- **The JS engine runs on its own thread.**
+- **JS only describes the UI.** React renders through a custom reconciler that emits
+  declarative UI-mutation ops; Rust applies them to `bevy_ui` entities. All the heavy
+  lifting - layout, input, rendering - happens in Rust and Bevy.
+- **Animations are orchestrated in Bevy, not JS.** Shared values and transitions are
+  driven on the Bevy side every frame; JS just declares the target. No per-frame JS,
+  no bridge traffic per tick.
+
+## Project status
+
+Currently, the project is a **quick, vibecoded proof of concept** demonstrating the idea. The API is very unstable and will change, the code quality is not satisfying.
+**Do not use it in production**.
+
+## The demos app
+
+[`examples/demos`](./examples/demos) is a gallery that exercises every feature above,
+with a left-nav that switches between live demos. It's the best **reference
+implementation** - each demo is a small, self-contained component you can read and
+copy when wiring up your own UI, messaging, or animations.
+
+```sh
+npm install
+npm run build -w demos-app
+cargo run --example demos
+```
+
+## Getting started
+
+See **[SETUP.md](./SETUP.md)** for setting up a new project end to end - the Rust
+host, the React app, bundling, and typed bindings.
+
+bevy-react is a Rust crate (`bevy-react`) plus an npm package (`bevy-react`),
+developed together. Both are `0.1.0` and not yet published, so for now you depend on
+them by path or git.
 
 ## Features
 
@@ -73,7 +112,7 @@ Host elements `<node>`, `<button>`, `<text>`, `<image>`, `<editableText>`, and
 
 ### Hover & press states
 
-Overlay extra style while an element is hovered or pressed — no state wiring needed.
+Overlay extra style while an element is hovered or pressed - no state wiring needed.
 
 ```tsx
 <button
@@ -195,16 +234,15 @@ import { Anchored } from "bevy-react";
 </Anchored.node>;
 ```
 
+![Dozens of colored cubes in a 3D scene, each with a numbered React badge anchored above it that tracks its cube as the camera moves.](./screenshots/anchored-nodes.png)
+
 ### Talking to Bevy
 
 Three typed channels connect React and the ECS:
 
-- **Notify** — `bevy.foo.set(value)` (or `emit(name, value)`): fire-and-forget
-  React → Bevy.
-- **Request** — `await bevy.foo.get()` (or `request(name, value)`): ask Bevy and
-  await a reply.
-- **Subscribe** — `bevy.on(name, cb)`: receive Bevy → React events; returns an
-  unsubscribe function.
+- **Notify** - `bevy.foo.doSomething(value)`: React -> Bevy event
+- **Request** - `await bevy.foo.getSomething()`: request/response cycle
+- **Subscribe** - `bevy.on(eventName, callback)`: Bevy → React events
 
 **1. Define the channel in Rust** with a macro and register it on the `App`:
 
@@ -232,20 +270,20 @@ app.add_react_handler(on_reset);
 app.add_react_event::<Scored>();
 ```
 
-**2. Generate the typed client** that React imports from `./generated`. Add an export
-path to your app — typically a flag that builds the `App`, registers your channels,
-and calls `app.export_react_typescript("ui/src/generated.ts")` (see
-[SETUP.md](./SETUP.md#talking-to-bevy-typed-channels)) — then run it (re-run whenever
+**2. Generate the typed client** that React imports from `./bevy`. Add an export
+path to your app - typically a flag that builds the `App`, registers your channels,
+and calls `app.export_react_typescript("ui/src/bevy.ts")` (see
+[SETUP.md](./SETUP.md#talking-to-bevy-typed-channels)) - then run it (re-run whenever
 you add or change a channel):
 
 ```sh
-cargo run -- --export-bindings ui/src/generated.ts
+cargo run -- --export-bindings ui/src/bevy.ts
 ```
 
 **3. Use it from React:**
 
 ```tsx
-import { bevy } from "./generated";
+import { bevy } from "./bevy";
 import { useEffect, useState } from "react";
 
 function Score() {
@@ -264,29 +302,6 @@ function Score() {
 See [SETUP.md](./SETUP.md#talking-to-bevy-typed-channels) for the request (await a
 reply) and event (Bevy → React) channels.
 
-## Getting started
+## Perfomarmance
 
-See **[SETUP.md](./SETUP.md)** for setting up a new project end to end — the Rust
-host, the React app, bundling, and typed bindings.
-
-bevy-react is a Rust crate (`bevy-react`) plus an npm package (`bevy-react`),
-developed together. Both are `0.1.0` and not yet published, so for now you depend on
-them by path or git.
-
-## The demos app
-
-[`examples/demos`](./examples/demos) is a gallery that exercises every feature above,
-with a left-nav that switches between live demos. It's the best **reference
-implementation** — each demo is a small, self-contained component you can read and
-copy when wiring up your own UI, messaging, or animations.
-
-```sh
-npm install
-npm run build -w demos-app
-cargo run --example demos
-```
-
-## Contributing
-
-The internals — the Rust↔JS bridge, hot-reload mechanics, and codegen — are
-documented in [`CLAUDE.md`](./CLAUDE.md).
+At this stage, no benchmarks or stress tests were executed against the library.

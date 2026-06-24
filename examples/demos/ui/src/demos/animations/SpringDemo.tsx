@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { Animated, useSharedValue, withSpring } from "bevy-react";
 import { BevyStyle } from "bevy-react/jsx";
-import { Example, Slider } from "../../components";
+import { Example, Slider } from "@/components";
 import { column, playButton, playLabel } from "./shared";
-import { Colors } from "../../theme";
+import { Colors } from "@/theme";
 
 // A damped spring: tune stiffness and damping, then watch the square settle.
 

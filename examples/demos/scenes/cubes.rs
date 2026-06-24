@@ -1,20 +1,15 @@
-//! **Cubes** scene (Basic UI). The React counter emits a number
-//! (`bevy.basicDemo.setCount(n)`) and Bevy shows that many spinning cubes. Pure
-//! one-way `emit`; no requests or events. This is the original counter example,
-//! now a state-scoped plugin.
-
 use bevy::prelude::*;
 use bevy_react::{ReactAppExt, react_message};
 
-use crate::shared::Scene;
+use crate::scene::Scene;
 
 /// Upper bound on the cube count (the React UI clamps to the same range).
 const MAX_CUBES: usize = 8;
 const CUBE_SPACING: f32 = 2.25;
 
-pub struct BasicUiPlugin;
+pub struct CubesScenePlugin;
 
-impl Plugin for BasicUiPlugin {
+impl Plugin for CubesScenePlugin {
     fn build(&self, app: &mut App) {
         register_bindings(app);
         app.insert_resource(DesiredCubes(3))

@@ -11,8 +11,8 @@ import {
   withTiming,
 } from "bevy-react";
 import { BevyStyle } from "bevy-react/jsx";
-import { Example } from "../../components";
-import { Colors, FontSizes } from "../../theme";
+import { Example } from "@/components";
+import { Colors, FontSizes } from "@/theme";
 
 type Mode = "linear" | "easeInOut" | "spring";
 

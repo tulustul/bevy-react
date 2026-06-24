@@ -201,6 +201,10 @@ export interface BevyStyle {
   textAlign?: "left" | "center" | "right" | "justify" | "start" | "end";
 }
 
+// TODO(review): the pointer model is bespoke and limited — left-button press/move/up only,
+// with normalized x/y + clientX/Y rather than DOM `PointerEvent` semantics. No enter/leave/
+// over, no wheel-as-element-event, no button/modifier info. It's part of the public contract,
+// so settle the shape before too many apps depend on it.
 /** Payload for the pointer handlers: the cursor position within the element,
  *  normalized to `0..1` from a top-left origin (`x` left→right, `y` top→bottom),
  *  clamped to the element's bounds even while dragging outside it. `clientX` /

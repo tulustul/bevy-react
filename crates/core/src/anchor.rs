@@ -47,6 +47,14 @@ pub struct AnchorScaling {
     pub base_distance: f32,
 }
 
+/// Marker for the dedicated overlay container that every [`Anchored`] node is
+/// reparented under. Spawned once at startup as a zero-size, absolutely-positioned
+/// child of the UI root at the window origin, so anchored overlays live in their own
+/// hierarchy and never contribute to an app container's flex layout or scrollable
+/// `content_size`. See [`position_anchored_nodes`].
+#[derive(Component, Debug, Clone, Copy)]
+pub struct AnchorLayer;
+
 /// Component stamped (by the main reconciler) on any `Anchored.node`. Carries the
 /// followed entity, world-space offset, and optional distance scaling. Requires
 /// `Visibility` so the system can hide the overlay when its anchor is behind the
@@ -68,12 +76,19 @@ pub struct Anchored {
 /// laid out (so it never flashes uncentered on spawn), and when the target has
 /// despawned or its anchor point is behind the camera / off-screen.
 ///
+/// Each anchored node is also reparented under the shared [`AnchorLayer`] so it lives
+/// in its own hierarchy: an off-screen anchor's large `left`/`top` then never inflates
+/// the scrollable `content_size` of whatever app container it was declared in. The
+/// reparent self-heals if a React reorder ever moves the node back.
+///
 /// Registered in `Update` ordered after the op drain so it overrides this frame's
 /// static style. A no-op when no anchored nodes exist.
 #[allow(clippy::type_complexity)]
 pub fn position_anchored_nodes(
+    mut commands: Commands,
     default_cam: Query<(&Camera, &GlobalTransform), With<IsDefaultUiCamera>>,
     other_cam: Query<(&Camera, &GlobalTransform), Without<IsDefaultUiCamera>>,
+    layer: Query<Entity, With<AnchorLayer>>,
     targets: Query<&GlobalTransform>,
     ui_nodes: Query<(&ComputedNode, &UiGlobalTransform)>,
     mut anchored: Query<(
@@ -86,7 +101,7 @@ pub fn position_anchored_nodes(
     )>,
 ) {
     // Project through the default UI camera; if none is marked, fall back to any
-    // camera (the library's own `Camera2d` has no marker).
+    // camera (the host app's UI camera may carry no marker).
     let Some((cam, cam_tf)) = default_cam
         .iter()
         .next()
@@ -95,7 +110,26 @@ pub fn position_anchored_nodes(
         return;
     };
 
+    // The overlay container every anchored node is reparented under.
+    let Ok(layer_entity) = layer.single() else {
+        return;
+    };
+    // The layer is spawned at the window origin (absolute, `left`/`top` 0, child of the
+    // full-window root), so anchored nodes — its children — position relative to (0,0).
+    // Using a constant rather than reading the layer's computed transform keeps this
+    // correct on the frame a node is first reparented (the reparent command below only
+    // applies at the next sync point) and avoids any layout-readiness dependency.
+    let parent_top_left = Vec2::ZERO;
+
     for (entity, anchor, child_of, mut node, mut visibility, mut transform) in &mut anchored {
+        // Move the overlay into the shared anchor layer (once; self-heals on reorder) so
+        // it can't affect its declared parent's flex layout or scroll range. Done before
+        // the layout-readiness guards so it happens even while the node waits to be laid
+        // out below.
+        if child_of.map(|c| c.parent()) != Some(layer_entity) {
+            commands.entity(entity).insert(ChildOf(layer_entity));
+        }
+
         // Always absolute, so a hidden overlay never takes flex-flow space in its
         // parent (e.g. while it waits to be positioned below).
         node.position_type = PositionType::Absolute;
@@ -142,12 +176,9 @@ pub fn position_anchored_nodes(
         }
 
         // `world_to_viewport` is in logical pixels, but `bevy_ui` positions an
-        // absolute node relative to its parent's box — so subtract the parent's
-        // top-left. Also center this node on the anchor using its own size.
-        let parent_top_left = child_of
-            .and_then(|c| ui_nodes.get(c.parent()).ok())
-            .map(|(n, gt)| logical_top_left(n, gt))
-            .unwrap_or(Vec2::ZERO);
+        // absolute node relative to its parent's box — so subtract the anchor layer's
+        // top-left (computed once above). Also center this node on the anchor using its
+        // own size.
         let half = computed.size() * computed.inverse_scale_factor() / 2.0;
         let local = viewport - parent_top_left - half;
 
@@ -155,15 +186,6 @@ pub fn position_anchored_nodes(
         node.top = Val::Px(local.y);
         set_visibility(&mut visibility, Visibility::Inherited);
     }
-}
-
-/// The logical-pixel top-left corner of a laid-out UI node, from its physical
-/// absolute center ([`UiGlobalTransform`]) and physical size ([`ComputedNode`]).
-/// `bevy_ui`'s `Val::Px` insets are logical, so anchoring math works in logical
-/// pixels throughout.
-fn logical_top_left(node: &ComputedNode, transform: &UiGlobalTransform) -> Vec2 {
-    let inv = node.inverse_scale_factor();
-    transform.translation * inv - node.size() * inv / 2.0
 }
 
 /// Assign `visibility` only when it actually changes, so we don't trip change
@@ -206,5 +228,57 @@ mod tests {
         }))
         .unwrap();
         assert_eq!(props.anchor.unwrap().offset, None);
+    }
+
+    #[test]
+    fn anchored_node_is_reparented_under_the_layer() {
+        use super::{AnchorLayer, Anchored, position_anchored_nodes};
+        use bevy::ecs::system::RunSystemOnce;
+        use bevy::prelude::*;
+        use bevy::ui::{ComputedNode, IsDefaultUiCamera, UiGlobalTransform};
+
+        let mut world = World::new();
+
+        // A default UI camera so the system gets past its camera guard.
+        world.spawn((
+            Camera::default(),
+            GlobalTransform::default(),
+            IsDefaultUiCamera,
+        ));
+
+        // The shared overlay layer (carries the components the layer query reads).
+        let layer = world
+            .spawn((
+                AnchorLayer,
+                ComputedNode::default(),
+                UiGlobalTransform::default(),
+            ))
+            .id();
+
+        // Some unrelated container the overlay was "declared" under in the React tree.
+        let other_parent = world.spawn(Node::default()).id();
+
+        // An anchored node parented under `other_parent` (not the layer). It has no
+        // `ComputedNode`, so it stays hidden — but the reparent runs first regardless.
+        let target = world.spawn(GlobalTransform::default()).id();
+        let badge = world
+            .spawn((
+                Node::default(),
+                Anchored {
+                    target,
+                    offset: Vec3::ZERO,
+                    scale: None,
+                },
+                ChildOf(other_parent),
+            ))
+            .id();
+
+        world.run_system_once(position_anchored_nodes).unwrap();
+
+        assert_eq!(
+            world.entity(badge).get::<ChildOf>().map(|c| c.parent()),
+            Some(layer),
+            "an anchored node must be reparented under the anchor layer"
+        );
     }
 }

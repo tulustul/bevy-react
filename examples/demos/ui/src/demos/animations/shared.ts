@@ -1,5 +1,5 @@
 import { BevyStyle } from "bevy-react/jsx";
-import { Colors, FontSizes } from "../../theme";
+import { Colors, FontSizes } from "@/theme";
 
 // Shared bits for the animation demos: the standard column layout and a "Play"-style
 // button so the interactive triggers look consistent. Colors come from ../../theme.

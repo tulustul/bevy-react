@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { BevyStyle } from "bevy-react/jsx";
-import { Example, Radio, RadioOption, Slider } from "../../components";
-import { Colors, FontSizes } from "../../theme";
+import { Example, Radio, RadioOption, Slider } from "@/components";
+import { Colors, FontSizes } from "@/theme";
 
 // `display: "grid"` opts a `<node>` into CSS-grid layout. Tracks accept the full
 // CSS syntax: `repeat(n, …)`, fr units, fixed sizes, and `span`/line placement.

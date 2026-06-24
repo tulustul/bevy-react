@@ -1,5 +1,5 @@
 import { BevyStyle } from "bevy-react/jsx";
-import { Colors, FontSizes } from "../theme";
+import { Colors, FontSizes } from "@/theme";
 
 export type ProgressBarProps = {
   /** Fill end, 0..1. */

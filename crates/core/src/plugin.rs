@@ -63,7 +63,6 @@ pub struct PointerCaptureSet;
 pub struct ReactUiPlugin {
     bundle: PathBuf,
     hot_reload: bool,
-    spawn_camera: bool,
     animations: bool,
     default_font: Option<PathBuf>,
     named_fonts: Vec<(String, PathBuf)>,
@@ -73,13 +72,14 @@ impl ReactUiPlugin {
     /// Create the plugin for the given built app bundle (`app.js`). The build
     /// emits a `vendor.js` beside it (react + the bevy-react runtime, loaded once);
     /// both must exist. Hot reload (React Fast Refresh — edits preserve component
-    /// state), a default 2D UI camera, and the Reanimated-style animations engine
-    /// are all enabled by default.
+    /// state) and the Reanimated-style animations engine are enabled by default.
+    ///
+    /// The plugin does **not** spawn a camera — `bevy_ui` needs one to render, so
+    /// your app must provide it (a `Camera2d`, or any camera that renders UI).
     pub fn new(bundle: impl Into<PathBuf>) -> Self {
         Self {
             bundle: bundle.into(),
             hot_reload: true,
-            spawn_camera: true,
             animations: true,
             default_font: None,
             named_fonts: Vec::new(),
@@ -89,12 +89,6 @@ impl ReactUiPlugin {
     /// Enable/disable watching the bundle and hot reloading on change.
     pub fn hot_reload(mut self, yes: bool) -> Self {
         self.hot_reload = yes;
-        self
-    }
-
-    /// Enable/disable spawning a `Camera2d` (disable if your app provides one).
-    pub fn spawn_camera(mut self, yes: bool) -> Self {
-        self.spawn_camera = yes;
         self
     }
 
@@ -128,6 +122,10 @@ impl Plugin for ReactUiPlugin {
         // Channels: op batches, app messages, and requests flow JS -> Bevy; a single
         // `Outbound` stream (UI events, app events, responses) and reload signals
         // flow Bevy -> JS.
+        // TODO(review): all of these are UNBOUNDED — there's no backpressure. A system that
+        // `events.send`s every frame while the JS side consumes slowly (or not at all) grows
+        // the outbound queue without bound. Consider bounded channels with an explicit
+        // drop/coalesce policy before this is "production".
         let (ops_tx, ops_rx) = crossbeam_channel::unbounded::<Vec<Op>>();
         let (emit_tx, emit_rx) = crossbeam_channel::unbounded::<ReactMessage>();
         let (request_tx, request_rx) = crossbeam_channel::unbounded::<RawRequest>();
@@ -170,7 +168,6 @@ impl Plugin for ReactUiPlugin {
         .insert_resource(EmitReceiver(emit_rx))
         .insert_resource(RequestReceiver(request_rx))
         .insert_resource(ReactUiConfig {
-            spawn_camera: self.spawn_camera,
             default_font: self.default_font.clone(),
             named_fonts: self.named_fonts.clone(),
         })
@@ -249,7 +246,6 @@ struct UiRoot;
 /// Plugin configuration read by the startup system.
 #[derive(Resource)]
 struct ReactUiConfig {
-    spawn_camera: bool,
     default_font: Option<PathBuf>,
     named_fonts: Vec<(String, PathBuf)>,
 }
@@ -299,10 +295,6 @@ fn setup(
     config: Res<ReactUiConfig>,
     assets: Res<AssetServer>,
 ) {
-    if config.spawn_camera {
-        commands.spawn(Camera2d);
-    }
-
     // Load configured fonts into the `Fonts` resource before the first
     // `apply_js_ops` (Update) creates any text.
     commands.insert_resource(Fonts {
@@ -317,6 +309,10 @@ fn setup(
     // The root container: a full-window flex column the reconciler appends
     // top-level children into (it is reconciler node id 0). Children stack from
     // the top, horizontally centered.
+    // TODO(review): the whole design is single-root / single-isolate / single op stream
+    // (node id 0 is the one root). There's no path to multiple independent React surfaces,
+    // multiple windows, or per-camera UI without protocol rework — call this out as a
+    // deliberate constraint while it's still cheap to revisit.
     let root = commands
         .spawn((
             Node {
@@ -331,6 +327,27 @@ fn setup(
             UiRoot,
         ))
         .id();
+
+    // The shared overlay container for world-anchored nodes (`Anchored.node`).
+    // `position_anchored_nodes` reparents every anchored overlay under this so it lives
+    // in its own hierarchy and never inflates an app container's flex layout or
+    // scrollable `content_size`. Zero-size at the window origin (absolute, left/top 0)
+    // with default `Overflow::visible`, so it neither clips its children nor intercepts
+    // pointer input; anchored nodes position themselves relative to its (0,0) corner.
+    // Spawned as the root's first child so the app subtree (appended later via ops)
+    // renders above it — add a `GlobalZIndex` here to lift overlays above app content.
+    commands.spawn((
+        Node {
+            position_type: PositionType::Absolute,
+            left: Val::Px(0.0),
+            top: Val::Px(0.0),
+            width: Val::Px(0.0),
+            height: Val::Px(0.0),
+            ..default()
+        },
+        crate::anchor::AnchorLayer,
+        ChildOf(root),
+    ));
 
     let ops_rx = channels.ops_rx.take().expect("setup runs once");
     commands.insert_resource(JsBridge::new(ops_rx, channels.outbound_tx.clone(), root));

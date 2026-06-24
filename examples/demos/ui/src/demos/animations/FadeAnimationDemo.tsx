@@ -1,8 +1,8 @@
 import { useEffect } from "react";
 import { Animated, useSharedValue, withRepeat, withTiming } from "bevy-react";
 import { BevyStyle } from "bevy-react/jsx";
-import { Example } from "../../components";
-import { Colors } from "../../theme";
+import { Example } from "@/components";
+import { Colors } from "@/theme";
 
 const FADE_MS = 500;
 

@@ -43,6 +43,8 @@ interface HostContext {
 }
 
 // Most host-config callbacks are intentionally trivial for a UI-only renderer.
+// TODO(review): `hostConfig: any` drops type-checking on the most protocol-critical
+// object. Type it as react-reconciler's `HostConfig<...>` so signature drift is caught.
 const hostConfig: any = {
   supportsMutation: true,
   supportsPersistence: false,
@@ -145,6 +147,10 @@ const hostConfig: any = {
   },
 
   // We return the new props as the payload so commitUpdate always runs.
+  // TODO(review): no prop diffing — `prepareUpdate` always returns `next`, so every
+  // update re-serializes and re-applies the FULL prop set (and the Bevy side re-inserts
+  // `Node`, forcing relayout — see ui_map::apply_style). Diff old vs next here (or carry a
+  // changed-keys set) so a one-field change doesn't re-apply everything.
   prepareUpdate: (_i: Instance, _t: string, _old: unknown, next: unknown) =>
     next,
 
@@ -207,6 +213,11 @@ let root: ReturnType<typeof reconciler.createContainer> | null = null;
 /** Mount a React element tree against the Bevy root container (first load). */
 export function render(element: ReactNode): void {
   if (root === null) {
+    // TODO(review): we mount a ConcurrentRoot but drive every event through
+    // `flushSync` (see bridge.runEventLoop), so React runs effectively synchronously —
+    // concurrent features (Suspense, transitions, time-slicing) are unavailable. Either
+    // commit to sync (a legacy root + the documented #327 workaround) or actually use
+    // concurrency; the current middle ground pays for a feature it doesn't use.
     const container: Container = { id: ROOT_ID };
     root = reconciler.createContainer(
       container,

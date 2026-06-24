@@ -27,6 +27,11 @@ fn is_scroll_container(node: &Node) -> bool {
 /// so that, when it actually scrolls, it can flag the pointer as UI-owned and stop
 /// world systems (e.g. a wheel-zoom camera) from also consuming the same wheel.
 ///
+/// The pointer is only claimed (`PointerCapture::over_ui`) when a container actually
+/// moves — a scroll container whose content fits (no scroll range on the wheeled axis)
+/// lets the wheel fall through, so a camera behind a transparent, non-overflowing
+/// scroll pane can still zoom.
+///
 /// Target selection is by **geometry, filtered to real scroll containers**. Every
 /// `Node` carries a `ScrollPosition` (it's a required component), so "has a
 /// `ScrollPosition`" is meaningless — we must check `Node.overflow`. Among the nodes
@@ -58,8 +63,8 @@ pub fn apply_scroll(
     };
     // `ComputedNode`/`UiGlobalTransform` are in physical pixels; the window cursor is
     // logical with a top-left origin. Scaling matches them for a window-filling camera
-    // (the default `Camera2d` this plugin spawns); a camera with a custom viewport
-    // offset is not handled here.
+    // (the host app's UI camera); a camera with a custom viewport offset is not handled
+    // here.
     let cursor = cursor * window.scale_factor();
 
     // Wheel delta → logical pixels. A positive wheel delta scrolls the view up,
@@ -73,29 +78,40 @@ pub fn apply_scroll(
     // scroll container whose rect contains the cursor wins. This also resolves nested
     // scroll areas correctly (an inner one sits later in the stack, so it's hit first).
     for &entity in ui_stack.uinodes.iter().rev() {
-        if let Ok((computed, transform, node, mut pos)) = scrollables.get_mut(entity) {
-            if is_scroll_container(node) && computed.contains_point(*transform, cursor) {
-                // Clamp to the scrollable range so the offset can't accumulate past the
-                // ends (otherwise you'd have to "unscroll" the slack before it moves).
-                // Bevy clamps the offset it *applies* for rendering but never writes that
-                // back to this component, so we must clamp it ourselves. `ComputedNode`
-                // sizes are physical; the component is logical, so convert with
-                // `inverse_scale_factor`. Mirrors `ui_layout_system`'s own formula.
-                let max = (computed.content_size - computed.size + computed.scrollbar_size)
-                    .max(Vec2::ZERO)
-                    * computed.inverse_scale_factor;
-                if node.overflow.x == OverflowAxis::Scroll {
-                    pos.0.x = (pos.0.x - delta.x).clamp(0.0, max.x);
-                }
-                if node.overflow.y == OverflowAxis::Scroll {
-                    pos.0.y = (pos.0.y - delta.y).clamp(0.0, max.y);
-                }
-                // The wheel was consumed by the UI this frame — let world-input systems
-                // that honor `PointerCapture` (the orbit camera's wheel-zoom, etc.)
-                // ignore it.
+        if let Ok((computed, transform, node, mut pos)) = scrollables.get_mut(entity)
+            && is_scroll_container(node)
+            && computed.contains_point(*transform, cursor)
+        {
+            // Clamp to the scrollable range so the offset can't accumulate past the
+            // ends (otherwise you'd have to "unscroll" the slack before it moves).
+            // Bevy clamps the offset it *applies* for rendering but never writes that
+            // back to this component, so we must clamp it ourselves. `ComputedNode`
+            // sizes are physical; the component is logical, so convert with
+            // `inverse_scale_factor`. Mirrors `ui_layout_system`'s own formula.
+            let max = (computed.content_size - computed.size + computed.scrollbar_size)
+                .max(Vec2::ZERO)
+                * computed.inverse_scale_factor;
+            // Only the axes with actual scroll range (`max > 0`) consume the wheel;
+            // a container whose content fits has nothing to move.
+            let mut consumed = false;
+            if node.overflow.x == OverflowAxis::Scroll && delta.x != 0.0 && max.x > 0.0 {
+                pos.0.x = (pos.0.x - delta.x).clamp(0.0, max.x);
+                consumed = true;
+            }
+            if node.overflow.y == OverflowAxis::Scroll && delta.y != 0.0 && max.y > 0.0 {
+                pos.0.y = (pos.0.y - delta.y).clamp(0.0, max.y);
+                consumed = true;
+            }
+            if consumed {
+                // The wheel actually moved this container — claim it for the UI so
+                // world-input systems that honor `PointerCapture` (the orbit camera's
+                // wheel-zoom, etc.) ignore the same wheel this frame.
                 capture.over_ui = true;
                 break;
             }
+            // Nothing to scroll here (content fits the container) — keep scanning lower
+            // containers, and ultimately leave the wheel for world input so e.g. a
+            // camera behind a transparent, non-overflowing scroll pane can still zoom.
         }
     }
 }
@@ -106,12 +122,12 @@ mod tests {
     use bevy::ecs::system::RunSystemOnce;
 
     /// Drive `apply_scroll` against a 200×100 scroll container centered at (300, 200)
-    /// holding 300px of content (so the scroll range is `[0, 200]` logical), with a
-    /// non-scrolling child node ("text") on top of it (also carrying a `ScrollPosition`,
-    /// since every `Node` does). Starts the container at `start`, applies one `Line`
-    /// wheel tick of `wheel`, and returns the container's resulting `ScrollPosition`
-    /// plus whether the pointer was flagged as UI-owned.
-    fn run(cursor: Vec2, start: Vec2, wheel: Vec2) -> (Vec2, bool) {
+    /// holding `content_h`px of content (so the scroll range is `[0, content_h - 100]`
+    /// logical), with a non-scrolling child node ("text") on top of it (also carrying a
+    /// `ScrollPosition`, since every `Node` does). Starts the container at `start`,
+    /// applies one `Line` wheel tick of `wheel`, and returns the container's resulting
+    /// `ScrollPosition` plus whether the pointer was flagged as UI-owned.
+    fn run_with_content(cursor: Vec2, start: Vec2, wheel: Vec2, content_h: f32) -> (Vec2, bool) {
         let mut world = World::new();
 
         let mut window = Window::default();
@@ -126,7 +142,7 @@ mod tests {
                 },
                 ComputedNode {
                     size: Vec2::new(200.0, 100.0),
-                    content_size: Vec2::new(200.0, 300.0),
+                    content_size: Vec2::new(200.0, content_h),
                     inverse_scale_factor: 1.0,
                     ..default()
                 },
@@ -167,6 +183,11 @@ mod tests {
         let pos = world.entity(container).get::<ScrollPosition>().unwrap().0;
         let over_ui = world.resource::<PointerCapture>().over_ui;
         (pos, over_ui)
+    }
+
+    /// Like [`run_with_content`] with the default 300px content (scroll range `[0, 200]`).
+    fn run(cursor: Vec2, start: Vec2, wheel: Vec2) -> (Vec2, bool) {
+        run_with_content(cursor, start, wheel, 300.0)
     }
 
     #[test]
@@ -211,5 +232,24 @@ mod tests {
         );
         assert_eq!(pos, Vec2::new(0.0, 30.0));
         assert!(!over_ui);
+    }
+
+    #[test]
+    fn does_not_claim_wheel_when_content_fits() {
+        // A scroll container whose content fits (content 100 == size 100, so the scroll
+        // range is empty) under the cursor. The wheel must NOT be consumed: position stays
+        // put and the pointer is left un-owned so a world system (e.g. the orbit camera's
+        // wheel-zoom behind a transparent, non-overflowing scroll pane) still receives it.
+        let (pos, over_ui) = run_with_content(
+            Vec2::new(300.0, 200.0),
+            Vec2::ZERO,
+            Vec2::new(0.0, -1.0),
+            100.0,
+        );
+        assert_eq!(pos, Vec2::ZERO);
+        assert!(
+            !over_ui,
+            "a container with nothing to scroll must not claim the wheel"
+        );
     }
 }

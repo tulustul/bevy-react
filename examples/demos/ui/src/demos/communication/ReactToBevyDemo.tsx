@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
-import { bevy } from "../../generated";
-import { Button, Example } from "../../components";
+import { bevy } from "@/bevy";
+import { Button, Example } from "@/components";
 import { BevyStyle } from "bevy-react/jsx";
-import { Colors, FontSizes } from "../../theme";
+import { Colors, FontSizes } from "@/theme";
 
 const MAX = 8;
 const TYPESCRIPT = "bevy.basicDemo.setCount(n);";

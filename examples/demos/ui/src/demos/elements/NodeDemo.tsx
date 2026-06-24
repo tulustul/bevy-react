@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { BevyStyle } from "bevy-react/jsx";
-import { Example, Slider } from "../../components";
-import { Colors } from "../../theme";
+import { Example, Slider } from "@/components";
+import { Colors } from "@/theme";
 
 // The `<node>` host element: a styleable, nestable box — the building block every
 // other layout is made of. See Layout → Flex/Grid for arranging its children.

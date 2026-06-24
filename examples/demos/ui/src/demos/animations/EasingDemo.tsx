@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { Animated, EasingName, useSharedValue, withTiming } from "bevy-react";
 import { BevyStyle } from "bevy-react/jsx";
-import { Example, Slider } from "../../components";
+import { Example, Slider } from "@/components";
 import { column, playButton, playLabel } from "./shared";
-import { Colors, FontSizes } from "../../theme";
+import { Colors, FontSizes } from "@/theme";
 
 // The four easing curves, raced side by side over the same distance/duration so
 // their acceleration profiles are easy to compare.

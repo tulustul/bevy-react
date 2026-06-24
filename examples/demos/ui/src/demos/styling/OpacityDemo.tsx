@@ -1,13 +1,7 @@
 import { useState } from "react";
 import { BevyStyle } from "bevy-react/jsx";
-import {
-  Checkbox,
-  Example,
-  Radio,
-  RadioOption,
-  Slider,
-} from "../../components";
-import { Colors } from "../../theme";
+import { Checkbox, Example, Radio, RadioOption, Slider } from "@/components";
+import { Colors } from "@/theme";
 import { box, controlColumn, row } from "./shared";
 
 export function OpacityDemo() {

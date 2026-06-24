@@ -7,8 +7,6 @@ default-members = ["crates/core"]
 version = "0.1.0"
 edition = "2024"
 
-# Shared dependency versions — each crate opts in with `{ workspace = true }`, so
-# bevy/serde/etc. are pinned in exactly one place across the whole workspace.
 [workspace.dependencies]
 anyhow = "1.0.102"
 bevy = "0.19"
@@ -16,23 +14,17 @@ crossbeam-channel = "0.5.15"
 deno_core = "0.404.0"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.150"
-# CPU vector rasterizer backing the `canvas` host element (anti-aliased paths
-# painted into a `bevy_ui::ImageNode` texture). Decoupled from Bevy's renderer.
 tiny-skia = "0.11"
 tokio = { version = "1.52.3", features = ["rt", "macros", "sync"] }
-# Generates the TypeScript message types `emit` is checked against. `#[react_message]`
-# derives `TS`; `App::export_react_typescript` walks registered payloads to emit them.
 ts-rs = "10"
 proc-macro2 = "1"
 quote = "1"
 syn = "2"
-# Internal crates, addressed by their workspace-root-relative paths.
+
 bevy-react-animations = { path = "crates/animations" }
 bevy-react-canvas = { path = "crates/canvas" }
 bevy-react-macros = { path = "crates/macros" }
 
-# Bevy compiles much faster to run and renders smoothly when its (and our) deps
-# are optimized even in dev builds. Profiles only take effect at the workspace root.
 [profile.dev]
 opt-level = 1
 

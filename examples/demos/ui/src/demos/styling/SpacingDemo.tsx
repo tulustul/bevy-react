@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { BevyStyle } from "bevy-react/jsx";
-import { Example, Slider } from "../../components";
-import { Colors } from "../../theme";
+import { Example, Slider } from "@/components";
+import { Colors } from "@/theme";
 import { controlColumn } from "./shared";
 
 export function SpacingDemo() {

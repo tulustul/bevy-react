@@ -92,8 +92,6 @@ fn pump(
     }
 }
 
-/// Play Bevy's `spawn_cubes`: push the `anchoredDemo.cubesSpawned` event with a
-/// small cube list, which `AnchoredDemo` (subscribed on mount) renders as badges.
 fn send_cubes_spawned(outbound_tx: &tokio::sync::mpsc::UnboundedSender<Outbound>) {
     let value = serde_json::json!({
         "cubes": [
@@ -104,7 +102,7 @@ fn send_cubes_spawned(outbound_tx: &tokio::sync::mpsc::UnboundedSender<Outbound>
     });
     outbound_tx
         .send(Outbound::Event {
-            name: "anchoredDemo.cubesSpawned".into(),
+            name: "crowdedCubes.spawned".into(),
             value,
         })
         .expect("JS thread gone before event");

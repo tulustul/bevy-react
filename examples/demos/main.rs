@@ -18,10 +18,9 @@
 //! For hot reload, run `npm run watch -w demos-app` in another terminal and edit
 //! the files under `ui/src/`.
 
-mod anchored;
-mod basic_ui;
-mod bouncing_ball;
-mod shared;
+mod camera;
+mod scene;
+mod scenes;
 
 use std::path::PathBuf;
 
@@ -29,10 +28,11 @@ use bevy::asset::AssetPlugin;
 use bevy::prelude::*;
 use bevy_react::{ReactAppExt, ReactUiPlugin};
 
-use anchored::AnchoredPlugin;
-use basic_ui::BasicUiPlugin;
-use bouncing_ball::BouncingBallPlugin;
-use shared::Scene;
+use camera::CameraPlugin;
+use scene::Scene;
+use scenes::bouncing_ball::BouncingBallScenePlugin;
+use scenes::crowded_cubes::CrowdedCubesScenePlugin;
+use scenes::cubes::CubesScenePlugin;
 
 fn main() {
     // `cargo run -p bevy-react --example demos -- --export-bindings <path>` writes the TypeScript
@@ -73,12 +73,12 @@ fn main() {
                 ..default()
             }),
     )
-    // We provide our own (3D) camera, so tell the plugin not to spawn a 2D one.
-    // Roboto is the app-wide default font; DancingScript is a named family the UI
-    // can select per element via `style={{ fontFamily: "DancingScript" }}`.
+    // The plugin no longer spawns a camera; our `CameraPlugin` (added below)
+    // provides the 3D camera that also renders the UI. Roboto is the app-wide
+    // default font; DancingScript is a named family the UI can select per element
+    // via `style={{ fontFamily: "DancingScript" }}`.
     .add_plugins(
         ReactUiPlugin::new(bundle)
-            .spawn_camera(false)
             .default_font("fonts/NotoSans-VariableFont_wdth,wght.ttf")
             .font("DancingScript", "fonts/DancingScript-VariableFont_wght.ttf")
             .font(
@@ -88,23 +88,16 @@ fn main() {
     )
     // State must be registered after DefaultPlugins (which brings StatesPlugin).
     .init_state::<Scene>()
-    .init_resource::<shared::CameraRig>()
-    .add_systems(Startup, shared::setup_camera_and_light)
-    // One shared camera controller (auto-orbit + mouse-drag + wheel-zoom) for every
-    // scene; reframe the orbit distance to suit each scene as it becomes active.
-    .add_systems(
-        Update,
-        (
-            // After the React UI refreshes `PointerCapture` so the camera sees this
-            // frame's state and ignores the mouse while the UI owns it.
-            shared::orbit_camera.after(bevy_react::PointerCaptureSet),
-            shared::reframe_camera.run_if(state_changed::<Scene>),
-        ),
-    )
-    .add_plugins((BasicUiPlugin, BouncingBallPlugin, AnchoredPlugin));
+    // The shared 3D camera (auto-orbit + mouse-drag + wheel-zoom + per-scene reframe).
+    .add_plugins(CameraPlugin)
+    .add_plugins((
+        CubesScenePlugin,
+        BouncingBallScenePlugin,
+        CrowdedCubesScenePlugin,
+    ));
     // Each scene's plugin registers its own bindings in `build`; only the global
     // scene-selection handler is left to register here.
-    shared::register_bindings(&mut app);
+    scene::register_bindings(&mut app);
     app.run();
 }
 
@@ -114,8 +107,8 @@ fn main() {
 /// plugin's `build` instead. This must list the exact same set the plugins do,
 /// so the generated TypeScript can never drift from the runtime.
 fn register_react_bindings(app: &mut App) {
-    shared::register_bindings(app);
-    basic_ui::register_bindings(app);
-    bouncing_ball::register_bindings(app);
-    anchored::register_bindings(app);
+    scene::register_bindings(app);
+    scenes::cubes::register_bindings(app);
+    scenes::bouncing_ball::register_bindings(app);
+    scenes::crowded_cubes::register_bindings(app);
 }

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { bevy } from "../../generated";
-import { Example } from "../../components";
-import { Colors, FontSizes } from "../../theme";
+import { bevy } from "@/bevy";
+import { Example } from "@/components";
+import { Colors, FontSizes } from "@/theme";
 
 const TYPESCRIPT = `bevy.on("bevyEventsDemo.ballBounced", (e) => {
   setBounces((n) => n + 1);

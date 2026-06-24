@@ -211,35 +211,35 @@ fn apply_animated_nodes(
         let mut bg = bg;
 
         // Color before opacity, so opacity gets the last word on alpha.
-        if let Some(binding) = &b.background_color {
-            if let Some(rgba) = eval_color(binding, &values) {
-                let color = Color::srgba(rgba[0], rgba[1], rgba[2], rgba[3]);
-                match &mut bg {
-                    Some(c) => c.0 = color,
-                    None => {
-                        commands.entity(entity).insert(BackgroundColor(color));
-                    }
+        if let Some(binding) = &b.background_color
+            && let Some(rgba) = eval_color(binding, &values)
+        {
+            let color = Color::srgba(rgba[0], rgba[1], rgba[2], rgba[3]);
+            match &mut bg {
+                Some(c) => c.0 = color,
+                None => {
+                    commands.entity(entity).insert(BackgroundColor(color));
                 }
             }
         }
 
-        if let Some(binding) = &b.opacity {
-            if let Some(alpha) = eval_scalar(binding, &values) {
-                if let Some(c) = &mut bg {
-                    let mut s = c.0.to_srgba();
-                    s.alpha = alpha;
-                    c.0 = Color::Srgba(s);
-                }
-                if let Some(mut tc) = text_color {
-                    let mut s = tc.0.to_srgba();
-                    s.alpha = alpha;
-                    tc.0 = Color::Srgba(s);
-                }
-                if let Some(mut img) = image {
-                    let mut s = img.color.to_srgba();
-                    s.alpha = alpha;
-                    img.color = Color::Srgba(s);
-                }
+        if let Some(binding) = &b.opacity
+            && let Some(alpha) = eval_scalar(binding, &values)
+        {
+            if let Some(c) = &mut bg {
+                let mut s = c.0.to_srgba();
+                s.alpha = alpha;
+                c.0 = Color::Srgba(s);
+            }
+            if let Some(mut tc) = text_color {
+                let mut s = tc.0.to_srgba();
+                s.alpha = alpha;
+                tc.0 = Color::Srgba(s);
+            }
+            if let Some(mut img) = image {
+                let mut s = img.color.to_srgba();
+                s.alpha = alpha;
+                img.color = Color::Srgba(s);
             }
         }
     }
@@ -607,7 +607,7 @@ impl Runner {
                 } else {
                     (*a, *b)
                 };
-                *child = Box::new(build_runner_with_target(template, from, Some(target)));
+                **child = build_runner_with_target(template, from, Some(target));
                 (v, false)
             }
             Runner::Sequence {
@@ -623,7 +623,7 @@ impl Runner {
                     return (v, true);
                 }
                 *index += 1;
-                *child = Box::new(build_runner(&steps[*index], v));
+                **child = build_runner(&steps[*index], v);
                 (v, false)
             }
             Runner::Delay {

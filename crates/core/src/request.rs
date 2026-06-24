@@ -32,8 +32,8 @@ use serde::de::DeserializeOwned;
 use ts_rs::TS;
 
 use crate::bridge::{OutboundResource, OutboundSender};
-use crate::message::TsCollector;
 use crate::protocol::{Outbound, ResponseResult};
+use crate::ts_codegen::TsCollector;
 
 /// The raw wire form of a request crossing JS → Bevy: a correlation `id`, the
 /// request `name`, and the JSON payload. Routed by [`ReactRequestRegistry`].

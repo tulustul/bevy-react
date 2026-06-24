@@ -2,6 +2,12 @@
 //!
 //! Provides [`react_message`], the attribute that turns a plain struct into a
 //! registrable React message payload.
+//
+// TODO(review): these macros expand to `::serde::` and `::ts_rs::` paths, forcing every
+// downstream consumer crate to add `serde` AND `ts_rs` as direct dependencies (works in-repo
+// only because examples share the package's deps). Re-export both from the lib (e.g.
+// `bevy_react::__private::{serde, ts_rs}`) and reference those paths so consumers need only
+// `bevy_react` + `bevy`.
 
 use proc_macro::TokenStream;
 use quote::quote;

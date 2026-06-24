@@ -4,7 +4,7 @@
 //
 //   import { mount } from "bevy-react";
 //   import { App } from "./App";
-//   await mount(<App />);
+//   mount(<App />);
 //
 // The lower-level pieces are exported for advanced/custom integrations.
 

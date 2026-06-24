@@ -25,6 +25,11 @@ fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
         .add_plugins(ReactUiPlugin::new("ui/dist/app.js"))
+        // `bevy_ui` needs a camera to render — the plugin doesn't spawn one, so
+        // provide your own (a `Camera2d`, or any camera that renders UI).
+        .add_systems(Startup, |mut commands: Commands| {
+            commands.spawn(Camera2d);
+        })
         .run();
 }
 ```
@@ -33,7 +38,6 @@ fn main() {
 shown):
 
 - `.hot_reload(true)` — apply bundle edits live, preserving hook state.
-- `.spawn_camera(true)` — spawn a `Camera2d` for you (turn off if you supply one).
 - `.with_animations(true)` — enable the animation engine.
 - `.default_font("assets/font.ttf")` — app-wide default font.
 - `.font("Name", "assets/name.ttf")` — register a named font for `fontFamily`.
@@ -77,7 +81,7 @@ Your entry point mounts the tree:
 import { mount } from "bevy-react";
 import { App } from "./App";
 
-await mount(<App />);
+mount(<App />);
 ```
 
 ## 3. Run it

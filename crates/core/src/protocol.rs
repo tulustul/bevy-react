@@ -156,6 +156,11 @@ pub use bevy_react_canvas::DrawCmd;
 /// (`"50%"`, `"100vw"`, `"auto"`, `"10px"`). Rect-valued fields
 /// (`margin`/`padding`/`border`/`borderRadius`) accept a number (uniform), a CSS
 /// shorthand string (`"8px 16px"`), or a `{ top, right, bottom, left }` object.
+// TODO(review): the enum-like fields below are `Option<String>` and re-parsed from their
+// string form on every apply (see ui_map's `display`/`align_items`/… and `parse_template`,
+// which re-allocates `Vec<RepeatedGridTrack>` each update). Decode them into real enums at
+// this serde boundary once (as `Length`/`Rect` already do) so the hot path is a copy, not a
+// string match — this compounds with the no-diffing / full-re-apply cost.
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Style {
@@ -385,7 +390,8 @@ fn parse_length(s: &str) -> Result<Length, String> {
     }
     // `vmin`/`vmax` before `vw`/`vh` is unnecessary (suffixes are distinct), but
     // `%` is checked last so numeric parsing handles the bare-number case.
-    let units: [(&str, fn(f32) -> Length); 6] = [
+    type LengthCtor = fn(f32) -> Length;
+    let units: [(&str, LengthCtor); 6] = [
         ("px", Length::Px),
         ("vmin", Length::VMin),
         ("vmax", Length::VMax),

@@ -1,6 +1,6 @@
 import { BevyStyle } from "bevy-react/jsx";
 import { PropsWithChildren } from "react";
-import { Colors, FontSizes } from "../theme";
+import { Colors, FontSizes } from "@/theme";
 
 export type ButtonProps = PropsWithChildren & {
   style?: BevyStyle;

@@ -1,5 +1,5 @@
 import { BevyStyle } from "bevy-react/jsx";
-import { Colors, FontSizes } from "../../theme";
+import { Colors, FontSizes } from "@/theme";
 
 // Small shared building blocks so the styling demos stay short and consistent.
 // Colors come from the global theme; see ../../theme.

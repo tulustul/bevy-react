@@ -1,6 +1,6 @@
 import { BevyStyle, PointerEventData } from "bevy-react/jsx";
 import { ProgressBar } from "./ProgressBar";
-import { Colors } from "../theme";
+import { Colors } from "@/theme";
 
 export type SliderProps = {
   /** Current value (controlled — the parent owns it). */

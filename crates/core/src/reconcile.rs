@@ -31,6 +31,9 @@ pub fn apply_js_ops(
     mut images: ResMut<Assets<Image>>,
     children: Query<&Children>,
     rnodes: Query<&RNode>,
+    // The persistent world-anchor overlay layer (a child of the root). It is
+    // infrastructure, not a reconciler node, so `Op::Reset` must preserve it.
+    anchor_layer: Query<(), With<crate::anchor::AnchorLayer>>,
     mut editables: Query<&mut EditableText>,
     // A `<text>` *root* carries a layout `Node`; a span (nested `<text>` or a
     // bare string) does not. Used on update to re-apply layout/visual/transform
@@ -54,9 +57,20 @@ pub fn apply_js_ops(
                 // Despawn the whole tree under the root (recursive), then reset
                 // the id map to just the root. Stale ops referencing despawned
                 // ids resolve to None afterwards and are skipped harmlessly.
-                if let Some(&root) = bridge.nodes.get(&ROOT_ID) {
-                    if let Ok(kids) = children.get(root) {
-                        for child in kids.iter() {
+                if let Some(&root) = bridge.nodes.get(&ROOT_ID)
+                    && let Ok(kids) = children.get(root)
+                {
+                    for child in kids.iter() {
+                        // The anchor layer is persistent infrastructure: keep it,
+                        // but despawn the reconciler overlays reparented under it
+                        // so a reload doesn't leave stale duplicate overlays.
+                        if anchor_layer.contains(child) {
+                            if let Ok(overlays) = children.get(child) {
+                                for overlay in overlays.iter() {
+                                    commands.entity(overlay).despawn();
+                                }
+                            }
+                        } else {
                             commands.entity(child).despawn();
                         }
                     }
@@ -66,6 +80,10 @@ pub fn apply_js_ops(
                 bridge.raw_spans.clear();
                 bridge.editable_inputs.clear();
                 bridge.editable_values.clear();
+                // The root persists but its children were just despawned; the shadow
+                // tree is fully rebuilt by the ops that follow.
+                bridge.child_order.clear();
+                bridge.parent_of.clear();
             }
             Op::Create { id, kind, props } => {
                 let entity = match kind.as_str() {
@@ -173,6 +191,11 @@ pub fn apply_js_ops(
             }
             Op::Append { parent, child } => {
                 if let (Some(p), Some(c)) = (resolve(&bridge, parent), resolve(&bridge, child)) {
+                    // Detach first so appending a node that's being moved (or reordered to
+                    // the end) leaves no stale entry in its old parent's list.
+                    bridge.detach(child);
+                    bridge.child_order.entry(parent).or_default().push(child);
+                    bridge.parent_of.insert(child, parent);
                     commands.entity(p).add_child(c);
                     inherit_text_style(&mut commands, &bridge, parent, child, c);
                 }
@@ -182,23 +205,42 @@ pub fn apply_js_ops(
                 child,
                 before,
             } => {
-                // PoC: ordered insertion isn't needed by the sample app, so we
-                // append. Reordering support would query the parent's Children
-                // and use `insert_children(index, &[child])`.
-                let _ = before;
+                // Ordered insertion: place `child` at `before`'s position. The live
+                // `Children` can't be read here (commands queued earlier in this same
+                // batch haven't applied), so the index comes from the shadow tree, which
+                // mirrors exactly what the deferred commands will produce. `insert_child`
+                // removes any existing occurrence of `child` first, then inserts at the
+                // (post-detach) index — matching the shadow update below.
                 if let (Some(p), Some(c)) = (resolve(&bridge, parent), resolve(&bridge, child)) {
-                    commands.entity(p).add_child(c);
+                    bridge.detach(child);
+                    let siblings = bridge.child_order.entry(parent).or_default();
+                    let idx = siblings
+                        .iter()
+                        .position(|&id| id == before)
+                        .unwrap_or(siblings.len());
+                    siblings.insert(idx, child);
+                    bridge.parent_of.insert(child, parent);
+                    commands.entity(p).insert_child(idx, c);
                     inherit_text_style(&mut commands, &bridge, parent, child, c);
                 }
             }
             Op::Remove { parent: _, child } => {
                 if let Some(c) = resolve(&bridge, child) {
                     commands.entity(c).despawn();
+                    // TODO(review): these single-node removals leak the *descendants* of a
+                    // removed subtree — React emits `Remove` only for the subtree root, but
+                    // Bevy despawns the whole subtree, so descendant ids linger here (stale
+                    // entity handles) until the next `Reset`. Prune the subtree from these
+                    // tables too (the `child_order` tree below already gives the ids).
                     bridge.nodes.remove(&child);
                     bridge.text_styles.remove(&child);
                     bridge.raw_spans.remove(&child);
                     bridge.editable_inputs.remove(&child);
                     bridge.editable_values.remove(&child);
+                    // Unlink from the parent's ordered list, then drop the subtree from the
+                    // shadow tree so it stays bounded.
+                    bridge.detach(child);
+                    bridge.forget_subtree(child);
                 }
             }
             Op::Update { id, props } => {
@@ -226,10 +268,10 @@ pub fn apply_js_ops(
                     apply_anchor(&mut ec, &props);
                     if let Ok(kids) = children.get(e) {
                         for child in kids.iter() {
-                            if let Ok(rnode) = rnodes.get(child) {
-                                if bridge.raw_spans.contains(&rnode.0) {
-                                    commands.entity(child).insert(style.clone());
-                                }
+                            if let Ok(rnode) = rnodes.get(child)
+                                && bridge.raw_spans.contains(&rnode.0)
+                            {
+                                commands.entity(child).insert(style.clone());
                             }
                         }
                     }
@@ -240,11 +282,11 @@ pub fn apply_js_ops(
                     // never resets the cursor. Re-applying baseline keeps the
                     // `onChange` dedup from echoing this programmatic set back.
                     if let Some(new_val) = &props.value {
-                        if let Ok(mut editable) = editables.get_mut(e) {
-                            if editable.value().to_string() != *new_val {
-                                editable.editor_mut().set_text(new_val);
-                                editable.queue_edit(TextEdit::TextEnd(false));
-                            }
+                        if let Ok(mut editable) = editables.get_mut(e)
+                            && editable.value().to_string() != *new_val
+                        {
+                            editable.editor_mut().set_text(new_val);
+                            editable.queue_edit(TextEdit::TextEnd(false));
                         }
                         bridge.editable_values.insert(id, new_val.clone());
                     }
@@ -286,6 +328,10 @@ pub fn apply_js_ops(
 /// When a bare-string run is appended into a `<text>`, copy the parent's text
 /// style onto it (Bevy has no text-style inheritance, and the parent's freshly
 /// queued components aren't yet visible to an ECS query this frame).
+// TODO(review): this hand-rolled CSS-style text inheritance (here + the O(children)
+// re-propagation loop in the `<text>` `Op::Update` branch) is a complexity hotspot. It's
+// likely unavoidable until Bevy grows real text-style inheritance, but worth watching as the
+// text model grows.
 fn inherit_text_style(
     commands: &mut Commands,
     bridge: &JsBridge,
@@ -545,30 +591,28 @@ pub fn collect_pointer_events(
     }
 
     // While held, follow the cursor and emit move events (a drag).
-    if buttons.pressed(MouseButton::Left) {
-        if let Some(entity) = drag.entity {
-            if let Ok((_, rnode, _, rel, handlers)) = nodes.get(entity) {
-                let pos = normalized_01(rel).unwrap_or(drag.last_pos);
-                let abs = cursor_abs.unwrap_or(drag.last_abs);
-                drag.last_pos = pos;
-                drag.last_abs = abs;
-                if handlers.moved {
-                    emit(rnode, "pointerMove", pos, abs);
-                }
-            }
+    if buttons.pressed(MouseButton::Left)
+        && let Some(entity) = drag.entity
+        && let Ok((_, rnode, _, rel, handlers)) = nodes.get(entity)
+    {
+        let pos = normalized_01(rel).unwrap_or(drag.last_pos);
+        let abs = cursor_abs.unwrap_or(drag.last_abs);
+        drag.last_pos = pos;
+        drag.last_abs = abs;
+        if handlers.moved {
+            emit(rnode, "pointerMove", pos, abs);
         }
     }
 
     // End the drag on release.
-    if buttons.just_released(MouseButton::Left) {
-        if let Some(entity) = drag.entity.take() {
-            if let Ok((_, rnode, _, rel, handlers)) = nodes.get(entity) {
-                let pos = normalized_01(rel).unwrap_or(drag.last_pos);
-                let abs = cursor_abs.unwrap_or(drag.last_abs);
-                if handlers.up {
-                    emit(rnode, "pointerUp", pos, abs);
-                }
-            }
+    if buttons.just_released(MouseButton::Left)
+        && let Some(entity) = drag.entity.take()
+        && let Ok((_, rnode, _, rel, handlers)) = nodes.get(entity)
+    {
+        let pos = normalized_01(rel).unwrap_or(drag.last_pos);
+        let abs = cursor_abs.unwrap_or(drag.last_abs);
+        if handlers.up {
+            emit(rnode, "pointerUp", pos, abs);
         }
     }
 
@@ -592,6 +636,7 @@ fn normalized_01(rel: &RelativeCursorPosition) -> Option<Vec2> {
 /// a React re-render while still hovered. `None` → base, `Hovered` → base+hover,
 /// `Pressed` → base+hover+press. Runs entirely on the Bevy side: no round-trip to
 /// JS, no React re-render on mouse move.
+#[allow(clippy::type_complexity)]
 pub fn apply_interaction_styles(
     mut commands: Commands,
     query: Query<
@@ -682,6 +727,239 @@ mod tests {
                 .rotate,
             Some(PI),
             "a text re-render must refresh the transform target so it animates"
+        );
+    }
+
+    // --- ordered insertion (`Op::Insert` honoring `before`) --------------------
+
+    /// Build a minimal app with `apply_js_ops` wired up and a spawned UI root, plus
+    /// the ops sender. Mirrors `text_update_reapplies_transform_target`'s harness.
+    fn ordering_app() -> (App, crossbeam_channel::Sender<Vec<Op>>, Entity) {
+        let mut app = App::new();
+        app.add_plugins((MinimalPlugins, AssetPlugin::default()));
+        app.init_asset::<Image>();
+        app.init_resource::<Fonts>();
+        let (ops_tx, ops_rx) = crossbeam_channel::unbounded::<Vec<Op>>();
+        let (out_tx, _out_rx) = tokio::sync::mpsc::unbounded_channel::<Outbound>();
+        let root = app.world_mut().spawn_empty().id();
+        app.insert_resource(JsBridge::new(ops_rx, out_tx, root));
+        app.add_systems(Update, apply_js_ops);
+        (app, ops_tx, root)
+    }
+
+    fn create_node(id: NodeId) -> Op {
+        Op::Create {
+            id,
+            kind: "node".into(),
+            props: Props::default(),
+        }
+    }
+
+    /// The entity a node id resolved to.
+    fn ent(app: &App, id: NodeId) -> Entity {
+        app.world().resource::<JsBridge>().nodes[&id]
+    }
+
+    /// The parent's children, in order.
+    fn children_of(app: &App, parent: Entity) -> Vec<Entity> {
+        app.world()
+            .entity(parent)
+            .get::<Children>()
+            .map(|c| c.iter().collect())
+            .unwrap_or_default()
+    }
+
+    /// Append-only construction yields the appended order — and does so within a
+    /// single batch, where the live `Children` is not yet readable.
+    #[test]
+    fn append_builds_child_order() {
+        let (mut app, tx, _root) = ordering_app();
+        tx.send(vec![
+            create_node(1), // parent
+            create_node(2),
+            create_node(3),
+            create_node(4),
+            Op::Append {
+                parent: ROOT_ID,
+                child: 1,
+            },
+            Op::Append {
+                parent: 1,
+                child: 2,
+            },
+            Op::Append {
+                parent: 1,
+                child: 3,
+            },
+            Op::Append {
+                parent: 1,
+                child: 4,
+            },
+        ])
+        .unwrap();
+        app.update();
+
+        let parent = ent(&app, 1);
+        assert_eq!(
+            children_of(&app, parent),
+            vec![ent(&app, 2), ent(&app, 3), ent(&app, 4)],
+        );
+    }
+
+    /// Moving an existing child with `Insert` reorders it (React emits `insertBefore`
+    /// with the same id, no preceding remove): `[A,B,C]` + move C before A → `[C,A,B]`.
+    #[test]
+    fn insert_reorders_existing_child() {
+        let (mut app, tx, _root) = ordering_app();
+        tx.send(vec![
+            create_node(1),
+            create_node(2),
+            create_node(3),
+            create_node(4),
+            Op::Append {
+                parent: ROOT_ID,
+                child: 1,
+            },
+            Op::Append {
+                parent: 1,
+                child: 2,
+            },
+            Op::Append {
+                parent: 1,
+                child: 3,
+            },
+            Op::Append {
+                parent: 1,
+                child: 4,
+            },
+        ])
+        .unwrap();
+        app.update();
+
+        // Move C (4) before A (2).
+        tx.send(vec![Op::Insert {
+            parent: 1,
+            child: 4,
+            before: 2,
+        }])
+        .unwrap();
+        app.update();
+
+        let parent = ent(&app, 1);
+        assert_eq!(
+            children_of(&app, parent),
+            vec![ent(&app, 4), ent(&app, 2), ent(&app, 3)],
+            "C should move to the front: [C, A, B]"
+        );
+    }
+
+    /// Inserting a brand-new child mid-list lands it at `before`'s position:
+    /// `[A,B,C]` + insert D before B → `[A,D,B,C]`.
+    #[test]
+    fn insert_new_child_in_the_middle() {
+        let (mut app, tx, _root) = ordering_app();
+        tx.send(vec![
+            create_node(1),
+            create_node(2),
+            create_node(3),
+            create_node(4),
+            Op::Append {
+                parent: ROOT_ID,
+                child: 1,
+            },
+            Op::Append {
+                parent: 1,
+                child: 2,
+            },
+            Op::Append {
+                parent: 1,
+                child: 3,
+            },
+            Op::Append {
+                parent: 1,
+                child: 4,
+            },
+        ])
+        .unwrap();
+        app.update();
+
+        // New node D (5) inserted before B (3).
+        tx.send(vec![
+            create_node(5),
+            Op::Insert {
+                parent: 1,
+                child: 5,
+                before: 3,
+            },
+        ])
+        .unwrap();
+        app.update();
+
+        let parent = ent(&app, 1);
+        assert_eq!(
+            children_of(&app, parent),
+            vec![ent(&app, 2), ent(&app, 5), ent(&app, 3), ent(&app, 4)],
+            "D should land before B: [A, D, B, C]"
+        );
+    }
+
+    /// The regression that motivates the shadow tree: an `Insert` whose `before` was
+    /// appended earlier in the SAME batch. The live `Children` can't be read mid-batch
+    /// (deferred commands), so the index must come from the shadow order — `[X, Y]`.
+    #[test]
+    fn insert_orders_within_a_single_batch() {
+        let (mut app, tx, _root) = ordering_app();
+        tx.send(vec![
+            create_node(10), // parent
+            create_node(11), // X
+            create_node(12), // Y
+            Op::Append {
+                parent: ROOT_ID,
+                child: 10,
+            },
+            Op::Append {
+                parent: 10,
+                child: 12,
+            }, // Y appended first
+            Op::Insert {
+                parent: 10,
+                child: 11,
+                before: 12,
+            }, // X inserted before Y, same batch
+        ])
+        .unwrap();
+        app.update();
+
+        let parent = ent(&app, 10);
+        assert_eq!(
+            children_of(&app, parent),
+            vec![ent(&app, 11), ent(&app, 12)],
+            "X must precede Y even though Children was unreadable mid-batch"
+        );
+    }
+
+    /// `Op::Reset` must keep the persistent anchor layer alive (it is spawned once at
+    /// startup) while still clearing the reconciler overlays reparented under it.
+    #[test]
+    fn reset_preserves_anchor_layer_but_clears_its_overlays() {
+        use crate::anchor::AnchorLayer;
+        let (mut app, tx, root) = ordering_app();
+
+        // The anchor layer is a child of the root; an overlay (a reconciler node) has
+        // been reparented under it, exactly as `position_anchored_nodes` would do.
+        let layer = app.world_mut().spawn((AnchorLayer, ChildOf(root))).id();
+        let overlay = app.world_mut().spawn((RNode(99), ChildOf(layer))).id();
+
+        tx.send(vec![Op::Reset]).unwrap();
+        app.update();
+
+        assert!(
+            app.world().entities().contains(layer),
+            "Op::Reset must preserve the persistent anchor layer"
+        );
+        assert!(
+            !app.world().entities().contains(overlay),
+            "Op::Reset must despawn overlays reparented under the anchor layer"
         );
     }
 }

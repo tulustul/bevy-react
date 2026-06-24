@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { BevyStyle } from "bevy-react/jsx";
-import { Button, Example } from "../../components";
-import { Colors } from "../../theme";
+import { Button, Example } from "@/components";
+import { Colors } from "@/theme";
 
 // A pure-UI demo of the `<image>` host element: an asset loaded by `src`, plus
 // `tint`, `flipX`, and `flipY`. The same `bevy-logo.png` is shown untinted and
