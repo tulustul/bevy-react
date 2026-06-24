@@ -1,0 +1,25 @@
+Release blockers:
+  ☐ Path-dep versions for crates.io - `Cargo.toml [workspace.dependencies]` references `bevy-react-animations` / `bevy-react-canvas` / `bevy-react-macros` by `path` only. crates.io rejects path-only deps — each needs `version = "0.1.0"` alongside `path`, and the leaf crates must be published first (macros → canvas/animations → core).
+  ☐ npm publish model - `js/package.json` `exports` ship raw `./src/*.ts` (no build output). Confirm that's intended for the esbuild-bundling consumer, or add a build step and ship compiled JS + `.d.ts`.
+  ☐ add docs.rs
+  ☐ Add `CHANGELOG.md` and `CONTRIBUTING.md`
+
+CI / correctness:
+  ☐ Re-enable Rus bindings-drift check are commented out in `.github/workflows/ci.yml` (commit `a131205`) because linking OOMs the GitHub runner. Until fixed, the test suite and the codegen-sync invariant (regen → `git diff --exit-code`) are unenforced. Fix options: `mold`/`lld` linker, split build/test into separate jobs, lower `codegen-units`, or a larger runner.
+  ☐ Failing JS nav tests - (`demo_switch`, `roundtrip`): `find_button` walks too few DOM levels, so the nav-button lookup fails. Tests are red, not just disabled.
+
+Known debt:
+  ☐ Unbounded channels / no backpressure - (`crates/core/src/plugin.rs:125`). A system that emits faster than JS drains grows the queue without bound. Bound them or document.
+  ☐ Proper error handling e.g. incorrect prop/style values
+  ☐ Panic audit on JS-derived data - Confirm these are unreachable from malformed ops, or convert to graceful errors: `crates/core/src/anchor.rs:214` / `:217` (`.expect("anchor present")` / `.expect("scale present")`), `crates/core/src/reconcile.rs:674` (`.expect("valid text props")`). A panic on the JS thread is worse than a logged error. (The request path already rejects on bad input.)
+  ☐ Full `Node` rebuild on every `Op::Update` - (`crates/core/src/ui_map.rs:494`) and the hand-maintained `Style` mirror list (`crates/core/src/ui_map.rs:589`) that must match `Style` field-for-field — easy to desync, perf-relevant.
+  ☐ Descendant leak on single-node removal - (`crates/core/src/reconcile.rs:230`).
+  ☐ Surface JS runtime errors - (`crates/core/src/js_thread.rs:136`): route the isolate's `console.error` / `console.log` back to the Bevy log so users can debug their React app.
+  ☐ Single-root / single-isolate - limitation (`crates/core/src/plugin.rs:312`) — one UI surface per app. Document explicitly.
+
+Features:
+  ☐ Benchmarks and stress tests
+  ☐ `<editableText>` completeness (IME, clipboard, selection); no accessibility story.
+  ☐ named colors
+  ☐ proper units support in styles
+  ☐ double check all bevy_ui features and make sure they are supported

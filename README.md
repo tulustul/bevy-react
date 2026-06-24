@@ -302,6 +302,6 @@ function Score() {
 See [SETUP.md](./SETUP.md#talking-to-bevy-typed-channels) for the request (await a
 reply) and event (Bevy → React) channels.
 
-## Perfomarmance
+## Performance
 
 At this stage, no benchmarks or stress tests were executed against the library.

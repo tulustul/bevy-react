@@ -2,6 +2,16 @@
   "name": "bevy-react",
   "version": "0.1.0",
   "description": "Drive bevy_ui from React via a custom reconciler over an embedded V8 runtime.",
+  "license": "MIT OR Apache-2.0",
+  "author": "Mateusz Tomczyk <mateusz.tomczyk.tul@gmail.com>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tulustul/bevy-react.git"
+  },
+  "homepage": "https://github.com/tulustul/bevy-react#readme",
+  "bugs": {
+    "url": "https://github.com/tulustul/bevy-react/issues"
+  },
   "type": "module",
   "exports": {
     ".": "./src/index.ts",

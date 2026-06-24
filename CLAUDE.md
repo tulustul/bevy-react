@@ -84,11 +84,11 @@ Three app-level channels, all **typed in Rust and mirrored to TypeScript by code
 
 ### The codegen sync invariant (important)
 
-The Rust binding structs are the **single source of truth**. `App::export_react_typescript(path)` (`crates/core/src/message.rs::render_typescript`) walks all three registries in one pass and writes a self-contained `generated.ts`: per-payload type declarations, the `ReactMessages`/`ReactRequests`/`ReactEvents` maps, typed `emit`/`request`/`on` wrappers, and a structured **`bevy` proxy** whose nested methods come from dotted request names (`"board.get"` → `bevy.board.get()`; a void/unit request payload → a zero-arg method).
+The Rust binding structs are the **single source of truth**. `App::export_react_typescript(path)` (`crates/core/src/message.rs::render_typescript`) walks all three registries in one pass and writes a self-contained `bevy.ts`: per-payload type declarations, the `ReactMessages`/`ReactRequests`/`ReactEvents` maps, typed `emit`/`request`/`on` wrappers, and a structured **`bevy` proxy** whose nested methods come from dotted request names (`"board.get"` → `bevy.board.get()`; a void/unit request payload → a zero-arg method).
 
-- The example exposes this via `cargo run -p bevy-react --example demos -- --export-bindings <path>` (a flag handled in `examples/demos/main.rs` that builds a bare `App`, runs the shared `register_react_bindings` aggregating every demo's bindings, exports, and returns without `app.run()`). The npm convenience is `npm run gen:bindings -w demos-app`.
-- **After changing any `#[react_message]`/`#[react_request]`/`#[react_event]` type, regenerate** and commit `generated.ts`. Output is deterministic (sorted); the CI guarantee is regenerate-then-`git diff --exit-code`. `generated.ts` is `.prettierignore`d so prettier never fights the generator.
-- App code imports the typed surface from `./generated` (e.g. `import { bevy, emit } from "./generated"`), **not** the untyped functions from `"bevy-react"`.
+- The example exposes this via `cargo run -p bevy-react --example demos -- --export-bindings <path>` (a flag handled in `examples/demos/main.rs` that builds a bare `App`, runs the shared `register_react_bindings` aggregating every demo's bindings, exports, and returns without `app.run()`). The npm convenience is `npm run bevy:generate -w demos-app`.
+- **After changing any `#[react_message]`/`#[react_request]`/`#[react_event]` type, regenerate** and commit `bevy.ts`. Output is deterministic (sorted); the CI guarantee is regenerate-then-`git diff --exit-code`. `bevy.ts` should be `.prettierignore`d so prettier never fights the generator (note: the current `.prettierignore` glob still names the old `generated.ts` — see `TODO`).
+- App code imports the typed surface from `./bevy` (e.g. `import { bevy, emit } from "./bevy"`), **not** the untyped functions from `"bevy-react"`.
 
 ## Conventions & gotchas
 

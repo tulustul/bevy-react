@@ -2,6 +2,13 @@
 name = "bevy-react-macros"
 version.workspace = true
 edition.workspace = true
+description = "Proc-macros for bevy-react's typed React<->Bevy messaging."
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords = ["bevy", "react", "macros", "codegen"]
+categories = ["gui", "game-development"]
 
 [lib]
 name = "bevy_react_macros"

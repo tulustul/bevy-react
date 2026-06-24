@@ -2,6 +2,14 @@
 name = "bevy-react"
 version.workspace = true
 edition.workspace = true
+description = "Drive bevy_ui from a React app over an embedded V8 runtime."
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme = "../../README.md"
+keywords = ["bevy", "react", "ui", "gamedev", "gui"]
+categories = ["gui", "game-development"]
 
 [lib]
 name = "bevy_react"

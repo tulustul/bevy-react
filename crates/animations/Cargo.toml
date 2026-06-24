@@ -2,6 +2,13 @@
 name = "bevy-react-animations"
 version.workspace = true
 edition.workspace = true
+description = "Reanimated-style animation engine for bevy-react."
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords = ["bevy", "react", "animation", "ui", "gamedev"]
+categories = ["gui", "game-development"]
 
 [lib]
 name = "bevy_react_animations"

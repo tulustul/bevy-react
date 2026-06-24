@@ -6,6 +6,10 @@ default-members = ["crates/core"]
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
+license = "MIT OR Apache-2.0"
+authors = ["Mateusz Tomczyk <mateusz.tomczyk.tul@gmail.com>"]
+repository = "https://github.com/tulustul/bevy-react"
+homepage = "https://github.com/tulustul/bevy-react"
 
 [workspace.dependencies]
 anyhow = "1.0.102"

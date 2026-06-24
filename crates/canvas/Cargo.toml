@@ -2,6 +2,13 @@
 name = "bevy-react-canvas"
 version.workspace = true
 edition.workspace = true
+description = "Canvas / rasterizer host element for bevy-react (tiny-skia)."
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords = ["bevy", "react", "canvas", "ui", "gamedev"]
+categories = ["gui", "game-development"]
 
 [lib]
 name = "bevy_react_canvas"
