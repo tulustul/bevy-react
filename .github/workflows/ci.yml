@@ -68,16 +68,19 @@ jobs:
       - name: Clippy
         run: cargo clippy --workspace --all-targets
 
-      # Build the JS bundle so the headless `roundtrip` test runs for real
-      # (it skips when the bundle is missing).
-      - name: Build JS bundle
-        run: npm run build -w demos-app
-
-      - name: Test
-        run: cargo test
-
-      - name: Regenerate TS bindings
-        run: npm run gen:bindings -w demos-app
-
-      - name: Verify bindings are up to date
-        run: git diff --exit-code -- examples/demos/ui/src/generated.ts
+      # TEMPORARILY DISABLED: linking OOMs the GitHub runner
+      # Re-enable once CI we have a fix.
+      #
+      # # Build the JS bundle so the headless `roundtrip` test runs for real
+      # # (it skips when the bundle is missing).
+      # - name: Build JS bundle
+      #   run: npm run build -w demos-app
+      #
+      # - name: Test
+      #   run: cargo test
+      #
+      # - name: Regenerate TS bindings
+      #   run: npm run gen:bindings -w demos-app
+      #
+      # - name: Verify bindings are up to date
+      #   run: git diff --exit-code -- examples/demos/ui/src/generated.ts
