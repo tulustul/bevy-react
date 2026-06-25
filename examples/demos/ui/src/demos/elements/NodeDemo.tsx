@@ -16,7 +16,7 @@ export function NodeDemo() {
   return (
     <Example
       description="A plain container you style and nest. Children flow inside it; drag to space them out."
-      typescript={TYPESCRIPT}
+      tsx={TYPESCRIPT}
     >
       <node style={{ ...panelStyle, gap }}>
         <node style={{ ...boxStyle, backgroundColor: Colors.primary100 }} />

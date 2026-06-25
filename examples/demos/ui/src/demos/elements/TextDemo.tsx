@@ -13,14 +13,14 @@ export function TextDemo() {
     <>
       <Example
         description="fontSize and fontWeight scale text. Drag to resize."
-        typescript={SIZE_TS}
+        tsx={SIZE_TS}
       >
         <SizeControl />
       </Example>
 
       <Example
         description="Custom font families, and inline nested color spans within one <text>."
-        typescript={FAMILY_TS}
+        tsx={FAMILY_TS}
       >
         <text
           style={{

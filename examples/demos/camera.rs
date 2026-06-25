@@ -92,7 +92,9 @@ fn orbit_camera(
     buttons: Res<ButtonInput<MouseButton>>,
     capture: Res<bevy_react::PointerCapture>,
     mut rig: ResMut<CameraRig>,
-    mut cam: Query<&mut Transform, With<Camera3d>>,
+    // Exclude the offscreen portal cameras (the follow/minimap render-target cams)
+    // so only the shared main camera orbits.
+    mut cam: Query<&mut Transform, (With<Camera3d>, Without<bevy_react::PortalCamera>)>,
 ) {
     // When the React UI owns the pointer (a drag, or hovering/pressing UI), don't
     // let the same mouse input drive the camera too.

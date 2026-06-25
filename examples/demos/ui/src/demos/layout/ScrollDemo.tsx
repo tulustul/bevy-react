@@ -10,7 +10,7 @@ export function ScrollDemo() {
   return (
     <Example
       description="overflowY: scroll clips a tall child and adds a wheel scrollbar. Hover the list and scroll."
-      typescript={`<node style={{
+      tsx={`<node style={{
   height: 180,
   overflowY: "scroll",
   scrollbarWidth: 8,

@@ -3,6 +3,7 @@ Release blockers:
   ☐ npm publish model - `js/package.json` `exports` ship raw `./src/*.ts` (no build output). Confirm that's intended for the esbuild-bundling consumer, or add a build step and ship compiled JS + `.d.ts`.
   ☐ add docs.rs
   ☐ Add `CHANGELOG.md` and `CONTRIBUTING.md`
+  ☐ stabilize API
 
 CI / correctness:
   ☐ Re-enable Rus bindings-drift check are commented out in `.github/workflows/ci.yml` (commit `a131205`) because linking OOMs the GitHub runner. Until fixed, the test suite and the codegen-sync invariant (regen → `git diff --exit-code`) are unenforced. Fix options: `mold`/`lld` linker, split build/test into separate jobs, lower `codegen-units`, or a larger runner.
@@ -18,8 +19,52 @@ Known debt:
   ☐ Single-root / single-isolate - limitation (`crates/core/src/plugin.rs:312`) — one UI surface per app. Document explicitly.
 
 Features:
-  ☐ Benchmarks and stress tests
   ☐ `<editableText>` completeness (IME, clipboard, selection); no accessibility story.
   ☐ named colors
   ☐ proper units support in styles
   ☐ double check all bevy_ui features and make sure they are supported
+
+
+Benchmarks and stress tests:
+  Framing: the reconciler IS `react-reconciler` (same Fiber engine as web React), so split
+  results into (a) apples-to-apples reconcile work — run the SAME component tree through a
+  react-dom host and the Bevy host, the delta is pure host/bridge overhead — and (b)
+  apples-to-oranges paint (bevy_ui/GPU vs DOM). The headline artifact is a "reconciler is
+  identical, here's the host overhead" chart.
+  Library-specific:
+    ☐ Op-flush hot path (criterion, headless): `serde_v8` deserialize + `apply_js_ops`
+      (`crates/core/src/reconcile.rs`) + `ui_map` vs `Vec<Op>` length (10 → 100k). Proves
+      the "no JSON strings on the hot path" claim.
+    ☐ Mount cost vs tree shape: deep (10k-deep) vs wide (10k siblings) vs balanced.
+    ☐ Update amplification: change one prop deep in an N-node tree → assert O(1) ops, not
+      O(N). Guards against reconciler/`Op::Update` regressions (relates to the full-`Node`
+      rebuild debt above).
+    ☐ Keyed-list churn: swap / insert / remove / reorder at scale.
+    ☐ End-to-end event round-trip latency (p50/p99 under load): click → `uiEvent` →
+      handler → setState → flush → applied. Extend `crates/core/tests/roundtrip.rs` with
+      timing. Expect ~1 frame (Bevy→JS is async via tokio mpsc → `op_next_event`).
+    ☐ Bevy→React event flood / backpressure: produce events faster than React commits;
+      watch the channel grow (ties to the unbounded-channels debt above).
+    ☐ Request/response under concurrency: many in-flight `op_request` correlations; verify
+      none hang on malformed payloads.
+    ☐ Frame-budget interaction (HIGHEST VALUE FIRST): `op_flush` is sync on the Bevy main
+      thread and shares the 16.6ms budget with the 3D sim. Measure dropped frames under a
+      large flush. Specifically: do world-anchored elements (declared once by React,
+      positioned every frame by a Bevy system — NO per-frame bridge traffic) trigger a
+      bevy_ui RELAYOUT on position change, or just transform/extract? If transform-only, N
+      anchored badges scale almost free; if relayout, that's the cost to fix.
+    ☐ Animations engine: N concurrent animations/frame — confirm values are driven
+      Rust-side, not round-tripped to JS each frame.
+    ☐ Canvas rasterizer: `DrawCmd` throughput/frame.
+    ☐ Hot-reload latency + steady-state memory across many reloads (isolate stays alive).
+    ☐ Leak/steady-state: frame-time stability; entity count across repeated `selectScene`
+      switches (verify `DespawnOnExit` reclaims).
+  Cross-framework comparison (port to bevy-react + a vanilla react-dom impl):
+    ☐ js-framework-benchmark (krausest) operation set — the industry-standard table:
+      create 1k/10k rows, update every 10th, swap, select, remove, clear, append.
+    ☐ uibench (localvoid/uibench) — clean reconciler-only comparison, minimal paint.
+    ☐ DBMonster / Sierpinski — sustained high-frequency / deep-recursive update cases.
+  Expectation (to validate): reconcile ≈ web & faster than RN (Hermes); commit boundary
+  faster than DOM mutation, ≈ RN Fabric; layout slower than Blink at high node counts
+  (the main risk); world-anchored UI AHEAD of web (web needs per-frame rAF + style writes,
+  we do it in Rust/GPU with zero JS).

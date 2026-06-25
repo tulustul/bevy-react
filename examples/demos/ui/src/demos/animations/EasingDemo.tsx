@@ -30,7 +30,7 @@ export function EasingDemo() {
   return (
     <Example
       description="Same distance, same duration: press Play to compare the four easings."
-      typescript={TYPESCRIPT}
+      tsx={TYPESCRIPT}
     >
       <node style={column}>
         <node style={{ flexDirection: "column", gap: 8 }}>

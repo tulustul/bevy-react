@@ -29,7 +29,7 @@ export function ReactToBevyDemo() {
   return (
     <Example
       description="React -> Bevy: a typed `emit` notifies the ECS, which spawns that many cubes."
-      typescript={TYPESCRIPT}
+      tsx={TYPESCRIPT}
       rust={RUST}
     >
       <text style={countStyle}>

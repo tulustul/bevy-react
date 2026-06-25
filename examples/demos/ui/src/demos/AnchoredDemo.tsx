@@ -37,7 +37,7 @@ export function AnchoredDemo() {
     <>
       <Example
         description="UI nodes pinned to a 3D entity, tracking it on screen and optionally scaling with distance."
-        typescript={TYPESCRIPT}
+        tsx={TYPESCRIPT}
       >
         <Checkbox
           label="Scale with distance"

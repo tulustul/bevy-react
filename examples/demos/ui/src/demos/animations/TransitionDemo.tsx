@@ -15,7 +15,7 @@ export function TransitionDemo() {
     <>
       <Example
         description="A `transition` eases hover/press style changes instead of snapping them."
-        typescript={`<button
+        tsx={`<button
   style={{ transform: { scale: 1 }, transition: {
     transform: { duration: 120, easing: "easeOut" },
     backgroundColor: { duration: 180 },
@@ -46,7 +46,7 @@ export function TransitionDemo() {
 
       <Example
         description="Transitions also ease plain React-state changes; here a spring drives the toggle."
-        typescript={`<button
+        tsx={`<button
   style={{
     transform: { translateX: on ? 36 : -36 },
     transition: { transform: { stiffness: 180, damping: 14 } },

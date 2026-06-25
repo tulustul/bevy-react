@@ -76,7 +76,7 @@ export function InteractionsDemo() {
   return (
     <Example
       description="Raw pointer events the bridge reports. Grab the box and drag it around the stage."
-      typescript={TYPESCRIPT}
+      tsx={TYPESCRIPT}
     >
       <node style={stageStyle}>
         <node

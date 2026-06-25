@@ -27,7 +27,7 @@ export function SpringDemo() {
   return (
     <Example
       description="A physical spring: low damping overshoots and wobbles, high damping glides."
-      typescript={TYPESCRIPT}
+      tsx={TYPESCRIPT}
     >
       <node style={column}>
         <node style={stage}>

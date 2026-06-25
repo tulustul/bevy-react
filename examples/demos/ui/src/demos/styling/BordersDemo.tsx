@@ -8,21 +8,21 @@ export function BordersDemo() {
     <>
       <Example
         description="borderRadius rounds the corners. Drag from square to pill."
-        typescript={`<node style={{ borderRadius: 16 }} />`}
+        tsx={`<node style={{ borderRadius: 16 }} />`}
       >
         <RadiusControl />
       </Example>
 
       <Example
         description="border adds an edge, painted by borderColor."
-        typescript={`border: 2, borderColor: "#7aa2f7"`}
+        tsx={`border: 2, borderColor: "#7aa2f7"`}
       >
         <WidthControl />
       </Example>
 
       <Example
         description="outline draws a ring outside the box, ignored by layout."
-        typescript={`outline: { width: 3, offset: 4, color: "#f9e2af" }`}
+        tsx={`outline: { width: 3, offset: 4, color: "#f9e2af" }`}
       >
         <OutlineControl />
       </Example>

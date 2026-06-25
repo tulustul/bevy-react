@@ -9,21 +9,21 @@ export function OpacityDemo() {
     <>
       <Example
         description="opacity fades a node and its children together. Drag to fade."
-        typescript={`<node style={{ opacity: 0.4 }} />`}
+        tsx={`<node style={{ opacity: 0.4 }} />`}
       >
         <OpacityControl />
       </Example>
 
       <Example
         description="zIndex controls paint order when nodes overlap."
-        typescript={`<node style={{ zIndex: 2 }} />`}
+        tsx={`<node style={{ zIndex: 2 }} />`}
       >
         <ZIndexControl />
       </Example>
 
       <Example
         description="display: none removes a node from layout entirely."
-        typescript={`<node style={{ display: "none" }} />`}
+        tsx={`<node style={{ display: "none" }} />`}
       >
         <DisplayControl />
       </Example>

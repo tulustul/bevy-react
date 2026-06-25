@@ -41,7 +41,7 @@ export function SpinDemo() {
   return (
     <Example
       description="An endless rotation via withRepeat; Stop calls cancelAnimation to freeze it."
-      typescript={TYPESCRIPT}
+      tsx={TYPESCRIPT}
     >
       <node style={column}>
         <node style={stage}>

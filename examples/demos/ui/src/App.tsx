@@ -9,6 +9,7 @@ import { BidirectionCommunicationDemo } from "./demos/communication/BidirectionC
 import { AnchoredDemo } from "./demos/AnchoredDemo";
 import { InteractionsDemo } from "./demos/InteractionsDemo";
 import { CanvasDemo } from "./demos/elements/CanvasDemo";
+import { PortalDemo } from "./demos/elements/PortalDemo";
 import { ScrollDemo } from "./demos/layout/ScrollDemo";
 import { EditableTextDemo } from "./demos/elements/EditableTextDemo";
 import { NodeDemo } from "./demos/elements/NodeDemo";
@@ -59,6 +60,12 @@ const DEMOS: DemoItem[] = [
       { label: "<editableText>", component: EditableTextDemo },
       { label: "<image>", component: ImageDemo },
       { label: "<canvas>", component: CanvasDemo },
+      { label: "<portal>", scene: "CrowdedCubes", component: PortalDemo },
+      {
+        label: "<Anchored.node>",
+        scene: "CrowdedCubes",
+        component: AnchoredDemo,
+      },
     ],
   },
   {
@@ -110,7 +117,6 @@ const DEMOS: DemoItem[] = [
       { label: "Style Transition", component: TransitionDemo },
     ],
   },
-  { scene: "CrowdedCubes", label: "World Anchors", component: AnchoredDemo },
   { label: "Interactions", component: InteractionsDemo },
 ];
 

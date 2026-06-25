@@ -9,27 +9,30 @@ import {
   removeEventListener as rawRemoveEventListener,
 } from "bevy-react";
 
-export type BallBounced = {
-  /**
-   * Which wall it hit.
-   */
-  wall: Wall;
-  /**
-   * Impact speed (world units/sec), for flavor in the toast.
-   */
-  speed: number;
-};
-export type BallState = { x: number; y: number; vx: number; vy: number };
-export type CubeInfo = { entity: bigint; label: string };
-export type CubesSpawned = { cubes: Array<CubeInfo> };
+export type BallBounced = { 
+/**
+ * Which wall it hit.
+ */
+wall: Wall, 
+/**
+ * Impact speed (world units/sec), for flavor in the toast.
+ */
+speed: number, };
+export type BallState = { x: number, y: number, vx: number, vy: number, };
+export type CubeInfo = { entity: bigint, label: string, };
+export type CubesSpawned = { cubes: Array<CubeInfo>, };
+export type FollowRandom = null;
 export type SceneId = "Cubes" | "BouncingBall" | "CrowdedCubes";
 export type SelectScene = SceneId | null;
 export type SetCount = number;
+export type SetFollowMode = boolean;
 export type Wall = "Left" | "Right" | "Top" | "Bottom" | "Front" | "Back";
 
 /** Every `emit` name and the payload type it carries. */
 export interface ReactMessages {
   "basicDemo.setCount": SetCount;
+  "crowdedCubes.followRandom": FollowRandom;
+  "crowdedCubes.setFollowMode": SetFollowMode;
   selectScene: SelectScene;
 }
 
@@ -45,10 +48,7 @@ export interface ReactEvents {
 }
 
 /** Send a typed app message to the Bevy side. */
-export function emit<K extends keyof ReactMessages>(
-  name: K,
-  value: ReactMessages[K],
-): void {
+export function emit<K extends keyof ReactMessages>(name: K, value: ReactMessages[K]): void {
   rawEmit(name, value);
 }
 
@@ -85,16 +85,14 @@ export const bevy = {
   addEventListener: on,
   removeEventListener,
   basicDemo: {
-    setCount(value: SetCount): void {
-      emit("basicDemo.setCount", value);
-    },
+    setCount(value: SetCount): void { emit("basicDemo.setCount", value); },
+  },
+  crowdedCubes: {
+    followRandom(value: FollowRandom): void { emit("crowdedCubes.followRandom", value); },
+    setFollowMode(value: SetFollowMode): void { emit("crowdedCubes.setFollowMode", value); },
   },
   pollingDemo: {
-    getBall(): Promise<BallState> {
-      return request("pollingDemo.getBall", null);
-    },
+    getBall(): Promise<BallState> { return request("pollingDemo.getBall", null); },
   },
-  selectScene(value: SelectScene): void {
-    emit("selectScene", value);
-  },
+  selectScene(value: SelectScene): void { emit("selectScene", value); },
 } as const;

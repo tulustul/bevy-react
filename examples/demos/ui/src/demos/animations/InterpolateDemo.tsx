@@ -32,7 +32,7 @@ export function InterpolateDemo() {
   return (
     <Example
       description="Drag the value 0 to 1 and watch one shared value drive both scale and color."
-      typescript={TYPESCRIPT}
+      tsx={TYPESCRIPT}
     >
       <node style={column}>
         <node style={stage}>

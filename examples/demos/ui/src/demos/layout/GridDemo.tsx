@@ -70,7 +70,7 @@ export function GridDemo() {
     <>
       <Example
         description="repeat(n, 1fr) makes n equal, flexible columns. Try the count and gap."
-        typescript={`<node style={{
+        tsx={`<node style={{
   display: "grid",
   gridTemplateColumns: "repeat(3, 1fr)",
   gap: 8,
@@ -81,7 +81,7 @@ export function GridDemo() {
 
       <Example
         description="Mixed tracks: a fixed sidebar and a flexible body column."
-        typescript={`gridTemplateColumns: "80px 1fr"`}
+        tsx={`gridTemplateColumns: "80px 1fr"`}
       >
         <node style={{ ...frame, gridTemplateColumns: "80px 1fr" }}>
           <Cells count={4} />
@@ -90,7 +90,7 @@ export function GridDemo() {
 
       <Example
         description="gridColumn: span 2 makes a cell straddle two columns."
-        typescript={`<node style={{ gridColumn: "span 2" }}>`}
+        tsx={`<node style={{ gridColumn: "span 2" }}>`}
       >
         <node style={{ ...frame, gridTemplateColumns: "repeat(3, 1fr)" }}>
           <node
@@ -108,7 +108,7 @@ export function GridDemo() {
 
       <Example
         description="gridRow: span 2 with explicit rows builds a feature cell."
-        typescript={`gridTemplateRows: "repeat(2, 48px)"
+        tsx={`gridTemplateRows: "repeat(2, 48px)"
 gridRow: "span 2"`}
       >
         <node

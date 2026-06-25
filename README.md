@@ -92,9 +92,10 @@ them by path or git.
 
 ### Elements & styling
 
-Host elements `<node>`, `<button>`, `<text>`, `<image>`, `<editableText>`, and
-`<canvas>` cover layout, input, and drawing. Style them with a flexbox/grid object
-(colors, spacing, borders, radius, shadows, transforms).
+Host elements `<node>`, `<button>`, `<text>`, `<image>`, `<editableText>`,
+`<canvas>`, and `<portal>` cover layout, input, drawing, and embedded 3D views.
+Style them with a flexbox/grid object (colors, spacing, borders, radius, shadows,
+transforms).
 
 ```tsx
 <node
@@ -221,6 +222,26 @@ rasterized into a texture. Returning fresh drawing each render makes it reactive
   }}
 />
 ```
+
+### Render-target portals
+
+`<portal>` shows an **offscreen render target** inside the UI — the live (or
+snapshot) output of a Bevy camera rendering into a texture. The app registers a
+named target and aims a camera at it; React displays it by name. Good for minimaps,
+picture-in-picture, or per-item 3D previews.
+
+```rust
+// Bevy: register a target, then point a camera at it.
+let view = render_targets.create(&mut images, "follow", RenderTargetSpec::default());
+commands.spawn((Camera3d::default(), view.camera_target(), PortalCamera("follow".into())));
+```
+
+```tsx
+// React: show it by name (Auto-sized to the node, so it stays crisp).
+<portal target="follow" style={{ width: 160, height: 160 }} />
+```
+
+![A "follow" portal showing an offscreen chase-cam view of a wandering cube and a 2D minimap of the whole field, each rendered by a Bevy camera into a texture and displayed in the React UI.](./screenshots/portal.png)
 
 ### World-anchored overlays
 

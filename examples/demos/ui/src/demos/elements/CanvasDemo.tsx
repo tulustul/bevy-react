@@ -130,10 +130,7 @@ export function CanvasDemo() {
   };
 
   return (
-    <Example
-      description="An immediate-mode raster surface."
-      typescript={TYPESCRIPT}
-    >
+    <Example description="An immediate-mode raster surface." tsx={TYPESCRIPT}>
       <canvas style={canvasStyle} draw={draw} onClick={shuffle} />
     </Example>
   );

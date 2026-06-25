@@ -9,21 +9,21 @@ export function SpacingDemo() {
     <>
       <Example
         description="padding insets content from the node's own edges."
-        typescript={`<node style={{ padding: 16 }} />`}
+        tsx={`<node style={{ padding: 16 }} />`}
       >
         <PaddingControl />
       </Example>
 
       <Example
         description="gap spaces flex/grid children; rowGap/columnGap split it."
-        typescript={`<node style={{ gap: 16 }} />`}
+        tsx={`<node style={{ gap: 16 }} />`}
       >
         <GapControl />
       </Example>
 
       <Example
         description="margin pushes a node away from its siblings."
-        typescript={`margin: { left: 24 }`}
+        tsx={`margin: { left: 24 }`}
       >
         <MarginControl />
       </Example>

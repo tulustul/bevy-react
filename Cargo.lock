@@ -389,6 +389,7 @@ dependencies = [
  "bevy-react-animations",
  "bevy-react-canvas",
  "bevy-react-macros",
+ "bevy-react-portal",
  "crossbeam-channel",
  "deno_core",
  "serde",
@@ -423,6 +424,13 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "bevy-react-portal"
+version = "0.1.0"
+dependencies = [
+ "bevy",
 ]
 
 [[package]]

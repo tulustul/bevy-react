@@ -9,21 +9,21 @@ export function TransformDemo() {
     <>
       <Example
         description="translate shifts a node after layout, without moving siblings."
-        typescript={`transform: { translateX: 16, translateY: 0 }`}
+        tsx={`transform: { translateX: 16, translateY: 0 }`}
       >
         <TranslateControl />
       </Example>
 
       <Example
         description="scale grows or shrinks a node around its center."
-        typescript={`transform: { scale: 0.7 }`}
+        tsx={`transform: { scale: 0.7 }`}
       >
         <ScaleControl />
       </Example>
 
       <Example
         description="rotate spins a node, in radians, around its center."
-        typescript={`transform: { rotate: 0.4 }`}
+        tsx={`transform: { rotate: 0.4 }`}
       >
         <RotateControl />
       </Example>

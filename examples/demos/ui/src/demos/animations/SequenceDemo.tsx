@@ -33,7 +33,7 @@ export function SequenceDemo() {
   return (
     <Example
       description="Press Play: slide right, pause, slide left, pause, return - one composed driver."
-      typescript={TYPESCRIPT}
+      tsx={TYPESCRIPT}
     >
       <node style={column}>
         <node style={stage}>

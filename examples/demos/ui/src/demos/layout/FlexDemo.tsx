@@ -86,7 +86,7 @@ export function FlexDemo() {
     <>
       <Example
         description="Flip the three main flex knobs live and watch the swatches rearrange."
-        typescript={`<node style={{
+        tsx={`<node style={{
   flexDirection,
   justifyContent,
   alignItems
@@ -97,7 +97,7 @@ export function FlexDemo() {
 
       <Example
         description="flexWrap pushes overflowing children onto the next line."
-        typescript={`<node style={{ flexWrap: "wrap", gap: 8 }}>`}
+        tsx={`<node style={{ flexWrap: "wrap", gap: 8 }}>`}
       >
         <node style={{ ...frame, width: 152, flexWrap: "wrap", gap: 8 }}>
           {Array.from({ length: 8 }, (_, i) => (
@@ -111,7 +111,7 @@ export function FlexDemo() {
 
       <Example
         description="flexGrow lets a child absorb the remaining space."
-        typescript={`<node style={{ flexGrow: 1 }}>`}
+        tsx={`<node style={{ flexGrow: 1 }}>`}
       >
         <node style={{ ...frame, width: 260, gap: 8 }}>
           <node style={{ ...swatch, backgroundColor: COLORS[0] }} />

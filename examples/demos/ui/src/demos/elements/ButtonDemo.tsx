@@ -19,7 +19,7 @@ export function ButtonDemo() {
   return (
     <Example
       description="A clickable node with hover and press style overrides, driving React state."
-      typescript={TYPESCRIPT}
+      tsx={TYPESCRIPT}
     >
       <text style={countStyle}>
         Clicks: <text style={{ color: Colors.primary100 }}>{count}</text>

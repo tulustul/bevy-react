@@ -176,6 +176,10 @@ impl Plugin for ReactUiPlugin {
         .init_resource::<ReactEventRegistry>()
         .init_resource::<PointerCapture>()
         .init_resource::<Fonts>()
+        // The offscreen render-target ("portal") registry and its shared blank
+        // placeholder texture, created before the first portal can mount.
+        .init_resource::<bevy_react_portal::RenderTargets>()
+        .add_systems(Startup, bevy_react_portal::init_portal_placeholder)
         .add_systems(Startup, setup)
         .add_systems(
             PreUpdate,
@@ -207,6 +211,12 @@ impl Plugin for ReactUiPlugin {
                 crate::anchor::position_anchored_nodes.after(apply_js_ops),
                 // Repaint `<canvas>` textures after their surfaces/sizes update.
                 bevy_react_canvas::update_canvas_surfaces.after(apply_js_ops),
+                // Bind `<portal>` nodes to their render-target textures after the
+                // op drain (so a freshly-spawned portal binds the same frame), then
+                // drive resolution + the snapshot camera lifecycle.
+                bevy_react_portal::bind_portals.after(apply_js_ops),
+                bevy_react_portal::drive_render_targets
+                    .after(bevy_react_portal::bind_portals),
             ),
         );
 

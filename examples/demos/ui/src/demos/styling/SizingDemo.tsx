@@ -9,21 +9,21 @@ export function SizingDemo() {
     <>
       <Example
         description="width/height take pixels, percentages, or viewport units."
-        typescript={`<node style={{ width: "60%" }} />`}
+        tsx={`<node style={{ width: "60%" }} />`}
       >
         <WidthControl />
       </Example>
 
       <Example
         description="aspectRatio derives the missing dimension from the given one."
-        typescript={`height: 50, aspectRatio: 1.6`}
+        tsx={`height: 50, aspectRatio: 1.6`}
       >
         <AspectControl />
       </Example>
 
       <Example
         description="minWidth/maxWidth clamp an otherwise flexible size."
-        typescript={`width: "100%", maxWidth: 160`}
+        tsx={`width: "100%", maxWidth: 160`}
       >
         <MaxWidthControl />
       </Example>

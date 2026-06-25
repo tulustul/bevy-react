@@ -127,6 +127,14 @@ pub struct Props {
     #[serde(default)]
     pub draw: Option<Vec<DrawCmd>>,
 
+    // --- `portal` element attribute ---
+    /// The render-target name a `portal` element displays. The reconciler stamps
+    /// a `bevy_react_portal::RPortal` carrying it; the binding system points the
+    /// node's `ImageNode` at the texture the app registered under this name (or a
+    /// transparent placeholder until it appears). Pure-serde, Bevy-free.
+    #[serde(default)]
+    pub target: Option<String>,
+
     // --- `editableText` element attributes ---
     /// The controlled text value of an `editableText`. Seeds the field on create;
     /// on update it's pushed into the widget only when it diverges from the live

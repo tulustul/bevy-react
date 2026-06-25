@@ -58,7 +58,7 @@ export function BidirectionCommunicationDemo() {
   return (
     <Example
       description="React <-> Bevy: an awaited request returns a typed response, polled here for live telemetry."
-      typescript={TYPESCRIPT}
+      tsx={TYPESCRIPT}
       rust={RUST}
     >
       {state ? (

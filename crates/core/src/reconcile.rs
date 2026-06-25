@@ -10,6 +10,7 @@ use bevy::ui::RelativeCursorPosition;
 use bevy::ui::widget::NodeImageMode;
 use bevy_react_animations::AnimatedNode;
 use bevy_react_canvas::{CanvasSurface, blank_canvas_image};
+use bevy_react_portal::{RPortal, blank_portal_image};
 
 use crate::anchor::Anchored;
 use crate::bridge::{JsBridge, PointerHandlers, RNode, StyleVariants};
@@ -118,6 +119,23 @@ pub fn apply_js_ops(
                             node_img,
                             CanvasSurface::new(props.draw.clone().unwrap_or_default()),
                         ));
+                        apply_style_variants(&mut ec, &props);
+                        apply_pointer_handlers(&mut ec, &props);
+                        apply_animated(&mut ec, &props);
+                        apply_anchor(&mut ec, &props);
+                        ec.id()
+                    }
+                    // A `<portal>`: a styled node carrying an `ImageNode` whose
+                    // texture is an offscreen render target the `bevy-react-portal`
+                    // registry owns. Starts on a blank placeholder; `bind_portals`
+                    // swaps in the real target texture for `target` once it exists.
+                    "portal" => {
+                        let handle = images.add(blank_portal_image());
+                        let mut node_img = ImageNode::new(handle);
+                        node_img.image_mode = NodeImageMode::Stretch;
+                        let mut ec = commands.spawn(RNode(id));
+                        apply_style(&mut ec, &props.style);
+                        ec.insert((node_img, RPortal(props.target.clone().unwrap_or_default())));
                         apply_style_variants(&mut ec, &props);
                         apply_pointer_handlers(&mut ec, &props);
                         apply_animated(&mut ec, &props);
@@ -303,6 +321,11 @@ pub fn apply_js_ops(
                     // canvas system keeps the same `ImageNode` handle and repaints).
                     if let Some(cmds) = &props.draw {
                         ec.insert(CanvasSurface::new(cmds.clone()));
+                    }
+                    // A `<portal>`'s new target name: rebind it (the binding system
+                    // points its `ImageNode` at the new target next frame).
+                    if let Some(target) = &props.target {
+                        ec.insert(RPortal(target.clone()));
                     }
                     apply_style_variants(&mut ec, &props);
                     apply_pointer_handlers(&mut ec, &props);
@@ -935,6 +958,47 @@ mod tests {
             children_of(&app, parent),
             vec![ent(&app, 11), ent(&app, 12)],
             "X must precede Y even though Children was unreadable mid-batch"
+        );
+    }
+
+    /// A `<portal>` mounts to an `ImageNode` carrying an `RPortal` with its target
+    /// name; an update rebinds the name.
+    #[test]
+    fn portal_mounts_with_target_and_rebinds() {
+        use bevy::ui::widget::ImageNode;
+        use bevy_react_portal::RPortal;
+        let (mut app, tx, _root) = ordering_app();
+        tx.send(vec![Op::Create {
+            id: 1,
+            kind: "portal".into(),
+            props: serde_json::from_value(serde_json::json!({ "target": "follow" }))
+                .expect("valid portal props"),
+        }])
+        .unwrap();
+        app.update();
+
+        let e = ent(&app, 1);
+        assert_eq!(
+            app.world().entity(e).get::<RPortal>().map(|p| p.0.clone()),
+            Some("follow".to_string()),
+            "a portal carries its target name"
+        );
+        assert!(
+            app.world().entity(e).get::<ImageNode>().is_some(),
+            "a portal is backed by an ImageNode"
+        );
+
+        tx.send(vec![Op::Update {
+            id: 1,
+            props: serde_json::from_value(serde_json::json!({ "target": "minimap" }))
+                .expect("valid portal props"),
+        }])
+        .unwrap();
+        app.update();
+        assert_eq!(
+            app.world().entity(e).get::<RPortal>().map(|p| p.0.clone()),
+            Some("minimap".to_string()),
+            "an update rebinds the portal's target name"
         );
     }
 

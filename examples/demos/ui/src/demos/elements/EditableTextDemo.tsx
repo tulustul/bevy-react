@@ -15,7 +15,7 @@ export function EditableTextDemo() {
   return (
     <Example
       description="A focusable text input: a controlled value with onChange."
-      typescript={TYPESCRIPT}
+      tsx={TYPESCRIPT}
     >
       <text>What's your name?</text>
       <editableText

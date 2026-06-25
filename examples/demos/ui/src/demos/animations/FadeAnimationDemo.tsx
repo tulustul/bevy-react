@@ -27,7 +27,7 @@ export function FadeAnimationDemo() {
   return (
     <Example
       description="A shared value drives animatedStyle imperatively, looped, ping-ponging opacity."
-      typescript={TYPESCRIPT}
+      tsx={TYPESCRIPT}
     >
       <node style={fadeStageStyle}>
         <Animated.node style={fadeSquareStyle} animatedStyle={{ opacity }} />

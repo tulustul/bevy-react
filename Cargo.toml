@@ -1,6 +1,12 @@
 [workspace]
 resolver = "3"
-members = ["crates/core", "crates/canvas", "crates/animations", "crates/macros"]
+members = [
+    "crates/core",
+    "crates/canvas",
+    "crates/animations",
+    "crates/macros",
+    "crates/portal",
+]
 default-members = ["crates/core"]
 
 [workspace.package]
@@ -28,6 +34,7 @@ syn = "2"
 bevy-react-animations = { path = "crates/animations" }
 bevy-react-canvas = { path = "crates/canvas" }
 bevy-react-macros = { path = "crates/macros" }
+bevy-react-portal = { path = "crates/portal" }
 
 [profile.dev]
 opt-level = 1

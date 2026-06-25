@@ -10,21 +10,21 @@ export function ColorsDemo() {
     <>
       <Example
         description="backgroundColor fills a node. Mix it from R/G/B channels."
-        typescript={`<node style={{ backgroundColor: "#7aa2f7" }} />`}
+        tsx={`<node style={{ backgroundColor: "#7aa2f7" }} />`}
       >
         <BackgroundControl />
       </Example>
 
       <Example
         description="borderColor paints the edge laid out by `border`."
-        typescript={`border: 4, borderColor: "#bb9af7"`}
+        tsx={`border: 4, borderColor: "#bb9af7"`}
       >
         <BorderColorControl />
       </Example>
 
       <Example
         description="color sets text color and inherits into nested <text>."
-        typescript={`<text style={{ color: "#f9e2af" }}>`}
+        tsx={`<text style={{ color: "#f9e2af" }}>`}
       >
         <TextColorControl />
       </Example>

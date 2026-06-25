@@ -53,7 +53,7 @@ export function BouncingBallsAnimationDemo() {
   return (
     <Example
       description="Staggered squares compose sequence/repeat/delay drivers; switch the easing live."
-      typescript={TYPESCRIPT}
+      tsx={TYPESCRIPT}
     >
       <node style={lanesStyle}>
         {Array.from({ length: COUNT }, (_, i) => (

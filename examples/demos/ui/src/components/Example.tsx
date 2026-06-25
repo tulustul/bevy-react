@@ -6,17 +6,12 @@ import { TextMono } from "./TextMono";
 export type ExampleProps = PropsWithChildren & {
   // A one/two-line note shown on the right, above the code.
   description?: string;
-  typescript?: string;
+  tsx?: string;
   rust?: string;
 };
 
-export function Example({
-  children,
-  description,
-  typescript,
-  rust,
-}: ExampleProps) {
-  const hasCode = !!(rust || typescript);
+export function Example({ children, description, tsx, rust }: ExampleProps) {
+  const hasCode = !!(rust || tsx);
   const hasAside = !!(description || hasCode);
 
   // Code snippets are shown by default but can be collapsed so a tall card
@@ -47,12 +42,12 @@ export function Example({
                 flexDirection: "column",
                 gap: 8,
                 overflowY: "clip",
-                maxHeight: open ? estimateCodeHeight(rust, typescript) : 0,
+                maxHeight: open ? estimateCodeHeight(rust, tsx) : 0,
                 transition: { size: { duration: 300, easing: "easeOut" } },
               }}
             >
               {rust && <Code lang="rust" code={rust} />}
-              {typescript && <Code lang="typescript" code={typescript} />}
+              {tsx && <Code lang="tsx" code={tsx} />}
             </node>
           )}
         </node>
@@ -74,18 +69,19 @@ function estimateCodeHeight(rust?: string, typescript?: string): number {
 }
 
 type CodeProps = {
-  lang: "typescript" | "rust";
+  lang: "tsx" | "rust";
   code: string;
 };
 function Code({ lang, code }: CodeProps) {
   return (
     <node style={{ flexDirection: "column" }}>
-      <TextMono style={{ fontSize: FontSizes.sm, padding: 5 }}>{lang}</TextMono>
+      <TextMono style={{ fontSize: FontSizes.sm, padding: { bottom: 5 } }}>
+        {lang}
+      </TextMono>
       <TextMono
         style={{
-          fontSize: FontSizes.xs,
+          fontSize: FontSizes.xxs,
           color: Colors.textColor200,
-          padding: 10,
         }}
       >
         {code}

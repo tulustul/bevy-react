@@ -16,6 +16,7 @@ import type {
   BevyEditableTextProps,
   BevyImageProps,
   BevyNodeProps,
+  BevyPortalProps,
   BevyTextProps,
 } from "./jsx";
 
@@ -43,6 +44,8 @@ export namespace JSX {
     image: BevyImageProps;
     /** An anti-aliased vector drawing surface (HTML-`<canvas>`-style). */
     canvas: BevyCanvasProps;
+    /** A view of an offscreen Bevy render target (render-to-texture). */
+    portal: BevyPortalProps;
     /** Styled, nestable text (maps to `bevy_ui::Text` / `TextSpan`). */
     text: BevyTextProps;
     /** A focusable, editable text field (maps to `bevy_text::EditableText`). */

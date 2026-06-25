@@ -271,6 +271,33 @@ export interface BevyCanvasProps extends BevyAttributes {
   onPointerUp?: (e: PointerEventData) => void;
 }
 
+/** Props for the `portal` element: a view of an **offscreen render target** (the
+ *  live or snapshot output of a Bevy camera drawing into a texture). Maps to a
+ *  `bevy_ui::ImageNode` whose texture is the named render target the Bevy app
+ *  registered. Style and size it like any node; the texture stretches to fill its
+ *  box, and (for `Auto`-resolution targets) the camera renders at the box's
+ *  resolution and aspect. */
+export interface BevyPortalProps extends BevyAttributes {
+  style?: BevyStyle;
+  /** Style overlaid on `style` while the element is hovered. */
+  hoverStyle?: BevyStyle;
+  /** Style overlaid on `style` (and `hoverStyle`) while the element is pressed. */
+  pressStyle?: BevyStyle;
+  /** Reanimated-style animation bindings (see `Animated.node`). */
+  animatedStyle?: AnimatedStyle;
+  /** The render-target name to display. The Bevy app registers it (via
+   *  `RenderTargets::create`) and hands the name to React over the typed event
+   *  channel; an unregistered name shows transparent until it appears. */
+  target: string;
+  onClick?: () => void;
+  /** Pointer pressed on the portal. Receives the cursor's normalized position. */
+  onPointerDown?: (e: PointerEventData) => void;
+  /** Pointer moved while held (a drag). Fires each frame until release. */
+  onPointerMove?: (e: PointerEventData) => void;
+  /** Pointer released after a press/drag that began on the portal. */
+  onPointerUp?: (e: PointerEventData) => void;
+}
+
 /** Props for the `image` element (maps to `bevy_ui::ImageNode`). */
 export interface BevyImageProps extends BevyAttributes {
   style?: BevyStyle;

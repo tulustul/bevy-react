@@ -16,7 +16,7 @@ export function ImageDemo() {
   return (
     <Example
       description="An image asset loaded by src, with an optional tint and per-axis flips."
-      typescript={TYPESCRIPT}
+      tsx={TYPESCRIPT}
     >
       <node style={{ flexDirection: "row", gap: 24, alignItems: "center" }}>
         <node style={{ flexDirection: "column", alignItems: "center", gap: 6 }}>

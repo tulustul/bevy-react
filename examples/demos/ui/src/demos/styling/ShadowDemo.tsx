@@ -9,7 +9,7 @@ export function ShadowDemo() {
     <>
       <Example
         description="boxShadow casts a soft drop shadow. Drag blur and spread."
-        typescript={`boxShadow: {
+        tsx={`boxShadow: {
   color: "#FFFFFF33",
   blurRadius: 12,
   spreadRadius: 3,
@@ -20,7 +20,7 @@ export function ShadowDemo() {
 
       <Example
         description="xOffset / yOffset push the shadow to imply a light direction."
-        typescript={`boxShadow: {
+        tsx={`boxShadow: {
   xOffset: 8,
   yOffset: 8,
   blurRadius: 6,

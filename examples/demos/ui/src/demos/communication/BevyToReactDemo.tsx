@@ -35,7 +35,7 @@ export function BevyToReactDemo() {
   return (
     <Example
       description="Bevy -> React: a typed event sent from a system fires every JS listener subscribed by name."
-      typescript={TYPESCRIPT}
+      tsx={TYPESCRIPT}
       rust={RUST}
     >
       <text style={{ fontSize: FontSizes.lg }}>Bounces</text>

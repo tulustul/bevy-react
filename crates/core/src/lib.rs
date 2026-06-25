@@ -43,6 +43,9 @@ pub mod protocol;
 pub use anchor::{Anchor, AnchorScaling, Anchored};
 pub use bevy_react_animations::{self, ReactUiAnimationsPlugin};
 pub use bevy_react_canvas::{self, CanvasSurface};
+pub use bevy_react_portal::{
+    self, PortalCamera, RenderMode, RenderTarget, RenderTargetSpec, RenderTargets, Resolution,
+};
 pub use bevy_react_macros::{react_event, react_message, react_request};
 pub use event::{ReactEvent, ReactEvents};
 pub use message::{ReactAppExt, ReactMessage, ReactPayload};

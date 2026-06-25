@@ -27,6 +27,7 @@ bevy = { workspace = true }
 bevy-react-animations = { workspace = true }
 bevy-react-canvas = { workspace = true }
 bevy-react-macros = { workspace = true }
+bevy-react-portal = { workspace = true }
 crossbeam-channel = { workspace = true }
 deno_core = { workspace = true }
 serde = { workspace = true }

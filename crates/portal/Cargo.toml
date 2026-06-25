@@ -1,0 +1,18 @@
+[package]
+name = "bevy-react-portal"
+version.workspace = true
+edition.workspace = true
+description = "Offscreen render-target (portal) host element for bevy-react."
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords = ["bevy", "react", "render-target", "ui", "gamedev"]
+categories = ["gui", "game-development"]
+
+[lib]
+name = "bevy_react_portal"
+path = "src/lib.rs"
+
+[dependencies]
+bevy = { workspace = true }
