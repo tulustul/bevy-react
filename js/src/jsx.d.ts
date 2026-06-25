@@ -25,6 +25,65 @@ export type Rect =
   | string
   | { top?: Length; right?: Length; bottom?: Length; left?: Length };
 
+/** Color space a gradient interpolates in (default `"oklab"`). */
+export type ColorSpace =
+  | "oklab"
+  | "oklch"
+  | "oklchLong"
+  | "srgb"
+  | "linearRgb"
+  | "hsl"
+  | "hslLong"
+  | "hsv"
+  | "hsvLong";
+
+/** Named center anchor for a radial/conic gradient (default `"center"`). */
+export type GradientPosition =
+  | "center"
+  | "top"
+  | "bottom"
+  | "left"
+  | "right"
+  | "topLeft"
+  | "topRight"
+  | "bottomLeft"
+  | "bottomRight";
+
+/** Size/shape of a radial gradient (default `"closestCorner"`). */
+export type RadialShape =
+  | "closestSide"
+  | "farthestSide"
+  | "closestCorner"
+  | "farthestCorner"
+  | { circle: Length }
+  | { ellipse: [Length, Length] };
+
+/** A linear/radial color stop. `position` places it along the gradient line
+ *  (absent → auto-spaced); `hint` is the `0..1` interpolation midpoint to the
+ *  next stop (default `0.5`). */
+export type GradientStop = { color: string; position?: Length; hint?: number };
+
+/** A conic color stop. `angle` is in **degrees** (absent → auto-spaced). */
+export type AngularStop = { color: string; angle?: number; hint?: number };
+
+/** One gradient. `angle`/`start` are in **degrees** (`0` = to top, clockwise). */
+export type Gradient =
+  | { type: "linear"; angle?: number; stops: GradientStop[]; colorSpace?: ColorSpace }
+  | {
+      type: "radial";
+      position?: GradientPosition;
+      shape?: RadialShape;
+      stops: GradientStop[];
+      colorSpace?: ColorSpace;
+    }
+  | {
+      type: "conic";
+      start?: number;
+      position?: GradientPosition;
+      stops: AngularStop[];
+      colorSpace?: ColorSpace;
+    };
+
 /** Timing for one transition channel: a timing curve (default) or, if `stiffness`
  *  or `damping` is given, a spring. `duration`/`delay` are in **milliseconds**
  *  (the renderer converts them to seconds before they cross to Rust). */
@@ -159,6 +218,13 @@ export interface BevyStyle {
     spreadRadius?: Length;
     blurRadius?: Length;
   };
+  /** Background gradient(s): one gradient or a layered list. Painted *over*
+   *  `backgroundColor` (like CSS `background-image`): an opaque gradient hides
+   *  it, so the color is a fallback; transparent stops let it show through. */
+  backgroundGradient?: Gradient | Gradient[];
+  /** Border gradient(s): one gradient or a layered list. Painted *over*
+   *  `borderColor` (needs a `border` width to be visible). */
+  borderGradient?: Gradient | Gradient[];
   zIndex?: number;
 
   // transform / opacity

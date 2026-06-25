@@ -1,19 +1,12 @@
 import { useState } from "react";
-import { BevyStyle } from "bevy-react/jsx";
+import { BevyStyle, Gradient } from "bevy-react/jsx";
 import { Example, Radio, RadioOption, Slider } from "@/components";
-import { Colors, FontSizes } from "@/theme";
+import { Colors, FontSizes, Gradients } from "@/theme";
 
 // `display: "grid"` opts a `<node>` into CSS-grid layout. Tracks accept the full
 // CSS syntax: `repeat(n, …)`, fr units, fixed sizes, and `span`/line placement.
 
-const COLORS = [
-  Colors.primary100,
-  Colors.green100,
-  Colors.red100,
-  Colors.yellow100,
-  Colors.purple100,
-  Colors.sky100,
-];
+const CELLS = Gradients.spectrum;
 
 function Cells({ count, from = 0 }: { count: number; from?: number }) {
   return (
@@ -22,16 +15,22 @@ function Cells({ count, from = 0 }: { count: number; from?: number }) {
         <Cell
           key={i}
           label={i + from + 1}
-          color={COLORS[(i + from) % COLORS.length]}
+          gradient={CELLS[(i + from) % CELLS.length]}
         />
       ))}
     </>
   );
 }
 
-function Cell({ label, color }: { label: number | string; color: string }) {
+function Cell({
+  label,
+  gradient,
+}: {
+  label: number | string;
+  gradient: Gradient;
+}) {
   return (
-    <node style={{ ...cell, backgroundColor: color }}>
+    <node style={{ ...cell, backgroundGradient: gradient }}>
       <text style={cellText}>{label}</text>
     </node>
   );
@@ -97,7 +96,7 @@ export function GridDemo() {
             style={{
               ...cell,
               gridColumn: "span 2",
-              backgroundColor: COLORS[0],
+              backgroundGradient: CELLS[0],
             }}
           >
             <text style={cellText}>span 2</text>
@@ -119,7 +118,7 @@ gridRow: "span 2"`}
           }}
         >
           <node
-            style={{ ...cell, gridRow: "span 2", backgroundColor: COLORS[0] }}
+            style={{ ...cell, gridRow: "span 2", backgroundGradient: CELLS[0] }}
           >
             <text style={cellText}>tall</text>
           </node>

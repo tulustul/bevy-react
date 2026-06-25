@@ -1,5 +1,5 @@
 import { BevyStyle } from "bevy-react/jsx";
-import { Colors, FontSizes } from "@/theme";
+import { Colors, FontSizes, Gradients } from "@/theme";
 
 export type CheckboxProps = {
   label: string;
@@ -18,8 +18,9 @@ export function Checkbox({ label, enabled, onChange }: CheckboxProps) {
         <node
           style={{
             backgroundColor: Colors.textColor100,
-            width: 22,
-            height: 22,
+            backgroundGradient: Gradients.primary,
+            width: 21,
+            height: 21,
             borderRadius: 5,
             transform: { scale: enabled ? 1 : 0 },
             transition: {
@@ -46,7 +47,7 @@ const wrapper: BevyStyle = {
 };
 
 const wrapperHovered: BevyStyle = {
-  backgroundColor: Colors.surface300,
+  backgroundGradient: Gradients.surface,
 };
 
 const box: BevyStyle = {
@@ -54,6 +55,7 @@ const box: BevyStyle = {
   height: 30,
   borderRadius: 7,
   borderColor: Colors.surface600,
+  borderGradient: Gradients.accentBorder,
   border: 2,
   alignItems: "center",
   justifyContent: "center",

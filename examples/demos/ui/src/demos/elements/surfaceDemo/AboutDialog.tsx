@@ -29,9 +29,7 @@ export function AboutDialog({ onClose }: { onClose: () => void }) {
             A React UI rendered into an offscreen texture and draped over a 3D
             monitor — clickable in-world.
           </text>
-          <Button style={okButton} labelStyle={okLabel} onClick={onClose}>
-            OK
-          </Button>
+          <Button onClick={onClose}>OK</Button>
         </node>
       </node>
     </node>
@@ -98,17 +96,4 @@ const blurb: BevyStyle = {
   color: Colors.textColor200,
   fontSize: FontSizes.base,
   textAlign: "center",
-};
-
-const okButton: BevyStyle = {
-  margin: { top: 8 },
-  padding: { top: 12, bottom: 12, left: 48, right: 48 },
-  borderRadius: 10,
-  backgroundColor: Colors.primary300,
-};
-
-const okLabel: BevyStyle = {
-  color: Colors.textColor400,
-  fontSize: FontSizes.base,
-  fontWeight: "bold",
 };

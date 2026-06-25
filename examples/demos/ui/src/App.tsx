@@ -2,7 +2,7 @@ import { ComponentType, useEffect, useState } from "react";
 import { BevyStyle } from "bevy-react/jsx";
 import { bevy } from "@/bevy";
 import type { SceneId } from "@/bevy";
-import { Colors, FontSizes } from "@/theme";
+import { Colors, FontSizes, Gradients } from "@/theme";
 import { ReactToBevyDemo } from "./demos/communication/ReactToBevyDemo";
 import { BevyToReactDemo } from "./demos/communication/BevyToReactDemo";
 import { BidirectionCommunicationDemo } from "./demos/communication/BidirectionCommunicationDemo";
@@ -33,6 +33,7 @@ import { SpacingDemo } from "./demos/styling/SpacingDemo";
 import { SizingDemo } from "./demos/styling/SizingDemo";
 import { TransformDemo } from "./demos/styling/TransformDemo";
 import { ShadowDemo } from "./demos/styling/ShadowDemo";
+import { GradientsDemo } from "./demos/styling/GradientsDemo";
 import { OpacityDemo } from "./demos/styling/OpacityDemo";
 
 type BaseDemoItem = { label: string; scene?: SceneId };
@@ -87,6 +88,7 @@ const DEMOS: DemoItem[] = [
       { label: "Sizing", component: SizingDemo },
       { label: "Transform", component: TransformDemo },
       { label: "Shadow", component: ShadowDemo },
+      { label: "Gradients", component: GradientsDemo },
       { label: "Opacity", component: OpacityDemo },
     ],
   },
@@ -269,9 +271,10 @@ function ItemButton({
         ...navButtonStyle,
         padding: isChild ? 6 : 12,
         backgroundColor: isActive ? Colors.primary100 : Colors.surface300,
+        backgroundGradient: isActive ? Gradients.primary : Gradients.surface,
       }}
       hoverStyle={{
-        backgroundColor: isActive ? Colors.primary100 : Colors.surface500,
+        backgroundGradient: isActive ? Gradients.primary : Gradients.surfaceHover,
       }}
     >
       <node
@@ -318,6 +321,7 @@ const navStyle: BevyStyle = {
   gap: 8,
   padding: 20,
   backgroundColor: Colors.surface100,
+  backgroundGradient: Gradients.navBackdrop,
   zIndex: 100,
   boxShadow: { blurRadius: 15, spreadRadius: 0, color: Colors.shadow100 },
 };

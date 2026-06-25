@@ -1,17 +1,12 @@
 import { useState } from "react";
 import { BevyStyle } from "bevy-react/jsx";
 import { Example, Radio, RadioOption } from "@/components";
-import { Colors } from "@/theme";
+import { Colors, Gradients } from "@/theme";
 
 // `<node>` is a flexbox container by default. These snippets show the main flex
 // knobs; see Layout → Grid for `display: "grid"`.
 
-const COLORS = [
-  Colors.primary100,
-  Colors.green100,
-  Colors.red100,
-  Colors.yellow100,
-];
+const SWATCHES = Gradients.spectrum;
 
 type FlexDirection = Required<BevyStyle>["flexDirection"];
 type JustifyContent = Required<BevyStyle>["justifyContent"];
@@ -39,8 +34,8 @@ const ALIGN_OPTIONS: RadioOption<AlignItems>[] = [
 function Swatches({ count = 4 }: { count?: number }) {
   return (
     <>
-      {COLORS.slice(0, count).map((c) => (
-        <node key={c} style={{ ...swatch, backgroundColor: c }} />
+      {SWATCHES.slice(0, count).map((g, i) => (
+        <node key={i} style={{ ...swatch, backgroundGradient: g }} />
       ))}
     </>
   );
@@ -103,7 +98,10 @@ export function FlexDemo() {
           {Array.from({ length: 8 }, (_, i) => (
             <node
               key={i}
-              style={{ ...swatch, backgroundColor: COLORS[i % COLORS.length] }}
+              style={{
+                ...swatch,
+                backgroundGradient: SWATCHES[i % SWATCHES.length],
+              }}
             />
           ))}
         </node>
@@ -114,9 +112,9 @@ export function FlexDemo() {
         tsx={`<node style={{ flexGrow: 1 }}>`}
       >
         <node style={{ ...frame, width: 260, gap: 8 }}>
-          <node style={{ ...swatch, backgroundColor: COLORS[0] }} />
-          <node style={{ ...grow, backgroundColor: COLORS[1] }} />
-          <node style={{ ...swatch, backgroundColor: COLORS[2] }} />
+          <node style={{ ...swatch, backgroundGradient: SWATCHES[0] }} />
+          <node style={{ ...grow, backgroundGradient: SWATCHES[1] }} />
+          <node style={{ ...swatch, backgroundGradient: SWATCHES[2] }} />
         </node>
       </Example>
     </>

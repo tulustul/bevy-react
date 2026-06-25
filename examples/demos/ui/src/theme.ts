@@ -32,6 +32,55 @@ export const Colors = {
   transparent: "#00000000",
 } as const;
 
+// --- Gradient presets -------------------------------------------------------
+// Built from the palette above so the whole app shares one tunable set. Each is
+// a `backgroundGradient`/`borderGradient` value; tweak here to retune app-wide.
+import type { Gradient } from "bevy-react/jsx";
+
+const linear = (angle: number, ...colors: string[]): Gradient => ({
+  type: "linear",
+  angle,
+  stops: colors.map((color) => ({ color })),
+});
+
+export const Gradients = {
+  // accent — active nav item, radio "selected", progress fill, primary buttons
+  primary: linear(135, Colors.primary300, Colors.primary100, Colors.primary200),
+  primaryHover: linear(
+    135,
+    Colors.primary100,
+    Colors.primary200,
+    Colors.sky100,
+  ),
+  // neutral surface lifts — unselected pills, generic buttons, code toggle
+  surface: linear(180, Colors.surface300, Colors.surface200),
+  surfaceHover: linear(180, Colors.surface500, Colors.surface400),
+  // card / panel depth
+  card: linear(160, Colors.surface200, Colors.surface100),
+  track: linear(180, Colors.surface400, Colors.surface500),
+  // showy multi-hue border for cards (borderGradient)
+  accentBorder: linear(135, Colors.primary300, Colors.sky100, Colors.purple100),
+  // immersive nav backdrop: dark vertical base + faint primary glow at top
+  navBackdrop: [
+    linear(180, Colors.surface100, Colors.surface200),
+    {
+      type: "radial",
+      position: "top",
+      stops: [
+        { color: Colors.primaryOverlay },
+        { color: Colors.transparent, position: 300 },
+      ],
+    },
+  ] satisfies Gradient[],
+  // vivid set cycled across layout swatches/cells (decorative)
+  spectrum: [
+    linear(135, Colors.red100, Colors.orange100),
+    linear(135, Colors.sky100, Colors.teal100),
+    linear(135, Colors.purple100, Colors.primary100),
+    linear(135, Colors.green100, Colors.amber100),
+  ] satisfies Gradient[],
+} as const;
+
 export const FontSizes = {
   xxs: 11,
   xs: 12,

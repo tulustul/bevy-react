@@ -1,6 +1,6 @@
 import { PropsWithChildren, useState } from "react";
 import { BevyStyle } from "bevy-react/jsx";
-import { Colors, FontSizes } from "@/theme";
+import { Colors, FontSizes, Gradients } from "@/theme";
 import { TextMono } from "./TextMono";
 
 export type ExampleProps = PropsWithChildren & {
@@ -26,7 +26,7 @@ export function Example({ children, description, tsx, rust }: ExampleProps) {
         <button
           onClick={() => setOpen((o) => !o)}
           style={codeToggleStyle}
-          hoverStyle={{ backgroundColor: Colors.surface500 }}
+          hoverStyle={{ backgroundGradient: Gradients.surfaceHover }}
         >
           <TextMono style={codeToggleLabelStyle}>{open ? "-" : "+"}</TextMono>
         </button>
@@ -95,9 +95,11 @@ const cardStyle: BevyStyle = {
   justifyContent: "center",
   minWidth: 320,
   backgroundColor: Colors.surface200,
+  backgroundGradient: Gradients.card,
   borderRadius: 16,
   border: 2,
   borderColor: Colors.primary100,
+  borderGradient: Gradients.accentBorder,
   zIndex: 1000,
   boxShadow: { blurRadius: 15, spreadRadius: 5, color: Colors.shadow100 },
 };
@@ -109,6 +111,7 @@ const demoStyle: BevyStyle = {
   justifyContent: "center",
   border: { right: 2 },
   borderColor: Colors.primary100,
+  borderGradient: Gradients.accentBorder,
   padding: 28,
 };
 
@@ -129,6 +132,7 @@ const codeToggleStyle: BevyStyle = {
   alignItems: "center",
   borderRadius: 6,
   backgroundColor: Colors.surface300,
+  backgroundGradient: Gradients.surface,
   zIndex: 1,
   transition: { backgroundColor: { duration: 200 } },
 };

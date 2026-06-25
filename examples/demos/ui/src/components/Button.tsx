@@ -1,6 +1,6 @@
 import { BevyStyle } from "bevy-react/jsx";
 import { PropsWithChildren } from "react";
-import { Colors, FontSizes } from "@/theme";
+import { Colors, FontSizes, Gradients } from "@/theme";
 
 export type ButtonProps = PropsWithChildren & {
   style?: BevyStyle;
@@ -38,6 +38,7 @@ const buttonStyle: BevyStyle = {
   padding: { top: 8, right: 12, bottom: 8, left: 12 },
   borderRadius: 8,
   backgroundColor: Colors.surface300,
+  backgroundGradient: Gradients.surface,
   transition: {
     backgroundColor: { duration: 150 },
     transform: { duration: 150 },
@@ -45,7 +46,7 @@ const buttonStyle: BevyStyle = {
 };
 
 const buttonHoverStyle: BevyStyle = {
-  backgroundColor: Colors.surface500,
+  backgroundGradient: Gradients.surfaceHover,
 };
 
 const buttonPressStyle: BevyStyle = {

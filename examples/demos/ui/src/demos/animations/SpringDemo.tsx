@@ -3,7 +3,7 @@ import { Animated, useSharedValue, withSpring } from "bevy-react";
 import { BevyStyle } from "bevy-react/jsx";
 import { Example, Slider } from "@/components";
 import { column, playButton, playLabel } from "./shared";
-import { Colors } from "@/theme";
+import { Colors, Gradients } from "@/theme";
 
 // A damped spring: tune stiffness and damping, then watch the square settle.
 
@@ -73,4 +73,5 @@ const square: BevyStyle = {
   height: 40,
   borderRadius: 10,
   backgroundColor: Colors.primary100,
+  backgroundGradient: Gradients.primary,
 };

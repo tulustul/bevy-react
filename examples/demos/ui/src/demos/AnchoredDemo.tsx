@@ -4,7 +4,7 @@ import { BevyStyle } from "bevy-react/jsx";
 import { bevy } from "@/bevy";
 import type { CubeInfo } from "@/bevy";
 import { Checkbox, Example, Slider } from "@/components";
-import { Colors, FontSizes } from "@/theme";
+import { Colors, FontSizes, Gradients } from "@/theme";
 
 const TYPESCRIPT = `<Anchored.node entity={cube.entity} offset={[0, 0.8, 0]}>
   <text>{cube.label}</text>
@@ -96,6 +96,7 @@ const badgeStyle: BevyStyle = {
   justifyContent: "center",
   padding: { top: 3, right: 8, bottom: 3, left: 8 },
   backgroundColor: Colors.primary100,
+  backgroundGradient: Gradients.primary,
   borderRadius: 999,
   boxShadow: {
     color: Colors.shadow100,

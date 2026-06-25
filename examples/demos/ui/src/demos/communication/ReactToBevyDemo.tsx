@@ -39,18 +39,38 @@ export function ReactToBevyDemo() {
       <node style={{ flexDirection: "row", gap: 12 }}>
         <Button
           onClick={() => setCount((c) => Math.min(MAX, c + 1))}
-          style={{ ...buttonStyle, backgroundColor: Colors.primary100 }}
-          hoverStyle={{ backgroundColor: Colors.primary200 }}
-          pressStyle={{ backgroundColor: Colors.primary300 }}
+          style={{
+            ...buttonStyle,
+            backgroundColor: Colors.primary100,
+            backgroundGradient: undefined,
+          }}
+          hoverStyle={{
+            backgroundColor: Colors.primary200,
+            backgroundGradient: undefined,
+          }}
+          pressStyle={{
+            backgroundColor: Colors.primary300,
+            backgroundGradient: undefined,
+          }}
           labelStyle={{ fontSize: FontSizes.xxxl }}
         >
           +
         </Button>
         <Button
           onClick={() => setCount((c) => Math.max(0, c - 1))}
-          style={{ ...buttonStyle, backgroundColor: Colors.red100 }}
-          hoverStyle={{ backgroundColor: Colors.red200 }}
-          pressStyle={{ backgroundColor: Colors.red300 }}
+          style={{
+            ...buttonStyle,
+            backgroundColor: Colors.red100,
+            backgroundGradient: undefined,
+          }}
+          hoverStyle={{
+            backgroundColor: Colors.red200,
+            backgroundGradient: undefined,
+          }}
+          pressStyle={{
+            backgroundColor: Colors.red300,
+            backgroundGradient: undefined,
+          }}
           labelStyle={{ fontSize: FontSizes.xxxl }}
         >
           -

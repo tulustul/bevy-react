@@ -1,5 +1,5 @@
 import { BevyStyle } from "bevy-react/jsx";
-import { Colors, FontSizes } from "@/theme";
+import { Colors, FontSizes, Gradients } from "@/theme";
 
 // Shared bits for the animation demos: the standard column layout and a "Play"-style
 // button so the interactive triggers look consistent. Colors come from ../../theme.
@@ -16,6 +16,7 @@ export const playButton: BevyStyle = {
   padding: { top: 8, right: 18, bottom: 8, left: 18 },
   borderRadius: 8,
   backgroundColor: Colors.primary100,
+  backgroundGradient: Gradients.primary,
   transform: { scale: 1 },
   transition: { transform: { duration: 100, easing: "easeOut" } },
 };

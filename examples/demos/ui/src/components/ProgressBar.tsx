@@ -1,5 +1,5 @@
 import { BevyStyle } from "bevy-react/jsx";
-import { Colors, FontSizes } from "@/theme";
+import { Colors, FontSizes, Gradients } from "@/theme";
 
 export type ProgressBarProps = {
   /** Fill end, 0..1. */
@@ -47,6 +47,7 @@ const track: BevyStyle = {
   height: 20,
   borderRadius: 6,
   backgroundColor: Colors.surface400,
+  backgroundGradient: Gradients.track,
 };
 
 const fillStyle: BevyStyle = {
@@ -55,6 +56,7 @@ const fillStyle: BevyStyle = {
   height: "100%",
   borderRadius: 6,
   backgroundColor: Colors.primary100,
+  backgroundGradient: Gradients.primary,
 };
 
 const labelWrap: BevyStyle = {

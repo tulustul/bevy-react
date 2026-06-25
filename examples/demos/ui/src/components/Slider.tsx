@@ -1,6 +1,6 @@
 import { BevyStyle, PointerEventData } from "bevy-react/jsx";
 import { ProgressBar } from "./ProgressBar";
-import { Colors } from "@/theme";
+import { Colors, Gradients } from "@/theme";
 
 export type SliderProps = {
   /** Current value (controlled — the parent owns it). */
@@ -48,4 +48,5 @@ const sliderTrack: BevyStyle = {
   height: 20,
   borderRadius: 6,
   backgroundColor: Colors.surface400,
+  backgroundGradient: Gradients.track,
 };

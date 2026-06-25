@@ -1,5 +1,5 @@
 import { BevyStyle } from "bevy-react/jsx";
-import { Colors, FontSizes } from "@/theme";
+import { Colors, FontSizes, Gradients } from "@/theme";
 
 export type RadioValue = string | number;
 
@@ -47,8 +47,16 @@ function Option({ option, selected, onClick }: OptionProps) {
   return (
     <button
       onClick={onClick}
-      style={{ ...pillStyle, backgroundColor: selected ? ACCENT : SURFACE }}
-      hoverStyle={{ backgroundColor: selected ? ACCENT_HOVER : SURFACE_HOVER }}
+      style={{
+        ...pillStyle,
+        backgroundColor: selected ? ACCENT : SURFACE,
+        backgroundGradient: selected ? Gradients.primary : Gradients.surface,
+      }}
+      hoverStyle={{
+        backgroundGradient: selected
+          ? Gradients.primaryHover
+          : Gradients.surfaceHover,
+      }}
       pressStyle={{ transform: { scale: 0.95 } }}
     >
       <text
@@ -65,9 +73,7 @@ function Option({ option, selected, onClick }: OptionProps) {
 }
 
 const ACCENT = Colors.primary100;
-const ACCENT_HOVER = Colors.primary200;
 const SURFACE = Colors.surface300;
-const SURFACE_HOVER = Colors.surface500;
 
 const groupStyle: BevyStyle = {
   flexDirection: "row",

@@ -7,7 +7,10 @@ use bevy::ui::widget::NodeImageMode;
 use bevy_react_animations::build_ui_transform;
 
 use crate::plugin::Fonts;
-use crate::protocol::{Length, Props, Rect, Style};
+use crate::protocol::{
+    AngularStop, ConicGradientSpec, GradientList, GradientSpec, GradientStop, LinearGradientSpec,
+    Length, Props, RadialGradientSpec, RadialShapeSpec, Rect, Style,
+};
 
 /// Parse a `#rrggbb`/`rrggbb` (or 8-digit alpha) hex string into a `Color`.
 /// Falls back to opaque white on parse failure so a typo never panics.
@@ -64,6 +67,123 @@ pub fn rect_to_border_radius(rect: Rect) -> BorderRadius {
         top_right: length_to_val(rect.right),
         bottom_right: length_to_val(rect.bottom),
         bottom_left: length_to_val(rect.left),
+    }
+}
+
+/// Map a wire color-space token to bevy's [`InterpolationColorSpace`]
+/// (default `Oklaba`, matching bevy's own default).
+fn parse_color_space(s: Option<&str>) -> InterpolationColorSpace {
+    match s {
+        Some("oklch") => InterpolationColorSpace::Oklcha,
+        Some("oklchLong") => InterpolationColorSpace::OklchaLong,
+        Some("srgb") => InterpolationColorSpace::Srgba,
+        Some("linearRgb") => InterpolationColorSpace::LinearRgba,
+        Some("hsl") => InterpolationColorSpace::Hsla,
+        Some("hslLong") => InterpolationColorSpace::HslaLong,
+        Some("hsv") => InterpolationColorSpace::Hsva,
+        Some("hsvLong") => InterpolationColorSpace::HsvaLong,
+        _ => InterpolationColorSpace::Oklaba,
+    }
+}
+
+/// Map a named anchor (`"center"`, `"topLeft"`, …) to a [`UiPosition`]
+/// (default center). Arbitrary `Val`-offset centers are not yet supported.
+fn parse_position(s: Option<&str>) -> UiPosition {
+    match s {
+        Some("top") => UiPosition::TOP,
+        Some("bottom") => UiPosition::BOTTOM,
+        Some("left") => UiPosition::LEFT,
+        Some("right") => UiPosition::RIGHT,
+        Some("topLeft") => UiPosition::TOP_LEFT,
+        Some("topRight") => UiPosition::TOP_RIGHT,
+        Some("bottomLeft") => UiPosition::BOTTOM_LEFT,
+        Some("bottomRight") => UiPosition::BOTTOM_RIGHT,
+        _ => UiPosition::CENTER,
+    }
+}
+
+/// Map a radial gradient's shape spec to bevy's [`RadialGradientShape`]
+/// (default `ClosestCorner`).
+fn parse_radial_shape(shape: Option<&RadialShapeSpec>) -> RadialGradientShape {
+    match shape {
+        Some(RadialShapeSpec::Circle { circle }) => {
+            RadialGradientShape::Circle(length_to_val(*circle))
+        }
+        Some(RadialShapeSpec::Ellipse { ellipse }) => {
+            RadialGradientShape::Ellipse(length_to_val(ellipse[0]), length_to_val(ellipse[1]))
+        }
+        Some(RadialShapeSpec::Keyword(k)) => match k.as_str() {
+            "closestSide" => RadialGradientShape::ClosestSide,
+            "farthestSide" => RadialGradientShape::FarthestSide,
+            "farthestCorner" => RadialGradientShape::FarthestCorner,
+            _ => RadialGradientShape::ClosestCorner,
+        },
+        None => RadialGradientShape::ClosestCorner,
+    }
+}
+
+/// Build a positional [`ColorStop`] (linear/radial), folding `opacity` into the
+/// color like the solid background path. An absent `position` is auto-spaced.
+fn color_stop(stop: &GradientStop, opacity: Option<f32>) -> ColorStop {
+    ColorStop {
+        color: apply_opacity(parse_color(&stop.color), opacity),
+        point: stop.position.map(length_to_val).unwrap_or(Val::Auto),
+        hint: stop.hint.unwrap_or(0.5),
+    }
+}
+
+/// Build an [`AngularColorStop`] (conic), converting the wire degrees to radians.
+fn angular_stop(stop: &AngularStop, opacity: Option<f32>) -> AngularColorStop {
+    AngularColorStop {
+        color: apply_opacity(parse_color(&stop.color), opacity),
+        angle: stop.angle.map(f32::to_radians),
+        hint: stop.hint.unwrap_or(0.5),
+    }
+}
+
+fn build_linear(spec: &LinearGradientSpec, opacity: Option<f32>) -> Gradient {
+    LinearGradient::new(
+        spec.angle.unwrap_or(0.0).to_radians(),
+        spec.stops.iter().map(|s| color_stop(s, opacity)).collect(),
+    )
+    .in_color_space(parse_color_space(spec.color_space.as_deref()))
+    .into()
+}
+
+fn build_radial(spec: &RadialGradientSpec, opacity: Option<f32>) -> Gradient {
+    RadialGradient::new(
+        parse_position(spec.position.as_deref()),
+        parse_radial_shape(spec.shape.as_ref()),
+        spec.stops.iter().map(|s| color_stop(s, opacity)).collect(),
+    )
+    .in_color_space(parse_color_space(spec.color_space.as_deref()))
+    .into()
+}
+
+fn build_conic(spec: &ConicGradientSpec, opacity: Option<f32>) -> Gradient {
+    ConicGradient::new(
+        parse_position(spec.position.as_deref()),
+        spec.stops.iter().map(|s| angular_stop(s, opacity)).collect(),
+    )
+    .with_start(spec.start.unwrap_or(0.0).to_radians())
+    .in_color_space(parse_color_space(spec.color_space.as_deref()))
+    .into()
+}
+
+fn build_gradient(spec: &GradientSpec, opacity: Option<f32>) -> Gradient {
+    match spec {
+        GradientSpec::Linear(l) => build_linear(l, opacity),
+        GradientSpec::Radial(r) => build_radial(r, opacity),
+        GradientSpec::Conic(c) => build_conic(c, opacity),
+    }
+}
+
+/// Flatten a [`GradientList`] (one or many) into the `Vec<Gradient>` that
+/// `BackgroundGradient`/`BorderGradient` wrap. `opacity` fades every stop.
+pub fn build_gradients(list: &GradientList, opacity: Option<f32>) -> Vec<Gradient> {
+    match list {
+        GradientList::One(g) => vec![build_gradient(g, opacity)],
+        GradientList::Many(gs) => gs.iter().map(|g| build_gradient(g, opacity)).collect(),
     }
 }
 
@@ -560,6 +680,22 @@ pub fn apply_style(ec: &mut EntityCommands, style: &Option<Style>) {
             ec.remove::<BoxShadow>();
         }
     }
+    match s.and_then(|s| s.background_gradient.as_ref()) {
+        Some(g) => {
+            ec.insert(BackgroundGradient(build_gradients(g, opacity)));
+        }
+        None => {
+            ec.remove::<BackgroundGradient>();
+        }
+    }
+    match s.and_then(|s| s.border_gradient.as_ref()) {
+        Some(g) => {
+            ec.insert(BorderGradient(build_gradients(g, opacity)));
+        }
+        None => {
+            ec.remove::<BorderGradient>();
+        }
+    }
     match s.and_then(|s| s.z_index) {
         Some(z) => {
             ec.insert(ZIndex(z));
@@ -641,6 +777,8 @@ pub fn overlay_style(base: &Option<Style>, overlay: &Option<Style>) -> Option<St
         border_radius,
         outline,
         box_shadow,
+        background_gradient,
+        border_gradient,
         z_index,
         transform,
         opacity,
@@ -818,6 +956,71 @@ mod tests {
         let margin = rect_to_uirect(s.margin.unwrap());
         assert_eq!(margin.top, Val::Px(1.0));
         assert_eq!(margin.left, Val::Px(2.0));
+    }
+
+    #[test]
+    fn linear_gradient_maps_angle_and_stops() {
+        let s = style(serde_json::json!({
+            "backgroundGradient": {
+                "type": "linear",
+                "angle": 90.0,
+                "stops": [
+                    { "color": "#ff0000", "position": 0 },
+                    { "color": "#0000ff", "position": "100%" },
+                ],
+            },
+        }));
+        let grads = build_gradients(s.background_gradient.as_ref().unwrap(), None);
+        assert_eq!(grads.len(), 1);
+        let Gradient::Linear(lin) = &grads[0] else {
+            panic!("expected a linear gradient, got {:?}", grads[0]);
+        };
+        assert!((lin.angle - 90.0_f32.to_radians()).abs() < 1e-6);
+        assert_eq!(lin.stops.len(), 2);
+        assert_eq!(lin.stops[0].point, Val::Px(0.0));
+        assert_eq!(lin.stops[1].point, Val::Percent(100.0));
+        assert_eq!(lin.stops[0].color.to_srgba(), Srgba::hex("ff0000").unwrap());
+    }
+
+    #[test]
+    fn gradient_accepts_single_or_array() {
+        let one = style(serde_json::json!({
+            "backgroundGradient": { "type": "linear", "stops": [{ "color": "#fff" }] },
+        }));
+        let many = style(serde_json::json!({
+            "backgroundGradient": [
+                { "type": "linear", "stops": [{ "color": "#fff" }] },
+                { "type": "radial", "stops": [{ "color": "#000" }] },
+            ],
+        }));
+        assert_eq!(
+            build_gradients(one.background_gradient.as_ref().unwrap(), None).len(),
+            1
+        );
+        assert_eq!(
+            build_gradients(many.background_gradient.as_ref().unwrap(), None).len(),
+            2
+        );
+    }
+
+    #[test]
+    fn conic_gradient_converts_degrees_to_radians() {
+        let s = style(serde_json::json!({
+            "backgroundGradient": {
+                "type": "conic",
+                "start": 45.0,
+                "stops": [
+                    { "color": "#ff0000", "angle": 0.0 },
+                    { "color": "#00ff00", "angle": 180.0 },
+                ],
+            },
+        }));
+        let grads = build_gradients(s.background_gradient.as_ref().unwrap(), None);
+        let Gradient::Conic(conic) = &grads[0] else {
+            panic!("expected a conic gradient, got {:?}", grads[0]);
+        };
+        assert!((conic.start - 45.0_f32.to_radians()).abs() < 1e-6);
+        assert_eq!(conic.stops[1].angle, Some(180.0_f32.to_radians()));
     }
 
     #[test]

@@ -283,6 +283,15 @@ pub struct Style {
     pub outline: Option<OutlineSpec>,
     #[serde(default)]
     pub box_shadow: Option<BoxShadowSpec>,
+    /// Background gradient(s); one gradient or a layered list. bevy paints it
+    /// *over* `backgroundColor` (CSS `background-image` semantics): an opaque
+    /// gradient hides the color (fallback); transparent stops reveal it.
+    #[serde(default)]
+    pub background_gradient: Option<GradientList>,
+    /// Border gradient(s); one gradient or a layered list. Painted *over*
+    /// `borderColor` (needs a `border` width to be visible).
+    #[serde(default)]
+    pub border_gradient: Option<GradientList>,
     #[serde(default)]
     pub z_index: Option<i32>,
 
@@ -351,6 +360,108 @@ pub struct BoxShadowSpec {
     pub spread_radius: Option<Length>,
     #[serde(default)]
     pub blur_radius: Option<Length>,
+}
+
+/// A single color stop for a linear/radial gradient. `position` is where the
+/// color sits along the gradient line (a [`Length`]); absent → auto-spaced.
+/// `hint` is the `0.0..=1.0` interpolation midpoint between this stop and the
+/// next (default `0.5`).
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GradientStop {
+    pub color: String,
+    #[serde(default)]
+    pub position: Option<Length>,
+    #[serde(default)]
+    pub hint: Option<f32>,
+}
+
+/// A single color stop for a conic gradient. `angle` is the stop's angle in
+/// **degrees** (absent → auto-spaced); `hint` as in [`GradientStop`].
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AngularStop {
+    pub color: String,
+    #[serde(default)]
+    pub angle: Option<f32>,
+    #[serde(default)]
+    pub hint: Option<f32>,
+}
+
+/// Radial/conic gradient center, given as a named anchor (`"center"`, `"top"`,
+/// `"topLeft"`, …). Arbitrary `Val`-offset centers are not yet supported.
+pub type GradientPosition = String;
+
+/// Color space the gradient interpolates in (`"oklab"` (default), `"oklch"`,
+/// `"oklchLong"`, `"srgb"`, `"linearRgb"`, `"hsl"`, `"hslLong"`, `"hsv"`,
+/// `"hsvLong"`).
+pub type ColorSpace = String;
+
+/// The size/shape of a radial gradient. Either a keyword
+/// (`"closestSide" | "farthestSide" | "closestCorner" | "farthestCorner"`,
+/// default `"closestCorner"`) or an explicit `{ circle }` / `{ ellipse }`.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum RadialShapeSpec {
+    Keyword(String),
+    Circle { circle: Length },
+    Ellipse { ellipse: [Length; 2] },
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LinearGradientSpec {
+    /// Gradient line angle in **degrees** (`0` = to top, increasing clockwise).
+    #[serde(default)]
+    pub angle: Option<f32>,
+    #[serde(default)]
+    pub stops: Vec<GradientStop>,
+    #[serde(default)]
+    pub color_space: Option<ColorSpace>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RadialGradientSpec {
+    #[serde(default)]
+    pub position: Option<GradientPosition>,
+    #[serde(default)]
+    pub shape: Option<RadialShapeSpec>,
+    #[serde(default)]
+    pub stops: Vec<GradientStop>,
+    #[serde(default)]
+    pub color_space: Option<ColorSpace>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConicGradientSpec {
+    /// Start angle in **degrees**.
+    #[serde(default)]
+    pub start: Option<f32>,
+    #[serde(default)]
+    pub position: Option<GradientPosition>,
+    #[serde(default)]
+    pub stops: Vec<AngularStop>,
+    #[serde(default)]
+    pub color_space: Option<ColorSpace>,
+}
+
+/// One gradient, discriminated by its `type` field on the wire.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(tag = "type", rename_all = "camelCase")]
+pub enum GradientSpec {
+    Linear(LinearGradientSpec),
+    Radial(RadialGradientSpec),
+    Conic(ConicGradientSpec),
+}
+
+/// A `backgroundGradient`/`borderGradient` value: one gradient or a layered list.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(untagged)]
+pub enum GradientList {
+    One(GradientSpec),
+    Many(Vec<GradientSpec>),
 }
 
 /// A static 2D transform mirroring the animated transform channels. Every field
