@@ -13,6 +13,7 @@ use std::cell::{Cell, RefCell};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
+use bevy::log::{debug, error, info, warn};
 use crossbeam_channel::Sender;
 use deno_core::{Extension, JsRuntime, OpDecl, OpState, RuntimeOptions, op2};
 use tokio::sync::Mutex;
@@ -70,6 +71,21 @@ fn op_flush(state: &mut OpState, #[serde] ops: Vec<Op>) {
 fn op_emit(state: &mut OpState, #[string] name: String, #[serde] value: serde_json::Value) {
     let sender = state.borrow::<EmitSender>();
     let _ = sender.0.send(ReactMessage { name, value });
+}
+
+/// JS -> Bevy: surface a `console.*` call in the Bevy log. `level` is one of
+/// "error" | "warn" | "info" | "debug" (mapped from the console method in the
+/// prelude shim). The `target: "bevy_react::js"` marks the line as coming from the React
+/// app, and the tracing level keeps `console.log` and `console.error` visually
+/// distinct (INFO vs the red ERROR).
+#[op2(fast)]
+fn op_log(#[string] level: String, #[string] msg: String) {
+    match level.as_str() {
+        "error" => error!(target: "bevy_react::js", "{msg}"),
+        "warn" => warn!(target: "bevy_react::js", "{msg}"),
+        "debug" => debug!(target: "bevy_react::js", "{msg}"),
+        _ => info!(target: "bevy_react::js", "{msg}"),
+    }
 }
 
 /// JS -> Bevy: declare/start/stop a shared-value animation. Synchronous,
@@ -143,10 +159,11 @@ async fn op_sleep(ms: f64) {
 /// microtask queue so React's scheduler (which yields with `setTimeout(_, 0)`)
 /// stays cheap. Cancellation is observable (a cleared callback never runs), even
 /// though the underlying sleep still completes.
-// TODO(review): the runtime code calls `console.error`/`console.log` (bridge.ts,
-// renderer.ts) but this prelude only polyfills timers + queueMicrotask. Confirm deno_core
-// provides `console` in this config; if not, the FIRST handler error throws on
-// `console.error` (masking the real error) instead of logging it — add a `console` shim here.
+// The prelude also installs a `console` that forwards to `op_log`, so every
+// `console.*` call (the runtime's own error handlers in bridge.ts/renderer.ts as
+// well as any user component) reaches the Bevy log tagged `target: "bevy_react::js"`, with
+// the tracing level distinguishing `log` from `error`. We define it explicitly
+// rather than relying on deno_core's default so behavior is deterministic.
 const PRELUDE: &str = r#"
 let __nextTimer = 1;
 const __cancelled = new Set();
@@ -174,6 +191,26 @@ globalThis.setInterval = (cb, ms = 0, ...args) => {
 };
 globalThis.clearInterval = (id) => { if (id != null) __cancelled.add(id); };
 globalThis.queueMicrotask = globalThis.queueMicrotask || ((cb) => { Promise.resolve().then(cb); });
+
+const __fmtArg = (a) => {
+  if (typeof a === "string") return a;
+  if (a instanceof Error) return a.stack || (a.name + ": " + a.message);
+  try { return JSON.stringify(a); } catch { return String(a); }
+};
+const __log = (level) => (...args) =>
+  Deno.core.ops.op_log(level, args.map(__fmtArg).join(" "));
+globalThis.console = {
+  log: __log("info"),
+  info: __log("info"),
+  debug: __log("debug"),
+  trace: __log("debug"),
+  warn: __log("warn"),
+  error: __log("error"),
+  dir: __log("info"),
+  table: __log("info"),
+  // No-op fallbacks so libraries that probe these never throw:
+  group: () => {}, groupCollapsed: () => {}, groupEnd: () => {}, assert: () => {},
+};
 "#;
 
 /// What ended a pump of the JS event loop.
@@ -239,7 +276,7 @@ pub fn spawn_js_thread(
                 ) {
                     Ok(rt) => rt,
                     Err(e) => {
-                        eprintln!("[js] initial runtime build failed: {e:?}");
+                        error!(target: "bevy_react::js", "initial runtime build failed: {e:?}");
                         return;
                     }
                 };
@@ -258,7 +295,7 @@ pub fn spawn_js_thread(
                                 // The update threw synchronously (e.g. a syntax
                                 // error in the bundle). Fall back to a full
                                 // isolate rebuild.
-                                eprintln!("[js] fast refresh failed ({e}); full reload");
+                                warn!(target: "bevy_react::js", "fast refresh failed ({e}); full reload");
                                 match build_runtime(
                                     &vendor_path,
                                     &app_path,
@@ -270,7 +307,7 @@ pub fn spawn_js_thread(
                                 ) {
                                     Ok(rt) => runtime = rt,
                                     Err(e) => {
-                                        eprintln!("[js] full reload failed: {e:?}");
+                                        error!(target: "bevy_react::js", "full reload failed: {e:?}");
                                         break;
                                     }
                                 }
@@ -301,9 +338,10 @@ fn build_runtime(
     const ANIMATE: OpDecl = op_animate();
     const NEXT: OpDecl = op_next_event();
     const SLEEP: OpDecl = op_sleep();
+    const LOG: OpDecl = op_log();
     let ext = Extension {
         name: "bevy_react_bridge",
-        ops: std::borrow::Cow::Borrowed(&[FLUSH, EMIT, REQUEST, ANIMATE, NEXT, SLEEP]),
+        ops: std::borrow::Cow::Borrowed(&[FLUSH, EMIT, REQUEST, ANIMATE, NEXT, SLEEP, LOG]),
         ..Default::default()
     };
 
@@ -364,7 +402,7 @@ async fn pump(
         Some(Err(e)) => {
             // Steady-state errors are caught inside the JS event loop, so this
             // is rare; treat it like a reload so we rebuild rather than wedge.
-            eprintln!("[js] event loop error: {e}");
+            error!(target: "bevy_react::js", "event loop error: {e}");
             Pumped::Reload
         }
         // The loop went idle: a reload with no pending timers, or shutdown.

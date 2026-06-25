@@ -15,7 +15,7 @@ Known debt:
   ☐ Panic audit on JS-derived data - Confirm these are unreachable from malformed ops, or convert to graceful errors: `crates/core/src/anchor.rs:214` / `:217` (`.expect("anchor present")` / `.expect("scale present")`), `crates/core/src/reconcile.rs:674` (`.expect("valid text props")`). A panic on the JS thread is worse than a logged error. (The request path already rejects on bad input.)
   ☐ Full `Node` rebuild on every `Op::Update` - (`crates/core/src/ui_map.rs:494`) and the hand-maintained `Style` mirror list (`crates/core/src/ui_map.rs:589`) that must match `Style` field-for-field — easy to desync, perf-relevant.
   ☐ Descendant leak on single-node removal - (`crates/core/src/reconcile.rs:230`).
-  ☐ Surface JS runtime errors - (`crates/core/src/js_thread.rs:136`): route the isolate's `console.error` / `console.log` back to the Bevy log so users can debug their React app.
+  ☑ Surface JS runtime errors - the prelude now installs a `console` that forwards every `console.*` call (and the runtime's own error handlers) to the Bevy log via `op_log`, tagged `target: "js"` with the tracing level distinguishing `log`/`warn`/`error`.
   ☐ Single-root / single-isolate - limitation (`crates/core/src/plugin.rs:312`) — one UI surface per app. Document explicitly.
 
 Features:
