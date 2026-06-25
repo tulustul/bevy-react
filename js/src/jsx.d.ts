@@ -68,7 +68,12 @@ export type AngularStop = { color: string; angle?: number; hint?: number };
 
 /** One gradient. `angle`/`start` are in **degrees** (`0` = to top, clockwise). */
 export type Gradient =
-  | { type: "linear"; angle?: number; stops: GradientStop[]; colorSpace?: ColorSpace }
+  | {
+      type: "linear";
+      angle?: number;
+      stops: GradientStop[];
+      colorSpace?: ColorSpace;
+    }
   | {
       type: "radial";
       position?: GradientPosition;
@@ -265,6 +270,19 @@ export interface BevyStyle {
   fontFamily?: string;
   /** Horizontal alignment of the text block (`<text>` root only). */
   textAlign?: "left" | "center" | "right" | "justify" | "start" | "end";
+  /** Line height. A bare number is a multiple of the font size; `{ px }` is an
+   * absolute pixel height. Unset → 1.2× the font size (bevy's default). */
+  lineHeight?: number | { px: number };
+  /** Letter spacing. A bare number is logical pixels; `{ rem }` is a multiple of
+   * the font size. */
+  letterSpacing?: number | { rem: number };
+  /** A single drop shadow behind the text (`<text>` root only). `offsetX`/
+   * `offsetY` are displacement in logical pixels (default `4`); `color` defaults
+   * to bevy's translucent black. */
+  textShadow?: { color?: string; offsetX?: number; offsetY?: number };
+  /** How the text wraps when it overflows its bounds (`<text>` root only).
+   * Default `"wordBoundary"`. */
+  lineBreak?: "wordBoundary" | "anyCharacter" | "wordOrCharacter" | "noWrap";
 }
 
 // TODO(review): the pointer model is bespoke and limited — left-button press/move/up only,
@@ -306,8 +324,8 @@ export interface BevyNodeProps extends BevyAttributes {
 }
 
 /** Props for the `text` element (maps to `bevy_ui::Text` / `TextSpan`). Style
- *  its `color`/`fontSize`/`fontWeight`/`textAlign` via `style`; nest `<text>`
- *  to restyle a run. */
+ *  its `color`/`fontSize`/`fontWeight`/`textAlign`/`lineHeight`/`letterSpacing`/
+ *  `textShadow`/`lineBreak` via `style`; nest `<text>` to restyle a run. */
 export interface BevyTextProps extends BevyAttributes {
   style?: BevyStyle;
   children?: ReactNode;

@@ -3,13 +3,15 @@
 //! components (background/border/outline/shadow/z-index), and `ImageNode`.
 
 use bevy::prelude::*;
+use bevy::text::{LetterSpacing, LineHeight};
 use bevy::ui::widget::NodeImageMode;
 use bevy_react_animations::build_ui_transform;
 
 use crate::plugin::Fonts;
 use crate::protocol::{
-    AngularStop, ConicGradientSpec, GradientList, GradientSpec, GradientStop, LinearGradientSpec,
-    Length, Props, RadialGradientSpec, RadialShapeSpec, Rect, Style,
+    AngularStop, ConicGradientSpec, GradientList, GradientSpec, GradientStop, Length,
+    LetterSpacingSpec, LineHeightSpec, LinearGradientSpec, Props, RadialGradientSpec,
+    RadialShapeSpec, Rect, Style,
 };
 
 /// Parse a `#rrggbb`/`rrggbb` (or 8-digit alpha) hex string into a `Color`.
@@ -163,7 +165,10 @@ fn build_radial(spec: &RadialGradientSpec, opacity: Option<f32>) -> Gradient {
 fn build_conic(spec: &ConicGradientSpec, opacity: Option<f32>) -> Gradient {
     ConicGradient::new(
         parse_position(spec.position.as_deref()),
-        spec.stops.iter().map(|s| angular_stop(s, opacity)).collect(),
+        spec.stops
+            .iter()
+            .map(|s| angular_stop(s, opacity))
+            .collect(),
     )
     .with_start(spec.start.unwrap_or(0.0).to_radians())
     .in_color_space(parse_color_space(spec.color_space.as_deref()))
@@ -696,6 +701,16 @@ pub fn apply_style(ec: &mut EntityCommands, style: &Option<Style>) {
             ec.remove::<BorderGradient>();
         }
     }
+    // A `<text>` root's drop shadow (block-level). No-op on non-text nodes (no
+    // `Text` to shadow); removed when the style drops it on a re-render/hover-out.
+    match text_shadow(s) {
+        Some(shadow) => {
+            ec.insert(shadow);
+        }
+        None => {
+            ec.remove::<TextShadow>();
+        }
+    }
     match s.and_then(|s| s.z_index) {
         Some(z) => {
             ec.insert(ZIndex(z));
@@ -786,7 +801,12 @@ pub fn overlay_style(base: &Option<Style>, overlay: &Option<Style>) -> Option<St
         color,
         font_size,
         font_weight,
+        font_family,
         text_align,
+        line_height,
+        letter_spacing,
+        text_shadow,
+        line_break,
     );
     Some(merged)
 }
@@ -850,12 +870,66 @@ fn justify(s: &str) -> Justify {
     }
 }
 
-/// Resolve a style's text appearance into the `TextColor` + `TextFont` a text
-/// run carries. Unset fields fall back to white / Bevy's default font. Returned
-/// as concrete components so they can be copied onto inheriting child spans.
-pub fn resolved_text_style(style: &Option<Style>, fonts: &Fonts) -> (TextColor, TextFont) {
+/// Map a wire line-break token to bevy's [`LineBreak`] (default `WordBoundary`,
+/// matching bevy's own default).
+fn linebreak(s: &str) -> LineBreak {
+    match s {
+        "anyCharacter" => LineBreak::AnyCharacter,
+        "wordOrCharacter" => LineBreak::WordOrCharacter,
+        "noWrap" => LineBreak::NoWrap,
+        _ => LineBreak::WordBoundary,
+    }
+}
+
+/// Map a [`LineHeightSpec`] to bevy's [`LineHeight`]: a bare number is a multiple
+/// of the font size, `{ px }` is an absolute pixel height.
+fn line_height(spec: LineHeightSpec) -> LineHeight {
+    match spec {
+        LineHeightSpec::Relative(scale) => LineHeight::RelativeToFont(scale),
+        LineHeightSpec::Px { px } => LineHeight::Px(px),
+    }
+}
+
+/// Map a [`LetterSpacingSpec`] to bevy's [`LetterSpacing`]: a bare number is
+/// logical pixels, `{ rem }` is a multiple of the font size.
+fn letter_spacing(spec: LetterSpacingSpec) -> LetterSpacing {
+    match spec {
+        LetterSpacingSpec::Px(px) => LetterSpacing::Px(px),
+        LetterSpacingSpec::Rem { rem } => LetterSpacing::Rem(rem),
+    }
+}
+
+/// Build a [`TextShadow`] from a style's `textShadow`, folding `opacity` into the
+/// color. Unset offset/color fields fall back to bevy's [`TextShadow::default`].
+fn text_shadow(style: Option<&Style>) -> Option<TextShadow> {
+    let s = style?;
+    let spec = s.text_shadow.as_ref()?;
+    let mut shadow = TextShadow::default();
+    if let Some(x) = spec.offset_x {
+        shadow.offset.x = x;
+    }
+    if let Some(y) = spec.offset_y {
+        shadow.offset.y = y;
+    }
+    if let Some(c) = &spec.color {
+        shadow.color = parse_color(c);
+    }
+    shadow.color = apply_opacity(shadow.color, s.opacity);
+    Some(shadow)
+}
+
+/// Resolve a style's text appearance into the `TextColor` + `TextFont` +
+/// `LineHeight` + `LetterSpacing` a text run carries. Unset fields fall back to
+/// white / Bevy's defaults. Returned as concrete components so they can be copied
+/// onto inheriting child spans.
+pub fn resolved_text_style(
+    style: &Option<Style>,
+    fonts: &Fonts,
+) -> (TextColor, TextFont, LineHeight, LetterSpacing) {
     let mut color = TextColor(Color::WHITE);
     let mut font = TextFont::default();
+    let mut line = LineHeight::default();
+    let mut spacing = LetterSpacing::default();
     // Default font face; a `fontFamily` below overrides it. Unset on both → leave
     // `TextFont::default()`'s empty handle (Bevy's built-in font).
     if let Some(h) = &fonts.default {
@@ -880,21 +954,32 @@ pub fn resolved_text_style(style: &Option<Style>, fonts: &Fonts) -> (TextColor, 
                 None => warn!("unknown fontFamily {family:?}; using the default font"),
             }
         }
+        if let Some(lh) = s.line_height {
+            line = line_height(lh);
+        }
+        if let Some(ls) = s.letter_spacing {
+            spacing = letter_spacing(ls);
+        }
     }
-    (color, font)
+    (color, font, line, spacing)
 }
 
-/// Insert the `TextColor` + `TextFont` for a `<text>` element or span.
+/// Insert the resolved text components for a `<text>` element or span.
 pub fn apply_text_style(ec: &mut EntityCommands, style: &Option<Style>, fonts: &Fonts) {
     ec.insert(resolved_text_style(style, fonts));
 }
 
-/// The `TextLayout` for a `<text>` root, if `textAlign` is set (root only).
+/// The `TextLayout` for a `<text>` root, if `textAlign` or `lineBreak` is set
+/// (root only). Either field present builds the layout; the other keeps its
+/// bevy default.
 pub fn text_layout(style: &Option<Style>) -> Option<TextLayout> {
-    let align = style.as_ref()?.text_align.as_deref()?;
+    let s = style.as_ref()?;
+    if s.text_align.is_none() && s.line_break.is_none() {
+        return None;
+    }
     Some(TextLayout {
-        justify: justify(align),
-        ..default()
+        justify: s.text_align.as_deref().map(justify).unwrap_or_default(),
+        linebreak: s.line_break.as_deref().map(linebreak).unwrap_or_default(),
     })
 }
 
@@ -1024,6 +1109,65 @@ mod tests {
     }
 
     #[test]
+    fn line_height_px_vs_relative() {
+        let rel = style(serde_json::json!({ "lineHeight": 1.5 }));
+        assert_eq!(
+            line_height(rel.line_height.unwrap()),
+            LineHeight::RelativeToFont(1.5)
+        );
+        let px = style(serde_json::json!({ "lineHeight": { "px": 28 } }));
+        assert_eq!(line_height(px.line_height.unwrap()), LineHeight::Px(28.0));
+    }
+
+    #[test]
+    fn letter_spacing_px_vs_rem() {
+        let px = style(serde_json::json!({ "letterSpacing": 2 }));
+        assert_eq!(
+            letter_spacing(px.letter_spacing.unwrap()),
+            LetterSpacing::Px(2.0)
+        );
+        let rem = style(serde_json::json!({ "letterSpacing": { "rem": 0.1 } }));
+        assert_eq!(
+            letter_spacing(rem.letter_spacing.unwrap()),
+            LetterSpacing::Rem(0.1)
+        );
+    }
+
+    #[test]
+    fn text_shadow_offset_and_color() {
+        let s = style(serde_json::json!({
+            "textShadow": { "color": "#ff0000", "offsetX": 2, "offsetY": 3 },
+        }));
+        let shadow = text_shadow(Some(&s)).unwrap();
+        assert_eq!(shadow.offset, Vec2::new(2.0, 3.0));
+        assert_eq!(shadow.color.to_srgba(), Srgba::hex("ff0000").unwrap());
+
+        // Unset offset falls back to bevy's default displacement (4.0).
+        let bare = style(serde_json::json!({ "textShadow": {} }));
+        assert_eq!(text_shadow(Some(&bare)).unwrap().offset, Vec2::splat(4.0));
+        // No textShadow → no component.
+        assert!(text_shadow(Some(&style(serde_json::json!({})))).is_none());
+    }
+
+    #[test]
+    fn line_break_drives_layout() {
+        // `lineBreak` alone (no `textAlign`) still builds a `TextLayout`.
+        let s = style(serde_json::json!({ "lineBreak": "noWrap" }));
+        let layout = text_layout(&Some(s)).unwrap();
+        assert_eq!(layout.linebreak, LineBreak::NoWrap);
+        assert_eq!(layout.justify, Justify::default());
+
+        // Neither set → no layout.
+        assert!(text_layout(&Some(style(serde_json::json!({})))).is_none());
+
+        // Both set are honored.
+        let both = style(serde_json::json!({ "textAlign": "center", "lineBreak": "anyCharacter" }));
+        let layout = text_layout(&Some(both)).unwrap();
+        assert_eq!(layout.justify, Justify::Center);
+        assert_eq!(layout.linebreak, LineBreak::AnyCharacter);
+    }
+
+    #[test]
     fn overlay_merges_fields() {
         let base = Some(style(serde_json::json!({
             "backgroundColor": "#111111",
@@ -1098,7 +1242,7 @@ mod tests {
         let s = style(serde_json::json!({
             "color": "#7aa2f7", "fontSize": 20, "fontWeight": "bold"
         }));
-        let (color, font) = resolved_text_style(&Some(s), &Fonts::default());
+        let (color, font, ..) = resolved_text_style(&Some(s), &Fonts::default());
         assert_eq!(color.0, parse_color("#7aa2f7"));
         assert_eq!(font.font_size, (20.0f32).into());
         assert_eq!(font.weight, FontWeight::BOLD);

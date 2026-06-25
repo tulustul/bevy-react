@@ -24,11 +24,11 @@ Features:
   ☐ proper units support in styles
   ☐ bevy_ui feature coverage gaps (audited against bevy_ui 0.19.0; layout/flex/grid/text-basics are complete). Add support for:
       High value:
-        ☐ Gradients - entirely absent. `LinearGradient` / `RadialGradient` / `ConicGradient` + `BackgroundGradient` / `BorderGradient` (`bevy_ui::gradients`). No gradient field exists in `protocol::Style`/`Props`. Headline 0.19 feature.
+        ✔ Gradients - entirely absent. `LinearGradient` / `RadialGradient` / `ConicGradient` + `BackgroundGradient` / `BorderGradient` (`bevy_ui::gradients`). No gradient field exists in `protocol::Style`/`Props`. Headline 0.19 feature. @done(26-06-25 21:32)
         ☐ Image 9-slice / tiled scaling - `imageMode` only maps `auto | stretch`; `NodeImageMode::Sliced(TextureSlicer)` (9-slice borders) and `Tiled { tile_x, tile_y, stretch_value }` unsupported. Also `ImageNode.rect` (source sub-rect / atlas region), `texture_atlas`, and `visual_box` not exposed.
         ☐ `GlobalZIndex` - only local `ZIndex` is exposed; overlays-above-everything need Global (see `plugin.rs:372` comment).
         ☐ Per-side `borderColor` - currently `BorderColor::all()` (uniform); `bevy_ui::BorderColor` supports `top/right/bottom/left` individually.
-        ☐ Text typography - `lineHeight`, `letterSpacing`, `TextShadow`, and line-break/wrap control (`TextLayout` linebreak) all unexposed.
+        ✔ Text typography - `lineHeight`, `letterSpacing`, `TextShadow`, and line-break/wrap control (`TextLayout` linebreak) all unexposed. @done(26-06-25 19:46)
       Medium value:
         ☐ Multiple stacked box shadows - `boxShadow` maps a single `ShadowStyle`; `bevy_ui::BoxShadow` is `Vec<ShadowStyle>`.
         ☐ `FocusPolicy` (Block/Pass) - cannot make a node click-through for picking.

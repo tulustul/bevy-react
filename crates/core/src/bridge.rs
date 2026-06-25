@@ -3,6 +3,7 @@
 
 use bevy::platform::collections::{HashMap, HashSet};
 use bevy::prelude::*;
+use bevy::text::{LetterSpacing, LineHeight};
 use crossbeam_channel::Receiver;
 use tokio::sync::mpsc::UnboundedSender;
 
@@ -11,7 +12,7 @@ use crate::protocol::{NodeId, Op, Outbound, Style};
 /// The text appearance a `<text>` element/span carries, kept so inheriting child
 /// runs (bare strings) can copy it on append without an ECS query (Bevy commands
 /// are deferred within an op batch, so the parent's components aren't visible yet).
-pub type ResolvedTextStyle = (TextColor, TextFont);
+pub type ResolvedTextStyle = (TextColor, TextFont, LineHeight, LetterSpacing);
 
 /// Carries batches of reconciler ops from the JS thread to Bevy.
 pub type OpReceiver = Receiver<Vec<Op>>;

@@ -332,6 +332,22 @@ pub struct Style {
     /// `"left" | "center" | "right" | "justify" | "start" | "end"`.
     #[serde(default)]
     pub text_align: Option<String>,
+    /// Line height. A bare number is a multiple of the font size; `{ "px": n }`
+    /// is an absolute pixel height. Unset → bevy's default (1.2× the font size).
+    #[serde(default)]
+    pub line_height: Option<LineHeightSpec>,
+    /// Letter spacing. A bare number is logical pixels; `{ "rem": n }` is a
+    /// multiple of the font size. Unset → no extra spacing.
+    #[serde(default)]
+    pub letter_spacing: Option<LetterSpacingSpec>,
+    /// A single drop shadow behind the text (`<text>` root only).
+    #[serde(default)]
+    pub text_shadow: Option<TextShadowSpec>,
+    /// How the text wraps when it overflows its bounds (`<text>` root only):
+    /// `"wordBoundary"` (default) | `"anyCharacter"` | `"wordOrCharacter"` |
+    /// `"noWrap"`.
+    #[serde(default)]
+    pub line_break: Option<String>,
 }
 
 /// Outline drawn around (outside) the node's border box.
@@ -360,6 +376,38 @@ pub struct BoxShadowSpec {
     pub spread_radius: Option<Length>,
     #[serde(default)]
     pub blur_radius: Option<Length>,
+}
+
+/// Line height for a `<text>`. A bare number is a multiple of the font size
+/// (`RelativeToFont`); `{ "px": n }` is an absolute pixel height.
+#[derive(Debug, Clone, Copy, Deserialize)]
+#[serde(untagged)]
+pub enum LineHeightSpec {
+    Relative(f32),
+    Px { px: f32 },
+}
+
+/// Letter spacing for a `<text>`. A bare number is logical pixels; `{ "rem": n }`
+/// is a multiple of the font size.
+#[derive(Debug, Clone, Copy, Deserialize)]
+#[serde(untagged)]
+pub enum LetterSpacingSpec {
+    Px(f32),
+    Rem { rem: f32 },
+}
+
+/// A single text drop shadow. `offsetX`/`offsetY` are displacement in logical
+/// pixels (absent → bevy's default of `4.0`); `color` defaults to bevy's
+/// translucent black when unset.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TextShadowSpec {
+    #[serde(default)]
+    pub color: Option<String>,
+    #[serde(default)]
+    pub offset_x: Option<f32>,
+    #[serde(default)]
+    pub offset_y: Option<f32>,
 }
 
 /// A single color stop for a linear/radial gradient. `position` is where the

@@ -174,11 +174,14 @@ pub fn apply_js_ops(
                             EditableText::new(props.value.as_deref().unwrap_or_default());
                         editable.max_characters = props.max_length;
                         editable.allow_newlines = props.multiline;
-                        let (text_color, font) = resolved_text_style(&props.style, &fonts);
+                        let (text_color, font, line_height, letter_spacing) =
+                            resolved_text_style(&props.style, &fonts);
                         ec.insert((
                             editable,
                             text_color,
                             font,
+                            line_height,
+                            letter_spacing,
                             TextLayout {
                                 linebreak: if props.multiline {
                                     LineBreak::WordBoundary
