@@ -76,7 +76,8 @@ export interface AnimatedStyle {
   scale?: AnimatedValue;
   scaleX?: AnimatedValue;
   scaleY?: AnimatedValue;
-  /** Clockwise rotation, in radians. */
+  /** Clockwise rotation, in **radians** (an imperative numeric channel — unlike
+   *  the declarative static `transform.rotate`, which takes a CSS angle/degrees). */
   rotate?: AnimatedValue;
   opacity?: AnimatedValue;
   backgroundColor?: AnimatedValue;

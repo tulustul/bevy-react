@@ -945,10 +945,12 @@ mod tests {
     use crate::transition::TransitionInput;
     use std::f32::consts::PI;
 
+    // Pass rotate as an explicit `rad` string so the asserted radian value is
+    // carried verbatim (a bare number would be read as degrees).
     fn text_props(rotate: f32) -> Props {
         serde_json::from_value(serde_json::json!({
             "style": {
-                "transform": { "rotate": rotate },
+                "transform": { "rotate": format!("{rotate}rad") },
                 "transition": { "transform": { "duration": 0.3 } },
             }
         }))

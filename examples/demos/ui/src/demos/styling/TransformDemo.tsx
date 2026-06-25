@@ -22,8 +22,8 @@ export function TransformDemo() {
       </Example>
 
       <Example
-        description="rotate spins a node, in radians, around its center."
-        tsx={`transform: { rotate: 0.4 }`}
+        description="rotate spins a node around its center (degrees, or a unit string like '0.25turn')."
+        tsx={`transform: { rotate: 45 }`}
       >
         <RotateControl />
       </Example>
@@ -82,7 +82,7 @@ function ScaleControl() {
 }
 
 function RotateControl() {
-  const [r, setR] = useState(0.4);
+  const [r, setR] = useState(45);
   return (
     <node style={controlColumn}>
       <node style={stage}>
@@ -97,9 +97,9 @@ function RotateControl() {
       <Slider
         value={r}
         min={0}
-        max={Math.PI * 2}
+        max={360}
         onChange={setR}
-        label={`rotate ${r.toFixed(2)}`}
+        label={`rotate ${r.toFixed(0)}°`}
       />
     </node>
   );

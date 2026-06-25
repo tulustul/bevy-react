@@ -18,6 +18,26 @@ export interface BevyAttributes {
  *  (`"50%"`, `"100vw"`, `"100vh"`, `"50vmin"`, `"50vmax"`, `"10px"`, `"auto"`). */
 export type Length = number | string;
 
+/** A CSS color string. Accepts hex (`"#f00"`, `"#1e1e2e"`, `"#1e1e2eaa"`), a
+ *  named color (`"red"`, `"rebeccapurple"`), `"transparent"`, or functional
+ *  notation: `"rgb(255 0 0 / 50%)"` / `"rgba(255,0,0,.5)"`, `"hsl(0 100% 50%)"`,
+ *  `"hwb(0 0% 0%)"`, `"oklab(0.7 0.1 0.05)"`, `"oklch(0.7 0.1 30)"`. An
+ *  unrecognized value renders as a loud magenta (and logs a warning). */
+export type Color = string;
+
+/** A CSS angle: a bare number is **degrees**, or a unit string (`"45deg"`,
+ *  `"1.5rad"`, `"0.25turn"`, `"100grad"`). */
+export type Angle = number | string;
+
+/** A CSS time/duration: a bare number is **milliseconds**, or a unit string
+ *  (`"200ms"`, `"0.2s"`). */
+export type Time = number | string;
+
+/** A font size: a bare number is logical pixels, or a unit string — `"24px"`,
+ *  `"2vw"`/`"2vh"`/`"2vmin"`/`"2vmax"`, or `"1.5rem"` (relative to Bevy's `RemSize`,
+ *  default 20px). CSS `em` is not supported (no Bevy equivalent). */
+export type FontSize = number | string;
+
 /** Four sides/corners: a number (uniform), a CSS shorthand string
  *  (`"8px"`, `"8px 16px"`, `"1px 2px 3px 4px"`), or an explicit object. */
 export type Rect =
@@ -61,16 +81,18 @@ export type RadialShape =
 /** A linear/radial color stop. `position` places it along the gradient line
  *  (absent → auto-spaced); `hint` is the `0..1` interpolation midpoint to the
  *  next stop (default `0.5`). */
-export type GradientStop = { color: string; position?: Length; hint?: number };
+export type GradientStop = { color: Color; position?: Length; hint?: number };
 
-/** A conic color stop. `angle` is in **degrees** (absent → auto-spaced). */
-export type AngularStop = { color: string; angle?: number; hint?: number };
+/** A conic color stop. `angle` is an [`Angle`] (bare number = degrees; absent →
+ *  auto-spaced). */
+export type AngularStop = { color: Color; angle?: Angle; hint?: number };
 
-/** One gradient. `angle`/`start` are in **degrees** (`0` = to top, clockwise). */
+/** One gradient. `angle`/`start` are [`Angle`]s (bare number = degrees; `0` = to
+ *  top, clockwise). */
 export type Gradient =
   | {
       type: "linear";
-      angle?: number;
+      angle?: Angle;
       stops: GradientStop[];
       colorSpace?: ColorSpace;
     }
@@ -83,21 +105,21 @@ export type Gradient =
     }
   | {
       type: "conic";
-      start?: number;
+      start?: Angle;
       position?: GradientPosition;
       stops: AngularStop[];
       colorSpace?: ColorSpace;
     };
 
 /** Timing for one transition channel: a timing curve (default) or, if `stiffness`
- *  or `damping` is given, a spring. `duration`/`delay` are in **milliseconds**
- *  (the renderer converts them to seconds before they cross to Rust). */
+ *  or `damping` is given, a spring. `duration`/`delay` are [`Time`]s — a bare
+ *  number is **milliseconds**, or a unit string (`"0.2s"`). */
 export type BevyTransitionSpec = {
-  /** Timing duration in ms (default 300). Ignored for a spring. */
-  duration?: number;
+  /** Timing duration (default `300` ms). Ignored for a spring. */
+  duration?: Time;
   easing?: "linear" | "easeIn" | "easeOut" | "easeInOut";
-  /** Hold this many ms before easing (default 0). */
-  delay?: number;
+  /** Hold this long before easing (default `0`). */
+  delay?: Time;
   /** Spring stiffness; its presence (with/without `damping`) selects a spring. */
   stiffness?: number;
   damping?: number;
@@ -210,14 +232,14 @@ export interface BevyStyle {
   gridColumn?: string;
 
   // visual (sibling components)
-  /** Hex background color, e.g. `#1e1e2e`. */
-  backgroundColor?: string;
-  /** Hex border color (applied to all sides). */
-  borderColor?: string;
+  /** Background color (any CSS [`Color`], e.g. `"#1e1e2e"` or `"rebeccapurple"`). */
+  backgroundColor?: Color;
+  /** Border color (any CSS [`Color`], applied to all sides). */
+  borderColor?: Color;
   borderRadius?: Rect;
-  outline?: { width?: Length; offset?: Length; color?: string };
+  outline?: { width?: Length; offset?: Length; color?: Color };
   boxShadow?: {
-    color?: string;
+    color?: Color;
     xOffset?: Length;
     yOffset?: Length;
     spreadRadius?: Length;
@@ -234,14 +256,15 @@ export interface BevyStyle {
 
   // transform / opacity
   /** Static 2D transform. With `transition` a change eases instead of snapping.
-   * `scale` is uniform; `scaleX`/`scaleY` override one axis. `rotate` is radians. */
+   * `scale` is uniform; `scaleX`/`scaleY` override one axis. `rotate` is an
+   * [`Angle`] (bare number = degrees, e.g. `45`, or `"1.5rad"`). */
   transform?: {
     translateX?: number;
     translateY?: number;
     scale?: number;
     scaleX?: number;
     scaleY?: number;
-    rotate?: number;
+    rotate?: Angle;
   };
   /** Opacity in `0..1`, multiplied into the background (and text) alpha. With a
    * `transition` a change eases. */
@@ -252,10 +275,11 @@ export interface BevyStyle {
   transition?: BevyTransition;
 
   // text (only meaningful on `<text>` elements/spans)
-  /** Hex text color. */
-  color?: string;
-  /** Font size in logical pixels. */
-  fontSize?: number;
+  /** Text color (any CSS [`Color`]). */
+  color?: Color;
+  /** Font size: a bare number is logical pixels, or a unit string (`"24px"`,
+   * `"2vw"`, `"1.5rem"`). See [`FontSize`]. */
+  fontSize?: FontSize;
   fontWeight?:
     | "thin"
     | "light"
@@ -270,16 +294,18 @@ export interface BevyStyle {
   fontFamily?: string;
   /** Horizontal alignment of the text block (`<text>` root only). */
   textAlign?: "left" | "center" | "right" | "justify" | "start" | "end";
-  /** Line height. A bare number is a multiple of the font size; `{ px }` is an
-   * absolute pixel height. Unset → 1.2× the font size (bevy's default). */
-  lineHeight?: number | { px: number };
-  /** Letter spacing. A bare number is logical pixels; `{ rem }` is a multiple of
-   * the font size. */
-  letterSpacing?: number | { rem: number };
+  /** Line height. A bare number is a multiple of the font size; a string carries a
+   * unit (`"20px"` absolute, `"1.5"`/`"1.5em"` a multiple); `{ px }` is an absolute
+   * pixel height. Unset → 1.2× the font size (bevy's default). */
+  lineHeight?: number | string | { px: number };
+  /** Letter spacing. A bare number is logical pixels; a string carries a unit
+   * (`"2px"`, `"0.1rem"`/`"0.1em"`, or `"normal"`); `{ rem }` is a font-size
+   * multiple. */
+  letterSpacing?: number | string | { rem: number };
   /** A single drop shadow behind the text (`<text>` root only). `offsetX`/
    * `offsetY` are displacement in logical pixels (default `4`); `color` defaults
    * to bevy's translucent black. */
-  textShadow?: { color?: string; offsetX?: number; offsetY?: number };
+  textShadow?: { color?: Color; offsetX?: number; offsetY?: number };
   /** How the text wraps when it overflows its bounds (`<text>` root only).
    * Default `"wordBoundary"`. */
   lineBreak?: "wordBoundary" | "anyCharacter" | "wordOrCharacter" | "noWrap";
@@ -427,8 +453,9 @@ export interface BevyImageProps extends BevyAttributes {
   animatedStyle?: AnimatedStyle;
   /** Asset path resolved by Bevy's `AssetServer` (relative to `assets/`). */
   src?: string;
-  /** Tint multiplied with the image (hex); also the fill of a `src`-less image. */
-  tint?: string;
+  /** Tint multiplied with the image (any CSS [`Color`]); also the fill of a
+   *  `src`-less image. */
+  tint?: Color;
   flipX?: boolean;
   flipY?: boolean;
   imageMode?: "auto" | "stretch";

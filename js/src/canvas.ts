@@ -58,7 +58,8 @@ export class CanvasContext {
   #strokeStyle = "#000000";
   #lineWidth = 1;
 
-  /** Current fill color (hex). Assigning records the change. */
+  /** Current fill color (any CSS color string: hex, named, `rgb()`/`hsl()`/…).
+   *  Assigning records the change. */
   get fillStyle(): string {
     return this.#fillStyle;
   }
@@ -67,7 +68,8 @@ export class CanvasContext {
     this.commands.push({ cmd: "fillStyle", color });
   }
 
-  /** Current stroke color (hex). Assigning records the change. */
+  /** Current stroke color (any CSS color string: hex, named, `rgb()`/`hsl()`/…).
+   *  Assigning records the change. */
   get strokeStyle(): string {
     return this.#strokeStyle;
   }

@@ -33,7 +33,7 @@ use bevy_react_animations::{
 };
 use serde::Deserialize;
 
-use crate::protocol::{Length, Style};
+use crate::protocol::{Length, Style, Time as WireTime};
 use crate::ui_map::{length_to_val, parse_color};
 
 /// CSS-like per-channel transition timing, set on [`Style::transition`]. Each
@@ -75,19 +75,19 @@ impl Transition {
 }
 
 /// Timing for one channel. A spring (any of `stiffness`/`damping` set) or, by
-/// default, a timing curve. `duration`/`delay` are in **seconds** on the wire —
-/// the JS side divides its millisecond inputs by 1000 before sending, so the Rust
-/// side stays uniform with the animations engine's seconds-based [`Driver`].
+/// default, a timing curve. `duration`/`delay` are [`WireTime`]s: a bare number is
+/// milliseconds (the JS-facing unit), a string carries an explicit unit
+/// (`"200ms"`/`"0.2s"`), and both decode to the seconds the [`Driver`] consumes.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ChannelTransition {
-    /// Timing duration in seconds (default `0.3`). Ignored for a spring.
-    pub duration: Option<f32>,
+    /// Timing duration (default `0.3s`). Ignored for a spring.
+    pub duration: Option<WireTime>,
     #[serde(default)]
     pub easing: Easing,
-    /// Hold this many seconds before easing (default `0`).
+    /// Hold this long before easing (default `0`).
     #[serde(default)]
-    pub delay: f32,
+    pub delay: WireTime,
     /// Spring stiffness; presence (with/without `damping`) selects a spring.
     pub stiffness: Option<f32>,
     pub damping: Option<f32>,
@@ -114,12 +114,13 @@ impl ChannelTransition {
         } else {
             let timing = Driver::Timing {
                 to,
-                duration: self.duration.unwrap_or(0.3),
+                duration: self.duration.map(WireTime::seconds).unwrap_or(0.3),
                 easing: self.easing,
             };
-            if self.delay > 0.0 {
+            let delay = self.delay.seconds();
+            if delay > 0.0 {
                 Driver::Delay {
-                    delay: self.delay,
+                    delay,
                     animation: Box::new(timing),
                 }
             } else {
@@ -166,7 +167,7 @@ impl TransitionInput {
             scale: t.scale,
             scale_x: t.scale_x,
             scale_y: t.scale_y,
-            rotate: t.rotate,
+            rotate: t.rotate.map(crate::protocol::Angle::radians),
             opacity: style.opacity,
             background_color: style
                 .background_color
@@ -529,9 +530,9 @@ mod tests {
 
     fn timing(duration: f32, easing: Easing) -> ChannelTransition {
         ChannelTransition {
-            duration: Some(duration),
+            duration: Some(WireTime::from_secs(duration)),
             easing,
-            delay: 0.0,
+            delay: WireTime::from_secs(0.0),
             stiffness: None,
             damping: None,
             mass: 1.0,
@@ -549,10 +550,12 @@ mod tests {
             "opacity": { "duration": 200 },
         }));
         // `opacity` has its own entry; `transform`/`background` fall back to `all`.
+        // The wire numbers are milliseconds → seconds (200ms → 0.2s, 100ms → 0.1s).
+        let secs = |c: &ChannelTransition| c.duration.map(WireTime::seconds);
         assert!(t.for_opacity().is_some());
-        assert_eq!(t.for_opacity().unwrap().duration, Some(200.0));
-        assert_eq!(t.for_transform().unwrap().duration, Some(100.0));
-        assert_eq!(t.for_background().unwrap().duration, Some(100.0));
+        assert_eq!(secs(t.for_opacity().unwrap()), Some(0.2));
+        assert_eq!(secs(t.for_transform().unwrap()), Some(0.1));
+        assert_eq!(secs(t.for_background().unwrap()), Some(0.1));
 
         // No `all`: an unspecified channel has no transition.
         let t: Transition = parse(serde_json::json!({ "opacity": { "duration": 50 } }));
@@ -565,7 +568,7 @@ mod tests {
         let spring = ChannelTransition {
             duration: None,
             easing: Easing::Linear,
-            delay: 0.0,
+            delay: WireTime::from_secs(0.0),
             stiffness: Some(120.0),
             damping: Some(14.0),
             mass: 1.0,
@@ -577,7 +580,7 @@ mod tests {
         ));
         // A delay wraps the timing in a Delay driver.
         let delayed = ChannelTransition {
-            delay: 0.2,
+            delay: WireTime::from_secs(0.2),
             ..timing(0.3, Easing::Linear)
         };
         assert!(matches!(delayed.to_driver(1.0), Driver::Delay { .. }));

@@ -13,6 +13,9 @@
 //! a future GPU backend (e.g. `bevy_vello`) could replace it without touching the
 //! protocol, the reconciler, or the JS side.
 
+mod color;
+pub use color::parse_css_color;
+
 use bevy::asset::RenderAssetUsages;
 use bevy::image::Image;
 use bevy::prelude::*;
@@ -299,44 +302,16 @@ fn push_arc(
     }
 }
 
-/// Parse a hex color (`#rgb`, `#rgba`, `#rrggbb`, `#rrggbbaa`) into straight-alpha
-/// RGBA bytes. Anything unparseable falls back to opaque black.
+/// Parse a CSS color string (see [`parse_css_color`]) into straight-alpha RGBA
+/// bytes. Anything unparseable falls back to opaque black.
 fn parse_rgba8(s: &str) -> [u8; 4] {
-    let h = s.strip_prefix('#').unwrap_or(s).trim();
-    let hex = |slice: &str| u8::from_str_radix(slice, 16).ok();
-    let dup = |c: u8| {
-        let v = hex(std::str::from_utf8(&[c]).unwrap_or("0"))?;
-        Some(v * 16 + v)
-    };
-    let b = h.as_bytes();
-    match b.len() {
-        3 => {
-            if let (Some(r), Some(g), Some(bl)) = (dup(b[0]), dup(b[1]), dup(b[2])) {
-                return [r, g, bl, 255];
-            }
-        }
-        4 => {
-            if let (Some(r), Some(g), Some(bl), Some(a)) =
-                (dup(b[0]), dup(b[1]), dup(b[2]), dup(b[3]))
-            {
-                return [r, g, bl, a];
-            }
-        }
-        6 => {
-            if let (Some(r), Some(g), Some(bl)) = (hex(&h[0..2]), hex(&h[2..4]), hex(&h[4..6])) {
-                return [r, g, bl, 255];
-            }
-        }
-        8 => {
-            if let (Some(r), Some(g), Some(bl), Some(a)) =
-                (hex(&h[0..2]), hex(&h[2..4]), hex(&h[4..6]), hex(&h[6..8]))
-            {
-                return [r, g, bl, a];
-            }
-        }
-        _ => {}
-    }
-    [0, 0, 0, 255]
+    let c = parse_css_color(s).unwrap_or(bevy::color::Srgba::new(0.0, 0.0, 0.0, 1.0));
+    [
+        (c.red.clamp(0.0, 1.0) * 255.0).round() as u8,
+        (c.green.clamp(0.0, 1.0) * 255.0).round() as u8,
+        (c.blue.clamp(0.0, 1.0) * 255.0).round() as u8,
+        (c.alpha.clamp(0.0, 1.0) * 255.0).round() as u8,
+    ]
 }
 
 #[cfg(test)]

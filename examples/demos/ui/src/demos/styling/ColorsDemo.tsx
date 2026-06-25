@@ -28,7 +28,54 @@ export function ColorsDemo() {
       >
         <TextColorControl />
       </Example>
+
+      <Example
+        description="Any CSS color works: hex, named, rgb()/hsl()/oklch(), or transparent."
+        tsx={`backgroundColor: "rebeccapurple""`}
+      >
+        <ColorFormatsRow />
+      </Example>
     </>
+  );
+}
+
+const COLOR_FORMATS: string[] = [
+  "tomato",
+  "rgb(122 162 247)",
+  "rgb(122, 62, 247)",
+  "rgb(255 255 255 / 5%)",
+  "hsl(140 70% 45%)",
+  "oklch(0.7 0.15 30)",
+  "#bb9af7",
+];
+
+function ColorFormatsRow() {
+  return (
+    <node style={{ flexDirection: "column", gap: 10 }}>
+      {COLOR_FORMATS.map((color) => (
+        <node
+          key={color}
+          style={{
+            width: 150,
+            height: 76,
+            borderRadius: 10,
+            backgroundColor: color,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <text
+            style={{
+              color: Colors.textColor400,
+              fontSize: FontSizes.xs,
+              fontWeight: "bold",
+            }}
+          >
+            {color}
+          </text>
+        </node>
+      ))}
+    </node>
   );
 }
 

@@ -316,9 +316,10 @@ pub struct Style {
     /// Hex text color.
     #[serde(default)]
     pub color: Option<String>,
-    /// Font size in logical pixels.
+    /// Font size: a number (logical pixels) or a unit string (`"24px"`, `"2vw"`,
+    /// `"1.5rem"`). See [`FontSize`].
     #[serde(default)]
-    pub font_size: Option<f32>,
+    pub font_size: Option<FontSize>,
     /// `"thin" | "light" | "normal" | "medium" | "semibold" | "bold" | "black"`
     /// or a numeric weight string (e.g. `"600"`).
     #[serde(default)]
@@ -379,21 +380,25 @@ pub struct BoxShadowSpec {
 }
 
 /// Line height for a `<text>`. A bare number is a multiple of the font size
-/// (`RelativeToFont`); `{ "px": n }` is an absolute pixel height.
-#[derive(Debug, Clone, Copy, Deserialize)]
+/// (`RelativeToFont`); a string carries a unit (`"20px"` absolute, `"1.5"` / `"1.5em"`
+/// a multiple); `{ "px": n }` is an absolute pixel height (legacy object form).
+#[derive(Debug, Clone, Deserialize)]
 #[serde(untagged)]
 pub enum LineHeightSpec {
     Relative(f32),
     Px { px: f32 },
+    Str(String),
 }
 
-/// Letter spacing for a `<text>`. A bare number is logical pixels; `{ "rem": n }`
-/// is a multiple of the font size.
-#[derive(Debug, Clone, Copy, Deserialize)]
+/// Letter spacing for a `<text>`. A bare number is logical pixels; a string carries
+/// a unit (`"2px"`, `"0.1rem"`/`"0.1em"` for a font-size multiple, or `"normal"`);
+/// `{ "rem": n }` is a multiple of the font size (legacy object form).
+#[derive(Debug, Clone, Deserialize)]
 #[serde(untagged)]
 pub enum LetterSpacingSpec {
     Px(f32),
     Rem { rem: f32 },
+    Str(String),
 }
 
 /// A single text drop shadow. `offsetX`/`offsetY` are displacement in logical
@@ -431,7 +436,7 @@ pub struct GradientStop {
 pub struct AngularStop {
     pub color: String,
     #[serde(default)]
-    pub angle: Option<f32>,
+    pub angle: Option<Angle>,
     #[serde(default)]
     pub hint: Option<f32>,
 }
@@ -459,9 +464,10 @@ pub enum RadialShapeSpec {
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LinearGradientSpec {
-    /// Gradient line angle in **degrees** (`0` = to top, increasing clockwise).
+    /// Gradient line angle (number = degrees, or a unit string; `0` = to top,
+    /// increasing clockwise).
     #[serde(default)]
-    pub angle: Option<f32>,
+    pub angle: Option<Angle>,
     #[serde(default)]
     pub stops: Vec<GradientStop>,
     #[serde(default)]
@@ -484,9 +490,9 @@ pub struct RadialGradientSpec {
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ConicGradientSpec {
-    /// Start angle in **degrees**.
+    /// Start angle (number = degrees, or a unit string).
     #[serde(default)]
-    pub start: Option<f32>,
+    pub start: Option<Angle>,
     #[serde(default)]
     pub position: Option<GradientPosition>,
     #[serde(default)]
@@ -526,8 +532,8 @@ pub struct Transform {
     pub scale: Option<f32>,
     pub scale_x: Option<f32>,
     pub scale_y: Option<f32>,
-    /// Clockwise rotation in radians.
-    pub rotate: Option<f32>,
+    /// Clockwise rotation (number = degrees, or a unit string like `"1.5rad"`).
+    pub rotate: Option<Angle>,
 }
 
 /// A length value mirroring `bevy_ui::Val`, parsed from the wire form (a number
@@ -602,6 +608,203 @@ impl<'de> Deserialize<'de> for Length {
             }
         }
         d.deserialize_any(LengthVisitor)
+    }
+}
+
+/// An angle, parsed from the wire as a number (read as **degrees**, the CSS
+/// convention) or a unit string (`"45deg"`, `"1.5rad"`, `"0.25turn"`, `"100grad"`).
+/// Stored internally as radians — the unit Bevy's gradient and transform APIs want.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct Angle(f32);
+
+impl Angle {
+    /// This angle in radians.
+    pub fn radians(self) -> f32 {
+        self.0
+    }
+}
+
+/// Parse a CSS angle token into radians. A bare number is degrees; a suffix of
+/// `deg`/`grad`/`turn`/`rad` selects the unit (`grad` is matched before `rad`
+/// since `"100grad"` also ends in `"rad"`).
+fn parse_angle(s: &str) -> Result<f32, String> {
+    use std::f32::consts::{PI, TAU};
+    let s = s.trim();
+    type AngleConv = fn(f32) -> f32;
+    let units: [(&str, AngleConv); 4] = [
+        ("deg", f32::to_radians),
+        ("grad", |v| v * PI / 200.0),
+        ("turn", |v| v * TAU),
+        ("rad", |v| v),
+    ];
+    for (suffix, conv) in units {
+        if let Some(num) = s.strip_suffix(suffix) {
+            let v: f32 = num
+                .trim()
+                .parse()
+                .map_err(|_| format!("invalid angle {s:?}"))?;
+            return Ok(conv(v));
+        }
+    }
+    s.parse::<f32>()
+        .map(f32::to_radians)
+        .map_err(|_| format!("invalid angle {s:?}"))
+}
+
+impl<'de> Deserialize<'de> for Angle {
+    fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        struct AngleVisitor;
+        impl Visitor<'_> for AngleVisitor {
+            type Value = Angle;
+            fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                f.write_str("a number (degrees) or a CSS angle string")
+            }
+            fn visit_f64<E: de::Error>(self, v: f64) -> Result<Angle, E> {
+                Ok(Angle((v as f32).to_radians()))
+            }
+            fn visit_i64<E: de::Error>(self, v: i64) -> Result<Angle, E> {
+                Ok(Angle((v as f32).to_radians()))
+            }
+            fn visit_u64<E: de::Error>(self, v: u64) -> Result<Angle, E> {
+                Ok(Angle((v as f32).to_radians()))
+            }
+            fn visit_str<E: de::Error>(self, s: &str) -> Result<Angle, E> {
+                parse_angle(s).map(Angle).map_err(E::custom)
+            }
+        }
+        d.deserialize_any(AngleVisitor)
+    }
+}
+
+/// A time/duration, parsed from the wire as a number (read as **milliseconds**,
+/// the JS-facing unit) or a unit string (`"200ms"`, `"0.2s"`). Stored as seconds —
+/// the unit the animations engine and the transition driver consume.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct Time(f32);
+
+impl Time {
+    /// Construct from a value already in seconds.
+    pub fn from_secs(secs: f32) -> Self {
+        Time(secs)
+    }
+    /// This duration in seconds.
+    pub fn seconds(self) -> f32 {
+        self.0
+    }
+}
+
+/// Parse a CSS time token into seconds. A bare number is milliseconds; a suffix of
+/// `ms`/`s` selects the unit (`ms` is matched before `s` since `"200ms"` also ends
+/// in `"s"`).
+fn parse_time(s: &str) -> Result<f32, String> {
+    let s = s.trim();
+    if let Some(num) = s.strip_suffix("ms") {
+        return num
+            .trim()
+            .parse::<f32>()
+            .map(|v| v / 1000.0)
+            .map_err(|_| format!("invalid time {s:?}"));
+    }
+    if let Some(num) = s.strip_suffix('s') {
+        return num
+            .trim()
+            .parse::<f32>()
+            .map_err(|_| format!("invalid time {s:?}"));
+    }
+    s.parse::<f32>()
+        .map(|v| v / 1000.0)
+        .map_err(|_| format!("invalid time {s:?}"))
+}
+
+impl<'de> Deserialize<'de> for Time {
+    fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        struct TimeVisitor;
+        impl Visitor<'_> for TimeVisitor {
+            type Value = Time;
+            fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                f.write_str("a number (milliseconds) or a CSS time string")
+            }
+            fn visit_f64<E: de::Error>(self, v: f64) -> Result<Time, E> {
+                Ok(Time(v as f32 / 1000.0))
+            }
+            fn visit_i64<E: de::Error>(self, v: i64) -> Result<Time, E> {
+                Ok(Time(v as f32 / 1000.0))
+            }
+            fn visit_u64<E: de::Error>(self, v: u64) -> Result<Time, E> {
+                Ok(Time(v as f32 / 1000.0))
+            }
+            fn visit_str<E: de::Error>(self, s: &str) -> Result<Time, E> {
+                parse_time(s).map(Time).map_err(E::custom)
+            }
+        }
+        d.deserialize_any(TimeVisitor)
+    }
+}
+
+/// A font size mirroring `bevy_text::FontSize`, parsed from the wire as a number
+/// (logical pixels) or a unit string (`"24px"`, `"100vw"`/`vh`/`vmin`/`vmax`,
+/// `"1.5rem"`). `rem` is relative to bevy's `RemSize` resource (default 20px).
+/// (CSS `em` has no `bevy_text` equivalent, so it is not accepted.)
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum FontSize {
+    Px(f32),
+    Vw(f32),
+    Vh(f32),
+    VMin(f32),
+    VMax(f32),
+    Rem(f32),
+}
+
+/// Parse a font-size token (`"24px"`, `"100vw"`, `"1.5rem"`, or a bare number read
+/// as pixels). Suffixes are checked longest-first where they'd otherwise alias
+/// (`vmin`/`vmax` before `vw`/`vh`).
+fn parse_font_size(s: &str) -> Result<FontSize, String> {
+    let s = s.trim();
+    type FsCtor = fn(f32) -> FontSize;
+    let units: [(&str, FsCtor); 6] = [
+        ("px", FontSize::Px),
+        ("rem", FontSize::Rem),
+        ("vmin", FontSize::VMin),
+        ("vmax", FontSize::VMax),
+        ("vw", FontSize::Vw),
+        ("vh", FontSize::Vh),
+    ];
+    for (suffix, ctor) in units {
+        if let Some(num) = s.strip_suffix(suffix) {
+            let v: f32 = num
+                .trim()
+                .parse()
+                .map_err(|_| format!("invalid fontSize {s:?}"))?;
+            return Ok(ctor(v));
+        }
+    }
+    s.parse::<f32>()
+        .map(FontSize::Px)
+        .map_err(|_| format!("invalid fontSize {s:?}"))
+}
+
+impl<'de> Deserialize<'de> for FontSize {
+    fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        struct FontSizeVisitor;
+        impl Visitor<'_> for FontSizeVisitor {
+            type Value = FontSize;
+            fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                f.write_str("a number (logical pixels) or a font-size unit string")
+            }
+            fn visit_f64<E: de::Error>(self, v: f64) -> Result<FontSize, E> {
+                Ok(FontSize::Px(v as f32))
+            }
+            fn visit_i64<E: de::Error>(self, v: i64) -> Result<FontSize, E> {
+                Ok(FontSize::Px(v as f32))
+            }
+            fn visit_u64<E: de::Error>(self, v: u64) -> Result<FontSize, E> {
+                Ok(FontSize::Px(v as f32))
+            }
+            fn visit_str<E: de::Error>(self, s: &str) -> Result<FontSize, E> {
+                parse_font_size(s).map_err(E::custom)
+            }
+        }
+        d.deserialize_any(FontSizeVisitor)
     }
 }
 
@@ -804,6 +1007,19 @@ mod tests {
         let transition = s.transition.expect("transition present");
         assert!(transition.for_transform().is_some());
         assert!(transition.for_opacity().is_none());
+    }
+
+    /// Angles parse from a bare number (degrees) or a unit string, always landing
+    /// in radians.
+    #[test]
+    fn angle_units() {
+        use std::f32::consts::{PI, TAU};
+        let parse = |v: serde_json::Value| serde_json::from_value::<Angle>(v).unwrap().radians();
+        assert!((parse(serde_json::json!(180)) - PI).abs() < 1e-5);
+        assert!((parse(serde_json::json!("180deg")) - PI).abs() < 1e-5);
+        assert!((parse(serde_json::json!("3.14159rad")) - PI).abs() < 1e-4);
+        assert!((parse(serde_json::json!("0.5turn")) - PI).abs() < 1e-5);
+        assert!((parse(serde_json::json!("400grad")) - TAU).abs() < 1e-5);
     }
 
     /// A `change` event serializes its new text as camelCase `value`, while the

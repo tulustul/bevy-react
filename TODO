@@ -20,8 +20,8 @@ Known debt:
 
 Features:
   ☐ `<editableText>` completeness (IME, clipboard, selection); no accessibility story.
-  ☐ named colors
-  ☐ proper units support in styles
+  ✔ named colors - CSS named colors (basic + extended palettes) + `transparent`, via the shared `bevy_react_canvas::parse_css_color`. @done(26-06-25)
+  ✔ proper units support in styles - colors gained named/`rgb()`/`hsl()`/`hwb()`/`oklab()`/`oklch()` notation (warn+magenta on a typo, no longer silent white); new `Angle` (deg/rad/turn/grad, bare number = degrees — `transform.rotate` now degrees, was radians) and `Time` (ms/s, bare number = ms, ms→s conversion moved from JS into Rust) wire types decode at the serde boundary like `Length`; `lineHeight`/`letterSpacing` accept CSS unit strings. Lengths were already a complete `Val` mirror. NOTE: `Length`/`Angle`/`Time` still fail-fast on a bad string (the bevy-free `protocol` can't `warn!`); folding that into the broader "Proper error handling" item is deferred. @done(26-06-25)
   ☐ bevy_ui feature coverage gaps (audited against bevy_ui 0.19.0; layout/flex/grid/text-basics are complete). Add support for:
       High value:
         ✔ Gradients - entirely absent. `LinearGradient` / `RadialGradient` / `ConicGradient` + `BackgroundGradient` / `BorderGradient` (`bevy_ui::gradients`). No gradient field exists in `protocol::Style`/`Props`. Headline 0.19 feature. @done(26-06-25 21:32)

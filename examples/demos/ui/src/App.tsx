@@ -27,6 +27,7 @@ import { SpringDemo } from "./demos/animations/SpringDemo";
 import { SequenceDemo } from "./demos/animations/SequenceDemo";
 import { SpinDemo } from "./demos/animations/SpinDemo";
 import { InterpolateDemo } from "./demos/animations/InterpolateDemo";
+import { UnitsDemo } from "./demos/styling/UnitsDemo";
 import { ColorsDemo } from "./demos/styling/ColorsDemo";
 import { BordersDemo } from "./demos/styling/BordersDemo";
 import { SpacingDemo } from "./demos/styling/SpacingDemo";
@@ -82,6 +83,7 @@ const DEMOS: DemoItem[] = [
   {
     label: "Styling",
     children: [
+      { label: "Units", component: UnitsDemo },
       { label: "Colors", component: ColorsDemo },
       { label: "Borders", component: BordersDemo },
       { label: "Spacing", component: SpacingDemo },
@@ -274,7 +276,9 @@ function ItemButton({
         backgroundGradient: isActive ? Gradients.primary : Gradients.surface,
       }}
       hoverStyle={{
-        backgroundGradient: isActive ? Gradients.primary : Gradients.surfaceHover,
+        backgroundGradient: isActive
+          ? Gradients.primary
+          : Gradients.surfaceHover,
       }}
     >
       <node

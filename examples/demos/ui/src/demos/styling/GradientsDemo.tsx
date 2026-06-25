@@ -30,6 +30,7 @@ export function GradientsDemo() {
           <node
             style={{
               ...box,
+              backgroundColor: undefined,
               backgroundGradient: {
                 type: "radial",
                 stops: [{ color: "#e0af68" }, { color: "#1a1b26" }],

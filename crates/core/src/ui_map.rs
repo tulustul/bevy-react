@@ -3,29 +3,33 @@
 //! components (background/border/outline/shadow/z-index), and `ImageNode`.
 
 use bevy::prelude::*;
-use bevy::text::{LetterSpacing, LineHeight};
+use bevy::text::{FontSize as BevyFontSize, LetterSpacing, LineHeight};
 use bevy::ui::widget::NodeImageMode;
 use bevy_react_animations::build_ui_transform;
 
 use crate::plugin::Fonts;
 use crate::protocol::{
-    AngularStop, ConicGradientSpec, GradientList, GradientSpec, GradientStop, Length,
-    LetterSpacingSpec, LineHeightSpec, LinearGradientSpec, Props, RadialGradientSpec,
+    Angle, AngularStop, ConicGradientSpec, FontSize, GradientList, GradientSpec, GradientStop,
+    Length, LetterSpacingSpec, LineHeightSpec, LinearGradientSpec, Props, RadialGradientSpec,
     RadialShapeSpec, Rect, Style,
 };
 
-/// Parse a `#rrggbb`/`rrggbb` (or 8-digit alpha) hex string into a `Color`.
-/// Falls back to opaque white on parse failure so a typo never panics.
+/// Parse a CSS color string into a `Color`: hex, named colors, `transparent`, or
+/// `rgb()/hsl()/hwb()/oklab()/oklch()` functional notation (see
+/// [`bevy_react_canvas::parse_css_color`]). On an unrecognized value it `warn!`s
+/// and falls back to a loud magenta so the typo is visible rather than silent.
 //
-// TODO(review): silent fallbacks here and in the enum mappers below (a typo'd color → white,
-// an unknown enum token → the Bevy default) hide styling bugs from app authors. Consider a
-// `debug!`/`warn!` on an unrecognized value (as `resolved_text_style` already does for an
-// unknown `fontFamily`).
-pub fn parse_color(hex: &str) -> Color {
-    let s = hex.strip_prefix('#').unwrap_or(hex);
-    bevy::color::Srgba::hex(s)
-        .map(Color::from)
-        .unwrap_or(Color::WHITE)
+// TODO(review): the enum mappers below still fall back silently (an unknown align/display/…
+// token → the Bevy default). Consider a `warn!` there too, as this and `resolved_text_style`
+// (unknown `fontFamily`) already do.
+pub fn parse_color(input: &str) -> Color {
+    match bevy_react_canvas::parse_css_color(input) {
+        Some(c) => Color::from(c),
+        None => {
+            warn!("unrecognized color {input:?}; using magenta debug fallback");
+            Color::srgb(1.0, 0.0, 1.0)
+        }
+    }
 }
 
 /// Multiply a color's alpha by `opacity` (if any). Shared by the background and
@@ -47,6 +51,19 @@ pub fn length_to_val(length: Length) -> Val {
         Length::Vh(v) => Val::Vh(v),
         Length::VMin(v) => Val::VMin(v),
         Length::VMax(v) => Val::VMax(v),
+    }
+}
+
+/// Convert a wire [`FontSize`] into bevy's `FontSize` (the `TextFont` field type),
+/// mapping each unit one-to-one (`Rem` resolves against bevy's `RemSize` resource).
+fn font_size_to_bevy(size: FontSize) -> BevyFontSize {
+    match size {
+        FontSize::Px(v) => BevyFontSize::Px(v),
+        FontSize::Vw(v) => BevyFontSize::Vw(v),
+        FontSize::Vh(v) => BevyFontSize::Vh(v),
+        FontSize::VMin(v) => BevyFontSize::VMin(v),
+        FontSize::VMax(v) => BevyFontSize::VMax(v),
+        FontSize::Rem(v) => BevyFontSize::Rem(v),
     }
 }
 
@@ -134,18 +151,18 @@ fn color_stop(stop: &GradientStop, opacity: Option<f32>) -> ColorStop {
     }
 }
 
-/// Build an [`AngularColorStop`] (conic), converting the wire degrees to radians.
+/// Build an [`AngularColorStop`] (conic). The wire [`Angle`] is already radians.
 fn angular_stop(stop: &AngularStop, opacity: Option<f32>) -> AngularColorStop {
     AngularColorStop {
         color: apply_opacity(parse_color(&stop.color), opacity),
-        angle: stop.angle.map(f32::to_radians),
+        angle: stop.angle.map(Angle::radians),
         hint: stop.hint.unwrap_or(0.5),
     }
 }
 
 fn build_linear(spec: &LinearGradientSpec, opacity: Option<f32>) -> Gradient {
     LinearGradient::new(
-        spec.angle.unwrap_or(0.0).to_radians(),
+        spec.angle.map(Angle::radians).unwrap_or(0.0),
         spec.stops.iter().map(|s| color_stop(s, opacity)).collect(),
     )
     .in_color_space(parse_color_space(spec.color_space.as_deref()))
@@ -170,7 +187,7 @@ fn build_conic(spec: &ConicGradientSpec, opacity: Option<f32>) -> Gradient {
             .map(|s| angular_stop(s, opacity))
             .collect(),
     )
-    .with_start(spec.start.unwrap_or(0.0).to_radians())
+    .with_start(spec.start.map(Angle::radians).unwrap_or(0.0))
     .in_color_space(parse_color_space(spec.color_space.as_deref()))
     .into()
 }
@@ -648,7 +665,7 @@ pub fn apply_style(ec: &mut EntityCommands, style: &Option<Style>) {
             t.scale,
             t.scale_x,
             t.scale_y,
-            t.rotate,
+            t.rotate.map(Angle::radians),
         ));
     }
     match s.and_then(|s| s.border_color.as_deref()) {
@@ -882,20 +899,60 @@ fn linebreak(s: &str) -> LineBreak {
 }
 
 /// Map a [`LineHeightSpec`] to bevy's [`LineHeight`]: a bare number is a multiple
-/// of the font size, `{ px }` is an absolute pixel height.
-fn line_height(spec: LineHeightSpec) -> LineHeight {
+/// of the font size, `{ px }` is an absolute pixel height, and a string carries a
+/// unit (`"20px"` absolute, else a multiple).
+fn line_height(spec: &LineHeightSpec) -> LineHeight {
     match spec {
-        LineHeightSpec::Relative(scale) => LineHeight::RelativeToFont(scale),
-        LineHeightSpec::Px { px } => LineHeight::Px(px),
+        LineHeightSpec::Relative(scale) => LineHeight::RelativeToFont(*scale),
+        LineHeightSpec::Px { px } => LineHeight::Px(*px),
+        LineHeightSpec::Str(s) => {
+            let s = s.trim();
+            if let Some(n) = s.strip_suffix("px") {
+                if let Ok(v) = n.trim().parse() {
+                    return LineHeight::Px(v);
+                }
+            } else {
+                // unitless or `em`/`rem` → a multiple of the font size.
+                let num = s
+                    .strip_suffix("rem")
+                    .or_else(|| s.strip_suffix("em"))
+                    .unwrap_or(s);
+                if let Ok(v) = num.trim().parse() {
+                    return LineHeight::RelativeToFont(v);
+                }
+            }
+            warn!("invalid lineHeight {s:?}; using the default");
+            LineHeight::default()
+        }
     }
 }
 
 /// Map a [`LetterSpacingSpec`] to bevy's [`LetterSpacing`]: a bare number is
-/// logical pixels, `{ rem }` is a multiple of the font size.
-fn letter_spacing(spec: LetterSpacingSpec) -> LetterSpacing {
+/// logical pixels, `{ rem }` is a multiple of the font size, and a string carries a
+/// unit (`"2px"`, `"0.1rem"`, or `"normal"`).
+fn letter_spacing(spec: &LetterSpacingSpec) -> LetterSpacing {
     match spec {
-        LetterSpacingSpec::Px(px) => LetterSpacing::Px(px),
-        LetterSpacingSpec::Rem { rem } => LetterSpacing::Rem(rem),
+        LetterSpacingSpec::Px(px) => LetterSpacing::Px(*px),
+        LetterSpacingSpec::Rem { rem } => LetterSpacing::Rem(*rem),
+        LetterSpacingSpec::Str(s) => {
+            let s = s.trim();
+            if s.eq_ignore_ascii_case("normal") {
+                return LetterSpacing::default();
+            }
+            if let Some(n) = s.strip_suffix("px") {
+                if let Ok(v) = n.trim().parse() {
+                    return LetterSpacing::Px(v);
+                }
+            } else if let Some(n) = s.strip_suffix("rem").or_else(|| s.strip_suffix("em")) {
+                if let Ok(v) = n.trim().parse() {
+                    return LetterSpacing::Rem(v);
+                }
+            } else if let Ok(v) = s.parse() {
+                return LetterSpacing::Px(v); // bare numeric string → logical pixels
+            }
+            warn!("invalid letterSpacing {s:?}; using the default");
+            LetterSpacing::default()
+        }
     }
 }
 
@@ -943,7 +1000,7 @@ pub fn resolved_text_style(
             color = TextColor(apply_opacity(color.0, s.opacity));
         }
         if let Some(size) = s.font_size {
-            font.font_size = size.into();
+            font.font_size = font_size_to_bevy(size);
         }
         if let Some(w) = &s.font_weight {
             font.weight = font_weight(w);
@@ -954,10 +1011,10 @@ pub fn resolved_text_style(
                 None => warn!("unknown fontFamily {family:?}; using the default font"),
             }
         }
-        if let Some(lh) = s.line_height {
+        if let Some(lh) = &s.line_height {
             line = line_height(lh);
         }
-        if let Some(ls) = s.letter_spacing {
+        if let Some(ls) = &s.letter_spacing {
             spacing = letter_spacing(ls);
         }
     }
@@ -1014,6 +1071,21 @@ mod tests {
 
     fn style(json: serde_json::Value) -> Style {
         serde_json::from_value(json).unwrap()
+    }
+
+    #[test]
+    fn color_named_function_and_fallback() {
+        // named, hex, and rgb() all agree on pure red.
+        let red = parse_color("#ff0000").to_srgba();
+        assert_eq!(parse_color("red").to_srgba(), red);
+        assert_eq!(parse_color("rgb(255, 0, 0)").to_srgba(), red);
+        // transparent maps to a zero-alpha color.
+        assert_eq!(parse_color("transparent").to_srgba().alpha, 0.0);
+        // an unrecognized value falls back to the loud magenta debug color.
+        assert_eq!(
+            parse_color("definitely-not-a-color"),
+            Color::srgb(1.0, 0.0, 1.0)
+        );
     }
 
     #[test]
@@ -1110,27 +1182,43 @@ mod tests {
 
     #[test]
     fn line_height_px_vs_relative() {
-        let rel = style(serde_json::json!({ "lineHeight": 1.5 }));
+        let lh = |v: serde_json::Value| {
+            line_height(
+                style(serde_json::json!({ "lineHeight": v }))
+                    .line_height
+                    .as_ref()
+                    .unwrap(),
+            )
+        };
+        assert_eq!(lh(serde_json::json!(1.5)), LineHeight::RelativeToFont(1.5));
+        assert_eq!(lh(serde_json::json!({ "px": 28 })), LineHeight::Px(28.0));
+        // string forms: `px` is absolute, unitless/`em` is a multiple.
+        assert_eq!(lh(serde_json::json!("20px")), LineHeight::Px(20.0));
         assert_eq!(
-            line_height(rel.line_height.unwrap()),
+            lh(serde_json::json!("1.5em")),
             LineHeight::RelativeToFont(1.5)
         );
-        let px = style(serde_json::json!({ "lineHeight": { "px": 28 } }));
-        assert_eq!(line_height(px.line_height.unwrap()), LineHeight::Px(28.0));
     }
 
     #[test]
     fn letter_spacing_px_vs_rem() {
-        let px = style(serde_json::json!({ "letterSpacing": 2 }));
+        let ls = |v: serde_json::Value| {
+            letter_spacing(
+                style(serde_json::json!({ "letterSpacing": v }))
+                    .letter_spacing
+                    .as_ref()
+                    .unwrap(),
+            )
+        };
+        assert_eq!(ls(serde_json::json!(2)), LetterSpacing::Px(2.0));
         assert_eq!(
-            letter_spacing(px.letter_spacing.unwrap()),
-            LetterSpacing::Px(2.0)
-        );
-        let rem = style(serde_json::json!({ "letterSpacing": { "rem": 0.1 } }));
-        assert_eq!(
-            letter_spacing(rem.letter_spacing.unwrap()),
+            ls(serde_json::json!({ "rem": 0.1 })),
             LetterSpacing::Rem(0.1)
         );
+        // string forms: `px`, `rem`/`em`, and `normal`.
+        assert_eq!(ls(serde_json::json!("2px")), LetterSpacing::Px(2.0));
+        assert_eq!(ls(serde_json::json!("0.1rem")), LetterSpacing::Rem(0.1));
+        assert_eq!(ls(serde_json::json!("normal")), LetterSpacing::default());
     }
 
     #[test]
@@ -1246,6 +1334,24 @@ mod tests {
         assert_eq!(color.0, parse_color("#7aa2f7"));
         assert_eq!(font.font_size, (20.0f32).into());
         assert_eq!(font.weight, FontWeight::BOLD);
+    }
+
+    #[test]
+    fn font_size_units() {
+        let fs = |v: serde_json::Value| {
+            resolved_text_style(
+                &Some(style(serde_json::json!({ "fontSize": v }))),
+                &Fonts::default(),
+            )
+            .1
+            .font_size
+        };
+        // bare number and "px" are both logical pixels.
+        assert_eq!(fs(serde_json::json!(24)), BevyFontSize::Px(24.0));
+        assert_eq!(fs(serde_json::json!("24px")), BevyFontSize::Px(24.0));
+        // viewport + rem units map one-to-one onto bevy's `FontSize`.
+        assert_eq!(fs(serde_json::json!("2vw")), BevyFontSize::Vw(2.0));
+        assert_eq!(fs(serde_json::json!("1.5rem")), BevyFontSize::Rem(1.5));
     }
 
     #[test]
