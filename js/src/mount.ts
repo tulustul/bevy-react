@@ -30,7 +30,17 @@ export async function mount(element: ReactNode): Promise<void> {
   const hmr = (globalThis as { __hmr?: HmrApi }).__hmr;
 
   if (hmr?.mounted) {
-    hmr.applyUpdate();
+    // A Fast Refresh render can throw (a component erroring during the refresh
+    // re-render makes `performReactRefresh` rethrow synchronously). Since the
+    // entry calls `mount()` un-awaited, an unguarded throw here would become a
+    // swallowed rejection that skips the re-park below — the JS event loop would
+    // then go idle and the JS thread would exit (UI freezes, no further reloads).
+    // Catch it, surface it, and fall through to re-park regardless.
+    try {
+      hmr.applyUpdate();
+    } catch (e) {
+      console.error("[js] fast refresh error:", e);
+    }
   } else {
     if (hmr) hmr.mounted = true;
     reset();

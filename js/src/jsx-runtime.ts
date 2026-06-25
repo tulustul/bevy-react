@@ -17,6 +17,7 @@ import type {
   BevyImageProps,
   BevyNodeProps,
   BevyPortalProps,
+  BevySurfaceProps,
   BevyTextProps,
 } from "./jsx";
 
@@ -46,6 +47,9 @@ export namespace JSX {
     canvas: BevyCanvasProps;
     /** A view of an offscreen Bevy render target (render-to-texture). */
     portal: BevyPortalProps;
+    /** Renders its subtree into an offscreen texture for use on a 3D material
+     *  (the inverse of `portal`). */
+    surface: BevySurfaceProps;
     /** Styled, nestable text (maps to `bevy_ui::Text` / `TextSpan`). */
     text: BevyTextProps;
     /** A focusable, editable text field (maps to `bevy_text::EditableText`). */

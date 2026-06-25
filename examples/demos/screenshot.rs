@@ -131,7 +131,11 @@ fn drive_shoot(
             return; // redirect hasn't run yet; try again next frame
         };
         let out = shoot.out.clone();
-        info!("capturing screenshot of {:?} → {}", shoot.label, out.display());
+        info!(
+            "capturing screenshot of {:?} → {}",
+            shoot.label,
+            out.display()
+        );
         commands
             .spawn(Screenshot::image(image))
             .observe(save_to_disk(out))

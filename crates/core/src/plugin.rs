@@ -12,8 +12,9 @@ use crate::js_thread::spawn_js_thread;
 use crate::message::{ReactMessage, ReactRegistry};
 use crate::protocol::{Op, Outbound};
 use crate::reconcile::{
-    apply_interaction_styles, apply_js_ops, collect_pointer_events, collect_ui_events,
-    on_text_edit_change,
+    apply_interaction_styles, apply_js_ops, apply_surface_interaction_styles,
+    collect_pointer_events, collect_surface_clicks, collect_surface_pointer_events,
+    collect_ui_events, on_text_edit_change,
 };
 use crate::request::{RawRequest, ReactRequestRegistry, RequestReceiver, dispatch_react_requests};
 
@@ -180,10 +181,22 @@ impl Plugin for ReactUiPlugin {
         // placeholder texture, created before the first portal can mount.
         .init_resource::<bevy_react_portal::RenderTargets>()
         .add_systems(Startup, bevy_react_portal::init_portal_placeholder)
+        // The `<surface>` registry (UI subtrees rendered into offscreen textures)
+        // and its single virtual pointer for in-world clicks.
+        .init_resource::<bevy_react_surface::Surfaces>()
+        .add_systems(Startup, bevy_react_surface::init_surface_pointer)
         .add_systems(Startup, setup)
         .add_systems(
             PreUpdate,
             (dispatch_react_messages, dispatch_react_requests),
+        )
+        // Drive the surface virtual pointer (cursor → mesh UV → image render
+        // target) before `bevy_picking` processes inputs, so the offscreen UI is
+        // hit-tested with this frame's cursor.
+        .add_systems(
+            PreUpdate,
+            bevy_react_surface::drive_surface_pointer
+                .before(bevy::picking::PickingSystems::ProcessInput),
         )
         .add_systems(
             Update,
@@ -215,8 +228,19 @@ impl Plugin for ReactUiPlugin {
                 // op drain (so a freshly-spawned portal binds the same frame), then
                 // drive resolution + the snapshot camera lifecycle.
                 bevy_react_portal::bind_portals.after(apply_js_ops),
-                bevy_react_portal::drive_render_targets
-                    .after(bevy_react_portal::bind_portals),
+                bevy_react_portal::drive_render_targets.after(bevy_react_portal::bind_portals),
+                // Bind `<surface>` roots to their offscreen UI cameras after the op
+                // drain (so a freshly-mounted surface binds the same frame), then
+                // drive the snapshot camera lifecycle.
+                bevy_react_surface::bind_surfaces.after(apply_js_ops),
+                bevy_react_surface::drive_surfaces.after(bevy_react_surface::bind_surfaces),
+                // Surface interaction: turn the virtual pointer's picking events on
+                // the offscreen subtree into `onClick`/`onPointer*` + hover/press
+                // styling. The picking events are produced in `PreUpdate`, so these
+                // read this frame's events.
+                collect_surface_clicks,
+                collect_surface_pointer_events,
+                apply_surface_interaction_styles,
             ),
         );
 

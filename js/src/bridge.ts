@@ -76,7 +76,8 @@ export interface SerializedProps {
   imageMode?: string;
   // `canvas` element: the recorded vector display list, rasterized on the Bevy side.
   draw?: DrawCmd[];
-  // `portal` element: the render-target name to display.
+  // `portal` element: the render-target name to display. Also carries a
+  // `surface` element's `name` (the offscreen surface its subtree renders into).
   target?: string;
   // `editableText` element attributes
   value?: string;
@@ -284,6 +285,9 @@ export function serializeProps(
     else if (key === "flipY") out.flipY = value as boolean;
     else if (key === "imageMode") out.imageMode = value as string;
     else if (key === "target") out.target = value as string;
+    // A `<surface>`'s `name` rides the same wire field as a `<portal>`'s `target`
+    // (both bind the element to a named render target); they never coexist.
+    else if (key === "name") out.target = value as string;
     else if (key === "value") out.value = value as string;
     else if (key === "maxLength") out.maxLength = value as number;
     else if (key === "multiline") out.multiline = value as boolean;

@@ -93,7 +93,8 @@ them by path or git.
 ### Elements & styling
 
 Host elements `<node>`, `<button>`, `<text>`, `<image>`, `<editableText>`,
-`<canvas>`, and `<portal>` cover layout, input, drawing, and embedded 3D views.
+`<canvas>`, `<portal>`, and `<surface>` cover layout, input, drawing, embedded 3D
+views, and UI rendered onto 3D meshes.
 Style them with a flexbox/grid object (colors, spacing, borders, radius, shadows,
 transforms).
 
@@ -242,6 +243,30 @@ commands.spawn((Camera3d::default(), view.camera_target(), PortalCamera("follow"
 ```
 
 ![A "follow" portal showing an offscreen chase-cam view of a wandering cube and a 2D minimap of the whole field, each rendered by a Bevy camera into a texture and displayed in the React UI.](./screenshots/portal.png)
+
+### Surfaces: UI on a 3D mesh
+
+`<surface>` is the inverse of `<portal>`: instead of showing a 3D camera inside the
+UI, it renders a React subtree into an **offscreen texture** that the Bevy app drapes
+onto any 3D mesh — a diegetic monitor, panel, or hologram driven by live React. Tag
+the displaying mesh with `SurfacePointer` to make the subtree clickable in 3D, so
+`onClick`/`onPointer*` and hover/press styles fire from in-world pointer hits.
+
+```rust
+// Bevy: register a surface, use its texture on a mesh, make the mesh clickable.
+let screen = surfaces.create(&mut images, "monitor", SurfaceSpec { size: UVec2::new(760, 700), ..default() });
+material.base_color_texture = Some(screen);
+commands.entity(screen_mesh).insert(SurfacePointer::new("monitor"));
+```
+
+```tsx
+// React: render a subtree into the named surface's texture.
+<surface name="monitor" style={{ width: "100%", height: "100%" }}>
+  <MonitorApp />
+</surface>
+```
+
+![A 3D monitor model whose screen is a live React "OS" — menu bar, taskbar, status line, and a code viewer — rendered into an offscreen texture and clickable in 3D.](./screenshots/monitor-screen.png)
 
 ### World-anchored overlays
 

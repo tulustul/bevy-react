@@ -10,6 +10,7 @@ import { AnchoredDemo } from "./demos/AnchoredDemo";
 import { InteractionsDemo } from "./demos/InteractionsDemo";
 import { CanvasDemo } from "./demos/elements/CanvasDemo";
 import { PortalDemo } from "./demos/elements/PortalDemo";
+import { SurfaceDemo } from "./demos/elements/surfaceDemo";
 import { ScrollDemo } from "./demos/layout/ScrollDemo";
 import { EditableTextDemo } from "./demos/elements/EditableTextDemo";
 import { NodeDemo } from "./demos/elements/NodeDemo";
@@ -61,6 +62,7 @@ const DEMOS: DemoItem[] = [
       { label: "<image>", component: ImageDemo },
       { label: "<canvas>", component: CanvasDemo },
       { label: "<portal>", scene: "CrowdedCubes", component: PortalDemo },
+      { label: "<surface>", scene: "Surface", component: SurfaceDemo },
       {
         label: "<Anchored.node>",
         scene: "CrowdedCubes",
@@ -121,7 +123,10 @@ const DEMOS: DemoItem[] = [
 ];
 
 /** Find the first selectable demo (a leaf with a `component`) by its nav label. */
-function findDemoByLabel(items: DemoItem[], label: string): DemoItem | undefined {
+function findDemoByLabel(
+  items: DemoItem[],
+  label: string,
+): DemoItem | undefined {
   for (const item of items) {
     if (item.label === label && item.component) return item;
     const found = item.children && findDemoByLabel(item.children, label);

@@ -69,6 +69,10 @@ pub struct JsBridge {
     /// Node ids that are `editableText` inputs, so an `Update` knows to push a
     /// diverging `value` into the live `EditableText` buffer.
     pub editable_inputs: HashSet<NodeId>,
+    /// Node ids that are `<surface>` detached roots. Their subtree renders into an
+    /// offscreen image via a dedicated UI camera, so they must NOT be parented into
+    /// the on-screen Bevy hierarchy: child-attach ops skip `add_child` for these.
+    pub surfaces: HashSet<NodeId>,
     /// The last text value emitted to JS for each `editableText`, used to dedup
     /// `TextEditChange` (which also fires on cursor moves) into real `"change"`s.
     pub editable_values: HashMap<NodeId, String>,
@@ -98,6 +102,7 @@ impl JsBridge {
             text_styles: HashMap::new(),
             raw_spans: HashSet::new(),
             editable_inputs: HashSet::new(),
+            surfaces: HashSet::new(),
             editable_values: HashMap::new(),
             child_order: HashMap::new(),
             parent_of: HashMap::new(),

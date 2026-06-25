@@ -4,18 +4,21 @@
 
 use bevy::image::Image;
 use bevy::input_focus::tab_navigation::TabIndex;
+use bevy::picking::events::{Click, Drag, Out, Over, Pointer, Press, Release};
 use bevy::prelude::*;
 use bevy::text::{EditableText, TextCursorStyle, TextEdit, TextEditChange};
 use bevy::ui::RelativeCursorPosition;
 use bevy::ui::widget::NodeImageMode;
+use bevy::ui::{ComputedNode, UiGlobalTransform};
 use bevy_react_animations::AnimatedNode;
 use bevy_react_canvas::{CanvasSurface, blank_canvas_image};
 use bevy_react_portal::{RPortal, blank_portal_image};
+use bevy_react_surface::{RSurface, SurfaceVirtualPointer};
 
 use crate::anchor::Anchored;
 use crate::bridge::{JsBridge, PointerHandlers, RNode, StyleVariants};
 use crate::plugin::Fonts;
-use crate::protocol::{NodeId, Op, Outbound, Props, ROOT_ID, UiEvent};
+use crate::protocol::{NodeId, Op, Outbound, Props, ROOT_ID, Style, UiEvent};
 use crate::ui_map::{
     apply_style, apply_text_style, image_node, overlay_style, resolved_text_style, text_layout,
 };
@@ -80,6 +83,7 @@ pub fn apply_js_ops(
                 bridge.text_styles.clear();
                 bridge.raw_spans.clear();
                 bridge.editable_inputs.clear();
+                bridge.surfaces.clear();
                 bridge.editable_values.clear();
                 // The root persists but its children were just despawned; the shadow
                 // tree is fully rebuilt by the ops that follow.
@@ -142,6 +146,23 @@ pub fn apply_js_ops(
                         apply_anchor(&mut ec, &props);
                         ec.id()
                     }
+                    // A `<surface>`: a styled container whose subtree renders into
+                    // an offscreen image instead of the on-screen UI. It is a
+                    // **detached UI root** — `bevy_react_surface::bind_surfaces`
+                    // points its `UiTargetCamera` at the surface's offscreen UI
+                    // camera, and the child-attach ops below keep it out of the
+                    // on-screen Bevy hierarchy. The root fills the texture by
+                    // default (user `style` overrides). Pointer/click events on it
+                    // arrive via the surface picking path (`collect_surface_events`),
+                    // not the legacy `Interaction` focus path.
+                    "surface" => {
+                        let style = overlay_style(&surface_root_base(), &props.style);
+                        let mut ec = commands.spawn(RNode(id));
+                        apply_style(&mut ec, &style);
+                        ec.insert(RSurface(props.target.clone().unwrap_or_default()));
+                        apply_anchor(&mut ec, &props);
+                        ec.id()
+                    }
                     // An `<editableText>`: a focusable native text input. Bevy's
                     // `EditableTextInputPlugin` (registered by `DefaultPlugins`)
                     // drives keyboard/focus/cursor/selection/clipboard; we just
@@ -192,6 +213,9 @@ pub fn apply_js_ops(
                         .editable_values
                         .insert(id, props.value.clone().unwrap_or_default());
                 }
+                if kind == "surface" {
+                    bridge.surfaces.insert(id);
+                }
                 bridge.nodes.insert(id, entity);
             }
             Op::CreateText { id, text } => {
@@ -208,6 +232,12 @@ pub fn apply_js_ops(
                 bridge.raw_spans.insert(id);
             }
             Op::Append { parent, child } => {
+                // A `<surface>` is a detached UI root: never parent it into the
+                // on-screen hierarchy (it renders to its own offscreen camera). Its
+                // own children attach to it normally via their own Append ops.
+                if bridge.surfaces.contains(&child) {
+                    continue;
+                }
                 if let (Some(p), Some(c)) = (resolve(&bridge, parent), resolve(&bridge, child)) {
                     // Detach first so appending a node that's being moved (or reordered to
                     // the end) leaves no stale entry in its old parent's list.
@@ -223,6 +253,10 @@ pub fn apply_js_ops(
                 child,
                 before,
             } => {
+                // A detached `<surface>` root is never parented (see `Op::Append`).
+                if bridge.surfaces.contains(&child) {
+                    continue;
+                }
                 // Ordered insertion: place `child` at `before`'s position. The live
                 // `Children` can't be read here (commands queued earlier in this same
                 // batch haven't applied), so the index comes from the shadow tree, which
@@ -254,6 +288,7 @@ pub fn apply_js_ops(
                     bridge.text_styles.remove(&child);
                     bridge.raw_spans.remove(&child);
                     bridge.editable_inputs.remove(&child);
+                    bridge.surfaces.remove(&child);
                     bridge.editable_values.remove(&child);
                     // Unlink from the parent's ordered list, then drop the subtree from the
                     // shadow tree so it stays bounded.
@@ -309,6 +344,18 @@ pub fn apply_js_ops(
                         bridge.editable_values.insert(id, new_val.clone());
                     }
                     apply_style(&mut commands.entity(e), &props.style);
+                } else if bridge.surfaces.contains(&id) {
+                    // A `<surface>` re-render: re-apply the (full-size-defaulted)
+                    // style and rebind its name. It shares the `target` wire field
+                    // with `<portal>`, so it must branch before the general path
+                    // below (which would wrongly stamp an `RPortal`).
+                    let style = overlay_style(&surface_root_base(), &props.style);
+                    let mut ec = commands.entity(e);
+                    apply_style(&mut ec, &style);
+                    if let Some(name) = &props.target {
+                        ec.insert(RSurface(name.clone()));
+                    }
+                    apply_anchor(&mut ec, &props);
                 } else {
                     let mut ec = commands.entity(e);
                     apply_style(&mut ec, &props.style);
@@ -368,6 +415,18 @@ fn inherit_text_style(
     if let Some(style) = bridge.text_styles.get(&parent).cloned() {
         commands.entity(child_entity).insert(style);
     }
+}
+
+/// The default style a `<surface>` root gets before the user's `style` is overlaid:
+/// it fills the offscreen texture (the camera's logical viewport) so the subtree
+/// has a definite box to lay out in. The user can override `width`/`height` (or any
+/// other field) via the element's `style` prop.
+fn surface_root_base() -> Option<Style> {
+    Some(Style {
+        width: Some(crate::protocol::Length::Percent(100.0)),
+        height: Some(crate::protocol::Length::Percent(100.0)),
+        ..Default::default()
+    })
 }
 
 /// Spawn a `node`, `button`, or `image` host element with its style.
@@ -677,6 +736,202 @@ pub fn apply_interaction_styles(
             Interaction::None => variants.base.clone(),
         };
         apply_style(&mut commands.entity(entity), &style);
+    }
+}
+
+/// Send one [`Outbound::UiEvent`] to the JS thread for a reconciler node.
+fn send_ui_event(bridge: &JsBridge, id: NodeId, kind: &str, pos: Option<Vec2>, abs: Option<Vec2>) {
+    let _ = bridge.outbound_tx.send(Outbound::UiEvent {
+        event: UiEvent {
+            id,
+            kind: kind.to_string(),
+            x: pos.map(|p| p.x),
+            y: pos.map(|p| p.y),
+            client_x: abs.map(|a| a.x),
+            client_y: abs.map(|a| a.y),
+            value: None,
+        },
+    });
+}
+
+/// Node-relative `0..1` position (top-left origin) of a surface-space pixel
+/// `position` within a node, plus that absolute surface pixel as the client coord.
+/// `None` when the point can't be normalized (degenerate node).
+fn surface_relative(
+    node: &ComputedNode,
+    transform: &UiGlobalTransform,
+    position: Vec2,
+) -> Option<(Vec2, Vec2)> {
+    node.normalize_point(*transform, position).map(|n| {
+        (
+            Vec2::new((n.x + 0.5).clamp(0.0, 1.0), (n.y + 0.5).clamp(0.0, 1.0)),
+            position,
+        )
+    })
+}
+
+/// Walk up the `ChildOf` chain from `entity` (inclusive) to the nearest entity that
+/// satisfies `is_target`. Surface picking hits the topmost leaf node (e.g. a `<text>`
+/// inside a `<button>`); this resolves it to the node that actually owns the
+/// interaction — mirroring how the legacy focus system attributes to the nearest
+/// `Interaction` node. Stops at the (detached) surface root when nothing matches.
+fn climb(
+    mut entity: Entity,
+    child_of: &Query<&ChildOf>,
+    is_target: impl Fn(Entity) -> bool,
+) -> Option<Entity> {
+    loop {
+        if is_target(entity) {
+            return Some(entity);
+        }
+        entity = child_of.get(entity).ok()?.parent();
+    }
+}
+
+/// Report `<surface>` clicks to JS. The in-world picking path drives a virtual
+/// pointer ([`SurfaceVirtualPointer`]) over the offscreen subtree, so a click on a
+/// surface node arrives as a `Pointer<Click>` for that pointer — the analogue of
+/// [`collect_ui_events`] for surfaces (whose nodes never get a legacy `Interaction`
+/// press, since they don't render to a window). Scoped to the surface pointer id so
+/// it never double-fires for main-window UI.
+pub fn collect_surface_clicks(
+    bridge: Res<JsBridge>,
+    pointer: Option<Res<SurfaceVirtualPointer>>,
+    mut clicks: MessageReader<Pointer<Click>>,
+    // Only `Interaction`-bearing nodes own a click (a `<button>` gets one via `Button`;
+    // a `<text>` child does not) — matching the legacy `collect_ui_events` attribution.
+    targets: Query<&RNode, With<Interaction>>,
+    child_of: Query<&ChildOf>,
+) {
+    let Some(pointer) = pointer else { return };
+    for ev in clicks.read() {
+        if ev.pointer_id != pointer.id {
+            continue;
+        }
+        // Resolve the picked leaf to the nearest interactive ancestor (the button),
+        // so a click on its label text still fires the button's handler.
+        if let Some(target) = climb(ev.entity, &child_of, |e| targets.contains(e))
+            && let Ok(rnode) = targets.get(target)
+        {
+            debug!("surface click -> reconciler node {}", rnode.0);
+            send_ui_event(&bridge, rnode.0, "click", None, None);
+        }
+    }
+}
+
+/// Report `onPointer*` drag events for `<surface>` nodes, mirroring
+/// [`collect_pointer_events`] for the in-world picking path. Press → `pointerDown`,
+/// drag → `pointerMove`, release → `pointerUp`, each gated on the node's declared
+/// [`PointerHandlers`] and carrying the cursor's node-relative `0..1` position
+/// (the surface-space pixel as `client_x/y`).
+#[allow(clippy::too_many_arguments)]
+pub fn collect_surface_pointer_events(
+    bridge: Res<JsBridge>,
+    pointer: Option<Res<SurfaceVirtualPointer>>,
+    mut presses: MessageReader<Pointer<Press>>,
+    mut releases: MessageReader<Pointer<Release>>,
+    mut drags: MessageReader<Pointer<Drag>>,
+    nodes: Query<(&RNode, &PointerHandlers, &ComputedNode, &UiGlobalTransform)>,
+    child_of: Query<&ChildOf>,
+) {
+    let Some(pointer) = pointer else { return };
+    let emit = |entity: Entity, want: fn(&PointerHandlers) -> bool, kind: &str, at: Vec2| {
+        // Resolve the picked leaf to the nearest ancestor that declared `onPointer*`.
+        if let Some(target) = climb(entity, &child_of, |e| nodes.contains(e))
+            && let Ok((rnode, handlers, node, transform)) = nodes.get(target)
+            && want(handlers)
+            && let Some((pos, abs)) = surface_relative(node, transform, at)
+        {
+            send_ui_event(&bridge, rnode.0, kind, Some(pos), Some(abs));
+        }
+    };
+    for ev in presses.read() {
+        if ev.pointer_id == pointer.id {
+            emit(
+                ev.entity,
+                |h| h.down,
+                "pointerDown",
+                ev.pointer_location.position,
+            );
+        }
+    }
+    for ev in drags.read() {
+        if ev.pointer_id == pointer.id {
+            emit(
+                ev.entity,
+                |h| h.moved,
+                "pointerMove",
+                ev.pointer_location.position,
+            );
+        }
+    }
+    for ev in releases.read() {
+        if ev.pointer_id == pointer.id {
+            emit(
+                ev.entity,
+                |h| h.up,
+                "pointerUp",
+                ev.pointer_location.position,
+            );
+        }
+    }
+}
+
+/// Apply hover/press [`StyleVariants`] to `<surface>` nodes from the in-world
+/// picking path — the surface-side analogue of [`apply_interaction_styles`], which
+/// can't help here because surface nodes never receive a legacy `Interaction`
+/// (their offscreen camera makes `ui_focus_system` skip them). Over → base+hover,
+/// press → base+hover+press, out/release → base/hover.
+#[allow(clippy::too_many_arguments)]
+pub fn apply_surface_interaction_styles(
+    mut commands: Commands,
+    pointer: Option<Res<SurfaceVirtualPointer>>,
+    mut overs: MessageReader<Pointer<Over>>,
+    mut outs: MessageReader<Pointer<Out>>,
+    mut presses: MessageReader<Pointer<Press>>,
+    mut releases: MessageReader<Pointer<Release>>,
+    variants: Query<&StyleVariants>,
+    child_of: Query<&ChildOf>,
+) {
+    let Some(pointer) = pointer else { return };
+    let mut restyle = |entity: Entity, style: Option<Style>| {
+        apply_style(&mut commands.entity(entity), &style);
+    };
+    // Resolve a picked leaf to the nearest ancestor with hover/press variants (the
+    // button), so its label text highlights the button rather than nothing.
+    let target = |entity: Entity| climb(entity, &child_of, |e| variants.contains(e));
+    for ev in outs.read() {
+        if ev.pointer_id == pointer.id
+            && let Some(t) = target(ev.entity)
+            && let Ok(v) = variants.get(t)
+        {
+            restyle(t, v.base.clone());
+        }
+    }
+    for ev in overs.read() {
+        if ev.pointer_id == pointer.id
+            && let Some(t) = target(ev.entity)
+            && let Ok(v) = variants.get(t)
+        {
+            restyle(t, overlay_style(&v.base, &v.hover));
+        }
+    }
+    for ev in releases.read() {
+        if ev.pointer_id == pointer.id
+            && let Some(t) = target(ev.entity)
+            && let Ok(v) = variants.get(t)
+        {
+            restyle(t, overlay_style(&v.base, &v.hover));
+        }
+    }
+    for ev in presses.read() {
+        if ev.pointer_id == pointer.id
+            && let Some(t) = target(ev.entity)
+            && let Ok(v) = variants.get(t)
+        {
+            let pressed = overlay_style(&overlay_style(&v.base, &v.hover), &v.press);
+            restyle(t, pressed);
+        }
     }
 }
 
@@ -999,6 +1254,78 @@ mod tests {
             app.world().entity(e).get::<RPortal>().map(|p| p.0.clone()),
             Some("minimap".to_string()),
             "an update rebinds the portal's target name"
+        );
+    }
+
+    /// A `<surface>` mounts carrying its name in an `RSurface`, and stays a detached
+    /// UI root: appending it under a parent must NOT add it to that parent's Bevy
+    /// `Children` (it renders to its own offscreen camera instead).
+    #[test]
+    fn surface_mounts_detached_with_name() {
+        use bevy_react_surface::RSurface;
+        let (mut app, tx, _root) = ordering_app();
+        tx.send(vec![
+            create_node(1), // a normal parent under the root
+            Op::Create {
+                id: 2,
+                kind: "surface".into(),
+                props: serde_json::from_value(serde_json::json!({ "target": "monitor" }))
+                    .expect("valid surface props"),
+            },
+            Op::Append {
+                parent: ROOT_ID,
+                child: 1,
+            },
+            // React appends the surface under node 1; the reconciler must keep it
+            // detached (no Bevy parent) so it is an independent layout root.
+            Op::Append {
+                parent: 1,
+                child: 2,
+            },
+        ])
+        .unwrap();
+        app.update();
+
+        let surface = ent(&app, 2);
+        assert_eq!(
+            app.world()
+                .entity(surface)
+                .get::<RSurface>()
+                .map(|s| s.0.clone()),
+            Some("monitor".to_string()),
+            "a surface carries its name in RSurface"
+        );
+        assert!(
+            app.world().entity(surface).get::<ChildOf>().is_none(),
+            "a surface is a detached root — never parented into the on-screen tree"
+        );
+        assert!(
+            children_of(&app, ent(&app, 1)).is_empty(),
+            "the surface's React parent has no Bevy children"
+        );
+
+        // An update rebinds the surface name (and never stamps an RPortal).
+        tx.send(vec![Op::Update {
+            id: 2,
+            props: serde_json::from_value(serde_json::json!({ "target": "panel" }))
+                .expect("valid surface props"),
+        }])
+        .unwrap();
+        app.update();
+        assert_eq!(
+            app.world()
+                .entity(surface)
+                .get::<RSurface>()
+                .map(|s| s.0.clone()),
+            Some("panel".to_string()),
+            "an update rebinds the surface name"
+        );
+        assert!(
+            app.world()
+                .entity(surface)
+                .get::<bevy_react_portal::RPortal>()
+                .is_none(),
+            "a surface update must not stamp an RPortal (shared `target` field)"
         );
     }
 

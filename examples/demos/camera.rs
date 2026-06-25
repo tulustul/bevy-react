@@ -3,6 +3,7 @@
 //! of it is bundled into [`CameraPlugin`].
 
 use bevy::input::mouse::{AccumulatedMouseMotion, AccumulatedMouseScroll};
+use bevy::post_process::bloom::Bloom;
 use bevy::prelude::*;
 use bevy::ui::IsDefaultUiCamera;
 
@@ -36,6 +37,10 @@ impl Plugin for CameraPlugin {
 fn setup_camera_and_light(mut commands: Commands) {
     commands.spawn((
         Camera3d::default(),
+        // Bloom glows bright/emissive pixels. It `#[require(Hdr)]`s, so adding it
+        // also flips the camera into HDR rendering (the prerequisite for bloom);
+        // tonemapping still writes the final LDR image to the target.
+        Bloom::NATURAL,
         Transform::from_xyz(0.0, 4.0, DEFAULT_RADIUS).looking_at(Vec3::ZERO, Vec3::Y),
         IsDefaultUiCamera,
     ));
@@ -55,7 +60,7 @@ fn setup_camera_and_light(mut commands: Commands) {
 const ORBIT_SPEED: f32 = 0.3; // radians/sec of automatic orbit
 const MOUSE_SENS: f32 = 0.005; // mouse drag → radians
 const ZOOM_SENS: f32 = 1.5; // scroll notch → world units of distance
-const MIN_RADIUS: f32 = 6.0;
+const MIN_RADIUS: f32 = 4.0;
 const MAX_RADIUS: f32 = 40.0;
 /// Default orbit distance — close enough for the small scenes; the cube-field
 /// scene reframes wider (see [`reframe_camera`]).
@@ -85,12 +90,14 @@ impl Default for CameraRig {
 /// from the current angle on release), and the mouse wheel zooms within
 /// `[MIN_RADIUS, MAX_RADIUS]`. Always looks at the origin so the scene reads as a
 /// 3D volume from any angle.
+#[allow(clippy::too_many_arguments)]
 fn orbit_camera(
     time: Res<Time>,
     motion: Res<AccumulatedMouseMotion>,
     scroll: Res<AccumulatedMouseScroll>,
     buttons: Res<ButtonInput<MouseButton>>,
     capture: Res<bevy_react::PointerCapture>,
+    state: Res<State<Scene>>,
     mut rig: ResMut<CameraRig>,
     // Exclude the offscreen portal cameras (the follow/minimap render-target cams)
     // so only the shared main camera orbits.
@@ -103,8 +110,10 @@ fn orbit_camera(
     if buttons.pressed(MouseButton::Left) && !captured {
         rig.yaw += motion.delta.x * MOUSE_SENS;
         rig.pitch = (rig.pitch + motion.delta.y * MOUSE_SENS).clamp(-1.4, 1.4);
-    } else {
-        // Auto-orbit resumes from wherever the user left it.
+    } else if *state.get() != Scene::Surface {
+        // Auto-orbit resumes from wherever the user left it — except the `<surface>`
+        // monitor scene, which holds still unless the user drags (auto-orbit off,
+        // mouse rotation kept), so the in-world screen stays readable.
         rig.yaw += ORBIT_SPEED * time.delta_secs();
     }
 
@@ -117,9 +126,17 @@ fn orbit_camera(
         rig.radius * rig.pitch.sin(),
         rig.radius * rig.yaw.sin() * rig.pitch.cos(),
     );
+    // Most scenes pivot on the world origin. The monitor sits at the origin too, but
+    // we aim a little above it so the (centered) screen clears the demo panel and
+    // shows in the viewport's lower area; mouse-rotation still orbits the monitor.
+    let target = if *state.get() == Scene::Surface {
+        Vec3::new(0.0, 0.85, 0.0)
+    } else {
+        Vec3::ZERO
+    };
     for mut transform in &mut cam {
-        transform.translation = pos;
-        transform.look_at(Vec3::ZERO, Vec3::Y);
+        transform.translation = target + pos;
+        transform.look_at(target, Vec3::Y);
     }
 }
 
@@ -127,8 +144,16 @@ fn orbit_camera(
 /// startup): the cube-field scene needs a wider frame than the small
 /// origin-centered scenes. The user can zoom from there.
 fn reframe_camera(state: Res<State<Scene>>, mut rig: ResMut<CameraRig>) {
-    rig.radius = match state.get() {
-        Scene::CrowdedCubes => 24.0,
-        _ => DEFAULT_RADIUS,
-    };
+    match state.get() {
+        Scene::CrowdedCubes => rig.radius = 24.0,
+        // The monitor sits at the origin (its screen centered there); frame it
+        // head-on (`yaw = π/2` looks down +Z at the screen face), a touch above,
+        // and close. Auto-orbit is off for this scene but the user can mouse-rotate.
+        Scene::Surface => {
+            rig.yaw = std::f32::consts::FRAC_PI_2;
+            rig.pitch = 0.15;
+            rig.radius = 7.5;
+        }
+        _ => rig.radius = DEFAULT_RADIUS,
+    }
 }

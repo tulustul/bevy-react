@@ -35,6 +35,7 @@ use scene::Scene;
 use scenes::bouncing_ball::BouncingBallScenePlugin;
 use scenes::crowded_cubes::CrowdedCubesScenePlugin;
 use scenes::cubes::CubesScenePlugin;
+use scenes::monitor::MonitorScenePlugin;
 use screenshot::ShootConfig;
 
 fn main() {
@@ -68,7 +69,10 @@ fn main() {
             .get(2)
             .expect("--shoot requires an <out.png> path")
             .into(),
-        settle_secs: shoot_args.get(3).and_then(|s| s.parse().ok()).unwrap_or(3.0),
+        settle_secs: shoot_args
+            .get(3)
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(3.0),
     });
 
     // CARGO_MANIFEST_DIR is the `bevy-react` crate (crates/core); the example and
@@ -118,6 +122,7 @@ fn main() {
         CubesScenePlugin,
         BouncingBallScenePlugin,
         CrowdedCubesScenePlugin,
+        MonitorScenePlugin,
     ));
     // Each scene's plugin registers its own bindings in `build`; only the global
     // scene-selection + debug-navigation handlers are left to register here.
@@ -140,4 +145,5 @@ fn register_react_bindings(app: &mut App) {
     scenes::cubes::register_bindings(app);
     scenes::bouncing_ball::register_bindings(app);
     scenes::crowded_cubes::register_bindings(app);
+    scenes::monitor::register_bindings(app);
 }

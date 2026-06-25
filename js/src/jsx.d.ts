@@ -298,6 +298,40 @@ export interface BevyPortalProps extends BevyAttributes {
   onPointerUp?: (e: PointerEventData) => void;
 }
 
+/** Props for the `surface` element: the **inverse** of `<portal>`. Its children
+ *  are rendered into an **offscreen texture** instead of the on-screen UI; the Bevy
+ *  app registers a surface by name (via `Surfaces::create`, choosing the pixel
+ *  resolution) and uses the resulting `Handle<Image>` as a material texture on any
+ *  3D mesh — a diegetic monitor, panel, or hologram driven by live React.
+ *
+ *  A `<surface>` is a **detached root**: place it anywhere in your tree and its
+ *  subtree renders off-screen, not inline. It fills the texture by default; size or
+ *  lay out its content with `style`. If the named surface isn't registered yet, it
+ *  renders nowhere until it appears. Tag the displaying mesh with `SurfacePointer`
+ *  on the Bevy side to make the subtree clickable in 3D — `onClick`/`onPointer*`
+ *  and hover/press styles then fire from in-world pointer hits. */
+export interface BevySurfaceProps extends BevyAttributes {
+  /** The surface name the Bevy app registered (`Surfaces::create`). The subtree
+   *  renders into that surface's texture; an unregistered name renders nowhere
+   *  until it appears. */
+  name: string;
+  style?: BevyStyle;
+  /** Style overlaid on `style` while a child is hovered (in-world). */
+  hoverStyle?: BevyStyle;
+  /** Style overlaid on `style` (and `hoverStyle`) while a child is pressed. */
+  pressStyle?: BevyStyle;
+  /** Reanimated-style animation bindings (see `Animated.node`). */
+  animatedStyle?: AnimatedStyle;
+  onClick?: () => void;
+  /** Pointer pressed on this element (an in-world drag begins). */
+  onPointerDown?: (e: PointerEventData) => void;
+  /** Pointer moved while held (an in-world drag). Fires each frame until release. */
+  onPointerMove?: (e: PointerEventData) => void;
+  /** Pointer released after a press/drag that began on this element. */
+  onPointerUp?: (e: PointerEventData) => void;
+  children?: ReactNode;
+}
+
 /** Props for the `image` element (maps to `bevy_ui::ImageNode`). */
 export interface BevyImageProps extends BevyAttributes {
   style?: BevyStyle;

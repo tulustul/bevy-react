@@ -390,6 +390,7 @@ dependencies = [
  "bevy-react-canvas",
  "bevy-react-macros",
  "bevy-react-portal",
+ "bevy-react-surface",
  "crossbeam-channel",
  "deno_core",
  "serde",
@@ -431,6 +432,14 @@ name = "bevy-react-portal"
 version = "0.1.0"
 dependencies = [
  "bevy",
+]
+
+[[package]]
+name = "bevy-react-surface"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "uuid",
 ]
 
 [[package]]

@@ -5,8 +5,8 @@ use bevy::camera::visibility::RenderLayers;
 use bevy::image::Image;
 use bevy::prelude::*;
 use bevy_react::{
-    PortalCamera, ReactAppExt, ReactEvents, RenderMode, RenderTargetSpec, RenderTargets, Resolution,
-    react_event, react_message,
+    PortalCamera, ReactAppExt, ReactEvents, RenderMode, RenderTargetSpec, RenderTargets,
+    Resolution, react_event, react_message,
 };
 use serde::Serialize;
 use ts_rs::TS;
@@ -42,8 +42,7 @@ impl Plugin for CrowdedCubesScenePlugin {
             .add_systems(OnEnter(Scene::CrowdedCubes), spawn_cubes)
             .add_systems(
                 Update,
-                (wander, follow_camera, sync_minimap_markers)
-                    .run_if(in_state(Scene::CrowdedCubes)),
+                (wander, follow_camera, sync_minimap_markers).run_if(in_state(Scene::CrowdedCubes)),
             );
     }
 }

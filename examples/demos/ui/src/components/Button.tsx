@@ -39,8 +39,8 @@ const buttonStyle: BevyStyle = {
   borderRadius: 8,
   backgroundColor: Colors.surface300,
   transition: {
-    backgroundColor: { duration: 1500 },
-    transform: { duration: 1500 },
+    backgroundColor: { duration: 150 },
+    transform: { duration: 150 },
   },
 };
 

@@ -78,6 +78,10 @@ fn setup_cube_assets(
             .map(|c| {
                 materials.add(StandardMaterial {
                     base_color: c,
+                    // Push each cube's color into HDR (>1.0) so the camera's bloom
+                    // pulls a soft glow off its edges. The multiplier sets glow
+                    // strength; tune alongside the camera's `Bloom` intensity.
+                    emissive: LinearRgba::from(c) * 4.0,
                     ..default()
                 })
             })

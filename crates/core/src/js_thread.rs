@@ -16,6 +16,7 @@ use std::rc::Rc;
 use crossbeam_channel::Sender;
 use deno_core::{Extension, JsRuntime, OpDecl, OpState, RuntimeOptions, op2};
 use tokio::sync::Mutex;
+use tokio::sync::Notify;
 use tokio::sync::mpsc::UnboundedReceiver;
 
 use bevy_react_animations::AnimationCommand;
@@ -46,6 +47,11 @@ struct ReloadReceiver(Rc<Mutex<UnboundedReceiver<()>>>);
 /// Set true when a reload was requested, so the outer loop rebuilds rather than
 /// exits. One per runtime instance.
 struct ReloadFlag(Rc<Cell<bool>>);
+
+/// Woken by `op_next_event` when it hands the JS loop the reload sentinel, so
+/// `pump` can break out of `run_event_loop` even when perpetual timers (e.g. a
+/// `setInterval` clock) keep the event loop from ever going idle on its own.
+struct ReloadNotify(Rc<Notify>);
 
 /// JS -> Bevy: ship one commit's worth of mutation ops. Synchronous.
 #[op2]
@@ -96,12 +102,13 @@ fn op_request(
 #[op2]
 #[serde]
 async fn op_next_event(state: Rc<RefCell<OpState>>) -> Option<Outbound> {
-    let (events, reload, flag) = {
+    let (events, reload, flag, notify) = {
         let state = state.borrow();
         (
             state.borrow::<OutboundReceiver>().0.clone(),
             state.borrow::<ReloadReceiver>().0.clone(),
             state.borrow::<ReloadFlag>().0.clone(),
+            state.borrow::<ReloadNotify>().0.clone(),
         )
     };
     let mut events = events.lock().await;
@@ -111,6 +118,9 @@ async fn op_next_event(state: Rc<RefCell<OpState>>) -> Option<Outbound> {
         r = reload.recv() => match r {
             Some(()) => {
                 flag.set(true);
+                // Wake `pump`: timers may be keeping `run_event_loop` from
+                // returning, so it can't notice the reload on its own.
+                notify.notify_one();
                 Some(Outbound::Reload)
             }
             None => None, // reload sender dropped => shutdown
@@ -216,6 +226,7 @@ pub fn spawn_js_thread(
                 let outbound_rx = Rc::new(Mutex::new(outbound_rx));
                 let reload_rx = Rc::new(Mutex::new(reload_rx));
                 let reload_flag = Rc::new(Cell::new(false));
+                let reload_notify = Rc::new(Notify::new());
 
                 let mut runtime = match build_runtime(
                     &vendor_path,
@@ -224,6 +235,7 @@ pub fn spawn_js_thread(
                     outbound_rx.clone(),
                     reload_rx.clone(),
                     reload_flag.clone(),
+                    reload_notify.clone(),
                 ) {
                     Ok(rt) => rt,
                     Err(e) => {
@@ -237,7 +249,7 @@ pub fn spawn_js_thread(
                     // `pump` drives the JS event loop: the initial/refreshed
                     // render commits, then it parks on `op_next_event` until a
                     // reload or shutdown.
-                    match pump(&mut runtime, &reload_flag).await {
+                    match pump(&mut runtime, &reload_flag, &reload_notify).await {
                         Pumped::Shutdown => break,
                         Pumped::Reload => {
                             // Re-execute the rebuilt app in the LIVE isolate. The
@@ -254,6 +266,7 @@ pub fn spawn_js_thread(
                                     outbound_rx.clone(),
                                     reload_rx.clone(),
                                     reload_flag.clone(),
+                                    reload_notify.clone(),
                                 ) {
                                     Ok(rt) => runtime = rt,
                                     Err(e) => {
@@ -280,6 +293,7 @@ fn build_runtime(
     outbound_rx: Rc<Mutex<UnboundedReceiver<Outbound>>>,
     reload_rx: Rc<Mutex<UnboundedReceiver<()>>>,
     reload_flag: Rc<Cell<bool>>,
+    reload_notify: Rc<Notify>,
 ) -> anyhow::Result<JsRuntime> {
     const FLUSH: OpDecl = op_flush();
     const EMIT: OpDecl = op_emit();
@@ -308,6 +322,7 @@ fn build_runtime(
         op_state.put(OutboundReceiver(outbound_rx));
         op_state.put(ReloadReceiver(reload_rx));
         op_state.put(ReloadFlag(reload_flag));
+        op_state.put(ReloadNotify(reload_notify));
     }
 
     runtime.execute_script("[prelude]", PRELUDE)?;
@@ -326,17 +341,40 @@ fn build_runtime(
 /// Drive the JS event loop until it yields control back to Rust: either a reload
 /// was signalled (`op_next_event` returned the reload sentinel, so the JS event
 /// loop returned) or all senders dropped (shutdown).
-async fn pump(runtime: &mut JsRuntime, reload_flag: &Rc<Cell<bool>>) -> Pumped {
-    if let Err(e) = runtime.run_event_loop(Default::default()).await {
-        // Steady-state errors are caught inside the JS event loop, so this is
-        // rare; treat it like a reload so we rebuild rather than wedge.
-        eprintln!("[js] event loop error: {e}");
-        return Pumped::Reload;
-    }
-    if reload_flag.get() {
-        Pumped::Reload
-    } else {
-        Pumped::Shutdown
+async fn pump(
+    runtime: &mut JsRuntime,
+    reload_flag: &Rc<Cell<bool>>,
+    reload_notify: &Notify,
+) -> Pumped {
+    // Race the event loop against the reload signal. `run_event_loop` only
+    // resolves when the loop goes idle, but an app with a perpetual timer
+    // (e.g. a `setInterval` clock) never does — so without this the reload
+    // sentinel `op_next_event` returns would never reach us, the bundle would
+    // never re-execute, and nothing would re-park on `op_next_event` (the UI
+    // would freeze). `biased` polls the event loop first so it fully drains the
+    // pending microtasks (the prior `runEventLoop` returning) before we bail.
+    let loop_result = tokio::select! {
+        biased;
+        res = runtime.run_event_loop(Default::default()) => Some(res),
+        _ = reload_notify.notified() => None,
+    };
+    match loop_result {
+        // Woken by a reload while the event loop was still busy with timers.
+        None => Pumped::Reload,
+        Some(Err(e)) => {
+            // Steady-state errors are caught inside the JS event loop, so this
+            // is rare; treat it like a reload so we rebuild rather than wedge.
+            eprintln!("[js] event loop error: {e}");
+            Pumped::Reload
+        }
+        // The loop went idle: a reload with no pending timers, or shutdown.
+        Some(Ok(())) => {
+            if reload_flag.get() {
+                Pumped::Reload
+            } else {
+                Pumped::Shutdown
+            }
+        }
     }
 }
 

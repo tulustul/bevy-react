@@ -17,6 +17,7 @@ pub enum Scene {
     Cubes,
     BouncingBall,
     CrowdedCubes,
+    Surface,
 }
 
 /// The wire form of [`Scene`] — what React sends with `emit("selectScene", id)`.
@@ -28,6 +29,7 @@ pub enum SceneId {
     Cubes,
     BouncingBall,
     CrowdedCubes,
+    Surface,
 }
 
 /// React picks the active scene from the left-nav: `emit("selectScene", id)`. A
@@ -47,6 +49,7 @@ fn apply_select_scene(on: On<SelectScene>, mut next: ResMut<NextState<Scene>>) {
         Some(SceneId::Cubes) => Scene::Cubes,
         Some(SceneId::BouncingBall) => Scene::BouncingBall,
         Some(SceneId::CrowdedCubes) => Scene::CrowdedCubes,
+        Some(SceneId::Surface) => Scene::Surface,
         None => Scene::None,
     });
 }

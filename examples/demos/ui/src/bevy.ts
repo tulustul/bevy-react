@@ -22,10 +22,11 @@ export type BallState = { x: number, y: number, vx: number, vy: number, };
 export type CubeInfo = { entity: bigint, label: string, };
 export type CubesSpawned = { cubes: Array<CubeInfo>, };
 export type FollowRandom = null;
-export type SceneId = "Cubes" | "BouncingBall" | "CrowdedCubes";
+export type SceneId = "Cubes" | "BouncingBall" | "CrowdedCubes" | "Surface";
 export type SelectDemo = { label: string, };
 export type SelectScene = SceneId | null;
 export type SetCount = number;
+export type SetCrt = boolean;
 export type SetFollowMode = boolean;
 export type Wall = "Left" | "Right" | "Top" | "Bottom" | "Front" | "Back";
 
@@ -35,6 +36,7 @@ export interface ReactMessages {
   "crowdedCubes.followRandom": FollowRandom;
   "crowdedCubes.setFollowMode": SetFollowMode;
   selectScene: SelectScene;
+  "surfaceDemo.setCrt": SetCrt;
 }
 
 /** Every `request` name and its request/response types. */
@@ -97,4 +99,7 @@ export const bevy = {
     getBall(): Promise<BallState> { return request("pollingDemo.getBall", null); },
   },
   selectScene(value: SelectScene): void { emit("selectScene", value); },
+  surfaceDemo: {
+    setCrt(value: SetCrt): void { emit("surfaceDemo.setCrt", value); },
+  },
 } as const;

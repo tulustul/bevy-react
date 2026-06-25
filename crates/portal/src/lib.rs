@@ -33,10 +33,10 @@
 //! camera aspect for free) or [`Fixed`](Resolution::Fixed) (a fixed cost, for a
 //! target shared by several portals).
 
+use bevy::camera::{ImageRenderTarget, RenderTarget as BevyRenderTarget};
 use bevy::image::Image;
 use bevy::platform::collections::HashMap;
 use bevy::prelude::*;
-use bevy::camera::{ImageRenderTarget, RenderTarget as BevyRenderTarget};
 use bevy::render::render_resource::{Extent3d, TextureFormat};
 use bevy::ui::ComputedNode;
 use bevy::ui::widget::ImageNode;
@@ -280,7 +280,9 @@ pub fn drive_render_targets(
             continue;
         }
         let Some(binder) = entry.binder else { continue };
-        let Ok(node) = nodes.get(binder) else { continue };
+        let Ok(node) = nodes.get(binder) else {
+            continue;
+        };
         let want = quantize_size(node.size());
         if want.x == 0 || want.y == 0 || want == entry.last_size {
             continue;
@@ -347,19 +349,21 @@ mod tests {
     #[test]
     fn create_get_remove() {
         let mut app = test_app();
-        let handle = app.world_mut().resource_scope(
-            |world, mut targets: Mut<RenderTargets>| {
+        let handle = app
+            .world_mut()
+            .resource_scope(|world, mut targets: Mut<RenderTargets>| {
                 let mut images = world.resource_mut::<Assets<Image>>();
                 targets
                     .create(&mut images, "follow", RenderTargetSpec::default())
                     .handle
-            },
-        );
+            });
         let targets = app.world().resource::<RenderTargets>();
         assert_eq!(targets.get("follow"), Some(handle));
         assert_eq!(targets.get("nope"), None);
 
-        app.world_mut().resource_mut::<RenderTargets>().remove("follow");
+        app.world_mut()
+            .resource_mut::<RenderTargets>()
+            .remove("follow");
         assert_eq!(app.world().resource::<RenderTargets>().get("follow"), None);
     }
 
@@ -404,18 +408,21 @@ mod tests {
         app.add_systems(Update, bind_portals);
         app.update(); // run startup → placeholder exists
 
-        let target_handle = app.world_mut().resource_scope(
-            |world, mut targets: Mut<RenderTargets>| {
-                let mut images = world.resource_mut::<Assets<Image>>();
-                targets
-                    .create(&mut images, "follow", RenderTargetSpec::default())
-                    .handle
-            },
-        );
+        let target_handle =
+            app.world_mut()
+                .resource_scope(|world, mut targets: Mut<RenderTargets>| {
+                    let mut images = world.resource_mut::<Assets<Image>>();
+                    targets
+                        .create(&mut images, "follow", RenderTargetSpec::default())
+                        .handle
+                });
         let placeholder = app.world().resource::<PortalPlaceholder>().0.clone();
         let portal = app
             .world_mut()
-            .spawn((RPortal("follow".into()), ImageNode::new(placeholder.clone())))
+            .spawn((
+                RPortal("follow".into()),
+                ImageNode::new(placeholder.clone()),
+            ))
             .id();
 
         app.update(); // bind_portals runs
@@ -430,7 +437,9 @@ mod tests {
             "the portal is recorded as the target's binder"
         );
 
-        app.world_mut().resource_mut::<RenderTargets>().remove("follow");
+        app.world_mut()
+            .resource_mut::<RenderTargets>()
+            .remove("follow");
         app.update();
         assert_eq!(
             app.world().entity(portal).get::<ImageNode>().unwrap().image,

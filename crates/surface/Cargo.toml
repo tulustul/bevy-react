@@ -1,0 +1,19 @@
+[package]
+name = "bevy-react-surface"
+version.workspace = true
+edition.workspace = true
+description = "Render a React UI subtree into an offscreen texture (the <surface> host element) for bevy-react."
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords = ["bevy", "react", "render-target", "ui", "gamedev"]
+categories = ["gui", "game-development"]
+
+[lib]
+name = "bevy_react_surface"
+path = "src/lib.rs"
+
+[dependencies]
+bevy = { workspace = true }
+uuid = { workspace = true }

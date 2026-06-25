@@ -43,10 +43,13 @@ pub mod protocol;
 pub use anchor::{Anchor, AnchorScaling, Anchored};
 pub use bevy_react_animations::{self, ReactUiAnimationsPlugin};
 pub use bevy_react_canvas::{self, CanvasSurface};
+pub use bevy_react_macros::{react_event, react_message, react_request};
 pub use bevy_react_portal::{
     self, PortalCamera, RenderMode, RenderTarget, RenderTargetSpec, RenderTargets, Resolution,
 };
-pub use bevy_react_macros::{react_event, react_message, react_request};
+pub use bevy_react_surface::{
+    self, SurfacePointer, SurfaceSpec, SurfaceVirtualPointer, Surfaces, UvChannel,
+};
 pub use event::{ReactEvent, ReactEvents};
 pub use message::{ReactAppExt, ReactMessage, ReactPayload};
 pub use plugin::{Fonts, PointerCapture, PointerCaptureSet, ReactUiPlugin};
