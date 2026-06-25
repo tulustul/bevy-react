@@ -23,6 +23,7 @@ export type CubeInfo = { entity: bigint, label: string, };
 export type CubesSpawned = { cubes: Array<CubeInfo>, };
 export type FollowRandom = null;
 export type SceneId = "Cubes" | "BouncingBall" | "CrowdedCubes";
+export type SelectDemo = { label: string, };
 export type SelectScene = SceneId | null;
 export type SetCount = number;
 export type SetFollowMode = boolean;
@@ -45,6 +46,7 @@ export interface ReactRequests {
 export interface ReactEvents {
   "bevyEventsDemo.ballBounced": BallBounced;
   "crowdedCubes.spawned": CubesSpawned;
+  "debug.selectDemo": SelectDemo;
 }
 
 /** Send a typed app message to the Bevy side. */

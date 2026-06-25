@@ -120,6 +120,16 @@ const DEMOS: DemoItem[] = [
   { label: "Interactions", component: InteractionsDemo },
 ];
 
+/** Find the first selectable demo (a leaf with a `component`) by its nav label. */
+function findDemoByLabel(items: DemoItem[], label: string): DemoItem | undefined {
+  for (const item of items) {
+    if (item.label === label && item.component) return item;
+    const found = item.children && findDemoByLabel(item.children, label);
+    if (found) return found;
+  }
+  return undefined;
+}
+
 export function App() {
   const [selectedDemo, setSelectedDemo] = useState<DemoItem>(
     DEMOS[0].children![0],
@@ -128,6 +138,15 @@ export function App() {
   useEffect(() => {
     bevy.selectScene(selectedDemo.scene ?? null);
   }, [selectedDemo]);
+
+  // Debug/automation hook: let the Bevy side (the `--shoot` screenshot tool) drive
+  // navigation by demo label. Selecting the already-selected demo is a no-op.
+  useEffect(() => {
+    return bevy.on("debug.selectDemo", ({ label }) => {
+      const demo = findDemoByLabel(DEMOS, label);
+      if (demo) setSelectedDemo(demo);
+    });
+  }, []);
 
   return (
     <node style={rootStyle}>
