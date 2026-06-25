@@ -25,7 +25,8 @@ Features:
   ☐ bevy_ui feature coverage gaps (audited against bevy_ui 0.19.0; layout/flex/grid/text-basics are complete). Add support for:
       High value:
         ✔ Gradients - entirely absent. `LinearGradient` / `RadialGradient` / `ConicGradient` + `BackgroundGradient` / `BorderGradient` (`bevy_ui::gradients`). No gradient field exists in `protocol::Style`/`Props`. Headline 0.19 feature. @done(26-06-25 21:32)
-        ☐ Image 9-slice / tiled scaling - `imageMode` only maps `auto | stretch`; `NodeImageMode::Sliced(TextureSlicer)` (9-slice borders) and `Tiled { tile_x, tile_y, stretch_value }` unsupported. Also `ImageNode.rect` (source sub-rect / atlas region), `texture_atlas`, and `visual_box` not exposed.
+        ✔ Image 9-slice / tiled scaling - `imageMode` now accepts `{type:"sliced", border, centerScaleMode, sidesScaleMode, maxCornerScale}` (`NodeImageMode::Sliced(TextureSlicer)`) and `{type:"tiled", tileX, tileY, stretchValue}`, in addition to `auto | stretch`. @done(26-06-25)
+        ☐ Image source-rect / atlas - `ImageNode.rect` (source sub-rect / atlas region), `texture_atlas`, and `visual_box` still not exposed.
         ☐ `GlobalZIndex` - only local `ZIndex` is exposed; overlays-above-everything need Global (see `plugin.rs:372` comment).
         ☐ Per-side `borderColor` - currently `BorderColor::all()` (uniform); `bevy_ui::BorderColor` supports `top/right/bottom/left` individually.
         ✔ Text typography - `lineHeight`, `letterSpacing`, `TextShadow`, and line-break/wrap control (`TextLayout` linebreak) all unexposed. @done(26-06-25 19:46)

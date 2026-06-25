@@ -115,9 +115,10 @@ pub struct Props {
     /// Flip the image along its y-axis.
     #[serde(default)]
     pub flip_y: bool,
-    /// How the image fits its box: `"auto"` or `"stretch"`.
+    /// How the image fits its box: the keyword `"auto"`/`"stretch"`, or a
+    /// `type`-tagged object for 9-slice (`"sliced"`) / `"tiled"` scaling.
     #[serde(default)]
-    pub image_mode: Option<String>,
+    pub image_mode: Option<ImageMode>,
 
     // --- `canvas` element attribute ---
     /// The display list for a `canvas` element: an ordered batch of vector draw
@@ -516,6 +517,90 @@ pub enum GradientSpec {
 pub enum GradientList {
     One(GradientSpec),
     Many(Vec<GradientSpec>),
+}
+
+/// How an `image` fits its node. A bare string (`"auto"`/`"stretch"`) maps to the
+/// trivial `bevy_ui` modes; the `type`-tagged object forms map to bevy's 9-slice
+/// (`"sliced"`) and `"tiled"` scaling. Bevy-free; converted to `NodeImageMode` in
+/// `ui_map`.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(untagged)]
+pub enum ImageMode {
+    /// `"auto"` or `"stretch"` (any unknown keyword falls back to `Auto`).
+    Keyword(String),
+    Spec(ImageModeSpec),
+}
+
+/// The object forms of [`ImageMode`], discriminated by their `type` field.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(tag = "type", rename_all = "camelCase")]
+pub enum ImageModeSpec {
+    Sliced(SliceSpec),
+    Tiled(TiledSpec),
+}
+
+/// 9-slice scaling parameters, mirroring `bevy_sprite::TextureSlicer`.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SliceSpec {
+    /// Border insets, in *source-texture pixels*, dividing the texture into nine
+    /// sections.
+    #[serde(default)]
+    pub border: SliceBorder,
+    /// How the center section scales (default: stretch).
+    #[serde(default)]
+    pub center_scale_mode: Option<SliceScale>,
+    /// How the four side sections scale (default: stretch).
+    #[serde(default)]
+    pub sides_scale_mode: Option<SliceScale>,
+    /// Maximum scale of the four corner sections (bevy default `1.0`).
+    #[serde(default)]
+    pub max_corner_scale: Option<f32>,
+}
+
+/// 9-slice border insets: a single number (uniform) or per-side, in *source-texture
+/// pixels*.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(untagged)]
+pub enum SliceBorder {
+    /// No border supplied → zero insets.
+    #[default]
+    Zero,
+    /// The same inset along every edge.
+    Uniform(f32),
+    /// Per-edge insets.
+    Sides {
+        #[serde(default)]
+        top: f32,
+        #[serde(default)]
+        right: f32,
+        #[serde(default)]
+        bottom: f32,
+        #[serde(default)]
+        left: f32,
+    },
+}
+
+/// How a 9-slice section scales when resized: `"stretch"` (the keyword) or
+/// `{ tile }`, where `tile` is the repeat `stretch_value`.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(untagged)]
+pub enum SliceScale {
+    Keyword(String),
+    Tile { tile: f32 },
+}
+
+/// `"tiled"` scaling: the whole image repeats once stretched beyond `stretch_value`.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TiledSpec {
+    #[serde(default)]
+    pub tile_x: bool,
+    #[serde(default)]
+    pub tile_y: bool,
+    /// Repeat threshold (bevy default `1.0`).
+    #[serde(default)]
+    pub stretch_value: Option<f32>,
 }
 
 /// A static 2D transform mirroring the animated transform channels. Every field

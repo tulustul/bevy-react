@@ -111,6 +111,37 @@ export type Gradient =
       colorSpace?: ColorSpace;
     };
 
+/** How a 9-slice section scales when resized: `"stretch"`, or `{ tile }` where
+ *  `tile` is the repeat threshold (`stretch_value`). */
+export type ImageSliceScale = "stretch" | { tile: number };
+
+/** How an `<image>` fits its node. The string forms map to bevy's trivial modes;
+ *  the object forms map to bevy's 9-slice (`"sliced"`) / `"tiled"` scaling, letting
+ *  one asset (e.g. a frame/border) resize without distorting its corners. */
+export type ImageMode =
+  | "auto"
+  | "stretch"
+  | {
+      type: "sliced";
+      /** Border insets in *source-texture pixels*: a number (uniform) or per-side. */
+      border:
+        | number
+        | { top: number; right: number; bottom: number; left: number };
+      /** How the center section scales (default `"stretch"`). */
+      centerScaleMode?: ImageSliceScale;
+      /** How the four side sections scale (default `"stretch"`). */
+      sidesScaleMode?: ImageSliceScale;
+      /** Max scale of the four corner sections (default `1`). */
+      maxCornerScale?: number;
+    }
+  | {
+      type: "tiled";
+      tileX?: boolean;
+      tileY?: boolean;
+      /** Repeat threshold (default `1`). */
+      stretchValue?: number;
+    };
+
 /** Timing for one transition channel: a timing curve (default) or, if `stiffness`
  *  or `damping` is given, a spring. `duration`/`delay` are [`Time`]s — a bare
  *  number is **milliseconds**, or a unit string (`"0.2s"`). */
@@ -458,7 +489,7 @@ export interface BevyImageProps extends BevyAttributes {
   tint?: Color;
   flipX?: boolean;
   flipY?: boolean;
-  imageMode?: "auto" | "stretch";
+  imageMode?: ImageMode;
   onClick?: () => void;
 }
 

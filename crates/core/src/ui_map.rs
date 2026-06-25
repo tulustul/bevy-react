@@ -3,6 +3,7 @@
 //! components (background/border/outline/shadow/z-index), and `ImageNode`.
 
 use bevy::prelude::*;
+use bevy::sprite::{BorderRect, SliceScaleMode, TextureSlicer};
 use bevy::text::{FontSize as BevyFontSize, LetterSpacing, LineHeight};
 use bevy::ui::widget::NodeImageMode;
 use bevy_react_animations::build_ui_transform;
@@ -10,8 +11,8 @@ use bevy_react_animations::build_ui_transform;
 use crate::plugin::Fonts;
 use crate::protocol::{
     Angle, AngularStop, ConicGradientSpec, FontSize, GradientList, GradientSpec, GradientStop,
-    Length, LetterSpacingSpec, LineHeightSpec, LinearGradientSpec, Props, RadialGradientSpec,
-    RadialShapeSpec, Rect, Style,
+    ImageMode, ImageModeSpec, Length, LetterSpacingSpec, LineHeightSpec, LinearGradientSpec, Props,
+    RadialGradientSpec, RadialShapeSpec, Rect, SliceBorder, SliceScale, SliceSpec, Style,
 };
 
 /// Parse a CSS color string into a `Color`: hex, named colors, `transparent`, or
@@ -851,12 +852,52 @@ pub fn image_node(props: &Props, assets: &AssetServer) -> ImageNode {
     image.flip_x = props.flip_x;
     image.flip_y = props.flip_y;
     if let Some(mode) = &props.image_mode {
-        image.image_mode = match mode.as_str() {
-            "stretch" => NodeImageMode::Stretch,
-            _ => NodeImageMode::Auto,
+        image.image_mode = match mode {
+            ImageMode::Keyword(s) if s == "stretch" => NodeImageMode::Stretch,
+            ImageMode::Keyword(_) => NodeImageMode::Auto,
+            ImageMode::Spec(ImageModeSpec::Sliced(s)) => NodeImageMode::Sliced(slicer(s)),
+            ImageMode::Spec(ImageModeSpec::Tiled(t)) => NodeImageMode::Tiled {
+                tile_x: t.tile_x,
+                tile_y: t.tile_y,
+                stretch_value: t.stretch_value.unwrap_or(1.0),
+            },
         };
     }
     image
+}
+
+/// Build a `bevy_sprite::TextureSlicer` (9-slice config) from the wire [`SliceSpec`].
+fn slicer(spec: &SliceSpec) -> TextureSlicer {
+    let border = match spec.border {
+        SliceBorder::Zero => BorderRect::ZERO,
+        SliceBorder::Uniform(n) => BorderRect::all(n),
+        SliceBorder::Sides {
+            top,
+            right,
+            bottom,
+            left,
+        } => BorderRect {
+            min_inset: Vec2::new(left, top),
+            max_inset: Vec2::new(right, bottom),
+        },
+    };
+    TextureSlicer {
+        border,
+        center_scale_mode: slice_scale(&spec.center_scale_mode),
+        sides_scale_mode: slice_scale(&spec.sides_scale_mode),
+        max_corner_scale: spec.max_corner_scale.unwrap_or(1.0),
+    }
+}
+
+/// Map a wire [`SliceScale`] (`None`/`"stretch"` → stretch, `{ tile }` → tile) onto
+/// `bevy_sprite::SliceScaleMode`.
+fn slice_scale(mode: &Option<SliceScale>) -> SliceScaleMode {
+    match mode {
+        Some(SliceScale::Tile { tile }) => SliceScaleMode::Tile {
+            stretch_value: *tile,
+        },
+        _ => SliceScaleMode::Stretch,
+    }
 }
 
 fn font_weight(s: &str) -> FontWeight {
@@ -1067,6 +1108,102 @@ mod tests {
             c.alpha
         );
         assert!((c.red - 1.0).abs() < 1e-6, "tint hue preserved");
+    }
+
+    /// A `{ type: "sliced", … }` `imageMode` maps to `NodeImageMode::Sliced` with
+    /// the per-side border insets and tile scale modes carried through.
+    fn assets_app() -> App {
+        let mut app = App::new();
+        app.add_plugins((MinimalPlugins, AssetPlugin::default()));
+        app.init_asset::<Image>();
+        app
+    }
+
+    #[test]
+    fn image_mode_sliced_maps_to_texture_slicer() {
+        let app = assets_app();
+        let assets = app.world().resource::<AssetServer>();
+
+        let props: Props = serde_json::from_value(serde_json::json!({
+            "src": "modal.png",
+            "imageMode": {
+                "type": "sliced",
+                "border": { "top": 10.0, "right": 20.0, "bottom": 30.0, "left": 40.0 },
+                "sidesScaleMode": { "tile": 0.5 },
+                "maxCornerScale": 2.0,
+            },
+        }))
+        .unwrap();
+        let image = image_node(&props, assets);
+        match image.image_mode {
+            NodeImageMode::Sliced(s) => {
+                assert_eq!(s.border.min_inset, Vec2::new(40.0, 10.0));
+                assert_eq!(s.border.max_inset, Vec2::new(20.0, 30.0));
+                assert_eq!(s.max_corner_scale, 2.0);
+                assert_eq!(s.center_scale_mode, SliceScaleMode::Stretch);
+                assert_eq!(
+                    s.sides_scale_mode,
+                    SliceScaleMode::Tile { stretch_value: 0.5 }
+                );
+            }
+            other => panic!("expected Sliced, got {other:?}"),
+        }
+    }
+
+    /// A uniform-number border and a `"tiled"` mode both decode and map.
+    #[test]
+    fn image_mode_tiled_and_uniform_border() {
+        let app = assets_app();
+        let assets = app.world().resource::<AssetServer>();
+
+        let sliced: Props = serde_json::from_value(serde_json::json!({
+            "src": "modal.png",
+            "imageMode": { "type": "sliced", "border": 16.0 },
+        }))
+        .unwrap();
+        match image_node(&sliced, assets).image_mode {
+            NodeImageMode::Sliced(s) => assert_eq!(s.border, BorderRect::all(16.0)),
+            other => panic!("expected Sliced, got {other:?}"),
+        }
+
+        let tiled: Props = serde_json::from_value(serde_json::json!({
+            "src": "modal.png",
+            "imageMode": { "type": "tiled", "tileX": true, "stretchValue": 2.0 },
+        }))
+        .unwrap();
+        match image_node(&tiled, assets).image_mode {
+            NodeImageMode::Tiled {
+                tile_x,
+                tile_y,
+                stretch_value,
+            } => {
+                assert!(tile_x);
+                assert!(!tile_y);
+                assert_eq!(stretch_value, 2.0);
+            }
+            other => panic!("expected Tiled, got {other:?}"),
+        }
+    }
+
+    /// The bare-string `imageMode` keywords still decode (backward compatible).
+    #[test]
+    fn image_mode_keyword_backward_compatible() {
+        let app = assets_app();
+        let assets = app.world().resource::<AssetServer>();
+
+        let stretch: Props =
+            serde_json::from_value(serde_json::json!({ "imageMode": "stretch" })).unwrap();
+        assert!(matches!(
+            image_node(&stretch, assets).image_mode,
+            NodeImageMode::Stretch
+        ));
+
+        let auto: Props =
+            serde_json::from_value(serde_json::json!({ "imageMode": "auto" })).unwrap();
+        assert!(matches!(
+            image_node(&auto, assets).image_mode,
+            NodeImageMode::Auto
+        ));
     }
 
     fn style(json: serde_json::Value) -> Style {
