@@ -3,6 +3,7 @@ import { BevyStyle } from "bevy-react/jsx";
 import { bevy } from "@/bevy";
 import type { SceneId } from "@/bevy";
 import { Colors, FontSizes, Gradients } from "@/theme";
+import { Home } from "./demos/Home";
 import { ReactToBevyDemo } from "./demos/communication/ReactToBevyDemo";
 import { BevyToReactDemo } from "./demos/communication/BevyToReactDemo";
 import { BidirectionCommunicationDemo } from "./demos/communication/BidirectionCommunicationDemo";
@@ -53,6 +54,7 @@ type DemoItem = BaseDemoItem &
   );
 
 const DEMOS: DemoItem[] = [
+  { label: "Home", scene: "Surface", component: Home },
   {
     label: "Elements",
     expandedByDefault: true,
@@ -140,9 +142,7 @@ function findDemoByLabel(
 }
 
 export function App() {
-  const [selectedDemo, setSelectedDemo] = useState<DemoItem>(
-    DEMOS[0].children![0],
-  );
+  const [selectedDemo, setSelectedDemo] = useState<DemoItem>(DEMOS[0]);
 
   useEffect(() => {
     bevy.selectScene(selectedDemo.scene ?? null);
@@ -160,7 +160,7 @@ export function App() {
   return (
     <node style={rootStyle}>
       <node style={navStyle}>
-        <image src="bevy-logo.png" style={{ width: 100 }} />
+        <image src="bevy-react-logo.png" style={{ width: 150 }} />
         <text style={titleStyle}>bevy-react</text>
         <node style={itemsStyle}>
           {DEMOS.map((demo, index) => (

@@ -37,7 +37,7 @@ const buttonStyle: BevyStyle = {
   alignItems: "center",
   padding: { top: 8, right: 12, bottom: 8, left: 12 },
   borderRadius: 8,
-  backgroundColor: Colors.surface300,
+  backgroundColor: Colors.surface400,
   backgroundGradient: Gradients.surface,
   transition: {
     backgroundColor: { duration: 150 },

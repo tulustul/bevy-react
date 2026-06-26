@@ -53,11 +53,11 @@ export const Gradients = {
     Colors.sky100,
   ),
   // neutral surface lifts — unselected pills, generic buttons, code toggle
-  surface: linear(180, Colors.surface300, Colors.surface200),
-  surfaceHover: linear(180, Colors.surface500, Colors.surface400),
+  surface: linear(180, Colors.surface500, Colors.surface300),
+  surfaceHover: linear(180, Colors.surface500, Colors.surface600),
   // card / panel depth
   card: linear(160, Colors.surface200, Colors.surface100),
-  track: linear(180, Colors.surface400, Colors.surface500),
+  track: linear(180, Colors.surface300, Colors.surface400),
   // showy multi-hue border for cards (borderGradient)
   accentBorder: linear(135, Colors.primary300, Colors.sky100, Colors.purple100),
   // immersive nav backdrop: dark vertical base + faint primary glow at top

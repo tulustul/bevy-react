@@ -8,7 +8,7 @@ import { Colors, Gradients } from "@/theme";
 //   2. 9-slice scaling — a single `modal.png` frame whose ornate corners stay
 //      crisp while the edges stretch, resized live by width/height sliders.
 
-const FLIP_TSX = `<image src="bevy-logo.png" tint="#7aa2f7" flipX flipY />`;
+const FLIP_TSX = `<image src="bevy-react-logo.png" tint="#7aa2f7" flipX flipY />`;
 
 const SLICE_TSX = `<image
   src="modal.png"
@@ -44,13 +44,13 @@ function FlipControl() {
     <>
       <node style={{ flexDirection: "row", gap: 24, alignItems: "center" }}>
         <image
-          src="bevy-logo.png"
+          src="bevy-react-logo.png"
           style={logoStyle}
           flipX={flipX}
           flipY={flipY}
         />
         <image
-          src="bevy-logo.png"
+          src="bevy-react-logo.png"
           style={logoStyle}
           tint={Colors.primary100}
           flipX={flipX}
