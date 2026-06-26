@@ -8,9 +8,9 @@ use bevy_react_animations::{AnimationCommand, AnimationSet, ReactUiAnimationsPlu
 
 use crate::bridge::{JsBridge, OpReceiver, OutboundResource, OutboundSender};
 use crate::event::ReactEventRegistry;
-use crate::js_thread::spawn_js_thread;
+use crate::host::{self, HostConfig, HostSenders};
 use crate::message::{ReactMessage, ReactRegistry};
-use crate::protocol::{Op, Outbound};
+use crate::protocol::Op;
 use crate::reconcile::{
     apply_interaction_styles, apply_js_ops, apply_surface_interaction_styles,
     collect_pointer_events, collect_surface_clicks, collect_surface_pointer_events,
@@ -120,9 +120,10 @@ impl ReactUiPlugin {
 
 impl Plugin for ReactUiPlugin {
     fn build(&self, app: &mut App) {
-        // Channels: op batches, app messages, and requests flow JS -> Bevy; a single
-        // `Outbound` stream (UI events, app events, responses) and reload signals
-        // flow Bevy -> JS.
+        // Channels: op batches, app messages, requests, and animation commands flow
+        // JS -> Bevy (crossbeam, same on every target). The Bevy -> JS direction (a
+        // single `Outbound` stream plus, on native, reload signals) is owned by the
+        // target's host, which returns its sender below.
         // TODO(review): all of these are UNBOUNDED — there's no backpressure. A system that
         // `events.send`s every frame while the JS side consumes slowly (or not at all) grows
         // the outbound queue without bound. Consider bounded channels with an explicit
@@ -131,32 +132,24 @@ impl Plugin for ReactUiPlugin {
         let (emit_tx, emit_rx) = crossbeam_channel::unbounded::<ReactMessage>();
         let (request_tx, request_rx) = crossbeam_channel::unbounded::<RawRequest>();
         let (anim_tx, anim_rx) = crossbeam_channel::unbounded::<AnimationCommand>();
-        let (outbound_tx, outbound_rx) = tokio::sync::mpsc::unbounded_channel::<Outbound>();
-        let (reload_tx, reload_rx) = tokio::sync::mpsc::unbounded_channel::<()>();
 
-        // The build emits two files side by side: `vendor.js` (loaded once) and
-        // the app bundle (`self.bundle`, re-executed on each hot reload).
-        let vendor = self.bundle.with_file_name("vendor.js");
-        for (label, path) in [("app bundle", &self.bundle), ("vendor bundle", &vendor)] {
-            if !path.exists() {
-                panic!(
-                    "JS {label} not found at {}.\nBuild your app first (e.g. `npm run build`).",
-                    path.display()
-                );
-            }
-        }
-
-        // The JS thread only needs the channels — not the ECS — so it can start
-        // rendering immediately. Its first ops queue until `setup` builds the root.
-        spawn_js_thread(
-            vendor,
-            self.bundle.clone(),
-            ops_tx,
-            emit_tx,
-            request_tx,
-            anim_tx,
-            outbound_rx,
-            reload_rx,
+        // Spawn/install the target's JS host: native runs an embedded V8 isolate on
+        // a dedicated thread (fed from disk, with hot reload); web runs React in the
+        // browser's own engine. The host owns the Bevy->JS transport and returns the
+        // sender every outbound producer writes to. It starts before `setup` builds
+        // the root, so the first ops simply queue until then.
+        let outbound_tx = host::spawn(
+            app,
+            HostConfig {
+                bundle: self.bundle.clone(),
+                hot_reload: self.hot_reload,
+            },
+            HostSenders {
+                ops: ops_tx,
+                emit: emit_tx,
+                request: request_tx,
+                anim: anim_tx,
+            },
         );
 
         app.insert_resource(BridgeChannels {
@@ -257,19 +250,6 @@ impl Plugin for ReactUiPlugin {
             app.add_plugins(ReactUiAnimationsPlugin::new(anim_rx))
                 .configure_sets(Update, AnimationSet::Apply.after(apply_js_ops));
         }
-
-        if self.hot_reload {
-            app.insert_resource(BundleWatch {
-                path: self.bundle.clone(),
-                last_modified: file_mtime(&self.bundle),
-                timer: Timer::from_seconds(0.3, TimerMode::Repeating),
-                reload_tx,
-            })
-            .add_systems(Update, watch_bundle);
-        } else {
-            // Keep the sender alive so the JS thread doesn't see shutdown.
-            app.insert_resource(ReloadKeepAlive(reload_tx));
-        }
     }
 }
 
@@ -317,11 +297,6 @@ fn dispatch_react_messages(
         registry.dispatch(msg, &mut commands);
     }
 }
-
-/// Holds the reload sender when hot reload is disabled, so the JS thread's
-/// reload channel never observes "all senders dropped" (shutdown).
-#[derive(Resource)]
-struct ReloadKeepAlive(#[allow(dead_code)] tokio::sync::mpsc::UnboundedSender<()>);
 
 fn setup(
     mut commands: Commands,
@@ -385,31 +360,4 @@ fn setup(
 
     let ops_rx = channels.ops_rx.take().expect("setup runs once");
     commands.insert_resource(JsBridge::new(ops_rx, channels.outbound_tx.clone(), root));
-}
-
-/// Polls the built bundle's mtime and signals the JS thread to hot reload when
-/// it changes (e.g. after `esbuild --watch` rebuilds it).
-#[derive(Resource)]
-struct BundleWatch {
-    path: PathBuf,
-    last_modified: Option<std::time::SystemTime>,
-    timer: Timer,
-    reload_tx: tokio::sync::mpsc::UnboundedSender<()>,
-}
-
-fn watch_bundle(time: Res<Time>, mut watch: ResMut<BundleWatch>) {
-    watch.timer.tick(time.delta());
-    if !watch.timer.just_finished() {
-        return;
-    }
-    let current = file_mtime(&watch.path);
-    if current.is_some() && current != watch.last_modified {
-        watch.last_modified = current;
-        info!("bundle changed — hot reloading React app");
-        let _ = watch.reload_tx.send(());
-    }
-}
-
-fn file_mtime(path: &std::path::Path) -> Option<std::time::SystemTime> {
-    std::fs::metadata(path).and_then(|m| m.modified()).ok()
 }

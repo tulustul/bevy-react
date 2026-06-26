@@ -33,6 +33,15 @@ proc-macro2 = "1"
 quote = "1"
 syn = "2"
 
+# Web (wasm32) host dependencies — see `crates/core/src/host/web.rs`.
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+js-sys = "0.3"
+web-sys = "0.3"
+serde-wasm-bindgen = "0.6"
+console_error_panic_hook = "0.1"
+getrandom = "0.3"
+
 bevy-react-animations = { path = "crates/animations" }
 bevy-react-canvas = { path = "crates/canvas" }
 bevy-react-macros = { path = "crates/macros" }

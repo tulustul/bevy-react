@@ -12,7 +12,16 @@
 // family id. `performReactRefresh` then re-renders the affected fibers,
 // preserving hook state when a component's hook signature is unchanged.
 
-import * as RefreshRuntime from "react-refresh/runtime";
+// Type-only import (erased at build) so this module has NO top-level side effect
+// and esbuild can tree-shake the whole react-refresh chain out of production bundles
+// — the value is `require`d lazily inside `setupRefreshRuntime`, which only runs in
+// dev (see renderer.ts's `if (DEV)` gate). A static value import would otherwise run
+// react-refresh's production runtime, which throws on load.
+import type * as RefreshRuntime from "react-refresh/runtime";
+
+// esbuild resolves a literal `require(...)` when bundling; declared locally to avoid
+// pulling in `@types/node` (mirrors the `process` declaration in renderer.ts).
+declare function require(id: string): typeof RefreshRuntime;
 
 interface HmrApi {
   mounted: boolean;
@@ -36,20 +45,21 @@ export function setupRefreshRuntime(): HmrApi {
   };
   if (g.__hmr) return g.__hmr;
 
+  const Refresh = require("react-refresh/runtime");
   if (!installed) {
     installed = true;
-    RefreshRuntime.injectIntoGlobalHook(globalThis);
+    Refresh.injectIntoGlobalHook(globalThis);
   }
 
   const api: HmrApi = {
     mounted: false,
     reloadCount: 0,
-    register: (type, id) => RefreshRuntime.register(type, id),
-    sign: RefreshRuntime.createSignatureFunctionForTransform,
-    performReactRefresh: () => RefreshRuntime.performReactRefresh(),
+    register: (type, id) => Refresh.register(type, id),
+    sign: Refresh.createSignatureFunctionForTransform,
+    performReactRefresh: () => Refresh.performReactRefresh(),
     applyUpdate() {
       this.reloadCount++;
-      RefreshRuntime.performReactRefresh();
+      Refresh.performReactRefresh();
     },
   };
 

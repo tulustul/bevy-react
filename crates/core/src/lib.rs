@@ -26,6 +26,7 @@ extern crate self as bevy_react;
 mod anchor;
 mod bridge;
 mod event;
+mod host;
 mod message;
 mod plugin;
 mod reconcile;
@@ -35,6 +36,10 @@ mod transition;
 mod ts_codegen;
 mod ui_map;
 
+// The native JS host (embedded V8 / deno_core on a dedicated thread). Exposed for
+// advanced use (custom integrations, headless tests). The web target has no such
+// thread — React runs in the browser's own engine — so this module is absent there.
+#[cfg(not(target_arch = "wasm32"))]
 pub mod js_thread;
 pub mod protocol;
 

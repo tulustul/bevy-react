@@ -6,6 +6,9 @@
   "scripts": {
     "build": "node build.mjs",
     "build:prod": "node build.mjs --prod",
+    "build:web": "node build-web.mjs",
+    "build:web:prod": "node build-web.mjs --prod",
+    "deploy:web": "node build-web.mjs --prod --build-only && gh-pages -d dist --dotfiles --no-history -b gh-pages",
     "watch": "node build.mjs --watch",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "bevy:generate": "cargo run --manifest-path ../../../crates/core/Cargo.toml --example demos -- --export-bindings src/bevy.ts"
@@ -19,6 +22,7 @@
     "@swc/core": "1.10.1",
     "@types/react": "18.3.12",
     "esbuild": "0.24.0",
+    "gh-pages": "6.3.0",
     "react-refresh": "0.14.2",
     "typescript": "5.6.3"
   }

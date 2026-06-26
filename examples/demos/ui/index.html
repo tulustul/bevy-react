@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>bevy-react · demos (web)</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #14151a;
+        overflow: hidden;
+      }
+      canvas {
+        display: block;
+        outline: none;
+      }
+    </style>
+  </head>
+  <body>
+    <script type="module">
+      // Boot order matters. The wasm module's `init()` runs the example's `main()`,
+      // which builds the Bevy app and — inside ReactUiPlugin::build — installs
+      // `globalThis.__bevyHost`, then schedules Bevy's frame loop and returns.
+      import init from "./demos.js";
+      await init();
+
+      // Only now that `__bevyHost` exists do we load the React runtime + app.
+      // They are classic IIFE bundles (vendor.js sets `globalThis.__bevyVendor`,
+      // app.js consumes it); bridge.ts reads `__bevyHost` at evaluation time, so
+      // vendor.js must run after `init()` and before app.js.
+      await loadScript("./vendor.js");
+      await loadScript("./app.js");
+
+      function loadScript(src) {
+        return new Promise((resolve, reject) => {
+          const s = document.createElement("script");
+          s.src = src;
+          s.onload = resolve;
+          s.onerror = () => reject(new Error(`failed to load ${src}`));
+          document.body.appendChild(s);
+        });
+      }
+    </script>
+  </body>
+</html>

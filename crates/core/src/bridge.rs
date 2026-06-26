@@ -5,7 +5,6 @@ use bevy::platform::collections::{HashMap, HashSet};
 use bevy::prelude::*;
 use bevy::text::{LetterSpacing, LineHeight};
 use crossbeam_channel::Receiver;
-use tokio::sync::mpsc::UnboundedSender;
 
 use crate::protocol::{NodeId, Op, Outbound, Style};
 
@@ -16,9 +15,18 @@ pub type ResolvedTextStyle = (TextColor, TextFont, LineHeight, LetterSpacing);
 
 /// Carries batches of reconciler ops from the JS thread to Bevy.
 pub type OpReceiver = Receiver<Vec<Op>>;
-/// Carries everything Bevy sends to the JS thread — UI events, app events, and
+/// Carries everything Bevy sends to the JS side — UI events, app events, and
 /// request responses — over one channel (sync `send`, no runtime needed).
-pub type OutboundSender = UnboundedSender<Outbound>;
+///
+/// The transport differs by target. On native, the JS thread parks on an async
+/// recv, so this is a tokio `UnboundedSender`. On web there is no separate thread
+/// (React runs in the page's own engine), so a crossbeam `Sender` drained per
+/// frame is enough. Both expose the same `send(msg) -> Result<…>`, so every
+/// producer ([`event`](crate::event), [`request`](crate::request)) is target-agnostic.
+#[cfg(not(target_arch = "wasm32"))]
+pub type OutboundSender = tokio::sync::mpsc::UnboundedSender<Outbound>;
+#[cfg(target_arch = "wasm32")]
+pub type OutboundSender = crossbeam_channel::Sender<Outbound>;
 
 /// Component stamped on every entity the reconciler creates, recording the JS
 /// node id so interaction events can be reported back with the right identity.

@@ -54,8 +54,31 @@ ${VENDOR_KEYS.map((k, i) => `  ${JSON.stringify(k)}: _m${i},`).join("\n")}
     stdin: { contents: entry, resolveDir: cwd, loader: "ts" },
     outfile,
     jsx: "automatic",
+    // The vendor bundle includes the bevy-react runtime (→ hmr.ts → react-refresh);
+    // stub the dev-only refresh runtime out of production builds.
+    plugins: prod ? [reactRefreshStubPlugin] : [],
   };
 }
+
+// React Fast Refresh is dev-only. Its production runtime *throws on load*
+// ("should not be included in the production bundle"), and the only call site is
+// gated out of prod (renderer.ts's `if (DEV) setupRefreshRuntime()`). esbuild can't
+// fold that branch away (the `DEV` indirection defeats DCE), so in prod we replace
+// the module with an empty stub — never dereferenced, since the gated call never
+// runs — keeping the runtime out of the bundle entirely.
+const reactRefreshStubPlugin = {
+  name: "react-refresh-stub",
+  setup(build) {
+    build.onResolve({ filter: /^react-refresh\/runtime$/ }, (args) => ({
+      path: args.path,
+      namespace: "react-refresh-stub",
+    }));
+    build.onLoad({ filter: /.*/, namespace: "react-refresh-stub" }, () => ({
+      contents: "module.exports = {};",
+      loader: "js",
+    }));
+  },
+};
 
 // Resolve vendor specifiers to a stub that reads from the global map.
 const vendorGlobalPlugin = {

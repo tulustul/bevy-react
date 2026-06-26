@@ -5,18 +5,25 @@
 import { recordDrawing } from "./canvas";
 import type { CanvasPainter, DrawCmd } from "./canvas";
 
-// deno_core exposes registered ops under `Deno.core.ops`.
-declare const Deno: {
-  core: {
-    ops: {
-      op_flush(ops: Op[]): void;
-      op_emit(name: string, value: unknown): void;
-      op_request(id: bigint, name: string, value: unknown): void;
-      op_animate(cmd: AnimationCommand): void;
-      op_next_event(): Promise<Outbound | null>;
-    };
-  };
-};
+// The whole Rust<->JS op surface. The same bundle runs under two hosts:
+//   - Native: an embedded V8 isolate (deno_core) exposes these under `Deno.core.ops`.
+//   - Web: the Bevy wasm module installs the identical methods on
+//     `globalThis.__bevyHost` (backed by `#[wasm_bindgen]` exports) before this
+//     bundle runs.
+// Same names and signatures both ways, so everything below is host-agnostic.
+interface BevyHost {
+  op_flush(ops: Op[]): void;
+  op_emit(name: string, value: unknown): void;
+  op_request(id: bigint, name: string, value: unknown): void;
+  op_animate(cmd: AnimationCommand): void;
+  op_next_event(): Promise<Outbound | null>;
+}
+
+// Resolved at module load. On native `Deno.core.ops` is read; on web the injected
+// host short-circuits the `??`, so `Deno` (undefined in a browser) is never touched.
+declare const Deno: { core: { ops: BevyHost } };
+const ops: BevyHost =
+  (globalThis as { __bevyHost?: BevyHost }).__bevyHost ?? Deno.core.ops;
 
 // Mirrors `bevy_react_animations::protocol::AnimationCommand` (tag = "kind").
 export type AnimationCommand =
@@ -128,19 +135,19 @@ export function push(op: Op): void {
 // stale animated values don't linger.
 export function reset(): void {
   pending.push({ op: "reset" });
-  Deno.core.ops.op_animate({ kind: "clear" });
+  ops.op_animate({ kind: "clear" });
 }
 
 // Send an animation command to the animations plugin (declare/set/animate/
 // cancel/clear). Synchronous and fire-and-forget, like `emit`. Low-level — apps
 // use the `useSharedValue` / `with*` helpers from `./animated`.
 export function animate(cmd: AnimationCommand): void {
-  Deno.core.ops.op_animate(cmd);
+  ops.op_animate(cmd);
 }
 
 export function flush(): void {
   if (pending.length === 0) return;
-  Deno.core.ops.op_flush(pending.splice(0, pending.length));
+  ops.op_flush(pending.splice(0, pending.length));
 }
 
 // Send a named app message to the Bevy side. Surfaced there as a
@@ -150,7 +157,7 @@ export function flush(): void {
 // your Rust `#[react_message]` structs by `App::export_react_typescript` — it checks
 // the name and payload against the same structs Bevy deserializes into, and calls this.
 export function emit(name: string, value: unknown): void {
-  Deno.core.ops.op_emit(name, value);
+  ops.op_emit(name, value);
 }
 
 // --- React -> Bevy requests (awaitable) ---
@@ -171,7 +178,7 @@ export function request(name: string, value: unknown): Promise<unknown> {
   const id = nextRequestId++;
   return new Promise((resolve, reject) => {
     pendingRequests.set(id, { resolve, reject });
-    Deno.core.ops.op_request(BigInt(id), name, value);
+    ops.op_request(BigInt(id), name, value);
   });
 }
 
@@ -334,7 +341,7 @@ export async function runEventLoop(
   wrap: (fn: () => void) => void = (fn) => fn(),
 ): Promise<void> {
   for (;;) {
-    const msg = await Deno.core.ops.op_next_event();
+    const msg = await ops.op_next_event();
     if (msg == null) break; // shutdown
     switch (msg.t) {
       case "reload":

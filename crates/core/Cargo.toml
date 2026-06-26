@@ -30,11 +30,27 @@ bevy-react-macros = { workspace = true }
 bevy-react-portal = { workspace = true }
 bevy-react-surface = { workspace = true }
 crossbeam-channel = { workspace = true }
-deno_core = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-tokio = { workspace = true }
 ts-rs = { workspace = true }
+
+# Native host: the embedded V8 isolate (deno_core) on a dedicated thread, driven by
+# a tokio current-thread runtime. Neither builds for wasm.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+deno_core = { workspace = true }
+tokio = { workspace = true }
+
+# Web host: React runs in the browser's own engine, reached over wasm-bindgen.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = { workspace = true }
+wasm-bindgen-futures = { workspace = true }
+js-sys = { workspace = true }
+serde-wasm-bindgen = { workspace = true }
+web-sys = { workspace = true, features = ["console"] }
+console_error_panic_hook = { workspace = true }
+# Bevy/rand pull `getrandom`; on wasm it needs the browser backend enabled (the
+# `wasm_js` feature plus `--cfg getrandom_backend="wasm_js"`, set in .cargo/config.toml).
+getrandom = { workspace = true, features = ["wasm_js"] }
 
 [dev-dependencies]
 crossbeam-channel = { workspace = true }

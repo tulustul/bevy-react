@@ -2,7 +2,7 @@
 //! can grab with the mouse and zoom with the wheel, plus a directional light. All
 //! of it is bundled into [`CameraPlugin`].
 
-use bevy::input::mouse::{AccumulatedMouseMotion, AccumulatedMouseScroll};
+use bevy::input::mouse::{AccumulatedMouseMotion, AccumulatedMouseScroll, MouseScrollUnit};
 use bevy::post_process::bloom::Bloom;
 use bevy::prelude::*;
 use bevy::ui::IsDefaultUiCamera;
@@ -60,6 +60,9 @@ fn setup_camera_and_light(mut commands: Commands) {
 const ORBIT_SPEED: f32 = 0.3; // radians/sec of automatic orbit
 const MOUSE_SENS: f32 = 0.005; // mouse drag → radians
 const ZOOM_SENS: f32 = 1.5; // scroll notch → world units of distance
+/// Web wheel events arrive in pixels (~100 per notch) rather than the line units
+/// native sends (~1 per notch); divide pixel deltas by this so one notch ≈ one line.
+const PIXELS_PER_NOTCH: f32 = 100.0;
 const MIN_RADIUS: f32 = 4.0;
 const MAX_RADIUS: f32 = 40.0;
 /// Default orbit distance — close enough for the small scenes; the cube-field
@@ -117,8 +120,14 @@ fn orbit_camera(
         rig.yaw += ORBIT_SPEED * time.delta_secs();
     }
 
-    if scroll.delta.y != 0.0 && !captured {
-        rig.radius = (rig.radius - scroll.delta.y * ZOOM_SENS).clamp(MIN_RADIUS, MAX_RADIUS);
+    // Normalize the wheel delta to notches so zoom feels the same on native (line
+    // units) and web (pixel units) — otherwise a single web notch saturates the clamp.
+    let notches = match scroll.unit {
+        MouseScrollUnit::Line => scroll.delta.y,
+        MouseScrollUnit::Pixel => scroll.delta.y / PIXELS_PER_NOTCH,
+    };
+    if notches != 0.0 && !captured {
+        rig.radius = (rig.radius - notches * ZOOM_SENS).clamp(MIN_RADIUS, MAX_RADIUS);
     }
 
     let pos = Vec3::new(

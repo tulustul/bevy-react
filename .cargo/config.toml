@@ -1,0 +1,6 @@
+# Web build: select getrandom's browser backend for wasm. getrandom 0.3+ dropped
+# the old `js` feature in favor of this cfg (paired with the `wasm_js` feature
+# enabled on the dependency in crates/core/Cargo.toml). Native targets are
+# unaffected — this section only applies when building for wasm32-unknown-unknown.
+[target.wasm32-unknown-unknown]
+rustflags = ['--cfg', 'getrandom_backend="wasm_js"']
