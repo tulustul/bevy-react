@@ -7,6 +7,10 @@ purely declarative; Rust and Bevy do the heavy lifting. State and interactions f
 both ways between your Bevy app and React, and edits hot-reload live while keeping
 component state.
 
+You can play with a live demo here:
+
+https://tulustul.github.io/bevy-react/
+
 ![The bevy-react demos app: a React-driven left-nav over a live 3D Bevy scene, with a world-tracking "Bounces" panel anchored above a bouncing ball.](./screenshots/example-app.png)
 
 ```tsx
