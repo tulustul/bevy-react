@@ -75,6 +75,11 @@ pub struct JsBridge {
     pub text_styles: HashMap<NodeId, ResolvedTextStyle>,
     /// Node ids that are bare-string runs inheriting their parent's text style.
     pub raw_spans: HashSet<NodeId>,
+    /// Node ids whose text content lives in a `TextSpan` component (vs a `Text`),
+    /// so `Op::UpdateText` updates the right component. Superset of `raw_spans`:
+    /// it also covers nested/inline `<text>` spans, which carry their own style
+    /// and so must NOT inherit their parent's (hence are kept out of `raw_spans`).
+    pub text_spans: HashSet<NodeId>,
     /// Node ids that are `editableText` inputs, so an `Update` knows to push a
     /// diverging `value` into the live `EditableText` buffer.
     pub editable_inputs: HashSet<NodeId>,
@@ -102,7 +107,7 @@ pub struct JsBridge {
     pub surface_parent: HashMap<NodeId, NodeId>,
     pub child_surfaces: HashMap<NodeId, Vec<NodeId>>,
     // TODO(review): JsBridge now holds several parallel NodeId-keyed side-tables
-    // (nodes/text_styles/raw_spans/editable_*/child_order/parent_of), and every `Remove`
+    // (nodes/text_styles/raw_spans/text_spans/editable_*/child_order/parent_of), and every `Remove`
     // must remember to clear each one. Consider moving per-node metadata onto the entities
     // as components so `despawn` cleans up for free and the maps can't drift.
 }
@@ -118,6 +123,7 @@ impl JsBridge {
             nodes,
             text_styles: HashMap::new(),
             raw_spans: HashSet::new(),
+            text_spans: HashSet::new(),
             editable_inputs: HashSet::new(),
             surfaces: HashSet::new(),
             editable_values: HashMap::new(),

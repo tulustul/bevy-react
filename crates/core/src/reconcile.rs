@@ -125,6 +125,7 @@ pub fn apply_js_ops(
                 bridge.nodes.retain(|&id, _| id == ROOT_ID);
                 bridge.text_styles.clear();
                 bridge.raw_spans.clear();
+                bridge.text_spans.clear();
                 bridge.editable_inputs.clear();
                 bridge.surfaces.clear();
                 bridge.editable_values.clear();
@@ -263,6 +264,12 @@ pub fn apply_js_ops(
                         .text_styles
                         .insert(id, resolved_text_style(&props.style, &fonts));
                 }
+                // A `textSpan` carries its text in a `TextSpan` component, so a later
+                // `Op::UpdateText` must update that (not insert a stray `Text`). It is
+                // NOT a `raw_span`: nested `<text>` spans keep their own style.
+                if kind == "textSpan" {
+                    bridge.text_spans.insert(id);
+                }
                 if kind == "editableText" {
                     bridge.editable_inputs.insert(id);
                     bridge
@@ -286,6 +293,7 @@ pub fn apply_js_ops(
                 let entity = commands.spawn((TextSpan(text), RNode(id))).id();
                 bridge.nodes.insert(id, entity);
                 bridge.raw_spans.insert(id);
+                bridge.text_spans.insert(id);
             }
             Op::Append { parent, child } => {
                 // A `<surface>` is a detached UI root: never parent it into the
@@ -356,6 +364,7 @@ pub fn apply_js_ops(
                     bridge.nodes.remove(&s);
                     bridge.text_styles.remove(&s);
                     bridge.raw_spans.remove(&s);
+                    bridge.text_spans.remove(&s);
                     bridge.editable_inputs.remove(&s);
                     bridge.surfaces.remove(&s);
                     bridge.editable_values.remove(&s);
@@ -373,6 +382,7 @@ pub fn apply_js_ops(
                     bridge.nodes.remove(&child);
                     bridge.text_styles.remove(&child);
                     bridge.raw_spans.remove(&child);
+                    bridge.text_spans.remove(&child);
                     bridge.editable_inputs.remove(&child);
                     bridge.surfaces.remove(&child);
                     bridge.editable_values.remove(&child);
@@ -470,7 +480,7 @@ pub fn apply_js_ops(
                 if let Some(e) = resolve(&bridge, id) {
                     // A run is either a standalone `Text` or, inside a `<text>`, a
                     // `TextSpan` — update whichever this entity is.
-                    if bridge.raw_spans.contains(&id) {
+                    if bridge.text_spans.contains(&id) {
                         commands.entity(e).insert(TextSpan(text));
                     } else {
                         commands.entity(e).insert(Text::new(text));
@@ -1105,6 +1115,57 @@ mod tests {
                 .rotate,
             Some(PI),
             "a text re-render must refresh the transform target so it animates"
+        );
+    }
+
+    /// Regression: an inline-text nested `<text>` (a `textSpan` carrying its text
+    /// on the create op) must keep updating its `TextSpan` on `Op::UpdateText` — it
+    /// must never gain a stray `Text` component (which renders a duplicate, leaving
+    /// the old value visible alongside the new one).
+    #[test]
+    fn update_text_on_inline_span_keeps_textspan() {
+        let (mut app, ops_tx, _root) = ordering_app();
+
+        ops_tx
+            .send(vec![
+                // A `<text>` root with a nested inline `<text>{0}</text>` span.
+                Op::Create {
+                    id: 1,
+                    kind: "text".into(),
+                    props: Props::default(),
+                    text: None,
+                },
+                Op::Create {
+                    id: 2,
+                    kind: "textSpan".into(),
+                    props: Props::default(),
+                    text: Some("0".into()),
+                },
+                Op::Append {
+                    parent: 1,
+                    child: 2,
+                },
+            ])
+            .unwrap();
+        app.update();
+
+        ops_tx
+            .send(vec![Op::UpdateText {
+                id: 2,
+                text: "1".into(),
+            }])
+            .unwrap();
+        app.update();
+
+        let span = ent(&app, 2);
+        assert_eq!(
+            app.world().entity(span).get::<TextSpan>().map(|s| &*s.0),
+            Some("1"),
+            "the span's TextSpan must hold the updated text"
+        );
+        assert!(
+            app.world().entity(span).get::<Text>().is_none(),
+            "a span must never gain a Text component (that renders a duplicate)"
         );
     }
 
