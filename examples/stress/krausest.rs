@@ -376,6 +376,11 @@ fn start_step(
     events: &ReactEvents,
 ) {
     let op = driver.seq[driver.step];
+    // Announce each new iteration and each op as it runs.
+    if driver.step == 0 {
+        info!("── iteration {}/{} ──", driver.iter + 1, driver.iterations);
+    }
+    info!("  [{}/{}] {}", driver.step + 1, driver.seq.len(), op.key());
     driver.t0 = Some(Instant::now());
     driver.expected_applied = stats.applied_count;
     inbox.last = None;

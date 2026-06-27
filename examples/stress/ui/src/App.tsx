@@ -150,7 +150,12 @@ export function App() {
 
       <node style={tableStyle}>
         {rows.map((row) => (
-          <RowView key={row.id} row={row} />
+          <RowView
+            key={row.id}
+            row={row}
+            selected={selected}
+            onSelect={() => setSelected(row.id)}
+          />
         ))}
       </node>
     </node>
@@ -159,15 +164,20 @@ export function App() {
 
 interface RowProps {
   row: Row;
+  selected: number | null;
+  onSelect: () => void;
 }
 
 // Memoized so a list-wide re-render only re-renders the rows whose props actually
 // changed — the keyed-reconciliation behaviour the benchmark exercises.
-const RowView = memo(function RowView({ row }: RowProps) {
+const RowView = memo(function RowView({ row, selected, onSelect }: RowProps) {
   return (
-    <node>
+    <button
+      style={row.id === selected ? rowSelectedStyle : rowStyle}
+      onClick={onSelect}
+    >
       <text>{`${row.id} ${row.label}`}</text>
-    </node>
+    </button>
   );
 });
 
@@ -222,7 +232,7 @@ const readoutStyle: BevyStyle = {
 
 const tableStyle: BevyStyle = {
   flexDirection: "column",
-  gap: 12,
+  gap: 5,
   width: "100%",
   overflowY: "scroll",
 };
@@ -247,4 +257,13 @@ const btnTextStyle: BevyStyle = {
   color: TEXT,
   fontSize: 13,
   fontWeight: "bold",
+};
+
+const rowStyle: BevyStyle = {
+  padding: 5,
+};
+
+const rowSelectedStyle: BevyStyle = {
+  padding: 5,
+  backgroundColor: SURFACE,
 };
