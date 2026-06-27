@@ -93,6 +93,14 @@ pub struct JsBridge {
     /// Reverse lookup (child → its current parent) so a re-parent or reorder can detach
     /// the child from its old parent's ordered list before re-inserting it.
     pub parent_of: HashMap<NodeId, NodeId>,
+    /// React-tree parentage of `<surface>` detached roots: surface id → its React
+    /// parent id, plus the reverse (parent → its surface children). A surface is kept
+    /// OUT of `child_order`/`parent_of` (it's not a Bevy child, and counting it would
+    /// skew sibling insert indices), so its structural position lives here instead. This
+    /// lets `Op::Remove` of an *ancestor* despawn the detached surface — which Bevy's
+    /// recursive despawn can't reach, since the surface has no `ChildOf`.
+    pub surface_parent: HashMap<NodeId, NodeId>,
+    pub child_surfaces: HashMap<NodeId, Vec<NodeId>>,
     // TODO(review): JsBridge now holds several parallel NodeId-keyed side-tables
     // (nodes/text_styles/raw_spans/editable_*/child_order/parent_of), and every `Remove`
     // must remember to clear each one. Consider moving per-node metadata onto the entities
@@ -115,6 +123,53 @@ impl JsBridge {
             editable_values: HashMap::new(),
             child_order: HashMap::new(),
             parent_of: HashMap::new(),
+            surface_parent: HashMap::new(),
+            child_surfaces: HashMap::new(),
+        }
+    }
+
+    /// Record a `<surface>`'s React parent (detaching it from any previous one first),
+    /// so a later removal of an ancestor can find and despawn this detached root.
+    pub fn attach_surface(&mut self, surface: NodeId, parent: NodeId) {
+        self.detach_surface(surface);
+        self.surface_parent.insert(surface, parent);
+        self.child_surfaces.entry(parent).or_default().push(surface);
+    }
+
+    /// Unlink `surface` from its current React parent's surface list (if any). Called
+    /// before a re-`Append`/`Insert` (a reorder/re-parent) and on removal.
+    pub fn detach_surface(&mut self, surface: NodeId) {
+        if let Some(parent) = self.surface_parent.remove(&surface)
+            && let Some(list) = self.child_surfaces.get_mut(&parent)
+        {
+            list.retain(|&id| id != surface);
+        }
+    }
+
+    /// Every detached surface id structurally **under** `node` — its surface children,
+    /// recursively through normal descendants (`child_order`) and nested surfaces —
+    /// removing their parentage bookkeeping as it goes. Does NOT include `node` itself
+    /// (a surface removed directly is handled by its own `Remove`). Used so `Op::Remove`
+    /// despawns surfaces that Bevy's recursive despawn of `node` can't reach.
+    pub fn surfaces_under(&mut self, node: NodeId) -> Vec<NodeId> {
+        let mut out = Vec::new();
+        self.collect_surfaces(node, &mut out);
+        out
+    }
+
+    fn collect_surfaces(&mut self, node: NodeId, out: &mut Vec<NodeId>) {
+        if let Some(surfaces) = self.child_surfaces.remove(&node) {
+            for surface in surfaces {
+                self.surface_parent.remove(&surface);
+                out.push(surface);
+                // A surface can itself host nested surfaces.
+                self.collect_surfaces(surface, out);
+            }
+        }
+        if let Some(kids) = self.child_order.get(&node).cloned() {
+            for kid in kids {
+                self.collect_surfaces(kid, out);
+            }
         }
     }
 

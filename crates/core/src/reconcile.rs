@@ -79,6 +79,16 @@ pub fn apply_js_ops(
                         }
                     }
                 }
+                // Detached `<surface>` roots aren't under `root`, so the child-despawn
+                // above misses them. On a cold reload the old React tree is discarded
+                // without unmount lifecycle (no `detachDeletedInstance`), so despawn
+                // them here too — otherwise stale surface subtrees keep rendering into
+                // their texture.
+                for id in bridge.surfaces.iter() {
+                    if let Some(&e) = bridge.nodes.get(id) {
+                        commands.entity(e).despawn();
+                    }
+                }
                 bridge.nodes.retain(|&id, _| id == ROOT_ID);
                 bridge.text_styles.clear();
                 bridge.raw_spans.clear();
@@ -89,6 +99,8 @@ pub fn apply_js_ops(
                 // tree is fully rebuilt by the ops that follow.
                 bridge.child_order.clear();
                 bridge.parent_of.clear();
+                bridge.surface_parent.clear();
+                bridge.child_surfaces.clear();
             }
             Op::Create { id, kind, props } => {
                 let entity = match kind.as_str() {
@@ -237,8 +249,11 @@ pub fn apply_js_ops(
             Op::Append { parent, child } => {
                 // A `<surface>` is a detached UI root: never parent it into the
                 // on-screen hierarchy (it renders to its own offscreen camera). Its
-                // own children attach to it normally via their own Append ops.
+                // own children attach to it normally via their own Append ops. Record
+                // its React parent so removing an ancestor can despawn this detached
+                // root (Bevy's recursive despawn never reaches it).
                 if bridge.surfaces.contains(&child) {
+                    bridge.attach_surface(child, parent);
                     continue;
                 }
                 if let (Some(p), Some(c)) = (resolve(&bridge, parent), resolve(&bridge, child)) {
@@ -256,8 +271,10 @@ pub fn apply_js_ops(
                 child,
                 before,
             } => {
-                // A detached `<surface>` root is never parented (see `Op::Append`).
+                // A detached `<surface>` root is never parented (see `Op::Append`), but
+                // still record its React parent for ancestor-removal cleanup.
                 if bridge.surfaces.contains(&child) {
+                    bridge.attach_surface(child, parent);
                     continue;
                 }
                 // Ordered insertion: place `child` at `before`'s position. The live
@@ -280,6 +297,31 @@ pub fn apply_js_ops(
                 }
             }
             Op::Remove { parent: _, child } => {
+                // React emits `Remove` only for the subtree's top node, and Bevy
+                // despawns that node recursively — but a `<surface>` nested under it is a
+                // detached root (no `ChildOf`), so neither reaches it. Despawn every
+                // detached surface at/under `child` (incl. `child` itself if it is one)
+                // before the recursive despawn below; otherwise the orphaned surface
+                // keeps rendering its stale subtree into its (often shared) texture.
+                let mut surfaces = bridge.surfaces_under(child);
+                if bridge.surfaces.contains(&child) {
+                    bridge.detach_surface(child);
+                    surfaces.push(child);
+                }
+                for s in surfaces {
+                    if let Some(se) = resolve(&bridge, s) {
+                        commands.entity(se).despawn();
+                    }
+                    bridge.nodes.remove(&s);
+                    bridge.text_styles.remove(&s);
+                    bridge.raw_spans.remove(&s);
+                    bridge.editable_inputs.remove(&s);
+                    bridge.surfaces.remove(&s);
+                    bridge.editable_values.remove(&s);
+                    bridge.detach(s);
+                    bridge.forget_subtree(s);
+                }
+
                 if let Some(c) = resolve(&bridge, child) {
                     commands.entity(c).despawn();
                     // TODO(review): these single-node removals leak the *descendants* of a
@@ -1356,6 +1398,119 @@ mod tests {
         assert!(
             !app.world().entities().contains(overlay),
             "Op::Reset must despawn overlays reparented under the anchor layer"
+        );
+    }
+
+    /// `Op::Reset` must despawn detached `<surface>` roots. They aren't children of the
+    /// UI root (a surface renders to its own offscreen camera), so the root-children
+    /// despawn misses them; a cold reload would otherwise leak a stale surface subtree
+    /// that keeps rendering into the texture.
+    #[test]
+    fn reset_despawns_detached_surfaces() {
+        let (mut app, tx, _root) = ordering_app();
+
+        // Mount a `<surface>` under the root (it stays a detached root in Bevy).
+        tx.send(vec![
+            Op::Create {
+                id: 1,
+                kind: "surface".into(),
+                props: serde_json::from_value(serde_json::json!({ "target": "monitor" }))
+                    .expect("valid surface props"),
+            },
+            Op::Append {
+                parent: ROOT_ID,
+                child: 1,
+            },
+        ])
+        .unwrap();
+        app.update();
+        let surface = ent(&app, 1);
+        assert!(app.world().entities().contains(surface));
+
+        tx.send(vec![Op::Reset]).unwrap();
+        app.update();
+
+        assert!(
+            !app.world().entities().contains(surface),
+            "Op::Reset must despawn the detached surface root"
+        );
+        assert!(
+            app.world().resource::<JsBridge>().surfaces.is_empty(),
+            "Op::Reset must clear surface bookkeeping"
+        );
+    }
+
+    /// Removing an ancestor whose subtree *contains* a detached `<surface>` must despawn
+    /// the surface too. React emits `Remove` only for the subtree's top node, and the
+    /// surface is a detached root (no `ChildOf`), so neither React's op nor Bevy's
+    /// recursive despawn of the ancestor reaches it — `apply_js_ops` must find it via the
+    /// tracked React parentage. Regression: navigating away from the Home demo left its
+    /// `<surface name="monitor">` rendering into the shared monitor texture under the
+    /// `<surface>` demo. This reproduces the exact op stream React emits (verified: only
+    /// the wrapper gets a `Remove`, never the nested surface).
+    #[test]
+    fn remove_ancestor_despawns_nested_surface() {
+        let (mut app, tx, _root) = ordering_app();
+        // Mirror Home's shape: a wrapper `<node>` under the root, a `<surface>` nested
+        // inside it, and a normal node rendered inside the surface.
+        tx.send(vec![
+            create_node(1), // wrapper (Home's container)
+            Op::Create {
+                id: 2,
+                kind: "surface".into(),
+                props: serde_json::from_value(serde_json::json!({ "target": "monitor" }))
+                    .expect("valid surface props"),
+            },
+            create_node(3), // content rendered inside the surface
+            Op::Append {
+                parent: ROOT_ID,
+                child: 1,
+            },
+            Op::Append {
+                parent: 1,
+                child: 2,
+            }, // surface nested under the wrapper
+            Op::Append {
+                parent: 2,
+                child: 3,
+            }, // content inside the surface
+        ])
+        .unwrap();
+        app.update();
+        let wrapper = ent(&app, 1);
+        let surface = ent(&app, 2);
+        let inner = ent(&app, 3);
+        assert!(app.world().entities().contains(surface));
+
+        // React unmounts the wrapper: a single `Remove` for the top node only.
+        tx.send(vec![Op::Remove {
+            parent: ROOT_ID,
+            child: 1,
+        }])
+        .unwrap();
+        app.update();
+
+        assert!(
+            !app.world().entities().contains(wrapper),
+            "the removed wrapper is despawned"
+        );
+        assert!(
+            !app.world().entities().contains(surface),
+            "the detached <surface> nested under the removed wrapper must be despawned"
+        );
+        assert!(
+            !app.world().entities().contains(inner),
+            "the surface's own subtree is despawned with it"
+        );
+        let bridge = app.world().resource::<JsBridge>();
+        assert!(bridge.surfaces.is_empty(), "surface bookkeeping is cleared");
+        assert!(
+            !bridge.nodes.contains_key(&2),
+            "the surface node id is forgotten"
+        );
+        assert!(
+            bridge.child_surfaces.is_empty() && bridge.surface_parent.is_empty(),
+            "surface parentage maps are cleared"
         );
     }
 }
