@@ -2,11 +2,15 @@
 //! - [`apply_js_ops`] drains reconciler op batches and mutates the UI tree.
 //! - [`collect_ui_events`] reports interactions back to the JS thread.
 
+use accesskit::Role;
+use bevy::a11y::AccessibilityNode;
 use bevy::image::Image;
+use bevy::platform::collections::HashSet;
 use bevy::input_focus::tab_navigation::TabIndex;
+use bevy::input_focus::{AutoFocus, FocusGained, FocusLost};
 use bevy::picking::events::{Click, Drag, Out, Over, Pointer, Press, Release};
 use bevy::prelude::*;
-use bevy::text::{EditableText, TextCursorStyle, TextEdit, TextEditChange};
+use bevy::text::{EditableText, FontCx, LayoutCx, TextCursorStyle, TextEdit, TextEditChange};
 use bevy::ui::RelativeCursorPosition;
 use bevy::ui::widget::NodeImageMode;
 use bevy::ui::{ComputedNode, UiGlobalTransform};
@@ -16,7 +20,7 @@ use bevy_react_portal::{RPortal, blank_portal_image};
 use bevy_react_surface::{RSurface, SurfaceVirtualPointer};
 
 use crate::anchor::Anchored;
-use crate::bridge::{JsBridge, PointerHandlers, RNode, StyleVariants};
+use crate::bridge::{FocusState, JsBridge, PointerHandlers, RNode, StyleVariants};
 use crate::plugin::Fonts;
 use crate::protocol::{NodeId, Op, Outbound, Props, ROOT_ID, Style, UiEvent};
 use crate::ui_map::{
@@ -68,6 +72,7 @@ pub fn apply_js_ops(
     // infrastructure, not a reconciler node, so `Op::Reset` must preserve it.
     anchor_layer: Query<(), With<crate::anchor::AnchorLayer>>,
     mut editables: Query<&mut EditableText>,
+    mut a11y_nodes: Query<&mut AccessibilityNode>,
     // A `<text>` *root* carries a layout `Node`; a span (nested `<text>` or a
     // bare string) does not. Used on update to re-apply layout/visual/transform
     // style to roots only — spans must never get a `Node`.
@@ -129,6 +134,10 @@ pub fn apply_js_ops(
                 bridge.editable_inputs.clear();
                 bridge.surfaces.clear();
                 bridge.editable_values.clear();
+                bridge.editable_selections.clear();
+                bridge.editable_select_handlers.clear();
+                bridge.editable_focus_handlers.clear();
+                bridge.editable_pending_selection.clear();
                 // The root persists but its children were just despawned; the shadow
                 // tree is fully rebuilt by the ops that follow.
                 bridge.child_order.clear();
@@ -253,7 +262,17 @@ pub fn apply_js_ops(
                             // Focusable via click (the widget's picking observers)
                             // and Tab navigation.
                             TabIndex(0),
+                            // Announce as a text field to assistive tech; the live
+                            // value is kept in sync by `sync_editable_a11y`.
+                            AccessibilityNode(editable_a11y_node(&props)),
                         ));
+                        // `AutoFocus`'s `on_add` hook focuses the entity once mounted.
+                        if props.autofocus {
+                            ec.insert(AutoFocus);
+                        }
+                        // `focusStyle` (and any hover/press) — applied Bevy-side as
+                        // the field's focus/interaction state changes.
+                        apply_style_variants(&mut ec, &props);
                         apply_anchor(&mut ec, &props);
                         ec.id()
                     }
@@ -275,6 +294,8 @@ pub fn apply_js_ops(
                     bridge
                         .editable_values
                         .insert(id, props.value.clone().unwrap_or_default());
+                    register_editable_handlers(&mut bridge, id, &props);
+                    queue_pending_selection(&mut bridge, id, &props);
                 }
                 if kind == "surface" {
                     bridge.surfaces.insert(id);
@@ -368,6 +389,10 @@ pub fn apply_js_ops(
                     bridge.editable_inputs.remove(&s);
                     bridge.surfaces.remove(&s);
                     bridge.editable_values.remove(&s);
+                    bridge.editable_selections.remove(&s);
+                    bridge.editable_select_handlers.remove(&s);
+                    bridge.editable_focus_handlers.remove(&s);
+                    bridge.editable_pending_selection.remove(&s);
                     bridge.detach(s);
                     bridge.forget_subtree(s);
                 }
@@ -386,6 +411,10 @@ pub fn apply_js_ops(
                     bridge.editable_inputs.remove(&child);
                     bridge.surfaces.remove(&child);
                     bridge.editable_values.remove(&child);
+                    bridge.editable_selections.remove(&child);
+                    bridge.editable_select_handlers.remove(&child);
+                    bridge.editable_focus_handlers.remove(&child);
+                    bridge.editable_pending_selection.remove(&child);
                     // Unlink from the parent's ordered list, then drop the subtree from the
                     // shadow tree so it stays bounded.
                     bridge.detach(child);
@@ -439,7 +468,19 @@ pub fn apply_js_ops(
                         }
                         bridge.editable_values.insert(id, new_val.clone());
                     }
-                    apply_style(&mut commands.entity(e), &props.style);
+                    // Handler presence and the controlled selection can change on a
+                    // re-render; refresh them. The accessible label is kept live too.
+                    register_editable_handlers(&mut bridge, id, &props);
+                    queue_pending_selection(&mut bridge, id, &props);
+                    if let Ok(mut node) = a11y_nodes.get_mut(e) {
+                        match &props.aria_label {
+                            Some(label) => node.set_label(label.clone()),
+                            None => node.clear_label(),
+                        }
+                    }
+                    let mut ec = commands.entity(e);
+                    apply_style(&mut ec, &props.style);
+                    apply_style_variants(&mut ec, &props);
                 } else if bridge.surfaces.contains(&id) {
                     // A `<surface>` re-render: re-apply the (full-size-defaulted)
                     // style and rebind its name. It shares the `target` wire field
@@ -607,15 +648,26 @@ fn apply_anchor(ec: &mut EntityCommands, props: &Props) {
 /// `Interaction` untouched (a `button`'s, or a node already mid-hover) so we
 /// never reset its state on a re-render.
 fn apply_style_variants(ec: &mut EntityCommands, props: &Props) {
-    if props.hover_style.is_some() || props.press_style.is_some() {
+    if props.hover_style.is_some() || props.press_style.is_some() || props.focus_style.is_some() {
         ec.insert(StyleVariants {
             base: props.style.clone(),
             hover: props.hover_style.clone(),
             press: props.press_style.clone(),
+            focus: props.focus_style.clone(),
         });
-        ec.insert_if_new(Interaction::default());
+        // Hover/press are driven by `Interaction`; focus by `FocusState` (toggled
+        // by the focus observers). Add each only for the variants present.
+        if props.hover_style.is_some() || props.press_style.is_some() {
+            ec.insert_if_new(Interaction::default());
+        }
+        if props.focus_style.is_some() {
+            ec.insert_if_new(FocusState::default());
+        } else {
+            ec.remove::<FocusState>();
+        }
     } else {
         ec.remove::<StyleVariants>();
+        ec.remove::<FocusState>();
     }
 }
 
@@ -665,22 +717,64 @@ pub fn collect_ui_events(
                 event: UiEvent {
                     id: rnode.0,
                     kind: "click".to_string(),
-                    x: None,
-                    y: None,
-                    client_x: None,
-                    client_y: None,
-                    value: None,
+                    ..default()
                 },
             });
         }
     }
 }
 
-/// Report `editableText` value edits back to JS as `"change"` UI events. Bevy
-/// triggers [`TextEditChange`] after applying edits — but also on cursor moves and
-/// selection changes, so we dedup against the last value emitted for the node and
-/// only fire when the text actually changed. The matching React `onChange` is
-/// looked up by node id + `"change"` kind in the JS event-loop router.
+/// Build the accesskit node for an `editableText` from its props (role + label +
+/// initial value). The live value is kept current by [`sync_editable_a11y`].
+fn editable_a11y_node(props: &Props) -> accesskit::Node {
+    let role = if props.multiline {
+        Role::MultilineTextInput
+    } else {
+        Role::TextInput
+    };
+    let mut node = accesskit::Node::new(role);
+    if let Some(label) = &props.aria_label {
+        node.set_label(label.clone());
+    }
+    node.set_value(props.value.clone().unwrap_or_default());
+    node
+}
+
+/// Add or remove `id` from `set` to mirror a boolean prop.
+fn set_membership(set: &mut HashSet<NodeId>, id: NodeId, present: bool) {
+    if present {
+        set.insert(id);
+    } else {
+        set.remove(&id);
+    }
+}
+
+/// Record which optional `editableText` handlers are registered in JS, so the
+/// high-frequency `"select"`/`"focus"`/`"blur"` events are only emitted when
+/// something is listening. Called on create and on every controlled update.
+fn register_editable_handlers(bridge: &mut JsBridge, id: NodeId, props: &Props) {
+    set_membership(&mut bridge.editable_select_handlers, id, props.on_select);
+    set_membership(
+        &mut bridge.editable_focus_handlers,
+        id,
+        props.on_focus || props.on_blur,
+    );
+}
+
+/// Queue a controlled selection (byte offsets) for [`apply_pending_selections`],
+/// when both `selectionStart` and `selectionEnd` are supplied.
+fn queue_pending_selection(bridge: &mut JsBridge, id: NodeId, props: &Props) {
+    if let (Some(start), Some(end)) = (props.selection_start, props.selection_end) {
+        bridge.editable_pending_selection.insert(id, (start, end));
+    }
+}
+
+/// Report `editableText` edits back to JS. Bevy triggers [`TextEditChange`] after
+/// applying edits — but also on cursor/selection moves — so this single observer
+/// emits a `"change"` (deduped against the last value) when the text changed, and
+/// a `"select"` (deduped against the last selection, and only for nodes with an
+/// `onSelect` handler, since caret moves are frequent) when the selection moved.
+/// Each is routed by node id + kind in the JS event-loop router.
 pub fn on_text_edit_change(
     change: On<TextEditChange>,
     mut bridge: ResMut<JsBridge>,
@@ -689,23 +783,151 @@ pub fn on_text_edit_change(
     let Ok((editable, rnode)) = editables.get(change.event_target()) else {
         return;
     };
+    let id = rnode.0;
+    let composing = editable.is_composing();
+
     let value = editable.value().to_string();
-    if bridge.editable_values.get(&rnode.0) == Some(&value) {
-        return; // cursor/selection move, or an echo of a programmatic set
+    if bridge.editable_values.get(&id) != Some(&value) {
+        bridge.editable_values.insert(id, value.clone());
+        debug!("change -> reconciler node {id}");
+        let _ = bridge.outbound_tx.send(Outbound::UiEvent {
+            event: UiEvent {
+                id,
+                kind: "change".to_string(),
+                value: Some(value),
+                composing: Some(composing),
+                ..default()
+            },
+        });
     }
-    bridge.editable_values.insert(rnode.0, value.clone());
-    debug!("change -> reconciler node {}", rnode.0);
+
+    if bridge.editable_select_handlers.contains(&id) {
+        let sel = editable.editor().raw_selection();
+        let anchor = sel.anchor().index();
+        let focus = sel.focus().index();
+        if bridge.editable_selections.get(&id) != Some(&(anchor, focus)) {
+            // Pre-seeded by a programmatic select; this dedup suppresses that echo.
+            bridge.editable_selections.insert(id, (anchor, focus));
+            let direction = if anchor == focus {
+                "none"
+            } else if anchor < focus {
+                "forward"
+            } else {
+                "backward"
+            };
+            let _ = bridge.outbound_tx.send(Outbound::UiEvent {
+                event: UiEvent {
+                    id,
+                    kind: "select".to_string(),
+                    selection_start: Some(anchor.min(focus)),
+                    selection_end: Some(anchor.max(focus)),
+                    selection_direction: Some(direction.to_string()),
+                    composing: Some(composing),
+                    ..default()
+                },
+            });
+        }
+    }
+}
+
+/// Emit an `editableText`'s `"focus"` / `"blur"` events, and toggle the node's
+/// [`FocusState`] so a `focusStyle` is (un)applied by [`apply_interaction_styles`].
+/// `FocusGained`/`FocusLost` are `auto_propagate` (they bubble to parents), so we
+/// act on the originally focused entity (`ev.entity`). Event emission is gated to
+/// editables with an `onFocus`/`onBlur` handler; `FocusState` is general (no-op for
+/// nodes without it).
+pub fn on_focus_gained(
+    ev: On<FocusGained>,
+    bridge: ResMut<JsBridge>,
+    editables: Query<&RNode, With<EditableText>>,
+    mut focus_states: Query<&mut FocusState>,
+) {
+    set_focus_state(&mut focus_states, ev.entity, true);
+    emit_focus_event(&bridge, &editables, ev.entity, "focus");
+}
+
+/// See [`on_focus_gained`]; the blur counterpart.
+pub fn on_focus_lost(
+    ev: On<FocusLost>,
+    bridge: ResMut<JsBridge>,
+    editables: Query<&RNode, With<EditableText>>,
+    mut focus_states: Query<&mut FocusState>,
+) {
+    set_focus_state(&mut focus_states, ev.entity, false);
+    emit_focus_event(&bridge, &editables, ev.entity, "blur");
+}
+
+/// Set a node's [`FocusState`] (if it has one), nudging change-detection only when
+/// the value actually flips so `apply_interaction_styles` re-merges just on change.
+fn set_focus_state(focus_states: &mut Query<&mut FocusState>, entity: Entity, focused: bool) {
+    if let Ok(mut state) = focus_states.get_mut(entity)
+        && state.0 != focused
+    {
+        state.0 = focused;
+    }
+}
+
+fn emit_focus_event(
+    bridge: &JsBridge,
+    editables: &Query<&RNode, With<EditableText>>,
+    entity: Entity,
+    kind: &str,
+) {
+    let Ok(rnode) = editables.get(entity) else {
+        return;
+    };
+    if !bridge.editable_focus_handlers.contains(&rnode.0) {
+        return;
+    }
     let _ = bridge.outbound_tx.send(Outbound::UiEvent {
         event: UiEvent {
             id: rnode.0,
-            kind: "change".to_string(),
-            x: None,
-            y: None,
-            client_x: None,
-            client_y: None,
-            value: Some(value),
+            kind: kind.to_string(),
+            ..default()
         },
     });
+}
+
+/// Apply controlled selections queued by [`queue_pending_selection`] to the live
+/// `EditableText`. Runs after Bevy's text-edit pass so offsets resolve against the
+/// text applied this frame. Pre-writes the last-emitted selection so the
+/// `TextEditChange` this triggers doesn't echo back to JS as a `"select"`.
+pub fn apply_pending_selections(
+    mut bridge: ResMut<JsBridge>,
+    mut editables: Query<&mut EditableText>,
+    mut font_cx: ResMut<FontCx>,
+    mut layout_cx: ResMut<LayoutCx>,
+) {
+    if bridge.editable_pending_selection.is_empty() {
+        return;
+    }
+    let pending: Vec<(NodeId, (usize, usize))> =
+        bridge.editable_pending_selection.drain().collect();
+    for (id, (start, end)) in pending {
+        let Some(&entity) = bridge.nodes.get(&id) else {
+            continue;
+        };
+        let Ok(mut editable) = editables.get_mut(entity) else {
+            continue;
+        };
+        // Suppress the echoed `"select"` (anchor=start, focus=end after the write).
+        bridge.editable_selections.insert(id, (start, end));
+        editable
+            .editor_mut()
+            .driver(&mut font_cx.context, &mut layout_cx.0)
+            .select_byte_range(start, end);
+    }
+}
+
+/// Keep each `editableText`'s accessibility node's value in step with its text, so
+/// screen readers announce the current content. Label/role are set on spawn (and
+/// the label refreshed on update) in [`apply_js_ops`].
+pub fn sync_editable_a11y(
+    mut q: Query<(&EditableText, &mut AccessibilityNode), Changed<EditableText>>,
+) {
+    for (editable, mut node) in &mut q {
+        node.set_value(editable.value().to_string());
+    }
 }
 
 /// The node currently being dragged (an `onPointer*` element pressed with the
@@ -752,7 +974,7 @@ pub fn collect_pointer_events(
                 y: Some(pos.y),
                 client_x: Some(abs.x),
                 client_y: Some(abs.y),
-                value: None,
+                ..default()
             },
         });
     };
@@ -820,27 +1042,42 @@ fn normalized_01(rel: &RelativeCursorPosition) -> Option<Vec2> {
 }
 
 /// Re-apply the merged style for any element with [`StyleVariants`] whose
-/// `Interaction` changed (hover/press in or out) — or whose variants changed from
-/// a React re-render while still hovered. `None` → base, `Hovered` → base+hover,
-/// `Pressed` → base+hover+press. Runs entirely on the Bevy side: no round-trip to
-/// JS, no React re-render on mouse move.
+/// `Interaction` or `FocusState` changed (hover/press/focus in or out) — or whose
+/// variants changed from a React re-render. The interaction axis: `None` → base,
+/// `Hovered` → base+hover, `Pressed` → base+hover+press; then `focus` overlays last
+/// (so an explicit `focusStyle` wins on conflicting fields). Both `Interaction` and
+/// `FocusState` are optional — a focus-only `editableText` has no `Interaction`, and
+/// a hover-only node has no `FocusState`. Runs entirely on the Bevy side: no
+/// round-trip to JS, no React re-render on mouse move or focus change.
 #[allow(clippy::type_complexity)]
 pub fn apply_interaction_styles(
     mut commands: Commands,
     query: Query<
-        (Entity, &Interaction, &StyleVariants),
-        Or<(Changed<Interaction>, Changed<StyleVariants>)>,
+        (
+            Entity,
+            Option<&Interaction>,
+            Option<&FocusState>,
+            &StyleVariants,
+        ),
+        Or<(
+            Changed<Interaction>,
+            Changed<FocusState>,
+            Changed<StyleVariants>,
+        )>,
     >,
 ) {
-    for (entity, interaction, variants) in &query {
-        let style = match *interaction {
-            Interaction::Pressed => overlay_style(
+    for (entity, interaction, focus, variants) in &query {
+        let mut style = match interaction {
+            Some(Interaction::Pressed) => overlay_style(
                 &overlay_style(&variants.base, &variants.hover),
                 &variants.press,
             ),
-            Interaction::Hovered => overlay_style(&variants.base, &variants.hover),
-            Interaction::None => variants.base.clone(),
+            Some(Interaction::Hovered) => overlay_style(&variants.base, &variants.hover),
+            _ => variants.base.clone(),
         };
+        if focus.is_some_and(|f| f.0) {
+            style = overlay_style(&style, &variants.focus);
+        }
         apply_style(&mut commands.entity(entity), &style);
     }
 }
@@ -855,7 +1092,7 @@ fn send_ui_event(bridge: &JsBridge, id: NodeId, kind: &str, pos: Option<Vec2>, a
             y: pos.map(|p| p.y),
             client_x: abs.map(|a| a.x),
             client_y: abs.map(|a| a.y),
-            value: None,
+            ..default()
         },
     });
 }

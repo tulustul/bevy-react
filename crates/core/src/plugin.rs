@@ -12,9 +12,10 @@ use crate::host::{self, HostConfig, HostSenders};
 use crate::message::{ReactMessage, ReactRegistry};
 use crate::protocol::Op;
 use crate::reconcile::{
-    OpApplyStats, apply_interaction_styles, apply_js_ops, apply_surface_interaction_styles,
-    collect_pointer_events, collect_surface_clicks, collect_surface_pointer_events,
-    collect_ui_events, on_text_edit_change,
+    OpApplyStats, apply_interaction_styles, apply_js_ops, apply_pending_selections,
+    apply_surface_interaction_styles, collect_pointer_events, collect_surface_clicks,
+    collect_surface_pointer_events, collect_ui_events, on_focus_gained, on_focus_lost,
+    on_text_edit_change, sync_editable_a11y,
 };
 use crate::request::{RawRequest, ReactRequestRegistry, RequestReceiver, dispatch_react_requests};
 
@@ -238,9 +239,21 @@ impl Plugin for ReactUiPlugin {
             ),
         );
 
-        // `editableText` value edits arrive as Bevy's `TextEditChange` trigger; an
-        // observer turns each real change into an outbound `"change"` UI event.
+        // `editableText` edits arrive as Bevy's `TextEditChange` trigger; an observer
+        // turns real changes into `"change"` and selection moves into `"select"` UI
+        // events. Two more observers bridge focus gain/loss to `"focus"`/`"blur"`.
         app.add_observer(on_text_edit_change);
+        app.add_observer(on_focus_gained);
+        app.add_observer(on_focus_lost);
+
+        // Controlled-selection writes and the a11y value sync run after Bevy's
+        // text-edit pass (`EditableTextSystems`) so they see this frame's applied
+        // edits and resolve byte offsets against the current text.
+        app.add_systems(
+            PostUpdate,
+            (apply_pending_selections, sync_editable_a11y)
+                .after(bevy::text::EditableTextSystems),
+        );
 
         // The animations engine is a separate plugin (its crate can't depend on
         // this one). We add it and, as the only crate that sees both sides, order

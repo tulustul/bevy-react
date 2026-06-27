@@ -28,6 +28,7 @@ name = "stress"
 path = "../../examples/stress/main.rs"
 
 [dependencies]
+accesskit = { workspace = true }
 anyhow = { workspace = true }
 bevy = { workspace = true }
 bevy-react-animations = { workspace = true }

@@ -42,7 +42,15 @@ pub struct StyleVariants {
     pub base: Option<Style>,
     pub hover: Option<Style>,
     pub press: Option<Style>,
+    pub focus: Option<Style>,
 }
+
+/// Whether a node with a `focusStyle` [`StyleVariants::focus`] is currently
+/// focused. A *mutated* bool (never inserted/removed while the node lives) so the
+/// interaction-style system re-merges on `Changed<FocusState>` when focus toggles.
+/// Set by the focus observers; read by `apply_interaction_styles`.
+#[derive(Component, Debug, Clone, Copy, Default)]
+pub struct FocusState(pub bool);
 
 /// Records which pointer handlers a node declared in JS, so the drag-capture
 /// system knows whether to emit `pointerDown` / `pointerMove` / `pointerUp` for
@@ -90,6 +98,19 @@ pub struct JsBridge {
     /// The last text value emitted to JS for each `editableText`, used to dedup
     /// `TextEditChange` (which also fires on cursor moves) into real `"change"`s.
     pub editable_values: HashMap<NodeId, String>,
+    /// The last selection (anchor, focus) byte offsets emitted to JS per
+    /// `editableText`, used to dedup `"select"` events. Pre-seeded by a controlled
+    /// selection write so its echoed `TextEditChange` doesn't re-emit.
+    pub editable_selections: HashMap<NodeId, (usize, usize)>,
+    /// `editableText` ids with an `onSelect` handler. Selection moves are very
+    /// high-frequency, so `"select"` is only emitted for nodes in this set.
+    pub editable_select_handlers: HashSet<NodeId>,
+    /// `editableText` ids with an `onFocus`/`onBlur` handler — gates `"focus"`/
+    /// `"blur"` emission the same way.
+    pub editable_focus_handlers: HashSet<NodeId>,
+    /// Controlled selection (anchor, focus) byte offsets awaiting application to
+    /// the live `EditableText`, drained by `apply_pending_selections`.
+    pub editable_pending_selection: HashMap<NodeId, (usize, usize)>,
     /// Authoritative ordered children per parent (incl. `ROOT_ID`). Bevy's `Children`
     /// component can't be read mid-batch — `Commands` hierarchy ops are deferred to the
     /// next sync point — so this mirror is the source of truth for computing ordered
@@ -127,6 +148,10 @@ impl JsBridge {
             editable_inputs: HashSet::new(),
             surfaces: HashSet::new(),
             editable_values: HashMap::new(),
+            editable_selections: HashMap::new(),
+            editable_select_handlers: HashSet::new(),
+            editable_focus_handlers: HashSet::new(),
+            editable_pending_selection: HashMap::new(),
             child_order: HashMap::new(),
             parent_of: HashMap::new(),
             surface_parent: HashMap::new(),

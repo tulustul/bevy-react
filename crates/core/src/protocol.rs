@@ -80,6 +80,11 @@ pub struct Props {
     /// Style overlaid on `style` (and `hover_style`) while the element is pressed.
     #[serde(default)]
     pub press_style: Option<Style>,
+    /// Style overlaid on `style` while the element is focused (currently
+    /// `editableText`). Applied on the Bevy side from the node's focus state, so
+    /// focus styling needs no React round-trip.
+    #[serde(default)]
+    pub focus_style: Option<Style>,
     /// Whether this element has an `onClick` handler registered in JS.
     #[serde(default)]
     pub on_click: bool,
@@ -155,6 +160,29 @@ pub struct Props {
     /// Whether this element has an `onChange` handler registered in JS.
     #[serde(default)]
     pub on_change: bool,
+    /// Focus an `editableText` when it mounts (inserts `AutoFocus`).
+    #[serde(default)]
+    pub autofocus: bool,
+    /// Controlled selection anchor, a UTF-8 **byte** offset into the value.
+    /// When `selection_start`/`selection_end` diverge from the live selection
+    /// they're pushed into the widget (see [`crate::reconcile`]).
+    #[serde(default)]
+    pub selection_start: Option<usize>,
+    /// Controlled selection focus, a UTF-8 **byte** offset into the value.
+    #[serde(default)]
+    pub selection_end: Option<usize>,
+    /// Accessible name announced to assistive tech (sets the a11y node's label).
+    #[serde(default)]
+    pub aria_label: Option<String>,
+    /// Whether this element has an `onSelect` handler registered in JS.
+    #[serde(default)]
+    pub on_select: bool,
+    /// Whether this element has an `onFocus` handler registered in JS.
+    #[serde(default)]
+    pub on_focus: bool,
+    /// Whether this element has an `onBlur` handler registered in JS.
+    #[serde(default)]
+    pub on_blur: bool,
 }
 
 /// The `canvas` display-list command type. It lives in the `bevy-react-canvas`
@@ -1000,7 +1028,8 @@ impl<'de> Deserialize<'de> for Rect {
 pub struct UiEvent {
     pub id: NodeId,
     /// `"click"`, a pointer kind (`"pointerDown"` / `"pointerMove"` /
-    /// `"pointerUp"`), or `"change"` for an `editableText` value edit.
+    /// `"pointerUp"`), or one of an `editableText`'s `"change"` / `"select"` /
+    /// `"focus"` / `"blur"` events.
     pub kind: String,
     /// Cursor x within the node, normalized to `0..1` (left→right). Present only
     /// for pointer events; `None` for `"click"`.
@@ -1022,6 +1051,20 @@ pub struct UiEvent {
     /// The new text of an `editableText`. Present only for `"change"` events.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub value: Option<String>,
+    /// Selection anchor, a UTF-8 **byte** offset. Present only for `"select"`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub selection_start: Option<usize>,
+    /// Selection focus, a UTF-8 **byte** offset. Present only for `"select"`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub selection_end: Option<usize>,
+    /// `"forward"` (anchor ≤ focus), `"backward"`, or `"none"` (collapsed).
+    /// Present only for `"select"`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub selection_direction: Option<String>,
+    /// Whether an IME composition is in progress. Present on an `editableText`'s
+    /// `"change"` / `"select"` events.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub composing: Option<bool>,
 }
 
 /// Everything that flows Bevy -> JS over the single outbound channel. Internally
@@ -1062,7 +1105,10 @@ mod tests {
     #[test]
     fn deserializes_editable_text_create() {
         let json = r#"{"op":"create","id":7,"kind":"editableText","props":{
-            "value":"hi","maxLength":40,"multiline":true,"onChange":true}}"#;
+            "value":"hi","maxLength":40,"multiline":true,"onChange":true,
+            "autofocus":true,"selectionStart":0,"selectionEnd":2,
+            "ariaLabel":"Name","onSelect":true,"onFocus":true,"onBlur":true,
+            "focusStyle":{"borderColor":"white"}}}"#;
         match serde_json::from_str::<Op>(json).expect("valid op") {
             Op::Create { id, kind, props, .. } => {
                 assert_eq!(id, 7);
@@ -1071,6 +1117,14 @@ mod tests {
                 assert_eq!(props.max_length, Some(40));
                 assert!(props.multiline);
                 assert!(props.on_change);
+                assert!(props.autofocus);
+                assert_eq!(props.selection_start, Some(0));
+                assert_eq!(props.selection_end, Some(2));
+                assert_eq!(props.aria_label.as_deref(), Some("Name"));
+                assert!(props.on_select);
+                assert!(props.on_focus);
+                assert!(props.on_blur);
+                assert!(props.focus_style.is_some());
             }
             other => panic!("expected create, got {other:?}"),
         }

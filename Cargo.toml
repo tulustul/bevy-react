@@ -19,8 +19,9 @@ repository = "https://github.com/tulustul/bevy-react"
 homepage = "https://github.com/tulustul/bevy-react"
 
 [workspace.dependencies]
+accesskit = "0.24"
 anyhow = "1.0.102"
-bevy = "0.19"
+bevy = { version = "0.19", features = ["system_clipboard"] }
 crossbeam-channel = "0.5.15"
 deno_core = "0.404.0"
 serde = { version = "1.0.228", features = ["derive"] }

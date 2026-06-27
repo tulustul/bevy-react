@@ -139,11 +139,7 @@ fn bridge_round_trip() {
                 event: UiEvent {
                     id,
                     kind: "click".into(),
-                    x: None,
-                    y: None,
-                    client_x: None,
-                    client_y: None,
-                    value: None,
+                    ..Default::default()
                 },
             })
             .expect("JS thread gone before click");

@@ -500,6 +500,10 @@ export interface BevyImageProps extends BevyAttributes {
  *  `style`, like `<text>`. */
 export interface BevyEditableTextProps extends BevyAttributes {
   style?: BevyStyle;
+  /** Style overlaid on `style` while the field is focused. Applied on the Bevy
+   *  side from the field's focus state, so it needs no React `onFocus` round-trip
+   *  (the focus analogue of `hoverStyle`/`pressStyle`). */
+  focusStyle?: BevyStyle;
   /** The current text. Pushed into the field only when it differs from what the
    *  widget already holds, so it never disrupts the caret while typing. */
   value?: string;
@@ -509,4 +513,25 @@ export interface BevyEditableTextProps extends BevyAttributes {
   maxLength?: number;
   /** Allow newlines (multi-line input). Defaults to single-line. */
   multiline?: boolean;
+  /** Focus the field when it mounts. */
+  autofocus?: boolean;
+  /** Controlled selection anchor, a UTF-8 **byte** offset into `value`. Set
+   *  together with `selectionEnd` to move the caret/selection programmatically. */
+  selectionStart?: number;
+  /** Controlled selection focus, a UTF-8 **byte** offset into `value`. */
+  selectionEnd?: number;
+  /** Accessible name announced to assistive tech (the a11y node's label). */
+  ariaLabel?: string;
+  /** Fires when the selection or caret moves. Offsets are UTF-8 **byte**
+   *  positions (not UTF-16 like the DOM). `direction` is the anchor→focus order. */
+  onSelect?: (selection: {
+    selectionStart: number;
+    selectionEnd: number;
+    selectionDirection: "forward" | "backward" | "none";
+    composing: boolean;
+  }) => void;
+  /** Fires when the field gains focus. */
+  onFocus?: () => void;
+  /** Fires when the field loses focus. */
+  onBlur?: () => void;
 }

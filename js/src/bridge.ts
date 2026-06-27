@@ -70,6 +70,7 @@ export interface SerializedProps {
   style?: Record<string, unknown>;
   hoverStyle?: Record<string, unknown>;
   pressStyle?: Record<string, unknown>;
+  focusStyle?: Record<string, unknown>;
   // Animation bindings (an `Animated.node`'s `animatedStyle`), opaque like style;
   // decoded on the Rust side into `AnimatedBindings`.
   animated?: Record<string, unknown>;
@@ -100,6 +101,14 @@ export interface SerializedProps {
   maxLength?: number;
   multiline?: boolean;
   onChange?: boolean;
+  autofocus?: boolean;
+  // Controlled selection as UTF-8 byte offsets into `value`.
+  selectionStart?: number;
+  selectionEnd?: number;
+  ariaLabel?: string;
+  onSelect?: boolean;
+  onFocus?: boolean;
+  onBlur?: boolean;
 }
 
 export interface UiEvent {
@@ -115,6 +124,13 @@ export interface UiEvent {
   clientY?: number;
   // The new text. Present only for an `editableText`'s "change" event.
   value?: string;
+  // Selection as UTF-8 byte offsets. Present only for the "select" event.
+  selectionStart?: number;
+  selectionEnd?: number;
+  // "forward" | "backward" | "none". Present only for "select".
+  selectionDirection?: string;
+  // Whether an IME composition is in progress. Present on "change"/"select".
+  composing?: boolean;
 }
 
 // Ops accumulated during the current commit, flushed in resetAfterCommit.
@@ -240,6 +256,9 @@ const HANDLER_KINDS: Record<string, string> = {
   onPointerMove: "pointerMove",
   onPointerUp: "pointerUp",
   onChange: "change",
+  onSelect: "select",
+  onFocus: "focus",
+  onBlur: "blur",
 };
 
 // (Re)populate the id -> handlers map from `props`, or clear it when there are no
@@ -291,6 +310,18 @@ export function serializeProps(
       out.onChange = true;
       continue;
     }
+    if (key === "onSelect" && typeof value === "function") {
+      out.onSelect = true;
+      continue;
+    }
+    if (key === "onFocus" && typeof value === "function") {
+      out.onFocus = true;
+      continue;
+    }
+    if (key === "onBlur" && typeof value === "function") {
+      out.onBlur = true;
+      continue;
+    }
     if (key === "style" && value && typeof value === "object") {
       // Style is fully opaque: every CSS-like key (incl. backgroundColor, border,
       // grid, transition timings, …) rides across inside this object and is
@@ -306,6 +337,12 @@ export function serializeProps(
     }
     if (key === "pressStyle" && value && typeof value === "object") {
       out.pressStyle = value as Record<string, unknown>;
+      continue;
+    }
+    // `editableText`'s `focusStyle`, overlaid while the field is focused — applied
+    // on the Bevy side, no React focus state needed.
+    if (key === "focusStyle" && value && typeof value === "object") {
+      out.focusStyle = value as Record<string, unknown>;
       continue;
     }
     // An `Animated.node`'s `animatedStyle`: each property is bound to a shared
@@ -346,6 +383,10 @@ export function serializeProps(
     else if (key === "value") out.value = value as string;
     else if (key === "maxLength") out.maxLength = value as number;
     else if (key === "multiline") out.multiline = value as boolean;
+    else if (key === "autofocus") out.autofocus = value as boolean;
+    else if (key === "selectionStart") out.selectionStart = value as number;
+    else if (key === "selectionEnd") out.selectionEnd = value as number;
+    else if (key === "ariaLabel") out.ariaLabel = value as string;
   }
 
   registerHandlers(id, props);

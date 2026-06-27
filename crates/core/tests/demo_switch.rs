@@ -173,11 +173,7 @@ fn demo_switch_anchored_survives() {
                 event: UiEvent {
                     id,
                     kind: "click".into(),
-                    x: None,
-                    y: None,
-                    client_x: None,
-                    client_y: None,
-                    value: None,
+                    ..Default::default()
                 },
             })
             .expect("JS thread gone before click");
