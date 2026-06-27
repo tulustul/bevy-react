@@ -12,7 +12,7 @@ use crate::host::{self, HostConfig, HostSenders};
 use crate::message::{ReactMessage, ReactRegistry};
 use crate::protocol::Op;
 use crate::reconcile::{
-    apply_interaction_styles, apply_js_ops, apply_surface_interaction_styles,
+    OpApplyStats, apply_interaction_styles, apply_js_ops, apply_surface_interaction_styles,
     collect_pointer_events, collect_surface_clicks, collect_surface_pointer_events,
     collect_ui_events, on_text_edit_change,
 };
@@ -169,6 +169,7 @@ impl Plugin for ReactUiPlugin {
         .init_resource::<ReactRequestRegistry>()
         .init_resource::<ReactEventRegistry>()
         .init_resource::<PointerCapture>()
+        .init_resource::<OpApplyStats>()
         .init_resource::<Fonts>()
         // The offscreen render-target ("portal") registry and its shared blank
         // placeholder texture, created before the first portal can mount.

@@ -23,6 +23,35 @@ use crate::ui_map::{
     apply_style, apply_text_style, image_node, overlay_style, resolved_text_style, text_layout,
 };
 
+/// Live instrumentation of the [`apply_js_ops`] hot path. Updated once per frame
+/// that applies at least one reconciler op (empty frames leave it untouched), so
+/// a benchmark driver — or any consumer — can poll `applied_count` to detect
+/// "my flushed batch has landed" and read the timing of the most recent batch.
+///
+/// Note `last_translate` measures only the op→command *queuing* in
+/// [`apply_js_ops`]; the queued `Commands` (entity spawn / component insert /
+/// hierarchy) execute later at a sync point, and `bevy_ui` layout later still —
+/// neither is included here. `last_apply_end` is exposed so a downstream timer
+/// can bracket those phases (e.g. up to `UiSystems::Layout`).
+///
+/// Timings are wall-clock, measured on native only; on web they stay zero/`None`
+/// (`std::time::Instant` is unavailable on wasm).
+#[derive(Resource, Default, Debug, Clone, Copy)]
+pub struct OpApplyStats {
+    /// Count of non-empty op batches applied since startup (one increment per
+    /// frame that applied at least one op).
+    pub applied_count: u64,
+    /// Number of ops in the most recently applied batch.
+    pub last_ops: usize,
+    /// Time spent translating the most recent batch into ECS commands — the
+    /// [`apply_js_ops`] body only. Excludes command execution and layout.
+    pub last_translate: std::time::Duration,
+    /// The instant [`apply_js_ops`] finished queuing the most recent batch
+    /// (native only). A later system can subtract this from a post-layout instant
+    /// to time command execution + layout.
+    pub last_apply_end: Option<std::time::Instant>,
+}
+
 /// Apply every queued reconciler op to the ECS. Runs in `Update`; ops simply
 /// queue in the channel until this drains them, so startup ordering is a
 /// non-issue.
@@ -43,6 +72,7 @@ pub fn apply_js_ops(
     // bare string) does not. Used on update to re-apply layout/visual/transform
     // style to roots only — spans must never get a `Node`.
     text_roots: Query<(), With<Node>>,
+    mut stats: ResMut<OpApplyStats>,
 ) {
     // Drain all pending batches first so we don't hold an immutable borrow of
     // `bridge` while mutating `bridge.nodes` below.
@@ -53,7 +83,10 @@ pub fn apply_js_ops(
     if ops.is_empty() {
         return;
     }
-    debug!("applying {} reconciler op(s)", ops.len());
+    let op_count = ops.len();
+    #[cfg(not(target_arch = "wasm32"))]
+    let started = std::time::Instant::now();
+    debug!("applying {op_count} reconciler op(s)");
 
     for op in ops {
         match op {
@@ -437,6 +470,16 @@ pub fn apply_js_ops(
                 }
             }
         }
+    }
+
+    // Record this batch for live instrumentation (see [`OpApplyStats`]).
+    stats.applied_count = stats.applied_count.wrapping_add(1);
+    stats.last_ops = op_count;
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let end = std::time::Instant::now();
+        stats.last_translate = end.duration_since(started);
+        stats.last_apply_end = Some(end);
     }
 }
 
@@ -1008,6 +1051,7 @@ mod tests {
         app.add_plugins((MinimalPlugins, AssetPlugin::default()));
         app.init_asset::<Image>();
         app.init_resource::<Fonts>();
+        app.init_resource::<OpApplyStats>();
 
         let (ops_tx, ops_rx) = crossbeam_channel::unbounded::<Vec<Op>>();
         // Keep the outbound receiver alive so the sender stays open.
@@ -1064,6 +1108,7 @@ mod tests {
         app.add_plugins((MinimalPlugins, AssetPlugin::default()));
         app.init_asset::<Image>();
         app.init_resource::<Fonts>();
+        app.init_resource::<OpApplyStats>();
         let (ops_tx, ops_rx) = crossbeam_channel::unbounded::<Vec<Op>>();
         let (out_tx, _out_rx) = tokio::sync::mpsc::unbounded_channel::<Outbound>();
         let root = app.world_mut().spawn_empty().id();

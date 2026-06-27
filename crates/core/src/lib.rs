@@ -58,4 +58,5 @@ pub use bevy_react_surface::{
 pub use event::{ReactEvent, ReactEvents};
 pub use message::{ReactAppExt, ReactMessage, ReactPayload};
 pub use plugin::{Fonts, PointerCapture, PointerCaptureSet, ReactUiPlugin};
+pub use reconcile::OpApplyStats;
 pub use request::{RawRequest, ReactRequest, Request, RequestEvent, Responder};

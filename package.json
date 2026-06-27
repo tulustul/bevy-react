@@ -3,7 +3,8 @@
   "private": true,
   "workspaces": [
     "js",
-    "examples/demos/ui"
+    "examples/demos/ui",
+    "examples/stress/ui"
   ],
   "scripts": {
     "lint": "eslint . && npm run typecheck && npm run lint:rust",

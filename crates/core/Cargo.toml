@@ -21,6 +21,12 @@ path = "src/lib.rs"
 name = "demos"
 path = "../../examples/demos/main.rs"
 
+# The benchmark / stress-test runner (see `examples/stress/`), declared explicitly
+# for the same reason as `demos` (it lives at the repo root).
+[[example]]
+name = "stress"
+path = "../../examples/stress/main.rs"
+
 [dependencies]
 anyhow = { workspace = true }
 bevy = { workspace = true }

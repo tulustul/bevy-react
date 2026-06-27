@@ -1,6 +1,8 @@
 /target
 
-
 # JS
 node_modules/
 examples/demos/ui/dist/
+examples/stress/ui/dist/
+
+benchmark_results

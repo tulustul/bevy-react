@@ -145,9 +145,27 @@ export function animate(cmd: AnimationCommand): void {
   ops.op_animate(cmd);
 }
 
+// Wall clock for instrumentation (the embedded isolate may lack `performance`).
+const nowMs: () => number =
+  typeof performance !== "undefined" && typeof performance.now === "function"
+    ? () => performance.now()
+    : () => Date.now();
+
 export function flush(): void {
   if (pending.length === 0) return;
-  ops.op_flush(pending.splice(0, pending.length));
+  const batch = pending.splice(0, pending.length);
+  // Instrumentation: time the native op_flush call. deno_core deserializes the
+  // arg (serde_v8: v8 -> Vec<Op>) synchronously as part of this call, so this
+  // captures serde-decode + the (near-free) channel send. Stashed on a global so
+  // a benchmark host can read the last commit's boundary cost.
+  const t0 = nowMs();
+  ops.op_flush(batch);
+  (
+    globalThis as { __bevyReactFlush?: { ms: number; ops: number } }
+  ).__bevyReactFlush = {
+    ms: nowMs() - t0,
+    ops: batch.length,
+  };
 }
 
 // Send a named app message to the Bevy side. Surfaced there as a
