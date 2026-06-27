@@ -5,14 +5,18 @@
 // A legacy root would re-enter the reconciler's sync-callback path on async
 // `setState` (e.g. a request continuation) and throw React #327.
 
-import type { ReactNode } from "react";
+import { createContext, type ReactNode } from "react";
 import Reconciler from "react-reconciler";
-import { DefaultEventPriority } from "react-reconciler/constants";
+import {
+  DefaultEventPriority,
+  NoEventPriority,
+} from "react-reconciler/constants";
 import {
   allocId,
   dropHandlers,
   flush,
   push,
+  registerHandlers,
   ROOT_ID,
   serializeProps,
 } from "./bridge";
@@ -42,18 +46,48 @@ interface HostContext {
   inText: boolean;
 }
 
-// Shallow reference-compare two prop bags, ignoring `children`. Used to tell a
-// text-only `<text>` update from one that also changed style/handlers; app style
-// objects are stable module consts, so a text-only change compares equal.
-function propsChangedExceptChildren(
+const HANDLER_PROP_KEYS = new Set([
+  "onClick",
+  "onPointerDown",
+  "onPointerMove",
+  "onPointerUp",
+  "onChange",
+]);
+
+// True when a Bevy-visible prop changed between renders. Skips `children` (inline
+// text is handled separately) and compares event handlers by *presence* — their
+// closures change identity every render but that needs no backend op. Everything
+// else (style/hover/press/animated/anchor + scalar attrs) compares by `Object.is`:
+// style objects compare by reference, so hoist them to module consts to stay equal
+// (an inline style object is conservatively treated as changed). Mirrors react-dom's
+// `diffProperties`; lets `commitUpdate` skip emitting no-op `update` ops.
+function bevyPropsChanged(
   a: Record<string, unknown>,
   b: Record<string, unknown>,
 ): boolean {
-  for (const k in a)
-    if (k !== "children" && !Object.is(a[k], b[k])) return true;
-  for (const k in b) if (k !== "children" && !(k in a)) return true;
+  for (const k in a) {
+    if (k === "children") continue;
+    if (HANDLER_PROP_KEYS.has(k)) {
+      if ((typeof a[k] === "function") !== (typeof b[k] === "function"))
+        return true;
+    } else if (!Object.is(a[k], b[k])) return true;
+  }
+  for (const k in b) {
+    if (k === "children" || k in a) continue;
+    if (HANDLER_PROP_KEYS.has(k)) {
+      if (typeof b[k] === "function") return true;
+    } else if (b[k] !== undefined) return true;
+  }
   return false;
 }
+
+// react-reconciler 0.33 tracks an "update priority" via the host config; back it
+// with a module var (NoEventPriority until React sets one).
+let currentUpdatePriority: number = NoEventPriority;
+
+// React 19 expects a host transition context object (used for form/transition
+// features we don't use); a plain context satisfies it.
+const HostTransitionContext = createContext<unknown>(null);
 
 // Most host-config callbacks are intentionally trivial for a UI-only renderer.
 // TODO(review): `hostConfig: any` drops type-checking on the most protocol-critical
@@ -78,7 +112,30 @@ const hostConfig: any = {
   prepareForCommit: () => null,
   resetAfterCommit: () => flush(),
   preparePortalMount: () => {},
-  getCurrentEventPriority: () => DefaultEventPriority,
+
+  // --- react-reconciler 0.33 host requirements (replaces getCurrentEventPriority) ---
+  getCurrentUpdatePriority: () => currentUpdatePriority,
+  setCurrentUpdatePriority: (priority: number) => {
+    currentUpdatePriority = priority;
+  },
+  resolveUpdatePriority: () =>
+    currentUpdatePriority !== NoEventPriority
+      ? currentUpdatePriority
+      : DefaultEventPriority,
+  resolveEventType: () => null,
+  resolveEventTimeStamp: () => -1,
+  NotPendingTransition: null,
+  HostTransitionContext,
+  resetFormInstance: () => {},
+  requestPostPaintCallback: () => {},
+  shouldAttemptEagerTransition: () => false,
+  trackSchedulerEvent: () => {},
+  // No async/suspense loading for host instances — commits never suspend here.
+  maySuspendCommit: () => false,
+  preloadInstance: () => true,
+  startSuspendingCommit: () => {},
+  suspendInstance: () => {},
+  waitForCommitToBeReady: () => null,
 
   // A `<text>` whose only child is a string/number renders that text directly
   // (no separate child text entity) — the React/DOM `shouldSetTextContent` fast
@@ -176,46 +233,35 @@ const hostConfig: any = {
     dropHandlers(child.id);
   },
 
-  // We return the new props as the payload so commitUpdate always runs.
-  // TODO(review): no prop diffing — `prepareUpdate` always returns `next`, so every
-  // update re-serializes and re-applies the FULL prop set (and the Bevy side re-inserts
-  // `Node`, forcing relayout — see ui_map::apply_style). Diff old vs next here (or carry a
-  // changed-keys set) so a one-field change doesn't re-apply everything.
-  prepareUpdate: (_i: Instance, _t: string, _old: unknown, next: unknown) =>
-    next,
-
+  // react-reconciler 0.33 removed `prepareUpdate`; `commitUpdate` now receives both
+  // prop bags and owns the diff. Emit an `update` op only when a Bevy-visible prop
+  // changed; otherwise just refresh the JS-side handler closures (no backend op, no
+  // relayout). `children` is excluded — inline `<text>` content is emitted separately.
   commitUpdate(
     instance: Instance,
-    _payload: unknown,
     type: string,
     oldProps: Record<string, unknown>,
     newProps: Record<string, unknown>,
+    _internalHandle: unknown,
   ) {
     const id = instance.id;
-    const newChild = newProps.children;
-    // An inline-text `<text>`: its string child rides as `text`, not a child node,
-    // so its change arrives here (not via commitTextUpdate). Emit a cheap
-    // `updateText` for a text-only change so it doesn't trigger a full style
-    // re-apply + relayout; only re-serialize props if a non-children prop changed.
-    if (
-      type === "text" &&
-      (typeof newChild === "string" || typeof newChild === "number")
-    ) {
-      const oldChild = oldProps.children;
-      const newText = String(newChild);
-      const oldText =
-        typeof oldChild === "string" || typeof oldChild === "number"
-          ? String(oldChild)
-          : undefined;
-      if (propsChangedExceptChildren(oldProps, newProps)) {
-        push({ op: "update", id, props: serializeProps(id, newProps) });
-      }
-      if (newText !== oldText) {
-        push({ op: "updateText", id, text: newText });
-      }
-      return;
+    if (bevyPropsChanged(oldProps, newProps)) {
+      push({ op: "update", id, props: serializeProps(id, newProps) });
+    } else {
+      registerHandlers(id, newProps);
     }
-    push({ op: "update", id, props: serializeProps(id, newProps) });
+    // Inline-text `<text>` (shouldSetTextContent): its string child rides as `text`,
+    // so its change arrives here (not via commitTextUpdate).
+    const c = newProps.children;
+    if (type === "text" && (typeof c === "string" || typeof c === "number")) {
+      const oc = oldProps.children;
+      const newText = String(c);
+      const oldText =
+        typeof oc === "string" || typeof oc === "number"
+          ? String(oc)
+          : undefined;
+      if (newText !== oldText) push({ op: "updateText", id, text: newText });
+    }
   },
 
   commitTextUpdate(textInstance: TextInstance, _old: string, next: string) {
@@ -248,7 +294,7 @@ const reconciler = Reconciler(hostConfig);
 if (DEV) {
   reconciler.injectIntoDevTools({
     bundleType: 1,
-    version: "18.3.1",
+    version: "19.2.7",
     rendererPackageName: "bevy-react",
     findFiberByHostInstance: () => null,
   });
@@ -256,7 +302,9 @@ if (DEV) {
 
 /** Run `fn` and synchronously commit any state updates it triggers. */
 export function flushSync(fn: () => void): void {
-  reconciler.flushSync(fn);
+  // react-reconciler 0.33 renamed the instance method `flushSync` →
+  // `flushSyncFromReconciler`.
+  reconciler.flushSyncFromReconciler(fn);
 }
 
 const ConcurrentRoot = 1;
@@ -275,6 +323,7 @@ export function render(element: ReactNode): void {
     // commit to sync (a legacy root + the documented #327 workaround) or actually use
     // concurrency; the current middle ground pays for a feature it doesn't use.
     const container: Container = { id: ROOT_ID };
+    const onError = (e: unknown) => console.error("[js] react error:", e);
     root = reconciler.createContainer(
       container,
       ConcurrentRoot,
@@ -282,13 +331,15 @@ export function render(element: ReactNode): void {
       false, // isStrictMode
       null, // concurrentUpdatesByDefaultOverride
       "", // identifierPrefix
-      (e: unknown) => console.error("[js] recoverable error:", e),
-      null, // transitionCallbacks
+      onError, // onUncaughtError
+      onError, // onCaughtError
+      onError, // onRecoverableError
+      () => {}, // onDefaultTransitionIndicator
     );
   }
   // Commit the initial mount synchronously: a concurrent root schedules the first
   // render asynchronously otherwise, delaying the initial op flush.
-  reconciler.flushSync(() => {
+  reconciler.flushSyncFromReconciler(() => {
     reconciler.updateContainer(element, root, null, null);
   });
 }

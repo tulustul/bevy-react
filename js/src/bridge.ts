@@ -233,42 +233,61 @@ export function removeEventListener(
 
 // Split React props into a serializable payload + registered event handlers.
 // `children` and functions never go across the boundary.
+// React prop name -> the event kind stored in the handler map / reported by Bevy.
+const HANDLER_KINDS: Record<string, string> = {
+  onClick: "click",
+  onPointerDown: "pointerDown",
+  onPointerMove: "pointerMove",
+  onPointerUp: "pointerUp",
+  onChange: "change",
+};
+
+// (Re)populate the id -> handlers map from `props`, or clear it when there are no
+// handlers. Handler functions stay in JS (only a boolean crosses); their closures
+// change identity every render, so `commitUpdate` calls this even on a no-op update
+// to refresh them without emitting a Bevy op.
+export function registerHandlers(
+  id: number,
+  props: Record<string, unknown>,
+): void {
+  let hs: Record<string, (...args: unknown[]) => void> | undefined;
+  for (const key in HANDLER_KINDS) {
+    const value = props[key];
+    if (typeof value === "function") {
+      (hs ??= {})[HANDLER_KINDS[key]] = value as (...args: unknown[]) => void;
+    }
+  }
+  if (hs) handlers.set(id, hs);
+  else handlers.delete(id);
+}
+
 export function serializeProps(
   id: number,
   props: Record<string, unknown>,
 ): SerializedProps {
   const out: SerializedProps = {};
-  const hs: Record<string, (...args: unknown[]) => void> = {};
 
   for (const [key, value] of Object.entries(props)) {
     if (key === "children") continue;
+    // Event handlers: only a boolean crosses; the actual closures are registered
+    // in the handler map by `registerHandlers(id, props)` at the end.
     if (key === "onClick" && typeof value === "function") {
-      hs.click = value as (...args: unknown[]) => void;
       out.onClick = true;
       continue;
     }
-    // Pointer/drag handlers. Like onClick, the function stays in JS and only a
-    // boolean crosses; Bevy reports back `pointerDown`/`pointerMove`/`pointerUp`
-    // events (with a normalized cursor position) the event loop routes here.
     if (key === "onPointerDown" && typeof value === "function") {
-      hs.pointerDown = value as (...args: unknown[]) => void;
       out.onPointerDown = true;
       continue;
     }
     if (key === "onPointerMove" && typeof value === "function") {
-      hs.pointerMove = value as (...args: unknown[]) => void;
       out.onPointerMove = true;
       continue;
     }
     if (key === "onPointerUp" && typeof value === "function") {
-      hs.pointerUp = value as (...args: unknown[]) => void;
       out.onPointerUp = true;
       continue;
     }
-    // An `editableText`'s `onChange`. The function stays in JS; Bevy reports back
-    // a `change` event (carrying the new text) the event loop routes here.
     if (key === "onChange" && typeof value === "function") {
-      hs.change = value as (...args: unknown[]) => void;
       out.onChange = true;
       continue;
     }
@@ -329,8 +348,7 @@ export function serializeProps(
     else if (key === "multiline") out.multiline = value as boolean;
   }
 
-  if (Object.keys(hs).length > 0) handlers.set(id, hs);
-  else handlers.delete(id);
+  registerHandlers(id, props);
 
   return out;
 }

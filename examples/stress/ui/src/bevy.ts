@@ -9,8 +9,8 @@ import {
   removeEventListener as rawRemoveEventListener,
 } from "bevy-react";
 
-export type BenchOp = "Create1" |"Create1k" | "Create10k" | "Append1k" | "UpdateEvery10th" | "Swap" | "Select" | "Remove" | "Clear";
-export type BenchStep = { op: BenchOp, seed: number, };
+export type BenchOp = "Create1" |"Create1k" | "Create10k" | "Append1" | "Append1k" | "UpdateEvery10th" | "Swap" | "Select" | "Remove" | "Clear";
+export type BenchStep = { op: BenchOp, seed: number };
 export type StepDone = { js_ms: number, flush_ms: number, };
 
 /** Every `emit` name and the payload type it carries. */

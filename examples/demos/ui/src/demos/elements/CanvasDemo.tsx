@@ -42,7 +42,7 @@ export function CanvasDemo() {
   // (a mid-flight reshuffle retargets smoothly).
   const valuesRef = useRef(values);
   valuesRef.current = values;
-  const frameRef = useRef<ReturnType<typeof setTimeout>>();
+  const frameRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const animateRef = useRef<(target: number[]) => void>(() => {});
 
   // One animation loop for the component's lifetime: an auto-shuffle every

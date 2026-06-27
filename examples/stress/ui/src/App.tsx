@@ -10,10 +10,11 @@ const now: () => number =
     ? () => performance.now()
     : () => Date.now();
 
-const CONTROLS: { label: string; op: BenchOp }[] = [
-  { label: "Create 1", op: "Create1" },
+const CONTROLS: { label: string; op: BenchOp; excludeFromTest?: boolean }[] = [
+  { label: "Create 1", op: "Create1", excludeFromTest: true },
   { label: "Create 1,000", op: "Create1k" },
   { label: "Create 10,000", op: "Create10k" },
+  { label: "Append 1", op: "Append1", excludeFromTest: true },
   { label: "Append 1,000", op: "Append1k" },
   { label: "Update every 10th", op: "UpdateEvery10th" },
   { label: "Swap rows", op: "Swap" },
@@ -60,6 +61,9 @@ export function App() {
         break;
       case "Append1k":
         setRows((rs) => [...rs, ...buildData(1000, seed)]);
+        break;
+      case "Append1":
+        setRows((rs) => [...rs, ...buildData(1, seed)]);
         break;
       case "UpdateEvery10th":
         setRows((rs) =>
@@ -161,10 +165,8 @@ interface RowProps {
 // changed — the keyed-reconciliation behaviour the benchmark exercises.
 const RowView = memo(function RowView({ row }: RowProps) {
   return (
-    <node style={rowStyle}>
-      <text style={idStyle}>
-        {row.id} {row.label}
-      </text>
+    <node>
+      <text>{`${row.id} ${row.label}`}</text>
     </node>
   );
 });
@@ -223,19 +225,6 @@ const tableStyle: BevyStyle = {
   gap: 12,
   width: "100%",
   overflowY: "scroll",
-};
-
-const rowStyle: BevyStyle = {
-  alignItems: "center",
-  padding: 10,
-  backgroundColor: "red",
-};
-
-const idStyle: BevyStyle = {
-  color: SUBTEXT,
-  fontSize: 13,
-  fontFamily: MONO,
-  width: 64,
 };
 
 const btnStyle: BevyStyle = {
