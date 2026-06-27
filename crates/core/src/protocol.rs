@@ -33,6 +33,10 @@ pub enum Op {
         kind: String,
         #[serde(default)]
         props: Props,
+        /// Inline text content for a single-string `<text>`/`<textSpan>` (the
+        /// `shouldSetTextContent` fast path — no separate child text entity).
+        #[serde(default)]
+        text: Option<String>,
     },
     /// Spawn a standalone text node (a bare string outside any `<text>`).
     CreateText { id: NodeId, text: String },
@@ -1060,7 +1064,7 @@ mod tests {
         let json = r#"{"op":"create","id":7,"kind":"editableText","props":{
             "value":"hi","maxLength":40,"multiline":true,"onChange":true}}"#;
         match serde_json::from_str::<Op>(json).expect("valid op") {
-            Op::Create { id, kind, props } => {
+            Op::Create { id, kind, props, .. } => {
                 assert_eq!(id, 7);
                 assert_eq!(kind, "editableText");
                 assert_eq!(props.value.as_deref(), Some("hi"));

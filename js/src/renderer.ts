@@ -42,6 +42,19 @@ interface HostContext {
   inText: boolean;
 }
 
+// Shallow reference-compare two prop bags, ignoring `children`. Used to tell a
+// text-only `<text>` update from one that also changed style/handlers; app style
+// objects are stable module consts, so a text-only change compares equal.
+function propsChangedExceptChildren(
+  a: Record<string, unknown>,
+  b: Record<string, unknown>,
+): boolean {
+  for (const k in a)
+    if (k !== "children" && !Object.is(a[k], b[k])) return true;
+  for (const k in b) if (k !== "children" && !(k in a)) return true;
+  return false;
+}
+
 // Most host-config callbacks are intentionally trivial for a UI-only renderer.
 // TODO(review): `hostConfig: any` drops type-checking on the most protocol-critical
 // object. Type it as react-reconciler's `HostConfig<...>` so signature drift is caught.
@@ -67,8 +80,13 @@ const hostConfig: any = {
   preparePortalMount: () => {},
   getCurrentEventPriority: () => DefaultEventPriority,
 
-  // Text always becomes a separate text node, never inlined into a host node.
-  shouldSetTextContent: () => false,
+  // A `<text>` whose only child is a string/number renders that text directly
+  // (no separate child text entity) — the React/DOM `shouldSetTextContent` fast
+  // path. Anything else (nested elements, multiple/mixed children) keeps the span
+  // model.
+  shouldSetTextContent: (type: string, props: Record<string, unknown>) =>
+    type === "text" &&
+    (typeof props.children === "string" || typeof props.children === "number"),
 
   createInstance(
     type: string,
@@ -79,7 +97,19 @@ const hostConfig: any = {
     const id = allocId();
     // A nested `<text>` is a styled span; a top-level one is a text block root.
     const kind = type === "text" && hostContext.inText ? "textSpan" : type;
-    push({ op: "create", id, kind, props: serializeProps(id, props) });
+    // A single-string `<text>` child rides inline on the create op (see
+    // shouldSetTextContent) instead of spawning its own text entity.
+    const child = props.children;
+    const text =
+      type === "text" &&
+      (typeof child === "string" || typeof child === "number")
+        ? String(child)
+        : undefined;
+    push(
+      text === undefined
+        ? { op: "create", id, kind, props: serializeProps(id, props) }
+        : { op: "create", id, kind, props: serializeProps(id, props), text },
+    );
     return { id, type };
   },
 
@@ -157,19 +187,45 @@ const hostConfig: any = {
   commitUpdate(
     instance: Instance,
     _payload: unknown,
-    _type: string,
-    _oldProps: unknown,
+    type: string,
+    oldProps: Record<string, unknown>,
     newProps: Record<string, unknown>,
   ) {
-    push({
-      op: "update",
-      id: instance.id,
-      props: serializeProps(instance.id, newProps),
-    });
+    const id = instance.id;
+    const newChild = newProps.children;
+    // An inline-text `<text>`: its string child rides as `text`, not a child node,
+    // so its change arrives here (not via commitTextUpdate). Emit a cheap
+    // `updateText` for a text-only change so it doesn't trigger a full style
+    // re-apply + relayout; only re-serialize props if a non-children prop changed.
+    if (
+      type === "text" &&
+      (typeof newChild === "string" || typeof newChild === "number")
+    ) {
+      const oldChild = oldProps.children;
+      const newText = String(newChild);
+      const oldText =
+        typeof oldChild === "string" || typeof oldChild === "number"
+          ? String(oldChild)
+          : undefined;
+      if (propsChangedExceptChildren(oldProps, newProps)) {
+        push({ op: "update", id, props: serializeProps(id, newProps) });
+      }
+      if (newText !== oldText) {
+        push({ op: "updateText", id, text: newText });
+      }
+      return;
+    }
+    push({ op: "update", id, props: serializeProps(id, newProps) });
   },
 
   commitTextUpdate(textInstance: TextInstance, _old: string, next: string) {
     push({ op: "updateText", id: textInstance.id, text: next });
+  },
+
+  // Clear an inline-text element's content (React calls this when a `<text>`
+  // switches from a string child to element children, before the spans mount).
+  resetTextContent(instance: Instance) {
+    push({ op: "updateText", id: instance.id, text: "" });
   },
 
   clearContainer: () => {},

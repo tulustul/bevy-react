@@ -135,13 +135,19 @@ pub fn apply_js_ops(
                 bridge.surface_parent.clear();
                 bridge.child_surfaces.clear();
             }
-            Op::Create { id, kind, props } => {
+            Op::Create {
+                id,
+                kind,
+                props,
+                text,
+            } => {
                 let entity = match kind.as_str() {
                     // A `<text>` root: a UI node carrying the text block + style.
+                    // A single-string child rides inline as `text` (no child span).
                     "text" => {
                         let mut ec = commands.spawn(RNode(id));
                         apply_style(&mut ec, &props.style);
-                        ec.insert(Text::new(String::new()));
+                        ec.insert(Text::new(text.clone().unwrap_or_default()));
                         apply_text_style(&mut ec, &props.style, &fonts);
                         if let Some(layout) = text_layout(&props.style) {
                             ec.insert(layout);
@@ -150,8 +156,10 @@ pub fn apply_js_ops(
                         ec.id()
                     }
                     // A nested `<text>`: a styled span (no layout box of its own).
+                    // A single-string child rides inline as `text`.
                     "textSpan" => {
-                        let mut ec = commands.spawn((RNode(id), TextSpan(String::new())));
+                        let mut ec =
+                            commands.spawn((RNode(id), TextSpan(text.clone().unwrap_or_default())));
                         apply_text_style(&mut ec, &props.style, &fonts);
                         ec.id()
                     }
@@ -1066,6 +1074,7 @@ mod tests {
                 id: 1,
                 kind: "text".into(),
                 props: text_props(0.0),
+                text: None,
             }])
             .unwrap();
         app.update();
@@ -1122,6 +1131,7 @@ mod tests {
             id,
             kind: "node".into(),
             props: Props::default(),
+            text: None,
         }
     }
 
@@ -1320,6 +1330,7 @@ mod tests {
             kind: "portal".into(),
             props: serde_json::from_value(serde_json::json!({ "target": "follow" }))
                 .expect("valid portal props"),
+            text: None,
         }])
         .unwrap();
         app.update();
@@ -1363,6 +1374,7 @@ mod tests {
                 kind: "surface".into(),
                 props: serde_json::from_value(serde_json::json!({ "target": "monitor" }))
                     .expect("valid surface props"),
+                text: None,
             },
             Op::Append {
                 parent: ROOT_ID,
@@ -1461,6 +1473,7 @@ mod tests {
                 kind: "surface".into(),
                 props: serde_json::from_value(serde_json::json!({ "target": "monitor" }))
                     .expect("valid surface props"),
+                text: None,
             },
             Op::Append {
                 parent: ROOT_ID,
@@ -1505,6 +1518,7 @@ mod tests {
                 kind: "surface".into(),
                 props: serde_json::from_value(serde_json::json!({ "target": "monitor" }))
                     .expect("valid surface props"),
+                text: None,
             },
             create_node(3), // content rendered inside the surface
             Op::Append {

@@ -50,7 +50,14 @@ export const ROOT_ID = 0;
 // Mirrors `protocol::Op` on the Rust side (tag = "op").
 export type Op =
   | { op: "reset" }
-  | { op: "create"; id: number; kind: string; props: SerializedProps }
+  | {
+      op: "create";
+      id: number;
+      kind: string;
+      props: SerializedProps;
+      // Inline text for a single-string `<text>`/`<textSpan>` (shouldSetTextContent).
+      text?: string;
+    }
   | { op: "createText"; id: number; text: string }
   | { op: "createTextSpan"; id: number; text: string }
   | { op: "append"; parent: number; child: number }
@@ -159,6 +166,8 @@ export function flush(): void {
   // captures serde-decode + the (near-free) channel send. Stashed on a global so
   // a benchmark host can read the last commit's boundary cost.
   const t0 = nowMs();
+  // console.log(JSON.stringify(batch, undefined, 2));
+  // console.log(batch.length);
   ops.op_flush(batch);
   (
     globalThis as { __bevyReactFlush?: { ms: number; ops: number } }

@@ -11,6 +11,7 @@ const now: () => number =
     : () => Date.now();
 
 const CONTROLS: { label: string; op: BenchOp }[] = [
+  { label: "Create 1", op: "Create1" },
   { label: "Create 1,000", op: "Create1k" },
   { label: "Create 10,000", op: "Create10k" },
   { label: "Append 1,000", op: "Append1k" },
@@ -41,16 +42,14 @@ export function App() {
   const pendingRef = useRef<{ op: BenchOp; driven: boolean } | null>(null);
   const seedRef = useRef(1);
 
-  const onSelect = useCallback((id: number) => setSelected(id), []);
-  const onRemove = useCallback(
-    (id: number) => setRows((rs) => rs.filter((r) => r.id !== id)),
-    [],
-  );
-
   // Apply one operation. All mutations go through `setState` so they land in a
   // single reconciler commit (the thing the benchmark measures).
   const runOp = useCallback((op: BenchOp, seed: number) => {
     switch (op) {
+      case "Create1":
+        setSelected(null);
+        setRows(buildData(1, seed));
+        break;
       case "Create1k":
         setSelected(null);
         setRows(buildData(1000, seed));
@@ -147,13 +146,7 @@ export function App() {
 
       <node style={tableStyle}>
         {rows.map((row) => (
-          <RowView
-            key={row.id}
-            row={row}
-            selected={row.id === selected}
-            onSelect={onSelect}
-            onRemove={onRemove}
-          />
+          <RowView key={row.id} row={row} />
         ))}
       </node>
     </node>
@@ -162,36 +155,16 @@ export function App() {
 
 interface RowProps {
   row: Row;
-  selected: boolean;
-  onSelect: (id: number) => void;
-  onRemove: (id: number) => void;
 }
 
 // Memoized so a list-wide re-render only re-renders the rows whose props actually
 // changed — the keyed-reconciliation behaviour the benchmark exercises.
-const RowView = memo(function RowView({
-  row,
-  selected,
-  onSelect,
-  onRemove,
-}: RowProps) {
+const RowView = memo(function RowView({ row }: RowProps) {
   return (
-    <node style={selected ? rowSelectedStyle : rowStyle}>
-      <text style={idStyle}>{row.id}</text>
-      <button
-        onClick={() => onSelect(row.id)}
-        style={labelCellStyle}
-        hoverStyle={cellHover}
-      >
-        <text style={labelTextStyle}>{row.label}</text>
-      </button>
-      <button
-        onClick={() => onRemove(row.id)}
-        style={removeCellStyle}
-        hoverStyle={removeHover}
-      >
-        <text style={removeTextStyle}>✕</text>
-      </button>
+    <node style={rowStyle}>
+      <text style={idStyle}>
+        {row.id} {row.label}
+      </text>
     </node>
   );
 });
@@ -216,7 +189,6 @@ const SURFACE = "#313244";
 const TEXT = "#cdd6f4";
 const SUBTEXT = "#a6adc8";
 const PRIMARY = "#89b4fa";
-const RED = "#f38ba8";
 const MONO = "Noto Sans Mono";
 
 const appStyle: BevyStyle = {
@@ -248,22 +220,15 @@ const readoutStyle: BevyStyle = {
 
 const tableStyle: BevyStyle = {
   flexDirection: "column",
+  gap: 12,
   width: "100%",
-  flexGrow: 1,
-  minHeight: 0,
   overflowY: "scroll",
 };
 
 const rowStyle: BevyStyle = {
-  flexDirection: "row",
   alignItems: "center",
-  gap: 12,
-  padding: { top: 4, bottom: 4, left: 8, right: 8 },
-};
-
-const rowSelectedStyle: BevyStyle = {
-  ...rowStyle,
-  backgroundColor: SURFACE,
+  padding: 10,
+  backgroundColor: "red",
 };
 
 const idStyle: BevyStyle = {
@@ -271,37 +236,6 @@ const idStyle: BevyStyle = {
   fontSize: 13,
   fontFamily: MONO,
   width: 64,
-};
-
-const labelCellStyle: BevyStyle = {
-  flexGrow: 1,
-  padding: { top: 2, bottom: 2 },
-};
-
-const cellHover: BevyStyle = {
-  backgroundColor: SURFACE,
-};
-
-const labelTextStyle: BevyStyle = {
-  color: TEXT,
-  fontSize: 14,
-};
-
-const removeCellStyle: BevyStyle = {
-  width: 28,
-  height: 24,
-  justifyContent: "center",
-  alignItems: "center",
-  borderRadius: 4,
-};
-
-const removeHover: BevyStyle = {
-  backgroundColor: SURFACE,
-};
-
-const removeTextStyle: BevyStyle = {
-  color: RED,
-  fontSize: 14,
 };
 
 const btnStyle: BevyStyle = {
