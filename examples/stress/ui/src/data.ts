@@ -1,4 +1,4 @@
-// Row data + label generation for the krausest benchmark, matching the standard
+// Row data + label generation for the table-ops benchmark, matching the standard
 // js-framework-benchmark word lists and the "adjective colour noun" label shape.
 
 const ADJECTIVES = [
@@ -64,7 +64,7 @@ export interface Row {
   label: string;
 }
 
-// A monotonic id source, so ids stay unique across create/append (krausest
+// A monotonic id source, so ids stay unique across create/append (the benchmark
 // requires stable, never-reused keys).
 let nextId = 1;
 

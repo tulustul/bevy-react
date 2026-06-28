@@ -130,7 +130,7 @@ export function App() {
 
   return (
     <node style={appStyle}>
-      <text style={titleStyle}>krausest · bevy-react</text>
+      <text style={titleStyle}>table-ops · bevy-react</text>
 
       <node style={controlsStyle}>
         {CONTROLS.map((c) => (

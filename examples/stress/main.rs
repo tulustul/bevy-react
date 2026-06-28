@@ -1,26 +1,27 @@
 //! Benchmark / stress-test runner for `bevy_react`.
 //!
 //! A minimal, pure-UI Bevy app (no 3D scene, no camera orbit) that hosts
-//! benchmark scenarios. The first scenario is **krausest** — the industry-standard
-//! js-framework-benchmark table operation set (create 1k/10k rows, append 1k,
-//! update every 10th, swap, select, remove, clear), measured as a *library*
-//! benchmark: bevy-react's own per-operation timings (no react-dom comparison).
+//! benchmark scenarios. The first scenario is **table-ops** — the standard
+//! table operation set (create 1k/10k rows, append 1k, update every 10th, swap,
+//! select, remove, clear) borrowed from the js-framework-benchmark, measured as
+//! a *library* benchmark: bevy-react's own per-operation timings (no react-dom
+//! comparison).
 //!
 //! Two entry modes:
 //!
-//!   * **Interactive** (no flags) — opens the krausest table with control buttons
+//!   * **Interactive** (no flags) — opens the table with control buttons
 //!     and a live timing readout, for manual exploration / profiling.
 //!     `cargo run -p bevy-react --example stress`
 //!
 //!   * **Capture** — drives the operation set automatically, one op at a time,
 //!     records per-op timing (p50/p99 over N iterations), writes JSON, and exits:
-//!     `cargo run -p bevy-react --example stress -- --run krausest --out results.json [--iterations N]`
+//!     `cargo run -p bevy-react --example stress -- --run table-ops --out results.json [--iterations N]`
 //!
 //! Like `--shoot` in the demos app, capture still needs an X11 display present.
 //!
 //! Build the bundle first: `npm run build -w stress-app`.
 
-mod krausest;
+mod table_ops;
 
 use std::path::PathBuf;
 
@@ -28,7 +29,7 @@ use bevy::prelude::*;
 use bevy::ui::IsDefaultUiCamera;
 use bevy_react::ReactUiPlugin;
 
-use krausest::KrausestPlugin;
+use table_ops::TableOpsPlugin;
 
 fn main() {
     use bevy_react::ReactAppExt;
@@ -54,8 +55,8 @@ fn main() {
     // `--run <scenario> [--out <path>] [--iterations N]` runs a scenario in
     // capture mode: drive → time → record → exit. Without it, run interactively.
     if args.first().map(String::as_str) == Some("--run") {
-        let scenario = args.get(1).map(String::as_str).unwrap_or("krausest");
-        assert_eq!(scenario, "krausest", "unknown scenario {scenario:?}");
+        let scenario = args.get(1).map(String::as_str).unwrap_or("table-ops");
+        assert_eq!(scenario, "table-ops", "unknown scenario {scenario:?}");
         let out = flag_value(&args, "--out").map(PathBuf::from);
         let iterations = flag_value(&args, "--iterations")
             .and_then(|s| s.parse().ok())
@@ -73,7 +74,7 @@ fn main() {
         }
 
         let mut app = build_app(/* hot_reload */ false);
-        krausest::add_capture_mode(&mut app, krausest::CaptureConfig { out, iterations });
+        table_ops::add_capture_mode(&mut app, table_ops::CaptureConfig { out, iterations });
         app.run();
         return;
     }
@@ -122,7 +123,7 @@ fn build_app(hot_reload: bool) -> App {
     )
     .add_plugins(react_plugin)
     .add_systems(Startup, spawn_ui_camera)
-    .add_plugins(KrausestPlugin);
+    .add_plugins(TableOpsPlugin);
     app
 }
 
@@ -137,5 +138,5 @@ fn spawn_ui_camera(mut commands: Commands) {
 /// must list the exact same set the plugins do — keeping the generated TypeScript
 /// from drifting from the runtime.
 fn register_react_bindings(app: &mut App) {
-    krausest::register_bindings(app);
+    table_ops::register_bindings(app);
 }

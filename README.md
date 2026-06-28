@@ -360,4 +360,38 @@ reply) and event (Bevy → React) channels.
 
 ## Performance
 
-At this stage, no benchmarks or stress tests were executed against the library.
+Executed against commit c9d31497fe816b34c48f1e9521e844de7939e949
+
+Spec: AMD Ryzen 7 5800X 8-Core, 32GB, GeForce RTX 3070
+
+Rows manipulations benchmark - `cargo run --release -p bevy-react --example stress -- --run table-ops --out benchmark_results/results.json`
+
+| Op | Ops Emitted | Total | JS | Flush | Pre-apply | Translate | Command | Layout | Bevy |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| create1k | 4001 | 51.117 | 13.000 | 9.000 | 20.698 | 2.161 | 18.975 | 9.478 | 28.521 |
+| create10k | 40001 | 854.888 | 381.000 | 185.000 | 510.240 | 35.528 | 189.095 | 117.958 | 305.084 |
+| append1k | 4001 | 52.675 | 14.000 | 9.000 | 20.352 | 2.168 | 19.241 | 10.668 | 29.577 |
+| updateEvery10th | 100 | 19.716 | 2.000 | 0.000 | 16.230 | 0.030 | 1.634 | 1.823 | 3.488 |
+| swap | 997 | 19.519 | 5.000 | 2.000 | 16.726 | 1.043 | 0.470 | 1.224 | 1.720 |
+| select | 1 | 17.565 | 2.000 | 0.000 | 16.165 | 0.006 | 0.311 | 1.109 | 1.422 |
+| remove | 2 | 17.727 | 2.000 | 0.000 | 16.241 | 0.005 | 0.348 | 1.160 | 1.504 |
+| clear | 1000 | 26.411 | 4.000 | 3.000 | 17.131 | 2.035 | 6.624 | 0.880 | 7.418 |
+
+### Legend
+
+All timings are the **median (p50)** over the samples, in **milliseconds**.
+
+| Column | Meaning |
+| --- | --- |
+| **Op** | The operation under test (create1k, swap, clear, …). |
+| **Ops Emitted** | Size of the flushed op batch React produced for one occurrence of this op. |
+| **Total** | End-to-end wall time, event trigger → change detected. Equals `Pre-apply + Translate + Bevy`. |
+| **Pre-apply** | Trigger → Bevy starts applying the batch. Covers the JS round-trip + inter-thread scheduling. Contains **JS**. |
+| **JS** | React reconcile + build the op batch + the `op_flush` call (measured on the JS thread). Subset of **Pre-apply**; contains **Flush**. |
+| **Flush** | The `op_flush` native call alone = `serde_v8` decode of the batch. Subset of **JS**. |
+| **Translate** | `apply_js_ops` walks the op batch → queues ECS commands (Bevy side). |
+| **Command** | Execute the queued ECS commands + UI prepare/content, before layout. |
+| **Layout** | `bevy_ui` layout: taffy solve + transform/clip propagation. |
+| **Bevy** | Apply done → change detected. Full post-translate Bevy wall time; ≈ `Command + Layout`. |
+
+Nesting: `Total = Pre-apply (⊇ JS ⊇ Flush) + Translate + Bevy (≈ Command + Layout)`.

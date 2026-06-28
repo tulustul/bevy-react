@@ -1,10 +1,10 @@
 # stress — bevy-react benchmarks
 
 A minimal, pure-UI Bevy app for benchmarking/stress-testing `bevy-react`. The
-first scenario is **krausest** (the js-framework-benchmark table operation set:
-create 1k/10k, append 1k, update every 10th, swap, select, remove, clear),
-measured as a *library* benchmark — bevy-react's own per-operation timings, no
-cross-framework comparison.
+first scenario is **table-ops** (the standard table operation set borrowed from
+the js-framework-benchmark: create 1k/10k, append 1k, update every 10th, swap,
+select, remove, clear), measured as a *library* benchmark — bevy-react's own
+per-operation timings, no cross-framework comparison.
 
 ## Use
 
@@ -28,7 +28,7 @@ display present.
 
 ```sh
 npm run build:prod -w stress-app
-cargo run --release -p bevy-react --example stress -- --run krausest --out results.json [--iterations N]
+cargo run --release -p bevy-react --example stress -- --run table-ops --out results.json [--iterations N]
 ```
 
 Results are written to `benchmark_results/` (gitignored).
@@ -61,5 +61,5 @@ npm run bevy:generate -w stress-app
 ## Layout
 
 - `main.rs` — entry point + flag parsing (`--run`, `--export-bindings`).
-- `krausest.rs` — the scenario: ops, bridge bindings, and the capture driver.
-- `ui/` — the `stress-app` React UI (the krausest table + harness).
+- `table_ops.rs` — the scenario: ops, bridge bindings, and the capture driver.
+- `ui/` — the `stress-app` React UI (the table + harness).

@@ -1,7 +1,7 @@
-//! The krausest js-framework-benchmark scenario: the standard table operation set
-//! (create 1k/10k rows, append 1k, update every 10th, swap, select, remove, clear),
-//! measured as a bevy-react *library* benchmark — our own per-operation timings,
-//! no cross-framework comparison.
+//! The table-ops scenario: the standard table operation set (create 1k/10k rows,
+//! append 1k, update every 10th, swap, select, remove, clear) borrowed from the
+//! js-framework-benchmark, measured as a bevy-react *library* benchmark — our own
+//! per-operation timings, no cross-framework comparison.
 //!
 //! Driving (capture mode) is event-driven, one op at a time: the Bevy driver sends
 //! a `bench.runStep` event, React performs the op (`setState` → reconciler commit
@@ -12,6 +12,7 @@
 //!
 //! Reference: https://github.com/krausest/js-framework-benchmark
 
+use std::fmt::Write as _;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
@@ -21,9 +22,9 @@ use bevy_react::{OpApplyStats, ReactAppExt, ReactEvents, react_event, react_mess
 use serde::Serialize;
 use ts_rs::TS;
 
-pub struct KrausestPlugin;
+pub struct TableOpsPlugin;
 
-impl Plugin for KrausestPlugin {
+impl Plugin for TableOpsPlugin {
     fn build(&self, app: &mut App) {
         register_bindings(app);
         app.init_resource::<BenchInbox>();
@@ -41,7 +42,7 @@ pub fn register_bindings(app: &mut App) {
 
 // --- The operation set ---
 
-/// One krausest table operation. A fieldless enum serializes as a plain string,
+/// One table operation. A fieldless enum serializes as a plain string,
 /// so the generated TS is a `"Create1k" | …` union the React app switches on.
 #[derive(Serialize, TS, Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BenchOp {
@@ -53,7 +54,7 @@ pub enum BenchOp {
     Append1k,
     /// Update the label of every 10th row in place.
     UpdateEvery10th,
-    /// Swap two rows far apart (rows 1 and 998, krausest-style).
+    /// Swap two rows far apart (rows 1 and 998, js-framework-benchmark-style).
     Swap,
     /// Select (highlight) a row.
     Select,
@@ -136,7 +137,7 @@ fn on_step_done(on: On<StepDone>, mut inbox: ResMut<BenchInbox>) {
 
 // --- Capture mode (automated driver) ---
 
-/// Parsed `--run krausest` arguments.
+/// Parsed `--run table-ops` arguments.
 pub struct CaptureConfig {
     /// Where to write the JSON report; `None` prints to stdout.
     pub out: Option<PathBuf>,
@@ -467,19 +468,132 @@ fn finalize(driver: &BenchDriver) {
         .collect();
 
     let report = Report {
-        scenario: "krausest",
+        scenario: "table-ops",
         iterations: driver.iterations,
         ops,
     };
     let json = serde_json::to_string_pretty(&report).expect("serialize report");
+    let markdown = render_markdown(&report);
     match &driver.out {
         Some(path) => {
             std::fs::write(path, &json)
                 .unwrap_or_else(|e| panic!("failed to write {}: {e}", path.display()));
             info!("wrote benchmark results to {}", path.display());
+
+            // Write the human-readable Markdown report to a sibling `.md` file.
+            let md_path = path.with_extension("md");
+            std::fs::write(&md_path, &markdown)
+                .unwrap_or_else(|e| panic!("failed to write {}: {e}", md_path.display()));
+            info!("wrote benchmark report to {}", md_path.display());
         }
-        None => println!("{json}"),
+        None => println!("{json}\n\n{markdown}"),
     }
+}
+
+/// Render a `Report` as a human-readable GitHub-flavored Markdown document: a
+/// single table (one row per op, `p50` per timing phase) plus a legend that
+/// explains every column and how the phases nest into the end-to-end total.
+fn render_markdown(report: &Report) -> String {
+    // Fixed precision keeps the columns aligned and the numbers scannable.
+    fn ms(v: f64) -> String {
+        format!("{v:.3}")
+    }
+
+    let mut out = String::new();
+    let _ = writeln!(out, "# {} benchmark", report.scenario);
+    let _ = writeln!(out);
+    let _ = writeln!(out, "Iterations: {}", report.iterations);
+    let _ = writeln!(out);
+
+    // One row per op (test), one column per timing phase. Median (p50) only.
+    // Columns run left-to-right in execution order so the table reads as a
+    // timeline; the legend below spells out each value and how they nest.
+    let _ = writeln!(out, "## Median per op (p50, ms)");
+    let _ = writeln!(out);
+    let _ = writeln!(
+        out,
+        "| Op | Ops Emitted | Total | Pre-apply | JS | Flush | Translate | Command | Layout | Bevy |"
+    );
+    let _ = writeln!(
+        out,
+        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |"
+    );
+    for o in &report.ops {
+        let _ = writeln!(
+            out,
+            "| {} | {} | {} | {} | {} | {} | {} | {} | {} | {} |",
+            o.op,
+            o.ops_emitted,
+            ms(o.total_ms.p50),
+            ms(o.pre_apply_ms.p50),
+            ms(o.js_ms.p50),
+            ms(o.flush_ms.p50),
+            ms(o.translate_ms.p50),
+            ms(o.command_ms.p50),
+            ms(o.layout_ms.p50),
+            ms(o.bevy_ms.p50),
+        );
+    }
+    let _ = writeln!(out);
+
+    // Legend: explain every column. All timings are median (p50) milliseconds.
+    let _ = writeln!(out, "### Legend");
+    let _ = writeln!(out);
+    let _ = writeln!(
+        out,
+        "All timings are the **median (p50)** over the samples, in **milliseconds**."
+    );
+    let _ = writeln!(out);
+    let _ = writeln!(out, "| Column | Meaning |");
+    let _ = writeln!(out, "| --- | --- |");
+    let _ = writeln!(
+        out,
+        "| **Op** | The operation under test (create1k, swap, clear, …). |"
+    );
+    let _ = writeln!(
+        out,
+        "| **Ops Emitted** | Size of the flushed op batch React produced for one occurrence of this op. |"
+    );
+    let _ = writeln!(
+        out,
+        "| **Total** | End-to-end wall time, event trigger → change detected. Equals `Pre-apply + Translate + Bevy`. |"
+    );
+    let _ = writeln!(
+        out,
+        "| **Pre-apply** | Trigger → Bevy starts applying the batch. Covers the JS round-trip + inter-thread scheduling. Contains **JS**. |"
+    );
+    let _ = writeln!(
+        out,
+        "| **JS** | React reconcile + build the op batch + the `op_flush` call (measured on the JS thread). Subset of **Pre-apply**; contains **Flush**. |"
+    );
+    let _ = writeln!(
+        out,
+        "| **Flush** | The `op_flush` native call alone = `serde_v8` decode of the batch. Subset of **JS**. |"
+    );
+    let _ = writeln!(
+        out,
+        "| **Translate** | `apply_js_ops` walks the op batch → queues ECS commands (Bevy side). |"
+    );
+    let _ = writeln!(
+        out,
+        "| **Command** | Execute the queued ECS commands + UI prepare/content, before layout. |"
+    );
+    let _ = writeln!(
+        out,
+        "| **Layout** | `bevy_ui` layout: taffy solve + transform/clip propagation. |"
+    );
+    let _ = writeln!(
+        out,
+        "| **Bevy** | Apply done → change detected. Full post-translate Bevy wall time; ≈ `Command + Layout`. |"
+    );
+    let _ = writeln!(out);
+    let _ = writeln!(
+        out,
+        "Nesting: `Total = Pre-apply (⊇ JS ⊇ Flush) + Translate + Bevy (≈ Command + Layout)`."
+    );
+    let _ = writeln!(out);
+
+    out
 }
 
 impl Stat {
