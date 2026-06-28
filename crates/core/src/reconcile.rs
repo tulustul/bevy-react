@@ -5,10 +5,10 @@
 use accesskit::Role;
 use bevy::a11y::AccessibilityNode;
 use bevy::image::Image;
-use bevy::platform::collections::HashSet;
 use bevy::input_focus::tab_navigation::TabIndex;
 use bevy::input_focus::{AutoFocus, FocusGained, FocusLost};
 use bevy::picking::events::{Click, Drag, Out, Over, Pointer, Press, Release};
+use bevy::platform::collections::HashSet;
 use bevy::prelude::*;
 use bevy::text::{EditableText, FontCx, LayoutCx, TextCursorStyle, TextEdit, TextEditChange};
 use bevy::ui::RelativeCursorPosition;
@@ -24,7 +24,8 @@ use crate::bridge::{FocusState, JsBridge, PointerHandlers, RNode, StyleVariants}
 use crate::plugin::Fonts;
 use crate::protocol::{NodeId, Op, Outbound, Props, ROOT_ID, Style, UiEvent};
 use crate::ui_map::{
-    apply_style, apply_text_style, image_node, overlay_style, resolved_text_style, text_layout,
+    AtlasLayoutCache, apply_atlas, apply_style, apply_text_style, image_node, overlay_style,
+    resolved_text_style, text_layout,
 };
 
 /// Live instrumentation of the [`apply_js_ops`] hot path. Updated once per frame
@@ -66,6 +67,10 @@ pub fn apply_js_ops(
     assets: Res<AssetServer>,
     fonts: Res<Fonts>,
     mut images: ResMut<Assets<Image>>,
+    // Sprite-sheet grids for `<image atlas>`, plus the cache that keeps repeated
+    // commits from leaking a `TextureAtlasLayout` per frame (see `AtlasLayoutCache`).
+    mut layouts: ResMut<Assets<TextureAtlasLayout>>,
+    mut atlas_cache: ResMut<AtlasLayoutCache>,
     children: Query<&Children>,
     rnodes: Query<&RNode>,
     // The persistent world-anchor overlay layer (a child of the root). It is
@@ -276,7 +281,15 @@ pub fn apply_js_ops(
                         apply_anchor(&mut ec, &props);
                         ec.id()
                     }
-                    _ => spawn_element(&mut commands, id, &kind, &props, &assets),
+                    _ => spawn_element(
+                        &mut commands,
+                        id,
+                        &kind,
+                        &props,
+                        &assets,
+                        &mut layouts,
+                        &mut atlas_cache,
+                    ),
                 };
                 if matches!(kind.as_str(), "text" | "textSpan") {
                     bridge
@@ -499,7 +512,9 @@ pub fn apply_js_ops(
                     // Image attributes only ever appear on `image` elements, so
                     // their presence is enough to re-apply the texture/tint.
                     if is_image(&props) {
-                        ec.insert(image_node(&props, &assets));
+                        let mut img = image_node(&props, &assets);
+                        apply_atlas(&mut img, &props, &mut layouts, &mut atlas_cache);
+                        ec.insert(img);
                     }
                     // A `<canvas>`'s new display list: replace the surface (the
                     // canvas system keeps the same `ImageNode` handle and repaints).
@@ -583,6 +598,8 @@ fn spawn_element(
     kind: &str,
     props: &Props,
     assets: &AssetServer,
+    layouts: &mut Assets<TextureAtlasLayout>,
+    atlas_cache: &mut AtlasLayoutCache,
 ) -> Entity {
     let mut ec = commands.spawn(RNode(id));
     apply_style(&mut ec, &props.style);
@@ -592,7 +609,9 @@ fn spawn_element(
             ec.insert(Button);
         }
         "image" => {
-            ec.insert(image_node(props, assets));
+            let mut img = image_node(props, assets);
+            apply_atlas(&mut img, props, layouts, atlas_cache);
+            ec.insert(img);
         }
         _ => {}
     }
@@ -699,6 +718,9 @@ fn is_image(props: &Props) -> bool {
         || props.image_mode.is_some()
         || props.flip_x
         || props.flip_y
+        || props.source_rect.is_some()
+        || props.atlas.is_some()
+        || props.visual_box.is_some()
 }
 
 fn resolve(bridge: &JsBridge, id: NodeId) -> Option<Entity> {
@@ -1305,8 +1327,10 @@ mod tests {
         let mut app = App::new();
         app.add_plugins((MinimalPlugins, AssetPlugin::default()));
         app.init_asset::<Image>();
+        app.init_asset::<TextureAtlasLayout>();
         app.init_resource::<Fonts>();
         app.init_resource::<OpApplyStats>();
+        app.init_resource::<AtlasLayoutCache>();
 
         let (ops_tx, ops_rx) = crossbeam_channel::unbounded::<Vec<Op>>();
         // Keep the outbound receiver alive so the sender stays open.
@@ -1414,8 +1438,10 @@ mod tests {
         let mut app = App::new();
         app.add_plugins((MinimalPlugins, AssetPlugin::default()));
         app.init_asset::<Image>();
+        app.init_asset::<TextureAtlasLayout>();
         app.init_resource::<Fonts>();
         app.init_resource::<OpApplyStats>();
+        app.init_resource::<AtlasLayoutCache>();
         let (ops_tx, ops_rx) = crossbeam_channel::unbounded::<Vec<Op>>();
         let (out_tx, _out_rx) = tokio::sync::mpsc::unbounded_channel::<Outbound>();
         let root = app.world_mut().spawn_empty().id();

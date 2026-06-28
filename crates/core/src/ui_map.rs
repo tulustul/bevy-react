@@ -2,6 +2,7 @@
 //! types) into `bevy_ui` components: the `Node` layout, its sibling visual
 //! components (background/border/outline/shadow/z-index), and `ImageNode`.
 
+use bevy::platform::collections::HashMap;
 use bevy::prelude::*;
 use bevy::sprite::{BorderRect, SliceScaleMode, TextureSlicer};
 use bevy::text::{FontSize as BevyFontSize, LetterSpacing, LineHeight};
@@ -10,9 +11,10 @@ use bevy_react_animations::build_ui_transform;
 
 use crate::plugin::Fonts;
 use crate::protocol::{
-    Angle, AngularStop, ConicGradientSpec, FontSize, GradientList, GradientSpec, GradientStop,
-    ImageMode, ImageModeSpec, Length, LetterSpacingSpec, LineHeightSpec, LinearGradientSpec, Props,
-    RadialGradientSpec, RadialShapeSpec, Rect, SliceBorder, SliceScale, SliceSpec, Style,
+    Angle, AngularStop, AtlasSpec, ConicGradientSpec, FontSize, GradientList, GradientSpec,
+    GradientStop, ImageMode, ImageModeSpec, Length, LetterSpacingSpec, LineHeightSpec,
+    LinearGradientSpec, Props, RadialGradientSpec, RadialShapeSpec, Rect, SliceBorder, SliceScale,
+    SliceSpec, Style,
 };
 
 /// Parse a CSS color string into a `Color`: hex, named colors, `transparent`, or
@@ -863,7 +865,86 @@ pub fn image_node(props: &Props, assets: &AssetServer) -> ImageNode {
             },
         };
     }
+    // `Rect` here is the wire top/right/bottom/left type (imported above), so the
+    // source sub-rect uses bevy's math `Rect` by its full path.
+    if let Some(r) = &props.source_rect {
+        image.rect = Some(bevy::math::Rect::new(
+            r.x,
+            r.y,
+            r.x + r.width,
+            r.y + r.height,
+        ));
+    }
+    if let Some(vb) = &props.visual_box {
+        image.visual_box = match vb.as_str() {
+            "content" => VisualBox::ContentBox,
+            "border" => VisualBox::BorderBox,
+            _ => VisualBox::PaddingBox,
+        };
+    }
     image
+}
+
+/// Caches one `TextureAtlasLayout` asset per unique grid (keyed on the grid, *not*
+/// the cell `index`). `image_node` is re-inserted on every `Op::Update`, so without
+/// this an index-only change (sprite animation) would add a fresh layout asset each
+/// frame — an unbounded leak. Constant grid → one cache hit, one shared handle.
+#[derive(Resource, Default)]
+pub struct AtlasLayoutCache(HashMap<AtlasKey, Handle<TextureAtlasLayout>>);
+
+/// The grid identity of an [`AtlasSpec`] — everything `TextureAtlasLayout::from_grid`
+/// consumes, excluding the per-cell `index`.
+#[derive(PartialEq, Eq, Hash)]
+struct AtlasKey {
+    tile_width: u32,
+    tile_height: u32,
+    columns: u32,
+    rows: u32,
+    padding: Option<[u32; 2]>,
+    offset: Option<[u32; 2]>,
+}
+
+impl AtlasKey {
+    fn of(a: &AtlasSpec) -> Self {
+        AtlasKey {
+            tile_width: a.tile_width,
+            tile_height: a.tile_height,
+            columns: a.columns,
+            rows: a.rows,
+            padding: a.padding,
+            offset: a.offset,
+        }
+    }
+}
+
+/// Set `image.texture_atlas` from `props.atlas` (a no-op if absent), building and
+/// caching the grid's `TextureAtlasLayout` so repeated commits reuse one asset.
+/// Kept out of [`image_node`] because it needs the `Assets`/cache resources, which
+/// only the reconcile systems hold.
+pub fn apply_atlas(
+    image: &mut ImageNode,
+    props: &Props,
+    layouts: &mut Assets<TextureAtlasLayout>,
+    cache: &mut AtlasLayoutCache,
+) {
+    let Some(a) = &props.atlas else { return };
+    let handle = cache
+        .0
+        .entry(AtlasKey::of(a))
+        .or_insert_with(|| {
+            layouts.add(TextureAtlasLayout::from_grid(
+                UVec2::new(a.tile_width, a.tile_height),
+                a.columns,
+                a.rows,
+                a.padding.map(|[x, y]| UVec2::new(x, y)),
+                a.offset.map(|[x, y]| UVec2::new(x, y)),
+            ))
+        })
+        .clone();
+    image.texture_atlas = Some(TextureAtlas {
+        layout: handle,
+        index: a.index,
+    });
 }
 
 /// Build a `bevy_sprite::TextureSlicer` (9-slice config) from the wire [`SliceSpec`].
@@ -1204,6 +1285,63 @@ mod tests {
             image_node(&auto, assets).image_mode,
             NodeImageMode::Auto
         ));
+    }
+
+    /// `sourceRect` becomes a min/max `Rect` (x,y → top-left; +width/height →
+    /// bottom-right), and `visualBox` selects the box variant.
+    #[test]
+    fn source_rect_and_visual_box_map() {
+        let app = assets_app();
+        let assets = app.world().resource::<AssetServer>();
+
+        let props: Props = serde_json::from_value(serde_json::json!({
+            "src": "logo.png",
+            "sourceRect": { "x": 10.0, "y": 20.0, "width": 30.0, "height": 40.0 },
+            "visualBox": "border",
+        }))
+        .unwrap();
+        let image = image_node(&props, assets);
+        assert_eq!(
+            image.rect,
+            Some(bevy::math::Rect::new(10.0, 20.0, 40.0, 60.0))
+        );
+        assert_eq!(image.visual_box, VisualBox::BorderBox);
+    }
+
+    /// Two cells of the *same* grid (only `index` differs) share one cached
+    /// `TextureAtlasLayout` handle — the leak-guard that makes index-only sprite
+    /// animation safe across the per-`Op::Update` rebuilds.
+    #[test]
+    fn atlas_layout_cache_reuses_handle_across_index() {
+        let app = assets_app();
+        let assets = app.world().resource::<AssetServer>();
+        let mut layouts = Assets::<TextureAtlasLayout>::default();
+        let mut cache = AtlasLayoutCache::default();
+
+        let frame = |index: usize| -> Props {
+            serde_json::from_value(serde_json::json!({
+                "src": "sheet.png",
+                "atlas": {
+                    "tileWidth": 32, "tileHeight": 32,
+                    "columns": 4, "rows": 4, "index": index,
+                },
+            }))
+            .unwrap()
+        };
+
+        let p0 = frame(0);
+        let mut a = image_node(&p0, assets);
+        apply_atlas(&mut a, &p0, &mut layouts, &mut cache);
+        let p2 = frame(2);
+        let mut b = image_node(&p2, assets);
+        apply_atlas(&mut b, &p2, &mut layouts, &mut cache);
+
+        let ta = a.texture_atlas.expect("atlas on a");
+        let tb = b.texture_atlas.expect("atlas on b");
+        assert_eq!(ta.layout, tb.layout, "same grid reuses one layout handle");
+        assert_eq!(ta.index, 0);
+        assert_eq!(tb.index, 2);
+        assert_eq!(layouts.len(), 1, "only one layout asset created");
     }
 
     fn style(json: serde_json::Value) -> Style {

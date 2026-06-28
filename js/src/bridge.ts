@@ -91,6 +91,12 @@ export interface SerializedProps {
   // `"auto"`/`"stretch"`, or an opaque 9-slice/tiled spec object, decoded on the
   // Rust side into `NodeImageMode`.
   imageMode?: string | Record<string, unknown>;
+  // Source sub-rect (`{x,y,width,height}` px) and sprite-sheet grid + cell, both
+  // opaque to JS and decoded on the Rust side into `ImageNode.rect`/`texture_atlas`.
+  sourceRect?: Record<string, unknown>;
+  atlas?: Record<string, unknown>;
+  // `"content"`/`"padding"`/`"border"` → `ImageNode.visual_box`.
+  visualBox?: string;
   // `canvas` element: the recorded vector display list, rasterized on the Bevy side.
   draw?: DrawCmd[];
   // `portal` element: the render-target name to display. Also carries a
@@ -376,6 +382,10 @@ export function serializeProps(
     else if (key === "flipY") out.flipY = value as boolean;
     else if (key === "imageMode")
       out.imageMode = value as string | Record<string, unknown>;
+    else if (key === "sourceRect")
+      out.sourceRect = value as Record<string, unknown>;
+    else if (key === "atlas") out.atlas = value as Record<string, unknown>;
+    else if (key === "visualBox") out.visualBox = value as string;
     else if (key === "target") out.target = value as string;
     // A `<surface>`'s `name` rides the same wire field as a `<portal>`'s `target`
     // (both bind the element to a named render target); they never coexist.

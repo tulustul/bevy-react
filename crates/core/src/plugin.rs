@@ -171,6 +171,7 @@ impl Plugin for ReactUiPlugin {
         .init_resource::<ReactEventRegistry>()
         .init_resource::<PointerCapture>()
         .init_resource::<OpApplyStats>()
+        .init_resource::<crate::ui_map::AtlasLayoutCache>()
         .init_resource::<Fonts>()
         // The offscreen render-target ("portal") registry and its shared blank
         // placeholder texture, created before the first portal can mount.
@@ -251,8 +252,7 @@ impl Plugin for ReactUiPlugin {
         // edits and resolve byte offsets against the current text.
         app.add_systems(
             PostUpdate,
-            (apply_pending_selections, sync_editable_a11y)
-                .after(bevy::text::EditableTextSystems),
+            (apply_pending_selections, sync_editable_a11y).after(bevy::text::EditableTextSystems),
         );
 
         // The animations engine is a separate plugin (its crate can't depend on

@@ -490,6 +490,25 @@ export interface BevyImageProps extends BevyAttributes {
   flipX?: boolean;
   flipY?: boolean;
   imageMode?: ImageMode;
+  /** Display only a sub-rectangle of the texture (source-texture pixels). Maps to
+   *  `ImageNode.rect`; with `atlas`, offsets from the selected cell's corner. */
+  sourceRect?: { x: number; y: number; width: number; height: number };
+  /** Treat `src` as a uniform sprite-sheet grid and show one cell. Maps to
+   *  `ImageNode.texture_atlas`; change `index` to flip frames (e.g. animation). */
+  atlas?: {
+    tileWidth: number;
+    tileHeight: number;
+    columns: number;
+    rows: number;
+    /** Gap between cells, `[x, y]` px. */
+    padding?: [number, number];
+    /** Grid origin offset from the texture's top-left, `[x, y]` px. */
+    offset?: [number, number];
+    /** Cell to display (row-major); default `0`. */
+    index?: number;
+  };
+  /** Which box of the node the image fills (default `"padding"`). */
+  visualBox?: "content" | "padding" | "border";
   onClick?: () => void;
 }
 

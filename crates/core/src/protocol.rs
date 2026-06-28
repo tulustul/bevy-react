@@ -128,6 +128,19 @@ pub struct Props {
     /// `type`-tagged object for 9-slice (`"sliced"`) / `"tiled"` scaling.
     #[serde(default)]
     pub image_mode: Option<ImageMode>,
+    /// Source sub-rect of the texture to display, in source-texture pixels.
+    /// Maps to `ImageNode.rect`. With `atlas`, it offsets from the atlas cell's
+    /// top-left corner.
+    #[serde(default)]
+    pub source_rect: Option<SourceRect>,
+    /// Treat `src` as a uniform sprite-sheet grid and select one cell. Maps to
+    /// `ImageNode.texture_atlas` (builds/caches a `TextureAtlasLayout`).
+    #[serde(default)]
+    pub atlas: Option<AtlasSpec>,
+    /// Which box of the node the image fills: `"content"` | `"padding"`
+    /// (default) | `"border"`. Maps to `ImageNode.visual_box`.
+    #[serde(default)]
+    pub visual_box: Option<String>,
 
     // --- `canvas` element attribute ---
     /// The display list for a `canvas` element: an ordered batch of vector draw
@@ -635,6 +648,39 @@ pub struct TiledSpec {
     pub stretch_value: Option<f32>,
 }
 
+/// A source sub-rect in texture pixels: top-left (`x`, `y`) plus `width`/`height`.
+/// Converted to a `bevy_math::Rect` (min/max corners) in `ui_map`.
+#[derive(Debug, Clone, Copy, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SourceRect {
+    pub x: f32,
+    pub y: f32,
+    pub width: f32,
+    pub height: f32,
+}
+
+/// A uniform sprite-sheet grid plus the selected cell. Mirrors
+/// `TextureAtlasLayout::from_grid` (tile size, columns, rows, optional padding /
+/// offset, all in source-texture pixels) + `TextureAtlas.index`. Bevy-free;
+/// turned into a cached `TextureAtlasLayout` asset in `ui_map`.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AtlasSpec {
+    pub tile_width: u32,
+    pub tile_height: u32,
+    pub columns: u32,
+    pub rows: u32,
+    /// Padding between cells (`[x, y]` px), if any.
+    #[serde(default)]
+    pub padding: Option<[u32; 2]>,
+    /// Offset of the grid's top-left from the texture origin (`[x, y]` px).
+    #[serde(default)]
+    pub offset: Option<[u32; 2]>,
+    /// Which cell to display (row-major). Default `0`.
+    #[serde(default)]
+    pub index: usize,
+}
+
 /// A static 2D transform mirroring the animated transform channels. Every field
 /// is optional; unset channels stay at identity (no translation, unit scale, no
 /// rotation). `scale` is uniform; `scaleX`/`scaleY` override a single axis.
@@ -1110,7 +1156,9 @@ mod tests {
             "ariaLabel":"Name","onSelect":true,"onFocus":true,"onBlur":true,
             "focusStyle":{"borderColor":"white"}}}"#;
         match serde_json::from_str::<Op>(json).expect("valid op") {
-            Op::Create { id, kind, props, .. } => {
+            Op::Create {
+                id, kind, props, ..
+            } => {
                 assert_eq!(id, 7);
                 assert_eq!(kind, "editableText");
                 assert_eq!(props.value.as_deref(), Some("hi"));
