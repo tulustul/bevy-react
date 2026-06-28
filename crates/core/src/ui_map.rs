@@ -672,9 +672,15 @@ pub fn apply_style(ec: &mut EntityCommands, style: &Option<Style>) {
             t.rotate.map(Angle::radians),
         ));
     }
-    match s.and_then(|s| s.border_color.as_deref()) {
-        Some(hex) => {
-            ec.insert(BorderColor::all(parse_color(hex)));
+    match s.and_then(|s| s.border_color.as_ref()) {
+        Some(spec) => {
+            let side = |c: &Option<String>| c.as_deref().map(parse_color).unwrap_or(Color::NONE);
+            ec.insert(BorderColor {
+                top: side(&spec.top),
+                right: side(&spec.right),
+                bottom: side(&spec.bottom),
+                left: side(&spec.left),
+            });
         }
         None => {
             ec.remove::<BorderColor>();

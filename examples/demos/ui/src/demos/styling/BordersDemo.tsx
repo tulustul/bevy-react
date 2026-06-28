@@ -21,6 +21,40 @@ export function BordersDemo() {
       </Example>
 
       <Example
+        description="Each border attribute also takes a per-side object"
+        tsx={`borderRadius: { top, right, bottom, left }
+borderColor: { top, right, bottom, left }
+border: { top, right, bottom, left }`}
+      >
+        <node style={controlColumn}>
+          <node
+            style={{
+              ...box,
+              backgroundColor: Colors.surface200,
+              borderRadius: {
+                top: 0,
+                right: 10,
+                bottom: 20,
+                left: 60,
+              },
+              border: {
+                top: 3,
+                right: 6,
+                bottom: 9,
+                left: 12,
+              },
+              borderColor: {
+                top: Colors.primary100,
+                right: Colors.amber100,
+                bottom: Colors.red100,
+                left: Colors.green100,
+              },
+            }}
+          />
+        </node>
+      </Example>
+
+      <Example
         description="outline draws a ring outside the box, ignored by layout."
         tsx={`outline: { width: 3, offset: 4, color: "#f9e2af" }`}
       >

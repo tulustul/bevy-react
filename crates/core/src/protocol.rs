@@ -318,9 +318,10 @@ pub struct Style {
     /// Hex background color (`#rrggbb` / `#rrggbbaa`).
     #[serde(default)]
     pub background_color: Option<String>,
-    /// Hex border color (applied to all sides).
+    /// Border color: a single CSS color (all four sides) or a
+    /// `{ top, right, bottom, left }` object (omitted sides → transparent).
     #[serde(default)]
-    pub border_color: Option<String>,
+    pub border_color: Option<BorderColorSpec>,
     /// Corner radii; same forms as the other rect fields (corners are
     /// top-left, top-right, bottom-right, bottom-left).
     #[serde(default)]
@@ -1072,6 +1073,68 @@ impl<'de> Deserialize<'de> for Rect {
     }
 }
 
+/// Border color: a single CSS color applied to all four sides, or a
+/// `{ top, right, bottom, left }` object setting sides individually. Omitted
+/// sides decode to `None` (painted transparent — bevy's `BorderColor` default).
+///
+/// Unlike [`Rect`], a multi-value string (`"red green blue"`) is **not** accepted:
+/// CSS color functions contain spaces (`rgb(1 2 3)`), so whitespace-splitting
+/// would be ambiguous. Per-side colors go through the object form only.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct BorderColorSpec {
+    pub top: Option<String>,
+    pub right: Option<String>,
+    pub bottom: Option<String>,
+    pub left: Option<String>,
+}
+
+impl BorderColorSpec {
+    /// One color on every side (the back-compat scalar form).
+    fn uniform(s: String) -> Self {
+        BorderColorSpec {
+            top: Some(s.clone()),
+            right: Some(s.clone()),
+            bottom: Some(s.clone()),
+            left: Some(s),
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for BorderColorSpec {
+    fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        struct BorderColorVisitor;
+        impl<'de> Visitor<'de> for BorderColorVisitor {
+            type Value = BorderColorSpec;
+            fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                f.write_str("a CSS color string or a {top,right,bottom,left} object of colors")
+            }
+            fn visit_str<E: de::Error>(self, s: &str) -> Result<BorderColorSpec, E> {
+                Ok(BorderColorSpec::uniform(s.to_owned()))
+            }
+            fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<BorderColorSpec, A::Error> {
+                let mut spec = BorderColorSpec::default();
+                while let Some(key) = map.next_key::<String>()? {
+                    let v = map.next_value::<String>()?;
+                    match key.as_str() {
+                        "top" => spec.top = Some(v),
+                        "right" => spec.right = Some(v),
+                        "bottom" => spec.bottom = Some(v),
+                        "left" => spec.left = Some(v),
+                        _ => {
+                            return Err(de::Error::unknown_field(
+                                &key,
+                                &["top", "right", "bottom", "left"],
+                            ));
+                        }
+                    }
+                }
+                Ok(spec)
+            }
+        }
+        d.deserialize_any(BorderColorVisitor)
+    }
+}
+
 /// An interaction event sent from Bevy back into JS, where the reconciler
 /// dispatches it to the matching React handler.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -1216,6 +1279,36 @@ mod tests {
         assert!((parse(serde_json::json!("3.14159rad")) - PI).abs() < 1e-4);
         assert!((parse(serde_json::json!("0.5turn")) - PI).abs() < 1e-5);
         assert!((parse(serde_json::json!("400grad")) - TAU).abs() < 1e-5);
+    }
+
+    /// `borderColor` decodes from a scalar (uniform, back-compat) or a per-side
+    /// object; omitted sides stay `None`, and an unknown side key is rejected.
+    #[test]
+    fn border_color_scalar_and_per_side() {
+        // Scalar string → every side set (the historical form).
+        let uniform: Style =
+            serde_json::from_str(r#"{ "borderColor": "white" }"#).expect("scalar decodes");
+        let bc = uniform.border_color.expect("border_color present");
+        assert_eq!(bc.top.as_deref(), Some("white"));
+        assert_eq!(bc.right.as_deref(), Some("white"));
+        assert_eq!(bc.bottom.as_deref(), Some("white"));
+        assert_eq!(bc.left.as_deref(), Some("white"));
+
+        // Object form sets only the named sides; the rest stay None (transparent).
+        let sided: Style =
+            serde_json::from_str(r##"{ "borderColor": { "top": "#f00", "left": "blue" } }"##)
+                .expect("object decodes");
+        let bc = sided.border_color.expect("border_color present");
+        assert_eq!(bc.top.as_deref(), Some("#f00"));
+        assert_eq!(bc.left.as_deref(), Some("blue"));
+        assert_eq!(bc.right, None);
+        assert_eq!(bc.bottom, None);
+
+        // An unknown side key errors rather than being silently ignored.
+        assert!(
+            serde_json::from_str::<Style>(r#"{ "borderColor": { "middle": "red" } }"#).is_err(),
+            "unknown side key must be rejected"
+        );
     }
 
     /// A `change` event serializes its new text as camelCase `value`, while the

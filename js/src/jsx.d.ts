@@ -265,8 +265,13 @@ export interface BevyStyle {
   // visual (sibling components)
   /** Background color (any CSS [`Color`], e.g. `"#1e1e2e"` or `"rebeccapurple"`). */
   backgroundColor?: Color;
-  /** Border color (any CSS [`Color`], applied to all sides). */
-  borderColor?: Color;
+  /** Border color: one CSS [`Color`] for all sides, or a per-side object.
+   *  Omitted sides are transparent. Per-side colors must use the object form —
+   *  a multi-value string is not supported (CSS color functions contain spaces).
+   *  Needs a `border` width to be visible. */
+  borderColor?:
+    | Color
+    | { top?: Color; right?: Color; bottom?: Color; left?: Color };
   borderRadius?: Rect;
   outline?: { width?: Length; offset?: Length; color?: Color };
   boxShadow?: {
