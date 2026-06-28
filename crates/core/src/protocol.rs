@@ -340,6 +340,11 @@ pub struct Style {
     pub border_gradient: Option<GradientList>,
     #[serde(default)]
     pub z_index: Option<i32>,
+    /// Global stacking order: lifts the node (and its subtree) into the UI's
+    /// top-level stack, escaping the parent stacking context. Unlike [`z_index`](Self::z_index),
+    /// which only reorders a node among its siblings.
+    #[serde(default)]
+    pub global_z_index: Option<i32>,
 
     // --- transform / opacity (drive `UiTransform` and color alpha) ---
     /// Static transform (translate/scale/rotate). Mirrors the animated transform

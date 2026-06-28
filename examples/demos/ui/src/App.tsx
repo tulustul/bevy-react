@@ -37,6 +37,7 @@ import { TransformDemo } from "./demos/styling/TransformDemo";
 import { ShadowDemo } from "./demos/styling/ShadowDemo";
 import { GradientsDemo } from "./demos/styling/GradientsDemo";
 import { OpacityDemo } from "./demos/styling/OpacityDemo";
+import { ZIndexDemo } from "./demos/styling/ZIndexDemo";
 
 type BaseDemoItem = { label: string; scene?: SceneId };
 type DemoItem = BaseDemoItem &
@@ -94,6 +95,7 @@ const DEMOS: DemoItem[] = [
       { label: "Shadow", component: ShadowDemo },
       { label: "Gradients", component: GradientsDemo },
       { label: "Opacity", component: OpacityDemo },
+      { label: "Z-Index", component: ZIndexDemo },
     ],
   },
   {

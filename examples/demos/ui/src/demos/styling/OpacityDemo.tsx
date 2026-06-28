@@ -1,6 +1,5 @@
 import { useState } from "react";
-import { BevyStyle } from "bevy-react/jsx";
-import { Checkbox, Example, Radio, RadioOption, Slider } from "@/components";
+import { Checkbox, Example, Slider } from "@/components";
 import { Colors } from "@/theme";
 import { box, controlColumn, row } from "./shared";
 
@@ -12,13 +11,6 @@ export function OpacityDemo() {
         tsx={`<node style={{ opacity: 0.4 }} />`}
       >
         <OpacityControl />
-      </Example>
-
-      <Example
-        description="zIndex controls paint order when nodes overlap."
-        tsx={`<node style={{ zIndex: 2 }} />`}
-      >
-        <ZIndexControl />
       </Example>
 
       <Example
@@ -47,41 +39,6 @@ function OpacityControl() {
   );
 }
 
-type Front = "blue" | "red";
-const FRONT_OPTIONS: RadioOption<Front>[] = [
-  { label: "blue front", value: "blue" },
-  { label: "red front", value: "red" },
-];
-
-function ZIndexControl() {
-  const [front, setFront] = useState<Front>("red");
-  return (
-    <node style={controlColumn}>
-      <node style={overlapStage}>
-        <node
-          style={{
-            ...chip,
-            left: 18,
-            top: 14,
-            backgroundColor: Colors.primary100,
-            zIndex: front === "blue" ? 2 : 1,
-          }}
-        />
-        <node
-          style={{
-            ...chip,
-            left: 50,
-            top: 30,
-            backgroundColor: Colors.red100,
-            zIndex: front === "red" ? 2 : 1,
-          }}
-        />
-      </node>
-      <Radio options={FRONT_OPTIONS} value={front} onChange={setFront} />
-    </node>
-  );
-}
-
 function DisplayControl() {
   const [hidden, setHidden] = useState(false);
   return (
@@ -101,19 +58,3 @@ function DisplayControl() {
     </node>
   );
 }
-
-const overlapStage: BevyStyle = {
-  positionType: "relative",
-  width: 150,
-  height: 96,
-  padding: 12,
-  backgroundColor: Colors.surface100,
-  borderRadius: 12,
-};
-
-const chip: BevyStyle = {
-  positionType: "absolute",
-  width: 60,
-  height: 60,
-  borderRadius: 10,
-};

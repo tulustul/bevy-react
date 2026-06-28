@@ -1,6 +1,7 @@
 //! Translation from reconciler props (the bevy-free [`crate::protocol`] wire
 //! types) into `bevy_ui` components: the `Node` layout, its sibling visual
-//! components (background/border/outline/shadow/z-index), and `ImageNode`.
+//! components (background/border/outline/shadow/z-index/global-z-index), and
+//! `ImageNode`.
 
 use bevy::platform::collections::HashMap;
 use bevy::prelude::*;
@@ -739,6 +740,14 @@ pub fn apply_style(ec: &mut EntityCommands, style: &Option<Style>) {
             ec.remove::<ZIndex>();
         }
     }
+    match s.and_then(|s| s.global_z_index) {
+        Some(z) => {
+            ec.insert(GlobalZIndex(z));
+        }
+        None => {
+            ec.remove::<GlobalZIndex>();
+        }
+    }
 
     // Stamp the transition engine's input from this (possibly hover/press-merged)
     // style. `drive_transitions` eases the snap values written above to their new
@@ -815,6 +824,7 @@ pub fn overlay_style(base: &Option<Style>, overlay: &Option<Style>) -> Option<St
         background_gradient,
         border_gradient,
         z_index,
+        global_z_index,
         transform,
         opacity,
         transition,

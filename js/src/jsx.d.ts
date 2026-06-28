@@ -284,6 +284,11 @@ export interface BevyStyle {
    *  `borderColor` (needs a `border` width to be visible). */
   borderGradient?: Gradient | Gradient[];
   zIndex?: number;
+  /** Lifts the node (and its subtree) into the UI's global stacking order,
+   *  escaping the parent stacking context — so a deeply-nested overlay can paint
+   *  above unrelated subtrees. Unlike `zIndex`, which only reorders a node among
+   *  its siblings. */
+  globalZIndex?: number;
 
   // transform / opacity
   /** Static 2D transform. With `transition` a change eases instead of snapping.
