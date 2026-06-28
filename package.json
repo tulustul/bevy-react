@@ -4,6 +4,7 @@
   "workspaces": [
     "js",
     "examples/demos/ui",
+    "examples/minimal/ui",
     "examples/stress/ui"
   ],
   "scripts": {

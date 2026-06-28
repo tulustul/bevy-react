@@ -27,6 +27,10 @@ path = "../../examples/demos/main.rs"
 name = "stress"
 path = "../../examples/stress/main.rs"
 
+[[example]]
+name = "minimal"
+path = "../../examples/minimal/main.rs"
+
 [dependencies]
 accesskit = { workspace = true }
 anyhow = { workspace = true }

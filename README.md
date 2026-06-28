@@ -85,6 +85,12 @@ cargo run --example demos
 
 ## Getting started
 
+Scaffold the React UI for a new project in one command:
+
+```sh
+npx bevy-react init ui   # creates ui/ with package.json, tsconfig, build, and a starter App
+```
+
 See **[SETUP.md](./SETUP.md)** for setting up a new project end to end - the Rust
 host, the React app, bundling, and typed bindings.
 

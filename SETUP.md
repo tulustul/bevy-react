@@ -3,9 +3,26 @@
 A bevy-react project has two halves: a **Rust host** (the Bevy app) and a **React
 app** that builds to a JS bundle the host loads at runtime.
 
-If you'd rather copy a working setup than assemble one, the [`examples/demos`](./examples/demos)
-app is a complete, idiomatic reference — host, build script, bindings, and a gallery
-of components.
+## Quick start
+
+The React/TS half is the fiddly part to wire up by hand, so a scaffolder ships with
+the package. From your project root:
+
+```sh
+npx bevy-react init ui   # scaffold the React app into ui/
+```
+
+This writes a `package.json` (pinned to compatible React / reconciler versions), a
+`tsconfig.json` with the required JSX settings, a two-bundle `build.mjs`, a starter
+`App.tsx`, and a placeholder `bevy.ts`. Then:
+
+```sh
+cd ui && npm install && npm run build
+```
+
+The rest of this guide explains what those files contain and how to extend them; if
+you'd rather copy a full, idiomatic reference, the [`examples/demos`](./examples/demos)
+app is a complete one — host, build script, bindings, and a gallery of components.
 
 ## 1. Rust host
 

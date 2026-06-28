@@ -26,9 +26,13 @@ pub(crate) fn spawn(app: &mut App, config: HostConfig, senders: HostSenders) -> 
     let vendor = bundle.with_file_name("vendor.js");
     for (label, path) in [("app bundle", &bundle), ("vendor bundle", &vendor)] {
         if !path.exists() {
+            // Resolve to an absolute path (without requiring the file to exist, so
+            // unlike `canonicalize` this works for the missing bundle) so the error
+            // is unambiguous regardless of the process's working directory.
+            let shown = std::path::absolute(path).unwrap_or_else(|_| path.clone());
             panic!(
                 "JS {label} not found at {}.\nBuild your app first (e.g. `npm run build`).",
-                path.display()
+                shown.display()
             );
         }
     }

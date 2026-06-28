@@ -13,6 +13,9 @@
     "url": "https://github.com/tulustul/bevy-react/issues"
   },
   "type": "module",
+  "bin": {
+    "bevy-react": "./bin/cli.mjs"
+  },
   "exports": {
     ".": "./src/index.ts",
     "./jsx": "./src/jsx.d.ts",
@@ -22,7 +25,9 @@
   },
   "files": [
     "src",
-    "build-lib.mjs"
+    "build-lib.mjs",
+    "bin",
+    "templates"
   ],
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json"

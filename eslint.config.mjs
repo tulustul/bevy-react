@@ -45,8 +45,8 @@ export default tseslint.config(
     },
   },
   {
-    // Node-run build scripts (esbuild + SWC pipeline for Fast Refresh).
-    files: ["**/build.mjs", "**/build-lib.mjs"],
+    // Node-run scripts: build pipeline (esbuild + SWC) and the scaffolding CLI.
+    files: ["**/build.mjs", "**/build-lib.mjs", "**/bin/*.mjs"],
     languageOptions: {
       globals: {
         ...globals.node,
