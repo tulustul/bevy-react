@@ -13,9 +13,9 @@ use crate::message::{ReactMessage, ReactRegistry};
 use crate::protocol::Op;
 use crate::reconcile::{
     OpApplyStats, apply_interaction_styles, apply_js_ops, apply_pending_selections,
-    apply_surface_interaction_styles, collect_pointer_events, collect_surface_clicks,
-    collect_surface_pointer_events, collect_ui_events, on_focus_gained, on_focus_lost,
-    on_text_edit_change, sync_editable_a11y,
+    apply_surface_interaction_styles, collect_pointer_events, collect_scroll_events,
+    collect_surface_clicks, collect_surface_pointer_events, collect_ui_events, on_focus_gained,
+    on_focus_lost, on_text_edit_change, sync_editable_a11y,
 };
 use crate::request::{RawRequest, ReactRequestRegistry, RequestReceiver, dispatch_react_requests};
 
@@ -207,6 +207,20 @@ impl Plugin for ReactUiPlugin {
                 crate::scroll::apply_scroll
                     .in_set(PointerCaptureSet)
                     .after(collect_pointer_events),
+                // Ease `ScrollPosition` toward the target the controlled write
+                // (`apply_js_ops`) and the wheel (`PointerCaptureSet`) set this frame.
+                // Runs after both so it eases toward the freshest target.
+                crate::transition::drive_scroll_transition
+                    .after(apply_js_ops)
+                    .after(PointerCaptureSet),
+                // Report scroll-offset changes (wheel, controlled write, or an eased
+                // frame) to JS for any node with an `onScroll` handler. After the ease
+                // so it sees the moved offset; after the op drain so a controlled write
+                // is already seeded into the dedup map (no echo).
+                collect_scroll_events
+                    .after(crate::transition::drive_scroll_transition)
+                    .after(PointerCaptureSet)
+                    .after(apply_js_ops),
                 // After the op drain so this frame's `StyleVariants` writes are
                 // visible; the ordering forces a command sync point first.
                 apply_interaction_styles.after(apply_js_ops),

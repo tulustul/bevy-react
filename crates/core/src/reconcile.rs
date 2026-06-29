@@ -14,16 +14,19 @@ use bevy::text::{EditableText, FontCx, LayoutCx, TextCursorStyle, TextEdit, Text
 use bevy::ui::FocusPolicy;
 use bevy::ui::RelativeCursorPosition;
 use bevy::ui::widget::NodeImageMode;
-use bevy::ui::{ComputedNode, UiGlobalTransform};
+use bevy::ui::{ComputedNode, ScrollPosition, UiGlobalTransform};
 use bevy_react_animations::AnimatedNode;
 use bevy_react_canvas::{CanvasSurface, blank_canvas_image};
 use bevy_react_portal::{RPortal, blank_portal_image};
 use bevy_react_surface::{RSurface, SurfaceVirtualPointer};
 
 use crate::anchor::Anchored;
-use crate::bridge::{FocusState, JsBridge, PointerHandlers, RNode, StyleVariants};
+use crate::bridge::{
+    FocusState, JsBridge, PointerHandlers, RNode, ScrollListener, ScrollStep, StyleVariants,
+};
 use crate::plugin::Fonts;
 use crate::protocol::{NodeId, Op, Outbound, Props, ROOT_ID, Style, UiEvent};
+use crate::transition::{ScrollTransitionState, apply_scroll_transition};
 use crate::ui_map::{
     AtlasLayoutCache, apply_atlas, apply_style, apply_text_style, image_node, overlay_style,
     resolved_text_style, text_layout,
@@ -82,6 +85,18 @@ pub fn apply_js_ops(
     // infrastructure, not a reconciler node, so `Op::Reset` must preserve it.
     anchor_layer: Query<(), With<crate::anchor::AnchorLayer>>,
     mut editables: Query<&mut EditableText>,
+    // Controlled `scrollTop`/`scrollLeft`: every `Node` has a `ScrollPosition`
+    // (it's a required component), so `get_mut(e)` succeeds for any node — we only
+    // write the axis React controls, and only when it diverges from the live value.
+    // `ComputedNode` lets us clamp the write to the scrollable range, like the
+    // wheel handler does, so a controlled offset can't overscroll. With a scroll
+    // transition the offset is eased: the controlled value sets the target rather
+    // than `ScrollPosition` directly.
+    mut scroll_query: Query<(
+        &mut ScrollPosition,
+        &ComputedNode,
+        Option<&mut ScrollTransitionState>,
+    )>,
     mut a11y_nodes: Query<&mut AccessibilityNode>,
     // A `<text>` *root* carries a layout `Node`; a span (nested `<text>` or a
     // bare string) does not. Used on update to re-apply layout/visual/transform
@@ -148,6 +163,7 @@ pub fn apply_js_ops(
                 bridge.editable_select_handlers.clear();
                 bridge.editable_focus_handlers.clear();
                 bridge.editable_pending_selection.clear();
+                bridge.scroll_positions.clear();
                 // The root persists but its children were just despawned; the shadow
                 // tree is fully rebuilt by the ops that follow.
                 bridge.child_order.clear();
@@ -318,6 +334,16 @@ pub fn apply_js_ops(
                 if kind == "surface" {
                     bridge.surfaces.insert(id);
                 }
+                // Controlled scroll + the `onScroll` listener apply to any node
+                // (anything with `overflow: scroll`). A `textSpan` has no `Node`
+                // and so never matches the read-back query — harmless there.
+                {
+                    let mut ec = commands.entity(entity);
+                    apply_scroll_listener(&mut ec, &props);
+                    apply_scroll_step(&mut ec, &props);
+                    apply_scroll_transition(&mut ec, &props.style);
+                    create_controlled_scroll(&mut bridge, &mut ec, id, &props);
+                }
                 bridge.nodes.insert(id, entity);
             }
             Op::CreateText { id, text } => {
@@ -411,6 +437,7 @@ pub fn apply_js_ops(
                     bridge.editable_select_handlers.remove(&s);
                     bridge.editable_focus_handlers.remove(&s);
                     bridge.editable_pending_selection.remove(&s);
+                    bridge.scroll_positions.remove(&s);
                     bridge.detach(s);
                     bridge.forget_subtree(s);
                 }
@@ -433,6 +460,7 @@ pub fn apply_js_ops(
                     bridge.editable_select_handlers.remove(&child);
                     bridge.editable_focus_handlers.remove(&child);
                     bridge.editable_pending_selection.remove(&child);
+                    bridge.scroll_positions.remove(&child);
                     // Unlink from the parent's ordered list, then drop the subtree from the
                     // shadow tree so it stays bounded.
                     bridge.detach(child);
@@ -538,8 +566,12 @@ pub fn apply_js_ops(
                     }
                     apply_style_variants(&mut ec, &props);
                     apply_pointer_handlers(&mut ec, &props);
+                    apply_scroll_listener(&mut ec, &props);
+                    apply_scroll_step(&mut ec, &props);
+                    apply_scroll_transition(&mut ec, &props.style);
                     apply_animated(&mut ec, &props);
                     apply_anchor(&mut ec, &props);
+                    update_controlled_scroll(&mut bridge, &mut scroll_query, e, id, &props);
                 }
             }
             Op::UpdateText { id, text } => {
@@ -731,6 +763,110 @@ fn apply_pointer_handlers(ec: &mut EntityCommands, props: &Props) {
     }
 }
 
+/// Toggle the [`ScrollListener`] marker so [`collect_scroll_events`] reports this
+/// node's `ScrollPosition` changes only while an `onScroll` handler is declared.
+fn apply_scroll_listener(ec: &mut EntityCommands, props: &Props) {
+    if props.on_scroll {
+        ec.insert_if_new(ScrollListener);
+    } else {
+        ec.remove::<ScrollListener>();
+    }
+}
+
+/// Stamp (or clear) the per-node [`ScrollStep`] wheel step from `scrollStep`.
+fn apply_scroll_step(ec: &mut EntityCommands, props: &Props) {
+    match props.scroll_step {
+        Some(step) => {
+            ec.insert(ScrollStep(step));
+        }
+        None => {
+            ec.remove::<ScrollStep>();
+        }
+    }
+}
+
+/// Apply a controlled `scrollTop`/`scrollLeft` on **create**: insert the offset
+/// (defaulting the uncontrolled axis to 0) and seed [`JsBridge::scroll_positions`]
+/// so neither the programmatic write nor the node's mount-frame
+/// `Changed<ScrollPosition>` echoes back as an `onScroll`. A listener with no
+/// controlled offset is seeded at the default `ZERO` for the same reason.
+fn create_controlled_scroll(
+    bridge: &mut JsBridge,
+    ec: &mut EntityCommands,
+    id: NodeId,
+    props: &Props,
+) {
+    if props.scroll_top.is_some() || props.scroll_left.is_some() {
+        let pos = Vec2::new(
+            props.scroll_left.unwrap_or(0.0),
+            props.scroll_top.unwrap_or(0.0),
+        );
+        // Overrides the `ZERO` that `Node`'s required `ScrollPosition` defaults to.
+        ec.insert(ScrollPosition(pos));
+        bridge.scroll_positions.insert(id, pos);
+    } else if props.on_scroll {
+        bridge.scroll_positions.insert(id, Vec2::ZERO);
+    }
+}
+
+/// Push a controlled `scrollTop`/`scrollLeft` into a live node on **update**:
+/// write only the axis React controls, clamped to the scrollable range, and only
+/// when it diverges from the live offset (so a re-render echoing the user's own
+/// wheel scroll is a no-op and never snaps the view). Mirrors the controlled
+/// `value` diff for `editableText`.
+///
+/// Records the **requested** (pre-clamp) value in [`JsBridge::scroll_positions`].
+/// When the request was in range this equals the written offset, so the read-back
+/// dedups it (no echo). When the request overshot, the clamped component value
+/// diverges from the recorded request, so the read-back fires one `"scroll"` with
+/// the real offset — letting a controlled `scrollTop={BIG}` settle to the true max.
+///
+/// With a scroll transition ([`ScrollTransitionState`] present) the clamped value
+/// becomes the eased **target** instead of being written to `ScrollPosition` — the
+/// `drive_scroll_transition` system moves the offset toward it. The uncontrolled
+/// axis keeps the current target (not the mid-ease position) so it doesn't snap.
+fn update_controlled_scroll(
+    bridge: &mut JsBridge,
+    scroll_query: &mut Query<(
+        &mut ScrollPosition,
+        &ComputedNode,
+        Option<&mut ScrollTransitionState>,
+    )>,
+    e: Entity,
+    id: NodeId,
+    props: &Props,
+) {
+    if props.scroll_top.is_none() && props.scroll_left.is_none() {
+        return;
+    }
+    if let Ok((mut pos, computed, scroll_state)) = scroll_query.get_mut(e) {
+        // Base on the eased target if a transition owns the offset, else the live one.
+        let mut requested = scroll_state.as_ref().map_or(pos.0, |s| s.target);
+        if let Some(x) = props.scroll_left {
+            requested.x = x;
+        }
+        if let Some(y) = props.scroll_top {
+            requested.y = y;
+        }
+        // Same range as the wheel handler (`scroll::apply_scroll`): `ComputedNode`
+        // sizes are physical, the component is logical, so scale with `inverse_scale_factor`.
+        let max = (computed.content_size - computed.size + computed.scrollbar_size).max(Vec2::ZERO)
+            * computed.inverse_scale_factor;
+        let clamped = requested.clamp(Vec2::ZERO, max);
+        match scroll_state {
+            // Eased: set the target; `drive_scroll_transition` moves `ScrollPosition`.
+            Some(mut state) => state.target = clamped,
+            // Snap: write the offset directly, only when it diverges.
+            None => {
+                if pos.0 != clamped {
+                    pos.0 = clamped;
+                }
+            }
+        }
+        bridge.scroll_positions.insert(id, requested);
+    }
+}
+
 /// `<button>` captures the pointer by default — bevy_ui's native `Button` sets
 /// `FocusPolicy::Block`, and we mirror that so a button doesn't leak its click to a
 /// sibling, an ancestor, or the 3D scene/portal behind it. [`apply_style`] defaults
@@ -780,6 +916,37 @@ pub fn collect_ui_events(
                 },
             });
         }
+    }
+}
+
+/// Report `ScrollPosition` changes back to JS as `"scroll"` events. Scoped to
+/// nodes carrying a [`ScrollListener`] (i.e. those with an `onScroll` handler) so
+/// the `Changed<ScrollPosition>` query stays cheap — `ScrollPosition` is a
+/// required component of every `Node`, so an unscoped query would fire for every
+/// node on its mount frame. A controlled write-back is deduped against
+/// [`JsBridge::scroll_positions`], breaking the controlled-component echo loop.
+#[allow(clippy::type_complexity)]
+pub fn collect_scroll_events(
+    mut bridge: ResMut<JsBridge>,
+    query: Query<(&ScrollPosition, &RNode), (With<ScrollListener>, Changed<ScrollPosition>)>,
+) {
+    for (scroll, rnode) in &query {
+        let id = rnode.0;
+        if bridge.scroll_positions.get(&id) == Some(&scroll.0) {
+            // Our own controlled write (or an unchanged value) — don't echo it.
+            continue;
+        }
+        bridge.scroll_positions.insert(id, scroll.0);
+        debug!("scroll -> reconciler node {id}");
+        let _ = bridge.outbound_tx.send(Outbound::UiEvent {
+            event: UiEvent {
+                id,
+                kind: "scroll".to_string(),
+                scroll_top: Some(scroll.0.y),
+                scroll_left: Some(scroll.0.x),
+                ..default()
+            },
+        });
     }
 }
 
@@ -2067,6 +2234,245 @@ mod tests {
         assert!(
             bridge.child_surfaces.is_empty() && bridge.surface_parent.is_empty(),
             "surface parentage maps are cleared"
+        );
+    }
+
+    /// A node created with a controlled `scrollTop` gets that `ScrollPosition`; an
+    /// `onScroll` node gets a `ScrollListener` and is seeded in the dedup map (at
+    /// `ZERO` when uncontrolled) so its mount-frame change doesn't echo back.
+    #[test]
+    fn controlled_scroll_create_sets_position_and_listener() {
+        let (mut app, ops_tx) = op_app();
+        ops_tx
+            .send(vec![
+                // controlled offset + an onScroll handler.
+                Op::Create {
+                    id: 1,
+                    kind: "node".into(),
+                    props: serde_json::from_value(serde_json::json!({
+                        "scrollTop": 50.0, "onScroll": true,
+                        "style": { "overflowY": "scroll" }
+                    }))
+                    .unwrap(),
+                    text: None,
+                },
+                // listener only (read-only scroll): seeded at ZERO.
+                Op::Create {
+                    id: 2,
+                    kind: "node".into(),
+                    props: serde_json::from_value(serde_json::json!({ "onScroll": true })).unwrap(),
+                    text: None,
+                },
+                // controlled only, no handler → no marker.
+                Op::Create {
+                    id: 3,
+                    kind: "node".into(),
+                    props: serde_json::from_value(serde_json::json!({ "scrollTop": 30.0 }))
+                        .unwrap(),
+                    text: None,
+                },
+            ])
+            .unwrap();
+        app.update();
+
+        let nodes = app.world().resource::<JsBridge>().nodes.clone();
+        let (e1, e2, e3) = (nodes[&1], nodes[&2], nodes[&3]);
+
+        assert_eq!(
+            app.world().entity(e1).get::<ScrollPosition>().unwrap().0,
+            Vec2::new(0.0, 50.0)
+        );
+        assert!(app.world().entity(e1).get::<ScrollListener>().is_some());
+        assert!(app.world().entity(e2).get::<ScrollListener>().is_some());
+        assert!(
+            app.world().entity(e3).get::<ScrollListener>().is_none(),
+            "a controlled node with no onScroll must not be marked"
+        );
+
+        let bridge = app.world().resource::<JsBridge>();
+        assert_eq!(bridge.scroll_positions.get(&1), Some(&Vec2::new(0.0, 50.0)));
+        assert_eq!(bridge.scroll_positions.get(&2), Some(&Vec2::ZERO));
+        assert_eq!(bridge.scroll_positions.get(&3), Some(&Vec2::new(0.0, 30.0)));
+    }
+
+    /// A controlled `scrollTop` past the scrollable range clamps the written
+    /// `ScrollPosition` to the max, while recording the *requested* value so the
+    /// read-back can correct React's controlled state down to the real max.
+    #[test]
+    fn controlled_scroll_update_clamps_to_range() {
+        let (mut app, ops_tx) = op_app();
+        ops_tx
+            .send(vec![Op::Create {
+                id: 1,
+                kind: "node".into(),
+                props: serde_json::from_value(serde_json::json!({
+                    "onScroll": true, "style": { "overflowY": "scroll" }
+                }))
+                .unwrap(),
+                text: None,
+            }])
+            .unwrap();
+        app.update();
+
+        let e1 = app.world().resource::<JsBridge>().nodes[&1];
+        // A laid-out size with real range: content 300, view 100 → max scroll 200.
+        app.world_mut().entity_mut(e1).insert(ComputedNode {
+            size: Vec2::new(200.0, 100.0),
+            content_size: Vec2::new(200.0, 300.0),
+            inverse_scale_factor: 1.0,
+            ..default()
+        });
+
+        ops_tx
+            .send(vec![Op::Update {
+                id: 1,
+                props: serde_json::from_value(serde_json::json!({
+                    "onScroll": true, "scrollTop": 10000.0,
+                    "style": { "overflowY": "scroll" }
+                }))
+                .unwrap(),
+            }])
+            .unwrap();
+        app.update();
+
+        assert_eq!(
+            app.world().entity(e1).get::<ScrollPosition>().unwrap().0,
+            Vec2::new(0.0, 200.0),
+            "the written offset is clamped to the scrollable range"
+        );
+        assert_eq!(
+            app.world().resource::<JsBridge>().scroll_positions.get(&1),
+            Some(&Vec2::new(0.0, 10000.0)),
+            "the requested (pre-clamp) value is recorded so the read-back can correct React"
+        );
+    }
+
+    /// [`collect_scroll_events`] reports a `"scroll"` for a `ScrollListener` node
+    /// whose offset diverges from the recorded one, ignores non-listener nodes, and
+    /// records the emitted value.
+    #[test]
+    fn collect_scroll_events_emits_for_listener_only() {
+        use bevy::ecs::system::RunSystemOnce;
+
+        let mut world = World::new();
+        let (out_tx, mut out_rx) = tokio::sync::mpsc::unbounded_channel::<Outbound>();
+        let (_ops_tx, ops_rx) = crossbeam_channel::unbounded::<Vec<Op>>();
+        let root = world.spawn_empty().id();
+        world.insert_resource(JsBridge::new(ops_rx, out_tx, root));
+
+        world.spawn((
+            ScrollPosition(Vec2::new(0.0, 50.0)),
+            RNode(1),
+            ScrollListener,
+        ));
+        // No marker → must be ignored even though its ScrollPosition is "changed".
+        world.spawn((ScrollPosition(Vec2::new(0.0, 70.0)), RNode(2)));
+
+        world.run_system_once(collect_scroll_events).unwrap();
+
+        match out_rx.try_recv().expect("a scroll event for the listener") {
+            Outbound::UiEvent { event } => {
+                assert_eq!(event.id, 1);
+                assert_eq!(event.kind, "scroll");
+                assert_eq!(event.scroll_top, Some(50.0));
+                assert_eq!(event.scroll_left, Some(0.0));
+            }
+            other => panic!("expected a UiEvent, got {other:?}"),
+        }
+        assert!(
+            out_rx.try_recv().is_err(),
+            "the non-listener node must not emit"
+        );
+        assert_eq!(
+            world.resource::<JsBridge>().scroll_positions.get(&1),
+            Some(&Vec2::new(0.0, 50.0))
+        );
+    }
+
+    /// A `ScrollPosition` equal to the recorded value (a controlled write-back, or
+    /// an unchanged offset) is NOT echoed — this is what breaks the controlled
+    /// component's feedback loop.
+    #[test]
+    fn collect_scroll_events_dedups_controlled_writeback() {
+        use bevy::ecs::system::RunSystemOnce;
+
+        let mut world = World::new();
+        let (out_tx, mut out_rx) = tokio::sync::mpsc::unbounded_channel::<Outbound>();
+        let (_ops_tx, ops_rx) = crossbeam_channel::unbounded::<Vec<Op>>();
+        let root = world.spawn_empty().id();
+        world.insert_resource(JsBridge::new(ops_rx, out_tx, root));
+
+        // The controlled write already recorded this exact offset.
+        world
+            .resource_mut::<JsBridge>()
+            .scroll_positions
+            .insert(1, Vec2::new(0.0, 50.0));
+        world.spawn((
+            ScrollPosition(Vec2::new(0.0, 50.0)),
+            RNode(1),
+            ScrollListener,
+        ));
+
+        world.run_system_once(collect_scroll_events).unwrap();
+
+        assert!(
+            out_rx.try_recv().is_err(),
+            "a write-back equal to the recorded value must not echo back to React"
+        );
+    }
+
+    /// With a `transition: { scroll }`, a controlled `scrollTop` change sets the eased
+    /// `ScrollTransitionState` target instead of snapping `ScrollPosition` — the drive
+    /// system (not exercised here) moves the offset toward it.
+    #[test]
+    fn controlled_scroll_with_transition_sets_target_not_position() {
+        let (mut app, ops_tx) = op_app();
+        let style = serde_json::json!({
+            "overflowY": "scroll", "transition": { "scroll": { "duration": 300 } }
+        });
+        ops_tx
+            .send(vec![Op::Create {
+                id: 1,
+                kind: "node".into(),
+                props: serde_json::from_value(serde_json::json!({ "style": style })).unwrap(),
+                text: None,
+            }])
+            .unwrap();
+        app.update();
+
+        let e1 = app.world().resource::<JsBridge>().nodes[&1];
+        // A real scroll range so the target isn't clamped away (content 300, view 100).
+        app.world_mut().entity_mut(e1).insert(ComputedNode {
+            size: Vec2::new(200.0, 100.0),
+            content_size: Vec2::new(200.0, 300.0),
+            inverse_scale_factor: 1.0,
+            ..default()
+        });
+
+        ops_tx
+            .send(vec![Op::Update {
+                id: 1,
+                props: serde_json::from_value(
+                    serde_json::json!({ "scrollTop": 80.0, "style": style }),
+                )
+                .unwrap(),
+            }])
+            .unwrap();
+        app.update();
+
+        assert_eq!(
+            app.world().entity(e1).get::<ScrollPosition>().unwrap().0,
+            Vec2::ZERO,
+            "a controlled change with a scroll transition must not snap the offset"
+        );
+        assert_eq!(
+            app.world()
+                .entity(e1)
+                .get::<ScrollTransitionState>()
+                .unwrap()
+                .target,
+            Vec2::new(0.0, 80.0),
+            "it sets the eased target instead"
         );
     }
 }

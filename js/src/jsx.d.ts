@@ -178,6 +178,12 @@ export interface BevyTransition {
    * accordion. Needs an explicit pixel target (e.g. `maxHeight: open ? 300 : 0`);
    * `auto`/unknown heights snap. Pair with `overflowY: "clip"`. */
   size?: BevyTransitionSpec;
+  /** Eases the scroll offset (`ScrollPosition`) of an `overflow: scroll` node
+   * toward its target — a controlled `scrollTop`/`scrollLeft` change or accumulated
+   * wheel input — instead of snapping (smooth scroll). Covers both axes. Don't also
+   * feed `onScroll` back into the same controlled axis, or the round-trip fights the
+   * ease (drive the target from buttons/state; read `onScroll` into separate state). */
+  scroll?: BevyTransitionSpec;
 }
 
 /** A CSS-like style object mapped onto `bevy_ui::Node` and its sibling visual
@@ -400,6 +406,20 @@ export interface BevyNodeProps extends BevyAttributes {
   onPointerMove?: (e: PointerEventData) => void;
   /** Pointer released after a press/drag that began on this element. */
   onPointerUp?: (e: PointerEventData) => void;
+  /** Controlled vertical scroll offset in logical px (maps to `ScrollPosition.y`).
+   *  Meaningful on a node with `overflowY: "scroll"`. Pushed into the node only
+   *  when it diverges from the live offset, so it never fights the user's wheel. */
+  scrollTop?: number;
+  /** Controlled horizontal scroll offset in logical px (maps to `ScrollPosition.x`).
+   *  Meaningful on a node with `overflowX: "scroll"`. */
+  scrollLeft?: number;
+  /** Logical pixels scrolled per mouse-wheel "line" for this container (default 20).
+   *  Only scales line-based wheels; trackpad pixel deltas are used as-is. */
+  scrollStep?: number;
+  /** Fires when this node's scroll offset changes (wheel or a controlled write).
+   *  Receives the new offset; pair with `scrollTop`/`scrollLeft` for a controlled
+   *  scroll container. */
+  onScroll?: (e: { scrollTop: number; scrollLeft: number }) => void;
   children?: ReactNode;
 }
 

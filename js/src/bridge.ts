@@ -83,6 +83,11 @@ export interface SerializedProps {
   onPointerDown?: boolean;
   onPointerMove?: boolean;
   onPointerUp?: boolean;
+  // Controlled scroll offsets (logical px) for any node with `overflow: scroll`.
+  scrollTop?: number;
+  scrollLeft?: number;
+  scrollStep?: number;
+  onScroll?: boolean;
   // `image` element attributes
   src?: string;
   tint?: string;
@@ -137,6 +142,9 @@ export interface UiEvent {
   selectionDirection?: string;
   // Whether an IME composition is in progress. Present on "change"/"select".
   composing?: boolean;
+  // New scroll offset (logical px). Present only for the "scroll" event.
+  scrollTop?: number;
+  scrollLeft?: number;
 }
 
 // Ops accumulated during the current commit, flushed in resetAfterCommit.
@@ -265,6 +273,7 @@ const HANDLER_KINDS: Record<string, string> = {
   onSelect: "select",
   onFocus: "focus",
   onBlur: "blur",
+  onScroll: "scroll",
 };
 
 // (Re)populate the id -> handlers map from `props`, or clear it when there are no
@@ -326,6 +335,10 @@ export function serializeProps(
     }
     if (key === "onBlur" && typeof value === "function") {
       out.onBlur = true;
+      continue;
+    }
+    if (key === "onScroll" && typeof value === "function") {
+      out.onScroll = true;
       continue;
     }
     if (key === "style" && value && typeof value === "object") {
@@ -397,6 +410,10 @@ export function serializeProps(
     else if (key === "selectionStart") out.selectionStart = value as number;
     else if (key === "selectionEnd") out.selectionEnd = value as number;
     else if (key === "ariaLabel") out.ariaLabel = value as string;
+    // Controlled scroll offsets (any node with `overflow: scroll`).
+    else if (key === "scrollTop") out.scrollTop = value as number;
+    else if (key === "scrollLeft") out.scrollLeft = value as number;
+    else if (key === "scrollStep") out.scrollStep = value as number;
   }
 
   registerHandlers(id, props);

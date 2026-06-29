@@ -63,6 +63,23 @@ pub struct PointerHandlers {
     pub up: bool,
 }
 
+/// Marks a node that declared an `onScroll` handler, so the read-back system
+/// (`collect_scroll_events`) reports its `ScrollPosition` changes. The marker is
+/// what keeps that query cheap: `ScrollPosition` is a required component of every
+/// `Node`, so a bare `Changed<ScrollPosition>` query would fire for every node on
+/// its mount frame — scoping to `With<ScrollListener>` walks only onScroll nodes.
+/// Inserted/removed alongside the node as its `onScroll` handler comes and goes,
+/// mirroring how `Interaction` gates `onClick`.
+#[derive(Component, Debug, Clone, Copy, Default)]
+pub struct ScrollListener;
+
+/// Per-node wheel step: logical pixels scrolled per mouse-wheel "line", overriding
+/// the default. Read by `scroll::apply_scroll`; absent → the default `LINE_HEIGHT`.
+/// Stamped from the `scrollStep` prop; only affects `MouseScrollUnit::Line` wheels
+/// (trackpads report `Pixel` deltas, which are used raw).
+#[derive(Component, Debug, Clone, Copy)]
+pub struct ScrollStep(pub f32);
+
 /// A standalone clone of the outbound sender, inserted in [`Plugin::build`] so
 /// the request dispatcher and the [`ReactEvents`](crate::ReactEvents) system
 /// param can push to JS without depending on [`JsBridge`], which only exists
@@ -111,6 +128,11 @@ pub struct JsBridge {
     /// Controlled selection (anchor, focus) byte offsets awaiting application to
     /// the live `EditableText`, drained by `apply_pending_selections`.
     pub editable_pending_selection: HashMap<NodeId, (usize, usize)>,
+    /// The last `ScrollPosition` emitted to JS (or written by a controlled
+    /// `scrollTop`/`scrollLeft`) per node. Dedups `"scroll"` events and breaks the
+    /// controlled-component echo loop: a programmatic write-back equal to this is
+    /// not re-emitted. Only nodes with an `onScroll` handler appear here.
+    pub scroll_positions: HashMap<NodeId, Vec2>,
     /// Authoritative ordered children per parent (incl. `ROOT_ID`). Bevy's `Children`
     /// component can't be read mid-batch — `Commands` hierarchy ops are deferred to the
     /// next sync point — so this mirror is the source of truth for computing ordered
@@ -152,6 +174,7 @@ impl JsBridge {
             editable_select_handlers: HashSet::new(),
             editable_focus_handlers: HashSet::new(),
             editable_pending_selection: HashMap::new(),
+            scroll_positions: HashMap::new(),
             child_order: HashMap::new(),
             parent_of: HashMap::new(),
             surface_parent: HashMap::new(),

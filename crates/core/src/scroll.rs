@@ -11,10 +11,13 @@ use bevy::prelude::*;
 use bevy::ui::{ComputedNode, ScrollPosition, UiGlobalTransform, UiStack};
 use bevy::window::PrimaryWindow;
 
+use crate::bridge::ScrollStep;
 use crate::plugin::PointerCapture;
+use crate::transition::ScrollTransitionState;
 
-/// Logical pixels scrolled per wheel "line" (mice report `Line` units; trackpads
-/// report `Pixel`). A middling value that feels close to a typical desktop.
+/// Default logical pixels scrolled per wheel "line" (mice report `Line` units;
+/// trackpads report `Pixel`). A middling value that feels close to a typical
+/// desktop. A node's `scrollStep` prop ([`ScrollStep`]) overrides it per container.
 const LINE_HEIGHT: f32 = 20.0;
 
 /// Whether a node opts into scrolling on either axis.
@@ -40,6 +43,7 @@ fn is_scroll_container(node: &Node) -> bool {
 /// content-agnostic: whatever sits on top (text glyphs, images, child nodes) is
 /// irrelevant because we only ever test the containers' rects. Bevy's layout clamps
 /// the *applied* offset to `[0, max]`, so writing freely here never overscrolls.
+#[allow(clippy::type_complexity)]
 pub fn apply_scroll(
     accumulated: Res<AccumulatedMouseScroll>,
     windows: Query<&Window, With<PrimaryWindow>>,
@@ -49,6 +53,8 @@ pub fn apply_scroll(
         &UiGlobalTransform,
         &Node,
         &mut ScrollPosition,
+        Option<&ScrollStep>,
+        Option<&mut ScrollTransitionState>,
     )>,
     mut capture: ResMut<PointerCapture>,
 ) {
@@ -67,21 +73,23 @@ pub fn apply_scroll(
     // here.
     let cursor = cursor * window.scale_factor();
 
-    // Wheel delta → logical pixels. A positive wheel delta scrolls the view up,
-    // i.e. moves content down, i.e. *decreases* the scroll offset.
-    let delta = match accumulated.unit {
-        MouseScrollUnit::Line => accumulated.delta * LINE_HEIGHT,
-        MouseScrollUnit::Pixel => accumulated.delta,
-    };
-
     // `uinodes` is ordered back-to-front, so reversed is topmost-first: the first
     // scroll container whose rect contains the cursor wins. This also resolves nested
     // scroll areas correctly (an inner one sits later in the stack, so it's hit first).
     for &entity in ui_stack.uinodes.iter().rev() {
-        if let Ok((computed, transform, node, mut pos)) = scrollables.get_mut(entity)
+        if let Ok((computed, transform, node, mut pos, step, scroll_state)) =
+            scrollables.get_mut(entity)
             && is_scroll_container(node)
             && computed.contains_point(*transform, cursor)
         {
+            // Wheel delta → logical pixels, scaled by this container's step. A positive
+            // wheel delta scrolls the view up (content down), i.e. *decreases* the offset.
+            let delta = match accumulated.unit {
+                MouseScrollUnit::Line => {
+                    accumulated.delta * step.map(|s| s.0).unwrap_or(LINE_HEIGHT)
+                }
+                MouseScrollUnit::Pixel => accumulated.delta,
+            };
             // Clamp to the scrollable range so the offset can't accumulate past the
             // ends (otherwise you'd have to "unscroll" the slack before it moves).
             // Bevy clamps the offset it *applies* for rendering but never writes that
@@ -91,18 +99,28 @@ pub fn apply_scroll(
             let max = (computed.content_size - computed.size + computed.scrollbar_size)
                 .max(Vec2::ZERO)
                 * computed.inverse_scale_factor;
+            // Move from the eased target if a scroll transition owns the offset (so
+            // ticks accumulate toward a farther target), else from the live position.
+            let base = scroll_state.as_ref().map_or(pos.0, |s| s.target);
             // Only the axes with actual scroll range (`max > 0`) consume the wheel;
             // a container whose content fits has nothing to move.
+            let mut next = base;
             let mut consumed = false;
             if node.overflow.x == OverflowAxis::Scroll && delta.x != 0.0 && max.x > 0.0 {
-                pos.0.x = (pos.0.x - delta.x).clamp(0.0, max.x);
+                next.x = (base.x - delta.x).clamp(0.0, max.x);
                 consumed = true;
             }
             if node.overflow.y == OverflowAxis::Scroll && delta.y != 0.0 && max.y > 0.0 {
-                pos.0.y = (pos.0.y - delta.y).clamp(0.0, max.y);
+                next.y = (base.y - delta.y).clamp(0.0, max.y);
                 consumed = true;
             }
             if consumed {
+                // With a transition, set the eased target (`drive_scroll_transition`
+                // moves `ScrollPosition`); otherwise move the offset directly.
+                match scroll_state {
+                    Some(mut state) => state.target = next,
+                    None => pos.0 = next,
+                }
                 // The wheel actually moved this container — claim it for the UI so
                 // world-input systems that honor `PointerCapture` (the orbit camera's
                 // wheel-zoom, etc.) ignore the same wheel this frame.
@@ -188,6 +206,73 @@ mod tests {
     /// Like [`run_with_content`] with the default 300px content (scroll range `[0, 200]`).
     fn run(cursor: Vec2, start: Vec2, wheel: Vec2) -> (Vec2, bool) {
         run_with_content(cursor, start, wheel, 300.0)
+    }
+
+    /// A 200×100 scroll container holding 300px of content, plus any extra components
+    /// the caller adds (e.g. `ScrollStep`, `ScrollTransitionState`). Cursor centered,
+    /// one `Line` wheel tick of `wheel`. Returns the container entity + world.
+    fn run_with(extra: impl Bundle, wheel: Vec2) -> (World, Entity) {
+        let mut world = World::new();
+        let mut window = Window::default();
+        window.set_physical_cursor_position(Some(Vec2::new(300.0, 200.0).as_dvec2()));
+        world.spawn((window, PrimaryWindow));
+        let container = world
+            .spawn((
+                Node {
+                    overflow: Overflow::scroll_y(),
+                    ..default()
+                },
+                ComputedNode {
+                    size: Vec2::new(200.0, 100.0),
+                    content_size: Vec2::new(200.0, 300.0),
+                    inverse_scale_factor: 1.0,
+                    ..default()
+                },
+                UiGlobalTransform::from_translation(Vec2::new(300.0, 200.0)),
+                ScrollPosition::default(),
+                extra,
+            ))
+            .id();
+        world.insert_resource(UiStack {
+            uinodes: vec![container],
+            partition: Vec::new(),
+        });
+        world.insert_resource(AccumulatedMouseScroll {
+            unit: MouseScrollUnit::Line,
+            delta: wheel,
+        });
+        world.insert_resource(PointerCapture::default());
+        world.run_system_once(apply_scroll).unwrap();
+        (world, container)
+    }
+
+    #[test]
+    fn scroll_step_scales_the_wheel_delta() {
+        // A custom step of 40 moves twice the default 20 per line tick (wheel down).
+        let (world, container) = run_with(ScrollStep(40.0), Vec2::new(0.0, -1.0));
+        let pos = world.entity(container).get::<ScrollPosition>().unwrap().0;
+        assert_eq!(pos, Vec2::new(0.0, 40.0));
+    }
+
+    #[test]
+    fn wheel_feeds_target_when_scroll_transition_present() {
+        // With a `ScrollTransitionState`, the wheel sets the eased *target*, leaving
+        // `ScrollPosition` untouched (the drive system moves it later).
+        let (world, container) = run_with(ScrollTransitionState::default(), Vec2::new(0.0, -1.0));
+        assert_eq!(
+            world.entity(container).get::<ScrollPosition>().unwrap().0,
+            Vec2::ZERO,
+            "the wheel must not move the offset directly when easing"
+        );
+        assert_eq!(
+            world
+                .entity(container)
+                .get::<ScrollTransitionState>()
+                .unwrap()
+                .target,
+            Vec2::new(0.0, 20.0),
+            "the wheel accumulates into the eased target"
+        );
     }
 
     #[test]

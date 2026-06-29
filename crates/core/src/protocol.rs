@@ -98,6 +98,29 @@ pub struct Props {
     /// Whether this element has an `onPointerUp` handler registered in JS.
     #[serde(default)]
     pub on_pointer_up: bool,
+
+    // --- controlled scroll (any node with `overflow: scroll`) ---
+    /// Controlled vertical scroll offset (logical px) → `ScrollPosition.y`. On
+    /// update it's pushed into the node only when it diverges from the live offset
+    /// (so a re-render echoing the user's own wheel scroll is a no-op — see
+    /// [`crate::reconcile`]). Each axis is independent; absent leaves it alone.
+    #[serde(default)]
+    pub scroll_top: Option<f32>,
+    /// Controlled horizontal scroll offset (logical px) → `ScrollPosition.x`.
+    #[serde(default)]
+    pub scroll_left: Option<f32>,
+    /// Logical pixels scrolled per mouse-wheel "line" for this container, overriding
+    /// the default. Maps to [`crate::bridge::ScrollStep`]; only scales `Line`-unit
+    /// wheels (trackpad `Pixel` deltas are used raw).
+    #[serde(default)]
+    pub scroll_step: Option<f32>,
+    /// Whether this element has an `onScroll` handler registered in JS. Present →
+    /// the reconciler stamps a [`crate::bridge::ScrollListener`] so the read-back
+    /// system reports offset changes (kept cheap by scoping its `Changed` query to
+    /// that marker, since `ScrollPosition` is a required component of every `Node`).
+    #[serde(default)]
+    pub on_scroll: bool,
+
     /// Per-property animation bindings for an `Animated.node` (Reanimated-style).
     /// Present → the main reconciler stamps a `bevy_react_animations::AnimatedNode`
     /// on the entity so the animations plugin drives the listed props each frame.
@@ -1157,8 +1180,8 @@ impl<'de> Deserialize<'de> for BorderColorSpec {
 pub struct UiEvent {
     pub id: NodeId,
     /// `"click"`, a pointer kind (`"pointerDown"` / `"pointerMove"` /
-    /// `"pointerUp"`), or one of an `editableText`'s `"change"` / `"select"` /
-    /// `"focus"` / `"blur"` events.
+    /// `"pointerUp"`), `"scroll"`, or one of an `editableText`'s `"change"` /
+    /// `"select"` / `"focus"` / `"blur"` events.
     pub kind: String,
     /// Cursor x within the node, normalized to `0..1` (left→right). Present only
     /// for pointer events; `None` for `"click"`.
@@ -1194,6 +1217,14 @@ pub struct UiEvent {
     /// `"change"` / `"select"` events.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub composing: Option<bool>,
+    /// Vertical scroll offset (logical px) → `ScrollPosition.y`. Present only for
+    /// `"scroll"` events.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scroll_top: Option<f32>,
+    /// Horizontal scroll offset (logical px) → `ScrollPosition.x`. Present only for
+    /// `"scroll"` events.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scroll_left: Option<f32>,
 }
 
 /// Everything that flows Bevy -> JS over the single outbound channel. Internally

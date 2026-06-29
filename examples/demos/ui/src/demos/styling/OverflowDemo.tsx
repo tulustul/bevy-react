@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { BevyStyle } from "bevy-react/jsx";
-import { Example, Radio, RadioOption } from "@/components";
+import { Button, Example, Radio, RadioOption } from "@/components";
 import { Colors, FontSizes } from "@/theme";
 import { caption, controlColumn } from "./shared";
 
@@ -54,7 +54,92 @@ scrollbarWidth: value === "scroll" ? 8 : 0,`}
           ))}
         </node>
       </Example>
+
+      <Example
+        description="A controlled scroll container: scrollTop is React state. onScroll syncs it from the wheel; the buttons jump the offset by writing scrollTop back. The readout shows the live value."
+        tsx={`const [scrollTop, setScrollTop] = useState(0);
+<node
+  style={{ overflowY: "scroll" }}
+  scrollTop={scrollTop}
+  onScroll={(e) => setScrollTop(e.scrollTop)}
+>`}
+      >
+        <ControlledScrollList />
+      </Example>
+
+      <Example
+        description="Smooth scroll: a scroll transition eases the offset instead of snapping. The buttons set a target and it animates there; the wheel eases too (scrollStep sets the per-line distance). onScroll feeds a separate readout — feeding it back into scrollTop would fight the ease."
+        tsx={`<node
+  style={{ overflowY: "scroll",
+    transition: { scroll: { duration: 200, easing: "easeOut" } } }}
+  scrollStep={50}
+  scrollTop={target}              // set by buttons only
+  onScroll={(e) => setReadout(e.scrollTop)}
+>`}
+      >
+        <SmoothScrollList />
+      </Example>
     </>
+  );
+}
+
+// Smooth (eased) scroll. The `transition: { scroll }` style eases `ScrollPosition`
+// toward its target, so the buttons animate to the ends and the wheel glides
+// (`scrollStep` sets the per-line distance). Per the easing caveat, `scrollTop` is
+// driven only by the buttons; `onScroll` updates a *separate* readout so the
+// round-trip doesn't keep resetting the target mid-ease.
+function SmoothScrollList() {
+  return (
+    <node style={controlColumn}>
+      <node
+        style={{
+          ...listStyle,
+          transition: { scroll: { duration: 200, easing: "easeOut" } },
+        }}
+        scrollStep={50}
+      >
+        {ITEMS.map((item) => (
+          <node key={item} style={rowStyle}>
+            <text
+              style={{ color: Colors.textColor100, fontSize: FontSizes.sm }}
+            >
+              {item}
+            </text>
+          </node>
+        ))}
+      </node>
+    </node>
+  );
+}
+
+// A controlled scroll container: `scrollTop` is React state, kept in sync from the
+// wheel via `onScroll` and jumped programmatically by the buttons. The readout
+// proves the round trip (Bevy → React on wheel, React → Bevy on a button press).
+function ControlledScrollList() {
+  const [scrollTop, setScrollTop] = useState(0);
+  return (
+    <node style={controlColumn}>
+      <node
+        style={listStyle}
+        scrollTop={scrollTop}
+        onScroll={(e) => setScrollTop(e.scrollTop)}
+      >
+        {ITEMS.map((item) => (
+          <node key={item} style={rowStyle}>
+            <text
+              style={{ color: Colors.textColor100, fontSize: FontSizes.sm }}
+            >
+              {item}
+            </text>
+          </node>
+        ))}
+      </node>
+      <node style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+        <Button onClick={() => setScrollTop(0)}>Top</Button>
+        <Button onClick={() => setScrollTop(10_000)}>Bottom</Button>
+        <text style={caption}>{`scrollTop: ${Math.round(scrollTop)}`}</text>
+      </node>
+    </node>
   );
 }
 

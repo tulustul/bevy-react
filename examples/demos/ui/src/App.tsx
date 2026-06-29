@@ -166,7 +166,7 @@ export function App() {
       <node style={navStyle}>
         <image src="bevy-react-logo.png" style={{ width: 150 }} />
         <text style={titleStyle}>bevy-react</text>
-        <node style={itemsStyle}>
+        <node style={itemsStyle} scrollStep={40}>
           {DEMOS.map((demo, index) => (
             <Item
               key={index}
@@ -178,7 +178,7 @@ export function App() {
         </node>
       </node>
 
-      <node style={contentStyle}>
+      <node style={contentStyle} scrollStep={100}>
         {selectedDemo.component && <selectedDemo.component />}
       </node>
     </node>
@@ -341,6 +341,7 @@ const itemsStyle: BevyStyle = {
   height: "100%",
   gap: 8,
   overflowY: "scroll",
+  transition: { scroll: { duration: 200, easing: "easeOut" } },
 };
 
 const titleStyle: BevyStyle = {
@@ -367,4 +368,5 @@ const contentStyle: BevyStyle = {
   gap: 20,
   padding: 24,
   overflowY: "scroll",
+  transition: { scroll: { duration: 200, easing: "easeOut" } },
 };

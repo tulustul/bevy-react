@@ -27,7 +27,7 @@
 //! plugin: the transition skips any channel bound by the entity's `AnimatedNode`.
 
 use bevy::prelude::*;
-use bevy::ui::UiTransform;
+use bevy::ui::{ScrollPosition, UiTransform};
 use bevy_react_animations::{
     AnimatedNode, Driver, Easing, Runner, build_runner, build_ui_transform,
 };
@@ -53,6 +53,12 @@ pub struct Transition {
     /// *layout* properties — easing one re-flows the surrounding content (a real
     /// accordion), unlike the post-layout `transform`.
     pub size: Option<ChannelTransition>,
+    /// Eases the scroll offset (`ScrollPosition`) of an `overflow: scroll` node
+    /// toward its target on change — the target being a controlled `scrollTop`/
+    /// `scrollLeft`, a `scrollTo`-style jump, or accumulated wheel input. Covers
+    /// both axes. Unlike the others, scroll's target lives in `Props` (it's a
+    /// controlled value), so it's fed by the scroll write path, not `from_style`.
+    pub scroll: Option<ChannelTransition>,
 }
 
 impl Transition {
@@ -71,6 +77,10 @@ impl Transition {
     /// The transition for the size channels (explicit, else `all`).
     pub fn for_size(&self) -> Option<&ChannelTransition> {
         self.size.as_ref().or(self.all.as_ref())
+    }
+    /// The transition for the scroll offset (explicit, else `all`).
+    pub fn for_scroll(&self) -> Option<&ChannelTransition> {
+        self.scroll.as_ref().or(self.all.as_ref())
     }
 }
 
@@ -340,6 +350,83 @@ impl LengthChannel {
             }
         }
         moved.then_some(self.current)
+    }
+}
+
+/// The scroll-easing **spec** input: the `transition.scroll` timing, reinserted
+/// fresh on every render (like [`TransitionInput`]) so a changed spec takes effect.
+/// Present only while `transition.scroll` (or `all`) is set. The *target* it eases
+/// toward is NOT here — scroll's target is a controlled `Props` value, fed into
+/// [`ScrollTransitionState`] by the scroll write path / wheel handler.
+#[derive(Component, Debug, Clone)]
+pub struct ScrollTransitionInput(pub ChannelTransition);
+
+/// The scroll-easing **runtime state**: the target offset plus a per-axis eased
+/// [`Channel`]. Persists across re-renders ([`insert_if_new`]). `target` is written
+/// by the feeders ([`crate::reconcile::update_controlled_scroll`] and
+/// `crate::scroll::apply_scroll`); [`drive_scroll_transition`] eases `ScrollPosition`
+/// toward it. Mirrors the [`TransitionState`] half of the split.
+#[derive(Component, Default)]
+pub struct ScrollTransitionState {
+    /// The offset to ease toward (already clamped to the scroll range by the feeder).
+    pub(crate) target: Vec2,
+    x: Channel,
+    y: Channel,
+    initialized: bool,
+}
+
+/// Stamp (or clear) the scroll-ease components from `transition.scroll`. Called
+/// from the reconciler's generic node paths (scroll containers are plain `<node>`s),
+/// alongside `apply_scroll_listener`/`apply_scroll_step`. The spec input is always
+/// reinserted (so a spec change lands); the state is created once and persists.
+pub fn apply_scroll_transition(ec: &mut EntityCommands, style: &Option<Style>) {
+    match style
+        .as_ref()
+        .and_then(|s| s.transition.as_ref())
+        .and_then(|t| t.for_scroll())
+    {
+        Some(spec) => {
+            ec.insert(ScrollTransitionInput(spec.clone()));
+            ec.insert_if_new(ScrollTransitionState::default());
+        }
+        None => {
+            ec.remove::<ScrollTransitionInput>();
+            ec.remove::<ScrollTransitionState>();
+        }
+    }
+}
+
+/// Ease each `ScrollTransitionState` node's `ScrollPosition` toward its `target`
+/// using the same per-channel [`Runner`] as [`drive_transitions`]. Writes only on a
+/// frame the eased value actually moved, so a settled offset doesn't spam
+/// `Changed<ScrollPosition>` (and thus `onScroll`). The target is pre-clamped by the
+/// feeders; Bevy clamps the *rendered* offset regardless.
+pub fn drive_scroll_transition(
+    time: Res<Time>,
+    mut query: Query<(
+        &ScrollTransitionInput,
+        &mut ScrollTransitionState,
+        &mut ScrollPosition,
+    )>,
+) {
+    let dt = time.delta_secs();
+    for (input, mut state, mut pos) in &mut query {
+        // Seed resting state to the live offset so the first target change eases from
+        // where the node actually is, not from zero.
+        if !state.initialized {
+            state.x.init(pos.0.x);
+            state.y.init(pos.0.y);
+            state.target = pos.0;
+            state.initialized = true;
+        }
+        let spec = &input.0;
+        let target = state.target;
+        let nx = state.x.drive(target.x, Some(spec), dt);
+        let ny = state.y.drive(target.y, Some(spec), dt);
+        // Conditional write: equal assignment would still trip change detection.
+        if pos.0.x != nx || pos.0.y != ny {
+            pos.0 = Vec2::new(nx, ny);
+        }
     }
 }
 
@@ -813,6 +900,50 @@ mod tests {
         assert!(
             matches!(mh, Val::Px(v) if v.abs() < 1e-3),
             "settled expected 0px, got {mh:?}"
+        );
+    }
+
+    /// `drive_scroll_transition` eases `ScrollPosition` toward the state's target
+    /// (seeded at the live offset on first sight) and settles exactly on it.
+    #[test]
+    fn system_eases_scroll_toward_target() {
+        let mut world = World::new();
+        world.insert_resource(Time::<()>::default());
+        let mut schedule = Schedule::default();
+        schedule.add_systems(drive_scroll_transition);
+
+        let e = world
+            .spawn((
+                ScrollTransitionInput(timing(1.0, Easing::Linear)),
+                ScrollTransitionState::default(),
+                ScrollPosition::default(),
+            ))
+            .id();
+
+        // First frame seeds resting state at the live offset (0) — no movement.
+        schedule.run(&mut world);
+        assert_eq!(
+            world.entity(e).get::<ScrollPosition>().unwrap().0,
+            Vec2::ZERO
+        );
+
+        // Target y=100; halfway through a 1s linear ease → ~50.
+        world
+            .entity_mut(e)
+            .get_mut::<ScrollTransitionState>()
+            .unwrap()
+            .target = Vec2::new(0.0, 100.0);
+        advance(&mut world, 0.5);
+        schedule.run(&mut world);
+        let y = world.entity(e).get::<ScrollPosition>().unwrap().0.y;
+        assert!((y - 50.0).abs() < 1.0, "mid-ease expected ~50, got {y}");
+
+        // Finish the ease → exactly 100.
+        advance(&mut world, 0.5);
+        schedule.run(&mut world);
+        assert_eq!(
+            world.entity(e).get::<ScrollPosition>().unwrap().0,
+            Vec2::new(0.0, 100.0)
         );
     }
 }
