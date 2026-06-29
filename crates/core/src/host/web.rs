@@ -83,14 +83,15 @@ fn install_host_object() -> Object {
     let host = Object::new();
 
     // op_flush(ops): JS → Bevy, a commit's worth of mutation ops.
-    let flush = Closure::<dyn Fn(JsValue)>::new(|ops: JsValue| {
-        match serde_wasm_bindgen::from_value::<Vec<Op>>(ops) {
-            Ok(batch) => with_host(|h| {
-                let _ = h.ops.send(batch);
-            }),
-            Err(e) => error(&format!("op_flush decode: {e}")),
-        }
-    });
+    let flush =
+        Closure::<dyn Fn(JsValue)>::new(|ops: JsValue| {
+            match serde_wasm_bindgen::from_value::<Vec<Op>>(ops) {
+                Ok(batch) => with_host(|h| {
+                    let _ = h.ops.send(batch);
+                }),
+                Err(e) => error(&format!("op_flush decode: {e}")),
+            }
+        });
     set_method(&host, "op_flush", flush.as_ref());
     flush.forget();
 

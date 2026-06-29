@@ -28,7 +28,36 @@ export function ShadowDemo() {
       >
         <OffsetControl />
       </Example>
+
+      <Example
+        description="An array of shadows stacks back-to-front — here a tight red drop plus a wide soft glow."
+        tsx={`boxShadow: [
+  { color: "#FF000066", yOffset: 4, blurRadius: 6 },
+  { color: "#4F8CFF55", blurRadius: 28, spreadRadius: 6 },
+]`}
+      >
+        <StackedShadow />
+      </Example>
     </>
+  );
+}
+
+function StackedShadow() {
+  return (
+    <node style={controlColumn}>
+      <node style={stage}>
+        <node
+          style={{
+            ...box,
+            backgroundColor: Colors.surface100,
+            boxShadow: [
+              { color: "#FF000066", yOffset: 4, blurRadius: 6 },
+              { color: "#4F8CFF55", blurRadius: 28, spreadRadius: 6 },
+            ],
+          }}
+        />
+      </node>
+    </node>
   );
 }
 

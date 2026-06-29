@@ -329,7 +329,7 @@ pub struct Style {
     #[serde(default)]
     pub outline: Option<OutlineSpec>,
     #[serde(default)]
-    pub box_shadow: Option<BoxShadowSpec>,
+    pub box_shadow: Option<BoxShadowList>,
     /// Background gradient(s); one gradient or a layered list. bevy paints it
     /// *over* `backgroundColor` (CSS `background-image` semantics): an opaque
     /// gradient hides the color (fallback); transparent stops reveal it.
@@ -429,6 +429,14 @@ pub struct BoxShadowSpec {
     pub spread_radius: Option<Length>,
     #[serde(default)]
     pub blur_radius: Option<Length>,
+}
+
+/// A `boxShadow` value: one shadow or a stacked list (CSS `box-shadow: a, b, …`).
+#[derive(Debug, Clone, Deserialize)]
+#[serde(untagged)]
+pub enum BoxShadowList {
+    One(BoxShadowSpec),
+    Many(Vec<BoxShadowSpec>),
 }
 
 /// Line height for a `<text>`. A bare number is a multiple of the font size

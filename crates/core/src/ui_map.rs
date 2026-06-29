@@ -12,10 +12,10 @@ use bevy_react_animations::build_ui_transform;
 
 use crate::plugin::Fonts;
 use crate::protocol::{
-    Angle, AngularStop, AtlasSpec, ConicGradientSpec, FontSize, GradientList, GradientSpec,
-    GradientStop, ImageMode, ImageModeSpec, Length, LetterSpacingSpec, LineHeightSpec,
-    LinearGradientSpec, Props, RadialGradientSpec, RadialShapeSpec, Rect, SliceBorder, SliceScale,
-    SliceSpec, Style,
+    Angle, AngularStop, AtlasSpec, BoxShadowList, BoxShadowSpec, ConicGradientSpec, FontSize,
+    GradientList, GradientSpec, GradientStop, ImageMode, ImageModeSpec, Length, LetterSpacingSpec,
+    LineHeightSpec, LinearGradientSpec, Props, RadialGradientSpec, RadialShapeSpec, Rect,
+    SliceBorder, SliceScale, SliceSpec, Style,
 };
 
 /// Parse a CSS color string into a `Color`: hex, named colors, `transparent`, or
@@ -210,6 +210,26 @@ pub fn build_gradients(list: &GradientList, opacity: Option<f32>) -> Vec<Gradien
     match list {
         GradientList::One(g) => vec![build_gradient(g, opacity)],
         GradientList::Many(gs) => gs.iter().map(|g| build_gradient(g, opacity)).collect(),
+    }
+}
+
+/// Convert one [`BoxShadowSpec`] into a `bevy_ui::ShadowStyle`.
+fn shadow_style(b: &BoxShadowSpec) -> ShadowStyle {
+    ShadowStyle {
+        color: b.color.as_deref().map(parse_color).unwrap_or(Color::BLACK),
+        x_offset: b.x_offset.map(length_to_val).unwrap_or(Val::Px(0.0)),
+        y_offset: b.y_offset.map(length_to_val).unwrap_or(Val::Px(0.0)),
+        spread_radius: b.spread_radius.map(length_to_val).unwrap_or(Val::Px(0.0)),
+        blur_radius: b.blur_radius.map(length_to_val).unwrap_or(Val::Px(0.0)),
+    }
+}
+
+/// Flatten a [`BoxShadowList`] (one or many) into the `Vec<ShadowStyle>` that
+/// `bevy_ui::BoxShadow` wraps, stacked back-to-front like CSS `box-shadow`.
+pub fn build_box_shadows(list: &BoxShadowList) -> Vec<ShadowStyle> {
+    match list {
+        BoxShadowList::One(b) => vec![shadow_style(b)],
+        BoxShadowList::Many(bs) => bs.iter().map(shadow_style).collect(),
     }
 }
 
@@ -700,13 +720,7 @@ pub fn apply_style(ec: &mut EntityCommands, style: &Option<Style>) {
     }
     match s.and_then(|s| s.box_shadow.as_ref()) {
         Some(b) => {
-            ec.insert(BoxShadow(vec![ShadowStyle {
-                color: b.color.as_deref().map(parse_color).unwrap_or(Color::BLACK),
-                x_offset: b.x_offset.map(length_to_val).unwrap_or(Val::Px(0.0)),
-                y_offset: b.y_offset.map(length_to_val).unwrap_or(Val::Px(0.0)),
-                spread_radius: b.spread_radius.map(length_to_val).unwrap_or(Val::Px(0.0)),
-                blur_radius: b.blur_radius.map(length_to_val).unwrap_or(Val::Px(0.0)),
-            }]));
+            ec.insert(BoxShadow(build_box_shadows(b)));
         }
         None => {
             ec.remove::<BoxShadow>();
@@ -1447,6 +1461,24 @@ mod tests {
         );
         assert_eq!(
             build_gradients(many.background_gradient.as_ref().unwrap(), None).len(),
+            2
+        );
+    }
+
+    #[test]
+    fn box_shadow_accepts_single_or_array() {
+        let one = style(serde_json::json!({
+            "boxShadow": { "color": "#000", "blurRadius": 8 },
+        }));
+        let many = style(serde_json::json!({
+            "boxShadow": [
+                { "color": "#000", "blurRadius": 4 },
+                { "color": "#FFFFFF33", "blurRadius": 16, "spreadRadius": 4 },
+            ],
+        }));
+        assert_eq!(build_box_shadows(one.box_shadow.as_ref().unwrap()).len(), 1);
+        assert_eq!(
+            build_box_shadows(many.box_shadow.as_ref().unwrap()).len(),
             2
         );
     }

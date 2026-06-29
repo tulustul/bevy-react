@@ -111,6 +111,15 @@ export type Gradient =
       colorSpace?: ColorSpace;
     };
 
+/** One drop shadow. Offsets/radii are [`Length`]s (bare number = px). */
+export type BoxShadow = {
+  color?: Color;
+  xOffset?: Length;
+  yOffset?: Length;
+  spreadRadius?: Length;
+  blurRadius?: Length;
+};
+
 /** How a 9-slice section scales when resized: `"stretch"`, or `{ tile }` where
  *  `tile` is the repeat threshold (`stretch_value`). */
 export type ImageSliceScale = "stretch" | { tile: number };
@@ -274,13 +283,9 @@ export interface BevyStyle {
     | { top?: Color; right?: Color; bottom?: Color; left?: Color };
   borderRadius?: Rect;
   outline?: { width?: Length; offset?: Length; color?: Color };
-  boxShadow?: {
-    color?: Color;
-    xOffset?: Length;
-    yOffset?: Length;
-    spreadRadius?: Length;
-    blurRadius?: Length;
-  };
+  /** One drop shadow, or an array of shadows stacked back-to-front (first
+   *  paints on top), like CSS `box-shadow: a, b, …`. */
+  boxShadow?: BoxShadow | BoxShadow[];
   /** Background gradient(s): one gradient or a layered list. Painted *over*
    *  `backgroundColor` (like CSS `background-image`): an opaque gradient hides
    *  it, so the color is a fallback; transparent stops let it show through. */

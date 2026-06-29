@@ -8,7 +8,9 @@ fn main() {
     // this for you.
     let mut args = std::env::args().skip(1);
     if args.next().as_deref() == Some("--export-bindings") {
-        let path = args.next().expect("--export-bindings requires an output path");
+        let path = args
+            .next()
+            .expect("--export-bindings requires an output path");
         let app = App::new();
         app.export_react_typescript(&path)
             .expect("failed to write TypeScript bindings");

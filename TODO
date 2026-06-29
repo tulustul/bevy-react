@@ -39,7 +39,7 @@ Features:
       Lower value / niche:
         ☐ `direction` (Ltr/Rtl) - no RTL layout.
         ☐ `overflow_clip_margin` (`VisualBox` + margin) and `OverrideClip` (per-node clip opt-out).
-        ☐ Native `ViewportNode` (render-camera-into-UI) - partly overlaps custom `<portal>`/`<surface>`, but the native widget isn't wired.
+        ✘ Native `ViewportNode` (render-camera-into-UI) - partly overlaps custom `<portal>`/`<surface>`, but the native widget isn't wired. @cancelled(26-06-29 00:23)
         ☐ Hover/focus event callbacks - only hover/press *styling* exists; no `onPointerEnter`/`onPointerLeave`/`onFocus` handlers.
         ☐ Widget interaction-state markers - `Checkable`/`Checked`/`Selectable`/`Selected`, `Label`, `UiTargetCamera` (mostly internal/widget-level).
 

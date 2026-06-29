@@ -148,10 +148,12 @@ fn build_app(window: Window, hot_reload: bool) -> App {
     // web the dev server serves them under `assets/` (Bevy's default), so the default
     // AssetPlugin is kept there.
     #[cfg(not(target_arch = "wasm32"))]
-    let default_plugins = DefaultPlugins.set(window_plugin).set(bevy::asset::AssetPlugin {
-        file_path: "../../examples/assets".into(),
-        ..default()
-    });
+    let default_plugins = DefaultPlugins
+        .set(window_plugin)
+        .set(bevy::asset::AssetPlugin {
+            file_path: "../../examples/assets".into(),
+            ..default()
+        });
     #[cfg(target_arch = "wasm32")]
     let default_plugins = DefaultPlugins.set(window_plugin);
 
