@@ -360,6 +360,16 @@ pub struct Style {
     pub outline: Option<OutlineSpec>,
     #[serde(default)]
     pub box_shadow: Option<BoxShadowList>,
+    /// CSS-like `filter`: per-pixel visual effects (`blur`, `brightness`,
+    /// `contrast`, `saturate`, `grayscale`, `sepia`, `invert`, `hueRotate`)
+    /// applied to the element's **own surface** (its image or background) via a
+    /// custom `UiMaterial` shader. Unlike CSS it does *not* cascade to descendants
+    /// — a `MaterialNode` renders only the node itself, so children/text draw on
+    /// top unfiltered. Present → the reconciler swaps the node's `ImageNode` /
+    /// `BackgroundColor` draw for a `MaterialNode<FilterMaterial>` (see
+    /// [`crate::filter`]).
+    #[serde(default)]
+    pub filter: Option<FilterSpec>,
     /// Background gradient(s); one gradient or a layered list. bevy paints it
     /// *over* `backgroundColor` (CSS `background-image` semantics): an opaque
     /// gradient hides the color (fallback); transparent stops reveal it.
@@ -474,6 +484,43 @@ pub struct BoxShadowSpec {
 pub enum BoxShadowList {
     One(BoxShadowSpec),
     Many(Vec<BoxShadowSpec>),
+}
+
+/// A CSS-like `filter`: each field is one filter function, mirroring CSS naming.
+/// Every field is optional; unset means identity (no effect). Amounts follow the
+/// CSS convention: `brightness`/`contrast`/`saturate` are multipliers (`1.0` =
+/// identity), `grayscale`/`sepia`/`invert` are `0.0..=1.0` blends (`0` = identity),
+/// `blur` is a radius (a [`Length`] in px), and `hueRotate` is an [`Angle`]. The
+/// functions are applied in a fixed canonical order (blur → brightness → contrast
+/// → saturate → grayscale → sepia → invert → hueRotate), not the declared order,
+/// so listing the same function twice is not supported. See [`crate::filter`].
+#[derive(Debug, Clone, Default, PartialEq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FilterSpec {
+    /// Gaussian blur radius (a [`Length`], px). `0`/absent → no blur.
+    #[serde(default)]
+    pub blur: Option<Length>,
+    /// Brightness multiplier (`1.0` = identity, `0.0` = black, `>1` brighter).
+    #[serde(default)]
+    pub brightness: Option<f32>,
+    /// Contrast multiplier about mid-grey (`1.0` = identity).
+    #[serde(default)]
+    pub contrast: Option<f32>,
+    /// Saturation multiplier (`1.0` = identity, `0.0` = grayscale, `>1` more vivid).
+    #[serde(default)]
+    pub saturate: Option<f32>,
+    /// Grayscale amount (`0.0` = identity, `1.0` = fully desaturated).
+    #[serde(default)]
+    pub grayscale: Option<f32>,
+    /// Sepia amount (`0.0` = identity, `1.0` = full sepia tone).
+    #[serde(default)]
+    pub sepia: Option<f32>,
+    /// Invert amount (`0.0` = identity, `1.0` = fully inverted colors).
+    #[serde(default)]
+    pub invert: Option<f32>,
+    /// Hue rotation (an [`Angle`]; number = degrees). `0`/absent → no rotation.
+    #[serde(default)]
+    pub hue_rotate: Option<Angle>,
 }
 
 /// Line height for a `<text>`. A bare number is a multiple of the font size
@@ -1453,6 +1500,36 @@ mod tests {
         let s: Style = serde_json::from_str(r#"{ "padding": "1px 2px 3px 4px 5px" }"#)
             .expect("bad value-count must not abort");
         assert_eq!(s.padding, Some(Rect::default()));
+    }
+
+    /// A `filter` decodes its CSS-like functions: `blur`/`hueRotate` carry units
+    /// (px / degrees), the rest are bare numbers; unset functions stay `None`
+    /// (identity). A malformed unit value falls back to its default, not an abort.
+    #[test]
+    fn deserializes_filter_functions() {
+        let s: Style = serde_json::from_str(
+            r#"{ "filter": {
+                "blur": "4px", "brightness": 1.2, "grayscale": 1,
+                "saturate": 0.5, "hueRotate": 90
+            } }"#,
+        )
+        .expect("filter decodes");
+        let f = s.filter.expect("filter present");
+        assert_eq!(f.blur, Some(Length::Px(4.0)));
+        assert_eq!(f.brightness, Some(1.2));
+        assert_eq!(f.grayscale, Some(1.0));
+        assert_eq!(f.saturate, Some(0.5));
+        assert!((f.hue_rotate.unwrap().radians() - std::f32::consts::FRAC_PI_2).abs() < 1e-5);
+        // Unset functions stay None (identity), never a default value.
+        assert_eq!(f.contrast, None);
+        assert_eq!(f.sepia, None);
+        assert_eq!(f.invert, None);
+
+        // A bad unit value falls back to the type default without aborting the Style.
+        let s: Style = serde_json::from_str(r#"{ "filter": { "blur": "4pxx" }, "opacity": 0.5 }"#)
+            .expect("a bad filter unit must not abort the style");
+        assert_eq!(s.filter.unwrap().blur, Some(Length::default()));
+        assert_eq!(s.opacity, Some(0.5));
     }
 
     /// A `change` event serializes its new text as camelCase `value`, while the

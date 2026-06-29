@@ -4,6 +4,7 @@
 
 use accesskit::Role;
 use bevy::a11y::AccessibilityNode;
+use bevy::ecs::system::SystemParam;
 use bevy::image::Image;
 use bevy::input_focus::tab_navigation::TabIndex;
 use bevy::input_focus::{AutoFocus, FocusGained, FocusLost};
@@ -24,12 +25,13 @@ use crate::anchor::Anchored;
 use crate::bridge::{
     FocusState, JsBridge, PointerHandlers, RNode, ScrollListener, ScrollStep, StyleVariants,
 };
+use crate::filter::{FilterAssets, FilterMaterial, FilterMaterialCache, filter_material};
 use crate::plugin::Fonts;
 use crate::protocol::{NodeId, Op, Outbound, Props, ROOT_ID, Style, UiEvent};
 use crate::transition::{ScrollTransitionState, apply_scroll_transition};
 use crate::ui_map::{
-    AtlasLayoutCache, apply_atlas, apply_style, apply_text_style, image_node, overlay_style,
-    resolved_text_style, text_layout,
+    AtlasLayoutCache, apply_atlas, apply_opacity, apply_style, apply_text_style, image_node,
+    overlay_style, parse_color, resolved_text_style, text_layout,
 };
 
 /// Live instrumentation of the [`apply_js_ops`] hot path. Updated once per frame
@@ -61,6 +63,19 @@ pub struct OpApplyStats {
     pub last_apply_end: Option<std::time::Instant>,
 }
 
+/// The asset stores + caches the op-apply path builds components from: the
+/// `<image atlas>` `TextureAtlasLayout`s and the `filter` style's
+/// [`FilterMaterial`]s (plus the shared white pixel). Bundled as one `SystemParam`
+/// so [`apply_js_ops`] stays under Bevy's per-system parameter limit.
+#[derive(SystemParam)]
+pub struct UiAssets<'w> {
+    layouts: ResMut<'w, Assets<TextureAtlasLayout>>,
+    atlas_cache: ResMut<'w, AtlasLayoutCache>,
+    filter_materials: ResMut<'w, Assets<FilterMaterial>>,
+    filter_cache: ResMut<'w, FilterMaterialCache>,
+    filter_assets: Res<'w, FilterAssets>,
+}
+
 /// Apply every queued reconciler op to the ECS. Runs in `Update`; ops simply
 /// queue in the channel until this drains them, so startup ordering is a
 /// non-issue.
@@ -73,8 +88,9 @@ pub fn apply_js_ops(
     mut images: ResMut<Assets<Image>>,
     // Sprite-sheet grids for `<image atlas>`, plus the cache that keeps repeated
     // commits from leaking a `TextureAtlasLayout` per frame (see `AtlasLayoutCache`).
-    mut layouts: ResMut<Assets<TextureAtlasLayout>>,
-    mut atlas_cache: ResMut<AtlasLayoutCache>,
+    // Asset stores + caches for `<image atlas>` and the `filter` material, bundled
+    // into one `SystemParam` so `apply_js_ops` stays within Bevy's 16-param limit.
+    mut ui_assets: UiAssets,
     children: Query<&Children>,
     rnodes: Query<&RNode>,
     // On re-render the entity's kind isn't on the op, so we detect a `<button>` by
@@ -308,8 +324,13 @@ pub fn apply_js_ops(
                         &kind,
                         &props,
                         &assets,
-                        &mut layouts,
-                        &mut atlas_cache,
+                        &mut ui_assets.layouts,
+                        &mut ui_assets.atlas_cache,
+                        &mut FilterCtx {
+                            materials: &mut ui_assets.filter_materials,
+                            cache: &mut ui_assets.filter_cache,
+                            white: &ui_assets.filter_assets.white,
+                        },
                     ),
                 };
                 if matches!(kind.as_str(), "text" | "textSpan") {
@@ -546,9 +567,27 @@ pub fn apply_js_ops(
                     // their presence is enough to re-apply the texture/tint.
                     if is_image(&props) {
                         let mut img = image_node(&props, &assets);
-                        apply_atlas(&mut img, &props, &mut layouts, &mut atlas_cache);
+                        apply_atlas(
+                            &mut img,
+                            &props,
+                            &mut ui_assets.layouts,
+                            &mut ui_assets.atlas_cache,
+                        );
                         ec.insert(img);
                     }
+                    // A `filter` swaps the node's draw for a `MaterialNode`; run
+                    // after the style/image above so it can drop the components it
+                    // replaces. Absent → it removes any prior filter material.
+                    apply_filter(
+                        &mut ec,
+                        &props,
+                        &assets,
+                        &mut FilterCtx {
+                            materials: &mut ui_assets.filter_materials,
+                            cache: &mut ui_assets.filter_cache,
+                            white: &ui_assets.filter_assets.white,
+                        },
+                    );
                     // A `<canvas>`'s new display list: replace the surface (the
                     // canvas system keeps the same `ImageNode` handle and repaints).
                     if let Some(cmds) = &props.draw {
@@ -633,7 +672,68 @@ fn surface_root_base() -> Option<Style> {
     })
 }
 
+/// The resources [`apply_filter`] needs to build/cache a `FilterMaterial` and bind
+/// the shared white pixel — bundled so the call sites don't thread three params.
+struct FilterCtx<'a> {
+    materials: &'a mut Assets<FilterMaterial>,
+    cache: &'a mut FilterMaterialCache,
+    white: &'a Handle<Image>,
+}
+
+/// Apply (or clear) a `filter` style on an element. Present → build a
+/// [`FilterMaterial`] (source = the `<image>`'s texture, else the shared white
+/// pixel tinted by `base_color`) and insert a `MaterialNode<FilterMaterial>`,
+/// dropping the standard `ImageNode` / `BackgroundColor` so the node isn't drawn
+/// twice. Absent → remove any prior filter material so the node reverts to its
+/// normal draw. Must run *after* `apply_style` / the image insert (it removes the
+/// components those add). See [`crate::filter`] for the scope (own surface only).
+fn apply_filter(ec: &mut EntityCommands, props: &Props, assets: &AssetServer, ctx: &mut FilterCtx) {
+    let Some(spec) = props.style.as_ref().and_then(|s| s.filter.as_ref()) else {
+        ec.remove::<MaterialNode<FilterMaterial>>();
+        return;
+    };
+    // Base color: the image tint, else the background color, else white. Opacity is
+    // folded into alpha just like the standard background/image paths.
+    let opacity = props.style.as_ref().and_then(|s| s.opacity);
+    let base = props
+        .tint
+        .as_deref()
+        .or_else(|| {
+            props
+                .style
+                .as_ref()
+                .and_then(|s| s.background_color.as_deref())
+        })
+        .map(parse_color)
+        .unwrap_or(Color::WHITE);
+    let texture = match &props.src {
+        Some(path) => assets.load(path),
+        None => ctx.white.clone(),
+    };
+    let mat = filter_material(spec, texture, apply_opacity(base, opacity));
+    let handle = ctx.cache.handle(ctx.materials, mat);
+
+    // The material replaces the node's own draw (so a filtered node never carries a
+    // visible `BackgroundColor` — that's already dropped in `apply_style`).
+    if props.src.is_some() {
+        // A `MaterialNode` has no content measure, so a filtered `<image>` with only
+        // a `width` would collapse to zero height. Keep the `ImageNode` (it measures
+        // the texture's intrinsic size) but make it transparent so only the filter
+        // material paints — no double draw.
+        let mut img = image_node(props, assets);
+        img.color = img.color.with_alpha(0.0);
+        ec.insert(img);
+    } else {
+        // A solid-colored node: the material paints the (filtered) color; drop any
+        // `ImageNode` a prior render left behind.
+        ec.remove::<ImageNode>();
+    }
+    ec.remove::<BackgroundColor>();
+    ec.insert(MaterialNode(handle));
+}
+
 /// Spawn a `node`, `button`, or `image` host element with its style.
+#[allow(clippy::too_many_arguments)]
 fn spawn_element(
     commands: &mut Commands,
     id: NodeId,
@@ -642,6 +742,7 @@ fn spawn_element(
     assets: &AssetServer,
     layouts: &mut Assets<TextureAtlasLayout>,
     atlas_cache: &mut AtlasLayoutCache,
+    filter: &mut FilterCtx,
 ) -> Entity {
     let mut ec = commands.spawn(RNode(id));
     apply_style(&mut ec, &props.style);
@@ -660,6 +761,8 @@ fn spawn_element(
         }
         _ => {}
     }
+    // A `filter` swaps the node's image/background draw for a filter material.
+    apply_filter(&mut ec, props, assets, filter);
     apply_style_variants(&mut ec, props);
     apply_pointer_handlers(&mut ec, props);
     apply_animated(&mut ec, props);
@@ -1533,6 +1636,10 @@ mod tests {
         app.init_resource::<Fonts>();
         app.init_resource::<OpApplyStats>();
         app.init_resource::<AtlasLayoutCache>();
+        // `apply_js_ops` reads the `filter` material assets/cache + white pixel.
+        app.init_asset::<FilterMaterial>();
+        app.init_resource::<FilterMaterialCache>();
+        app.add_systems(Startup, crate::filter::init_filter_assets);
 
         let (ops_tx, ops_rx) = crossbeam_channel::unbounded::<Vec<Op>>();
         let (out_tx, out_rx) = tokio::sync::mpsc::unbounded_channel::<Outbound>();
@@ -1671,6 +1778,10 @@ mod tests {
         app.init_resource::<Fonts>();
         app.init_resource::<OpApplyStats>();
         app.init_resource::<AtlasLayoutCache>();
+        // `apply_js_ops` reads the `filter` material assets/cache + white pixel.
+        app.init_asset::<FilterMaterial>();
+        app.init_resource::<FilterMaterialCache>();
+        app.add_systems(Startup, crate::filter::init_filter_assets);
 
         let (ops_tx, ops_rx) = crossbeam_channel::unbounded::<Vec<Op>>();
         // Keep the outbound receiver alive so the sender stays open.
@@ -1782,6 +1893,10 @@ mod tests {
         app.init_resource::<Fonts>();
         app.init_resource::<OpApplyStats>();
         app.init_resource::<AtlasLayoutCache>();
+        // `apply_js_ops` reads the `filter` material assets/cache + white pixel.
+        app.init_asset::<FilterMaterial>();
+        app.init_resource::<FilterMaterialCache>();
+        app.add_systems(Startup, crate::filter::init_filter_assets);
         let (ops_tx, ops_rx) = crossbeam_channel::unbounded::<Vec<Op>>();
         let (out_tx, _out_rx) = tokio::sync::mpsc::unbounded_channel::<Outbound>();
         let root = app.world_mut().spawn_empty().id();

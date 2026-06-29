@@ -3,8 +3,11 @@
 
 use std::path::PathBuf;
 
+use bevy::asset::embedded_asset;
 use bevy::prelude::*;
 use bevy_react_animations::{AnimationCommand, AnimationSet, ReactUiAnimationsPlugin};
+
+use crate::filter::{FilterMaterial, FilterMaterialCache, init_filter_assets};
 
 use crate::bridge::{JsBridge, OpReceiver, OutboundResource, OutboundSender};
 use crate::event::ReactEventRegistry;
@@ -121,6 +124,21 @@ impl ReactUiPlugin {
 
 impl Plugin for ReactUiPlugin {
     fn build(&self, app: &mut App) {
+        // The `filter` style's shader, embedded so it ships with the crate (no
+        // `assets/` folder needed by consumers). The `UiMaterialPlugin` registers
+        // the `FilterMaterial` asset + render pipeline; `init_filter_assets`
+        // creates the shared white pixel for solid-color filtered nodes. Gated on
+        // a render pipeline being present (the canonical `DefaultPlugins`-first
+        // setup), since `embedded_asset!`/`UiMaterialPlugin` need the asset + render
+        // infrastructure — a headless `App` with neither (e.g. wiring-only tests)
+        // simply skips it.
+        if app.is_plugin_added::<bevy::render::RenderPlugin>() {
+            embedded_asset!(app, "filter.wgsl");
+            app.add_plugins(UiMaterialPlugin::<FilterMaterial>::default())
+                .init_resource::<FilterMaterialCache>()
+                .add_systems(Startup, init_filter_assets);
+        }
+
         // Channels: op batches, app messages, requests, and animation commands flow
         // JS -> Bevy (crossbeam, same on every target). The Bevy -> JS direction (a
         // single `Outbound` stream plus, on native, reload signals) is owned by the

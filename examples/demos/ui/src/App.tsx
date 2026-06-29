@@ -35,6 +35,7 @@ import { SpacingDemo } from "./demos/styling/SpacingDemo";
 import { SizingDemo } from "./demos/styling/SizingDemo";
 import { TransformDemo } from "./demos/styling/TransformDemo";
 import { ShadowDemo } from "./demos/styling/ShadowDemo";
+import { FilterDemo } from "./demos/styling/FilterDemo";
 import { GradientsDemo } from "./demos/styling/GradientsDemo";
 import { OpacityDemo } from "./demos/styling/OpacityDemo";
 import { ZIndexDemo } from "./demos/styling/ZIndexDemo";
@@ -94,6 +95,7 @@ const DEMOS: DemoItem[] = [
       { label: "Overflow", component: OverflowDemo },
       { label: "Transform", component: TransformDemo },
       { label: "Shadow", component: ShadowDemo },
+      { label: "Filter", component: FilterDemo },
       { label: "Gradients", component: GradientsDemo },
       { label: "Opacity", component: OpacityDemo },
       { label: "Z-Index", component: ZIndexDemo },

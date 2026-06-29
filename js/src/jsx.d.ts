@@ -292,6 +292,24 @@ export interface BevyStyle {
   /** One drop shadow, or an array of shadows stacked back-to-front (first
    *  paints on top), like CSS `box-shadow: a, b, …`. */
   boxShadow?: BoxShadow | BoxShadow[];
+  /** CSS-like per-pixel visual filters, applied to the element's **own surface**
+   *  (its image or background) via a custom shader. Unlike CSS this does *not*
+   *  cascade to children/text — it's most useful on an `<image>` or a leaf node.
+   *  `blur` is a radius (px). `brightness`/`contrast`/`saturate` are multipliers
+   *  (`1` = identity). `grayscale`/`sepia`/`invert` are `0..1` (0 = identity).
+   *  `hueRotate` is an [`Angle`] (number = degrees). Functions apply in a fixed
+   *  order: blur → brightness → contrast → saturate → grayscale → sepia → invert
+   *  → hueRotate. */
+  filter?: {
+    blur?: Length;
+    brightness?: number;
+    contrast?: number;
+    saturate?: number;
+    grayscale?: number;
+    sepia?: number;
+    invert?: number;
+    hueRotate?: Angle;
+  };
   /** Background gradient(s): one gradient or a layered list. Painted *over*
    *  `backgroundColor` (like CSS `background-image`): an opaque gradient hides
    *  it, so the color is a fallback; transparent stops let it show through. */

@@ -19,6 +19,12 @@ export const row: BevyStyle = {
   gap: 12,
 };
 
+export const column: BevyStyle = {
+  flexDirection: "column",
+  alignItems: "center",
+  gap: 12,
+};
+
 export const stage: BevyStyle = {
   alignItems: "center",
   justifyContent: "center",

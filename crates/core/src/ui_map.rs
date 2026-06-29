@@ -696,11 +696,17 @@ pub fn apply_style(ec: &mut EntityCommands, style: &Option<Style>) {
     // `opacity` multiplies into the background (and text) alpha — color before
     // opacity, mirroring the animated path.
     let opacity = s.and_then(|s| s.opacity);
+    // A `filter` makes the node render through a `MaterialNode<FilterMaterial>`
+    // (built reconcile-side, where the material assets live), which *replaces* the
+    // standard draw and itself paints the filtered background color. So a filtered
+    // node never carries `BackgroundColor` — that also avoids a double draw when
+    // hover/press re-applies this style without rebuilding the material.
+    let has_filter = s.map(|s| s.filter.is_some()).unwrap_or(false);
     match s.and_then(|s| s.background_color.as_deref()) {
-        Some(hex) => {
+        Some(hex) if !has_filter => {
             ec.insert(BackgroundColor(apply_opacity(parse_color(hex), opacity)));
         }
-        None => {
+        _ => {
             ec.remove::<BackgroundColor>();
         }
     }
