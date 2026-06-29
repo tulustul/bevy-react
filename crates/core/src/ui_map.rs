@@ -272,8 +272,10 @@ fn overflow_axis(s: &str) -> OverflowAxis {
 
 fn align_items(s: &str) -> AlignItems {
     match s {
-        "start" | "flexStart" => AlignItems::FlexStart,
-        "end" | "flexEnd" => AlignItems::FlexEnd,
+        "start" => AlignItems::Start,
+        "end" => AlignItems::End,
+        "flexStart" => AlignItems::FlexStart,
+        "flexEnd" => AlignItems::FlexEnd,
         "center" => AlignItems::Center,
         "baseline" => AlignItems::Baseline,
         "stretch" => AlignItems::Stretch,
@@ -284,8 +286,10 @@ fn align_items(s: &str) -> AlignItems {
 fn align_self(s: &str) -> AlignSelf {
     match s {
         "auto" => AlignSelf::Auto,
-        "start" | "flexStart" => AlignSelf::FlexStart,
-        "end" | "flexEnd" => AlignSelf::FlexEnd,
+        "start" => AlignSelf::Start,
+        "end" => AlignSelf::End,
+        "flexStart" => AlignSelf::FlexStart,
+        "flexEnd" => AlignSelf::FlexEnd,
         "center" => AlignSelf::Center,
         "baseline" => AlignSelf::Baseline,
         "stretch" => AlignSelf::Stretch,
@@ -295,8 +299,10 @@ fn align_self(s: &str) -> AlignSelf {
 
 fn align_content(s: &str) -> AlignContent {
     match s {
-        "start" | "flexStart" => AlignContent::FlexStart,
-        "end" | "flexEnd" => AlignContent::FlexEnd,
+        "start" => AlignContent::Start,
+        "end" => AlignContent::End,
+        "flexStart" => AlignContent::FlexStart,
+        "flexEnd" => AlignContent::FlexEnd,
         "center" => AlignContent::Center,
         "stretch" => AlignContent::Stretch,
         "spaceBetween" => AlignContent::SpaceBetween,
@@ -331,8 +337,10 @@ fn justify_self(s: &str) -> JustifySelf {
 
 fn justify_content(s: &str) -> JustifyContent {
     match s {
-        "start" | "flexStart" => JustifyContent::FlexStart,
-        "end" | "flexEnd" => JustifyContent::FlexEnd,
+        "start" => JustifyContent::Start,
+        "end" => JustifyContent::End,
+        "flexStart" => JustifyContent::FlexStart,
+        "flexEnd" => JustifyContent::FlexEnd,
         "center" => JustifyContent::Center,
         "stretch" => JustifyContent::Stretch,
         "spaceBetween" => JustifyContent::SpaceBetween,
@@ -1233,6 +1241,27 @@ mod tests {
             c.alpha
         );
         assert!((c.red - 1.0).abs() < 1e-6, "tint hue preserved");
+    }
+
+    /// `start`/`end` map to the physical `Start`/`End` variants while
+    /// `flexStart`/`flexEnd` map to the flow-relative `FlexStart`/`FlexEnd`.
+    /// They diverge in grid and reversed-flex containers, so the keywords must
+    /// not collapse together.
+    #[test]
+    fn align_keywords_distinguish_physical_from_flex() {
+        assert_eq!(align_items("start"), AlignItems::Start);
+        assert_eq!(align_items("end"), AlignItems::End);
+        assert_eq!(align_items("flexStart"), AlignItems::FlexStart);
+        assert_eq!(align_items("flexEnd"), AlignItems::FlexEnd);
+
+        assert_eq!(align_self("start"), AlignSelf::Start);
+        assert_eq!(align_self("flexStart"), AlignSelf::FlexStart);
+
+        assert_eq!(align_content("start"), AlignContent::Start);
+        assert_eq!(align_content("flexStart"), AlignContent::FlexStart);
+
+        assert_eq!(justify_content("start"), JustifyContent::Start);
+        assert_eq!(justify_content("flexStart"), JustifyContent::FlexStart);
     }
 
     /// `focusPolicy` maps to `bevy::ui::FocusPolicy`: `"block"` → `Block`,

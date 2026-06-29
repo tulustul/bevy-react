@@ -14,11 +14,16 @@ type AlignItems = Required<BevyStyle>["alignItems"];
 
 const DIRECTION_OPTIONS: RadioOption<FlexDirection>[] = [
   { label: "row", value: "row" },
+  { label: "rowReverse", value: "rowReverse" },
   { label: "column", value: "column" },
 ];
 
+// `start`/`end` are physical (writing-direction relative); `flexStart`/`flexEnd`
+// follow `flexDirection`. They diverge under `rowReverse` — pick it above to see
+// `start` (visually left) part ways from `flexStart` (the reversed flow start).
 const JUSTIFY_OPTIONS: RadioOption<JustifyContent>[] = [
   { label: "center", value: "center" },
+  { label: "start", value: "start" },
   { label: "flexStart", value: "flexStart" },
   { label: "flexEnd", value: "flexEnd" },
   { label: "spaceBetween", value: "spaceBetween" },
@@ -26,6 +31,7 @@ const JUSTIFY_OPTIONS: RadioOption<JustifyContent>[] = [
 
 const ALIGN_OPTIONS: RadioOption<AlignItems>[] = [
   { label: "center", value: "center" },
+  { label: "start", value: "start" },
   { label: "flexStart", value: "flexStart" },
   { label: "flexEnd", value: "flexEnd" },
   { label: "stretch", value: "stretch" },
