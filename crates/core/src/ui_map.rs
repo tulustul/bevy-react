@@ -19,14 +19,19 @@ use crate::protocol::{
     SliceBorder, SliceScale, SliceSpec, Style,
 };
 
+/// Fallback for an enum-keyword mapper that didn't recognize its token: `warn!`s
+/// (naming the field and value) and returns the type's default, so a typo'd
+/// `display`/`align*`/… surfaces in the log instead of silently snapping to the
+/// Bevy default. Mirrors the `parse_color` / `fontFamily` warn+fallback pattern.
+fn unknown_keyword<T: Default>(kind: &str, s: &str) -> T {
+    warn!("unrecognized {kind} {s:?}; using the default");
+    T::default()
+}
+
 /// Parse a CSS color string into a `Color`: hex, named colors, `transparent`, or
 /// `rgb()/hsl()/hwb()/oklab()/oklch()` functional notation (see
 /// [`bevy_react_canvas::parse_css_color`]). On an unrecognized value it `warn!`s
 /// and falls back to a loud magenta so the typo is visible rather than silent.
-//
-// TODO(review): the enum mappers below still fall back silently (an unknown align/display/…
-// token → the Bevy default). Consider a `warn!` there too, as this and `resolved_text_style`
-// (unknown `fontFamily`) already do.
 pub fn parse_color(input: &str) -> Color {
     match bevy_react_canvas::parse_css_color(input) {
         Some(c) => Color::from(c),
@@ -240,7 +245,7 @@ fn display(s: &str) -> Display {
         "grid" => Display::Grid,
         "block" => Display::Block,
         "none" => Display::None,
-        _ => Display::default(),
+        _ => unknown_keyword("display", s),
     }
 }
 
@@ -248,7 +253,7 @@ fn box_sizing(s: &str) -> BoxSizing {
     match s {
         "borderBox" | "border-box" => BoxSizing::BorderBox,
         "contentBox" | "content-box" => BoxSizing::ContentBox,
-        _ => BoxSizing::default(),
+        _ => unknown_keyword("boxSizing", s),
     }
 }
 
@@ -256,7 +261,7 @@ fn position_type(s: &str) -> PositionType {
     match s {
         "absolute" => PositionType::Absolute,
         "relative" => PositionType::Relative,
-        _ => PositionType::default(),
+        _ => unknown_keyword("positionType", s),
     }
 }
 
@@ -266,7 +271,7 @@ fn overflow_axis(s: &str) -> OverflowAxis {
         "clip" => OverflowAxis::Clip,
         "hidden" => OverflowAxis::Hidden,
         "scroll" => OverflowAxis::Scroll,
-        _ => OverflowAxis::default(),
+        _ => unknown_keyword("overflow", s),
     }
 }
 
@@ -279,7 +284,7 @@ fn align_items(s: &str) -> AlignItems {
         "center" => AlignItems::Center,
         "baseline" => AlignItems::Baseline,
         "stretch" => AlignItems::Stretch,
-        _ => AlignItems::default(),
+        _ => unknown_keyword("alignItems", s),
     }
 }
 
@@ -293,7 +298,7 @@ fn align_self(s: &str) -> AlignSelf {
         "center" => AlignSelf::Center,
         "baseline" => AlignSelf::Baseline,
         "stretch" => AlignSelf::Stretch,
-        _ => AlignSelf::default(),
+        _ => unknown_keyword("alignSelf", s),
     }
 }
 
@@ -308,7 +313,7 @@ fn align_content(s: &str) -> AlignContent {
         "spaceBetween" => AlignContent::SpaceBetween,
         "spaceEvenly" => AlignContent::SpaceEvenly,
         "spaceAround" => AlignContent::SpaceAround,
-        _ => AlignContent::default(),
+        _ => unknown_keyword("alignContent", s),
     }
 }
 
@@ -319,7 +324,7 @@ fn justify_items(s: &str) -> JustifyItems {
         "center" => JustifyItems::Center,
         "baseline" => JustifyItems::Baseline,
         "stretch" => JustifyItems::Stretch,
-        _ => JustifyItems::default(),
+        _ => unknown_keyword("justifyItems", s),
     }
 }
 
@@ -331,7 +336,7 @@ fn justify_self(s: &str) -> JustifySelf {
         "center" => JustifySelf::Center,
         "baseline" => JustifySelf::Baseline,
         "stretch" => JustifySelf::Stretch,
-        _ => JustifySelf::default(),
+        _ => unknown_keyword("justifySelf", s),
     }
 }
 
@@ -346,7 +351,7 @@ fn justify_content(s: &str) -> JustifyContent {
         "spaceBetween" => JustifyContent::SpaceBetween,
         "spaceEvenly" => JustifyContent::SpaceEvenly,
         "spaceAround" => JustifyContent::SpaceAround,
-        _ => JustifyContent::default(),
+        _ => unknown_keyword("justifyContent", s),
     }
 }
 
@@ -356,7 +361,7 @@ fn flex_direction(s: &str) -> FlexDirection {
         "column" => FlexDirection::Column,
         "rowReverse" => FlexDirection::RowReverse,
         "columnReverse" => FlexDirection::ColumnReverse,
-        _ => FlexDirection::default(),
+        _ => unknown_keyword("flexDirection", s),
     }
 }
 
@@ -365,7 +370,7 @@ fn flex_wrap(s: &str) -> FlexWrap {
         "nowrap" | "noWrap" => FlexWrap::NoWrap,
         "wrap" => FlexWrap::Wrap,
         "wrapReverse" => FlexWrap::WrapReverse,
-        _ => FlexWrap::default(),
+        _ => unknown_keyword("flexWrap", s),
     }
 }
 
@@ -375,7 +380,7 @@ fn grid_auto_flow(s: &str) -> GridAutoFlow {
         "column" => GridAutoFlow::Column,
         "rowDense" => GridAutoFlow::RowDense,
         "columnDense" => GridAutoFlow::ColumnDense,
-        _ => GridAutoFlow::default(),
+        _ => unknown_keyword("gridAutoFlow", s),
     }
 }
 
@@ -459,15 +464,22 @@ fn parse_template(s: &str) -> Vec<RepeatedGridTrack> {
     split_tracks(s)
         .into_iter()
         .filter_map(|tok| {
-            if let Some(inner) = tok
-                .strip_prefix("repeat(")
-                .and_then(|t| t.strip_suffix(')'))
-            {
-                let (count, track) = inner.split_once(',')?;
-                repeated_track(count.trim().parse().ok()?, track)
-            } else {
-                single_track(&tok).map(Into::into)
+            let parse_one = || {
+                if let Some(inner) = tok
+                    .strip_prefix("repeat(")
+                    .and_then(|t| t.strip_suffix(')'))
+                {
+                    let (count, track) = inner.split_once(',')?;
+                    repeated_track(count.trim().parse().ok()?, track)
+                } else {
+                    single_track(&tok).map(Into::into)
+                }
+            };
+            let parsed = parse_one();
+            if parsed.is_none() {
+                warn!("ignoring unparsable grid track {tok:?}");
             }
+            parsed
         })
         .collect()
 }
@@ -476,7 +488,13 @@ fn parse_template(s: &str) -> Vec<RepeatedGridTrack> {
 fn parse_auto_tracks(s: &str) -> Vec<GridTrack> {
     split_tracks(s)
         .iter()
-        .filter_map(|t| single_track(t))
+        .filter_map(|t| {
+            let parsed = single_track(t);
+            if parsed.is_none() {
+                warn!("ignoring unparsable grid track {t:?}");
+            }
+            parsed
+        })
         .collect()
 }
 
@@ -1042,10 +1060,10 @@ fn font_weight(s: &str) -> FontWeight {
         "semibold" => FontWeight(600),
         "bold" => FontWeight::BOLD,
         "black" => FontWeight::BLACK,
-        other => other
-            .parse::<u16>()
-            .map(FontWeight)
-            .unwrap_or(FontWeight::NORMAL),
+        other => other.parse::<u16>().map(FontWeight).unwrap_or_else(|_| {
+            warn!("unrecognized fontWeight {other:?}; using the default");
+            FontWeight::NORMAL
+        }),
     }
 }
 
@@ -1057,7 +1075,7 @@ fn justify(s: &str) -> Justify {
         "justify" => Justify::Justified,
         "start" => Justify::Start,
         "end" => Justify::End,
-        _ => Justify::default(),
+        _ => unknown_keyword("textAlign", s),
     }
 }
 
@@ -1065,10 +1083,14 @@ fn justify(s: &str) -> Justify {
 /// matching bevy's own default).
 fn linebreak(s: &str) -> LineBreak {
     match s {
+        "wordBoundary" => LineBreak::WordBoundary,
         "anyCharacter" => LineBreak::AnyCharacter,
         "wordOrCharacter" => LineBreak::WordOrCharacter,
         "noWrap" => LineBreak::NoWrap,
-        _ => LineBreak::WordBoundary,
+        _ => {
+            warn!("unrecognized lineBreak {s:?}; using the default");
+            LineBreak::WordBoundary
+        }
     }
 }
 
@@ -1766,5 +1788,18 @@ mod tests {
         let layout =
             text_layout(&Some(style(serde_json::json!({ "textAlign": "right" })))).unwrap();
         assert_eq!(layout.justify, Justify::Right);
+    }
+
+    /// An unrecognized enum keyword falls back to the type's default (and warns)
+    /// rather than panicking or being silently dropped — see [`unknown_keyword`].
+    #[test]
+    fn unknown_enum_keywords_fall_back_to_default() {
+        assert_eq!(display("flx"), Display::default());
+        assert_eq!(align_items("centre"), AlignItems::default());
+        assert_eq!(flex_direction("sideways"), FlexDirection::default());
+        assert_eq!(justify("middle"), Justify::default());
+        assert_eq!(font_weight("heavyish"), FontWeight::NORMAL);
+        // A valid keyword that previously relied on the catch-all still maps.
+        assert_eq!(linebreak("wordBoundary"), LineBreak::WordBoundary);
     }
 }

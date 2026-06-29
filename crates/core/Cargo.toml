@@ -43,6 +43,7 @@ bevy-react-surface = { workspace = true }
 crossbeam-channel = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+tracing = { workspace = true }
 ts-rs = { workspace = true }
 
 # Native host: the embedded V8 isolate (deno_core) on a dedicated thread, driven by

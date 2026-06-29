@@ -265,9 +265,22 @@ pub fn spawn_js_thread(
                 let reload_flag = Rc::new(Cell::new(false));
                 let reload_notify = Rc::new(Notify::new());
 
+                // The last app bundle that executed WITHOUT throwing. A reload that
+                // throws (syntax error or a runtime error like an undefined
+                // identifier in a component) is rejected and this is re-run instead,
+                // so a broken edit never tears down the working UI — see the reload
+                // arm below.
+                let mut last_good_app = match read_app(&app_path) {
+                    Ok(code) => code,
+                    Err(e) => {
+                        error!(target: "bevy_react::js", "reading app failed: {e:?}");
+                        return;
+                    }
+                };
+
                 let mut runtime = match build_runtime(
                     &vendor_path,
-                    &app_path,
+                    &last_good_app,
                     &senders,
                     outbound_rx.clone(),
                     reload_rx.clone(),
@@ -291,24 +304,31 @@ pub fn spawn_js_thread(
                         Pumped::Reload => {
                             // Re-execute the rebuilt app in the LIVE isolate. The
                             // next `pump` drives the resulting Fast Refresh.
-                            if let Err(e) = apply_update(&mut runtime, &app_path) {
-                                // The update threw synchronously (e.g. a syntax
-                                // error in the bundle). Fall back to a full
-                                // isolate rebuild.
-                                warn!(target: "bevy_react::js", "fast refresh failed ({e}); full reload");
-                                match build_runtime(
-                                    &vendor_path,
-                                    &app_path,
-                                    &senders,
-                                    outbound_rx.clone(),
-                                    reload_rx.clone(),
-                                    reload_flag.clone(),
-                                    reload_notify.clone(),
-                                ) {
-                                    Ok(rt) => runtime = rt,
-                                    Err(e) => {
-                                        error!(target: "bevy_react::js", "full reload failed: {e:?}");
-                                        break;
+                            let new_code = match read_app(&app_path) {
+                                Ok(code) => code,
+                                Err(e) => {
+                                    warn!(target: "bevy_react::js", "reading rebuilt app failed ({e}); keeping the previous working version");
+                                    continue;
+                                }
+                            };
+                            match runtime.execute_script("[app-update]", new_code.clone()) {
+                                // Applied cleanly — this becomes the new fallback.
+                                Ok(_) => last_good_app = new_code,
+                                Err(e) => {
+                                    // The new bundle threw (a syntax error, or a
+                                    // runtime error like `padding: aa16` referencing
+                                    // an undefined identifier). Don't refresh into
+                                    // broken code: re-run the last working bundle so
+                                    // its `mount()` re-parks the event loop and the
+                                    // UI stays live. The next good edit applies.
+                                    warn!(target: "bevy_react::js", "update rejected ({e}); keeping the previous working version");
+                                    if let Err(e) = runtime
+                                        .execute_script("[app-restore]", last_good_app.clone())
+                                    {
+                                        // The known-good bundle failed to re-run
+                                        // (should not happen — it ran moments ago).
+                                        // Log and keep pumping rather than wedge.
+                                        error!(target: "bevy_react::js", "restoring previous app failed: {e:?}");
                                     }
                                 }
                             }
@@ -325,7 +345,7 @@ pub fn spawn_js_thread(
 /// (via `flushSync`) and parks on `op_next_event`; the caller's `pump` drives it.
 fn build_runtime(
     vendor_path: &Path,
-    app_path: &Path,
+    app_code: &str,
     senders: &Senders,
     outbound_rx: Rc<Mutex<UnboundedReceiver<Outbound>>>,
     reload_rx: Rc<Mutex<UnboundedReceiver<()>>>,
@@ -369,9 +389,7 @@ fn build_runtime(
         .map_err(|e| anyhow::anyhow!("reading vendor {}: {e}", vendor_path.display()))?;
     runtime.execute_script("[vendor]", vendor_code)?;
 
-    let app_code = std::fs::read_to_string(app_path)
-        .map_err(|e| anyhow::anyhow!("reading app {}: {e}", app_path.display()))?;
-    runtime.execute_script("[app]", app_code)?;
+    runtime.execute_script("[app]", app_code.to_owned())?;
 
     Ok(runtime)
 }
@@ -416,15 +434,11 @@ async fn pump(
     }
 }
 
-/// Re-execute the (rebuilt) app bundle in the LIVE isolate. The app IIFE
-/// re-registers its components and calls `mount()`, which — seeing the isolate
-/// already mounted — triggers `performReactRefresh()` and re-parks the event
-/// loop on `op_next_event`. Synchronous: the caller's next `pump` drives the
-/// refresh render (and the re-park). Returns `Err` only if the script threw
-/// synchronously (e.g. a syntax error), which the caller treats as "full reload".
-fn apply_update(runtime: &mut JsRuntime, app_path: &Path) -> anyhow::Result<()> {
-    let app_code = std::fs::read_to_string(app_path)
-        .map_err(|e| anyhow::anyhow!("reading app {}: {e}", app_path.display()))?;
-    runtime.execute_script("[app-update]", app_code)?;
-    Ok(())
+/// Read the app bundle from disk. Re-executing it in the live isolate (on a hot
+/// reload) is what drives Fast Refresh: the app IIFE re-registers its components
+/// and calls `mount()`, which — seeing the isolate already mounted — triggers
+/// `performReactRefresh()` and re-parks the event loop on `op_next_event`.
+fn read_app(app_path: &Path) -> anyhow::Result<String> {
+    std::fs::read_to_string(app_path)
+        .map_err(|e| anyhow::anyhow!("reading app {}: {e}", app_path.display()))
 }

@@ -6,6 +6,13 @@
 //! **bevy-free**: the translation into `bevy_ui` components lives in
 //! [`crate::ui_map`]. Ops only ever flow JS -> Rust, so they need `Deserialize`
 //! only; `UiEvent` flows Rust -> JS and is `Serialize`.
+//!
+//! The unit-bearing wire types (`Length`/`Angle`/`Time`/`FontSize`) parse here at
+//! the serde boundary. A malformed string must **not** fail the whole batch (one
+//! typo would abort the entire commit and trigger a reload), so their
+//! `Deserialize` impls fall back to a default and emit a `tracing::warn!` naming
+//! the bad value — using the neutral `tracing` facade (not bevy types) so the
+//! module stays bevy-free while reaching the same log sink `bevy_log` drains.
 
 use std::fmt;
 
@@ -813,7 +820,10 @@ impl<'de> Deserialize<'de> for Length {
                 Ok(Length::Px(v as f32))
             }
             fn visit_str<E: de::Error>(self, s: &str) -> Result<Length, E> {
-                parse_length(s).map_err(E::custom)
+                Ok(parse_length(s).unwrap_or_else(|e| {
+                    tracing::warn!(target: "bevy_react", "{e}; using the default");
+                    Length::default()
+                }))
             }
         }
         d.deserialize_any(LengthVisitor)
@@ -878,7 +888,10 @@ impl<'de> Deserialize<'de> for Angle {
                 Ok(Angle((v as f32).to_radians()))
             }
             fn visit_str<E: de::Error>(self, s: &str) -> Result<Angle, E> {
-                parse_angle(s).map(Angle).map_err(E::custom)
+                Ok(parse_angle(s).map(Angle).unwrap_or_else(|e| {
+                    tracing::warn!(target: "bevy_react", "{e}; using the default");
+                    Angle::default()
+                }))
             }
         }
         d.deserialize_any(AngleVisitor)
@@ -943,7 +956,10 @@ impl<'de> Deserialize<'de> for Time {
                 Ok(Time(v as f32 / 1000.0))
             }
             fn visit_str<E: de::Error>(self, s: &str) -> Result<Time, E> {
-                parse_time(s).map(Time).map_err(E::custom)
+                Ok(parse_time(s).map(Time).unwrap_or_else(|e| {
+                    tracing::warn!(target: "bevy_react", "{e}; using the default");
+                    Time::default()
+                }))
             }
         }
         d.deserialize_any(TimeVisitor)
@@ -1010,7 +1026,10 @@ impl<'de> Deserialize<'de> for FontSize {
                 Ok(FontSize::Px(v as f32))
             }
             fn visit_str<E: de::Error>(self, s: &str) -> Result<FontSize, E> {
-                parse_font_size(s).map_err(E::custom)
+                Ok(parse_font_size(s).unwrap_or_else(|e| {
+                    tracing::warn!(target: "bevy_react", "{e}; using the default");
+                    FontSize::Px(0.0)
+                }))
             }
         }
         d.deserialize_any(FontSizeVisitor)
@@ -1082,12 +1101,21 @@ impl<'de> Deserialize<'de> for Rect {
                 Ok(Rect::uniform(Length::Px(v as f32)))
             }
             fn visit_str<E: de::Error>(self, s: &str) -> Result<Rect, E> {
-                let values = s
+                // A bad token or value-count must not throw (that aborts the whole
+                // commit batch and wedges the reconciler) — warn and fall back.
+                let values: Vec<Length> = s
                     .split_whitespace()
-                    .map(parse_length)
-                    .collect::<Result<Vec<_>, _>>()
-                    .map_err(E::custom)?;
-                Rect::from_shorthand(&values).map_err(E::custom)
+                    .map(|tok| {
+                        parse_length(tok).unwrap_or_else(|e| {
+                            tracing::warn!(target: "bevy_react", "{e}; using the default");
+                            Length::default()
+                        })
+                    })
+                    .collect();
+                Ok(Rect::from_shorthand(&values).unwrap_or_else(|e| {
+                    tracing::warn!(target: "bevy_react", "invalid rect {s:?}: {e}; using the default");
+                    Rect::default()
+                }))
             }
             fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Rect, A::Error> {
                 let mut rect = Rect::default();
@@ -1098,12 +1126,12 @@ impl<'de> Deserialize<'de> for Rect {
                         "right" => rect.right = v,
                         "bottom" => rect.bottom = v,
                         "left" => rect.left = v,
-                        _ => {
-                            return Err(de::Error::unknown_field(
-                                &key,
-                                &["top", "right", "bottom", "left"],
-                            ));
-                        }
+                        // An unknown side key must not throw (that aborts the whole
+                        // commit batch) — `v` is already consumed, so warn and skip.
+                        _ => tracing::warn!(
+                            target: "bevy_react",
+                            "unknown rect side {key:?}; ignoring (expected top/right/bottom/left)"
+                        ),
                     }
                 }
                 Ok(rect)
@@ -1160,12 +1188,12 @@ impl<'de> Deserialize<'de> for BorderColorSpec {
                         "right" => spec.right = Some(v),
                         "bottom" => spec.bottom = Some(v),
                         "left" => spec.left = Some(v),
-                        _ => {
-                            return Err(de::Error::unknown_field(
-                                &key,
-                                &["top", "right", "bottom", "left"],
-                            ));
-                        }
+                        // An unknown side key must not throw (that aborts the whole
+                        // commit batch) — `v` is already consumed, so warn and skip.
+                        _ => tracing::warn!(
+                            target: "bevy_react",
+                            "unknown borderColor side {key:?}; ignoring (expected top/right/bottom/left)"
+                        ),
                     }
                 }
                 Ok(spec)
@@ -1354,11 +1382,77 @@ mod tests {
         assert_eq!(bc.right, None);
         assert_eq!(bc.bottom, None);
 
-        // An unknown side key errors rather than being silently ignored.
-        assert!(
-            serde_json::from_str::<Style>(r#"{ "borderColor": { "middle": "red" } }"#).is_err(),
-            "unknown side key must be rejected"
+        // An unknown side key is ignored (warned), not rejected: throwing here would
+        // abort the whole commit batch and wedge the reconciler. A valid sibling key
+        // still applies; the unknown one leaves all sides at their default (None).
+        let bogus: Style =
+            serde_json::from_str(r#"{ "borderColor": { "middle": "red", "top": "blue" } }"#)
+                .expect("unknown side key must not abort deserialization");
+        let bc = bogus.border_color.expect("border_color present");
+        assert_eq!(bc.top.as_deref(), Some("blue"));
+        assert_eq!(bc.right, None);
+        assert_eq!(bc.bottom, None);
+        assert_eq!(bc.left, None);
+    }
+
+    /// A malformed unit string in any unit-bearing field must **not** fail the
+    /// whole `Style` (and thus the whole commit batch): it decodes to the type's
+    /// default and warns. A good value alongside it still decodes correctly.
+    #[test]
+    fn bad_unit_values_fall_back_instead_of_aborting() {
+        // Bad `width` (unknown unit) → default, sibling `height` intact.
+        let s: Style = serde_json::from_str(r#"{ "width": "100pixels", "height": "40px" }"#)
+            .expect("a bad length must not abort deserialization");
+        assert_eq!(s.width, Some(Length::default()));
+        assert_eq!(s.height, Some(Length::Px(40.0)));
+
+        // Bad `fontSize` → default `Px(0.0)`.
+        let s: Style = serde_json::from_str(r#"{ "fontSize": "16pxx" }"#)
+            .expect("bad fontSize must not abort");
+        assert_eq!(s.font_size, Some(FontSize::Px(0.0)));
+
+        // Bad transform `rotate` (angle) → default `Angle(0)`, valid `translateX` intact.
+        let t: Transform = serde_json::from_str(r#"{ "rotate": "45degg", "translateX": "50%" }"#)
+            .expect("bad angle must not abort");
+        assert_eq!(t.rotate, Some(Angle::default()));
+        assert_eq!(t.translate_x, Some(Length::Percent(50.0)));
+
+        // Rect shorthand (`padding`/`margin`/`border`/`borderRadius`): a bad token
+        // defaults just that side; a good shorthand still decodes; a bad value-count
+        // defaults the whole rect. None of these abort (the reported `padding: "16asd"`).
+        let s: Style =
+            serde_json::from_str(r#"{ "padding": "16asd" }"#).expect("bad rect must not abort");
+        assert_eq!(s.padding, Some(Rect::default()));
+
+        let s: Style = serde_json::from_str(r#"{ "padding": "8px 16asd" }"#)
+            .expect("partial-bad rect must not abort");
+        // top/bottom = 8px (good), right/left = default (the bad token).
+        assert_eq!(
+            s.padding,
+            Some(Rect {
+                top: Length::Px(8.0),
+                bottom: Length::Px(8.0),
+                right: Length::default(),
+                left: Length::default(),
+            })
         );
+
+        let s: Style = serde_json::from_str(r#"{ "padding": "8px 16px" }"#)
+            .expect("valid two-value shorthand decodes");
+        assert_eq!(
+            s.padding,
+            Some(Rect {
+                top: Length::Px(8.0),
+                bottom: Length::Px(8.0),
+                right: Length::Px(16.0),
+                left: Length::Px(16.0),
+            })
+        );
+
+        // Too many values (>4) → whole rect falls back to default, no abort.
+        let s: Style = serde_json::from_str(r#"{ "padding": "1px 2px 3px 4px 5px" }"#)
+            .expect("bad value-count must not abort");
+        assert_eq!(s.padding, Some(Rect::default()));
     }
 
     /// A `change` event serializes its new text as camelCase `value`, while the
