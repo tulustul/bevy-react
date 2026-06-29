@@ -31,7 +31,7 @@ Features:
         ✔ Per-side `borderColor` - `borderColor` now accepts a `{top,right,bottom,left}` object of colors (omitted sides → transparent) in addition to the uniform string form; maps to `bevy_ui::BorderColor`'s per-side fields. New `protocol::BorderColorSpec` wire type (string or object). Demo: Styling → "Borders" shows a four-color box. @done(26-06-29)
         ✔ Text typography - `lineHeight`, `letterSpacing`, `TextShadow`, and line-break/wrap control (`TextLayout` linebreak) all unexposed. @done(26-06-25 19:46)
       Medium value:
-        ☐ Multiple stacked box shadows - `boxShadow` maps a single `ShadowStyle`; `bevy_ui::BoxShadow` is `Vec<ShadowStyle>`.
+        ✔ Multiple stacked box shadows - `boxShadow` maps a single `ShadowStyle`; `bevy_ui::BoxShadow` is `Vec<ShadowStyle>`. @done(26-06-29 11:43)
         ☐ `FocusPolicy` (Block/Pass) - cannot make a node click-through for picking.
         ☐ Controlled `ScrollPosition` - scroll input is handled (`scroll.rs`), but offset can't be set/read from React.
         ☐ AlignItems/AlignContent `Start`/`End` vs `FlexStart`/`FlexEnd` - `start`/`end` collapse to the Flex variants; distinct in grid context.
@@ -41,7 +41,7 @@ Features:
         ☐ `overflow_clip_margin` (`VisualBox` + margin) and `OverrideClip` (per-node clip opt-out).
         ✘ Native `ViewportNode` (render-camera-into-UI) - partly overlaps custom `<portal>`/`<surface>`, but the native widget isn't wired. @cancelled(26-06-29 00:23)
         ☐ Hover/focus event callbacks - only hover/press *styling* exists; no `onPointerEnter`/`onPointerLeave`/`onFocus` handlers.
-        ☐ Widget interaction-state markers - `Checkable`/`Checked`/`Selectable`/`Selected`, `Label`, `UiTargetCamera` (mostly internal/widget-level).
+        ✘ Widget interaction-state markers - `Checkable`/`Checked`/`Selectable`/`Selected`, `Label`, `UiTargetCamera` (mostly internal/widget-level). @cancelled(26-06-29 11:44)
 
 
 Benchmarks and stress tests:

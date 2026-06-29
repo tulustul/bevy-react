@@ -12,7 +12,7 @@ import { InteractionsDemo } from "./demos/InteractionsDemo";
 import { CanvasDemo } from "./demos/elements/CanvasDemo";
 import { PortalDemo } from "./demos/elements/PortalDemo";
 import { SurfaceDemo } from "./demos/elements/surfaceDemo";
-import { ScrollDemo } from "./demos/layout/ScrollDemo";
+import { OverflowDemo } from "./demos/styling/OverflowDemo";
 import { EditableTextDemo } from "./demos/elements/EditableTextDemo";
 import { NodeDemo } from "./demos/elements/NodeDemo";
 import { FlexDemo } from "./demos/layout/FlexDemo";
@@ -80,7 +80,6 @@ const DEMOS: DemoItem[] = [
     children: [
       { label: "Flex", component: FlexDemo },
       { label: "Grid", component: GridDemo },
-      { label: "Scroll", component: ScrollDemo },
     ],
   },
   {
@@ -91,6 +90,7 @@ const DEMOS: DemoItem[] = [
       { label: "Borders", component: BordersDemo },
       { label: "Spacing", component: SpacingDemo },
       { label: "Sizing", component: SizingDemo },
+      { label: "Overflow", component: OverflowDemo },
       { label: "Transform", component: TransformDemo },
       { label: "Shadow", component: ShadowDemo },
       { label: "Gradients", component: GradientsDemo },
