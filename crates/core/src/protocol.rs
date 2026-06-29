@@ -731,10 +731,12 @@ pub struct AtlasSpec {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Transform {
-    /// Translation along x, in logical pixels.
-    pub translate_x: Option<f32>,
-    /// Translation along y, in logical pixels.
-    pub translate_y: Option<f32>,
+    /// Translation along x — a length (number = logical pixels, or a unit string
+    /// like `"50%"`, resolved against the node's own size by `bevy_ui`).
+    pub translate_x: Option<Length>,
+    /// Translation along y — a length (number = logical pixels, or a unit string
+    /// like `"50%"`).
+    pub translate_y: Option<Length>,
     /// Uniform scale (both axes), unless overridden by `scale_x`/`scale_y`.
     pub scale: Option<f32>,
     pub scale_x: Option<f32>,
@@ -1298,7 +1300,7 @@ mod tests {
     fn deserializes_transform_opacity_and_transition() {
         let s: Style = serde_json::from_str(
             r#"{
-                "transform": { "scale": 0.95, "translateX": 4 },
+                "transform": { "scale": 0.95, "translateX": 4, "translateY": "50%" },
                 "opacity": 0.5,
                 "transition": { "transform": { "duration": 0.15, "easing": "easeOut" } }
             }"#,
@@ -1306,7 +1308,9 @@ mod tests {
         .expect("style decodes");
         let t = s.transform.expect("transform present");
         assert_eq!(t.scale, Some(0.95));
-        assert_eq!(t.translate_x, Some(4.0));
+        // A bare number is logical pixels; a unit string carries an explicit unit.
+        assert_eq!(t.translate_x, Some(Length::Px(4.0)));
+        assert_eq!(t.translate_y, Some(Length::Percent(50.0)));
         assert_eq!(t.scale_x, None);
         assert_eq!(s.opacity, Some(0.5));
         let transition = s.transition.expect("transition present");

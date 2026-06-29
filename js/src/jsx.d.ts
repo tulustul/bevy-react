@@ -316,11 +316,13 @@ export interface BevyStyle {
 
   // transform / opacity
   /** Static 2D transform. With `transition` a change eases instead of snapping.
+   * `translateX`/`translateY` are [`Length`]s (bare number = logical pixels, or a
+   * unit string like `"50%"`/`"10vw"`, resolved against the node's own size).
    * `scale` is uniform; `scaleX`/`scaleY` override one axis. `rotate` is an
    * [`Angle`] (bare number = degrees, e.g. `45`, or `"1.5rad"`). */
   transform?: {
-    translateX?: number;
-    translateY?: number;
+    translateX?: Length;
+    translateY?: Length;
     scale?: number;
     scaleX?: number;
     scaleY?: number;

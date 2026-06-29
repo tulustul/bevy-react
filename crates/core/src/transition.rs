@@ -148,8 +148,8 @@ impl ChannelTransition {
 #[derive(Component, Debug, Clone, Default)]
 pub struct TransitionInput {
     pub spec: Transition,
-    pub translate_x: Option<f32>,
-    pub translate_y: Option<f32>,
+    pub translate_x: Option<Length>,
+    pub translate_y: Option<Length>,
     pub scale: Option<f32>,
     pub scale_x: Option<f32>,
     pub scale_y: Option<f32>,
@@ -198,8 +198,8 @@ impl TransitionInput {
 #[derive(Component, Default)]
 #[require(UiTransform)]
 pub struct TransitionState {
-    translate_x: Channel,
-    translate_y: Channel,
+    translate_x: LengthChannel,
+    translate_y: LengthChannel,
     scale: Channel,
     scale_x: Channel,
     scale_y: Channel,
@@ -473,8 +473,12 @@ pub fn drive_transitions(
         // Seed resting values on first sight so a freshly mounted element snaps to
         // its initial style instead of animating in from zero.
         if !state.initialized {
-            state.translate_x.init(input.translate_x.unwrap_or(0.0));
-            state.translate_y.init(input.translate_y.unwrap_or(0.0));
+            state
+                .translate_x
+                .init(input.translate_x.unwrap_or(Length::Px(0.0)));
+            state
+                .translate_y
+                .init(input.translate_y.unwrap_or(Length::Px(0.0)));
             state.scale.init(input.scale.unwrap_or(1.0));
             state.scale_x.init(input.scale_x.unwrap_or(1.0));
             state.scale_y.init(input.scale_y.unwrap_or(1.0));
@@ -505,8 +509,17 @@ pub fn drive_transitions(
         // precedence intact).
         if input.spec.for_transform().is_some() && !skip_transform {
             let s = input.spec.for_transform();
-            let tx = input.translate_x.map(|t| state.translate_x.drive(t, s, dt));
-            let ty = input.translate_y.map(|t| state.translate_y.drive(t, s, dt));
+            // `LengthChannel::drive` reports a value only on a frame it moved, but the
+            // rebuilt `UiTransform` needs the current translation every frame — so drive
+            // for the side effect, then read `current` and convert to `Val`.
+            let tx = input.translate_x.map(|t| {
+                state.translate_x.drive(t, s, dt);
+                length_to_val(state.translate_x.current)
+            });
+            let ty = input.translate_y.map(|t| {
+                state.translate_y.drive(t, s, dt);
+                length_to_val(state.translate_y.current)
+            });
             let sc = input.scale.map(|t| state.scale.drive(t, s, dt));
             let scx = input.scale_x.map(|t| state.scale_x.drive(t, s, dt));
             let scy = input.scale_y.map(|t| state.scale_y.drive(t, s, dt));
@@ -774,6 +787,55 @@ mod tests {
         assert!(
             (sx - 0.975).abs() < 1e-2,
             "mid-release expected ~0.975, got {sx}"
+        );
+    }
+
+    #[test]
+    fn system_eases_percent_translate() {
+        let (mut world, mut schedule) = drive_world();
+        let spec = Transition {
+            transform: Some(timing(1.0, Easing::Linear)),
+            ..Default::default()
+        };
+        let e = world
+            .spawn((
+                TransitionInput {
+                    spec,
+                    translate_x: Some(Length::Percent(0.0)),
+                    ..Default::default()
+                },
+                TransitionState::default(),
+                UiTransform::default(),
+            ))
+            .id();
+
+        // First frame seeds the resting state at 0% — snaps, no animation.
+        schedule.run(&mut world);
+        assert_eq!(
+            world.entity(e).get::<UiTransform>().unwrap().translation.x,
+            Val::Percent(0.0)
+        );
+
+        // Retarget to 100%: halfway through a 1s linear ease → ~50%, still in
+        // percent units (not collapsed to px).
+        world
+            .entity_mut(e)
+            .get_mut::<TransitionInput>()
+            .unwrap()
+            .translate_x = Some(Length::Percent(100.0));
+        advance(&mut world, 0.5);
+        schedule.run(&mut world);
+        let tx = world.entity(e).get::<UiTransform>().unwrap().translation.x;
+        assert!(
+            matches!(tx, Val::Percent(v) if (v - 50.0).abs() < 1.0),
+            "mid expected ~50%, got {tx:?}"
+        );
+
+        advance(&mut world, 0.5);
+        schedule.run(&mut world);
+        assert_eq!(
+            world.entity(e).get::<UiTransform>().unwrap().translation.x,
+            Val::Percent(100.0)
         );
     }
 

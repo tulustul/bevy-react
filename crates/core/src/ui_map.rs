@@ -693,8 +693,8 @@ pub fn apply_style(ec: &mut EntityCommands, style: &Option<Style>) {
     // animation/transition isn't reset by a coincident re-render.
     if let Some(t) = s.and_then(|s| s.transform) {
         ec.insert(build_ui_transform(
-            t.translate_x,
-            t.translate_y,
+            t.translate_x.map(length_to_val),
+            t.translate_y.map(length_to_val),
             t.scale,
             t.scale_x,
             t.scale_y,

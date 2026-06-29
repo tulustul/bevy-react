@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { BevyStyle } from "bevy-react/jsx";
-import { Example, Slider } from "@/components";
+import { Button, Example, Slider } from "@/components";
 import { Colors } from "@/theme";
 import { box, controlColumn } from "./shared";
 
@@ -12,6 +12,13 @@ export function TransformDemo() {
         tsx={`transform: { translateX: 16, translateY: 0 }`}
       >
         <TranslateControl />
+      </Example>
+
+      <Example
+        description="translate also takes responsive units — translateX '50%' shifts a node by half its own width, regardless of pixel size (and eases with a transition)."
+        tsx={`transform: { translateX: on ? "50%" : "0%" }`}
+      >
+        <PercentTranslateControl />
       </Example>
 
       <Example
@@ -53,6 +60,27 @@ function TranslateControl() {
         onChange={setY}
         label={`translateY ${y.toFixed(0)}`}
       />
+    </node>
+  );
+}
+
+function PercentTranslateControl() {
+  const [on, setOn] = useState(false);
+  return (
+    <node style={controlColumn}>
+      <node style={stage}>
+        <node
+          style={{
+            ...box,
+            backgroundColor: Colors.amber100,
+            transform: { translateX: on ? "50%" : "0%" },
+            transition: { transform: { duration: 0.25, easing: "easeOut" } },
+          }}
+        />
+      </node>
+      <Button onClick={() => setOn((v) => !v)}>
+        translateX {on ? '"50%"' : '"0%"'}
+      </Button>
     </node>
   );
 }

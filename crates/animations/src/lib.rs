@@ -199,8 +199,14 @@ fn apply_animated_nodes(
         // frame (unbound channels stay at identity).
         if b.has_transform() {
             *transform = build_ui_transform(
-                b.translate_x.as_ref().and_then(|x| eval_scalar(x, &values)),
-                b.translate_y.as_ref().and_then(|x| eval_scalar(x, &values)),
+                b.translate_x
+                    .as_ref()
+                    .and_then(|x| eval_scalar(x, &values))
+                    .map(Val::Px),
+                b.translate_y
+                    .as_ref()
+                    .and_then(|x| eval_scalar(x, &values))
+                    .map(Val::Px),
                 b.scale.as_ref().and_then(|x| eval_scalar(x, &values)),
                 b.scale_x.as_ref().and_then(|x| eval_scalar(x, &values)),
                 b.scale_y.as_ref().and_then(|x| eval_scalar(x, &values)),
@@ -251,8 +257,8 @@ fn apply_animated_nodes(
 /// node apply and `bevy-react`'s static/transition transform path so the channel
 /// semantics stay identical across both.
 pub fn build_ui_transform(
-    translate_x: Option<f32>,
-    translate_y: Option<f32>,
+    translate_x: Option<Val>,
+    translate_y: Option<Val>,
     scale: Option<f32>,
     scale_x: Option<f32>,
     scale_y: Option<f32>,
@@ -260,10 +266,10 @@ pub fn build_ui_transform(
 ) -> UiTransform {
     let mut t = UiTransform::IDENTITY;
     if let Some(v) = translate_x {
-        t.translation.x = Val::Px(v);
+        t.translation.x = v;
     }
     if let Some(v) = translate_y {
-        t.translation.y = Val::Px(v);
+        t.translation.y = v;
     }
     let mut sx = 1.0;
     let mut sy = 1.0;
