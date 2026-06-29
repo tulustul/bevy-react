@@ -299,6 +299,14 @@ export interface BevyStyle {
    *  above unrelated subtrees. Unlike `zIndex`, which only reorders a node among
    *  its siblings. */
   globalZIndex?: number;
+  /** Pointer pass-through. `"pass"` makes the element click-through — pointer
+   *  interaction (hover/press/click) falls to elements behind it. `"block"` makes
+   *  it *capture* interaction so siblings, the 3D scene, and portals behind it
+   *  don't receive it. Defaults differ by element: a `<button>` blocks (it's a
+   *  discrete control), a `<node>` (and other containers) passes — so a wrapper or
+   *  label never swallows clicks meant for what's behind or around it. Set this to
+   *  override, e.g. a click-through button or a click-capturing panel/backdrop. */
+  focusPolicy?: "block" | "pass";
 
   // transform / opacity
   /** Static 2D transform. With `transition` a change eases instead of snapping.

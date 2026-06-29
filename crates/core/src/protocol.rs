@@ -346,6 +346,13 @@ pub struct Style {
     /// which only reorders a node among its siblings.
     #[serde(default)]
     pub global_z_index: Option<i32>,
+    /// Pointer pass-through. Maps to `bevy::ui::FocusPolicy`. `"pass"` lets pointer
+    /// interaction fall through to nodes behind this one; `"block"` makes it
+    /// *capture* interaction so siblings, the 3D scene, and portals behind it don't
+    /// receive it. When unset the default is element-dependent (set in the
+    /// reconciler): a `<button>` blocks, a `<node>`/container passes.
+    #[serde(default)]
+    pub focus_policy: Option<String>,
 
     // --- transform / opacity (drive `UiTransform` and color alpha) ---
     /// Static transform (translate/scale/rotate). Mirrors the animated transform

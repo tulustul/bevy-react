@@ -7,6 +7,7 @@ use bevy::platform::collections::HashMap;
 use bevy::prelude::*;
 use bevy::sprite::{BorderRect, SliceScaleMode, TextureSlicer};
 use bevy::text::{FontSize as BevyFontSize, LetterSpacing, LineHeight};
+use bevy::ui::FocusPolicy;
 use bevy::ui::widget::NodeImageMode;
 use bevy_react_animations::build_ui_transform;
 
@@ -768,6 +769,19 @@ pub fn apply_style(ec: &mut EntityCommands, style: &Option<Style>) {
             ec.remove::<GlobalZIndex>();
         }
     }
+    // `focusPolicy` controls pointer pass-through. The node's default is `Pass`
+    // (bevy_ui `Node` requires `FocusPolicy`, whose `Default` is `Pass`), so absent
+    // / "pass" stay click-through and only "block" makes the node capture pointer
+    // interaction (so nodes behind it don't receive it). We always *insert* — never
+    // remove — because removing the component makes `ui_focus_system` fall back to
+    // `.unwrap_or(&FocusPolicy::Block)` and silently block every node (e.g. a `<text>`
+    // child would then block its parent); inserting also makes toggling "block" back
+    // off reliably revert to `Pass`.
+    let focus_policy = match s.and_then(|s| s.focus_policy.as_deref()) {
+        Some("block") => FocusPolicy::Block,
+        _ => FocusPolicy::Pass, // "pass", unknown, or absent
+    };
+    ec.insert(focus_policy);
 
     // Stamp the transition engine's input from this (possibly hover/press-merged)
     // style. `drive_transitions` eases the snap values written above to their new
@@ -1219,6 +1233,44 @@ mod tests {
             c.alpha
         );
         assert!((c.red - 1.0).abs() < 1e-6, "tint hue preserved");
+    }
+
+    /// `focusPolicy` maps to `bevy::ui::FocusPolicy`: `"block"` → `Block`,
+    /// `"pass"` → `Pass`, and dropping the key falls back to the node's default
+    /// `Pass` (never removes the component — removal would make `ui_focus_system`
+    /// silently block the node).
+    #[test]
+    fn focus_policy_maps_with_pass_default() {
+        use bevy::ecs::world::CommandQueue;
+
+        let apply = |world: &mut World, entity: Entity, json: serde_json::Value| {
+            let style: Style = serde_json::from_value(json).unwrap();
+            let mut queue = CommandQueue::default();
+            let mut commands = Commands::new(&mut queue, world);
+            apply_style(&mut commands.entity(entity), &Some(style));
+            queue.apply(world);
+        };
+
+        let mut world = World::new();
+        let entity = world.spawn_empty().id();
+
+        apply(
+            &mut world,
+            entity,
+            serde_json::json!({ "focusPolicy": "block" }),
+        );
+        assert_eq!(world.get::<FocusPolicy>(entity), Some(&FocusPolicy::Block));
+
+        apply(
+            &mut world,
+            entity,
+            serde_json::json!({ "focusPolicy": "pass" }),
+        );
+        assert_eq!(world.get::<FocusPolicy>(entity), Some(&FocusPolicy::Pass));
+
+        // Dropping the key reverts to the default `Pass` (not removed → not Block).
+        apply(&mut world, entity, serde_json::json!({}));
+        assert_eq!(world.get::<FocusPolicy>(entity), Some(&FocusPolicy::Pass));
     }
 
     /// A `{ type: "sliced", … }` `imageMode` maps to `NodeImageMode::Sliced` with

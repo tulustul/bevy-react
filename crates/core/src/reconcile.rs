@@ -11,6 +11,7 @@ use bevy::picking::events::{Click, Drag, Out, Over, Pointer, Press, Release};
 use bevy::platform::collections::HashSet;
 use bevy::prelude::*;
 use bevy::text::{EditableText, FontCx, LayoutCx, TextCursorStyle, TextEdit, TextEditChange};
+use bevy::ui::FocusPolicy;
 use bevy::ui::RelativeCursorPosition;
 use bevy::ui::widget::NodeImageMode;
 use bevy::ui::{ComputedNode, UiGlobalTransform};
@@ -73,6 +74,10 @@ pub fn apply_js_ops(
     mut atlas_cache: ResMut<AtlasLayoutCache>,
     children: Query<&Children>,
     rnodes: Query<&RNode>,
+    // On re-render the entity's kind isn't on the op, so we detect a `<button>` by
+    // its marker to keep re-asserting its `FocusPolicy::Block` default (see
+    // `apply_button_focus_default`) that the per-commit `apply_style` resets to `Pass`.
+    buttons: Query<(), With<Button>>,
     // The persistent world-anchor overlay layer (a child of the root). It is
     // infrastructure, not a reconciler node, so `Op::Reset` must preserve it.
     anchor_layer: Query<(), With<crate::anchor::AnchorLayer>>,
@@ -526,6 +531,11 @@ pub fn apply_js_ops(
                     if let Some(target) = &props.target {
                         ec.insert(RPortal(target.clone()));
                     }
+                    // `apply_style` just reset this entity to the `Pass` default;
+                    // re-assert a button's `Block` (no-op / `Pass` for plain nodes).
+                    if buttons.get(e).is_ok() {
+                        apply_button_focus_default(&mut ec, &props.style);
+                    }
                     apply_style_variants(&mut ec, &props);
                     apply_pointer_handlers(&mut ec, &props);
                     apply_animated(&mut ec, &props);
@@ -607,6 +617,9 @@ fn spawn_element(
         // `Button` requires `Interaction`, which is added automatically.
         "button" => {
             ec.insert(Button);
+            // Buttons capture the pointer by default; `apply_style` already
+            // defaulted this entity to `Pass`, so override unless the prop is set.
+            apply_button_focus_default(&mut ec, &props.style);
         }
         "image" => {
             let mut img = image_node(props, assets);
@@ -692,10 +705,15 @@ fn apply_style_variants(ec: &mut EntityCommands, props: &Props) {
 
 /// Stamp (or clear) the [`PointerHandlers`] marker plus the components the
 /// drag-capture system needs. When any `onPointer*` handler is declared the
-/// element also gets an `Interaction` (so the focus system tracks the press that
-/// starts a drag) and a [`RelativeCursorPosition`] (so we can read the cursor's
-/// normalized position within it). `insert_if_new` leaves an existing
-/// `Interaction` (a `button`'s, or a hover/press variant's) untouched.
+/// element also gets a [`RelativeCursorPosition`] (so we can read the cursor's
+/// normalized position within it).
+///
+/// Both `onClick` and the `onPointer*` handlers are detected through the
+/// `Interaction` `Pressed` transition (see [`collect_ui_events`]), so any element
+/// carrying either gets an `Interaction`. Without it a plain `<node onClick>` —
+/// no hover/press style, not a `<button>` — would never be reported as clicked.
+/// `insert_if_new` leaves an existing `Interaction` (a `button`'s, or a
+/// hover/press variant's) untouched.
 fn apply_pointer_handlers(ec: &mut EntityCommands, props: &Props) {
     if props.on_pointer_down || props.on_pointer_move || props.on_pointer_up {
         ec.insert(PointerHandlers {
@@ -703,11 +721,30 @@ fn apply_pointer_handlers(ec: &mut EntityCommands, props: &Props) {
             moved: props.on_pointer_move,
             up: props.on_pointer_up,
         });
-        ec.insert_if_new(Interaction::default());
         ec.insert_if_new(RelativeCursorPosition::default());
     } else {
         ec.remove::<PointerHandlers>();
         ec.remove::<RelativeCursorPosition>();
+    }
+    if props.on_click || props.on_pointer_down || props.on_pointer_move || props.on_pointer_up {
+        ec.insert_if_new(Interaction::default());
+    }
+}
+
+/// `<button>` captures the pointer by default — bevy_ui's native `Button` sets
+/// `FocusPolicy::Block`, and we mirror that so a button doesn't leak its click to a
+/// sibling, an ancestor, or the 3D scene/portal behind it. [`apply_style`] defaults
+/// every element to `Pass`, so for a button with no explicit `focusPolicy` we
+/// re-assert `Block` here. A bare `<node>` keeps `Pass`, so containers/labels stay
+/// click-through and don't swallow clicks meant for what's behind or around them.
+/// An explicit `focusPolicy` prop (handled in `apply_style`) always wins.
+fn apply_button_focus_default(ec: &mut EntityCommands, style: &Option<Style>) {
+    let has_explicit = style
+        .as_ref()
+        .and_then(|s| s.focus_policy.as_deref())
+        .is_some();
+    if !has_explicit {
+        ec.insert(FocusPolicy::Block);
     }
 }
 
@@ -1317,6 +1354,142 @@ mod tests {
             }
         }))
         .expect("valid text props")
+    }
+
+    /// Spin up a minimal app wired to `apply_js_ops`, returning the app and the
+    /// op sender (the outbound receiver is leaked to keep the sender open).
+    fn op_app() -> (App, crossbeam_channel::Sender<Vec<Op>>) {
+        let mut app = App::new();
+        app.add_plugins((MinimalPlugins, AssetPlugin::default()));
+        app.init_asset::<Image>();
+        app.init_asset::<TextureAtlasLayout>();
+        app.init_resource::<Fonts>();
+        app.init_resource::<OpApplyStats>();
+        app.init_resource::<AtlasLayoutCache>();
+
+        let (ops_tx, ops_rx) = crossbeam_channel::unbounded::<Vec<Op>>();
+        let (out_tx, out_rx) = tokio::sync::mpsc::unbounded_channel::<Outbound>();
+        std::mem::forget(out_rx); // keep the channel open for the test's lifetime
+        let root = app.world_mut().spawn_empty().id();
+        app.insert_resource(JsBridge::new(ops_rx, out_tx, root));
+        app.add_systems(Update, apply_js_ops);
+        (app, ops_tx)
+    }
+
+    /// A plain `<node onClick>` — no hover/press style, not a `<button>` — must get
+    /// an `Interaction` so [`collect_ui_events`] can report its clicks. Regression:
+    /// `onClick` crossed the wire as a bool but nothing attached an `Interaction`,
+    /// so such a node was silently unclickable (only a `<button>`, or a node that
+    /// also had a hover/press style or an `onPointer*` handler, worked).
+    #[test]
+    fn node_onclick_attaches_interaction() {
+        let (mut app, ops_tx) = op_app();
+
+        ops_tx
+            .send(vec![
+                // 1: a bare onClick node — the case that was broken.
+                Op::Create {
+                    id: 1,
+                    kind: "node".into(),
+                    props: serde_json::from_value(serde_json::json!({ "onClick": true })).unwrap(),
+                    text: None,
+                },
+                // 2: a node with no interaction props at all — must stay inert.
+                Op::Create {
+                    id: 2,
+                    kind: "node".into(),
+                    props: Props::default(),
+                    text: None,
+                },
+            ])
+            .unwrap();
+        app.update();
+
+        let nodes = &app.world().resource::<JsBridge>().nodes;
+        let (clickable, inert) = (nodes[&1], nodes[&2]);
+        assert!(
+            app.world().entity(clickable).get::<Interaction>().is_some(),
+            "`onClick` alone must make a <node> clickable"
+        );
+        assert!(
+            app.world().entity(inert).get::<Interaction>().is_none(),
+            "a node with no handlers/hover/press must not gain an Interaction"
+        );
+    }
+
+    /// `FocusPolicy` defaults differ by element kind: a `<button>` captures the
+    /// pointer (`Block`, mirroring bevy_ui's native `Button`), while a `<node>`
+    /// passes it through (`Pass`), so a container/label never swallows clicks meant
+    /// for what's behind it. An explicit `focusPolicy` prop overrides either, and
+    /// re-rendering a button keeps its `Block` (the per-commit `apply_style` resets
+    /// it to `Pass` first).
+    #[test]
+    fn focus_policy_defaults_block_button_pass_node() {
+        let (mut app, ops_tx) = op_app();
+
+        let node_props =
+            |json: serde_json::Value| -> Props { serde_json::from_value(json).unwrap() };
+        ops_tx
+            .send(vec![
+                // 1: bare button → Block default.
+                Op::Create {
+                    id: 1,
+                    kind: "button".into(),
+                    props: Props::default(),
+                    text: None,
+                },
+                // 2: bare node → Pass default.
+                Op::Create {
+                    id: 2,
+                    kind: "node".into(),
+                    props: Props::default(),
+                    text: None,
+                },
+                // 3: button with explicit focusPolicy "pass" → overrides the default.
+                Op::Create {
+                    id: 3,
+                    kind: "button".into(),
+                    props: node_props(serde_json::json!({ "style": { "focusPolicy": "pass" } })),
+                    text: None,
+                },
+            ])
+            .unwrap();
+        app.update();
+
+        let fp = |app: &App, id: u32| -> Option<FocusPolicy> {
+            let e = app.world().resource::<JsBridge>().nodes[&id];
+            app.world().entity(e).get::<FocusPolicy>().copied()
+        };
+        assert_eq!(
+            fp(&app, 1),
+            Some(FocusPolicy::Block),
+            "button defaults to Block"
+        );
+        assert_eq!(
+            fp(&app, 2),
+            Some(FocusPolicy::Pass),
+            "node defaults to Pass"
+        );
+        assert_eq!(
+            fp(&app, 3),
+            Some(FocusPolicy::Pass),
+            "explicit focusPolicy overrides the button default"
+        );
+
+        // Re-render the bare button: `apply_style` resets to `Pass`, but the button
+        // default must be re-asserted so it stays `Block`.
+        ops_tx
+            .send(vec![Op::Update {
+                id: 1,
+                props: Props::default(),
+            }])
+            .unwrap();
+        app.update();
+        assert_eq!(
+            fp(&app, 1),
+            Some(FocusPolicy::Block),
+            "a re-rendered button keeps its Block default"
+        );
     }
 
     /// A `<text>` root's `transform`/`transition` must update on re-render — not
