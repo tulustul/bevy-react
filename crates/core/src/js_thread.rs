@@ -409,26 +409,37 @@ async fn pump(
     // never re-execute, and nothing would re-park on `op_next_event` (the UI
     // would freeze). `biased` polls the event loop first so it fully drains the
     // pending microtasks (the prior `runEventLoop` returning) before we bail.
-    let loop_result = tokio::select! {
-        biased;
-        res = runtime.run_event_loop(Default::default()) => Some(res),
-        _ = reload_notify.notified() => None,
-    };
-    match loop_result {
-        // Woken by a reload while the event loop was still busy with timers.
-        None => Pumped::Reload,
-        Some(Err(e)) => {
-            // Steady-state errors are caught inside the JS event loop, so this
-            // is rare; treat it like a reload so we rebuild rather than wedge.
-            error!(target: "bevy_react::js", "event loop error: {e}");
-            Pumped::Reload
-        }
-        // The loop went idle: a reload with no pending timers, or shutdown.
-        Some(Ok(())) => {
-            if reload_flag.get() {
-                Pumped::Reload
-            } else {
-                Pumped::Shutdown
+    loop {
+        let loop_result = tokio::select! {
+            biased;
+            res = runtime.run_event_loop(Default::default()) => Some(res),
+            _ = reload_notify.notified() => None,
+        };
+        match loop_result {
+            // Woken by the reload notify (a real reload sets `reload_flag` before
+            // `notify_one`). If the flag is clear this is a *stale* permit: when a
+            // prior reload resolved via the event-loop branch above, `biased`
+            // drained the loop first and dropped this `notified()` future after it
+            // had been notified, which re-arms the permit. Ignore it and keep
+            // driving the loop, or we'd re-execute the app a second time.
+            None => {
+                if reload_flag.get() {
+                    return Pumped::Reload;
+                }
+            }
+            Some(Err(e)) => {
+                // Steady-state errors are caught inside the JS event loop, so this
+                // is rare; treat it like a reload so we rebuild rather than wedge.
+                error!(target: "bevy_react::js", "event loop error: {e}");
+                return Pumped::Reload;
+            }
+            // The loop went idle: a reload with no pending timers, or shutdown.
+            Some(Ok(())) => {
+                return if reload_flag.get() {
+                    Pumped::Reload
+                } else {
+                    Pumped::Shutdown
+                };
             }
         }
     }

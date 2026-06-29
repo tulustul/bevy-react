@@ -30,8 +30,17 @@ fn accumulate(
     text_of: &mut HashMap<u32, String>,
 ) {
     match op {
-        Op::Create { id, kind, .. } if kind == "button" => {
-            buttons.insert(*id);
+        Op::Create {
+            id, kind, text, ..
+        } => {
+            if kind == "button" {
+                buttons.insert(*id);
+            }
+            // A single-string `<text>` rides its label inline on the create op
+            // (the `shouldSetTextContent` fast path) rather than as a child run.
+            if let Some(text) = text {
+                text_of.insert(*id, text.clone());
+            }
         }
         Op::CreateTextSpan { id, text } | Op::CreateText { id, text } => {
             text_of.insert(*id, text.clone());
@@ -46,8 +55,9 @@ fn accumulate(
     }
 }
 
-/// A nav entry renders `<button><text>{label}</text></button>`, so the button id
-/// is the grandparent of the label's text run.
+/// A nav entry renders `<button>…<text>{label}</text>…</button>`, where the label
+/// `<text>` is nested under one or more wrapper `<node>`s, so walk up from the label's
+/// text run until we reach the enclosing button.
 fn find_button(
     label: &str,
     buttons: &HashSet<u32>,
@@ -55,12 +65,19 @@ fn find_button(
     text_of: &HashMap<u32, String>,
 ) -> Option<u32> {
     for (span, text) in text_of {
-        if text.trim() == label
-            && let Some(&text_node) = parent_of.get(span)
-            && let Some(&button) = parent_of.get(&text_node)
-            && buttons.contains(&button)
-        {
-            return Some(button);
+        if text.trim() != label {
+            continue;
+        }
+        // Bound the walk so a malformed parent map can't loop forever.
+        let mut current = *span;
+        for _ in 0..8 {
+            let Some(&parent) = parent_of.get(&current) else {
+                break;
+            };
+            if buttons.contains(&parent) {
+                return Some(parent);
+            }
+            current = parent;
         }
     }
     None
@@ -182,8 +199,19 @@ fn bridge_round_trip() {
             for op in &batch {
                 accumulate(op, &mut buttons, &mut parent_of, &mut text_of);
                 match op {
-                    Op::Create { props, kind, .. } if kind == "button" => {
-                        assert!(props.on_click, "button created without onClick");
+                    Op::Create {
+                        id, props, kind, text,
+                    } => {
+                        if kind == "button" {
+                            assert!(props.on_click, "button created without onClick");
+                        }
+                        // The `+` label and the `3` count both ride inline on their
+                        // `<text>` create op (the `shouldSetTextContent` fast path).
+                        match text.as_deref().map(str::trim) {
+                            Some("+") => plus_text = Some(*id),
+                            Some("3") => saw_initial = true,
+                            _ => {}
+                        }
                     }
                     Op::CreateText { id, text } if text.trim() == "+" => {
                         plus_text = Some(*id);
