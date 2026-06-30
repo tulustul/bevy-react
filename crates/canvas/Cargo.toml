@@ -10,6 +10,10 @@ homepage.workspace = true
 keywords = ["bevy", "react", "canvas", "ui", "gamedev"]
 categories = ["gui", "game-development"]
 
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
 [lib]
 name = "bevy_react_canvas"
 path = "src/lib.rs"

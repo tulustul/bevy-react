@@ -1,3 +1,4 @@
+#![cfg_attr(docsrs, feature(doc_auto_cfg))]
 //! Proc-macro support for `bevy-react`.
 //!
 //! Provides [`react_message`], the attribute that turns a plain struct into a

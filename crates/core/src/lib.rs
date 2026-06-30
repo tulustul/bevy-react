@@ -1,3 +1,4 @@
+#![cfg_attr(docsrs, feature(doc_auto_cfg))]
 //! Drive `bevy_ui` from a React app running on an embedded V8 (deno_core)
 //! runtime. The bridge is deliberately tiny: two channels and two ops connect a
 //! dedicated JS thread to Bevy.

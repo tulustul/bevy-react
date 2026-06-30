@@ -1,3 +1,4 @@
+#![cfg_attr(docsrs, feature(doc_auto_cfg))]
 //! The `surface` host element: the **inverse** of `bevy-react-portal`. Where a
 //! portal draws an offscreen Bevy camera *into* the React UI, a surface renders a
 //! React UI subtree *out* into an offscreen [`Image`] the app can drape over any

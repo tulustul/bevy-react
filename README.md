@@ -1,5 +1,7 @@
 # bevy-react
 
+[![docs.rs](https://img.shields.io/docsrs/bevy-react)](https://docs.rs/bevy-react)
+
 Build [`bevy_ui`](https://docs.rs/bevy/latest/bevy/ui/index.html) interfaces with
 **React**. You write components in React/TSX and they render to native Bevy UI
 through a **React Native-style bridge** - **no web view, no DOM**. The JS side stays

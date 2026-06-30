@@ -1,3 +1,4 @@
+#![cfg_attr(docsrs, feature(doc_auto_cfg))]
 //! The `canvas` host element: an arbitrary anti-aliased vector drawing surface.
 //!
 //! A `<canvas>` is a normal styled UI node carrying an [`ImageNode`] whose

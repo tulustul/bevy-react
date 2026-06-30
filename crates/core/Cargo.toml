@@ -11,6 +11,13 @@ readme = "../../README.md"
 keywords = ["bevy", "react", "ui", "gamedev", "gui"]
 categories = ["gui", "game-development"]
 
+# docs.rs documents the default (native) target. `rusty_v8` (via deno_core) skips
+# its network V8 download when the `DOCS_RS` env var is set, so the native build
+# succeeds without network access.
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
 [lib]
 name = "bevy_react"
 path = "src/lib.rs"

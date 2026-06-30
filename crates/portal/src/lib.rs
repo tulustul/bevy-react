@@ -1,3 +1,4 @@
+#![cfg_attr(docsrs, feature(doc_auto_cfg))]
 //! The `portal` host element: a UI rectangle that displays an **offscreen render
 //! target** — the live (or snapshot) output of a Bevy camera drawing into a GPU
 //! texture.
