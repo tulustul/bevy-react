@@ -30,6 +30,14 @@ jobs:
   rust:
     name: Rust checks
     runs-on: ubuntu-latest
+    # Job-wide so EVERY cargo step (clippy + test + bindings) compiles with the
+    # same profile fingerprint. Drops debug info — the biggest link-memory cost
+    # (keeps the Bevy links under the 7 GB runner ceiling) and also keeps the
+    # rust-cache artifact small and consistent so deps are reused across pushes
+    # instead of recompiled. (If it were per-step, clippy would build deps WITH
+    # debug and test would rebuild them all WITHOUT — defeating the cache.)
+    env:
+      CARGO_PROFILE_DEV_DEBUG: "0"
     steps:
       - uses: actions/checkout@v4
 
@@ -44,10 +52,17 @@ jobs:
 
       # Caches ~/.cargo and target/, keyed on Cargo.lock + rustc version.
       # Keeps the heavy Bevy build out of every run after the first.
+      #
+      # cache-on-failure is OFF on purpose: GitHub cache keys are immutable, so the
+      # FIRST run to save a key wins forever. With it on, a run that fails fast (e.g.
+      # rustfmt erroring before anything compiles) would save a near-empty cache and
+      # permanently block the later successful full build from saving real artifacts
+      # — every subsequent run then recompiles all of Bevy. A failed run instead just
+      # restores the last good cache via the prefix restore-key.
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: rust
-          cache-on-failure: "true"
+          cache-on-failure: "false"
 
       - uses: actions/setup-node@v4
         with:
@@ -64,8 +79,8 @@ jobs:
 
       # The heavy Bevy links below OOM'd the 7 GB runner with the default linker.
       # `mold -run` swaps in the low-memory linker for the child cargo across the
-      # whole process tree, and `CARGO_PROFILE_DEV_DEBUG=0` drops debug info (the
-      # biggest link-memory contributor) — together they keep the links in budget.
+      # whole process tree (debug info is already dropped job-wide above), keeping
+      # the links in budget.
 
       # Build the JS bundle so the headless `roundtrip` / `demo_switch` tests run
       # for real (they skip-pass when the bundle is missing).
@@ -73,13 +88,9 @@ jobs:
         run: npm run build -w demos-app
 
       - name: Test
-        env:
-          CARGO_PROFILE_DEV_DEBUG: "0"
         run: mold -run cargo test
 
       - name: Regenerate TS bindings
-        env:
-          CARGO_PROFILE_DEV_DEBUG: "0"
         run: mold -run npm run bevy:generate -w demos-app
 
       - name: Verify bindings are up to date
