@@ -16,7 +16,8 @@
   "dependencies": {
     "bevy-react": "*",
     "react": "19.2.7",
-    "react-reconciler": "0.33.0"
+    "react-reconciler": "0.33.0",
+    "zustand": "5.0.2"
   },
   "devDependencies": {
     "@swc/core": "1.10.1",
