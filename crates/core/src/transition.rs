@@ -29,7 +29,7 @@
 use bevy::prelude::*;
 use bevy::ui::{ScrollPosition, UiTransform};
 use bevy_react_animations::{
-    AnimatedNode, Driver, Easing, Runner, build_runner, build_ui_transform,
+    AnimatableProperty, AnimatedNode, Driver, Easing, Runner, build_runner, build_ui_transform,
 };
 use serde::Deserialize;
 
@@ -500,8 +500,8 @@ pub fn drive_transitions(
 
         // `animatedStyle` (imperative) wins: skip any channel it already drives.
         let skip_transform = anim.is_some_and(|a| a.0.has_transform());
-        let skip_opacity = anim.is_some_and(|a| a.0.opacity.is_some());
-        let skip_bg = anim.is_some_and(|a| a.0.background_color.is_some());
+        let skip_opacity = anim.is_some_and(|a| a.0.contains(AnimatableProperty::Opacity));
+        let skip_bg = anim.is_some_and(|a| a.0.contains(AnimatableProperty::BackgroundColor));
 
         // Transform: only when a transform transition is declared; otherwise the
         // static `UiTransform` from `apply_style` stands untouched. Only specified

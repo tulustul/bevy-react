@@ -15,13 +15,17 @@
 
 use std::collections::HashMap;
 
+use bevy::ecs::query::QueryData;
 use bevy::prelude::*;
 use bevy::ui::UiTransform;
 use crossbeam_channel::Receiver;
 
 pub mod protocol;
 
-pub use protocol::{AnimatedBindings, AnimationCommand, Binding, Driver, Easing, SharedId};
+pub use protocol::{
+    AnimatableProperty, AnimatedBindings, AnimationCommand, Binding, Driver, Easing, SharedId,
+    ValueKind,
+};
 
 /// Adds the animation orchestration: the [`SharedValues`] table, the per-frame
 /// driver/apply systems, and the [`AnimationInbox`] that feeds commands in.
@@ -179,75 +183,167 @@ fn tick_animations(time: Res<Time>, mut values: ResMut<SharedValues>) {
     values.tick(time.delta_secs());
 }
 
-#[allow(clippy::type_complexity)]
+/// The components an animated node can drive. A `QueryData` struct (rather than a
+/// tuple) so a new animatable target component is one field, not a tuple-arity
+/// problem. Every visual/layout target is optional except `UiTransform` (required
+/// by [`AnimatedNode`]).
+#[derive(QueryData)]
+#[query_data(mutable)]
+struct AnimTargets {
+    transform: &'static mut UiTransform,
+    bg: Option<&'static mut BackgroundColor>,
+    border: Option<&'static mut BorderColor>,
+    text: Option<&'static mut TextColor>,
+    image: Option<&'static mut ImageNode>,
+    node: Option<&'static mut Node>,
+}
+
 fn apply_animated_nodes(
     mut commands: Commands,
     values: Res<SharedValues>,
-    mut query: Query<(
-        Entity,
-        &AnimatedNode,
-        &mut UiTransform,
-        Option<&mut BackgroundColor>,
-        Option<&mut TextColor>,
-        Option<&mut ImageNode>,
-    )>,
+    mut query: Query<(Entity, &AnimatedNode, AnimTargets)>,
 ) {
-    for (entity, anim, mut transform, bg, text_color, image) in &mut query {
+    use AnimatableProperty as P;
+    for (entity, anim, mut t) in &mut query {
         let b = &anim.0;
 
-        // Transform channels rebuild the whole `UiTransform` from bindings each
-        // frame (unbound channels stay at identity).
+        // Stage 1 — transform group: rebuild the whole `UiTransform` from the six
+        // channels each frame (unbound channels stay at identity). Grouped because
+        // scale precedence (`scale` vs `scaleX`/`scaleY`) needs all channels at once.
         if b.has_transform() {
-            *transform = build_ui_transform(
-                b.translate_x
-                    .as_ref()
+            *t.transform = build_ui_transform(
+                b.get(P::TranslateX)
                     .and_then(|x| eval_scalar(x, &values))
                     .map(Val::Px),
-                b.translate_y
-                    .as_ref()
+                b.get(P::TranslateY)
                     .and_then(|x| eval_scalar(x, &values))
                     .map(Val::Px),
-                b.scale.as_ref().and_then(|x| eval_scalar(x, &values)),
-                b.scale_x.as_ref().and_then(|x| eval_scalar(x, &values)),
-                b.scale_y.as_ref().and_then(|x| eval_scalar(x, &values)),
-                b.rotate.as_ref().and_then(|x| eval_scalar(x, &values)),
+                b.get(P::Scale).and_then(|x| eval_scalar(x, &values)),
+                b.get(P::ScaleX).and_then(|x| eval_scalar(x, &values)),
+                b.get(P::ScaleY).and_then(|x| eval_scalar(x, &values)),
+                b.get(P::Rotate).and_then(|x| eval_scalar(x, &values)),
             );
         }
 
-        let mut bg = bg;
-
-        // Color before opacity, so opacity gets the last word on alpha.
-        if let Some(binding) = &b.background_color
-            && let Some(rgba) = eval_color(binding, &values)
-        {
-            let color = Color::srgba(rgba[0], rgba[1], rgba[2], rgba[3]);
-            match &mut bg {
-                Some(c) => c.0 = color,
-                None => {
-                    commands.entity(entity).insert(BackgroundColor(color));
+        // Stage 2 — every non-transform, non-opacity binding. Colors land on their
+        // component; lengths/scalars land on `Node`. Opacity is deferred to stage 3
+        // so it owns the final alpha after any color write (the original ordering).
+        for (&property, binding) in b.iter() {
+            if property.is_transform() || property == P::Opacity {
+                continue;
+            }
+            match property.value_kind() {
+                ValueKind::Color => {
+                    let Some(rgba) = eval_color(binding, &values) else {
+                        continue;
+                    };
+                    let color = Color::srgba(rgba[0], rgba[1], rgba[2], rgba[3]);
+                    match property {
+                        P::BackgroundColor => match &mut t.bg {
+                            Some(c) => c.0 = color,
+                            None => {
+                                commands.entity(entity).insert(BackgroundColor(color));
+                            }
+                        },
+                        P::BorderColor => {
+                            let bc = BorderColor {
+                                top: color,
+                                right: color,
+                                bottom: color,
+                                left: color,
+                            };
+                            match &mut t.border {
+                                Some(c) => **c = bc,
+                                None => {
+                                    commands.entity(entity).insert(bc);
+                                }
+                            }
+                        }
+                        P::Color => {
+                            if let Some(tc) = &mut t.text {
+                                tc.0 = color;
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                // Length/Scalar (and the unused Angle) all target `Node` here —
+                // transform's Length/Scalar/Angle members were handled in stage 1.
+                _ => {
+                    let Some(v) = eval_scalar(binding, &values) else {
+                        continue;
+                    };
+                    if let Some(node) = t.node.as_mut() {
+                        write_node_value(node, property, v);
+                    }
                 }
             }
         }
 
-        if let Some(binding) = &b.opacity
+        // Stage 3 — opacity owns the final alpha across background/text/image.
+        if let Some(binding) = b.get(P::Opacity)
             && let Some(alpha) = eval_scalar(binding, &values)
         {
-            if let Some(c) = &mut bg {
+            if let Some(c) = &mut t.bg {
                 let mut s = c.0.to_srgba();
                 s.alpha = alpha;
                 c.0 = Color::Srgba(s);
             }
-            if let Some(mut tc) = text_color {
+            if let Some(tc) = &mut t.text {
                 let mut s = tc.0.to_srgba();
                 s.alpha = alpha;
                 tc.0 = Color::Srgba(s);
             }
-            if let Some(mut img) = image {
+            if let Some(img) = &mut t.image {
                 let mut s = img.color.to_srgba();
                 s.alpha = alpha;
                 img.color = Color::Srgba(s);
             }
         }
+    }
+}
+
+/// Write a resolved scalar onto the matching `Node` layout field — but only when
+/// it actually differs from the live value. Writing `Node` re-triggers Bevy's
+/// layout, so the compare keeps a settled length binding from forcing a relayout
+/// every frame (the read goes through `Deref`, only the assignment through
+/// `DerefMut`, so an unchanged value never trips change detection). It also means a
+/// re-render that resets `Node` to its static style is corrected next frame.
+/// Lengths resolve to `Val::Px`: the imperative animation surface is scalar `f32`.
+fn write_node_value<N: std::ops::DerefMut<Target = Node>>(
+    node: &mut N,
+    property: AnimatableProperty,
+    v: f32,
+) {
+    use AnimatableProperty as P;
+    let val = Val::Px(v);
+    // Each arm's guard reads the live field through `Deref` (no change mark) and
+    // the body writes through `DerefMut` (marks changed) only when it differs — so
+    // a settled binding never forces a relayout. `Gap` writes both axes.
+    match property {
+        P::Width if node.width != val => node.width = val,
+        P::Height if node.height != val => node.height = val,
+        P::MinWidth if node.min_width != val => node.min_width = val,
+        P::MinHeight if node.min_height != val => node.min_height = val,
+        P::MaxWidth if node.max_width != val => node.max_width = val,
+        P::MaxHeight if node.max_height != val => node.max_height = val,
+        P::Left if node.left != val => node.left = val,
+        P::Right if node.right != val => node.right = val,
+        P::Top if node.top != val => node.top = val,
+        P::Bottom if node.bottom != val => node.bottom = val,
+        P::FlexBasis if node.flex_basis != val => node.flex_basis = val,
+        P::Gap => {
+            if node.row_gap != val {
+                node.row_gap = val;
+            }
+            if node.column_gap != val {
+                node.column_gap = val;
+            }
+        }
+        P::RowGap if node.row_gap != val => node.row_gap = val,
+        P::ColumnGap if node.column_gap != val => node.column_gap = val,
+        P::AspectRatio if node.aspect_ratio != Some(v) => node.aspect_ratio = Some(v),
+        _ => {}
     }
 }
 
@@ -996,8 +1092,109 @@ mod tests {
                      "input": [0, 1], "output": [[0,0,0,1],[1,1,1,1]] } }"#,
         )
         .unwrap();
-        assert!(bindings.translate_x.is_some());
-        assert!(bindings.background_color.is_some());
+        assert!(bindings.contains(AnimatableProperty::TranslateX));
+        assert!(bindings.contains(AnimatableProperty::BackgroundColor));
         assert!(bindings.has_transform());
+    }
+
+    #[test]
+    fn animated_bindings_skips_unknown_properties() {
+        // A newer JS bundle can send a property this binary doesn't know yet; the
+        // unknown key is skipped and the recognised ones still decode (rather than
+        // the whole `animatedStyle` failing).
+        let bindings: AnimatedBindings = serde_json::from_str(
+            r#"{ "scale": { "type": "shared", "id": 7 },
+                 "someFutureProp": { "type": "shared", "id": 8 } }"#,
+        )
+        .unwrap();
+        assert!(bindings.contains(AnimatableProperty::Scale));
+        assert!(bindings.has_transform());
+        assert_eq!(bindings.iter().count(), 1, "unknown property dropped");
+    }
+
+    /// The table-driven applier writes the transform translation, the interpolated
+    /// background color, and lets opacity own the final alpha — exactly the three
+    /// stages (transform → color → opacity) the per-field applier did.
+    #[test]
+    fn apply_writes_transform_color_then_opacity() {
+        let mut world = World::new();
+        let mut values = SharedValues::default();
+        values.set(1, 25.0); // translateX (px)
+        values.set(2, 0.5); // opacity
+        values.set(3, 0.0); // color progress → output[0] = red
+        world.insert_resource(values);
+
+        let bindings: AnimatedBindings = serde_json::from_value(serde_json::json!({
+            "translateX": { "type": "shared", "id": 1 },
+            "opacity": { "type": "shared", "id": 2 },
+            "backgroundColor": { "type": "interpolateColor", "id": 3,
+                "input": [0, 1], "output": [[1, 0, 0, 1], [0, 0, 1, 1]] },
+        }))
+        .unwrap();
+
+        let e = world
+            .spawn((
+                AnimatedNode(bindings),
+                UiTransform::default(),
+                BackgroundColor(Color::WHITE),
+            ))
+            .id();
+
+        let mut schedule = Schedule::default();
+        schedule.add_systems(apply_animated_nodes);
+        schedule.run(&mut world);
+
+        let t = world.entity(e).get::<UiTransform>().unwrap();
+        assert_eq!(t.translation.x, Val::Px(25.0));
+
+        // Color resolved to red, then opacity overwrote alpha to 0.5.
+        let s = world.entity(e).get::<BackgroundColor>().unwrap().0.to_srgba();
+        assert!((s.red - 1.0).abs() < 1e-4);
+        assert!(s.green.abs() < 1e-4);
+        assert!(s.blue.abs() < 1e-4);
+        assert!((s.alpha - 0.5).abs() < 1e-4, "opacity owns final alpha");
+    }
+
+    /// A layout length lands on `Node` (as px); a `borderColor` binding inserts a
+    /// `BorderColor` on all sides when absent; and a re-render that resets `Node`
+    /// is corrected on the next apply (the compare-before-write re-applies because
+    /// the live value differs from the still-active binding's value).
+    #[test]
+    fn apply_drives_node_length_and_border_color() {
+        let mut world = World::new();
+        let mut values = SharedValues::default();
+        values.set(10, 200.0); // width (px)
+        values.set(11, 0.0); // border-color progress → output[0] = green
+        world.insert_resource(values);
+
+        let bindings: AnimatedBindings = serde_json::from_value(serde_json::json!({
+            "width": { "type": "shared", "id": 10 },
+            "borderColor": { "type": "interpolateColor", "id": 11,
+                "input": [0, 1], "output": [[0, 1, 0, 1], [1, 0, 0, 1]] },
+        }))
+        .unwrap();
+
+        let e = world
+            .spawn((AnimatedNode(bindings), UiTransform::default(), Node::default()))
+            .id();
+
+        let mut schedule = Schedule::default();
+        schedule.add_systems(apply_animated_nodes);
+        schedule.run(&mut world);
+
+        assert_eq!(world.entity(e).get::<Node>().unwrap().width, Val::Px(200.0));
+        let bc = world.entity(e).get::<BorderColor>().unwrap();
+        let s = bc.top.to_srgba();
+        assert!(s.green > 0.9 && s.red < 0.1, "border resolved to green, got {s:?}");
+        assert_eq!(bc.left, bc.top, "all four sides set uniformly");
+
+        // A re-render resets the static width; the still-active binding re-applies.
+        world.entity_mut(e).get_mut::<Node>().unwrap().width = Val::Px(100.0);
+        schedule.run(&mut world);
+        assert_eq!(
+            world.entity(e).get::<Node>().unwrap().width,
+            Val::Px(200.0),
+            "binding re-applies after a re-render reset"
+        );
     }
 }

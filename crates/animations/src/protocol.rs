@@ -6,7 +6,10 @@
 //! travels through `op_flush`. The JS side (`js/src/animated.ts`) hand-writes
 //! matching JSON shapes — keep the two in sync, just like `bridge.ts` ↔ `Op`.
 
+use std::collections::BTreeMap;
+
 use serde::Deserialize;
+use serde::de::{self, Deserializer, MapAccess, Visitor};
 
 /// Identity of a shared value (Reanimated's `useSharedValue`). Allocated on the
 /// JS side; lives in the [`crate::SharedValues`] table on the Bevy side. Its own
@@ -104,35 +107,229 @@ pub enum Binding {
     },
 }
 
-/// The per-node `animatedStyle`: which style properties are animation-driven and
-/// by what. Mirrors `BevyStyle`'s shape (named optional fields) so it decodes the
-/// same opaque-object way `Style` does. Transforms map to `UiTransform`; `opacity`
-/// drives color alpha; `background_color` drives `BackgroundColor`.
-#[derive(Debug, Clone, Default, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct AnimatedBindings {
-    pub translate_x: Option<Binding>,
-    pub translate_y: Option<Binding>,
-    /// Uniform scale (applied to both axes unless `scale_x`/`scale_y` override).
-    pub scale: Option<Binding>,
-    pub scale_x: Option<Binding>,
-    pub scale_y: Option<Binding>,
+/// Identity of one continuous, animation-driveable style property. This is the
+/// open set the generic apply layer dispatches on — adding a new animatable
+/// property is a new variant here plus a row in the apply table (`crate::lib`),
+/// not a new named field on a fixed struct. The wire key is camelCase (see
+/// [`AnimatableProperty::from_wire`]); the JS side mirrors this set in
+/// `js/src/animated.ts`'s `AnimatableProperty` union.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum AnimatableProperty {
+    /// Post-layout x translation, in px (drives `UiTransform`).
+    TranslateX,
+    /// Post-layout y translation, in px (drives `UiTransform`).
+    TranslateY,
+    /// Uniform scale (both axes unless `ScaleX`/`ScaleY` override).
+    Scale,
+    ScaleX,
+    ScaleY,
     /// Clockwise rotation in radians.
-    pub rotate: Option<Binding>,
-    pub opacity: Option<Binding>,
-    pub background_color: Option<Binding>,
+    Rotate,
+    /// Multiplies color alpha across background/text/image.
+    Opacity,
+    /// Drives `BackgroundColor`.
+    BackgroundColor,
+    /// Drives `BorderColor` (all four sides uniformly).
+    BorderColor,
+    /// Drives `TextColor` (a `<text>` node's color).
+    Color,
+
+    // Layout lengths (px) — write `Node`, which re-triggers Bevy layout. The
+    // applier writes the field only when it actually changes (no idle relayout).
+    Width,
+    Height,
+    MinWidth,
+    MinHeight,
+    MaxWidth,
+    MaxHeight,
+    Left,
+    Right,
+    Top,
+    Bottom,
+    FlexBasis,
+    /// Sets both row and column gap.
+    Gap,
+    RowGap,
+    ColumnGap,
+
+    // Layout scalars — also write `Node`. (`flexGrow`/`flexShrink` are deliberately
+    // not here: they're relative weights, not magnitudes — animating them has no
+    // intuitive visual meaning, unlike a size or `aspectRatio`.)
+    AspectRatio,
 }
 
+impl AnimatableProperty {
+    /// Wire (camelCase) key → property, or `None` for an unrecognised key. The
+    /// deserializer skips unknown keys rather than failing, so a JS bundle newer
+    /// than this binary degrades gracefully instead of dropping the whole node's
+    /// `animatedStyle`.
+    pub fn from_wire(key: &str) -> Option<Self> {
+        Some(match key {
+            "translateX" => Self::TranslateX,
+            "translateY" => Self::TranslateY,
+            "scale" => Self::Scale,
+            "scaleX" => Self::ScaleX,
+            "scaleY" => Self::ScaleY,
+            "rotate" => Self::Rotate,
+            "opacity" => Self::Opacity,
+            "backgroundColor" => Self::BackgroundColor,
+            "borderColor" => Self::BorderColor,
+            "color" => Self::Color,
+            "width" => Self::Width,
+            "height" => Self::Height,
+            "minWidth" => Self::MinWidth,
+            "minHeight" => Self::MinHeight,
+            "maxWidth" => Self::MaxWidth,
+            "maxHeight" => Self::MaxHeight,
+            "left" => Self::Left,
+            "right" => Self::Right,
+            "top" => Self::Top,
+            "bottom" => Self::Bottom,
+            "flexBasis" => Self::FlexBasis,
+            "gap" => Self::Gap,
+            "rowGap" => Self::RowGap,
+            "columnGap" => Self::ColumnGap,
+            "aspectRatio" => Self::AspectRatio,
+            _ => return None,
+        })
+    }
+
+    /// The kind of value this property animates — picks scalar-vs-color resolution
+    /// in the apply layer. `Rotate` is an `Angle` but, imperatively, JS already
+    /// sends radians, so the applier resolves it as a scalar.
+    pub fn value_kind(self) -> ValueKind {
+        match self {
+            Self::TranslateX
+            | Self::TranslateY
+            | Self::Width
+            | Self::Height
+            | Self::MinWidth
+            | Self::MinHeight
+            | Self::MaxWidth
+            | Self::MaxHeight
+            | Self::Left
+            | Self::Right
+            | Self::Top
+            | Self::Bottom
+            | Self::FlexBasis
+            | Self::Gap
+            | Self::RowGap
+            | Self::ColumnGap => ValueKind::Length,
+            Self::Scale | Self::ScaleX | Self::ScaleY | Self::Opacity | Self::AspectRatio => {
+                ValueKind::Scalar
+            }
+            Self::Rotate => ValueKind::Angle,
+            Self::BackgroundColor | Self::BorderColor | Self::Color => ValueKind::Color,
+        }
+    }
+
+    /// Whether this property feeds the `UiTransform` (built from all transform
+    /// channels together), so the apply layer can rebuild the transform once.
+    pub fn is_transform(self) -> bool {
+        matches!(
+            self,
+            Self::TranslateX
+                | Self::TranslateY
+                | Self::Scale
+                | Self::ScaleX
+                | Self::ScaleY
+                | Self::Rotate
+        )
+    }
+}
+
+/// How an animated value resolves and where it lands. Pure metadata shared by the
+/// imperative apply layer and (for identity/precedence) the CSS-`transition`
+/// engine in `core`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ValueKind {
+    /// A bare `f32` (scale, opacity, …).
+    Scalar,
+    /// A length in px (translate).
+    Length,
+    /// An rgba color.
+    Color,
+    /// An angle in radians.
+    Angle,
+}
+
+/// The per-node `animatedStyle`: which style properties are animation-driven and
+/// by what. An open property→[`Binding`] map (mirrors the JS object shape: every
+/// camelCase style key maps to a binding). Decodes the same opaque-object way
+/// `Style` does — unknown keys are skipped (warn-and-continue) so a newer JS
+/// bundle never breaks an older binary's whole node. A `BTreeMap` keeps iteration
+/// deterministic (stable transform-group rebuild and test assertions).
+#[derive(Debug, Clone, Default)]
+pub struct AnimatedBindings(pub BTreeMap<AnimatableProperty, Binding>);
+
 impl AnimatedBindings {
+    /// The binding for a property, if bound.
+    pub fn get(&self, property: AnimatableProperty) -> Option<&Binding> {
+        self.0.get(&property)
+    }
+
+    /// Whether a property is bound.
+    pub fn contains(&self, property: AnimatableProperty) -> bool {
+        self.0.contains_key(&property)
+    }
+
     /// Whether any transform channel is bound (so the orchestrator only writes
     /// `UiTransform` when something actually drives it).
     pub fn has_transform(&self) -> bool {
-        self.translate_x.is_some()
-            || self.translate_y.is_some()
-            || self.scale.is_some()
-            || self.scale_x.is_some()
-            || self.scale_y.is_some()
-            || self.rotate.is_some()
+        self.0.keys().any(|p| p.is_transform())
+    }
+
+    /// Iterate the bound (property, binding) pairs in property order.
+    pub fn iter(&self) -> impl Iterator<Item = (&AnimatableProperty, &Binding)> {
+        self.0.iter()
+    }
+
+    /// Whether nothing is bound.
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+}
+
+impl<'de> Deserialize<'de> for AnimatedBindings {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct BindingsVisitor;
+
+        impl<'de> Visitor<'de> for BindingsVisitor {
+            type Value = AnimatedBindings;
+
+            fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                f.write_str("a map of animatable style properties to bindings")
+            }
+
+            fn visit_map<M>(self, mut map: M) -> Result<Self::Value, M::Error>
+            where
+                M: MapAccess<'de>,
+            {
+                let mut out = BTreeMap::new();
+                while let Some(key) = map.next_key::<String>()? {
+                    match AnimatableProperty::from_wire(&key) {
+                        Some(property) => {
+                            out.insert(property, map.next_value::<Binding>()?);
+                        }
+                        None => {
+                            // Consume the value so deserialization stays in sync,
+                            // then skip: forward-compat with a newer JS surface.
+                            map.next_value::<de::IgnoredAny>()?;
+                            tracing::warn!(
+                                target: "bevy_react",
+                                "animatedStyle: ignoring unknown property {key:?}"
+                            );
+                        }
+                    }
+                }
+                Ok(AnimatedBindings(out))
+            }
+        }
+
+        deserializer.deserialize_map(BindingsVisitor)
     }
 }
 

@@ -433,6 +433,7 @@ dependencies = [
  "crossbeam-channel",
  "serde",
  "serde_json",
+ "tracing",
 ]
 
 [[package]]

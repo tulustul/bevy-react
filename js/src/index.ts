@@ -40,6 +40,7 @@ export type {
   Binding,
   AnimatedValue,
   AnimatedStyle,
+  AnimatableProperty,
   EasingName,
 } from "./animated";
 

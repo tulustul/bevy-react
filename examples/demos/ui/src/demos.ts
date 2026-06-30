@@ -25,6 +25,7 @@ import { SpringDemo } from "./demos/animations/SpringDemo";
 import { SequenceDemo } from "./demos/animations/SequenceDemo";
 import { SpinDemo } from "./demos/animations/SpinDemo";
 import { InterpolateDemo } from "./demos/animations/InterpolateDemo";
+import { LayoutAnimationDemo } from "./demos/animations/LayoutAnimationDemo";
 import { UnitsDemo } from "./demos/styling/UnitsDemo";
 import { ColorsDemo } from "./demos/styling/ColorsDemo";
 import { BordersDemo } from "./demos/styling/BordersDemo";
@@ -124,6 +125,7 @@ export const DEMOS: DemoItem[] = [
       { label: "Sequence", component: SequenceDemo },
       { label: "Spin", component: SpinDemo },
       { label: "Interpolate", component: InterpolateDemo },
+      { label: "Layout & Color", component: LayoutAnimationDemo },
       { label: "Bouncing Squares", component: BouncingBallsAnimationDemo },
       { label: "Style Transition", component: TransitionDemo },
     ],

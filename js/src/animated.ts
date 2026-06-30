@@ -66,22 +66,49 @@ export interface SharedValue {
  *  directly) or an interpolation binding. */
 export type AnimatedValue = SharedValue | Binding;
 
-/** The animation-driven half of an `Animated.node`'s style. Transform channels
- *  map to `UiTransform`; `opacity` drives color alpha; `backgroundColor` drives
- *  the background color. */
-export interface AnimatedStyle {
-  translateX?: AnimatedValue;
-  translateY?: AnimatedValue;
-  /** Uniform scale (both axes), unless overridden by `scaleX` / `scaleY`. */
-  scale?: AnimatedValue;
-  scaleX?: AnimatedValue;
-  scaleY?: AnimatedValue;
-  /** Clockwise rotation, in **radians** (an imperative numeric channel — unlike
-   *  the declarative static `transform.rotate`, which takes a CSS angle/degrees). */
-  rotate?: AnimatedValue;
-  opacity?: AnimatedValue;
-  backgroundColor?: AnimatedValue;
-}
+/** The continuous style properties an `Animated.node` can drive. Mirrors the Rust
+ *  `AnimatableProperty` enum (`crates/animations/src/protocol.rs`) — keep the two
+ *  in sync (hand-synced, like the rest of the animation wire surface). Transform
+ *  channels (`translateX`…`rotate`) map to `UiTransform`; `opacity` drives color
+ *  alpha; `backgroundColor` drives the background color. `rotate` is in **radians**
+ *  (an imperative numeric channel — unlike the declarative static `transform.rotate`,
+ *  which takes a CSS angle/degrees). */
+export type AnimatableProperty =
+  // Transform → `UiTransform` (post-layout, no relayout).
+  | "translateX"
+  | "translateY"
+  | "scale"
+  | "scaleX"
+  | "scaleY"
+  | "rotate"
+  // Color / alpha.
+  | "opacity"
+  | "backgroundColor"
+  | "borderColor"
+  | "color"
+  // Layout lengths (px) — drive `Node`, so these re-flow surrounding content.
+  | "width"
+  | "height"
+  | "minWidth"
+  | "minHeight"
+  | "maxWidth"
+  | "maxHeight"
+  | "left"
+  | "right"
+  | "top"
+  | "bottom"
+  | "flexBasis"
+  | "gap"
+  | "rowGap"
+  | "columnGap"
+  // Layout scalars. (`flexGrow`/`flexShrink` are intentionally omitted: they're
+  // relative weights, not magnitudes, so animating them has no intuitive meaning —
+  // animate `flexBasis`/`width` instead.)
+  | "aspectRatio";
+
+/** The animation-driven half of an `Animated.node`'s style: each animatable
+ *  property bound to a shared value or interpolation. */
+export type AnimatedStyle = Partial<Record<AnimatableProperty, AnimatedValue>>;
 
 // Per-runtime shared-value id allocator. A hot reload spins up a fresh isolate,
 // so this resets to 1 naturally; `reset()` clears the Bevy-side table to match.
