@@ -8,9 +8,8 @@
     "examples/stress/ui"
   ],
   "scripts": {
-    "lint": "eslint . && npm run typecheck && npm run lint:rust",
+    "lint": "eslint . && npm run typecheck && npm run format:check",
     "lint:fix": "eslint . --fix",
-    "lint:rust": "cargo clippy --workspace --all-targets",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "format": "prettier --write . && cargo fmt",
     "format:check": "prettier --check . && cargo fmt --check"

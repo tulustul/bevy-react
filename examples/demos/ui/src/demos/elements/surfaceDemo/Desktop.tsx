@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { BevyStyle } from "bevy-react/jsx";
 import { Colors, FontSizes } from "@/theme";
 import { MenuBar, MenuId } from "./MenuBar";

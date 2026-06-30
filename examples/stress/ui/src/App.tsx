@@ -113,6 +113,9 @@ export function App() {
   // After every commit, close out a pending op. Driven steps report their JS-side
   // time back to Bevy (`bench.stepDone`); manual steps update the on-screen readout
   // (which would itself re-render, so we never do that during a measured drive).
+  // Intentionally runs after every commit — a dependency array would defeat the
+  // post-commit accounting this effect exists to do.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     const p = pendingRef.current;
     if (!p) return;

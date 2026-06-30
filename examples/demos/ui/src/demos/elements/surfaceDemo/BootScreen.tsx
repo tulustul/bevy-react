@@ -70,6 +70,9 @@ function ProgressBar({ onDone }: ProgressBarProps) {
     }
     const t = setTimeout(() => setProgress((p) => p + 1), STRIP_MS);
     return () => clearTimeout(t);
+    // Deliberately keyed only on `progress` — `onDone` is a stable prop and
+    // re-keying on it would restart the timer mid-progress.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [progress]);
 
   return (
@@ -117,5 +120,3 @@ const bootStatus: BevyStyle = {
   color: Colors.primary100,
   fontSize: FontSizes.lg,
 };
-
-const bootBarWrap: BevyStyle = { width: "70%" };

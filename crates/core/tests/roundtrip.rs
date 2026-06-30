@@ -30,9 +30,7 @@ fn accumulate(
     text_of: &mut HashMap<u32, String>,
 ) {
     match op {
-        Op::Create {
-            id, kind, text, ..
-        } => {
+        Op::Create { id, kind, text, .. } => {
             if kind == "button" {
                 buttons.insert(*id);
             }
@@ -200,7 +198,10 @@ fn bridge_round_trip() {
                 accumulate(op, &mut buttons, &mut parent_of, &mut text_of);
                 match op {
                     Op::Create {
-                        id, props, kind, text,
+                        id,
+                        props,
+                        kind,
+                        text,
                     } => {
                         if kind == "button" {
                             assert!(props.on_click, "button created without onClick");

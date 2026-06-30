@@ -102,13 +102,6 @@ const row: BevyStyle = {
 
 const rowHover: BevyStyle = { backgroundColor: Colors.primary300 };
 
-const check: BevyStyle = {
-  width: 16,
-  color: Colors.primary100,
-  fontSize: FontSizes.sm,
-  fontWeight: "bold",
-};
-
 const label: BevyStyle = {
   color: Colors.textColor100,
   fontSize: FontSizes.base,

@@ -1,5 +1,5 @@
 import { BevyStyle } from "bevy-react/jsx";
-import { Button, Checkbox } from "@/components";
+import { Checkbox } from "@/components";
 import { Colors, FontSizes } from "@/theme";
 
 type Props = {

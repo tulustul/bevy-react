@@ -3,7 +3,7 @@
 A minimal, pure-UI Bevy app for benchmarking/stress-testing `bevy-react`. The
 first scenario is **table-ops** (the standard table operation set borrowed from
 the js-framework-benchmark: create 1k/10k, append 1k, update every 10th, swap,
-select, remove, clear), measured as a *library* benchmark — bevy-react's own
+select, remove, clear), measured as a _library_ benchmark — bevy-react's own
 per-operation timings, no cross-framework comparison.
 
 ## Use

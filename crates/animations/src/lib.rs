@@ -1149,7 +1149,12 @@ mod tests {
         assert_eq!(t.translation.x, Val::Px(25.0));
 
         // Color resolved to red, then opacity overwrote alpha to 0.5.
-        let s = world.entity(e).get::<BackgroundColor>().unwrap().0.to_srgba();
+        let s = world
+            .entity(e)
+            .get::<BackgroundColor>()
+            .unwrap()
+            .0
+            .to_srgba();
         assert!((s.red - 1.0).abs() < 1e-4);
         assert!(s.green.abs() < 1e-4);
         assert!(s.blue.abs() < 1e-4);
@@ -1176,7 +1181,11 @@ mod tests {
         .unwrap();
 
         let e = world
-            .spawn((AnimatedNode(bindings), UiTransform::default(), Node::default()))
+            .spawn((
+                AnimatedNode(bindings),
+                UiTransform::default(),
+                Node::default(),
+            ))
             .id();
 
         let mut schedule = Schedule::default();
@@ -1186,7 +1195,10 @@ mod tests {
         assert_eq!(world.entity(e).get::<Node>().unwrap().width, Val::Px(200.0));
         let bc = world.entity(e).get::<BorderColor>().unwrap();
         let s = bc.top.to_srgba();
-        assert!(s.green > 0.9 && s.red < 0.1, "border resolved to green, got {s:?}");
+        assert!(
+            s.green > 0.9 && s.red < 0.1,
+            "border resolved to green, got {s:?}"
+        );
         assert_eq!(bc.left, bc.top, "all four sides set uniformly");
 
         // A re-render resets the static width; the still-active binding re-applies.

@@ -36,11 +36,11 @@ writes; we do it in Rust/GPU with zero JS).
 
 ## Harness structure (three tiers, three execution models)
 
-| Tier | What | Where it runs | How |
-|---|---|---|---|
-| 1 | Library micro-benchmarks | headless, pure Rust | `crates/*/benches/*.rs`, **criterion**, `cargo bench` |
-| 2 | App-driven runtime / stress | live Bevy app loop | `examples/stress` runner |
-| 3 | Cross-framework comparison | Bevy app **and** browser | shared host-agnostic scenarios, two backends |
+| Tier | What                        | Where it runs            | How                                                   |
+| ---- | --------------------------- | ------------------------ | ----------------------------------------------------- |
+| 1    | Library micro-benchmarks    | headless, pure Rust      | `crates/*/benches/*.rs`, **criterion**, `cargo bench` |
+| 2    | App-driven runtime / stress | live Bevy app loop       | `examples/stress` runner                              |
+| 3    | Cross-framework comparison  | Bevy app **and** browser | shared host-agnostic scenarios, two backends          |
 
 ### Tier 2/3 runner: `examples/stress`
 
@@ -49,7 +49,7 @@ gallery), but reusing the demos patterns: `States`-enum gating,
 `DespawnOnExit(...)` scoping, the scene plugins, and `CameraPlugin`. Two entry
 modes, both already precedented by demos' `--shoot` / `--export-bindings`:
 
-- **Interactive selector** (left-nav) — for the *manual exploration / profiling*
+- **Interactive selector** (left-nav) — for the _manual exploration / profiling_
   goal.
 - **Flag-driven capture** — `--run <scenario> [params] --out results.json` —
   runs, captures timing, emits JSON, exits. One binary, scenario = a module ⇒
@@ -88,28 +88,28 @@ comparison (where one exists).
 - **L1 — Op-flush hot path.**
   `serde_v8` deserialize + `apply_js_ops` (`crates/core/src/reconcile.rs`) +
   `ui_map`, swept over `Vec<Op>` length **10 → 100k**.
-  *Metric:* ns/op and ops/sec vs batch size. *Proves:* the "no JSON strings on
+  _Metric:_ ns/op and ops/sec vs batch size. _Proves:_ the "no JSON strings on
   the hot path" claim.
-  *Comparison:* host-specific; no external equivalent. Conceptually the analogue
+  _Comparison:_ host-specific; no external equivalent. Conceptually the analogue
   of `react-dom`'s commit-phase mutation apply.
 
 - **L2 — Mount cost vs tree shape.**
   First-render cost for **deep** (10k-deep), **wide** (10k siblings), and
-  **balanced** trees. *Metric:* total mount time + ops emitted.
-  *Comparison:* deep/recursive case mirrors the **Sierpinski** triangle demo
+  **balanced** trees. _Metric:_ total mount time + ops emitted.
+  _Comparison:_ deep/recursive case mirrors the **Sierpinski** triangle demo
   (below); raw create cost mirrors js-framework-benchmark "create 1,000 / 10,000
   rows".
 
 - **L3 — Update amplification.**
   Change one prop deep in an N-node tree; **assert O(1) ops, not O(N)**.
-  *Metric:* ops emitted per single logical change (regression guard).
-  *Relates to:* the full-`Node`-rebuild-on-every-`Op::Update` debt
-  (`ui_map.rs:494`). *Comparison:* uibench's targeted-update scenarios.
+  _Metric:_ ops emitted per single logical change (regression guard).
+  _Relates to:_ the full-`Node`-rebuild-on-every-`Op::Update` debt
+  (`ui_map.rs:494`). _Comparison:_ uibench's targeted-update scenarios.
 
 - **L4 — Keyed-list churn.**
   swap / insert / remove / reorder at scale on a keyed list.
-  *Metric:* ops emitted + apply time per operation.
-  *Comparison:* js-framework-benchmark "swap rows", "remove row", "select row";
+  _Metric:_ ops emitted + apply time per operation.
+  _Comparison:_ js-framework-benchmark "swap rows", "remove row", "select row";
   uibench list-reconciliation cases.
 
 ### Tier 2 — app-driven runtime / stress tests (live Bevy loop)
@@ -117,56 +117,56 @@ comparison (where one exists).
 - **S1 — End-to-end event round-trip latency (p50/p99 under load).**
   click → `uiEvent` → handler → `setState` → flush → applied. Extend
   `crates/core/tests/roundtrip.rs` with timing.
-  *Metric:* round-trip latency distribution; expect ~1 frame (Bevy→JS is async
+  _Metric:_ round-trip latency distribution; expect ~1 frame (Bevy→JS is async
   via tokio mpsc → `op_next_event`).
-  *Comparison:* no standard web benchmark; informally vs `react-dom` synthetic
+  _Comparison:_ no standard web benchmark; informally vs `react-dom` synthetic
   event → `setState` → commit in the same scenario.
 
 - **S2 — Bevy→React event flood / backpressure.**
   Produce events faster than React commits; watch the channel grow.
-  *Metric:* channel depth over time, dropped/lagged events, memory.
-  *Ties to:* unbounded-channels debt (`plugin.rs:125`). *Comparison:*
+  _Metric:_ channel depth over time, dropped/lagged events, memory.
+  _Ties to:_ unbounded-channels debt (`plugin.rs:125`). _Comparison:_
   library-specific; none.
 
 - **S3 — Request/response under concurrency.**
   Many in-flight `op_request` correlations, including malformed payloads.
-  *Metric:* completion latency under N concurrent; **assert none hang** (bad
-  input must reject, never block). *Comparison:* library-specific; none.
+  _Metric:_ completion latency under N concurrent; **assert none hang** (bad
+  input must reject, never block). _Comparison:_ library-specific; none.
 
 - **S4 — Frame-budget interaction. (HIGHEST VALUE)**
   `op_flush` is sync on the Bevy main thread and shares the 16.6ms budget with
   the 3D sim. Measure dropped frames under a large flush.
   **Key sub-question:** do world-anchored elements (declared once by React,
-  positioned every frame by a Bevy system, *no* per-frame bridge traffic)
+  positioned every frame by a Bevy system, _no_ per-frame bridge traffic)
   trigger a `bevy_ui` **relayout** on position change, or just transform/extract?
   If transform-only, N anchored badges scale ~free; if relayout, that is the
   cost to fix.
-  *Metric:* frame-time histogram / dropped frames vs flush size and anchored-node
-  count. *Comparison:* sustained-load spirit matches **DBMonster** (below); the
+  _Metric:_ frame-time histogram / dropped frames vs flush size and anchored-node
+  count. _Comparison:_ sustained-load spirit matches **DBMonster** (below); the
   world-anchored result is where we expect to be **ahead** of web.
 
 - **S5 — Animations engine throughput.**
   N concurrent animations/frame; **confirm values are driven Rust-side**
   (`crates/animations`), not round-tripped to JS each frame.
-  *Metric:* max concurrent animations within frame budget; bridge traffic per
-  frame (should be ~0). *Comparison:* DBMonster (sustained high-frequency
+  _Metric:_ max concurrent animations within frame budget; bridge traffic per
+  frame (should be ~0). _Comparison:_ DBMonster (sustained high-frequency
   updates).
 
 - **S6 — Canvas rasterizer throughput.**
   `DrawCmd` throughput per frame (`crates/canvas`).
-  *Metric:* draw commands/frame within budget. *Comparison:* none direct (this is
+  _Metric:_ draw commands/frame within budget. _Comparison:_ none direct (this is
   our rasterizer host element); loosely, a `<canvas>` 2D draw loop.
 
 - **S7 — Hot-reload latency + steady-state memory.**
   Fast Refresh path; isolate stays alive across many reloads.
-  *Metric:* reload-to-repaint latency; isolate memory across repeated reloads
-  (leak watch). *Comparison:* none standard.
+  _Metric:_ reload-to-repaint latency; isolate memory across repeated reloads
+  (leak watch). _Comparison:_ none standard.
 
 - **S8 — Leak / steady-state.**
   Frame-time stability and entity count across repeated `selectScene` switches;
   **verify `DespawnOnExit` reclaims**.
-  *Metric:* entity count delta per switch cycle; frame-time drift over time.
-  *Comparison:* DBMonster (long-run stability).
+  _Metric:_ entity count delta per switch cycle; frame-time drift over time.
+  _Comparison:_ DBMonster (long-run stability).
 
 ### Tier 3 — cross-framework comparison (shared scenarios, two backends)
 
@@ -176,27 +176,27 @@ host and a vanilla **react-dom** host from one shared component tree.
 - **X1 — js-framework-benchmark (krausest) operation set.**
   The industry-standard table: create 1k / 10k rows, update every 10th, swap,
   select, remove, clear, append.
-  *Metric:* per-operation time, bevy-react vs react-dom.
-  *Compare with:* https://github.com/krausest/js-framework-benchmark ·
+  _Metric:_ per-operation time, bevy-react vs react-dom.
+  _Compare with:_ https://github.com/krausest/js-framework-benchmark ·
   results table https://krausest.github.io/js-framework-benchmark/
 
 - **X2 — uibench (localvoid).**
   Clean reconciler-only comparison, minimal paint — the best isolation of
   "reconcile work" (a) from paint (b).
-  *Metric:* uibench's own scored operation set, both hosts.
-  *Compare with:* https://github.com/localvoid/uibench · live
+  _Metric:_ uibench's own scored operation set, both hosts.
+  _Compare with:_ https://github.com/localvoid/uibench · live
   https://localvoid.github.io/uibench/
 
 - **X3 — DBMonster.**
   Sustained high-frequency update / repaint stress.
-  *Metric:* sustained FPS / frame-time under continuous mutation, both hosts.
-  *Compare with:* https://github.com/mathieuancelin/js-repaint-perfs · live
+  _Metric:_ sustained FPS / frame-time under continuous mutation, both hosts.
+  _Compare with:_ https://github.com/mathieuancelin/js-repaint-perfs · live
   https://mathieuancelin.github.io/js-repaint-perfs/
 
 - **X4 — Sierpinski triangle.**
   Deep-recursive update under load — the canonical Fiber stress demo.
-  *Metric:* update latency / frame-time at depth, both hosts.
-  *Compare with:* React Fiber vs Stack demo
+  _Metric:_ update latency / frame-time at depth, both hosts.
+  _Compare with:_ React Fiber vs Stack demo
   https://github.com/claudiopro/react-fiber-vs-stack-demo · live
   https://claudiopro.github.io/react-fiber-vs-stack-demo/
 
@@ -211,7 +211,7 @@ host and a vanilla **react-dom** host from one shared component tree.
 3. **S4** (frame-budget / world-anchored) — highest single-test value; answers
    the relayout-vs-transform question.
 4. **X2 (uibench)** then **X1 (krausest)** — the headline comparison artifact.
-5. Remaining S* and X3/X4 as capacity allows.
+5. Remaining S\* and X3/X4 as capacity allows.
 
 ## Open questions
 

@@ -53,7 +53,11 @@ export function LayoutAnimationDemo() {
           animatedStyle={{
             width: interpolate(t, [0, 1], [88, 200]),
             height: interpolate(t, [0, 1], [88, 120]),
-            borderColor: interpolateColor(t, [0, 1], [Colors.sky100, Colors.purple100]),
+            borderColor: interpolateColor(
+              t,
+              [0, 1],
+              [Colors.sky100, Colors.purple100],
+            ),
           }}
         />
       </node>

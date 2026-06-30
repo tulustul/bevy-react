@@ -31,9 +31,7 @@ fn accumulate(
     text_of: &mut HashMap<u32, String>,
 ) {
     match op {
-        Op::Create {
-            id, kind, text, ..
-        } => {
+        Op::Create { id, kind, text, .. } => {
             if kind == "button" {
                 buttons.insert(*id);
             }

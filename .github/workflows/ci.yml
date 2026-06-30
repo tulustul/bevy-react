@@ -11,8 +11,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  js:
-    name: JS (lint / typecheck / format)
+  typescript:
+    name: Typescript checks
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -24,17 +24,11 @@ jobs:
 
       - run: npm ci
 
-      - name: ESLint
-        run: npx eslint .
-
-      - name: Typecheck
-        run: npm run typecheck
-
-      - name: Prettier
-        run: npx prettier --check .
+      - name: Linting
+        run: npm run lint
 
   rust:
-    name: Rust (fmt / clippy / test / bindings)
+    name: Rust checks
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -42,7 +36,7 @@ jobs:
       - name: Install Bevy system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libasound2-dev libudev-dev libwayland-dev libxkbcommon-dev
+          sudo apt-get install -y libasound2-dev libudev-dev libwayland-dev libxkbcommon-dev mold
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -68,19 +62,25 @@ jobs:
       - name: Clippy
         run: cargo clippy --workspace --all-targets
 
-      # TEMPORARILY DISABLED: linking OOMs the GitHub runner
-      # Re-enable once CI we have a fix.
-      #
-      # # Build the JS bundle so the headless `roundtrip` test runs for real
-      # # (it skips when the bundle is missing).
-      # - name: Build JS bundle
-      #   run: npm run build -w demos-app
-      #
-      # - name: Test
-      #   run: cargo test
-      #
-      # - name: Regenerate TS bindings
-      #   run: npm run gen:bindings -w demos-app
-      #
-      # - name: Verify bindings are up to date
-      #   run: git diff --exit-code -- examples/demos/ui/src/generated.ts
+      # The heavy Bevy links below OOM'd the 7 GB runner with the default linker.
+      # `mold -run` swaps in the low-memory linker for the child cargo across the
+      # whole process tree, and `CARGO_PROFILE_DEV_DEBUG=0` drops debug info (the
+      # biggest link-memory contributor) — together they keep the links in budget.
+
+      # Build the JS bundle so the headless `roundtrip` / `demo_switch` tests run
+      # for real (they skip-pass when the bundle is missing).
+      - name: Build JS bundle
+        run: npm run build -w demos-app
+
+      - name: Test
+        env:
+          CARGO_PROFILE_DEV_DEBUG: "0"
+        run: mold -run cargo test
+
+      - name: Regenerate TS bindings
+        env:
+          CARGO_PROFILE_DEV_DEBUG: "0"
+        run: mold -run npm run bevy:generate -w demos-app
+
+      - name: Verify bindings are up to date
+        run: git diff --exit-code -- examples/demos/ui/src/bevy.ts

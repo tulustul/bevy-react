@@ -6,8 +6,8 @@ Release blockers:
   ☐ stabilize API
 
 CI / correctness:
-  ☐ Re-enable Rus bindings-drift check are commented out in `.github/workflows/ci.yml` (commit `a131205`) because linking OOMs the GitHub runner. Until fixed, the test suite and the codegen-sync invariant (regen → `git diff --exit-code`) are unenforced. Fix options: `mold`/`lld` linker, split build/test into separate jobs, lower `codegen-units`, or a larger runner.
-  ☐ Failing JS nav tests - (`demo_switch`, `roundtrip`): `find_button` walks too few DOM levels, so the nav-button lookup fails. Tests are red, not just disabled.
+  ✔ Re-enable Rust bindings-drift check + test suite in `.github/workflows/ci.yml` (was commented out in `a131205` because linking OOM'd the runner). Fixed the OOM with the `mold` linker (apt) + `CARGO_PROFILE_DEV_DEBUG=0`, applied non-invasively via `mold -run <cmd>` on the `Test`/`Regenerate TS bindings` steps. Also corrected two stale names baked into the dead block: `gen:bindings`→`bevy:generate`, `generated.ts`→`bevy.ts`. @done(26-06-30)
+  ✔ Failing JS nav tests (`demo_switch`, `roundtrip`) - now green; the `find_button` walk was already widened to 8 levels (`crates/core/tests/{demo_switch,roundtrip}.rs`). Verified `cargo test` passes the full suite locally with the bundle built. @done(26-06-30)
 
 Known debt:
   ☐ Unbounded channels / no backpressure - (`crates/core/src/plugin.rs:125`). A system that emits faster than JS drains grows the queue without bound. Bound them or document.
