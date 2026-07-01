@@ -15,6 +15,7 @@ import {
   allocId,
   dropHandlers,
   flush,
+  HANDLER_PROP_KEYS,
   push,
   registerHandlers,
   ROOT_ID,
@@ -45,14 +46,6 @@ interface Container {
 interface HostContext {
   inText: boolean;
 }
-
-const HANDLER_PROP_KEYS = new Set([
-  "onClick",
-  "onPointerDown",
-  "onPointerMove",
-  "onPointerUp",
-  "onChange",
-]);
 
 // True when a Bevy-visible prop changed between renders. Skips `children` (inline
 // text is handled separately) and compares event handlers by *presence* — their

@@ -284,6 +284,12 @@ const HANDLER_KINDS: Record<string, string> = {
   onScroll: "scroll",
 };
 
+// The handler prop names, for the renderer's dirty-check: these props are
+// compared by presence, not identity (closures change every render).
+export const HANDLER_PROP_KEYS: ReadonlySet<string> = new Set(
+  Object.keys(HANDLER_KINDS),
+);
+
 // (Re)populate the id -> handlers map from `props`, or clear it when there are no
 // handlers. Handler functions stay in JS (only a boolean crosses); their closures
 // change identity every render, so `commitUpdate` calls this even on a no-op update
