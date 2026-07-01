@@ -54,14 +54,26 @@ pub struct FocusState(pub bool);
 
 /// Records which pointer handlers a node declared in JS, so the drag-capture
 /// system knows whether to emit `pointerDown` / `pointerMove` / `pointerUp` for
-/// it. Stamped (or removed) alongside the node's `Interaction` +
+/// it, and the hover system whether to emit `pointerEnter` / `pointerLeave`.
+/// Stamped (or removed) alongside the node's `Interaction` +
 /// `RelativeCursorPosition` whenever any `onPointer*` handler is present.
 #[derive(Component, Debug, Clone, Copy, Default)]
 pub struct PointerHandlers {
     pub down: bool,
     pub moved: bool,
     pub up: bool,
+    pub enter: bool,
+    pub leave: bool,
 }
+
+/// Whether a node with an `onPointerEnter`/`onPointerLeave` handler currently has
+/// the pointer inside it (its `Interaction` is not `None`). Kept so the hover
+/// system can emit `pointerEnter`/`pointerLeave` only on the boundary crossing —
+/// not on the `Hovered`↔`Pressed` transition of a click. A *component* (rather
+/// than a side-table) so it despawns with the node. Stamped alongside
+/// `PointerHandlers` when either handler is present; absent otherwise.
+#[derive(Component, Debug, Clone, Copy, Default)]
+pub struct HoverState(pub bool);
 
 /// Marks a node that declared an `onScroll` handler, so the read-back system
 /// (`collect_scroll_events`) reports its `ScrollPosition` changes. The marker is

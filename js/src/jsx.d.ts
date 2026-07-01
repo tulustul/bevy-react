@@ -391,10 +391,10 @@ export interface BevyStyle {
   lineBreak?: "wordBoundary" | "anyCharacter" | "wordOrCharacter" | "noWrap";
 }
 
-// TODO(review): the pointer model is bespoke and limited — left-button press/move/up only,
-// with normalized x/y + clientX/Y rather than DOM `PointerEvent` semantics. No enter/leave/
-// over, no wheel-as-element-event, no button/modifier info. It's part of the public contract,
-// so settle the shape before too many apps depend on it.
+// TODO(review): the pointer model is bespoke and limited — left-button press/move/up plus
+// enter/leave, with normalized x/y + clientX/Y rather than DOM `PointerEvent` semantics. No
+// wheel-as-element-event, no button/modifier info. It's part of the public contract, so
+// settle the shape before too many apps depend on it.
 /** Payload for the pointer handlers: the cursor position within the element,
  *  normalized to `0..1` from a top-left origin (`x` left→right, `y` top→bottom),
  *  clamped to the element's bounds even while dragging outside it. `clientX` /
@@ -426,6 +426,11 @@ export interface BevyNodeProps extends BevyAttributes {
   onPointerMove?: (e: PointerEventData) => void;
   /** Pointer released after a press/drag that began on this element. */
   onPointerUp?: (e: PointerEventData) => void;
+  /** Pointer entered this element (hover begins). Fires once on the boundary
+   *  crossing — not again on press/release while still inside. */
+  onPointerEnter?: (e: PointerEventData) => void;
+  /** Pointer left this element (hover ends). */
+  onPointerLeave?: (e: PointerEventData) => void;
   /** Controlled vertical scroll offset in logical px (maps to `ScrollPosition.y`).
    *  Meaningful on a node with `overflowY: "scroll"`. Pushed into the node only
    *  when it diverges from the live offset, so it never fights the user's wheel. */
@@ -473,6 +478,10 @@ export interface BevyCanvasProps extends BevyAttributes {
   onPointerMove?: (e: PointerEventData) => void;
   /** Pointer released after a press/drag that began on the canvas. */
   onPointerUp?: (e: PointerEventData) => void;
+  /** Pointer entered the canvas (hover begins). */
+  onPointerEnter?: (e: PointerEventData) => void;
+  /** Pointer left the canvas (hover ends). */
+  onPointerLeave?: (e: PointerEventData) => void;
 }
 
 /** Props for the `portal` element: a view of an **offscreen render target** (the
@@ -500,6 +509,10 @@ export interface BevyPortalProps extends BevyAttributes {
   onPointerMove?: (e: PointerEventData) => void;
   /** Pointer released after a press/drag that began on the portal. */
   onPointerUp?: (e: PointerEventData) => void;
+  /** Pointer entered the portal (hover begins). */
+  onPointerEnter?: (e: PointerEventData) => void;
+  /** Pointer left the portal (hover ends). */
+  onPointerLeave?: (e: PointerEventData) => void;
 }
 
 /** Props for the `surface` element: the **inverse** of `<portal>`. Its children
@@ -533,6 +546,10 @@ export interface BevySurfaceProps extends BevyAttributes {
   onPointerMove?: (e: PointerEventData) => void;
   /** Pointer released after a press/drag that began on this element. */
   onPointerUp?: (e: PointerEventData) => void;
+  /** Pointer entered this element (hover begins). Fires from in-world pointer hits. */
+  onPointerEnter?: (e: PointerEventData) => void;
+  /** Pointer left this element (hover ends). */
+  onPointerLeave?: (e: PointerEventData) => void;
   children?: ReactNode;
 }
 

@@ -40,7 +40,8 @@ Features:
         ☐ `direction` (Ltr/Rtl) - no RTL layout.
         ☐ `overflow_clip_margin` (`VisualBox` + margin) and `OverrideClip` (per-node clip opt-out).
         ✘ Native `ViewportNode` (render-camera-into-UI) - partly overlaps custom `<portal>`/`<surface>`, but the native widget isn't wired. @cancelled(26-06-29 00:23)
-        ☐ Hover/focus event callbacks - only hover/press *styling* exists; no `onPointerEnter`/`onPointerLeave`/`onFocus` handlers.
+        ✔ Hover event callbacks - `onPointerEnter`/`onPointerLeave` on `node`/`button`/`canvas`/`portal`/`surface`, fired once per hover-boundary crossing (main window from `Interaction` transitions gated by a `HoverState`; `<surface>` from the virtual pointer's `Pointer<Over>`/`Pointer<Out>`). Carry the same `PointerEventData` (normalized `x`/`y` + `clientX`/`clientY`) as the other pointer handlers. @done(26-07-01)
+        ☐ Generic focus event callbacks - `onFocus`/`onBlur` only fire for `<editableText>` today; arbitrary `<node>`/`<button>` aren't focusable (would need `TabIndex`/focus-target infra + keyboard nav to fire `FocusGained`/`FocusLost`).
         ✘ Widget interaction-state markers - `Checkable`/`Checked`/`Selectable`/`Selected`, `Label`, `UiTargetCamera` (mostly internal/widget-level). @cancelled(26-06-29 11:44)
 
 

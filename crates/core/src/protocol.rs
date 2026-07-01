@@ -105,6 +105,14 @@ pub struct Props {
     /// Whether this element has an `onPointerUp` handler registered in JS.
     #[serde(default)]
     pub on_pointer_up: bool,
+    /// Whether this element has an `onPointerEnter` handler registered in JS.
+    /// Fires once when the pointer enters the element (hover begins).
+    #[serde(default)]
+    pub on_pointer_enter: bool,
+    /// Whether this element has an `onPointerLeave` handler registered in JS.
+    /// Fires once when the pointer leaves the element (hover ends).
+    #[serde(default)]
+    pub on_pointer_leave: bool,
 
     // --- controlled scroll (any node with `overflow: scroll`) ---
     /// Controlled vertical scroll offset (logical px) → `ScrollPosition.y`. On
@@ -1257,8 +1265,8 @@ impl<'de> Deserialize<'de> for BorderColorSpec {
 pub struct UiEvent {
     pub id: NodeId,
     /// `"click"`, a pointer kind (`"pointerDown"` / `"pointerMove"` /
-    /// `"pointerUp"`), `"scroll"`, or one of an `editableText`'s `"change"` /
-    /// `"select"` / `"focus"` / `"blur"` events.
+    /// `"pointerUp"` / `"pointerEnter"` / `"pointerLeave"`), `"scroll"`, or one of
+    /// an `editableText`'s `"change"` / `"select"` / `"focus"` / `"blur"` events.
     pub kind: String,
     /// Cursor x within the node, normalized to `0..1` (left→right). Present only
     /// for pointer events; `None` for `"click"`.

@@ -8,13 +8,17 @@ const TYPESCRIPT = `<node
   onPointerDown={...}
   onPointerMove={...}
   onPointerUp={...}
+  onPointerEnter={...}
+  onPointerLeave={...}
 />`;
 
 // A pure-UI demo of the raw pointer events the bridge reports: `click`,
-// `pointerDown`, `pointerMove`, `pointerUp`. Grab the box and drag it around —
-// dragging uses the absolute `clientX`/`clientY` the bridge now sends (the
-// normalized `x`/`y` are clamped to the box and can't drive free movement). No
-// Bevy scene: the 3D viewport stays empty.
+// `pointerDown`, `pointerMove`, `pointerUp`, and the hover boundary
+// `pointerEnter`/`pointerLeave`. Grab the box and drag it around — dragging uses
+// the absolute `clientX`/`clientY` the bridge sends (the normalized `x`/`y` are
+// clamped to the box and can't drive free movement) — and move the cursor on/off
+// the box to see enter/leave fire once per crossing. No Bevy scene: the 3D
+// viewport stays empty.
 
 const STAGE_W = 380;
 const STAGE_H = 240;
@@ -26,6 +30,15 @@ const clamp = (v: number, lo: number, hi: number) =>
 type LogLine = { id: number; text: string };
 
 export function InteractionsDemo() {
+  return (
+    <>
+      <DragExample />
+      <HoverExample />
+    </>
+  );
+}
+
+function DragExample() {
   const [pos, setPos] = useState({
     left: (STAGE_W - BOX) / 2,
     top: (STAGE_H - BOX) / 2,
@@ -76,15 +89,22 @@ export function InteractionsDemo() {
   return (
     <Example
       description="Raw pointer events the bridge reports. Grab the box and drag it around the stage."
-      tsx={TYPESCRIPT}
+      tsx={`<node
+  onClick={...}
+  onPointerDown={...}
+  onPointerMove={...}
+  onPointerUp={...}
+/>`}
     >
       <node style={stageStyle}>
         <node
           style={{
             ...boxStyle,
+            positionType: "absolute",
             left: pos.left,
             top: pos.top,
             backgroundColor: pressed ? Colors.purple100 : Colors.primary100,
+            border: 2,
           }}
           onClick={() => record("click")}
           onPointerDown={onPointerDown}
@@ -116,6 +136,51 @@ export function InteractionsDemo() {
   );
 }
 
+function HoverExample() {
+  const [hovering, setHovering] = useState(false);
+
+  const onPointerEnter = (e: PointerEventData) => {
+    setHovering(true);
+  };
+
+  const onPointerLeave = (e: PointerEventData) => {
+    setHovering(false);
+  };
+  return (
+    <Example
+      description="Raw pointer events the bridge reports. Grab the box and drag it around the stage."
+      tsx={`<node
+  onPointerEnter={...}
+  onPointerLeave={...}
+/>`}
+    >
+      <node style={{ flexDirection: "row", gap: 20 }}>
+        <node
+          style={boxStyle}
+          onPointerEnter={() => setHovering(true)}
+          onPointerLeave={() => setHovering(false)}
+        >
+          <text style={boxLabelStyle}>Hover me</text>
+        </node>
+        <node
+          style={{
+            ...boxStyle,
+            transform: {
+              rotate: hovering ? "-20deg" : 0,
+              translateY: hovering ? -20 : 0,
+            },
+            transition: { transform: { duration: 300, easing: "easeInOut" } },
+          }}
+        >
+          <text style={boxLabelStyle}>
+            {hovering ? "hovered" : "not hovered"}
+          </text>
+        </node>
+      </node>
+    </Example>
+  );
+}
+
 const stageStyle: BevyStyle = {
   width: STAGE_W,
   height: STAGE_H,
@@ -129,18 +194,19 @@ const stageStyle: BevyStyle = {
 };
 
 const boxStyle: BevyStyle = {
-  positionType: "absolute",
   width: BOX,
   height: BOX,
   borderRadius: 12,
   justifyContent: "center",
   alignItems: "center",
+  backgroundColor: Colors.amber100,
 };
 
 const boxLabelStyle: BevyStyle = {
   color: Colors.textColor400,
   fontSize: FontSizes.sm,
   fontWeight: "bold",
+  textAlign: "center",
 };
 
 const logStyle: BevyStyle = {

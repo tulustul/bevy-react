@@ -23,7 +23,8 @@ use bevy_react_surface::{RSurface, SurfaceVirtualPointer};
 
 use crate::anchor::Anchored;
 use crate::bridge::{
-    FocusState, JsBridge, PointerHandlers, RNode, ScrollListener, ScrollStep, StyleVariants,
+    FocusState, HoverState, JsBridge, PointerHandlers, RNode, ScrollListener, ScrollStep,
+    StyleVariants,
 };
 use crate::filter::{FilterAssets, FilterMaterial, FilterMaterialCache, filter_material};
 use crate::plugin::Fonts;
@@ -850,18 +851,34 @@ fn apply_style_variants(ec: &mut EntityCommands, props: &Props) {
 /// `insert_if_new` leaves an existing `Interaction` (a `button`'s, or a
 /// hover/press variant's) untouched.
 fn apply_pointer_handlers(ec: &mut EntityCommands, props: &Props) {
-    if props.on_pointer_down || props.on_pointer_move || props.on_pointer_up {
+    let any_pointer = props.on_pointer_down
+        || props.on_pointer_move
+        || props.on_pointer_up
+        || props.on_pointer_enter
+        || props.on_pointer_leave;
+    if any_pointer {
         ec.insert(PointerHandlers {
             down: props.on_pointer_down,
             moved: props.on_pointer_move,
             up: props.on_pointer_up,
+            enter: props.on_pointer_enter,
+            leave: props.on_pointer_leave,
         });
+        // `RelativeCursorPosition` supplies the `x`/`y` carried by drag and hover
+        // events; the drag-capture and hover systems both read it.
         ec.insert_if_new(RelativeCursorPosition::default());
     } else {
         ec.remove::<PointerHandlers>();
         ec.remove::<RelativeCursorPosition>();
     }
-    if props.on_click || props.on_pointer_down || props.on_pointer_move || props.on_pointer_up {
+    // `pointerEnter`/`pointerLeave` are derived from `Interaction` transitions, so
+    // the node tracks its "inside" state in `HoverState`; add/remove it in step.
+    if props.on_pointer_enter || props.on_pointer_leave {
+        ec.insert_if_new(HoverState::default());
+    } else {
+        ec.remove::<HoverState>();
+    }
+    if props.on_click || any_pointer {
         ec.insert_if_new(Interaction::default());
     }
 }
@@ -1363,6 +1380,47 @@ pub fn collect_pointer_events(
     capture.over_ui = interactions.iter().any(|i| *i != Interaction::None);
 }
 
+/// Emit `pointerEnter` / `pointerLeave` for main-window nodes that declared those
+/// handlers. Hover in/out is the `Interaction` `None`↔(`Hovered`|`Pressed`) boundary
+/// — the same signal that drives hover *styling* ([`apply_interaction_styles`]) — so
+/// this lands on the right node via `FocusPolicy` (a `<button>`, not its child text)
+/// with no ancestor climbing. Per-node [`HoverState`] remembers whether the pointer
+/// was inside, so a click's `Hovered`↔`Pressed` transition never re-fires enter/leave.
+#[allow(clippy::type_complexity)]
+pub fn collect_hover_events(
+    bridge: Res<JsBridge>,
+    windows: Query<&Window>,
+    mut nodes: Query<
+        (
+            &Interaction,
+            &mut HoverState,
+            &PointerHandlers,
+            &RNode,
+            Option<&RelativeCursorPosition>,
+        ),
+        Changed<Interaction>,
+    >,
+) {
+    let cursor_abs = windows.iter().next().and_then(|w| w.cursor_position());
+    for (interaction, mut hover, handlers, rnode, rel) in &mut nodes {
+        let inside = *interaction != Interaction::None;
+        if inside == hover.0 {
+            continue; // A `Hovered`↔`Pressed` change, not a boundary crossing.
+        }
+        hover.0 = inside;
+        let kind = if inside {
+            "pointerEnter"
+        } else {
+            "pointerLeave"
+        };
+        if (inside && handlers.enter) || (!inside && handlers.leave) {
+            let pos = rel.and_then(normalized_01).unwrap_or(Vec2::ZERO);
+            let abs = cursor_abs.unwrap_or(Vec2::ZERO);
+            send_ui_event(&bridge, rnode.0, kind, Some(pos), Some(abs));
+        }
+    }
+}
+
 /// Shift `RelativeCursorPosition`'s centered, unclamped position to a clamped
 /// `0..1` top-left-origin coordinate. `None` when the cursor position is unknown.
 fn normalized_01(rel: &RelativeCursorPosition) -> Option<Vec2> {
@@ -1549,6 +1607,51 @@ pub fn collect_surface_pointer_events(
     }
 }
 
+/// Report `pointerEnter` / `pointerLeave` for `<surface>` nodes, mirroring
+/// [`collect_surface_pointer_events`] for the hover boundary. Surface nodes get no
+/// legacy `Interaction`, so this reads the virtual pointer's `Pointer<Over>` /
+/// `Pointer<Out>` picking events (like [`apply_surface_interaction_styles`]) and
+/// `climb`s to the nearest ancestor that declared the handler.
+pub fn collect_surface_hover_events(
+    bridge: Res<JsBridge>,
+    pointer: Option<Res<SurfaceVirtualPointer>>,
+    mut overs: MessageReader<Pointer<Over>>,
+    mut outs: MessageReader<Pointer<Out>>,
+    nodes: Query<(&RNode, &PointerHandlers, &ComputedNode, &UiGlobalTransform)>,
+    child_of: Query<&ChildOf>,
+) {
+    let Some(pointer) = pointer else { return };
+    let emit = |entity: Entity, want: fn(&PointerHandlers) -> bool, kind: &str, at: Vec2| {
+        if let Some(target) = climb(entity, &child_of, |e| nodes.contains(e))
+            && let Ok((rnode, handlers, node, transform)) = nodes.get(target)
+            && want(handlers)
+            && let Some((pos, abs)) = surface_relative(node, transform, at)
+        {
+            send_ui_event(&bridge, rnode.0, kind, Some(pos), Some(abs));
+        }
+    };
+    for ev in overs.read() {
+        if ev.pointer_id == pointer.id {
+            emit(
+                ev.entity,
+                |h| h.enter,
+                "pointerEnter",
+                ev.pointer_location.position,
+            );
+        }
+    }
+    for ev in outs.read() {
+        if ev.pointer_id == pointer.id {
+            emit(
+                ev.entity,
+                |h| h.leave,
+                "pointerLeave",
+                ev.pointer_location.position,
+            );
+        }
+    }
+}
+
 /// Apply hover/press [`StyleVariants`] to `<surface>` nodes from the in-world
 /// picking path — the surface-side analogue of [`apply_interaction_styles`], which
 /// can't help here because surface nodes never receive a legacy `Interaction`
@@ -1689,6 +1792,90 @@ mod tests {
             app.world().entity(inert).get::<Interaction>().is_none(),
             "a node with no handlers/hover/press must not gain an Interaction"
         );
+    }
+
+    /// A node with `onPointerEnter`/`onPointerLeave` gets an `Interaction` + a
+    /// [`HoverState`], and the reconciler stamps the handler flags.
+    #[test]
+    fn pointer_enter_leave_stamps_hover_state() {
+        let (mut app, ops_tx) = op_app();
+        ops_tx
+            .send(vec![Op::Create {
+                id: 1,
+                kind: "node".into(),
+                props: serde_json::from_value(
+                    serde_json::json!({ "onPointerEnter": true, "onPointerLeave": true }),
+                )
+                .unwrap(),
+                text: None,
+            }])
+            .unwrap();
+        app.update();
+
+        let e = app.world().resource::<JsBridge>().nodes[&1];
+        let entity = app.world().entity(e);
+        assert!(
+            entity.get::<Interaction>().is_some(),
+            "hover handlers must make the node interactive"
+        );
+        assert!(
+            entity.get::<HoverState>().is_some(),
+            "hover handlers must stamp a HoverState"
+        );
+        let handlers = entity.get::<PointerHandlers>().expect("PointerHandlers");
+        assert!(handlers.enter && handlers.leave);
+    }
+
+    /// [`collect_hover_events`] emits `pointerEnter` on the first non-`None`
+    /// interaction and `pointerLeave` on the return to `None`, and must NOT re-fire
+    /// on the `Hovered`↔`Pressed` transition of a click (guarded by [`HoverState`]).
+    #[test]
+    fn hover_events_fire_on_boundary_only() {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins);
+        let (out_tx, mut out_rx) = tokio::sync::mpsc::unbounded_channel::<Outbound>();
+        let (_ops_tx, ops_rx) = crossbeam_channel::unbounded::<Vec<Op>>();
+        let root = app.world_mut().spawn_empty().id();
+        app.insert_resource(JsBridge::new(ops_rx, out_tx, root));
+        app.add_systems(Update, collect_hover_events);
+
+        let e = app
+            .world_mut()
+            .spawn((
+                Interaction::None,
+                HoverState(false),
+                PointerHandlers {
+                    enter: true,
+                    leave: true,
+                    ..default()
+                },
+                RNode(1),
+            ))
+            .id();
+
+        let set = |app: &mut App, i: Interaction| {
+            *app.world_mut()
+                .entity_mut(e)
+                .get_mut::<Interaction>()
+                .unwrap() = i;
+            app.update();
+        };
+
+        app.update(); // Mount frame: still "outside" (None) → no event.
+        set(&mut app, Interaction::Hovered); // None → Hovered: enter.
+        set(&mut app, Interaction::Pressed); // Hovered → Pressed: no re-enter.
+        set(&mut app, Interaction::None); // Pressed → None: leave.
+
+        let kinds: Vec<String> = std::iter::from_fn(|| out_rx.try_recv().ok())
+            .map(|o| match o {
+                Outbound::UiEvent { event } => {
+                    assert_eq!(event.id, 1);
+                    event.kind
+                }
+                other => panic!("expected a UiEvent, got {other:?}"),
+            })
+            .collect();
+        assert_eq!(kinds, vec!["pointerEnter", "pointerLeave"]);
     }
 
     /// `FocusPolicy` defaults differ by element kind: a `<button>` captures the

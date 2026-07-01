@@ -83,6 +83,8 @@ export interface SerializedProps {
   onPointerDown?: boolean;
   onPointerMove?: boolean;
   onPointerUp?: boolean;
+  onPointerEnter?: boolean;
+  onPointerLeave?: boolean;
   // Controlled scroll offsets (logical px) for any node with `overflow: scroll`.
   scrollTop?: number;
   scrollLeft?: number;
@@ -269,6 +271,8 @@ const HANDLER_KINDS: Record<string, string> = {
   onPointerDown: "pointerDown",
   onPointerMove: "pointerMove",
   onPointerUp: "pointerUp",
+  onPointerEnter: "pointerEnter",
+  onPointerLeave: "pointerLeave",
   onChange: "change",
   onSelect: "select",
   onFocus: "focus",
@@ -319,6 +323,14 @@ export function serializeProps(
     }
     if (key === "onPointerUp" && typeof value === "function") {
       out.onPointerUp = true;
+      continue;
+    }
+    if (key === "onPointerEnter" && typeof value === "function") {
+      out.onPointerEnter = true;
+      continue;
+    }
+    if (key === "onPointerLeave" && typeof value === "function") {
+      out.onPointerLeave = true;
       continue;
     }
     if (key === "onChange" && typeof value === "function") {

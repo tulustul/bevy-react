@@ -16,9 +16,10 @@ use crate::message::{ReactMessage, ReactRegistry};
 use crate::protocol::Op;
 use crate::reconcile::{
     OpApplyStats, apply_interaction_styles, apply_js_ops, apply_pending_selections,
-    apply_surface_interaction_styles, collect_pointer_events, collect_scroll_events,
-    collect_surface_clicks, collect_surface_pointer_events, collect_ui_events, on_focus_gained,
-    on_focus_lost, on_text_edit_change, sync_editable_a11y,
+    apply_surface_interaction_styles, collect_hover_events, collect_pointer_events,
+    collect_scroll_events, collect_surface_clicks, collect_surface_hover_events,
+    collect_surface_pointer_events, collect_ui_events, on_focus_gained, on_focus_lost,
+    on_text_edit_change, sync_editable_a11y,
 };
 use crate::request::{RawRequest, ReactRequestRegistry, RequestReceiver, dispatch_react_requests};
 
@@ -217,6 +218,9 @@ impl Plugin for ReactUiPlugin {
             (
                 apply_js_ops,
                 collect_ui_events,
+                // Emit `pointerEnter`/`pointerLeave` from `Interaction` transitions
+                // (same signal as hover styling), for nodes with those handlers.
+                collect_hover_events,
                 collect_pointer_events.in_set(PointerCaptureSet),
                 // Wheel-scroll any `overflow: scroll` node under the cursor. In the
                 // same set, after `collect_pointer_events`, so it ORs into this
@@ -268,6 +272,7 @@ impl Plugin for ReactUiPlugin {
                 // read this frame's events.
                 collect_surface_clicks,
                 collect_surface_pointer_events,
+                collect_surface_hover_events,
                 apply_surface_interaction_styles,
             ),
         );
