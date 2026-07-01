@@ -568,8 +568,12 @@ fn build_runner_with_target(driver: &Driver, from: f32, target: Option<f32>) -> 
             mass,
         } => Runner::Spring {
             to: target.unwrap_or(*to),
-            stiffness: *stiffness,
-            damping: *damping,
+            // Like `mass` below: clamp to a positive floor so a zero/negative/NaN
+            // JS value can't make the integrator diverge to NaN (negative
+            // stiffness repels, negative damping injects energy) or oscillate
+            // forever without settling. `f32::max` also maps NaN to the floor.
+            stiffness: stiffness.max(1e-4),
+            damping: damping.max(1e-4),
             mass: mass.max(1e-4),
             pos: from,
             vel: 0.0,
@@ -793,6 +797,42 @@ mod tests {
         // EaseIn is below the diagonal, EaseOut above, at the midpoint.
         assert!(ease(Easing::EaseIn, 0.5) < 0.5);
         assert!(ease(Easing::EaseOut, 0.5) > 0.5);
+    }
+
+    /// Hostile JS spring params (zero/negative/NaN stiffness, damping, mass) are
+    /// clamped to a positive floor, so the integrator stays finite and settles
+    /// instead of diverging to NaN (and being driven forever).
+    #[test]
+    fn spring_survives_hostile_params() {
+        for (stiffness, damping, mass) in [
+            (-1.0, -5.0, 0.0),
+            (0.0, 0.0, -1.0),
+            (f32::NAN, f32::NAN, f32::NAN),
+        ] {
+            let driver = Driver::Spring {
+                to: 100.0,
+                stiffness,
+                damping,
+                mass,
+            };
+            let mut r = build_runner(&driver, 0.0);
+            let mut settled = false;
+            for _ in 0..10_000 {
+                let (v, done) = r.step(1.0 / 60.0);
+                assert!(
+                    v.is_finite(),
+                    "diverged with k={stiffness} c={damping} m={mass}"
+                );
+                if done {
+                    settled = true;
+                    break;
+                }
+            }
+            assert!(
+                settled,
+                "never settled with k={stiffness} c={damping} m={mass}"
+            );
+        }
     }
 
     #[test]

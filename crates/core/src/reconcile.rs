@@ -21,7 +21,7 @@ use bevy_react_canvas::{CanvasSurface, blank_canvas_image};
 use bevy_react_portal::{RPortal, blank_portal_image};
 use bevy_react_surface::{RSurface, SurfaceVirtualPointer};
 
-use crate::anchor::Anchored;
+use crate::anchor::{AnchorScaling, Anchored};
 use crate::bridge::{
     FocusState, HoverState, JsBridge, PointerHandlers, RNode, ScrollListener, ScrollStep,
     StyleVariants,
@@ -772,7 +772,9 @@ fn apply_anchor(ec: &mut EntityCommands, props: &Props) {
                 ec.insert(Anchored {
                     target,
                     offset,
-                    scale: anchor.scale,
+                    // Sanitized once here so the per-frame scale math can't panic
+                    // on JS-supplied NaN/reversed bounds.
+                    scale: anchor.scale.and_then(AnchorScaling::sanitized),
                 });
             }
             None => {
@@ -2550,7 +2552,10 @@ mod tests {
         let mid = ent(&app, 2);
         let leaf = ent(&app, 3);
         assert!(
-            app.world().resource::<JsBridge>().editable_inputs.contains(&3),
+            app.world()
+                .resource::<JsBridge>()
+                .editable_inputs
+                .contains(&3),
             "the editableText descendant is tracked before removal"
         );
 
@@ -2571,7 +2576,10 @@ mod tests {
             "the descendant leaf node is despawned with the subtree"
         );
         let bridge = app.world().resource::<JsBridge>();
-        assert!(!bridge.nodes.contains_key(&1), "the removed root is forgotten");
+        assert!(
+            !bridge.nodes.contains_key(&1),
+            "the removed root is forgotten"
+        );
         assert!(
             !bridge.nodes.contains_key(&2),
             "the descendant mid node id is forgotten (no stale entity handle)"

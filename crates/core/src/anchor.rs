@@ -47,6 +47,48 @@ pub struct AnchorScaling {
     pub base_distance: f32,
 }
 
+impl AnchorScaling {
+    /// Validate a JS-supplied config once at apply time so the per-frame math
+    /// can't panic or emit a non-finite scale: any non-finite field disables
+    /// scaling (`None`) with a warning, and reversed `min`/`max` bounds are
+    /// swapped (a reversed pair would panic `f32::clamp` every frame).
+    pub(crate) fn sanitized(self) -> Option<Self> {
+        if ![self.min, self.max, self.factor, self.base_distance]
+            .iter()
+            .all(|v| v.is_finite())
+        {
+            warn!("non-finite anchor scale config {self:?}; disabling distance scaling");
+            return None;
+        }
+        if self.min > self.max {
+            warn!(
+                "anchor scale min {} > max {}; swapping the bounds",
+                self.min, self.max
+            );
+            return Some(Self {
+                min: self.max,
+                max: self.min,
+                ..self
+            });
+        }
+        Some(self)
+    }
+}
+
+/// Distance-based scale for a [sanitized](AnchorScaling::sanitized) config: `1`
+/// when the camera is exactly `base_distance` away, growing closer / shrinking
+/// farther, pinned to `min..=max`. At `dist == 0` the ratio is `inf`, which
+/// `clamp` pins to `max` (closest → largest); a NaN product (`factor == 0` ×
+/// `inf`) resolves to `max` for the same reason.
+fn distance_scale(c: &AnchorScaling, dist: f32) -> f32 {
+    let raw = 1.0 + c.factor * (c.base_distance / dist - 1.0);
+    if raw.is_nan() {
+        c.max
+    } else {
+        raw.clamp(c.min, c.max)
+    }
+}
+
 /// Marker for the dedicated overlay container that every [`Anchored`] node is
 /// reparented under. Spawned once at startup as a zero-size, absolutely-positioned
 /// child of the UI root at the window origin, so anchored overlays live in their own
@@ -162,13 +204,9 @@ pub fn position_anchored_nodes(
         };
 
         // Distance-based scaling (applied via `UiTransform`, which scales about the
-        // node center, so the overlay stays centered on its anchor). `None` → 1. At
-        // `dist == 0` the ratio is `inf`, which `clamp` pins to `max` (closest → largest).
-        let scale = match anchor.scale {
-            Some(c) => {
-                let dist = world.distance(cam_tf.translation());
-                (1.0 + c.factor * (c.base_distance / dist - 1.0)).clamp(c.min, c.max)
-            }
+        // node center, so the overlay stays centered on its anchor). `None` → 1.
+        let scale = match &anchor.scale {
+            Some(c) => distance_scale(c, world.distance(cam_tf.translation())),
             None => 1.0,
         };
         if transform.scale != Vec2::splat(scale) {
@@ -198,7 +236,56 @@ fn set_visibility(visibility: &mut Mut<Visibility>, next: Visibility) {
 
 #[cfg(test)]
 mod tests {
+    use super::{AnchorScaling, distance_scale};
     use crate::protocol::Props;
+
+    fn scaling(min: f32, max: f32, factor: f32, base_distance: f32) -> AnchorScaling {
+        AnchorScaling {
+            min,
+            max,
+            factor,
+            base_distance,
+        }
+    }
+
+    /// Reversed bounds would panic `f32::clamp` every frame; `sanitized` swaps
+    /// them instead.
+    #[test]
+    fn sanitize_swaps_reversed_bounds() {
+        let s = scaling(2.0, 0.4, 1.0, 24.0).sanitized().expect("kept");
+        assert_eq!((s.min, s.max), (0.4, 2.0));
+        // An already-valid config passes through unchanged.
+        let s = scaling(0.4, 2.0, 1.0, 24.0).sanitized().expect("kept");
+        assert_eq!((s.min, s.max), (0.4, 2.0));
+    }
+
+    /// Any non-finite field disables scaling entirely (NaN bounds would panic
+    /// `f32::clamp`; a NaN factor/base_distance would produce a NaN scale).
+    #[test]
+    fn sanitize_rejects_non_finite_fields() {
+        for bad in [
+            scaling(f32::NAN, 2.0, 1.0, 24.0),
+            scaling(0.4, f32::NAN, 1.0, 24.0),
+            scaling(0.4, 2.0, f32::NAN, 24.0),
+            scaling(0.4, 2.0, 1.0, f32::NAN),
+            scaling(0.4, f32::INFINITY, 1.0, 24.0),
+        ] {
+            assert!(bad.sanitized().is_none(), "kept {bad:?}");
+        }
+    }
+
+    /// `dist == 0` (camera exactly on the anchor) must stay finite: the `inf`
+    /// ratio pins to `max`, including the `factor == 0` case whose `0 * inf`
+    /// product is NaN.
+    #[test]
+    fn distance_scale_is_finite_at_zero_distance() {
+        let c = scaling(0.4, 2.0, 1.0, 24.0);
+        assert_eq!(distance_scale(&c, 0.0), 2.0);
+        let flat = scaling(0.4, 2.0, 0.0, 24.0);
+        assert_eq!(distance_scale(&flat, 0.0), 2.0);
+        // Normal case: at exactly base_distance the scale is 1.
+        assert_eq!(distance_scale(&c, 24.0), 1.0);
+    }
 
     #[test]
     fn props_deserialize_anchor() {

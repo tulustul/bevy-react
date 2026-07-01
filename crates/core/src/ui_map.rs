@@ -498,39 +498,57 @@ fn parse_auto_tracks(s: &str) -> Vec<GridTrack> {
         .collect()
 }
 
-/// Parse a grid line placement (`"1 / 3"`, `"span 2"`, `"2"`, `"auto"`).
+/// Parse a grid line placement (`"1 / 3"`, `"span 2"`, `"2"`, `"auto"`). A zero
+/// line/span (invalid in CSS — and `GridPlacement`'s constructors panic on it) or
+/// an unrecognized token warns and falls back to `auto`.
 fn parse_grid_placement(s: &str) -> GridPlacement {
-    let span_of = |t: &str| {
-        t.trim()
-            .strip_prefix("span")
-            .and_then(|n| n.trim().parse::<u16>().ok())
-    };
-    if let Some((a, b)) = s.split_once('/') {
-        let (a, b) = (a.trim(), b.trim());
-        let start: Option<i16> = a.parse().ok();
-        if let Some(span) = span_of(b) {
-            return match start {
-                Some(start) => GridPlacement::start_span(start, span),
-                None => GridPlacement::span(span),
+    try_grid_placement(s).unwrap_or_else(|| unknown_keyword("grid placement", s))
+}
+
+/// Fallible half of [`parse_grid_placement`]: `None` on anything that must not
+/// reach `GridPlacement`'s panicking constructors. A zero anywhere in the value
+/// aborts the whole placement (rather than degrading to a partial one, which
+/// would silently mis-place the item).
+fn try_grid_placement(s: &str) -> Option<GridPlacement> {
+    enum Token {
+        Num(i16),  // a nonzero line number
+        Span(u16), // a nonzero `span N`
+        Auto,
+        Invalid, // a zero line/span, or an unrecognized token
+    }
+    fn token(t: &str) -> Token {
+        let t = t.trim();
+        if t == "auto" {
+            return Token::Auto;
+        }
+        if let Some(n) = t.strip_prefix("span") {
+            return match n.trim().parse::<u16>() {
+                Ok(0) | Err(_) => Token::Invalid,
+                Ok(n) => Token::Span(n),
             };
         }
-        if let (Some(start), Some(end)) = (start, b.parse::<i16>().ok()) {
-            return GridPlacement::start_end(start, end);
+        match t.parse::<i16>() {
+            Ok(0) | Err(_) => Token::Invalid,
+            Ok(n) => Token::Num(n),
         }
-        if let Some(start) = start {
-            return GridPlacement::start(start);
-        }
-        return GridPlacement::auto();
     }
-    let s = s.trim();
-    if s == "auto" {
-        GridPlacement::auto()
-    } else if let Some(span) = span_of(s) {
-        GridPlacement::span(span)
-    } else if let Ok(line) = s.parse::<i16>() {
-        GridPlacement::start(line)
-    } else {
-        GridPlacement::auto()
+    use Token::*;
+    if let Some((a, b)) = s.split_once('/') {
+        return Some(match (token(a), token(b)) {
+            (Num(start), Span(span)) => GridPlacement::start_span(start, span),
+            (Auto, Span(span)) => GridPlacement::span(span),
+            (Num(start), Num(end)) => GridPlacement::start_end(start, end),
+            (Num(start), Auto) => GridPlacement::start(start),
+            (Auto, Num(end)) => GridPlacement::end(end),
+            (Auto, Auto) => GridPlacement::auto(),
+            _ => return None,
+        });
+    }
+    match token(s) {
+        Auto => Some(GridPlacement::auto()),
+        Span(span) => Some(GridPlacement::span(span)),
+        Num(line) => Some(GridPlacement::start(line)),
+        Invalid => None,
     }
 }
 
@@ -1765,14 +1783,35 @@ mod tests {
     fn grid_templates_and_placement() {
         assert_eq!(parse_template("1fr 2fr 100px").len(), 3);
         assert_eq!(parse_template("repeat(3, 1fr)").len(), 1);
+        let placed = |s: &str| format!("{:?}", parse_grid_placement(s));
+        let expect = |p: GridPlacement| format!("{p:?}");
+        assert_eq!(placed("1 / 3"), expect(GridPlacement::start_end(1, 3)));
+        assert_eq!(placed("span 2"), expect(GridPlacement::span(2)));
         assert_eq!(
-            format!("{:?}", parse_grid_placement("1 / 3")),
-            format!("{:?}", GridPlacement::start_end(1, 3))
+            placed("2 / span 3"),
+            expect(GridPlacement::start_span(2, 3))
         );
-        assert_eq!(
-            format!("{:?}", parse_grid_placement("span 2")),
-            format!("{:?}", GridPlacement::span(2))
-        );
+        assert_eq!(placed("2 / 2"), expect(GridPlacement::start_end(2, 2)));
+        assert_eq!(placed("-1"), expect(GridPlacement::start(-1)));
+        assert_eq!(placed("2 / auto"), expect(GridPlacement::start(2)));
+        assert_eq!(placed("auto / 3"), expect(GridPlacement::end(3)));
+    }
+
+    /// A zero grid line/span is invalid CSS and panics `GridPlacement`'s
+    /// constructors — every zero-bearing form must warn and fall back to `auto`,
+    /// never reach the constructor or degrade to a partial placement.
+    #[test]
+    fn grid_placement_zero_falls_back_to_auto() {
+        let auto = format!("{:?}", GridPlacement::auto());
+        for s in ["0", "span 0", "0 / 2", "2 / 0", "0 / span 2", "2 / span 0"] {
+            assert_eq!(
+                format!("{:?}", parse_grid_placement(s)),
+                auto,
+                "input {s:?}"
+            );
+        }
+        // Unrecognized garbage also falls back rather than panicking.
+        assert_eq!(format!("{:?}", parse_grid_placement("garbage")), auto);
     }
 
     #[test]
