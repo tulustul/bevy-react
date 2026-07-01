@@ -263,6 +263,10 @@ export function removeEventListener(
   listeners.get(name)?.delete(cb);
 }
 
+// Global keyboard events (`keyDown` / `keyUp`) are built in to the core plugin
+// and surface through the generated typed `bevy.on("keyDown", …)` — there are no
+// separate package helpers; they route through `addEventListener` like any event.
+
 // Split React props into a serializable payload + registered event handlers.
 // `children` and functions never go across the boundary.
 // React prop name -> the event kind stored in the handler map / reported by Bevy.

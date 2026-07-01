@@ -22,6 +22,31 @@ export type BallState = { x: number, y: number, vx: number, vy: number, };
 export type CubeInfo = { entity: bigint, label: string, };
 export type CubesSpawned = { cubes: Array<CubeInfo>, };
 export type FollowRandom = null;
+export type KeyDown = KeyboardEventData;
+export type KeyUp = KeyboardEventData;
+export type KeyboardEventData = { 
+/**
+ * Layout-aware logical key: the typed character (`"a"`, `"A"`) or a named
+ * key (`"Enter"`, `"ArrowLeft"`, `"Escape"`).
+ */
+key: string, 
+/**
+ * Layout-independent physical key, W3C `code` style (`"KeyA"`, `"Enter"`).
+ */
+code: string, 
+/**
+ * The text produced by the key, if any (respects modifiers/IME). `null` for
+ * keys that don't produce text (e.g. arrows, modifiers).
+ */
+text: string | null, 
+/**
+ * Whether this is an OS auto-repeat while the key is held.
+ */
+repeat: boolean, ctrlKey: boolean, shiftKey: boolean, altKey: boolean, 
+/**
+ * The "Meta"/"Super" key (Windows/Command).
+ */
+metaKey: boolean, };
 export type SceneId = "Cubes" | "BouncingBall" | "CrowdedCubes" | "Surface";
 export type SelectDemo = { label: string, };
 export type SelectScene = SceneId | null;
@@ -49,6 +74,8 @@ export interface ReactEvents {
   "bevyEventsDemo.ballBounced": BallBounced;
   "crowdedCubes.spawned": CubesSpawned;
   "debug.selectDemo": SelectDemo;
+  keyDown: KeyDown;
+  keyUp: KeyUp;
 }
 
 /** Send a typed app message to the Bevy side. */

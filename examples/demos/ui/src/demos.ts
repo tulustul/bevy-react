@@ -5,7 +5,8 @@ import { ReactToBevyDemo } from "./demos/communication/ReactToBevyDemo";
 import { BevyToReactDemo } from "./demos/communication/BevyToReactDemo";
 import { BidirectionCommunicationDemo } from "./demos/communication/BidirectionCommunicationDemo";
 import { AnchoredDemo } from "./demos/AnchoredDemo";
-import { InteractionsDemo } from "./demos/InteractionsDemo";
+import { MouseDemo } from "./demos/interactions/MouseDemo";
+import { KeyboardDemo } from "./demos/interactions/KeyboardDemo";
 import { CanvasDemo } from "./demos/elements/CanvasDemo";
 import { PortalDemo } from "./demos/elements/PortalDemo";
 import { SurfaceDemo } from "./demos/elements/surfaceDemo";
@@ -130,7 +131,13 @@ export const DEMOS: DemoItem[] = [
       { label: "Style Transition", component: TransitionDemo },
     ],
   },
-  { label: "Interactions", component: InteractionsDemo },
+  {
+    label: "Interactions",
+    children: [
+      { label: "Mouse", component: MouseDemo },
+      { label: "Keyboard", component: KeyboardDemo },
+    ],
+  },
 ];
 
 /** Find the first selectable demo (a leaf with a `component`) by its nav label. */

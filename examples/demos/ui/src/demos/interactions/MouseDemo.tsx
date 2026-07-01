@@ -3,15 +3,6 @@ import { BevyStyle, PointerEventData } from "bevy-react/jsx";
 import { Example } from "@/components";
 import { Colors, FontSizes } from "@/theme";
 
-const TYPESCRIPT = `<node
-  onClick={...}
-  onPointerDown={...}
-  onPointerMove={...}
-  onPointerUp={...}
-  onPointerEnter={...}
-  onPointerLeave={...}
-/>`;
-
 // A pure-UI demo of the raw pointer events the bridge reports: `click`,
 // `pointerDown`, `pointerMove`, `pointerUp`, and the hover boundary
 // `pointerEnter`/`pointerLeave`. Grab the box and drag it around — dragging uses
@@ -29,7 +20,7 @@ const clamp = (v: number, lo: number, hi: number) =>
 
 type LogLine = { id: number; text: string };
 
-export function InteractionsDemo() {
+export function MouseDemo() {
   return (
     <>
       <DragExample />
@@ -139,16 +130,9 @@ function DragExample() {
 function HoverExample() {
   const [hovering, setHovering] = useState(false);
 
-  const onPointerEnter = (e: PointerEventData) => {
-    setHovering(true);
-  };
-
-  const onPointerLeave = (e: PointerEventData) => {
-    setHovering(false);
-  };
   return (
     <Example
-      description="Raw pointer events the bridge reports. Grab the box and drag it around the stage."
+      description="Hover boundary events: onPointerEnter / onPointerLeave fire once per crossing."
       tsx={`<node
   onPointerEnter={...}
   onPointerLeave={...}

@@ -218,6 +218,10 @@ impl Plugin for ReactUiPlugin {
             (
                 apply_js_ops,
                 collect_ui_events,
+                // Forward window-global keystrokes to React as built-in named
+                // events (`onKeyDown`/`onKeyUp`). Node-independent: reads Bevy's
+                // `KeyboardInput` messages directly, no reconciler state needed.
+                crate::keyboard::collect_keyboard_events,
                 // Emit `pointerEnter`/`pointerLeave` from `Interaction` transitions
                 // (same signal as hover styling), for nodes with those handlers.
                 collect_hover_events,

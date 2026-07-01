@@ -50,6 +50,10 @@ pub(crate) fn render_typescript(
     for reg in events.handlers.values() {
         (reg.ts_collect)(&mut collector);
     }
+    // Built-in framework events: always seeded so `bevy.on("keyDown", …)` is typed
+    // in every app with no per-app registration (see `crate::keyboard`).
+    collector.add::<crate::keyboard::KeyDown>();
+    collector.add::<crate::keyboard::KeyUp>();
 
     // Sorted name lists keep the maps and proxy stable across runs.
     let mut message_names: Vec<(&str, String)> = messages
@@ -71,11 +75,18 @@ pub(crate) fn render_typescript(
         .collect();
     request_rows.sort_by(|a, b| a.name.cmp(b.name));
 
+    // `keyDown`/`keyUp` are reserved for the built-in keyboard events; drop any
+    // app event that collides so the generated interface can't get a duplicate key,
+    // then append the built-ins (always present).
+    const BUILTIN_EVENTS: [&str; 2] = ["keyDown", "keyUp"];
     let mut event_names: Vec<(&str, String)> = events
         .handlers
         .iter()
         .map(|(name, reg)| (*name, (reg.ts_name)()))
+        .filter(|(name, _)| !BUILTIN_EVENTS.contains(name))
         .collect();
+    event_names.push(("keyDown", <crate::keyboard::KeyDown as TS>::name()));
+    event_names.push(("keyUp", <crate::keyboard::KeyUp as TS>::name()));
     event_names.sort();
 
     let mut out = String::new();
@@ -503,6 +514,17 @@ mod tests {
             ts.contains(r#""user.disconnected": UserDisconnected;"#),
             "{ts}"
         );
+        // Built-in keyboard events are always seeded, even with none registered.
+        assert!(
+            ts.contains("export type KeyDown = KeyboardEventData;"),
+            "{ts}"
+        );
+        assert!(
+            ts.contains("export type KeyUp = KeyboardEventData;"),
+            "{ts}"
+        );
+        assert!(ts.contains("keyDown: KeyDown;"), "{ts}");
+        assert!(ts.contains("keyUp: KeyUp;"), "{ts}");
         // A `Vec<PieceInfo>` response declares its inner struct and types as an array.
         assert!(ts.contains("export type PieceInfo = "), "{ts}");
         assert!(

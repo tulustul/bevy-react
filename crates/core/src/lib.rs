@@ -29,6 +29,7 @@ mod bridge;
 mod event;
 mod filter;
 mod host;
+mod keyboard;
 mod message;
 mod plugin;
 mod reconcile;
