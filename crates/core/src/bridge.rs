@@ -108,6 +108,14 @@ pub struct JsBridge {
     pub outbound_tx: OutboundSender,
     /// Maps reconciler node ids to their spawned entities.
     pub nodes: HashMap<NodeId, Entity>,
+    /// The last applied props per node (event-like fields stripped — see
+    /// [`crate::protocol::Props::split_events`]). Every [`crate::protocol::Op::Update`]
+    /// merges its delta into this retained state, so the apply path always works
+    /// from the full merged props even though only the changed fields crossed
+    /// the boundary. Seeded on create.
+    /// Boxed: `Props` is several KB by value (four inline `Style`s), and the
+    /// update path moves entries out of and back into the map per op.
+    pub props_cache: HashMap<NodeId, Box<crate::protocol::Props>>,
     /// Resolved text style of each `<text>` element/span, for span inheritance.
     pub text_styles: HashMap<NodeId, ResolvedTextStyle>,
     /// Node ids that are bare-string runs inheriting their parent's text style.
@@ -172,6 +180,7 @@ impl JsBridge {
             ops_rx,
             outbound_tx,
             nodes,
+            props_cache: HashMap::new(),
             text_styles: HashMap::new(),
             raw_spans: HashSet::new(),
             text_spans: HashSet::new(),
@@ -252,6 +261,7 @@ impl JsBridge {
     /// `child_surfaces` (handled by `attach_surface`/`detach_surface`/`surfaces_under`).
     fn forget_node_data(&mut self, id: NodeId) {
         self.nodes.remove(&id);
+        self.props_cache.remove(&id);
         self.text_styles.remove(&id);
         self.raw_spans.remove(&id);
         self.text_spans.remove(&id);

@@ -16,7 +16,7 @@ use crate::protocol::{
     Angle, AngularStop, AtlasSpec, BoxShadowList, BoxShadowSpec, ConicGradientSpec, FontSize,
     GradientList, GradientSpec, GradientStop, ImageMode, ImageModeSpec, Length, LetterSpacingSpec,
     LineHeightSpec, LinearGradientSpec, Props, RadialGradientSpec, RadialShapeSpec, Rect,
-    SliceBorder, SliceScale, SliceSpec, Style,
+    SliceBorder, SliceScale, SliceSpec, Style, StyleDirty,
 };
 
 /// Fallback for an enum-keyword mapper that didn't recognize its token: `warn!`s
@@ -721,29 +721,48 @@ fn set_node_if_changed(node: Node) -> impl EntityCommand {
 /// present in the style (and remove ones that are absent, so toggling a style key
 /// off clears the component).
 pub fn apply_style(ec: &mut EntityCommands, style: &Option<Style>) {
+    apply_style_masked(ec, style, StyleDirty::ALL);
+}
+
+/// [`apply_style`] restricted to the dirty [`style_groups`]: each derived
+/// component is only rebuilt/inserted/removed when one of the style fields its
+/// group reads was touched (see the field table in [`crate::protocol`]). A
+/// delta `Op::Update` passes the mask its merge computed; every other caller
+/// (create, hover/press restyle, legacy update) passes [`StyleDirty::ALL`].
+///
+/// `style` must always be the **full merged** style, never a delta — a skipped
+/// group keeps its current components, but an executed group trusts `style`
+/// completely (absence = remove).
+pub fn apply_style_masked(ec: &mut EntityCommands, style: &Option<Style>, dirty: StyleDirty) {
+    use crate::protocol::style_groups as g;
+
     // Guarded in-place update, not a wholesale re-insert: `Op::Update` and the
     // hover/press restyle systems all funnel through here, and re-inserting `Node`
     // unconditionally marks it changed and relays out the subtree even for a
     // paint-only change. The reconciler already skips no-op updates (`renderer.ts`'s
-    // `bevyPropsChanged`); this skips the relayout when the *layout* is unchanged.
-    ec.queue(set_node_if_changed(node_from_style(style)));
+    // delta builder); this skips the relayout when the *layout* is unchanged.
+    if dirty.intersects(g::LAYOUT) {
+        ec.queue(set_node_if_changed(node_from_style(style)));
+    }
     let s = style.as_ref();
 
     // `opacity` multiplies into the background (and text) alpha — color before
     // opacity, mirroring the animated path.
     let opacity = s.and_then(|s| s.opacity);
-    // A `filter` makes the node render through a `MaterialNode<FilterMaterial>`
-    // (built reconcile-side, where the material assets live), which *replaces* the
-    // standard draw and itself paints the filtered background color. So a filtered
-    // node never carries `BackgroundColor` — that also avoids a double draw when
-    // hover/press re-applies this style without rebuilding the material.
-    let has_filter = s.map(|s| s.filter.is_some()).unwrap_or(false);
-    match s.and_then(|s| s.background_color.as_deref()) {
-        Some(hex) if !has_filter => {
-            ec.insert(BackgroundColor(apply_opacity(parse_color(hex), opacity)));
-        }
-        _ => {
-            ec.remove::<BackgroundColor>();
+    if dirty.intersects(g::BACKGROUND) {
+        // A `filter` makes the node render through a `MaterialNode<FilterMaterial>`
+        // (built reconcile-side, where the material assets live), which *replaces* the
+        // standard draw and itself paints the filtered background color. So a filtered
+        // node never carries `BackgroundColor` — that also avoids a double draw when
+        // hover/press re-applies this style without rebuilding the material.
+        let has_filter = s.map(|s| s.filter.is_some()).unwrap_or(false);
+        match s.and_then(|s| s.background_color.as_deref()) {
+            Some(hex) if !has_filter => {
+                ec.insert(BackgroundColor(apply_opacity(parse_color(hex), opacity)));
+            }
+            _ => {
+                ec.remove::<BackgroundColor>();
+            }
         }
     }
 
@@ -751,7 +770,9 @@ pub fn apply_style(ec: &mut EntityCommands, style: &Option<Style>) {
     // untouched* (never remove) so the `#[require(UiTransform)]` invariant on
     // `AnimatedNode`/transition entities is never violated, and an in-flight
     // animation/transition isn't reset by a coincident re-render.
-    if let Some(t) = s.and_then(|s| s.transform) {
+    if dirty.intersects(g::TRANSFORM)
+        && let Some(t) = s.and_then(|s| s.transform)
+    {
         ec.insert(build_ui_transform(
             t.translate_x.map(length_to_val),
             t.translate_y.map(length_to_val),
@@ -761,80 +782,97 @@ pub fn apply_style(ec: &mut EntityCommands, style: &Option<Style>) {
             t.rotate.map(Angle::radians),
         ));
     }
-    match s.and_then(|s| s.border_color.as_ref()) {
-        Some(spec) => {
-            let side = |c: &Option<String>| c.as_deref().map(parse_color).unwrap_or(Color::NONE);
-            ec.insert(BorderColor {
-                top: side(&spec.top),
-                right: side(&spec.right),
-                bottom: side(&spec.bottom),
-                left: side(&spec.left),
-            });
-        }
-        None => {
-            ec.remove::<BorderColor>();
-        }
-    }
-    match s.and_then(|s| s.outline.as_ref()) {
-        Some(o) => {
-            ec.insert(Outline {
-                width: o.width.map(length_to_val).unwrap_or(Val::Px(1.0)),
-                offset: o.offset.map(length_to_val).unwrap_or(Val::Px(0.0)),
-                color: o.color.as_deref().map(parse_color).unwrap_or(Color::WHITE),
-            });
-        }
-        None => {
-            ec.remove::<Outline>();
+    if dirty.intersects(g::BORDER_COLOR) {
+        match s.and_then(|s| s.border_color.as_ref()) {
+            Some(spec) => {
+                let side =
+                    |c: &Option<String>| c.as_deref().map(parse_color).unwrap_or(Color::NONE);
+                ec.insert(BorderColor {
+                    top: side(&spec.top),
+                    right: side(&spec.right),
+                    bottom: side(&spec.bottom),
+                    left: side(&spec.left),
+                });
+            }
+            None => {
+                ec.remove::<BorderColor>();
+            }
         }
     }
-    match s.and_then(|s| s.box_shadow.as_ref()) {
-        Some(b) => {
-            ec.insert(BoxShadow(build_box_shadows(b)));
-        }
-        None => {
-            ec.remove::<BoxShadow>();
-        }
-    }
-    match s.and_then(|s| s.background_gradient.as_ref()) {
-        Some(g) => {
-            ec.insert(BackgroundGradient(build_gradients(g, opacity)));
-        }
-        None => {
-            ec.remove::<BackgroundGradient>();
+    if dirty.intersects(g::OUTLINE) {
+        match s.and_then(|s| s.outline.as_ref()) {
+            Some(o) => {
+                ec.insert(Outline {
+                    width: o.width.map(length_to_val).unwrap_or(Val::Px(1.0)),
+                    offset: o.offset.map(length_to_val).unwrap_or(Val::Px(0.0)),
+                    color: o.color.as_deref().map(parse_color).unwrap_or(Color::WHITE),
+                });
+            }
+            None => {
+                ec.remove::<Outline>();
+            }
         }
     }
-    match s.and_then(|s| s.border_gradient.as_ref()) {
-        Some(g) => {
-            ec.insert(BorderGradient(build_gradients(g, opacity)));
+    if dirty.intersects(g::BOX_SHADOW) {
+        match s.and_then(|s| s.box_shadow.as_ref()) {
+            Some(b) => {
+                ec.insert(BoxShadow(build_box_shadows(b)));
+            }
+            None => {
+                ec.remove::<BoxShadow>();
+            }
         }
-        None => {
-            ec.remove::<BorderGradient>();
+    }
+    if dirty.intersects(g::BG_GRADIENT) {
+        match s.and_then(|s| s.background_gradient.as_ref()) {
+            Some(grad) => {
+                ec.insert(BackgroundGradient(build_gradients(grad, opacity)));
+            }
+            None => {
+                ec.remove::<BackgroundGradient>();
+            }
+        }
+    }
+    if dirty.intersects(g::BORDER_GRADIENT) {
+        match s.and_then(|s| s.border_gradient.as_ref()) {
+            Some(grad) => {
+                ec.insert(BorderGradient(build_gradients(grad, opacity)));
+            }
+            None => {
+                ec.remove::<BorderGradient>();
+            }
         }
     }
     // A `<text>` root's drop shadow (block-level). No-op on non-text nodes (no
     // `Text` to shadow); removed when the style drops it on a re-render/hover-out.
-    match text_shadow(s) {
-        Some(shadow) => {
-            ec.insert(shadow);
-        }
-        None => {
-            ec.remove::<TextShadow>();
-        }
-    }
-    match s.and_then(|s| s.z_index) {
-        Some(z) => {
-            ec.insert(ZIndex(z));
-        }
-        None => {
-            ec.remove::<ZIndex>();
+    if dirty.intersects(g::TEXT_SHADOW) {
+        match text_shadow(s) {
+            Some(shadow) => {
+                ec.insert(shadow);
+            }
+            None => {
+                ec.remove::<TextShadow>();
+            }
         }
     }
-    match s.and_then(|s| s.global_z_index) {
-        Some(z) => {
-            ec.insert(GlobalZIndex(z));
+    if dirty.intersects(g::Z_INDEX) {
+        match s.and_then(|s| s.z_index) {
+            Some(z) => {
+                ec.insert(ZIndex(z));
+            }
+            None => {
+                ec.remove::<ZIndex>();
+            }
         }
-        None => {
-            ec.remove::<GlobalZIndex>();
+    }
+    if dirty.intersects(g::GLOBAL_Z_INDEX) {
+        match s.and_then(|s| s.global_z_index) {
+            Some(z) => {
+                ec.insert(GlobalZIndex(z));
+            }
+            None => {
+                ec.remove::<GlobalZIndex>();
+            }
         }
     }
     // `focusPolicy` controls pointer pass-through. The node's default is `Pass`
@@ -844,17 +882,24 @@ pub fn apply_style(ec: &mut EntityCommands, style: &Option<Style>) {
     // remove — because removing the component makes `ui_focus_system` fall back to
     // `.unwrap_or(&FocusPolicy::Block)` and silently block every node (e.g. a `<text>`
     // child would then block its parent); inserting also makes toggling "block" back
-    // off reliably revert to `Pass`.
-    let focus_policy = match s.and_then(|s| s.focus_policy.as_deref()) {
-        Some("block") => FocusPolicy::Block,
-        _ => FocusPolicy::Pass, // "pass", unknown, or absent
-    };
-    ec.insert(focus_policy);
+    // off reliably revert to `Pass`. (A `<button>`'s `Block` default is re-asserted
+    // by the reconciler under the same `FOCUS_POLICY` gate.)
+    if dirty.intersects(g::FOCUS_POLICY) {
+        let focus_policy = match s.and_then(|s| s.focus_policy.as_deref()) {
+            Some("block") => FocusPolicy::Block,
+            _ => FocusPolicy::Pass, // "pass", unknown, or absent
+        };
+        ec.insert(focus_policy);
+    }
 
     // Stamp the transition engine's input from this (possibly hover/press-merged)
     // style. `drive_transitions` eases the snap values written above to their new
-    // targets; see [`crate::transition`].
-    crate::transition::apply_transition(ec, style);
+    // targets; see [`crate::transition`]. Skipping when no transitioned channel
+    // was touched is safe: `drive_transitions` polls every `TransitionState` (no
+    // `Changed` filter), so it never needs a fresh insert to keep easing.
+    if dirty.intersects(g::TRANSITION) {
+        crate::transition::apply_transition(ec, style);
+    }
 }
 
 /// Overlay `overlay` onto `base`, producing the style to apply: every field the
@@ -866,80 +911,23 @@ pub fn overlay_style(base: &Option<Style>, overlay: &Option<Style>) -> Option<St
         return base.clone();
     };
     let mut merged = base.clone().unwrap_or_default();
-    // One arm per `Style` field; kept in struct order so it's easy to audit that
-    // every field is overlaid.
-    // TODO(review): this hand-maintained field list must mirror `Style` exactly — omit a
-    // field when adding it to `Style` and it's SILENTLY dropped from hover/press merging,
-    // with no compile error. Add a field-coverage test (or derive the overlay) to enforce it.
+    // Driven by the shared field table (`protocol::with_style_fields`), so a new
+    // `Style` field is overlaid automatically (and its absence from the table is
+    // a test failure). Fields tagged `no_overlay` (`filter`, `focus_policy`) are
+    // deliberately NOT carried by hover/press/focus variants — see the table's
+    // docs for why.
     macro_rules! overlay_field {
-        ($($f:ident),* $(,)?) => {
-            $( if overlay.$f.is_some() { merged.$f = overlay.$f.clone(); } )*
+        ($(($f:ident, $name:literal, $g:tt, $ov:ident),)*) => {
+            $( overlay_field!(@one $f, $ov); )*
         };
+        (@one $f:ident, overlay) => {
+            if overlay.$f.is_some() {
+                merged.$f = overlay.$f.clone();
+            }
+        };
+        (@one $f:ident, no_overlay) => {};
     }
-    overlay_field!(
-        display,
-        box_sizing,
-        position_type,
-        overflow_x,
-        overflow_y,
-        scrollbar_width,
-        left,
-        right,
-        top,
-        bottom,
-        width,
-        height,
-        min_width,
-        min_height,
-        max_width,
-        max_height,
-        aspect_ratio,
-        align_items,
-        justify_items,
-        align_self,
-        justify_self,
-        align_content,
-        justify_content,
-        margin,
-        padding,
-        border,
-        flex_direction,
-        flex_wrap,
-        flex_grow,
-        flex_shrink,
-        flex_basis,
-        gap,
-        row_gap,
-        column_gap,
-        grid_auto_flow,
-        grid_template_rows,
-        grid_template_columns,
-        grid_auto_rows,
-        grid_auto_columns,
-        grid_row,
-        grid_column,
-        background_color,
-        border_color,
-        border_radius,
-        outline,
-        box_shadow,
-        background_gradient,
-        border_gradient,
-        z_index,
-        global_z_index,
-        transform,
-        opacity,
-        transition,
-        color,
-        font_size,
-        font_weight,
-        font_family,
-        text_align,
-        line_height,
-        letter_spacing,
-        text_shadow,
-        line_break,
-    );
+    crate::protocol::with_style_fields!(overlay_field);
     Some(merged)
 }
 
@@ -1745,6 +1733,30 @@ mod tests {
         // Overlay onto an absent base still yields the overlay's fields.
         let from_none = overlay_style(&None, &overlay).unwrap();
         assert_eq!(from_none.background_color.as_deref(), Some("#89b4fa"));
+    }
+
+    /// `filter` and `focusPolicy` are deliberately NOT carried by variants:
+    /// the interaction restyle path can't rebuild the filter material, and a
+    /// hover-overlaid filter would drop `BackgroundColor` with nothing painting
+    /// in its place; a variant must not silently toggle pointer capture either.
+    #[test]
+    fn overlay_skips_filter_and_focus_policy() {
+        let base = Some(style(serde_json::json!({
+            "filter": { "blur": 4 },
+            "focusPolicy": "block",
+        })));
+        let overlay = Some(style(serde_json::json!({
+            "filter": { "blur": 9 },
+            "focusPolicy": "pass",
+            "backgroundColor": "red",
+        })));
+        let merged = overlay_style(&base, &overlay).unwrap();
+        assert_eq!(
+            merged.filter.unwrap().blur,
+            base.as_ref().unwrap().filter.as_ref().unwrap().blur
+        );
+        assert_eq!(merged.focus_policy.as_deref(), Some("block"));
+        assert_eq!(merged.background_color.as_deref(), Some("red"));
     }
 
     #[test]

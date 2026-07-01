@@ -63,7 +63,17 @@ export type Op =
   | { op: "append"; parent: number; child: number }
   | { op: "insert"; parent: number; child: number; before: number }
   | { op: "remove"; parent: number; child: number }
-  | { op: "update"; id: number; props: SerializedProps }
+  | {
+      op: "update";
+      id: number;
+      // A delta against the node's last applied props: `props` carries only
+      // the changed fields (`props.style` only the changed style fields);
+      // `unset`/`styleUnset` name prop / style wire fields reset to their
+      // defaults; anything in neither is left unchanged on the Bevy side.
+      props: SerializedProps;
+      unset?: string[];
+      styleUnset?: string[];
+    }
   | { op: "updateText"; id: number; text: string };
 
 export interface SerializedProps {
@@ -309,138 +319,305 @@ export function registerHandlers(
   else handlers.delete(id);
 }
 
+// Object-valued props that ride across whole and are replaced atomically by a
+// delta update (unlike `style`, which diffs field-by-field):
+// - `style`/`hoverStyle`/`pressStyle`/`focusStyle` are fully opaque: every
+//   CSS-like key (incl. backgroundColor, border, grid, transition timings, …)
+//   rides inside the object and is decoded — units and all — on the Rust side.
+//   Bevy overlays the hover/press/focus variants onto the base style from the
+//   node's interaction state; `focusStyle` applies while an `editableText` is
+//   focused, no React focus state needed.
+// - An `Anchored.node`'s `anchor` (entity + optional offset) is opaque too;
+//   Bevy projects the entity's world position to the screen each frame.
+// - `animatedStyle` is converted by `serializeAnimatedStyle` (wire: `animated`).
+const OBJECT_PROP_KEYS = new Set([
+  "style",
+  "hoverStyle",
+  "pressStyle",
+  "focusStyle",
+  "anchor",
+  "animatedStyle",
+]);
+
+// Text + `image` + `editableText` element attributes that pass through by name.
+const PASSTHROUGH_PROP_KEYS = new Set([
+  "color",
+  "fontSize",
+  "src",
+  "tint",
+  "flipX",
+  "flipY",
+  "imageMode",
+  "sourceRect",
+  "atlas",
+  "visualBox",
+  "target",
+  "value",
+  "maxLength",
+  "multiline",
+  "autofocus",
+  "selectionStart",
+  "selectionEnd",
+  "ariaLabel",
+  "scrollTop",
+  "scrollLeft",
+  "scrollStep",
+]);
+
+// Props whose wire name differs from the React prop name. A `<surface>`'s
+// `name` rides the same wire field as a `<portal>`'s `target` (both bind the
+// element to a named render target); they never coexist.
+const WIRE_NAME: Record<string, string> = {
+  name: "target",
+  animatedStyle: "animated",
+};
+
+// "Act now" props: present = do something once (push a controlled value, draw a
+// display list), absent = no action. Removing one from the props is a no-op —
+// there is no retained state to reset — so a delta never lists them in `unset`
+// (Rust would only warn).
+const EVENT_PROP_KEYS = new Set([
+  "value",
+  "selectionStart",
+  "selectionEnd",
+  "scrollTop",
+  "scrollLeft",
+  "draw",
+]);
+
+// Serialize one React prop into `out` under its wire name. Returns whether the
+// prop is wire-visible (a handler closure becomes a boolean; `children` and
+// unrecognized keys never cross).
+function serializePropInto(
+  out: SerializedProps,
+  key: string,
+  value: unknown,
+): boolean {
+  if (key === "children") return false;
+  const rec = out as Record<string, unknown>;
+  // Event handlers: only a boolean crosses; the actual closures live in the
+  // handler map (see `registerHandlers`).
+  if (HANDLER_PROP_KEYS.has(key)) {
+    if (typeof value !== "function") return false;
+    rec[key] = true;
+    return true;
+  }
+  if (OBJECT_PROP_KEYS.has(key)) {
+    if (!value || typeof value !== "object") return false;
+    if (key === "animatedStyle") {
+      // An `Animated.node`'s `animatedStyle`: each property is bound to a shared
+      // value (or an interpolation). A bare `SharedValue` becomes a `shared`
+      // binding; `interpolate`/`interpolateColor` results pass through as-is.
+      out.animated = serializeAnimatedStyle(value as Record<string, unknown>);
+    } else {
+      rec[key] = value;
+    }
+    return true;
+  }
+  // A `canvas`'s `draw`: a painter callback (recorded against a fresh context)
+  // or an already-built `DrawCmd[]` display list. Either way it crosses as data.
+  if (key === "draw") {
+    out.draw =
+      typeof value === "function"
+        ? recordDrawing(value as CanvasPainter)
+        : (value as DrawCmd[]);
+    return true;
+  }
+  if (PASSTHROUGH_PROP_KEYS.has(key)) {
+    rec[key] = value;
+    return true;
+  }
+  if (key === "name") {
+    out.target = value as string;
+    return true;
+  }
+  return false;
+}
+
 export function serializeProps(
   id: number,
   props: Record<string, unknown>,
 ): SerializedProps {
   const out: SerializedProps = {};
-
   for (const [key, value] of Object.entries(props)) {
+    serializePropInto(out, key, value);
+  }
+  registerHandlers(id, props);
+  return out;
+}
+
+// Structural equality with a depth cap. Style values are small plain-JSON
+// trees (rects, transforms, shadow lists, gradient stops); comparing them
+// structurally means an inline object literal that didn't actually change
+// doesn't count as a change. Past the cap (or for functions/class instances)
+// it conservatively reports "unequal", which merely re-sends that one field.
+export function valuesEqual(a: unknown, b: unknown, depth = 4): boolean {
+  if (Object.is(a, b)) return true;
+  if (depth <= 0) return false;
+  if (
+    typeof a !== "object" ||
+    typeof b !== "object" ||
+    a === null ||
+    b === null
+  ) {
+    return false;
+  }
+  const aArr = Array.isArray(a);
+  if (aArr !== Array.isArray(b)) return false;
+  if (aArr) {
+    const av = a as unknown[];
+    const bv = b as unknown[];
+    if (av.length !== bv.length) return false;
+    for (let i = 0; i < av.length; i++) {
+      if (!valuesEqual(av[i], bv[i], depth - 1)) return false;
+    }
+    return true;
+  }
+  const ao = a as Record<string, unknown>;
+  const bo = b as Record<string, unknown>;
+  for (const k in ao) {
+    if (!valuesEqual(ao[k], bo[k], depth - 1)) return false;
+  }
+  for (const k in bo) {
+    if (!(k in ao) && bo[k] !== undefined) return false;
+  }
+  return true;
+}
+
+// Field-level diff of two style objects. Returns the changed fields (`delta`)
+// and the removed field names (`unset`), or `null` when nothing changed — so a
+// style object recreated inline with identical values produces no op at all.
+function diffStyle(
+  a: Record<string, unknown>,
+  b: Record<string, unknown>,
+): { delta: Record<string, unknown> | null; unset: string[] | null } | null {
+  let delta: Record<string, unknown> | null = null;
+  let unset: string[] | null = null;
+  for (const k in a) {
+    const av = a[k];
+    const bv = b[k];
+    if (bv === undefined) {
+      if (av !== undefined) (unset ??= []).push(k);
+    } else if (!valuesEqual(av, bv)) {
+      (delta ??= {})[k] = bv;
+    }
+  }
+  for (const k in b) {
+    if (k in a) continue;
+    const bv = b[k];
+    if (bv !== undefined) (delta ??= {})[k] = bv;
+  }
+  if (!delta && !unset) return null;
+  return { delta, unset };
+}
+
+// Diff two prop bags into a delta `update` op, or `null` when no Bevy-visible
+// prop changed. The JS-side handler closures are (re)registered either way —
+// they change identity every render but that needs no backend op.
+//
+// Semantics (mirrored by `Props::merge_delta` on the Rust side): a field in
+// `props` is set, a name in `unset` is reset to its default, anything in
+// neither is unchanged. `style` diffs field-by-field (`styleUnset` names the
+// removed style fields); the other object props replace atomically. Event-like
+// props (`EVENT_PROP_KEYS`) only ever appear when changed — never in `unset`.
+// Handlers compare by *presence*; everything else structurally (`valuesEqual`),
+// so hoisted style objects skip on reference equality and inline-but-identical
+// objects skip on structure.
+export function buildUpdateOp(
+  id: number,
+  oldProps: Record<string, unknown>,
+  newProps: Record<string, unknown>,
+): Op | null {
+  // Accumulated behind one object so the `diffKey` closure's writes stay
+  // visible to TypeScript's flow analysis at the read sites below.
+  const acc: {
+    props: SerializedProps | null;
+    unset: string[] | null;
+    styleUnset: string[] | null;
+  } = { props: null, unset: null, styleUnset: null };
+
+  const isObj = (v: unknown): v is Record<string, unknown> =>
+    typeof v === "object" && v !== null;
+
+  const diffKey = (key: string, a: unknown, b: unknown) => {
+    if (HANDLER_PROP_KEYS.has(key)) {
+      const had = typeof a === "function";
+      const has = typeof b === "function";
+      if (had === has) return;
+      if (has) serializePropInto((acc.props ??= {}), key, b);
+      else (acc.unset ??= []).push(key);
+      return;
+    }
+    if (Object.is(a, b)) return;
+    if (key === "style") {
+      const av = isObj(a) ? a : undefined;
+      const bv = isObj(b) ? b : undefined;
+      if (av && bv) {
+        const d = diffStyle(av, bv);
+        if (!d) return;
+        if (d.delta) (acc.props ??= {}).style = d.delta;
+        if (d.unset) acc.styleUnset = d.unset;
+      } else if (bv) {
+        (acc.props ??= {}).style = bv;
+      } else if (av) {
+        (acc.unset ??= []).push("style");
+      }
+      return;
+    }
+    if (OBJECT_PROP_KEYS.has(key)) {
+      // Atomic object props: structurally equal → unchanged; present → replace
+      // whole; gone → unset.
+      if (isObj(b)) {
+        if (isObj(a) && valuesEqual(a, b)) return;
+        serializePropInto((acc.props ??= {}), key, b);
+      } else if (isObj(a)) {
+        (acc.unset ??= []).push(WIRE_NAME[key] ?? key);
+      }
+      return;
+    }
+    if (b === undefined) {
+      // Dropping an event-like prop is a no-op (nothing retained to reset).
+      if (EVENT_PROP_KEYS.has(key)) return;
+      if (serializePropInto({}, key, a)) {
+        (acc.unset ??= []).push(WIRE_NAME[key] ?? key);
+      }
+      return;
+    }
+    serializePropInto((acc.props ??= {}), key, b);
+  };
+
+  for (const key in oldProps) {
     if (key === "children") continue;
-    // Event handlers: only a boolean crosses; the actual closures are registered
-    // in the handler map by `registerHandlers(id, props)` at the end.
-    if (key === "onClick" && typeof value === "function") {
-      out.onClick = true;
-      continue;
-    }
-    if (key === "onPointerDown" && typeof value === "function") {
-      out.onPointerDown = true;
-      continue;
-    }
-    if (key === "onPointerMove" && typeof value === "function") {
-      out.onPointerMove = true;
-      continue;
-    }
-    if (key === "onPointerUp" && typeof value === "function") {
-      out.onPointerUp = true;
-      continue;
-    }
-    if (key === "onPointerEnter" && typeof value === "function") {
-      out.onPointerEnter = true;
-      continue;
-    }
-    if (key === "onPointerLeave" && typeof value === "function") {
-      out.onPointerLeave = true;
-      continue;
-    }
-    if (key === "onChange" && typeof value === "function") {
-      out.onChange = true;
-      continue;
-    }
-    if (key === "onSelect" && typeof value === "function") {
-      out.onSelect = true;
-      continue;
-    }
-    if (key === "onFocus" && typeof value === "function") {
-      out.onFocus = true;
-      continue;
-    }
-    if (key === "onBlur" && typeof value === "function") {
-      out.onBlur = true;
-      continue;
-    }
-    if (key === "onScroll" && typeof value === "function") {
-      out.onScroll = true;
-      continue;
-    }
-    if (key === "style" && value && typeof value === "object") {
-      // Style is fully opaque: every CSS-like key (incl. backgroundColor, border,
-      // grid, transition timings, …) rides across inside this object and is
-      // decoded — units and all — on the Rust side.
-      out.style = value as Record<string, unknown>;
-      continue;
-    }
-    // Hover/press variant styles ride across opaque, like `style`. Bevy overlays
-    // them onto the base style from the node's interaction state.
-    if (key === "hoverStyle" && value && typeof value === "object") {
-      out.hoverStyle = value as Record<string, unknown>;
-      continue;
-    }
-    if (key === "pressStyle" && value && typeof value === "object") {
-      out.pressStyle = value as Record<string, unknown>;
-      continue;
-    }
-    // `editableText`'s `focusStyle`, overlaid while the field is focused — applied
-    // on the Bevy side, no React focus state needed.
-    if (key === "focusStyle" && value && typeof value === "object") {
-      out.focusStyle = value as Record<string, unknown>;
-      continue;
-    }
-    // An `Animated.node`'s `animatedStyle`: each property is bound to a shared
-    // value (or an interpolation). A bare `SharedValue` becomes a `shared`
-    // binding; `interpolate`/`interpolateColor` results pass through as-is.
-    if (key === "animatedStyle" && value && typeof value === "object") {
-      out.animated = serializeAnimatedStyle(value as Record<string, unknown>);
-      continue;
-    }
-    // An `Anchored.node`'s `anchor` (entity + optional offset) rides across opaque;
-    // Bevy projects the entity's world position to the screen each frame.
-    if (key === "anchor" && value && typeof value === "object") {
-      out.anchor = value as Record<string, unknown>;
-      continue;
-    }
-    // A `canvas`'s `draw`: a painter callback (recorded against a fresh context)
-    // or an already-built `DrawCmd[]` display list. Either way it crosses as data.
-    if (key === "draw") {
-      out.draw =
-        typeof value === "function"
-          ? recordDrawing(value as CanvasPainter)
-          : (value as DrawCmd[]);
-      continue;
-    }
-    // Text + `image` + `editableText` element attributes pass through by name.
-    if (key === "color") out.color = value as string;
-    else if (key === "fontSize") out.fontSize = value as number;
-    else if (key === "src") out.src = value as string;
-    else if (key === "tint") out.tint = value as string;
-    else if (key === "flipX") out.flipX = value as boolean;
-    else if (key === "flipY") out.flipY = value as boolean;
-    else if (key === "imageMode")
-      out.imageMode = value as string | Record<string, unknown>;
-    else if (key === "sourceRect")
-      out.sourceRect = value as Record<string, unknown>;
-    else if (key === "atlas") out.atlas = value as Record<string, unknown>;
-    else if (key === "visualBox") out.visualBox = value as string;
-    else if (key === "target") out.target = value as string;
-    // A `<surface>`'s `name` rides the same wire field as a `<portal>`'s `target`
-    // (both bind the element to a named render target); they never coexist.
-    else if (key === "name") out.target = value as string;
-    else if (key === "value") out.value = value as string;
-    else if (key === "maxLength") out.maxLength = value as number;
-    else if (key === "multiline") out.multiline = value as boolean;
-    else if (key === "autofocus") out.autofocus = value as boolean;
-    else if (key === "selectionStart") out.selectionStart = value as number;
-    else if (key === "selectionEnd") out.selectionEnd = value as number;
-    else if (key === "ariaLabel") out.ariaLabel = value as string;
-    // Controlled scroll offsets (any node with `overflow: scroll`).
-    else if (key === "scrollTop") out.scrollTop = value as number;
-    else if (key === "scrollLeft") out.scrollLeft = value as number;
-    else if (key === "scrollStep") out.scrollStep = value as number;
+    diffKey(key, oldProps[key], newProps[key]);
+  }
+  for (const key in newProps) {
+    if (key === "children" || key in oldProps) continue;
+    diffKey(key, undefined, newProps[key]);
   }
 
-  registerHandlers(id, props);
+  // The controlled selection is applied as a (start, end) pair on the Bevy
+  // side; when either half changed, carry both current values so the delta
+  // never delivers half a selection.
+  const props = acc.props;
+  if (
+    props &&
+    (props.selectionStart !== undefined) !== (props.selectionEnd !== undefined)
+  ) {
+    if (typeof newProps.selectionStart === "number")
+      props.selectionStart = newProps.selectionStart;
+    if (typeof newProps.selectionEnd === "number")
+      props.selectionEnd = newProps.selectionEnd;
+  }
 
-  return out;
+  // Refresh the JS-side closures even for a no-op update (their identity
+  // changes every render; no backend op needed for that).
+  registerHandlers(id, newProps);
+
+  if (!props && !acc.unset && !acc.styleUnset) return null;
+  const op: Op = { op: "update", id, props: props ?? {} };
+  if (acc.unset) op.unset = acc.unset;
+  if (acc.styleUnset) op.styleUnset = acc.styleUnset;
+  return op;
 }
 
 // Convert an `animatedStyle` object into its wire form. Each property value is

@@ -64,6 +64,8 @@ The whole boundary is a dedicated **JS thread** (owns the V8 isolate, runs a `cu
 
 The reconciler/render side lives in `js/src/` (`renderer.ts`, `mount.ts`, `bridge.ts`). The Bevy side that consumes ops and produces events: `crates/core/src/reconcile.rs` (`apply_js_ops`, `collect_ui_events`) and `crates/core/src/ui_map.rs` (op→`bevy_ui` component mapping).
 
+**Updates are deltas — the only form.** `commitUpdate` diffs old/new props (`buildUpdateOp` in `bridge.ts` — handlers by presence, `style` field-by-field, everything else structurally) and emits `Op::Update { props, unset, styleUnset }` carrying only changed fields; a re-render with no value changes emits **no op at all**. Rust keeps the last applied props per node (`JsBridge::props_cache`), merges each delta (`Props::merge_delta` — absent = unchanged, `unset`/`styleUnset` = reset; a single `style_fields!` table in `protocol.rs` maps every style field to its wire name + "dirty group"), and re-applies **only the dirty groups** (`apply_style_masked` in `ui_map.rs`). Event-like props (`value`, `selection*`, `scrollTop/Left`, `draw`) are act-now, never cached. Event-loop consequence: op silence on an idempotent re-render is normal, so don't probe runtime liveness with a state-neutral click. Adding a `Style` field means extending the `style_fields!` table — a compile error + `protocol::tests` guard it.
+
 ## Architecture: hot reload (React Fast Refresh)
 
 Editing a component **preserves its `useState`/hook state** (and live animations); only non-component edits or errors fall back to a full reload. The mechanism spans three layers — read `js_thread.rs`, `js/src/hmr.ts` + `renderer.ts` + `mount.ts`, and `js/build-lib.mjs` together:

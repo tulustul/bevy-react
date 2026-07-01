@@ -60,11 +60,33 @@ pub enum Op {
     },
     /// Detach and despawn `child` (and its descendants).
     Remove { parent: NodeId, child: NodeId },
-    /// Re-apply props to an existing element.
+    /// Apply a prop **delta** to an existing element, against its last applied
+    /// props (retained per node in `JsBridge::props_cache`).
+    ///
+    /// A field present in `props` is set; a wire name listed in `unset` is
+    /// reset to its default (for booleans: set `false`); a field in neither is
+    /// left unchanged. `props.style` is itself a field-level delta: its `Some`
+    /// fields overwrite the corresponding fields of the last applied style,
+    /// and style wire names listed in `style_unset` are cleared (`style_unset`
+    /// applies even when `props.style` is absent). The variant styles
+    /// (`hoverStyle`/`pressStyle`/`focusStyle`) and other object-valued props
+    /// are atomic: present replaces the whole value, `unset` clears it.
+    ///
+    /// The event-like props (`value`, `selectionStart`/`selectionEnd`,
+    /// `scrollTop`/`scrollLeft`, `draw`) keep their "present = act now" meaning
+    /// and are never part of the retained state (see [`Props::merge_delta`]).
     Update {
         id: NodeId,
         #[serde(default)]
         props: Props,
+        /// Top-level prop wire names (camelCase) reset to their defaults.
+        #[serde(default)]
+        unset: Vec<String>,
+        /// Style field wire names (camelCase) cleared from the merged style.
+        /// (The enum's `rename_all` covers variant names, not their fields, so
+        /// the wire name is spelled out.)
+        #[serde(default, rename = "styleUnset")]
+        style_unset: Vec<String>,
     },
     /// Replace the string of a text node.
     UpdateText { id: NodeId, text: String },
@@ -456,6 +478,553 @@ pub struct Style {
     /// `"noWrap"`.
     #[serde(default)]
     pub line_break: Option<String>,
+}
+
+/// Bit flags naming the groups of work [`crate::ui_map::apply_style`] (and the
+/// update reconciler) derive from a [`Style`]. Each [`Style`] field belongs to
+/// the group(s) whose output reads it (see [`with_style_fields`]); a delta
+/// update ORs the groups of its touched fields into a [`StyleDirty`] mask so
+/// the apply path can skip every group the delta provably didn't affect.
+pub mod style_groups {
+    /// `bevy_ui::Node` (`node_from_style`): every layout field.
+    pub const LAYOUT: u32 = 1 << 0;
+    /// `BackgroundColor` (reads `background_color`, `opacity`, `filter`).
+    pub const BACKGROUND: u32 = 1 << 1;
+    /// `UiTransform` (reads `transform`).
+    pub const TRANSFORM: u32 = 1 << 2;
+    /// `BorderColor`.
+    pub const BORDER_COLOR: u32 = 1 << 3;
+    /// `Outline`.
+    pub const OUTLINE: u32 = 1 << 4;
+    /// `BoxShadow`.
+    pub const BOX_SHADOW: u32 = 1 << 5;
+    /// `BackgroundGradient` (reads `background_gradient`, `opacity`).
+    pub const BG_GRADIENT: u32 = 1 << 6;
+    /// `BorderGradient` (reads `border_gradient`, `opacity`).
+    pub const BORDER_GRADIENT: u32 = 1 << 7;
+    /// `TextShadow` (reads `text_shadow`, `opacity`).
+    pub const TEXT_SHADOW: u32 = 1 << 8;
+    /// `ZIndex`.
+    pub const Z_INDEX: u32 = 1 << 9;
+    /// `GlobalZIndex`.
+    pub const GLOBAL_Z_INDEX: u32 = 1 << 10;
+    /// `FocusPolicy` (also `apply_button_focus_default` in the reconciler).
+    pub const FOCUS_POLICY: u32 = 1 << 11;
+    /// The filter material (`apply_filter` in the reconciler).
+    pub const FILTER: u32 = 1 << 12;
+    /// `TransitionInput` (`TransitionInput::from_style` reads `transition` plus
+    /// every transitioned channel: `transform`, `opacity`, `background_color`,
+    /// `width`, `height`, `max_width`, `max_height`).
+    pub const TRANSITION: u32 = 1 << 13;
+    /// `ScrollTransitionInput` (reads `transition`).
+    pub const SCROLL_TRANSITION: u32 = 1 << 14;
+    /// The resolved text style (`resolved_text_style`: `color`, `font_size`,
+    /// `font_weight`, `font_family`, `line_height`, `letter_spacing`,
+    /// `opacity`) — includes the `<text>` re-propagation to inheriting spans.
+    pub const TEXT: u32 = 1 << 15;
+    /// `TextLayout` (`text_layout`: `text_align`, `line_break`).
+    pub const TEXT_LAYOUT: u32 = 1 << 16;
+}
+
+/// The single source of truth for [`Style`]'s field list. Invokes the callback
+/// macro `$cb` once with one `(ident, "wireName", (group bits), overlay-flag)`
+/// entry per field:
+///
+/// - `ident` / `"wireName"`: the Rust field and its camelCase wire name.
+/// - `(group bits)`: the [`style_groups`] whose derived output reads the field.
+/// - `overlay` / `no_overlay`: whether `overlay_style` (hover/press/focus
+///   merging) carries the field. `filter` is `no_overlay` because the
+///   interaction restyle path can't rebuild the filter material (no asset
+///   access) — a hover-overlaid filter would drop `BackgroundColor` (the
+///   `has_filter` gate) with nothing painting in its place. `focus_policy` is
+///   `no_overlay` so a variant can't silently toggle pointer capture.
+///
+/// Consumers: `overlay_style` (ui_map), [`Style::overlay_delta`],
+/// [`Style::unset_field`], and the field-coverage test. Adding a `Style` field
+/// without extending this table is caught by `style_field_table_is_complete`.
+macro_rules! with_style_fields {
+    ($cb:ident) => {
+        $cb! {
+            (display, "display", (LAYOUT), overlay),
+            (box_sizing, "boxSizing", (LAYOUT), overlay),
+            (position_type, "positionType", (LAYOUT), overlay),
+            (overflow_x, "overflowX", (LAYOUT), overlay),
+            (overflow_y, "overflowY", (LAYOUT), overlay),
+            (scrollbar_width, "scrollbarWidth", (LAYOUT), overlay),
+            (left, "left", (LAYOUT), overlay),
+            (right, "right", (LAYOUT), overlay),
+            (top, "top", (LAYOUT), overlay),
+            (bottom, "bottom", (LAYOUT), overlay),
+            (width, "width", (LAYOUT | TRANSITION), overlay),
+            (height, "height", (LAYOUT | TRANSITION), overlay),
+            (min_width, "minWidth", (LAYOUT), overlay),
+            (min_height, "minHeight", (LAYOUT), overlay),
+            (max_width, "maxWidth", (LAYOUT | TRANSITION), overlay),
+            (max_height, "maxHeight", (LAYOUT | TRANSITION), overlay),
+            (aspect_ratio, "aspectRatio", (LAYOUT), overlay),
+            (align_items, "alignItems", (LAYOUT), overlay),
+            (justify_items, "justifyItems", (LAYOUT), overlay),
+            (align_self, "alignSelf", (LAYOUT), overlay),
+            (justify_self, "justifySelf", (LAYOUT), overlay),
+            (align_content, "alignContent", (LAYOUT), overlay),
+            (justify_content, "justifyContent", (LAYOUT), overlay),
+            (margin, "margin", (LAYOUT), overlay),
+            (padding, "padding", (LAYOUT), overlay),
+            (border, "border", (LAYOUT), overlay),
+            (flex_direction, "flexDirection", (LAYOUT), overlay),
+            (flex_wrap, "flexWrap", (LAYOUT), overlay),
+            (flex_grow, "flexGrow", (LAYOUT), overlay),
+            (flex_shrink, "flexShrink", (LAYOUT), overlay),
+            (flex_basis, "flexBasis", (LAYOUT), overlay),
+            (gap, "gap", (LAYOUT), overlay),
+            (row_gap, "rowGap", (LAYOUT), overlay),
+            (column_gap, "columnGap", (LAYOUT), overlay),
+            (grid_auto_flow, "gridAutoFlow", (LAYOUT), overlay),
+            (grid_template_rows, "gridTemplateRows", (LAYOUT), overlay),
+            (grid_template_columns, "gridTemplateColumns", (LAYOUT), overlay),
+            (grid_auto_rows, "gridAutoRows", (LAYOUT), overlay),
+            (grid_auto_columns, "gridAutoColumns", (LAYOUT), overlay),
+            (grid_row, "gridRow", (LAYOUT), overlay),
+            (grid_column, "gridColumn", (LAYOUT), overlay),
+            (background_color, "backgroundColor", (BACKGROUND | TRANSITION), overlay),
+            (border_color, "borderColor", (BORDER_COLOR), overlay),
+            (border_radius, "borderRadius", (LAYOUT), overlay),
+            (outline, "outline", (OUTLINE), overlay),
+            (box_shadow, "boxShadow", (BOX_SHADOW), overlay),
+            (filter, "filter", (BACKGROUND | FILTER), no_overlay),
+            (background_gradient, "backgroundGradient", (BG_GRADIENT), overlay),
+            (border_gradient, "borderGradient", (BORDER_GRADIENT), overlay),
+            (z_index, "zIndex", (Z_INDEX), overlay),
+            (global_z_index, "globalZIndex", (GLOBAL_Z_INDEX), overlay),
+            (focus_policy, "focusPolicy", (FOCUS_POLICY), no_overlay),
+            (
+                transform,
+                "transform",
+                (TRANSFORM | TRANSITION),
+                overlay
+            ),
+            (
+                opacity,
+                "opacity",
+                (BACKGROUND | BG_GRADIENT | BORDER_GRADIENT | TEXT_SHADOW | TRANSITION | TEXT),
+                overlay
+            ),
+            (
+                transition,
+                "transition",
+                (TRANSITION | SCROLL_TRANSITION),
+                overlay
+            ),
+            (color, "color", (TEXT), overlay),
+            (font_size, "fontSize", (TEXT), overlay),
+            (font_weight, "fontWeight", (TEXT), overlay),
+            (font_family, "fontFamily", (TEXT), overlay),
+            (text_align, "textAlign", (TEXT_LAYOUT), overlay),
+            (line_height, "lineHeight", (TEXT), overlay),
+            (letter_spacing, "letterSpacing", (TEXT), overlay),
+            (text_shadow, "textShadow", (TEXT_SHADOW), overlay),
+            (line_break, "lineBreak", (TEXT_LAYOUT), overlay),
+        }
+    };
+}
+pub(crate) use with_style_fields;
+
+/// Which [`style_groups`] a delta update touched. `ALL` (every bit set) is the
+/// full-reapply mask used by non-delta paths.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct StyleDirty(pub u32);
+
+impl StyleDirty {
+    /// Nothing dirty — every style group can be skipped.
+    pub const NONE: Self = Self(0);
+    /// Everything dirty — full re-apply (create, hover/press restyle).
+    pub const ALL: Self = Self(u32::MAX);
+
+    /// Whether any of `groups`' bits is dirty.
+    pub fn intersects(self, groups: u32) -> bool {
+        self.0 & groups != 0
+    }
+
+    /// Whether any style field at all was touched.
+    pub fn any(self) -> bool {
+        self.0 != 0
+    }
+}
+
+/// Which parts of a [`Props`] a delta update touched; drives which of the
+/// reconciler's `apply_*` helpers run. Style granularity lives in
+/// [`StyleDirty`]; the other flags are per prop group.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct PropsDirty {
+    /// Style groups touched via `style` / `style_unset`.
+    pub style: StyleDirty,
+    /// `hoverStyle` set or unset.
+    pub hover_style: bool,
+    /// `pressStyle` set or unset.
+    pub press_style: bool,
+    /// `focusStyle` set or unset.
+    pub focus_style: bool,
+    /// Any of `onClick` / `onPointerDown|Move|Up|Enter|Leave` toggled.
+    pub pointer: bool,
+    /// `onScroll` toggled.
+    pub scroll_listener: bool,
+    /// `scrollStep` changed.
+    pub scroll_step: bool,
+    /// `animated` bindings changed.
+    pub animated: bool,
+    /// `anchor` changed.
+    pub anchor: bool,
+    /// Any `image` attribute (`src`/`tint`/`flipX`/`flipY`/`imageMode`/
+    /// `sourceRect`/`atlas`/`visualBox`) changed.
+    pub image: bool,
+    /// `target` (portal/surface binding) changed.
+    pub target: bool,
+    /// Any `editableText` handler flag (`onChange`/`onSelect`/`onFocus`/
+    /// `onBlur`) toggled.
+    pub editable_handlers: bool,
+    /// `ariaLabel` changed.
+    pub aria_label: bool,
+}
+
+impl PropsDirty {
+    /// Whether the [`crate::bridge::StyleVariants`] component needs rebuilding:
+    /// its `base` mirrors `style`, so any style-field change counts too.
+    pub fn any_style_variant(&self) -> bool {
+        self.style.any() || self.hover_style || self.press_style || self.focus_style
+    }
+}
+
+/// The "act now" props of an update, split from the retained state: pushed
+/// into the live widget once and never stored, so an unrelated later delta
+/// can't replay them (re-push a controlled value, re-clone a canvas display
+/// list). Absent fields mean "no event", exactly like the pre-delta protocol.
+#[derive(Debug, Default)]
+pub struct UpdateEvents {
+    /// Controlled `editableText` value to push (when diverging).
+    pub value: Option<String>,
+    /// Controlled selection anchor (UTF-8 byte offset).
+    pub selection_start: Option<usize>,
+    /// Controlled selection focus (UTF-8 byte offset).
+    pub selection_end: Option<usize>,
+    /// Controlled vertical scroll offset.
+    pub scroll_top: Option<f32>,
+    /// Controlled horizontal scroll offset.
+    pub scroll_left: Option<f32>,
+    /// A `<canvas>` display list to (re)draw.
+    pub draw: Option<Vec<DrawCmd>>,
+}
+
+impl Style {
+    /// Overlay every `Some` field of `delta` onto `self` and return the OR of
+    /// the touched fields' [`style_groups`] bits. Unlike `overlay_style` this
+    /// carries **all** fields (including `filter`/`focus_policy`): the delta
+    /// is the app's own base style, not a hover variant.
+    pub(crate) fn overlay_delta(&mut self, delta: &Style) -> u32 {
+        let mut groups = 0u32;
+        macro_rules! merge_field {
+            ($(($f:ident, $name:literal, $g:tt, $ov:ident),)*) => {
+                $(
+                    if delta.$f.is_some() {
+                        self.$f = delta.$f.clone();
+                        groups |= {
+                            use style_groups::*;
+                            $g
+                        };
+                    }
+                )*
+            };
+        }
+        with_style_fields!(merge_field);
+        groups
+    }
+
+    /// Clear the field named by `wire_name` (camelCase) and return its
+    /// [`style_groups`] bits, or `None` (after a `warn!`) for an unknown name.
+    pub(crate) fn unset_field(&mut self, wire_name: &str) -> Option<u32> {
+        macro_rules! unset_match {
+            ($(($f:ident, $name:literal, $g:tt, $ov:ident),)*) => {
+                match wire_name {
+                    $(
+                        $name => {
+                            self.$f = None;
+                            Some({
+                                use style_groups::*;
+                                $g
+                            })
+                        }
+                    )*
+                    _ => {
+                        tracing::warn!(
+                            target: "bevy_react",
+                            "unknown style field {wire_name:?} in styleUnset; ignoring"
+                        );
+                        None
+                    }
+                }
+            };
+        }
+        with_style_fields!(unset_match)
+    }
+}
+
+impl Props {
+    /// Split the event-like fields (see [`UpdateEvents`]) out of `self`,
+    /// leaving the retained state. Used to seed the per-node props cache from
+    /// a create.
+    pub fn split_events(mut self) -> (Props, UpdateEvents) {
+        let events = UpdateEvents {
+            value: self.value.take(),
+            selection_start: self.selection_start.take(),
+            selection_end: self.selection_end.take(),
+            scroll_top: self.scroll_top.take(),
+            scroll_left: self.scroll_left.take(),
+            draw: self.draw.take(),
+        };
+        (self, events)
+    }
+
+    /// Merge an [`Op::Update`] delta (`props` + `unset` + `style_unset`) into
+    /// `self` (the retained last-applied props), returning what the delta
+    /// touched and the event-like fields to act on. See the semantics on
+    /// [`Op::Update`].
+    pub fn merge_delta(
+        &mut self,
+        delta: Props,
+        unset: &[String],
+        style_unset: &[String],
+    ) -> (PropsDirty, UpdateEvents) {
+        let mut dirty = PropsDirty::default();
+        let (delta, events) = delta.split_events();
+
+        // --- set: fields present in the delta ---
+        if let Some(style_delta) = &delta.style {
+            let groups = self
+                .style
+                .get_or_insert_default()
+                .overlay_delta(style_delta);
+            dirty.style.0 |= groups;
+        }
+        if delta.hover_style.is_some() {
+            self.hover_style = delta.hover_style;
+            dirty.hover_style = true;
+        }
+        if delta.press_style.is_some() {
+            self.press_style = delta.press_style;
+            dirty.press_style = true;
+        }
+        if delta.focus_style.is_some() {
+            self.focus_style = delta.focus_style;
+            dirty.focus_style = true;
+        }
+        // Handler/flag booleans: the delta only ever carries `true` (a handler
+        // appeared / a flag turned on); turning one off rides `unset`.
+        macro_rules! merge_bool {
+            ($($f:ident => $flag:ident),* $(,)?) => {
+                $(
+                    if delta.$f {
+                        self.$f = true;
+                        dirty.$flag = true;
+                    }
+                )*
+            };
+        }
+        merge_bool!(
+            on_click => pointer,
+            on_pointer_down => pointer,
+            on_pointer_move => pointer,
+            on_pointer_up => pointer,
+            on_pointer_enter => pointer,
+            on_pointer_leave => pointer,
+            on_scroll => scroll_listener,
+            on_change => editable_handlers,
+            on_select => editable_handlers,
+            on_focus => editable_handlers,
+            on_blur => editable_handlers,
+            flip_x => image,
+            flip_y => image,
+        );
+        // `multiline`/`autofocus` are create-time only; keep the cache true to
+        // the props but no apply work keys off them.
+        if delta.multiline {
+            self.multiline = true;
+        }
+        if delta.autofocus {
+            self.autofocus = true;
+        }
+        macro_rules! merge_option {
+            ($($f:ident => $($flag:ident)?),* $(,)?) => {
+                $(
+                    if delta.$f.is_some() {
+                        self.$f = delta.$f;
+                        $( dirty.$flag = true; )?
+                    }
+                )*
+            };
+        }
+        merge_option!(
+            scroll_step => scroll_step,
+            animated => animated,
+            anchor => anchor,
+            src => image,
+            tint => image,
+            image_mode => image,
+            source_rect => image,
+            atlas => image,
+            visual_box => image,
+            target => target,
+            aria_label => aria_label,
+            max_length => , // create-time only, cached for completeness
+        );
+
+        // --- unset: wire names reset to their defaults ---
+        for name in unset {
+            match name.as_str() {
+                "style" => {
+                    self.style = None;
+                    dirty.style = StyleDirty::ALL;
+                }
+                "hoverStyle" => {
+                    self.hover_style = None;
+                    dirty.hover_style = true;
+                }
+                "pressStyle" => {
+                    self.press_style = None;
+                    dirty.press_style = true;
+                }
+                "focusStyle" => {
+                    self.focus_style = None;
+                    dirty.focus_style = true;
+                }
+                "onClick" => {
+                    self.on_click = false;
+                    dirty.pointer = true;
+                }
+                "onPointerDown" => {
+                    self.on_pointer_down = false;
+                    dirty.pointer = true;
+                }
+                "onPointerMove" => {
+                    self.on_pointer_move = false;
+                    dirty.pointer = true;
+                }
+                "onPointerUp" => {
+                    self.on_pointer_up = false;
+                    dirty.pointer = true;
+                }
+                "onPointerEnter" => {
+                    self.on_pointer_enter = false;
+                    dirty.pointer = true;
+                }
+                "onPointerLeave" => {
+                    self.on_pointer_leave = false;
+                    dirty.pointer = true;
+                }
+                "onScroll" => {
+                    self.on_scroll = false;
+                    dirty.scroll_listener = true;
+                }
+                "onChange" => {
+                    self.on_change = false;
+                    dirty.editable_handlers = true;
+                }
+                "onSelect" => {
+                    self.on_select = false;
+                    dirty.editable_handlers = true;
+                }
+                "onFocus" => {
+                    self.on_focus = false;
+                    dirty.editable_handlers = true;
+                }
+                "onBlur" => {
+                    self.on_blur = false;
+                    dirty.editable_handlers = true;
+                }
+                "flipX" => {
+                    self.flip_x = false;
+                    dirty.image = true;
+                }
+                "flipY" => {
+                    self.flip_y = false;
+                    dirty.image = true;
+                }
+                "multiline" => self.multiline = false,
+                "autofocus" => self.autofocus = false,
+                "scrollStep" => {
+                    self.scroll_step = None;
+                    dirty.scroll_step = true;
+                }
+                "animated" => {
+                    self.animated = None;
+                    dirty.animated = true;
+                }
+                "anchor" => {
+                    self.anchor = None;
+                    dirty.anchor = true;
+                }
+                "src" => {
+                    self.src = None;
+                    dirty.image = true;
+                }
+                "tint" => {
+                    self.tint = None;
+                    dirty.image = true;
+                }
+                "imageMode" => {
+                    self.image_mode = None;
+                    dirty.image = true;
+                }
+                "sourceRect" => {
+                    self.source_rect = None;
+                    dirty.image = true;
+                }
+                "atlas" => {
+                    self.atlas = None;
+                    dirty.image = true;
+                }
+                "visualBox" => {
+                    self.visual_box = None;
+                    dirty.image = true;
+                }
+                "target" => {
+                    self.target = None;
+                    dirty.target = true;
+                }
+                "ariaLabel" => {
+                    self.aria_label = None;
+                    dirty.aria_label = true;
+                }
+                "maxLength" => self.max_length = None,
+                // Event-like props have no retained state to unset; dropping
+                // the prop simply stops producing events.
+                "value" | "selectionStart" | "selectionEnd" | "scrollTop" | "scrollLeft"
+                | "draw" => {
+                    tracing::warn!(
+                        target: "bevy_react",
+                        "event-like prop {name:?} in unset; nothing to reset"
+                    );
+                }
+                other => {
+                    tracing::warn!(
+                        target: "bevy_react",
+                        "unknown prop {other:?} in unset; ignoring"
+                    );
+                }
+            }
+        }
+
+        // --- style_unset: after the overlay, so a (never-emitted) set+unset of
+        // the same field resolves to unset ---
+        if !style_unset.is_empty() {
+            let style = self.style.get_or_insert_default();
+            for name in style_unset {
+                if let Some(groups) = style.unset_field(name) {
+                    dirty.style.0 |= groups;
+                }
+            }
+        }
+
+        (dirty, events)
+    }
 }
 
 /// Outline drawn around (outside) the node's border box.
@@ -1554,5 +2123,259 @@ mod tests {
         assert_eq!(v["kind"], "change");
         assert_eq!(v["value"], "hello");
         assert!(v.get("clientX").is_none(), "pointer fields omitted");
+    }
+
+    /// Compile-time completeness guard: a `Style` struct literal built from the
+    /// field table must name every field — adding a `Style` field without
+    /// extending `with_style_fields!` fails this with E0063 (missing field).
+    #[test]
+    fn style_field_table_is_complete() {
+        macro_rules! build_full {
+            ($(($f:ident, $name:literal, $g:tt, $ov:ident),)*) => {
+                Style { $($f: None,)* }
+            };
+        }
+        let _style: Style = with_style_fields!(build_full);
+    }
+
+    /// Every table wire name must equal serde's `rename_all = "camelCase"`
+    /// rendering of the field ident, or `unset_field`/the JS delta builder
+    /// would miss the field.
+    #[test]
+    fn style_wire_names_match_serde_rename() {
+        fn camel(s: &str) -> String {
+            let mut out = String::new();
+            let mut up = false;
+            for c in s.chars() {
+                if c == '_' {
+                    up = true;
+                } else if up {
+                    out.extend(c.to_uppercase());
+                    up = false;
+                } else {
+                    out.push(c);
+                }
+            }
+            out
+        }
+        macro_rules! check {
+            ($(($f:ident, $name:literal, $g:tt, $ov:ident),)*) => {
+                $( assert_eq!(camel(stringify!($f)), $name, "table wire name for `{}`", stringify!($f)); )*
+            };
+        }
+        with_style_fields!(check);
+    }
+
+    fn props(json: serde_json::Value) -> Props {
+        serde_json::from_value(json).expect("valid props")
+    }
+
+    /// A delta sets exactly the supplied fields; everything else is preserved.
+    #[test]
+    fn merge_delta_sets_and_preserves() {
+        let mut cached = props(serde_json::json!({
+            "style": { "backgroundColor": "red", "outline": { "color": "white" } },
+            "hoverStyle": { "backgroundColor": "blue" },
+            "onClick": true,
+            "src": "a.png",
+        }));
+        let (dirty, ev) = cached.merge_delta(
+            props(serde_json::json!({ "style": { "width": 100 } })),
+            &[],
+            &[],
+        );
+
+        let style = cached.style.as_ref().unwrap();
+        assert_eq!(style.width, Some(Length::Px(100.0)));
+        assert_eq!(style.background_color.as_deref(), Some("red"));
+        assert!(style.outline.is_some(), "untouched style fields preserved");
+        assert!(cached.hover_style.is_some(), "untouched props preserved");
+        assert!(cached.on_click);
+        assert_eq!(cached.src.as_deref(), Some("a.png"));
+
+        assert!(dirty.style.intersects(style_groups::LAYOUT));
+        assert!(
+            !dirty
+                .style
+                .intersects(style_groups::BACKGROUND | style_groups::OUTLINE),
+            "untouched groups must stay clean"
+        );
+        assert!(!dirty.hover_style && !dirty.pointer && !dirty.image);
+        // `width` is a transitioned channel, so the transition group re-arms.
+        assert!(dirty.style.intersects(style_groups::TRANSITION));
+        assert!(ev.value.is_none() && ev.draw.is_none());
+    }
+
+    /// `unset` resets props (bools to false, options to None); `style_unset`
+    /// clears style fields — even when the delta carries no `style` object.
+    #[test]
+    fn merge_delta_unsets() {
+        let mut cached = props(serde_json::json!({
+            "style": { "backgroundColor": "red", "width": 50 },
+            "hoverStyle": { "backgroundColor": "blue" },
+            "onClick": true,
+        }));
+        let (dirty, _) = cached.merge_delta(
+            Props::default(),
+            &["hoverStyle".into(), "onClick".into()],
+            &["backgroundColor".into()],
+        );
+
+        let style = cached.style.as_ref().unwrap();
+        assert_eq!(style.background_color, None);
+        assert_eq!(
+            style.width,
+            Some(Length::Px(50.0)),
+            "other style fields kept"
+        );
+        assert!(cached.hover_style.is_none());
+        assert!(!cached.on_click);
+        assert!(dirty.style.intersects(style_groups::BACKGROUND));
+        assert!(!dirty.style.intersects(style_groups::LAYOUT));
+        assert!(dirty.hover_style && dirty.pointer);
+        assert!(dirty.any_style_variant());
+    }
+
+    /// `"style"` in `unset` drops the whole style and dirties every group.
+    #[test]
+    fn merge_delta_unsets_style_wholesale() {
+        let mut cached = props(serde_json::json!({
+            "style": { "backgroundColor": "red", "width": 50 },
+        }));
+        let (dirty, _) = cached.merge_delta(Props::default(), &["style".into()], &[]);
+        assert!(cached.style.is_none());
+        assert_eq!(dirty.style, StyleDirty::ALL);
+    }
+
+    /// Event-like fields ride out through `UpdateEvents` and are never retained.
+    #[test]
+    fn merge_delta_events_not_cached() {
+        let mut cached = Props::default();
+        let (dirty, ev) = cached.merge_delta(
+            props(serde_json::json!({
+                "value": "hi", "selectionStart": 1, "selectionEnd": 3,
+                "scrollTop": 40.0, "scrollLeft": 2.0,
+            })),
+            &[],
+            &[],
+        );
+        assert_eq!(ev.value.as_deref(), Some("hi"));
+        assert_eq!((ev.selection_start, ev.selection_end), (Some(1), Some(3)));
+        assert_eq!((ev.scroll_top, ev.scroll_left), (Some(40.0), Some(2.0)));
+        assert!(cached.value.is_none() && cached.scroll_top.is_none());
+        assert!(cached.selection_start.is_none());
+        // Event fields alone dirty nothing.
+        assert!(!dirty.style.any() && !dirty.image && !dirty.anchor);
+    }
+
+    /// Variant styles replace atomically: a delta `hoverStyle` is the whole new
+    /// value, not a merge into the previous one.
+    #[test]
+    fn merge_delta_replaces_variants_atomically() {
+        let mut cached = props(serde_json::json!({
+            "hoverStyle": { "backgroundColor": "blue", "width": 10 },
+        }));
+        let (dirty, _) = cached.merge_delta(
+            props(serde_json::json!({ "hoverStyle": { "outline": { "color": "white" } } })),
+            &[],
+            &[],
+        );
+        let hover = cached.hover_style.as_ref().unwrap();
+        assert!(hover.outline.is_some());
+        assert_eq!(hover.background_color, None, "atomic replace, not a merge");
+        assert_eq!(hover.width, None);
+        assert!(dirty.hover_style);
+    }
+
+    /// Unknown names in `unset`/`style_unset` warn and are ignored — a delta
+    /// from a newer/older bundle must never panic the op drain.
+    #[test]
+    fn merge_delta_ignores_unknown_names() {
+        let mut cached = props(serde_json::json!({ "style": { "width": 10 } }));
+        let (dirty, _) = cached.merge_delta(
+            Props::default(),
+            &["nope".into(), "value".into()],
+            &["alsoNope".into()],
+        );
+        assert_eq!(cached.style.as_ref().unwrap().width, Some(Length::Px(10.0)));
+        assert!(!dirty.style.any());
+    }
+
+    /// Two sequential deltas converge to the same state as one combined delta.
+    #[test]
+    fn merge_delta_converges() {
+        let base = serde_json::json!({
+            "style": { "backgroundColor": "red", "width": 10 }, "onClick": true,
+        });
+        let mut two_steps = props(base.clone());
+        two_steps.merge_delta(
+            props(serde_json::json!({ "style": { "width": 20 } })),
+            &[],
+            &[],
+        );
+        two_steps.merge_delta(
+            props(serde_json::json!({ "style": { "height": 5 } })),
+            &[],
+            &["backgroundColor".into()],
+        );
+
+        let mut one_step = props(base);
+        one_step.merge_delta(
+            props(serde_json::json!({ "style": { "width": 20, "height": 5 } })),
+            &[],
+            &["backgroundColor".into()],
+        );
+
+        let a = two_steps.style.as_ref().unwrap();
+        let b = one_step.style.as_ref().unwrap();
+        assert_eq!(a.width, b.width);
+        assert_eq!(a.height, b.height);
+        assert_eq!(a.background_color, b.background_color);
+        assert!(two_steps.on_click && one_step.on_click);
+    }
+
+    /// `split_events` strips exactly the event-like fields, leaving state.
+    #[test]
+    fn split_events_strips_event_fields() {
+        let full = props(serde_json::json!({
+            "style": { "width": 10 }, "onClick": true, "value": "v",
+            "selectionStart": 0, "selectionEnd": 1, "scrollTop": 5.0,
+        }));
+        let (state, ev) = full.split_events();
+        assert!(state.style.is_some() && state.on_click);
+        assert!(state.value.is_none() && state.selection_start.is_none());
+        assert!(state.scroll_top.is_none());
+        assert_eq!(ev.value.as_deref(), Some("v"));
+        assert_eq!(ev.scroll_top, Some(5.0));
+    }
+
+    /// An `update` op decodes with and without the unset lists — `styleUnset`
+    /// in particular must land in `style_unset` (the enum's `rename_all`
+    /// doesn't cover variant fields).
+    #[test]
+    fn deserializes_update_delta_form() {
+        let minimal: Op = serde_json::from_str(r#"{"op":"update","id":3,"props":{}}"#).unwrap();
+        match minimal {
+            Op::Update {
+                unset, style_unset, ..
+            } => {
+                assert!(unset.is_empty() && style_unset.is_empty());
+            }
+            other => panic!("expected update, got {other:?}"),
+        }
+        let full: Op = serde_json::from_str(
+            r#"{"op":"update","id":3,"props":{"style":{"width":1}},
+                "unset":["onClick"],"styleUnset":["backgroundColor"]}"#,
+        )
+        .unwrap();
+        match full {
+            Op::Update {
+                unset, style_unset, ..
+            } => {
+                assert_eq!(unset, vec!["onClick"]);
+                assert_eq!(style_unset, vec!["backgroundColor"]);
+            }
+            other => panic!("expected update, got {other:?}"),
+        }
     }
 }

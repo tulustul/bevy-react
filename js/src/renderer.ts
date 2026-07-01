@@ -13,11 +13,10 @@ import {
 } from "react-reconciler/constants";
 import {
   allocId,
+  buildUpdateOp,
   dropHandlers,
   flush,
-  HANDLER_PROP_KEYS,
   push,
-  registerHandlers,
   ROOT_ID,
   serializeProps,
 } from "./bridge";
@@ -45,33 +44,6 @@ interface Container {
 }
 interface HostContext {
   inText: boolean;
-}
-
-// True when a Bevy-visible prop changed between renders. Skips `children` (inline
-// text is handled separately) and compares event handlers by *presence* — their
-// closures change identity every render but that needs no backend op. Everything
-// else (style/hover/press/animated/anchor + scalar attrs) compares by `Object.is`:
-// style objects compare by reference, so hoist them to module consts to stay equal
-// (an inline style object is conservatively treated as changed). Mirrors react-dom's
-// `diffProperties`; lets `commitUpdate` skip emitting no-op `update` ops.
-function bevyPropsChanged(
-  a: Record<string, unknown>,
-  b: Record<string, unknown>,
-): boolean {
-  for (const k in a) {
-    if (k === "children") continue;
-    if (HANDLER_PROP_KEYS.has(k)) {
-      if ((typeof a[k] === "function") !== (typeof b[k] === "function"))
-        return true;
-    } else if (!Object.is(a[k], b[k])) return true;
-  }
-  for (const k in b) {
-    if (k === "children" || k in a) continue;
-    if (HANDLER_PROP_KEYS.has(k)) {
-      if (typeof b[k] === "function") return true;
-    } else if (b[k] !== undefined) return true;
-  }
-  return false;
 }
 
 // react-reconciler 0.33 tracks an "update priority" via the host config; back it
@@ -227,9 +199,10 @@ const hostConfig: any = {
   },
 
   // react-reconciler 0.33 removed `prepareUpdate`; `commitUpdate` now receives both
-  // prop bags and owns the diff. Emit an `update` op only when a Bevy-visible prop
-  // changed; otherwise just refresh the JS-side handler closures (no backend op, no
-  // relayout). `children` is excluded — inline `<text>` content is emitted separately.
+  // prop bags and owns the diff. `buildUpdateOp` diffs them into a delta `update`
+  // op carrying only the changed props (and refreshes the JS-side handler closures
+  // either way); when nothing Bevy-visible changed there is no backend op at all.
+  // `children` is excluded — inline `<text>` content is emitted separately.
   commitUpdate(
     instance: Instance,
     type: string,
@@ -238,11 +211,8 @@ const hostConfig: any = {
     _internalHandle: unknown,
   ) {
     const id = instance.id;
-    if (bevyPropsChanged(oldProps, newProps)) {
-      push({ op: "update", id, props: serializeProps(id, newProps) });
-    } else {
-      registerHandlers(id, newProps);
-    }
+    const op = buildUpdateOp(id, oldProps, newProps);
+    if (op) push(op);
     // Inline-text `<text>` (shouldSetTextContent): its string child rides as `text`,
     // so its change arrives here (not via commitTextUpdate).
     const c = newProps.children;

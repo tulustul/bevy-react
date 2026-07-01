@@ -219,8 +219,12 @@ fn demo_switch_anchored_survives() {
     }
 
     // Final liveness check: a live runtime keeps emitting ops for a click.
+    // Click the button that toggles state every time (`other_btn`): re-clicking
+    // the already-selected `anchored_btn` is an idempotent re-render, which
+    // correctly emits ZERO ops now that updates are diffed — silence there is
+    // the delta optimization, not a dead runtime.
     eprintln!("--- final liveness probe");
-    click(anchored_btn);
+    click(other_btn);
     let saw_ops = {
         let deadline = Instant::now() + Duration::from_secs(2);
         let mut any = false;

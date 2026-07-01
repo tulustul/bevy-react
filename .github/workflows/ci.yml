@@ -27,6 +27,9 @@ jobs:
       - name: Linting
         run: npm run lint
 
+      - name: JS unit tests
+        run: npm test -w bevy-react
+
   rust:
     name: Rust checks
     runs-on: ubuntu-latest
