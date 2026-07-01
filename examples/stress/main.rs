@@ -2,8 +2,9 @@
 //!
 //! A minimal, pure-UI Bevy app (no 3D scene, no camera orbit) that hosts
 //! benchmark scenarios. The first scenario is **table-ops** — the standard
-//! table operation set (create 1k/10k rows, append 1k, update every 10th, swap,
-//! select, remove, clear) borrowed from the js-framework-benchmark, measured as
+//! table operation set (create 1k/10k rows, append 1k, update every 2nd row's
+//! text/background, swap, select, remove, clear) borrowed from the
+//! js-framework-benchmark, measured as
 //! a *library* benchmark: bevy-react's own per-operation timings (no react-dom
 //! comparison).
 //!

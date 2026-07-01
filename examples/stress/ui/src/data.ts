@@ -62,6 +62,9 @@ const NOUNS = [
 export interface Row {
   id: number;
   label: string;
+  // Optional per-row background, toggled by the `UpdateEvery2ndBackgroundColor`
+  // benchmark op. Left unset by `buildData` so a fresh row uses the default style.
+  bg?: string;
 }
 
 // A monotonic id source, so ids stay unique across create/append (the benchmark

@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BevyStyle } from "bevy-react/jsx";
 import { emit, on, type BenchOp } from "./bevy";
 import { buildData, type Row } from "./data";
@@ -16,7 +16,8 @@ const CONTROLS: { label: string; op: BenchOp; excludeFromTest?: boolean }[] = [
   { label: "Create 10,000", op: "Create10k" },
   { label: "Append 1", op: "Append1", excludeFromTest: true },
   { label: "Append 1,000", op: "Append1k" },
-  { label: "Update every 10th", op: "UpdateEvery10th" },
+  { label: "Update 2nd (text)", op: "UpdateEvery2ndText" },
+  { label: "Update 2nd (bg)", op: "UpdateEvery2ndBackgroundColor" },
   { label: "Swap rows", op: "Swap" },
   { label: "Select", op: "Select" },
   { label: "Remove", op: "Remove" },
@@ -65,10 +66,22 @@ export function App() {
       case "Append1":
         setRows((rs) => [...rs, ...buildData(1, seed)]);
         break;
-      case "UpdateEvery10th":
+      case "UpdateEvery2ndText":
+        // Text change on every 2nd row → new content measure → genuine relayout.
         setRows((rs) =>
           rs.map((r, i) =>
-            i % 10 === 0 ? { ...r, label: `${r.label} !!!` } : r,
+            i % 2 === 0 ? { ...r, label: `${r.label} !!!` } : r,
+          ),
+        );
+        break;
+      case "UpdateEvery2ndBackgroundColor":
+        // Paint-only change on every 2nd row: only `backgroundColor` moves, no
+        // layout field. Toggles between two colors so repeated runs keep changing.
+        setRows((rs) =>
+          rs.map((r, i) =>
+            i % 2 === 0
+              ? { ...r, bg: r.bg === ROW_BG_A ? ROW_BG_B : ROW_BG_A }
+              : r,
           ),
         );
         break;
@@ -174,11 +187,22 @@ interface RowProps {
 // Memoized so a list-wide re-render only re-renders the rows whose props actually
 // changed — the keyed-reconciliation behaviour the benchmark exercises.
 const RowView = memo(function RowView({ row, selected, onSelect }: RowProps) {
+  const isSelected = row.id === selected;
+  // Keep the style reference stable when neither selection nor `bg` changed, so an
+  // unrelated re-render (the inline `onSelect` re-renders every row) doesn't look
+  // like a prop change and emit a spurious `update` op — only a real `bg`/selection
+  // change rebuilds the object. Mirrors the module-const styles' referential stability.
+  const style = useMemo<BevyStyle>(
+    () =>
+      isSelected
+        ? rowSelectedStyle
+        : row.bg
+          ? { ...rowStyle, backgroundColor: row.bg }
+          : rowStyle,
+    [isSelected, row.bg],
+  );
   return (
-    <button
-      style={row.id === selected ? rowSelectedStyle : rowStyle}
-      onClick={onSelect}
-    >
+    <button style={style} onClick={onSelect}>
       <text>{`${row.id} ${row.label}`}</text>
     </button>
   );
@@ -205,6 +229,11 @@ const TEXT = "#cdd6f4";
 const SUBTEXT = "#a6adc8";
 const PRIMARY = "#89b4fa";
 const MONO = "Noto Sans Mono";
+
+// Two backgrounds the `UpdateEvery2ndBackgroundColor` op toggles between (a
+// paint-only change: same layout, only `backgroundColor` differs).
+const ROW_BG_A = "#45475a";
+const ROW_BG_B = "#585b70";
 
 const appStyle: BevyStyle = {
   width: "100%",

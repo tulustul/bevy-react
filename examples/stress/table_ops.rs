@@ -1,5 +1,6 @@
 //! The table-ops scenario: the standard table operation set (create 1k/10k rows,
-//! append 1k, update every 10th, swap, select, remove, clear) borrowed from the
+//! append 1k, update every 2nd row's text/background, swap, select, remove, clear)
+//! borrowed from the
 //! js-framework-benchmark, measured as a bevy-react *library* benchmark — our own
 //! per-operation timings, no cross-framework comparison.
 //!
@@ -52,8 +53,10 @@ pub enum BenchOp {
     Create10k,
     /// Append 1,000 rows to the existing table.
     Append1k,
-    /// Update the label of every 10th row in place.
-    UpdateEvery10th,
+    /// Update the label of every 2nd row in place (text change → relayout).
+    UpdateEvery2ndText,
+    /// Recolor every 2nd row's background (paint-only → should not relayout).
+    UpdateEvery2ndBackgroundColor,
     /// Swap two rows far apart (rows 1 and 998, js-framework-benchmark-style).
     Swap,
     /// Select (highlight) a row.
@@ -71,7 +74,8 @@ impl BenchOp {
             BenchOp::Create1k => "create1k",
             BenchOp::Create10k => "create10k",
             BenchOp::Append1k => "append1k",
-            BenchOp::UpdateEvery10th => "updateEvery10th",
+            BenchOp::UpdateEvery2ndText => "updateEvery2ndText",
+            BenchOp::UpdateEvery2ndBackgroundColor => "updateEvery2ndBackgroundColor",
             BenchOp::Swap => "swap",
             BenchOp::Select => "select",
             BenchOp::Remove => "remove",
@@ -81,11 +85,12 @@ impl BenchOp {
 }
 
 /// Every op, in a fixed order, for grouping the report deterministically.
-const ALL_OPS: [BenchOp; 8] = [
+const ALL_OPS: [BenchOp; 9] = [
     BenchOp::Create1k,
     BenchOp::Create10k,
     BenchOp::Append1k,
-    BenchOp::UpdateEvery10th,
+    BenchOp::UpdateEvery2ndText,
+    BenchOp::UpdateEvery2ndBackgroundColor,
     BenchOp::Swap,
     BenchOp::Select,
     BenchOp::Remove,
@@ -273,19 +278,25 @@ impl BenchDriver {
 }
 
 /// The per-iteration op sequence. Each measured op runs from a consistent
-/// precondition (create from empty, swap/select/remove on a full 1k table, append
-/// at 1k→2k), and every iteration ends empty so the next starts clean.
+/// precondition (create from empty, the two update ops on a full 10k table,
+/// swap/select/remove on a full 1k table, append at 1k→2k), and every iteration
+/// ends empty so the next starts clean.
 fn default_sequence() -> Vec<BenchOp> {
     use BenchOp::*;
     vec![
+        // The two in-place update ops run on a 10k table (the heavy relayout case);
+        // the Create10k that sets them up doubles as the create10k measurement.
+        Create10k,
+        UpdateEvery2ndText,
+        UpdateEvery2ndBackgroundColor,
+        Clear,
+        // Swap/select/remove on a full 1k table (js-framework-benchmark convention).
         Create1k,
-        UpdateEvery10th,
         Swap,
         Select,
         Remove,
         Clear,
-        Create10k,
-        Clear,
+        // Append 1k → 2k.
         Create1k,
         Append1k,
         Clear,
