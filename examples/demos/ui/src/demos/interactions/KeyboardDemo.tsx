@@ -14,10 +14,6 @@ useEffect(() => {
   return () => { offDown(); offUp(); };
 }, []);`;
 
-const RUST = `// Built in to bevy-react's core plugin — no Rust needed.
-// The plugin reads Bevy's KeyboardInput and forwards each
-// press/release to React as the typed keyDown / keyUp events.`;
-
 function modifierLabel(e: KeyboardEventData | null): string {
   if (!e) {
     return "-";

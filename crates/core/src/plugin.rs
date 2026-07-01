@@ -373,10 +373,6 @@ fn setup(
     // The root container: a full-window flex column the reconciler appends
     // top-level children into (it is reconciler node id 0). Children stack from
     // the top, horizontally centered.
-    // TODO(review): the whole design is single-root / single-isolate / single op stream
-    // (node id 0 is the one root). There's no path to multiple independent React surfaces,
-    // multiple windows, or per-camera UI without protocol rework — call this out as a
-    // deliberate constraint while it's still cheap to revisit.
     let root = commands
         .spawn((
             Node {

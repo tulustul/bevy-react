@@ -448,43 +448,18 @@ pub fn apply_js_ops(
                     if let Some(se) = resolve(&bridge, s) {
                         commands.entity(se).despawn();
                     }
-                    bridge.nodes.remove(&s);
-                    bridge.text_styles.remove(&s);
-                    bridge.raw_spans.remove(&s);
-                    bridge.text_spans.remove(&s);
-                    bridge.editable_inputs.remove(&s);
-                    bridge.surfaces.remove(&s);
-                    bridge.editable_values.remove(&s);
-                    bridge.editable_selections.remove(&s);
-                    bridge.editable_select_handlers.remove(&s);
-                    bridge.editable_focus_handlers.remove(&s);
-                    bridge.editable_pending_selection.remove(&s);
-                    bridge.scroll_positions.remove(&s);
+                    // `forget_subtree` prunes `s` *and* the content rendered inside it
+                    // (its `child_order` subtree) from every per-node side-table.
                     bridge.detach(s);
                     bridge.forget_subtree(s);
                 }
 
                 if let Some(c) = resolve(&bridge, child) {
                     commands.entity(c).despawn();
-                    // TODO(review): these single-node removals leak the *descendants* of a
-                    // removed subtree — React emits `Remove` only for the subtree root, but
-                    // Bevy despawns the whole subtree, so descendant ids linger here (stale
-                    // entity handles) until the next `Reset`. Prune the subtree from these
-                    // tables too (the `child_order` tree below already gives the ids).
-                    bridge.nodes.remove(&child);
-                    bridge.text_styles.remove(&child);
-                    bridge.raw_spans.remove(&child);
-                    bridge.text_spans.remove(&child);
-                    bridge.editable_inputs.remove(&child);
-                    bridge.surfaces.remove(&child);
-                    bridge.editable_values.remove(&child);
-                    bridge.editable_selections.remove(&child);
-                    bridge.editable_select_handlers.remove(&child);
-                    bridge.editable_focus_handlers.remove(&child);
-                    bridge.editable_pending_selection.remove(&child);
-                    bridge.scroll_positions.remove(&child);
-                    // Unlink from the parent's ordered list, then drop the subtree from the
-                    // shadow tree so it stays bounded.
+                    // Unlink from the parent's ordered list, then drop the whole subtree
+                    // from the shadow tree — `forget_subtree` prunes `child` and every
+                    // despawned descendant from all per-node side-tables, so no stale
+                    // `NodeId → Entity` handles linger until the next `Reset`.
                     bridge.detach(child);
                     bridge.forget_subtree(child);
                 }
@@ -2536,6 +2511,78 @@ mod tests {
         assert!(
             bridge.child_surfaces.is_empty() && bridge.surface_parent.is_empty(),
             "surface parentage maps are cleared"
+        );
+    }
+
+    /// Removing a subtree must forget its *descendants'* per-node bookkeeping, not just
+    /// the removed root's. React emits `Remove` only for the top node, and Bevy despawns
+    /// the whole subtree recursively — so the bridge's `NodeId`-keyed side-tables would
+    /// otherwise keep stale entries for every descendant until the next `Op::Reset`.
+    #[test]
+    fn remove_subtree_forgets_descendant_node_data() {
+        let (mut app, tx, _root) = ordering_app();
+        // A plain nested subtree wrapper(1) → mid(2) → leaf(3); `leaf` is an
+        // `editableText` so a set-typed side-table (`editable_inputs`) is exercised too.
+        tx.send(vec![
+            create_node(1),
+            create_node(2),
+            Op::Create {
+                id: 3,
+                kind: "editableText".into(),
+                props: Props::default(),
+                text: None,
+            },
+            Op::Append {
+                parent: ROOT_ID,
+                child: 1,
+            },
+            Op::Append {
+                parent: 1,
+                child: 2,
+            },
+            Op::Append {
+                parent: 2,
+                child: 3,
+            },
+        ])
+        .unwrap();
+        app.update();
+        let mid = ent(&app, 2);
+        let leaf = ent(&app, 3);
+        assert!(
+            app.world().resource::<JsBridge>().editable_inputs.contains(&3),
+            "the editableText descendant is tracked before removal"
+        );
+
+        // React unmounts the wrapper: a single `Remove` for the top node only.
+        tx.send(vec![Op::Remove {
+            parent: ROOT_ID,
+            child: 1,
+        }])
+        .unwrap();
+        app.update();
+
+        assert!(
+            !app.world().entities().contains(mid),
+            "the descendant mid node is despawned with the subtree"
+        );
+        assert!(
+            !app.world().entities().contains(leaf),
+            "the descendant leaf node is despawned with the subtree"
+        );
+        let bridge = app.world().resource::<JsBridge>();
+        assert!(!bridge.nodes.contains_key(&1), "the removed root is forgotten");
+        assert!(
+            !bridge.nodes.contains_key(&2),
+            "the descendant mid node id is forgotten (no stale entity handle)"
+        );
+        assert!(
+            !bridge.nodes.contains_key(&3),
+            "the descendant leaf node id is forgotten (no stale entity handle)"
+        );
+        assert!(
+            !bridge.editable_inputs.contains(&3),
+            "the descendant editableText is dropped from the editable_inputs set"
         );
     }
 

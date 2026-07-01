@@ -161,10 +161,6 @@ pub struct JsBridge {
     /// recursive despawn can't reach, since the surface has no `ChildOf`.
     pub surface_parent: HashMap<NodeId, NodeId>,
     pub child_surfaces: HashMap<NodeId, Vec<NodeId>>,
-    // TODO(review): JsBridge now holds several parallel NodeId-keyed side-tables
-    // (nodes/text_styles/raw_spans/text_spans/editable_*/child_order/parent_of), and every `Remove`
-    // must remember to clear each one. Consider moving per-node metadata onto the entities
-    // as components so `despawn` cleans up for free and the maps can't drift.
 }
 
 impl JsBridge {
@@ -250,10 +246,33 @@ impl JsBridge {
         }
     }
 
+    /// Drop all per-node side-table data for a single node id. Covers the `NodeId`-keyed
+    /// data tables only — NOT the structural `child_order`/`parent_of` maps (handled by
+    /// `forget_subtree`/`detach`) nor the surface parentage maps `surface_parent`/
+    /// `child_surfaces` (handled by `attach_surface`/`detach_surface`/`surfaces_under`).
+    fn forget_node_data(&mut self, id: NodeId) {
+        self.nodes.remove(&id);
+        self.text_styles.remove(&id);
+        self.raw_spans.remove(&id);
+        self.text_spans.remove(&id);
+        self.editable_inputs.remove(&id);
+        self.surfaces.remove(&id);
+        self.editable_values.remove(&id);
+        self.editable_selections.remove(&id);
+        self.editable_select_handlers.remove(&id);
+        self.editable_focus_handlers.remove(&id);
+        self.editable_pending_selection.remove(&id);
+        self.scroll_positions.remove(&id);
+    }
+
     /// Drop `child` and its whole subtree from the shadow tree. React emits a `Remove`
     /// only for the root of a removed subtree (Bevy despawns the descendants
-    /// recursively), so we recurse to keep `child_order`/`parent_of` bounded.
+    /// recursively), so we recurse to keep `child_order`/`parent_of` bounded and to prune
+    /// every node's per-node side-table data (via `forget_node_data`) — otherwise
+    /// descendant ids would linger as stale entity handles until the next `Op::Reset`.
+    /// Does not unlink the root from its parent's ordered list; call `detach` for that.
     pub fn forget_subtree(&mut self, child: NodeId) {
+        self.forget_node_data(child);
         if let Some(grandkids) = self.child_order.remove(&child) {
             for grandkid in grandkids {
                 self.parent_of.remove(&grandkid);
