@@ -680,17 +680,35 @@ pub fn node_from_style(style: &Option<Style>) -> Node {
     node
 }
 
-/// Apply a style to an element: insert its `Node` plus the sibling visual
-/// components present in the style (and remove ones that are absent, so toggling
-/// a style key off clears the component).
-//
-// TODO(review): every `Op::Update` re-inserts a freshly-built `Node` wholesale, marking
-// it changed and forcing a layout pass for the subtree — even when only a paint-only prop
-// (e.g. backgroundColor) changed. Combined with the lack of prop diffing in the reconciler
-// (see renderer.prepareUpdate), frequent re-renders thrash layout. Split layout-affecting
-// from paint-only props and skip the `Node` re-insert when no layout field changed.
+/// Update an entity's `Node` in place, marking it changed (→ a `bevy_ui` relayout)
+/// only when the freshly built value actually differs — so a paint-only restyle
+/// (e.g. `backgroundColor`) no longer forces a spurious relayout. Falls back to
+/// insert when the entity has no `Node` yet (a fresh spawn whose `Node` hasn't been
+/// added at command-apply time). Runs as a queued `EntityCommand`, so it needs no
+/// `&mut Node` query in the caller and applies in command order (correct when a node
+/// is updated more than once in one drained batch — sequential `set_if_neq`s converge).
+fn set_node_if_changed(node: Node) -> impl EntityCommand {
+    move |mut entity: EntityWorldMut| match entity.get_mut::<Node>() {
+        Some(mut current) => {
+            current.set_if_neq(node);
+        }
+        None => {
+            entity.insert(node);
+        }
+    }
+}
+
+/// Apply a style to an element: update its `Node` (only relaying out when a layout
+/// field changed — see [`set_node_if_changed`]) plus the sibling visual components
+/// present in the style (and remove ones that are absent, so toggling a style key
+/// off clears the component).
 pub fn apply_style(ec: &mut EntityCommands, style: &Option<Style>) {
-    ec.insert(node_from_style(style));
+    // Guarded in-place update, not a wholesale re-insert: `Op::Update` and the
+    // hover/press restyle systems all funnel through here, and re-inserting `Node`
+    // unconditionally marks it changed and relays out the subtree even for a
+    // paint-only change. The reconciler already skips no-op updates (`renderer.ts`'s
+    // `bevyPropsChanged`); this skips the relayout when the *layout* is unchanged.
+    ec.queue(set_node_if_changed(node_from_style(style)));
     let s = style.as_ref();
 
     // `opacity` multiplies into the background (and text) alpha — color before
