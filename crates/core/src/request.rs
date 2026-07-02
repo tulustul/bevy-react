@@ -33,6 +33,7 @@ use ts_rs::TS;
 
 use crate::bridge::{OutboundResource, OutboundSender};
 use crate::protocol::{Outbound, ResponseResult};
+use crate::registry::{NamedEntry, register_entry};
 use crate::ts_codegen::TsCollector;
 
 /// The raw wire form of a request crossing JS → Bevy: a correlation `id`, the
@@ -210,24 +211,22 @@ pub(crate) struct ReactRequestRegistry {
     pub(crate) handlers: HashMap<&'static str, RequestRegistration>,
 }
 
+impl NamedEntry for RequestRegistration {
+    fn type_id(&self) -> TypeId {
+        self.type_id
+    }
+}
+
 impl ReactRequestRegistry {
     /// Register the deserialize-and-trigger handler for request `T`. Idempotent
     /// per type; warns only if a different type already owns `T::NAME`.
     pub(crate) fn register<T: ReactRequest>(&mut self) {
-        let type_id = TypeId::of::<T>();
-        if let Some(existing) = self.handlers.get(T::NAME) {
-            if existing.type_id == type_id {
-                return;
-            }
-            warn!(
-                "react request {:?} is registered by two different types; replacing the previous handler",
-                T::NAME
-            );
-        }
-        self.handlers.insert(
+        register_entry(
+            &mut self.handlers,
             T::NAME,
+            "request",
             RequestRegistration {
-                type_id,
+                type_id: TypeId::of::<T>(),
                 handler: Box::new(|raw, tx, commands| {
                     // `T` is concrete here, so serde and the trigger are baked in.
                     let responder = Responder::<T::Response>::new(raw.id, tx.clone());

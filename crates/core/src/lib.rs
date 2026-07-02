@@ -33,6 +33,7 @@ mod keyboard;
 mod message;
 mod plugin;
 mod reconcile;
+mod registry;
 mod request;
 mod scroll;
 mod transition;

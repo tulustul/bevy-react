@@ -29,6 +29,7 @@ use serde::de::DeserializeOwned;
 use ts_rs::TS;
 
 use crate::event::{ReactEvent, ReactEventRegistry};
+use crate::registry::{NamedEntry, register_entry};
 use crate::request::{ReactRequest, ReactRequestRegistry, RequestEvent};
 use crate::ts_codegen::TsCollector;
 
@@ -89,6 +90,12 @@ pub(crate) struct Registration {
 type Handler =
     Box<dyn Fn(serde_json::Value, &mut Commands) -> Result<(), serde_json::Error> + Send + Sync>;
 
+impl NamedEntry for Registration {
+    fn type_id(&self) -> TypeId {
+        self.type_id
+    }
+}
+
 impl ReactRegistry {
     /// Register the deserialize-and-trigger handler for payload `T`. Idempotent
     /// for a given type; warns only if a different type already owns `T::NAME`.
@@ -97,20 +104,12 @@ impl ReactRegistry {
         T: ReactPayload,
         for<'a> <T as Event>::Trigger<'a>: Default,
     {
-        let type_id = TypeId::of::<T>();
-        if let Some(existing) = self.handlers.get(T::NAME) {
-            if existing.type_id == type_id {
-                return; // same payload registered again — nothing to do.
-            }
-            warn!(
-                "react message {:?} is registered by two different types; replacing the previous handler",
-                T::NAME
-            );
-        }
-        self.handlers.insert(
+        register_entry(
+            &mut self.handlers,
             T::NAME,
+            "message",
             Registration {
-                type_id,
+                type_id: TypeId::of::<T>(),
                 handler: Box::new(|value, commands| {
                     // `T` is concrete here, so serde and the trigger are baked in.
                     let payload: T = serde_json::from_value(value)?;
@@ -199,30 +198,37 @@ pub trait ReactAppExt {
     where
         E: ReactEvent;
 
-    /// Write the TypeScript types for every registered React message to `path`.
+    /// Write a self-contained TypeScript module (conventionally `src/bevy.ts`)
+    /// mirroring every registered React binding to `path`.
     ///
-    /// The generated module declares each payload's type (mirrored from the Rust
-    /// `#[react_message]` struct via `ts-rs`), a `ReactMessages` map from `emit` name
-    /// to payload type, and a typed `emit` wrapper. Import that `emit` from your React
-    /// app instead of the untyped one from `"bevy-react"`, and `emit(name, value)` is
-    /// checked against the same structs Bevy deserializes into.
+    /// The generated module covers all three app-messaging surfaces in one pass:
+    /// a type declaration per payload (mirrored from the `#[react_message]` /
+    /// `#[react_request]` / `#[react_event]` structs via `ts-rs`), the
+    /// `ReactMessages`/`ReactRequests`/`ReactEvents` name→type maps, typed
+    /// `emit`/`request`/`on` wrappers, and a structured `bevy` proxy whose nested
+    /// methods come from dotted request names (`"board.get"` → `bevy.board.get()`).
+    /// App code imports that typed surface from `./bevy` instead of the untyped
+    /// functions from `"bevy-react"`, so every call is checked against the same
+    /// structs Bevy serializes and deserializes.
     ///
-    /// Call this from a small exporter entry point (e.g. a `--export-bindings <path>`
-    /// arg) after registering your handlers, then commit the output. Re-run it and
-    /// `git diff --exit-code` in CI to guarantee the TypeScript never drifts from Rust.
+    /// Keep a **single registration site**: put your `add_react_*` calls in a
+    /// `register_bindings(app)` function that both the real app (e.g. your
+    /// plugin's `build`) and a small exporter entry point call, so a binding can
+    /// never exist at runtime without appearing in the generated types. Wire the
+    /// exporter to a CLI flag that returns before `app.run()`, commit the output,
+    /// and have CI regenerate + `git diff --exit-code` to guarantee the
+    /// TypeScript never drifts from Rust. (See `examples/demos/main.rs` and its
+    /// `--export-bindings` flag, exposed as `npm run bevy:generate`.)
     ///
     /// ```ignore
-    /// let mut app = App::new();
-    /// app.add_react_handler(apply_count); // register the same payloads as the real app
-    /// app.export_react_typescript("ui/src/messages.ts")?;
+    /// if std::env::args().nth(1).as_deref() == Some("--export-bindings") {
+    ///     let path = std::env::args().nth(2).expect("output path");
+    ///     let mut app = App::new();
+    ///     register_bindings(&mut app); // the same fn the real app calls
+    ///     app.export_react_typescript(&path)?;
+    ///     return;
+    /// }
     /// ```
-    //
-    // TODO(review): codegen sync hinges on a hand-maintained DUPLICATE registration — the
-    // exporter entry point must re-register exactly the same handlers as the real app. Add a
-    // handler in the app but forget it here and the type silently vanishes from `generated.ts`
-    // (the CI `git diff` only catches drift if this exporter is itself correct). Prefer
-    // exporting from the REAL app build (e.g. an `--export-bindings` mode that exports before
-    // `app.run()`), so there's a single registration site.
     fn export_react_typescript(&self, path: impl AsRef<Path>) -> std::io::Result<()>;
 }
 

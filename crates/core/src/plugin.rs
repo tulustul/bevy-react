@@ -228,13 +228,20 @@ impl Plugin for ReactUiPlugin {
                 // (same signal as hover styling), for nodes with those handlers.
                 collect_hover_events,
                 collect_pointer_events.in_set(PointerCaptureSet),
-                // Wheel-scroll any `overflow: scroll` node under the cursor. In the
-                // same set, after `collect_pointer_events`, so it ORs into this
-                // frame's `PointerCapture::over_ui` before world systems (ordered
-                // `.after(PointerCaptureSet)`) read it.
-                crate::scroll::apply_scroll
-                    .in_set(PointerCaptureSet)
-                    .after(collect_pointer_events),
+                // Wheel-scroll any `overflow: scroll` node under the cursor, and
+                // deliver raw wheel deltas to any `onWheel` node. Both in the same
+                // set, after `collect_pointer_events`, so their `PointerCapture::over_ui`
+                // claim survives (that system *assigns* `over_ui`) and world systems
+                // (ordered `.after(PointerCaptureSet)`) see it. (A sub-tuple: the outer
+                // tuple is at Bevy's arity limit.)
+                (
+                    crate::scroll::apply_scroll
+                        .in_set(PointerCaptureSet)
+                        .after(collect_pointer_events),
+                    crate::scroll::collect_wheel_events
+                        .in_set(PointerCaptureSet)
+                        .after(collect_pointer_events),
+                ),
                 // Ease `ScrollPosition` toward the target the controlled write
                 // (`apply_js_ops`) and the wheel (`PointerCaptureSet`) set this frame.
                 // Runs after both so it eases toward the freshest target.

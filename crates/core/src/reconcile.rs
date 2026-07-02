@@ -25,7 +25,7 @@ use bevy_react_surface::{RSurface, SurfaceVirtualPointer};
 use crate::anchor::{AnchorScaling, Anchored};
 use crate::bridge::{
     CanvasSizeTracker, FocusState, HoverState, JsBridge, PointerHandlers, RNode, ScrollListener,
-    ScrollStep, StyleVariants,
+    ScrollStep, SpanKind, StyleVariants, WheelListener,
 };
 use crate::filter::{FilterAssets, FilterMaterial, FilterMaterialCache, filter_material};
 use crate::plugin::Fonts;
@@ -173,8 +173,7 @@ pub fn apply_js_ops(
                 bridge.nodes.retain(|&id, _| id == ROOT_ID);
                 bridge.props_cache.clear();
                 bridge.text_styles.clear();
-                bridge.raw_spans.clear();
-                bridge.text_spans.clear();
+                bridge.spans.clear();
                 bridge.editable_inputs.clear();
                 bridge.surfaces.clear();
                 bridge.editable_values.clear();
@@ -344,9 +343,9 @@ pub fn apply_js_ops(
                 }
                 // A `textSpan` carries its text in a `TextSpan` component, so a later
                 // `Op::UpdateText` must update that (not insert a stray `Text`). It is
-                // NOT a `raw_span`: nested `<text>` spans keep their own style.
+                // `InlineStyled`: nested `<text>` spans keep their own style.
                 if kind == "textSpan" {
-                    bridge.text_spans.insert(id);
+                    bridge.spans.insert(id, SpanKind::InlineStyled);
                 }
                 if kind == "editableText" {
                     bridge.editable_inputs.insert(id);
@@ -370,6 +369,7 @@ pub fn apply_js_ops(
                 {
                     let mut ec = commands.entity(entity);
                     apply_scroll_listener(&mut ec, &props);
+                    apply_wheel_listener(&mut ec, &props);
                     apply_scroll_step(&mut ec, &props);
                     apply_scroll_transition(&mut ec, &props.style);
                     create_controlled_scroll(&mut bridge, &mut ec, id, &props);
@@ -392,8 +392,7 @@ pub fn apply_js_ops(
                 // parent on append (see below); until then it keeps span defaults.
                 let entity = commands.spawn((TextSpan(text), RNode(id))).id();
                 bridge.nodes.insert(id, entity);
-                bridge.raw_spans.insert(id);
-                bridge.text_spans.insert(id);
+                bridge.spans.insert(id, SpanKind::RawInherited);
             }
             Op::Append { parent, child } => {
                 // A `<surface>` is a detached UI root: never parent it into the
@@ -545,7 +544,7 @@ pub fn apply_js_ops(
                     {
                         for child in kids.iter() {
                             if let Ok(rnode) = rnodes.get(child)
-                                && bridge.raw_spans.contains(&rnode.0)
+                                && bridge.spans.get(&rnode.0) == Some(&SpanKind::RawInherited)
                             {
                                 commands.entity(child).insert(style.clone());
                             }
@@ -675,6 +674,9 @@ pub fn apply_js_ops(
                     if dirty.scroll_listener {
                         apply_scroll_listener(&mut ec, &props);
                     }
+                    if dirty.wheel {
+                        apply_wheel_listener(&mut ec, &props);
+                    }
                     if dirty.scroll_step {
                         apply_scroll_step(&mut ec, &props);
                     }
@@ -703,7 +705,7 @@ pub fn apply_js_ops(
                 if let Some(e) = resolve(&bridge, id) {
                     // A run is either a standalone `Text` or, inside a `<text>`, a
                     // `TextSpan` — update whichever this entity is.
-                    if bridge.text_spans.contains(&id) {
+                    if bridge.spans.contains_key(&id) {
                         commands.entity(e).insert(TextSpan(text));
                     } else {
                         commands.entity(e).insert(Text::new(text));
@@ -753,7 +755,7 @@ fn inherit_text_style(
     child: NodeId,
     child_entity: Entity,
 ) {
-    if !bridge.raw_spans.contains(&child) {
+    if bridge.spans.get(&child) != Some(&SpanKind::RawInherited) {
         return;
     }
     if let Some(style) = bridge.text_styles.get(&parent).cloned() {
@@ -993,6 +995,17 @@ fn apply_scroll_listener(ec: &mut EntityCommands, props: &Props) {
         ec.insert_if_new(ScrollListener);
     } else {
         ec.remove::<ScrollListener>();
+    }
+}
+
+/// Toggle the [`WheelListener`] marker so [`crate::scroll::collect_wheel_events`]
+/// reports raw wheel deltas over this node only while an `onWheel` handler is
+/// declared. Independent of `overflow: scroll` — any node can receive the wheel.
+fn apply_wheel_listener(ec: &mut EntityCommands, props: &Props) {
+    if props.on_wheel {
+        ec.insert_if_new(WheelListener);
+    } else {
+        ec.remove::<WheelListener>();
     }
 }
 

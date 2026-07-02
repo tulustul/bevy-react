@@ -138,8 +138,12 @@ export type AnimatableProperty =
  *  property bound to a shared value or interpolation. */
 export type AnimatedStyle = Partial<Record<AnimatableProperty, AnimatedValue>>;
 
-// Per-runtime shared-value id allocator. A hot reload spins up a fresh isolate,
-// so this resets to 1 naturally; `reset()` clears the Bevy-side table to match.
+// Per-runtime shared-value id allocator. The isolate persists across hot
+// reloads (only the app bundle re-executes; this module lives in the vendor
+// bundle), so the counter never resets and just keeps growing — fine, since
+// ids only need to be unique. `reset()` sends `AnimationCommand::Clear` to
+// wipe the Bevy-side table before the re-render re-declares each value under
+// a fresh id.
 let nextSharedId = 1;
 
 /**

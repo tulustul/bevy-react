@@ -3,7 +3,7 @@
 //! The Rust binding structs (`#[react_message]` / `#[react_request]` /
 //! `#[react_event]`) are the single source of truth. This module walks the three
 //! registries ([`ReactRegistry`], [`ReactRequestRegistry`], [`ReactEventRegistry`])
-//! in one pass and renders a self-contained `generated.ts`: per-payload type
+//! in one pass and renders a self-contained `bevy.ts`: per-payload type
 //! declarations, the `ReactMessages` / `ReactRequests` / `ReactEvents` maps, typed
 //! `emit` / `request` / `on` wrappers, and a structured `bevy` proxy object.
 //!

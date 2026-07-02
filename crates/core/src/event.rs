@@ -27,6 +27,7 @@ use ts_rs::TS;
 
 use crate::bridge::OutboundResource;
 use crate::protocol::Outbound;
+use crate::registry::{NamedEntry, register_entry};
 use crate::ts_codegen::TsCollector;
 
 /// A typed payload Bevy sends to React as a named event. Out-only — it is never
@@ -81,24 +82,22 @@ pub(crate) struct ReactEventRegistry {
     pub(crate) handlers: HashMap<&'static str, EventRegistration>,
 }
 
+impl NamedEntry for EventRegistration {
+    fn type_id(&self) -> TypeId {
+        self.type_id
+    }
+}
+
 impl ReactEventRegistry {
     /// Record event type `E` for export. Idempotent per type; warns only if a
     /// different type already owns `E::NAME`.
     pub(crate) fn register<E: ReactEvent>(&mut self) {
-        let type_id = TypeId::of::<E>();
-        if let Some(existing) = self.handlers.get(E::NAME) {
-            if existing.type_id == type_id {
-                return;
-            }
-            warn!(
-                "react event {:?} is registered by two different types; replacing the previous entry",
-                E::NAME
-            );
-        }
-        self.handlers.insert(
+        register_entry(
+            &mut self.handlers,
             E::NAME,
+            "event",
             EventRegistration {
-                type_id,
+                type_id: TypeId::of::<E>(),
                 ts_name: <E as TS>::name,
                 ts_collect: |c| c.add::<E>(),
             },

@@ -85,6 +85,14 @@ pub struct HoverState(pub bool);
 #[derive(Component, Debug, Clone, Copy, Default)]
 pub struct ScrollListener;
 
+/// Marks a node that declared an `onWheel` handler, so
+/// [`crate::scroll::collect_wheel_events`] reports raw wheel deltas over it. The
+/// marker scopes the wheel hit-test to opted-in nodes; unlike [`ScrollListener`]
+/// it works on *any* node (no `overflow: scroll` needed). Inserted/removed as the
+/// handler comes and goes, mirroring `ScrollListener`.
+#[derive(Component, Debug, Clone, Copy, Default)]
+pub struct WheelListener;
+
 /// Per-node wheel step: logical pixels scrolled per mouse-wheel "line", overriding
 /// the default. Read by `scroll::apply_scroll`; absent → the default `LINE_HEIGHT`.
 /// Stamped from the `scrollStep` prop; only affects `MouseScrollUnit::Line` wheels
@@ -107,6 +115,18 @@ pub struct CanvasSizeTracker(pub (u32, u32));
 #[derive(Resource, Clone)]
 pub struct OutboundResource(pub OutboundSender);
 
+/// What kind of `TextSpan`-backed run a node inside a `<text>` element is.
+/// Tracked in [`JsBridge::spans`]; a node not in that map isn't a span at all.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SpanKind {
+    /// A bare-string run with no style of its own: it inherits (and must be
+    /// re-sent) its parent `<text>`'s resolved style.
+    RawInherited,
+    /// A nested/inline `<text>` span carrying its own style, which must NOT
+    /// inherit its parent's.
+    InlineStyled,
+}
+
 /// The Bevy resource holding the live boundary state.
 #[derive(Resource)]
 pub struct JsBridge {
@@ -126,13 +146,10 @@ pub struct JsBridge {
     pub props_cache: HashMap<NodeId, Box<crate::protocol::Props>>,
     /// Resolved text style of each `<text>` element/span, for span inheritance.
     pub text_styles: HashMap<NodeId, ResolvedTextStyle>,
-    /// Node ids that are bare-string runs inheriting their parent's text style.
-    pub raw_spans: HashSet<NodeId>,
     /// Node ids whose text content lives in a `TextSpan` component (vs a `Text`),
-    /// so `Op::UpdateText` updates the right component. Superset of `raw_spans`:
-    /// it also covers nested/inline `<text>` spans, which carry their own style
-    /// and so must NOT inherit their parent's (hence are kept out of `raw_spans`).
-    pub text_spans: HashSet<NodeId>,
+    /// so `Op::UpdateText` updates the right component, and what [`SpanKind`]
+    /// each one is. Nodes absent from the map hold a plain `Text` (or no text).
+    pub spans: HashMap<NodeId, SpanKind>,
     /// Node ids that are `editableText` inputs, so an `Update` knows to push a
     /// diverging `value` into the live `EditableText` buffer.
     pub editable_inputs: HashSet<NodeId>,
@@ -190,8 +207,7 @@ impl JsBridge {
             nodes,
             props_cache: HashMap::new(),
             text_styles: HashMap::new(),
-            raw_spans: HashSet::new(),
-            text_spans: HashSet::new(),
+            spans: HashMap::new(),
             editable_inputs: HashSet::new(),
             surfaces: HashSet::new(),
             editable_values: HashMap::new(),
@@ -271,8 +287,7 @@ impl JsBridge {
         self.nodes.remove(&id);
         self.props_cache.remove(&id);
         self.text_styles.remove(&id);
-        self.raw_spans.remove(&id);
-        self.text_spans.remove(&id);
+        self.spans.remove(&id);
         self.editable_inputs.remove(&id);
         self.surfaces.remove(&id);
         self.editable_values.remove(&id);

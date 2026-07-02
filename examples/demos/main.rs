@@ -54,7 +54,7 @@ fn main() {
     use screenshot::ShootConfig;
 
     // `cargo run -p bevy-react --example demos -- --export-bindings <path>` writes the TypeScript
-    // message types instead of running the app, keeping `ui/src/generated.ts` in sync
+    // bindings instead of running the app, keeping `ui/src/bevy.ts` in sync
     // with the Rust `#[react_*]` structs. It needs only the handler registrations, so
     // it skips DefaultPlugins/ReactUiPlugin (no window, no JS runtime).
     let mut args = std::env::args().skip(1);

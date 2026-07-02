@@ -82,7 +82,11 @@ export type Op =
   // handle's microtask flush, or the runtime's clear+replay after a resize).
   | { op: "draw"; id: number; cmds: DrawCmd[] };
 
-export interface SerializedProps {
+// Handler props cross as presence booleans under their own prop name; the
+// flag set is derived from `HANDLER_KINDS` so it can't drift.
+export interface SerializedProps extends Partial<
+  Record<HandlerPropKey, boolean>
+> {
   style?: Record<string, unknown>;
   hoverStyle?: Record<string, unknown>;
   pressStyle?: Record<string, unknown>;
@@ -95,17 +99,10 @@ export interface SerializedProps {
   anchor?: Record<string, unknown>;
   color?: string;
   fontSize?: number;
-  onClick?: boolean;
-  onPointerDown?: boolean;
-  onPointerMove?: boolean;
-  onPointerUp?: boolean;
-  onPointerEnter?: boolean;
-  onPointerLeave?: boolean;
   // Controlled scroll offsets (logical px) for any node with `overflow: scroll`.
   scrollTop?: number;
   scrollLeft?: number;
   scrollStep?: number;
-  onScroll?: boolean;
   // `image` element attributes
   src?: string;
   tint?: string;
@@ -123,7 +120,6 @@ export interface SerializedProps {
   // `canvas` element: the recorded vector display list, rasterized on the Bevy
   // side (clear + replay on the retained surface).
   draw?: DrawCmd[];
-  onResize?: boolean;
   // `portal` element: the render-target name to display. Also carries a
   // `surface` element's `name` (the offscreen surface its subtree renders into).
   target?: string;
@@ -131,15 +127,11 @@ export interface SerializedProps {
   value?: string;
   maxLength?: number;
   multiline?: boolean;
-  onChange?: boolean;
   autofocus?: boolean;
   // Controlled selection as UTF-8 byte offsets into `value`.
   selectionStart?: number;
   selectionEnd?: number;
   ariaLabel?: string;
-  onSelect?: boolean;
-  onFocus?: boolean;
-  onBlur?: boolean;
 }
 
 export interface UiEvent {
@@ -169,6 +161,11 @@ export interface UiEvent {
   // New scroll offset (logical px). Present only for the "scroll" event.
   scrollTop?: number;
   scrollLeft?: number;
+  // Raw wheel delta. Present only for the "wheel" event; interpret with
+  // `deltaMode` ("line" = mouse notches, "pixel" = trackpad), like DOM WheelEvent.
+  deltaX?: number;
+  deltaY?: number;
+  deltaMode?: string;
   // New laid-out size (logical px). Present only for a `canvas`'s "resize"
   // event — fired on first layout and any size change, after the retained
   // surface was cleared.
@@ -377,7 +374,7 @@ export function removeEventListener(
 // Split React props into a serializable payload + registered event handlers.
 // `children` and functions never go across the boundary.
 // React prop name -> the event kind stored in the handler map / reported by Bevy.
-const HANDLER_KINDS: Record<string, string> = {
+const HANDLER_KINDS = {
   onClick: "click",
   onPointerDown: "pointerDown",
   onPointerMove: "pointerMove",
@@ -389,8 +386,13 @@ const HANDLER_KINDS: Record<string, string> = {
   onFocus: "focus",
   onBlur: "blur",
   onScroll: "scroll",
+  onWheel: "wheel",
   onResize: "resize",
-};
+} as const satisfies Record<string, string>;
+
+// The handler prop names as a type, so `SerializedProps` derives its `onX`
+// boolean flags from this map instead of hand-listing them.
+type HandlerPropKey = keyof typeof HANDLER_KINDS;
 
 // The handler prop names, for the renderer's dirty-check: these props are
 // compared by presence, not identity (closures change every render).
@@ -407,10 +409,10 @@ export function registerHandlers(
   props: Record<string, unknown>,
 ): void {
   let hs: Record<string, (...args: unknown[]) => void> | undefined;
-  for (const key in HANDLER_KINDS) {
+  for (const [key, kind] of Object.entries(HANDLER_KINDS)) {
     const value = props[key];
     if (typeof value === "function") {
-      (hs ??= {})[HANDLER_KINDS[key]] = value as (...args: unknown[]) => void;
+      (hs ??= {})[kind] = value as (...args: unknown[]) => void;
     }
   }
   if (hs) handlers.set(id, hs);

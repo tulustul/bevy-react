@@ -394,9 +394,9 @@ export interface BevyStyle {
 }
 
 // TODO(review): the pointer model is bespoke — normalized x/y + clientX/Y and a DOM
-// `button` number rather than full DOM `PointerEvent` semantics. No wheel-as-element-event,
-// no modifier info. It's part of the public contract, so settle the shape before too many
-// apps depend on it.
+// `button` number rather than full DOM `PointerEvent` semantics. No modifier info.
+// It's part of the public contract, so settle the shape before too many apps depend
+// on it.
 /** Payload for the pointer handlers: the cursor position within the element,
  *  normalized to `0..1` from a top-left origin (`x` left→right, `y` top→bottom),
  *  clamped to the element's bounds even while dragging outside it. `clientX` /
@@ -411,6 +411,25 @@ export interface PointerEventData {
    *  middle, `2` right). Present on down/move/up (a move's button is the one
    *  dragging); absent on enter/leave. */
   button?: number;
+}
+
+/** Payload for `onWheel`: the cursor position within the element (same `x`/`y`
+ *  normalized `0..1` + absolute `clientX`/`clientY` as `PointerEventData`) plus the
+ *  **raw** wheel delta. `deltaMode` says how to read the deltas — `"line"` (mouse
+ *  notches: scale by your own per-line distance) or `"pixel"` (trackpad: already in
+ *  pixels) — mirroring DOM `WheelEvent`. Unlike a scroll container, nothing is scaled
+ *  or applied for you: use the deltas to drive a zoom, pan, or custom scroll. */
+export interface WheelEventData {
+  x: number;
+  y: number;
+  clientX: number;
+  clientY: number;
+  /** Raw horizontal wheel delta this frame. */
+  deltaX: number;
+  /** Raw vertical wheel delta this frame; positive is wheel-down / scroll-forward. */
+  deltaY: number;
+  /** How to interpret the deltas: `"line"` (mouse) or `"pixel"` (trackpad). */
+  deltaMode: "line" | "pixel";
 }
 
 /** Props common to `node` and `button`. */
@@ -455,6 +474,10 @@ export interface BevyNodeProps extends BevyAttributes {
    *  Receives the new offset; pair with `scrollTop`/`scrollLeft` for a controlled
    *  scroll container. */
   onScroll?: (e: { scrollTop: number; scrollLeft: number }) => void;
+  /** Mouse wheel over this node. Fires for **any** node (no `overflow: scroll`
+   *  needed) with the raw deltas — drive a zoom, pan, or custom scroll. Handling
+   *  the wheel traps it from world systems (a 3D camera behind it won't also zoom). */
+  onWheel?: (e: WheelEventData) => void;
   children?: ReactNode;
 }
 
@@ -504,6 +527,9 @@ export interface BevyCanvasProps extends BevyAttributes {
   onPointerEnter?: (e: PointerEventData) => void;
   /** Pointer left the canvas (hover ends). */
   onPointerLeave?: (e: PointerEventData) => void;
+  /** Mouse wheel over the canvas, with the raw deltas — e.g. to zoom a map.
+   *  Handling it traps the wheel from world systems (see `WheelEventData`). */
+  onWheel?: (e: WheelEventData) => void;
 }
 
 /** Props for the `portal` element: a view of an **offscreen render target** (the
@@ -535,6 +561,8 @@ export interface BevyPortalProps extends BevyAttributes {
   onPointerEnter?: (e: PointerEventData) => void;
   /** Pointer left the portal (hover ends). */
   onPointerLeave?: (e: PointerEventData) => void;
+  /** Mouse wheel over the portal, with the raw deltas (see `WheelEventData`). */
+  onWheel?: (e: WheelEventData) => void;
 }
 
 /** Props for the `surface` element: the **inverse** of `<portal>`. Its children
@@ -572,6 +600,9 @@ export interface BevySurfaceProps extends BevyAttributes {
   onPointerEnter?: (e: PointerEventData) => void;
   /** Pointer left this element (hover ends). */
   onPointerLeave?: (e: PointerEventData) => void;
+  // NOTE: no `onWheel` on `<surface>` yet — the main-window wheel path can't reach a
+  // subtree rendered into an offscreen texture (it would need the in-world virtual
+  // pointer, like the surface `onPointer*` events). Deferred.
   children?: ReactNode;
 }
 

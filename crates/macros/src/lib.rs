@@ -35,23 +35,19 @@ use syn::{DeriveInput, LitStr, Type, parse_macro_input};
 /// ```
 #[proc_macro_attribute]
 pub fn react_message(attr: TokenStream, item: TokenStream) -> TokenStream {
-    // Parse the optional `name = "..."` override.
-    let mut name_override: Option<String> = None;
-    let arg_parser = syn::meta::parser(|meta| {
-        if meta.path.is_ident("name") {
-            name_override = Some(meta.value()?.parse::<LitStr>()?.value());
-            Ok(())
-        } else {
-            Err(meta.error("unsupported `react_message` argument; expected `name = \"...\"`"))
-        }
-    });
-    parse_macro_input!(attr with arg_parser);
+    let name_override = match parse_name_only_attr(attr, "react_message") {
+        Ok(name) => name,
+        Err(e) => return e.to_compile_error().into(),
+    };
 
     let input = parse_macro_input!(item as DeriveInput);
-    let ident = &input.ident;
-    let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
-
-    let name = name_override.unwrap_or_else(|| lower_first(&ident.to_string()));
+    let PayloadParts {
+        ident,
+        impl_generics,
+        ty_generics,
+        where_clause,
+        name,
+    } = payload_parts(&input, name_override);
 
     quote! {
         #[derive(::serde::Deserialize, ::ts_rs::TS)]
@@ -93,8 +89,7 @@ pub fn react_request(attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut name_override: Option<String> = None;
     let mut response: Option<Type> = None;
     let arg_parser = syn::meta::parser(|meta| {
-        if meta.path.is_ident("name") {
-            name_override = Some(meta.value()?.parse::<LitStr>()?.value());
+        if try_parse_name_arg(&meta, &mut name_override)? {
             Ok(())
         } else if meta.path.is_ident("response") {
             response = Some(meta.value()?.parse::<Type>()?);
@@ -120,9 +115,13 @@ pub fn react_request(attr: TokenStream, item: TokenStream) -> TokenStream {
     };
 
     let input = parse_macro_input!(item as DeriveInput);
-    let ident = &input.ident;
-    let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
-    let name = name_override.unwrap_or_else(|| lower_first(&ident.to_string()));
+    let PayloadParts {
+        ident,
+        impl_generics,
+        ty_generics,
+        where_clause,
+        name,
+    } = payload_parts(&input, name_override);
 
     quote! {
         #[derive(::serde::Deserialize, ::ts_rs::TS)]
@@ -151,21 +150,19 @@ pub fn react_request(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// ```
 #[proc_macro_attribute]
 pub fn react_event(attr: TokenStream, item: TokenStream) -> TokenStream {
-    let mut name_override: Option<String> = None;
-    let arg_parser = syn::meta::parser(|meta| {
-        if meta.path.is_ident("name") {
-            name_override = Some(meta.value()?.parse::<LitStr>()?.value());
-            Ok(())
-        } else {
-            Err(meta.error("unsupported `react_event` argument; expected `name = \"...\"`"))
-        }
-    });
-    parse_macro_input!(attr with arg_parser);
+    let name_override = match parse_name_only_attr(attr, "react_event") {
+        Ok(name) => name,
+        Err(e) => return e.to_compile_error().into(),
+    };
 
     let input = parse_macro_input!(item as DeriveInput);
-    let ident = &input.ident;
-    let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
-    let name = name_override.unwrap_or_else(|| lower_first(&ident.to_string()));
+    let PayloadParts {
+        ident,
+        impl_generics,
+        ty_generics,
+        where_clause,
+        name,
+    } = payload_parts(&input, name_override);
 
     quote! {
         #[derive(::serde::Serialize, ::ts_rs::TS)]
@@ -176,6 +173,60 @@ pub fn react_event(attr: TokenStream, item: TokenStream) -> TokenStream {
         }
     }
     .into()
+}
+
+/// Consume a `name = "..."` argument if that's what `meta` holds; returns
+/// whether it matched, so callers can chain their own arms after it.
+fn try_parse_name_arg(
+    meta: &syn::meta::ParseNestedMeta,
+    out: &mut Option<String>,
+) -> syn::Result<bool> {
+    if meta.path.is_ident("name") {
+        *out = Some(meta.value()?.parse::<LitStr>()?.value());
+        Ok(true)
+    } else {
+        Ok(false)
+    }
+}
+
+/// Parse an attribute argument list that accepts only `name = "..."` (the
+/// `react_message`/`react_event` form; `react_request` adds a `response` arm).
+fn parse_name_only_attr(attr: TokenStream, macro_name: &str) -> syn::Result<Option<String>> {
+    let mut name_override: Option<String> = None;
+    let parser = syn::meta::parser(|meta| {
+        if try_parse_name_arg(&meta, &mut name_override)? {
+            Ok(())
+        } else {
+            Err(meta.error(format!(
+                "unsupported `{macro_name}` argument; expected `name = \"...\"`"
+            )))
+        }
+    });
+    syn::parse::Parser::parse(parser, attr)?;
+    Ok(name_override)
+}
+
+/// The pieces every `react_*` macro pulls off the annotated struct.
+struct PayloadParts<'a> {
+    ident: &'a syn::Ident,
+    impl_generics: syn::ImplGenerics<'a>,
+    ty_generics: syn::TypeGenerics<'a>,
+    where_clause: Option<&'a syn::WhereClause>,
+    /// The wire name: the `name = "..."` override, or the struct ident with its
+    /// first letter lowercased (`Count` → `"count"`).
+    name: String,
+}
+
+fn payload_parts<'a>(input: &'a DeriveInput, name_override: Option<String>) -> PayloadParts<'a> {
+    let ident = &input.ident;
+    let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
+    PayloadParts {
+        ident,
+        impl_generics,
+        ty_generics,
+        where_clause,
+        name: name_override.unwrap_or_else(|| lower_first(&ident.to_string())),
+    }
 }
 
 /// Lowercase only the first character of `s` (`Count` → `count`).

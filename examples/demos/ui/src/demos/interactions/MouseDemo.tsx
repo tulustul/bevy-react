@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { BevyStyle, PointerEventData } from "bevy-react/jsx";
+import { BevyStyle, PointerEventData, WheelEventData } from "bevy-react/jsx";
 import { Example } from "@/components";
 import { Colors, FontSizes } from "@/theme";
 
@@ -27,6 +27,7 @@ export function MouseDemo() {
     <>
       <DragExample />
       <HoverExample />
+      <WheelExample />
     </>
   );
 }
@@ -161,6 +162,57 @@ function HoverExample() {
           <text style={boxLabelStyle}>
             {hovering ? "hovered" : "not hovered"}
           </text>
+        </node>
+      </node>
+    </Example>
+  );
+}
+
+// `onWheel` delivers the *raw* wheel deltas to any node — no `overflow: scroll`
+// needed. Here it drives a zoom: line-unit wheels (a mouse's notches) are scaled by
+// a bigger per-step factor than pixel-unit (trackpad) deltas. Handling the wheel
+// also traps it from world systems — the `over_ui` claim is what lets a zoomable
+// `<canvas>` map coexist with an orbit camera behind the UI (no scene here).
+function WheelExample() {
+  const [zoom, setZoom] = useState(1);
+
+  const onWheel = (e: WheelEventData) => {
+    const step = e.deltaMode === "line" ? e.deltaY * 0.1 : e.deltaY * 0.005;
+    // Wheel up (deltaY < 0) zooms in.
+    setZoom((z) => clamp(z - step, 0.5, 3));
+  };
+
+  const side = Math.round(BOX * zoom);
+
+  return (
+    <Example
+      description="onWheel hands any node the raw wheel deltas (no overflow: scroll). Scroll the wheel over the box to zoom it."
+      tsx={`<node onWheel={(e) => {
+  const step = e.deltaMode === "line" ? e.deltaY * 0.1 : e.deltaY * 0.005;
+  setZoom((z) => clamp(z - step, 0.5, 3));
+}} />`}
+    >
+      <node
+        style={{
+          ...stageStyle,
+          justifyContent: "center",
+          alignItems: "center",
+        }}
+      >
+        <node
+          style={{
+            width: side,
+            height: side,
+            borderRadius: 12,
+            justifyContent: "center",
+            alignItems: "center",
+            backgroundColor: Colors.primary100,
+            flexDirection: "column",
+          }}
+          onWheel={onWheel}
+        >
+          <text style={boxLabelStyle}>Zoom me</text>
+          <text style={boxLabelStyle}>{`${zoom.toFixed(2)}×`}</text>
         </node>
       </node>
     </Example>

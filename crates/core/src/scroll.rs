@@ -11,8 +11,9 @@ use bevy::prelude::*;
 use bevy::ui::{ComputedNode, ScrollPosition, UiGlobalTransform, UiStack};
 use bevy::window::PrimaryWindow;
 
-use crate::bridge::ScrollStep;
+use crate::bridge::{JsBridge, RNode, ScrollStep, WheelListener};
 use crate::plugin::PointerCapture;
+use crate::protocol::{Outbound, UiEvent};
 use crate::transition::ScrollTransitionState;
 
 /// Default logical pixels scrolled per wheel "line" (mice report `Line` units;
@@ -35,14 +36,22 @@ fn is_scroll_container(node: &Node) -> bool {
 /// lets the wheel fall through, so a camera behind a transparent, non-overflowing
 /// scroll pane can still zoom.
 ///
-/// Target selection is by **geometry, filtered to real scroll containers**. Every
-/// `Node` carries a `ScrollPosition` (it's a required component), so "has a
-/// `ScrollPosition`" is meaningless — we must check `Node.overflow`. Among the nodes
-/// that actually opt into scrolling, we hit-test the cursor against each one's own
-/// rectangle with [`ComputedNode::contains_point`] and take the topmost. This is
-/// content-agnostic: whatever sits on top (text glyphs, images, child nodes) is
-/// irrelevant because we only ever test the containers' rects. Bevy's layout clamps
-/// the *applied* offset to `[0, max]`, so writing freely here never overscrolls.
+/// Target selection is by **geometry, topmost-first**. Every `Node` carries a
+/// `ScrollPosition` (it's a required component), so "has a `ScrollPosition`" is
+/// meaningless — we must check `Node.overflow`. We walk the `UiStack` top to bottom
+/// and hit-test the cursor against each node's rectangle with
+/// [`ComputedNode::contains_point`]:
+/// - The topmost node under the cursor that declared `onWheel` (a [`WheelListener`])
+///   **claims** the wheel: it emits via [`collect_wheel_events`], and here we stop
+///   without scrolling anything beneath it. That is what lets an `onWheel` node
+///   (e.g. a zoomable map) sit inside a scroll page and swallow the wheel instead of
+///   also scrolling its ancestor — DOM `preventDefault` semantics.
+/// - Otherwise the topmost real scroll container under the cursor scrolls. This stays
+///   content-agnostic: plain nodes on top (text glyphs, images) are transparent
+///   because they are neither listeners nor scroll containers.
+///
+/// Bevy's layout clamps the *applied* offset to `[0, max]`, so writing freely here
+/// never overscrolls.
 #[allow(clippy::type_complexity)]
 pub fn apply_scroll(
     accumulated: Res<AccumulatedMouseScroll>,
@@ -56,6 +65,7 @@ pub fn apply_scroll(
         Option<&ScrollStep>,
         Option<&mut ScrollTransitionState>,
     )>,
+    wheel_listeners: Query<(), With<WheelListener>>,
     mut capture: ResMut<PointerCapture>,
 ) {
     if accumulated.delta == Vec2::ZERO {
@@ -74,63 +84,147 @@ pub fn apply_scroll(
     let cursor = cursor * window.scale_factor();
 
     // `uinodes` is ordered back-to-front, so reversed is topmost-first: the first
-    // scroll container whose rect contains the cursor wins. This also resolves nested
+    // node under the cursor that claims the wheel wins. This also resolves nested
     // scroll areas correctly (an inner one sits later in the stack, so it's hit first).
     for &entity in ui_stack.uinodes.iter().rev() {
-        if let Ok((computed, transform, node, mut pos, step, scroll_state)) =
+        let Ok((computed, transform, node, mut pos, step, scroll_state)) =
             scrollables.get_mut(entity)
-            && is_scroll_container(node)
-            && computed.contains_point(*transform, cursor)
-        {
-            // Wheel delta → logical pixels, scaled by this container's step. A positive
-            // wheel delta scrolls the view up (content down), i.e. *decreases* the offset.
-            let delta = match accumulated.unit {
-                MouseScrollUnit::Line => {
-                    accumulated.delta * step.map(|s| s.0).unwrap_or(LINE_HEIGHT)
-                }
-                MouseScrollUnit::Pixel => accumulated.delta,
-            };
-            // Clamp to the scrollable range so the offset can't accumulate past the
-            // ends (otherwise you'd have to "unscroll" the slack before it moves).
-            // Bevy clamps the offset it *applies* for rendering but never writes that
-            // back to this component, so we must clamp it ourselves. `ComputedNode`
-            // sizes are physical; the component is logical, so convert with
-            // `inverse_scale_factor`. Mirrors `ui_layout_system`'s own formula.
-            let max = (computed.content_size - computed.size + computed.scrollbar_size)
-                .max(Vec2::ZERO)
-                * computed.inverse_scale_factor;
-            // Move from the eased target if a scroll transition owns the offset (so
-            // ticks accumulate toward a farther target), else from the live position.
-            let base = scroll_state.as_ref().map_or(pos.0, |s| s.target);
-            // Only the axes with actual scroll range (`max > 0`) consume the wheel;
-            // a container whose content fits has nothing to move.
-            let mut next = base;
-            let mut consumed = false;
-            if node.overflow.x == OverflowAxis::Scroll && delta.x != 0.0 && max.x > 0.0 {
-                next.x = (base.x - delta.x).clamp(0.0, max.x);
-                consumed = true;
-            }
-            if node.overflow.y == OverflowAxis::Scroll && delta.y != 0.0 && max.y > 0.0 {
-                next.y = (base.y - delta.y).clamp(0.0, max.y);
-                consumed = true;
-            }
-            if consumed {
-                // With a transition, set the eased target (`drive_scroll_transition`
-                // moves `ScrollPosition`); otherwise move the offset directly.
-                match scroll_state {
-                    Some(mut state) => state.target = next,
-                    None => pos.0 = next,
-                }
-                // The wheel actually moved this container — claim it for the UI so
-                // world-input systems that honor `PointerCapture` (the orbit camera's
-                // wheel-zoom, etc.) ignore the same wheel this frame.
-                capture.over_ui = true;
-                break;
-            }
-            // Nothing to scroll here (content fits the container) — keep scanning lower
-            // containers, and ultimately leave the wheel for world input so e.g. a
-            // camera behind a transparent, non-overflowing scroll pane can still zoom.
+        else {
+            continue;
+        };
+        if !computed.contains_point(*transform, cursor) {
+            continue; // cursor not over this node — transparent, keep scanning
         }
+        // An `onWheel` node on top claims the wheel: stop before scrolling anything
+        // beneath it. `collect_wheel_events` does the emission (+ the `over_ui`
+        // claim); we only need to make sure no ancestor scroll container also moves.
+        if wheel_listeners.contains(entity) {
+            return;
+        }
+        if !is_scroll_container(node) {
+            continue; // a plain node over the cursor is transparent to scrolling
+        }
+        // Wheel delta → logical pixels, scaled by this container's step. A positive
+        // wheel delta scrolls the view up (content down), i.e. *decreases* the offset.
+        let delta = match accumulated.unit {
+            MouseScrollUnit::Line => accumulated.delta * step.map(|s| s.0).unwrap_or(LINE_HEIGHT),
+            MouseScrollUnit::Pixel => accumulated.delta,
+        };
+        // Clamp to the scrollable range so the offset can't accumulate past the
+        // ends (otherwise you'd have to "unscroll" the slack before it moves).
+        // Bevy clamps the offset it *applies* for rendering but never writes that
+        // back to this component, so we must clamp it ourselves. `ComputedNode`
+        // sizes are physical; the component is logical, so convert with
+        // `inverse_scale_factor`. Mirrors `ui_layout_system`'s own formula.
+        let max = (computed.content_size - computed.size + computed.scrollbar_size).max(Vec2::ZERO)
+            * computed.inverse_scale_factor;
+        // Move from the eased target if a scroll transition owns the offset (so
+        // ticks accumulate toward a farther target), else from the live position.
+        let base = scroll_state.as_ref().map_or(pos.0, |s| s.target);
+        // Only the axes with actual scroll range (`max > 0`) consume the wheel;
+        // a container whose content fits has nothing to move.
+        let mut next = base;
+        let mut consumed = false;
+        if node.overflow.x == OverflowAxis::Scroll && delta.x != 0.0 && max.x > 0.0 {
+            next.x = (base.x - delta.x).clamp(0.0, max.x);
+            consumed = true;
+        }
+        if node.overflow.y == OverflowAxis::Scroll && delta.y != 0.0 && max.y > 0.0 {
+            next.y = (base.y - delta.y).clamp(0.0, max.y);
+            consumed = true;
+        }
+        if consumed {
+            // With a transition, set the eased target (`drive_scroll_transition`
+            // moves `ScrollPosition`); otherwise move the offset directly.
+            match scroll_state {
+                Some(mut state) => state.target = next,
+                None => pos.0 = next,
+            }
+            // The wheel actually moved this container — claim it for the UI so
+            // world-input systems that honor `PointerCapture` (the orbit camera's
+            // wheel-zoom, etc.) ignore the same wheel this frame.
+            capture.over_ui = true;
+            break;
+        }
+        // Nothing to scroll here (content fits the container) — keep scanning lower
+        // containers, and ultimately leave the wheel for world input so e.g. a
+        // camera behind a transparent, non-overflowing scroll pane can still zoom.
+    }
+}
+
+/// Deliver raw mouse-wheel deltas to the topmost `onWheel` node under the cursor.
+///
+/// Unlike [`apply_scroll`] (which only moves `overflow: scroll` containers), this
+/// fires for **any** node that declared an `onWheel` handler — e.g. a zoomable
+/// `<canvas>` map. The delta is passed through untouched (no `ScrollStep` scaling);
+/// `deltaMode` (`"line"`/`"pixel"`) tells the app how to read it, like DOM
+/// `WheelEvent`.
+///
+/// Target selection mirrors [`apply_scroll`]: a geometric hit-test over the
+/// `UiStack`, topmost first, filtered to [`WheelListener`] nodes — no `Interaction`
+/// needed, so it composes cleanly with the `onPointer*` machinery. Runs in
+/// `PointerCaptureSet` after `collect_pointer_events` so the `PointerCapture::over_ui`
+/// claim survives (that system *assigns* `over_ui`), letting world wheel-consumers
+/// (a zoom camera) ignore a wheel a node just handled.
+pub fn collect_wheel_events(
+    accumulated: Res<AccumulatedMouseScroll>,
+    windows: Query<&Window, With<PrimaryWindow>>,
+    ui_stack: Res<UiStack>,
+    bridge: Res<JsBridge>,
+    listeners: Query<(&ComputedNode, &UiGlobalTransform, &RNode), With<WheelListener>>,
+    mut capture: ResMut<PointerCapture>,
+) {
+    if accumulated.delta == Vec2::ZERO {
+        return;
+    }
+    let Ok(window) = windows.single() else {
+        return;
+    };
+    let Some(cursor_logical) = window.cursor_position() else {
+        return;
+    };
+    // `ComputedNode`/`UiGlobalTransform` are physical; the window cursor is logical
+    // (see the note in `apply_scroll`). Match them for the hit-test.
+    let cursor = cursor_logical * window.scale_factor();
+
+    let delta_mode = match accumulated.unit {
+        MouseScrollUnit::Line => "line",
+        MouseScrollUnit::Pixel => "pixel",
+    };
+
+    // `uinodes` is back-to-front, so reversed is topmost-first: the first `onWheel`
+    // node whose rect contains the cursor wins.
+    for &entity in ui_stack.uinodes.iter().rev() {
+        let Ok((computed, transform, rnode)) = listeners.get(entity) else {
+            continue;
+        };
+        if !computed.contains_point(*transform, cursor) {
+            continue;
+        }
+        // Normalized 0..1 position within the node (top-left origin), matching the
+        // pointer events' `x`/`y`. A successful `contains_point` implies a non-zero
+        // size, so the divide is safe.
+        let size = computed.size;
+        let min = transform.translation - size * 0.5;
+        let norm = ((cursor - min) / size).clamp(Vec2::ZERO, Vec2::ONE);
+        let _ = bridge.outbound_tx.send(Outbound::UiEvent {
+            event: UiEvent {
+                id: rnode.0,
+                kind: "wheel".to_string(),
+                x: Some(norm.x),
+                y: Some(norm.y),
+                client_x: Some(cursor_logical.x),
+                client_y: Some(cursor_logical.y),
+                delta_x: Some(accumulated.delta.x),
+                delta_y: Some(accumulated.delta.y),
+                delta_mode: Some(delta_mode.to_string()),
+                ..default()
+            },
+        });
+        // The node handled the wheel — claim the pointer so world-input systems that
+        // honor `PointerCapture` ignore the same wheel this frame.
+        capture.over_ui = true;
+        break;
     }
 }
 
@@ -336,5 +430,168 @@ mod tests {
             !over_ui,
             "a container with nothing to scroll must not claim the wheel"
         );
+    }
+
+    #[test]
+    fn wheel_listener_on_top_blocks_ancestor_scroll() {
+        // A scroll container with a `WheelListener` child on top of it (the reported
+        // bug shape: an `onWheel` box inside a scrollable page). Cursor over the child
+        // → `apply_scroll` must yield, leaving the ancestor container un-scrolled. The
+        // event itself is emitted separately by `collect_wheel_events`.
+        let mut world = World::new();
+        let mut window = Window::default();
+        window.set_physical_cursor_position(Some(Vec2::new(300.0, 200.0).as_dvec2()));
+        world.spawn((window, PrimaryWindow));
+
+        let container = world
+            .spawn((
+                Node {
+                    overflow: Overflow::scroll_y(),
+                    ..default()
+                },
+                ComputedNode {
+                    size: Vec2::new(200.0, 100.0),
+                    content_size: Vec2::new(200.0, 300.0),
+                    inverse_scale_factor: 1.0,
+                    ..default()
+                },
+                UiGlobalTransform::from_translation(Vec2::new(300.0, 200.0)),
+                ScrollPosition::default(),
+            ))
+            .id();
+        let child = world
+            .spawn((
+                Node::default(),
+                ComputedNode {
+                    size: Vec2::new(80.0, 20.0),
+                    inverse_scale_factor: 1.0,
+                    ..default()
+                },
+                UiGlobalTransform::from_translation(Vec2::new(300.0, 200.0)),
+                ScrollPosition::default(),
+                WheelListener,
+            ))
+            .id();
+        // Container behind, `onWheel` child in front (topmost-first hits the child).
+        world.insert_resource(UiStack {
+            uinodes: vec![container, child],
+            partition: Vec::new(),
+        });
+        world.insert_resource(AccumulatedMouseScroll {
+            unit: MouseScrollUnit::Line,
+            delta: Vec2::new(0.0, -1.0),
+        });
+        world.insert_resource(PointerCapture::default());
+        world.run_system_once(apply_scroll).unwrap();
+
+        assert_eq!(
+            world.entity(container).get::<ScrollPosition>().unwrap().0,
+            Vec2::ZERO,
+            "an onWheel node on top must block its ancestor scroll container"
+        );
+    }
+
+    /// Drive `collect_wheel_events` against a single 200×100 `WheelListener` node (id 7)
+    /// centered at (300, 200), with one wheel tick of `wheel` in `unit`. Returns the
+    /// emitted `wheel` `UiEvent` (if any) and whether the pointer was flagged UI-owned.
+    fn run_wheel(cursor: Vec2, wheel: Vec2, unit: MouseScrollUnit) -> (Option<UiEvent>, bool) {
+        let mut world = World::new();
+
+        let mut window = Window::default();
+        window.set_physical_cursor_position(Some(cursor.as_dvec2()));
+        world.spawn((window, PrimaryWindow));
+
+        let (_ops_tx, ops_rx) = crossbeam_channel::unbounded::<Vec<crate::protocol::Op>>();
+        let (out_tx, mut out_rx) = tokio::sync::mpsc::unbounded_channel::<Outbound>();
+        let root = world.spawn_empty().id();
+        world.insert_resource(JsBridge::new(ops_rx, out_tx, root));
+
+        let node = world
+            .spawn((
+                RNode(7),
+                ComputedNode {
+                    size: Vec2::new(200.0, 100.0),
+                    inverse_scale_factor: 1.0,
+                    ..default()
+                },
+                UiGlobalTransform::from_translation(Vec2::new(300.0, 200.0)),
+                WheelListener,
+            ))
+            .id();
+        world.insert_resource(UiStack {
+            uinodes: vec![node],
+            partition: Vec::new(),
+        });
+        world.insert_resource(AccumulatedMouseScroll { unit, delta: wheel });
+        world.insert_resource(PointerCapture::default());
+
+        world.run_system_once(collect_wheel_events).unwrap();
+
+        let event = out_rx.try_recv().ok().map(|o| match o {
+            Outbound::UiEvent { event } => event,
+            other => panic!("expected a UiEvent, got {other:?}"),
+        });
+        let over_ui = world.resource::<PointerCapture>().over_ui;
+        (event, over_ui)
+    }
+
+    #[test]
+    fn wheel_over_listener_emits_raw_delta_and_claims() {
+        // Cursor over the node; the raw delta rides through untouched (no ScrollStep
+        // scaling), tagged with its unit, and the wheel is claimed for the UI.
+        let (event, over_ui) = run_wheel(
+            Vec2::new(300.0, 200.0),
+            Vec2::new(3.0, -2.0),
+            MouseScrollUnit::Line,
+        );
+        let event = event.expect("a wheel event over the listener");
+        assert_eq!(event.id, 7);
+        assert_eq!(event.kind, "wheel");
+        assert_eq!(event.delta_x, Some(3.0));
+        assert_eq!(event.delta_y, Some(-2.0));
+        assert_eq!(event.delta_mode.as_deref(), Some("line"));
+        // Cursor at the node's center → normalized (0.5, 0.5), absolute = logical cursor.
+        assert_eq!(event.x, Some(0.5));
+        assert_eq!(event.y, Some(0.5));
+        assert_eq!(event.client_x, Some(300.0));
+        assert_eq!(event.client_y, Some(200.0));
+        assert!(
+            over_ui,
+            "handling the wheel must claim the pointer for the UI"
+        );
+    }
+
+    #[test]
+    fn wheel_reports_pixel_unit_for_trackpads() {
+        let (event, _) = run_wheel(
+            Vec2::new(300.0, 200.0),
+            Vec2::new(0.0, 12.0),
+            MouseScrollUnit::Pixel,
+        );
+        assert_eq!(
+            event.expect("a wheel event").delta_mode.as_deref(),
+            Some("pixel")
+        );
+    }
+
+    #[test]
+    fn wheel_outside_listener_emits_nothing() {
+        // In-window but outside the node's rect (x:200..400, y:150..250) → no event, and
+        // the wheel is left un-owned so world systems still receive it.
+        let (event, over_ui) = run_wheel(
+            Vec2::new(50.0, 50.0),
+            Vec2::new(0.0, -1.0),
+            MouseScrollUnit::Line,
+        );
+        assert!(event.is_none(), "no listener under the cursor");
+        assert!(!over_ui);
+    }
+
+    #[test]
+    fn zero_wheel_emits_nothing() {
+        let (event, over_ui) =
+            run_wheel(Vec2::new(300.0, 200.0), Vec2::ZERO, MouseScrollUnit::Line);
+        assert!(event.is_none(), "a zero delta must not emit a wheel event");
+        assert!(!over_ui);
     }
 }

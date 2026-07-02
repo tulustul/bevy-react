@@ -174,6 +174,12 @@ pub struct Props {
     /// that marker, since `ScrollPosition` is a required component of every `Node`).
     #[serde(default)]
     pub on_scroll: bool,
+    /// Whether this element has an `onWheel` handler registered in JS. Present →
+    /// the reconciler stamps a [`crate::bridge::WheelListener`] so
+    /// [`crate::scroll::collect_wheel_events`] reports raw wheel deltas over the
+    /// node (any node, unlike `onScroll`, which needs `overflow: scroll`).
+    #[serde(default)]
+    pub on_wheel: bool,
 
     /// Per-property animation bindings for an `Animated.node` (Reanimated-style).
     /// Present → the main reconciler stamps a `bevy_react_animations::AnimatedNode`
@@ -695,6 +701,8 @@ pub struct PropsDirty {
     pub pointer: bool,
     /// `onScroll` toggled.
     pub scroll_listener: bool,
+    /// `onWheel` toggled.
+    pub wheel: bool,
     /// `scrollStep` changed.
     pub scroll_step: bool,
     /// `animated` bindings changed.
@@ -863,6 +871,7 @@ impl Props {
             on_pointer_enter => pointer,
             on_pointer_leave => pointer,
             on_scroll => scroll_listener,
+            on_wheel => wheel,
             on_change => editable_handlers,
             on_select => editable_handlers,
             on_focus => editable_handlers,
@@ -954,6 +963,10 @@ impl Props {
                 "onScroll" => {
                     self.on_scroll = false;
                     dirty.scroll_listener = true;
+                }
+                "onWheel" => {
+                    self.on_wheel = false;
+                    dirty.wheel = true;
                 }
                 "onChange" => {
                     self.on_change = false;
@@ -2243,9 +2256,9 @@ impl<'de> Deserialize<'de> for BorderColorSpec {
 pub struct UiEvent {
     pub id: NodeId,
     /// `"click"`, a pointer kind (`"pointerDown"` / `"pointerMove"` /
-    /// `"pointerUp"` / `"pointerEnter"` / `"pointerLeave"`), `"scroll"`, a
-    /// `canvas`'s `"resize"`, or one of an `editableText`'s `"change"` /
-    /// `"select"` / `"focus"` / `"blur"` events.
+    /// `"pointerUp"` / `"pointerEnter"` / `"pointerLeave"`), `"scroll"`,
+    /// `"wheel"`, a `canvas`'s `"resize"`, or one of an `editableText`'s
+    /// `"change"` / `"select"` / `"focus"` / `"blur"` events.
     pub kind: String,
     /// Cursor x within the node, normalized to `0..1` (left→right). Present only
     /// for pointer events; `None` for `"click"`.
@@ -2295,6 +2308,19 @@ pub struct UiEvent {
     /// `"scroll"` events.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub scroll_left: Option<f32>,
+    /// Raw horizontal wheel delta (the frame's accumulated scroll). Present only
+    /// for `"wheel"` events; interpret with [`delta_mode`](Self::delta_mode).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub delta_x: Option<f32>,
+    /// Raw vertical wheel delta. Present only for `"wheel"` events; positive is a
+    /// wheel-down / scroll-forward gesture, matching DOM `WheelEvent.deltaY`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub delta_y: Option<f32>,
+    /// How to read the wheel deltas: `"line"` (mouse notches — scale by your own
+    /// per-line distance) or `"pixel"` (trackpad — already in pixels). Mirrors
+    /// DOM `WheelEvent.deltaMode`. Present only for `"wheel"` events.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub delta_mode: Option<String>,
     /// New logical (CSS px) width of a `canvas`'s laid-out box. Present only for
     /// `"resize"` events, which fire on first layout (0 → W×H) and whenever the
     /// physical pixel size changes (including a DPR change at constant logical
@@ -3037,5 +3063,21 @@ mod tests {
         assert!(!dirty.pointer && !dirty.scroll_listener);
         cached.merge_delta(Props::default(), &["onResize".into()], &[]);
         assert!(!cached.on_resize);
+    }
+
+    /// `onWheel` sets the `wheel` dirty flag on appearance and clears it on `unset`,
+    /// independent of the scroll flags.
+    #[test]
+    fn merge_delta_wheel_flag() {
+        let mut cached = Props::default();
+        let (dirty, _) =
+            cached.merge_delta(props(serde_json::json!({ "onWheel": true })), &[], &[]);
+        assert!(cached.on_wheel);
+        assert!(dirty.wheel);
+        assert!(!dirty.pointer && !dirty.scroll_listener);
+
+        let (dirty, _) = cached.merge_delta(Props::default(), &["onWheel".into()], &[]);
+        assert!(!cached.on_wheel);
+        assert!(dirty.wheel);
     }
 }
