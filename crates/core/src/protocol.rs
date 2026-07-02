@@ -2,20 +2,29 @@
 //!
 //! Everything here derives `serde` so deno_core's `serde_v8` can convert
 //! directly between the plain JS objects the reconciler builds and these Rust
-//! types — no JSON strings on the hot path. These types are deliberately
-//! **bevy-free**: the translation into `bevy_ui` components lives in
-//! [`crate::ui_map`]. Ops only ever flow JS -> Rust, so they need `Deserialize`
-//! only; `UiEvent` flows Rust -> JS and is `Serialize`.
+//! types — no JSON strings on the hot path. Ops only ever flow JS -> Rust, so
+//! they need `Deserialize` only; `UiEvent` flows Rust -> JS and is `Serialize`.
 //!
-//! The unit-bearing wire types (`Length`/`Angle`/`Time`/`FontSize`) parse here at
-//! the serde boundary. A malformed string must **not** fail the whole batch (one
-//! typo would abort the entire commit and trigger a reload), so their
-//! `Deserialize` impls fall back to a default and emit a `tracing::warn!` naming
-//! the bad value — using the neutral `tracing` facade (not bevy types) so the
-//! module stays bevy-free while reaching the same log sink `bevy_log` drains.
+//! Wire strings are decoded **once, here at the serde boundary** — never
+//! re-parsed on apply. The unit-bearing types (`Length`/`Angle`/`Time`/
+//! `FontSize`) parse into their own wire types, and the enum-like style fields
+//! (`display`/`align*`/`flex*`/grid tracks/…) decode directly into the
+//! `bevy_ui`/`bevy_text` values they drive, via field-level `deserialize_with`
+//! (which sidesteps the orphan rule), so applying a style in [`crate::ui_map`]
+//! is a plain field copy. A malformed string must **not** fail the whole batch
+//! (one typo would abort the entire commit and trigger a reload), so every
+//! deserializer falls back to the bevy default and emits a
+//! `tracing::warn!` naming the bad value (`tracing` reaches the same log sink
+//! `bevy_log` drains).
 
 use std::fmt;
 
+use bevy::text::{FontWeight, Justify, LineBreak};
+use bevy::ui::{
+    AlignContent, AlignItems, AlignSelf, BoxSizing, Display, FlexDirection, FlexWrap, FocusPolicy,
+    GridAutoFlow, GridPlacement, GridTrack, JustifyContent, JustifyItems, JustifySelf,
+    OverflowAxis, PositionType, RepeatedGridTrack,
+};
 use serde::de::{self, Deserializer, MapAccess, Visitor};
 use serde::{Deserialize, Serialize};
 
@@ -270,25 +279,24 @@ pub use bevy_react_canvas::DrawCmd;
 /// (`"50%"`, `"100vw"`, `"auto"`, `"10px"`). Rect-valued fields
 /// (`margin`/`padding`/`border`/`borderRadius`) accept a number (uniform), a CSS
 /// shorthand string (`"8px 16px"`), or a `{ top, right, bottom, left }` object.
-// TODO(review): the enum-like fields below are `Option<String>` and re-parsed from their
-// string form on every apply (see ui_map's `display`/`align_items`/… and `parse_template`,
-// which re-allocates `Vec<RepeatedGridTrack>` each update). Decode them into real enums at
-// this serde boundary once (as `Length`/`Rect` already do) so the hot path is a copy, not a
-// string match — this compounds with the no-diffing / full-re-apply cost.
+/// Keyword-valued fields (`display`, `align*`, `flex*`, …) decode straight into
+/// the `bevy_ui`/`bevy_text` enum they drive (see the `keyword_fields!`
+/// deserializers below); an unrecognized keyword warns and falls back to the
+/// bevy default. Grid tracks/placements likewise parse once at decode.
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Style {
     // --- display / box model ---
-    #[serde(default)]
-    pub display: Option<String>,
-    #[serde(default)]
-    pub box_sizing: Option<String>,
-    #[serde(default)]
-    pub position_type: Option<String>,
-    #[serde(default)]
-    pub overflow_x: Option<String>,
-    #[serde(default)]
-    pub overflow_y: Option<String>,
+    #[serde(default, deserialize_with = "de_display")]
+    pub display: Option<Display>,
+    #[serde(default, deserialize_with = "de_box_sizing")]
+    pub box_sizing: Option<BoxSizing>,
+    #[serde(default, deserialize_with = "de_position_type")]
+    pub position_type: Option<PositionType>,
+    #[serde(default, deserialize_with = "de_overflow_axis")]
+    pub overflow_x: Option<OverflowAxis>,
+    #[serde(default, deserialize_with = "de_overflow_axis")]
+    pub overflow_y: Option<OverflowAxis>,
     #[serde(default)]
     pub scrollbar_width: Option<f32>,
 
@@ -319,18 +327,18 @@ pub struct Style {
     pub aspect_ratio: Option<f32>,
 
     // --- alignment ---
-    #[serde(default)]
-    pub align_items: Option<String>,
-    #[serde(default)]
-    pub justify_items: Option<String>,
-    #[serde(default)]
-    pub align_self: Option<String>,
-    #[serde(default)]
-    pub justify_self: Option<String>,
-    #[serde(default)]
-    pub align_content: Option<String>,
-    #[serde(default)]
-    pub justify_content: Option<String>,
+    #[serde(default, deserialize_with = "de_align_items")]
+    pub align_items: Option<AlignItems>,
+    #[serde(default, deserialize_with = "de_justify_items")]
+    pub justify_items: Option<JustifyItems>,
+    #[serde(default, deserialize_with = "de_align_self")]
+    pub align_self: Option<AlignSelf>,
+    #[serde(default, deserialize_with = "de_justify_self")]
+    pub justify_self: Option<JustifySelf>,
+    #[serde(default, deserialize_with = "de_align_content")]
+    pub align_content: Option<AlignContent>,
+    #[serde(default, deserialize_with = "de_justify_content")]
+    pub justify_content: Option<JustifyContent>,
 
     // --- spacing ---
     #[serde(default)]
@@ -341,10 +349,10 @@ pub struct Style {
     pub border: Option<Rect>,
 
     // --- flex ---
-    #[serde(default)]
-    pub flex_direction: Option<String>,
-    #[serde(default)]
-    pub flex_wrap: Option<String>,
+    #[serde(default, deserialize_with = "de_flex_direction")]
+    pub flex_direction: Option<FlexDirection>,
+    #[serde(default, deserialize_with = "de_flex_wrap")]
+    pub flex_wrap: Option<FlexWrap>,
     #[serde(default)]
     pub flex_grow: Option<f32>,
     #[serde(default)]
@@ -359,20 +367,23 @@ pub struct Style {
     pub column_gap: Option<Length>,
 
     // --- grid ---
-    #[serde(default)]
-    pub grid_auto_flow: Option<String>,
-    #[serde(default)]
-    pub grid_template_rows: Option<String>,
-    #[serde(default)]
-    pub grid_template_columns: Option<String>,
-    #[serde(default)]
-    pub grid_auto_rows: Option<String>,
-    #[serde(default)]
-    pub grid_auto_columns: Option<String>,
-    #[serde(default)]
-    pub grid_row: Option<String>,
-    #[serde(default)]
-    pub grid_column: Option<String>,
+    #[serde(default, deserialize_with = "de_grid_auto_flow")]
+    pub grid_auto_flow: Option<GridAutoFlow>,
+    /// CSS grid template (`"repeat(3, 1fr)"`, `"1fr 2fr 100px"`, `"auto"`).
+    #[serde(default, deserialize_with = "de_grid_template")]
+    pub grid_template_rows: Option<Vec<RepeatedGridTrack>>,
+    #[serde(default, deserialize_with = "de_grid_template")]
+    pub grid_template_columns: Option<Vec<RepeatedGridTrack>>,
+    /// Auto-track sizing (`grid-auto-rows`/`columns`); no `repeat()`.
+    #[serde(default, deserialize_with = "de_grid_auto_tracks")]
+    pub grid_auto_rows: Option<Vec<GridTrack>>,
+    #[serde(default, deserialize_with = "de_grid_auto_tracks")]
+    pub grid_auto_columns: Option<Vec<GridTrack>>,
+    /// Grid line placement (`"1 / 3"`, `"span 2"`, `"2"`, `"auto"`).
+    #[serde(default, deserialize_with = "de_grid_placement")]
+    pub grid_row: Option<GridPlacement>,
+    #[serde(default, deserialize_with = "de_grid_placement")]
+    pub grid_column: Option<GridPlacement>,
 
     // --- visual (sibling components) ---
     /// Hex background color (`#rrggbb` / `#rrggbbaa`).
@@ -421,8 +432,8 @@ pub struct Style {
     /// *capture* interaction so siblings, the 3D scene, and portals behind it don't
     /// receive it. When unset the default is element-dependent (set in the
     /// reconciler): a `<button>` blocks, a `<node>`/container passes.
-    #[serde(default)]
-    pub focus_policy: Option<String>,
+    #[serde(default, deserialize_with = "de_focus_policy")]
+    pub focus_policy: Option<FocusPolicy>,
 
     // --- transform / opacity (drive `UiTransform` and color alpha) ---
     /// Static transform (translate/scale/rotate). Mirrors the animated transform
@@ -451,8 +462,8 @@ pub struct Style {
     pub font_size: Option<FontSize>,
     /// `"thin" | "light" | "normal" | "medium" | "semibold" | "bold" | "black"`
     /// or a numeric weight string (e.g. `"600"`).
-    #[serde(default)]
-    pub font_weight: Option<String>,
+    #[serde(default, deserialize_with = "de_font_weight")]
+    pub font_weight: Option<FontWeight>,
     /// Registered font-family name to render this text with (see the plugin's
     /// `default_font`/`font` config). Unknown or unset → the configured default
     /// font.
@@ -460,8 +471,8 @@ pub struct Style {
     pub font_family: Option<String>,
     /// Horizontal alignment of the text block (`<text>` root only):
     /// `"left" | "center" | "right" | "justify" | "start" | "end"`.
-    #[serde(default)]
-    pub text_align: Option<String>,
+    #[serde(default, deserialize_with = "de_text_align")]
+    pub text_align: Option<Justify>,
     /// Line height. A bare number is a multiple of the font size; `{ "px": n }`
     /// is an absolute pixel height. Unset → bevy's default (1.2× the font size).
     #[serde(default)]
@@ -476,8 +487,8 @@ pub struct Style {
     /// How the text wraps when it overflows its bounds (`<text>` root only):
     /// `"wordBoundary"` (default) | `"anyCharacter"` | `"wordOrCharacter"` |
     /// `"noWrap"`.
-    #[serde(default)]
-    pub line_break: Option<String>,
+    #[serde(default, deserialize_with = "de_line_break")]
+    pub line_break: Option<LineBreak>,
 }
 
 /// Bit flags naming the groups of work [`crate::ui_map::apply_style`] (and the
@@ -1765,6 +1776,382 @@ impl<'de> Deserialize<'de> for Rect {
     }
 }
 
+/// Declares one `deserialize_with` fn per keyword-valued [`Style`] field,
+/// decoding the wire keyword straight into the `bevy_ui`/`bevy_text` enum it
+/// drives. An unrecognized keyword warns (naming the field and value) and falls
+/// back to the enum's bevy default — a typo must not abort the commit batch. A
+/// JSON `null` decodes to `None` (matching the former `Option<String>` fields);
+/// any other non-string value keeps hard-erroring, like [`Length`].
+macro_rules! keyword_fields {
+    ( $(
+        $(#[$meta:meta])*
+        fn $fn_name:ident($kind:literal) -> $ty:ty {
+            $( $($kw:literal)|+ => $variant:ident ),+ $(,)?
+        }
+    )+ ) => { $(
+        $(#[$meta])*
+        fn $fn_name<'de, D: Deserializer<'de>>(d: D) -> Result<Option<$ty>, D::Error> {
+            struct V;
+            impl<'de> Visitor<'de> for V {
+                type Value = Option<$ty>;
+                fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                    f.write_str(concat!("a `", $kind, "` keyword string"))
+                }
+                fn visit_str<E: de::Error>(self, s: &str) -> Result<Self::Value, E> {
+                    Ok(Some(match s {
+                        $( $($kw)|+ => <$ty>::$variant, )+
+                        _ => {
+                            tracing::warn!(
+                                target: "bevy_react",
+                                "unrecognized {} {s:?}; using the default", $kind
+                            );
+                            <$ty>::default()
+                        }
+                    }))
+                }
+                fn visit_unit<E: de::Error>(self) -> Result<Self::Value, E> {
+                    Ok(None)
+                }
+                fn visit_none<E: de::Error>(self) -> Result<Self::Value, E> {
+                    Ok(None)
+                }
+            }
+            d.deserialize_any(V)
+        }
+    )+ };
+}
+
+keyword_fields! {
+    fn de_display("display") -> Display {
+        "flex" => Flex, "grid" => Grid, "block" => Block, "none" => None,
+    }
+    fn de_box_sizing("boxSizing") -> BoxSizing {
+        "borderBox" | "border-box" => BorderBox,
+        "contentBox" | "content-box" => ContentBox,
+    }
+    fn de_position_type("positionType") -> PositionType {
+        "absolute" => Absolute, "relative" => Relative,
+    }
+    fn de_overflow_axis("overflow") -> OverflowAxis {
+        "visible" => Visible, "clip" => Clip, "hidden" => Hidden, "scroll" => Scroll,
+    }
+    // `start`/`end` are the physical variants, `flexStart`/`flexEnd` the
+    // flow-relative ones — they diverge in grid and reversed-flex containers,
+    // so the keywords must not collapse together. The alignment enums' bevy
+    // default is the keyword-less `Default` variant ("align per the layout
+    // spec"), which is also the unrecognized-keyword fallback.
+    fn de_align_items("alignItems") -> AlignItems {
+        "start" => Start, "end" => End,
+        "flexStart" => FlexStart, "flexEnd" => FlexEnd,
+        "center" => Center, "baseline" => Baseline, "stretch" => Stretch,
+    }
+    fn de_justify_items("justifyItems") -> JustifyItems {
+        "start" => Start, "end" => End,
+        "center" => Center, "baseline" => Baseline, "stretch" => Stretch,
+    }
+    fn de_align_self("alignSelf") -> AlignSelf {
+        "auto" => Auto, "start" => Start, "end" => End,
+        "flexStart" => FlexStart, "flexEnd" => FlexEnd,
+        "center" => Center, "baseline" => Baseline, "stretch" => Stretch,
+    }
+    fn de_justify_self("justifySelf") -> JustifySelf {
+        "auto" => Auto, "start" => Start, "end" => End,
+        "center" => Center, "baseline" => Baseline, "stretch" => Stretch,
+    }
+    fn de_align_content("alignContent") -> AlignContent {
+        "start" => Start, "end" => End,
+        "flexStart" => FlexStart, "flexEnd" => FlexEnd,
+        "center" => Center, "stretch" => Stretch,
+        "spaceBetween" => SpaceBetween, "spaceEvenly" => SpaceEvenly,
+        "spaceAround" => SpaceAround,
+    }
+    fn de_justify_content("justifyContent") -> JustifyContent {
+        "start" => Start, "end" => End,
+        "flexStart" => FlexStart, "flexEnd" => FlexEnd,
+        "center" => Center, "stretch" => Stretch,
+        "spaceBetween" => SpaceBetween, "spaceEvenly" => SpaceEvenly,
+        "spaceAround" => SpaceAround,
+    }
+    fn de_flex_direction("flexDirection") -> FlexDirection {
+        "row" => Row, "column" => Column,
+        "rowReverse" => RowReverse, "columnReverse" => ColumnReverse,
+    }
+    fn de_flex_wrap("flexWrap") -> FlexWrap {
+        "nowrap" | "noWrap" => NoWrap, "wrap" => Wrap, "wrapReverse" => WrapReverse,
+    }
+    fn de_grid_auto_flow("gridAutoFlow") -> GridAutoFlow {
+        "row" => Row, "column" => Column,
+        "rowDense" => RowDense, "columnDense" => ColumnDense,
+    }
+    // Unknown values fall back to `Pass` (bevy's default) so a typo stays
+    // click-through rather than silently swallowing pointer interaction.
+    fn de_focus_policy("focusPolicy") -> FocusPolicy {
+        "block" => Block, "pass" => Pass,
+    }
+    fn de_text_align("textAlign") -> Justify {
+        "left" => Left, "center" => Center, "right" => Right,
+        "justify" => Justified, "start" => Start, "end" => End,
+    }
+    fn de_line_break("lineBreak") -> LineBreak {
+        "wordBoundary" => WordBoundary, "anyCharacter" => AnyCharacter,
+        "wordOrCharacter" => WordOrCharacter, "noWrap" => NoWrap,
+    }
+}
+
+/// `fontWeight`: a named keyword or a numeric weight string (`"600"`). Not a
+/// [`keyword_fields!`] entry because of the numeric form. Unrecognized → warn +
+/// `NORMAL` (400).
+fn de_font_weight<'de, D: Deserializer<'de>>(d: D) -> Result<Option<FontWeight>, D::Error> {
+    struct V;
+    impl<'de> Visitor<'de> for V {
+        type Value = Option<FontWeight>;
+        fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            f.write_str("a `fontWeight` keyword or numeric weight string")
+        }
+        fn visit_str<E: de::Error>(self, s: &str) -> Result<Self::Value, E> {
+            Ok(Some(match s {
+                "thin" => FontWeight::THIN,
+                "light" => FontWeight(300),
+                "normal" => FontWeight::NORMAL,
+                "medium" => FontWeight(500),
+                "semibold" => FontWeight(600),
+                "bold" => FontWeight::BOLD,
+                "black" => FontWeight::BLACK,
+                other => other.parse::<u16>().map(FontWeight).unwrap_or_else(|_| {
+                    tracing::warn!(
+                        target: "bevy_react",
+                        "unrecognized fontWeight {other:?}; using the default"
+                    );
+                    FontWeight::NORMAL
+                }),
+            }))
+        }
+        fn visit_unit<E: de::Error>(self) -> Result<Self::Value, E> {
+            Ok(None)
+        }
+        fn visit_none<E: de::Error>(self) -> Result<Self::Value, E> {
+            Ok(None)
+        }
+    }
+    d.deserialize_any(V)
+}
+
+/// Split a grid track list on whitespace while keeping `repeat(...)` groups
+/// (which contain spaces) intact.
+fn split_tracks(s: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut depth = 0usize;
+    let mut cur = String::new();
+    for ch in s.chars() {
+        match ch {
+            '(' => {
+                depth += 1;
+                cur.push(ch);
+            }
+            ')' => {
+                depth = depth.saturating_sub(1);
+                cur.push(ch);
+            }
+            c if c.is_whitespace() && depth == 0 => {
+                if !cur.is_empty() {
+                    out.push(std::mem::take(&mut cur));
+                }
+            }
+            c => cur.push(c),
+        }
+    }
+    if !cur.is_empty() {
+        out.push(cur);
+    }
+    out
+}
+
+/// Parse one sizing token (`"1fr"`, `"100px"`, `"50%"`, `"auto"`,
+/// `"min-content"`, `"max-content"`, `"2flex"`) into a `GridTrack`.
+fn single_track(token: &str) -> Option<GridTrack> {
+    let t = token.trim();
+    match t {
+        "auto" => return Some(GridTrack::auto()),
+        "min-content" => return Some(GridTrack::min_content()),
+        "max-content" => return Some(GridTrack::max_content()),
+        _ => {}
+    }
+    let parse = |num: &str| num.trim().parse::<f32>().ok();
+    if let Some(v) = t.strip_suffix("fr").and_then(parse) {
+        Some(GridTrack::fr(v))
+    } else if let Some(v) = t.strip_suffix("flex").and_then(parse) {
+        Some(GridTrack::flex(v))
+    } else if let Some(v) = t.strip_suffix("px").and_then(parse) {
+        Some(GridTrack::px(v))
+    } else {
+        t.strip_suffix('%').and_then(parse).map(GridTrack::percent)
+    }
+}
+
+/// Build a repeated track (`repeat(count, token)`), dispatching on the unit.
+fn repeated_track(count: u16, token: &str) -> Option<RepeatedGridTrack> {
+    let t = token.trim();
+    match t {
+        "auto" => return Some(RepeatedGridTrack::auto(count)),
+        "min-content" => return Some(RepeatedGridTrack::min_content(count)),
+        "max-content" => return Some(RepeatedGridTrack::max_content(count)),
+        _ => {}
+    }
+    let parse = |num: &str| num.trim().parse::<f32>().ok();
+    if let Some(v) = t.strip_suffix("fr").and_then(parse) {
+        Some(RepeatedGridTrack::fr(count, v))
+    } else if let Some(v) = t.strip_suffix("flex").and_then(parse) {
+        Some(RepeatedGridTrack::flex(count, v))
+    } else if let Some(v) = t.strip_suffix("px").and_then(parse) {
+        Some(RepeatedGridTrack::px(count as usize, v))
+    } else {
+        t.strip_suffix('%')
+            .and_then(parse)
+            .map(|v| RepeatedGridTrack::percent(count as usize, v))
+    }
+}
+
+/// Parse a CSS grid template (`"repeat(3, 1fr)"`, `"1fr 2fr 100px"`, `"auto"`).
+/// An unparsable token warns and is skipped; the rest of the template survives.
+fn parse_template(s: &str) -> Vec<RepeatedGridTrack> {
+    split_tracks(s)
+        .into_iter()
+        .filter_map(|tok| {
+            let parse_one = || {
+                if let Some(inner) = tok
+                    .strip_prefix("repeat(")
+                    .and_then(|t| t.strip_suffix(')'))
+                {
+                    let (count, track) = inner.split_once(',')?;
+                    repeated_track(count.trim().parse().ok()?, track)
+                } else {
+                    single_track(&tok).map(Into::into)
+                }
+            };
+            let parsed = parse_one();
+            if parsed.is_none() {
+                tracing::warn!(target: "bevy_react", "ignoring unparsable grid track {tok:?}");
+            }
+            parsed
+        })
+        .collect()
+}
+
+/// Parse an auto-track list (`grid-auto-rows`/`columns`); no `repeat()`.
+fn parse_auto_tracks(s: &str) -> Vec<GridTrack> {
+    split_tracks(s)
+        .iter()
+        .filter_map(|t| {
+            let parsed = single_track(t);
+            if parsed.is_none() {
+                tracing::warn!(target: "bevy_react", "ignoring unparsable grid track {t:?}");
+            }
+            parsed
+        })
+        .collect()
+}
+
+/// Fallible half of [`de_grid_placement`]: `None` on anything that must not
+/// reach `GridPlacement`'s panicking constructors. A zero anywhere in the value
+/// (invalid in CSS) aborts the whole placement (rather than degrading to a
+/// partial one, which would silently mis-place the item).
+fn try_grid_placement(s: &str) -> Option<GridPlacement> {
+    enum Token {
+        Num(i16),  // a nonzero line number
+        Span(u16), // a nonzero `span N`
+        Auto,
+        Invalid, // a zero line/span, or an unrecognized token
+    }
+    fn token(t: &str) -> Token {
+        let t = t.trim();
+        if t == "auto" {
+            return Token::Auto;
+        }
+        if let Some(n) = t.strip_prefix("span") {
+            return match n.trim().parse::<u16>() {
+                Ok(0) | Err(_) => Token::Invalid,
+                Ok(n) => Token::Span(n),
+            };
+        }
+        match t.parse::<i16>() {
+            Ok(0) | Err(_) => Token::Invalid,
+            Ok(n) => Token::Num(n),
+        }
+    }
+    use Token::*;
+    if let Some((a, b)) = s.split_once('/') {
+        return Some(match (token(a), token(b)) {
+            (Num(start), Span(span)) => GridPlacement::start_span(start, span),
+            (Auto, Span(span)) => GridPlacement::span(span),
+            (Num(start), Num(end)) => GridPlacement::start_end(start, end),
+            (Num(start), Auto) => GridPlacement::start(start),
+            (Auto, Num(end)) => GridPlacement::end(end),
+            (Auto, Auto) => GridPlacement::auto(),
+            _ => return None,
+        });
+    }
+    match token(s) {
+        Auto => Some(GridPlacement::auto()),
+        Span(span) => Some(GridPlacement::span(span)),
+        Num(line) => Some(GridPlacement::start(line)),
+        Invalid => None,
+    }
+}
+
+/// Shared shape of the three grid deserializers: string in, parsed value out,
+/// `null` → `None`, non-string → hard error (like the keyword fields).
+macro_rules! grid_fields {
+    ( $(
+        $(#[$meta:meta])*
+        fn $fn_name:ident($expect:literal) -> $ty:ty { $parse:expr }
+    )+ ) => { $(
+        $(#[$meta])*
+        fn $fn_name<'de, D: Deserializer<'de>>(d: D) -> Result<Option<$ty>, D::Error> {
+            struct V;
+            impl<'de> Visitor<'de> for V {
+                type Value = Option<$ty>;
+                fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                    f.write_str($expect)
+                }
+                fn visit_str<E: de::Error>(self, s: &str) -> Result<Self::Value, E> {
+                    let parse: fn(&str) -> $ty = $parse;
+                    Ok(Some(parse(s)))
+                }
+                fn visit_unit<E: de::Error>(self) -> Result<Self::Value, E> {
+                    Ok(None)
+                }
+                fn visit_none<E: de::Error>(self) -> Result<Self::Value, E> {
+                    Ok(None)
+                }
+            }
+            d.deserialize_any(V)
+        }
+    )+ };
+}
+
+grid_fields! {
+    fn de_grid_template("a CSS grid template string") -> Vec<RepeatedGridTrack> {
+        parse_template
+    }
+    fn de_grid_auto_tracks("a grid auto-track list string") -> Vec<GridTrack> {
+        parse_auto_tracks
+    }
+    /// A zero grid line/span (invalid in CSS — and `GridPlacement`'s
+    /// constructors panic on it) or an unrecognized token warns and falls back
+    /// to `auto`.
+    fn de_grid_placement("a grid line placement string") -> GridPlacement {
+        |s| {
+            try_grid_placement(s).unwrap_or_else(|| {
+                tracing::warn!(
+                    target: "bevy_react",
+                    "unrecognized grid placement {s:?}; using the default"
+                );
+                GridPlacement::default()
+            })
+        }
+    }
+}
+
 /// Border color: a single CSS color applied to all four sides, or a
 /// `{ top, right, bottom, left }` object setting sides individually. Omitted
 /// sides decode to `None` (painted transparent — bevy's `BorderColor` default).
@@ -2077,6 +2464,142 @@ mod tests {
         let s: Style = serde_json::from_str(r#"{ "padding": "1px 2px 3px 4px 5px" }"#)
             .expect("bad value-count must not abort");
         assert_eq!(s.padding, Some(Rect::default()));
+    }
+
+    /// Keyword style fields decode straight into their `bevy_ui`/`bevy_text`
+    /// enums; `start`/`end` map to the physical `Start`/`End` variants while
+    /// `flexStart`/`flexEnd` map to the flow-relative `FlexStart`/`FlexEnd`.
+    /// They diverge in grid and reversed-flex containers, so the keywords must
+    /// not collapse together.
+    #[test]
+    fn keyword_fields_decode_to_bevy_enums() {
+        let s: Style = serde_json::from_value(serde_json::json!({
+            "display": "grid",
+            "alignItems": "start",
+            "alignSelf": "flexStart",
+            "alignContent": "spaceBetween",
+            "justifyContent": "flexEnd",
+            "flexWrap": "nowrap",
+            "focusPolicy": "block",
+            "textAlign": "justify",
+            "lineBreak": "anyCharacter",
+        }))
+        .expect("keyword style decodes");
+        assert_eq!(s.display, Some(Display::Grid));
+        assert_eq!(s.align_items, Some(AlignItems::Start));
+        assert_eq!(s.align_self, Some(AlignSelf::FlexStart));
+        assert_eq!(s.align_content, Some(AlignContent::SpaceBetween));
+        assert_eq!(s.justify_content, Some(JustifyContent::FlexEnd));
+        assert_eq!(s.flex_wrap, Some(FlexWrap::NoWrap));
+        assert_eq!(s.focus_policy, Some(FocusPolicy::Block));
+        assert_eq!(s.text_align, Some(Justify::Justified));
+        assert_eq!(s.line_break, Some(LineBreak::AnyCharacter));
+
+        let s: Style = serde_json::from_value(serde_json::json!({
+            "alignItems": "flexStart",
+            "justifyContent": "start",
+            // both keyword spellings of boxSizing are accepted
+            "boxSizing": "border-box",
+            "flexWrap": "noWrap",
+        }))
+        .expect("alias keywords decode");
+        assert_eq!(s.align_items, Some(AlignItems::FlexStart));
+        assert_eq!(s.justify_content, Some(JustifyContent::Start));
+        assert_eq!(s.box_sizing, Some(BoxSizing::BorderBox));
+        assert_eq!(s.flex_wrap, Some(FlexWrap::NoWrap));
+    }
+
+    /// An unrecognized enum keyword falls back to the bevy default (and warns)
+    /// rather than aborting the batch or being silently dropped — a valid
+    /// sibling field still decodes.
+    #[test]
+    fn unknown_enum_keywords_fall_back_to_default() {
+        let s: Style = serde_json::from_value(serde_json::json!({
+            "display": "flx",
+            "alignItems": "centre",
+            "flexDirection": "sideways",
+            "textAlign": "middle",
+            "fontWeight": "heavyish",
+            "focusPolicy": "weird",
+            // A valid sibling proves the fallbacks didn't abort the Style.
+            "lineBreak": "wordBoundary",
+        }))
+        .expect("bad keywords must not abort deserialization");
+        assert_eq!(s.display, Some(Display::default()));
+        assert_eq!(s.align_items, Some(AlignItems::default()));
+        assert_eq!(s.flex_direction, Some(FlexDirection::default()));
+        assert_eq!(s.text_align, Some(Justify::default()));
+        assert_eq!(s.font_weight, Some(FontWeight::NORMAL));
+        assert_eq!(s.focus_policy, Some(FocusPolicy::Pass));
+        assert_eq!(s.line_break, Some(LineBreak::WordBoundary));
+    }
+
+    /// `fontWeight` takes a named keyword or a numeric weight string.
+    #[test]
+    fn font_weight_keywords_and_numeric() {
+        let fw = |v: serde_json::Value| {
+            serde_json::from_value::<Style>(serde_json::json!({ "fontWeight": v }))
+                .expect("fontWeight decodes")
+                .font_weight
+        };
+        assert_eq!(fw("bold".into()), Some(FontWeight::BOLD));
+        assert_eq!(fw("600".into()), Some(FontWeight(600)));
+        assert_eq!(fw("thin".into()), Some(FontWeight::THIN));
+    }
+
+    /// Grid templates/placements parse once at decode into the bevy types.
+    #[test]
+    fn grid_templates_and_placement_decode() {
+        let s: Style = serde_json::from_value(serde_json::json!({
+            "gridTemplateColumns": "1fr 2fr 100px",
+            "gridTemplateRows": "repeat(3, 1fr)",
+            "gridAutoRows": "auto 40px",
+        }))
+        .expect("grid template decodes");
+        assert_eq!(s.grid_template_columns.map(|t| t.len()), Some(3));
+        assert_eq!(s.grid_template_rows.map(|t| t.len()), Some(1));
+        assert_eq!(s.grid_auto_rows.map(|t| t.len()), Some(2));
+
+        // An unparsable track is skipped (warned); the rest survive.
+        let s: Style =
+            serde_json::from_value(serde_json::json!({ "gridTemplateRows": "1fr bogus 2fr" }))
+                .expect("bad track must not abort");
+        assert_eq!(s.grid_template_rows.map(|t| t.len()), Some(2));
+
+        let placed = |v: &str| {
+            let s: Style = serde_json::from_value(serde_json::json!({ "gridRow": v }))
+                .expect("grid placement decodes");
+            format!("{:?}", s.grid_row.unwrap())
+        };
+        let expect = |p: GridPlacement| format!("{p:?}");
+        assert_eq!(placed("1 / 3"), expect(GridPlacement::start_end(1, 3)));
+        assert_eq!(placed("span 2"), expect(GridPlacement::span(2)));
+        assert_eq!(
+            placed("2 / span 3"),
+            expect(GridPlacement::start_span(2, 3))
+        );
+        assert_eq!(placed("2 / 2"), expect(GridPlacement::start_end(2, 2)));
+        assert_eq!(placed("-1"), expect(GridPlacement::start(-1)));
+        assert_eq!(placed("2 / auto"), expect(GridPlacement::start(2)));
+        assert_eq!(placed("auto / 3"), expect(GridPlacement::end(3)));
+    }
+
+    /// A zero grid line/span is invalid CSS and panics `GridPlacement`'s
+    /// constructors — every zero-bearing form must warn and fall back to `auto`
+    /// at decode, never reach the constructor or degrade to a partial placement.
+    #[test]
+    fn grid_placement_zero_falls_back_to_auto() {
+        let placed = |v: &str| {
+            let s: Style = serde_json::from_value(serde_json::json!({ "gridRow": v }))
+                .expect("zero placement must not abort");
+            format!("{:?}", s.grid_row.unwrap())
+        };
+        let auto = format!("{:?}", GridPlacement::auto());
+        for s in ["0", "span 0", "0 / 2", "2 / 0", "0 / span 2", "2 / span 0"] {
+            assert_eq!(placed(s), auto, "input {s:?}");
+        }
+        // Unrecognized garbage also falls back rather than panicking.
+        assert_eq!(placed("garbage"), auto);
     }
 
     /// A `filter` decodes its CSS-like functions: `blur`/`hueRotate` carry units

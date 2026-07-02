@@ -1,7 +1,9 @@
-//! Translation from reconciler props (the bevy-free [`crate::protocol`] wire
-//! types) into `bevy_ui` components: the `Node` layout, its sibling visual
-//! components (background/border/outline/shadow/z-index/global-z-index), and
-//! `ImageNode`.
+//! Translation from reconciler props (the [`crate::protocol`] wire types) into
+//! `bevy_ui` components: the `Node` layout, its sibling visual components
+//! (background/border/outline/shadow/z-index/global-z-index), and `ImageNode`.
+//! Keyword and grid style fields already arrive as decoded `bevy_ui` values
+//! (parsed once at the serde boundary — see [`crate::protocol`]), so applying
+//! them here is a plain field copy.
 
 use bevy::platform::collections::HashMap;
 use bevy::prelude::*;
@@ -18,15 +20,6 @@ use crate::protocol::{
     LineHeightSpec, LinearGradientSpec, Props, RadialGradientSpec, RadialShapeSpec, Rect,
     SliceBorder, SliceScale, SliceSpec, Style, StyleDirty,
 };
-
-/// Fallback for an enum-keyword mapper that didn't recognize its token: `warn!`s
-/// (naming the field and value) and returns the type's default, so a typo'd
-/// `display`/`align*`/… surfaces in the log instead of silently snapping to the
-/// Bevy default. Mirrors the `parse_color` / `fontFamily` warn+fallback pattern.
-fn unknown_keyword<T: Default>(kind: &str, s: &str) -> T {
-    warn!("unrecognized {kind} {s:?}; using the default");
-    T::default()
-}
 
 /// Parse a CSS color string into a `Color`: hex, named colors, `transparent`, or
 /// `rgb()/hsl()/hwb()/oklab()/oklch()` functional notation (see
@@ -239,319 +232,6 @@ pub fn build_box_shadows(list: &BoxShadowList) -> Vec<ShadowStyle> {
     }
 }
 
-fn display(s: &str) -> Display {
-    match s {
-        "flex" => Display::Flex,
-        "grid" => Display::Grid,
-        "block" => Display::Block,
-        "none" => Display::None,
-        _ => unknown_keyword("display", s),
-    }
-}
-
-fn box_sizing(s: &str) -> BoxSizing {
-    match s {
-        "borderBox" | "border-box" => BoxSizing::BorderBox,
-        "contentBox" | "content-box" => BoxSizing::ContentBox,
-        _ => unknown_keyword("boxSizing", s),
-    }
-}
-
-fn position_type(s: &str) -> PositionType {
-    match s {
-        "absolute" => PositionType::Absolute,
-        "relative" => PositionType::Relative,
-        _ => unknown_keyword("positionType", s),
-    }
-}
-
-fn overflow_axis(s: &str) -> OverflowAxis {
-    match s {
-        "visible" => OverflowAxis::Visible,
-        "clip" => OverflowAxis::Clip,
-        "hidden" => OverflowAxis::Hidden,
-        "scroll" => OverflowAxis::Scroll,
-        _ => unknown_keyword("overflow", s),
-    }
-}
-
-fn align_items(s: &str) -> AlignItems {
-    match s {
-        "start" => AlignItems::Start,
-        "end" => AlignItems::End,
-        "flexStart" => AlignItems::FlexStart,
-        "flexEnd" => AlignItems::FlexEnd,
-        "center" => AlignItems::Center,
-        "baseline" => AlignItems::Baseline,
-        "stretch" => AlignItems::Stretch,
-        _ => unknown_keyword("alignItems", s),
-    }
-}
-
-fn align_self(s: &str) -> AlignSelf {
-    match s {
-        "auto" => AlignSelf::Auto,
-        "start" => AlignSelf::Start,
-        "end" => AlignSelf::End,
-        "flexStart" => AlignSelf::FlexStart,
-        "flexEnd" => AlignSelf::FlexEnd,
-        "center" => AlignSelf::Center,
-        "baseline" => AlignSelf::Baseline,
-        "stretch" => AlignSelf::Stretch,
-        _ => unknown_keyword("alignSelf", s),
-    }
-}
-
-fn align_content(s: &str) -> AlignContent {
-    match s {
-        "start" => AlignContent::Start,
-        "end" => AlignContent::End,
-        "flexStart" => AlignContent::FlexStart,
-        "flexEnd" => AlignContent::FlexEnd,
-        "center" => AlignContent::Center,
-        "stretch" => AlignContent::Stretch,
-        "spaceBetween" => AlignContent::SpaceBetween,
-        "spaceEvenly" => AlignContent::SpaceEvenly,
-        "spaceAround" => AlignContent::SpaceAround,
-        _ => unknown_keyword("alignContent", s),
-    }
-}
-
-fn justify_items(s: &str) -> JustifyItems {
-    match s {
-        "start" => JustifyItems::Start,
-        "end" => JustifyItems::End,
-        "center" => JustifyItems::Center,
-        "baseline" => JustifyItems::Baseline,
-        "stretch" => JustifyItems::Stretch,
-        _ => unknown_keyword("justifyItems", s),
-    }
-}
-
-fn justify_self(s: &str) -> JustifySelf {
-    match s {
-        "auto" => JustifySelf::Auto,
-        "start" => JustifySelf::Start,
-        "end" => JustifySelf::End,
-        "center" => JustifySelf::Center,
-        "baseline" => JustifySelf::Baseline,
-        "stretch" => JustifySelf::Stretch,
-        _ => unknown_keyword("justifySelf", s),
-    }
-}
-
-fn justify_content(s: &str) -> JustifyContent {
-    match s {
-        "start" => JustifyContent::Start,
-        "end" => JustifyContent::End,
-        "flexStart" => JustifyContent::FlexStart,
-        "flexEnd" => JustifyContent::FlexEnd,
-        "center" => JustifyContent::Center,
-        "stretch" => JustifyContent::Stretch,
-        "spaceBetween" => JustifyContent::SpaceBetween,
-        "spaceEvenly" => JustifyContent::SpaceEvenly,
-        "spaceAround" => JustifyContent::SpaceAround,
-        _ => unknown_keyword("justifyContent", s),
-    }
-}
-
-fn flex_direction(s: &str) -> FlexDirection {
-    match s {
-        "row" => FlexDirection::Row,
-        "column" => FlexDirection::Column,
-        "rowReverse" => FlexDirection::RowReverse,
-        "columnReverse" => FlexDirection::ColumnReverse,
-        _ => unknown_keyword("flexDirection", s),
-    }
-}
-
-fn flex_wrap(s: &str) -> FlexWrap {
-    match s {
-        "nowrap" | "noWrap" => FlexWrap::NoWrap,
-        "wrap" => FlexWrap::Wrap,
-        "wrapReverse" => FlexWrap::WrapReverse,
-        _ => unknown_keyword("flexWrap", s),
-    }
-}
-
-fn grid_auto_flow(s: &str) -> GridAutoFlow {
-    match s {
-        "row" => GridAutoFlow::Row,
-        "column" => GridAutoFlow::Column,
-        "rowDense" => GridAutoFlow::RowDense,
-        "columnDense" => GridAutoFlow::ColumnDense,
-        _ => unknown_keyword("gridAutoFlow", s),
-    }
-}
-
-/// Split a grid track list on whitespace while keeping `repeat(...)` groups
-/// (which contain spaces) intact.
-fn split_tracks(s: &str) -> Vec<String> {
-    let mut out = Vec::new();
-    let mut depth = 0usize;
-    let mut cur = String::new();
-    for ch in s.chars() {
-        match ch {
-            '(' => {
-                depth += 1;
-                cur.push(ch);
-            }
-            ')' => {
-                depth = depth.saturating_sub(1);
-                cur.push(ch);
-            }
-            c if c.is_whitespace() && depth == 0 => {
-                if !cur.is_empty() {
-                    out.push(std::mem::take(&mut cur));
-                }
-            }
-            c => cur.push(c),
-        }
-    }
-    if !cur.is_empty() {
-        out.push(cur);
-    }
-    out
-}
-
-/// Parse one sizing token (`"1fr"`, `"100px"`, `"50%"`, `"auto"`,
-/// `"min-content"`, `"max-content"`, `"2flex"`) into a `GridTrack`.
-fn single_track(token: &str) -> Option<GridTrack> {
-    let t = token.trim();
-    match t {
-        "auto" => return Some(GridTrack::auto()),
-        "min-content" => return Some(GridTrack::min_content()),
-        "max-content" => return Some(GridTrack::max_content()),
-        _ => {}
-    }
-    let parse = |num: &str| num.trim().parse::<f32>().ok();
-    if let Some(v) = t.strip_suffix("fr").and_then(parse) {
-        Some(GridTrack::fr(v))
-    } else if let Some(v) = t.strip_suffix("flex").and_then(parse) {
-        Some(GridTrack::flex(v))
-    } else if let Some(v) = t.strip_suffix("px").and_then(parse) {
-        Some(GridTrack::px(v))
-    } else {
-        t.strip_suffix('%').and_then(parse).map(GridTrack::percent)
-    }
-}
-
-/// Build a repeated track (`repeat(count, token)`), dispatching on the unit.
-fn repeated_track(count: u16, token: &str) -> Option<RepeatedGridTrack> {
-    let t = token.trim();
-    match t {
-        "auto" => return Some(RepeatedGridTrack::auto(count)),
-        "min-content" => return Some(RepeatedGridTrack::min_content(count)),
-        "max-content" => return Some(RepeatedGridTrack::max_content(count)),
-        _ => {}
-    }
-    let parse = |num: &str| num.trim().parse::<f32>().ok();
-    if let Some(v) = t.strip_suffix("fr").and_then(parse) {
-        Some(RepeatedGridTrack::fr(count, v))
-    } else if let Some(v) = t.strip_suffix("flex").and_then(parse) {
-        Some(RepeatedGridTrack::flex(count, v))
-    } else if let Some(v) = t.strip_suffix("px").and_then(parse) {
-        Some(RepeatedGridTrack::px(count as usize, v))
-    } else {
-        t.strip_suffix('%')
-            .and_then(parse)
-            .map(|v| RepeatedGridTrack::percent(count as usize, v))
-    }
-}
-
-/// Parse a CSS grid template (`"repeat(3, 1fr)"`, `"1fr 2fr 100px"`, `"auto"`).
-fn parse_template(s: &str) -> Vec<RepeatedGridTrack> {
-    split_tracks(s)
-        .into_iter()
-        .filter_map(|tok| {
-            let parse_one = || {
-                if let Some(inner) = tok
-                    .strip_prefix("repeat(")
-                    .and_then(|t| t.strip_suffix(')'))
-                {
-                    let (count, track) = inner.split_once(',')?;
-                    repeated_track(count.trim().parse().ok()?, track)
-                } else {
-                    single_track(&tok).map(Into::into)
-                }
-            };
-            let parsed = parse_one();
-            if parsed.is_none() {
-                warn!("ignoring unparsable grid track {tok:?}");
-            }
-            parsed
-        })
-        .collect()
-}
-
-/// Parse an auto-track list (`grid-auto-rows`/`columns`); no `repeat()`.
-fn parse_auto_tracks(s: &str) -> Vec<GridTrack> {
-    split_tracks(s)
-        .iter()
-        .filter_map(|t| {
-            let parsed = single_track(t);
-            if parsed.is_none() {
-                warn!("ignoring unparsable grid track {t:?}");
-            }
-            parsed
-        })
-        .collect()
-}
-
-/// Parse a grid line placement (`"1 / 3"`, `"span 2"`, `"2"`, `"auto"`). A zero
-/// line/span (invalid in CSS — and `GridPlacement`'s constructors panic on it) or
-/// an unrecognized token warns and falls back to `auto`.
-fn parse_grid_placement(s: &str) -> GridPlacement {
-    try_grid_placement(s).unwrap_or_else(|| unknown_keyword("grid placement", s))
-}
-
-/// Fallible half of [`parse_grid_placement`]: `None` on anything that must not
-/// reach `GridPlacement`'s panicking constructors. A zero anywhere in the value
-/// aborts the whole placement (rather than degrading to a partial one, which
-/// would silently mis-place the item).
-fn try_grid_placement(s: &str) -> Option<GridPlacement> {
-    enum Token {
-        Num(i16),  // a nonzero line number
-        Span(u16), // a nonzero `span N`
-        Auto,
-        Invalid, // a zero line/span, or an unrecognized token
-    }
-    fn token(t: &str) -> Token {
-        let t = t.trim();
-        if t == "auto" {
-            return Token::Auto;
-        }
-        if let Some(n) = t.strip_prefix("span") {
-            return match n.trim().parse::<u16>() {
-                Ok(0) | Err(_) => Token::Invalid,
-                Ok(n) => Token::Span(n),
-            };
-        }
-        match t.parse::<i16>() {
-            Ok(0) | Err(_) => Token::Invalid,
-            Ok(n) => Token::Num(n),
-        }
-    }
-    use Token::*;
-    if let Some((a, b)) = s.split_once('/') {
-        return Some(match (token(a), token(b)) {
-            (Num(start), Span(span)) => GridPlacement::start_span(start, span),
-            (Auto, Span(span)) => GridPlacement::span(span),
-            (Num(start), Num(end)) => GridPlacement::start_end(start, end),
-            (Num(start), Auto) => GridPlacement::start(start),
-            (Auto, Num(end)) => GridPlacement::end(end),
-            (Auto, Auto) => GridPlacement::auto(),
-            _ => return None,
-        });
-    }
-    match token(s) {
-        Auto => Some(GridPlacement::auto()),
-        Span(span) => Some(GridPlacement::span(span)),
-        Num(line) => Some(GridPlacement::start(line)),
-        Invalid => None,
-    }
-}
-
 /// Build a `bevy_ui::Node` from the style subset. Unset fields keep Bevy's
 /// defaults.
 pub fn node_from_style(style: &Option<Style>) -> Node {
@@ -560,20 +240,20 @@ pub fn node_from_style(style: &Option<Style>) -> Node {
         return node;
     };
 
-    if let Some(v) = &s.display {
-        node.display = display(v);
+    if let Some(v) = s.display {
+        node.display = v;
     }
-    if let Some(v) = &s.box_sizing {
-        node.box_sizing = box_sizing(v);
+    if let Some(v) = s.box_sizing {
+        node.box_sizing = v;
     }
-    if let Some(v) = &s.position_type {
-        node.position_type = position_type(v);
+    if let Some(v) = s.position_type {
+        node.position_type = v;
     }
-    if let Some(v) = &s.overflow_x {
-        node.overflow.x = overflow_axis(v);
+    if let Some(v) = s.overflow_x {
+        node.overflow.x = v;
     }
-    if let Some(v) = &s.overflow_y {
-        node.overflow.y = overflow_axis(v);
+    if let Some(v) = s.overflow_y {
+        node.overflow.y = v;
     }
     if let Some(v) = s.scrollbar_width {
         node.scrollbar_width = v;
@@ -614,23 +294,23 @@ pub fn node_from_style(style: &Option<Style>) -> Node {
         node.aspect_ratio = Some(v);
     }
 
-    if let Some(v) = &s.align_items {
-        node.align_items = align_items(v);
+    if let Some(v) = s.align_items {
+        node.align_items = v;
     }
-    if let Some(v) = &s.justify_items {
-        node.justify_items = justify_items(v);
+    if let Some(v) = s.justify_items {
+        node.justify_items = v;
     }
-    if let Some(v) = &s.align_self {
-        node.align_self = align_self(v);
+    if let Some(v) = s.align_self {
+        node.align_self = v;
     }
-    if let Some(v) = &s.justify_self {
-        node.justify_self = justify_self(v);
+    if let Some(v) = s.justify_self {
+        node.justify_self = v;
     }
-    if let Some(v) = &s.align_content {
-        node.align_content = align_content(v);
+    if let Some(v) = s.align_content {
+        node.align_content = v;
     }
-    if let Some(v) = &s.justify_content {
-        node.justify_content = justify_content(v);
+    if let Some(v) = s.justify_content {
+        node.justify_content = v;
     }
 
     if let Some(r) = s.margin {
@@ -643,11 +323,11 @@ pub fn node_from_style(style: &Option<Style>) -> Node {
         node.border = rect_to_uirect(r);
     }
 
-    if let Some(v) = &s.flex_direction {
-        node.flex_direction = flex_direction(v);
+    if let Some(v) = s.flex_direction {
+        node.flex_direction = v;
     }
-    if let Some(v) = &s.flex_wrap {
-        node.flex_wrap = flex_wrap(v);
+    if let Some(v) = s.flex_wrap {
+        node.flex_wrap = v;
     }
     if let Some(v) = s.flex_grow {
         node.flex_grow = v;
@@ -669,26 +349,26 @@ pub fn node_from_style(style: &Option<Style>) -> Node {
         node.column_gap = length_to_val(v);
     }
 
-    if let Some(v) = &s.grid_auto_flow {
-        node.grid_auto_flow = grid_auto_flow(v);
+    if let Some(v) = s.grid_auto_flow {
+        node.grid_auto_flow = v;
     }
     if let Some(v) = &s.grid_template_rows {
-        node.grid_template_rows = parse_template(v);
+        node.grid_template_rows = v.clone();
     }
     if let Some(v) = &s.grid_template_columns {
-        node.grid_template_columns = parse_template(v);
+        node.grid_template_columns = v.clone();
     }
     if let Some(v) = &s.grid_auto_rows {
-        node.grid_auto_rows = parse_auto_tracks(v);
+        node.grid_auto_rows = v.clone();
     }
     if let Some(v) = &s.grid_auto_columns {
-        node.grid_auto_columns = parse_auto_tracks(v);
+        node.grid_auto_columns = v.clone();
     }
-    if let Some(v) = &s.grid_row {
-        node.grid_row = parse_grid_placement(v);
+    if let Some(v) = s.grid_row {
+        node.grid_row = v;
     }
-    if let Some(v) = &s.grid_column {
-        node.grid_column = parse_grid_placement(v);
+    if let Some(v) = s.grid_column {
+        node.grid_column = v;
     }
 
     if let Some(r) = s.border_radius {
@@ -885,10 +565,7 @@ pub fn apply_style_masked(ec: &mut EntityCommands, style: &Option<Style>, dirty:
     // off reliably revert to `Pass`. (A `<button>`'s `Block` default is re-asserted
     // by the reconciler under the same `FOCUS_POLICY` gate.)
     if dirty.intersects(g::FOCUS_POLICY) {
-        let focus_policy = match s.and_then(|s| s.focus_policy.as_deref()) {
-            Some("block") => FocusPolicy::Block,
-            _ => FocusPolicy::Pass, // "pass", unknown, or absent
-        };
+        let focus_policy = s.and_then(|s| s.focus_policy).unwrap_or(FocusPolicy::Pass); // absent (or a decode fallback) stays click-through
         ec.insert(focus_policy);
     }
 
@@ -1081,49 +758,6 @@ fn slice_scale(mode: &Option<SliceScale>) -> SliceScaleMode {
     }
 }
 
-fn font_weight(s: &str) -> FontWeight {
-    match s {
-        "thin" => FontWeight::THIN,
-        "light" => FontWeight(300),
-        "normal" => FontWeight::NORMAL,
-        "medium" => FontWeight(500),
-        "semibold" => FontWeight(600),
-        "bold" => FontWeight::BOLD,
-        "black" => FontWeight::BLACK,
-        other => other.parse::<u16>().map(FontWeight).unwrap_or_else(|_| {
-            warn!("unrecognized fontWeight {other:?}; using the default");
-            FontWeight::NORMAL
-        }),
-    }
-}
-
-fn justify(s: &str) -> Justify {
-    match s {
-        "left" => Justify::Left,
-        "center" => Justify::Center,
-        "right" => Justify::Right,
-        "justify" => Justify::Justified,
-        "start" => Justify::Start,
-        "end" => Justify::End,
-        _ => unknown_keyword("textAlign", s),
-    }
-}
-
-/// Map a wire line-break token to bevy's [`LineBreak`] (default `WordBoundary`,
-/// matching bevy's own default).
-fn linebreak(s: &str) -> LineBreak {
-    match s {
-        "wordBoundary" => LineBreak::WordBoundary,
-        "anyCharacter" => LineBreak::AnyCharacter,
-        "wordOrCharacter" => LineBreak::WordOrCharacter,
-        "noWrap" => LineBreak::NoWrap,
-        _ => {
-            warn!("unrecognized lineBreak {s:?}; using the default");
-            LineBreak::WordBoundary
-        }
-    }
-}
-
 /// Map a [`LineHeightSpec`] to bevy's [`LineHeight`]: a bare number is a multiple
 /// of the font size, `{ px }` is an absolute pixel height, and a string carries a
 /// unit (`"20px"` absolute, else a multiple).
@@ -1228,8 +862,8 @@ pub fn resolved_text_style(
         if let Some(size) = s.font_size {
             font.font_size = font_size_to_bevy(size);
         }
-        if let Some(w) = &s.font_weight {
-            font.weight = font_weight(w);
+        if let Some(w) = s.font_weight {
+            font.weight = w;
         }
         if let Some(family) = &s.font_family {
             match fonts.named.get(family) {
@@ -1261,8 +895,8 @@ pub fn text_layout(style: &Option<Style>) -> Option<TextLayout> {
         return None;
     }
     Some(TextLayout {
-        justify: s.text_align.as_deref().map(justify).unwrap_or_default(),
-        linebreak: s.line_break.as_deref().map(linebreak).unwrap_or_default(),
+        justify: s.text_align.unwrap_or_default(),
+        linebreak: s.line_break.unwrap_or_default(),
     })
 }
 
@@ -1293,27 +927,6 @@ mod tests {
             c.alpha
         );
         assert!((c.red - 1.0).abs() < 1e-6, "tint hue preserved");
-    }
-
-    /// `start`/`end` map to the physical `Start`/`End` variants while
-    /// `flexStart`/`flexEnd` map to the flow-relative `FlexStart`/`FlexEnd`.
-    /// They diverge in grid and reversed-flex containers, so the keywords must
-    /// not collapse together.
-    #[test]
-    fn align_keywords_distinguish_physical_from_flex() {
-        assert_eq!(align_items("start"), AlignItems::Start);
-        assert_eq!(align_items("end"), AlignItems::End);
-        assert_eq!(align_items("flexStart"), AlignItems::FlexStart);
-        assert_eq!(align_items("flexEnd"), AlignItems::FlexEnd);
-
-        assert_eq!(align_self("start"), AlignSelf::Start);
-        assert_eq!(align_self("flexStart"), AlignSelf::FlexStart);
-
-        assert_eq!(align_content("start"), AlignContent::Start);
-        assert_eq!(align_content("flexStart"), AlignContent::FlexStart);
-
-        assert_eq!(justify_content("start"), JustifyContent::Start);
-        assert_eq!(justify_content("flexStart"), JustifyContent::FlexStart);
     }
 
     /// `focusPolicy` maps to `bevy::ui::FocusPolicy`: `"block"` → `Block`,
@@ -1755,7 +1368,7 @@ mod tests {
             merged.filter.unwrap().blur,
             base.as_ref().unwrap().filter.as_ref().unwrap().blur
         );
-        assert_eq!(merged.focus_policy.as_deref(), Some("block"));
+        assert_eq!(merged.focus_policy, Some(FocusPolicy::Block));
         assert_eq!(merged.background_color.as_deref(), Some("red"));
     }
 
@@ -1791,39 +1404,23 @@ mod tests {
         assert_eq!(node.column_gap, Val::Px(12.0));
     }
 
+    /// Grid fields arrive pre-parsed from the serde boundary (see
+    /// `protocol::tests` for the parsing itself); `node_from_style` copies them
+    /// into the `Node` verbatim.
     #[test]
     fn grid_templates_and_placement() {
-        assert_eq!(parse_template("1fr 2fr 100px").len(), 3);
-        assert_eq!(parse_template("repeat(3, 1fr)").len(), 1);
-        let placed = |s: &str| format!("{:?}", parse_grid_placement(s));
-        let expect = |p: GridPlacement| format!("{p:?}");
-        assert_eq!(placed("1 / 3"), expect(GridPlacement::start_end(1, 3)));
-        assert_eq!(placed("span 2"), expect(GridPlacement::span(2)));
+        let s = style(serde_json::json!({
+            "gridTemplateColumns": "1fr 2fr 100px",
+            "gridAutoRows": "auto 40px",
+            "gridRow": "2 / span 3",
+        }));
+        let node = node_from_style(&Some(s));
+        assert_eq!(node.grid_template_columns.len(), 3);
+        assert_eq!(node.grid_auto_rows.len(), 2);
         assert_eq!(
-            placed("2 / span 3"),
-            expect(GridPlacement::start_span(2, 3))
+            format!("{:?}", node.grid_row),
+            format!("{:?}", GridPlacement::start_span(2, 3))
         );
-        assert_eq!(placed("2 / 2"), expect(GridPlacement::start_end(2, 2)));
-        assert_eq!(placed("-1"), expect(GridPlacement::start(-1)));
-        assert_eq!(placed("2 / auto"), expect(GridPlacement::start(2)));
-        assert_eq!(placed("auto / 3"), expect(GridPlacement::end(3)));
-    }
-
-    /// A zero grid line/span is invalid CSS and panics `GridPlacement`'s
-    /// constructors — every zero-bearing form must warn and fall back to `auto`,
-    /// never reach the constructor or degrade to a partial placement.
-    #[test]
-    fn grid_placement_zero_falls_back_to_auto() {
-        let auto = format!("{:?}", GridPlacement::auto());
-        for s in ["0", "span 0", "0 / 2", "2 / 0", "0 / span 2", "2 / span 0"] {
-            assert_eq!(
-                format!("{:?}", parse_grid_placement(s)),
-                auto,
-                "input {s:?}"
-            );
-        }
-        // Unrecognized garbage also falls back rather than panicking.
-        assert_eq!(format!("{:?}", parse_grid_placement("garbage")), auto);
     }
 
     #[test]
@@ -1855,26 +1452,12 @@ mod tests {
         assert_eq!(fs(serde_json::json!("1.5rem")), BevyFontSize::Rem(1.5));
     }
 
+    /// Decoded text enums flow through to the `TextLayout` (keyword parsing
+    /// itself is covered in `protocol::tests`).
     #[test]
     fn text_enums() {
-        assert_eq!(font_weight("bold"), FontWeight::BOLD);
-        assert_eq!(font_weight("600"), FontWeight(600));
-        assert_eq!(justify("center"), Justify::Center);
         let layout =
             text_layout(&Some(style(serde_json::json!({ "textAlign": "right" })))).unwrap();
         assert_eq!(layout.justify, Justify::Right);
-    }
-
-    /// An unrecognized enum keyword falls back to the type's default (and warns)
-    /// rather than panicking or being silently dropped — see [`unknown_keyword`].
-    #[test]
-    fn unknown_enum_keywords_fall_back_to_default() {
-        assert_eq!(display("flx"), Display::default());
-        assert_eq!(align_items("centre"), AlignItems::default());
-        assert_eq!(flex_direction("sideways"), FlexDirection::default());
-        assert_eq!(justify("middle"), Justify::default());
-        assert_eq!(font_weight("heavyish"), FontWeight::NORMAL);
-        // A valid keyword that previously relied on the catch-all still maps.
-        assert_eq!(linebreak("wordBoundary"), LineBreak::WordBoundary);
     }
 }

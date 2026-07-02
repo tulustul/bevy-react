@@ -1075,10 +1075,7 @@ fn update_controlled_scroll(
 /// click-through and don't swallow clicks meant for what's behind or around them.
 /// An explicit `focusPolicy` prop (handled in `apply_style`) always wins.
 fn apply_button_focus_default(ec: &mut EntityCommands, style: &Option<Style>) {
-    let has_explicit = style
-        .as_ref()
-        .and_then(|s| s.focus_policy.as_deref())
-        .is_some();
+    let has_explicit = style.as_ref().is_some_and(|s| s.focus_policy.is_some());
     if !has_explicit {
         ec.insert(FocusPolicy::Block);
     }
