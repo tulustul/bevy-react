@@ -2,7 +2,7 @@
 // registry of event handlers (which never cross into Rust), and the event loop
 // that pulls UI events back from Bevy.
 
-import { recordDrawing } from "./canvas";
+import { BevyCanvasElement, recordDrawing } from "./canvas";
 import type { CanvasPainter, DrawCmd } from "./canvas";
 
 // The whole Rust<->JS op surface. The same bundle runs under two hosts:
@@ -77,7 +77,10 @@ export type Op =
       unset?: string[];
       styleUnset?: string[];
     }
-  | { op: "updateText"; id: number; text: string };
+  | { op: "updateText"; id: number; text: string }
+  // Append draw commands to a `<canvas>`'s retained surface (an imperative
+  // handle's microtask flush, or the runtime's clear+replay after a resize).
+  | { op: "draw"; id: number; cmds: DrawCmd[] };
 
 export interface SerializedProps {
   style?: Record<string, unknown>;
@@ -117,8 +120,10 @@ export interface SerializedProps {
   atlas?: Record<string, unknown>;
   // `"content"`/`"padding"`/`"border"` → `ImageNode.visual_box`.
   visualBox?: string;
-  // `canvas` element: the recorded vector display list, rasterized on the Bevy side.
+  // `canvas` element: the recorded vector display list, rasterized on the Bevy
+  // side (clear + replay on the retained surface).
   draw?: DrawCmd[];
+  onResize?: boolean;
   // `portal` element: the render-target name to display. Also carries a
   // `surface` element's `name` (the offscreen surface its subtree renders into).
   target?: string;
@@ -164,6 +169,11 @@ export interface UiEvent {
   // New scroll offset (logical px). Present only for the "scroll" event.
   scrollTop?: number;
   scrollLeft?: number;
+  // New laid-out size (logical px). Present only for a `canvas`'s "resize"
+  // event — fired on first layout and any size change, after the retained
+  // surface was cleared.
+  width?: number;
+  height?: number;
 }
 
 // Ops accumulated during the current commit, flushed in resetAfterCommit.
@@ -174,6 +184,15 @@ const handlers = new Map<
   number,
   Record<string, (...args: unknown[]) => void>
 >();
+
+// id -> a `<canvas>`'s declarative `draw` prop (painter fn or prebuilt list),
+// kept so the runtime can replay it after a resize cleared the surface.
+// Refreshed on every (re)serialization so replay uses the newest closure.
+const canvasPainters = new Map<number, CanvasPainter | DrawCmd[]>();
+
+// id -> a `<canvas>`'s last laid-out logical size, from its "resize" events.
+// Read by the element handle's `width`/`height`.
+const canvasSizes = new Map<number, { width: number; height: number }>();
 
 let nextId = 1; // 0 is reserved for the root container.
 
@@ -195,6 +214,8 @@ export function reset(): void {
   pending.push({ op: "reset" });
   ops.op_animate({ kind: "clear" });
   animationCallbacks.clear();
+  canvasPainters.clear();
+  canvasSizes.clear();
 }
 
 // Send an animation command to the animations plugin (declare/set/animate/
@@ -246,6 +267,53 @@ export function flush(): void {
     ms: nowMs() - t0,
     ops: batch.length,
   };
+}
+
+// --- `<canvas>` imperative drawing + resize plumbing ---
+
+// Send one draw batch for a canvas node, immediately. Rides the same op
+// channel as tree ops, so ordering against creates/updates is preserved.
+function sendDraw(id: number, cmds: DrawCmd[]): void {
+  push({ op: "draw", id, cmds });
+  flush();
+}
+
+// Build the public instance for a `<canvas>` (what a React ref resolves to).
+// Called by the renderer's `createInstance`.
+export function createCanvasElement(id: number): BevyCanvasElement {
+  return new BevyCanvasElement(id, {
+    send: (cmds) => sendDraw(id, cmds),
+    size: () => canvasSizes.get(id),
+  });
+}
+
+// Track (or drop) a node's declarative `draw` prop for resize replay. Called
+// beside `registerHandlers` on every serialization, so a Fast-Refreshed
+// painter replaces its stale predecessor.
+function registerCanvasPainter(
+  id: number,
+  props: Record<string, unknown>,
+): void {
+  const d = props.draw;
+  if (typeof d === "function") canvasPainters.set(id, d as CanvasPainter);
+  else if (Array.isArray(d)) canvasPainters.set(id, d as DrawCmd[]);
+  else canvasPainters.delete(id);
+}
+
+// A canvas laid out at a new size: the Rust side just cleared its surface.
+// Record the size (for the handle's `width`/`height` and the user's onResize),
+// and replay the declarative painter if there is one. The leading `clear`
+// keeps the replay a replace even if it interleaves with imperative draws
+// (right after the Rust-side clear it's a cheap no-op).
+function handleCanvasResize(event: UiEvent): void {
+  canvasSizes.set(event.id, {
+    width: event.width ?? 0,
+    height: event.height ?? 0,
+  });
+  const painter = canvasPainters.get(event.id);
+  if (!painter) return;
+  const cmds = typeof painter === "function" ? recordDrawing(painter) : painter;
+  sendDraw(event.id, [{ cmd: "clear" }, ...cmds]);
 }
 
 // Send a named app message to the Bevy side. Surfaced there as a
@@ -321,6 +389,7 @@ const HANDLER_KINDS: Record<string, string> = {
   onFocus: "focus",
   onBlur: "blur",
   onScroll: "scroll",
+  onResize: "resize",
 };
 
 // The handler prop names, for the renderer's dirty-check: these props are
@@ -472,6 +541,7 @@ export function serializeProps(
     serializePropInto(out, key, value);
   }
   registerHandlers(id, props);
+  registerCanvasPainter(id, props);
   return out;
 }
 
@@ -641,6 +711,7 @@ export function buildUpdateOp(
   // Refresh the JS-side closures even for a no-op update (their identity
   // changes every render; no backend op needed for that).
   registerHandlers(id, newProps);
+  registerCanvasPainter(id, newProps);
 
   if (!props && !acc.unset && !acc.styleUnset) return null;
   const op: Op = { op: "update", id, props: props ?? {} };
@@ -669,6 +740,8 @@ function serializeAnimatedStyle(
 
 export function dropHandlers(id: number): void {
   handlers.delete(id);
+  canvasPainters.delete(id);
+  canvasSizes.delete(id);
 }
 
 // Pull messages from Bevy forever and route each by kind: UI events to their React
@@ -688,6 +761,10 @@ export async function runEventLoop(
       case "reload":
         return; // runtime is being rebuilt
       case "uiEvent": {
+        // A canvas resize needs the runtime first (size cache + declarative
+        // replay — the surface was cleared), whether or not a user handler
+        // is registered.
+        if (msg.event.kind === "resize") handleCanvasResize(msg.event);
         const fn = handlers.get(msg.event.id)?.[msg.event.kind];
         if (fn) {
           const event = msg.event;

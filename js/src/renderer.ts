@@ -14,6 +14,7 @@ import {
 import {
   allocId,
   buildUpdateOp,
+  createCanvasElement,
   dropHandlers,
   flush,
   push,
@@ -132,7 +133,9 @@ const hostConfig: any = {
         ? { op: "create", id, kind, props: serializeProps(id, props) }
         : { op: "create", id, kind, props: serializeProps(id, props), text },
     );
-    return { id, type };
+    // A `<canvas>`'s instance is its persistent element handle (what a ref
+    // resolves to via `getPublicInstance`); it satisfies `Instance`.
+    return type === "canvas" ? createCanvasElement(id) : { id, type };
   },
 
   createTextInstance(

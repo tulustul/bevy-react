@@ -392,3 +392,125 @@ fn animation_callback_round_trip() {
     }
     panic!("no 'Play' label update after AnimationFinished — callback never fired");
 }
+
+/// End-to-end check of the canvas resize→replay path: a `"resize"` UI event on
+/// a `<canvas>` with a declarative `draw` painter must make the JS runtime
+/// re-record the painter and send a `draw` op that clears + replays (the Rust
+/// side just cleared the retained surface). Located by op kind, not tree
+/// shape, so the demo's structure can change freely.
+#[test]
+fn canvas_resize_replay_round_trip() {
+    use bevy_react::protocol::DrawCmd;
+
+    let bundle = example_bundle();
+    if !bundle.exists() {
+        eprintln!(
+            "skipping canvas_resize_replay_round_trip: bundle not built at {}\n  run: npm install && npm run build -w demos-app",
+            bundle.display()
+        );
+        return;
+    }
+
+    let (ops_tx, ops_rx) = crossbeam_channel::unbounded::<Vec<Op>>();
+    // Held for the duration so emits/requests from the app go nowhere harmlessly.
+    let (emit_tx, _emit_rx) = crossbeam_channel::unbounded::<ReactMessage>();
+    let (request_tx, _request_rx) = crossbeam_channel::unbounded::<RawRequest>();
+    // Held for the duration so animation commands go nowhere harmlessly.
+    let (anim_tx, _anim_rx) = crossbeam_channel::unbounded();
+    let (outbound_tx, outbound_rx) = tokio::sync::mpsc::unbounded_channel::<Outbound>();
+    // Held for the duration: dropping the reload sender would look like shutdown.
+    let (_reload_tx, reload_rx) = tokio::sync::mpsc::unbounded_channel::<()>();
+
+    let vendor = bundle.with_file_name("vendor.js");
+    spawn_js_thread(
+        vendor,
+        bundle,
+        ops_tx,
+        emit_tx,
+        request_tx,
+        anim_tx,
+        outbound_rx,
+        reload_rx,
+    );
+
+    let mut buttons: HashSet<u32> = HashSet::new();
+    let mut parent_of: HashMap<u32, u32> = HashMap::new();
+    let mut text_of: HashMap<u32, String> = HashMap::new();
+
+    // Navigate to the `<canvas>` demo ("Elements" is expanded by default).
+    let canvas_nav = drain_until_button(
+        &ops_rx,
+        "<canvas>",
+        Duration::from_secs(15),
+        &mut buttons,
+        &mut parent_of,
+        &mut text_of,
+    )
+    .expect("no '<canvas>' nav button in initial render");
+    outbound_tx
+        .send(Outbound::UiEvent {
+            event: UiEvent {
+                id: canvas_nav,
+                kind: "click".into(),
+                ..Default::default()
+            },
+        })
+        .expect("JS thread gone before nav click");
+
+    // The demo mounts its declarative (`draw`-prop) canvas first; an
+    // imperative (ref-handle) canvas may follow — keep the FIRST create only,
+    // since the replay-on-resize contract under test is the declarative one.
+    let mut canvas_id: Option<u32> = None;
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while canvas_id.is_none() && Instant::now() < deadline {
+        if let Ok(batch) = ops_rx.recv_timeout(Duration::from_millis(500)) {
+            for op in &batch {
+                if let Op::Create { id, kind, .. } = op
+                    && kind == "canvas"
+                {
+                    canvas_id = Some(*id);
+                    break;
+                }
+            }
+        }
+    }
+    let canvas_id = canvas_id.expect("no canvas create op in the '<canvas>' demo");
+    eprintln!("OK   canvas mounted: id={canvas_id}");
+
+    // Play Bevy's part: the canvas was laid out (its surface cleared) — report it.
+    outbound_tx
+        .send(Outbound::UiEvent {
+            event: UiEvent {
+                id: canvas_id,
+                kind: "resize".into(),
+                width: Some(460.0),
+                height: Some(260.0),
+                ..Default::default()
+            },
+        })
+        .expect("JS thread gone before resize");
+
+    // The runtime must replay the declarative painter: a `draw` op for this
+    // node, starting with a full clear, followed by the recorded drawing.
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while Instant::now() < deadline {
+        if let Ok(batch) = ops_rx.recv_timeout(Duration::from_millis(500)) {
+            for op in &batch {
+                if let Op::Draw { id, cmds } = op
+                    && *id == canvas_id
+                {
+                    assert_eq!(
+                        cmds.first(),
+                        Some(&DrawCmd::Clear),
+                        "resize replay must lead with a clear"
+                    );
+                    assert!(cmds.len() > 1, "resize replay recorded no drawing");
+                    eprintln!("OK   resize replay: draw op with {} commands", cmds.len());
+                    eprintln!("PASS canvas resize end-to-end");
+                    return;
+                }
+            }
+        }
+    }
+    panic!("no draw op after resize — declarative painter never replayed");
+}

@@ -49,7 +49,15 @@ export type {
 export { Anchored } from "./anchored";
 export type { AnchorProps, AnchorScaling, Vec3 } from "./anchored";
 
-// Canvas drawing (`<canvas draw={(ctx) => …}/>`). `CanvasContext` records an
-// HTML-canvas-like display list rasterized on the Bevy side.
-export { CanvasContext, recordDrawing } from "./canvas";
-export type { CanvasPainter, DrawCmd } from "./canvas";
+// Canvas drawing. `CanvasContext` records an HTML-canvas-like display list
+// rasterized on the Bevy side — declaratively via `<canvas draw={(ctx) => …}/>`,
+// or imperatively through a `<canvas ref={…}>`'s persistent `BevyCanvasElement`
+// handle (`getContext()` → a `RetainedCanvasContext` that batches and
+// flushes at will; paint accumulates on the retained surface).
+export {
+  BevyCanvasElement,
+  CanvasContext,
+  RetainedCanvasContext,
+  recordDrawing,
+} from "./canvas";
+export type { CanvasHost, CanvasPainter, DrawCmd } from "./canvas";

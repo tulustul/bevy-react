@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { CanvasContext } from "bevy-react";
+import type {
+  BevyCanvasElement,
+  CanvasContext,
+  RetainedCanvasContext,
+} from "bevy-react";
 import { BevyStyle } from "bevy-react/jsx";
-import { Example } from "@/components";
+import { Button, Example } from "@/components";
 import { Colors } from "@/theme";
 
 // A pure-UI demo of the `<canvas>` host element: an anti-aliased vector line
@@ -19,13 +23,13 @@ const PERIOD_MS = 1500; // auto-shuffle cadence
 const DURATION_MS = 500; // tween length
 const FRAME_MS = 16; // ~60fps; the runtime has no Date.now, so we accumulate this
 
-const TYPESCRIPT = `<canvas
-  draw={(ctx) => {
-    ctx.strokeStyle = "#7aa2f7";
-    ctx.bezierCurveTo(/* ... */);
-    ctx.stroke();
-  }}
-/>`;
+const PALETTE = [
+  Colors.primary100,
+  Colors.green100,
+  Colors.red100,
+  Colors.yellow100,
+  Colors.purple100,
+];
 
 type Pt = { x: number; y: number };
 
@@ -37,6 +41,15 @@ const easeInOut = (t: number): number =>
   t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 
 export function CanvasDemo() {
+  return (
+    <>
+      <GraphExample />
+      <PaintExample />
+    </>
+  );
+}
+
+function GraphExample() {
   const [values, setValues] = useState<number[]>(() => randomData(POINTS));
   // Latest displayed values, so a tween always starts from where we are now
   // (a mid-flight reshuffle retargets smoothly).
@@ -130,8 +143,109 @@ export function CanvasDemo() {
   };
 
   return (
-    <Example description="An immediate-mode raster surface." tsx={TYPESCRIPT}>
+    <Example
+      description="A declarative vector drawing: the draw prop clears and replays whenever it changes."
+      tsx={`<canvas
+  draw={(ctx) => {
+    ctx.strokeStyle = "#7aa2f7";
+    ctx.bezierCurveTo(/* ... */);
+    ctx.stroke();
+  }}
+/>`}
+    >
       <canvas style={canvasStyle} draw={draw} onClick={shuffle} />
+    </Example>
+  );
+}
+
+function PaintExample() {
+  const ref = useRef<BevyCanvasElement>(null);
+  // The in-flight stroke's last point (drawing happens between pointer events,
+  // entirely outside React state — no re-renders while doodling).
+  const last = useRef<Pt | null>(null);
+  const strokeCount = useRef(0);
+
+  const paintBackground = useCallback((el: BevyCanvasElement) => {
+    const ctx = el.getContext();
+    ctx.fillStyle = Colors.surface100;
+    ctx.beginPath();
+    ctx.rect(0, 0, el.width, el.height);
+    ctx.fill();
+  }, []);
+
+  const pointAt = (el: BevyCanvasElement, e: { x: number; y: number }): Pt => ({
+    x: e.x * el.width,
+    y: e.y * el.height,
+  });
+
+  const begin = useCallback((e: { x: number; y: number }) => {
+    const el = ref.current;
+    if (!el) return;
+    const p = pointAt(el, e);
+    const ctx = el.getContext();
+    ctx.strokeStyle = ctx.fillStyle =
+      PALETTE[strokeCount.current++ % PALETTE.length];
+    ctx.lineWidth = 3;
+    dot(ctx, p);
+    last.current = p;
+  }, []);
+
+  const drawFromMouse = useCallback((e: { x: number; y: number }) => {
+    const el = ref.current;
+    const from = last.current;
+    if (!el || !from) return;
+    const p = pointAt(el, e);
+    // pointerMove fires every held frame, moving or not — a stationary drag
+    // would send a zero-length (undrawable) segment per frame.
+    if (p.x === from.x && p.y === from.y) return;
+    const ctx = el.getContext();
+    // One short segment per event, each its own path — the surface retains
+    // everything already painted, so nothing needs re-stroking.
+    ctx.beginPath();
+    ctx.moveTo(from.x, from.y);
+    ctx.lineTo(p.x, p.y);
+    ctx.stroke();
+    dot(ctx, p);
+    last.current = p;
+  }, []);
+
+  const clear = useCallback(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.getContext().clear();
+    paintBackground(el);
+  }, [paintBackground]);
+
+  return (
+    <Example
+      description="A retained drawing surface, driven imperatively through a ref handle. Drag to doodle — strokes accumulate with no React renders; the surface clears on resize and onResize repaints the background."
+      tsx={`const ref = useRef<BevyCanvasElement>(null);
+
+<canvas
+  ref={ref}
+  onResize={() => paintBackground(ref.current!)}
+  onPointerDown={begin}
+  onPointerMove={(e) => {
+    const ctx = ref.current!.getContext();
+    ctx.beginPath();
+    ctx.moveTo(last.x, last.y);
+    ctx.lineTo(e.x * ref.current!.width, e.y * ref.current!.height);
+    ctx.stroke(); // accumulates — nothing else is repainted
+  }}
+/>`}
+    >
+      <node style={columnStyle}>
+        <text>Use mouse to draw on the canvas</text>
+        <canvas
+          ref={ref}
+          style={canvasStyle}
+          onResize={() => ref.current && paintBackground(ref.current)}
+          onPointerDown={begin}
+          onPointerMove={drawFromMouse}
+          onPointerUp={() => (last.current = null)}
+        />
+        <Button onClick={clear}>Clear</Button>
+      </node>
     </Example>
   );
 }
@@ -156,6 +270,18 @@ function smoothPath(ctx: CanvasContext, pts: Pt[]) {
     );
   }
 }
+
+function dot(ctx: RetainedCanvasContext, p: Pt) {
+  ctx.beginPath();
+  ctx.arc(p.x, p.y, 1.5, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+const columnStyle: BevyStyle = {
+  flexDirection: "column",
+  alignItems: "center",
+  gap: 12,
+};
 
 const canvasStyle: BevyStyle = {
   width: W,

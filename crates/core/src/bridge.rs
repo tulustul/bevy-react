@@ -92,6 +92,14 @@ pub struct ScrollListener;
 #[derive(Component, Debug, Clone, Copy)]
 pub struct ScrollStep(pub f32);
 
+/// The last physical size reported to JS as a `"resize"` event for a `<canvas>`
+/// (`collect_canvas_resize_events`). `ComputedNode` is rewritten by layout far
+/// more often than the size actually changes, so this compare is the real
+/// filter. Starts `(0, 0)`, so the first layout fires an event. A component
+/// (not a `Local` map) so a despawn cleans it up automatically.
+#[derive(Component, Debug, Clone, Copy, Default)]
+pub struct CanvasSizeTracker(pub (u32, u32));
+
 /// A standalone clone of the outbound sender, inserted in [`Plugin::build`] so
 /// the request dispatcher and the [`ReactEvents`](crate::ReactEvents) system
 /// param can push to JS without depending on [`JsBridge`], which only exists

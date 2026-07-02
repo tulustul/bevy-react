@@ -99,6 +99,14 @@ pub enum Op {
     },
     /// Replace the string of a text node.
     UpdateText { id: NodeId, text: String },
+    /// Append draw commands to a `canvas` element's retained surface — the
+    /// imperative `getContext()` handle's microtask flush, or the JS
+    /// runtime's clear+replay of a declarative painter after a resize. Paint
+    /// accumulates on the retained pixels; a leading [`DrawCmd::Clear`] makes
+    /// the batch a replace. Bypasses the props cache entirely (nothing is
+    /// retained protocol-side). A missing or non-canvas node is skipped
+    /// silently, like every other op.
+    Draw { id: NodeId, cmds: Vec<DrawCmd> },
 }
 
 /// Props for a host element. Event handlers never cross the boundary — the
@@ -211,13 +219,21 @@ pub struct Props {
     #[serde(default)]
     pub visual_box: Option<String>,
 
-    // --- `canvas` element attribute ---
-    /// The display list for a `canvas` element: an ordered batch of vector draw
-    /// commands (the recorded form of an HTML-canvas-like `ctx.moveTo/lineTo/…`
-    /// session). Present → the canvas re-rasterizes into its backing texture.
-    /// `Some(vec![])` clears the canvas; absent leaves the previous drawing.
+    // --- `canvas` element attributes ---
+    /// The declarative display list for a `canvas` element: an ordered batch of
+    /// vector draw commands (the recorded form of an HTML-canvas-like
+    /// `ctx.moveTo/lineTo/…` session). Present → the retained surface is
+    /// **cleared and the list replayed** (raster state reset first).
+    /// `Some(vec![])` clears the canvas; absent leaves the retained pixels.
+    /// Imperative (accumulating) drawing rides [`Op::Draw`] instead.
     #[serde(default)]
     pub draw: Option<Vec<DrawCmd>>,
+    /// Whether this element has an `onResize` handler registered in JS. Cached
+    /// only so the delta stays truthful — `"resize"` events are **not** gated
+    /// on it (the JS runtime consumes them unconditionally, to replay a
+    /// declarative painter and keep the canvas handle's size fresh).
+    #[serde(default)]
+    pub on_resize: bool,
 
     // --- `portal` element attribute ---
     /// The render-target name a `portal` element displays. The reconciler stamps
@@ -721,7 +737,7 @@ pub struct UpdateEvents {
     pub scroll_top: Option<f32>,
     /// Controlled horizontal scroll offset.
     pub scroll_left: Option<f32>,
-    /// A `<canvas>` display list to (re)draw.
+    /// A `<canvas>` display list to clear + replay.
     pub draw: Option<Vec<DrawCmd>>,
 }
 
@@ -862,6 +878,11 @@ impl Props {
         if delta.autofocus {
             self.autofocus = true;
         }
+        // `onResize` gates nothing Rust-side (resize events are unconditional);
+        // cached only so the delta stays truthful.
+        if delta.on_resize {
+            self.on_resize = true;
+        }
         macro_rules! merge_option {
             ($($f:ident => $($flag:ident)?),* $(,)?) => {
                 $(
@@ -960,6 +981,7 @@ impl Props {
                 }
                 "multiline" => self.multiline = false,
                 "autofocus" => self.autofocus = false,
+                "onResize" => self.on_resize = false,
                 "scrollStep" => {
                     self.scroll_step = None;
                     dirty.scroll_step = true;
@@ -2221,8 +2243,9 @@ impl<'de> Deserialize<'de> for BorderColorSpec {
 pub struct UiEvent {
     pub id: NodeId,
     /// `"click"`, a pointer kind (`"pointerDown"` / `"pointerMove"` /
-    /// `"pointerUp"` / `"pointerEnter"` / `"pointerLeave"`), `"scroll"`, or one of
-    /// an `editableText`'s `"change"` / `"select"` / `"focus"` / `"blur"` events.
+    /// `"pointerUp"` / `"pointerEnter"` / `"pointerLeave"`), `"scroll"`, a
+    /// `canvas`'s `"resize"`, or one of an `editableText`'s `"change"` /
+    /// `"select"` / `"focus"` / `"blur"` events.
     pub kind: String,
     /// Cursor x within the node, normalized to `0..1` (left→right). Present only
     /// for pointer events; `None` for `"click"`.
@@ -2272,6 +2295,16 @@ pub struct UiEvent {
     /// `"scroll"` events.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub scroll_left: Option<f32>,
+    /// New logical (CSS px) width of a `canvas`'s laid-out box. Present only for
+    /// `"resize"` events, which fire on first layout (0 → W×H) and whenever the
+    /// physical pixel size changes (including a DPR change at constant logical
+    /// size). The surface was cleared — redraw.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub width: Option<f32>,
+    /// New logical height of a `canvas`'s laid-out box. Present only for
+    /// `"resize"` events; see [`width`](Self::width).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub height: Option<f32>,
 }
 
 /// Everything that flows Bevy -> JS over the single outbound channel. Internally
@@ -2930,5 +2963,79 @@ mod tests {
             }
             other => panic!("expected update, got {other:?}"),
         }
+    }
+
+    /// A `draw` op decodes, including the clear commands (the imperative
+    /// canvas path). Struct-variant fields aren't renamed by the enum's
+    /// `rename_all`, so the wire form is pinned here.
+    #[test]
+    fn deserializes_draw_op() {
+        let op: Op = serde_json::from_str(
+            r##"{"op":"draw","id":7,"cmds":[
+                {"cmd":"clear"},
+                {"cmd":"clearRect","x":1.0,"y":2.0,"w":3.0,"h":4.0},
+                {"cmd":"fillStyle","color":"#f00"}
+            ]}"##,
+        )
+        .unwrap();
+        match op {
+            Op::Draw { id, cmds } => {
+                assert_eq!(id, 7);
+                assert_eq!(cmds.len(), 3);
+                assert_eq!(cmds[0], DrawCmd::Clear);
+                assert_eq!(
+                    cmds[1],
+                    DrawCmd::ClearRect {
+                        x: 1.0,
+                        y: 2.0,
+                        w: 3.0,
+                        h: 4.0
+                    }
+                );
+                assert_eq!(
+                    cmds[2],
+                    DrawCmd::FillStyle {
+                        color: "#f00".into()
+                    }
+                );
+            }
+            other => panic!("expected draw, got {other:?}"),
+        }
+    }
+
+    /// A `"resize"` UI event serializes its logical size and omits every other
+    /// optional field.
+    #[test]
+    fn serializes_resize_ui_event() {
+        let v = serde_json::to_value(Outbound::UiEvent {
+            event: UiEvent {
+                id: 5,
+                kind: "resize".into(),
+                width: Some(300.0),
+                height: Some(150.0),
+                ..Default::default()
+            },
+        })
+        .unwrap();
+        assert_eq!(v["t"], "uiEvent");
+        let ev = &v["event"];
+        assert_eq!(ev["id"], 5);
+        assert_eq!(ev["kind"], "resize");
+        assert_eq!(ev["width"], 300.0);
+        assert_eq!(ev["height"], 150.0);
+        assert!(ev.get("x").is_none() && ev.get("scrollTop").is_none());
+    }
+
+    /// `onResize` decodes, merges into the cache, and unsets without warning —
+    /// it gates nothing Rust-side, so it dirties nothing.
+    #[test]
+    fn merge_delta_on_resize_flag() {
+        let mut cached = Props::default();
+        let (dirty, _) =
+            cached.merge_delta(props(serde_json::json!({ "onResize": true })), &[], &[]);
+        assert!(cached.on_resize);
+        assert!(!dirty.pointer && !dirty.scroll_listener);
+        cached.merge_delta(Props::default(), &["onResize".into()], &[]);
+        assert!(!cached.on_resize);
     }
 }

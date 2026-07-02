@@ -18,10 +18,10 @@ use crate::message::{ReactMessage, ReactRegistry};
 use crate::protocol::{Op, Outbound};
 use crate::reconcile::{
     OpApplyStats, apply_interaction_styles, apply_js_ops, apply_pending_selections,
-    apply_surface_interaction_styles, collect_hover_events, collect_pointer_events,
-    collect_scroll_events, collect_surface_clicks, collect_surface_hover_events,
-    collect_surface_pointer_events, collect_ui_events, on_focus_gained, on_focus_lost,
-    on_text_edit_change, sync_editable_a11y,
+    apply_surface_interaction_styles, collect_canvas_resize_events, collect_hover_events,
+    collect_pointer_events, collect_scroll_events, collect_surface_clicks,
+    collect_surface_hover_events, collect_surface_pointer_events, collect_ui_events,
+    on_focus_gained, on_focus_lost, on_text_edit_change, sync_editable_a11y,
 };
 use crate::request::{RawRequest, ReactRequestRegistry, RequestReceiver, dispatch_react_requests};
 
@@ -260,8 +260,15 @@ impl Plugin for ReactUiPlugin {
                 // World-anchored overlays reposition after the op drain so they
                 // override this frame's static `left`/`top`.
                 crate::anchor::position_anchored_nodes.after(apply_js_ops),
-                // Repaint `<canvas>` textures after their surfaces/sizes update.
-                bevy_react_canvas::update_canvas_surfaces.after(apply_js_ops),
+                // Repaint `<canvas>` textures after their surfaces/sizes update,
+                // and report layout resizes to JS (the surface just cleared — so
+                // the app / the runtime's declarative replay redraws). Both read
+                // last frame's `ComputedNode`. (A sub-tuple: the outer tuple is
+                // at Bevy's arity limit.)
+                (
+                    bevy_react_canvas::update_canvas_surfaces.after(apply_js_ops),
+                    collect_canvas_resize_events.after(apply_js_ops),
+                ),
                 // Bind `<portal>` nodes to their render-target textures after the
                 // op drain (so a freshly-spawned portal binds the same frame), then
                 // drive resolution + the snapshot camera lifecycle.

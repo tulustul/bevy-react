@@ -18,14 +18,14 @@ use bevy::ui::RelativeCursorPosition;
 use bevy::ui::widget::NodeImageMode;
 use bevy::ui::{ComputedNode, ScrollPosition, UiGlobalTransform};
 use bevy_react_animations::AnimatedNode;
-use bevy_react_canvas::{CanvasSurface, blank_canvas_image};
+use bevy_react_canvas::{CanvasSurface, blank_canvas_image, clamp_physical_size};
 use bevy_react_portal::{RPortal, blank_portal_image};
 use bevy_react_surface::{RSurface, SurfaceVirtualPointer};
 
 use crate::anchor::{AnchorScaling, Anchored};
 use crate::bridge::{
-    FocusState, HoverState, JsBridge, PointerHandlers, RNode, ScrollListener, ScrollStep,
-    StyleVariants,
+    CanvasSizeTracker, FocusState, HoverState, JsBridge, PointerHandlers, RNode, ScrollListener,
+    ScrollStep, StyleVariants,
 };
 use crate::filter::{FilterAssets, FilterMaterial, FilterMaterialCache, filter_material};
 use crate::plugin::Fonts;
@@ -230,6 +230,7 @@ pub fn apply_js_ops(
                         ec.insert((
                             node_img,
                             CanvasSurface::new(props.draw.clone().unwrap_or_default()),
+                            CanvasSizeTracker::default(),
                         ));
                         apply_style_variants(&mut ec, &props);
                         apply_pointer_handlers(&mut ec, &props);
@@ -636,10 +637,16 @@ pub fn apply_js_ops(
                             },
                         );
                     }
-                    // A `<canvas>`'s new display list: replace the surface (the
-                    // canvas system keeps the same `ImageNode` handle and repaints).
+                    // A `<canvas>`'s new declarative display list: clear + replay
+                    // on the retained surface. Queued (not re-inserted) so the
+                    // surface's retained pixmap and pending imperative commands
+                    // aren't thrown away with the component.
                     if let Some(cmds) = ev.draw {
-                        ec.insert(CanvasSurface::new(cmds));
+                        ec.queue(move |mut entity: EntityWorldMut| {
+                            if let Some(mut surface) = entity.get_mut::<CanvasSurface>() {
+                                surface.set_display_list(cmds);
+                            }
+                        });
                     }
                     // A `<portal>`'s new target name: rebind it (the binding system
                     // points its `ImageNode` at the new target next frame).
@@ -701,6 +708,21 @@ pub fn apply_js_ops(
                     } else {
                         commands.entity(e).insert(Text::new(text));
                     }
+                }
+            }
+            Op::Draw { id, cmds } => {
+                // Imperative canvas drawing (a handle's microtask flush) or the
+                // runtime's declarative replay after a resize: append to the
+                // retained surface. A missing node (already unmounted, stale
+                // handle) is skipped silently, like every other op. Queued so a
+                // same-batch `Create`'s deferred `CanvasSurface` insert lands
+                // first.
+                if let Some(e) = resolve(&bridge, id) {
+                    commands.entity(e).queue(move |mut entity: EntityWorldMut| {
+                        if let Some(mut surface) = entity.get_mut::<CanvasSurface>() {
+                            surface.enqueue(cmds);
+                        }
+                    });
                 }
             }
         }
@@ -1172,6 +1194,47 @@ pub fn collect_scroll_events(
                 kind: "scroll".to_string(),
                 scroll_top: Some(scroll.0.y),
                 scroll_left: Some(scroll.0.x),
+                ..default()
+            },
+        });
+    }
+}
+
+/// Emit a `"resize"` UI event (new logical size) for every `<canvas>` whose
+/// laid-out **physical** size changed — including its first layout (0 → W×H)
+/// and a DPR change at constant logical size, both of which cleared the
+/// retained surface. Not gated on a handler flag: the JS runtime consumes
+/// resizes unconditionally (to replay a declarative painter and keep the
+/// canvas handle's size fresh); a user `onResize` is dispatched if registered.
+/// The per-entity [`CanvasSizeTracker`] filters the non-size `ComputedNode`
+/// rewrites layout does every pass. Sizes clamp exactly like the rasterizer's,
+/// so the reported size always matches the actual buffer.
+#[allow(clippy::type_complexity)]
+pub fn collect_canvas_resize_events(
+    bridge: Res<JsBridge>,
+    mut query: Query<
+        (&RNode, &ComputedNode, &mut CanvasSizeTracker),
+        (With<CanvasSurface>, Changed<ComputedNode>),
+    >,
+) {
+    for (rnode, node, mut tracker) in &mut query {
+        let (w, h) = clamp_physical_size(node.size);
+        if w == 0 || h == 0 || tracker.0 == (w, h) {
+            continue;
+        }
+        tracker.0 = (w, h);
+        let scale = if node.inverse_scale_factor > 0.0 {
+            node.inverse_scale_factor
+        } else {
+            1.0
+        };
+        debug!("canvas resize -> reconciler node {}", rnode.0);
+        let _ = bridge.outbound_tx.send(Outbound::UiEvent {
+            event: UiEvent {
+                id: rnode.0,
+                kind: "resize".to_string(),
+                width: Some(w as f32 * scale),
+                height: Some(h as f32 * scale),
                 ..default()
             },
         });

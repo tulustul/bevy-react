@@ -3,13 +3,15 @@
 // your tsconfig at it with `"jsx": "react-jsx"` + `"jsxImportSource": "bevy-react"`.
 // Import `BevyStyle` here to type a shared style object.
 
-import type { Key, ReactNode } from "react";
+import type { Key, ReactNode, Ref } from "react";
 import type { AnimatedStyle } from "./animated";
-import type { CanvasPainter, DrawCmd } from "./canvas";
+import type { BevyCanvasElement, CanvasPainter, DrawCmd } from "./canvas";
 
 /** Attributes React manages itself (not real host props — React strips `key`
  *  before props reach the reconciler). Shared by every host element so keyed
- *  lists type-check. Host elements take no `ref`, so `key` is all that's here. */
+ *  lists type-check. Most host elements take no `ref` — `<canvas>` is the
+ *  exception (its ref resolves to a persistent `BevyCanvasElement` handle,
+ *  typed on `BevyCanvasProps`). */
 export interface BevyAttributes {
   key?: Key | null | undefined;
 }
@@ -465,9 +467,14 @@ export interface BevyTextProps extends BevyAttributes {
 }
 
 /** Props for the `canvas` element: an arbitrary anti-aliased vector drawing
- *  surface (maps to a `bevy_ui::ImageNode` whose texture is rasterized from the
- *  display list). Style it like any node; size it via `style.width`/`height`. */
+ *  surface with web-faithful retained pixels (maps to a `bevy_ui::ImageNode`
+ *  whose texture paint accumulates onto). Style it like any node; size it via
+ *  `style.width`/`height`. Draw declaratively via `draw`, or imperatively —
+ *  at any time, without a React render — through `ref.current.getContext()`. */
 export interface BevyCanvasProps extends BevyAttributes {
+  /** Persistent handle to the element (`BevyCanvasElement`): `getContext()`
+   *  for imperative, accumulating drawing, plus the laid-out `width`/`height`. */
+  ref?: Ref<BevyCanvasElement>;
   style?: BevyStyle;
   /** Style overlaid on `style` while the element is hovered. */
   hoverStyle?: BevyStyle;
@@ -475,10 +482,17 @@ export interface BevyCanvasProps extends BevyAttributes {
   pressStyle?: BevyStyle;
   /** Reanimated-style animation bindings (see `Animated.node`). */
   animatedStyle?: AnimatedStyle;
-  /** The drawing: either a painter that receives an HTML-canvas-like context
-   *  (`CanvasContext`), or a pre-recorded `DrawCmd[]` display list. Re-rasterized
-   *  whenever this prop changes. */
+  /** The declarative drawing: either a painter that receives an HTML-canvas-like
+   *  context (`CanvasContext`), or a pre-recorded `DrawCmd[]` display list.
+   *  Whenever this prop changes, the retained surface is **cleared and the
+   *  drawing replayed**; the runtime also replays it automatically after a
+   *  resize. Omit it to manage the surface purely through the ref handle. */
   draw?: DrawCmd[] | CanvasPainter;
+  /** The laid-out size changed (including the first layout, 0 → W×H) and the
+   *  retained surface was **cleared** — redraw here when drawing imperatively
+   *  (a declarative `draw` prop is replayed for you). Receives the new logical
+   *  size. */
+  onResize?: (e: { width: number; height: number }) => void;
   onClick?: () => void;
   /** Pointer pressed on the canvas. Receives the cursor's normalized position. */
   onPointerDown?: (e: PointerEventData) => void;

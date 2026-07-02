@@ -163,3 +163,25 @@ test("scalar prop removed lands in unset under its wire name", () => {
 test("children changes never cross", () => {
   assert.equal(buildUpdateOp(1, { children: "a" }, { children: "b" }), null);
 });
+
+test("onResize diffs by presence like any handler", () => {
+  const gained = buildUpdateOp(1, {}, { onResize: () => {} });
+  assert.deepEqual(gained.props, { onResize: true });
+
+  const lost = buildUpdateOp(1, { onResize: () => {} }, {});
+  assert.deepEqual(lost.unset, ["onResize"]);
+});
+
+test("a changed draw painter re-sends the recorded display list", () => {
+  // Painter closures differ by identity every render; the recorded commands
+  // ride the update (clear + replay semantics on the Rust side).
+  const op = buildUpdateOp(
+    1,
+    { draw: (ctx) => ctx.beginPath() },
+    { draw: (ctx) => ctx.rect(0, 0, 4, 4) },
+  );
+  assert.deepEqual(op.props.draw, [{ cmd: "rect", x: 0, y: 0, w: 4, h: 4 }]);
+
+  // Dropping the painter is a no-op (retained pixels stay), not an unset.
+  assert.equal(buildUpdateOp(1, { draw: (ctx) => ctx.fill() }, {}), null);
+});

@@ -130,9 +130,7 @@ impl SharedValueState {
     /// The settlement for interrupting a still-active token-tagged driver
     /// (`set`/`cancel`/a superseding `animate`), consuming the token.
     fn interrupted(&mut self, id: SharedId) -> Option<AnimationSettled> {
-        if self.active.is_none() {
-            return None;
-        }
+        self.active.as_ref()?;
         let token = self.token.take()?;
         Some(AnimationSettled {
             id,
