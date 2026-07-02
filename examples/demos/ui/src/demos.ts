@@ -39,6 +39,7 @@ import { GradientsDemo } from "./demos/styling/GradientsDemo";
 import { OpacityDemo } from "./demos/styling/OpacityDemo";
 import { ZIndexDemo } from "./demos/styling/ZIndexDemo";
 import { FocusPolicyDemo } from "./demos/styling/FocusPolicyDemo";
+import { CursorDemo } from "./demos/styling/CursorDemo";
 
 type BaseDemoItem = { label: string; scene?: SceneId };
 export type DemoItem = BaseDemoItem &
@@ -99,6 +100,7 @@ export const DEMOS: DemoItem[] = [
       { label: "Opacity", component: OpacityDemo },
       { label: "Z-Index", component: ZIndexDemo },
       { label: "Focus Policy", component: FocusPolicyDemo },
+      { label: "Cursor", component: CursorDemo },
     ],
   },
   {

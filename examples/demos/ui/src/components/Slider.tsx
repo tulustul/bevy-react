@@ -49,4 +49,5 @@ const sliderTrack: BevyStyle = {
   borderRadius: 6,
   backgroundColor: Colors.surface400,
   backgroundGradient: Gradients.track,
+  cursor: "pointer",
 };

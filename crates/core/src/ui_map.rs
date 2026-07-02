@@ -14,6 +14,7 @@ use bevy::ui::FocusPolicy;
 use bevy::ui::widget::NodeImageMode;
 use bevy_react_animations::build_ui_transform;
 
+use crate::cursor::NodeCursor;
 use crate::plugin::Fonts;
 use crate::protocol::{
     Angle, AngularStop, AtlasSpec, BoxShadowList, BoxShadowSpec, ConicGradientSpec, FontSize,
@@ -553,6 +554,16 @@ pub fn apply_style_masked(ec: &mut EntityCommands, style: &Option<Style>, dirty:
             }
             None => {
                 ec.remove::<GlobalZIndex>();
+            }
+        }
+    }
+    if dirty.intersects(g::CURSOR) {
+        match s.and_then(|s| s.cursor.as_ref()) {
+            Some(c) => {
+                ec.insert(NodeCursor(c.clone()));
+            }
+            None => {
+                ec.remove::<NodeCursor>();
             }
         }
     }

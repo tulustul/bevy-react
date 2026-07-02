@@ -55,6 +55,7 @@ const clickButtonStyle: BevyStyle = {
   alignItems: "center",
   borderRadius: 8,
   backgroundColor: Colors.primary100,
+  cursor: "pointer",
 };
 
 const clickLabelStyle: BevyStyle = {

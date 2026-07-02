@@ -41,6 +41,7 @@ const wrapper: BevyStyle = {
   padding: { top: 8, right: 12, bottom: 8, left: 12 },
   borderRadius: 8,
   backgroundColor: Colors.transparent,
+  cursor: "pointer",
   transition: {
     backgroundColor: { duration: 150 },
   },

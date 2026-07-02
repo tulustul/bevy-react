@@ -26,6 +26,7 @@ extern crate self as bevy_react;
 
 mod anchor;
 mod bridge;
+mod cursor;
 mod event;
 mod filter;
 mod host;

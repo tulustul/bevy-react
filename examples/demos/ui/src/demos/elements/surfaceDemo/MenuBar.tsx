@@ -105,6 +105,7 @@ const menuLabel: BevyStyle = {
   padding: { top: 8, bottom: 8, left: 14, right: 14 },
   borderRadius: 7,
   backgroundColor: Colors.transparent,
+  cursor: "pointer",
 };
 
 const menuLabelHover: BevyStyle = { backgroundColor: Colors.surface300 };
@@ -113,6 +114,7 @@ const menuLabelActive: BevyStyle = {
   padding: { top: 8, bottom: 8, left: 14, right: 14 },
   borderRadius: 7,
   backgroundColor: Colors.primary300,
+  cursor: "pointer",
 };
 
 const menuLabelText: BevyStyle = {

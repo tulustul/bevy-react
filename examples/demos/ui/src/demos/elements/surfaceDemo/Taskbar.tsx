@@ -100,6 +100,7 @@ const startButton: BevyStyle = {
   padding: { top: 8, bottom: 8, left: 12, right: 16 },
   borderRadius: 8,
   backgroundColor: Colors.surface300,
+  cursor: "pointer",
 };
 
 const startButtonHover: BevyStyle = { backgroundColor: Colors.surface500 };
@@ -111,6 +112,7 @@ const startButtonActive: BevyStyle = {
   padding: { top: 8, bottom: 8, left: 12, right: 16 },
   borderRadius: 8,
   backgroundColor: Colors.primary300,
+  cursor: "pointer",
 };
 
 const startText: BevyStyle = {

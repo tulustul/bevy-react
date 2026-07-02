@@ -43,6 +43,7 @@ const buttonStyle: BevyStyle = {
     backgroundColor: { duration: 150 },
     transform: { duration: 150 },
   },
+  cursor: "pointer",
 };
 
 const buttonHoverStyle: BevyStyle = {

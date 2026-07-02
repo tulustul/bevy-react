@@ -92,6 +92,7 @@ const pillStyle: BevyStyle = {
     backgroundColor: { duration: 150 },
     transform: { duration: 120, easing: "easeOut" },
   },
+  cursor: "pointer",
 };
 
 const pillLabel: BevyStyle = {

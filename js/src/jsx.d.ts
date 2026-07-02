@@ -188,6 +188,45 @@ export interface BevyTransition {
   scroll?: BevyTransitionSpec;
 }
 
+/** The built-in system cursor keywords (winit's `SystemCursorIcon`, camelCase or CSS
+ *  kebab-case). Used by the `cursor` style prop; a custom-cursor name (registered on
+ *  the Rust side via `add_custom_cursor`) is any other string. */
+export type SystemCursor =
+  | "default"
+  | "contextMenu"
+  | "help"
+  | "pointer"
+  | "progress"
+  | "wait"
+  | "cell"
+  | "crosshair"
+  | "text"
+  | "verticalText"
+  | "alias"
+  | "copy"
+  | "move"
+  | "noDrop"
+  | "notAllowed"
+  | "grab"
+  | "grabbing"
+  | "eResize"
+  | "nResize"
+  | "neResize"
+  | "nwResize"
+  | "sResize"
+  | "seResize"
+  | "swResize"
+  | "wResize"
+  | "ewResize"
+  | "nsResize"
+  | "neswResize"
+  | "nwseResize"
+  | "colResize"
+  | "rowResize"
+  | "allScroll"
+  | "zoomIn"
+  | "zoomOut";
+
 /** A CSS-like style object mapped onto `bevy_ui::Node` and its sibling visual
  *  components. Every field is optional; unset fields keep Bevy's defaults. */
 export interface BevyStyle {
@@ -333,6 +372,14 @@ export interface BevyStyle {
    *  label never swallows clicks meant for what's behind or around it. Set this to
    *  override, e.g. a click-through button or a click-capturing panel/backdrop. */
   focusPolicy?: "block" | "pass";
+  /** Mouse cursor shown while the pointer is over this element (CSS `cursor`).
+   *  Drives the OS cursor icon; the topmost element under the pointer with a
+   *  `cursor` set wins, so a child without one inherits its ancestor's. A
+   *  {@link SystemCursor} keyword uses a built-in cursor; any other string names a
+   *  custom image cursor registered on the Rust side via `ReactUiPlugin::cursor`.
+   *  A custom cursor registered under a keyword name (e.g. `"pointer"`) *overrides*
+   *  that system cursor. */
+  cursor?: SystemCursor | (string & {});
 
   // transform / opacity
   /** Static 2D transform. With `transition` a change eases instead of snapping.

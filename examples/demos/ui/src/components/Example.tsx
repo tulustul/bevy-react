@@ -148,4 +148,5 @@ const descriptionStyle: BevyStyle = {
   fontSize: FontSizes.sm,
   maxWidth: 320,
   padding: 5,
+  margin: { bottom: 15 },
 };

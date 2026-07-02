@@ -1761,7 +1761,7 @@ fn surface_relative(
 /// inside a `<button>`); this resolves it to the node that actually owns the
 /// interaction — mirroring how the legacy focus system attributes to the nearest
 /// `Interaction` node. Stops at the (detached) surface root when nothing matches.
-fn climb(
+pub(crate) fn climb(
     mut entity: Entity,
     child_of: &Query<&ChildOf>,
     is_target: impl Fn(Entity) -> bool,

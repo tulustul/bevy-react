@@ -5,6 +5,7 @@ use std::path::PathBuf;
 
 use bevy::asset::embedded_asset;
 use bevy::prelude::*;
+use bevy::window::CustomCursorImage;
 use bevy_react_animations::{
     AnimationCommand, AnimationSet, AnimationSettled, ReactUiAnimationsPlugin,
 };
@@ -74,6 +75,7 @@ pub struct ReactUiPlugin {
     animations: bool,
     default_font: Option<PathBuf>,
     named_fonts: Vec<(String, PathBuf)>,
+    custom_cursors: Vec<(String, PathBuf, (u16, u16))>,
 }
 
 impl ReactUiPlugin {
@@ -91,6 +93,7 @@ impl ReactUiPlugin {
             animations: true,
             default_font: None,
             named_fonts: Vec::new(),
+            custom_cursors: Vec::new(),
         }
     }
 
@@ -121,6 +124,22 @@ impl ReactUiPlugin {
     /// (relative to your `AssetPlugin.file_path`).
     pub fn font(mut self, name: impl Into<String>, path: impl Into<PathBuf>) -> Self {
         self.named_fonts.push((name.into(), path.into()));
+        self
+    }
+
+    /// Register a named custom **image** cursor. React selects it per element with
+    /// `style={{ cursor: name }}` (any name that isn't a built-in cursor keyword);
+    /// the image at `path` is loaded via the `AssetServer` (relative to your
+    /// `AssetPlugin.file_path`), and `hotspot` is the click-point pixel (top-left
+    /// origin) within it. The cursor analogue of [`Self::font`].
+    pub fn cursor(
+        mut self,
+        name: impl Into<String>,
+        path: impl Into<PathBuf>,
+        hotspot: (u16, u16),
+    ) -> Self {
+        self.custom_cursors
+            .push((name.into(), path.into(), hotspot));
         self
     }
 }
@@ -186,6 +205,7 @@ impl Plugin for ReactUiPlugin {
         .insert_resource(ReactUiConfig {
             default_font: self.default_font.clone(),
             named_fonts: self.named_fonts.clone(),
+            custom_cursors: self.custom_cursors.clone(),
         })
         .init_resource::<ReactRegistry>()
         .init_resource::<ReactRequestRegistry>()
@@ -194,6 +214,7 @@ impl Plugin for ReactUiPlugin {
         .init_resource::<OpApplyStats>()
         .init_resource::<crate::ui_map::AtlasLayoutCache>()
         .init_resource::<Fonts>()
+        .init_resource::<crate::cursor::CustomCursors>()
         // The offscreen render-target ("portal") registry and its shared blank
         // placeholder texture, created before the first portal can mount.
         .init_resource::<bevy_react_portal::RenderTargets>()
@@ -270,11 +291,14 @@ impl Plugin for ReactUiPlugin {
                 // Repaint `<canvas>` textures after their surfaces/sizes update,
                 // and report layout resizes to JS (the surface just cleared — so
                 // the app / the runtime's declarative replay redraws). Both read
-                // last frame's `ComputedNode`. (A sub-tuple: the outer tuple is
-                // at Bevy's arity limit.)
+                // last frame's `ComputedNode`. The cursor driver rides here too —
+                // it also reads last frame's `ComputedNode` after the op drain
+                // (freshly-stamped `NodeCursor`s visible), and this sub-tuple keeps
+                // the outer tuple under Bevy's arity limit.
                 (
                     bevy_react_canvas::update_canvas_surfaces.after(apply_js_ops),
                     collect_canvas_resize_events.after(apply_js_ops),
+                    crate::cursor::drive_cursor_icon.after(apply_js_ops),
                 ),
                 // Bind `<portal>` nodes to their render-target textures after the
                 // op drain (so a freshly-spawned portal binds the same frame), then
@@ -352,6 +376,7 @@ struct UiRoot;
 struct ReactUiConfig {
     default_font: Option<PathBuf>,
     named_fonts: Vec<(String, PathBuf)>,
+    custom_cursors: Vec<(String, PathBuf, (u16, u16))>,
 }
 
 /// Fonts loaded from the plugin config, resolved to handles at startup. The
@@ -404,6 +429,24 @@ fn setup(
             .map(|(name, path)| (name.clone(), assets.load(path.clone())))
             .collect(),
     });
+    // Likewise load configured custom image cursors into the registry `drive_cursor_icon`
+    // resolves a `cursor` name against.
+    commands.insert_resource(crate::cursor::CustomCursors(
+        config
+            .custom_cursors
+            .iter()
+            .map(|(name, path, hotspot)| {
+                (
+                    name.clone(),
+                    CustomCursorImage {
+                        handle: assets.load(path.clone()),
+                        hotspot: *hotspot,
+                        ..default()
+                    },
+                )
+            })
+            .collect(),
+    ));
 
     // The root container: a full-window flex column the reconciler appends
     // top-level children into (it is reconciler node id 0). Children stack from

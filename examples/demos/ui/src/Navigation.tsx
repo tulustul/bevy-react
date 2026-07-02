@@ -192,4 +192,5 @@ const navButtonStyle: BevyStyle = {
   padding: 12,
   borderRadius: 8,
   width: "100%",
+  cursor: "pointer",
 };

@@ -7,6 +7,10 @@ const SIZE_TS = `<text style={{ fontSize: 28, fontWeight: "bold" }}>
   Big & bold
 </text>`;
 
+// Font families are loaded upfront on the Rust side, then selected by name from React.
+const FAMILY_RUST = `ReactUiPlugin::new(bundle)
+    .font("DancingScript", "fonts/DancingScript-VariableFont_wght.ttf");`;
+
 const FAMILY_TS = `<text style={{ fontFamily: "DancingScript" }}>`;
 
 const TYPOGRAPHY_TS = `<text style={{ lineHeight: 1.8, letterSpacing: 2 }}>
@@ -38,6 +42,7 @@ export function TextDemo() {
 
       <Example
         description="Custom font families, and inline nested color spans within one <text>."
+        rust={FAMILY_RUST}
         tsx={FAMILY_TS}
       >
         <text

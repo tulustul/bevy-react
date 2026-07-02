@@ -456,6 +456,15 @@ pub struct Style {
     /// reconciler): a `<button>` blocks, a `<node>`/container passes.
     #[serde(default, deserialize_with = "de_focus_policy")]
     pub focus_policy: Option<FocusPolicy>,
+    /// Mouse cursor shown while the pointer is over this node (CSS `cursor`).
+    /// A system keyword (winit's `SystemCursorIcon`) or a custom-cursor name
+    /// registered via `ReactUiPlugin::cursor`; the name is resolved (registry first,
+    /// so a custom cursor can override a system keyword) onto the window's
+    /// `CursorIcon` by `crate::cursor::drive_cursor_icon`. Like `font_family`, a raw
+    /// name resolved at drive time. Absent → the node contributes no cursor (its
+    /// ancestor's or the default arrow shows).
+    #[serde(default)]
+    pub cursor: Option<String>,
 
     // --- transform / opacity (drive `UiTransform` and color alpha) ---
     /// Static transform (translate/scale/rotate). Mirrors the animated transform
@@ -557,6 +566,9 @@ pub mod style_groups {
     pub const TEXT: u32 = 1 << 15;
     /// `TextLayout` (`text_layout`: `text_align`, `line_break`).
     pub const TEXT_LAYOUT: u32 = 1 << 16;
+    /// `NodeCursor` (reads `cursor`) — the per-node cursor `drive_cursor_icon`
+    /// writes onto the window's `CursorIcon` on hover.
+    pub const CURSOR: u32 = 1 << 17;
 }
 
 /// The single source of truth for [`Style`]'s field list. Invokes the callback
@@ -630,6 +642,7 @@ macro_rules! with_style_fields {
             (z_index, "zIndex", (Z_INDEX), overlay),
             (global_z_index, "globalZIndex", (GLOBAL_Z_INDEX), overlay),
             (focus_policy, "focusPolicy", (FOCUS_POLICY), no_overlay),
+            (cursor, "cursor", (CURSOR), overlay),
             (
                 transform,
                 "transform",
@@ -3079,5 +3092,39 @@ mod tests {
         let (dirty, _) = cached.merge_delta(Props::default(), &["onWheel".into()], &[]);
         assert!(!cached.on_wheel);
         assert!(dirty.wheel);
+    }
+
+    /// `cursor` decodes to the raw name (keyword or custom); resolution (registry
+    /// first, then system keyword) is deferred to `drive_cursor_icon`, like `fontFamily`.
+    #[test]
+    fn deserializes_cursor_name() {
+        let s: Style = serde_json::from_str(r#"{ "cursor": "pointer" }"#).expect("cursor decodes");
+        assert_eq!(s.cursor.as_deref(), Some("pointer"));
+
+        let s: Style =
+            serde_json::from_str(r#"{ "cursor": "hand" }"#).expect("custom name decodes");
+        assert_eq!(s.cursor.as_deref(), Some("hand"));
+    }
+
+    /// A `cursor` delta sets the `CURSOR` dirty group; a `style` unset of it clears
+    /// the field and re-arms the group.
+    #[test]
+    fn merge_delta_cursor_group() {
+        let mut cached = Props::default();
+        let (dirty, _) = cached.merge_delta(
+            props(serde_json::json!({ "style": { "cursor": "pointer" } })),
+            &[],
+            &[],
+        );
+        assert_eq!(
+            cached.style.as_ref().unwrap().cursor.as_deref(),
+            Some("pointer")
+        );
+        assert!(dirty.style.intersects(style_groups::CURSOR));
+        assert!(!dirty.style.intersects(style_groups::LAYOUT));
+
+        let (dirty, _) = cached.merge_delta(Props::default(), &[], &["cursor".into()]);
+        assert_eq!(cached.style.as_ref().unwrap().cursor, None);
+        assert!(dirty.style.intersects(style_groups::CURSOR));
     }
 }
