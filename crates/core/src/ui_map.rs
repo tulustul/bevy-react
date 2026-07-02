@@ -5,6 +5,7 @@
 //! (parsed once at the serde boundary — see [`crate::protocol`]), so applying
 //! them here is a plain field copy.
 
+use bevy::picking::Pickable;
 use bevy::platform::collections::HashMap;
 use bevy::prelude::*;
 use bevy::sprite::{BorderRect, SliceScaleMode, TextureSlicer};
@@ -564,9 +565,19 @@ pub fn apply_style_masked(ec: &mut EntityCommands, style: &Option<Style>, dirty:
     // child would then block its parent); inserting also makes toggling "block" back
     // off reliably revert to `Pass`. (A `<button>`'s `Block` default is re-asserted
     // by the reconciler under the same `FOCUS_POLICY` gate.)
+    //
+    // The policy is mirrored into `Pickable.should_block_lower` because bevy_ui's
+    // *picking* backend ignores `FocusPolicy` entirely and blocks by default when
+    // `Pickable` is absent — and clicks (plus all `<surface>` interaction) ride
+    // picking events. The same never-remove rule applies: an absent `Pickable`
+    // falls back to block.
     if dirty.intersects(g::FOCUS_POLICY) {
         let focus_policy = s.and_then(|s| s.focus_policy).unwrap_or(FocusPolicy::Pass); // absent (or a decode fallback) stays click-through
         ec.insert(focus_policy);
+        ec.insert(Pickable {
+            should_block_lower: focus_policy == FocusPolicy::Block,
+            is_hoverable: true,
+        });
     }
 
     // Stamp the transition engine's input from this (possibly hover/press-merged)

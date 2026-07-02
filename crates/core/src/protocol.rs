@@ -2241,6 +2241,12 @@ pub struct UiEvent {
     /// pointer events; see [`client_x`](Self::client_x).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub client_y: Option<f32>,
+    /// Which mouse button fired, in DOM `MouseEvent.button` numbering:
+    /// `0` left/primary, `1` middle/auxiliary, `2` right/secondary. Present for
+    /// `"pointerDown"`/`"pointerMove"`/`"pointerUp"`; absent for `"click"`
+    /// (primary-only, like DOM `click`) and hover/scroll/text events.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub button: Option<u8>,
     /// The new text of an `editableText`. Present only for `"change"` events.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub value: Option<String>,
@@ -2646,6 +2652,22 @@ mod tests {
         assert_eq!(v["kind"], "change");
         assert_eq!(v["value"], "hello");
         assert!(v.get("clientX").is_none(), "pointer fields omitted");
+        assert!(v.get("button").is_none(), "button omitted on text events");
+    }
+
+    /// A pointer event carries the DOM button number; button-less events omit it
+    /// entirely (see the `serializes_change_event_with_value` assertion above).
+    #[test]
+    fn serializes_pointer_event_with_button() {
+        let ev = UiEvent {
+            id: 3,
+            kind: "pointerDown".into(),
+            button: Some(2),
+            ..Default::default()
+        };
+        let v = serde_json::to_value(&ev).expect("serializable");
+        assert_eq!(v["kind"], "pointerDown");
+        assert_eq!(v["button"], 2);
     }
 
     /// Compile-time completeness guard: a `Style` struct literal built from the

@@ -391,10 +391,10 @@ export interface BevyStyle {
   lineBreak?: "wordBoundary" | "anyCharacter" | "wordOrCharacter" | "noWrap";
 }
 
-// TODO(review): the pointer model is bespoke and limited — left-button press/move/up plus
-// enter/leave, with normalized x/y + clientX/Y rather than DOM `PointerEvent` semantics. No
-// wheel-as-element-event, no button/modifier info. It's part of the public contract, so
-// settle the shape before too many apps depend on it.
+// TODO(review): the pointer model is bespoke — normalized x/y + clientX/Y and a DOM
+// `button` number rather than full DOM `PointerEvent` semantics. No wheel-as-element-event,
+// no modifier info. It's part of the public contract, so settle the shape before too many
+// apps depend on it.
 /** Payload for the pointer handlers: the cursor position within the element,
  *  normalized to `0..1` from a top-left origin (`x` left→right, `y` top→bottom),
  *  clamped to the element's bounds even while dragging outside it. `clientX` /
@@ -405,6 +405,10 @@ export interface PointerEventData {
   y: number;
   clientX: number;
   clientY: number;
+  /** Which mouse button, DOM `MouseEvent.button` numbering (`0` left, `1`
+   *  middle, `2` right). Present on down/move/up (a move's button is the one
+   *  dragging); absent on enter/leave. */
+  button?: number;
 }
 
 /** Props common to `node` and `button`. */
@@ -417,6 +421,10 @@ export interface BevyNodeProps extends BevyAttributes {
   /** Reanimated-style animation bindings (see `Animated.node`). Each property is
    *  driven by a shared value and updated every frame on the Bevy side. */
   animatedStyle?: AnimatedStyle;
+  /** Clicked with the primary (left) mouse button: fires on release over the
+   *  element the press landed on (press, drag off, release elsewhere does not
+   *  click — DOM `click` semantics). For right/middle interactions use
+   *  `onPointerDown`/`onPointerUp` and read `e.button`. */
   onClick?: () => void;
   /** Pointer pressed on this element (a drag begins). Receives the cursor's
    *  normalized position within the element. */

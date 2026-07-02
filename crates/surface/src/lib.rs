@@ -229,8 +229,27 @@ pub struct SurfaceVirtualPointer {
     /// cursor), so we can move it off-bounds to generate `Out`/release when the
     /// cursor leaves every surface mesh.
     over_target: Option<Handle<Image>>,
-    /// Whether we have emitted a press the matching release is still owed for.
-    pressed: bool,
+    /// Per-button "we have emitted a press the matching release is still owed
+    /// for", indexed by [`button_index`].
+    pressed: [bool; FORWARDED_BUTTONS.len()],
+}
+
+/// The mouse buttons forwarded to the virtual pointer, with their picking
+/// analogues — the same left/middle/right set bevy_picking itself forwards for
+/// the window pointer (Back/Forward/Other are ignored there too).
+const FORWARDED_BUTTONS: [(MouseButton, PointerButton); 3] = [
+    (MouseButton::Left, PointerButton::Primary),
+    (MouseButton::Right, PointerButton::Secondary),
+    (MouseButton::Middle, PointerButton::Middle),
+];
+
+/// Index of a forwarded button in [`SurfaceVirtualPointer::pressed`].
+fn button_index(button: PointerButton) -> usize {
+    match button {
+        PointerButton::Primary => 0,
+        PointerButton::Secondary => 1,
+        PointerButton::Middle => 2,
+    }
 }
 
 /// Spawn the virtual surface pointer at startup and publish its id.
@@ -243,7 +262,7 @@ pub fn init_surface_pointer(mut commands: Commands) {
         id,
         last_pos: Vec2::ZERO,
         over_target: None,
-        pressed: false,
+        pressed: [false; FORWARDED_BUTTONS.len()],
     });
 }
 
@@ -393,36 +412,40 @@ pub fn drive_surface_pointer(
         state.last_pos = position;
         state.over_target = Some(handle);
 
-        if buttons.just_pressed(MouseButton::Left) {
-            input.write(PointerInput::new(
-                pointer_id,
-                location.clone(),
-                PointerAction::Press(PointerButton::Primary),
-            ));
-            state.pressed = true;
-        }
-        if buttons.just_released(MouseButton::Left) && state.pressed {
-            input.write(PointerInput::new(
-                pointer_id,
-                location,
-                PointerAction::Release(PointerButton::Primary),
-            ));
-            state.pressed = false;
+        for (mb, pb) in FORWARDED_BUTTONS {
+            if buttons.just_pressed(mb) {
+                input.write(PointerInput::new(
+                    pointer_id,
+                    location.clone(),
+                    PointerAction::Press(pb),
+                ));
+                state.pressed[button_index(pb)] = true;
+            }
+            if buttons.just_released(mb) && state.pressed[button_index(pb)] {
+                input.write(PointerInput::new(
+                    pointer_id,
+                    location.clone(),
+                    PointerAction::Release(pb),
+                ));
+                state.pressed[button_index(pb)] = false;
+            }
         }
         return;
     }
 
     // No surface under the cursor: move the pointer off-bounds so picking fires an
-    // `Out`, and release any press we still owe so a control never sticks.
+    // `Out`, and release every press we still owe so a control never sticks.
     if let Some(handle) = state.over_target.clone() {
         let location = image_location(&handle, Vec2::splat(-1.0));
-        if state.pressed {
-            input.write(PointerInput::new(
-                pointer_id,
-                location.clone(),
-                PointerAction::Release(PointerButton::Primary),
-            ));
-            state.pressed = false;
+        for (_, pb) in FORWARDED_BUTTONS {
+            if state.pressed[button_index(pb)] {
+                input.write(PointerInput::new(
+                    pointer_id,
+                    location.clone(),
+                    PointerAction::Release(pb),
+                ));
+                state.pressed[button_index(pb)] = false;
+            }
         }
         input.write(PointerInput::new(
             pointer_id,

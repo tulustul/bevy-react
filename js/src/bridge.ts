@@ -145,6 +145,10 @@ export interface UiEvent {
   // Present only for pointer events; absent for "click".
   clientX?: number;
   clientY?: number;
+  // Which mouse button fired, DOM numbering (0 left, 1 middle, 2 right).
+  // Present for pointerDown/Move/Up; absent for "click" (primary-only, like
+  // DOM click) and hover/scroll/text events.
+  button?: number;
   // The new text. Present only for an `editableText`'s "change" event.
   value?: string;
   // Selection as UTF-8 byte offsets. Present only for the "select" event.

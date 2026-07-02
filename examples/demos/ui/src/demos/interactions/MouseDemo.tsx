@@ -3,8 +3,10 @@ import { BevyStyle, PointerEventData } from "bevy-react/jsx";
 import { Example } from "@/components";
 import { Colors, FontSizes } from "@/theme";
 
-// A pure-UI demo of the raw pointer events the bridge reports: `click`,
-// `pointerDown`, `pointerMove`, `pointerUp`, and the hover boundary
+// A pure-UI demo of the raw pointer events the bridge reports: `click`
+// (left-button only, on release over the pressed node), `pointerDown`,
+// `pointerMove`, `pointerUp` (any mouse button — the log's `btn=` is its DOM
+// number), and the hover boundary
 // `pointerEnter`/`pointerLeave`. Grab the box and drag it around — dragging uses
 // the absolute `clientX`/`clientY` the bridge sends (the normalized `x`/`y` are
 // clamped to the box and can't drive free movement) — and move the cursor on/off
@@ -53,7 +55,7 @@ function DragExample() {
   const fmt = (e: PointerEventData) =>
     `x=${e.x.toFixed(2)} y=${e.y.toFixed(2)} | client=(${Math.round(
       e.clientX,
-    )}, ${Math.round(e.clientY)})`;
+    )}, ${Math.round(e.clientY)}) | btn=${e.button}`;
 
   const onPointerDown = (e: PointerEventData) => {
     lastClient.current = { x: e.clientX, y: e.clientY };

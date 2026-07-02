@@ -8,7 +8,8 @@ use bevy::ecs::system::SystemParam;
 use bevy::image::Image;
 use bevy::input_focus::tab_navigation::TabIndex;
 use bevy::input_focus::{AutoFocus, FocusGained, FocusLost};
-use bevy::picking::events::{Click, Drag, Out, Over, Pointer, Press, Release};
+use bevy::picking::events::{Click, Drag, Enter, Leave, Pointer, Press, Release};
+use bevy::picking::pointer::{PointerButton, PointerId};
 use bevy::platform::collections::HashSet;
 use bevy::prelude::*;
 use bevy::text::{EditableText, FontCx, LayoutCx, TextCursorStyle, TextEdit, TextEditChange};
@@ -923,12 +924,13 @@ fn apply_style_variants(ec: &mut EntityCommands, props: &Props) {
 /// element also gets a [`RelativeCursorPosition`] (so we can read the cursor's
 /// normalized position within it).
 ///
-/// Both `onClick` and the `onPointer*` handlers are detected through the
-/// `Interaction` `Pressed` transition (see [`collect_ui_events`]), so any element
-/// carrying either gets an `Interaction`. Without it a plain `<node onClick>` —
-/// no hover/press style, not a `<button>` — would never be reported as clicked.
-/// `insert_if_new` leaves an existing `Interaction` (a `button`'s, or a
-/// hover/press variant's) untouched.
+/// Both `onClick` and the `onPointer*` handlers need an `Interaction`: it is the
+/// click-*ownership* marker ([`collect_ui_events`] climbs a picked leaf to the
+/// nearest `Interaction`-bearing node), the drag begin/over test in
+/// [`collect_pointer_events`], and the hover/press-style + [`crate::PointerCapture`]
+/// source. Without it a plain `<node onClick>` — no hover/press style, not a
+/// `<button>` — would never be reported as clicked. `insert_if_new` leaves an
+/// existing `Interaction` (a `button`'s, or a hover/press variant's) untouched.
 fn apply_pointer_handlers(ec: &mut EntityCommands, props: &Props) {
     let any_pointer = props.on_pointer_down
         || props.on_pointer_move
@@ -1078,6 +1080,12 @@ fn apply_button_focus_default(ec: &mut EntityCommands, style: &Option<Style>) {
     let has_explicit = style.as_ref().is_some_and(|s| s.focus_policy.is_some());
     if !has_explicit {
         ec.insert(FocusPolicy::Block);
+        // Mirror into the picking backend's blocking flag, exactly as
+        // `apply_style` does for the `Pass` default (see its `FOCUS_POLICY` doc).
+        ec.insert(bevy::picking::Pickable {
+            should_block_lower: true,
+            is_hoverable: true,
+        });
     }
 }
 
@@ -1097,21 +1105,44 @@ fn resolve(bridge: &JsBridge, id: NodeId) -> Option<Entity> {
     bridge.nodes.get(&id).copied()
 }
 
-/// Report `Pressed` transitions on any reconciler-owned node to the JS thread.
+/// Report clicks on reconciler-owned nodes to the JS thread. Rides bevy_picking's
+/// `Pointer<Click>`, which fires on *release over the same node the press landed
+/// on* — DOM click semantics, so press → drag off → release never clicks. Like
+/// DOM `click`, only the primary (left) button clicks; right/middle interactions
+/// are the `onPointer*` events' job (which carry the button). The surface
+/// virtual pointer is excluded: its clicks are [`collect_surface_clicks`]' job.
 pub fn collect_ui_events(
     bridge: Res<JsBridge>,
-    query: Query<(&Interaction, &RNode), Changed<Interaction>>,
+    surface_pointer: Option<Res<SurfaceVirtualPointer>>,
+    mut clicks: MessageReader<Pointer<Click>>,
+    // Only `Interaction`-bearing nodes own a click (a `<button>` gets one via
+    // `Button`; a `<text>` child does not) — the same attribution rule as the
+    // legacy `ui_focus_system` path and `collect_surface_clicks`.
+    targets: Query<&RNode, With<Interaction>>,
+    child_of: Query<&ChildOf>,
 ) {
-    for (interaction, rnode) in &query {
-        if *interaction == Interaction::Pressed {
+    // One gesture fans out to every entity in the pointer's hover map (a button
+    // AND its pass-through label); climbing resolves them to the same owner, so
+    // dedupe per (pointer, owner) within the frame.
+    let mut seen: HashSet<(PointerId, Entity)> = HashSet::new();
+    for ev in clicks.read() {
+        if ev.button != PointerButton::Primary {
+            continue;
+        }
+        if surface_pointer
+            .as_ref()
+            .is_some_and(|p| ev.pointer_id == p.id)
+        {
+            continue;
+        }
+        // Resolve the picked leaf (often a text span) to the nearest interactive
+        // ancestor, so a click on a button's label still fires the button.
+        if let Some(target) = climb(ev.entity, &child_of, |e| targets.contains(e))
+            && seen.insert((ev.pointer_id, target))
+            && let Ok(rnode) = targets.get(target)
+        {
             debug!("click -> reconciler node {}", rnode.0);
-            let _ = bridge.outbound_tx.send(Outbound::UiEvent {
-                event: UiEvent {
-                    id: rnode.0,
-                    kind: "click".to_string(),
-                    ..default()
-                },
-            });
+            send_ui_event(&bridge, rnode.0, "click", None, None, None);
         }
     }
 }
@@ -1360,22 +1391,49 @@ pub fn sync_editable_a11y(
     }
 }
 
-/// The node currently being dragged (an `onPointer*` element pressed with the
-/// left mouse button), plus the last cursor positions we read for it — used as a
-/// fallback when the cursor leaves the window mid-drag. `last_pos` is the
-/// node-relative `0..1` position; `last_abs` is the absolute window position.
-#[derive(Default)]
+/// The mouse buttons the pointer pipeline reports, paired with their DOM
+/// `MouseEvent.button` numbers (`0`/`1`/`2` = left/middle/right — the same set
+/// bevy_picking forwards; Back/Forward/Other stay ignored).
+const POINTER_BUTTONS: [(MouseButton, u8); 3] = [
+    (MouseButton::Left, 0),
+    (MouseButton::Middle, 1),
+    (MouseButton::Right, 2),
+];
+
+/// The node currently being dragged (an `onPointer*` element pressed with any
+/// mouse button), plus the last cursor positions we read for it — used as a
+/// fallback when the cursor leaves the window mid-drag. `button`/`dom_button`
+/// are the button that began the drag: move/up track and report it, and any
+/// other button pressed mid-drag is ignored (one active drag at a time).
+/// `last_pos` is the node-relative `0..1` position; `last_abs` is the absolute
+/// window position.
 pub struct ActiveDrag {
     entity: Option<Entity>,
+    button: MouseButton,
+    dom_button: u8,
     last_pos: Vec2,
     last_abs: Vec2,
+}
+
+impl Default for ActiveDrag {
+    fn default() -> Self {
+        Self {
+            entity: None,
+            button: MouseButton::Left,
+            dom_button: 0,
+            last_pos: Vec2::ZERO,
+            last_abs: Vec2::ZERO,
+        }
+    }
 }
 
 /// Drive native pointer/drag events for elements that declared `onPointer*`
 /// handlers. Unlike the discrete click path, this follows the cursor across
 /// frames so a dragged control (e.g. a slider) keeps updating even when the
 /// pointer leaves its bounds — `RelativeCursorPosition` keeps reporting while the
-/// cursor is anywhere in the window, and we clamp to `0..1`.
+/// cursor is anywhere in the window, and we clamp to `0..1`. Any mouse button
+/// starts a drag and is reported on its events ([`ActiveDrag::button`] — one
+/// drag at a time, keyed to the button that began it).
 ///
 /// `RelativeCursorPosition::normalized` is centered (`-0.5` = left/top edge,
 /// `0.5` = right/bottom); we shift it to a `0..1` top-left origin to match the
@@ -1395,7 +1453,7 @@ pub fn collect_pointer_events(
     mut capture: ResMut<crate::PointerCapture>,
     mut drag: Local<ActiveDrag>,
 ) {
-    let emit = |rnode: &RNode, kind: &str, pos: Vec2, abs: Vec2| {
+    let emit = |rnode: &RNode, kind: &str, pos: Vec2, abs: Vec2, button: u8| {
         let _ = bridge.outbound_tx.send(Outbound::UiEvent {
             event: UiEvent {
                 id: rnode.0,
@@ -1404,6 +1462,7 @@ pub fn collect_pointer_events(
                 y: Some(pos.y),
                 client_x: Some(abs.x),
                 client_y: Some(abs.y),
+                button: Some(button),
                 ..default()
             },
         });
@@ -1413,25 +1472,44 @@ pub fn collect_pointer_events(
     // is outside the window (mid-drag), where we fall back to the last reading.
     let cursor_abs = windows.iter().next().and_then(|w| w.cursor_position());
 
-    // Begin a drag on the frame the button goes down, over a pressed handler node.
-    if buttons.just_pressed(MouseButton::Left) {
-        for (entity, rnode, interaction, rel, handlers) in &nodes {
-            if *interaction == Interaction::Pressed {
-                let pos = normalized_01(rel).unwrap_or(drag.last_pos);
-                let abs = cursor_abs.unwrap_or(drag.last_abs);
-                drag.entity = Some(entity);
-                drag.last_pos = pos;
-                drag.last_abs = abs;
-                if handlers.down {
-                    emit(rnode, "pointerDown", pos, abs);
+    // Begin a drag on the frame any button goes down over a handler node.
+    if drag.entity.is_none() {
+        'begin: for (mb, dom) in POINTER_BUTTONS {
+            if !buttons.just_pressed(mb) {
+                continue;
+            }
+            for (entity, rnode, interaction, rel, handlers) in &nodes {
+                let over = if mb == MouseButton::Left {
+                    // `ui_focus_system` attributes left presses for us (it
+                    // honors `FocusPolicy` blocking).
+                    *interaction == Interaction::Pressed
+                } else {
+                    // Other buttons never set `Pressed`: use this frame's hover
+                    // attribution (same blocking rules) plus the geometric
+                    // over-test, which rejects a stale sticky `Pressed` left
+                    // behind by a left-drag that exited the node.
+                    *interaction != Interaction::None && rel.cursor_over()
+                };
+                if over {
+                    let pos = normalized_01(rel).unwrap_or(drag.last_pos);
+                    let abs = cursor_abs.unwrap_or(drag.last_abs);
+                    drag.entity = Some(entity);
+                    drag.button = mb;
+                    drag.dom_button = dom;
+                    drag.last_pos = pos;
+                    drag.last_abs = abs;
+                    if handlers.down {
+                        emit(rnode, "pointerDown", pos, abs, dom);
+                    }
+                    break 'begin;
                 }
-                break;
             }
         }
     }
 
-    // While held, follow the cursor and emit move events (a drag).
-    if buttons.pressed(MouseButton::Left)
+    // While the initiating button is held, follow the cursor and emit move
+    // events (a drag).
+    if buttons.pressed(drag.button)
         && let Some(entity) = drag.entity
         && let Ok((_, rnode, _, rel, handlers)) = nodes.get(entity)
     {
@@ -1440,19 +1518,19 @@ pub fn collect_pointer_events(
         drag.last_pos = pos;
         drag.last_abs = abs;
         if handlers.moved {
-            emit(rnode, "pointerMove", pos, abs);
+            emit(rnode, "pointerMove", pos, abs, drag.dom_button);
         }
     }
 
-    // End the drag on release.
-    if buttons.just_released(MouseButton::Left)
+    // End the drag when the initiating button is released.
+    if buttons.just_released(drag.button)
         && let Some(entity) = drag.entity.take()
         && let Ok((_, rnode, _, rel, handlers)) = nodes.get(entity)
     {
         let pos = normalized_01(rel).unwrap_or(drag.last_pos);
         let abs = cursor_abs.unwrap_or(drag.last_abs);
         if handlers.up {
-            emit(rnode, "pointerUp", pos, abs);
+            emit(rnode, "pointerUp", pos, abs, drag.dom_button);
         }
     }
 
@@ -1500,7 +1578,7 @@ pub fn collect_hover_events(
         if (inside && handlers.enter) || (!inside && handlers.leave) {
             let pos = rel.and_then(normalized_01).unwrap_or(Vec2::ZERO);
             let abs = cursor_abs.unwrap_or(Vec2::ZERO);
-            send_ui_event(&bridge, rnode.0, kind, Some(pos), Some(abs));
+            send_ui_event(&bridge, rnode.0, kind, Some(pos), Some(abs), None);
         }
     }
 }
@@ -1554,7 +1632,14 @@ pub fn apply_interaction_styles(
 }
 
 /// Send one [`Outbound::UiEvent`] to the JS thread for a reconciler node.
-fn send_ui_event(bridge: &JsBridge, id: NodeId, kind: &str, pos: Option<Vec2>, abs: Option<Vec2>) {
+fn send_ui_event(
+    bridge: &JsBridge,
+    id: NodeId,
+    kind: &str,
+    pos: Option<Vec2>,
+    abs: Option<Vec2>,
+    button: Option<u8>,
+) {
     let _ = bridge.outbound_tx.send(Outbound::UiEvent {
         event: UiEvent {
             id,
@@ -1563,9 +1648,20 @@ fn send_ui_event(bridge: &JsBridge, id: NodeId, kind: &str, pos: Option<Vec2>, a
             y: pos.map(|p| p.y),
             client_x: abs.map(|a| a.x),
             client_y: abs.map(|a| a.y),
+            button,
             ..default()
         },
     });
+}
+
+/// DOM `MouseEvent.button` number for a picking button (`0`/`1`/`2` =
+/// left/middle/right — bevy_picking never forwards Back/Forward/Other).
+fn dom_button(button: PointerButton) -> u8 {
+    match button {
+        PointerButton::Primary => 0,
+        PointerButton::Middle => 1,
+        PointerButton::Secondary => 2,
+    }
 }
 
 /// Node-relative `0..1` position (top-left origin) of a surface-space pixel
@@ -1606,8 +1702,8 @@ fn climb(
 /// pointer ([`SurfaceVirtualPointer`]) over the offscreen subtree, so a click on a
 /// surface node arrives as a `Pointer<Click>` for that pointer — the analogue of
 /// [`collect_ui_events`] for surfaces (whose nodes never get a legacy `Interaction`
-/// press, since they don't render to a window). Scoped to the surface pointer id so
-/// it never double-fires for main-window UI.
+/// press, since they don't render to a window), primary-button-only like it too.
+/// Scoped to the surface pointer id so it never double-fires for main-window UI.
 pub fn collect_surface_clicks(
     bridge: Res<JsBridge>,
     pointer: Option<Res<SurfaceVirtualPointer>>,
@@ -1618,17 +1714,24 @@ pub fn collect_surface_clicks(
     child_of: Query<&ChildOf>,
 ) {
     let Some(pointer) = pointer else { return };
+    // A pass-through node stacked over the target makes one gesture fan out to
+    // every entity in the hover map; climbing can resolve them to the same
+    // owner, so dedupe per owner within the frame.
+    let mut seen: HashSet<Entity> = HashSet::new();
     for ev in clicks.read() {
-        if ev.pointer_id != pointer.id {
+        // Like DOM `click` (and `collect_ui_events`), only the primary button
+        // clicks; right/middle ride the `onPointer*` events.
+        if ev.pointer_id != pointer.id || ev.button != PointerButton::Primary {
             continue;
         }
         // Resolve the picked leaf to the nearest interactive ancestor (the button),
         // so a click on its label text still fires the button's handler.
         if let Some(target) = climb(ev.entity, &child_of, |e| targets.contains(e))
+            && seen.insert(target)
             && let Ok(rnode) = targets.get(target)
         {
             debug!("surface click -> reconciler node {}", rnode.0);
-            send_ui_event(&bridge, rnode.0, "click", None, None);
+            send_ui_event(&bridge, rnode.0, "click", None, None, None);
         }
     }
 }
@@ -1636,8 +1739,9 @@ pub fn collect_surface_clicks(
 /// Report `onPointer*` drag events for `<surface>` nodes, mirroring
 /// [`collect_pointer_events`] for the in-world picking path. Press → `pointerDown`,
 /// drag → `pointerMove`, release → `pointerUp`, each gated on the node's declared
-/// [`PointerHandlers`] and carrying the cursor's node-relative `0..1` position
-/// (the surface-space pixel as `client_x/y`).
+/// [`PointerHandlers`], carrying the cursor's node-relative `0..1` position
+/// (the surface-space pixel as `client_x/y`) and the mouse button (a `Drag`'s
+/// button is the one doing the dragging).
 #[allow(clippy::too_many_arguments)]
 pub fn collect_surface_pointer_events(
     bridge: Res<JsBridge>,
@@ -1649,14 +1753,33 @@ pub fn collect_surface_pointer_events(
     child_of: Query<&ChildOf>,
 ) {
     let Some(pointer) = pointer else { return };
-    let emit = |entity: Entity, want: fn(&PointerHandlers) -> bool, kind: &str, at: Vec2| {
+    // Per-kind (owner, button) dedupe: a pass-through node stacked over the
+    // target fans each gesture out to every hovered entity, and climbing can
+    // resolve them to the same owner. (Moves see at most one `Drag` per button
+    // per frame — `drive_surface_pointer` emits one `Move` per frame — so the
+    // set never suppresses a genuine repeat.)
+    let mut seen: HashSet<(Entity, PointerButton)> = HashSet::new();
+    let emit = |entity: Entity,
+                want: fn(&PointerHandlers) -> bool,
+                kind: &str,
+                at: Vec2,
+                button: PointerButton,
+                seen: &mut HashSet<(Entity, PointerButton)>| {
         // Resolve the picked leaf to the nearest ancestor that declared `onPointer*`.
         if let Some(target) = climb(entity, &child_of, |e| nodes.contains(e))
+            && seen.insert((target, button))
             && let Ok((rnode, handlers, node, transform)) = nodes.get(target)
             && want(handlers)
             && let Some((pos, abs)) = surface_relative(node, transform, at)
         {
-            send_ui_event(&bridge, rnode.0, kind, Some(pos), Some(abs));
+            send_ui_event(
+                &bridge,
+                rnode.0,
+                kind,
+                Some(pos),
+                Some(abs),
+                Some(dom_button(button)),
+            );
         }
     };
     for ev in presses.read() {
@@ -1666,9 +1789,12 @@ pub fn collect_surface_pointer_events(
                 |h| h.down,
                 "pointerDown",
                 ev.pointer_location.position,
+                ev.button,
+                &mut seen,
             );
         }
     }
+    seen.clear();
     for ev in drags.read() {
         if ev.pointer_id == pointer.id {
             emit(
@@ -1676,9 +1802,12 @@ pub fn collect_surface_pointer_events(
                 |h| h.moved,
                 "pointerMove",
                 ev.pointer_location.position,
+                ev.button,
+                &mut seen,
             );
         }
     }
+    seen.clear();
     for ev in releases.read() {
         if ev.pointer_id == pointer.id {
             emit(
@@ -1686,6 +1815,8 @@ pub fn collect_surface_pointer_events(
                 |h| h.up,
                 "pointerUp",
                 ev.pointer_location.position,
+                ev.button,
+                &mut seen,
             );
         }
     }
@@ -1693,28 +1824,29 @@ pub fn collect_surface_pointer_events(
 
 /// Report `pointerEnter` / `pointerLeave` for `<surface>` nodes, mirroring
 /// [`collect_surface_pointer_events`] for the hover boundary. Surface nodes get no
-/// legacy `Interaction`, so this reads the virtual pointer's `Pointer<Over>` /
-/// `Pointer<Out>` picking events (like [`apply_surface_interaction_styles`]) and
-/// `climb`s to the nearest ancestor that declared the handler.
+/// legacy `Interaction`, so this reads the virtual pointer's `Pointer<Enter>` /
+/// `Pointer<Leave>` picking events. Those already implement DOM
+/// `mouseenter`/`mouseleave` semantics — they fire for the hovered entity *and*
+/// its ancestors, only on true boundary crossings — so no climb (and no dedupe)
+/// is needed, and crossing between a button's label and its padding never
+/// re-fires the button's boundary. Hover events carry no button.
 pub fn collect_surface_hover_events(
     bridge: Res<JsBridge>,
     pointer: Option<Res<SurfaceVirtualPointer>>,
-    mut overs: MessageReader<Pointer<Over>>,
-    mut outs: MessageReader<Pointer<Out>>,
+    mut enters: MessageReader<Pointer<Enter>>,
+    mut leaves: MessageReader<Pointer<Leave>>,
     nodes: Query<(&RNode, &PointerHandlers, &ComputedNode, &UiGlobalTransform)>,
-    child_of: Query<&ChildOf>,
 ) {
     let Some(pointer) = pointer else { return };
     let emit = |entity: Entity, want: fn(&PointerHandlers) -> bool, kind: &str, at: Vec2| {
-        if let Some(target) = climb(entity, &child_of, |e| nodes.contains(e))
-            && let Ok((rnode, handlers, node, transform)) = nodes.get(target)
+        if let Ok((rnode, handlers, node, transform)) = nodes.get(entity)
             && want(handlers)
             && let Some((pos, abs)) = surface_relative(node, transform, at)
         {
-            send_ui_event(&bridge, rnode.0, kind, Some(pos), Some(abs));
+            send_ui_event(&bridge, rnode.0, kind, Some(pos), Some(abs), None);
         }
     };
-    for ev in overs.read() {
+    for ev in enters.read() {
         if ev.pointer_id == pointer.id {
             emit(
                 ev.entity,
@@ -1724,7 +1856,7 @@ pub fn collect_surface_hover_events(
             );
         }
     }
-    for ev in outs.read() {
+    for ev in leaves.read() {
         if ev.pointer_id == pointer.id {
             emit(
                 ev.entity,
@@ -1739,14 +1871,19 @@ pub fn collect_surface_hover_events(
 /// Apply hover/press [`StyleVariants`] to `<surface>` nodes from the in-world
 /// picking path — the surface-side analogue of [`apply_interaction_styles`], which
 /// can't help here because surface nodes never receive a legacy `Interaction`
-/// (their offscreen camera makes `ui_focus_system` skip them). Over → base+hover,
-/// press → base+hover+press, out/release → base/hover.
+/// (their offscreen camera makes `ui_focus_system` skip them). Enter →
+/// base+hover, press → base+hover+press, leave/release → base/hover. The hover
+/// axis rides `Pointer<Enter>`/`Pointer<Leave>` (boundary-only, ancestor-aware —
+/// see [`collect_surface_hover_events`]); the press axis keeps `Press`/`Release`
+/// with the climb, filtered to the primary button so a right/middle press
+/// doesn't trigger `pressStyle` (DOM `:active` parity with the main window's
+/// `Interaction::Pressed`).
 #[allow(clippy::too_many_arguments)]
 pub fn apply_surface_interaction_styles(
     mut commands: Commands,
     pointer: Option<Res<SurfaceVirtualPointer>>,
-    mut overs: MessageReader<Pointer<Over>>,
-    mut outs: MessageReader<Pointer<Out>>,
+    mut enters: MessageReader<Pointer<Enter>>,
+    mut leaves: MessageReader<Pointer<Leave>>,
     mut presses: MessageReader<Pointer<Press>>,
     mut releases: MessageReader<Pointer<Release>>,
     variants: Query<&StyleVariants>,
@@ -1759,24 +1896,23 @@ pub fn apply_surface_interaction_styles(
     // Resolve a picked leaf to the nearest ancestor with hover/press variants (the
     // button), so its label text highlights the button rather than nothing.
     let target = |entity: Entity| climb(entity, &child_of, |e| variants.contains(e));
-    for ev in outs.read() {
+    for ev in leaves.read() {
         if ev.pointer_id == pointer.id
-            && let Some(t) = target(ev.entity)
-            && let Ok(v) = variants.get(t)
+            && let Ok(v) = variants.get(ev.entity)
         {
-            restyle(t, v.base.clone());
+            restyle(ev.entity, v.base.clone());
         }
     }
-    for ev in overs.read() {
+    for ev in enters.read() {
         if ev.pointer_id == pointer.id
-            && let Some(t) = target(ev.entity)
-            && let Ok(v) = variants.get(t)
+            && let Ok(v) = variants.get(ev.entity)
         {
-            restyle(t, overlay_style(&v.base, &v.hover));
+            restyle(ev.entity, overlay_style(&v.base, &v.hover));
         }
     }
     for ev in releases.read() {
         if ev.pointer_id == pointer.id
+            && ev.button == PointerButton::Primary
             && let Some(t) = target(ev.entity)
             && let Ok(v) = variants.get(t)
         {
@@ -1785,6 +1921,7 @@ pub fn apply_surface_interaction_styles(
     }
     for ev in presses.read() {
         if ev.pointer_id == pointer.id
+            && ev.button == PointerButton::Primary
             && let Some(t) = target(ev.entity)
             && let Ok(v) = variants.get(t)
         {
@@ -2015,20 +2152,37 @@ mod tests {
             let e = app.world().resource::<JsBridge>().nodes[&id];
             app.world().entity(e).get::<FocusPolicy>().copied()
         };
+        // The picking mirror: `Pickable.should_block_lower` must track the policy,
+        // because the picking backend (which clicks and all `<surface>` interaction
+        // ride) ignores `FocusPolicy` and blocks when `Pickable` is absent.
+        let blocks = |app: &App, id: u32| -> Option<bool> {
+            let e = app.world().resource::<JsBridge>().nodes[&id];
+            app.world()
+                .entity(e)
+                .get::<bevy::picking::Pickable>()
+                .map(|p| p.should_block_lower)
+        };
         assert_eq!(
             fp(&app, 1),
             Some(FocusPolicy::Block),
             "button defaults to Block"
         );
+        assert_eq!(blocks(&app, 1), Some(true), "button blocks picking too");
         assert_eq!(
             fp(&app, 2),
             Some(FocusPolicy::Pass),
             "node defaults to Pass"
         );
+        assert_eq!(blocks(&app, 2), Some(false), "node passes picking too");
         assert_eq!(
             fp(&app, 3),
             Some(FocusPolicy::Pass),
             "explicit focusPolicy overrides the button default"
+        );
+        assert_eq!(
+            blocks(&app, 3),
+            Some(false),
+            "explicit pass unblocks picking on a button"
         );
 
         // A delta that dirties the FOCUS_POLICY group (unsetting the — already
@@ -2049,6 +2203,128 @@ mod tests {
             Some(FocusPolicy::Block),
             "a re-rendered button keeps its Block default"
         );
+        assert_eq!(
+            blocks(&app, 1),
+            Some(true),
+            "a re-rendered button keeps blocking picking"
+        );
+    }
+
+    /// A synthetic picking `Pointer<Click>` location: the render target is
+    /// irrelevant to the collectors, so a default image handle stands in.
+    fn click_location() -> bevy::picking::pointer::Location {
+        bevy::picking::pointer::Location {
+            target: bevy::camera::NormalizedRenderTarget::Image(Handle::<Image>::default().into()),
+            position: Vec2::ZERO,
+        }
+    }
+
+    /// A minimal app wired for the picking-based click collectors: a `JsBridge`
+    /// (with its outbound receiver kept alive) + `Pointer<Click>` messages.
+    fn click_app() -> (App, tokio::sync::mpsc::UnboundedReceiver<Outbound>) {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins);
+        let (out_tx, out_rx) = tokio::sync::mpsc::unbounded_channel::<Outbound>();
+        let (_ops_tx, ops_rx) = crossbeam_channel::unbounded::<Vec<Op>>();
+        std::mem::forget(_ops_tx); // Keep the ops channel open for the app's lifetime.
+        let root = app.world_mut().spawn_empty().id();
+        app.insert_resource(JsBridge::new(ops_rx, out_tx, root));
+        app.add_message::<Pointer<Click>>();
+        (app, out_rx)
+    }
+
+    fn drain_clicks(out_rx: &mut tokio::sync::mpsc::UnboundedReceiver<Outbound>) -> Vec<UiEvent> {
+        std::iter::from_fn(|| out_rx.try_recv().ok())
+            .map(|o| match o {
+                Outbound::UiEvent { event } => event,
+                other => panic!("expected a UiEvent, got {other:?}"),
+            })
+            .collect()
+    }
+
+    /// [`collect_ui_events`] rides `Pointer<Click>`: only the primary button
+    /// clicks (right/middle are the `onPointer*` events' job), a click on a
+    /// node's leaf (label) climbs to the `Interaction`-bearing owner, and the
+    /// multi-pick fan-out (leaf + owner both hovered) dedupes to ONE event.
+    #[test]
+    fn picking_click_fires_once_primary_only() {
+        let (mut app, mut out_rx) = click_app();
+        app.add_systems(Update, collect_ui_events);
+
+        let owner = app.world_mut().spawn((RNode(1), Interaction::None)).id();
+        let leaf = app.world_mut().spawn(ChildOf(owner)).id();
+
+        let click = |entity, button| {
+            Pointer::new(
+                PointerId::Mouse,
+                click_location(),
+                Click {
+                    button,
+                    hit: bevy::picking::backend::HitData::new(Entity::PLACEHOLDER, 0.0, None, None),
+                    duration: std::time::Duration::ZERO,
+                    count: 1,
+                },
+                entity,
+            )
+        };
+        // A right click must be ignored entirely…
+        app.world_mut()
+            .write_message(click(leaf, PointerButton::Secondary));
+        // …while a primary gesture fans out to every hovered entity (leaf +
+        // owner) and must dedupe to one click.
+        app.world_mut()
+            .write_message(click(leaf, PointerButton::Primary));
+        app.world_mut()
+            .write_message(click(owner, PointerButton::Primary));
+        app.update();
+
+        let events = drain_clicks(&mut out_rx);
+        assert_eq!(
+            events.len(),
+            1,
+            "secondary filtered out; leaf + owner primary picks dedupe to one click"
+        );
+        assert_eq!(events[0].id, 1);
+        assert_eq!(events[0].kind, "click");
+        assert_eq!(
+            events[0].button, None,
+            "clicks carry no button (primary implied)"
+        );
+    }
+
+    /// The surface virtual pointer's clicks belong to [`collect_surface_clicks`]
+    /// alone: [`collect_ui_events`] must skip them (no double-fire), and the
+    /// surface collector reports exactly one click.
+    #[test]
+    fn surface_pointer_clicks_are_not_main_clicks() {
+        let (mut app, mut out_rx) = click_app();
+        app.add_systems(Startup, bevy_react_surface::init_surface_pointer);
+        app.add_systems(Update, (collect_ui_events, collect_surface_clicks));
+        app.update(); // Run Startup so the pointer resource exists.
+
+        let owner = app.world_mut().spawn((RNode(7), Interaction::None)).id();
+        let surface_id = app.world().resource::<SurfaceVirtualPointer>().id;
+        app.world_mut().write_message(Pointer::new(
+            surface_id,
+            click_location(),
+            Click {
+                button: PointerButton::Primary,
+                hit: bevy::picking::backend::HitData::new(Entity::PLACEHOLDER, 0.0, None, None),
+                duration: std::time::Duration::ZERO,
+                count: 1,
+            },
+            owner,
+        ));
+        app.update();
+
+        let events = drain_clicks(&mut out_rx);
+        assert_eq!(
+            events.len(),
+            1,
+            "exactly one click: surface-collected, not double-fired by collect_ui_events"
+        );
+        assert_eq!(events[0].id, 7);
+        assert_eq!(events[0].button, None, "clicks carry no button");
     }
 
     /// A `<text>` root's `transform`/`transition` must update on re-render — not
