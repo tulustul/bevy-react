@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   Animated,
   useSharedValue,
@@ -11,28 +12,35 @@ import { column, playButton, playLabel } from "./shared";
 import { Colors } from "@/theme";
 
 // withSequence chains drivers — each starts where the previous ended — and
-// withDelay inserts the pauses between them.
+// withDelay inserts the pauses between them. The trailing function is the
+// completion callback (Reanimated-style): it fires once, on the Bevy side
+// reporting the whole sequence settled, with finished=false if something
+// interrupted it. Here it re-enables the Play button.
 
 const TYPESCRIPT = `x.value = withSequence(
   withTiming(110, { easing: "easeOut" }),
   withDelay(250, withTiming(-110)),
   withDelay(250, withTiming(0)),
+  (finished) => setRunning(false),
 );`;
 
 export function SequenceDemo() {
   const x = useSharedValue(0);
+  const [running, setRunning] = useState(false);
 
   const run = () => {
+    setRunning(true);
     x.value = withSequence(
       withTiming(110, { duration: 450, easing: "easeOut" }),
       withDelay(250, withTiming(-110, { duration: 450, easing: "easeInOut" })),
       withDelay(250, withTiming(0, { duration: 350, easing: "easeIn" })),
+      () => setRunning(false),
     );
   };
 
   return (
     <Example
-      description="Press Play: slide right, pause, slide left, pause, return - one composed driver."
+      description="Press Play: slide right, pause, slide left, pause, return - one composed driver. Its completion callback re-enables the button."
       tsx={TYPESCRIPT}
     >
       <node style={column}>
@@ -40,11 +48,11 @@ export function SequenceDemo() {
           <Animated.node style={square} animatedStyle={{ translateX: x }} />
         </node>
         <button
-          style={playButton}
+          style={running ? { ...playButton, opacity: 0.4 } : playButton}
           pressStyle={{ transform: { scale: 0.92 } }}
-          onClick={run}
+          onClick={running ? undefined : run}
         >
-          <text style={playLabel}>Play</text>
+          <text style={playLabel}>{running ? "Playing…" : "Play"}</text>
         </button>
       </node>
     </Example>

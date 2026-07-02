@@ -15,6 +15,7 @@ use crossbeam_channel::{Receiver, RecvTimeoutError};
 use bevy_react::js_thread::spawn_js_thread;
 use bevy_react::protocol::{Op, Outbound, UiEvent};
 use bevy_react::{RawRequest, ReactMessage};
+use bevy_react_animations::AnimationCommand;
 
 fn example_bundle() -> PathBuf {
     // CARGO_MANIFEST_DIR is crates/core; the example bundle is at the repo root.
@@ -258,4 +259,136 @@ fn bridge_round_trip() {
         }
     }
     panic!("no count '4' update after click");
+}
+
+/// End-to-end check of animation completion callbacks: the Sequence demo's Play
+/// button assigns a driver whose callback re-enables the button. Playing Bevy's
+/// role, we capture the token-tagged `animate` command and inject the
+/// `AnimationFinished` settlement, asserting the callback's re-render lands.
+#[test]
+fn animation_callback_round_trip() {
+    let bundle = example_bundle();
+    if !bundle.exists() {
+        eprintln!(
+            "skipping animation_callback_round_trip: bundle not built at {}\n  run: npm install && npm run build -w demos-app",
+            bundle.display()
+        );
+        return;
+    }
+
+    let (ops_tx, ops_rx) = crossbeam_channel::unbounded::<Vec<Op>>();
+    // Held for the duration so emits/requests from the app go nowhere harmlessly.
+    let (emit_tx, _emit_rx) = crossbeam_channel::unbounded::<ReactMessage>();
+    let (request_tx, _request_rx) = crossbeam_channel::unbounded::<RawRequest>();
+    let (anim_tx, anim_rx) = crossbeam_channel::unbounded::<AnimationCommand>();
+    let (outbound_tx, outbound_rx) = tokio::sync::mpsc::unbounded_channel::<Outbound>();
+    // Held for the duration: dropping the reload sender would look like shutdown.
+    let (_reload_tx, reload_rx) = tokio::sync::mpsc::unbounded_channel::<()>();
+
+    let vendor = bundle.with_file_name("vendor.js");
+    spawn_js_thread(
+        vendor,
+        bundle,
+        ops_tx,
+        emit_tx,
+        request_tx,
+        anim_tx,
+        outbound_rx,
+        reload_rx,
+    );
+
+    let mut buttons: HashSet<u32> = HashSet::new();
+    let mut parent_of: HashMap<u32, u32> = HashMap::new();
+    let mut text_of: HashMap<u32, String> = HashMap::new();
+
+    let click = |id: u32| {
+        outbound_tx
+            .send(Outbound::UiEvent {
+                event: UiEvent {
+                    id,
+                    kind: "click".into(),
+                    ..Default::default()
+                },
+            })
+            .expect("JS thread gone before click");
+    };
+
+    // Navigate the left-nav: expand "Animations", select "Sequence".
+    let animations = drain_until_button(
+        &ops_rx,
+        "Animations",
+        Duration::from_secs(15),
+        &mut buttons,
+        &mut parent_of,
+        &mut text_of,
+    )
+    .expect("no 'Animations' nav button in initial render");
+    click(animations);
+
+    let sequence = drain_until_button(
+        &ops_rx,
+        "Sequence",
+        Duration::from_secs(10),
+        &mut buttons,
+        &mut parent_of,
+        &mut text_of,
+    )
+    .expect("no 'Sequence' nav button after expanding 'Animations'");
+    click(sequence);
+
+    let play = drain_until_button(
+        &ops_rx,
+        "Play",
+        Duration::from_secs(10),
+        &mut buttons,
+        &mut parent_of,
+        &mut text_of,
+    )
+    .expect("no 'Play' button in the Sequence demo");
+    click(play);
+
+    // The click handler assigns the sequence driver with a completion callback —
+    // the `animate` command must carry a correlation token. Skip the demo's
+    // other commands (`declare` on mount, etc.).
+    let deadline = Instant::now() + Duration::from_secs(10);
+    let (value_id, token) = loop {
+        assert!(Instant::now() < deadline, "no tokened animate after Play");
+        match anim_rx.recv_timeout(Duration::from_millis(500)) {
+            Ok(AnimationCommand::Animate {
+                id,
+                token: Some(token),
+                ..
+            }) => break (id, token),
+            Ok(_) => {}
+            Err(RecvTimeoutError::Timeout) => {}
+            Err(RecvTimeoutError::Disconnected) => panic!("JS thread died before animate"),
+        }
+    };
+    eprintln!("OK   Play assigned driver: shared value {value_id}, token {token}");
+
+    // Bevy's part, played by hand: report the driver settled. The callback runs
+    // `setRunning(false)`, flipping the button label "Playing…" -> "Play".
+    outbound_tx
+        .send(Outbound::AnimationFinished {
+            id: value_id,
+            token,
+            finished: true,
+        })
+        .expect("JS thread gone before settlement");
+
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while Instant::now() < deadline {
+        if let Ok(batch) = ops_rx.recv_timeout(Duration::from_millis(500)) {
+            for op in &batch {
+                if let Op::UpdateText { text, .. } = op
+                    && text.trim() == "Play"
+                {
+                    eprintln!("OK   completion callback re-render: label back to 'Play'");
+                    eprintln!("PASS animation callback end-to-end");
+                    return;
+                }
+            }
+        }
+    }
+    panic!("no 'Play' label update after AnimationFinished — callback never fired");
 }

@@ -5,7 +5,9 @@ use std::path::PathBuf;
 
 use bevy::asset::embedded_asset;
 use bevy::prelude::*;
-use bevy_react_animations::{AnimationCommand, AnimationSet, ReactUiAnimationsPlugin};
+use bevy_react_animations::{
+    AnimationCommand, AnimationSet, AnimationSettled, ReactUiAnimationsPlugin,
+};
 
 use crate::filter::{FilterMaterial, FilterMaterialCache, init_filter_assets};
 
@@ -13,7 +15,7 @@ use crate::bridge::{JsBridge, OpReceiver, OutboundResource, OutboundSender};
 use crate::event::ReactEventRegistry;
 use crate::host::{self, HostConfig, HostSenders};
 use crate::message::{ReactMessage, ReactRegistry};
-use crate::protocol::Op;
+use crate::protocol::{Op, Outbound};
 use crate::reconcile::{
     OpApplyStats, apply_interaction_styles, apply_js_ops, apply_pending_selections,
     apply_surface_interaction_styles, collect_hover_events, collect_pointer_events,
@@ -303,8 +305,27 @@ impl Plugin for ReactUiPlugin {
         // `op_animate` sends are discarded.
         if self.animations {
             app.add_plugins(ReactUiAnimationsPlugin::new(anim_rx))
-                .configure_sets(Update, AnimationSet::Apply.after(apply_js_ops));
+                .configure_sets(Update, AnimationSet::Apply.after(apply_js_ops))
+                // Completion callbacks: settlements the engine reports (once per
+                // token-tagged driver, not per frame) go out to JS.
+                .add_systems(Update, forward_animation_settled.after(AnimationSet::Tick));
         }
+    }
+}
+
+/// Forward the animation engine's [`AnimationSettled`] messages to JS as
+/// [`Outbound::AnimationFinished`], resolving each to its completion callback.
+/// The engine crate can't depend on this one, so the bridging happens here.
+fn forward_animation_settled(
+    mut settled: MessageReader<AnimationSettled>,
+    outbound: Res<OutboundResource>,
+) {
+    for s in settled.read() {
+        let _ = outbound.0.send(Outbound::AnimationFinished {
+            id: s.id,
+            token: s.token,
+            finished: s.finished,
+        });
     }
 }
 

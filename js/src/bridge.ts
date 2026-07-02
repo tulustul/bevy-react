@@ -26,10 +26,12 @@ const ops: BevyHost =
   (globalThis as { __bevyHost?: BevyHost }).__bevyHost ?? Deno.core.ops;
 
 // Mirrors `bevy_react_animations::protocol::AnimationCommand` (tag = "kind").
+// `token` correlates a completion callback: Bevy reports the driver's settlement
+// back with it (see `registerAnimationCallback`); omitted → nothing is reported.
 export type AnimationCommand =
   | { kind: "declare"; id: number; initial: number }
   | { kind: "set"; id: number; value: number }
-  | { kind: "animate"; id: number; driver: unknown }
+  | { kind: "animate"; id: number; driver: unknown; token?: number }
   | { kind: "cancel"; id: number }
   | { kind: "clear" };
 
@@ -38,6 +40,7 @@ type Outbound =
   | { t: "uiEvent"; event: UiEvent }
   | { t: "event"; name: string; value: unknown }
   | { t: "response"; id: number; result: ResponseResult }
+  | { t: "animationFinished"; id: number; token: number; finished: boolean }
   | { t: "reload" };
 
 // Mirrors `protocol::ResponseResult` (internally tagged with `status`).
@@ -185,10 +188,13 @@ export function push(op: Op): void {
 // Queue a teardown of the previous tree. A fresh runtime calls this before its
 // first render so a hot reload replaces (rather than duplicates) the UI. Also
 // clears the Bevy-side shared-value table (which persists across reloads) so
-// stale animated values don't linger.
+// stale animated values don't linger — and the completion-callback registry,
+// whose pending entries would otherwise never fire (Bevy drops their
+// settlements on `clear`).
 export function reset(): void {
   pending.push({ op: "reset" });
   ops.op_animate({ kind: "clear" });
+  animationCallbacks.clear();
 }
 
 // Send an animation command to the animations plugin (declare/set/animate/
@@ -196,6 +202,25 @@ export function reset(): void {
 // use the `useSharedValue` / `with*` helpers from `./animated`.
 export function animate(cmd: AnimationCommand): void {
   ops.op_animate(cmd);
+}
+
+// --- Animation completion callbacks ---
+
+// One entry per in-flight `animate` command that carried a callback, keyed by
+// the correlation token sent with it. Bevy reports each token's settlement
+// exactly once (finished or interrupted), so entries are removed on dispatch.
+// Owned here (not in `animated.ts`) so `reset()` can clear it.
+let nextAnimationToken = 1;
+const animationCallbacks = new Map<number, (finished: boolean) => void>();
+
+// Register a completion callback and return the token to send with the
+// `animate` command. Low-level — apps pass callbacks to the `with*` helpers.
+export function registerAnimationCallback(
+  cb: (finished: boolean) => void,
+): number {
+  const token = nextAnimationToken++;
+  animationCallbacks.set(token, cb);
+  return token;
 }
 
 // Wall clock for instrumentation (the embedded isolate may lack `performance`).
@@ -700,6 +725,21 @@ export async function runEventLoop(
         pendingRequests.delete(msg.id);
         if (msg.result.status === "ok") p.resolve(msg.result.value);
         else p.reject(new Error(msg.result.message));
+        break;
+      }
+      case "animationFinished": {
+        const cb = animationCallbacks.get(msg.token);
+        if (!cb) break; // cleared by reset — safe no-op
+        animationCallbacks.delete(msg.token);
+        // Inside `wrap` (flushSync): completion callbacks typically setState to
+        // chain the next phase, and the resulting ops should flush this pass.
+        wrap(() => {
+          try {
+            cb(msg.finished);
+          } catch (e) {
+            console.error("[js] animation callback error:", e);
+          }
+        });
         break;
       }
     }

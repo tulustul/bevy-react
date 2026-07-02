@@ -2290,6 +2290,14 @@ pub enum Outbound {
     },
     /// A reply to a React -> Bevy request, correlated by the request `id`.
     Response { id: u64, result: ResponseResult },
+    /// A token-tagged animation driver settled: `finished` is `true` on natural
+    /// completion, `false` on interruption. `token` correlates the JS completion
+    /// callback registered when the driver was assigned.
+    AnimationFinished {
+        id: bevy_react_animations::SharedId,
+        token: u64,
+        finished: bool,
+    },
     /// Hot-reload sentinel: make the JS event loop exit so the runtime rebuilds.
     Reload,
 }

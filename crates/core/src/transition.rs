@@ -29,7 +29,8 @@
 use bevy::prelude::*;
 use bevy::ui::{ScrollPosition, UiTransform};
 use bevy_react_animations::{
-    AnimatableProperty, AnimatedNode, Driver, Easing, Runner, build_runner, build_ui_transform,
+    AnimatableProperty, AnimatedNode, Driver, Easing, Lerp, Runner, build_runner,
+    build_ui_transform,
 };
 use serde::Deserialize;
 
@@ -198,18 +199,18 @@ impl TransitionInput {
 #[derive(Component, Default)]
 #[require(UiTransform)]
 pub struct TransitionState {
-    translate_x: LengthChannel,
-    translate_y: LengthChannel,
+    translate_x: ProgressChannel<Length>,
+    translate_y: ProgressChannel<Length>,
     scale: Channel,
     scale_x: Channel,
     scale_y: Channel,
     rotate: Channel,
     opacity: Channel,
-    color: ColorChannel,
-    width: LengthChannel,
-    height: LengthChannel,
-    max_width: LengthChannel,
-    max_height: LengthChannel,
+    color: ProgressChannel<[f32; 4]>,
+    width: ProgressChannel<Length>,
+    height: ProgressChannel<Length>,
+    max_width: ProgressChannel<Length>,
+    max_height: ProgressChannel<Length>,
     initialized: bool,
 }
 
@@ -254,24 +255,33 @@ impl Channel {
     }
 }
 
-/// Background-color channel: a single progress [`Runner`] (0→1) lerping straight
-/// rgba from `start` to `target`.
+/// A progress-lerped channel (colors, [`Length`]s): a single [`Runner`] eases a
+/// progress value 0→1 and the reading lerps from `start` to `target`. Used for
+/// quantities that can't be time-stepped directly in value space (a color's four
+/// channels move together; a `Length` carries a unit). [`ProgressChannel::drive`]
+/// returns the current reading every frame — a caller writing a relayout-
+/// triggering target (`Node`) compares before writing, like every other apply
+/// path.
 #[derive(Default)]
-struct ColorChannel {
-    current: [f32; 4],
-    target: [f32; 4],
-    start: [f32; 4],
+struct ProgressChannel<T> {
+    current: T,
+    target: T,
+    start: T,
     runner: Option<Runner>,
 }
 
-impl ColorChannel {
-    fn init(&mut self, value: [f32; 4]) {
+impl<T: Lerp + PartialEq> ProgressChannel<T> {
+    /// Snap to `value` without animating (used to seed the resting state so an
+    /// element doesn't animate from zero when it first appears).
+    fn init(&mut self, value: T) {
         self.current = value;
         self.target = value;
         self.runner = None;
     }
 
-    fn drive(&mut self, target: [f32; 4], spec: Option<&ChannelTransition>, dt: f32) -> [f32; 4] {
+    /// Advance toward `target`. `spec` `Some` eases; `None` snaps. Returns the
+    /// current reading.
+    fn drive(&mut self, target: T, spec: Option<&ChannelTransition>, dt: f32) -> T {
         if target != self.target {
             self.target = target;
             match spec {
@@ -287,7 +297,7 @@ impl ColorChannel {
         }
         if let Some(r) = self.runner.as_mut() {
             let (p, done) = r.step(dt);
-            self.current = lerp_rgba(self.start, self.target, p);
+            self.current = self.start.lerp(self.target, p);
             if done {
                 self.current = self.target;
                 self.runner = None;
@@ -297,59 +307,21 @@ impl ColorChannel {
     }
 }
 
-/// A layout-size channel ([`Node`] `width`/`height`/`max_*`): a single progress
-/// [`Runner`] (0→1) lerping a [`Length`] from `start` to `target`. Unlike the
-/// transform/color channels, writing its value mutates `Node` and re-triggers
-/// Bevy's layout — so [`LengthChannel::drive`] reports whether it actually moved,
-/// and the caller writes `Node` only then (no relayout while idle).
-#[derive(Default)]
-struct LengthChannel {
-    current: Length,
-    target: Length,
-    start: Length,
-    runner: Option<Runner>,
-}
-
-impl LengthChannel {
-    fn init(&mut self, value: Length) {
-        self.current = value;
-        self.target = value;
-        self.runner = None;
-    }
-
-    /// Advance toward `target`. Returns `Some(current)` only on a frame it moved
-    /// (armed, stepped, or snapped); `None` when idle.
-    fn drive(
-        &mut self,
-        target: Length,
-        spec: Option<&ChannelTransition>,
-        dt: f32,
-    ) -> Option<Length> {
-        let mut moved = false;
-        if target != self.target {
-            self.target = target;
-            moved = true;
-            match spec {
-                Some(s) => {
-                    self.start = self.current;
-                    self.runner = Some(build_runner(&s.to_driver(1.0), 0.0));
-                }
-                None => {
-                    self.current = target;
-                    self.runner = None;
-                }
-            }
+/// Interpolate two lengths of the same unit; mixed units or `auto` can't be
+/// interpolated, so it snaps to the target.
+impl Lerp for Length {
+    fn lerp(self, other: Self, t: f32) -> Self {
+        use Length::*;
+        let lerp = |x: f32, y: f32| x + (y - x) * t;
+        match (self, other) {
+            (Px(x), Px(y)) => Px(lerp(x, y)),
+            (Percent(x), Percent(y)) => Percent(lerp(x, y)),
+            (Vw(x), Vw(y)) => Vw(lerp(x, y)),
+            (Vh(x), Vh(y)) => Vh(lerp(x, y)),
+            (VMin(x), VMin(y)) => VMin(lerp(x, y)),
+            (VMax(x), VMax(y)) => VMax(lerp(x, y)),
+            _ => other,
         }
-        if let Some(r) = self.runner.as_mut() {
-            let (p, done) = r.step(dt);
-            self.current = lerp_length(self.start, self.target, p);
-            moved = true;
-            if done {
-                self.current = self.target;
-                self.runner = None;
-            }
-        }
-        moved.then_some(self.current)
     }
 }
 
@@ -509,32 +481,45 @@ pub fn drive_transitions(
         // precedence intact).
         if input.spec.for_transform().is_some() && !skip_transform {
             let s = input.spec.for_transform();
-            // `LengthChannel::drive` reports a value only on a frame it moved, but the
-            // rebuilt `UiTransform` needs the current translation every frame — so drive
-            // for the side effect, then read `current` and convert to `Val`.
-            let tx = input.translate_x.map(|t| {
-                state.translate_x.drive(t, s, dt);
-                length_to_val(state.translate_x.current)
-            });
-            let ty = input.translate_y.map(|t| {
-                state.translate_y.drive(t, s, dt);
-                length_to_val(state.translate_y.current)
-            });
+            let tx = input
+                .translate_x
+                .map(|t| length_to_val(state.translate_x.drive(t, s, dt)));
+            let ty = input
+                .translate_y
+                .map(|t| length_to_val(state.translate_y.drive(t, s, dt)));
             let sc = input.scale.map(|t| state.scale.drive(t, s, dt));
             let scx = input.scale_x.map(|t| state.scale_x.drive(t, s, dt));
             let scy = input.scale_y.map(|t| state.scale_y.drive(t, s, dt));
             let rot = input.rotate.map(|t| state.rotate.drive(t, s, dt));
-            *transform = build_ui_transform(tx, ty, sc, scx, scy, rot);
+            // Compare-before-write so a settled transition doesn't dirty change
+            // detection every frame (read via `Deref`, write via `DerefMut`).
+            let new = build_ui_transform(tx, ty, sc, scx, scy, rot);
+            if *transform != new {
+                *transform = new;
+            }
         }
 
         let mut bg = bg;
 
-        // Background color before opacity, so opacity owns the final alpha.
+        // Opacity owns the final alpha across background/text/image. Resolved
+        // before the background write so it can be baked into that color —
+        // otherwise the two writes would ping-pong the alpha channel every frame
+        // and the compare-before-write guards would never settle.
+        let alpha = if !skip_opacity && let Some(target) = input.opacity {
+            Some(state.opacity.drive(target, input.spec.for_opacity(), dt))
+        } else {
+            None
+        };
+
         if !skip_bg && let Some(target) = input.background_color {
-            let rgba = state.color.drive(target, input.spec.for_background(), dt);
+            let mut rgba = state.color.drive(target, input.spec.for_background(), dt);
+            if let Some(a) = alpha {
+                rgba[3] = a;
+            }
             let color = rgba_to_color(rgba);
             match &mut bg {
-                Some(c) => c.0 = color,
+                Some(c) if c.0 != color => c.0 = color,
+                Some(_) => {}
                 None => {
                     commands.entity(entity).insert(BackgroundColor(color));
                 }
@@ -543,46 +528,57 @@ pub fn drive_transitions(
 
         // Opacity always applies when set (even with no opacity transition: it then
         // snaps), so a transitioning background color doesn't clobber the alpha.
-        if !skip_opacity && let Some(target) = input.opacity {
-            let alpha = state.opacity.drive(target, input.spec.for_opacity(), dt);
-            if let Some(c) = &mut bg {
+        if let Some(alpha) = alpha {
+            if let Some(c) = &mut bg
+                && c.0.alpha() != alpha
+            {
                 c.0 = c.0.with_alpha(alpha);
             }
-            if let Some(mut tc) = text_color {
+            if let Some(mut tc) = text_color
+                && tc.0.alpha() != alpha
+            {
                 tc.0 = tc.0.with_alpha(alpha);
             }
-            if let Some(mut img) = image {
+            if let Some(mut img) = image
+                && img.color.alpha() != alpha
+            {
                 img.color = img.color.with_alpha(alpha);
             }
         }
 
-        // Size (layout): ease the specified `Node` dimensions. Each channel writes
-        // `Node` only on a frame it actually moved (the `Some` guard), so a settled
-        // transition doesn't force a relayout every frame. The animations engine
-        // never writes `Node`, so no precedence check is needed.
+        // Size (layout): ease the specified `Node` dimensions. Writing `Node`
+        // re-triggers Bevy's layout, so each field is compared before writing —
+        // a settled transition doesn't force a relayout every frame, and a
+        // re-render that reset `Node` to its static style is corrected here.
+        // The animations engine never writes `Node`, so no precedence check is
+        // needed.
         if input.spec.for_size().is_some()
             && let Some(mut node) = node
         {
             let s = input.spec.for_size();
-            if let Some(t) = input.width
-                && let Some(v) = state.width.drive(t, s, dt)
-            {
-                node.width = length_to_val(v);
+            if let Some(t) = input.width {
+                let v = length_to_val(state.width.drive(t, s, dt));
+                if node.width != v {
+                    node.width = v;
+                }
             }
-            if let Some(t) = input.height
-                && let Some(v) = state.height.drive(t, s, dt)
-            {
-                node.height = length_to_val(v);
+            if let Some(t) = input.height {
+                let v = length_to_val(state.height.drive(t, s, dt));
+                if node.height != v {
+                    node.height = v;
+                }
             }
-            if let Some(t) = input.max_width
-                && let Some(v) = state.max_width.drive(t, s, dt)
-            {
-                node.max_width = length_to_val(v);
+            if let Some(t) = input.max_width {
+                let v = length_to_val(state.max_width.drive(t, s, dt));
+                if node.max_width != v {
+                    node.max_width = v;
+                }
             }
-            if let Some(t) = input.max_height
-                && let Some(v) = state.max_height.drive(t, s, dt)
-            {
-                node.max_height = length_to_val(v);
+            if let Some(t) = input.max_height {
+                let v = length_to_val(state.max_height.drive(t, s, dt));
+                if node.max_height != v {
+                    node.max_height = v;
+                }
             }
         }
     }
@@ -595,31 +591,6 @@ fn color_to_rgba(color: Color) -> [f32; 4] {
 
 fn rgba_to_color(rgba: [f32; 4]) -> Color {
     Color::srgba(rgba[0], rgba[1], rgba[2], rgba[3])
-}
-
-fn lerp_rgba(a: [f32; 4], b: [f32; 4], t: f32) -> [f32; 4] {
-    [
-        a[0] + (b[0] - a[0]) * t,
-        a[1] + (b[1] - a[1]) * t,
-        a[2] + (b[2] - a[2]) * t,
-        a[3] + (b[3] - a[3]) * t,
-    ]
-}
-
-/// Interpolate two lengths of the same unit; mixed units or `auto` can't be
-/// interpolated, so it snaps to the target.
-fn lerp_length(a: Length, b: Length, t: f32) -> Length {
-    use Length::*;
-    let lerp = |x: f32, y: f32| x + (y - x) * t;
-    match (a, b) {
-        (Px(x), Px(y)) => Px(lerp(x, y)),
-        (Percent(x), Percent(y)) => Percent(lerp(x, y)),
-        (Vw(x), Vw(y)) => Vw(lerp(x, y)),
-        (Vh(x), Vh(y)) => Vh(lerp(x, y)),
-        (VMin(x), VMin(y)) => VMin(lerp(x, y)),
-        (VMax(x), VMax(y)) => VMax(lerp(x, y)),
-        _ => b,
-    }
 }
 
 #[cfg(test)]
@@ -707,7 +678,7 @@ mod tests {
 
     #[test]
     fn color_channel_lerps_to_target() {
-        let mut c = ColorChannel::default();
+        let mut c = ProgressChannel::<[f32; 4]>::default();
         c.init([0.0, 0.0, 0.0, 1.0]);
         let spec = timing(1.0, Easing::Linear);
         c.drive([1.0, 0.5, 0.0, 1.0], Some(&spec), 0.0); // arm
@@ -877,46 +848,105 @@ mod tests {
         assert_eq!(world.entity(e).get::<UiTransform>().unwrap().scale.x, 2.0);
     }
 
+    /// Once a transition has settled, `drive_transitions` must stop marking the
+    /// target components changed (compare-before-write) — a settled hover/press
+    /// style shouldn't keep transform propagation / extraction hot forever.
+    #[test]
+    fn settled_transition_does_not_dirty_components() {
+        #[derive(Resource, Default)]
+        struct Dirty(usize);
+
+        let (mut world, mut schedule) = drive_world();
+        world.init_resource::<Dirty>();
+        let spec = Transition {
+            transform: Some(timing(0.2, Easing::Linear)),
+            background_color: Some(timing(0.2, Easing::Linear)),
+            opacity: Some(timing(0.2, Easing::Linear)),
+            ..Default::default()
+        };
+        let e = world
+            .spawn((
+                TransitionInput {
+                    spec,
+                    scale: Some(1.0),
+                    // Deliberately different from the bg target's alpha: opacity
+                    // owns the final alpha, and the two writes must still settle.
+                    opacity: Some(0.5),
+                    background_color: Some([1.0, 0.0, 0.0, 1.0]),
+                    ..Default::default()
+                },
+                TransitionState::default(),
+                UiTransform::default(),
+                BackgroundColor(Color::WHITE),
+            ))
+            .id();
+
+        type AnyTargetChanged = Or<(Changed<UiTransform>, Changed<BackgroundColor>)>;
+
+        let mut detect = Schedule::default();
+        detect.add_systems(|q: Query<(), AnyTargetChanged>, mut dirty: ResMut<Dirty>| {
+            dirty.0 = q.iter().count();
+        });
+
+        // Seed, retarget, and run the ease well past completion.
+        schedule.run(&mut world);
+        world
+            .entity_mut(e)
+            .get_mut::<TransitionInput>()
+            .unwrap()
+            .scale = Some(0.9);
+        advance(&mut world, 0.5);
+        schedule.run(&mut world);
+        detect.run(&mut world); // consume all the churn so far
+
+        advance(&mut world, 0.5);
+        schedule.run(&mut world);
+        detect.run(&mut world);
+        assert_eq!(
+            world.resource::<Dirty>().0,
+            0,
+            "a settled transition must not dirty anything"
+        );
+    }
+
     #[test]
     fn lerp_length_same_unit_else_snaps() {
+        assert_eq!(Length::Px(0.0).lerp(Length::Px(10.0), 0.5), Length::Px(5.0));
         assert_eq!(
-            lerp_length(Length::Px(0.0), Length::Px(10.0), 0.5),
-            Length::Px(5.0)
-        );
-        assert_eq!(
-            lerp_length(Length::Percent(0.0), Length::Percent(100.0), 0.25),
+            Length::Percent(0.0).lerp(Length::Percent(100.0), 0.25),
             Length::Percent(25.0)
         );
         // `auto` or mixed units can't be interpolated → snap to the target.
+        assert_eq!(Length::Auto.lerp(Length::Px(10.0), 0.5), Length::Px(10.0));
         assert_eq!(
-            lerp_length(Length::Auto, Length::Px(10.0), 0.5),
-            Length::Px(10.0)
-        );
-        assert_eq!(
-            lerp_length(Length::Px(0.0), Length::Percent(10.0), 0.5),
+            Length::Px(0.0).lerp(Length::Percent(10.0), 0.5),
             Length::Percent(10.0)
         );
     }
 
-    fn px(l: Option<Length>) -> f32 {
+    fn px(l: Length) -> f32 {
         match l {
-            Some(Length::Px(v)) => v,
-            other => panic!("expected Some(Px), got {other:?}"),
+            Length::Px(v) => v,
+            other => panic!("expected Px, got {other:?}"),
         }
     }
 
     #[test]
     fn length_channel_eases_then_idles() {
-        let mut ch = LengthChannel::default();
+        let mut ch = ProgressChannel::<Length>::default();
         ch.init(Length::Px(0.0));
         let spec = timing(1.0, Easing::Linear);
         // Arm toward 100; the arm frame reports the (still 0) value.
         assert!((px(ch.drive(Length::Px(100.0), Some(&spec), 0.0)) - 0.0).abs() < 1e-3);
         assert!((px(ch.drive(Length::Px(100.0), Some(&spec), 0.5)) - 50.0).abs() < 1e-3);
         assert!((px(ch.drive(Length::Px(100.0), Some(&spec), 0.5)) - 100.0).abs() < 1e-3);
-        // Settled and target unchanged → idle: no value, so the caller skips the
-        // `Node` write (no relayout while idle).
-        assert_eq!(ch.drive(Length::Px(100.0), Some(&spec), 0.5), None);
+        // Settled and target unchanged → idle: the runner is dropped and the
+        // reading holds steady (the caller's compare skips the `Node` write).
+        assert!(ch.runner.is_none(), "runner dropped once settled");
+        assert_eq!(
+            ch.drive(Length::Px(100.0), Some(&spec), 0.5),
+            Length::Px(100.0)
+        );
     }
 
     #[test]

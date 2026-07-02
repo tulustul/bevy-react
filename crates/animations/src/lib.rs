@@ -7,7 +7,10 @@
 //! (`withTiming`, `withSpring`, `withRepeat`, `withSequence`) to them; an
 //! `Animated.node` binds style properties to those values. All per-frame work —
 //! advancing drivers, interpolation, writing components — happens **here, on the
-//! Bevy side**, never crossing back to JS.
+//! Bevy side**, never crossing back to JS. The one exception is completion:
+//! a driver started with a correlation token reports its settlement (one
+//! [`AnimationSettled`] message, forwarded by the integrator) so a JS callback
+//! can fire — once per animation, not per frame.
 //!
 //! This crate is deliberately decoupled from the main `bevy-react` crate (which
 //! depends on it): it owns the animation wire types ([`mod@protocol`]) and the
@@ -22,11 +25,13 @@ use bevy::ui::UiTransform;
 use crossbeam_channel::Receiver;
 
 pub mod protocol;
+mod runner;
 
 pub use protocol::{
     AnimatableProperty, AnimatedBindings, AnimationCommand, Binding, Driver, Easing, SharedId,
     ValueKind,
 };
+pub use runner::{Runner, build_runner};
 
 /// Adds the animation orchestration: the [`SharedValues`] table, the per-frame
 /// driver/apply systems, and the [`AnimationInbox`] that feeds commands in.
@@ -49,6 +54,7 @@ impl ReactUiAnimationsPlugin {
 impl Plugin for ReactUiAnimationsPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<SharedValues>()
+            .add_message::<AnimationSettled>()
             .insert_resource(AnimationInbox(self.inbox.clone()))
             .configure_sets(
                 Update,
@@ -84,20 +90,56 @@ pub enum AnimationSet {
 #[require(UiTransform)]
 pub struct AnimatedNode(pub AnimatedBindings);
 
+/// A token-tagged driver settled: `finished` is `true` when it ran to its natural
+/// end, `false` when a `set`/`cancel`/new `animate` interrupted it. Written by
+/// the drain/tick systems for every [`AnimationCommand::Animate`] that carried a
+/// `token`; the integrator (`bevy-react`) forwards these to the JS completion
+/// callbacks. The one thing this crate sends back toward JS.
+#[derive(Message, Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AnimationSettled {
+    /// The shared value the driver was animating.
+    pub id: SharedId,
+    /// The JS-side correlation token from the `animate` command.
+    pub token: u64,
+    /// Natural completion (`true`) vs interruption (`false`).
+    pub finished: bool,
+}
+
 /// The receiving end of the `op_animate` channel, drained each frame.
 #[derive(Resource)]
 pub struct AnimationInbox(pub(crate) Receiver<AnimationCommand>);
 
 /// The live table of shared values, keyed by [`SharedId`]. Each entry holds the
-/// current reading plus an optional active driver.
+/// current reading plus an optional active driver. Settlements of token-tagged
+/// drivers accumulate in `settled` until the owning system flushes them to the
+/// [`AnimationSettled`] message stream.
 #[derive(Resource, Default)]
 pub struct SharedValues {
     values: HashMap<SharedId, SharedValueState>,
+    settled: Vec<AnimationSettled>,
 }
 
 struct SharedValueState {
     current: f32,
     active: Option<Runner>,
+    /// Correlation token of the active driver's JS completion callback, if any.
+    token: Option<u64>,
+}
+
+impl SharedValueState {
+    /// The settlement for interrupting a still-active token-tagged driver
+    /// (`set`/`cancel`/a superseding `animate`), consuming the token.
+    fn interrupted(&mut self, id: SharedId) -> Option<AnimationSettled> {
+        if self.active.is_none() {
+            return None;
+        }
+        let token = self.token.take()?;
+        Some(AnimationSettled {
+            id,
+            token,
+            finished: false,
+        })
+    }
 }
 
 impl SharedValues {
@@ -122,6 +164,7 @@ impl SharedValues {
         self.values.entry(id).or_insert(SharedValueState {
             current: initial,
             active: None,
+            token: None,
         });
     }
 
@@ -129,59 +172,90 @@ impl SharedValues {
         let s = self.values.entry(id).or_insert(SharedValueState {
             current: value,
             active: None,
+            token: None,
         });
+        self.settled.extend(s.interrupted(id));
         s.current = value;
         s.active = None;
     }
 
-    fn animate(&mut self, id: SharedId, driver: &Driver) {
+    fn animate(&mut self, id: SharedId, driver: &Driver, token: Option<u64>) {
         let s = self.values.entry(id).or_insert(SharedValueState {
             current: 0.0,
             active: None,
+            token: None,
         });
+        self.settled.extend(s.interrupted(id));
         let from = s.current;
         s.active = Some(build_runner(driver, from));
+        s.token = token;
     }
 
     fn cancel(&mut self, id: SharedId) {
         if let Some(s) = self.values.get_mut(&id) {
+            self.settled.extend(s.interrupted(id));
             s.active = None;
         }
     }
 
     fn clear(&mut self) {
         self.values.clear();
+        // Reset also wipes the JS callback registry, so pending settlements would
+        // land on nobody — drop them.
+        self.settled.clear();
     }
 
     fn tick(&mut self, dt: f32) {
-        for s in self.values.values_mut() {
+        for (&id, s) in self.values.iter_mut() {
             if let Some(runner) = s.active.as_mut() {
                 let (value, finished) = runner.step(dt);
                 s.current = value;
                 if finished {
                     s.active = None;
+                    if let Some(token) = s.token.take() {
+                        self.settled.push(AnimationSettled {
+                            id,
+                            token,
+                            finished: true,
+                        });
+                    }
                 }
             }
         }
+    }
+
+    /// Flush the settlements accumulated since the last flush.
+    fn take_settled(&mut self) -> Vec<AnimationSettled> {
+        std::mem::take(&mut self.settled)
     }
 }
 
 // --- Systems -------------------------------------------------------------------
 
-fn drain_animation_commands(inbox: Res<AnimationInbox>, mut values: ResMut<SharedValues>) {
+fn drain_animation_commands(
+    inbox: Res<AnimationInbox>,
+    mut values: ResMut<SharedValues>,
+    mut settled: MessageWriter<AnimationSettled>,
+) {
     while let Ok(cmd) = inbox.0.try_recv() {
         match cmd {
             AnimationCommand::Declare { id, initial } => values.declare(id, initial),
             AnimationCommand::Set { id, value } => values.set(id, value),
-            AnimationCommand::Animate { id, driver } => values.animate(id, &driver),
+            AnimationCommand::Animate { id, driver, token } => values.animate(id, &driver, token),
             AnimationCommand::Cancel { id } => values.cancel(id),
             AnimationCommand::Clear => values.clear(),
         }
     }
+    settled.write_batch(values.take_settled());
 }
 
-fn tick_animations(time: Res<Time>, mut values: ResMut<SharedValues>) {
+fn tick_animations(
+    time: Res<Time>,
+    mut values: ResMut<SharedValues>,
+    mut settled: MessageWriter<AnimationSettled>,
+) {
     values.tick(time.delta_secs());
+    settled.write_batch(values.take_settled());
 }
 
 /// The components an animated node can drive. A `QueryData` struct (rather than a
@@ -211,8 +285,11 @@ fn apply_animated_nodes(
         // Stage 1 — transform group: rebuild the whole `UiTransform` from the six
         // channels each frame (unbound channels stay at identity). Grouped because
         // scale precedence (`scale` vs `scaleX`/`scaleY`) needs all channels at once.
+        // Compare-before-write (here and in every stage below): the read goes
+        // through `Deref` (no change mark), only the assignment through `DerefMut`
+        // — so a settled binding doesn't dirty change detection every frame.
         if b.has_transform() {
-            *t.transform = build_ui_transform(
+            let new = build_ui_transform(
                 b.get(P::TranslateX)
                     .and_then(|x| eval_scalar(x, &values))
                     .map(Val::Px),
@@ -224,7 +301,16 @@ fn apply_animated_nodes(
                 b.get(P::ScaleY).and_then(|x| eval_scalar(x, &values)),
                 b.get(P::Rotate).and_then(|x| eval_scalar(x, &values)),
             );
+            if *t.transform != new {
+                *t.transform = new;
+            }
         }
+
+        // Opacity owns the final alpha across background/text/image (stage 3).
+        // Resolved once up front so stage 2 can bake it into any color it writes —
+        // otherwise the two stages would ping-pong the alpha every frame and the
+        // compare-before-write guards would never settle.
+        let opacity_alpha = b.get(P::Opacity).and_then(|x| eval_scalar(x, &values));
 
         // Stage 2 — every non-transform, non-opacity binding. Colors land on their
         // component; lengths/scalars land on `Node`. Opacity is deferred to stage 3
@@ -235,13 +321,21 @@ fn apply_animated_nodes(
             }
             match property.value_kind() {
                 ValueKind::Color => {
-                    let Some(rgba) = eval_color(binding, &values) else {
+                    let Some(mut rgba) = eval_color(binding, &values) else {
                         continue;
                     };
+                    // Bake the final alpha in for the components stage 3 drives
+                    // (border is not one of them: opacity never touches it).
+                    if matches!(property, P::BackgroundColor | P::Color)
+                        && let Some(alpha) = opacity_alpha
+                    {
+                        rgba[3] = alpha;
+                    }
                     let color = Color::srgba(rgba[0], rgba[1], rgba[2], rgba[3]);
                     match property {
                         P::BackgroundColor => match &mut t.bg {
-                            Some(c) => c.0 = color,
+                            Some(c) if c.0 != color => c.0 = color,
+                            Some(_) => {}
                             None => {
                                 commands.entity(entity).insert(BackgroundColor(color));
                             }
@@ -254,14 +348,17 @@ fn apply_animated_nodes(
                                 left: color,
                             };
                             match &mut t.border {
-                                Some(c) => **c = bc,
+                                Some(c) if **c != bc => **c = bc,
+                                Some(_) => {}
                                 None => {
                                     commands.entity(entity).insert(bc);
                                 }
                             }
                         }
                         P::Color => {
-                            if let Some(tc) = &mut t.text {
+                            if let Some(tc) = &mut t.text
+                                && tc.0 != color
+                            {
                                 tc.0 = color;
                             }
                         }
@@ -282,23 +379,28 @@ fn apply_animated_nodes(
         }
 
         // Stage 3 — opacity owns the final alpha across background/text/image.
-        if let Some(binding) = b.get(P::Opacity)
-            && let Some(alpha) = eval_scalar(binding, &values)
-        {
-            if let Some(c) = &mut t.bg {
-                let mut s = c.0.to_srgba();
-                s.alpha = alpha;
-                c.0 = Color::Srgba(s);
+        if let Some(alpha) = opacity_alpha {
+            let with_alpha = |color: Color| -> Option<Color> {
+                let mut s = color.to_srgba();
+                (s.alpha != alpha).then(|| {
+                    s.alpha = alpha;
+                    Color::Srgba(s)
+                })
+            };
+            if let Some(c) = &mut t.bg
+                && let Some(new) = with_alpha(c.0)
+            {
+                c.0 = new;
             }
-            if let Some(tc) = &mut t.text {
-                let mut s = tc.0.to_srgba();
-                s.alpha = alpha;
-                tc.0 = Color::Srgba(s);
+            if let Some(tc) = &mut t.text
+                && let Some(new) = with_alpha(tc.0)
+            {
+                tc.0 = new;
             }
-            if let Some(img) = &mut t.image {
-                let mut s = img.color.to_srgba();
-                s.alpha = alpha;
-                img.color = Color::Srgba(s);
+            if let Some(img) = &mut t.image
+                && let Some(new) = with_alpha(img.color)
+            {
+                img.color = new;
             }
         }
     }
@@ -408,38 +510,54 @@ fn eval_color(binding: &Binding, values: &SharedValues) -> Option<[f32; 4]> {
     }
 }
 
+/// Linear interpolation between two values of the same kind, `t` in `0.0..=1.0`.
+/// The one primitive every interpolated quantity shares — implemented here for
+/// the scalar and color bindings, and by `bevy-react`'s transition engine for its
+/// own channel types (hence public).
+pub trait Lerp: Copy {
+    /// `self + (other - self) * t`, component-wise where applicable.
+    fn lerp(self, other: Self, t: f32) -> Self;
+}
+
+impl Lerp for f32 {
+    fn lerp(self, other: Self, t: f32) -> Self {
+        self + (other - self) * t
+    }
+}
+
+impl Lerp for [f32; 4] {
+    fn lerp(self, other: Self, t: f32) -> Self {
+        // Qualified: `bevy::math::FloatExt::lerp` is also in scope for `f32`.
+        [
+            Lerp::lerp(self[0], other[0], t),
+            Lerp::lerp(self[1], other[1], t),
+            Lerp::lerp(self[2], other[2], t),
+            Lerp::lerp(self[3], other[3], t),
+        ]
+    }
+}
+
 /// Piecewise-linear interpolation, clamped at the ends. `input` must be ascending.
 fn piecewise(x: f32, input: &[f32], output: &[f32]) -> f32 {
-    let n = input.len().min(output.len());
-    if n == 0 {
+    if input.is_empty() || output.is_empty() {
         return x;
     }
-    if n == 1 || x <= input[0] {
-        return output[0];
-    }
-    if x >= input[n - 1] {
-        return output[n - 1];
-    }
-    for i in 0..n - 1 {
-        let (a, b) = (input[i], input[i + 1]);
-        if x >= a && x <= b {
-            let t = if (b - a).abs() < f32::EPSILON {
-                0.0
-            } else {
-                (x - a) / (b - a)
-            };
-            return output[i] + (output[i + 1] - output[i]) * t;
-        }
-    }
-    output[n - 1]
+    piecewise_impl(x, input, output)
 }
 
 /// Per-channel piecewise-linear color interpolation (rgba in `0.0..=1.0`).
 fn piecewise_color(x: f32, input: &[f32], output: &[[f32; 4]]) -> [f32; 4] {
-    let n = input.len().min(output.len());
-    if n == 0 {
+    if input.is_empty() || output.is_empty() {
         return [0.0, 0.0, 0.0, 1.0];
     }
+    piecewise_impl(x, input, output)
+}
+
+/// The shared segment routine behind [`piecewise`]/[`piecewise_color`]: find the
+/// segment containing `x` and lerp within it, clamping at both ends. `input` must
+/// be ascending and both slices non-empty (the wrappers handle empty).
+fn piecewise_impl<T: Lerp>(x: f32, input: &[f32], output: &[T]) -> T {
+    let n = input.len().min(output.len());
     if n == 1 || x <= input[0] {
         return output[0];
     }
@@ -454,309 +572,13 @@ fn piecewise_color(x: f32, input: &[f32], output: &[[f32; 4]]) -> [f32; 4] {
             } else {
                 (x - a) / (b - a)
             };
-            let lo = output[i];
-            let hi = output[i + 1];
-            return [
-                lo[0] + (hi[0] - lo[0]) * t,
-                lo[1] + (hi[1] - lo[1]) * t,
-                lo[2] + (hi[2] - lo[2]) * t,
-                lo[3] + (hi[3] - lo[3]) * t,
-            ];
+            return output[i].lerp(output[i + 1], t);
         }
     }
     output[n - 1]
 }
 
-fn ease(easing: Easing, t: f32) -> f32 {
-    let t = t.clamp(0.0, 1.0);
-    match easing {
-        Easing::Linear => t,
-        Easing::EaseIn => t * t * t,
-        Easing::EaseOut => {
-            let u = 1.0 - t;
-            1.0 - u * u * u
-        }
-        Easing::EaseInOut => {
-            if t < 0.5 {
-                4.0 * t * t * t
-            } else {
-                let u = -2.0 * t + 2.0;
-                1.0 - u * u * u / 2.0
-            }
-        }
-    }
-}
-
-// --- Driver runtime ------------------------------------------------------------
-
-const SPRING_REST_DELTA: f32 = 0.01;
-const SPRING_REST_SPEED: f32 = 0.01;
-const SPRING_SUBSTEP: f32 = 0.001;
-const SPRING_MAX_SUBSTEPS: u32 = 64;
-
-/// The stateful evaluation of a [`Driver`] over time. Built from a driver + the
-/// value's live reading; advanced by [`Runner::step`].
-///
-/// Public so `bevy-react`'s CSS-like `transition` engine can reuse the exact same
-/// driver runtime (the per-entity transition state holds a `Runner` per channel),
-/// rather than re-implementing easing/spring integration.
-pub enum Runner {
-    /// Degenerate (empty sequence / zero-count repeat): already settled.
-    Done(f32),
-    Timing {
-        from: f32,
-        to: f32,
-        duration: f32,
-        easing: Easing,
-        elapsed: f32,
-    },
-    Spring {
-        to: f32,
-        stiffness: f32,
-        damping: f32,
-        mass: f32,
-        pos: f32,
-        vel: f32,
-    },
-    Repeat {
-        template: Box<Driver>,
-        remaining: i32,
-        reverse: bool,
-        iteration: u32,
-        a: f32,
-        b: f32,
-        child: Box<Runner>,
-    },
-    Sequence {
-        steps: Vec<Driver>,
-        index: usize,
-        child: Box<Runner>,
-    },
-    Delay {
-        remaining: f32,
-        animation: Box<Driver>,
-        from: f32,
-        child: Option<Box<Runner>>,
-    },
-}
-
-/// Build a [`Runner`] for `driver` starting from the value `from`. Public for the
-/// `bevy-react` transition engine (see [`Runner`]).
-pub fn build_runner(driver: &Driver, from: f32) -> Runner {
-    build_runner_with_target(driver, from, None)
-}
-
-/// Build a runner; `target` overrides the natural endpoint for scalar drivers
-/// (used by reverse-repeat to ping-pong). Composite drivers ignore it.
-fn build_runner_with_target(driver: &Driver, from: f32, target: Option<f32>) -> Runner {
-    match driver {
-        Driver::Timing {
-            to,
-            duration,
-            easing,
-        } => Runner::Timing {
-            from,
-            to: target.unwrap_or(*to),
-            duration: duration.max(0.0),
-            easing: *easing,
-            elapsed: 0.0,
-        },
-        Driver::Spring {
-            to,
-            stiffness,
-            damping,
-            mass,
-        } => Runner::Spring {
-            to: target.unwrap_or(*to),
-            // Like `mass` below: clamp to a positive floor so a zero/negative/NaN
-            // JS value can't make the integrator diverge to NaN (negative
-            // stiffness repels, negative damping injects energy) or oscillate
-            // forever without settling. `f32::max` also maps NaN to the floor.
-            stiffness: stiffness.max(1e-4),
-            damping: damping.max(1e-4),
-            mass: mass.max(1e-4),
-            pos: from,
-            vel: 0.0,
-        },
-        Driver::Repeat {
-            animation,
-            count,
-            reverse,
-        } => {
-            if *count == 0 {
-                return Runner::Done(from);
-            }
-            Runner::Repeat {
-                template: animation.clone(),
-                remaining: *count,
-                reverse: *reverse,
-                iteration: 0,
-                a: from,
-                b: terminal_value(animation, from),
-                child: Box::new(build_runner(animation, from)),
-            }
-        }
-        Driver::Sequence { steps } => {
-            if steps.is_empty() {
-                return Runner::Done(from);
-            }
-            Runner::Sequence {
-                steps: steps.clone(),
-                index: 0,
-                child: Box::new(build_runner(&steps[0], from)),
-            }
-        }
-        Driver::Delay { delay, animation } => Runner::Delay {
-            remaining: delay.max(0.0),
-            animation: animation.clone(),
-            from,
-            child: None,
-        },
-    }
-}
-
-/// The value a driver settles on if run to completion from `from` (used to derive
-/// repeat endpoints).
-fn terminal_value(driver: &Driver, from: f32) -> f32 {
-    match driver {
-        Driver::Timing { to, .. } => *to,
-        Driver::Spring { to, .. } => *to,
-        Driver::Sequence { steps } => steps.iter().fold(from, |acc, s| terminal_value(s, acc)),
-        Driver::Delay { animation, .. } => terminal_value(animation, from),
-        Driver::Repeat {
-            animation,
-            count,
-            reverse,
-        } => {
-            let a = from;
-            let b = terminal_value(animation, from);
-            if *count <= 0 {
-                b
-            } else if *reverse && count % 2 == 0 {
-                a
-            } else {
-                b
-            }
-        }
-    }
-}
-
-impl Runner {
-    /// Advance by `dt` seconds, returning `(value, finished)`.
-    pub fn step(&mut self, dt: f32) -> (f32, bool) {
-        match self {
-            Runner::Done(v) => (*v, true),
-            Runner::Timing {
-                from,
-                to,
-                duration,
-                easing,
-                elapsed,
-            } => {
-                *elapsed += dt;
-                if *duration <= 0.0 {
-                    return (*to, true);
-                }
-                let t = (*elapsed / *duration).clamp(0.0, 1.0);
-                let v = *from + (*to - *from) * ease(*easing, t);
-                (v, *elapsed >= *duration)
-            }
-            Runner::Spring {
-                to,
-                stiffness,
-                damping,
-                mass,
-                pos,
-                vel,
-            } => {
-                let n = ((dt / SPRING_SUBSTEP).ceil() as u32).clamp(1, SPRING_MAX_SUBSTEPS);
-                let h = dt / n as f32;
-                for _ in 0..n {
-                    let force = -*stiffness * (*pos - *to) - *damping * *vel;
-                    let acc = force / *mass;
-                    *vel += acc * h;
-                    *pos += *vel * h;
-                }
-                let settled =
-                    (*pos - *to).abs() < SPRING_REST_DELTA && vel.abs() < SPRING_REST_SPEED;
-                if settled {
-                    *pos = *to;
-                    *vel = 0.0;
-                }
-                (*pos, settled)
-            }
-            Runner::Repeat {
-                template,
-                remaining,
-                reverse,
-                iteration,
-                a,
-                b,
-                child,
-            } => {
-                let (v, done) = child.step(dt);
-                if !done {
-                    return (v, false);
-                }
-                if *remaining > 0 {
-                    *remaining -= 1;
-                    if *remaining == 0 {
-                        return (v, true);
-                    }
-                }
-                *iteration += 1;
-                let (from, target) = if *reverse {
-                    if *iteration % 2 == 0 {
-                        (*a, *b)
-                    } else {
-                        (*b, *a)
-                    }
-                } else {
-                    (*a, *b)
-                };
-                **child = build_runner_with_target(template, from, Some(target));
-                (v, false)
-            }
-            Runner::Sequence {
-                steps,
-                index,
-                child,
-            } => {
-                let (v, done) = child.step(dt);
-                if !done {
-                    return (v, false);
-                }
-                if *index + 1 >= steps.len() {
-                    return (v, true);
-                }
-                *index += 1;
-                **child = build_runner(&steps[*index], v);
-                (v, false)
-            }
-            Runner::Delay {
-                remaining,
-                animation,
-                from,
-                child,
-            } => {
-                if let Some(child) = child {
-                    return child.step(dt);
-                }
-                *remaining -= dt;
-                if *remaining > 0.0 {
-                    return (*from, false);
-                }
-                // Delay elapsed: build the child and run it with the leftover time
-                // (`-remaining`) so no time is lost crossing the boundary.
-                let leftover = -*remaining;
-                let mut runner = build_runner(animation, *from);
-                let result = runner.step(leftover);
-                *child = Some(Box::new(runner));
-                result
-            }
-        }
-    }
-}
+// (Driver runtime — `Runner`, `build_runner`, easing — lives in `runner.rs`.)
 
 #[cfg(test)]
 mod tests {
@@ -767,71 +589,6 @@ mod tests {
             to,
             duration,
             easing: Easing::Linear,
-        }
-    }
-
-    /// Drive a runner to completion in fixed `dt` ticks, returning the final value.
-    fn run_to_end(driver: &Driver, from: f32, dt: f32, max_ticks: usize) -> (f32, usize) {
-        let mut r = build_runner(driver, from);
-        for i in 0..max_ticks {
-            let (v, done) = r.step(dt);
-            if done {
-                return (v, i + 1);
-            }
-        }
-        panic!("runner did not finish in {max_ticks} ticks");
-    }
-
-    #[test]
-    fn easing_endpoints_and_midpoint() {
-        for e in [
-            Easing::Linear,
-            Easing::EaseIn,
-            Easing::EaseOut,
-            Easing::EaseInOut,
-        ] {
-            assert!((ease(e, 0.0) - 0.0).abs() < 1e-6, "{e:?} at 0");
-            assert!((ease(e, 1.0) - 1.0).abs() < 1e-6, "{e:?} at 1");
-        }
-        assert!((ease(Easing::Linear, 0.5) - 0.5).abs() < 1e-6);
-        // EaseIn is below the diagonal, EaseOut above, at the midpoint.
-        assert!(ease(Easing::EaseIn, 0.5) < 0.5);
-        assert!(ease(Easing::EaseOut, 0.5) > 0.5);
-    }
-
-    /// Hostile JS spring params (zero/negative/NaN stiffness, damping, mass) are
-    /// clamped to a positive floor, so the integrator stays finite and settles
-    /// instead of diverging to NaN (and being driven forever).
-    #[test]
-    fn spring_survives_hostile_params() {
-        for (stiffness, damping, mass) in [
-            (-1.0, -5.0, 0.0),
-            (0.0, 0.0, -1.0),
-            (f32::NAN, f32::NAN, f32::NAN),
-        ] {
-            let driver = Driver::Spring {
-                to: 100.0,
-                stiffness,
-                damping,
-                mass,
-            };
-            let mut r = build_runner(&driver, 0.0);
-            let mut settled = false;
-            for _ in 0..10_000 {
-                let (v, done) = r.step(1.0 / 60.0);
-                assert!(
-                    v.is_finite(),
-                    "diverged with k={stiffness} c={damping} m={mass}"
-                );
-                if done {
-                    settled = true;
-                    break;
-                }
-            }
-            assert!(
-                settled,
-                "never settled with k={stiffness} c={damping} m={mass}"
-            );
         }
     }
 
@@ -861,217 +618,10 @@ mod tests {
     }
 
     #[test]
-    fn timing_runs_from_current_to_target() {
-        let mut r = build_runner(&timing(100.0, 1.0), 0.0);
-        let (v1, done1) = r.step(0.5);
-        assert!(!done1);
-        assert!((v1 - 50.0).abs() < 1e-3, "halfway expected ~50, got {v1}");
-        let (v2, done2) = r.step(0.5);
-        assert!(done2);
-        assert!((v2 - 100.0).abs() < 1e-3, "end expected 100, got {v2}");
-    }
-
-    #[test]
-    fn zero_duration_timing_snaps() {
-        let mut r = build_runner(&timing(42.0, 0.0), 0.0);
-        let (v, done) = r.step(0.016);
-        assert!(done);
-        assert_eq!(v, 42.0);
-    }
-
-    #[test]
-    fn spring_settles_on_target() {
-        let driver = Driver::Spring {
-            to: 100.0,
-            stiffness: 120.0,
-            damping: 14.0,
-            mass: 1.0,
-        };
-        let (v, ticks) = run_to_end(&driver, 0.0, 1.0 / 60.0, 2000);
-        assert!(
-            (v - 100.0).abs() < 0.1,
-            "spring should settle near 100, got {v}"
-        );
-        assert!(ticks > 1, "spring should take multiple ticks");
-    }
-
-    #[test]
-    fn delay_holds_then_runs_child() {
-        // Hold at the start value for 0.5s, then time 10 -> 30 over 1s.
-        let driver = Driver::Delay {
-            delay: 0.5,
-            animation: Box::new(timing(30.0, 1.0)),
-        };
-        let mut r = build_runner(&driver, 10.0);
-        let (v1, d1) = r.step(0.25);
-        assert!(!d1);
-        assert!(
-            (v1 - 10.0).abs() < 1e-6,
-            "still holding, expected 10, got {v1}"
-        );
-        let (v2, d2) = r.step(0.25); // delay exactly elapses, child starts (0 leftover)
-        assert!(!d2);
-        assert!(
-            (v2 - 10.0).abs() < 1e-3,
-            "child at t=0 expected 10, got {v2}"
-        );
-        let (v3, _d3) = r.step(0.5); // halfway through the 1s timing
-        assert!((v3 - 20.0).abs() < 1e-3, "halfway expected 20, got {v3}");
-        let (v4, d4) = r.step(0.5);
-        assert!(d4);
-        assert!((v4 - 30.0).abs() < 1e-3, "end expected 30, got {v4}");
-    }
-
-    #[test]
-    fn delay_carries_leftover_time_across_the_boundary() {
-        // 0.1s delay, then a 1s timing 0 -> 100. A single 0.6s tick should burn
-        // the delay and advance 0.5s into the timing (≈50), losing no time.
-        let driver = Driver::Delay {
-            delay: 0.1,
-            animation: Box::new(timing(100.0, 1.0)),
-        };
-        let mut r = build_runner(&driver, 0.0);
-        let (v, done) = r.step(0.6);
-        assert!(!done);
-        assert!(
-            (v - 50.0).abs() < 1e-3,
-            "expected ~50 after leftover, got {v}"
-        );
-    }
-
-    #[test]
-    fn zero_delay_runs_child_immediately() {
-        // Covers the i = 0 stagger case: no hold, behaves like the bare child.
-        let driver = Driver::Delay {
-            delay: 0.0,
-            animation: Box::new(timing(100.0, 1.0)),
-        };
-        let mut r = build_runner(&driver, 0.0);
-        let (v, done) = r.step(0.5);
-        assert!(!done);
-        assert!(
-            (v - 50.0).abs() < 1e-3,
-            "zero delay should not hold, got {v}"
-        );
-    }
-
-    #[test]
-    fn delay_inside_repeated_sequence_composes() {
-        // The exact demo shape: bounce -A -> +A with a stop at each end, looped.
-        let amp = 100.0;
-        let bounce = Driver::Repeat {
-            animation: Box::new(Driver::Sequence {
-                steps: vec![
-                    Driver::Delay {
-                        delay: 0.2,
-                        animation: Box::new(timing(amp, 0.5)),
-                    },
-                    Driver::Delay {
-                        delay: 0.2,
-                        animation: Box::new(timing(-amp, 0.5)),
-                    },
-                ],
-            }),
-            count: -1,
-            reverse: false,
-        };
-        let mut r = build_runner(&bounce, -amp);
-        // Run a couple of seconds; it must stay bounded in [-amp, amp] and never finish.
-        let mut min = f32::INFINITY;
-        let mut max = f32::NEG_INFINITY;
-        for _ in 0..240 {
-            let (v, done) = r.step(1.0 / 60.0);
-            assert!(!done, "infinite bounce must never finish");
-            min = min.min(v);
-            max = max.max(v);
-        }
-        assert!(
-            min <= -amp + 1.0,
-            "should reach the left extreme, min={min}"
-        );
-        assert!(
-            max >= amp - 1.0,
-            "should reach the right extreme, max={max}"
-        );
-        assert!(min >= -amp - 1e-3 && max <= amp + 1e-3, "must stay bounded");
-    }
-
-    #[test]
-    fn sequence_chains_steps_from_previous_end() {
-        // 0 -> 50 -> 120, each over 1s.
-        let driver = Driver::Sequence {
-            steps: vec![timing(50.0, 1.0), timing(120.0, 1.0)],
-        };
-        let mut r = build_runner(&driver, 0.0);
-        let (v1, d1) = r.step(1.0); // first step done
-        assert!(!d1);
-        assert!(
-            (v1 - 50.0).abs() < 1e-3,
-            "after step 1 expected 50, got {v1}"
-        );
-        let (v2, _d2) = r.step(0.5); // halfway through second step: 50 -> 120
-        assert!(
-            (v2 - 85.0).abs() < 1.0,
-            "midway second step expected ~85, got {v2}"
-        );
-        let (v3, d3) = r.step(0.5);
-        assert!(d3);
-        assert!(
-            (v3 - 120.0).abs() < 1e-3,
-            "sequence end expected 120, got {v3}"
-        );
-    }
-
-    #[test]
-    fn finite_repeat_finishes_after_count_cycles() {
-        // Repeat a 1s timing twice, no reverse: each cycle 0 -> 10.
-        let driver = Driver::Repeat {
-            animation: Box::new(timing(10.0, 1.0)),
-            count: 2,
-            reverse: false,
-        };
-        let (v, _ticks) = run_to_end(&driver, 0.0, 0.25, 1000);
-        assert!(
-            (v - 10.0).abs() < 1e-3,
-            "finite repeat ends at target, got {v}"
-        );
-    }
-
-    #[test]
-    fn reverse_repeat_ping_pongs_endpoints() {
-        // 0 -> 10 then (reverse) 10 -> 0 over two cycles: ends back at 0.
-        let driver = Driver::Repeat {
-            animation: Box::new(timing(10.0, 1.0)),
-            count: 2,
-            reverse: true,
-        };
-        let (v, _ticks) = run_to_end(&driver, 0.0, 0.25, 1000);
-        assert!(
-            (v - 0.0).abs() < 1e-3,
-            "reverse repeat returns to start, got {v}"
-        );
-        assert_eq!(terminal_value(&driver, 0.0), 0.0);
-    }
-
-    #[test]
-    fn infinite_repeat_never_finishes() {
-        let driver = Driver::Repeat {
-            animation: Box::new(timing(10.0, 1.0)),
-            count: -1,
-            reverse: true,
-        };
-        let mut r = build_runner(&driver, 0.0);
-        for _ in 0..1000 {
-            let (_v, done) = r.step(0.1);
-            assert!(!done, "infinite repeat must never report finished");
-        }
-    }
-
-    #[test]
     fn shared_values_animate_and_tick_to_target() {
         let mut values = SharedValues::default();
         values.declare(1, 0.0);
-        values.animate(1, &timing(100.0, 1.0));
+        values.animate(1, &timing(100.0, 1.0), None);
         values.tick(0.5);
         assert!((values.get(1).unwrap() - 50.0).abs() < 1e-3);
         values.tick(0.5);
@@ -1091,6 +641,78 @@ mod tests {
         assert_eq!(values.get(1), Some(7.0));
         values.clear();
         assert!(values.is_empty());
+    }
+
+    /// A token-tagged driver reports exactly one `finished: true` settlement when
+    /// it runs to its natural end — and nothing at all without a token.
+    #[test]
+    fn tokened_driver_settles_finished_once() {
+        let mut values = SharedValues::default();
+        values.declare(1, 0.0);
+        values.animate(1, &timing(100.0, 1.0), Some(7));
+        values.tick(0.5);
+        assert!(values.take_settled().is_empty(), "not settled yet");
+        values.tick(0.5);
+        assert_eq!(
+            values.take_settled(),
+            vec![AnimationSettled {
+                id: 1,
+                token: 7,
+                finished: true
+            }]
+        );
+        values.tick(1.0);
+        assert!(values.take_settled().is_empty(), "reported exactly once");
+
+        // Token-free drivers stay silent.
+        values.animate(1, &timing(0.0, 0.1), None);
+        values.tick(1.0);
+        assert!(values.take_settled().is_empty());
+    }
+
+    /// Interrupting an active token-tagged driver — via `set`, `cancel`, or a
+    /// superseding `animate` — reports `finished: false` for the old token.
+    #[test]
+    fn interrupting_a_tokened_driver_settles_unfinished() {
+        let mut values = SharedValues::default();
+        values.declare(1, 0.0);
+
+        values.animate(1, &timing(100.0, 1.0), Some(1));
+        values.set(1, 50.0);
+        assert_eq!(
+            values.take_settled(),
+            vec![AnimationSettled {
+                id: 1,
+                token: 1,
+                finished: false
+            }]
+        );
+
+        values.animate(1, &timing(100.0, 1.0), Some(2));
+        values.cancel(1);
+        assert_eq!(
+            values.take_settled(),
+            vec![AnimationSettled {
+                id: 1,
+                token: 2,
+                finished: false
+            }]
+        );
+
+        values.animate(1, &timing(100.0, 1.0), Some(3));
+        values.animate(1, &timing(0.0, 1.0), Some(4));
+        assert_eq!(
+            values.take_settled(),
+            vec![AnimationSettled {
+                id: 1,
+                token: 3,
+                finished: false
+            }]
+        );
+
+        // `clear` (reset/hot reload) drops pending settlements silently.
+        values.clear();
+        assert!(values.take_settled().is_empty());
     }
 
     #[test]
@@ -1126,6 +748,23 @@ mod tests {
         assert!(matches!(cmd, AnimationCommand::Declare { id: 3, .. }));
         let cmd: AnimationCommand = serde_json::from_str(r#"{ "kind": "clear" }"#).unwrap();
         assert!(matches!(cmd, AnimationCommand::Clear));
+
+        // `animate` decodes with and without the completion-callback token (the
+        // JS side omits the key entirely when no callback was passed).
+        let cmd: AnimationCommand = serde_json::from_str(
+            r#"{ "kind": "animate", "id": 1,
+                 "driver": { "type": "timing", "to": 1 }, "token": 9 }"#,
+        )
+        .unwrap();
+        assert!(matches!(
+            cmd,
+            AnimationCommand::Animate { token: Some(9), .. }
+        ));
+        let cmd: AnimationCommand = serde_json::from_str(
+            r#"{ "kind": "animate", "id": 1, "driver": { "type": "timing", "to": 1 } }"#,
+        )
+        .unwrap();
+        assert!(matches!(cmd, AnimationCommand::Animate { token: None, .. }));
 
         let bindings: AnimatedBindings = serde_json::from_str(
             r#"{ "translateX": { "type": "shared", "id": 1 },
@@ -1248,6 +887,69 @@ mod tests {
             world.entity(e).get::<Node>().unwrap().width,
             Val::Px(200.0),
             "binding re-applies after a re-render reset"
+        );
+    }
+
+    /// Once every bound shared value has settled, the apply system must stop
+    /// marking the target components changed — otherwise every `Animated.node`
+    /// keeps Bevy's transform propagation / render extraction hot forever.
+    #[test]
+    fn settled_apply_does_not_dirty_components() {
+        #[derive(Resource, Default)]
+        struct Dirty(usize);
+
+        let mut world = World::new();
+        let mut values = SharedValues::default();
+        values.set(1, 25.0); // translateX (px)
+        values.set(2, 0.5); // opacity
+        values.set(3, 0.0); // color progress
+        world.insert_resource(values);
+        world.init_resource::<Dirty>();
+
+        let bindings: AnimatedBindings = serde_json::from_value(serde_json::json!({
+            "translateX": { "type": "shared", "id": 1 },
+            "opacity": { "type": "shared", "id": 2 },
+            "backgroundColor": { "type": "interpolateColor", "id": 3,
+                "input": [0, 1], "output": [[1, 0, 0, 1], [0, 0, 1, 1]] },
+            "width": { "type": "shared", "id": 1 },
+        }))
+        .unwrap();
+
+        world.spawn((
+            AnimatedNode(bindings),
+            UiTransform::default(),
+            BackgroundColor(Color::WHITE),
+            Node::default(),
+        ));
+
+        type AnyTargetChanged = Or<(
+            Changed<UiTransform>,
+            Changed<BackgroundColor>,
+            Changed<Node>,
+        )>;
+
+        let mut apply = Schedule::default();
+        apply.add_systems(apply_animated_nodes);
+        // A separate schedule so the detector's change ticks span exactly one
+        // apply run (Changed<> is relative to the detector's own last run).
+        let mut detect = Schedule::default();
+        detect.add_systems(|q: Query<(), AnyTargetChanged>, mut dirty: ResMut<Dirty>| {
+            dirty.0 = q.iter().count();
+        });
+
+        apply.run(&mut world);
+        detect.run(&mut world);
+        assert!(
+            world.resource::<Dirty>().0 > 0,
+            "first apply must write the bound components"
+        );
+
+        apply.run(&mut world);
+        detect.run(&mut world);
+        assert_eq!(
+            world.resource::<Dirty>().0,
+            0,
+            "an apply with settled values must not dirty anything"
         );
     }
 }

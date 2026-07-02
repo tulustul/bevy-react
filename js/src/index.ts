@@ -41,6 +41,7 @@ export type {
   AnimatedValue,
   AnimatedStyle,
   AnimatableProperty,
+  AnimationCallback,
   EasingName,
 } from "./animated";
 

@@ -4,14 +4,16 @@
 // number with a stable id), assign it a *driver* (`withTiming`, `withSpring`,
 // `withRepeat`, `withSequence`), and bind style properties to it on an
 // `Animated.node`. The declaration crosses the bridge once; the Bevy side drives
-// the value every frame — per-frame interpolation never round-trips to JS.
+// the value every frame — per-frame interpolation never round-trips to JS. The
+// one thing that crosses back is completion: a driver with a callback settles
+// exactly one `animationFinished` event (routed in `bridge.ts`).
 //
 // These shapes are hand-mirrored against `bevy_react_animations::protocol` on the
 // Rust side (the same contract `bridge.ts` keeps with `protocol::Op`). Keep them
 // in sync.
 
 import { createElement, useRef } from "react";
-import { animate } from "./bridge";
+import { animate, registerAnimationCallback } from "./bridge";
 import type { BevyImageProps, BevyNodeProps, BevyTextProps } from "./jsx";
 
 /** Easing curve names understood by `withTiming` (mirrors Rust `Easing`). */
@@ -25,20 +27,46 @@ export const Easing = {
   easeInOut: "easeInOut",
 } as const satisfies Record<string, EasingName>;
 
+/** A completion callback (Reanimated-style): fires once when the driver
+ *  assigned to a shared value settles — `finished` is `true` on natural
+ *  completion, `false` when it was interrupted (a `set`, `cancelAnimation`, or
+ *  a newly assigned driver). Only the **top-level** driver's callback fires;
+ *  one nested inside `withRepeat`/`withSequence`/`withDelay` is ignored. */
+export type AnimationCallback = (finished: boolean) => void;
+
 /** A driver: how a shared value evolves over time. Built by the `with*`
- *  helpers and assigned to `sharedValue.value`. Drivers compose. */
+ *  helpers and assigned to `sharedValue.value`. Drivers compose. `callback` is
+ *  JS-only (stripped before the wire); see [`AnimationCallback`]. */
 export type Driver =
-  | { type: "timing"; to: number; duration: number; easing: EasingName }
+  | {
+      type: "timing";
+      to: number;
+      duration: number;
+      easing: EasingName;
+      callback?: AnimationCallback;
+    }
   | {
       type: "spring";
       to: number;
       stiffness: number;
       damping: number;
       mass: number;
+      callback?: AnimationCallback;
     }
-  | { type: "repeat"; animation: Driver; count: number; reverse: boolean }
-  | { type: "sequence"; steps: Driver[] }
-  | { type: "delay"; delay: number; animation: Driver };
+  | {
+      type: "repeat";
+      animation: Driver;
+      count: number;
+      reverse: boolean;
+      callback?: AnimationCallback;
+    }
+  | { type: "sequence"; steps: Driver[]; callback?: AnimationCallback }
+  | {
+      type: "delay";
+      delay: number;
+      animation: Driver;
+      callback?: AnimationCallback;
+    };
 
 /** A binding from a style property to a shared value, evaluated each frame on the
  *  Bevy side. Produced by passing a `SharedValue` directly, or via
@@ -144,30 +172,67 @@ function makeSharedValue(id: number, initial: number): SharedValue {
         last = v;
         animate({ kind: "set", id, value: v });
       } else {
-        animate({ kind: "animate", id, driver: v });
+        const { callback } = v as { callback?: AnimationCallback };
+        const driver = toWireDriver(v, false);
+        if (callback) {
+          const token = registerAnimationCallback(callback);
+          animate({ kind: "animate", id, driver, token });
+        } else {
+          animate({ kind: "animate", id, driver });
+        }
       }
     },
   };
 }
 
+/** Copy a driver tree without its JS-only `callback` fields (the wire shape
+ *  must stay JSON-pure for `serde_v8`). Only the top-level callback is honored
+ *  (extracted by the caller before this walk); a nested one is dropped with a
+ *  warning — this engine reports the settlement of the *assigned* driver, not
+ *  of every stage inside it. */
+function toWireDriver(driver: Driver, nested: boolean): Driver {
+  const { callback, ...rest } = driver as Driver & {
+    callback?: AnimationCallback;
+  };
+  if (callback && nested) {
+    console.warn(
+      "[bevy-react] animation callbacks only fire on the top-level driver; nested callback ignored",
+    );
+  }
+  const d = rest as Driver;
+  switch (d.type) {
+    case "repeat":
+    case "delay":
+      return { ...d, animation: toWireDriver(d.animation, true) };
+    case "sequence":
+      return { ...d, steps: d.steps.map((s) => toWireDriver(s, true)) };
+    default:
+      return d;
+  }
+}
+
 /** Animate to `to` over `duration` ms (default 300) with `easing` (default
- *  linear). */
+ *  linear). `callback` fires once on settlement (see [`AnimationCallback`]). */
 export function withTiming(
   to: number,
   config?: { duration?: number; easing?: EasingName },
+  callback?: AnimationCallback,
 ): Driver {
   return {
     type: "timing",
     to,
     duration: (config?.duration ?? 300) / 1000,
     easing: config?.easing ?? "linear",
+    callback,
   };
 }
 
-/** Settle on `to` with a damped spring. */
+/** Settle on `to` with a damped spring. `callback` fires once on settlement
+ *  (see [`AnimationCallback`]). */
 export function withSpring(
   to: number,
   config?: { stiffness?: number; damping?: number; mass?: number },
+  callback?: AnimationCallback,
 ): Driver {
   return {
     type: "spring",
@@ -175,28 +240,46 @@ export function withSpring(
     stiffness: config?.stiffness ?? 100,
     damping: config?.damping ?? 10,
     mass: config?.mass ?? 1,
+    callback,
   };
 }
 
 /** Repeat `animation` `count` times (`-1` = forever, the default). `reverse`
- *  ping-pongs the endpoints (timing/spring) instead of restarting from the top. */
+ *  ping-pongs the endpoints (timing/spring) instead of restarting from the top.
+ *  `callback` fires once on settlement (never for an infinite repeat, unless
+ *  interrupted — see [`AnimationCallback`]). */
 export function withRepeat(
   animation: Driver,
   count = -1,
   reverse = false,
+  callback?: AnimationCallback,
 ): Driver {
-  return { type: "repeat", animation, count, reverse };
+  return { type: "repeat", animation, count, reverse, callback };
 }
 
-/** Run each driver in order, each starting where the previous ended. */
-export function withSequence(...steps: Driver[]): Driver {
-  return { type: "sequence", steps };
+/** Run each driver in order, each starting where the previous ended. A trailing
+ *  function argument is a completion callback for the whole sequence (see
+ *  [`AnimationCallback`]). */
+export function withSequence(
+  ...args: [...Driver[], AnimationCallback | Driver] | Driver[]
+): Driver {
+  const steps = [...args] as Driver[];
+  let callback: AnimationCallback | undefined;
+  if (typeof steps[steps.length - 1] === "function") {
+    callback = steps.pop() as unknown as AnimationCallback;
+  }
+  return { type: "sequence", steps, callback };
 }
 
 /** Hold in place for `delayMs`, then run `animation`. The canonical way to
- *  stagger animations or pause between steps. */
-export function withDelay(delayMs: number, animation: Driver): Driver {
-  return { type: "delay", delay: delayMs / 1000, animation };
+ *  stagger animations or pause between steps. `callback` fires once the whole
+ *  (delay + animation) settles (see [`AnimationCallback`]). */
+export function withDelay(
+  delayMs: number,
+  animation: Driver,
+  callback?: AnimationCallback,
+): Driver {
+  return { type: "delay", delay: delayMs / 1000, animation, callback };
 }
 
 /** Map a shared value through a piecewise-linear curve (clamped at the ends). */
@@ -222,7 +305,8 @@ export function interpolateColor(
   };
 }
 
-/** Stop a shared value's active animation, freezing it in place. */
+/** Stop a shared value's active animation, freezing it in place. If the driver
+ *  carried a completion callback, it fires with `finished: false`. */
 export function cancelAnimation(value: SharedValue): void {
   animate({ kind: "cancel", id: value.id });
 }

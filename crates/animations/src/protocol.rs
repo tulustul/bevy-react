@@ -76,8 +76,16 @@ pub enum AnimationCommand {
     Declare { id: SharedId, initial: f32 },
     /// Set a value immediately, cancelling any active driver.
     Set { id: SharedId, value: f32 },
-    /// Start a driver; it animates from the value's live reading.
-    Animate { id: SharedId, driver: Driver },
+    /// Start a driver; it animates from the value's live reading. `token`
+    /// correlates a JS completion callback: when present, the engine reports the
+    /// driver's settlement (finished or interrupted) back with this token; when
+    /// absent nothing is reported (callback-free animations stay zero-overhead).
+    Animate {
+        id: SharedId,
+        driver: Driver,
+        #[serde(default)]
+        token: Option<u64>,
+    },
     /// Stop a value's active driver, freezing it where it is.
     Cancel { id: SharedId },
     /// Drop every shared value (sent on reconciler reset / hot reload).
