@@ -132,7 +132,7 @@ const APPEND_BATCH: u32 = 1_000;
 
 /// Human label for a scale (`1_000` → `"1k"`), used in the report.
 fn scale_label(n: u32) -> String {
-    if n >= 1_000 && n % 1_000 == 0 {
+    if n >= 1_000 && n.is_multiple_of(1_000) {
         format!("{}k", n / 1_000)
     } else {
         n.to_string()

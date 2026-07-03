@@ -100,8 +100,9 @@ pub fn apply_js_ops(
     // `apply_button_focus_default`) that the per-commit `apply_style` resets to `Pass`.
     buttons: Query<(), With<Button>>,
     // The persistent world-anchor overlay layer (a child of the root). It is
-    // infrastructure, not a reconciler node, so `Op::Reset` must preserve it.
-    anchor_layer: Query<(), With<crate::anchor::AnchorLayer>>,
+    // infrastructure, not a reconciler node, so `Op::Reset` must preserve it and
+    // the end-of-batch hierarchy rebuild must keep it in the root's children.
+    anchor_layer: Query<Entity, With<crate::anchor::AnchorLayer>>,
     mut editables: Query<&mut EditableText>,
     // Controlled `scrollTop`/`scrollLeft`: every `Node` has a `ScrollPosition`
     // (it's a required component), so `get_mut(e)` succeeds for any node — we only
@@ -135,6 +136,16 @@ pub fn apply_js_ops(
     #[cfg(not(target_arch = "wasm32"))]
     let started = std::time::Instant::now();
     debug!("applying {op_count} reconciler op(s)");
+
+    // Parents whose child ORDER diverged from the ECS this batch (same-parent
+    // re-appends and every `Insert`); they get one `replace_children` after the
+    // loop instead of a per-op O(siblings) splice — mass reorders are O(ops) +
+    // one O(children) rebuild, not quadratic. First-time attaches still queue an
+    // O(1) `add_child` per op (a same-batch ancestor removal must reach the child
+    // recursively), and removals don't dirty their parent at all: despawn's
+    // relationship cleanup drops the child from `Children` preserving the order
+    // of the rest.
+    let mut dirty: HashSet<NodeId> = HashSet::new();
 
     for op in ops {
         match op {
@@ -183,11 +194,15 @@ pub fn apply_js_ops(
                 bridge.editable_pending_selection.clear();
                 bridge.scroll_positions.clear();
                 // The root persists but its children were just despawned; the shadow
-                // tree is fully rebuilt by the ops that follow.
-                bridge.child_order.clear();
+                // tree is fully rebuilt by the ops that follow. Drop any pre-reset
+                // dirty parents too — the reloaded app re-uses node ids, and its own
+                // ops re-dirty whatever it rebuilds.
+                bridge.siblings.clear();
+                bridge.child_list.clear();
                 bridge.parent_of.clear();
                 bridge.surface_parent.clear();
                 bridge.child_surfaces.clear();
+                dirty.clear();
             }
             Op::Create {
                 id,
@@ -405,12 +420,22 @@ pub fn apply_js_ops(
                     continue;
                 }
                 if let (Some(p), Some(c)) = (resolve(&bridge, parent), resolve(&bridge, child)) {
-                    // Detach first so appending a node that's being moved (or reordered to
-                    // the end) leaves no stale entry in its old parent's list.
-                    bridge.detach(child);
-                    bridge.child_order.entry(parent).or_default().push(child);
-                    bridge.parent_of.insert(child, parent);
-                    commands.entity(p).add_child(c);
+                    let same_parent = bridge.parent_of.get(&child) == Some(&parent);
+                    bridge.append_child(parent, child);
+                    if same_parent {
+                        // Re-append = move to the end: an O(1) shadow reorder, synced
+                        // to the ECS by the end-of-batch rebuild.
+                        dirty.insert(parent);
+                    } else {
+                        // Fresh node (or cross-parent move): attach in the ECS NOW —
+                        // a same-batch removal of an ancestor must be able to despawn
+                        // it recursively; deferring the attach would leak it as an
+                        // orphaned window-UI root. `add_child` appends, matching the
+                        // shadow tail (so no rebuild is needed), and a cross-parent
+                        // `add_child` also detaches from the old ECS parent via the
+                        // relationship hooks.
+                        commands.entity(p).add_child(c);
+                    }
                     inherit_text_style(&mut commands, &bridge, parent, child, c);
                 }
             }
@@ -427,20 +452,19 @@ pub fn apply_js_ops(
                 }
                 // Ordered insertion: place `child` at `before`'s position. The live
                 // `Children` can't be read here (commands queued earlier in this same
-                // batch haven't applied), so the index comes from the shadow tree, which
-                // mirrors exactly what the deferred commands will produce. `insert_child`
-                // removes any existing occurrence of `child` first, then inserts at the
-                // (post-detach) index — matching the shadow update below.
+                // batch haven't applied), so the shadow tree is the ordering truth and
+                // the ECS position is fixed up by the end-of-batch rebuild of the
+                // (always dirty) parent. A missing `before` falls back to appending.
                 if let (Some(p), Some(c)) = (resolve(&bridge, parent), resolve(&bridge, child)) {
-                    bridge.detach(child);
-                    let siblings = bridge.child_order.entry(parent).or_default();
-                    let idx = siblings
-                        .iter()
-                        .position(|&id| id == before)
-                        .unwrap_or(siblings.len());
-                    siblings.insert(idx, child);
-                    bridge.parent_of.insert(child, parent);
-                    commands.entity(p).insert_child(idx, c);
+                    let same_parent = bridge.parent_of.get(&child) == Some(&parent);
+                    bridge.insert_before(parent, child, before);
+                    if !same_parent {
+                        // Fresh/cross-parent: attach NOW (at the end — the rebuild
+                        // moves it into place); see `Op::Append` for why deferring
+                        // the attach itself would leak on same-batch removal.
+                        commands.entity(p).add_child(c);
+                    }
+                    dirty.insert(parent);
                     inherit_text_style(&mut commands, &bridge, parent, child, c);
                 }
             }
@@ -728,6 +752,36 @@ pub fn apply_js_ops(
                 }
             }
         }
+    }
+
+    // Sync the ECS hierarchy: one `replace_children` per parent whose child list
+    // changed this batch (Bevy diffs — kept children get no `ChildOf` rewrite, the
+    // order becomes exactly the slice's). Skipping unresolvable parents guards the
+    // despawned-entity panic: anything removed (or wiped by `Reset`) mid-batch was
+    // pruned from `bridge.nodes` by `forget_subtree`.
+    for parent in dirty {
+        let Some(p) = resolve(&bridge, parent) else {
+            continue;
+        };
+        let mut list: Vec<Entity> = Vec::new();
+        // The AnchorLayer is a Rust-side child of the root, invisible to the shadow
+        // tree — keep it as the first child (its spawn-time position; overlays are
+        // lifted by `GlobalZIndex`, not sibling order). Without this, the root's
+        // rebuild would strip its `ChildOf`.
+        if parent == ROOT_ID
+            && let Ok(layer) = anchor_layer.single()
+        {
+            list.push(layer);
+        }
+        list.extend(
+            bridge
+                .children_of(parent)
+                .filter_map(|id| resolve(&bridge, id)),
+        );
+        // Note: an anchored overlay under `parent` gets `ChildOf(parent)` re-asserted
+        // here (its live parent is the AnchorLayer) — same as the old per-op
+        // `insert_child` path; the anchor system self-heals it next frame.
+        commands.entity(p).replace_children(&list);
     }
 
     // Record this batch for live instrumentation (see [`OpApplyStats`]).
@@ -2729,6 +2783,263 @@ mod tests {
             vec![ent(&app, 11), ent(&app, 12)],
             "X must precede Y even though Children was unreadable mid-batch"
         );
+    }
+
+    /// One batch mixing all three structural ops on the same parent: append a new
+    /// child, move an existing one, remove another. The end-of-batch rebuild must
+    /// produce the final order in one `replace_children`, with the removed child's
+    /// despawn applied first.
+    #[test]
+    fn mixed_batch_orders_correctly() {
+        let (mut app, tx, _root) = ordering_app();
+        tx.send(vec![
+            create_node(1),
+            create_node(2),
+            create_node(3),
+            create_node(4),
+            Op::Append {
+                parent: ROOT_ID,
+                child: 1,
+            },
+            Op::Append {
+                parent: 1,
+                child: 2,
+            },
+            Op::Append {
+                parent: 1,
+                child: 3,
+            },
+            Op::Append {
+                parent: 1,
+                child: 4,
+            },
+        ])
+        .unwrap();
+        app.update();
+
+        // [2,3,4] → append 5 → move 4 before 2 → remove 3 ⇒ [4,2,5].
+        tx.send(vec![
+            create_node(5),
+            Op::Append {
+                parent: 1,
+                child: 5,
+            },
+            Op::Insert {
+                parent: 1,
+                child: 4,
+                before: 2,
+            },
+            Op::Remove {
+                parent: 1,
+                child: 3,
+            },
+        ])
+        .unwrap();
+        app.update();
+
+        let parent = ent(&app, 1);
+        assert_eq!(
+            children_of(&app, parent),
+            vec![ent(&app, 4), ent(&app, 2), ent(&app, 5)],
+            "append + move + remove in one batch must land as [4, 2, 5]"
+        );
+    }
+
+    /// Moving a child to a DIFFERENT parent in one batch: the old `ChildOf` must be
+    /// dropped eagerly (the rebuild's `replace_children` skips relationship hooks for
+    /// the entities it adds), or the child would linger in the old parent's
+    /// `Children`.
+    #[test]
+    fn move_between_parents_in_one_batch() {
+        let (mut app, tx, _root) = ordering_app();
+        tx.send(vec![
+            create_node(1), // parent A
+            create_node(2), // parent B
+            create_node(3),
+            create_node(4),
+            create_node(5),
+            Op::Append {
+                parent: ROOT_ID,
+                child: 1,
+            },
+            Op::Append {
+                parent: ROOT_ID,
+                child: 2,
+            },
+            Op::Append {
+                parent: 1,
+                child: 3,
+            },
+            Op::Append {
+                parent: 1,
+                child: 4,
+            },
+            Op::Append {
+                parent: 2,
+                child: 5,
+            },
+        ])
+        .unwrap();
+        app.update();
+
+        // Move 3 from A to B (append at B's end).
+        tx.send(vec![Op::Append {
+            parent: 2,
+            child: 3,
+        }])
+        .unwrap();
+        app.update();
+
+        let (a, b) = (ent(&app, 1), ent(&app, 2));
+        assert_eq!(
+            children_of(&app, a),
+            vec![ent(&app, 4)],
+            "the moved child must leave the old parent's Children"
+        );
+        assert_eq!(children_of(&app, b), vec![ent(&app, 5), ent(&app, 3)]);
+        assert_eq!(
+            app.world()
+                .entity(ent(&app, 3))
+                .get::<ChildOf>()
+                .map(|c| c.parent()),
+            Some(b),
+            "the moved child's ChildOf must point at the new parent"
+        );
+    }
+
+    /// The `AnchorLayer` is a Rust-side child of the root, invisible to the shadow
+    /// tree — a root rebuild must keep it as the first child instead of stripping
+    /// its `ChildOf`.
+    #[test]
+    fn root_rebuild_preserves_anchor_layer() {
+        let (mut app, tx, root) = ordering_app();
+        let layer = app
+            .world_mut()
+            .spawn((crate::anchor::AnchorLayer, ChildOf(root)))
+            .id();
+
+        tx.send(vec![
+            create_node(1),
+            create_node(2),
+            Op::Append {
+                parent: ROOT_ID,
+                child: 1,
+            },
+            Op::Append {
+                parent: ROOT_ID,
+                child: 2,
+            },
+        ])
+        .unwrap();
+        app.update();
+        assert_eq!(
+            children_of(&app, root),
+            vec![layer, ent(&app, 1), ent(&app, 2)]
+        );
+
+        // Reorder the root's reconciler children; the layer must stay first.
+        tx.send(vec![Op::Insert {
+            parent: ROOT_ID,
+            child: 2,
+            before: 1,
+        }])
+        .unwrap();
+        app.update();
+        assert_eq!(
+            children_of(&app, root),
+            vec![layer, ent(&app, 2), ent(&app, 1)],
+            "the AnchorLayer must survive root rebuilds as the first child"
+        );
+    }
+
+    /// The leak regression the demos app exposed: a child created and appended in
+    /// the SAME batch that removes its (pre-existing) parent. The attach must be
+    /// queued per op — if it were deferred to the end-of-batch rebuild (which skips
+    /// removed parents), the recursive despawn couldn't reach the child and it would
+    /// survive as an orphaned window-UI root.
+    #[test]
+    fn same_batch_create_under_removed_parent_despawns() {
+        let (mut app, tx, _root) = ordering_app();
+        tx.send(vec![
+            create_node(1),
+            Op::Append {
+                parent: ROOT_ID,
+                child: 1,
+            },
+        ])
+        .unwrap();
+        app.update();
+
+        // One batch: grow the subtree, then remove its root.
+        tx.send(vec![
+            create_node(2),
+            Op::Append {
+                parent: 1,
+                child: 2,
+            },
+            Op::Remove {
+                parent: ROOT_ID,
+                child: 1,
+            },
+        ])
+        .unwrap();
+        app.update();
+
+        let survivors = app.world_mut().query::<&RNode>().iter(app.world()).count();
+        assert_eq!(
+            survivors, 0,
+            "the same-batch child must be despawned with its removed parent, not \
+             leaked as an orphaned root"
+        );
+    }
+
+    /// Remove + reorder on the same parent in one batch: the dirty rebuild runs with
+    /// a despawned ex-child mid-queue and must not resurrect or panic on it.
+    #[test]
+    fn remove_then_reorder_same_parent() {
+        let (mut app, tx, _root) = ordering_app();
+        tx.send(vec![
+            create_node(1),
+            create_node(2),
+            create_node(3),
+            create_node(4),
+            Op::Append {
+                parent: ROOT_ID,
+                child: 1,
+            },
+            Op::Append {
+                parent: 1,
+                child: 2,
+            },
+            Op::Append {
+                parent: 1,
+                child: 3,
+            },
+            Op::Append {
+                parent: 1,
+                child: 4,
+            },
+        ])
+        .unwrap();
+        app.update();
+
+        // [2,3,4] → remove 3, then move 4 before 2 ⇒ [4,2].
+        tx.send(vec![
+            Op::Remove {
+                parent: 1,
+                child: 3,
+            },
+            Op::Insert {
+                parent: 1,
+                child: 4,
+                before: 2,
+            },
+        ])
+        .unwrap();
+        app.update();
+
+        let parent = ent(&app, 1);
+        assert_eq!(children_of(&app, parent), vec![ent(&app, 4), ent(&app, 2)]);
     }
 
     /// A `<portal>` mounts to an `ImageNode` carrying an `RPortal` with its target

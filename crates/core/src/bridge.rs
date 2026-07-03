@@ -155,7 +155,7 @@ pub struct JsBridge {
     pub editable_inputs: HashSet<NodeId>,
     /// Node ids that are `<surface>` detached roots. Their subtree renders into an
     /// offscreen image via a dedicated UI camera, so they must NOT be parented into
-    /// the on-screen Bevy hierarchy: child-attach ops skip `add_child` for these.
+    /// the on-screen Bevy hierarchy: child-attach ops skip Bevy parenting for these.
     pub surfaces: HashSet<NodeId>,
     /// The last text value emitted to JS for each `editableText`, used to dedup
     /// `TextEditChange` (which also fires on cursor moves) into real `"change"`s.
@@ -178,22 +178,41 @@ pub struct JsBridge {
     /// controlled-component echo loop: a programmatic write-back equal to this is
     /// not re-emitted. Only nodes with an `onScroll` handler appear here.
     pub scroll_positions: HashMap<NodeId, Vec2>,
-    /// Authoritative ordered children per parent (incl. `ROOT_ID`). Bevy's `Children`
-    /// component can't be read mid-batch — `Commands` hierarchy ops are deferred to the
-    /// next sync point — so this mirror is the source of truth for computing ordered
-    /// insertion indices. Kept in lock-step with the ECS by `apply_js_ops`.
-    pub child_order: HashMap<NodeId, Vec<NodeId>>,
+    /// Authoritative ordered children per parent (incl. `ROOT_ID`), stored as a
+    /// doubly-linked sibling list (per-child links here, per-parent ends in
+    /// [`Self::child_list`]) so detach/append/insert are O(1) regardless of sibling
+    /// count. Bevy's `Children` component can't be read mid-batch — `Commands`
+    /// hierarchy ops are deferred to the next sync point — so this mirror is the
+    /// source of truth for child order; `apply_js_ops` syncs it into the ECS with one
+    /// `replace_children` per structurally-changed parent per batch.
+    pub siblings: HashMap<NodeId, SiblingLinks>,
+    /// Ends of each parent's ordered child list (entry present iff non-empty).
+    pub child_list: HashMap<NodeId, ChildList>,
     /// Reverse lookup (child → its current parent) so a re-parent or reorder can detach
     /// the child from its old parent's ordered list before re-inserting it.
     pub parent_of: HashMap<NodeId, NodeId>,
     /// React-tree parentage of `<surface>` detached roots: surface id → its React
     /// parent id, plus the reverse (parent → its surface children). A surface is kept
-    /// OUT of `child_order`/`parent_of` (it's not a Bevy child, and counting it would
-    /// skew sibling insert indices), so its structural position lives here instead. This
+    /// OUT of `siblings`/`parent_of` (it's not a Bevy child, and counting it would
+    /// skew sibling ordering), so its structural position lives here instead. This
     /// lets `Op::Remove` of an *ancestor* despawn the detached surface — which Bevy's
     /// recursive despawn can't reach, since the surface has no `ChildOf`.
     pub surface_parent: HashMap<NodeId, NodeId>,
     pub child_surfaces: HashMap<NodeId, Vec<NodeId>>,
+}
+
+/// Doubly-linked sibling entry (present iff the node is attached to a parent).
+#[derive(Clone, Copy, Default)]
+pub struct SiblingLinks {
+    prev: Option<NodeId>,
+    next: Option<NodeId>,
+}
+
+/// Ends of a parent's ordered child list.
+#[derive(Clone, Copy)]
+pub struct ChildList {
+    head: NodeId,
+    tail: NodeId,
 }
 
 impl JsBridge {
@@ -216,7 +235,8 @@ impl JsBridge {
             editable_focus_handlers: HashSet::new(),
             editable_pending_selection: HashMap::new(),
             scroll_positions: HashMap::new(),
-            child_order: HashMap::new(),
+            siblings: HashMap::new(),
+            child_list: HashMap::new(),
             parent_of: HashMap::new(),
             surface_parent: HashMap::new(),
             child_surfaces: HashMap::new(),
@@ -242,7 +262,7 @@ impl JsBridge {
     }
 
     /// Every detached surface id structurally **under** `node` — its surface children,
-    /// recursively through normal descendants (`child_order`) and nested surfaces —
+    /// recursively through normal descendants (the sibling lists) and nested surfaces —
     /// removing their parentage bookkeeping as it goes. Does NOT include `node` itself
     /// (a surface removed directly is handled by its own `Remove`). Used so `Op::Remove`
     /// despawns surfaces that Bevy's recursive despawn of `node` can't reach.
@@ -261,27 +281,131 @@ impl JsBridge {
                 self.collect_surfaces(surface, out);
             }
         }
-        if let Some(kids) = self.child_order.get(&node).cloned() {
-            for kid in kids {
-                self.collect_surfaces(kid, out);
-            }
+        let kids: Vec<NodeId> = self.children_of(node).collect();
+        for kid in kids {
+            self.collect_surfaces(kid, out);
         }
     }
 
     /// Unlink `child` from its current parent's ordered children list (if any). Called
     /// before an `Append`/`Insert` so a reorder or re-parent doesn't leave a stale
-    /// duplicate in the shadow tree.
+    /// duplicate in the shadow tree, and on removal. O(1): patches the doubly-linked
+    /// neighbors and the parent's list ends.
     pub fn detach(&mut self, child: NodeId) {
-        if let Some(parent) = self.parent_of.remove(&child)
-            && let Some(siblings) = self.child_order.get_mut(&parent)
+        let Some(parent) = self.parent_of.remove(&child) else {
+            return;
+        };
+        let Some(links) = self.siblings.remove(&child) else {
+            return;
+        };
+        if let Some(prev) = links.prev
+            && let Some(l) = self.siblings.get_mut(&prev)
         {
-            siblings.retain(|&id| id != child);
+            l.next = links.next;
+        }
+        if let Some(next) = links.next
+            && let Some(l) = self.siblings.get_mut(&next)
+        {
+            l.prev = links.prev;
+        }
+        if let Some(list) = self.child_list.get_mut(&parent) {
+            match (links.prev, links.next) {
+                // Only child: the parent's list is now empty.
+                (None, None) => {
+                    self.child_list.remove(&parent);
+                }
+                (None, Some(next)) => list.head = next,
+                (Some(prev), None) => list.tail = prev,
+                (Some(_), Some(_)) => {}
+            }
         }
     }
 
+    /// Attach `child` as `parent`'s last child (detaching it from any previous
+    /// position first). O(1).
+    pub fn append_child(&mut self, parent: NodeId, child: NodeId) {
+        self.detach(child);
+        self.parent_of.insert(child, parent);
+        match self.child_list.get_mut(&parent) {
+            Some(list) => {
+                let old_tail = list.tail;
+                if let Some(l) = self.siblings.get_mut(&old_tail) {
+                    l.next = Some(child);
+                }
+                self.siblings.insert(
+                    child,
+                    SiblingLinks {
+                        prev: Some(old_tail),
+                        next: None,
+                    },
+                );
+                list.tail = child;
+            }
+            None => {
+                self.siblings.insert(child, SiblingLinks::default());
+                self.child_list.insert(
+                    parent,
+                    ChildList {
+                        head: child,
+                        tail: child,
+                    },
+                );
+            }
+        }
+    }
+
+    /// Attach `child` immediately before `before` under `parent` (detaching `child`
+    /// from any previous position first). Falls back to appending when `before` is not
+    /// currently a child of `parent` — the same fallback the old index-based path had
+    /// (`position(..).unwrap_or(len)`), and the path taken when `before` is a
+    /// `<surface>` (which never enters the sibling list). O(1).
+    pub fn insert_before(&mut self, parent: NodeId, child: NodeId, before: NodeId) {
+        self.detach(child);
+        if self.parent_of.get(&before) != Some(&parent) {
+            self.append_child(parent, child);
+            return;
+        }
+        self.parent_of.insert(child, parent);
+        let before_links = self
+            .siblings
+            .get_mut(&before)
+            .expect("attached child has sibling links");
+        let prev = before_links.prev;
+        before_links.prev = Some(child);
+        self.siblings.insert(
+            child,
+            SiblingLinks {
+                prev,
+                next: Some(before),
+            },
+        );
+        match prev {
+            Some(p) => {
+                if let Some(l) = self.siblings.get_mut(&p) {
+                    l.next = Some(child);
+                }
+            }
+            None => {
+                if let Some(list) = self.child_list.get_mut(&parent) {
+                    list.head = child;
+                }
+            }
+        }
+    }
+
+    /// Iterate `parent`'s children in order (walks the sibling links).
+    pub fn children_of(&self, parent: NodeId) -> impl Iterator<Item = NodeId> + '_ {
+        let mut cursor = self.child_list.get(&parent).map(|l| l.head);
+        std::iter::from_fn(move || {
+            let id = cursor?;
+            cursor = self.siblings.get(&id).and_then(|l| l.next);
+            Some(id)
+        })
+    }
+
     /// Drop all per-node side-table data for a single node id. Covers the `NodeId`-keyed
-    /// data tables only — NOT the structural `child_order`/`parent_of` maps (handled by
-    /// `forget_subtree`/`detach`) nor the surface parentage maps `surface_parent`/
+    /// data tables only — NOT the structural `siblings`/`child_list`/`parent_of` maps
+    /// (handled by `forget_subtree`/`detach`) nor the surface parentage maps `surface_parent`/
     /// `child_surfaces` (handled by `attach_surface`/`detach_surface`/`surfaces_under`).
     fn forget_node_data(&mut self, id: NodeId) {
         self.nodes.remove(&id);
@@ -300,17 +424,18 @@ impl JsBridge {
 
     /// Drop `child` and its whole subtree from the shadow tree. React emits a `Remove`
     /// only for the root of a removed subtree (Bevy despawns the descendants
-    /// recursively), so we recurse to keep `child_order`/`parent_of` bounded and to prune
+    /// recursively), so we recurse to keep the structural maps bounded and to prune
     /// every node's per-node side-table data (via `forget_node_data`) — otherwise
     /// descendant ids would linger as stale entity handles until the next `Op::Reset`.
     /// Does not unlink the root from its parent's ordered list; call `detach` for that.
     pub fn forget_subtree(&mut self, child: NodeId) {
         self.forget_node_data(child);
-        if let Some(grandkids) = self.child_order.remove(&child) {
-            for grandkid in grandkids {
-                self.parent_of.remove(&grandkid);
-                self.forget_subtree(grandkid);
-            }
+        let grandkids: Vec<NodeId> = self.children_of(child).collect();
+        self.child_list.remove(&child);
+        for grandkid in grandkids {
+            self.parent_of.remove(&grandkid);
+            self.siblings.remove(&grandkid);
+            self.forget_subtree(grandkid);
         }
     }
 }
