@@ -317,6 +317,9 @@ struct BenchDriver {
     expected_applied: u64,
     settle_frames: u32,
     samples: Vec<Sample>,
+    /// The current step's Bevy-side timings, frozen the frame its batch landed;
+    /// awaiting the React `stepDone` report to fill `js_ms`/`flush_ms`.
+    pending: Option<Sample>,
 }
 
 impl BenchDriver {
@@ -333,6 +336,7 @@ impl BenchDriver {
             expected_applied: 0,
             settle_frames: 0,
             samples: Vec::new(),
+            pending: None,
         }
     }
 }
@@ -437,7 +441,13 @@ fn drive_bench(
         Phase::Trigger => start_step(&mut driver, &stats, &mut inbox, &events),
         Phase::Await => {
             let landed = stats.applied_count > driver.expected_applied;
-            if landed && let Some(report) = inbox.last {
+            // Freeze every Bevy-side timing the frame the batch lands (this system
+            // runs post-layout, so `now` closes out that same frame). The React
+            // `stepDone` report can arrive one frame LATER — it's pumped in
+            // `PreUpdate` while ops apply in `Update`, so a commit finishing
+            // between the two loses the race — and waiting for it here would
+            // silently add a whole frame (~16 ms at 10k rows) to `total`/`bevy`.
+            if landed && driver.pending.is_none() {
                 let now = Instant::now();
                 let t0 = driver.t0.expect("t0 set in start_step");
                 let translate = stats.last_translate;
@@ -453,25 +463,35 @@ fn drive_bench(
                     }
                     None => (f64::NAN, f64::NAN),
                 };
-                let total_ms = now.saturating_duration_since(t0).as_secs_f64() * 1000.0;
                 let step = driver.seq[driver.step];
-                if step.record {
-                    driver.samples.push(Sample {
-                        op: step.op,
-                        n: step.n,
-                        rows: step.rows,
-                        total_ms,
-                        js_ms: report.js_ms,
-                        flush_ms: report.flush_ms,
-                        pre_apply_ms,
-                        translate_ms: translate.as_secs_f64() * 1000.0,
-                        command_ms: timers.last_command.as_secs_f64() * 1000.0,
-                        layout_ms: timers.last_layout.as_secs_f64() * 1000.0,
-                        bevy_ms,
-                        // The flushed batch size for this op's commit, from core's
-                        // live op-flush instrumentation (React can't see it).
-                        ops_emitted: stats.last_ops,
-                    });
+                driver.pending = Some(Sample {
+                    op: step.op,
+                    n: step.n,
+                    rows: step.rows,
+                    total_ms: now.saturating_duration_since(t0).as_secs_f64() * 1000.0,
+                    // Filled in below once the React report arrives.
+                    js_ms: f64::NAN,
+                    flush_ms: f64::NAN,
+                    pre_apply_ms,
+                    translate_ms: translate.as_secs_f64() * 1000.0,
+                    command_ms: timers.last_command.as_secs_f64() * 1000.0,
+                    layout_ms: timers.last_layout.as_secs_f64() * 1000.0,
+                    bevy_ms,
+                    // The flushed batch size for this op's commit, from core's
+                    // live op-flush instrumentation (React can't see it).
+                    ops_emitted: stats.last_ops,
+                });
+            }
+            // Complete the sample once the JS-side numbers show up (usually the
+            // same frame, sometimes the next — see above).
+            if driver.pending.is_some()
+                && let Some(report) = inbox.last
+            {
+                let mut sample = driver.pending.take().expect("checked above");
+                sample.js_ms = report.js_ms;
+                sample.flush_ms = report.flush_ms;
+                if driver.seq[driver.step].record {
+                    driver.samples.push(sample);
                 }
                 driver.phase = Phase::Settle;
                 driver.settle_frames = 0;
@@ -481,6 +501,7 @@ fn drive_bench(
                     driver.seq[driver.step].op,
                     inbox.last.is_some()
                 );
+                driver.pending = None;
                 driver.phase = Phase::Settle;
                 driver.settle_frames = 0;
             }
@@ -518,6 +539,7 @@ fn start_step(
     driver.t0 = Some(Instant::now());
     driver.expected_applied = stats.applied_count;
     inbox.last = None;
+    driver.pending = None;
     let seed = driver.seed;
     driver.seed = driver.seed.wrapping_add(1);
     events.send(&BenchStep {
@@ -715,7 +737,7 @@ fn render_markdown(report: &Report) -> String {
     );
     let _ = writeln!(
         out,
-        "| **Total** | End-to-end wall time, event trigger → change detected. Equals `Pre-apply + Translate + Bevy`. |"
+        "| **Total** | End-to-end wall time, event trigger → post-layout on the frame the batch applied. Equals `Pre-apply + Translate + Bevy`. |"
     );
     let _ = writeln!(
         out,
@@ -743,7 +765,7 @@ fn render_markdown(report: &Report) -> String {
     );
     let _ = writeln!(
         out,
-        "| **Bevy** | Apply done → change detected. Full post-translate Bevy wall time; ≈ `Command + Layout`. |"
+        "| **Bevy** | Apply done → post-layout, same frame. Full post-translate Bevy wall time; ≈ `Command + Layout`. |"
     );
     let _ = writeln!(out);
     let _ = writeln!(

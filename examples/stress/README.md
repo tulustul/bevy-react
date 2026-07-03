@@ -72,8 +72,11 @@ cargo run --release -p bevy-react --example stress -- --run table-ops --out resu
 
 Results are written to `benchmark_results/` (gitignored).
 
-Each op reports `totalMs` (event trigger → result detected Bevy-side, the
-end-to-end number) plus a per-leg breakdown (each a `{p50,p99,mean,min,max}`):
+Each op reports `totalMs` (event trigger → post-layout on the frame the op's
+batch applied, the end-to-end number; the React-side `stepDone` report can
+arrive a frame later, but the timings are frozen when the batch lands so that
+race never inflates them) plus a per-leg breakdown (each a
+`{p50,p99,mean,min,max}`):
 
 - `jsMs` — React reconcile + build the op array + the serde decode (JS thread).
 - `flushMs` — the `op_flush` native call alone = `serde_v8` decode of the op
