@@ -1,8 +1,13 @@
-//! The table-ops scenario: the standard table operation set (create 1k/10k rows,
-//! append 1k, update every 2nd row's text/background, swap, select, remove, clear)
-//! borrowed from the
+//! The table-ops scenario: a table operation set derived from the
 //! js-framework-benchmark, measured as a bevy-react *library* benchmark — our own
 //! per-operation timings, no cross-framework comparison.
+//!
+//! Every operation comes in a **surgical** (`*1`, one row) and a **mass**
+//! (`*Every2nd`, half the table) variant, and the whole set runs at **two table
+//! scales** (1k and 10k rows). Comparing a surgical op across scales is the
+//! point: it exposes costs that are secretly O(table) rather than O(changed).
+//! `insertEvery2nd` doubles as a quadratic-behavior detector (a per-insert
+//! `Children` splice shows up as ~100× instead of ~10× between scales).
 //!
 //! Driving (capture mode) is event-driven, one op at a time: the Bevy driver sends
 //! a `bench.runStep` event, React performs the op (`setState` → reconciler commit
@@ -44,25 +49,36 @@ pub fn register_bindings(app: &mut App) {
 // --- The operation set ---
 
 /// One table operation. A fieldless enum serializes as a plain string,
-/// so the generated TS is a `"Create1k" | …` union the React app switches on.
+/// so the generated TS is a `"Create" | …` union the React app switches on.
+/// The table scale rides in [`BenchStep::n`], not in per-scale variants.
 #[derive(Serialize, TS, Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BenchOp {
-    /// Replace the table with 1,000 fresh rows.
-    Create1k,
-    /// Replace the table with 10,000 fresh rows.
-    Create10k,
-    /// Append 1,000 rows to the existing table.
+    /// Replace the table with `n` fresh rows (`n` = the current scale).
+    Create,
+    /// Append 1 fresh row at the end.
+    Append1,
+    /// Append 1,000 fresh rows (fixed batch at both scales, jsfb-style).
     Append1k,
+    /// Insert 1 fresh row at the middle (index ⌊len/2⌋).
+    Insert1,
+    /// Insert a fresh row after every 2nd existing row (→ ~1.5×).
+    InsertEvery2nd,
+    /// Update one middle row's label in place (text change → relayout).
+    UpdateText1,
     /// Update the label of every 2nd row in place (text change → relayout).
-    UpdateEvery2ndText,
+    UpdateTextEvery2nd,
+    /// Recolor one middle row's background (paint-only → should not relayout).
+    UpdateColor1,
     /// Recolor every 2nd row's background (paint-only → should not relayout).
-    UpdateEvery2ndBackgroundColor,
-    /// Swap two rows far apart (rows 1 and 998, js-framework-benchmark-style).
-    Swap,
-    /// Select (highlight) a row.
-    Select,
-    /// Remove a single row.
-    Remove,
+    UpdateColorEvery2nd,
+    /// Swap two rows far apart (rows 1 and len−2, js-framework-benchmark-style).
+    Swap1,
+    /// Swap each adjacent pair (0↔1, 2↔3, …) — mass move ops.
+    SwapEvery2nd,
+    /// Remove one middle row.
+    Remove1,
+    /// Remove every 2nd row (→ half).
+    RemoveEvery2nd,
     /// Empty the table.
     Clear,
 }
@@ -71,39 +87,68 @@ impl BenchOp {
     /// Stable lower-camel key used to group samples in the JSON report.
     fn key(self) -> &'static str {
         match self {
-            BenchOp::Create1k => "create1k",
-            BenchOp::Create10k => "create10k",
+            BenchOp::Create => "create",
+            BenchOp::Append1 => "append1",
             BenchOp::Append1k => "append1k",
-            BenchOp::UpdateEvery2ndText => "updateEvery2ndText",
-            BenchOp::UpdateEvery2ndBackgroundColor => "updateEvery2ndBackgroundColor",
-            BenchOp::Swap => "swap",
-            BenchOp::Select => "select",
-            BenchOp::Remove => "remove",
+            BenchOp::Insert1 => "insert1",
+            BenchOp::InsertEvery2nd => "insertEvery2nd",
+            BenchOp::UpdateText1 => "updateText1",
+            BenchOp::UpdateTextEvery2nd => "updateTextEvery2nd",
+            BenchOp::UpdateColor1 => "updateColor1",
+            BenchOp::UpdateColorEvery2nd => "updateColorEvery2nd",
+            BenchOp::Swap1 => "swap1",
+            BenchOp::SwapEvery2nd => "swapEvery2nd",
+            BenchOp::Remove1 => "remove1",
+            BenchOp::RemoveEvery2nd => "removeEvery2nd",
             BenchOp::Clear => "clear",
         }
     }
 }
 
 /// Every op, in a fixed order, for grouping the report deterministically.
-const ALL_OPS: [BenchOp; 9] = [
-    BenchOp::Create1k,
-    BenchOp::Create10k,
+const ALL_OPS: [BenchOp; 14] = [
+    BenchOp::Create,
+    BenchOp::Append1,
     BenchOp::Append1k,
-    BenchOp::UpdateEvery2ndText,
-    BenchOp::UpdateEvery2ndBackgroundColor,
-    BenchOp::Swap,
-    BenchOp::Select,
-    BenchOp::Remove,
+    BenchOp::Insert1,
+    BenchOp::InsertEvery2nd,
+    BenchOp::UpdateText1,
+    BenchOp::UpdateTextEvery2nd,
+    BenchOp::UpdateColor1,
+    BenchOp::UpdateColorEvery2nd,
+    BenchOp::Swap1,
+    BenchOp::SwapEvery2nd,
+    BenchOp::Remove1,
+    BenchOp::RemoveEvery2nd,
     BenchOp::Clear,
 ];
 
+/// The table scales the whole op set runs at.
+const SCALES: [u32; 2] = [1_000, 10_000];
+
+/// Rows `Append1k` adds regardless of scale (js-framework-benchmark convention:
+/// insert a fixed batch into an existing table).
+const APPEND_BATCH: u32 = 1_000;
+
+/// Human label for a scale (`1_000` → `"1k"`), used in the report.
+fn scale_label(n: u32) -> String {
+    if n >= 1_000 && n % 1_000 == 0 {
+        format!("{}k", n / 1_000)
+    } else {
+        n.to_string()
+    }
+}
+
 // --- Bridge bindings ---
 
-/// Bevy → React: run one benchmark operation. `seed` lets React generate
-/// reproducible-yet-varied row labels per step.
+/// Bevy → React: run one benchmark operation. `n` is the table scale this step
+/// belongs to (only `Create` consumes it JS-side; it rides on every step so
+/// samples group by scale). `seed` lets React generate reproducible-yet-varied
+/// row labels per step.
 #[react_event(name = "bench.runStep")]
 pub struct BenchStep {
     op: BenchOp,
+    n: u32,
     seed: u32,
 }
 
@@ -230,6 +275,10 @@ enum Phase {
 /// One recorded operation timing, decomposed into legs (see `add_capture_mode`).
 struct Sample {
     op: BenchOp,
+    /// The scale (table size the op set targets) this sample belongs to.
+    n: u32,
+    /// Table row count when the op ran (its precondition).
+    rows: u32,
     total_ms: f64,
     js_ms: f64,
     /// `op_flush` native call = `serde_v8` decode of the batch (subset of `js_ms`).
@@ -244,11 +293,22 @@ struct Sample {
     ops_emitted: usize,
 }
 
+/// One sequence entry: the op, the scale it runs at, whether its timing is
+/// recorded (`false` = a precondition-reset step that still runs through the
+/// full Trigger/Await/Settle machinery), and the table size it starts from.
+#[derive(Clone, Copy)]
+struct Step {
+    op: BenchOp,
+    n: u32,
+    record: bool,
+    rows: u32,
+}
+
 #[derive(Resource)]
 struct BenchDriver {
     out: Option<PathBuf>,
     iterations: u32,
-    seq: Vec<BenchOp>,
+    seq: Vec<Step>,
     iter: u32,
     step: usize,
     phase: Phase,
@@ -277,30 +337,81 @@ impl BenchDriver {
     }
 }
 
-/// The per-iteration op sequence. Each measured op runs from a consistent
-/// precondition (create from empty, the two update ops on a full 10k table,
-/// swap/select/remove on a full 1k table, append at 1k→2k), and every iteration
-/// ends empty so the next starts clean.
-fn default_sequence() -> Vec<BenchOp> {
+/// The per-iteration op sequence: the whole op set once per scale, organized in
+/// blocks so every measured op runs from a consistent precondition. The in-place
+/// ops (update/swap) don't change the row count, so one measured `Create` serves
+/// them all and the block's `Clear` is measured from a full table. The structural
+/// ops (append/insert/remove) perturb the count, so each group gets an unmeasured
+/// create/clear reset. Every block ends empty, so the next starts clean — and an
+/// unmeasured `Clear` never runs on an empty table (zero ops would stall `Await`).
+fn default_sequence() -> Vec<Step> {
     use BenchOp::*;
-    vec![
-        // The two in-place update ops run on a 10k table (the heavy relayout case);
-        // the Create10k that sets them up doubles as the create10k measurement.
-        Create10k,
-        UpdateEvery2ndText,
-        UpdateEvery2ndBackgroundColor,
-        Clear,
-        // Swap/select/remove on a full 1k table (js-framework-benchmark convention).
-        Create1k,
-        Swap,
-        Select,
-        Remove,
-        Clear,
-        // Append 1k → 2k.
-        Create1k,
-        Append1k,
-        Clear,
-    ]
+    const BLOCKS: [&[(BenchOp, bool)]; 4] = [
+        &[
+            (Create, true),
+            (UpdateText1, true),
+            (UpdateTextEvery2nd, true),
+            (UpdateColor1, true),
+            (UpdateColorEvery2nd, true),
+            (Swap1, true),
+            (SwapEvery2nd, true),
+            (Clear, true),
+        ],
+        &[
+            (Create, false),
+            (Append1, true),
+            (Append1k, true),
+            (Clear, false),
+        ],
+        &[
+            (Create, false),
+            (Insert1, true),
+            (InsertEvery2nd, true),
+            (Clear, false),
+        ],
+        &[
+            (Create, false),
+            (Remove1, true),
+            (RemoveEvery2nd, true),
+            (Clear, false),
+        ],
+    ];
+    let mut seq = Vec::new();
+    for n in SCALES {
+        for block in BLOCKS {
+            let mut rows = 0u32;
+            for &(op, record) in block {
+                seq.push(Step {
+                    op,
+                    n,
+                    record,
+                    rows,
+                });
+                rows = rows_after(op, rows, n);
+            }
+        }
+    }
+    seq
+}
+
+/// Table row count after `op` runs on `rows` rows at scale `n`. Must mirror the
+/// JS implementations in `ui/src/App.tsx` — it feeds the report's `rows`
+/// (precondition) column and the sequence's precondition bookkeeping.
+fn rows_after(op: BenchOp, rows: u32, n: u32) -> u32 {
+    use BenchOp::*;
+    match op {
+        Create => n,
+        Append1 | Insert1 => rows + 1,
+        Append1k => rows + APPEND_BATCH,
+        // One fresh row after every complete pair of existing rows.
+        InsertEvery2nd => rows + rows / 2,
+        Remove1 => rows.saturating_sub(1),
+        // Keeps the even indices: ceil(rows / 2).
+        RemoveEvery2nd => rows - rows / 2,
+        Clear => 0,
+        UpdateText1 | UpdateTextEvery2nd | UpdateColor1 | UpdateColorEvery2nd | Swap1
+        | SwapEvery2nd => rows,
+    }
 }
 
 fn drive_bench(
@@ -343,27 +454,31 @@ fn drive_bench(
                     None => (f64::NAN, f64::NAN),
                 };
                 let total_ms = now.saturating_duration_since(t0).as_secs_f64() * 1000.0;
-                let op = driver.seq[driver.step];
-                driver.samples.push(Sample {
-                    op,
-                    total_ms,
-                    js_ms: report.js_ms,
-                    flush_ms: report.flush_ms,
-                    pre_apply_ms,
-                    translate_ms: translate.as_secs_f64() * 1000.0,
-                    command_ms: timers.last_command.as_secs_f64() * 1000.0,
-                    layout_ms: timers.last_layout.as_secs_f64() * 1000.0,
-                    bevy_ms,
-                    // The flushed batch size for this op's commit, from core's
-                    // live op-flush instrumentation (React can't see it).
-                    ops_emitted: stats.last_ops,
-                });
+                let step = driver.seq[driver.step];
+                if step.record {
+                    driver.samples.push(Sample {
+                        op: step.op,
+                        n: step.n,
+                        rows: step.rows,
+                        total_ms,
+                        js_ms: report.js_ms,
+                        flush_ms: report.flush_ms,
+                        pre_apply_ms,
+                        translate_ms: translate.as_secs_f64() * 1000.0,
+                        command_ms: timers.last_command.as_secs_f64() * 1000.0,
+                        layout_ms: timers.last_layout.as_secs_f64() * 1000.0,
+                        bevy_ms,
+                        // The flushed batch size for this op's commit, from core's
+                        // live op-flush instrumentation (React can't see it).
+                        ops_emitted: stats.last_ops,
+                    });
+                }
                 driver.phase = Phase::Settle;
                 driver.settle_frames = 0;
             } else if driver.t0.is_some_and(|t| t.elapsed() > STEP_TIMEOUT) {
                 warn!(
                     "bench step {:?} timed out (landed={landed}, reported={})",
-                    driver.seq[driver.step],
+                    driver.seq[driver.step].op,
                     inbox.last.is_some()
                 );
                 driver.phase = Phase::Settle;
@@ -387,18 +502,29 @@ fn start_step(
     inbox: &mut BenchInbox,
     events: &ReactEvents,
 ) {
-    let op = driver.seq[driver.step];
+    let step = driver.seq[driver.step];
     // Announce each new iteration and each op as it runs.
     if driver.step == 0 {
         info!("── iteration {}/{} ──", driver.iter + 1, driver.iterations);
     }
-    info!("  [{}/{}] {}", driver.step + 1, driver.seq.len(), op.key());
+    info!(
+        "  [{}/{}] {}@{}{}",
+        driver.step + 1,
+        driver.seq.len(),
+        step.op.key(),
+        scale_label(step.n),
+        if step.record { "" } else { " (reset)" }
+    );
     driver.t0 = Some(Instant::now());
     driver.expected_applied = stats.applied_count;
     inbox.last = None;
     let seed = driver.seed;
     driver.seed = driver.seed.wrapping_add(1);
-    events.send(&BenchStep { op, seed });
+    events.send(&BenchStep {
+        op: step.op,
+        n: step.n,
+        seed,
+    });
     driver.phase = Phase::Await;
 }
 
@@ -432,6 +558,10 @@ struct Report {
 #[serde(rename_all = "camelCase")]
 struct OpReport {
     op: &'static str,
+    /// Scale label the samples belong to (`"1k"` / `"10k"`).
+    scale: String,
+    /// Table row count when the op ran (its precondition).
+    rows: u32,
     count: usize,
     ops_emitted: usize,
     total_ms: Stat,
@@ -455,15 +585,24 @@ struct Stat {
 }
 
 fn finalize(driver: &BenchDriver) {
-    let ops: Vec<OpReport> = ALL_OPS
+    // Grouped by scale, then by the fixed op order, so the report (and the JSON
+    // `ops` list) reads as one full op set per scale.
+    let ops: Vec<OpReport> = SCALES
         .iter()
-        .filter_map(|&op| {
-            let samples: Vec<&Sample> = driver.samples.iter().filter(|s| s.op == op).collect();
+        .flat_map(|&n| ALL_OPS.iter().map(move |&op| (op, n)))
+        .filter_map(|(op, n)| {
+            let samples: Vec<&Sample> = driver
+                .samples
+                .iter()
+                .filter(|s| s.op == op && s.n == n)
+                .collect();
             if samples.is_empty() {
                 return None;
             }
             Some(OpReport {
                 op: op.key(),
+                scale: scale_label(n),
+                rows: samples[0].rows,
                 count: samples.len(),
                 ops_emitted: samples[0].ops_emitted,
                 total_ms: Stat::of(samples.iter().map(|s| s.total_ms)),
@@ -516,36 +655,41 @@ fn render_markdown(report: &Report) -> String {
     let _ = writeln!(out, "Iterations: {}", report.iterations);
     let _ = writeln!(out);
 
-    // One row per op (test), one column per timing phase. Median (p50) only.
-    // Columns run left-to-right in execution order so the table reads as a
-    // timeline; the legend below spells out each value and how they nest.
-    let _ = writeln!(out, "## Median per op (p50, ms)");
-    let _ = writeln!(out);
-    let _ = writeln!(
-        out,
-        "| Op | Ops Emitted | Total | Pre-apply | JS | Flush | Translate | Command | Layout | Bevy |"
-    );
-    let _ = writeln!(
-        out,
-        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |"
-    );
-    for o in &report.ops {
+    // One section per scale; one row per op, one column per timing phase.
+    // Median (p50) only. Columns run left-to-right in execution order so the
+    // table reads as a timeline; the legend below spells out each value and how
+    // they nest.
+    for n in SCALES {
+        let label = scale_label(n);
+        let _ = writeln!(out, "## Median per op — {label} table (p50, ms)");
+        let _ = writeln!(out);
         let _ = writeln!(
             out,
-            "| {} | {} | {} | {} | {} | {} | {} | {} | {} | {} |",
-            o.op,
-            o.ops_emitted,
-            ms(o.total_ms.p50),
-            ms(o.pre_apply_ms.p50),
-            ms(o.js_ms.p50),
-            ms(o.flush_ms.p50),
-            ms(o.translate_ms.p50),
-            ms(o.command_ms.p50),
-            ms(o.layout_ms.p50),
-            ms(o.bevy_ms.p50),
+            "| Op | Rows | Ops Emitted | Total | Pre-apply | JS | Flush | Translate | Command | Layout | Bevy |"
         );
+        let _ = writeln!(
+            out,
+            "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |"
+        );
+        for o in report.ops.iter().filter(|o| o.scale == label) {
+            let _ = writeln!(
+                out,
+                "| {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} |",
+                o.op,
+                o.rows,
+                o.ops_emitted,
+                ms(o.total_ms.p50),
+                ms(o.pre_apply_ms.p50),
+                ms(o.js_ms.p50),
+                ms(o.flush_ms.p50),
+                ms(o.translate_ms.p50),
+                ms(o.command_ms.p50),
+                ms(o.layout_ms.p50),
+                ms(o.bevy_ms.p50),
+            );
+        }
+        let _ = writeln!(out);
     }
-    let _ = writeln!(out);
 
     // Legend: explain every column. All timings are median (p50) milliseconds.
     let _ = writeln!(out, "### Legend");
@@ -559,7 +703,11 @@ fn render_markdown(report: &Report) -> String {
     let _ = writeln!(out, "| --- | --- |");
     let _ = writeln!(
         out,
-        "| **Op** | The operation under test (create1k, swap, clear, …). |"
+        "| **Op** | The operation under test (create, swap1, removeEvery2nd, …). |"
+    );
+    let _ = writeln!(
+        out,
+        "| **Rows** | Table row count when the op ran (its precondition). |"
     );
     let _ = writeln!(
         out,
@@ -601,6 +749,14 @@ fn render_markdown(report: &Report) -> String {
     let _ = writeln!(
         out,
         "Nesting: `Total = Pre-apply (⊇ JS ⊇ Flush) + Translate + Bevy (≈ Command + Layout)`."
+    );
+    let _ = writeln!(out);
+    let _ = writeln!(
+        out,
+        "For the surgical (`*1`) ops, **JS**/**Flush** are sub-millisecond and the \
+         isolate's clock may only have 1 ms resolution (`Date.now()`), so those two \
+         columns can read as 0/1 ms noise — the Rust-side columns carry the signal. \
+         Bump `--iterations` for stable surgical p50s."
     );
     let _ = writeln!(out);
 

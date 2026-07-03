@@ -1,12 +1,12 @@
 //! Benchmark / stress-test runner for `bevy_react`.
 //!
 //! A minimal, pure-UI Bevy app (no 3D scene, no camera orbit) that hosts
-//! benchmark scenarios. The first scenario is **table-ops** — the standard
-//! table operation set (create 1k/10k rows, append 1k, update every 2nd row's
-//! text/background, swap, select, remove, clear) borrowed from the
-//! js-framework-benchmark, measured as
-//! a *library* benchmark: bevy-react's own per-operation timings (no react-dom
-//! comparison).
+//! benchmark scenarios. The first scenario is **table-ops** — a table operation
+//! set derived from the js-framework-benchmark, where every op comes in a
+//! surgical (`*1`) and a mass (`*Every2nd`) variant (create, append, insert,
+//! update text/color, swap, remove, clear) and the whole set runs at two table
+//! scales (1k and 10k rows). Measured as a *library* benchmark: bevy-react's
+//! own per-operation timings (no react-dom comparison).
 //!
 //! Two entry modes:
 //!
@@ -28,6 +28,7 @@ use std::path::PathBuf;
 
 use bevy::prelude::*;
 use bevy::ui::IsDefaultUiCamera;
+use bevy::window::PresentMode;
 use bevy_react::ReactUiPlugin;
 
 use table_ops::TableOpsPlugin;
@@ -74,13 +75,16 @@ fn main() {
             );
         }
 
-        let mut app = build_app(/* hot_reload */ false);
+        // No vsync while capturing: with the default `Fifo` the trigger→apply
+        // round trip crosses 1–2 vsync'd frame boundaries, quantizing `totalMs`
+        // to ~16.6 ms multiples and drowning out sub-frame ops.
+        let mut app = build_app(/* hot_reload */ false, PresentMode::AutoNoVsync);
         table_ops::add_capture_mode(&mut app, table_ops::CaptureConfig { out, iterations });
         app.run();
         return;
     }
 
-    build_app(/* hot_reload */ true).run();
+    build_app(/* hot_reload */ true, PresentMode::default()).run();
 }
 
 /// Pull the value following `--flag` from the arg list, if present.
@@ -93,7 +97,7 @@ fn flag_value<'a>(args: &'a [String], flag: &str) -> Option<&'a str> {
 
 /// Build the stress `App`: DefaultPlugins + the React UI layer + a 2D UI camera +
 /// the benchmark plugin. Pure UI — no 3D scene or orbit camera.
-fn build_app(hot_reload: bool) -> App {
+fn build_app(hot_reload: bool, present_mode: PresentMode) -> App {
     // CARGO_MANIFEST_DIR is the `bevy-react` crate (crates/core); the example and
     // its bundle live at the repo root, two levels up.
     let bundle =
@@ -113,6 +117,7 @@ fn build_app(hot_reload: bool) -> App {
             .set(WindowPlugin {
                 primary_window: Some(Window {
                     title: "bevy-react · stress".to_string(),
+                    present_mode,
                     ..default()
                 }),
                 ..default()

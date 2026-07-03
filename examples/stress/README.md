@@ -1,10 +1,47 @@
 # stress — bevy-react benchmarks
 
 A minimal, pure-UI Bevy app for benchmarking/stress-testing `bevy-react`. The
-first scenario is **table-ops** (the standard table operation set borrowed from
-the js-framework-benchmark: create 1k/10k, append 1k, update every 10th, swap,
-select, remove, clear), measured as a _library_ benchmark — bevy-react's own
+first scenario is **table-ops** (a table operation set derived from the
+js-framework-benchmark), measured as a _library_ benchmark — bevy-react's own
 per-operation timings, no cross-framework comparison.
+
+## The operation set
+
+Every operation comes in a **surgical** (`*1`, one row) and a **mass**
+(`*Every2nd`, half the table) variant, and the whole set runs at **two table
+scales** — 1k and 10k rows. That 2×2 (surgical/mass × small/large) is the
+point: comparing a surgical op across scales exposes costs that are secretly
+O(table) rather than O(changed), and comparing mass ops across scales checks
+throughput stays linear. `insertEvery2nd` doubles as a quadratic-behavior
+detector: if applying interleaved mid-list inserts costs O(table) each (e.g. a
+per-insert `Children` splice), the 1k→10k ratio reads ~100× instead of ~10×.
+
+| Op                    | Semantics (table of N rows)                          | Wire path exercised            |
+| --------------------- | ---------------------------------------------------- | ------------------------------ |
+| `create`              | replace the table with N fresh rows                  | mass spawn                     |
+| `append1`             | append 1 fresh row at the end                        | single insert-at-end           |
+| `append1k`            | append 1,000 fresh rows (fixed batch at both scales) | mass insert-at-end             |
+| `insert1`             | insert 1 fresh row at the middle                     | single mid-list `insertBefore` |
+| `insertEvery2nd`      | a fresh row after every 2nd existing row (→ ~1.5N)   | mass interleaved inserts       |
+| `updateText1`         | append `" !!!"` to one middle row's label            | single text update → relayout  |
+| `updateTextEvery2nd`  | same for every 2nd row                               | mass text updates → relayout   |
+| `updateColor1`        | toggle one middle row's `backgroundColor`            | single paint-only style delta  |
+| `updateColorEvery2nd` | same for every 2nd row                               | mass paint-only style deltas   |
+| `swap1`               | swap rows 1 and N−2                                  | 2 keyed moves                  |
+| `swapEvery2nd`        | swap each adjacent pair (0↔1, 2↔3, …)                | mass keyed moves               |
+| `remove1`             | remove one middle row                                | single despawn                 |
+| `removeEvery2nd`      | remove every 2nd row (→ N/2)                         | mass despawns                  |
+| `clear`               | empty the table                                      | full teardown                  |
+
+The rows are keyed and memoized, so swaps emit hierarchy **move** ops (not
+per-row updates), text updates hit the relayout path, and color updates hit the
+paint-only delta path.
+
+Capture runs the set in blocks so each measured op has a consistent, reported
+precondition (the `rows` column): the count-stable in-place ops share one
+measured `create` and end with a measured `clear` from a full table; the
+structural groups (append/insert/remove) each get an unmeasured create/clear
+reset around them.
 
 ## Use
 
@@ -20,7 +57,9 @@ cargo run -p bevy-react --example stress
 
 **Capture** (automated) — drives the operation set one op at a time, records
 per-op timing (p50/p99/mean over N iterations) to JSON, then exits. Needs an X11
-display present.
+display present. Capture disables vsync (`PresentMode::AutoNoVsync`) so `totalMs`
+isn't quantized to ~16.6 ms frame boundaries; interactive mode keeps the default
+present mode.
 
 > **Always run capture in release + prod.** A debug Rust build and a dev JS
 > bundle run ~10x slower, so the numbers are meaningless. Capture warns if it
@@ -48,6 +87,12 @@ end-to-end number) plus a per-leg breakdown (each a `{p50,p99,mean,min,max}`):
 
 `opsEmitted` is the flushed batch size. The `js` legs and the Bevy legs run on
 different threads, so this is a breakdown, not a strict sum of `totalMs`.
+
+The Markdown report renders one p50 table per scale (1k, 10k). For the
+surgical (`*1`) ops, `jsMs`/`flushMs` are sub-millisecond while the isolate's
+clock may only have 1 ms resolution (`Date.now()`), so those columns can read
+as 0/1 ms noise — the Rust-side legs carry the signal there. Bump
+`--iterations` for stable surgical p50s.
 
 ## Regenerate bindings
 

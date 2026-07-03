@@ -9,8 +9,33 @@ import {
   removeEventListener as rawRemoveEventListener,
 } from "bevy-react";
 
-export type BenchOp = "Create1" |"Create1k" | "Create10k" | "Append1" | "Append1k" | "UpdateEvery2ndText" | "UpdateEvery2ndBackgroundColor" | "Swap" | "Select" | "Remove" | "Clear";
-export type BenchStep = { op: BenchOp, seed: number };
+export type BenchOp = "Create" | "Append1" | "Append1k" | "Insert1" | "InsertEvery2nd" | "UpdateText1" | "UpdateTextEvery2nd" | "UpdateColor1" | "UpdateColorEvery2nd" | "Swap1" | "SwapEvery2nd" | "Remove1" | "RemoveEvery2nd" | "Clear";
+export type BenchStep = { op: BenchOp, n: number, seed: number, };
+export type KeyDown = KeyboardEventData;
+export type KeyUp = KeyboardEventData;
+export type KeyboardEventData = { 
+/**
+ * Layout-aware logical key: the typed character (`"a"`, `"A"`) or a named
+ * key (`"Enter"`, `"ArrowLeft"`, `"Escape"`).
+ */
+key: string, 
+/**
+ * Layout-independent physical key, W3C `code` style (`"KeyA"`, `"Enter"`).
+ */
+code: string, 
+/**
+ * The text produced by the key, if any (respects modifiers/IME). `null` for
+ * keys that don't produce text (e.g. arrows, modifiers).
+ */
+text: string | null, 
+/**
+ * Whether this is an OS auto-repeat while the key is held.
+ */
+repeat: boolean, ctrlKey: boolean, shiftKey: boolean, altKey: boolean, 
+/**
+ * The "Meta"/"Super" key (Windows/Command).
+ */
+metaKey: boolean, };
 export type StepDone = { js_ms: number, flush_ms: number, };
 
 /** Every `emit` name and the payload type it carries. */
@@ -25,6 +50,8 @@ export interface ReactRequests {
 /** Every Bevy → React event name and the payload it carries. */
 export interface ReactEvents {
   "bench.runStep": BenchStep;
+  keyDown: KeyDown;
+  keyUp: KeyUp;
 }
 
 /** Send a typed app message to the Bevy side. */
