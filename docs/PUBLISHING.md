@@ -1,6 +1,4 @@
-# Publishing
-
-## Release steps
+# Release steps
 
 ### 1. Bump the version
 
@@ -56,9 +54,15 @@ cargo publish --workspace
 npm publish -w bevy-react
 ```
 
-### 6. Tag the release
+### 8. Tag the release
 
 ```sh
 git tag v<version>
 git push origin v<version>
+```
+
+### 9. Deploy web demo to Github Pages
+
+```sh
+npm run deploy:web -w demos-app
 ```

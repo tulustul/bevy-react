@@ -1,6 +1,15 @@
-# bevy-react
+<p align="center">
+  <img src="./examples/assets/bevy-react-logo.png" alt="bevy-react logo" width="220" />
+</p>
 
-[![docs.rs](https://img.shields.io/docsrs/bevy-react)](https://docs.rs/bevy-react)
+<h1 align="center">bevy-react</h1>
+
+<p align="center">
+  <a href="https://github.com/tulustul/bevy-react/actions/workflows/ci.yml"><img src="https://github.com/tulustul/bevy-react/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
+  <a href="https://crates.io/crates/bevy-react"><img src="https://img.shields.io/crates/v/bevy-react" alt="crates.io" /></a>
+  <a href="https://www.npmjs.com/package/bevy-react"><img src="https://img.shields.io/npm/v/bevy-react" alt="npm" /></a>
+  <a href="https://docs.rs/bevy-react"><img src="https://img.shields.io/docsrs/bevy-react" alt="docs.rs" /></a>
+</p>
 
 Build [`bevy_ui`](https://docs.rs/bevy/latest/bevy/ui/index.html) interfaces with
 **React**. You write components in React/TSX and they render to native Bevy UI
