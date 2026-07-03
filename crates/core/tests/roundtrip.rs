@@ -3,7 +3,7 @@
 //! render plus a click round trip.
 //!
 //! Requires the example bundle to be built first:
-//!   npm install && npm run build -w demos-app
+//!   npm install && npm run build -w demos
 //! If the bundle is missing the test skips (passes) with a notice.
 
 use std::collections::{HashMap, HashSet};
@@ -117,7 +117,7 @@ fn bridge_round_trip() {
     let bundle = example_bundle();
     if !bundle.exists() {
         eprintln!(
-            "skipping bridge_round_trip: bundle not built at {}\n  run: npm install && npm run build -w demos-app",
+            "skipping bridge_round_trip: bundle not built at {}\n  run: npm install && npm run build -w demos",
             bundle.display()
         );
         return;
@@ -270,7 +270,7 @@ fn animation_callback_round_trip() {
     let bundle = example_bundle();
     if !bundle.exists() {
         eprintln!(
-            "skipping animation_callback_round_trip: bundle not built at {}\n  run: npm install && npm run build -w demos-app",
+            "skipping animation_callback_round_trip: bundle not built at {}\n  run: npm install && npm run build -w demos",
             bundle.display()
         );
         return;
@@ -405,7 +405,7 @@ fn canvas_resize_replay_round_trip() {
     let bundle = example_bundle();
     if !bundle.exists() {
         eprintln!(
-            "skipping canvas_resize_replay_round_trip: bundle not built at {}\n  run: npm install && npm run build -w demos-app",
+            "skipping canvas_resize_replay_round_trip: bundle not built at {}\n  run: npm install && npm run build -w demos",
             bundle.display()
         );
         return;

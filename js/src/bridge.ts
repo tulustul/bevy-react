@@ -350,14 +350,16 @@ export function request(name: string, value: unknown): Promise<unknown> {
 const listeners = new Map<string, Set<(value: unknown) => void>>();
 
 // Subscribe to a named Bevy event (Bevy sends it via the `ReactEvents` param).
+// Returns an unsubscribe function, like the generated `bevy.on`.
 // Untyped low-level form — prefer the generated `bevy.on`.
 export function addEventListener(
   name: string,
   cb: (value: unknown) => void,
-): void {
+): () => void {
   let set = listeners.get(name);
   if (!set) listeners.set(name, (set = new Set()));
   set.add(cb);
+  return () => removeEventListener(name, cb);
 }
 
 export function removeEventListener(

@@ -4,7 +4,7 @@
 //! `cargo test` instead of only in the live app.
 //!
 //! Requires the example bundle (prefer the dev build for readable errors):
-//!   npm run build -w demos-app
+//!   npm run build -w demos
 //! Run with `--nocapture` to see the real `[js]` error + bridge instrumentation:
 //!   cargo test --test demo_switch -- --nocapture
 
@@ -128,7 +128,7 @@ fn demo_switch_anchored_survives() {
     let bundle = example_bundle();
     if !bundle.exists() {
         eprintln!(
-            "skipping demo_switch_anchored_survives: bundle not built at {}\n  run: npm run build -w demos-app",
+            "skipping demo_switch_anchored_survives: bundle not built at {}\n  run: npm run build -w demos",
             bundle.display()
         );
         return;

@@ -88,13 +88,13 @@ jobs:
       # Build the JS bundle so the headless `roundtrip` / `demo_switch` tests run
       # for real (they skip-pass when the bundle is missing).
       - name: Build JS bundle
-        run: npm run build -w demos-app
+        run: npm run build -w demos
 
       - name: Test
         run: mold -run cargo test
 
       - name: Regenerate TS bindings
-        run: mold -run npm run bevy:generate -w demos-app
+        run: mold -run npm run bevy:generate -w demos
 
       - name: Verify bindings are up to date
         run: git diff --exit-code -- examples/demos/ui/src/bevy.ts

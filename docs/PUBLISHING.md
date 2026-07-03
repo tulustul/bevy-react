@@ -21,17 +21,17 @@ npm version <version> -w bevy-react --no-git-tag-version
 ### 3. Verify the native build works
 
 ```sh
-npm run build:prod -w demos-app
+npm run build:prod -w demos
 cargo run --release --example demos
 
-npm run build:prod -w minimal-app
+npm run build:prod -w minimal
 cargo run --release --example minimal
 ```
 
 ### 4. Verify the web build works
 
 ```sh
-npm run build:web:prod -w demos-app
+npm run build:web:prod -w demos
 npm run build:web:prod -w minimal
 ```
 
@@ -64,5 +64,5 @@ git push origin v<version>
 ### 9. Deploy web demo to Github Pages
 
 ```sh
-npm run deploy:web -w demos-app
+npm run deploy:web -w demos
 ```

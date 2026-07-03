@@ -12,10 +12,10 @@
 //!
 //! Run with:
 //!
-//!   npm install && npm run build -w demos-app   # build the React bundle
+//!   npm install && npm run build -w demos   # build the React bundle
 //!   cargo run -p bevy-react --example demos
 //!
-//! For hot reload, run `npm run watch -w demos-app` in another terminal and edit
+//! For hot reload, run `npm run watch -w demos` in another terminal and edit
 //! the files under `ui/src/`.
 
 mod camera;

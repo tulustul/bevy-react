@@ -16,9 +16,9 @@ Build / run the example (this is the main way to see it working):
 
 ```sh
 npm install                          # once
-npm run build -w demos-app           # build the React bundles — REQUIRED before running
+npm run build -w demos           # build the React bundles — REQUIRED before running
 cargo run -p bevy-react --example demos   # run the Bevy app (needs a GPU/window)
-npm run watch -w demos-app           # rebuild app bundle on change → React Fast Refresh
+npm run watch -w demos           # rebuild app bundle on change → React Fast Refresh
 ```
 
 The build (`examples/demos/ui/build.mjs`, via `bevy-react/build-lib`) emits **two**
@@ -36,7 +36,7 @@ cargo test -p bevy-react --lib ts_codegen::tests::exports_typescript   # a singl
 cargo test -p bevy-react --test roundtrip   # headless end-to-end bridge test (real JS runtime)
 ```
 
-The `roundtrip` test drives the JS thread directly and asserts an initial render + click round trip. **It requires the bundle to be built first** (`npm run build -w demos-app`); if the bundle is missing it skips (passes) with a notice.
+The `roundtrip` test drives the JS thread directly and asserts an initial render + click round trip. **It requires the bundle to be built first** (`npm run build -w demos`); if the bundle is missing it skips (passes) with a notice.
 
 Lint / format / typecheck (run from repo root):
 
@@ -88,7 +88,7 @@ Three app-level channels, all **typed in Rust and mirrored to TypeScript by code
 
 The Rust binding structs are the **single source of truth**. `App::export_react_typescript(path)` (`crates/core/src/message.rs::render_typescript`) walks all three registries in one pass and writes a self-contained `bevy.ts`: per-payload type declarations, the `ReactMessages`/`ReactRequests`/`ReactEvents` maps, typed `emit`/`request`/`on` wrappers, and a structured **`bevy` proxy** whose nested methods come from dotted request names (`"board.get"` → `bevy.board.get()`; a void/unit request payload → a zero-arg method).
 
-- The example exposes this via `cargo run -p bevy-react --example demos -- --export-bindings <path>` (a flag handled in `examples/demos/main.rs` that builds a bare `App`, runs the shared `register_react_bindings` aggregating every demo's bindings, exports, and returns without `app.run()`). The npm convenience is `npm run bevy:generate -w demos-app`.
+- The example exposes this via `cargo run -p bevy-react --example demos -- --export-bindings <path>` (a flag handled in `examples/demos/main.rs` that builds a bare `App`, runs the shared `register_react_bindings` aggregating every demo's bindings, exports, and returns without `app.run()`). The npm convenience is `npm run bevy:generate -w demos`.
 - **After changing any `#[react_message]`/`#[react_request]`/`#[react_event]` type, regenerate** and commit `bevy.ts`. Output is deterministic (sorted); the CI guarantee is regenerate-then-`git diff --exit-code`. `bevy.ts` is `.prettierignore`d so prettier never fights the generator.
 - App code imports the typed surface from `./bevy` (e.g. `import { bevy, emit } from "./bevy"`), **not** the untyped functions from `"bevy-react"`.
 
@@ -113,7 +113,7 @@ The Rust binding structs are the **single source of truth**. `App::export_react_
 To see a demo rendered — to verify a visual change or refresh a screenshot — use the example's built-in `--shoot` mode, **not** OS screen capture (`import`/`grim`/`scrot`/`xdotool`). Screen-grabbing grabs the wrong window on a shared/occluded desktop, and an occluded window's swapchain reads back as 1×1.
 
 ```sh
-npm run build -w demos-app   # build the bundle first (shoot mode disables hot reload)
+npm run build -w demos   # build the bundle first (shoot mode disables hot reload)
 cargo run -p bevy-react --example demos -- --shoot "<portal>" out.png [settle_secs]
 ```
 

@@ -4,7 +4,7 @@ A gallery showing `bevy-react` driving `bevy_ui` from a React app over a live 3D
 scene. It runs on two targets from one codebase: **native** (embedded V8) and **web**
 (React in the browser's engine, Bevy as wasm).
 
-The app is two halves: the **React UI** (`demos-app` npm workspace → `ui/dist/*.js`)
+The app is two halves: the **React UI** (`demos` npm workspace → `ui/dist/*.js`)
 and the **Bevy app** (the `demos` example). Run everything from the repo root.
 
 ```sh
@@ -15,14 +15,14 @@ cargo install wasm-bindgen-cli                # once, for web (need not be on PA
 
 ## Running
 
-| Mode             | JS                                      | Rust                                  |
-| ---------------- | --------------------------------------- | ------------------------------------- |
-| Native · dev     | `npm run build -w demos-app`            | `cargo run --example demos`           |
-| Native · release | `npm run build:prod -w demos-app`       | `cargo run --example demos --release` |
-| Native · watch   | `npm run watch -w demos-app`            | `cargo run --example demos`           |
-| Web · dev        | `npm run build:web -w demos-app` ¹      | N/A                                   |
-| Web · release    | `npm run build:web:prod -w demos-app` ¹ | N/A                                   |
-| Web · deploy     | `npm run deploy:web -w demos-app`       | N/A                                   |
+| Mode             | JS                                  | Rust                                  |
+| ---------------- | ----------------------------------- | ------------------------------------- |
+| Native · dev     | `npm run build -w demos`            | `cargo run --example demos`           |
+| Native · release | `npm run build:prod -w demos`       | `cargo run --example demos --release` |
+| Native · watch   | `npm run watch -w demos`            | `cargo run --example demos`           |
+| Web · dev        | `npm run build:web -w demos` ¹      | N/A                                   |
+| Web · release    | `npm run build:web:prod -w demos` ¹ | N/A                                   |
+| Web · deploy     | `npm run deploy:web -w demos`       | N/A                                   |
 
 ¹ **`build:web`** does it all in one command: bundles the React app (esbuild), compiles
 the Bevy app to wasm (`wasm-bindgen`), writes a static site to `ui/dist/`, and serves it
@@ -32,6 +32,6 @@ disk-heavy — keep tens of GB free (`cargo clean --target wasm32-unknown-unknow
 ## Other
 
 ```sh
-npm run bevy:generate -w demos-app            # regen ui/src/bevy.ts after #[react_*] changes
+npm run bevy:generate -w demos            # regen ui/src/bevy.ts after #[react_*] changes
 cargo run --example demos -- --shoot "<portal>" out.png   # headless screenshot (native)
 ```
