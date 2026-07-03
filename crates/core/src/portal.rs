@@ -1,9 +1,8 @@
-#![cfg_attr(docsrs, feature(doc_auto_cfg))]
 //! The `portal` host element: a UI rectangle that displays an **offscreen render
 //! target** — the live (or snapshot) output of a Bevy camera drawing into a GPU
 //! texture.
 //!
-//! It is the GPU sibling of `bevy-react-canvas`: both are a styled [`ImageNode`]
+//! It is the GPU sibling of [`crate::canvas`]: both are a styled [`ImageNode`]
 //! whose backing [`Image`] this crate manages. Where the canvas CPU-rasterizes a
 //! display list, a portal's image is a **render target** a secondary camera draws
 //! into (render-to-texture), so a portal can embed a minimap, a picture-in-picture,
@@ -215,7 +214,7 @@ pub struct RPortal(pub String);
 #[derive(Resource)]
 pub struct PortalPlaceholder(pub Handle<Image>);
 
-/// A 1×1 transparent image, mirroring `bevy_react_canvas::blank_canvas_image`.
+/// A 1×1 transparent image, mirroring [`crate::canvas::blank_canvas_image`].
 pub fn blank_portal_image() -> Image {
     Image::new_fill(
         Extent3d {

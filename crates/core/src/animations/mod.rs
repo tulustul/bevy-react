@@ -1,4 +1,3 @@
-#![cfg_attr(docsrs, feature(doc_auto_cfg))]
 //! `ReactUiAnimationsPlugin` — a Reanimated-style animation engine for
 //! `bevy-react`.
 //!

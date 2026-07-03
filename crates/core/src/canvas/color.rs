@@ -1,6 +1,6 @@
 //! CSS color-string parsing, shared by the canvas rasterizer (`parse_rgba8`) and
-//! `core`'s `ui_map::parse_color`. It lives in this leaf crate because `core`
-//! depends on `bevy-react-canvas` (never the reverse), so this is the lowest
+//! `core`'s `ui_map::parse_color`. It lives in this module because `ui_map`
+//! depends on `crate::canvas` (never the reverse), so this is the lowest
 //! point both color paths can share.
 //!
 //! [`parse_css_color`] returns a straight-alpha [`Srgba`], or `None` when the

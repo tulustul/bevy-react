@@ -4,7 +4,7 @@
 
 use bevy::prelude::*;
 use bevy_react::ReactUiPlugin;
-use bevy_react::bevy_react_animations::SharedValues;
+use bevy_react::animations::SharedValues;
 
 /// Minimal app + vendor bundles so `ReactUiPlugin::build` (which panics on a
 /// missing bundle) is satisfied. The plugin loads `vendor.js` beside the app

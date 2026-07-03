@@ -20,7 +20,7 @@ use tokio::sync::Mutex;
 use tokio::sync::Notify;
 use tokio::sync::mpsc::UnboundedReceiver;
 
-use bevy_react_animations::AnimationCommand;
+use crate::animations::AnimationCommand;
 
 use crate::message::ReactMessage;
 use crate::protocol::{Op, Outbound};

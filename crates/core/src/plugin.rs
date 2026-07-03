@@ -3,12 +3,12 @@
 
 use std::path::PathBuf;
 
+use crate::animations::{
+    AnimationCommand, AnimationSet, AnimationSettled, ReactUiAnimationsPlugin,
+};
 use bevy::asset::embedded_asset;
 use bevy::prelude::*;
 use bevy::window::CustomCursorImage;
-use bevy_react_animations::{
-    AnimationCommand, AnimationSet, AnimationSettled, ReactUiAnimationsPlugin,
-};
 
 use crate::filter::{FilterMaterial, FilterMaterialCache, init_filter_assets};
 
@@ -217,12 +217,12 @@ impl Plugin for ReactUiPlugin {
         .init_resource::<crate::cursor::CustomCursors>()
         // The offscreen render-target ("portal") registry and its shared blank
         // placeholder texture, created before the first portal can mount.
-        .init_resource::<bevy_react_portal::RenderTargets>()
-        .add_systems(Startup, bevy_react_portal::init_portal_placeholder)
+        .init_resource::<crate::portal::RenderTargets>()
+        .add_systems(Startup, crate::portal::init_portal_placeholder)
         // The `<surface>` registry (UI subtrees rendered into offscreen textures)
         // and its single virtual pointer for in-world clicks.
-        .init_resource::<bevy_react_surface::Surfaces>()
-        .add_systems(Startup, bevy_react_surface::init_surface_pointer)
+        .init_resource::<crate::surface::Surfaces>()
+        .add_systems(Startup, crate::surface::init_surface_pointer)
         .add_systems(Startup, setup)
         .add_systems(
             PreUpdate,
@@ -233,7 +233,7 @@ impl Plugin for ReactUiPlugin {
         // hit-tested with this frame's cursor.
         .add_systems(
             PreUpdate,
-            bevy_react_surface::drive_surface_pointer
+            crate::surface::drive_surface_pointer
                 .before(bevy::picking::PickingSystems::ProcessInput),
         )
         .add_systems(
@@ -296,20 +296,20 @@ impl Plugin for ReactUiPlugin {
                 // (freshly-stamped `NodeCursor`s visible), and this sub-tuple keeps
                 // the outer tuple under Bevy's arity limit.
                 (
-                    bevy_react_canvas::update_canvas_surfaces.after(apply_js_ops),
+                    crate::canvas::update_canvas_surfaces.after(apply_js_ops),
                     collect_canvas_resize_events.after(apply_js_ops),
                     crate::cursor::drive_cursor_icon.after(apply_js_ops),
                 ),
                 // Bind `<portal>` nodes to their render-target textures after the
                 // op drain (so a freshly-spawned portal binds the same frame), then
                 // drive resolution + the snapshot camera lifecycle.
-                bevy_react_portal::bind_portals.after(apply_js_ops),
-                bevy_react_portal::drive_render_targets.after(bevy_react_portal::bind_portals),
+                crate::portal::bind_portals.after(apply_js_ops),
+                crate::portal::drive_render_targets.after(crate::portal::bind_portals),
                 // Bind `<surface>` roots to their offscreen UI cameras after the op
                 // drain (so a freshly-mounted surface binds the same frame), then
                 // drive the snapshot camera lifecycle.
-                bevy_react_surface::bind_surfaces.after(apply_js_ops),
-                bevy_react_surface::drive_surfaces.after(bevy_react_surface::bind_surfaces),
+                crate::surface::bind_surfaces.after(apply_js_ops),
+                crate::surface::drive_surfaces.after(crate::surface::bind_surfaces),
                 // Surface interaction: turn the virtual pointer's picking events on
                 // the offscreen subtree into `onClick`/`onPointer*` + hover/press
                 // styling. The picking events are produced in `PreUpdate`, so these

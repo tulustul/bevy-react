@@ -48,20 +48,24 @@ mod ui_map;
 pub mod js_thread;
 pub mod protocol;
 
-// The animation engine and the canvas host element each live in their own crate
-// (this crate depends on both). Re-exported so consumers can reach them directly.
+// The animation engine and the canvas/portal/surface host elements. Public
+// modules so consumers can reach their full APIs; the most-used items are also
+// re-exported at the crate root below.
+pub mod animations;
+pub mod canvas;
+pub mod portal;
+pub mod surface;
+
 pub use anchor::{Anchor, AnchorScaling, Anchored};
-pub use bevy_react_animations::{self, ReactUiAnimationsPlugin};
-pub use bevy_react_canvas::{self, CanvasSurface};
+pub use animations::ReactUiAnimationsPlugin;
 pub use bevy_react_macros::{react_event, react_message, react_request};
-pub use bevy_react_portal::{
-    self, PortalCamera, RenderMode, RenderTarget, RenderTargetSpec, RenderTargets, Resolution,
-};
-pub use bevy_react_surface::{
-    self, SurfacePointer, SurfaceSpec, SurfaceVirtualPointer, Surfaces, UvChannel,
-};
+pub use canvas::CanvasSurface;
 pub use event::{ReactEvent, ReactEvents};
 pub use message::{ReactAppExt, ReactMessage, ReactPayload};
 pub use plugin::{Fonts, PointerCapture, PointerCaptureSet, ReactUiPlugin};
+pub use portal::{
+    PortalCamera, RenderMode, RenderTarget, RenderTargetSpec, RenderTargets, Resolution,
+};
 pub use reconcile::OpApplyStats;
 pub use request::{RawRequest, ReactRequest, Request, RequestEvent, Responder};
+pub use surface::{SurfacePointer, SurfaceSpec, SurfaceVirtualPointer, Surfaces, UvChannel};

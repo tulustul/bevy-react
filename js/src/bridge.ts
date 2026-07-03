@@ -25,7 +25,7 @@ declare const Deno: { core: { ops: BevyHost } };
 const ops: BevyHost =
   (globalThis as { __bevyHost?: BevyHost }).__bevyHost ?? Deno.core.ops;
 
-// Mirrors `bevy_react_animations::protocol::AnimationCommand` (tag = "kind").
+// Mirrors `bevy_react::animations::protocol::AnimationCommand` (tag = "kind").
 // `token` correlates a completion callback: Bevy reports the driver's settlement
 // back with it (see `registerAnimationCallback`); omitted → nothing is reported.
 export type AnimationCommand =

@@ -5,6 +5,7 @@
 //! (parsed once at the serde boundary — see [`crate::protocol`]), so applying
 //! them here is a plain field copy.
 
+use crate::animations::build_ui_transform;
 use bevy::picking::Pickable;
 use bevy::platform::collections::HashMap;
 use bevy::prelude::*;
@@ -12,7 +13,6 @@ use bevy::sprite::{BorderRect, SliceScaleMode, TextureSlicer};
 use bevy::text::{FontSize as BevyFontSize, LetterSpacing, LineHeight};
 use bevy::ui::FocusPolicy;
 use bevy::ui::widget::NodeImageMode;
-use bevy_react_animations::build_ui_transform;
 
 use crate::cursor::NodeCursor;
 use crate::plugin::Fonts;
@@ -25,10 +25,10 @@ use crate::protocol::{
 
 /// Parse a CSS color string into a `Color`: hex, named colors, `transparent`, or
 /// `rgb()/hsl()/hwb()/oklab()/oklch()` functional notation (see
-/// [`bevy_react_canvas::parse_css_color`]). On an unrecognized value it `warn!`s
+/// [`crate::canvas::parse_css_color`]). On an unrecognized value it `warn!`s
 /// and falls back to a loud magenta so the typo is visible rather than silent.
 pub fn parse_color(input: &str) -> Color {
-    match bevy_react_canvas::parse_css_color(input) {
+    match crate::canvas::parse_css_color(input) {
         Some(c) => Color::from(c),
         None => {
             warn!("unrecognized color {input:?}; using magenta debug fallback");

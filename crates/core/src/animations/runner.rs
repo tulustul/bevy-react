@@ -6,7 +6,7 @@
 //! engine, which holds a `Runner` per channel rather than re-implementing
 //! easing/spring integration.
 
-use crate::protocol::{Driver, Easing};
+use super::protocol::{Driver, Easing};
 
 const SPRING_REST_DELTA: f32 = 0.01;
 const SPRING_REST_SPEED: f32 = 0.01;

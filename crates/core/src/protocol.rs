@@ -182,11 +182,11 @@ pub struct Props {
     pub on_wheel: bool,
 
     /// Per-property animation bindings for an `Animated.node` (Reanimated-style).
-    /// Present → the main reconciler stamps a `bevy_react_animations::AnimatedNode`
+    /// Present → the main reconciler stamps a `crate::animations::AnimatedNode`
     /// on the entity so the animations plugin drives the listed props each frame.
     /// Bevy-free, pure-serde, like the rest of the protocol.
     #[serde(default)]
-    pub animated: Option<bevy_react_animations::AnimatedBindings>,
+    pub animated: Option<crate::animations::AnimatedBindings>,
     /// World-anchor binding for an `Anchored.node`: the Bevy entity to follow and
     /// an optional offset. Present → the reconciler stamps a [`crate::anchor::Anchored`]
     /// so the per-frame positioning system tracks it. Pure-serde, Bevy-free.
@@ -243,7 +243,7 @@ pub struct Props {
 
     // --- `portal` element attribute ---
     /// The render-target name a `portal` element displays. The reconciler stamps
-    /// a `bevy_react_portal::RPortal` carrying it; the binding system points the
+    /// a `crate::portal::RPortal` carrying it; the binding system points the
     /// node's `ImageNode` at the texture the app registered under this name (or a
     /// transparent placeholder until it appears). Pure-serde, Bevy-free.
     #[serde(default)]
@@ -289,10 +289,10 @@ pub struct Props {
     pub on_blur: bool,
 }
 
-/// The `canvas` display-list command type. It lives in the `bevy-react-canvas`
-/// crate (which owns the host element and its rasterizer), and is re-exported here
+/// The `canvas` display-list command type. It lives in the [`crate::canvas`]
+/// module (which owns the host element and its rasterizer), and is re-exported here
 /// so it stays reachable as `protocol::DrawCmd` and so [`Props::draw`] can name it.
-pub use bevy_react_canvas::DrawCmd;
+pub use crate::canvas::DrawCmd;
 
 /// A CSS-like style object mapped onto `bevy_ui::Node` and its sibling visual
 /// components. Every field is optional; unset fields keep Bevy's defaults.
@@ -2366,7 +2366,7 @@ pub enum Outbound {
     /// completion, `false` on interruption. `token` correlates the JS completion
     /// callback registered when the driver was assigned.
     AnimationFinished {
-        id: bevy_react_animations::SharedId,
+        id: crate::animations::SharedId,
         token: u64,
         finished: bool,
     },

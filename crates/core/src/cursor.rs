@@ -23,13 +23,13 @@
 //! arrow. Nodes without a `NodeCursor` are transparent to both scans, so a child
 //! inherits its nearest cursor-bearing ancestor (CSS-like).
 
+use crate::surface::SurfaceVirtualPointer;
 use bevy::picking::hover::HoverMap;
 use bevy::picking::pointer::PointerId;
 use bevy::platform::collections::HashMap;
 use bevy::prelude::*;
 use bevy::ui::{ComputedNode, UiGlobalTransform, UiStack};
 use bevy::window::{CursorIcon, CustomCursor, CustomCursorImage, PrimaryWindow, SystemCursorIcon};
-use bevy_react_surface::SurfaceVirtualPointer;
 
 /// The cursor a node requests while the pointer is over it — the raw `cursor` style
 /// name (a system keyword or a custom-cursor name), resolved at drive time by

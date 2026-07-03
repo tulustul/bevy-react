@@ -17,7 +17,7 @@ use js_sys::{Function, Object, Promise, Reflect};
 use serde::Serialize;
 use wasm_bindgen::prelude::*;
 
-use bevy_react_animations::AnimationCommand;
+use crate::animations::AnimationCommand;
 
 use crate::bridge::OutboundSender;
 use crate::message::ReactMessage;

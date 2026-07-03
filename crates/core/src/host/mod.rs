@@ -16,7 +16,7 @@
 
 use crossbeam_channel::Sender;
 
-use bevy_react_animations::AnimationCommand;
+use crate::animations::AnimationCommand;
 
 use crate::message::ReactMessage;
 use crate::protocol::Op;

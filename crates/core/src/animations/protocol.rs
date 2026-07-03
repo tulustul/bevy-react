@@ -12,7 +12,7 @@ use serde::Deserialize;
 use serde::de::{self, Deserializer, MapAccess, Visitor};
 
 /// Identity of a shared value (Reanimated's `useSharedValue`). Allocated on the
-/// JS side; lives in the [`crate::SharedValues`] table on the Bevy side. Its own
+/// JS side; lives in the [`crate::animations::SharedValues`] table on the Bevy side. Its own
 /// namespace, unrelated to reconciler node ids.
 pub type SharedId = u32;
 
@@ -67,7 +67,7 @@ pub enum Easing {
 }
 
 /// An imperative animation command, carried by `op_animate`. Drains into the
-/// [`crate::SharedValues`] table each frame.
+/// [`crate::animations::SharedValues`] table each frame.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum AnimationCommand {
@@ -117,7 +117,7 @@ pub enum Binding {
 
 /// Identity of one continuous, animation-driveable style property. This is the
 /// open set the generic apply layer dispatches on — adding a new animatable
-/// property is a new variant here plus a row in the apply table (`crate::lib`),
+/// property is a new variant here plus a row in the apply table (`crate::animations`),
 /// not a new named field on a fixed struct. The wire key is camelCase (see
 /// [`AnimatableProperty::from_wire`]); the JS side mirrors this set in
 /// `js/src/animated.ts`'s `AnimatableProperty` union.

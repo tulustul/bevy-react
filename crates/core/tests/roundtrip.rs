@@ -12,10 +12,10 @@ use std::time::{Duration, Instant};
 
 use crossbeam_channel::{Receiver, RecvTimeoutError};
 
+use bevy_react::animations::AnimationCommand;
 use bevy_react::js_thread::spawn_js_thread;
 use bevy_react::protocol::{Op, Outbound, UiEvent};
 use bevy_react::{RawRequest, ReactMessage};
-use bevy_react_animations::AnimationCommand;
 
 fn example_bundle() -> PathBuf {
     // CARGO_MANIFEST_DIR is crates/core; the example bundle is at the repo root.

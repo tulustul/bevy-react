@@ -404,11 +404,7 @@ dependencies = [
  "accesskit",
  "anyhow",
  "bevy",
- "bevy-react-animations",
- "bevy-react-canvas",
  "bevy-react-macros",
- "bevy-react-portal",
- "bevy-react-surface",
  "console_error_panic_hook",
  "crossbeam-channel",
  "deno_core",
@@ -417,32 +413,14 @@ dependencies = [
  "serde",
  "serde-wasm-bindgen",
  "serde_json",
+ "tiny-skia",
  "tokio",
  "tracing",
  "ts-rs",
+ "uuid",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
-]
-
-[[package]]
-name = "bevy-react-animations"
-version = "0.1.0"
-dependencies = [
- "bevy",
- "crossbeam-channel",
- "serde",
- "serde_json",
- "tracing",
-]
-
-[[package]]
-name = "bevy-react-canvas"
-version = "0.1.0"
-dependencies = [
- "bevy",
- "serde",
- "tiny-skia",
 ]
 
 [[package]]
@@ -452,21 +430,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
-]
-
-[[package]]
-name = "bevy-react-portal"
-version = "0.1.0"
-dependencies = [
- "bevy",
-]
-
-[[package]]
-name = "bevy-react-surface"
-version = "0.1.0"
-dependencies = [
- "bevy",
- "uuid",
 ]
 
 [[package]]

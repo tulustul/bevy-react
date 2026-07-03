@@ -2,6 +2,10 @@
 //! - [`apply_js_ops`] drains reconciler op batches and mutates the UI tree.
 //! - [`collect_ui_events`] reports interactions back to the JS thread.
 
+use crate::animations::AnimatedNode;
+use crate::canvas::{CanvasSurface, blank_canvas_image, clamp_physical_size};
+use crate::portal::{RPortal, blank_portal_image};
+use crate::surface::{RSurface, SurfaceVirtualPointer};
 use accesskit::Role;
 use bevy::a11y::AccessibilityNode;
 use bevy::ecs::system::SystemParam;
@@ -17,10 +21,6 @@ use bevy::ui::FocusPolicy;
 use bevy::ui::RelativeCursorPosition;
 use bevy::ui::widget::NodeImageMode;
 use bevy::ui::{ComputedNode, ScrollPosition, UiGlobalTransform};
-use bevy_react_animations::AnimatedNode;
-use bevy_react_canvas::{CanvasSurface, blank_canvas_image, clamp_physical_size};
-use bevy_react_portal::{RPortal, blank_portal_image};
-use bevy_react_surface::{RSurface, SurfaceVirtualPointer};
 
 use crate::anchor::{AnchorScaling, Anchored};
 use crate::bridge::{
@@ -253,7 +253,7 @@ pub fn apply_js_ops(
                         ec.id()
                     }
                     // A `<portal>`: a styled node carrying an `ImageNode` whose
-                    // texture is an offscreen render target the `bevy-react-portal`
+                    // texture is an offscreen render target the [`crate::portal`]
                     // registry owns. Starts on a blank placeholder; `bind_portals`
                     // swaps in the real target texture for `target` once it exists.
                     "portal" => {
@@ -271,7 +271,7 @@ pub fn apply_js_ops(
                     }
                     // A `<surface>`: a styled container whose subtree renders into
                     // an offscreen image instead of the on-screen UI. It is a
-                    // **detached UI root** — `bevy_react_surface::bind_surfaces`
+                    // **detached UI root** — `crate::surface::bind_surfaces`
                     // points its `UiTargetCamera` at the surface's offscreen UI
                     // camera, and the child-attach ops below keep it out of the
                     // on-screen Bevy hierarchy. The root fills the texture by
@@ -2428,7 +2428,7 @@ mod tests {
     #[test]
     fn surface_pointer_clicks_are_not_main_clicks() {
         let (mut app, mut out_rx) = click_app();
-        app.add_systems(Startup, bevy_react_surface::init_surface_pointer);
+        app.add_systems(Startup, crate::surface::init_surface_pointer);
         app.add_systems(Update, (collect_ui_events, collect_surface_clicks));
         app.update(); // Run Startup so the pointer resource exists.
 
@@ -3046,8 +3046,8 @@ mod tests {
     /// name; an update rebinds the name.
     #[test]
     fn portal_mounts_with_target_and_rebinds() {
+        use crate::portal::RPortal;
         use bevy::ui::widget::ImageNode;
-        use bevy_react_portal::RPortal;
         let (mut app, tx, _root) = ordering_app();
         tx.send(vec![Op::Create {
             id: 1,
@@ -3091,7 +3091,7 @@ mod tests {
     /// `Children` (it renders to its own offscreen camera instead).
     #[test]
     fn surface_mounts_detached_with_name() {
-        use bevy_react_surface::RSurface;
+        use crate::surface::RSurface;
         let (mut app, tx, _root) = ordering_app();
         tx.send(vec![
             create_node(1), // a normal parent under the root
@@ -3155,7 +3155,7 @@ mod tests {
         assert!(
             app.world()
                 .entity(surface)
-                .get::<bevy_react_portal::RPortal>()
+                .get::<crate::portal::RPortal>()
                 .is_none(),
             "a surface update must not stamp an RPortal (shared `target` field)"
         );

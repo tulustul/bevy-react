@@ -8,7 +8,7 @@
 // one thing that crosses back is completion: a driver with a callback settles
 // exactly one `animationFinished` event (routed in `bridge.ts`).
 //
-// These shapes are hand-mirrored against `bevy_react_animations::protocol` on the
+// These shapes are hand-mirrored against `bevy_react::animations::protocol` on the
 // Rust side (the same contract `bridge.ts` keeps with `protocol::Op`). Keep them
 // in sync.
 

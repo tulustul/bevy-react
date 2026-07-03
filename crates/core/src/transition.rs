@@ -26,12 +26,12 @@
 //! A channel also driven by `animatedStyle` (imperative) is left to the animations
 //! plugin: the transition skips any channel bound by the entity's `AnimatedNode`.
 
-use bevy::prelude::*;
-use bevy::ui::{ScrollPosition, UiTransform};
-use bevy_react_animations::{
+use crate::animations::{
     AnimatableProperty, AnimatedNode, Driver, Easing, Lerp, Runner, build_runner,
     build_ui_transform,
 };
+use bevy::prelude::*;
+use bevy::ui::{ScrollPosition, UiTransform};
 use serde::Deserialize;
 
 use crate::protocol::{Length, Style, Time as WireTime};
@@ -596,7 +596,7 @@ fn rgba_to_color(rgba: [f32; 4]) -> Color {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bevy_react_animations::AnimatedBindings;
+    use crate::animations::AnimatedBindings;
     use std::time::Duration;
 
     fn timing(duration: f32, easing: Easing) -> ChannelTransition {
