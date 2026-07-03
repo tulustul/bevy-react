@@ -92,34 +92,58 @@ Currently, the project is a **quick, vibecoded proof of concept** demonstrating 
 | ---- | ---------- |
 | 0.19 | 0.1        |
 
+## Getting started
+
+```sh
+cargo add bevy-react
+```
+
+Scaffold the React UI:
+
+```sh
+npx bevy-react init ui
+cd ui && npm run watch
+```
+
+Add the plugin to your app
+
+```rust
+use bevy_react::{ReactUiPlugin};
+
+app.add_plugins(ReactUiPlugin::new("ui/dist/app.js")
+```
+
+Follow the [`examples/minimal`](https://github.com/tulustul/bevy-react/tree/main/examples/minimal/main.rs) example for a full working setup.
+
+### Typescript client generation
+
+Copy the `--export-bindings` flag implementation from [`examples/minimal`](https://github.com/tulustul/bevy-react/tree/main/examples/minimal/main.rs)
+
+After that you can run
+
+```sh
+npm run bevy:generate
+```
+
+or
+
+```sh
+cargo run -- --export-bindings ui/src/bevy.ts
+```
+
+which will generate a `bevy.ts` file in your `ui` directory. This file will include all the needed integration with your Rust code. See [Talking to Bevy](#talking-to-bevy) for details.
+
+Rembember to regenerate the client each time you update the communication channel in Rust.
+
 ## The demos app
 
-[`examples/demos`](https://github.com/tulustul/bevy-react/tree/main/examples/demos) is a gallery that exercises every feature above,
-with a left-nav that switches between live demos. It's the best **reference
-implementation** - each demo is a small, self-contained component you can read and
-copy when wiring up your own UI, messaging, or animations.
+[`examples/demos`](https://github.com/tulustul/bevy-react/tree/main/examples/demos) is a gallery that exercises most features available. It's the best **reference implementation** - each demo is a small, self-contained component you can read and copy when wiring up your own UI, messaging, or animations.
 
 ```sh
 npm install
 npm run build -w demos
 cargo run --example demos
 ```
-
-## Getting started
-
-Scaffold the React UI for a new project in one command:
-
-```sh
-npx bevy-react init ui   # creates ui/ with package.json, tsconfig, build, and a starter App
-```
-
-[`examples/minimal`](https://github.com/tulustul/bevy-react/tree/main/examples/minimal) is the smallest end-to-end project - the
-Rust host, a scaffolded React app, bundling, and typed bindings - and a good
-template to copy from.
-
-bevy-react is a Rust crate ([`bevy-react`](https://crates.io/crates/bevy-react) on
-crates.io) plus an npm package ([`bevy-react`](https://www.npmjs.com/package/bevy-react)
-on npm), developed together and versioned in lockstep.
 
 ## Features
 
@@ -350,17 +374,7 @@ app.add_react_handler(on_reset);
 app.add_react_event::<Scored>();
 ```
 
-**2. Generate the typed client** that React imports from `./bevy`. Add an export
-path to your app - typically a flag that builds the `App`, registers your channels,
-and calls `app.export_react_typescript("ui/src/bevy.ts")` (see
-[`examples/minimal/main.rs`](https://github.com/tulustul/bevy-react/blob/main/examples/minimal/main.rs)) - then run it (re-run
-whenever you add or change a channel):
-
-```sh
-cargo run -- --export-bindings ui/src/bevy.ts
-```
-
-**3. Use it from React:**
+**2. Use it from React:**
 
 ```tsx
 import { bevy } from "./bevy";
@@ -385,10 +399,7 @@ its demos.
 
 ## Performance
 
-The bridge is delta-based and batched, so steady-state updates are cheap: changing
-one row of a 1k-row table costs ~2.4 ms end to end, and creating all 1k rows from
-scratch ~52 ms (Ryzen 7 5800X / RTX 3070). Full methodology and per-operation
-tables (1k and 10k rows) live in [docs/BENCHMARKS.md](https://github.com/tulustul/bevy-react/blob/main/docs/BENCHMARKS.md).
+[docs/BENCHMARKS.md](https://github.com/tulustul/bevy-react/blob/main/docs/BENCHMARKS.md).
 
 ## License
 
