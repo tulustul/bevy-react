@@ -77,8 +77,8 @@ export function EditableTextDemo() {
         focusStyle={focusStyle}
       />
 
-      <text style={{ fontSize: FontSizes.xxl, opacity: name ? 1 : 0 }}>
-        Hello {name}
+      <text style={{ fontSize: FontSizes.xxl }}>
+        {name ? `Hello ${name}` : " "}
       </text>
 
       <node style={statusBoxStyle}>

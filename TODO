@@ -3,7 +3,6 @@
 Release blockers:
   ☐ Path-dep versions for crates.io - `Cargo.toml [workspace.dependencies]` references `bevy-react-animations` / `bevy-react-canvas` / `bevy-react-macros` by `path` only. crates.io rejects path-only deps — each needs `version = "0.1.0"` alongside `path`, and the leaf crates must be published first (macros → canvas/animations → core).
   ☐ npm publish model - `js/package.json` `exports` ship raw `./src/*.ts` (no build output). Confirm that's intended for the esbuild-bundling consumer, or add a build step and ship compiled JS + `.d.ts`.
-  ☐ Add `CHANGELOG.md` and `CONTRIBUTING.md`
   ☐ stabilize API
     ☐ Mark the public wire enums `#[non_exhaustive]` (`crates/core/src/protocol.rs:33` `Op`, `:1320` `Outbound`). Both are pub via `pub mod protocol` ("exposed for advanced use"); adding a variant is semver-breaking for any downstream exhaustive `match`. Cheap pre-publish insurance.
 
