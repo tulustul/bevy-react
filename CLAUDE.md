@@ -107,6 +107,7 @@ The Rust binding structs are the **single source of truth**. `App::export_react_
 - Don't create new git branches or commits. The user is responsible for working with git. You are allowed to execute `git diff` and other non-mutating commands.
 - If you find any linting issue, try to fix it immidiately.
 - If you find any broken unit test, ask user if a fix for it is needed.
+- Ask the user questions if uncertain.
 
 ### Screenshotting the demos app (visual verification)
 

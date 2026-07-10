@@ -213,6 +213,7 @@ impl Plugin for ReactUiPlugin {
         .init_resource::<PointerCapture>()
         .init_resource::<OpApplyStats>()
         .init_resource::<crate::ui_map::AtlasLayoutCache>()
+        .init_resource::<crate::scrollbar::ScrollbarTracks>()
         .init_resource::<Fonts>()
         .init_resource::<crate::cursor::CustomCursors>()
         // The offscreen render-target ("portal") registry and its shared blank
@@ -262,6 +263,12 @@ impl Plugin for ReactUiPlugin {
                     crate::scroll::collect_wheel_events
                         .in_set(PointerCaptureSet)
                         .after(collect_pointer_events),
+                    // A scrollbar-thumb drag claims the pointer (so world input
+                    // ignores it) and pins any eased scroll target. In the set,
+                    // after `collect_pointer_events` so its `over_ui` claim survives.
+                    crate::scrollbar::bridge_scrollbar_capture
+                        .in_set(PointerCaptureSet)
+                        .after(collect_pointer_events),
                 ),
                 // Ease `ScrollPosition` toward the target the controlled write
                 // (`apply_js_ops`) and the wheel (`PointerCaptureSet`) set this frame.
@@ -299,6 +306,20 @@ impl Plugin for ReactUiPlugin {
                     crate::canvas::update_canvas_surfaces.after(apply_js_ops),
                     collect_canvas_resize_events.after(apply_js_ops),
                     crate::cursor::drive_cursor_icon.after(apply_js_ops),
+                    // Spawn/teardown the Bevy scrollbar widget over each
+                    // `overflow: scroll` container that declared a `scrollbar`
+                    // style, then place its track over the container's edge. Both
+                    // after the op drain (fresh `ScrollbarConfig`s visible); place
+                    // after sync so the tracks exist. Bevy's `ScrollbarPlugin`
+                    // (in `DefaultPlugins`) drives the thumb in `PostUpdate`.
+                    crate::scrollbar::sync_scrollbars.after(apply_js_ops),
+                    crate::scrollbar::position_scrollbars
+                        .after(apply_js_ops)
+                        .after(crate::scrollbar::sync_scrollbars),
+                    // Paint each bar in its hover/pressed/base state (reads Bevy's
+                    // `Hovered` + `ScrollbarDragState`). After sync so the entities exist.
+                    crate::scrollbar::style_scrollbar_states
+                        .after(crate::scrollbar::sync_scrollbars),
                 ),
                 // Bind `<portal>` nodes to their render-target textures after the
                 // op drain (so a freshly-spawned portal binds the same frame), then
@@ -460,6 +481,14 @@ fn setup(
                 justify_content: JustifyContent::FlexStart,
                 align_items: AlignItems::Center,
                 row_gap: Val::Px(16.0),
+                ..default()
+            },
+            // Layout scaffolding only: without an explicit `Pickable` the UI
+            // picking backend treats the full-window root as a blocking hit,
+            // which would make hover queries (`HoverMap`) report "over UI"
+            // everywhere. Element nodes opt in per-`FocusPolicy` instead.
+            bevy::picking::Pickable {
+                should_block_lower: false,
                 ..default()
             },
             UiRoot,

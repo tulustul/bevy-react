@@ -37,6 +37,7 @@ mod reconcile;
 mod registry;
 mod request;
 mod scroll;
+mod scrollbar;
 mod transition;
 mod ts_codegen;
 mod ui_map;
@@ -68,4 +69,8 @@ pub use portal::{
 };
 pub use reconcile::OpApplyStats;
 pub use request::{RawRequest, ReactRequest, Request, RequestEvent, Responder};
+pub use scrollbar::{
+    HorizontalEdge, ScrollbarConfig, ScrollbarPartStyle, ScrollbarPosition, ScrollbarSpec,
+    VerticalEdge,
+};
 pub use surface::{SurfacePointer, SurfaceSpec, SurfaceVirtualPointer, Surfaces, UvChannel};

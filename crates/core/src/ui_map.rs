@@ -22,6 +22,7 @@ use crate::protocol::{
     LineHeightSpec, LinearGradientSpec, Props, RadialGradientSpec, RadialShapeSpec, Rect,
     SliceBorder, SliceScale, SliceSpec, Style, StyleDirty,
 };
+use crate::scrollbar::{ScrollbarConfig, ScrollbarPosition};
 
 /// Parse a CSS color string into a `Color`: hex, named colors, `transparent`, or
 /// `rgb()/hsl()/hwb()/oklab()/oklch()` functional notation (see
@@ -259,6 +260,13 @@ pub fn node_from_style(style: &Option<Style>) -> Node {
     }
     if let Some(v) = s.scrollbar_width {
         node.scrollbar_width = v;
+    } else if let Some(spec) = &s.scrollbar {
+        // A gutter-positioned visible scrollbar reserves space for itself (content
+        // shrinks) via Bevy's own `scrollbar_width` — unless the user set one
+        // explicitly (handled above). A floating bar reserves nothing.
+        if spec.is_visible() && spec.position() == ScrollbarPosition::Gutter {
+            node.scrollbar_width = spec.thickness();
+        }
     }
 
     if let Some(v) = s.left {
@@ -564,6 +572,19 @@ pub fn apply_style_masked(ec: &mut EntityCommands, style: &Option<Style>, dirty:
             }
             None => {
                 ec.remove::<NodeCursor>();
+            }
+        }
+    }
+    // A visible `scrollbar` stamps `ScrollbarConfig`; the shell (`crate::scrollbar`)
+    // spawns Bevy's scrollbar widget over this container from it. `"none"`/absent
+    // clears it (and the shell despawns any bars).
+    if dirty.intersects(g::SCROLLBAR) {
+        match s.and_then(|s| s.scrollbar.as_ref()) {
+            Some(spec) if spec.is_visible() => {
+                ec.insert(ScrollbarConfig(spec.clone()));
+            }
+            _ => {
+                ec.remove::<ScrollbarConfig>();
             }
         }
     }

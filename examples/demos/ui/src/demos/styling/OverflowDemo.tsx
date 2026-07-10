@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { BevyStyle } from "bevy-react/jsx";
+import { BevyStyle, ScrollbarStyle } from "bevy-react/jsx";
 import { Button, Example, Radio, RadioOption } from "@/components";
 import { Colors, FontSizes } from "@/theme";
 import { caption, controlColumn } from "./shared";
@@ -56,6 +56,36 @@ scrollbarWidth: value === "scroll" ? 8 : 0,`}
       </Example>
 
       <Example
+        description="A visible, draggable scrollbar. Set style.scrollbar to 'default' for a built-in bar, or an object to style the track/thumb, pick a side, and reserve a gutter (content shrinks) vs float over content. Drag the thumb or click the track to page."
+        tsx={`style={{ overflowY: "scroll", scrollbar: "default" }}
+
+// or fully styled:
+scrollbar: {
+  track: { backgroundColor: "#00000022", borderRadius: 6 },
+  thumb: { backgroundColor: "#8b5cf6", borderRadius: 6 },
+  thickness: 10,
+  position: "float",      // or "gutter" (default)
+  verticalSide: "left",   // or "right"
+}`}
+      >
+        <ScrollbarShowcase />
+      </Example>
+
+      <Example
+        description="A horizontal scrollbar: overflowX: scroll on a fixed-width row whose tiles refuse to shrink, so the row overflows. The bar sits on the bottom edge by default; horizontalSide: 'top' (with position: 'float') moves it above the content. Drag the thumb or click the track to page."
+        tsx={`<node style={{
+  overflowX: "scroll",
+  scrollbar: {
+    thumb: { backgroundColor: "#7aa2f7", borderRadius: 8 },
+    thickness: 10,
+    horizontalSide: "bottom",  // or "top"
+  },
+}}>`}
+      >
+        <HScrollShowcase />
+      </Example>
+
+      <Example
         description="A controlled scroll container: scrollTop is React state. onScroll syncs it from the wheel; the buttons jump the offset by writing scrollTop back. The readout shows the live value."
         tsx={`const [scrollTop, setScrollTop] = useState(0);
 <node
@@ -104,6 +134,86 @@ function SmoothScrollList() {
               style={{ color: Colors.textColor100, fontSize: FontSizes.sm }}
             >
               {item}
+            </text>
+          </node>
+        ))}
+      </node>
+    </node>
+  );
+}
+
+// A row of scrollable lists that differ only in their `scrollbar` style: the
+// built-in "default" bar, a custom-styled gutter bar, a floating bar, and a
+// left-side bar. Each is draggable (thumb) and pages on a track click.
+function ScrollbarShowcase() {
+  return (
+    <node style={{ flexDirection: "column", gap: 16 }}>
+      <ScrollList label={'scrollbar: "default"'} scrollbar="default" />
+      <ScrollList label="custom (gutter)" scrollbar={customBar} />
+      <ScrollList label='position: "float"' scrollbar={floatBar} />
+      <ScrollList label='verticalSide: "left"' scrollbar={leftBar} />
+      <ScrollList label="hover + pressed" scrollbar={statesBar} />
+    </node>
+  );
+}
+
+function ScrollList({
+  label,
+  scrollbar,
+}: {
+  label: string;
+  scrollbar: "none" | "default" | ScrollbarStyle;
+}) {
+  return (
+    <node style={{ flexDirection: "column", gap: 6 }}>
+      <text style={caption}>{label}</text>
+      <node style={{ ...showcaseList, scrollbar }}>
+        {ITEMS.map((item) => (
+          <node key={item} style={rowStyle}>
+            <text
+              style={{ color: Colors.textColor100, fontSize: FontSizes.sm }}
+            >
+              {item}
+            </text>
+          </node>
+        ))}
+      </node>
+    </node>
+  );
+}
+
+// Two horizontally-scrolling rows that differ only in which edge the bar sits on
+// (bottom, reserving a gutter; top, floating over the content).
+function HScrollShowcase() {
+  return (
+    <node style={{ flexDirection: "column", gap: 16 }}>
+      <HScrollList label='horizontalSide: "bottom"' scrollbar={hBottomBar} />
+      <HScrollList label='horizontalSide: "top" (float)' scrollbar={hTopBar} />
+    </node>
+  );
+}
+
+function HScrollList({
+  label,
+  scrollbar,
+}: {
+  label: string;
+  scrollbar: ScrollbarStyle;
+}) {
+  return (
+    <node style={{ flexDirection: "column", gap: 6 }}>
+      <text style={caption}>{label}</text>
+      <node style={{ ...hScrollRow, scrollbar }}>
+        {HTILES.map((n) => (
+          <node key={n} style={hTileStyle}>
+            <text
+              style={{
+                color: Colors.textColor400,
+                fontSize: FontSizes.base,
+                fontWeight: "bold",
+              }}
+            >
+              {n}
             </text>
           </node>
         ))}
@@ -285,4 +395,93 @@ const rowStyle: BevyStyle = {
   padding: "10px 12px",
   borderRadius: 6,
   backgroundColor: Colors.surface400,
+};
+
+// Base for the visible-scrollbar showcase lists — no `scrollbarWidth`, so the
+// `scrollbar` style controls the gutter itself.
+const showcaseList: BevyStyle = {
+  flexDirection: "column",
+  gap: 6,
+  width: 200,
+  height: 180,
+  padding: 8,
+  overflowY: "scroll",
+  backgroundColor: Colors.surface100,
+  borderRadius: 8,
+};
+
+// A fully-styled bar: translucent rounded track, violet rounded thumb.
+const customBar: ScrollbarStyle = {
+  track: { backgroundColor: "#00000088", borderRadius: 8 },
+  thumb: { backgroundColor: Colors.primary100, borderRadius: 8 },
+  thickness: 20,
+};
+
+// Floats over the content instead of reserving a gutter.
+const floatBar: ScrollbarStyle = {
+  ...customBar,
+  position: "float",
+};
+
+// The vertical bar on the left edge.
+const leftBar: ScrollbarStyle = {
+  ...customBar,
+  verticalSide: "left",
+};
+
+// The thumb brightens on hover and turns violet while dragging (pressed > hover).
+const statesBar: ScrollbarStyle = {
+  track: { backgroundColor: "#00000022", borderRadius: 8 },
+  thumb: {
+    backgroundColor: Colors.surface400,
+    borderRadius: 8,
+    hover: { backgroundColor: Colors.textColor200 },
+    pressed: { backgroundColor: Colors.primary100 },
+  },
+  thickness: 10,
+};
+
+// Numbered tiles for the horizontal-scroll demo.
+const HTILES = Array.from({ length: 12 }, (_, i) => i + 1);
+
+// A fixed-width row; `flexShrink: 0` on the tiles forces the row to overflow so a
+// horizontal bar appears. No `scrollbarWidth` — the `scrollbar` style owns the gutter.
+const hScrollRow: BevyStyle = {
+  flexDirection: "row",
+  gap: 8,
+  width: 360,
+  padding: 8,
+  overflowX: "scroll",
+  backgroundColor: Colors.surface100,
+  borderRadius: 8,
+};
+
+const hTileStyle: BevyStyle = {
+  width: 90,
+  height: 70,
+  flexShrink: 0,
+  alignItems: "center",
+  justifyContent: "center",
+  borderRadius: 6,
+  backgroundColor: Colors.primary100,
+};
+
+// Bottom bar (reserves a gutter, so content shifts up).
+const hBottomBar: ScrollbarStyle = {
+  track: { backgroundColor: "#00000088", borderRadius: 8 },
+  thumb: {
+    backgroundColor: Colors.primary100,
+    borderRadius: 8,
+    hover: { backgroundColor: Colors.sky100 },
+  },
+  thickness: 10,
+  horizontalSide: "bottom",
+};
+
+// Top bar floating over the content (no reserved gutter, so it doesn't fight the
+// bottom-reserved gutter Bevy would otherwise add).
+const hTopBar: ScrollbarStyle = {
+  ...hBottomBar,
+  position: "float",
+  horizontalSide: "top",
 };

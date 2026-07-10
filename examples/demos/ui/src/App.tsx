@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { BevyStyle } from "bevy-react/jsx";
 import { bevy } from "@/bevy";
+import { Scrollbar } from "@/theme";
 import { DEMOS, findDemoByLabel } from "./demos";
 import { useNavStore } from "./store";
 import { Navigation } from "./Navigation";
@@ -44,5 +45,7 @@ const contentStyle: BevyStyle = {
   gap: 20,
   padding: 24,
   overflowY: "scroll",
+  overflowX: "scroll",
+  scrollbar: Scrollbar,
   transition: { scroll: { duration: 200, easing: "easeOut" } },
 };

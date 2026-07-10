@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { BevyStyle } from "bevy-react/jsx";
-import { Colors, FontSizes, Gradients } from "@/theme";
+import { Colors, FontSizes, Gradients, Scrollbar } from "@/theme";
 import { DEMOS, type DemoItem } from "./demos";
 import { useNavStore } from "./store";
 
@@ -137,6 +137,7 @@ function ItemButton({
             color: isActive ? Colors.textColor400 : Colors.textColor100,
             fontSize: isChild ? FontSizes.sm : FontSizes.base,
             fontWeight: "bold",
+            margin: { right: 10 },
           }}
         >
           {label}
@@ -161,7 +162,7 @@ const navStyle: BevyStyle = {
   width: 220,
   height: "100%",
   gap: 8,
-  padding: 20,
+  padding: 10,
   backgroundColor: Colors.surface100,
   backgroundGradient: Gradients.navBackdrop,
   zIndex: 100,
@@ -175,7 +176,9 @@ const itemsStyle: BevyStyle = {
   height: "100%",
   gap: 8,
   overflowY: "scroll",
+  scrollbar: Scrollbar,
   transition: { scroll: { duration: 200, easing: "easeOut" } },
+  padding: { right: 10 },
 };
 
 const titleStyle: BevyStyle = {

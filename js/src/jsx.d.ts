@@ -227,6 +227,56 @@ export type SystemCursor =
   | "zoomIn"
   | "zoomOut";
 
+/** The paint properties of one scrollbar part in one interaction state.
+ *  Deliberately **not** a full [`BevyStyle`]: the thumb is a headless Bevy widget
+ *  with no layout node, so only these apply. Size/placement come from the parent
+ *  [`ScrollbarStyle`] (`thickness`) — a part never sets its own width/height. */
+export interface ScrollbarPartVisual {
+  /** Fill color (any CSS [`Color`]). */
+  backgroundColor?: Color;
+  /** Border color: one CSS [`Color`] for all sides, or a per-side object. */
+  borderColor?:
+    | Color
+    | { top?: Color; right?: Color; bottom?: Color; left?: Color };
+  /** Corner radii (same forms as any [`Rect`]). */
+  borderRadius?: Rect;
+  /** Border thickness (same forms as any [`Rect`]). */
+  border?: Rect;
+}
+
+/** Styling for one scrollbar part (the `track` groove or the draggable `thumb`),
+ *  with optional interaction-state overlays. `pressed` wins over `hover`, which
+ *  overlays the base. (Scrollbars take no keyboard focus, so there is no `focused`
+ *  state.) */
+export interface ScrollbarPartStyle extends ScrollbarPartVisual {
+  /** Overlaid while the pointer is over this part. */
+  hover?: ScrollbarPartVisual;
+  /** Overlaid while the bar is being dragged (wins over `hover`). */
+  pressed?: ScrollbarPartVisual;
+}
+
+/** Configures a node's visible scrollbar (the object form of `style.scrollbar`).
+ *  A bar appears per axis that is `overflow: scroll` **and** overflows, and
+ *  auto-hides when its content fits. */
+export interface ScrollbarStyle {
+  /** Styles the track (the groove behind the thumb). */
+  track?: ScrollbarPartStyle;
+  /** Styles the thumb (the draggable handle). */
+  thumb?: ScrollbarPartStyle;
+  /** Bar cross-axis size in logical px (default `12`). */
+  thickness?: number;
+  /** Minimum thumb length in logical px, so it stays grabbable on long content
+   *  (default `24`). */
+  minThumbLength?: number;
+  /** `"gutter"` (default) reserves space so content shrinks and the bar sits in
+   *  its own track; `"float"` reserves nothing and floats the bar over content. */
+  position?: "gutter" | "float";
+  /** Which edge the vertical bar sits on (default `"right"`). */
+  verticalSide?: "left" | "right";
+  /** Which edge the horizontal bar sits on (default `"bottom"`). */
+  horizontalSide?: "top" | "bottom";
+}
+
 /** A CSS-like style object mapped onto `bevy_ui::Node` and its sibling visual
  *  components. Every field is optional; unset fields keep Bevy's defaults. */
 export interface BevyStyle {
@@ -402,6 +452,10 @@ export interface BevyStyle {
    * change occurs — via re-render or `hoverStyle`/`pressStyle` — it eases over time
    * (using the same driver/easing engine as `animatedStyle`) instead of snapping. */
   transition?: BevyTransition;
+  /** A visible scrollbar for an `overflow: scroll` node. `"none"` (default) hides
+   *  it; `"default"` is a built-in neutral bar; an object configures it. Draggable
+   *  thumb + click-to-page are built in. See [`ScrollbarStyle`]. */
+  scrollbar?: "none" | "default" | ScrollbarStyle;
 
   // text (only meaningful on `<text>` elements/spans)
   /** Text color (any CSS [`Color`]). */

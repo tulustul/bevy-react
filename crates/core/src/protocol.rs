@@ -483,6 +483,13 @@ pub struct Style {
     #[serde(default)]
     pub transition: Option<crate::transition::Transition>,
 
+    /// Visible scrollbar for an `overflow: scroll` node: `"none"` (default) /
+    /// `"default"` / a styled object. Present → the reconciler stamps a
+    /// [`crate::scrollbar::ScrollbarConfig`] and the shell spawns Bevy's headless
+    /// scrollbar widget over the container. Pure-serde, module-owned.
+    #[serde(default)]
+    pub scrollbar: Option<crate::scrollbar::ScrollbarSpec>,
+
     // --- text (only meaningful on `<text>` elements/spans) ---
     /// Hex text color.
     #[serde(default)]
@@ -569,6 +576,11 @@ pub mod style_groups {
     /// `NodeCursor` (reads `cursor`) — the per-node cursor `drive_cursor_icon`
     /// writes onto the window's `CursorIcon` on hover.
     pub const CURSOR: u32 = 1 << 17;
+    /// `ScrollbarConfig` (reads `scrollbar`) — the visible scrollbar shell
+    /// (`crate::scrollbar`) spawns/updates Bevy's scrollbar widget from it. The
+    /// field is *also* in `LAYOUT` because a gutter-positioned bar drives
+    /// `Node.scrollbar_width` (see `node_from_style`).
+    pub const SCROLLBAR: u32 = 1 << 18;
 }
 
 /// The single source of truth for [`Style`]'s field list. Invokes the callback
@@ -643,6 +655,7 @@ macro_rules! with_style_fields {
             (global_z_index, "globalZIndex", (GLOBAL_Z_INDEX), overlay),
             (focus_policy, "focusPolicy", (FOCUS_POLICY), no_overlay),
             (cursor, "cursor", (CURSOR), overlay),
+            (scrollbar, "scrollbar", (SCROLLBAR | LAYOUT), overlay),
             (
                 transform,
                 "transform",

@@ -15,6 +15,7 @@ export const Colors = {
   surface400: "#313244",
   surface500: "#42425e",
   surface600: "#505072",
+  surface700: "#676792ff",
 
   green100: "#9ece6a",
   red100: "#f7768e",
@@ -35,7 +36,7 @@ export const Colors = {
 // --- Gradient presets -------------------------------------------------------
 // Built from the palette above so the whole app shares one tunable set. Each is
 // a `backgroundGradient`/`borderGradient` value; tweak here to retune app-wide.
-import type { Gradient } from "bevy-react/jsx";
+import type { Gradient, ScrollbarStyle } from "bevy-react/jsx";
 
 const linear = (angle: number, ...colors: string[]): Gradient => ({
   type: "linear",
@@ -72,7 +73,6 @@ export const Gradients = {
       ],
     },
   ] satisfies Gradient[],
-  // vivid set cycled across layout swatches/cells (decorative)
   spectrum: [
     linear(135, Colors.red100, Colors.orange100),
     linear(135, Colors.sky100, Colors.teal100),
@@ -80,6 +80,17 @@ export const Gradients = {
     linear(135, Colors.green100, Colors.amber100),
   ] satisfies Gradient[],
 } as const;
+
+export const Scrollbar: ScrollbarStyle = {
+  track: { backgroundColor: Colors.transparent, borderRadius: 6 },
+  thumb: {
+    backgroundColor: Colors.surface500,
+    borderRadius: 6,
+    hover: { backgroundColor: Colors.surface600 },
+    pressed: { backgroundColor: Colors.surface700 },
+  },
+  thickness: 6,
+};
 
 export const FontSizes = {
   xxs: 11,
