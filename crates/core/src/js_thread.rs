@@ -29,6 +29,21 @@ use crate::request::RawRequest;
 /// Sender half stored in `OpState` so `op_flush` can hand op batches to Bevy.
 struct OpSender(Sender<Vec<Op>>);
 
+/// Sender half stored in `OpState` so `op_flush` can stamp each batch's send
+/// instant for the devtools "pre-apply" leg (send → `apply_js_ops` start:
+/// channel wait + frame latency). A side channel rather than a payload change,
+/// so the op hot path's type stays `Vec<Op>`. Stamps are sent BEFORE the batch,
+/// so a received batch always finds its stamp queued and the FIFOs stay aligned.
+struct FlushStampSender(Sender<std::time::Instant>);
+
+/// Sender half stored in `OpState` so `op_flush` can mark each batch's origin:
+/// `true` = the devtools panel's own React container produced it. Same aligned
+/// side-channel discipline as [`FlushStampSender`] (flag sent BEFORE the
+/// batch). Lets `apply_js_ops` attribute applies, so devtools batch-stats skip
+/// the panel's own repaints (otherwise stats → panel repaint → new batch →
+/// stats… self-observes at frame rate).
+struct FlushDevtoolsSender(Sender<bool>);
+
 /// Sender half stored in `OpState` so `op_emit` can hand app messages to Bevy.
 struct EmitSender(Sender<ReactMessage>);
 
@@ -55,8 +70,16 @@ struct ReloadFlag(Rc<Cell<bool>>);
 struct ReloadNotify(Rc<Notify>);
 
 /// JS -> Bevy: ship one commit's worth of mutation ops. Synchronous.
+/// `devtools` marks batches from the panel's own React container (see
+/// [`FlushDevtoolsSender`]).
 #[op2]
-fn op_flush(state: &mut OpState, #[serde] ops: Vec<Op>) {
+fn op_flush(state: &mut OpState, #[serde] ops: Vec<Op>, devtools: bool) {
+    // Stamp + flag first (see `FlushStampSender`): the serde_v8 decode of `ops`
+    // already happened, so the stamp marks pure channel-entry time.
+    let stamp = state.borrow::<FlushStampSender>();
+    let _ = stamp.0.send(std::time::Instant::now());
+    let flag = state.borrow::<FlushDevtoolsSender>();
+    let _ = flag.0.send(devtools);
     let sender = state.borrow::<OpSender>();
     let _ = sender.0.send(ops);
 }
@@ -225,6 +248,8 @@ enum Pumped {
 #[derive(Clone)]
 struct Senders {
     ops: Sender<Vec<Op>>,
+    flush_stamps: Sender<std::time::Instant>,
+    flush_devtools: Sender<bool>,
     emit: Sender<ReactMessage>,
     request: Sender<RawRequest>,
     anim: Sender<AnimationCommand>,
@@ -237,6 +262,8 @@ pub fn spawn_js_thread(
     vendor_path: PathBuf,
     app_path: PathBuf,
     ops_tx: Sender<Vec<Op>>,
+    flush_stamps_tx: Sender<std::time::Instant>,
+    flush_devtools_tx: Sender<bool>,
     emit_tx: Sender<ReactMessage>,
     request_tx: Sender<RawRequest>,
     anim_tx: Sender<AnimationCommand>,
@@ -254,6 +281,8 @@ pub fn spawn_js_thread(
             rt.block_on(async move {
                 let senders = Senders {
                     ops: ops_tx,
+                    flush_stamps: flush_stamps_tx,
+                    flush_devtools: flush_devtools_tx,
                     emit: emit_tx,
                     request: request_tx,
                     anim: anim_tx,
@@ -374,6 +403,8 @@ fn build_runtime(
         let op_state = runtime.op_state();
         let mut op_state = op_state.borrow_mut();
         op_state.put(OpSender(senders.ops.clone()));
+        op_state.put(FlushStampSender(senders.flush_stamps.clone()));
+        op_state.put(FlushDevtoolsSender(senders.flush_devtools.clone()));
         op_state.put(EmitSender(senders.emit.clone()));
         op_state.put(RequestSender(senders.request.clone()));
         op_state.put(AnimSender(senders.anim.clone()));

@@ -12,7 +12,7 @@ import type { CanvasPainter, DrawCmd } from "./canvas";
 //     bundle runs.
 // Same names and signatures both ways, so everything below is host-agnostic.
 interface BevyHost {
-  op_flush(ops: Op[]): void;
+  op_flush(ops: Op[], devtools: boolean): void;
   op_emit(name: string, value: unknown): void;
   op_request(id: bigint, name: string, value: unknown): void;
   op_animate(cmd: AnimationCommand): void;
@@ -36,7 +36,7 @@ export type AnimationCommand =
   | { kind: "clear" };
 
 // Mirrors `protocol::Outbound` on the Rust side (internally tagged with `t`).
-type Outbound =
+export type Outbound =
   | { t: "uiEvent"; event: UiEvent }
   | { t: "event"; name: string; value: unknown }
   | { t: "response"; id: number; result: ResponseResult }
@@ -242,28 +242,74 @@ export function registerAnimationCallback(
 }
 
 // Wall clock for instrumentation (the embedded isolate may lack `performance`).
-const nowMs: () => number =
+export const nowMs: () => number =
   typeof performance !== "undefined" && typeof performance.now === "function"
     ? () => performance.now()
     : () => Date.now();
 
-export function flush(): void {
-  if (pending.length === 0) return;
-  const batch = pending.splice(0, pending.length);
-  // Instrumentation: time the native op_flush call. deno_core deserializes the
-  // arg (serde_v8: v8 -> Vec<Op>) synchronously as part of this call, so this
-  // captures serde-decode + the (near-free) channel send. Stashed on a global so
-  // a benchmark host can read the last commit's boundary cost.
+// --- Devtools bridge tap ---
+
+// A passive observer of every message crossing the boundary, in both directions.
+// Installed only by the devtools runtime (dev builds); in production the tap is
+// null and each call site pays one null check. Taps observe AFTER a successful
+// send (a thrown `op_flush` means Bevy never saw the batch, so observers — the
+// devtools op mirror in particular — must not see it either).
+export interface BridgeTap {
+  /** A JS→Bevy op batch. `devtools` marks the devtools panel's own container. */
+  flush(batch: Op[], devtools: boolean): void;
+  /** A JS→Bevy fire-and-forget app message. */
+  emit(name: string, value: unknown): void;
+  /** A JS→Bevy correlated request (its response arrives via `outbound`). */
+  request(id: number, name: string, value: unknown): void;
+  /** A Bevy→JS message, observed before it is routed. */
+  outbound(msg: Outbound): void;
+  /** The event loop is about to run a handler inside `flushSync` (the "JS"
+   *  timing leg starts — handler + React render + commit). */
+  wrapStart(): void;
+  /** …and it finished, `ms` later. Commits scheduled outside an event wrap
+   *  (timers, microtasks) are not bracketed and get no JS leg. */
+  wrapEnd(ms: number): void;
+}
+
+let bridgeTap: BridgeTap | null = null;
+
+/** Install (or with `null`, remove) the devtools bridge tap. Devtools-internal. */
+export function __installBridgeTap(tap: BridgeTap | null): void {
+  bridgeTap = tap;
+}
+
+// Send one op batch across the boundary, bypassing the `pending` buffer. The
+// SOLE `op_flush` call site — every batch passes the tap here. `devtools` marks
+// batches from the devtools panel's own React container (and its edit ops), so
+// the recorder can exclude them and the op mirror can attribute node ownership.
+//
+// deno_core deserializes the arg (serde_v8: v8 -> Vec<Op>) synchronously as part
+// of this call; a malformed op throws a TypeError HERE and the whole batch is
+// lost (Bevy never sees it) — callers sending hand-built ops (devtools edits)
+// must flush them in isolation inside try/catch so an invalid value can never
+// eat React's own pending ops. The timing stash on `__bevyReactFlush` captures
+// serde-decode + the (near-free) channel send for benchmark hosts.
+export function flushRaw(batch: Op[], devtools = false): void {
+  if (batch.length === 0) return;
   const t0 = nowMs();
-  // console.log(JSON.stringify(batch, undefined, 2));
-  // console.log(batch.length);
-  ops.op_flush(batch);
+  // The flag crosses the bridge with the ops, so Rust can attribute the apply
+  // (devtools batch-stats skip the panel's own commits — no self-observation).
+  ops.op_flush(batch, devtools);
   (
     globalThis as { __bevyReactFlush?: { ms: number; ops: number } }
   ).__bevyReactFlush = {
     ms: nowMs() - t0,
     ops: batch.length,
   };
+  if (bridgeTap) bridgeTap.flush(batch, devtools);
+}
+
+// Flush the ops accumulated during the current commit. `devtools` is true when
+// the committing container is the devtools panel's (see renderer.ts's
+// per-container `resetAfterCommit`).
+export function flush(devtools = false): void {
+  if (pending.length === 0) return;
+  flushRaw(pending.splice(0, pending.length), devtools);
 }
 
 // --- `<canvas>` imperative drawing + resize plumbing ---
@@ -321,6 +367,7 @@ function handleCanvasResize(event: UiEvent): void {
 // the name and payload against the same structs Bevy deserializes into, and calls this.
 export function emit(name: string, value: unknown): void {
   ops.op_emit(name, value);
+  if (bridgeTap) bridgeTap.emit(name, value);
 }
 
 // --- React -> Bevy requests (awaitable) ---
@@ -342,6 +389,7 @@ export function request(name: string, value: unknown): Promise<unknown> {
   return new Promise((resolve, reject) => {
     pendingRequests.set(id, { resolve, reject });
     ops.op_request(BigInt(id), name, value);
+    if (bridgeTap) bridgeTap.request(id, name, value);
   });
 }
 
@@ -465,6 +513,13 @@ const PASSTHROUGH_PROP_KEYS = new Set([
   "scrollLeft",
   "scrollStep",
 ]);
+
+// Bool flag props. Rust's `Props::merge_delta` (protocol.rs `merge_bool!`)
+// only honors `true` in a delta — the wire can't tell an explicit `false` from
+// an absent field — so turning a flag off must ride `unset` (each has a reset
+// arm in the `unset` loop). Keep in sync with protocol.rs's plain-`bool`
+// passthrough fields.
+const BOOL_PROP_KEYS = new Set(["flipX", "flipY", "multiline", "autofocus"]);
 
 // Props whose wire name differs from the React prop name. A `<surface>`'s
 // `name` rides the same wire field as a `<portal>`'s `target` (both bind the
@@ -678,6 +733,13 @@ export function buildUpdateOp(
       }
       return;
     }
+    if (BOOL_PROP_KEYS.has(key) && b === false) {
+      // A `false` in the delta would be a silent no-op on the Rust side
+      // (`merge_bool!` only acts on `true`); turning a flag off rides `unset`.
+      // None of these keys is wire-renamed.
+      if (a === true) (acc.unset ??= []).push(key);
+      return;
+    }
     if (b === undefined) {
       // Dropping an event-like prop is a no-op (nothing retained to reset).
       if (EVENT_PROP_KEYS.has(key)) return;
@@ -758,9 +820,28 @@ export function dropHandlers(id: number): void {
 export async function runEventLoop(
   wrap: (fn: () => void) => void = (fn) => fn(),
 ): Promise<void> {
+  // Bracket each wrapped handler for the devtools "JS" timing leg (handler +
+  // synchronous React render/commit; any flush inside is subtracted by the
+  // recorder). No-op without a tap installed.
+  const timedWrap = (fn: () => void): void => {
+    if (!bridgeTap) {
+      wrap(fn);
+      return;
+    }
+    const t0 = nowMs();
+    bridgeTap.wrapStart();
+    try {
+      wrap(fn);
+    } finally {
+      bridgeTap.wrapEnd(nowMs() - t0);
+    }
+  };
   for (;;) {
     const msg = await ops.op_next_event();
     if (msg == null) break; // shutdown
+    // The single Bevy→JS drain: every outbound message passes the tap here,
+    // before routing (so the devtools log sees events even with no listener).
+    if (bridgeTap) bridgeTap.outbound(msg);
     switch (msg.t) {
       case "reload":
         return; // runtime is being rebuilt
@@ -772,7 +853,7 @@ export async function runEventLoop(
         const fn = handlers.get(msg.event.id)?.[msg.event.kind];
         if (fn) {
           const event = msg.event;
-          wrap(() => {
+          timedWrap(() => {
             try {
               // Click handlers ignore the arg; pointer handlers read x/y; an
               // `editableText`'s onChange receives the new text directly.
@@ -788,7 +869,7 @@ export async function runEventLoop(
         const set = listeners.get(msg.name);
         if (set && set.size > 0) {
           const value = msg.value;
-          wrap(() => {
+          timedWrap(() => {
             for (const cb of set) {
               try {
                 cb(value);
@@ -814,7 +895,7 @@ export async function runEventLoop(
         animationCallbacks.delete(msg.token);
         // Inside `wrap` (flushSync): completion callbacks typically setState to
         // chain the next phase, and the resulting ops should flush this pass.
-        wrap(() => {
+        timedWrap(() => {
           try {
             cb(msg.finished);
           } catch (e) {

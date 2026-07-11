@@ -2874,6 +2874,27 @@ mod tests {
         assert!(dirty.any_style_variant());
     }
 
+    /// The bool-flag contract the JS diff relies on (bridge.ts
+    /// `BOOL_PROP_KEYS`): a plain-`bool` field can't distinguish an explicit
+    /// `false` from absent on the wire, so a `false` in the delta is a no-op —
+    /// turning a flag off must ride `unset`, which resets it and dirties its
+    /// group.
+    #[test]
+    fn merge_delta_bool_false_is_noop_off_rides_unset() {
+        let mut cached = props(serde_json::json!({ "flipX": true, "flipY": true }));
+
+        // `{"flipX": false}` decodes identically to an absent field: no-op.
+        let (dirty, _) = cached.merge_delta(props(serde_json::json!({ "flipX": false })), &[], &[]);
+        assert!(cached.flip_x, "explicit false in a delta must not clear");
+        assert!(!dirty.image);
+
+        // The off path: `unset` resets the flag and dirties the image group.
+        let (dirty, _) = cached.merge_delta(Props::default(), &["flipX".into()], &[]);
+        assert!(!cached.flip_x);
+        assert!(cached.flip_y, "sibling flag untouched");
+        assert!(dirty.image);
+    }
+
     /// `"style"` in `unset` drops the whole style and dirties every group.
     #[test]
     fn merge_delta_unsets_style_wholesale() {

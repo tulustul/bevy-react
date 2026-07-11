@@ -21,6 +21,7 @@ import {
   ROOT_ID,
   serializeProps,
 } from "./bridge";
+import { installDevtools } from "./devtools";
 import { setupRefreshRuntime } from "./hmr";
 
 // `process.env.NODE_ENV` is replaced at build time by esbuild's `define`; the
@@ -42,6 +43,10 @@ interface TextInstance {
 }
 interface Container {
   id: number;
+  // Marks the devtools panel's own container: its commits flush with
+  // `devtools = true` so the bridge tap can attribute (and the recorder
+  // exclude) the panel's own ops. See `renderDevtools`.
+  devtools?: boolean;
 }
 interface HostContext {
   inText: boolean;
@@ -76,7 +81,11 @@ const hostConfig: any = {
   }),
   getPublicInstance: (instance: Instance) => instance,
   prepareForCommit: () => null,
-  resetAfterCommit: () => flush(),
+  // react-reconciler commits each root separately and passes its containerInfo
+  // here, so every op batch is attributable to exactly one container — the app's
+  // or the devtools panel's. That per-batch attribution is what keeps the
+  // devtools recorder from logging its own panel's re-renders (a feedback loop).
+  resetAfterCommit: (container: Container) => flush(!!container.devtools),
   preparePortalMount: () => {},
 
   // --- react-reconciler 0.33 host requirements (replaces getCurrentEventPriority) ---
@@ -162,11 +171,8 @@ const hostConfig: any = {
   appendChild(parent: Instance, child: Instance | TextInstance) {
     push({ op: "append", parent: parent.id, child: child.id });
   },
-  appendChildToContainer(
-    _container: Container,
-    child: Instance | TextInstance,
-  ) {
-    push({ op: "append", parent: ROOT_ID, child: child.id });
+  appendChildToContainer(container: Container, child: Instance | TextInstance) {
+    push({ op: "append", parent: container.id, child: child.id });
   },
 
   insertBefore(
@@ -182,11 +188,16 @@ const hostConfig: any = {
     });
   },
   insertInContainerBefore(
-    _container: Container,
+    container: Container,
     child: Instance | TextInstance,
     before: Instance | TextInstance,
   ) {
-    push({ op: "insert", parent: ROOT_ID, child: child.id, before: before.id });
+    push({
+      op: "insert",
+      parent: container.id,
+      child: child.id,
+      before: before.id,
+    });
   },
 
   removeChild(parent: Instance, child: Instance | TextInstance) {
@@ -194,10 +205,10 @@ const hostConfig: any = {
     dropHandlers(child.id);
   },
   removeChildFromContainer(
-    _container: Container,
+    container: Container,
     child: Instance | TextInstance,
   ) {
-    push({ op: "remove", parent: ROOT_ID, child: child.id });
+    push({ op: "remove", parent: container.id, child: child.id });
     dropHandlers(child.id);
   },
 
@@ -280,8 +291,48 @@ const ConcurrentRoot = 1;
 // state intact) instead of remounting.
 let root: ReturnType<typeof reconciler.createContainer> | null = null;
 
+// The devtools panel's own persistent React root: a SECOND container, so the
+// panel's commits are separate flushes from the app's (see `resetAfterCommit`)
+// and the app's fiber tree stays byte-identical to a non-devtools build. Shares
+// the node-id allocator with the app container, so ids never collide.
+let devtoolsRoot: ReturnType<typeof reconciler.createContainer> | null = null;
+
+/** Mount the devtools panel tree in its own container. Devtools-internal. */
+export function renderDevtools(element: ReactNode): void {
+  if (devtoolsRoot === null) {
+    const container: Container = { id: ROOT_ID, devtools: true };
+    const onError = (e: unknown) => console.error("[js] devtools error:", e);
+    devtoolsRoot = reconciler.createContainer(
+      container,
+      ConcurrentRoot,
+      null,
+      false,
+      null,
+      "",
+      onError,
+      onError,
+      onError,
+      () => {},
+    );
+  }
+  reconciler.flushSyncFromReconciler(() => {
+    reconciler.updateContainer(element, devtoolsRoot, null, null);
+  });
+}
+
 /** Mount a React element tree against the Bevy root container (first load). */
 export function render(element: ReactNode): void {
+  // Install the devtools panel (dev builds only) BEFORE the app's first commit,
+  // so the bridge tap sees the app's initial mount ops. The env check must stay
+  // a literal — esbuild's `define` folds it, where the `DEV` const indirection
+  // would defeat DCE (see build-lib.mjs). In prod bundles `./devtools` is
+  // additionally stubbed out entirely by `devtoolsStubPlugin`.
+  if (process.env.NODE_ENV !== "production") {
+    // Drain anything already pending (mount.ts's reset op) as an app batch, so
+    // the devtools container's first commit isn't blamed for it.
+    flush();
+    installDevtools({ mount: renderDevtools });
+  }
   if (root === null) {
     // TODO(review): we mount a ConcurrentRoot but drive every event through
     // `flushSync` (see bridge.runEventLoop), so React runs effectively synchronously —

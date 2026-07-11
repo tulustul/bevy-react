@@ -36,6 +36,9 @@ fn set_timeout_honors_delay() {
         .expect("write temp bundle");
 
     let (ops_tx, _ops_rx) = crossbeam_channel::unbounded::<Vec<Op>>();
+    // Send-instant stamps (devtools pre-apply timing); unread here, held open.
+    let (flush_stamps_tx, _flush_stamps_rx) = crossbeam_channel::unbounded();
+    let (flush_devtools_tx, _flush_devtools_rx) = crossbeam_channel::unbounded();
     let (emit_tx, emit_rx) = crossbeam_channel::unbounded::<ReactMessage>();
     let (request_tx, _request_rx) = crossbeam_channel::unbounded::<RawRequest>();
     let (anim_tx, _anim_rx) = crossbeam_channel::unbounded();
@@ -47,6 +50,8 @@ fn set_timeout_honors_delay() {
         vendor,
         bundle,
         ops_tx,
+        flush_stamps_tx,
+        flush_devtools_tx,
         emit_tx,
         request_tx,
         anim_tx,

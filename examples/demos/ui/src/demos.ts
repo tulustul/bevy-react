@@ -13,6 +13,7 @@ import { SurfaceDemo } from "./demos/elements/surfaceDemo";
 import { OverflowDemo } from "./demos/styling/OverflowDemo";
 import { EditableTextDemo } from "./demos/elements/EditableTextDemo";
 import { NodeDemo } from "./demos/elements/NodeDemo";
+import { RootDemo } from "./demos/elements/RootDemo";
 import { FlexDemo } from "./demos/layout/FlexDemo";
 import { GridDemo } from "./demos/layout/GridDemo";
 import { ButtonDemo } from "./demos/elements/ButtonDemo";
@@ -70,6 +71,7 @@ export const DEMOS: DemoItem[] = [
       { label: "<canvas>", component: CanvasDemo },
       { label: "<portal>", scene: "CrowdedCubes", component: PortalDemo },
       { label: "<surface>", scene: "Surface", component: SurfaceDemo },
+      { label: "<root>", component: RootDemo },
       {
         label: "<Anchored.node>",
         scene: "CrowdedCubes",

@@ -124,6 +124,9 @@ fn bridge_round_trip() {
     }
 
     let (ops_tx, ops_rx) = crossbeam_channel::unbounded::<Vec<Op>>();
+    // Send-instant stamps (devtools pre-apply timing); unread here, held open.
+    let (flush_stamps_tx, _flush_stamps_rx) = crossbeam_channel::unbounded();
+    let (flush_devtools_tx, _flush_devtools_rx) = crossbeam_channel::unbounded();
     // Held for the duration so emits/requests from the app go nowhere harmlessly.
     let (emit_tx, _emit_rx) = crossbeam_channel::unbounded::<ReactMessage>();
     let (request_tx, _request_rx) = crossbeam_channel::unbounded::<RawRequest>();
@@ -138,6 +141,8 @@ fn bridge_round_trip() {
         vendor,
         bundle,
         ops_tx,
+        flush_stamps_tx,
+        flush_devtools_tx,
         emit_tx,
         request_tx,
         anim_tx,
@@ -277,6 +282,9 @@ fn animation_callback_round_trip() {
     }
 
     let (ops_tx, ops_rx) = crossbeam_channel::unbounded::<Vec<Op>>();
+    // Send-instant stamps (devtools pre-apply timing); unread here, held open.
+    let (flush_stamps_tx, _flush_stamps_rx) = crossbeam_channel::unbounded();
+    let (flush_devtools_tx, _flush_devtools_rx) = crossbeam_channel::unbounded();
     // Held for the duration so emits/requests from the app go nowhere harmlessly.
     let (emit_tx, _emit_rx) = crossbeam_channel::unbounded::<ReactMessage>();
     let (request_tx, _request_rx) = crossbeam_channel::unbounded::<RawRequest>();
@@ -290,6 +298,8 @@ fn animation_callback_round_trip() {
         vendor,
         bundle,
         ops_tx,
+        flush_stamps_tx,
+        flush_devtools_tx,
         emit_tx,
         request_tx,
         anim_tx,
@@ -412,6 +422,9 @@ fn canvas_resize_replay_round_trip() {
     }
 
     let (ops_tx, ops_rx) = crossbeam_channel::unbounded::<Vec<Op>>();
+    // Send-instant stamps (devtools pre-apply timing); unread here, held open.
+    let (flush_stamps_tx, _flush_stamps_rx) = crossbeam_channel::unbounded();
+    let (flush_devtools_tx, _flush_devtools_rx) = crossbeam_channel::unbounded();
     // Held for the duration so emits/requests from the app go nowhere harmlessly.
     let (emit_tx, _emit_rx) = crossbeam_channel::unbounded::<ReactMessage>();
     let (request_tx, _request_rx) = crossbeam_channel::unbounded::<RawRequest>();
@@ -426,6 +439,8 @@ fn canvas_resize_replay_round_trip() {
         vendor,
         bundle,
         ops_tx,
+        flush_stamps_tx,
+        flush_devtools_tx,
         emit_tx,
         request_tx,
         anim_tx,
@@ -513,4 +528,135 @@ fn canvas_resize_replay_round_trip() {
         }
     }
     panic!("no draw op after resize — declarative painter never replayed");
+}
+
+/// End-to-end check of the `<root>` host element from APP code (the modal demo):
+/// opening the modal must mount a detached `<root>` whose `name` prop crossed as
+/// the `target` wire field, and closing it must remove that root — exercising
+/// the detached-root machinery outside the devtools panel.
+#[test]
+fn root_demo_modal_round_trip() {
+    let bundle = example_bundle();
+    if !bundle.exists() {
+        eprintln!(
+            "skipping root_demo_modal_round_trip: bundle not built at {}\n  run: npm install && npm run build -w demos",
+            bundle.display()
+        );
+        return;
+    }
+
+    let (ops_tx, ops_rx) = crossbeam_channel::unbounded::<Vec<Op>>();
+    // Send-instant stamps (devtools pre-apply timing); unread here, held open.
+    let (flush_stamps_tx, _flush_stamps_rx) = crossbeam_channel::unbounded();
+    let (flush_devtools_tx, _flush_devtools_rx) = crossbeam_channel::unbounded();
+    // Held for the duration so emits/requests from the app go nowhere harmlessly.
+    let (emit_tx, _emit_rx) = crossbeam_channel::unbounded::<ReactMessage>();
+    let (request_tx, _request_rx) = crossbeam_channel::unbounded::<RawRequest>();
+    // Held for the duration so animation commands go nowhere harmlessly.
+    let (anim_tx, _anim_rx) = crossbeam_channel::unbounded();
+    let (outbound_tx, outbound_rx) = tokio::sync::mpsc::unbounded_channel::<Outbound>();
+    // Held for the duration: dropping the reload sender would look like shutdown.
+    let (_reload_tx, reload_rx) = tokio::sync::mpsc::unbounded_channel::<()>();
+
+    let vendor = bundle.with_file_name("vendor.js");
+    spawn_js_thread(
+        vendor,
+        bundle,
+        ops_tx,
+        flush_stamps_tx,
+        flush_devtools_tx,
+        emit_tx,
+        request_tx,
+        anim_tx,
+        outbound_rx,
+        reload_rx,
+    );
+
+    let mut buttons: HashSet<u32> = HashSet::new();
+    let mut parent_of: HashMap<u32, u32> = HashMap::new();
+    let mut text_of: HashMap<u32, String> = HashMap::new();
+
+    let click = |id: u32| {
+        outbound_tx
+            .send(Outbound::UiEvent {
+                event: UiEvent {
+                    id,
+                    kind: "click".into(),
+                    ..Default::default()
+                },
+            })
+            .expect("JS thread gone before click");
+    };
+
+    // Navigate to the `<root>` demo ("Elements" is expanded by default).
+    let nav = drain_until_button(
+        &ops_rx,
+        "<root>",
+        Duration::from_secs(15),
+        &mut buttons,
+        &mut parent_of,
+        &mut text_of,
+    )
+    .expect("no '<root>' nav button in initial render");
+    click(nav);
+
+    let open = drain_until_button(
+        &ops_rx,
+        "Open modal",
+        Duration::from_secs(10),
+        &mut buttons,
+        &mut parent_of,
+        &mut text_of,
+    )
+    .expect("no 'Open modal' button in the <root> demo");
+    click(open);
+
+    // The modal must mount as a `<root>` create op carrying the demo's `name`
+    // prop on the `target` wire field.
+    let mut root_id: Option<u32> = None;
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while Instant::now() < deadline {
+        if root_id.is_some() && find_button("Close", &buttons, &parent_of, &text_of).is_some() {
+            break;
+        }
+        if let Ok(batch) = ops_rx.recv_timeout(Duration::from_millis(200)) {
+            for op in &batch {
+                accumulate(op, &mut buttons, &mut parent_of, &mut text_of);
+                if let Op::Create {
+                    id, kind, props, ..
+                } = op
+                    && kind == "root"
+                {
+                    assert_eq!(
+                        props.target.as_deref(),
+                        Some("modal"),
+                        "the <root>'s `name` prop must cross as wire `target`"
+                    );
+                    root_id = Some(*id);
+                }
+            }
+        }
+    }
+    let root_id = root_id.expect("no `<root>` create op after opening the modal");
+    let close = find_button("Close", &buttons, &parent_of, &text_of)
+        .expect("no 'Close' button in the modal");
+    eprintln!("OK   modal mounted: <root name=\"modal\"> id={root_id}");
+
+    // Closing must remove the detached root.
+    click(close);
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while Instant::now() < deadline {
+        if let Ok(batch) = ops_rx.recv_timeout(Duration::from_millis(200)) {
+            for op in &batch {
+                if let Op::Remove { child, .. } = op
+                    && *child == root_id
+                {
+                    eprintln!("OK   modal closed: <root> removed");
+                    eprintln!("PASS <root> demo end-to-end");
+                    return;
+                }
+            }
+        }
+    }
+    panic!("modal `<root>` never removed after Close");
 }

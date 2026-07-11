@@ -666,6 +666,27 @@ export interface BevyPortalProps extends BevyAttributes {
   onWheel?: (e: WheelEventData) => void;
 }
 
+/** Props for the `root` element: the **screen-space twin** of `<surface>`. Its
+ *  children render as an independent top-level UI tree on the default camera —
+ *  detached from wherever the element sits in your component tree — so an overlay
+ *  (like the devtools panel) can float above the app without living inside the
+ *  app's layout or inflating its node tree.
+ *
+ *  By default a `<root>` fills the window as a **column** (like the main app
+ *  root — Bevy's own default is `row`) and sits just above the window tree
+ *  (`globalZIndex: 1` — bevy_ui gives equal z-indices no defined order, so the
+ *  default must win the tie deterministically); set `style.flexDirection` /
+ *  `style.globalZIndex` to change either. The root node itself never blocks or
+ *  hovers picking — its children are ordinary interactive nodes. */
+export interface BevyRootProps extends BevyAttributes {
+  /** Labels this root in the devtools root selector (unnamed roots are
+   *  auto-numbered; the default window tree is `"main"`). Shares the `target`
+   *  wire field with `<surface>`'s `name`. */
+  name?: string;
+  style?: BevyStyle;
+  children?: ReactNode;
+}
+
 /** Props for the `surface` element: the **inverse** of `<portal>`. Its children
  *  are rendered into an **offscreen texture** instead of the on-screen UI; the Bevy
  *  app registers a surface by name (via `Surfaces::create`, choosing the pixel

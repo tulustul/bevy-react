@@ -27,11 +27,18 @@ extern crate self as bevy_react;
 mod anchor;
 mod bridge;
 mod cursor;
+// The Chrome-DevTools-style inspector. A feature-gated module (not a separate
+// crate — it needs `JsBridge` and friends, which stay private) that is fully
+// compiled out unless the `devtools` cargo feature is on. This repo's own dev
+// units get the feature automatically via the self dev-dependency in Cargo.toml.
+#[cfg(feature = "devtools")]
+mod devtools;
 mod event;
 mod filter;
 mod host;
 mod keyboard;
 mod message;
+mod pick_clip;
 mod plugin;
 mod reconcile;
 mod registry;
@@ -61,6 +68,9 @@ pub use anchor::{Anchor, AnchorScaling, Anchored};
 pub use animations::ReactUiAnimationsPlugin;
 pub use bevy_react_macros::{react_event, react_message, react_request};
 pub use canvas::CanvasSurface;
+#[cfg(feature = "devtools")]
+#[cfg_attr(docsrs, doc(cfg(feature = "devtools")))]
+pub use devtools::DevtoolsPlugin;
 pub use event::{ReactEvent, ReactEvents};
 pub use message::{ReactAppExt, ReactMessage, ReactPayload};
 pub use plugin::{Fonts, PointerCapture, PointerCaptureSet, ReactUiPlugin};

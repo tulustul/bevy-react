@@ -5,7 +5,16 @@ import type * as React from "react";
 
 export { Fragment, jsxDEV } from "react/jsx-dev-runtime";
 
-import type { BevyImageProps, BevyNodeProps, BevyTextProps } from "./jsx";
+import type {
+  BevyCanvasProps,
+  BevyEditableTextProps,
+  BevyImageProps,
+  BevyNodeProps,
+  BevyPortalProps,
+  BevyRootProps,
+  BevySurfaceProps,
+  BevyTextProps,
+} from "./jsx";
 
 export namespace JSX {
   export type ElementType = React.JSX.ElementType;
@@ -20,10 +29,17 @@ export namespace JSX {
   export interface IntrinsicAttributes extends React.JSX.IntrinsicAttributes {}
   export interface IntrinsicClassAttributes<T> extends React.JSX
     .IntrinsicClassAttributes<T> {}
+  // Kept in exact sync with `jsx-runtime.ts` — the dev runtime types the same
+  // host elements (it had drifted to a subset).
   export interface IntrinsicElements {
     node: BevyNodeProps;
     button: BevyNodeProps;
     image: BevyImageProps;
+    canvas: BevyCanvasProps;
+    portal: BevyPortalProps;
+    surface: BevySurfaceProps;
+    root: BevyRootProps;
     text: BevyTextProps;
+    editableText: BevyEditableTextProps;
   }
 }

@@ -26,6 +26,14 @@ use crate::request::RawRequest;
 /// same crossbeam channels on every target; only the Bevy→JS direction differs.
 pub(crate) struct HostSenders {
     pub ops: Sender<Vec<Op>>,
+    /// Per-batch send instants for the devtools "pre-apply" leg. Native only —
+    /// `Instant::now` is unavailable on wasm, so the web host drops it and the
+    /// receiver simply stays empty there.
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
+    pub flush_stamps: Sender<std::time::Instant>,
+    /// Per-batch devtools-origin flags (aligned FIFO with `ops`, flag sent
+    /// first), so applies can be attributed — see `reconcile::FlushFlags`.
+    pub flush_devtools: Sender<bool>,
     pub emit: Sender<ReactMessage>,
     pub request: Sender<RawRequest>,
     pub anim: Sender<AnimationCommand>,

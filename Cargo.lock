@@ -404,6 +404,7 @@ dependencies = [
  "accesskit",
  "anyhow",
  "bevy",
+ "bevy-react",
  "bevy-react-macros",
  "console_error_panic_hook",
  "crossbeam-channel",

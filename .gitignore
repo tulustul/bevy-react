@@ -6,3 +6,6 @@ examples/demos/ui/dist/
 examples/stress/ui/dist/
 
 benchmark_results
+
+# Devtools panel layout settings (per-machine)
+.bevy-react-devtools.json

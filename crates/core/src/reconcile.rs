@@ -54,8 +54,21 @@ pub struct OpApplyStats {
     /// Count of non-empty op batches applied since startup (one increment per
     /// frame that applied at least one op).
     pub applied_count: u64,
+    /// Like `applied_count`, but only counting applies that included at least
+    /// one APP flush (per-batch origin flags — see [`FlushFlags`]). The
+    /// devtools panel's own repaints bump only `applied_count`; batch-stats
+    /// emission keys off this so the panel never reports (and re-triggers
+    /// itself with) its own commits. With no flags channel wired (headless
+    /// tests), every apply counts as app.
+    pub app_applied_count: u64,
     /// Number of ops in the most recently applied batch.
     pub last_ops: usize,
+    /// How long the most recently applied ops waited between `op_flush`'s send
+    /// (the JS side, post-serde) and the start of [`apply_js_ops`] — channel
+    /// wait plus frame latency. Measured from the OLDEST coalesced batch's
+    /// [`FlushStamps`] stamp; zero when no stamp channel is wired (headless
+    /// tests) and on web.
+    pub last_pre_apply: std::time::Duration,
     /// Time spent translating the most recent batch into ECS commands — the
     /// [`apply_js_ops`] body only. Excludes command execution and layout.
     pub last_translate: std::time::Duration,
@@ -63,6 +76,30 @@ pub struct OpApplyStats {
     /// (native only). A later system can subtract this from a post-layout instant
     /// to time command execution + layout.
     pub last_apply_end: Option<std::time::Instant>,
+}
+
+/// Receiver of per-batch send instants, stamped by the JS host's `op_flush`
+/// right before each batch enters the ops channel (see `js_thread.rs`). Both
+/// FIFOs are aligned (stamp sent first), so draining one stamp per received
+/// batch keeps them in lockstep. Feeds [`OpApplyStats::last_pre_apply`].
+#[derive(Resource)]
+pub struct FlushStamps(pub(crate) crossbeam_channel::Receiver<std::time::Instant>);
+
+/// Receiver of per-batch devtools-origin flags (`true` = the devtools panel's
+/// own React container flushed the batch), sent by the JS host's `op_flush`
+/// with the same aligned-FIFO discipline as [`FlushStamps`]. Feeds
+/// [`OpApplyStats::app_applied_count`].
+#[derive(Resource)]
+pub struct FlushFlags(pub(crate) crossbeam_channel::Receiver<bool>);
+
+/// The per-batch side channels (`Option`: absent in headless unit tests),
+/// bundled as one `SystemParam` so [`apply_js_ops`] stays within Bevy's
+/// 16-parameter limit.
+#[derive(SystemParam)]
+pub struct FlushMeta<'w> {
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
+    stamps: Option<Res<'w, FlushStamps>>,
+    flags: Option<Res<'w, FlushFlags>>,
 }
 
 /// The asset stores + caches the op-apply path builds components from: the
@@ -122,12 +159,18 @@ pub fn apply_js_ops(
     // style to roots only — spans must never get a `Node`.
     text_roots: Query<(), With<Node>>,
     mut stats: ResMut<OpApplyStats>,
+    // The stamp + origin-flag side channels; absent in headless unit tests
+    // (stamps also stay empty on web). See [`FlushMeta`].
+    #[cfg_attr(target_arch = "wasm32", allow(unused_variables))] meta: FlushMeta,
 ) {
     // Drain all pending batches first so we don't hold an immutable borrow of
     // `bridge` while mutating `bridge.nodes` below.
     let mut ops: Vec<Op> = Vec::new();
+    #[cfg_attr(target_arch = "wasm32", allow(unused_mut, unused_variables))]
+    let mut batches = 0usize;
     while let Ok(batch) = bridge.ops_rx.try_recv() {
         ops.extend(batch);
+        batches += 1;
     }
     if ops.is_empty() {
         return;
@@ -135,6 +178,34 @@ pub fn apply_js_ops(
     let op_count = ops.len();
     #[cfg(not(target_arch = "wasm32"))]
     let started = std::time::Instant::now();
+    // One stamp per received batch (aligned FIFOs — see `FlushStamps`); the
+    // OLDEST is when the earliest coalesced batch entered the channel.
+    #[cfg(not(target_arch = "wasm32"))]
+    let first_stamp = meta.stamps.as_ref().and_then(|stamps| {
+        let mut first = None;
+        for _ in 0..batches {
+            if let Ok(stamp) = stamps.0.try_recv() {
+                first.get_or_insert(stamp);
+            }
+        }
+        first
+    });
+    // One origin flag per received batch (aligned FIFOs — see [`FlushFlags`]);
+    // any non-devtools flush makes this an APP apply. A missing channel
+    // (headless tests) or a missing flag counts as app.
+    let any_app = match &meta.flags {
+        Some(flags) => {
+            let mut any_app = false;
+            for _ in 0..batches {
+                match flags.0.try_recv() {
+                    Ok(devtools) => any_app |= !devtools,
+                    Err(_) => any_app = true,
+                }
+            }
+            any_app
+        }
+        None => true,
+    };
     debug!("applying {op_count} reconciler op(s)");
 
     // Parents whose child ORDER diverged from the ECS this batch (same-parent
@@ -171,12 +242,13 @@ pub fn apply_js_ops(
                         }
                     }
                 }
-                // Detached `<surface>` roots aren't under `root`, so the child-despawn
-                // above misses them. On a cold reload the old React tree is discarded
-                // without unmount lifecycle (no `detachDeletedInstance`), so despawn
-                // them here too — otherwise stale surface subtrees keep rendering into
-                // their texture.
-                for id in bridge.surfaces.iter() {
+                // Detached roots (`<surface>`/`<root>`) aren't under `root`, so the
+                // child-despawn above misses them. On a cold reload the old React
+                // tree is discarded without unmount lifecycle (no
+                // `detachDeletedInstance`), so despawn them here too — otherwise a
+                // stale surface subtree keeps rendering into its texture, and a
+                // stale `<root>` stays on screen.
+                for id in bridge.surfaces.iter().chain(bridge.roots.iter()) {
                     if let Some(&e) = bridge.nodes.get(id) {
                         commands.entity(e).despawn();
                     }
@@ -187,6 +259,7 @@ pub fn apply_js_ops(
                 bridge.spans.clear();
                 bridge.editable_inputs.clear();
                 bridge.surfaces.clear();
+                bridge.roots.clear();
                 bridge.editable_values.clear();
                 bridge.editable_selections.clear();
                 bridge.editable_select_handlers.clear();
@@ -286,6 +359,26 @@ pub fn apply_js_ops(
                         apply_anchor(&mut ec, &props);
                         ec.id()
                     }
+                    // A `<root>`: the screen-space twin of `<surface>` — a styled
+                    // container that is a **detached UI root** on the default UI
+                    // camera (no `UiTargetCamera`), for overlays that must float
+                    // above and stay out of the app's own tree (the devtools
+                    // panel). The child-attach ops keep it out of the Bevy
+                    // hierarchy like a surface. It fills the window as a column
+                    // and sits just above the window tree by default — both from
+                    // `root_base()`, overlaid by the user's `style`; baking
+                    // `globalZIndex` into the style (instead of inserting a raw
+                    // `GlobalZIndex`) means masked re-applies on re-render keep
+                    // re-asserting it. The root itself never blocks or hovers
+                    // picking; its children are ordinary pickable nodes.
+                    "root" => {
+                        let style = overlay_style(&root_base(), &props.style);
+                        let mut ec = commands.spawn(RNode(id));
+                        apply_style(&mut ec, &style);
+                        ec.insert((crate::bridge::RRoot, Pickable::IGNORE));
+                        apply_anchor(&mut ec, &props);
+                        ec.id()
+                    }
                     // An `<editableText>`: a focusable native text input. Bevy's
                     // `EditableTextInputPlugin` (registered by `DefaultPlugins`)
                     // drives keyboard/focus/cursor/selection/clipboard; we just
@@ -378,6 +471,9 @@ pub fn apply_js_ops(
                 if kind == "surface" {
                     bridge.surfaces.insert(id);
                 }
+                if kind == "root" {
+                    bridge.roots.insert(id);
+                }
                 // Controlled scroll + the `onScroll` listener apply to any node
                 // (anything with `overflow: scroll`). A `textSpan` has no `Node`
                 // and so never matches the read-back query — harmless there.
@@ -410,12 +506,13 @@ pub fn apply_js_ops(
                 bridge.spans.insert(id, SpanKind::RawInherited);
             }
             Op::Append { parent, child } => {
-                // A `<surface>` is a detached UI root: never parent it into the
-                // on-screen hierarchy (it renders to its own offscreen camera). Its
-                // own children attach to it normally via their own Append ops. Record
+                // A `<surface>`/`<root>` is a detached UI root: never parent it into
+                // the on-screen hierarchy (a surface renders to its own offscreen
+                // camera; a `<root>` is an independent screen-space tree). Its own
+                // children attach to it normally via their own Append ops. Record
                 // its React parent so removing an ancestor can despawn this detached
                 // root (Bevy's recursive despawn never reaches it).
-                if bridge.surfaces.contains(&child) {
+                if bridge.is_detached_root(child) {
                     bridge.attach_surface(child, parent);
                     continue;
                 }
@@ -444,9 +541,10 @@ pub fn apply_js_ops(
                 child,
                 before,
             } => {
-                // A detached `<surface>` root is never parented (see `Op::Append`), but
-                // still record its React parent for ancestor-removal cleanup.
-                if bridge.surfaces.contains(&child) {
+                // A detached root (`<surface>`/`<root>`) is never parented (see
+                // `Op::Append`), but still record its React parent for
+                // ancestor-removal cleanup.
+                if bridge.is_detached_root(child) {
                     bridge.attach_surface(child, parent);
                     continue;
                 }
@@ -470,13 +568,14 @@ pub fn apply_js_ops(
             }
             Op::Remove { parent: _, child } => {
                 // React emits `Remove` only for the subtree's top node, and Bevy
-                // despawns that node recursively — but a `<surface>` nested under it is a
-                // detached root (no `ChildOf`), so neither reaches it. Despawn every
-                // detached surface at/under `child` (incl. `child` itself if it is one)
-                // before the recursive despawn below; otherwise the orphaned surface
-                // keeps rendering its stale subtree into its (often shared) texture.
+                // despawns that node recursively — but a `<surface>`/`<root>` nested
+                // under it is a detached root (no `ChildOf`), so neither reaches it.
+                // Despawn every detached root at/under `child` (incl. `child` itself
+                // if it is one) before the recursive despawn below; otherwise the
+                // orphan keeps rendering (a surface into its often-shared texture, a
+                // `<root>` straight onto the screen).
                 let mut surfaces = bridge.surfaces_under(child);
-                if bridge.surfaces.contains(&child) {
+                if bridge.is_detached_root(child) {
                     bridge.detach_surface(child);
                     surfaces.push(child);
                 }
@@ -622,6 +721,18 @@ pub fn apply_js_ops(
                         && let Some(name) = &props.target
                     {
                         ec.insert(RSurface(name.clone()));
+                    }
+                    if dirty.anchor {
+                        apply_anchor(&mut ec, &props);
+                    }
+                } else if bridge.roots.contains(&id) {
+                    // A `<root>` re-render: re-overlay the screen-filling,
+                    // top-of-stack base (see `root_base`) so a masked re-apply
+                    // keeps the baked `globalZIndex` instead of stripping it.
+                    let mut ec = commands.entity(e);
+                    if dirty.style.any() {
+                        let style = overlay_style(&root_base(), &props.style);
+                        apply_style_masked(&mut ec, &style, dirty.style);
                     }
                     if dirty.anchor {
                         apply_anchor(&mut ec, &props);
@@ -786,10 +897,16 @@ pub fn apply_js_ops(
 
     // Record this batch for live instrumentation (see [`OpApplyStats`]).
     stats.applied_count = stats.applied_count.wrapping_add(1);
+    if any_app {
+        stats.app_applied_count = stats.app_applied_count.wrapping_add(1);
+    }
     stats.last_ops = op_count;
     #[cfg(not(target_arch = "wasm32"))]
     {
         let end = std::time::Instant::now();
+        stats.last_pre_apply = first_stamp
+            .map(|stamp| started.saturating_duration_since(stamp))
+            .unwrap_or_default();
         stats.last_translate = end.duration_since(started);
         stats.last_apply_end = Some(end);
     }
@@ -825,6 +942,37 @@ fn surface_root_base() -> Option<Style> {
     Some(Style {
         width: Some(crate::protocol::Length::Percent(100.0)),
         height: Some(crate::protocol::Length::Percent(100.0)),
+        ..Default::default()
+    })
+}
+
+/// The default style a `<root>` gets before the user's `style` is overlaid: a
+/// window-filling overlay just above the window tree. `globalZIndex: 1` (not a
+/// magic max — see below) because bevy_ui sorts root nodes by `(GlobalZIndex,
+/// ZIndex)` with NO tiebreak: equal keys fall back to query iteration order,
+/// which is unspecified — a bare `<root>` at the window tree's implicit 0 could
+/// land above OR below it. `1` is deterministically above, while leaving the
+/// whole range open for the user's own layering (`style.globalZIndex` overrides
+/// in either direction; the devtools panel claims `i32::MAX` explicitly).
+/// Baked into the *style* rather than inserted as a raw `GlobalZIndex`
+/// component so masked style re-applies on re-render re-assert it (a raw
+/// insert would be stripped the first time the Z_INDEX dirty group executes
+/// with no style value).
+fn root_base() -> Option<Style> {
+    Some(Style {
+        width: Some(crate::protocol::Length::Percent(100.0)),
+        height: Some(crate::protocol::Length::Percent(100.0)),
+        // Default to a column, like the main UI root (plugin.rs). Bevy's own
+        // default is `row`, but a row container mis-measures a single
+        // content-sized child that has `maxWidth` + wrapping text: the text is
+        // sized at max-content (one line) during the row's main-axis pass, then
+        // clamped to `maxWidth` and wrapped on render — so the child's height is
+        // committed one line short while its siblings sit at the wrapped
+        // positions. A `<root>` is a top-level app container like the main root,
+        // so `column` is both the least-surprising default and the one that
+        // sidesteps that quirk. Overridable via `style.flexDirection`.
+        flex_direction: Some(FlexDirection::Column),
+        global_z_index: Some(1),
         ..Default::default()
     })
 }
@@ -2114,6 +2262,42 @@ mod tests {
         (app, ops_tx)
     }
 
+    /// The per-batch origin flags attribute applies: a devtools-flagged batch
+    /// bumps `applied_count` but not `app_applied_count`, so devtools batch
+    /// stats (keyed off the app counter) skip the panel's own repaints —
+    /// otherwise stats → panel repaint → new batch → stats… self-observes at
+    /// frame rate.
+    #[test]
+    fn devtools_flagged_batches_skip_app_applied_count() {
+        let (mut app, ops_tx) = op_app();
+        let (flags_tx, flags_rx) = crossbeam_channel::unbounded::<bool>();
+        app.insert_resource(FlushFlags(flags_rx));
+        let create = |id: NodeId| Op::Create {
+            id,
+            kind: "node".into(),
+            props: Props::default(),
+            text: None,
+        };
+
+        // A devtools-flagged batch (the panel's own commit): applied, but not
+        // an APP apply.
+        flags_tx.send(true).unwrap();
+        ops_tx.send(vec![create(1)]).unwrap();
+        app.update();
+        let stats = *app.world().resource::<OpApplyStats>();
+        assert_eq!((stats.applied_count, stats.app_applied_count), (1, 0));
+
+        // An app batch bumps both — even when a devtools batch coalesces into
+        // the same apply.
+        flags_tx.send(false).unwrap();
+        ops_tx.send(vec![create(2)]).unwrap();
+        flags_tx.send(true).unwrap();
+        ops_tx.send(vec![create(3)]).unwrap();
+        app.update();
+        let stats = *app.world().resource::<OpApplyStats>();
+        assert_eq!((stats.applied_count, stats.app_applied_count), (2, 1));
+    }
+
     /// A plain `<node onClick>` — no hover/press style, not a `<button>` — must get
     /// an `Interaction` so [`collect_ui_events`] can report its clicks. Regression:
     /// `onClick` crossed the wire as a bool but nothing attached an `Interaction`,
@@ -3158,6 +3342,155 @@ mod tests {
                 .get::<crate::portal::RPortal>()
                 .is_none(),
             "a surface update must not stamp an RPortal (shared `target` field)"
+        );
+    }
+
+    /// A `<root>` mounts as a detached, screen-space top-level tree: never parented
+    /// into the Bevy hierarchy, floating just above the window tree (the
+    /// `globalZIndex` is baked into its style so re-renders re-assert it), ignoring
+    /// picking itself — while its own children attach to it normally — and it
+    /// despawns when its React ancestor unmounts (Bevy's recursive despawn can't
+    /// reach a node with no `ChildOf`).
+    #[test]
+    fn root_mounts_detached_screen_space() {
+        use crate::bridge::RRoot;
+        let (mut app, tx, _ui_root) = ordering_app();
+        tx.send(vec![
+            create_node(1), // a normal parent under the UI root
+            Op::Create {
+                id: 2,
+                kind: "root".into(),
+                props: Props::default(),
+                text: None,
+            },
+            create_node(3), // panel content inside the <root>
+            Op::Append {
+                parent: ROOT_ID,
+                child: 1,
+            },
+            // React appends the <root> under node 1; the reconciler must keep it
+            // detached so it is an independent screen-space layout root.
+            Op::Append {
+                parent: 1,
+                child: 2,
+            },
+            Op::Append {
+                parent: 2,
+                child: 3,
+            },
+        ])
+        .unwrap();
+        app.update();
+
+        let root_e = ent(&app, 2);
+        assert!(
+            app.world().entity(root_e).get::<RRoot>().is_some(),
+            "a <root> carries the RRoot marker"
+        );
+        assert!(
+            app.world().entity(root_e).get::<ChildOf>().is_none(),
+            "a <root> is a detached root — never parented into the on-screen tree"
+        );
+        assert!(
+            children_of(&app, ent(&app, 1)).is_empty(),
+            "the <root>'s React parent has no Bevy children"
+        );
+        assert_eq!(
+            app.world()
+                .entity(root_e)
+                .get::<GlobalZIndex>()
+                .map(|z| z.0),
+            Some(1),
+            "a <root> floats just above the window tree by default"
+        );
+        assert_eq!(
+            app.world().entity(root_e).get::<Pickable>(),
+            Some(&Pickable::IGNORE),
+            "the <root> itself must not block or hover picking"
+        );
+        assert_eq!(
+            children_of(&app, root_e),
+            vec![ent(&app, 3)],
+            "the <root>'s own children attach to it normally"
+        );
+        assert_eq!(
+            app.world()
+                .entity(root_e)
+                .get::<Node>()
+                .map(|n| n.flex_direction),
+            Some(FlexDirection::Column),
+            "a <root> defaults to a column, like the main UI root (not Bevy's row)"
+        );
+
+        // A style-only re-render must keep the baked default z-index.
+        tx.send(vec![update_delta(
+            2,
+            serde_json::from_value(serde_json::json!({ "style": { "padding": 4 } }))
+                .expect("valid root props"),
+            &[],
+            &[],
+        )])
+        .unwrap();
+        app.update();
+        assert_eq!(
+            app.world()
+                .entity(root_e)
+                .get::<GlobalZIndex>()
+                .map(|z| z.0),
+            Some(1),
+            "a re-render must re-assert the baked globalZIndex, not strip it"
+        );
+
+        // Removing the React ancestor must despawn the detached <root> (and its
+        // subtree) even though no ChildOf links them.
+        tx.send(vec![Op::Remove {
+            parent: ROOT_ID,
+            child: 1,
+        }])
+        .unwrap();
+        app.update();
+        assert!(
+            !app.world().entities().contains(root_e),
+            "removing a React ancestor must despawn the detached <root>"
+        );
+        let bridge = app.world().resource::<JsBridge>();
+        assert!(
+            bridge.roots.is_empty() && !bridge.nodes.contains_key(&2),
+            "the <root>'s bookkeeping must be pruned on removal"
+        );
+    }
+
+    /// `Op::Reset` must despawn detached `<root>`s: they aren't children of the UI
+    /// root, so the root-children despawn misses them; a cold reload would otherwise
+    /// leave the stale overlay on screen.
+    #[test]
+    fn reset_despawns_detached_roots() {
+        let (mut app, tx, _ui_root) = ordering_app();
+        tx.send(vec![
+            Op::Create {
+                id: 1,
+                kind: "root".into(),
+                props: Props::default(),
+                text: None,
+            },
+            Op::Append {
+                parent: ROOT_ID,
+                child: 1,
+            },
+        ])
+        .unwrap();
+        app.update();
+        let root_e = ent(&app, 1);
+
+        tx.send(vec![Op::Reset]).unwrap();
+        app.update();
+        assert!(
+            !app.world().entities().contains(root_e),
+            "Op::Reset must despawn detached <root>s"
+        );
+        assert!(
+            app.world().resource::<JsBridge>().roots.is_empty(),
+            "Op::Reset must clear the roots set"
         );
     }
 

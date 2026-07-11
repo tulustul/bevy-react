@@ -1,5 +1,25 @@
 # Keep the descriptions short and to the point. Don't put any details here until required.
 
+Improvements:
+  ☐ pointermove called even though the pointer was not moved
+  ☐ window resize event
+Bugs:
+  ✔ ImageDemo - disabling flip not working @done(26-07-12 12:16)
+  ☐ large fontSize panics the app, look for similar issues
+devtools:
+  ✔ add left/right side docking options @done(26-07-12 12:17)
+  ✔ picking works only for the main root @done(26-07-12 12:18)
+  ✔ clicking somewhere in the styles section selects a node from the tree. This happes when the nodes tree has a scroll. It selects a node that be displayed under the cursor, if the tree was continuing down. @done(26-07-12 12:18)
+  ✔ styles - can enable multiple edit texts by clicking on multiple styles. Clicking one should disable edit for the previous one. @done(26-07-12 12:18)
+  ✔ * styles - add checkboxes to quickly enable/disable the style, like in chrome devtools @done(26-07-12 17:25)
+  ✔ unbounded pendingStats growth while the panel is closed (memory leak) - the recorder now records nothing while the panel is closed (armed at install → the always-sent devtools.restore disarms it; pendingStats also hard-capped) @done(26-07-12 20:15)
+  ✔ allow to start the app with devtools opened - `open` persists in the settings file on every toggle and restores on launch (recorder armed at install captures the initial mount); `.start_open()` + BEVY_REACT_DEVTOOLS_OPEN removed @done(26-07-12 20:15)
+  ✔ make devtools positioning relative to the screen size - float rect + docked width are now fractions of the UI viewport (devtools.window streams the default UI camera's logical viewport size — correct in --shoot mode too), px floors keep a tiny window usable @done(26-07-12 20:15)
+  ✔ Renames: Elements -> Nodes, Log -> Bridge @done(26-07-12 20:15)
+  ✔ nicer timestamps formatting in logs (hour,minutes,seconds) - wall-clock HH:MM:SS.mmm @done(26-07-12 20:15)
+  ☐ invalid properties detection + flagging
+
+
 Release blockers:
   ☐ Path-dep versions for crates.io - `Cargo.toml [workspace.dependencies]` references `bevy-react-animations` / `bevy-react-canvas` / `bevy-react-macros` by `path` only. crates.io rejects path-only deps — each needs `version = "0.1.0"` alongside `path`, and the leaf crates must be published first (macros → canvas/animations → core).
   ☐ npm publish model - `js/package.json` `exports` ship raw `./src/*.ts` (no build output). Confirm that's intended for the esbuild-bundling consumer, or add a build step and ship compiled JS + `.d.ts`.

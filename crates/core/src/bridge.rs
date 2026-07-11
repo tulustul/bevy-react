@@ -33,6 +33,13 @@ pub type OutboundSender = crossbeam_channel::Sender<Outbound>;
 #[derive(Component, Debug, Clone, Copy)]
 pub struct RNode(pub NodeId);
 
+/// Marks a `<root>` host element: the screen-space twin of `<surface>` — a
+/// detached top-level UI tree rendered on the default UI camera, used for
+/// overlays that must float above (and stay out of) the app's own tree, like
+/// the devtools panel. Tracked in [`JsBridge::roots`].
+#[derive(Component, Debug, Clone, Copy)]
+pub struct RRoot;
+
 /// Base + hover + press styles kept on an element that declares `hoverStyle`
 /// and/or `pressStyle`. The interaction system re-applies the merged style as
 /// the node's `Interaction` changes, entirely on the Bevy side (no round-trip
@@ -157,6 +164,10 @@ pub struct JsBridge {
     /// offscreen image via a dedicated UI camera, so they must NOT be parented into
     /// the on-screen Bevy hierarchy: child-attach ops skip Bevy parenting for these.
     pub surfaces: HashSet<NodeId>,
+    /// Node ids that are `<root>` detached roots ([`RRoot`]): screen-space
+    /// top-level trees on the default UI camera. Like surfaces they are never
+    /// parented into the Bevy hierarchy; see [`Self::is_detached_root`].
+    pub roots: HashSet<NodeId>,
     /// The last text value emitted to JS for each `editableText`, used to dedup
     /// `TextEditChange` (which also fires on cursor moves) into real `"change"`s.
     pub editable_values: HashMap<NodeId, String>,
@@ -191,12 +202,13 @@ pub struct JsBridge {
     /// Reverse lookup (child → its current parent) so a re-parent or reorder can detach
     /// the child from its old parent's ordered list before re-inserting it.
     pub parent_of: HashMap<NodeId, NodeId>,
-    /// React-tree parentage of `<surface>` detached roots: surface id → its React
-    /// parent id, plus the reverse (parent → its surface children). A surface is kept
-    /// OUT of `siblings`/`parent_of` (it's not a Bevy child, and counting it would
-    /// skew sibling ordering), so its structural position lives here instead. This
-    /// lets `Op::Remove` of an *ancestor* despawn the detached surface — which Bevy's
-    /// recursive despawn can't reach, since the surface has no `ChildOf`.
+    /// React-tree parentage of detached roots (`<surface>` and `<root>` alike):
+    /// detached id → its React parent id, plus the reverse (parent → its detached
+    /// children). A detached root is kept OUT of `siblings`/`parent_of` (it's not a
+    /// Bevy child, and counting it would skew sibling ordering), so its structural
+    /// position lives here instead. This lets `Op::Remove` of an *ancestor* despawn
+    /// the detached root — which Bevy's recursive despawn can't reach, since it has
+    /// no `ChildOf`.
     pub surface_parent: HashMap<NodeId, NodeId>,
     pub child_surfaces: HashMap<NodeId, Vec<NodeId>>,
 }
@@ -229,6 +241,7 @@ impl JsBridge {
             spans: HashMap::new(),
             editable_inputs: HashSet::new(),
             surfaces: HashSet::new(),
+            roots: HashSet::new(),
             editable_values: HashMap::new(),
             editable_selections: HashMap::new(),
             editable_select_handlers: HashSet::new(),
@@ -243,8 +256,17 @@ impl JsBridge {
         }
     }
 
-    /// Record a `<surface>`'s React parent (detaching it from any previous one first),
-    /// so a later removal of an ancestor can find and despawn this detached root.
+    /// Whether `id` is a detached UI root — a `<surface>` (offscreen camera) or a
+    /// `<root>` (screen-space overlay). Detached roots are never parented into the
+    /// Bevy hierarchy; the child-attach ops record their React parentage via
+    /// [`Self::attach_surface`] instead.
+    pub fn is_detached_root(&self, id: NodeId) -> bool {
+        self.surfaces.contains(&id) || self.roots.contains(&id)
+    }
+
+    /// Record a detached root's React parent (detaching it from any previous one
+    /// first), so a later removal of an ancestor can find and despawn it. Despite
+    /// the name this covers `<root>`s too (they share the parentage maps).
     pub fn attach_surface(&mut self, surface: NodeId, parent: NodeId) {
         self.detach_surface(surface);
         self.surface_parent.insert(surface, parent);
@@ -414,6 +436,7 @@ impl JsBridge {
         self.spans.remove(&id);
         self.editable_inputs.remove(&id);
         self.surfaces.remove(&id);
+        self.roots.remove(&id);
         self.editable_values.remove(&id);
         self.editable_selections.remove(&id);
         self.editable_select_handlers.remove(&id);

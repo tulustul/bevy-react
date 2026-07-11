@@ -156,12 +156,18 @@ pub fn position_anchored_nodes(
     let Ok(layer_entity) = layer.single() else {
         return;
     };
-    // The layer is spawned at the window origin (absolute, `left`/`top` 0, child of the
-    // full-window root), so anchored nodes — its children — position relative to (0,0).
-    // Using a constant rather than reading the layer's computed transform keeps this
-    // correct on the frame a node is first reparented (the reparent command below only
-    // applies at the next sync point) and avoids any layout-readiness dependency.
-    let parent_top_left = Vec2::ZERO;
+    // Anchored nodes position relative to the layer's box, so subtract its
+    // actual top-left. Usually that's the window origin (absolute `left`/`top`
+    // 0 under the full-window root), but devtools' reserve-space mode insets
+    // the root's margin, shifting the layer with it. The layer is 0×0, so its
+    // transform translation IS its top-left (physical → logical). Pre-first-
+    // layout the translation is zero — identical to the old `Vec2::ZERO`
+    // constant — and a margin change (dock toggle / live panel resize) lags
+    // here by one frame, which is accepted.
+    let parent_top_left = ui_nodes
+        .get(layer_entity)
+        .map(|(c, t)| t.translation * c.inverse_scale_factor())
+        .unwrap_or(Vec2::ZERO);
 
     for (entity, anchor, child_of, mut node, mut visibility, mut transform) in &mut anchored {
         // Move the overlay into the shared anchor layer (once; self-heals on reorder) so

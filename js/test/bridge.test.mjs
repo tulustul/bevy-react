@@ -160,6 +160,26 @@ test("scalar prop removed lands in unset under its wire name", () => {
   assert.deepEqual(op.unset, ["tint"]);
 });
 
+test("bool flag props ride unset when turned off, never send false", () => {
+  // Rust's merge_delta only honors `true` for plain-bool fields; an explicit
+  // `false` in the delta would be a silent no-op (the flip-disable bug).
+  const off = buildUpdateOp(1, { flipX: true }, { flipX: false });
+  assert.deepEqual(off.unset, ["flipX"]);
+  assert.deepEqual(off.props, {});
+
+  // Appearing as `false` is the default — nothing crosses.
+  assert.equal(buildUpdateOp(1, {}, { flipX: false }), null);
+
+  // Turning on takes the normal set path.
+  const on = buildUpdateOp(1, { flipX: false }, { flipX: true });
+  assert.deepEqual(on.props, { flipX: true });
+  assert.equal(on.unset, undefined);
+
+  // The other bool flags share the contract.
+  const multi = buildUpdateOp(1, { multiline: true }, { multiline: false });
+  assert.deepEqual(multi.unset, ["multiline"]);
+});
+
 test("children changes never cross", () => {
   assert.equal(buildUpdateOp(1, { children: "a" }, { children: "b" }), null);
 });

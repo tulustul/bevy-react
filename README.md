@@ -397,6 +397,43 @@ The request channel (`#[react_request]` - React `await`s a typed reply) works th
 same way; [`examples/demos`](https://github.com/tulustul/bevy-react/tree/main/examples/demos) defines all three channels across
 its demos.
 
+### Devtools
+
+A built-in, Chrome-devtools-style inspector for the live UI. Toggle it with
+**F12** (configurable):
+
+- **Elements** - a live tree explorer of the `bevy_ui` node tree. Selecting or
+  hovering a row highlights the node on screen; the **pick** button is the
+  inverse - click any node in the running UI to select it in the tree.
+- **Inspector** - the selected node's style and props, straight from the wire
+  values the app sent. Click a value to edit it inline (Enter applies, Esc
+  cancels; empty resets the field; `+ add style` adds a new declaration).
+  Edits are transient, Chrome-style: the next React commit that touches the
+  field wins.
+- **Log** - a Network-panel-like recording of everything crossing the
+  Rust↔JS bridge: op batches, `emit`s, requests with their paired responses,
+  and Bevy→React events, with per-kind filters, pause/clear, and expandable
+  payloads.
+- **Stats** - live node/entity counts, fps, and the render-time legs of the
+  last applied op batch (translate / command / layout), the same
+  instrumentation the stress benchmarks report.
+
+![The bevy-react devtools panel docked over the demos app: an Elements tree, inspector, and live stats footer.](https://raw.githubusercontent.com/tulustul/bevy-react/main/screenshots/devtools.png)
+
+Enable it with the `devtools` cargo feature and add the plugin:
+
+```rust
+#[cfg(feature = "devtools")]
+app.add_plugins(bevy_react::DevtoolsPlugin::new().toggle_key(KeyCode::F12));
+```
+
+The feature is off by default, so release/consumer builds compile none of it
+(the plugin is also inert in `--release` builds), and the panel's JS is
+stripped from production bundles. This repo's own examples and tests enable it
+automatically via a self dev-dependency - `cargo run -p bevy-react --example demos`
+has it with no extra flags. The devtools bridge channels are internal: they
+never appear in your app's generated `bevy.ts`.
+
 ## Performance
 
 [docs/BENCHMARKS.md](https://github.com/tulustul/bevy-react/blob/main/docs/BENCHMARKS.md).

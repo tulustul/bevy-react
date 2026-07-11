@@ -1,0 +1,108 @@
+import { useState } from "react";
+import { BevyStyle } from "bevy-react/jsx";
+import { Button, Example } from "@/components";
+import { Colors } from "@/theme";
+
+// The `<root>` host element: a **detached, screen-space top-level tree** — the
+// on-screen twin of `<surface>`. Wherever the element sits in your component
+// tree, its children render as an independent window-filling layer floating
+// above the app (top of the global stack by default) — the natural home for
+// modals, toasts, and other overlays. The `name` labels the root in the
+// devtools root selector (F12).
+
+const TYPESCRIPT = `const [open, setOpen] = useState(false);
+
+<Button onClick={() => setOpen(true)}>Open modal</Button>;
+
+{open && (
+  <root
+    name="modal"
+    style={{
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: "#000000aa",
+    }}
+  >
+    <node style={dialogStyle}>
+      <text>Detached modal</text>
+      <Button onClick={() => setOpen(false)}>Close</Button>
+    </node>
+  </root>
+)}`;
+
+export function RootDemo() {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <Example
+      description="A <root> renders its children as a detached, window-filling layer above the whole app — a modal that escapes this card entirely. While it is open, the devtools (F12) list it as a selectable root named 'modal'."
+      tsx={TYPESCRIPT}
+    >
+      <node style={panelStyle}>
+        <text style={hintStyle}>
+          The dialog is declared right here, inside this small card…
+        </text>
+        <Button onClick={() => setOpen(true)}>Open modal</Button>
+      </node>
+
+      {open && (
+        <root name="modal" style={backdropStyle}>
+          <node style={dialogStyle}>
+            <text style={titleStyle}>Detached modal</text>
+            <text style={bodyStyle}>
+              This dialog lives in a {"<root>"}: a detached, screen-space tree
+              that fills the window and floats above everything — the left nav,
+              the demo card, all of it — even though the component sits inside
+              the card.
+            </text>
+            <Button onClick={() => setOpen(false)}>Close</Button>
+          </node>
+        </root>
+      )}
+    </Example>
+  );
+}
+
+const panelStyle: BevyStyle = {
+  flexDirection: "column",
+  alignItems: "flexStart",
+  gap: 12,
+  padding: 16,
+  backgroundColor: Colors.surface100,
+  borderRadius: 12,
+};
+
+const hintStyle: BevyStyle = {
+  color: Colors.textColor200,
+  fontSize: 14,
+};
+
+// The `<root>` already fills the window (a centered column by default); the
+// backdrop styling (dim + center the dialog) goes straight on it.
+const backdropStyle: BevyStyle = {
+  alignItems: "center",
+  justifyContent: "center",
+  backgroundColor: "#000000aa",
+};
+
+const dialogStyle: BevyStyle = {
+  flexDirection: "column",
+  alignItems: "flexStart",
+  gap: 12,
+  maxWidth: 420,
+  padding: 20,
+  backgroundColor: Colors.surface200,
+  border: 1,
+  borderColor: Colors.surface400,
+  borderRadius: 12,
+};
+
+const titleStyle: BevyStyle = {
+  color: Colors.textColor100,
+  fontSize: 20,
+};
+
+const bodyStyle: BevyStyle = {
+  color: Colors.textColor200,
+  fontSize: 14,
+};

@@ -38,6 +38,13 @@ path = "../../examples/stress/main.rs"
 name = "minimal"
 path = "../../examples/minimal/main.rs"
 
+# The Chrome-DevTools-style inspector (`DevtoolsPlugin` + the `<root>`-hosted
+# panel). Off by default so release/consumer builds compile none of it; the
+# self-referential dev-dependency below turns it on for this repo's own dev
+# units (examples, tests), so `cargo run --example demos` needs no flag.
+[features]
+devtools = []
+
 [dependencies]
 accesskit = { workspace = true }
 anyhow = { workspace = true }
@@ -72,3 +79,6 @@ getrandom = { workspace = true, features = ["wasm_js"] }
 [dev-dependencies]
 crossbeam-channel = { workspace = true }
 tokio = { workspace = true }
+# Self-referential: enables `devtools` for every dev unit (examples, tests) via
+# feature unification, without ever propagating it to downstream consumers.
+bevy-react = { path = ".", features = ["devtools"] }

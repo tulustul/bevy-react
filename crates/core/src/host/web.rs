@@ -32,6 +32,7 @@ use super::{HostConfig, HostSenders};
 struct WebHost {
     // JS → Bevy: the same crossbeam senders every target uses.
     ops: Sender<Vec<Op>>,
+    flush_devtools: Sender<bool>,
     emit: Sender<ReactMessage>,
     request: Sender<RawRequest>,
     anim: Sender<AnimationCommand>,
@@ -57,6 +58,7 @@ pub(crate) fn spawn(app: &mut App, _config: HostConfig, senders: HostSenders) ->
     HOST.with(|h| {
         *h.borrow_mut() = Some(WebHost {
             ops: senders.ops,
+            flush_devtools: senders.flush_devtools,
             emit: senders.emit,
             request: senders.request,
             anim: senders.anim,
@@ -82,16 +84,18 @@ pub(crate) fn spawn(app: &mut App, _config: HostConfig, senders: HostSenders) ->
 fn install_host_object() -> Object {
     let host = Object::new();
 
-    // op_flush(ops): JS → Bevy, a commit's worth of mutation ops.
-    let flush =
-        Closure::<dyn Fn(JsValue)>::new(|ops: JsValue| {
-            match serde_wasm_bindgen::from_value::<Vec<Op>>(ops) {
-                Ok(batch) => with_host(|h| {
-                    let _ = h.ops.send(batch);
-                }),
-                Err(e) => error(&format!("op_flush decode: {e}")),
-            }
-        });
+    // op_flush(ops, devtools): JS → Bevy, a commit's worth of mutation ops,
+    // flagged with its origin (the panel's own container vs the app). The flag
+    // is sent first so the aligned FIFOs never desync (see `FlushFlags`).
+    let flush = Closure::<dyn Fn(JsValue, JsValue)>::new(|ops: JsValue, devtools: JsValue| {
+        match serde_wasm_bindgen::from_value::<Vec<Op>>(ops) {
+            Ok(batch) => with_host(|h| {
+                let _ = h.flush_devtools.send(devtools.as_bool().unwrap_or(false));
+                let _ = h.ops.send(batch);
+            }),
+            Err(e) => error(&format!("op_flush decode: {e}")),
+        }
+    });
     set_method(&host, "op_flush", flush.as_ref());
     flush.forget();
 

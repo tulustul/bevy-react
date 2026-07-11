@@ -17,6 +17,7 @@ import type {
   BevyImageProps,
   BevyNodeProps,
   BevyPortalProps,
+  BevyRootProps,
   BevySurfaceProps,
   BevyTextProps,
 } from "./jsx";
@@ -50,6 +51,9 @@ export namespace JSX {
     /** Renders its subtree into an offscreen texture for use on a 3D material
      *  (the inverse of `portal`). */
     surface: BevySurfaceProps;
+    /** A detached, screen-space top-level UI tree floating above the app on the
+     *  default camera (the on-screen twin of `surface`). */
+    root: BevyRootProps;
     /** Styled, nestable text (maps to `bevy_ui::Text` / `TextSpan`). */
     text: BevyTextProps;
     /** A focusable, editable text field (maps to `bevy_text::EditableText`). */

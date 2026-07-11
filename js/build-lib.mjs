@@ -54,9 +54,12 @@ ${VENDOR_KEYS.map((k, i) => `  ${JSON.stringify(k)}: _m${i},`).join("\n")}
     stdin: { contents: entry, resolveDir: cwd, loader: "ts" },
     outfile,
     jsx: "automatic",
-    // The vendor bundle includes the bevy-react runtime (→ hmr.ts → react-refresh);
-    // stub the dev-only refresh runtime out of production builds.
-    plugins: prod ? [reactRefreshStubPlugin] : [],
+    // The runtime's own .tsx (the devtools panel) types against bevy-react's
+    // host elements, not HTML.
+    jsxImportSource: "bevy-react",
+    // The vendor bundle includes the bevy-react runtime (→ hmr.ts → react-refresh
+    // and → devtools); stub both dev-only pieces out of production builds.
+    plugins: prod ? [reactRefreshStubPlugin, devtoolsStubPlugin] : [],
   };
 }
 
@@ -75,6 +78,28 @@ const reactRefreshStubPlugin = {
     }));
     build.onLoad({ filter: /.*/, namespace: "react-refresh-stub" }, () => ({
       contents: "module.exports = {};",
+      loader: "js",
+    }));
+  },
+};
+
+// The devtools inspector is dev-only. Its only call site (renderer.ts's
+// `installDevtools`) is behind a literal `process.env.NODE_ENV` check that
+// esbuild's `define` folds away in prod, but the static import would still pull
+// the whole panel/mirror/recorder into the bundle — so in prod the module is
+// replaced with a no-op stub, guaranteeing the devtools code is physically
+// absent from production vendor.js.
+const devtoolsStubPlugin = {
+  name: "devtools-stub",
+  setup(build) {
+    build.onResolve({ filter: /^\.\/devtools$/ }, (args) => {
+      // Only the runtime's own import (renderer.ts) — never a user module that
+      // happens to have a sibling `devtools` directory.
+      if (!/[/\\]renderer\.ts$/.test(args.importer)) return null;
+      return { path: args.path, namespace: "devtools-stub" };
+    });
+    build.onLoad({ filter: /.*/, namespace: "devtools-stub" }, () => ({
+      contents: "module.exports = { installDevtools: () => {} };",
       loader: "js",
     }));
   },

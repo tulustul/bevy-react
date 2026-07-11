@@ -170,6 +170,13 @@ impl Plugin for ReactUiPlugin {
         // the outbound queue without bound. Consider bounded channels with an explicit
         // drop/coalesce policy before this is "production".
         let (ops_tx, ops_rx) = crossbeam_channel::unbounded::<Vec<Op>>();
+        // Side channel of per-batch send instants (see `FlushStamps`): feeds the
+        // devtools "pre-apply" timing leg. Stays empty on web (no `Instant`).
+        let (flush_stamps_tx, flush_stamps_rx) =
+            crossbeam_channel::unbounded::<std::time::Instant>();
+        // Side channel of per-batch devtools-origin flags (see `FlushFlags`):
+        // lets applies be attributed to the panel vs the app on every target.
+        let (flush_devtools_tx, flush_devtools_rx) = crossbeam_channel::unbounded::<bool>();
         let (emit_tx, emit_rx) = crossbeam_channel::unbounded::<ReactMessage>();
         let (request_tx, request_rx) = crossbeam_channel::unbounded::<RawRequest>();
         let (anim_tx, anim_rx) = crossbeam_channel::unbounded::<AnimationCommand>();
@@ -187,11 +194,15 @@ impl Plugin for ReactUiPlugin {
             },
             HostSenders {
                 ops: ops_tx,
+                flush_stamps: flush_stamps_tx,
+                flush_devtools: flush_devtools_tx,
                 emit: emit_tx,
                 request: request_tx,
                 anim: anim_tx,
             },
         );
+        app.insert_resource(crate::reconcile::FlushStamps(flush_stamps_rx));
+        app.insert_resource(crate::reconcile::FlushFlags(flush_devtools_rx));
 
         app.insert_resource(BridgeChannels {
             ops_rx: Some(ops_rx),
@@ -236,6 +247,17 @@ impl Plugin for ReactUiPlugin {
             PreUpdate,
             crate::surface::drive_surface_pointer
                 .before(bevy::picking::PickingSystems::ProcessInput),
+        )
+        // Re-filter picking hits against the render-grade inherited clip
+        // (`CalculatedClip`) — bevy_ui 0.19's own clip check misses hits on
+        // scrolled/clipped-away nodes whose direct parent doesn't clip (see
+        // `pick_clip` module docs). Between the backends and the hover-map
+        // update, so every downstream consumer sees only visible hits.
+        .add_systems(
+            PreUpdate,
+            crate::pick_clip::filter_clipped_pointer_hits
+                .after(bevy::picking::PickingSystems::Backend)
+                .before(bevy::picking::PickingSystems::Hover),
         )
         .add_systems(
             Update,
@@ -389,8 +411,10 @@ fn forward_animation_settled(
 }
 
 /// Marker for the UI root entity (reconciler node id 0 / `ROOT_ID`).
+/// `pub(crate)`: devtools' reserve-space mode insets this root's margins to
+/// push the app UI aside while the panel is docked.
 #[derive(Component)]
-struct UiRoot;
+pub(crate) struct UiRoot;
 
 /// Plugin configuration read by the startup system.
 #[derive(Resource)]

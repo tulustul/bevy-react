@@ -171,6 +171,13 @@ fn build_app(window: Window, hot_reload: bool) -> App {
             CrowdedCubesScenePlugin,
             MonitorScenePlugin,
         ));
+    // The devtools inspector (F12). The feature is auto-enabled for dev units by
+    // the crate's self dev-dependency, so a plain `cargo run --example demos`
+    // includes it; release consumer builds compile none of it. Whether the
+    // panel is open persists in `.bevy-react-devtools.json`, so it reopens
+    // where you left it.
+    #[cfg(feature = "devtools")]
+    app.add_plugins(bevy_react::DevtoolsPlugin::new());
     // Each scene's plugin registers its own bindings in `build`; only the global
     // scene-selection + debug-navigation handlers are left to register here.
     scene::register_bindings(&mut app);
