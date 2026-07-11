@@ -25,7 +25,9 @@ export function App() {
       <Navigation />
 
       <node style={contentStyle} scrollStep={100}>
-        {selectedDemo.component && <selectedDemo.component />}
+        <node style={contentInnerStyle}>
+          {selectedDemo.component && <selectedDemo.component />}
+        </node>
       </node>
     </node>
   );
@@ -37,15 +39,28 @@ const rootStyle: BevyStyle = {
   flexDirection: "row",
 };
 
+// The scroll viewport. It must NOT center its content: centering an item that is
+// wider than the viewport pushes its left half into a negative scroll offset that
+// can never be reached (and inflates the range so the far end shows padding). So it
+// left-aligns the scroll content and lets the inner wrapper do the centering.
 const contentStyle: BevyStyle = {
   flexGrow: 1,
   height: "100%",
   flexDirection: "column",
-  alignItems: "center",
-  gap: 20,
-  padding: 24,
+  alignItems: "flexStart",
   overflowY: "scroll",
   overflowX: "scroll",
   scrollbar: Scrollbar,
   transition: { scroll: { duration: 200, easing: "easeOut" } },
+};
+
+// The scroll content: `minWidth: 100%` makes it fill the viewport (so narrow demos
+// still center) while growing to the widest demo, keeping the content's left edge at
+// scroll 0 — the flexbox "safe center" that stays reachable from both ends.
+const contentInnerStyle: BevyStyle = {
+  flexDirection: "column",
+  alignItems: "center",
+  gap: 20,
+  padding: 24,
+  minWidth: "100%",
 };
