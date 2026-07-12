@@ -62,6 +62,7 @@ use crate::message::ReactAppExt;
 use crate::plugin::PointerCapture;
 use crate::protocol::NodeId;
 use crate::reconcile::{OpApplyStats, climb};
+use crate::window::ui_viewport_size;
 use crate::{react_event, react_message};
 
 /// The Bevy side of the devtools inspector. See the [module docs](self).
@@ -285,27 +286,6 @@ struct DevtoolsPicked {
 struct DevtoolsWindow {
     width: f32,
     height: f32,
-}
-
-/// The UI's layout viewport in logical px: the default UI camera's target —
-/// which detached `<root>`s (the panel) lay out against, and which stays
-/// correct when that camera renders offscreen (the demos' `--shoot` mode,
-/// where the OS window's size is unrelated to the capture target) — falling
-/// back to the window (headless tests have no camera; a windowed app without
-/// an explicit [`IsDefaultUiCamera`] targets the window anyway).
-fn ui_viewport_size(
-    cameras: &Query<&Camera, With<IsDefaultUiCamera>>,
-    windows: &Query<&Window>,
-) -> Option<Vec2> {
-    if let Ok(camera) = cameras.single()
-        && let Some(size) = camera.logical_viewport_size()
-    {
-        return Some(size);
-    }
-    windows
-        .single()
-        .ok()
-        .map(|window| Vec2::new(window.width(), window.height()))
 }
 
 /// Bevy → JS: render timings for one applied op batch. **Event-driven** — sent

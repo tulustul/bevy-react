@@ -47,6 +47,7 @@ repeat: boolean, ctrlKey: boolean, shiftKey: boolean, altKey: boolean,
  * The "Meta"/"Super" key (Windows/Command).
  */
 metaKey: boolean, };
+export type Resize = WindowSize;
 export type SceneId = "Cubes" | "BouncingBall" | "CrowdedCubes" | "Surface";
 export type SelectDemo = { label: string, };
 export type SelectScene = SceneId | null;
@@ -54,6 +55,7 @@ export type SetCount = number;
 export type SetCrt = boolean;
 export type SetFollowMode = boolean;
 export type Wall = "Left" | "Right" | "Top" | "Bottom" | "Front" | "Back";
+export type WindowSize = { width: number, height: number, };
 
 /** Every `emit` name and the payload type it carries. */
 export interface ReactMessages {
@@ -67,6 +69,7 @@ export interface ReactMessages {
 /** Every `request` name and its request/response types. */
 export interface ReactRequests {
   "pollingDemo.getBall": { request: null; response: BallState };
+  "window.size": { request: null; response: WindowSize };
 }
 
 /** Every Bevy → React event name and the payload it carries. */
@@ -76,6 +79,7 @@ export interface ReactEvents {
   "debug.selectDemo": SelectDemo;
   keyDown: KeyDown;
   keyUp: KeyUp;
+  resize: Resize;
 }
 
 /** Send a typed app message to the Bevy side. */
@@ -128,5 +132,8 @@ export const bevy = {
   selectScene(value: SelectScene): void { emit("selectScene", value); },
   surfaceDemo: {
     setCrt(value: SetCrt): void { emit("surfaceDemo.setCrt", value); },
+  },
+  window: {
+    size(): Promise<WindowSize> { return request("window.size", null); },
   },
 } as const;

@@ -51,9 +51,12 @@ pub(crate) fn render_typescript(
         (reg.ts_collect)(&mut collector);
     }
     // Built-in framework events: always seeded so `bevy.on("keyDown", …)` is typed
-    // in every app with no per-app registration (see `crate::keyboard`).
+    // in every app with no per-app registration (see `crate::keyboard` and
+    // `crate::window`). `Resize` pulls in `WindowSize`, which the built-in
+    // `window.size` request row below references too.
     collector.add::<crate::keyboard::KeyDown>();
     collector.add::<crate::keyboard::KeyUp>();
+    collector.add::<crate::window::Resize>();
 
     // Sorted name lists keep the maps and proxy stable across runs.
     let mut message_names: Vec<(&str, String)> = messages
@@ -63,6 +66,10 @@ pub(crate) fn render_typescript(
         .collect();
     message_names.sort();
 
+    // `window.size` is reserved for the built-in viewport request (see
+    // `crate::window`); drop any app request that collides, then append the
+    // built-in (always present — the plugin registers its handler).
+    const BUILTIN_REQUESTS: [&str; 1] = ["window.size"];
     let mut request_rows: Vec<RequestRow> = requests
         .handlers
         .iter()
@@ -72,13 +79,20 @@ pub(crate) fn render_typescript(
             response_ts: (reg.ts_response_name)(),
             void: (reg.request_is_void)(),
         })
+        .filter(|row| !BUILTIN_REQUESTS.contains(&row.name))
         .collect();
+    request_rows.push(RequestRow {
+        name: "window.size",
+        request_ts: <crate::window::WindowSizeGet as TS>::name(),
+        response_ts: <crate::window::WindowSize as TS>::name(),
+        void: true,
+    });
     request_rows.sort_by(|a, b| a.name.cmp(b.name));
 
-    // `keyDown`/`keyUp` are reserved for the built-in keyboard events; drop any
+    // `keyDown`/`keyUp`/`resize` are reserved for the built-in events; drop any
     // app event that collides so the generated interface can't get a duplicate key,
     // then append the built-ins (always present).
-    const BUILTIN_EVENTS: [&str; 2] = ["keyDown", "keyUp"];
+    const BUILTIN_EVENTS: [&str; 3] = ["keyDown", "keyUp", "resize"];
     let mut event_names: Vec<(&str, String)> = events
         .handlers
         .iter()
@@ -87,6 +101,7 @@ pub(crate) fn render_typescript(
         .collect();
     event_names.push(("keyDown", <crate::keyboard::KeyDown as TS>::name()));
     event_names.push(("keyUp", <crate::keyboard::KeyUp as TS>::name()));
+    event_names.push(("resize", <crate::window::Resize as TS>::name()));
     event_names.sort();
 
     let mut out = String::new();
@@ -525,6 +540,18 @@ mod tests {
         );
         assert!(ts.contains("keyDown: KeyDown;"), "{ts}");
         assert!(ts.contains("keyUp: KeyUp;"), "{ts}");
+        // So are the built-in viewport-size event and request.
+        assert!(ts.contains("export type WindowSize = "), "{ts}");
+        assert!(ts.contains("export type Resize = WindowSize;"), "{ts}");
+        assert!(ts.contains("resize: Resize;"), "{ts}");
+        assert!(
+            ts.contains(r#""window.size": { request: null; response: WindowSize };"#),
+            "{ts}"
+        );
+        assert!(
+            ts.contains(r#"size(): Promise<WindowSize> { return request("window.size", null); }"#),
+            "{ts}"
+        );
         // A `Vec<PieceInfo>` response declares its inner struct and types as an array.
         assert!(ts.contains("export type PieceInfo = "), "{ts}");
         assert!(

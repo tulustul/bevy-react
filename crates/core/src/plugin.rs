@@ -15,7 +15,7 @@ use crate::filter::{FilterMaterial, FilterMaterialCache, init_filter_assets};
 use crate::bridge::{JsBridge, OpReceiver, OutboundResource, OutboundSender};
 use crate::event::ReactEventRegistry;
 use crate::host::{self, HostConfig, HostSenders};
-use crate::message::{ReactMessage, ReactRegistry};
+use crate::message::{ReactAppExt, ReactMessage, ReactRegistry};
 use crate::protocol::{Op, Outbound};
 use crate::reconcile::{
     OpApplyStats, apply_interaction_styles, apply_js_ops, apply_pending_selections,
@@ -365,6 +365,16 @@ impl Plugin for ReactUiPlugin {
                 apply_surface_interaction_styles,
             ),
         );
+
+        // The built-in `"resize"` event + `bevy.window.size()` request (see
+        // `crate::window`). A separate `add_systems` call — the Update tuple
+        // above is at Bevy's arity cap. `.after(apply_js_ops)` so the initial
+        // size goes out the same frame the first batch applies.
+        app.add_systems(
+            Update,
+            crate::window::send_resize_events.after(apply_js_ops),
+        );
+        app.add_react_request_handler(crate::window::handle_window_size_request);
 
         // Frame-start stamp for the devtools frame-wait / pre-apply split
         // (native only — no usable `Instant::now` on wasm). `First`: before

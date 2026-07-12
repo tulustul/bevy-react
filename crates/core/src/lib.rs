@@ -48,6 +48,7 @@ mod scrollbar;
 mod transition;
 mod ts_codegen;
 mod ui_map;
+mod window;
 
 // The native JS host (embedded V8 / deno_core on a dedicated thread). Exposed for
 // advanced use (custom integrations, headless tests). The web target has no such

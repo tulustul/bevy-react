@@ -2,7 +2,7 @@
 
 Improvements:
   ✔ pointermove called even though the pointer was not moved - `collect_pointer_events` now emits `pointerMove` only when the window cursor position changed (stationary held pointer is silent; the down frame no longer duplicates `pointerDown` as a zero-length move). `drive_surface_pointer` skips its dead zero-delta `PointerInput::Move` writes (bevy_picking dropped them anyway) except when the hovered surface image changed (that move retargets `PointerLocation`). CanvasDemo keeps its zero-length-segment guard (still needed: the node-relative position clamps at the canvas edges) with a corrected comment. Test: `pointer_move_only_fires_on_cursor_movement`. @done(26-07-12)
-  ☐ window resize event
+  ✔ window resize event - built-in `bevy.on("resize", cb)` streams the UI viewport's logical size `{width, height}` (default UI camera's logical viewport, window fallback — correct in --shoot mode), sent once after the first applied batch (listener-race gate) then on every change (poll + Local diff, so scale-factor changes count); plus built-in `bevy.window.size()` request for pull-on-mount. Both codegen-seeded into every bevy.ts (keyboard precedent; new BUILTIN_REQUESTS analogue). New `crates/core/src/window.rs` (also now owns `ui_viewport_size`, lifted from devtools). Demo: WindowSizeExample in BevyToReactDemo. Tests: `window::tests` gate/dedup/change + request Ok/Err, ts_codegen asserts. @done(26-07-12)
 Bugs:
   ✔ ImageDemo - disabling flip not working @done(26-07-12 12:16)
   ☐ large fontSize panics the app, look for similar issues
