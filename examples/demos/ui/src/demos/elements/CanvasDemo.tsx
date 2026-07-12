@@ -195,8 +195,9 @@ function PaintExample() {
     const from = last.current;
     if (!el || !from) return;
     const p = pointAt(el, e);
-    // pointerMove fires every held frame, moving or not — a stationary drag
-    // would send a zero-length (undrawable) segment per frame.
+    // The node-relative position clamps at the canvas edges, so dragging past
+    // the border repeats the same clamped point — a zero-length (undrawable)
+    // segment.
     if (p.x === from.x && p.y === from.y) return;
     const ctx = el.getContext();
     // One short segment per event, each its own path — the surface retains

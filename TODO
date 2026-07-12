@@ -1,7 +1,7 @@
 # Keep the descriptions short and to the point. Don't put any details here until required.
 
 Improvements:
-  ☐ pointermove called even though the pointer was not moved
+  ✔ pointermove called even though the pointer was not moved - `collect_pointer_events` now emits `pointerMove` only when the window cursor position changed (stationary held pointer is silent; the down frame no longer duplicates `pointerDown` as a zero-length move). `drive_surface_pointer` skips its dead zero-delta `PointerInput::Move` writes (bevy_picking dropped them anyway) except when the hovered surface image changed (that move retargets `PointerLocation`). CanvasDemo keeps its zero-length-segment guard (still needed: the node-relative position clamps at the canvas edges) with a corrected comment. Test: `pointer_move_only_fires_on_cursor_movement`. @done(26-07-12)
   ☐ window resize event
 Bugs:
   ✔ ImageDemo - disabling flip not working @done(26-07-12 12:16)

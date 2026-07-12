@@ -1709,9 +1709,11 @@ impl Default for ActiveDrag {
 /// handlers. Unlike the discrete click path, this follows the cursor across
 /// frames so a dragged control (e.g. a slider) keeps updating even when the
 /// pointer leaves its bounds — `RelativeCursorPosition` keeps reporting while the
-/// cursor is anywhere in the window, and we clamp to `0..1`. Any mouse button
-/// starts a drag and is reported on its events ([`ActiveDrag::button`] — one
-/// drag at a time, keyed to the button that began it).
+/// cursor is anywhere in the window, and we clamp to `0..1`. `pointerMove` is
+/// emitted only when the window cursor actually moved (DOM semantics), not once
+/// per held frame. Any mouse button starts a drag and is reported on its events
+/// ([`ActiveDrag::button`] — one drag at a time, keyed to the button that began
+/// it).
 ///
 /// `RelativeCursorPosition::normalized` is centered (`-0.5` = left/top edge,
 /// `0.5` = right/bottom); we shift it to a `0..1` top-left origin to match the
@@ -1786,16 +1788,19 @@ pub fn collect_pointer_events(
     }
 
     // While the initiating button is held, follow the cursor and emit move
-    // events (a drag).
+    // events (a drag). Only an actual cursor displacement emits: a stationary
+    // held pointer stays silent (DOM `pointermove` semantics) instead of
+    // flooding the bridge with one identical event per frame.
     if buttons.pressed(drag.button)
         && let Some(entity) = drag.entity
         && let Ok((_, rnode, _, rel, handlers)) = nodes.get(entity)
     {
         let pos = normalized_01(rel).unwrap_or(drag.last_pos);
         let abs = cursor_abs.unwrap_or(drag.last_abs);
+        let cursor_moved = abs != drag.last_abs;
         drag.last_pos = pos;
         drag.last_abs = abs;
-        if handlers.moved {
+        if cursor_moved && handlers.moved {
             emit(rnode, "pointerMove", pos, abs, drag.dom_button);
         }
     }
@@ -2034,8 +2039,8 @@ pub fn collect_surface_pointer_events(
     // Per-kind (owner, button) dedupe: a pass-through node stacked over the
     // target fans each gesture out to every hovered entity, and climbing can
     // resolve them to the same owner. (Moves see at most one `Drag` per button
-    // per frame — `drive_surface_pointer` emits one `Move` per frame — so the
-    // set never suppresses a genuine repeat.)
+    // per frame — `drive_surface_pointer` emits at most one `Move` per frame —
+    // so the set never suppresses a genuine repeat.)
     let mut seen: HashSet<(Entity, PointerButton)> = HashSet::new();
     let emit = |entity: Entity,
                 want: fn(&PointerHandlers) -> bool,
@@ -2604,6 +2609,80 @@ mod tests {
             events[0].button, None,
             "clicks carry no button (primary implied)"
         );
+    }
+
+    /// [`collect_pointer_events`] emits `pointerMove` only when the window cursor
+    /// actually moved: a stationary held button is silent (the regression was one
+    /// identical event per frame), and the down frame doesn't duplicate
+    /// `pointerDown` as a zero-length move.
+    #[test]
+    fn pointer_move_only_fires_on_cursor_movement() {
+        let (mut app, mut out_rx) = click_app();
+        app.init_resource::<ButtonInput<MouseButton>>();
+        app.init_resource::<crate::PointerCapture>();
+        app.add_systems(Update, collect_pointer_events);
+
+        let mut window = Window::default();
+        window.set_physical_cursor_position(Some(bevy::math::DVec2::new(100.0, 100.0)));
+        let win = app.world_mut().spawn(window).id();
+
+        let node = app
+            .world_mut()
+            .spawn((
+                RNode(1),
+                Interaction::Pressed,
+                RelativeCursorPosition {
+                    cursor_over: true,
+                    normalized: Some(Vec2::ZERO),
+                },
+                PointerHandlers {
+                    down: true,
+                    moved: true,
+                    up: true,
+                    ..default()
+                },
+            ))
+            .id();
+
+        let kinds = |rx: &mut tokio::sync::mpsc::UnboundedReceiver<Outbound>| {
+            drain_clicks(rx)
+                .into_iter()
+                .map(|e| e.kind)
+                .collect::<Vec<_>>()
+        };
+
+        // Press frame: a pointerDown, and no same-position pointerMove.
+        app.world_mut()
+            .resource_mut::<ButtonInput<MouseButton>>()
+            .press(MouseButton::Left);
+        app.update();
+        assert_eq!(kinds(&mut out_rx), ["pointerDown"]);
+
+        // Held but stationary: silence.
+        app.world_mut()
+            .resource_mut::<ButtonInput<MouseButton>>()
+            .clear();
+        app.update();
+        assert_eq!(kinds(&mut out_rx), Vec::<String>::new());
+
+        // The cursor moves: exactly one pointerMove.
+        app.world_mut()
+            .get_mut::<Window>(win)
+            .unwrap()
+            .set_physical_cursor_position(Some(bevy::math::DVec2::new(110.0, 100.0)));
+        app.world_mut()
+            .get_mut::<RelativeCursorPosition>(node)
+            .unwrap()
+            .normalized = Some(Vec2::new(0.05, 0.0));
+        app.update();
+        assert_eq!(kinds(&mut out_rx), ["pointerMove"]);
+
+        // Release: a pointerUp, no trailing move.
+        app.world_mut()
+            .resource_mut::<ButtonInput<MouseButton>>()
+            .release(MouseButton::Left);
+        app.update();
+        assert_eq!(kinds(&mut out_rx), ["pointerUp"]);
     }
 
     /// The surface virtual pointer's clicks belong to [`collect_surface_clicks`]

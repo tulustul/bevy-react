@@ -403,11 +403,16 @@ pub fn drive_surface_pointer(
         let position = Vec2::new(uv.x * size.x as f32, uv.y * size.y as f32);
         let location = image_location(&handle, position);
         let delta = position - state.last_pos;
-        input.write(PointerInput::new(
-            pointer_id,
-            location.clone(),
-            PointerAction::Move { delta },
-        ));
+        // A zero-delta move carries no information (picking drops it before any
+        // `Pointer<Move>`/`Drag` dispatch) — unless the target image changed,
+        // where the move is what retargets `PointerLocation` to the new surface.
+        if delta != Vec2::ZERO || state.over_target.as_ref() != Some(&handle) {
+            input.write(PointerInput::new(
+                pointer_id,
+                location.clone(),
+                PointerAction::Move { delta },
+            ));
+        }
         state.last_pos = position;
         state.over_target = Some(handle);
 
