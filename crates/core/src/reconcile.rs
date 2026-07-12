@@ -63,11 +63,18 @@ pub struct OpApplyStats {
     pub app_applied_count: u64,
     /// Number of ops in the most recently applied batch.
     pub last_ops: usize,
-    /// How long the most recently applied ops waited between `op_flush`'s send
-    /// (the JS side, post-serde) and the start of [`apply_js_ops`] — channel
-    /// wait plus frame latency. Measured from the OLDEST coalesced batch's
-    /// [`FlushStamps`] stamp; zero when no stamp channel is wired (headless
-    /// tests) and on web.
+    /// How long the most recently applied ops idled in the channel across the
+    /// frame boundary: the OLDEST coalesced batch's [`FlushStamps`] stamp →
+    /// this frame's [`FrameStamp`]. Structural queue wait, typically ~one
+    /// vsync period (a Bevy-triggered commit always lands just after that
+    /// frame's drain); can exceed one frame when batches coalesce. Zero when
+    /// the stamp channel or frame stamp is missing (headless tests) and on web.
+    pub last_frame_wait: std::time::Duration,
+    /// The in-frame leg of the same span: max(batch stamp, frame start) →
+    /// the start of [`apply_js_ops`] — time eaten by schedules/systems that
+    /// ran before the drain this frame. With no [`FrameStamp`] present the
+    /// whole send→apply span lands here. Zero when no stamp channel is wired
+    /// (headless tests) and on web.
     pub last_pre_apply: std::time::Duration,
     /// Time spent translating the most recent batch into ECS commands — the
     /// [`apply_js_ops`] body only. Excludes command execution and layout.
@@ -81,9 +88,23 @@ pub struct OpApplyStats {
 /// Receiver of per-batch send instants, stamped by the JS host's `op_flush`
 /// right before each batch enters the ops channel (see `js_thread.rs`). Both
 /// FIFOs are aligned (stamp sent first), so draining one stamp per received
-/// batch keeps them in lockstep. Feeds [`OpApplyStats::last_pre_apply`].
+/// batch keeps them in lockstep. Feeds [`OpApplyStats::last_frame_wait`] and
+/// [`OpApplyStats::last_pre_apply`].
 #[derive(Resource)]
 pub struct FlushStamps(pub(crate) crossbeam_channel::Receiver<std::time::Instant>);
+
+/// The instant Bevy's `First` schedule ran this frame (native only; stays
+/// `None` on web and in headless tests that never add [`mark_frame_start`]).
+/// The frame boundary that splits [`OpApplyStats::last_frame_wait`] from
+/// `last_pre_apply`.
+#[derive(Resource, Default, Debug, Clone, Copy)]
+pub struct FrameStamp(pub Option<std::time::Instant>);
+
+/// Stamp the frame's start. Registered in `First` (native only).
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn mark_frame_start(mut stamp: ResMut<FrameStamp>) {
+    stamp.0 = Some(std::time::Instant::now());
+}
 
 /// Receiver of per-batch devtools-origin flags (`true` = the devtools panel's
 /// own React container flushed the batch), sent by the JS host's `op_flush`
@@ -100,6 +121,8 @@ pub struct FlushMeta<'w> {
     #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     stamps: Option<Res<'w, FlushStamps>>,
     flags: Option<Res<'w, FlushFlags>>,
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
+    frame: Option<Res<'w, FrameStamp>>,
 }
 
 /// The asset stores + caches the op-apply path builds components from: the
@@ -904,12 +927,32 @@ pub fn apply_js_ops(
     #[cfg(not(target_arch = "wasm32"))]
     {
         let end = std::time::Instant::now();
-        stats.last_pre_apply = first_stamp
-            .map(|stamp| started.saturating_duration_since(stamp))
+        let (wait, pre) = first_stamp
+            .map(|stamp| split_pre_apply(stamp, meta.frame.as_ref().and_then(|f| f.0), started))
             .unwrap_or_default();
+        stats.last_frame_wait = wait;
+        stats.last_pre_apply = pre;
         stats.last_translate = end.duration_since(started);
         stats.last_apply_end = Some(end);
     }
+}
+
+/// Split "op_flush send → apply start" into the cross-frame queue wait and the
+/// in-frame leg at the frame-start boundary. Saturating: a stamp landing
+/// mid-frame (after frame start, e.g. a JS-timer commit) clamps the wait to
+/// zero; jitter never panics. A `None` frame start puts the whole span in the
+/// in-frame leg.
+#[cfg(not(target_arch = "wasm32"))]
+fn split_pre_apply(
+    stamp: std::time::Instant,
+    frame_start: Option<std::time::Instant>,
+    apply_start: std::time::Instant,
+) -> (std::time::Duration, std::time::Duration) {
+    let boundary = frame_start.map_or(stamp, |fs| fs.max(stamp));
+    (
+        boundary.saturating_duration_since(stamp),
+        apply_start.saturating_duration_since(boundary),
+    )
 }
 
 /// When a bare-string run is appended into a `<text>`, copy the parent's text
@@ -2301,6 +2344,59 @@ mod tests {
         app.update();
         let stats = *app.world().resource::<OpApplyStats>();
         assert_eq!((stats.applied_count, stats.app_applied_count), (2, 1));
+    }
+
+    #[test]
+    fn split_pre_apply_splits_wait_and_in_frame() {
+        use std::time::Duration;
+        let t0 = std::time::Instant::now();
+        let t1 = t0 + Duration::from_millis(12);
+        let t2 = t1 + Duration::from_millis(3);
+        assert_eq!(
+            split_pre_apply(t0, Some(t1), t2),
+            (Duration::from_millis(12), Duration::from_millis(3))
+        );
+        // A stamp landing mid-frame (after frame start, e.g. a JS-timer
+        // commit) clamps the wait to zero — the whole span is in-frame.
+        assert_eq!(split_pre_apply(t1, Some(t0), t2), (Duration::ZERO, t2 - t1));
+        // No frame stamp (headless): the whole span is the in-frame leg.
+        assert_eq!(split_pre_apply(t0, None, t2), (Duration::ZERO, t2 - t0));
+    }
+
+    /// The send→apply span splits at the frame boundary: the cross-frame queue
+    /// wait lands in `last_frame_wait`, the in-frame remainder in
+    /// `last_pre_apply`.
+    #[test]
+    fn flush_stamp_splits_frame_wait_from_pre_apply() {
+        use std::time::{Duration, Instant};
+        let (mut app, ops_tx) = op_app();
+        let (stamps_tx, stamps_rx) = crossbeam_channel::unbounded::<Instant>();
+        app.insert_resource(FlushStamps(stamps_rx));
+        // Both boundaries in the past so ordering is stamp < frame start <
+        // apply start (a future-dated frame stamp would saturate the in-frame
+        // leg to zero instead).
+        let now = Instant::now();
+        let stamp = now - Duration::from_millis(30);
+        let frame_start = now - Duration::from_millis(10);
+        app.insert_resource(FrameStamp(Some(frame_start)));
+
+        stamps_tx.send(stamp).unwrap();
+        ops_tx
+            .send(vec![Op::Create {
+                id: 1,
+                kind: "node".into(),
+                props: Props::default(),
+                text: None,
+            }])
+            .unwrap();
+        app.update();
+
+        let stats = *app.world().resource::<OpApplyStats>();
+        // Both endpoints are fixed instants, so the wait is exact.
+        assert_eq!(stats.last_frame_wait, Duration::from_millis(20));
+        // The in-frame leg runs to the real apply start — at least the fixed
+        // 10ms between the frame stamp and `now`.
+        assert!(stats.last_pre_apply >= Duration::from_millis(10));
     }
 
     /// A plain `<node onClick>` — no hover/press style, not a `<button>` — must get

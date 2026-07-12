@@ -18,6 +18,7 @@ export interface DevtoolsToggle {
 export interface DevtoolsBatchStats {
   applied_count: number;
   last_ops: number;
+  frame_wait_ms: number;
   pre_apply_ms: number;
   translate_ms: number;
   command_ms: number;

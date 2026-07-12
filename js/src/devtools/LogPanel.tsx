@@ -199,10 +199,11 @@ function LogRow({
   );
 }
 
-/** End-to-end cost of an ops entry: the sum of its measured, disjoint segments
- *  (JS render + flush + pre-apply + translate + command + layout). Not a wall
- *  measure — there is no shared clock across the boundary — but the segments
- *  are contiguous, so the sum is the honest equivalent. */
+/** Work cost of an ops entry: the sum of its measured segments (JS render +
+ *  flush + pre-apply + translate + command + layout). Deliberately NOT wall
+ *  time: the flush→frame-start queue wait (the dimmed "wait" column, ~one
+ *  vsync of idle channel time) is excluded, so this measures what the batch
+ *  cost, not how long it waited for the render loop. */
 function grandTotal(entry: LogEntry): number {
   return (
     (entry.jsMs ?? 0) + (entry.flushMs ?? 0) + (entry.stats?.total_ms ?? 0)
@@ -210,14 +211,17 @@ function grandTotal(entry: LogEntry): number {
 }
 
 /** The stress-table columns for one ops entry:
- *  Total | Pre-apply | JS | Flush | Translate | Command | Layout | Bevy. */
+ *  Total | Wait | Pre-apply | JS | Flush | Translate | Command | Layout | Bevy.
+ *  "wait" (dimmed) is the flush→frame-start queue wait — latency, not work —
+ *  and is excluded from "total". */
 function StatsBreakdown({ entry }: { entry: LogEntry }) {
   const s = entry.stats;
   if (!s) return null;
   const ms = (v: number | undefined) =>
     v === undefined ? "-" : `${v.toFixed(2)}`;
-  const cols: [string, string][] = [
+  const cols: [string, string, boolean?][] = [
     ["total", ms(grandTotal(entry))],
+    ["wait", ms(s.frame_wait_ms), true],
     ["pre-apply", ms(s.pre_apply_ms)],
     ["js", ms(entry.jsMs)],
     ["flush", ms(entry.flushMs)],
@@ -228,14 +232,18 @@ function StatsBreakdown({ entry }: { entry: LogEntry }) {
   ];
   return (
     <node style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
-      {cols.map(([label, value]) => (
+      {cols.map(([label, value, dim]) => (
         <node
           key={label}
           style={{ flexDirection: "row", gap: 2, alignItems: "center" }}
         >
           <text style={{ color: theme.textDim, fontSize: 9 }}>{label}</text>
           <text
-            style={{ color: theme.ok, fontSize: 9, fontFamily: theme.mono }}
+            style={{
+              color: dim ? theme.textDim : theme.ok,
+              fontSize: 9,
+              fontFamily: theme.mono,
+            }}
           >
             {value}
           </text>

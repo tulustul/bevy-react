@@ -223,6 +223,8 @@ impl Plugin for ReactUiPlugin {
         .init_resource::<ReactEventRegistry>()
         .init_resource::<PointerCapture>()
         .init_resource::<OpApplyStats>()
+        // Unconditional so wasm compiles; it just stays `None` there.
+        .init_resource::<crate::reconcile::FrameStamp>()
         .init_resource::<crate::ui_map::AtlasLayoutCache>()
         .init_resource::<crate::scrollbar::ScrollbarTracks>()
         .init_resource::<Fonts>()
@@ -363,6 +365,12 @@ impl Plugin for ReactUiPlugin {
                 apply_surface_interaction_styles,
             ),
         );
+
+        // Frame-start stamp for the devtools frame-wait / pre-apply split
+        // (native only — no usable `Instant::now` on wasm). `First`: before
+        // any work the pre-apply leg should attribute.
+        #[cfg(not(target_arch = "wasm32"))]
+        app.add_systems(bevy::app::First, crate::reconcile::mark_frame_start);
 
         // `editableText` edits arrive as Bevy's `TextEditChange` trigger; an observer
         // turns real changes into `"change"` and selection moves into `"select"` UI

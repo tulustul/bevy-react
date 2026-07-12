@@ -319,7 +319,11 @@ struct DevtoolsBatchStats {
     applied_count: u64,
     /// Ops applied this frame (all queued flushes, coalesced).
     last_ops: usize,
-    /// `op_flush` send → apply start: channel wait + frame latency.
+    /// `op_flush` send → frame start: cross-frame queue wait (typically ~one
+    /// vsync; structural, excluded from the panel's totals).
+    frame_wait_ms: f64,
+    /// Frame start (or send, if later) → apply start: in-frame schedules
+    /// before the drain.
     pre_apply_ms: f64,
     /// Op → ECS-command translation (the `apply_js_ops` body).
     translate_ms: f64,
@@ -997,6 +1001,7 @@ fn emit_batch_stats(
     events.send(&DevtoolsBatchStats {
         applied_count: stats.applied_count,
         last_ops: stats.last_ops,
+        frame_wait_ms: stats.last_frame_wait.as_secs_f64() * 1000.0,
         pre_apply_ms: stats.last_pre_apply.as_secs_f64() * 1000.0,
         translate_ms: stats.last_translate.as_secs_f64() * 1000.0,
         command_ms: timers.last_command.as_secs_f64() * 1000.0,
@@ -1396,14 +1401,22 @@ mod tests {
             "the panel's own commits must not produce batch stats"
         );
 
-        // An app apply: exactly one stats event.
+        // An app apply: exactly one stats event, carrying both pre-apply legs.
         {
             let mut stats = app.world_mut().resource_mut::<OpApplyStats>();
             stats.applied_count = 2;
             stats.app_applied_count = 1;
         }
         app.update();
-        assert_eq!(stats_events(&mut rx), 1, "an app apply reports once");
+        let stats: Vec<_> = drain_events(&mut rx)
+            .into_iter()
+            .filter(|(name, _)| name == "devtools.batchStats")
+            .collect();
+        assert_eq!(stats.len(), 1, "an app apply reports once");
+        assert!(
+            stats[0].1.get("frame_wait_ms").is_some(),
+            "batch stats carry the frame-wait leg"
+        );
     }
 
     /// A unique temp path per test; deleted on drop.

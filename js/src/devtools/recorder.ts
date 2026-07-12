@@ -34,12 +34,16 @@ export type LogKind =
  *  entries when the matching `devtools.batchStats` event lands. Rust-side legs
  *  only; the JS-side legs (`jsMs`, `flushMs`) live on the entry itself. */
 export interface BatchTimings {
-  /** `op_flush` send → apply start (channel wait + frame latency). */
+  /** `op_flush` send → frame start: structural vsync queue wait — reported,
+   *  but excluded from `total_ms`. Optional so an entry recorded before a
+   *  mid-session skew renders `-`, not `NaN`. */
+  frame_wait_ms?: number;
+  /** Frame start (or send, if later) → apply start: the in-frame leg. */
   pre_apply_ms: number;
   translate_ms: number;
   command_ms: number;
   layout_ms: number;
-  /** Sum of the Rust-side legs above. */
+  /** Sum of the Rust-side WORK legs above (excludes `frame_wait_ms`). */
   total_ms: number;
 }
 
@@ -197,10 +201,13 @@ export const recorder = {
     // the "stats → footer re-render → panel ops → new batch → stats…" loop
     // should the attribution ever regress.
     if (pendingStats.length === 0) return;
+    // Work legs only — `frame_wait_ms` (idle vsync queue wait) is deliberately
+    // excluded so totals measure cost, not frame latency.
     const total_ms =
       s.pre_apply_ms + s.translate_ms + s.command_ms + s.layout_ms;
     lastBatch = { applied_count: s.applied_count, ops: s.last_ops, total_ms };
     const timings: BatchTimings = {
+      frame_wait_ms: s.frame_wait_ms,
       pre_apply_ms: s.pre_apply_ms,
       translate_ms: s.translate_ms,
       command_ms: s.command_ms,
