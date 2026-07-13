@@ -176,7 +176,7 @@ fn demo_switch_anchored_survives() {
                 anchored_btn = anchored_btn
                     .or_else(|| find_button("<Anchored.node>", &buttons, &parent_of, &text_of));
                 other_btn = other_btn
-                    .or_else(|| find_button("Interactions", &buttons, &parent_of, &text_of));
+                    .or_else(|| find_button("Events", &buttons, &parent_of, &text_of));
             }
             Err(RecvTimeoutError::Timeout) => {}
             Err(RecvTimeoutError::Disconnected) => panic!("JS thread died during initial render"),
@@ -184,7 +184,7 @@ fn demo_switch_anchored_survives() {
     }
 
     let anchored_btn = anchored_btn.expect("no '<Anchored.node>' nav button in initial render");
-    let other_btn = other_btn.expect("no 'Interactions' nav button in initial render");
+    let other_btn = other_btn.expect("no 'Events' nav button in initial render");
     eprintln!("OK   nav buttons: anchored={anchored_btn}, other={other_btn}");
 
     let click = |id: u32| {
@@ -212,7 +212,7 @@ fn demo_switch_anchored_survives() {
             &mut text_of,
         );
 
-        eprintln!("--- round {round}: -> Interactions");
+        eprintln!("--- round {round}: -> Events");
         click(other_btn);
         pump(
             &ops_rx,
