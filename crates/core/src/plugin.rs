@@ -68,7 +68,8 @@ pub struct PointerCaptureSet;
 /// Point it at a built JS bundle (see the `bevy-react` npm package). The plugin
 /// spawns the dedicated JS thread, applies the reconciler's ops to the ECS,
 /// reports interactions back to React, and — unless disabled — hot reloads the
-/// app when the bundle changes on disk.
+/// app when the bundle changes on disk. In dev builds it also enables the
+/// devtools inspector (toggled with `F12`; see [`Self::devtools`]).
 pub struct ReactUiPlugin {
     bundle: PathBuf,
     hot_reload: bool,
@@ -76,6 +77,8 @@ pub struct ReactUiPlugin {
     default_font: Option<PathBuf>,
     named_fonts: Vec<(String, PathBuf)>,
     custom_cursors: Vec<(String, PathBuf, (u16, u16))>,
+    #[cfg(feature = "devtools")]
+    devtools: crate::devtools::DevtoolsConfig,
 }
 
 impl ReactUiPlugin {
@@ -94,7 +97,35 @@ impl ReactUiPlugin {
             default_font: None,
             named_fonts: Vec::new(),
             custom_cursors: Vec::new(),
+            #[cfg(feature = "devtools")]
+            devtools: Default::default(),
         }
+    }
+
+    /// Configure the devtools inspector, on by default in dev builds (release
+    /// builds never run it, even when compiled in). Every
+    /// [`DevtoolsConfig`](crate::DevtoolsConfig) field has a default, so
+    /// override only what you need:
+    ///
+    /// ```no_run
+    /// # use bevy::prelude::*;
+    /// # use bevy_react::{DevtoolsConfig, ReactUiPlugin};
+    /// # let mut app = App::new();
+    /// app.add_plugins(ReactUiPlugin::new("ui/dist/app.js").devtools(DevtoolsConfig {
+    ///     toggle_key: KeyCode::F1,
+    ///     settings_path: Some(".config/devtools.json".into()),
+    ///     ..default()
+    /// }));
+    /// // or disable devtools entirely
+    /// app.add_plugins(ReactUiPlugin::new("ui/dist/app.js").devtools(DevtoolsConfig {
+    ///     enabled: false,
+    ///     ..default()
+    /// }));
+    /// ```
+    #[cfg(feature = "devtools")]
+    pub fn devtools(mut self, config: crate::devtools::DevtoolsConfig) -> Self {
+        self.devtools = config;
+        self
     }
 
     /// Enable/disable watching the bundle and hot reloading on change.
@@ -408,6 +439,14 @@ impl Plugin for ReactUiPlugin {
                 // Completion callbacks: settlements the engine reports (once per
                 // token-tagged driver, not per frame) go out to JS.
                 .add_systems(Update, forward_animation_settled.after(AnimationSet::Tick));
+        }
+
+        // The devtools inspector rides along by default (see `Self::devtools`).
+        // Registration is the only gate needed here: the plugin itself registers
+        // nothing in `--release` builds.
+        #[cfg(feature = "devtools")]
+        if self.devtools.enabled {
+            app.add_plugins(crate::devtools::DevtoolsPlugin::new(self.devtools.clone()));
         }
     }
 }

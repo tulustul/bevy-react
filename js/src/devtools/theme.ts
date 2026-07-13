@@ -1,4 +1,4 @@
-// The devtools panel's palette (Chrome-devtools-like dark theme). Hex only —
+// The devtools panel's palette (dark theme). Hex only —
 // every color crosses the bridge as a wire string parsed by the Rust side.
 export const theme = {
   /** Panel background. */

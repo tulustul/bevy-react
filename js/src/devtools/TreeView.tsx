@@ -1,4 +1,4 @@
-// The Nodes tree: a Chrome-like explorer over the op mirror. Rows expand/
+// The Nodes tree: an explorer over the op mirror. Rows expand/
 // collapse, click selects (driving the inspector + the on-screen highlight),
 // and hovering a row highlights its node in the running UI.
 

@@ -1,17 +1,16 @@
-//! The Chrome-DevTools-style inspector: a React panel (shipped inside the
+//! The devtools inspector: a React panel (shipped inside the
 //! bevy-react JS runtime, rendered into a detached `<root>` overlay) backed by
 //! this Bevy-side plugin. The panel gives a live nodes explorer, two-way node
 //! selection (tree → on-screen highlight, screen → tree pick mode), transient
 //! inline prop/style editing, stats + render timings, and a bridge-message log.
 //!
-//! Add [`DevtoolsPlugin`] after [`ReactUiPlugin`](crate::ReactUiPlugin):
+//! [`DevtoolsPlugin`] is crate-internal: [`ReactUiPlugin`](crate::ReactUiPlugin)
+//! auto-registers it, and consumers configure it through
+//! [`ReactUiPlugin::devtools`](crate::ReactUiPlugin::devtools), which takes a
+//! [`DevtoolsConfig`] (every field defaulted, including `enabled`).
 //!
-//! ```ignore
-//! app.add_plugins(DevtoolsPlugin::new().toggle_key(KeyCode::F12));
-//! ```
-//!
-//! The module only exists behind the `devtools` cargo feature (off by default,
-//! auto-enabled for this repo's own examples/tests via the self dev-dependency),
+//! The module only exists behind the `devtools` cargo feature (a default
+//! feature — release builds compile it out with `default-features = false`),
 //! and the plugin is inert in `--release` builds even when compiled in. The JS
 //! half lives in `js/src/devtools/` and is stripped from production bundles.
 //!
@@ -38,7 +37,7 @@
 //! - Settings persistence: layout settings — including whether the panel was
 //!   open, so it reopens where you left it — round-trip through a JSON file
 //!   (default `.bevy-react-devtools.json` in the working directory —
-//!   [`DevtoolsPlugin::settings_path`] / [`DevtoolsPlugin::no_settings_file`]).
+//!   [`DevtoolsConfig::settings_path`]).
 //!   The blob returns to the panel exactly once via `devtools.restore` —
 //!   **always**, with defaults when there is no (or a corrupt) file: the JS
 //!   recorder arms itself at install to capture the app's initial mount and
@@ -66,62 +65,75 @@ use crate::reconcile::{OpApplyStats, climb};
 use crate::window::ui_viewport_size;
 use crate::{react_event, react_message};
 
-/// The Bevy side of the devtools inspector. See the [module docs](self).
+/// Devtools configuration, passed to
+/// [`ReactUiPlugin::devtools`](crate::ReactUiPlugin::devtools). Every field
+/// has a default (`DevtoolsConfig::default()` is exactly what an app gets
+/// without calling `.devtools(...)` at all), so construct it with
+/// struct-update syntax:
 ///
-/// The panel toggles with [`toggle_key`](Self::toggle_key) (default `F12`).
-/// Whether it was open persists with the layout settings, so an app closed
-/// with the panel open reopens it on the next launch (once the React app has
-/// mounted).
-pub struct DevtoolsPlugin {
-    toggle_key: KeyCode,
-    settings_path: Option<std::path::PathBuf>,
+/// ```no_run
+/// # use bevy::prelude::*;
+/// # use bevy_react::{DevtoolsConfig, ReactUiPlugin};
+/// # let mut app = App::new();
+/// app.add_plugins(ReactUiPlugin::new("ui/dist/app.js").devtools(DevtoolsConfig {
+///     settings_path: Some(".config/devtools.json".into()),
+///     ..default()
+/// }));
+/// ```
+///
+/// Also a resource, so the toggle/persistence systems can read it.
+#[derive(Resource, Clone)]
+pub struct DevtoolsConfig {
+    /// Whether the devtools are available at all. Default: `true` (dev builds
+    /// only either way — release builds never run them).
+    pub enabled: bool,
+    /// The key that toggles the panel. Default: `F12`.
+    pub toggle_key: KeyCode,
+    /// Where the panel's layout settings (dock mode/width, float rect, the
+    /// reserve and overlay toggles, tree/inspector split, whether the panel
+    /// is open) persist across runs; `None` disables persistence. Default:
+    /// `.bevy-react-devtools.json` in the working directory. Native only —
+    /// on web the file is neither read nor written.
+    pub settings_path: Option<std::path::PathBuf>,
 }
 
-impl Default for DevtoolsPlugin {
+impl Default for DevtoolsConfig {
     fn default() -> Self {
         Self {
+            enabled: true,
             toggle_key: KeyCode::F12,
             settings_path: Some(std::path::PathBuf::from(".bevy-react-devtools.json")),
         }
     }
 }
 
+/// The Bevy side of the devtools inspector. See the [module docs](self).
+///
+/// Crate-internal: [`ReactUiPlugin`](crate::ReactUiPlugin) auto-registers it,
+/// built from the consumer's [`DevtoolsConfig`].
+pub struct DevtoolsPlugin {
+    config: DevtoolsConfig,
+}
+
 impl DevtoolsPlugin {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// The key that toggles the panel (default `F12`).
-    pub fn toggle_key(mut self, key: KeyCode) -> Self {
-        self.toggle_key = key;
-        self
-    }
-
-    /// Where the panel's layout settings (dock mode/width, float rect, the
-    /// reserve and overlay toggles, tree/inspector split) persist across runs.
-    /// Default: `.bevy-react-devtools.json` in the working directory. Native
-    /// only — on web the file is neither read nor written.
-    pub fn settings_path(mut self, path: impl Into<std::path::PathBuf>) -> Self {
-        self.settings_path = Some(path.into());
-        self
-    }
-
-    /// Disable settings persistence entirely.
-    pub fn no_settings_file(mut self) -> Self {
-        self.settings_path = None;
-        self
+    pub fn new(config: DevtoolsConfig) -> Self {
+        Self { config }
     }
 }
 
 impl Plugin for DevtoolsPlugin {
     fn build(&self, app: &mut App) {
-        // "Dev build only": even when the feature is compiled in (e.g.
-        // `cargo run --release --example demos`, where the self dev-dependency
-        // still unifies the feature on), the plugin registers nothing.
+        // "Dev build only": the feature is a default feature, so this is the
+        // expected path for every consumer `--release` build — the plugin
+        // registers nothing. `debug!`, not `warn!`: release logs stay clean.
         if !cfg!(debug_assertions) {
-            warn!("DevtoolsPlugin is inert in release builds");
+            debug!("DevtoolsPlugin is inert in release builds");
             return;
         }
+        // The toggle/pick systems read `ButtonInput` resources; a headless app
+        // without `InputPlugin` (wiring-only tests) must not panic on them.
+        app.init_resource::<ButtonInput<KeyCode>>();
+        app.init_resource::<ButtonInput<MouseButton>>();
         // Start collecting apply-time invalid-value warnings (see
         // `crate::diag`): armed for the app's whole lifetime, panel open or
         // not, so warnings from the initial mount are waiting when it opens.
@@ -130,7 +142,7 @@ impl Plugin for DevtoolsPlugin {
         // corrupt JSON — mean fresh defaults). The overlay toggle seeds the
         // Rust-side state immediately so highlight gating is correct before
         // the JS panel wakes; the rest restores to JS via `send_restore`.
-        let loaded = load_settings(self.settings_path.as_deref());
+        let loaded = load_settings(self.config.settings_path.as_deref());
         app.insert_resource(DevtoolsState {
             show_selection_overlay: loaded.as_ref().is_none_or(|s| s.overlay),
             ..Default::default()
@@ -144,10 +156,7 @@ impl Plugin for DevtoolsPlugin {
             debounce: Duration::from_secs(1),
         })
         .init_resource::<DevtoolsTimers>()
-        .insert_resource(DevtoolsConfig {
-            toggle_key: self.toggle_key,
-            settings_path: self.settings_path.clone(),
-        })
+        .insert_resource(self.config.clone())
         // Panel → Bevy state sync. Registration is what routes the emits;
         // none of this reaches an app's generated `bevy.ts` because the
         // bindings exporter never adds this plugin.
@@ -206,14 +215,6 @@ impl Plugin for DevtoolsPlugin {
             ),
         );
     }
-}
-
-/// Plugin configuration, kept as a resource so the key handler can read it.
-#[derive(Resource)]
-struct DevtoolsConfig {
-    toggle_key: KeyCode,
-    /// Where panel settings persist (`None` = persistence disabled).
-    settings_path: Option<std::path::PathBuf>,
 }
 
 /// Live devtools state, written by the JS panel's messages (and the toggle key)
@@ -713,7 +714,8 @@ fn toggle_on_key(
 
 /// Reserve window space for a docked panel: inset the app's [`UiRoot`] margin
 /// on the reserved edge so the whole reconciler tree reflows beside the panel
-/// (Chrome-style "push"), and release it whenever the reservation ends. Gated
+/// (the panel pushes the app aside rather than overlapping it), and release it
+/// whenever the reservation ends. Gated
 /// on `state.open`, so every close path (close button, toggle key) releases
 /// the space with no extra bookkeeping.
 ///
@@ -816,7 +818,7 @@ fn split_legs(
 /// out of pick mode's scope.
 ///
 /// Known limitation (documented): the picking click still reaches the app's own
-/// `onClick` handlers — Chrome suppresses the page click, we don't.
+/// `onClick` handlers — pick mode does not suppress the click.
 #[allow(clippy::too_many_arguments)]
 fn drive_pick_mode(
     mut state: ResMut<DevtoolsState>,
@@ -883,7 +885,7 @@ fn drive_pick_mode(
 }
 
 /// Marks the single pre-spawned highlight overlay entity: the translucent box
-/// drawn over the node the devtools is hovering/selecting (Chrome's blue box).
+/// drawn over the node the devtools is hovering/selecting.
 #[derive(Component)]
 struct DevtoolsHighlightOverlay;
 
@@ -900,7 +902,7 @@ fn spawn_highlight_overlay(mut commands: Commands) {
             display: Display::None,
             ..default()
         },
-        // Chrome-like translucent blue fill + hairline.
+        // Translucent blue fill + hairline.
         BackgroundColor(Color::srgba(0.54, 0.71, 0.97, 0.30)),
         Outline {
             width: Val::Px(1.0),
@@ -1061,7 +1063,7 @@ mod tests {
 
     /// Headless app with the toggle/auto-open systems and a drainable outbound
     /// channel (the same harness shape as `keyboard.rs`'s tests).
-    fn test_app(plugin: DevtoolsPlugin) -> (App, UnboundedReceiver<Outbound>) {
+    fn test_app(config: DevtoolsConfig) -> (App, UnboundedReceiver<Outbound>) {
         let mut app = App::new();
         // Hold the diag test lock for the app's lifetime: `emit_runtime_warnings`
         // drains the process-global runtime sink every update, so concurrent
@@ -1078,7 +1080,7 @@ mod tests {
         app.init_resource::<OpApplyStats>();
         let (tx, rx) = unbounded_channel::<Outbound>();
         app.insert_resource(OutboundResource(tx));
-        app.add_plugins(plugin);
+        app.add_plugins(DevtoolsPlugin::new(config));
         (app, rx)
     }
 
@@ -1094,7 +1096,10 @@ mod tests {
 
     #[test]
     fn toggle_key_flips_state_and_notifies_js() {
-        let (mut app, mut rx) = test_app(DevtoolsPlugin::new().toggle_key(KeyCode::F9));
+        let (mut app, mut rx) = test_app(DevtoolsConfig {
+            toggle_key: KeyCode::F9,
+            ..default()
+        });
         app.update();
         assert!(drain_events(&mut rx).is_empty(), "no toggle before the key");
 
@@ -1146,7 +1151,10 @@ mod tests {
             ..Default::default()
         };
         std::fs::write(&tmp.0, serde_json::to_string(&settings).unwrap()).unwrap();
-        let (mut app, mut rx) = test_app(DevtoolsPlugin::new().settings_path(&tmp.0));
+        let (mut app, mut rx) = test_app(DevtoolsConfig {
+            settings_path: Some(tmp.0.clone()),
+            ..default()
+        });
         app.update();
         assert!(
             drain_events(&mut rx).is_empty(),
@@ -1197,7 +1205,10 @@ mod tests {
     fn runtime_warnings_emit_once_and_reset_on_reload() {
         // NOTE: the diag test lock is already held by `test_app`'s app —
         // taking it here too would deadlock.
-        let (mut app, mut rx) = test_app(DevtoolsPlugin::new().no_settings_file());
+        let (mut app, mut rx) = test_app(DevtoolsConfig {
+            settings_path: None,
+            ..default()
+        });
         let _ = crate::diag::take_runtime_warnings();
         // The listener-race gate holds warnings until the app has mounted.
         app.world_mut().resource_mut::<OpApplyStats>().applied_count = 1;
@@ -1480,7 +1491,7 @@ mod tests {
     /// exists in the harness, so the width is unclamped.
     #[test]
     fn dock_reservation_insets_uiroot_margin() {
-        let (mut app, _rx) = test_app(DevtoolsPlugin::new());
+        let (mut app, _rx) = test_app(DevtoolsConfig::default());
         let root = app
             .world_mut()
             .spawn((Node::default(), crate::plugin::UiRoot))
@@ -1514,7 +1525,7 @@ mod tests {
     /// and a negative width clamps to zero.
     #[test]
     fn dock_message_parses_side_and_clamps_width() {
-        let (mut app, _rx) = test_app(DevtoolsPlugin::new());
+        let (mut app, _rx) = test_app(DevtoolsConfig::default());
         let dock = |app: &mut App, side: Option<&str>, width: f32| {
             app.world_mut().trigger(DevtoolsDockMessage {
                 side: side.map(String::from),
@@ -1541,7 +1552,10 @@ mod tests {
     /// re-trigger itself; an app apply emits one event.
     #[test]
     fn batch_stats_skip_devtools_only_applies() {
-        let (mut app, mut rx) = test_app(DevtoolsPlugin::new().no_settings_file());
+        let (mut app, mut rx) = test_app(DevtoolsConfig {
+            settings_path: None,
+            ..default()
+        });
         app.world_mut().resource_mut::<DevtoolsState>().open = true;
         let stats_events = |rx: &mut UnboundedReceiver<Outbound>| {
             drain_events(rx)
@@ -1626,7 +1640,10 @@ mod tests {
     fn settings_file_seeds_overlay_and_restores_once() {
         let tmp = TempSettings::new("restore");
         std::fs::write(&tmp.0, serde_json::to_string(&sample_settings()).unwrap()).unwrap();
-        let (mut app, mut rx) = test_app(DevtoolsPlugin::new().settings_path(&tmp.0));
+        let (mut app, mut rx) = test_app(DevtoolsConfig {
+            settings_path: Some(tmp.0.clone()),
+            ..default()
+        });
 
         assert!(
             !app.world()
@@ -1658,7 +1675,10 @@ mod tests {
     #[test]
     fn settings_message_writes_file_debounced() {
         let tmp = TempSettings::new("save");
-        let (mut app, _rx) = test_app(DevtoolsPlugin::new().settings_path(&tmp.0));
+        let (mut app, _rx) = test_app(DevtoolsConfig {
+            settings_path: Some(tmp.0.clone()),
+            ..default()
+        });
         app.world_mut()
             .resource_mut::<DevtoolsPersistence>()
             .debounce = Duration::ZERO;
@@ -1683,7 +1703,10 @@ mod tests {
     #[test]
     fn settings_flush_on_app_exit() {
         let tmp = TempSettings::new("flush");
-        let (mut app, _rx) = test_app(DevtoolsPlugin::new().settings_path(&tmp.0));
+        let (mut app, _rx) = test_app(DevtoolsConfig {
+            settings_path: Some(tmp.0.clone()),
+            ..default()
+        });
         // Default 1s debounce: a normal update must NOT write yet.
         app.world_mut().trigger(sample_settings());
         app.update();
@@ -1701,7 +1724,10 @@ mod tests {
     fn corrupt_or_disabled_settings_are_ignored() {
         let tmp = TempSettings::new("corrupt");
         std::fs::write(&tmp.0, "{ not json").unwrap();
-        let (mut app, mut rx) = test_app(DevtoolsPlugin::new().settings_path(&tmp.0));
+        let (mut app, mut rx) = test_app(DevtoolsConfig {
+            settings_path: Some(tmp.0.clone()),
+            ..default()
+        });
         assert!(
             app.world()
                 .resource::<DevtoolsState>()
@@ -1718,7 +1744,10 @@ mod tests {
         // before building the second, or the lock self-deadlocks.
         drop(app);
 
-        let (mut app, _rx) = test_app(DevtoolsPlugin::new().no_settings_file());
+        let (mut app, _rx) = test_app(DevtoolsConfig {
+            settings_path: None,
+            ..default()
+        });
         app.world_mut()
             .resource_mut::<DevtoolsPersistence>()
             .debounce = Duration::ZERO;
@@ -1731,7 +1760,10 @@ mod tests {
     /// signal must never be skipped.
     #[test]
     fn restore_defaults_sent_without_settings_file() {
-        let (mut app, mut rx) = test_app(DevtoolsPlugin::new().no_settings_file());
+        let (mut app, mut rx) = test_app(DevtoolsConfig {
+            settings_path: None,
+            ..default()
+        });
         app.update();
         assert!(drain_restores(&mut rx).is_empty(), "not before mount");
 
@@ -1764,7 +1796,10 @@ mod tests {
             "split": 200.0,
         });
         std::fs::write(&tmp.0, legacy.to_string()).unwrap();
-        let (mut app, mut rx) = test_app(DevtoolsPlugin::new().settings_path(&tmp.0));
+        let (mut app, mut rx) = test_app(DevtoolsConfig {
+            settings_path: Some(tmp.0.clone()),
+            ..default()
+        });
         app.world_mut().resource_mut::<OpApplyStats>().applied_count = 1;
         app.update();
         let restores = drain_restores(&mut rx);
@@ -1787,7 +1822,10 @@ mod tests {
     fn window_size_sent_on_open_and_resize() {
         use bevy::window::WindowResolution;
 
-        let (mut app, mut rx) = test_app(DevtoolsPlugin::new().no_settings_file());
+        let (mut app, mut rx) = test_app(DevtoolsConfig {
+            settings_path: None,
+            ..default()
+        });
         let window = app
             .world_mut()
             .spawn(Window {

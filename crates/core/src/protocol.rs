@@ -1873,11 +1873,7 @@ impl<'de> Deserialize<'de> for Rect {
                     })
                     .collect();
                 Ok(Rect::from_shorthand(&values).unwrap_or_else(|e| {
-                    decode_warn(
-                        "rect",
-                        s,
-                        &format!("invalid rect {s:?}: {e}"),
-                    );
+                    decode_warn("rect", s, &format!("invalid rect {s:?}: {e}"));
                     Rect::default()
                 }))
             }

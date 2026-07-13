@@ -2,7 +2,7 @@
 // send it through the NORMAL op pipeline (`op_flush` → `merge_delta` →
 // `apply_style_masked`), so merge semantics, dirty groups, and the Rust props
 // cache all behave exactly as if React had sent the change. Semantics are
-// deliberately TRANSIENT, Chrome-style: the edit applies now, and the next app
+// deliberately TRANSIENT: the edit applies now, and the next app
 // commit that touches the same field stomps it (one that doesn't leaves it).
 //
 // Failure containment: a structurally invalid value makes `op_flush` throw a
@@ -20,7 +20,7 @@ import {
 } from "./fields";
 import { mirror } from "./mirror";
 
-// Chrome-style disabled style declarations: unsetting a field drops it from
+// Disabled style declarations: unsetting a field drops it from
 // the Rust cache AND the mirror, so the remembered value must live here (a
 // vendor-module map = panel lifetime, survives Fast Refresh). Keyed node id →
 // field → the raw wire value to restore on re-enable.
@@ -134,7 +134,7 @@ function applyEdit(
   const trimmed = raw.trim();
   let op: Op;
   if (trimmed === "") {
-    // Empty input = reset the field to its default (Chrome's delete-value).
+    // Empty input = reset the field to its default.
     op = isStyle
       ? { op: "update", id, props: {}, styleUnset: [field] }
       : { op: "update", id, props: {}, unset: [field] };

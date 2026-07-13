@@ -32,10 +32,11 @@ mod cursor;
 // only exists with the `devtools` feature on a debug build; otherwise every fn
 // is an inline no-op stub.
 mod diag;
-// The Chrome-DevTools-style inspector. A feature-gated module (not a separate
+// The devtools inspector. A feature-gated module (not a separate
 // crate — it needs `JsBridge` and friends, which stay private) that is fully
-// compiled out unless the `devtools` cargo feature is on. This repo's own dev
-// units get the feature automatically via the self dev-dependency in Cargo.toml.
+// compiled out unless the `devtools` cargo feature (a default feature) is on.
+// Crate-internal: `ReactUiPlugin` auto-registers `DevtoolsPlugin` and exposes
+// the only knob (`ReactUiPlugin::devtools`).
 #[cfg(feature = "devtools")]
 mod devtools;
 mod event;
@@ -76,7 +77,7 @@ pub use bevy_react_macros::{react_event, react_message, react_request};
 pub use canvas::CanvasSurface;
 #[cfg(feature = "devtools")]
 #[cfg_attr(docsrs, doc(cfg(feature = "devtools")))]
-pub use devtools::DevtoolsPlugin;
+pub use devtools::DevtoolsConfig;
 pub use event::{ReactEvent, ReactEvents};
 pub use message::{ReactAppExt, ReactMessage, ReactPayload};
 pub use plugin::{Fonts, PointerCapture, PointerCaptureSet, ReactUiPlugin};

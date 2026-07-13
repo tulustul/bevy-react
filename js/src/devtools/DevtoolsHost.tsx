@@ -1,4 +1,4 @@
-// The devtools panel UI: a Chrome-devtools-like inspector rendered into a
+// The devtools panel UI: an inspector rendered into a
 // detached `<root>` overlay (so it floats above the app and stays out of the
 // app's node tree / stats). Mounted once per isolate in its own React
 // container (see renderer.ts `renderDevtools`); renders `null` while closed,
@@ -136,7 +136,7 @@ export function DevtoolsHost() {
     return () => sendPanelRoot(null);
   }, [open]);
 
-  // Escape exits pick mode (Chrome-like), riding the built-in keyDown event.
+  // Escape exits pick mode, riding the built-in keyDown event.
   useEffect(() => {
     if (!picking) return;
     return addEventListener("keyDown", (e) => {
@@ -210,8 +210,8 @@ export function DevtoolsHost() {
   };
 
   // The effective space reservation, in px. Keyed on `widthFrac` AND `win` so
-  // the app follows both an edge resize and a window resize live
-  // (Chrome-like). Rust gates the margin on the panel's open state, so no
+  // the app follows both an edge resize and a window resize live.
+  // Rust gates the margin on the panel's open state, so no
   // cleanup is needed on close. If a huge app tree ever stutters during the
   // drag, retreat to a committed-on-pointerUp width here.
   useEffect(() => {

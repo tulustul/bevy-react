@@ -1,7 +1,7 @@
 // The inspector pane: the selected node's style + props, from the op mirror
 // (raw wire values, so what you see is exactly what you can type back). Values
-// edit inline — click, type, Enter applies / Escape cancels — with transient,
-// Chrome-like semantics (see edits.ts). Invalid input stays in the editor with
+// edit inline — click, type, Enter applies / Escape cancels — with transient
+// semantics (see edits.ts). Invalid input stays in the editor with
 // an inline error and never crosses the bridge (or costs app ops).
 
 import { useEffect, useState } from "react";
@@ -21,7 +21,7 @@ import { useMirrorVersion } from "./TreeView";
 
 export function Inspector({ id }: { id: number | null }) {
   useMirrorVersion();
-  // Which row is editing, if any — Chrome-exclusive: opening one editor closes
+  // Which row is editing, if any — exclusive: opening one editor closes
   // the previous (its draft is discarded). Keyed `style:{field}` /
   // `prop:{field}` / `"add"` so style and prop rows can't collide.
   const [activeField, setActiveField] = useState<string | null>(null);
@@ -34,7 +34,7 @@ export function Inspector({ id }: { id: number | null }) {
     );
   }
   const props = Object.entries(node.props);
-  // Chrome-style disabled declarations: gone from the live style (and the
+  // Disabled declarations: gone from the live style (and the
   // mirror), listed from the remembered-value store, dimmed + unchecked.
   // Rendered as ONE list in stable first-seen order (`orderedStyleFields`),
   // so toggling a row off and on never moves it.
@@ -59,7 +59,7 @@ export function Inspector({ id }: { id: number | null }) {
       {styleFields.map((field) => {
         const isDisabled = !(field in node.style);
         const value = isDisabled ? disabled.get(field) : node.style[field];
-        // Chrome-style row flags: Rust-reported invalid values (the mirror's
+        // Row flags: Rust-reported invalid values (the mirror's
         // per-row warnings), plus the pure-JS rule for a style key Rust's
         // serde silently drops (it never even warns on those).
         const warning = isDisabled
@@ -157,7 +157,7 @@ function EditRow({
   active: boolean;
   onActivate: () => void;
   onDone: () => void;
-  /** Chrome-style enable/disable checkbox (style rows only). */
+  /** Enable/disable checkbox (style rows only). */
   toggle?: { checked: boolean; onToggle: () => void };
   /** Invalid-value flag: tints the row and shows this message under it. */
   warning?: string;
@@ -167,7 +167,7 @@ function EditRow({
     error: string | null;
   }>({ draft: "", error: null });
 
-  // Losing active status (another row opened) discards the draft, Chrome-style.
+  // Losing active status (another row opened) discards the draft.
   useEffect(() => {
     if (!active) setState({ draft: "", error: null });
   }, [active]);
@@ -302,7 +302,7 @@ function EditRow({
   );
 }
 
-/** Chrome's "add a declaration": type `field: value` and press Enter. */
+/** Add a declaration: type `field: value` and press Enter. */
 function AddStyleRow({
   id,
   active,
