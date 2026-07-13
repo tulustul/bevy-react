@@ -155,9 +155,10 @@ impl<'de> Deserialize<'de> for ScrollbarPartStyle {
                         // abort the whole commit batch — like the rest of the protocol).
                         _ => {
                             let _ = map.next_value::<de::IgnoredAny>()?;
-                            tracing::warn!(
-                                target: "bevy_react",
-                                "unknown scrollbar part field {key:?}; ignoring"
+                            crate::protocol::decode_warn(
+                                "scrollbar",
+                                &key,
+                                &format!("unknown scrollbar part field {key:?}; ignoring"),
                             );
                         }
                     }
@@ -260,9 +261,10 @@ impl<'de> Deserialize<'de> for ScrollbarSpec {
                     "none" => ScrollbarSpec::None,
                     "default" => ScrollbarSpec::Default,
                     other => {
-                        tracing::warn!(
-                            target: "bevy_react",
-                            "unknown scrollbar keyword {other:?}; using \"none\""
+                        crate::protocol::decode_warn(
+                            "scrollbar",
+                            other,
+                            &format!("unknown scrollbar keyword {other:?}; using \"none\""),
                         );
                         ScrollbarSpec::None
                     }
@@ -294,7 +296,13 @@ impl<'de> Deserialize<'de> for ScrollbarSpec {
                                 "float" => ScrollbarPosition::Float,
                                 "gutter" => ScrollbarPosition::Gutter,
                                 other => {
-                                    tracing::warn!(target: "bevy_react", "unknown scrollbar position {other:?}; using \"gutter\"");
+                                    crate::protocol::decode_warn(
+                                        "scrollbar",
+                                        other,
+                                        &format!(
+                                            "unknown scrollbar position {other:?}; using \"gutter\""
+                                        ),
+                                    );
                                     ScrollbarPosition::Gutter
                                 }
                             }
@@ -304,7 +312,13 @@ impl<'de> Deserialize<'de> for ScrollbarSpec {
                                 "left" => HorizontalEdge::Left,
                                 "right" => HorizontalEdge::Right,
                                 other => {
-                                    tracing::warn!(target: "bevy_react", "unknown scrollbar verticalSide {other:?}; using \"right\"");
+                                    crate::protocol::decode_warn(
+                                        "scrollbar",
+                                        other,
+                                        &format!(
+                                            "unknown scrollbar verticalSide {other:?}; using \"right\""
+                                        ),
+                                    );
                                     HorizontalEdge::Right
                                 }
                             }
@@ -314,14 +328,24 @@ impl<'de> Deserialize<'de> for ScrollbarSpec {
                                 "top" => VerticalEdge::Top,
                                 "bottom" => VerticalEdge::Bottom,
                                 other => {
-                                    tracing::warn!(target: "bevy_react", "unknown scrollbar horizontalSide {other:?}; using \"bottom\"");
+                                    crate::protocol::decode_warn(
+                                        "scrollbar",
+                                        other,
+                                        &format!(
+                                            "unknown scrollbar horizontalSide {other:?}; using \"bottom\""
+                                        ),
+                                    );
                                     VerticalEdge::Bottom
                                 }
                             }
                         }
                         _ => {
                             let _ = map.next_value::<de::IgnoredAny>()?;
-                            tracing::warn!(target: "bevy_react", "unknown scrollbar field {key:?}; ignoring");
+                            crate::protocol::decode_warn(
+                                "scrollbar",
+                                &key,
+                                &format!("unknown scrollbar field {key:?}; ignoring"),
+                            );
                         }
                     }
                 }

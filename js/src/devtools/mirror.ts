@@ -16,7 +16,8 @@
 // Lives in vendor.js (never re-executed on hot reload), so it survives Fast
 // Refresh; a cold reload's `reset` op clears it along with the Bevy tree.
 
-import type { Op } from "../bridge";
+import type { DecodeWarning, Op } from "../bridge";
+import { matchWarning } from "./warnings";
 
 /** Event-like fields that act once and are never part of retained state —
  *  keep in sync with `protocol.rs`'s `Props::split_events`. */
@@ -44,6 +45,12 @@ export interface MirrorNode {
   parent: number | null;
   /** Created by the devtools panel's own container (excluded from app views). */
   devtools: boolean;
+  /** Invalid-value flags by inspector row key (`style:width` / `prop:tint`) →
+   *  the Rust warn message. Set from Rust-reported warnings (decode-time via
+   *  the flush tap, apply-time via `devtools.warning`); an entry clears when
+   *  its field is next set or unset, and dies with the node. Lazily created —
+   *  most nodes never warn. */
+  warnings?: Map<string, string>;
 }
 
 const nodes = new Map<number, MirrorNode>();
@@ -107,9 +114,16 @@ function mergeProps(node: MirrorNode, props: Record<string, unknown>): void {
   for (const [key, value] of Object.entries(props)) {
     if (key === "style") {
       const style = value as Record<string, unknown> | undefined;
-      if (style) for (const [k, v] of Object.entries(style)) node.style[k] = v;
+      if (style)
+        for (const [k, v] of Object.entries(style)) {
+          node.style[k] = v;
+          // A fresh value supersedes the field's warning; a re-reported
+          // invalid value re-flags right after (post-merge matching).
+          node.warnings?.delete(`style:${k}`);
+        }
     } else if (!ACT_NOW.has(key)) {
       node.props[key] = value;
+      node.warnings?.delete(`prop:${key}`);
     }
   }
 }
@@ -166,8 +180,16 @@ function applyOp(op: Op, devtools: boolean): void {
       const node = nodes.get(op.id);
       if (!node) break;
       mergeProps(node, op.props as Record<string, unknown>);
-      for (const key of op.unset ?? []) delete node.props[key];
-      for (const key of op.styleUnset ?? []) delete node.style[key];
+      for (const key of op.unset ?? []) {
+        delete node.props[key];
+        node.warnings?.delete(`prop:${key}`);
+      }
+      for (const key of op.styleUnset ?? []) {
+        delete node.style[key];
+        // Unsetting clears the flag too — this is also the path the style
+        // disable checkbox rides.
+        node.warnings?.delete(`style:${key}`);
+      }
       break;
     }
     case "updateText": {
@@ -180,6 +202,28 @@ function applyOp(op: Op, devtools: boolean): void {
   }
 }
 
+/** Match one warning against its node's retained values and store the flags.
+ *  Returns whether a visible (non-devtools-node) flag changed — the caller's
+ *  notify signal. Idempotent: an unchanged message never reports a change, so
+ *  a re-reported warning can't churn the panel. */
+function setWarnings(
+  id: number | null,
+  warning: { kind: string; value: string; message: string },
+): boolean {
+  if (id === null) return false;
+  const node = nodes.get(id);
+  if (!node) return false;
+  let changed = false;
+  for (const key of matchWarning(node, warning)) {
+    const warnings = (node.warnings ??= new Map());
+    if (warnings.get(key) !== warning.message) {
+      warnings.set(key, warning.message);
+      if (!node.devtools) changed = true;
+    }
+  }
+  return changed;
+}
+
 export const mirror = {
   /** Replay one flushed op batch (called from the bridge tap).
    *
@@ -189,7 +233,11 @@ export const mirror = {
    *  until React kills the root with "maximum update depth exceeded". The one
    *  exception is a devtools batch that touches an APP node (an inspector
    *  edit): that must notify so the inspector shows the applied value. */
-  apply(batch: Op[], devtools: boolean): void {
+  apply(
+    batch: Op[],
+    devtools: boolean,
+    decodeWarnings?: DecodeWarning[],
+  ): void {
     let visible = !devtools;
     for (const op of batch) {
       if (devtools && !visible) {
@@ -211,7 +259,26 @@ export const mirror = {
       }
       applyOp(op, devtools);
     }
+    // Match this batch's decode-time invalid-value warnings against the
+    // now-merged wire values (matching must run post-merge so a warning for a
+    // value the same batch set can resolve to its field). A flag on an APP
+    // node must repaint the inspector even for a devtools-authored batch —
+    // that's exactly the inline-edit feedback path; the panel's own nodes
+    // stay silent (same no-self-observation rule as ops).
+    for (const w of decodeWarnings ?? []) {
+      if (setWarnings(w.node, w)) visible = true;
+    }
     if (visible) scheduleNotify();
+  },
+
+  /** Attach an apply-time (`devtools.warning` event) invalid-value flag. */
+  addRuntimeWarning(w: {
+    id: number | null;
+    kind: string;
+    value: string;
+    message: string;
+  }): void {
+    if (setWarnings(w.id, w)) scheduleNotify();
   },
 
   get(id: number): MirrorNode | undefined {

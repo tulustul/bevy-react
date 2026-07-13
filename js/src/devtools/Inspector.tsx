@@ -59,12 +59,22 @@ export function Inspector({ id }: { id: number | null }) {
       {styleFields.map((field) => {
         const isDisabled = !(field in node.style);
         const value = isDisabled ? disabled.get(field) : node.style[field];
+        // Chrome-style row flags: Rust-reported invalid values (the mirror's
+        // per-row warnings), plus the pure-JS rule for a style key Rust's
+        // serde silently drops (it never even warns on those).
+        const warning = isDisabled
+          ? undefined
+          : (node.warnings?.get(`style:${field}`) ??
+            (field in STYLE_FIELDS
+              ? undefined
+              : `unknown style field "${field}" (ignored by Bevy)`));
         return (
           <EditRow
             key={field}
             field={field}
             value={value}
             editable={!isDisabled}
+            warning={warning}
             apply={(raw) => applyStyleEdit(id, field, raw)}
             toggle={
               isDisabled
@@ -94,6 +104,7 @@ export function Inspector({ id }: { id: number | null }) {
           field={field}
           value={value}
           editable={field in EDITABLE_PROPS}
+          warning={node.warnings?.get(`prop:${field}`)}
           apply={(raw) => applyPropEdit(id, field, raw)}
           {...rowProps(`prop:${field}`)}
         />
@@ -136,6 +147,7 @@ function EditRow({
   onActivate,
   onDone,
   toggle,
+  warning,
 }: {
   field: string;
   value: unknown;
@@ -147,6 +159,8 @@ function EditRow({
   onDone: () => void;
   /** Chrome-style enable/disable checkbox (style rows only). */
   toggle?: { checked: boolean; onToggle: () => void };
+  /** Invalid-value flag: tints the row and shows this message under it. */
+  warning?: string;
 }) {
   const [state, setState] = useState<{
     draft: string;
@@ -196,9 +210,21 @@ function EditRow({
             </text>
           </button>
         )}
+        {warning && (
+          // ASCII marker — the default font may lack a real ⚠ glyph (tofu).
+          <text
+            style={{ color: theme.warn, fontSize: 11, fontFamily: theme.mono }}
+          >
+            (!)
+          </text>
+        )}
         <text
           style={{
-            color: toggle?.checked === false ? theme.textDim : theme.accent,
+            color: warning
+              ? theme.warn
+              : toggle?.checked === false
+                ? theme.textDim
+                : theme.accent,
             fontSize: 11,
             fontFamily: theme.mono,
             lineBreak: "noWrap",
@@ -235,7 +261,11 @@ function EditRow({
                 instead of wrapping the row. */}
             <text
               style={{
-                color: editable ? theme.accentAlt : theme.textDim,
+                color: warning
+                  ? theme.warn
+                  : editable
+                    ? theme.accentAlt
+                    : theme.textDim,
                 fontSize: 11,
                 fontFamily: theme.mono,
                 lineBreak: "noWrap",
@@ -255,6 +285,17 @@ function EditRow({
           }}
         >
           {state.error}
+        </text>
+      )}
+      {!active && warning && (
+        <text
+          style={{
+            color: theme.warn,
+            fontSize: 10,
+            margin: { left: 16, bottom: 2 },
+          }}
+        >
+          {warning}
         </text>
       )}
     </node>

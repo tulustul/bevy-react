@@ -15,7 +15,10 @@
 //! (one typo would abort the entire commit and trigger a reload), so every
 //! deserializer falls back to the bevy default and emits a
 //! `tracing::warn!` naming the bad value (`tracing` reaches the same log sink
-//! `bevy_log` drains).
+//! `bevy_log` drains). In dev builds with devtools those fallbacks are also
+//! collected as structured `crate::diag` entries (`decode_warn` +
+//! [`OpBatch`]'s per-op attribution) so the inspector can flag the offending
+//! style/prop rows.
 
 use std::fmt;
 
@@ -107,6 +110,67 @@ pub enum Op {
     /// retained protocol-side). A missing or non-canvas node is skipped
     /// silently, like every other op.
     Draw { id: NodeId, cmds: Vec<DrawCmd> },
+}
+
+/// Emit a decode-fallback warning: the log line every malformed wire value
+/// already produced, plus (in dev builds with devtools) a structured
+/// [`crate::diag`] entry so the inspector can flag the offending row. `kind`
+/// names the value's domain (`"length"`, `"rect"`, a keyword field's kind, …);
+/// `value` is the raw offending wire string.
+pub(crate) fn decode_warn(kind: &'static str, value: &str, message: &str) {
+    tracing::warn!(target: "bevy_react", "{message}");
+    crate::diag::decode_report(kind, value, message);
+}
+
+/// A `Vec<Op>` whose `Deserialize` brackets each element's decode with the
+/// [`crate::diag`] decode sink's watermarks, stamping every warning a field
+/// deserializer pushed with the op's target node id — the id is structurally
+/// out of scope down in the field visitors, but trivially known per op here.
+/// The wire format is exactly a plain op array; in release builds the
+/// bracketing calls are inline no-ops and this decodes like a bare `Vec<Op>`.
+pub struct OpBatch(pub Vec<Op>);
+
+/// The node an op targets, for decode-warning attribution. Tree ops carry no
+/// decodable values, so they have no meaningful target.
+fn op_target_id(op: &Op) -> Option<NodeId> {
+    match op {
+        Op::Create { id, .. }
+        | Op::CreateText { id, .. }
+        | Op::CreateTextSpan { id, .. }
+        | Op::Update { id, .. }
+        | Op::UpdateText { id, .. }
+        | Op::Draw { id, .. } => Some(*id),
+        Op::Reset | Op::Append { .. } | Op::Insert { .. } | Op::Remove { .. } => None,
+    }
+}
+
+impl<'de> Deserialize<'de> for OpBatch {
+    fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        struct BatchVisitor;
+        impl<'de> Visitor<'de> for BatchVisitor {
+            type Value = Vec<Op>;
+            fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                f.write_str("an array of reconciler ops")
+            }
+            fn visit_seq<A: de::SeqAccess<'de>>(self, mut seq: A) -> Result<Vec<Op>, A::Error> {
+                // Clearing at batch start (not on drain) bounds the sink even
+                // when nothing ever drains it, and drops entries from a batch
+                // whose decode threw mid-way (Bevy never saw those ops).
+                crate::diag::decode_batch_start();
+                let mut ops = Vec::with_capacity(seq.size_hint().unwrap_or(0));
+                loop {
+                    let mark = crate::diag::decode_watermark();
+                    let Some(op) = seq.next_element::<Op>()? else {
+                        break;
+                    };
+                    crate::diag::decode_attribute_since(mark, op_target_id(&op));
+                    ops.push(op);
+                }
+                Ok(ops)
+            }
+        }
+        d.deserialize_seq(BatchVisitor).map(OpBatch)
+    }
 }
 
 /// Props for a host element. Event handlers never cross the boundary — the
@@ -1517,7 +1581,7 @@ impl<'de> Deserialize<'de> for Length {
             }
             fn visit_str<E: de::Error>(self, s: &str) -> Result<Length, E> {
                 Ok(parse_length(s).unwrap_or_else(|e| {
-                    tracing::warn!(target: "bevy_react", "{e}; using the default");
+                    decode_warn("length", s, &e);
                     Length::default()
                 }))
             }
@@ -1585,7 +1649,7 @@ impl<'de> Deserialize<'de> for Angle {
             }
             fn visit_str<E: de::Error>(self, s: &str) -> Result<Angle, E> {
                 Ok(parse_angle(s).map(Angle).unwrap_or_else(|e| {
-                    tracing::warn!(target: "bevy_react", "{e}; using the default");
+                    decode_warn("angle", s, &e);
                     Angle::default()
                 }))
             }
@@ -1653,7 +1717,7 @@ impl<'de> Deserialize<'de> for Time {
             }
             fn visit_str<E: de::Error>(self, s: &str) -> Result<Time, E> {
                 Ok(parse_time(s).map(Time).unwrap_or_else(|e| {
-                    tracing::warn!(target: "bevy_react", "{e}; using the default");
+                    decode_warn("time", s, &e);
                     Time::default()
                 }))
             }
@@ -1723,7 +1787,7 @@ impl<'de> Deserialize<'de> for FontSize {
             }
             fn visit_str<E: de::Error>(self, s: &str) -> Result<FontSize, E> {
                 Ok(parse_font_size(s).unwrap_or_else(|e| {
-                    tracing::warn!(target: "bevy_react", "{e}; using the default");
+                    decode_warn("fontSize", s, &e);
                     FontSize::Px(0.0)
                 }))
             }
@@ -1803,13 +1867,17 @@ impl<'de> Deserialize<'de> for Rect {
                     .split_whitespace()
                     .map(|tok| {
                         parse_length(tok).unwrap_or_else(|e| {
-                            tracing::warn!(target: "bevy_react", "{e}; using the default");
+                            decode_warn("rect", tok, &e);
                             Length::default()
                         })
                     })
                     .collect();
                 Ok(Rect::from_shorthand(&values).unwrap_or_else(|e| {
-                    tracing::warn!(target: "bevy_react", "invalid rect {s:?}: {e}; using the default");
+                    decode_warn(
+                        "rect",
+                        s,
+                        &format!("invalid rect {s:?}: {e}"),
+                    );
                     Rect::default()
                 }))
             }
@@ -1824,9 +1892,12 @@ impl<'de> Deserialize<'de> for Rect {
                         "left" => rect.left = v,
                         // An unknown side key must not throw (that aborts the whole
                         // commit batch) — `v` is already consumed, so warn and skip.
-                        _ => tracing::warn!(
-                            target: "bevy_react",
-                            "unknown rect side {key:?}; ignoring (expected top/right/bottom/left)"
+                        _ => decode_warn(
+                            "rect",
+                            &key,
+                            &format!(
+                                "unknown rect side {key:?}; ignoring (expected top/right/bottom/left)"
+                            ),
                         ),
                     }
                 }
@@ -1862,9 +1933,10 @@ macro_rules! keyword_fields {
                     Ok(Some(match s {
                         $( $($kw)|+ => <$ty>::$variant, )+
                         _ => {
-                            tracing::warn!(
-                                target: "bevy_react",
-                                "unrecognized {} {s:?}; using the default", $kind
+                            decode_warn(
+                                $kind,
+                                s,
+                                &format!("unrecognized {} {s:?}", $kind),
                             );
                             <$ty>::default()
                         }
@@ -1979,9 +2051,10 @@ fn de_font_weight<'de, D: Deserializer<'de>>(d: D) -> Result<Option<FontWeight>,
                 "bold" => FontWeight::BOLD,
                 "black" => FontWeight::BLACK,
                 other => other.parse::<u16>().map(FontWeight).unwrap_or_else(|_| {
-                    tracing::warn!(
-                        target: "bevy_react",
-                        "unrecognized fontWeight {other:?}; using the default"
+                    decode_warn(
+                        "fontWeight",
+                        other,
+                        &format!("unrecognized fontWeight {other:?}"),
                     );
                     FontWeight::NORMAL
                 }),
@@ -2091,7 +2164,11 @@ fn parse_template(s: &str) -> Vec<RepeatedGridTrack> {
             };
             let parsed = parse_one();
             if parsed.is_none() {
-                tracing::warn!(target: "bevy_react", "ignoring unparsable grid track {tok:?}");
+                decode_warn(
+                    "gridTrack",
+                    &tok,
+                    &format!("ignoring unparsable grid track {tok:?}"),
+                );
             }
             parsed
         })
@@ -2105,7 +2182,11 @@ fn parse_auto_tracks(s: &str) -> Vec<GridTrack> {
         .filter_map(|t| {
             let parsed = single_track(t);
             if parsed.is_none() {
-                tracing::warn!(target: "bevy_react", "ignoring unparsable grid track {t:?}");
+                decode_warn(
+                    "gridTrack",
+                    t,
+                    &format!("ignoring unparsable grid track {t:?}"),
+                );
             }
             parsed
         })
@@ -2203,9 +2284,10 @@ grid_fields! {
     fn de_grid_placement("a grid line placement string") -> GridPlacement {
         |s| {
             try_grid_placement(s).unwrap_or_else(|| {
-                tracing::warn!(
-                    target: "bevy_react",
-                    "unrecognized grid placement {s:?}; using the default"
+                decode_warn(
+                    "gridPlacement",
+                    s,
+                    &format!("unrecognized grid placement {s:?}"),
                 );
                 GridPlacement::default()
             })
@@ -2262,9 +2344,12 @@ impl<'de> Deserialize<'de> for BorderColorSpec {
                         "left" => spec.left = Some(v),
                         // An unknown side key must not throw (that aborts the whole
                         // commit batch) — `v` is already consumed, so warn and skip.
-                        _ => tracing::warn!(
-                            target: "bevy_react",
-                            "unknown borderColor side {key:?}; ignoring (expected top/right/bottom/left)"
+                        _ => decode_warn(
+                            "borderColor",
+                            &key,
+                            &format!(
+                                "unknown borderColor side {key:?}; ignoring (expected top/right/bottom/left)"
+                            ),
                         ),
                     }
                 }
@@ -2400,6 +2485,42 @@ pub enum ResponseResult {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// `OpBatch` stamps decode-fallback warnings with the op that carried
+    /// them, so devtools can attribute "invalid length" to a node id even
+    /// though the field visitors can't see one. The decode sink is
+    /// thread-local (and cleared at batch start), so this is parallel-safe.
+    #[cfg(all(feature = "devtools", debug_assertions))]
+    #[test]
+    fn op_batch_attributes_decode_warnings() {
+        // A leftover from an earlier decode on this thread must not leak in.
+        crate::diag::decode_report("length", "stale", "stale entry");
+        let json = r#"[
+            {"op":"update","id":7,"props":{"style":{"width":"aa16"}}},
+            {"op":"append","parent":0,"child":7},
+            {"op":"update","id":9,"props":{"style":{"display":"flexx","padding":"1px bogus"}}}
+        ]"#;
+        let batch: OpBatch = serde_json::from_str(json).expect("batch decodes");
+        assert_eq!(batch.0.len(), 3, "fallbacks must not drop ops");
+        let warns = crate::diag::take_decode_warnings();
+        let brief: Vec<_> = warns
+            .iter()
+            .map(|w| (w.node, w.kind, w.value.as_str()))
+            .collect();
+        assert_eq!(
+            brief,
+            vec![
+                (Some(7), "length", "aa16"),
+                (Some(9), "display", "flexx"),
+                (Some(9), "rect", "bogus"),
+            ],
+        );
+        assert!(warns.iter().all(|w| !w.message.is_empty()));
+        assert!(
+            crate::diag::take_decode_warnings().is_empty(),
+            "drain empties the sink"
+        );
+    }
 
     /// An `<editableText>` create op carries its controlled value and attributes.
     #[test]

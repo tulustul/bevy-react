@@ -5,7 +5,7 @@ Improvements:
   ✔ window resize event - built-in `bevy.on("resize", cb)` streams the UI viewport's logical size `{width, height}` (default UI camera's logical viewport, window fallback — correct in --shoot mode), sent once after the first applied batch (listener-race gate) then on every change (poll + Local diff, so scale-factor changes count); plus built-in `bevy.window.size()` request for pull-on-mount. Both codegen-seeded into every bevy.ts (keyboard precedent; new BUILTIN_REQUESTS analogue). New `crates/core/src/window.rs` (also now owns `ui_viewport_size`, lifted from devtools). Demo: WindowSizeExample in BevyToReactDemo. Tests: `window::tests` gate/dedup/change + request Ok/Err, ts_codegen asserts. @done(26-07-12)
 Bugs:
   ✔ ImageDemo - disabling flip not working @done(26-07-12 12:16)
-  ☐ large fontSize panics the app, look for similar issues
+  ✘ large fontSize panics the app, look for similar issues @cancelled(26-07-13 12:29)
 devtools:
   ✔ add left/right side docking options @done(26-07-12 12:17)
   ✔ picking works only for the main root @done(26-07-12 12:18)
@@ -17,14 +17,7 @@ devtools:
   ✔ make devtools positioning relative to the screen size - float rect + docked width are now fractions of the UI viewport (devtools.window streams the default UI camera's logical viewport size — correct in --shoot mode too), px floors keep a tiny window usable @done(26-07-12 20:15)
   ✔ Renames: Elements -> Nodes, Log -> Bridge @done(26-07-12 20:15)
   ✔ nicer timestamps formatting in logs (hour,minutes,seconds) - wall-clock HH:MM:SS.mmm @done(26-07-12 20:15)
-  ☐ invalid properties detection + flagging
-
-
-Release blockers:
-  ☐ Path-dep versions for crates.io - `Cargo.toml [workspace.dependencies]` references `bevy-react-animations` / `bevy-react-canvas` / `bevy-react-macros` by `path` only. crates.io rejects path-only deps — each needs `version = "0.1.0"` alongside `path`, and the leaf crates must be published first (macros → canvas/animations → core).
-  ☐ npm publish model - `js/package.json` `exports` ship raw `./src/*.ts` (no build output). Confirm that's intended for the esbuild-bundling consumer, or add a build step and ship compiled JS + `.d.ts`.
-  ☐ stabilize API
-    ☐ Mark the public wire enums `#[non_exhaustive]` (`crates/core/src/protocol.rs:33` `Op`, `:1320` `Outbound`). Both are pub via `pub mod protocol` ("exposed for advanced use"); adding a variant is semver-breaking for any downstream exhaustive `match`. Cheap pre-publish insurance.
+  ✔ devtools invalid properties detection + flagging - invalid style/prop values (e.g. `color: "notexistingcolor"`, `padding: "aa16"`, `display: "flexx"`) now flag their inspector rows Chrome-style ((!) marker + yellow tint + the warn message under the row). Rust reports `(node, kind, value, message)` via `crates/core/src/diag.rs` (two sinks: a thread-local decode sink — serde-boundary fallbacks, node-attributed per op by `protocol::OpBatch`, drained synchronously by the bridge tap via the new `op_take_decode_warnings` op — and an armed global runtime sink for apply-time parses (colors/fontFamily/cursor/lineHeight/letterSpacing) scoped by `diag::node_scope`, drained per frame → `devtools.warning` event, hash-deduped, dedup reset on reload via `OpApplyStats.reset_count`). Field attribution is JS-side: `js/src/devtools/warnings.ts` matches the raw value against the mirror node's retained wire values narrowed by a kind→fields table; flags live on `MirrorNode.warnings`, clear when the field is set/unset (incl. the disable checkbox), die with the node. Unknown live style keys (`dsplay:` — serde silently drops them, Rust never warns) flag via a pure-JS `STYLE_FIELDS` check. Inline devtools edits get the same feedback (sync via the tap for decode kinds, next-frame event for colors). Always-on in dev (panel closed included); release builds compile the sinks to no-op stubs. Tests: `protocol::op_batch_attributes_decode_warnings`, `ui_map::bad_color_reports_runtime_warning`, `devtools::runtime_warnings_emit_once_and_reset_on_reload` + `js_warning_kind_table_covers_known_kinds` (kind-table guard), `js/test/warnings.test.mjs` (matcher), `tests/decode_warnings.rs` (real serde_v8 end-to-end, self-contained bundle). @done(26-07-13)
 
 Correctness:
   JS-input panics (extends the archived "Panic audit", which only checked `.unwrap()`/`.expect()`, not panicking library calls):

@@ -56,7 +56,9 @@ fn resolve_cursor(name: &str, custom: &CustomCursors) -> CursorIcon {
     } else if let Some(icon) = system_cursor_keyword(name) {
         CursorIcon::from(icon)
     } else {
-        warn!(target: "bevy_react", "unknown cursor {name:?}; using the default");
+        let msg = format!("unknown cursor {name:?}");
+        warn!(target: "bevy_react", "{msg}");
+        crate::diag::report("cursor", name, &msg);
         CursorIcon::from(SystemCursorIcon::Default)
     }
 }
@@ -125,6 +127,7 @@ pub fn drive_cursor_icon(
     custom_cursors: Res<CustomCursors>,
     node_cursors: Query<&NodeCursor>,
     child_of: Query<&ChildOf>,
+    rnodes: Query<&crate::bridge::RNode>,
 ) {
     let Ok((window_entity, window, current)) = windows.single() else {
         return;
@@ -133,7 +136,7 @@ pub fn drive_cursor_icon(
     // Surface UI wins: the in-world virtual pointer is the only thing that knows the
     // pointer is over an offscreen subtree (the window hit-test can't — its geometry
     // is in texture space). Fall through to the main-window hit-test otherwise.
-    let name = surface_pointer
+    let named = surface_pointer
         .as_deref()
         .zip(hover_map.as_deref())
         .and_then(|(pointer, hover_map)| {
@@ -144,19 +147,31 @@ pub fn drive_cursor_icon(
     // No cursor-bearing node under the pointer → the app default. Routing it through
     // `resolve_cursor("default", …)` (rather than a hardcoded arrow) lets a custom
     // cursor registered as `"default"` become the app-wide base cursor.
-    let desired = resolve_cursor(name.as_deref().unwrap_or("default"), &custom_cursors);
+    let desired = {
+        // Attribute an unknown-cursor warning to the node that carried the
+        // `cursor` style, so devtools can flag its row.
+        let _diag = named
+            .as_ref()
+            .and_then(|(_, e)| rnodes.get(*e).ok())
+            .map(|r| crate::diag::node_scope(r.0));
+        resolve_cursor(
+            named.as_ref().map(|(n, _)| n.as_str()).unwrap_or("default"),
+            &custom_cursors,
+        )
+    };
     if current != Some(&desired) {
         commands.entity(window_entity).insert(desired);
     }
 }
 
-/// The cursor of the topmost main-window `NodeCursor` node under the window pointer,
-/// or `None` if the pointer is over none (or its position is unknown).
+/// The cursor of the topmost main-window `NodeCursor` node under the window pointer
+/// (name + the entity that carried it), or `None` if the pointer is over none (or
+/// its position is unknown).
 fn window_cursor(
     window: &Window,
     ui_stack: &UiStack,
     windowed: &Query<(&ComputedNode, &UiGlobalTransform, &NodeCursor)>,
-) -> Option<String> {
+) -> Option<(String, Entity)> {
     // `ComputedNode`/`UiGlobalTransform` are physical; the window cursor is logical
     // (see the note in `crate::scroll::apply_scroll`). Match them for the hit-test.
     let cursor = window.cursor_position()? * window.scale_factor();
@@ -166,7 +181,7 @@ fn window_cursor(
         let (computed, transform, node_cursor) = windowed.get(entity).ok()?;
         computed
             .contains_point(*transform, cursor)
-            .then(|| node_cursor.0.clone())
+            .then(|| (node_cursor.0.clone(), entity))
     })
 }
 
@@ -180,7 +195,7 @@ fn surface_cursor_for(
     hover_map: &HoverMap,
     node_cursors: &Query<&NodeCursor>,
     child_of: &Query<&ChildOf>,
-) -> Option<String> {
+) -> Option<(String, Entity)> {
     // Topmost hovered node = smallest picking depth (the UI backend assigns depth 0 to
     // the front-most node, increasing downward through the stack).
     let (&top, _) = hover_map
@@ -188,7 +203,7 @@ fn surface_cursor_for(
         .iter()
         .min_by(|a, b| a.1.depth.total_cmp(&b.1.depth))?;
     let owner = crate::reconcile::climb(top, child_of, |e| node_cursors.contains(e))?;
-    node_cursors.get(owner).ok().map(|c| c.0.clone())
+    node_cursors.get(owner).ok().map(|c| (c.0.clone(), owner))
 }
 
 #[cfg(test)]
@@ -311,14 +326,14 @@ mod tests {
         hover_map.insert(pointer_id, hovered);
         world.insert_resource(hover_map);
 
-        let icon = world
+        let hit = world
             .run_system_once(
                 move |hm: Res<HoverMap>, ncs: Query<&NodeCursor>, co: Query<&ChildOf>| {
                     surface_cursor_for(pointer_id, &hm, &ncs, &co)
                 },
             )
             .unwrap();
-        assert_eq!(icon.as_deref(), Some("pointer"));
+        assert_eq!(hit, Some(("pointer".to_string(), parent)));
     }
 
     /// A hovered surface node with no cursor on itself or any ancestor contributes
@@ -334,14 +349,14 @@ mod tests {
         hover_map.insert(pointer_id, hovered);
         world.insert_resource(hover_map);
 
-        let icon = world
+        let hit = world
             .run_system_once(
                 move |hm: Res<HoverMap>, ncs: Query<&NodeCursor>, co: Query<&ChildOf>| {
                     surface_cursor_for(pointer_id, &hm, &ncs, &co)
                 },
             )
             .unwrap();
-        assert_eq!(icon, None);
+        assert_eq!(hit, None);
     }
 
     /// Resolution order: the registry wins first (so a custom cursor named after a

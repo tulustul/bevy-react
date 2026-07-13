@@ -23,7 +23,7 @@ use tokio::sync::mpsc::UnboundedReceiver;
 use crate::animations::AnimationCommand;
 
 use crate::message::ReactMessage;
-use crate::protocol::{Op, Outbound};
+use crate::protocol::{Op, OpBatch, Outbound};
 use crate::request::RawRequest;
 
 /// Sender half stored in `OpState` so `op_flush` can hand op batches to Bevy.
@@ -71,9 +71,11 @@ struct ReloadNotify(Rc<Notify>);
 
 /// JS -> Bevy: ship one commit's worth of mutation ops. Synchronous.
 /// `devtools` marks batches from the panel's own React container (see
-/// [`FlushDevtoolsSender`]).
+/// [`FlushDevtoolsSender`]). The [`OpBatch`] wrapper decodes exactly like a
+/// `Vec<Op>` but stamps any decode-fallback warnings with their op's node id
+/// (see [`crate::diag`]); [`op_take_decode_warnings`] drains them.
 #[op2]
-fn op_flush(state: &mut OpState, #[serde] ops: Vec<Op>, devtools: bool) {
+fn op_flush(state: &mut OpState, #[serde] ops: OpBatch, devtools: bool) {
     // Stamp + flag first (see `FlushStampSender`): the serde_v8 decode of `ops`
     // already happened, so the stamp marks pure channel-entry time.
     let stamp = state.borrow::<FlushStampSender>();
@@ -81,7 +83,17 @@ fn op_flush(state: &mut OpState, #[serde] ops: Vec<Op>, devtools: bool) {
     let flag = state.borrow::<FlushDevtoolsSender>();
     let _ = flag.0.send(devtools);
     let sender = state.borrow::<OpSender>();
-    let _ = sender.0.send(ops);
+    let _ = sender.0.send(ops.0);
+}
+
+/// JS -> Bevy(-side state): drain the invalid-value warnings collected while
+/// decoding the most recent `op_flush` batch (same thread, so "most recent" is
+/// exact). Called by the dev-only devtools bridge tap right after each flush;
+/// production bundles never call it. Empty outside dev/devtools builds.
+#[op2]
+#[serde]
+fn op_take_decode_warnings() -> Vec<crate::diag::DecodeWarning> {
+    crate::diag::take_decode_warnings()
 }
 
 /// JS -> Bevy: emit a named app message (e.g. "count") for ECS systems to read.
@@ -382,6 +394,7 @@ fn build_runtime(
     reload_notify: Rc<Notify>,
 ) -> anyhow::Result<JsRuntime> {
     const FLUSH: OpDecl = op_flush();
+    const TAKE_WARNINGS: OpDecl = op_take_decode_warnings();
     const EMIT: OpDecl = op_emit();
     const REQUEST: OpDecl = op_request();
     const ANIMATE: OpDecl = op_animate();
@@ -390,7 +403,16 @@ fn build_runtime(
     const LOG: OpDecl = op_log();
     let ext = Extension {
         name: "bevy_react_bridge",
-        ops: std::borrow::Cow::Borrowed(&[FLUSH, EMIT, REQUEST, ANIMATE, NEXT, SLEEP, LOG]),
+        ops: std::borrow::Cow::Borrowed(&[
+            FLUSH,
+            TAKE_WARNINGS,
+            EMIT,
+            REQUEST,
+            ANIMATE,
+            NEXT,
+            SLEEP,
+            LOG,
+        ]),
         ..Default::default()
     };
 

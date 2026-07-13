@@ -32,7 +32,9 @@ pub fn parse_color(input: &str) -> Color {
     match crate::canvas::parse_css_color(input) {
         Some(c) => Color::from(c),
         None => {
-            warn!("unrecognized color {input:?}; using magenta debug fallback");
+            let msg = format!("unrecognized color {input:?}");
+            warn!("{msg}");
+            crate::diag::report("color", input, &msg);
             Color::srgb(1.0, 0.0, 1.0)
         }
     }
@@ -824,7 +826,9 @@ fn line_height(spec: &LineHeightSpec) -> LineHeight {
                     return LineHeight::RelativeToFont(v);
                 }
             }
-            warn!("invalid lineHeight {s:?}; using the default");
+            let msg = format!("invalid lineHeight {s:?}");
+            warn!("{msg}");
+            crate::diag::report("lineHeight", s, &msg);
             LineHeight::default()
         }
     }
@@ -853,7 +857,9 @@ fn letter_spacing(spec: &LetterSpacingSpec) -> LetterSpacing {
             } else if let Ok(v) = s.parse() {
                 return LetterSpacing::Px(v); // bare numeric string → logical pixels
             }
-            warn!("invalid letterSpacing {s:?}; using the default");
+            let msg = format!("invalid letterSpacing {s:?}");
+            warn!("{msg}");
+            crate::diag::report("letterSpacing", s, &msg);
             LetterSpacing::default()
         }
     }
@@ -911,7 +917,11 @@ pub fn resolved_text_style(
         if let Some(family) = &s.font_family {
             match fonts.named.get(family) {
                 Some(h) => font.font = FontSource::Handle(h.clone()),
-                None => warn!("unknown fontFamily {family:?}; using the default font"),
+                None => {
+                    let msg = format!("unknown fontFamily {family:?}");
+                    warn!("{msg}");
+                    crate::diag::report("fontFamily", family, &msg);
+                }
             }
         }
         if let Some(lh) = &s.line_height {
@@ -947,6 +957,45 @@ pub fn text_layout(style: &Option<Style>) -> Option<TextLayout> {
 mod tests {
     use super::*;
     use crate::protocol::{Props, Style};
+
+    /// An unrecognized color reports into the diag runtime sink under the
+    /// enclosing node scope, so devtools can flag the row. The sink is
+    /// process-global, so: serialize via the test lock, and filter drained
+    /// entries by our own node id rather than asserting emptiness.
+    #[cfg(all(feature = "devtools", debug_assertions))]
+    #[test]
+    fn bad_color_reports_runtime_warning() {
+        let _lock = crate::diag::test_lock();
+        crate::diag::arm_runtime();
+        let _ = crate::diag::take_runtime_warnings();
+
+        let color = {
+            let _scope = crate::diag::node_scope(4242);
+            parse_color("notexistingcolor")
+        };
+        assert_eq!(color, Color::srgb(1.0, 0.0, 1.0), "magenta debug fallback");
+
+        let mine: Vec<_> = crate::diag::take_runtime_warnings()
+            .into_iter()
+            .filter(|w| w.node == Some(4242))
+            .collect();
+        assert_eq!(mine.len(), 1);
+        assert_eq!(mine[0].kind, "color");
+        assert_eq!(mine[0].value, "notexistingcolor");
+        assert!(mine[0].message.contains("unrecognized color"));
+
+        // A valid color must not report.
+        {
+            let _scope = crate::diag::node_scope(4242);
+            parse_color("rebeccapurple");
+        }
+        assert!(
+            !crate::diag::take_runtime_warnings()
+                .iter()
+                .any(|w| w.node == Some(4242)),
+            "valid colors must not warn"
+        );
+    }
 
     /// `opacity` fades an `<image>` by multiplying into its tint alpha (so a `src`
     /// image dims too, not just colored boxes/text).

@@ -17,6 +17,23 @@ interface BevyHost {
   op_request(id: bigint, name: string, value: unknown): void;
   op_animate(cmd: AnimationCommand): void;
   op_next_event(): Promise<Outbound | null>;
+  /** Drain the invalid-value warnings collected while decoding the most recent
+   *  `op_flush` batch (dev builds with devtools; optional so a prod host may
+   *  omit it). Called only when a bridge tap is installed. */
+  op_take_decode_warnings?(): DecodeWarning[];
+}
+
+/** Mirrors `bevy_react::diag::DecodeWarning`: one invalid style/prop value the
+ *  Rust serde boundary replaced with a default while decoding an op batch.
+ *  `node` is the target of the op that carried it; `kind` names the value's
+ *  domain (`"length"`, `"rect"`, a keyword field name like `"display"`, …) —
+ *  the devtools mirror matches `value` against the node's retained wire values
+ *  to resolve the concrete field. */
+export interface DecodeWarning {
+  node: number | null;
+  kind: string;
+  value: string;
+  message: string;
 }
 
 // Resolved at module load. On native `Deno.core.ops` is read; on web the injected
@@ -255,8 +272,10 @@ export const nowMs: () => number =
 // send (a thrown `op_flush` means Bevy never saw the batch, so observers — the
 // devtools op mirror in particular — must not see it either).
 export interface BridgeTap {
-  /** A JS→Bevy op batch. `devtools` marks the devtools panel's own container. */
-  flush(batch: Op[], devtools: boolean): void;
+  /** A JS→Bevy op batch. `devtools` marks the devtools panel's own container.
+   *  `decodeWarnings` are the invalid-value fallbacks Rust collected while
+   *  decoding exactly this batch (absent on hosts without the drain op). */
+  flush(batch: Op[], devtools: boolean, decodeWarnings?: DecodeWarning[]): void;
   /** A JS→Bevy fire-and-forget app message. */
   emit(name: string, value: unknown): void;
   /** A JS→Bevy correlated request (its response arrives via `outbound`). */
@@ -301,7 +320,10 @@ export function flushRaw(batch: Op[], devtools = false): void {
     ms: nowMs() - t0,
     ops: batch.length,
   };
-  if (bridgeTap) bridgeTap.flush(batch, devtools);
+  // Drain the decode warnings only when someone is listening — in production
+  // the tap is null and the op is never called (and may not even exist).
+  if (bridgeTap)
+    bridgeTap.flush(batch, devtools, ops.op_take_decode_warnings?.());
 }
 
 // Flush the ops accumulated during the current commit. `devtools` is true when

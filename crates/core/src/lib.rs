@@ -27,6 +27,11 @@ extern crate self as bevy_react;
 mod anchor;
 mod bridge;
 mod cursor;
+// Devtools diagnostics sinks (invalid style/prop values). Always declared —
+// the protocol/apply call sites are unconditional — but its real implementation
+// only exists with the `devtools` feature on a debug build; otherwise every fn
+// is an inline no-op stub.
+mod diag;
 // The Chrome-DevTools-style inspector. A feature-gated module (not a separate
 // crate — it needs `JsBridge` and friends, which stay private) that is fully
 // compiled out unless the `devtools` cargo feature is on. This repo's own dev

@@ -54,6 +54,10 @@ pub struct OpApplyStats {
     /// Count of non-empty op batches applied since startup (one increment per
     /// frame that applied at least one op).
     pub applied_count: u64,
+    /// Count of [`Op::Reset`]s applied (a cold hot-reload tears the tree down).
+    /// Devtools uses it to clear its warning-dedup state, so a reloaded app's
+    /// re-decoded invalid values flag again (the JS mirror was also reset).
+    pub reset_count: u64,
     /// Like `applied_count`, but only counting applies that included at least
     /// one APP flush (per-batch origin flags — see [`FlushFlags`]). The
     /// devtools panel's own repaints bump only `applied_count`; batch-stats
@@ -244,6 +248,7 @@ pub fn apply_js_ops(
     for op in ops {
         match op {
             Op::Reset => {
+                stats.reset_count += 1;
                 // Despawn the whole tree under the root (recursive), then reset
                 // the id map to just the root. Stale ops referencing despawned
                 // ids resolve to None afterwards and are skipped harmlessly.
@@ -306,6 +311,9 @@ pub fn apply_js_ops(
                 props,
                 text,
             } => {
+                // Attribute apply-time parse warnings (colors, fonts, …) fired
+                // while building this node to its id (see `crate::diag`).
+                let _diag = crate::diag::node_scope(id);
                 let entity = match kind.as_str() {
                     // A `<text>` root: a UI node carrying the text block + style.
                     // A single-string child rides inline as `text` (no child span).
@@ -631,6 +639,10 @@ pub fn apply_js_ops(
                 let Some(e) = resolve(&bridge, id) else {
                     continue;
                 };
+                // Attribute apply-time parse warnings to this node (see
+                // `crate::diag`); the guard restores the outer scope on any
+                // exit from this arm.
+                let _diag = crate::diag::node_scope(id);
                 // Merge the delta into the retained per-node props, yielding the
                 // merged full props, what the delta touched, and the event-like
                 // fields to act on.
@@ -1940,6 +1952,7 @@ pub fn apply_interaction_styles(
             Changed<StyleVariants>,
         )>,
     >,
+    rnodes: Query<&RNode>,
 ) {
     for (entity, interaction, focus, variants) in &query {
         let mut style = match interaction {
@@ -1953,6 +1966,11 @@ pub fn apply_interaction_styles(
         if focus.is_some_and(|f| f.0) {
             style = overlay_style(&style, &variants.focus);
         }
+        // Attribute re-parse warnings (e.g. a bad hoverStyle color) to the node.
+        let _diag = rnodes
+            .get(entity)
+            .ok()
+            .map(|r| crate::diag::node_scope(r.0));
         apply_style(&mut commands.entity(entity), &style);
     }
 }
@@ -2214,9 +2232,15 @@ pub fn apply_surface_interaction_styles(
     mut releases: MessageReader<Pointer<Release>>,
     variants: Query<&StyleVariants>,
     child_of: Query<&ChildOf>,
+    rnodes: Query<&RNode>,
 ) {
     let Some(pointer) = pointer else { return };
     let mut restyle = |entity: Entity, style: Option<Style>| {
+        // Attribute re-parse warnings (e.g. a bad hoverStyle color) to the node.
+        let _diag = rnodes
+            .get(entity)
+            .ok()
+            .map(|r| crate::diag::node_scope(r.0));
         apply_style(&mut commands.entity(entity), &style);
     };
     // Resolve a picked leaf to the nearest ancestor with hover/press variants (the

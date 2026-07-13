@@ -52,6 +52,7 @@
 
 use bevy::picking::hover::HoverMap;
 use bevy::picking::pointer::PointerId;
+use bevy::platform::collections::HashSet;
 use bevy::prelude::*;
 use bevy::ui::{ComputedNode, IsDefaultUiCamera, UiGlobalTransform, UiSystems};
 use std::time::Duration;
@@ -121,6 +122,10 @@ impl Plugin for DevtoolsPlugin {
             warn!("DevtoolsPlugin is inert in release builds");
             return;
         }
+        // Start collecting apply-time invalid-value warnings (see
+        // `crate::diag`): armed for the app's whole lifetime, panel open or
+        // not, so warnings from the initial mount are waiting when it opens.
+        crate::diag::arm_runtime();
         // Load persisted panel settings (native only; errors — missing file,
         // corrupt JSON — mean fresh defaults). The overlay toggle seeds the
         // Rust-side state immediately so highlight gating is correct before
@@ -166,6 +171,9 @@ impl Plugin for DevtoolsPlugin {
                 apply_dock_reservation,
                 send_restore,
                 save_settings,
+                // Entries produced later the same frame (e.g. hover restyles)
+                // simply drain next frame — ordering is deliberately loose.
+                emit_runtime_warnings,
             ),
         )
         // A quit right after a layout drag must not lose the change: flush
@@ -311,6 +319,25 @@ struct DevtoolsBatchStats {
     command_ms: f64,
     /// `UiSystems::Layout` + `PostLayout` (taffy + transform/clip propagation).
     layout_ms: f64,
+}
+
+/// Bevy → JS: an invalid style/prop value fell back to a default at apply time
+/// (an unrecognized color, an unknown fontFamily/cursor, a bad text metric) —
+/// see [`crate::diag`]'s runtime sink. The panel's mirror matches `value`
+/// against the node's retained wire values to flag the offending inspector
+/// row. **Not** gated on the panel being open: warnings accumulate on the
+/// mirror so opening the panel later still shows them. (Decode-time warnings
+/// take the synchronous `op_take_decode_warnings` path instead — no event.)
+#[react_event(name = "devtools.warning")]
+struct DevtoolsWarning {
+    /// The affected node, when the parse site ran under a node scope.
+    id: Option<NodeId>,
+    /// The value's domain (`"color"`, `"fontFamily"`, `"cursor"`, …).
+    kind: String,
+    /// The raw offending wire value.
+    value: String,
+    /// The human-readable log message (shown under the flagged row).
+    message: String,
 }
 
 /// JS → Bevy: the panel opened or closed itself (close button, install sync).
@@ -989,6 +1016,42 @@ fn emit_batch_stats(
     });
 }
 
+/// Drain the [`crate::diag`] runtime sink and ship each **new** warning to JS
+/// as a `devtools.warning` event. Deduped by a hash of the whole entry so the
+/// hover/press restyle paths (which re-parse the same bad value on every flip)
+/// can't spam; the set resets on [`OpApplyStats::reset_count`] (hot reload) so
+/// a reloaded app's warnings flag again — the JS mirror was reset too. NOT
+/// gated on the panel being open (always-on-in-dev: the mirror stores the
+/// flags for whenever the panel opens); the `applied_count` gate only holds
+/// entries back until the React app has mounted its listeners (same
+/// listener-race guard as [`send_restore`] — entries stay queued, not lost).
+fn emit_runtime_warnings(
+    stats: Res<OpApplyStats>,
+    events: ReactEvents,
+    mut seen: Local<HashSet<u64>>,
+    mut last_reset: Local<u64>,
+) {
+    if stats.reset_count != *last_reset {
+        *last_reset = stats.reset_count;
+        seen.clear();
+    }
+    if stats.applied_count == 0 {
+        return;
+    }
+    for w in crate::diag::take_runtime_warnings() {
+        let mut hasher = std::hash::DefaultHasher::new();
+        std::hash::Hash::hash(&(w.node, w.kind, &w.value, &w.message), &mut hasher);
+        if seen.insert(std::hash::Hasher::finish(&hasher)) {
+            events.send(&DevtoolsWarning {
+                id: w.node,
+                kind: w.kind.to_string(),
+                value: w.value,
+                message: w.message,
+            });
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1000,6 +1063,15 @@ mod tests {
     /// channel (the same harness shape as `keyboard.rs`'s tests).
     fn test_app(plugin: DevtoolsPlugin) -> (App, UnboundedReceiver<Outbound>) {
         let mut app = App::new();
+        // Hold the diag test lock for the app's lifetime: `emit_runtime_warnings`
+        // drains the process-global runtime sink every update, so concurrent
+        // test apps would steal entries from each other (and from the
+        // diag/ui_map sink tests). A non-send resource drops with the App.
+        // CONSEQUENCE: one live test_app per test — `drop(app)` before
+        // creating a second, or this lock self-deadlocks (std Mutex is not
+        // reentrant). Don't take `diag::test_lock()` in a test using this
+        // harness either.
+        app.insert_non_send(crate::diag::test_lock());
         app.add_plugins(MinimalPlugins);
         app.init_resource::<ButtonInput<KeyCode>>();
         app.init_resource::<ButtonInput<MouseButton>>();
@@ -1114,6 +1186,116 @@ mod tests {
     /// bare (`width:`) or quoted (`"width":`) — prettier decides which.
     /// camelCase wire names make the bare `name:` probe unambiguous (a missing
     /// `top` is never satisfied by `scrollTop:`).
+    /// Runtime invalid-value warnings ship once per distinct entry as
+    /// `devtools.warning` (hover restyles re-report the same bad value on
+    /// every flip — the dedup set must swallow those), and re-ship after a
+    /// hot reload (`reset_count` bump), matching the JS mirror's reset.
+    /// Global-sink caveats: hold the diag test lock, and filter both drained
+    /// warnings and emitted events by our own node id.
+    #[cfg(debug_assertions)]
+    #[test]
+    fn runtime_warnings_emit_once_and_reset_on_reload() {
+        // NOTE: the diag test lock is already held by `test_app`'s app —
+        // taking it here too would deadlock.
+        let (mut app, mut rx) = test_app(DevtoolsPlugin::new().no_settings_file());
+        let _ = crate::diag::take_runtime_warnings();
+        // The listener-race gate holds warnings until the app has mounted.
+        app.world_mut().resource_mut::<OpApplyStats>().applied_count = 1;
+
+        let report = || {
+            let _scope = crate::diag::node_scope(31337);
+            crate::diag::report("color", "redd", "unrecognized color \"redd\"");
+        };
+        let mine = |events: &[(String, serde_json::Value)]| {
+            events
+                .iter()
+                .filter(|(name, v)| name == "devtools.warning" && v["id"] == 31337)
+                .count()
+        };
+
+        report();
+        app.update();
+        let events = drain_events(&mut rx);
+        assert_eq!(
+            mine(&events),
+            1,
+            "first report ships (panel closed is fine)"
+        );
+        assert!(
+            events.iter().any(|(name, v)| name == "devtools.warning"
+                && v["kind"] == "color"
+                && v["value"] == "redd"
+                && v["message"].as_str().is_some_and(|m| m.contains("redd"))),
+            "the event carries kind/value/message"
+        );
+
+        report();
+        app.update();
+        assert_eq!(
+            mine(&drain_events(&mut rx)),
+            0,
+            "an identical re-report is deduped"
+        );
+
+        app.world_mut().resource_mut::<OpApplyStats>().reset_count += 1;
+        report();
+        app.update();
+        assert_eq!(
+            mine(&drain_events(&mut rx)),
+            1,
+            "a hot reload clears the dedup set so warnings re-flag"
+        );
+    }
+
+    /// `warnings.ts`'s `KIND_FIELDS` must know every warning kind Rust emits,
+    /// or that kind degrades to a broad all-style-fields value scan. Kind
+    /// literals live at the `decode_warn` call sites (`protocol.rs`,
+    /// `scrollbar.rs`, `animations/protocol.rs`) and the `diag::report` sites
+    /// (`ui_map.rs`, `cursor.rs`); extend BOTH this list and the table when
+    /// adding one. (`length`/`angle`/`time` are deliberately table-less —
+    /// they're the broad-scan kinds.)
+    #[test]
+    fn js_warning_kind_table_covers_known_kinds() {
+        let warnings_ts = include_str!("../../../js/src/devtools/warnings.ts");
+        for kind in [
+            "display",
+            "boxSizing",
+            "positionType",
+            "overflow",
+            "alignItems",
+            "justifyItems",
+            "alignSelf",
+            "justifySelf",
+            "alignContent",
+            "justifyContent",
+            "flexDirection",
+            "flexWrap",
+            "gridAutoFlow",
+            "focusPolicy",
+            "textAlign",
+            "lineBreak",
+            "fontSize",
+            "fontWeight",
+            "rect",
+            "gridTrack",
+            "gridPlacement",
+            "borderColor",
+            "scrollbar",
+            "animatedStyle",
+            "color",
+            "fontFamily",
+            "cursor",
+            "lineHeight",
+            "letterSpacing",
+        ] {
+            assert!(
+                warnings_ts.contains(&format!("{kind}:"))
+                    || warnings_ts.contains(&format!("\"{kind}\":")),
+                "js/src/devtools/warnings.ts KIND_FIELDS is missing kind \"{kind}\""
+            );
+        }
+    }
+
     #[test]
     fn js_style_field_table_covers_every_style_field() {
         let fields_ts = include_str!("../../../js/src/devtools/fields.ts");
@@ -1532,6 +1714,9 @@ mod tests {
         assert_eq!(restores[0]["mode"], "right");
         assert_eq!(restores[0]["open"], false);
         assert!(!app.world().resource::<DevtoolsState>().open);
+        // Release the first app (and its diag test lock — see `test_app`)
+        // before building the second, or the lock self-deadlocks.
+        drop(app);
 
         let (mut app, _rx) = test_app(DevtoolsPlugin::new().no_settings_file());
         app.world_mut()

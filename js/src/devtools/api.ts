@@ -30,6 +30,18 @@ export interface DevtoolsPicked {
   id: number;
 }
 
+/** Bevy→JS `devtools.warning`: an invalid style/prop value fell back to a
+ *  default at apply time (unrecognized color, unknown fontFamily/cursor, bad
+ *  text metric). Sent whether or not the panel is open — the mirror stores
+ *  the flag for whenever it opens. Decode-time warnings take the synchronous
+ *  `op_take_decode_warnings` path through the bridge tap instead. */
+export interface DevtoolsWarning {
+  id: number | null;
+  kind: string;
+  value: string;
+  message: string;
+}
+
 /** The panel's persisted layout settings — the JS→Bevy `devtools.settings`
  *  message AND the Bevy→JS `devtools.restore` payload (Rust also serializes
  *  this exact shape to the settings file). Field names match the Rust struct
@@ -69,6 +81,11 @@ export function onBatchStats(cb: (e: DevtoolsBatchStats) => void): () => void {
 
 export function onPicked(cb: (e: DevtoolsPicked) => void): () => void {
   return addEventListener("devtools.picked", cb as (v: unknown) => void);
+}
+
+/** Apply-time invalid-value warnings (see [`DevtoolsWarning`]). */
+export function onWarning(cb: (w: DevtoolsWarning) => void): () => void {
+  return addEventListener("devtools.warning", cb as (v: unknown) => void);
 }
 
 /** Settings loaded from disk (or defaults), sent exactly once after the React

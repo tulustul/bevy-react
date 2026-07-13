@@ -326,10 +326,9 @@ impl<'de> Deserialize<'de> for AnimatedBindings {
                             // Consume the value so deserialization stays in sync,
                             // then skip: forward-compat with a newer JS surface.
                             map.next_value::<de::IgnoredAny>()?;
-                            tracing::warn!(
-                                target: "bevy_react",
-                                "animatedStyle: ignoring unknown property {key:?}"
-                            );
+                            let msg = format!("animatedStyle: ignoring unknown property {key:?}");
+                            tracing::warn!(target: "bevy_react", "{msg}");
+                            crate::diag::decode_report("animatedStyle", &key, &msg);
                         }
                     }
                 }

@@ -10,7 +10,7 @@
 
 import { createElement, type ReactNode } from "react";
 import { __installBridgeTap } from "../bridge";
-import { onBatchStats, onRestore, onToggle } from "./api";
+import { onBatchStats, onRestore, onToggle, onWarning } from "./api";
 import { DevtoolsHost } from "./DevtoolsHost";
 import { mirror } from "./mirror";
 import { recorder } from "./recorder";
@@ -25,8 +25,8 @@ export function installDevtools(host: {
   if (installed) return;
   installed = true;
   __installBridgeTap({
-    flush: (batch, devtools) => {
-      mirror.apply(batch, devtools);
+    flush: (batch, devtools, decodeWarnings) => {
+      mirror.apply(batch, devtools, decodeWarnings);
       recorder.onFlush(batch, devtools);
     },
     emit: (name, value) => recorder.onEmit(name, value),
@@ -38,6 +38,9 @@ export function installDevtools(host: {
   // Rust reports per-batch render timings after each apply; the recorder
   // attaches them to the matching "ops" log entries.
   onBatchStats((s) => recorder.attachBatchStats(s));
+  // Apply-time invalid-value warnings (colors, fonts, cursor…) flag inspector
+  // rows via the mirror — decode-time ones arrive through the flush tap above.
+  onWarning((w) => mirror.addRuntimeWarning(w));
   // Recording follows the panel. The recorder starts armed (to capture the
   // initial mount); the session's single `devtools.restore` settles it —
   // disarming when the panel stays closed — and every toggle thereafter

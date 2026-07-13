@@ -21,7 +21,7 @@ use crate::animations::AnimationCommand;
 
 use crate::bridge::OutboundSender;
 use crate::message::ReactMessage;
-use crate::protocol::{Op, Outbound};
+use crate::protocol::{Op, OpBatch, Outbound};
 use crate::request::RawRequest;
 
 use super::{HostConfig, HostSenders};
@@ -88,16 +88,27 @@ fn install_host_object() -> Object {
     // flagged with its origin (the panel's own container vs the app). The flag
     // is sent first so the aligned FIFOs never desync (see `FlushFlags`).
     let flush = Closure::<dyn Fn(JsValue, JsValue)>::new(|ops: JsValue, devtools: JsValue| {
-        match serde_wasm_bindgen::from_value::<Vec<Op>>(ops) {
+        // `OpBatch` decodes exactly like `Vec<Op>` but stamps decode-fallback
+        // warnings with their op's node id (see `crate::diag`).
+        match serde_wasm_bindgen::from_value::<OpBatch>(ops) {
             Ok(batch) => with_host(|h| {
                 let _ = h.flush_devtools.send(devtools.as_bool().unwrap_or(false));
-                let _ = h.ops.send(batch);
+                let _ = h.ops.send(batch.0);
             }),
             Err(e) => error(&format!("op_flush decode: {e}")),
         }
     });
     set_method(&host, "op_flush", flush.as_ref());
     flush.forget();
+
+    // op_take_decode_warnings(): drain the invalid-value warnings collected while
+    // decoding the most recent op_flush batch (same thread — wasm is
+    // single-threaded). Called by the dev-only devtools bridge tap.
+    let take_warnings = Closure::<dyn Fn() -> JsValue>::new(|| {
+        serde_wasm_bindgen::to_value(&crate::diag::take_decode_warnings()).unwrap_or(JsValue::NULL)
+    });
+    set_method(&host, "op_take_decode_warnings", take_warnings.as_ref());
+    take_warnings.forget();
 
     // op_emit(name, value): JS → Bevy, a named app message.
     let emit = Closure::<dyn Fn(JsValue, JsValue)>::new(|name: JsValue, value: JsValue| {
