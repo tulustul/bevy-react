@@ -12,7 +12,7 @@
 // Rust side (the same contract `bridge.ts` keeps with `protocol::Op`). Keep them
 // in sync.
 
-import { createElement, useRef } from "react";
+import { createElement, useRef, type FunctionComponent } from "react";
 import { animate, registerAnimationCallback } from "./bridge";
 import type { BevyImageProps, BevyNodeProps, BevyTextProps } from "./jsx";
 
@@ -333,8 +333,9 @@ function hexToRgba(hex: string): [number, number, number, number] {
 // Thin host wrappers, so apps write `<Animated.node animatedStyle={…}/>` the way
 // Reanimated apps write `<Animated.View/>`. The animation lives in `animatedStyle`
 // (the intrinsic elements accept it; see jsx.d.ts).
-function host<P>(type: string) {
-  return (props: P) => createElement(type as any, props as any);
+function host<P extends object>(type: string) {
+  return (props: P) =>
+    createElement(type as unknown as FunctionComponent<P>, props);
 }
 
 export const Animated = {

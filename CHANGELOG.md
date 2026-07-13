@@ -31,7 +31,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The bridge now skips `pointermove` UI events when the cursor has not actually
   moved, reducing redundant traffic on the Bevy→JS channel.
 
-
 ## [0.1.2] - 2026-07-03
 
 Last release before this changelog was introduced.

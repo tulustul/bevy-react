@@ -175,8 +175,8 @@ fn demo_switch_anchored_survives() {
                 }
                 anchored_btn = anchored_btn
                     .or_else(|| find_button("<Anchored.node>", &buttons, &parent_of, &text_of));
-                other_btn = other_btn
-                    .or_else(|| find_button("Events", &buttons, &parent_of, &text_of));
+                other_btn =
+                    other_btn.or_else(|| find_button("Events", &buttons, &parent_of, &text_of));
             }
             Err(RecvTimeoutError::Timeout) => {}
             Err(RecvTimeoutError::Disconnected) => panic!("JS thread died during initial render"),
