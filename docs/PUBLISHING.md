@@ -32,36 +32,41 @@ cargo run --release --example minimal
 
 ```sh
 npm run build:web:prod -w demos
-npm run build:web:prod -w minimal
 ```
 
-### 5. Dry-run both publishes
+### 5. Run stress tests, compare with previous version results, and check if there is any performance regression
+
+```sh
+cargo run --release -p bevy-react --example stress -- --run table-ops --out benchmark_results/<version>.json
+```
+
+### 6. Dry-run both publishes
 
 ```sh
 cargo publish --workspace --dry-run
 npm publish --dry-run -w bevy-react
 ```
 
-### 6. Publish to crates.io
+### 7. Publish to crates.io
 
 ```sh
 cargo publish --workspace
 ```
 
-### 7. Publish to npm
+### 8. Publish to npm
 
 ```sh
 npm publish -w bevy-react
 ```
 
-### 8. Tag the release
+### 9. Tag the release
 
 ```sh
 git tag v<version>
 git push origin v<version>
 ```
 
-### 9. Deploy web demo to Github Pages
+### 10. Deploy web demo to Github Pages
 
 ```sh
 npm run deploy:web -w demos

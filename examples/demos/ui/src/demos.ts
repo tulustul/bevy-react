@@ -5,8 +5,9 @@ import { ReactToBevyDemo } from "./demos/communication/ReactToBevyDemo";
 import { BevyToReactDemo } from "./demos/communication/BevyToReactDemo";
 import { BidirectionCommunicationDemo } from "./demos/communication/BidirectionCommunicationDemo";
 import { AnchoredDemo } from "./demos/AnchoredDemo";
-import { MouseDemo } from "./demos/interactions/MouseDemo";
-import { KeyboardDemo } from "./demos/interactions/KeyboardDemo";
+import { MouseDemo } from "./demos/events/MouseDemo";
+import { KeyboardDemo } from "./demos/events/KeyboardDemo";
+import { WindowDemo } from "./demos/events/WindowDemo";
 import { CanvasDemo } from "./demos/elements/CanvasDemo";
 import { PortalDemo } from "./demos/elements/PortalDemo";
 import { SurfaceDemo } from "./demos/elements/surfaceDemo";
@@ -136,10 +137,11 @@ export const DEMOS: DemoItem[] = [
     ],
   },
   {
-    label: "Interactions",
+    label: "Events",
     children: [
       { label: "Mouse", component: MouseDemo },
       { label: "Keyboard", component: KeyboardDemo },
+      { label: "Window", component: WindowDemo },
     ],
   },
 ];

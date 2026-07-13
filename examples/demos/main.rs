@@ -8,7 +8,7 @@
 //!     `bevy.pollingDemo.getBall()` polls (one scene, both bridge directions).
 //!   * Crowded cubes — UI badges anchored to ~100 wandering 3D cubes on a plane.
 //!
-//! Pure-UI demos (Animations, Interactions, …) declare no scene and select `null`.
+//! Pure-UI demos (Animations, Events, …) declare no scene and select `null`.
 //!
 //! Run with:
 //!
