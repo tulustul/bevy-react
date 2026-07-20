@@ -9,6 +9,7 @@ import type {
   BevyCanvasProps,
   BevyEditableTextProps,
   BevyImageProps,
+  BevyLayerProps,
   BevyNodeProps,
   BevyPortalProps,
   BevyRootProps,
@@ -37,6 +38,7 @@ export namespace JSX {
     image: BevyImageProps;
     canvas: BevyCanvasProps;
     portal: BevyPortalProps;
+    layer: BevyLayerProps;
     surface: BevySurfaceProps;
     root: BevyRootProps;
     text: BevyTextProps;

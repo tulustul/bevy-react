@@ -71,6 +71,11 @@ pub mod canvas;
 pub mod portal;
 pub mod surface;
 
+// The `<layer>` host element's effect layer: uniform data model (packed schema
+// + wire types), the generic effect material, and the effect registry. The
+// render-to-texture systems and protocol integration land in later tasks.
+pub mod layer;
+
 pub use anchor::{Anchor, AnchorScaling, Anchored};
 pub use animations::ReactUiAnimationsPlugin;
 pub use bevy_react_macros::{react_event, react_message, react_request};
@@ -79,6 +84,7 @@ pub use canvas::CanvasSurface;
 #[cfg_attr(docsrs, doc(cfg(feature = "devtools")))]
 pub use devtools::DevtoolsConfig;
 pub use event::{ReactEvent, ReactEvents};
+pub use layer::{LayerAppExt, LayerEffect, LayerEffects, UniformKind};
 pub use message::{ReactAppExt, ReactMessage, ReactPayload};
 pub use plugin::{Fonts, PointerCapture, PointerCaptureSet, ReactUiPlugin};
 pub use portal::{

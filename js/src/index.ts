@@ -49,6 +49,11 @@ export type {
 export { Anchored } from "./anchored";
 export type { AnchorProps, AnchorScaling, Vec3 } from "./anchored";
 
+// `<layer>` prop/style types, re-exported (types-only) for the generated
+// `bevy.ts` typed `Layer` wrapper — and for app code narrowing layer styles by
+// hand. The full intrinsic-props surface stays in `bevy-react/jsx`.
+export type { BevyLayerProps, BevyLayerStyle, LayerUniformValue } from "./jsx";
+
 // Canvas drawing. `CanvasContext` records an HTML-canvas-like display list
 // rasterized on the Bevy side — declaratively via `<canvas draw={(ctx) => …}/>`,
 // or imperatively through a `<canvas ref={…}>`'s persistent `BevyCanvasElement`

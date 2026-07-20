@@ -511,7 +511,8 @@ const OBJECT_PROP_KEYS = new Set([
   "animatedStyle",
 ]);
 
-// Text + `image` + `editableText` element attributes that pass through by name.
+// Text + `image` + `editableText` + `layer` element attributes that pass
+// through by name.
 const PASSTHROUGH_PROP_KEYS = new Set([
   "color",
   "fontSize",
@@ -534,6 +535,7 @@ const PASSTHROUGH_PROP_KEYS = new Set([
   "scrollTop",
   "scrollLeft",
   "scrollStep",
+  "effect",
 ]);
 
 // Bool flag props. Rust's `Props::merge_delta` (protocol.rs `merge_bool!`)

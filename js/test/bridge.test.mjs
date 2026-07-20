@@ -33,7 +33,7 @@ const bundled = await build({
   logLevel: "silent",
 });
 const code = Buffer.from(bundled.outputFiles[0].contents).toString("base64");
-const { buildUpdateOp, valuesEqual } = await import(
+const { buildUpdateOp, serializeProps, valuesEqual } = await import(
   `data:text/javascript;base64,${code}`
 );
 
@@ -190,6 +190,67 @@ test("onResize diffs by presence like any handler", () => {
 
   const lost = buildUpdateOp(1, { onResize: () => {} }, {});
   assert.deepEqual(lost.unset, ["onResize"]);
+});
+
+test("a layer's effect passes through by name on create and update", () => {
+  // Create path: `effect` crosses as-is (a plain scalar attribute).
+  assert.deepEqual(serializeProps(1, { effect: "blur", children: [] }), {
+    effect: "blur",
+  });
+
+  // Delta path: a change rides `props`, a removal rides `unset` — the same
+  // retained-scalar contract as `target`/`tint`.
+  const changed = buildUpdateOp(1, { effect: "blur" }, { effect: "glow" });
+  assert.deepEqual(changed.props, { effect: "glow" });
+  assert.equal(changed.unset, undefined);
+
+  const removed = buildUpdateOp(1, { effect: "blur" }, {});
+  assert.deepEqual(removed.unset, ["effect"]);
+  assert.deepEqual(removed.props, {});
+});
+
+test("style.uniforms rides the style diff like any other field", () => {
+  // A value change arrives as a style delta carrying only `uniforms`.
+  const changed = buildUpdateOp(
+    1,
+    { style: { width: 100, uniforms: { strength: 1 } } },
+    { style: { width: 100, uniforms: { strength: 2 } } },
+  );
+  assert.deepEqual(changed.props.style, { uniforms: { strength: 2 } });
+  assert.equal(changed.styleUnset, undefined);
+
+  // Structurally identical uniforms produce no op at all.
+  assert.equal(
+    buildUpdateOp(
+      1,
+      { style: { uniforms: { tint: [1, 0, 0, 1] } } },
+      { style: { uniforms: { tint: [1, 0, 0, 1] } } },
+    ),
+    null,
+  );
+
+  // Dropping the field lands in `styleUnset` (reset to the effect's defaults).
+  const removed = buildUpdateOp(
+    1,
+    { style: { width: 100, uniforms: { strength: 1 } } },
+    { style: { width: 100 } },
+  );
+  assert.deepEqual(removed.styleUnset, ["uniforms"]);
+});
+
+test("a vec uniform in a variant style stays within the depth cap", () => {
+  // hoverStyle → uniforms → tint → [1,0,0,1] consumes exactly all four levels
+  // of `valuesEqual`'s default depth cap — the deepest structure it admits. If
+  // the cap ever shrinks, this identical inline re-render silently becomes an
+  // op per render instead of no op.
+  assert.equal(
+    buildUpdateOp(
+      1,
+      { hoverStyle: { uniforms: { tint: [1, 0, 0, 1] } } },
+      { hoverStyle: { uniforms: { tint: [1, 0, 0, 1] } } },
+    ),
+    null,
+  );
 });
 
 test("a changed draw painter re-sends the recorded display list", () => {

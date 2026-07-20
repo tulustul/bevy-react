@@ -8,6 +8,12 @@ import {
   addEventListener as rawAddEventListener,
   removeEventListener as rawRemoveEventListener,
 } from "bevy-react";
+import type {
+  BevyLayerProps,
+  BevyLayerStyle,
+  LayerUniformValue,
+} from "bevy-react";
+import { createElement, type ReactElement } from "react";
 
 export type BallBounced = { 
 /**
@@ -137,3 +143,66 @@ export const bevy = {
     size(): Promise<WindowSize> { return request("window.size", null); },
   },
 } as const;
+
+// ---- `<layer>` effects ----------------------------------------------------
+
+/** Uniforms for the "chromaticAberration" `<layer>` effect. */
+export interface ChromaticAberrationUniforms {
+  /** `f32` — default `0.0`. */
+  strength?: number;
+  /** `vec2` — default `[1.0, 0.0]`. */
+  direction?: [number, number];
+}
+
+/** Uniforms for the "dissolve" `<layer>` effect. */
+export interface DissolveUniforms {
+  /** `f32` — default `0.0`. */
+  threshold?: number;
+  /** `f32` — default `0.08`. */
+  softness?: number;
+}
+
+/** Uniforms for the "none" `<layer>` effect (declares none). */
+export type NoneUniforms = Record<string, never>;
+
+/** Every registered `<layer>` effect and the uniforms it declares. */
+export interface LayerEffects {
+  chromaticAberration: ChromaticAberrationUniforms;
+  dissolve: DissolveUniforms;
+  none: NoneUniforms;
+}
+
+/** Compile-time proof: every effect's uniforms shape fits the `<layer>`
+ *  intrinsic's `Record<string, LayerUniformValue>` wire type. */
+export type AssertLayerUniformsCompat<
+  T extends Partial<Record<string, LayerUniformValue>>,
+> = T;
+export type LayerUniformsCompat = [
+  AssertLayerUniformsCompat<{ [K in keyof ChromaticAberrationUniforms]: ChromaticAberrationUniforms[K] }>,
+  AssertLayerUniformsCompat<{ [K in keyof DissolveUniforms]: DissolveUniforms[K] }>,
+  AssertLayerUniformsCompat<{ [K in keyof NoneUniforms]: NoneUniforms[K] }>,
+];
+
+/** `BevyLayerStyle` with `uniforms` narrowed to one effect's typed shape. */
+export type LayerStyleFor<U> = Omit<BevyLayerStyle, "uniforms"> & {
+  uniforms?: U;
+};
+
+/** Props for the typed `Layer` wrapper (see `Layer`). */
+export type LayerProps<E extends keyof LayerEffects> = { effect?: E } & Omit<
+  BevyLayerProps,
+  "effect" | "style" | "hoverStyle" | "pressStyle"
+> & {
+    style?: LayerStyleFor<LayerEffects[E]>;
+    hoverStyle?: LayerStyleFor<LayerEffects[E]>;
+    pressStyle?: LayerStyleFor<LayerEffects[E]>;
+  };
+
+/** Typed `<layer>`: choosing an `effect` compile-checks `style.uniforms`
+ *  (and the hover/press variants) against that effect's Rust-declared
+ *  schema. The plain `<layer>` intrinsic stays available untyped. */
+export function Layer<E extends keyof LayerEffects = "none">(
+  props: LayerProps<E>,
+): ReactElement {
+  return createElement("layer", props as BevyLayerProps);
+}

@@ -211,6 +211,15 @@ pub struct JsBridge {
     /// no `ChildOf`.
     pub surface_parent: HashMap<NodeId, NodeId>,
     pub child_surfaces: HashMap<NodeId, Vec<NodeId>>,
+    /// Each `<layer>`'s **companion root** (see [`crate::layer::LayerRoot`]):
+    /// layer node id → the parentless entity its JSX children ECS-attach to.
+    /// Unlike a `<surface>`, the layer's *display node* stays an ordinary child
+    /// of the on-screen tree (so `nodes` maps the id to the display entity, and
+    /// the shadow tree records the layer as its children's parent); only the
+    /// ECS attach target is redirected here. The companion has no `ChildOf`, so
+    /// removal of an ancestor must despawn it explicitly (see
+    /// [`Self::layers_under`]).
+    pub layers: HashMap<NodeId, Entity>,
 }
 
 /// Doubly-linked sibling entry (present iff the node is attached to a parent).
@@ -253,6 +262,7 @@ impl JsBridge {
             parent_of: HashMap::new(),
             surface_parent: HashMap::new(),
             child_surfaces: HashMap::new(),
+            layers: HashMap::new(),
         }
     }
 
@@ -288,6 +298,9 @@ impl JsBridge {
     /// removing their parentage bookkeeping as it goes. Does NOT include `node` itself
     /// (a surface removed directly is handled by its own `Remove`). Used so `Op::Remove`
     /// despawns surfaces that Bevy's recursive despawn of `node` can't reach.
+    /// Ordering contract: the read-only [`Self::layers_under`] walk traverses the same
+    /// `child_surfaces` links this walk *prunes*, so `Op::Remove` must run `layers_under`
+    /// before this.
     pub fn surfaces_under(&mut self, node: NodeId) -> Vec<NodeId> {
         let mut out = Vec::new();
         self.collect_surfaces(node, &mut out);
@@ -306,6 +319,35 @@ impl JsBridge {
         let kids: Vec<NodeId> = self.children_of(node).collect();
         for kid in kids {
             self.collect_surfaces(kid, out);
+        }
+    }
+
+    /// Every `<layer>` node id structurally at-or-under `node`'s subtree —
+    /// walking the ordered shadow child lists (which *do* include layer
+    /// children, since a layer stays in the sibling lists) **and** through
+    /// detached roots (`child_surfaces`), so a layer nested inside a removed
+    /// `<surface>` is found too. Does NOT include `node` itself — the caller
+    /// checks that separately, mirroring [`Self::surfaces_under`]. Read-only
+    /// (unlike `surfaces_under`, which prunes as it walks): the companion
+    /// entities are looked up in [`Self::layers`] afterwards, and the table is
+    /// pruned by `forget_subtree`'s per-node sweep.
+    pub fn layers_under(&self, node: NodeId) -> Vec<NodeId> {
+        let mut out = Vec::new();
+        self.collect_layers(node, &mut out);
+        out
+    }
+
+    fn collect_layers(&self, node: NodeId, out: &mut Vec<NodeId>) {
+        if let Some(surfaces) = self.child_surfaces.get(&node) {
+            for surface in surfaces {
+                self.collect_layers(*surface, out);
+            }
+        }
+        for kid in self.children_of(node) {
+            if self.layers.contains_key(&kid) {
+                out.push(kid);
+            }
+            self.collect_layers(kid, out);
         }
     }
 
@@ -437,6 +479,7 @@ impl JsBridge {
         self.editable_inputs.remove(&id);
         self.surfaces.remove(&id);
         self.roots.remove(&id);
+        self.layers.remove(&id);
         self.editable_values.remove(&id);
         self.editable_selections.remove(&id);
         self.editable_select_handlers.remove(&id);

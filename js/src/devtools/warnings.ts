@@ -72,6 +72,11 @@ const KIND_FIELDS: Record<string, { style?: string[]; props?: string[] }> = {
   cursor: { style: ["cursor"] },
   lineHeight: { style: ["lineHeight"] },
   letterSpacing: { style: ["letterSpacing"] },
+  // `<layer>` effect resolution + uniform packing (reconcile.rs / layer.rs).
+  // A bad uniform is reported by NAME (the value may be a bare number the
+  // string matcher can't see), which matches the `uniforms` map's key.
+  layerEffect: { props: ["effect"] },
+  layerUniform: { style: ["uniforms"] },
 };
 
 /** The style variant props are opaque style objects under `props`; a bad value

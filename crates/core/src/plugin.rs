@@ -11,6 +11,7 @@ use bevy::prelude::*;
 use bevy::window::CustomCursorImage;
 
 use crate::filter::{FilterMaterial, FilterMaterialCache, init_filter_assets};
+use crate::layer::{LayerEffects, LayerMaterial};
 
 use crate::bridge::{JsBridge, OpReceiver, OutboundResource, OutboundSender};
 use crate::event::ReactEventRegistry;
@@ -185,12 +186,42 @@ impl Plugin for ReactUiPlugin {
         // setup), since `embedded_asset!`/`UiMaterialPlugin` need the asset + render
         // infrastructure — a headless `App` with neither (e.g. wiring-only tests)
         // simply skips it.
-        if app.is_plugin_added::<bevy::render::RenderPlugin>() {
+        let has_render = app.is_plugin_added::<bevy::render::RenderPlugin>();
+        let has_image_assets = app.world().contains_resource::<Assets<Image>>();
+        if has_render {
             embedded_asset!(app, "filter.wgsl");
-            app.add_plugins(UiMaterialPlugin::<FilterMaterial>::default())
-                .init_resource::<FilterMaterialCache>()
+            app.add_plugins(UiMaterialPlugin::<FilterMaterial>::default());
+            // The `<layer>` element's generic effect material: the embedded
+            // fallback shader (real effects specialize their own composed
+            // shader over it) and the material asset + render pipeline.
+            embedded_asset!(app, "layer.wgsl");
+            app.add_plugins(UiMaterialPlugin::<LayerMaterial>::default());
+        } else if has_image_assets {
+            // Headless-but-with-assets (a windowless test App that still wants
+            // real op application, e.g. `tests/roundtrip.rs`'s world-wiring
+            // check): register the material stores `apply_js_ops` needs —
+            // without them Bevy skips the system on failed param validation
+            // and no op ever applies. The render halves (embedded shaders, the
+            // `UiMaterialPlugin` pipelines) stay render-gated above; nothing
+            // draws.
+            app.init_asset::<FilterMaterial>();
+            app.init_asset::<LayerMaterial>();
+            if !app
+                .world()
+                .contains_resource::<Assets<bevy::shader::Shader>>()
+            {
+                app.init_asset::<bevy::shader::Shader>();
+            }
+        }
+        if has_render || has_image_assets {
+            app.init_resource::<FilterMaterialCache>()
                 .add_systems(Startup, init_filter_assets);
         }
+        // The `<layer>` effect registry lives outside the render gate:
+        // registration only composes WGSL source (shader assets are minted
+        // lazily), so it must work on a bare `App` — the codegen exporter
+        // builds one. No-op if `register_layer_effect` already created it.
+        app.init_resource::<LayerEffects>();
 
         // Channels: op batches, app messages, requests, and animation commands flow
         // JS -> Bevy (crossbeam, same on every target). The Bevy -> JS direction (a
@@ -394,6 +425,19 @@ impl Plugin for ReactUiPlugin {
                 collect_surface_pointer_events,
                 collect_surface_hover_events,
                 apply_surface_interaction_styles,
+            ),
+        );
+
+        // The `<layer>` element's per-frame systems: bind each fresh layer to
+        // its offscreen camera + render texture after the op drain (so a layer
+        // created this frame binds the same frame), then drive texture sizing,
+        // companion layout, group alpha, and orphan GC. A separate
+        // `add_systems` call — the Update tuple above is at Bevy's arity cap.
+        app.add_systems(
+            Update,
+            (
+                crate::layer::bind_layers.after(apply_js_ops),
+                crate::layer::drive_layers.after(crate::layer::bind_layers),
             ),
         );
 

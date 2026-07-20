@@ -28,6 +28,7 @@ use crate::bridge::{
     ScrollStep, SpanKind, StyleVariants, WheelListener,
 };
 use crate::filter::{FilterAssets, FilterMaterial, FilterMaterialCache, filter_material};
+use crate::layer::{LayerEffects, LayerMaterial, LayerPacked, LayerRoot, RLayer, pack_uniforms};
 use crate::plugin::Fonts;
 use crate::protocol::{NodeId, Op, Outbound, Props, ROOT_ID, Style, UiEvent};
 use crate::transition::{ScrollTransitionState, apply_scroll_transition};
@@ -130,16 +131,26 @@ pub struct FlushMeta<'w> {
 }
 
 /// The asset stores + caches the op-apply path builds components from: the
-/// `<image atlas>` `TextureAtlasLayout`s and the `filter` style's
-/// [`FilterMaterial`]s (plus the shared white pixel). Bundled as one `SystemParam`
-/// so [`apply_js_ops`] stays under Bevy's per-system parameter limit.
+/// `<image atlas>` `TextureAtlasLayout`s, the `filter` style's
+/// [`FilterMaterial`]s (plus the shared white pixel), and the `<layer>`
+/// element's effect registry + material/shader stores. Bundled as one
+/// `SystemParam` so [`apply_js_ops`] stays under Bevy's per-system parameter
+/// limit.
 #[derive(SystemParam)]
-pub struct UiAssets<'w> {
+pub struct UiAssets<'w, 's> {
     layouts: ResMut<'w, Assets<TextureAtlasLayout>>,
     atlas_cache: ResMut<'w, AtlasLayoutCache>,
     filter_materials: ResMut<'w, Assets<FilterMaterial>>,
     filter_cache: ResMut<'w, FilterMaterialCache>,
     filter_assets: Res<'w, FilterAssets>,
+    /// The `<layer>` effect registry: resolves `effect` names to schemas and
+    /// mints composed shaders lazily ([`LayerEffects::ensure_shader`]).
+    layer_effects: ResMut<'w, LayerEffects>,
+    layer_materials: ResMut<'w, Assets<LayerMaterial>>,
+    shaders: ResMut<'w, Assets<bevy::shader::Shader>>,
+    /// A `<layer>` display node's material handle + resolved effect, for the
+    /// update path (re-pack uniforms / swap the effect shader in place).
+    layer_nodes: Query<'w, 's, (&'static MaterialNode<LayerMaterial>, &'static RLayer)>,
 }
 
 /// Apply every queued reconciler op to the ECS. Runs in `Update`; ops simply
@@ -281,6 +292,13 @@ pub fn apply_js_ops(
                         commands.entity(e).despawn();
                     }
                 }
+                // Layer companions are parentless like detached roots (the
+                // display nodes fell to the sweeps above), so despawn them
+                // explicitly too — otherwise a reload leaks each layer's
+                // (hidden) subtree.
+                for &companion in bridge.layers.values() {
+                    commands.entity(companion).despawn();
+                }
                 bridge.nodes.retain(|&id, _| id == ROOT_ID);
                 bridge.props_cache.clear();
                 bridge.text_styles.clear();
@@ -303,6 +321,7 @@ pub fn apply_js_ops(
                 bridge.parent_of.clear();
                 bridge.surface_parent.clear();
                 bridge.child_surfaces.clear();
+                bridge.layers.clear();
                 dirty.clear();
             }
             Op::Create {
@@ -372,6 +391,64 @@ pub fn apply_js_ops(
                         apply_animated(&mut ec, &props);
                         apply_anchor(&mut ec, &props);
                         ec.id()
+                    }
+                    // A `<layer>`: a styled node re-displaying its own subtree
+                    // through a custom-effect `LayerMaterial`. TWO entities: the
+                    // on-screen **display node** here (material + `RLayer`), and a
+                    // parentless, hidden **companion root** the child-attach ops
+                    // redirect the layer's JSX children onto (see `container_of`)
+                    // so the subtree lays out detached — the render-to-texture
+                    // systems (a later task) size it and capture it into the
+                    // material's `layer` texture. Starts on a blank placeholder
+                    // image, like a `<portal>`.
+                    "layer" => {
+                        let effect =
+                            resolve_layer_effect(&ui_assets.layer_effects, props.effect.as_deref());
+                        let shader = ui_assets
+                            .layer_effects
+                            .ensure_shader(&effect, &mut ui_assets.shaders)
+                            .expect("resolved layer effect is registered");
+                        // Defaults from the effect's schema, overlaid by any
+                        // declarative `style.uniforms` — packed NOW, so the first
+                        // frame renders with the requested values.
+                        let schema = &ui_assets
+                            .layer_effects
+                            .get(&effect)
+                            .expect("resolved layer effect is registered")
+                            .schema;
+                        let mut params = schema.packed_defaults();
+                        if let Some(map) = props.style.as_ref().and_then(|s| s.uniforms.as_ref()) {
+                            pack_uniforms(schema, map, &mut params);
+                        }
+                        let material = ui_assets.layer_materials.add(LayerMaterial {
+                            // Group alpha defaults to 1.0 (`LayerPacked::default`).
+                            packed: LayerPacked {
+                                params,
+                                ..Default::default()
+                            },
+                            layer: images.add(blank_portal_image()),
+                            shader,
+                        });
+                        // Companion first (empty), so the display's `RLayer` can
+                        // point at it; filled in below once the display exists.
+                        let companion = commands.spawn_empty().id();
+                        let mut ec = commands.spawn(RNode(id));
+                        apply_style(&mut ec, &props.style);
+                        ec.insert((MaterialNode(material), RLayer { companion, effect }));
+                        apply_style_variants(&mut ec, &props);
+                        apply_pointer_handlers(&mut ec, &props);
+                        apply_animated(&mut ec, &props);
+                        apply_anchor(&mut ec, &props);
+                        let display = ec.id();
+                        // The companion: a detached root the children attach to.
+                        // NOT NodeId-mapped (the id maps to the display node) and
+                        // parentless; hidden until the capture path (later task)
+                        // renders it offscreen.
+                        let mut cc = commands.entity(companion);
+                        apply_style(&mut cc, &layer_root_base());
+                        cc.insert((LayerRoot(display), Visibility::Hidden));
+                        bridge.layers.insert(id, companion);
+                        display
                     }
                     // A `<surface>`: a styled container whose subtree renders into
                     // an offscreen image instead of the on-screen UI. It is a
@@ -547,7 +624,8 @@ pub fn apply_js_ops(
                     bridge.attach_surface(child, parent);
                     continue;
                 }
-                if let (Some(p), Some(c)) = (resolve(&bridge, parent), resolve(&bridge, child)) {
+                if let (Some(p), Some(c)) = (container_of(&bridge, parent), resolve(&bridge, child))
+                {
                     let same_parent = bridge.parent_of.get(&child) == Some(&parent);
                     bridge.append_child(parent, child);
                     if same_parent {
@@ -584,7 +662,8 @@ pub fn apply_js_ops(
                 // batch haven't applied), so the shadow tree is the ordering truth and
                 // the ECS position is fixed up by the end-of-batch rebuild of the
                 // (always dirty) parent. A missing `before` falls back to appending.
-                if let (Some(p), Some(c)) = (resolve(&bridge, parent), resolve(&bridge, child)) {
+                if let (Some(p), Some(c)) = (container_of(&bridge, parent), resolve(&bridge, child))
+                {
                     let same_parent = bridge.parent_of.get(&child) == Some(&parent);
                     bridge.insert_before(parent, child, before);
                     if !same_parent {
@@ -605,6 +684,23 @@ pub fn apply_js_ops(
                 // if it is one) before the recursive despawn below; otherwise the
                 // orphan keeps rendering (a surface into its often-shared texture, a
                 // `<root>` straight onto the screen).
+                //
+                // Layer companions are parentless too: despawn every `<layer>`'s
+                // companion at/under `child` (children hang off it, so this takes
+                // the layer's subtree with it; the display node itself falls to
+                // the ordinary recursive despawn below). Must run BEFORE
+                // `surfaces_under`, which prunes the `child_surfaces` links this
+                // read-only walk also traverses; the `layers` table entries are
+                // pruned by `forget_subtree`'s per-node sweep below.
+                let mut layer_ids = bridge.layers_under(child);
+                if bridge.layers.contains_key(&child) {
+                    layer_ids.push(child);
+                }
+                for lid in layer_ids {
+                    if let Some(&companion) = bridge.layers.get(&lid) {
+                        commands.entity(companion).despawn();
+                    }
+                }
                 let mut surfaces = bridge.surfaces_under(child);
                 if bridge.is_detached_root(child) {
                     bridge.detach_surface(child);
@@ -824,6 +920,54 @@ pub fn apply_js_ops(
                     {
                         ec.insert(RPortal(target.clone()));
                     }
+                    // A `<layer>` re-render: an `effect` change swaps the material's
+                    // composed shader and invalidates the old packing (repacked from
+                    // the NEW schema's defaults + the retained `style.uniforms`); a
+                    // `uniforms` delta repacks values over the retained effect's
+                    // defaults. Compare-before-write — mutating the asset re-prepares
+                    // bind groups. Group alpha (`packed.misc`) is the opacity path's
+                    // (a later task), never touched here.
+                    if (dirty.effect || dirty.style.intersects(g::LAYER))
+                        && let Ok((mat_node, rlayer)) = ui_assets.layer_nodes.get(e)
+                    {
+                        let effect = if dirty.effect {
+                            // Re-resolve (warning on an unknown name); otherwise
+                            // reuse the already-resolved name so a uniforms-only
+                            // re-render never re-warns.
+                            resolve_layer_effect(&ui_assets.layer_effects, props.effect.as_deref())
+                        } else {
+                            rlayer.effect.clone()
+                        };
+                        let shader = ui_assets
+                            .layer_effects
+                            .ensure_shader(&effect, &mut ui_assets.shaders)
+                            .expect("resolved layer effect is registered");
+                        let schema = &ui_assets
+                            .layer_effects
+                            .get(&effect)
+                            .expect("resolved layer effect is registered")
+                            .schema;
+                        let mut params = schema.packed_defaults();
+                        if let Some(map) = props.style.as_ref().and_then(|s| s.uniforms.as_ref()) {
+                            pack_uniforms(schema, map, &mut params);
+                        }
+                        let handle = mat_node.0.clone();
+                        let changed = ui_assets
+                            .layer_materials
+                            .get(&handle)
+                            .is_some_and(|m| m.shader != shader || m.packed.params != params);
+                        if changed && let Some(mut mat) = ui_assets.layer_materials.get_mut(&handle)
+                        {
+                            mat.shader = shader;
+                            mat.packed.params = params;
+                        }
+                        if dirty.effect && rlayer.effect != effect {
+                            ec.insert(RLayer {
+                                companion: rlayer.companion,
+                                effect,
+                            });
+                        }
+                    }
                     // When `apply_style_masked` reset this entity's `FocusPolicy` to
                     // the `Pass` default, re-assert a button's `Block` (no-op /
                     // `Pass` for plain nodes). Skipped when the mask skipped the
@@ -906,7 +1050,9 @@ pub fn apply_js_ops(
     // despawned-entity panic: anything removed (or wiped by `Reset`) mid-batch was
     // pruned from `bridge.nodes` by `forget_subtree`.
     for parent in dirty {
-        let Some(p) = resolve(&bridge, parent) else {
+        // A `<layer>` parent rebuilds onto its companion (where its children
+        // actually live), like the per-op attaches above.
+        let Some(p) = container_of(&bridge, parent) else {
             continue;
         };
         let mut list: Vec<Entity> = Vec::new();
@@ -1030,6 +1176,46 @@ fn root_base() -> Option<Style> {
         global_z_index: Some(1),
         ..Default::default()
     })
+}
+
+/// The default style a `<layer>`'s companion root gets: an absolutely
+/// positioned, zero-sized column at the origin. Zero (not full-size) because
+/// the companion's box must track the *display node's* laid-out size — the
+/// capture system (a later task) writes the real dimensions each frame; until
+/// then a zero box keeps the hidden subtree from occupying window layout.
+/// Unlike `surface_root_base`/`root_base` this is not overlaid by the user's
+/// `style` — that styles the display node; the companion is infrastructure.
+fn layer_root_base() -> Option<Style> {
+    Some(Style {
+        position_type: Some(PositionType::Absolute),
+        left: Some(crate::protocol::Length::Px(0.0)),
+        top: Some(crate::protocol::Length::Px(0.0)),
+        width: Some(crate::protocol::Length::Px(0.0)),
+        height: Some(crate::protocol::Length::Px(0.0)),
+        // A column, like the main UI root and `root_base` (see the quirk note
+        // there) — the least surprising default for a top-level container.
+        flex_direction: Some(FlexDirection::Column),
+        ..Default::default()
+    })
+}
+
+/// Resolve a `<layer>`'s requested `effect` name against the registry: absent
+/// → `"none"`; unknown → warn (log + a `"layerEffect"` [`crate::diag`] entry
+/// under the ambient node scope) and fall back to `"none"`, so the layer still
+/// renders identity instead of stalling on a missing shader.
+fn resolve_layer_effect(effects: &LayerEffects, requested: Option<&str>) -> String {
+    let name = requested.unwrap_or("none");
+    if effects.get(name).is_some() {
+        name.to_owned()
+    } else {
+        warn!("unknown layer effect {name:?}; falling back to \"none\"");
+        crate::diag::report(
+            "layerEffect",
+            name,
+            &format!("unknown layer effect \"{name}\" — falling back to \"none\""),
+        );
+        "none".to_owned()
+    }
 }
 
 /// The resources [`apply_filter`] needs to build/cache a `FilterMaterial` and bind
@@ -1395,6 +1581,20 @@ fn is_image(props: &Props) -> bool {
 
 fn resolve(bridge: &JsBridge, id: NodeId) -> Option<Entity> {
     bridge.nodes.get(&id).copied()
+}
+
+/// The entity children of `id` ECS-attach to: a `<layer>`'s **companion root**
+/// (its JSX children live on the detached companion, not the display node),
+/// anything else its own entity. The single redirect point every attach site
+/// (`Op::Append`, `Op::Insert`, the end-of-batch rebuild) goes through — the
+/// shadow tree keeps recording the layer id as the parent, so ordering truth
+/// is unchanged.
+fn container_of(bridge: &JsBridge, id: NodeId) -> Option<Entity> {
+    bridge
+        .layers
+        .get(&id)
+        .copied()
+        .or_else(|| resolve(bridge, id))
 }
 
 /// Report clicks on reconciler-owned nodes to the JS thread. Rides bevy_picking's
@@ -2324,6 +2524,10 @@ mod tests {
         app.init_asset::<FilterMaterial>();
         app.init_resource::<FilterMaterialCache>();
         app.add_systems(Startup, crate::filter::init_filter_assets);
+        // …and the `<layer>` effect registry + material/shader stores.
+        app.init_asset::<LayerMaterial>();
+        app.init_asset::<bevy::shader::Shader>();
+        app.init_resource::<LayerEffects>();
 
         let (ops_tx, ops_rx) = crossbeam_channel::unbounded::<Vec<Op>>();
         let (out_tx, out_rx) = tokio::sync::mpsc::unbounded_channel::<Outbound>();
@@ -2856,6 +3060,10 @@ mod tests {
         app.init_asset::<FilterMaterial>();
         app.init_resource::<FilterMaterialCache>();
         app.add_systems(Startup, crate::filter::init_filter_assets);
+        // …and the `<layer>` effect registry + material/shader stores.
+        app.init_asset::<LayerMaterial>();
+        app.init_asset::<bevy::shader::Shader>();
+        app.init_resource::<LayerEffects>();
 
         let (ops_tx, ops_rx) = crossbeam_channel::unbounded::<Vec<Op>>();
         // Keep the outbound receiver alive so the sender stays open.
@@ -2968,6 +3176,10 @@ mod tests {
         app.init_asset::<FilterMaterial>();
         app.init_resource::<FilterMaterialCache>();
         app.add_systems(Startup, crate::filter::init_filter_assets);
+        // …and the `<layer>` effect registry + material/shader stores.
+        app.init_asset::<LayerMaterial>();
+        app.init_asset::<bevy::shader::Shader>();
+        app.init_resource::<LayerEffects>();
         let (ops_tx, ops_rx) = crossbeam_channel::unbounded::<Vec<Op>>();
         let (out_tx, _out_rx) = tokio::sync::mpsc::unbounded_channel::<Outbound>();
         let root = app.world_mut().spawn_empty().id();
@@ -4519,5 +4731,546 @@ mod tests {
             app.world().entity(e).get::<PointerHandlers>().is_none(),
             "unsetting the last handler clears the marker"
         );
+    }
+
+    // --- `<layer>` (effect-material display node + detached companion root) ----
+
+    use crate::layer::{LayerEffect, LayerEffects, LayerMaterial, LayerRoot, RLayer, UniformKind};
+
+    /// A minimal single-entry-point effect fragment for registering test effects.
+    const TEST_FRAGMENT: &str = "@fragment\nfn fragment(in: UiVertexOutput) -> @location(0) \
+                                 vec4<f32> { return vec4<f32>(0.0); }\n";
+
+    fn create_layer(id: NodeId, props: serde_json::Value) -> Op {
+        Op::Create {
+            id,
+            kind: "layer".into(),
+            props: serde_json::from_value(props).expect("valid layer props"),
+            text: None,
+        }
+    }
+
+    fn append(parent: NodeId, child: NodeId) -> Op {
+        Op::Append { parent, child }
+    }
+
+    /// The layer's material asset, resolved through its `MaterialNode`.
+    fn layer_material(app: &App, display: Entity) -> LayerMaterial {
+        let handle = app
+            .world()
+            .entity(display)
+            .get::<MaterialNode<LayerMaterial>>()
+            .expect("a <layer> display node carries a MaterialNode<LayerMaterial>")
+            .0
+            .clone();
+        app.world()
+            .resource::<Assets<LayerMaterial>>()
+            .get(&handle)
+            .expect("the layer material asset exists")
+            .clone()
+    }
+
+    /// A `<layer>` create spawns TWO entities: the on-screen display node
+    /// (material + `RLayer`) and a parentless, hidden companion root that the
+    /// layer's JSX children actually attach to.
+    #[test]
+    fn layer_create_spawns_display_node_and_companion_root() {
+        let (mut app, tx, _root) = ordering_app();
+        tx.send(vec![
+            create_layer(1, serde_json::json!({})),
+            create_node(2),
+            append(ROOT_ID, 1),
+            append(1, 2),
+        ])
+        .unwrap();
+        app.update();
+
+        let display = ent(&app, 1);
+        let rlayer = app
+            .world()
+            .entity(display)
+            .get::<RLayer>()
+            .expect("display node carries RLayer")
+            .clone();
+        assert_eq!(
+            rlayer.effect, "none",
+            "no effect prop → the identity effect"
+        );
+        assert!(
+            app.world()
+                .entity(display)
+                .get::<MaterialNode<LayerMaterial>>()
+                .is_some(),
+            "display node renders through the layer material"
+        );
+
+        let companion = app.world().resource::<JsBridge>().layers[&1];
+        assert_eq!(
+            rlayer.companion, companion,
+            "RLayer points at the companion"
+        );
+        let companion_ref = app.world().entity(companion);
+        assert!(
+            companion_ref.get::<ChildOf>().is_none(),
+            "the companion is a detached (parentless) root"
+        );
+        assert_eq!(
+            companion_ref.get::<LayerRoot>().map(|r| r.0),
+            Some(display),
+            "the companion back-links to the display node"
+        );
+        assert_eq!(
+            companion_ref.get::<Visibility>(),
+            Some(&Visibility::Hidden),
+            "the companion starts hidden"
+        );
+
+        // The layer's JSX child attaches to the companion, NOT the display node.
+        assert_eq!(
+            app.world()
+                .entity(ent(&app, 2))
+                .get::<ChildOf>()
+                .map(|c| c.parent()),
+            Some(companion),
+            "layer children ECS-attach to the companion"
+        );
+        assert!(
+            children_of(&app, display).is_empty(),
+            "the display node has no reconciler children"
+        );
+    }
+
+    /// Reordering a layer's children (re-append → end-of-batch rebuild) lands the
+    /// `replace_children` on the companion, in shadow-tree order.
+    #[test]
+    fn layer_children_reorder_targets_companion() {
+        let (mut app, tx, _root) = ordering_app();
+        tx.send(vec![
+            create_layer(1, serde_json::json!({})),
+            create_node(2),
+            create_node(3),
+            create_node(4),
+            append(ROOT_ID, 1),
+            append(1, 2),
+            append(1, 3),
+            append(1, 4),
+        ])
+        .unwrap();
+        app.update();
+        let companion = app.world().resource::<JsBridge>().layers[&1];
+        assert_eq!(
+            children_of(&app, companion),
+            vec![ent(&app, 2), ent(&app, 3), ent(&app, 4)]
+        );
+
+        // Re-append 2 (move to end) — the dirty-parent rebuild must hit the companion.
+        tx.send(vec![append(1, 2)]).unwrap();
+        app.update();
+        assert_eq!(
+            children_of(&app, companion),
+            vec![ent(&app, 3), ent(&app, 4), ent(&app, 2)],
+            "reorder must land on the companion, in shadow order"
+        );
+    }
+
+    /// Removing an ANCESTOR of a layer despawns the display node, the companion,
+    /// and the children hanging off the companion — and prunes the bridge tables.
+    #[test]
+    fn layer_remove_despawns_companion_subtree() {
+        let (mut app, tx, _root) = ordering_app();
+        tx.send(vec![
+            create_node(1), // plain ancestor
+            create_layer(2, serde_json::json!({})),
+            create_node(3), // layer child (on the companion)
+            append(ROOT_ID, 1),
+            append(1, 2),
+            append(2, 3),
+        ])
+        .unwrap();
+        app.update();
+        let display = ent(&app, 2);
+        let companion = app.world().resource::<JsBridge>().layers[&2];
+        let child = ent(&app, 3);
+
+        tx.send(vec![Op::Remove {
+            parent: ROOT_ID,
+            child: 1,
+        }])
+        .unwrap();
+        app.update();
+
+        assert!(
+            !app.world().entities().contains(display),
+            "the display node despawns with its ancestor"
+        );
+        assert!(
+            !app.world().entities().contains(companion),
+            "the companion is despawned explicitly (no ChildOf reaches it)"
+        );
+        assert!(
+            !app.world().entities().contains(child),
+            "the layer's children despawn with the companion"
+        );
+        let bridge = app.world().resource::<JsBridge>();
+        assert!(
+            bridge.layers.is_empty(),
+            "the layers side table must be pruned"
+        );
+        for id in [1u32, 2, 3] {
+            assert!(
+                !bridge.nodes.contains_key(&id),
+                "node {id} must be pruned from the id map"
+            );
+        }
+    }
+
+    /// A `<surface>` nested INSIDE a layer's subtree must still be found (and
+    /// despawned) by the detached-root walk when the layer's ancestor is removed.
+    #[test]
+    fn surface_under_layer_still_cleaned() {
+        let (mut app, tx, _root) = ordering_app();
+        tx.send(vec![
+            create_layer(1, serde_json::json!({})),
+            Op::Create {
+                id: 2,
+                kind: "surface".into(),
+                props: serde_json::from_value(serde_json::json!({ "target": "t" })).unwrap(),
+                text: None,
+            },
+            create_node(3), // content inside the surface
+            append(ROOT_ID, 1),
+            append(1, 2),
+            append(2, 3),
+        ])
+        .unwrap();
+        app.update();
+        let surface_e = ent(&app, 2);
+        let content_e = ent(&app, 3);
+
+        tx.send(vec![Op::Remove {
+            parent: ROOT_ID,
+            child: 1,
+        }])
+        .unwrap();
+        app.update();
+
+        assert!(
+            !app.world().entities().contains(surface_e),
+            "a surface nested in a layer subtree must despawn with the layer's ancestor"
+        );
+        assert!(
+            !app.world().entities().contains(content_e),
+            "the surface's content despawns with it"
+        );
+        let bridge = app.world().resource::<JsBridge>();
+        assert!(bridge.surfaces.is_empty(), "surfaces set pruned");
+        assert!(bridge.layers.is_empty(), "layers table pruned");
+    }
+
+    /// `Op::Reset` despawns every layer companion (they are parentless, so the
+    /// root-children sweep misses them) and clears the layers table.
+    #[test]
+    fn reset_despawns_layer_companions() {
+        let (mut app, tx, _root) = ordering_app();
+        tx.send(vec![
+            create_layer(1, serde_json::json!({})),
+            append(ROOT_ID, 1),
+        ])
+        .unwrap();
+        app.update();
+        let companion = app.world().resource::<JsBridge>().layers[&1];
+
+        tx.send(vec![Op::Reset]).unwrap();
+        app.update();
+        assert!(
+            !app.world().entities().contains(companion),
+            "Op::Reset must despawn layer companions"
+        );
+        assert!(
+            app.world().resource::<JsBridge>().layers.is_empty(),
+            "Op::Reset must clear the layers table"
+        );
+    }
+
+    /// An unknown `effect` name falls back to the built-in `"none"` shader and
+    /// reports a `"layerEffect"` diag warning attributed to the node.
+    #[cfg(all(feature = "devtools", debug_assertions))]
+    #[test]
+    fn unknown_effect_falls_back_to_none_with_warning() {
+        let _lock = crate::diag::test_lock();
+        crate::diag::arm_runtime();
+        let _ = crate::diag::take_runtime_warnings();
+
+        let (mut app, tx, _root) = ordering_app();
+        tx.send(vec![
+            create_layer(7, serde_json::json!({ "effect": "nope" })),
+            append(ROOT_ID, 7),
+        ])
+        .unwrap();
+        app.update();
+
+        let none_shader =
+            app.world_mut()
+                .resource_scope(|world, mut effects: Mut<LayerEffects>| {
+                    let mut shaders = world.resource_mut::<Assets<bevy::shader::Shader>>();
+                    effects
+                        .ensure_shader("none", &mut shaders)
+                        .expect("\"none\" is built in")
+                });
+        let material = layer_material(&app, ent(&app, 7));
+        assert_eq!(
+            material.shader, none_shader,
+            "an unknown effect renders through the \"none\" shader"
+        );
+        assert_eq!(
+            app.world()
+                .entity(ent(&app, 7))
+                .get::<RLayer>()
+                .unwrap()
+                .effect,
+            "none",
+            "the resolved effect is retained, not the unknown name"
+        );
+
+        let mine: Vec<_> = crate::diag::take_runtime_warnings()
+            .into_iter()
+            .filter(|w| w.node == Some(7))
+            .collect();
+        assert_eq!(mine.len(), 1, "exactly one warning for the unknown effect");
+        assert_eq!(mine[0].kind, "layerEffect");
+        assert_eq!(mine[0].value, "nope");
+        assert!(mine[0].message.contains("nope"), "{}", mine[0].message);
+    }
+
+    /// A `uniforms` style delta repacks the material's params lane; a second,
+    /// identical delta must NOT mutate the asset again (compare-before-write —
+    /// asset mutation re-prepares bind groups).
+    #[test]
+    fn layer_uniform_updates_repack_material() {
+        #[derive(Resource, Default)]
+        struct ModifiedCount(usize);
+        fn count_modified(
+            mut reader: MessageReader<AssetEvent<LayerMaterial>>,
+            mut count: ResMut<ModifiedCount>,
+        ) {
+            for ev in reader.read() {
+                if matches!(ev, AssetEvent::Modified { .. }) {
+                    count.0 += 1;
+                }
+            }
+        }
+
+        let (mut app, tx, _root) = ordering_app();
+        app.init_resource::<ModifiedCount>();
+        app.add_systems(Update, count_modified.after(apply_js_ops));
+        app.world_mut().resource_mut::<LayerEffects>().register(
+            LayerEffect::new("glow")
+                .uniform("strength", UniformKind::F32, 1.0)
+                .fragment_wgsl(TEST_FRAGMENT),
+        );
+
+        // Create with an initial declarative uniform: packed over the default NOW.
+        tx.send(vec![
+            create_layer(
+                1,
+                serde_json::json!({ "effect": "glow", "style": { "uniforms": { "strength": 0.25 } } }),
+            ),
+            append(ROOT_ID, 1),
+        ])
+        .unwrap();
+        app.update();
+        let display = ent(&app, 1);
+        assert_eq!(
+            layer_material(&app, display).packed.params[0].x,
+            0.25,
+            "create packs the declarative uniforms over the schema defaults"
+        );
+        assert_eq!(
+            layer_material(&app, display).packed.misc.x,
+            1.0,
+            "group alpha defaults to 1.0"
+        );
+
+        // A uniforms delta repacks the lane.
+        let delta = || {
+            update_delta(
+                1,
+                serde_json::from_value(
+                    serde_json::json!({ "style": { "uniforms": { "strength": 0.5 } } }),
+                )
+                .unwrap(),
+                &[],
+                &[],
+            )
+        };
+        tx.send(vec![delta()]).unwrap();
+        app.update();
+        assert_eq!(
+            layer_material(&app, display).packed.params[0].x,
+            0.5,
+            "a uniforms delta repacks the material params"
+        );
+        app.update(); // flush the Modified event into the counter
+        let after_first = app.world().resource::<ModifiedCount>().0;
+        assert_eq!(after_first, 1, "the first repack mutates the asset once");
+
+        // An identical delta must not touch the asset (compare-before-write).
+        tx.send(vec![delta()]).unwrap();
+        app.update();
+        app.update();
+        assert_eq!(
+            app.world().resource::<ModifiedCount>().0,
+            after_first,
+            "an identical uniforms delta must not re-mutate the asset"
+        );
+    }
+
+    /// An `effect` delta swaps the material's shader to the new effect's and
+    /// invalidates the old packing: params rebuild from the NEW schema's
+    /// defaults (the old effect's packed value is gone — its uniform name no
+    /// longer resolves), `RLayer.effect` re-stamps, and a subsequent uniforms
+    /// delta packs against the new schema.
+    #[test]
+    fn layer_effect_update_swaps_shader_and_repacks() {
+        let (mut app, tx, _root) = ordering_app();
+        {
+            let mut effects = app.world_mut().resource_mut::<LayerEffects>();
+            effects.register(
+                LayerEffect::new("aa")
+                    .uniform("ua", UniformKind::F32, 1.0)
+                    .fragment_wgsl(TEST_FRAGMENT),
+            );
+            effects.register(
+                LayerEffect::new("bb")
+                    .uniform("ub", UniformKind::F32, 2.0)
+                    .fragment_wgsl(TEST_FRAGMENT),
+            );
+        }
+
+        tx.send(vec![
+            create_layer(
+                1,
+                serde_json::json!({ "effect": "aa", "style": { "uniforms": { "ua": 0.75 } } }),
+            ),
+            append(ROOT_ID, 1),
+        ])
+        .unwrap();
+        app.update();
+        let display = ent(&app, 1);
+        assert_eq!(
+            layer_material(&app, display).packed.params[0].x,
+            0.75,
+            "created packing A's uniform value"
+        );
+
+        // Swap the effect to "bb".
+        tx.send(vec![update_delta(
+            1,
+            serde_json::from_value(serde_json::json!({ "effect": "bb" })).unwrap(),
+            &[],
+            &[],
+        )])
+        .unwrap();
+        app.update();
+
+        let bb_shader = app
+            .world_mut()
+            .resource_scope(|world, mut effects: Mut<LayerEffects>| {
+                let mut shaders = world.resource_mut::<Assets<bevy::shader::Shader>>();
+                effects
+                    .ensure_shader("bb", &mut shaders)
+                    .expect("\"bb\" is registered")
+            });
+        let material = layer_material(&app, display);
+        assert_eq!(
+            material.shader, bb_shader,
+            "the material renders through B's composed shader"
+        );
+        assert_eq!(
+            material.packed.params[0].x, 2.0,
+            "params repack from B's schema defaults — A's packed value is gone \
+             (the retained `ua` no longer resolves against B's schema)"
+        );
+        assert_eq!(
+            app.world().entity(display).get::<RLayer>().unwrap().effect,
+            "bb",
+            "RLayer re-stamps the resolved effect"
+        );
+
+        // A uniforms delta after the swap packs against B's schema.
+        tx.send(vec![update_delta(
+            1,
+            serde_json::from_value(serde_json::json!({ "style": { "uniforms": { "ub": 0.125 } } }))
+                .unwrap(),
+            &[],
+            &[],
+        )])
+        .unwrap();
+        app.update();
+        assert_eq!(
+            layer_material(&app, display).packed.params[0].x,
+            0.125,
+            "a post-swap uniforms delta packs at B's declared lanes"
+        );
+    }
+
+    /// A `<layer>` nested INSIDE a `<surface>` whose ancestor is removed must
+    /// still get its companion despawned and its table entry pruned — the
+    /// executable form of the ordering contract: `layers_under` (read-only)
+    /// walks the `child_surfaces` links that `surfaces_under` prunes, so it
+    /// must run first in `Op::Remove`.
+    #[test]
+    fn layer_under_surface_cleaned() {
+        let (mut app, tx, _root) = ordering_app();
+        // The wrapper level matters: removing the PLAIN node 1 makes the layer
+        // reachable ONLY through the `child_surfaces[1] → surface 2` link that
+        // `surfaces_under` prunes — so this test fails if the walks are
+        // swapped, pinning the ordering (a removed surface itself would leave
+        // the layer reachable via sibling lists and mask the bug).
+        tx.send(vec![
+            create_node(1), // plain wrapper
+            Op::Create {
+                id: 2,
+                kind: "surface".into(),
+                props: serde_json::from_value(serde_json::json!({ "target": "t" })).unwrap(),
+                text: None,
+            },
+            create_layer(3, serde_json::json!({})),
+            create_node(4), // layer child (on the companion)
+            append(ROOT_ID, 1),
+            append(1, 2),
+            append(2, 3),
+            append(3, 4),
+        ])
+        .unwrap();
+        app.update();
+        let display = ent(&app, 3);
+        let companion = app.world().resource::<JsBridge>().layers[&3];
+        let child = ent(&app, 4);
+
+        // Removing the plain ancestor must reach the layer nested inside the
+        // detached surface.
+        tx.send(vec![Op::Remove {
+            parent: ROOT_ID,
+            child: 1,
+        }])
+        .unwrap();
+        app.update();
+
+        assert!(
+            !app.world().entities().contains(display),
+            "the layer display despawns with the surface subtree"
+        );
+        assert!(
+            !app.world().entities().contains(companion),
+            "the companion of a layer nested in a removed surface is despawned"
+        );
+        assert!(
+            !app.world().entities().contains(child),
+            "the layer's children despawn with the companion"
+        );
+        let bridge = app.world().resource::<JsBridge>();
+        assert!(bridge.layers.is_empty(), "layers table pruned");
+        assert!(bridge.surfaces.is_empty(), "surfaces set pruned");
     }
 }

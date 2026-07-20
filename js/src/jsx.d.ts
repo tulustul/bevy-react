@@ -494,6 +494,25 @@ export interface BevyStyle {
   lineBreak?: "wordBoundary" | "anyCharacter" | "wordOrCharacter" | "noWrap";
 }
 
+/** One value in a `<layer>`'s `uniforms` map: a number for an `f32`, an array
+ *  for a `vec2`/`vec3`/`vec4`, or a hex color string for a color. The typed
+ *  per-effect interfaces the `bevy.ts` codegen emits constrain each uniform to
+ *  a member of this union. */
+export type LayerUniformValue = number | number[] | string;
+
+/** A [`BevyStyle`] extended with the `<layer>`-only `uniforms` field. On a
+ *  layer, `opacity` means **group** opacity: the subtree is composited to a
+ *  texture first, so it fades as one surface (overlapping children never show
+ *  through each other), unlike per-node opacity. */
+export interface BevyLayerStyle extends BevyStyle {
+  /** Values for the active effect's shader uniforms, keyed by the uniform name
+   *  the effect declared on the Rust side (see [`LayerUniformValue`] for the
+   *  value forms). Replaced atomically like any style field; omitted uniforms
+   *  keep the effect's defaults. Unknown names are flagged by devtools at
+   *  runtime. */
+  uniforms?: Record<string, LayerUniformValue>;
+}
+
 // TODO(review): the pointer model is bespoke — normalized x/y + clientX/Y and a DOM
 // `button` number rather than full DOM `PointerEvent` semantics. No modifier info.
 // It's part of the public contract, so settle the shape before too many apps depend
@@ -664,6 +683,40 @@ export interface BevyPortalProps extends BevyAttributes {
   onPointerLeave?: (e: PointerEventData) => void;
   /** Mouse wheel over the portal, with the raw deltas (see `WheelEventData`). */
   onWheel?: (e: WheelEventData) => void;
+}
+
+/** Props for the `layer` element: a container whose children render to an
+ *  **offscreen texture** composited back through a custom-shader material — so
+ *  a Rust-registered post-process effect (blur, glow, …) can apply to the
+ *  subtree as one surface. Lay it out and style it like any node; `style` is a
+ *  [`BevyLayerStyle`], whose `opacity` is **group** opacity and whose
+ *  `uniforms` feed the active effect's shader. */
+export interface BevyLayerProps extends BevyAttributes {
+  /** Name of a Rust-registered effect to composite through (default `"none"`:
+   *  plain pass-through compositing). Typed per-effect wrappers come from the
+   *  `bevy.ts` codegen. */
+  effect?: string;
+  style?: BevyLayerStyle;
+  /** Style overlaid on `style` while the element is hovered. */
+  hoverStyle?: BevyLayerStyle;
+  /** Style overlaid on `style` (and `hoverStyle`) while the element is pressed. */
+  pressStyle?: BevyLayerStyle;
+  /** Reanimated-style animation bindings (see `Animated.node`). */
+  animatedStyle?: AnimatedStyle;
+  onClick?: () => void;
+  /** Pointer pressed on this element (a drag begins). */
+  onPointerDown?: (e: PointerEventData) => void;
+  /** Pointer moved while held (a drag). Fires each frame until release. */
+  onPointerMove?: (e: PointerEventData) => void;
+  /** Pointer released after a press/drag that began on this element. */
+  onPointerUp?: (e: PointerEventData) => void;
+  /** Pointer entered this element (hover begins). */
+  onPointerEnter?: (e: PointerEventData) => void;
+  /** Pointer left this element (hover ends). */
+  onPointerLeave?: (e: PointerEventData) => void;
+  /** Mouse wheel over this element, with the raw deltas (see `WheelEventData`). */
+  onWheel?: (e: WheelEventData) => void;
+  children?: ReactNode;
 }
 
 /** Props for the `root` element: the **screen-space twin** of `<surface>`. Its

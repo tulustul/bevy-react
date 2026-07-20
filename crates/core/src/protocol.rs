@@ -313,6 +313,16 @@ pub struct Props {
     #[serde(default)]
     pub target: Option<String>,
 
+    // --- `layer` element attribute ---
+    /// The effect name a `layer` element renders through, resolved against the
+    /// Rust-side [`crate::layer::LayerEffects`] registry at reconcile time
+    /// (mirroring how [`target`](Self::target) names a portal binding). Absent
+    /// → the built-in identity effect `"none"`; an unknown name also falls
+    /// back to `"none"` with a devtools warning (that behavior lands with the
+    /// reconcile wiring). Pure-serde, Bevy-free.
+    #[serde(default)]
+    pub effect: Option<String>,
+
     // --- `editableText` element attributes ---
     /// The controlled text value of an `editableText`. Seeds the field on create;
     /// on update it's pushed into the widget only when it diverges from the live
@@ -554,6 +564,17 @@ pub struct Style {
     #[serde(default)]
     pub scrollbar: Option<crate::scrollbar::ScrollbarSpec>,
 
+    /// Uniform values for a `<layer>`'s effect shader: uniform name → value,
+    /// resolved against the effect's declared schema and repacked into the
+    /// layer material when dirty. Undeclared names / mismatched shapes warn
+    /// and keep the declared default — but only for values the untagged wire
+    /// type can represent (number | number[] | string); a structurally alien
+    /// value (bool, null, nested object) fails the `Style` decode like any
+    /// other struct-shaped field (`scrollbar`/`transform` behave identically).
+    /// Pure-serde, module-owned (see [`crate::layer`]).
+    #[serde(default)]
+    pub uniforms: Option<crate::layer::LayerUniformMap>,
+
     // --- text (only meaningful on `<text>` elements/spans) ---
     /// Hex text color.
     #[serde(default)]
@@ -645,6 +666,9 @@ pub mod style_groups {
     /// field is *also* in `LAYOUT` because a gutter-positioned bar drives
     /// `Node.scrollbar_width` (see `node_from_style`).
     pub const SCROLLBAR: u32 = 1 << 18;
+    /// The `<layer>` effect material (reads `uniforms`) — the packed uniform
+    /// array is rebuilt from the effect's schema when dirty.
+    pub const LAYER: u32 = 1 << 19;
 }
 
 /// The single source of truth for [`Style`]'s field list. Invokes the callback
@@ -720,6 +744,7 @@ macro_rules! with_style_fields {
             (focus_policy, "focusPolicy", (FOCUS_POLICY), no_overlay),
             (cursor, "cursor", (CURSOR), overlay),
             (scrollbar, "scrollbar", (SCROLLBAR | LAYOUT), overlay),
+            (uniforms, "uniforms", (LAYER), overlay),
             (
                 transform,
                 "transform",
@@ -804,6 +829,8 @@ pub struct PropsDirty {
     pub image: bool,
     /// `target` (portal/surface binding) changed.
     pub target: bool,
+    /// `effect` (layer effect name) changed.
+    pub effect: bool,
     /// Any `editableText` handler flag (`onChange`/`onSelect`/`onFocus`/
     /// `onBlur`) toggled.
     pub editable_handlers: bool,
@@ -1003,6 +1030,7 @@ impl Props {
             atlas => image,
             visual_box => image,
             target => target,
+            effect => effect,
             aria_label => aria_label,
             max_length => , // create-time only, cached for completeness
         );
@@ -1124,6 +1152,10 @@ impl Props {
                 "target" => {
                     self.target = None;
                     dirty.target = true;
+                }
+                "effect" => {
+                    self.effect = None;
+                    dirty.effect = true;
                 }
                 "ariaLabel" => {
                     self.aria_label = None;
@@ -3277,5 +3309,70 @@ mod tests {
         let (dirty, _) = cached.merge_delta(Props::default(), &[], &["cursor".into()]);
         assert_eq!(cached.style.as_ref().unwrap().cursor, None);
         assert!(dirty.style.intersects(style_groups::CURSOR));
+    }
+
+    /// The `<layer>` wire names are pinned through a full `update` op:
+    /// `"effect"` on props, `"uniforms"` inside `style`. The op enum's
+    /// `rename_all` doesn't reach nested/struct-variant fields, so the exact
+    /// wire strings are asserted here rather than derived.
+    #[test]
+    fn deserializes_layer_update_op_wire_names() {
+        let op: Op = serde_json::from_str(
+            r##"{"op":"update","id":4,"props":{"effect":"frost",
+                "style":{"uniforms":{"strength":0.5,"tint":"#ff0000ff"}}}}"##,
+        )
+        .unwrap();
+        match op {
+            Op::Update { id, props, .. } => {
+                assert_eq!(id, 4);
+                assert_eq!(props.effect.as_deref(), Some("frost"));
+                let uniforms = props.style.unwrap().uniforms.expect("uniforms present");
+                assert!(uniforms.get("strength").is_some());
+                assert!(uniforms.get("tint").is_some());
+            }
+            other => panic!("expected update, got {other:?}"),
+        }
+    }
+
+    /// A `uniforms` delta dirties exactly the `LAYER` style group — the apply
+    /// path must repack the layer material without touching any other group.
+    #[test]
+    fn uniforms_style_field_marks_layer_dirty_group() {
+        let mut cached = Props::default();
+        let (dirty, _) = cached.merge_delta(
+            props(serde_json::json!({ "style": { "uniforms": { "strength": 0.5 } } })),
+            &[],
+            &[],
+        );
+        assert!(cached.style.as_ref().unwrap().uniforms.is_some());
+        assert_eq!(dirty.style, StyleDirty(style_groups::LAYER), "only LAYER");
+    }
+
+    /// `styleUnset: ["uniforms"]` clears the retained map (back to the
+    /// effect's declared defaults on apply) and re-arms the `LAYER` group.
+    #[test]
+    fn style_unset_uniforms_resets() {
+        let mut cached = props(serde_json::json!({
+            "style": { "uniforms": { "strength": 0.5 } },
+        }));
+        let (dirty, _) = cached.merge_delta(Props::default(), &[], &["uniforms".into()]);
+        assert!(cached.style.as_ref().unwrap().uniforms.is_none());
+        assert!(dirty.style.intersects(style_groups::LAYER));
+    }
+
+    /// An `effect` delta sets the `effect` dirty flag (like `target` for
+    /// portals); `unset` resets it to `None` and re-arms the flag.
+    #[test]
+    fn merge_delta_effect() {
+        let mut cached = Props::default();
+        let (dirty, _) =
+            cached.merge_delta(props(serde_json::json!({ "effect": "frost" })), &[], &[]);
+        assert_eq!(cached.effect.as_deref(), Some("frost"));
+        assert!(dirty.effect);
+        assert!(!dirty.target && !dirty.image);
+
+        let (dirty, _) = cached.merge_delta(Props::default(), &["effect".into()], &[]);
+        assert!(cached.effect.is_none());
+        assert!(dirty.effect);
     }
 }

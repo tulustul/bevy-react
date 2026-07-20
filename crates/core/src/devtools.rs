@@ -1298,6 +1298,8 @@ mod tests {
             "cursor",
             "lineHeight",
             "letterSpacing",
+            "layerEffect",
+            "layerUniform",
         ] {
             assert!(
                 warnings_ts.contains(&format!("{kind}:"))

@@ -3,9 +3,11 @@
 //! The Rust binding structs (`#[react_message]` / `#[react_request]` /
 //! `#[react_event]`) are the single source of truth. This module walks the three
 //! registries ([`ReactRegistry`], [`ReactRequestRegistry`], [`ReactEventRegistry`])
-//! in one pass and renders a self-contained `bevy.ts`: per-payload type
-//! declarations, the `ReactMessages` / `ReactRequests` / `ReactEvents` maps, typed
-//! `emit` / `request` / `on` wrappers, and a structured `bevy` proxy object.
+//! plus the `<layer>` effect registry ([`LayerEffects`]) in one pass and renders a
+//! self-contained `bevy.ts`: per-payload type declarations, the `ReactMessages` /
+//! `ReactRequests` / `ReactEvents` maps, typed `emit` / `request` / `on` wrappers,
+//! a structured `bevy` proxy object, and per-effect uniforms types with a typed
+//! `Layer` wrapper component.
 //!
 //! [`export`] writes that module to disk; it backs
 //! [`ReactAppExt::export_react_typescript`](crate::ReactAppExt::export_react_typescript).
@@ -22,13 +24,16 @@ use bevy::ecs::world::World;
 use ts_rs::{TS, TypeVisitor};
 
 use crate::event::ReactEventRegistry;
+use crate::layer::{LayerEffects, UniformDecl, UniformKind};
 use crate::message::ReactRegistry;
 use crate::request::ReactRequestRegistry;
 
-/// Render the three registries as one self-contained TypeScript module: every
+/// Render the registries as one self-contained TypeScript module: every
 /// payload/request/response/event type declaration (plus transitive dependencies),
 /// the `ReactMessages` / `ReactRequests` / `ReactEvents` maps, typed
-/// `emit`/`request`/`on` wrappers, and the structured `bevy` proxy object. See
+/// `emit`/`request`/`on` wrappers, the structured `bevy` proxy object, and the
+/// `<layer>` effect section (per-effect uniforms types + the typed `Layer`
+/// wrapper — see [`render_layer_section`]). See
 /// [`ReactAppExt::export_react_typescript`](crate::ReactAppExt::export_react_typescript).
 ///
 /// Output is deterministic (sorted) so a `git diff --exit-code` after regeneration
@@ -37,6 +42,7 @@ pub(crate) fn render_typescript(
     messages: &ReactRegistry,
     requests: &ReactRequestRegistry,
     events: &ReactEventRegistry,
+    layer_effects: &LayerEffects,
 ) -> String {
     // One shared collector across all three registries: a type referenced by more
     // than one (e.g. a struct used as both a message and a response) is declared once.
@@ -114,7 +120,13 @@ pub(crate) fn render_typescript(
          \x20 request as rawRequest,\n\
          \x20 addEventListener as rawAddEventListener,\n\
          \x20 removeEventListener as rawRemoveEventListener,\n\
-         } from \"bevy-react\";\n\n",
+         } from \"bevy-react\";\n\
+         import type {\n\
+         \x20 BevyLayerProps,\n\
+         \x20 BevyLayerStyle,\n\
+         \x20 LayerUniformValue,\n\
+         } from \"bevy-react\";\n\
+         import { createElement, type ReactElement } from \"react\";\n\n",
     );
 
     // Type declarations.
@@ -183,6 +195,179 @@ pub(crate) fn render_typescript(
 
     // The structured `bevy` proxy object.
     out.push_str(&render_bevy_object(&request_rows, &message_names));
+
+    // The `<layer>` effect section: per-effect uniforms types + typed wrapper.
+    out.push_str(&render_layer_section(layer_effects));
+    out
+}
+
+/// The single [`UniformKind`] → TypeScript mapping: scalars are `number`,
+/// vectors are fixed-length tuples (tuples are assignable to the `<layer>`
+/// intrinsic's `number[]`-carrying [`crate::layer::LayerUniformValue`] mirror),
+/// colors travel as hex/CSS color strings.
+fn uniform_ts_type(kind: UniformKind) -> &'static str {
+    match kind {
+        UniformKind::F32 => "number",
+        UniformKind::Vec2 => "[number, number]",
+        UniformKind::Vec3 => "[number, number, number]",
+        UniformKind::Vec4 => "[number, number, number, number]",
+        UniformKind::Color => "string",
+    }
+}
+
+/// `PascalCase` a registered effect name for its generated `<X>Uniforms` type.
+/// Effect names are identifier-enforced at definition time
+/// (`LayerEffect::new`), so in practice only underscores split words
+/// (`"my_effect"` → `MyEffect`); the general non-alphanumeric splitting and the
+/// `Effect` prefix for a name with no leading letter stay as defensive
+/// backstops so this can never emit an invalid TypeScript identifier.
+fn pascal_ident(name: &str) -> String {
+    let mut out = String::new();
+    let mut upper_next = true;
+    for c in name.chars() {
+        if c.is_ascii_alphanumeric() {
+            if upper_next && c.is_ascii_alphabetic() {
+                out.push(c.to_ascii_uppercase());
+            } else {
+                out.push(c);
+            }
+            upper_next = false;
+        } else {
+            upper_next = true;
+        }
+    }
+    if !out.starts_with(|c: char| c.is_ascii_alphabetic()) {
+        out.insert_str(0, "Effect");
+    }
+    out
+}
+
+/// The doc comment body for one generated uniform field: its WGSL kind and the
+/// Rust-declared default (colors show their packed linear-RGBA lanes — the
+/// value the shader sees — since reversing them to the authored CSS string is
+/// lossy).
+fn uniform_field_doc(decl: &UniformDecl) -> String {
+    let d = decl.default;
+    match decl.kind {
+        UniformKind::F32 => format!("`f32` — default `{:?}`.", d[0]),
+        UniformKind::Vec2 => format!("`vec2` — default `[{:?}, {:?}]`.", d[0], d[1]),
+        UniformKind::Vec3 => {
+            format!("`vec3` — default `[{:?}, {:?}, {:?}]`.", d[0], d[1], d[2])
+        }
+        UniformKind::Vec4 => format!(
+            "`vec4` — default `[{:?}, {:?}, {:?}, {:?}]`.",
+            d[0], d[1], d[2], d[3]
+        ),
+        UniformKind::Color => format!(
+            "Color, as a CSS color string — default linear RGBA `[{:?}, {:?}, {:?}, {:?}]`.",
+            d[0], d[1], d[2], d[3]
+        ),
+    }
+}
+
+/// Render the `<layer>` effect section: one `<Pascal>Uniforms` type per
+/// registered effect (interface of optional typed fields; empty schemas — like
+/// the `"none"` builtin — collapse to `Record<string, never>` so they accept no
+/// keys), the `LayerEffects` name → uniforms map, a compile-time proof that
+/// every generated shape stays assignable to the intrinsic's
+/// `Record<string, LayerUniformValue>` wire type, and the typed `Layer` wrapper
+/// component (`createElement`-based — `bevy.ts` is a `.ts` file, no JSX).
+fn render_layer_section(effects: &LayerEffects) -> String {
+    // Effect name → generated Pascal type ident. Distinct names may legally
+    // flatten to the same ident (`"my-effect"` / `"myEffect"`); that would emit
+    // two same-named types, so fail loudly at export time, like the proxy does
+    // for ambiguous binding names.
+    let mut pascal_names: BTreeMap<&str, String> = BTreeMap::new();
+    let mut claimed: BTreeMap<String, &str> = BTreeMap::new();
+    for (name, _) in effects.iter() {
+        let pascal = format!("{}Uniforms", pascal_ident(name));
+        if let Some(prev) = claimed.insert(pascal.clone(), name) {
+            panic!(
+                "layer effects {prev:?} and {name:?} both generate the TypeScript type {pascal:?}; rename one"
+            );
+        }
+        pascal_names.insert(name, pascal);
+    }
+
+    let mut out = String::new();
+    out.push_str(
+        "\n// ---- `<layer>` effects ----------------------------------------------------\n\n",
+    );
+
+    for (name, effect) in effects.iter() {
+        let pascal = &pascal_names[name];
+        let decls = effect.schema.decls();
+        if decls.is_empty() {
+            writeln!(
+                out,
+                "/** Uniforms for the {name:?} `<layer>` effect (declares none). */"
+            )
+            .unwrap();
+            writeln!(out, "export type {pascal} = Record<string, never>;").unwrap();
+        } else {
+            writeln!(out, "/** Uniforms for the {name:?} `<layer>` effect. */").unwrap();
+            writeln!(out, "export interface {pascal} {{").unwrap();
+            for decl in decls {
+                writeln!(out, "  /** {} */", uniform_field_doc(decl)).unwrap();
+                writeln!(out, "  {}?: {};", decl.name, uniform_ts_type(decl.kind)).unwrap();
+            }
+            out.push_str("}\n");
+        }
+        out.push('\n');
+    }
+
+    out.push_str("/** Every registered `<layer>` effect and the uniforms it declares. */\n");
+    out.push_str("export interface LayerEffects {\n");
+    for (name, _) in effects.iter() {
+        writeln!(out, "  {}: {};", json_key(name), pascal_names[name]).unwrap();
+    }
+    out.push_str("}\n\n");
+
+    out.push_str(
+        "/** Compile-time proof: every effect's uniforms shape fits the `<layer>`\n\
+         \x20*  intrinsic's `Record<string, LayerUniformValue>` wire type. */\n\
+         export type AssertLayerUniformsCompat<\n\
+         \x20 T extends Partial<Record<string, LayerUniformValue>>,\n\
+         > = T;\n\
+         export type LayerUniformsCompat = [\n",
+    );
+    for (name, _) in effects.iter() {
+        let pascal = &pascal_names[name];
+        // The `{ [K in keyof P]: P[K] }` wrap is load-bearing: interfaces get
+        // no implicit index signature, so the bare `P` would fail the
+        // `Partial<Record<string, LayerUniformValue>>` constraint even when
+        // every field fits — the mapped copy is checked key by key.
+        writeln!(
+            out,
+            "  AssertLayerUniformsCompat<{{ [K in keyof {pascal}]: {pascal}[K] }}>,"
+        )
+        .unwrap();
+    }
+    out.push_str("];\n\n");
+
+    out.push_str(
+        "/** `BevyLayerStyle` with `uniforms` narrowed to one effect's typed shape. */\n\
+         export type LayerStyleFor<U> = Omit<BevyLayerStyle, \"uniforms\"> & {\n\
+         \x20 uniforms?: U;\n\
+         };\n\n\
+         /** Props for the typed `Layer` wrapper (see `Layer`). */\n\
+         export type LayerProps<E extends keyof LayerEffects> = { effect?: E } & Omit<\n\
+         \x20 BevyLayerProps,\n\
+         \x20 \"effect\" | \"style\" | \"hoverStyle\" | \"pressStyle\"\n\
+         > & {\n\
+         \x20   style?: LayerStyleFor<LayerEffects[E]>;\n\
+         \x20   hoverStyle?: LayerStyleFor<LayerEffects[E]>;\n\
+         \x20   pressStyle?: LayerStyleFor<LayerEffects[E]>;\n\
+         \x20 };\n\n\
+         /** Typed `<layer>`: choosing an `effect` compile-checks `style.uniforms`\n\
+         \x20*  (and the hover/press variants) against that effect's Rust-declared\n\
+         \x20*  schema. The plain `<layer>` intrinsic stays available untyped. */\n\
+         export function Layer<E extends keyof LayerEffects = \"none\">(\n\
+         \x20 props: LayerProps<E>,\n\
+         ): ReactElement {\n\
+         \x20 return createElement(\"layer\", props as BevyLayerProps);\n\
+         }\n",
+    );
     out
 }
 
@@ -396,6 +581,10 @@ pub(crate) fn export(world: &World, path: &Path) -> std::io::Result<()> {
     let empty_messages = ReactRegistry::default();
     let empty_requests = ReactRequestRegistry::default();
     let empty_events = ReactEventRegistry::default();
+    // An app that never registered a layer effect has no `LayerEffects`
+    // resource at all (it is created on demand); the default registry still
+    // carries the `"none"` builtin, so the generated section is never empty.
+    let default_layer_effects = LayerEffects::default();
     let contents = render_typescript(
         world
             .get_resource::<ReactRegistry>()
@@ -406,6 +595,9 @@ pub(crate) fn export(world: &World, path: &Path) -> std::io::Result<()> {
         world
             .get_resource::<ReactEventRegistry>()
             .unwrap_or(&empty_events),
+        world
+            .get_resource::<LayerEffects>()
+            .unwrap_or(&default_layer_effects),
     );
     // Create any missing parent directories so callers can point at a path whose
     // containing dir doesn't exist yet (e.g. `ui/src/bevy.ts`) without a NotFound
@@ -421,6 +613,7 @@ pub(crate) fn export(world: &World, path: &Path) -> std::io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::layer::{LayerAppExt as _, LayerEffect};
     use crate::{ReactAppExt, react_message};
     use bevy::prelude::*;
 
@@ -501,11 +694,13 @@ mod tests {
         app.add_react_event::<UserDisconnected>();
 
         let world = app.world();
+        let layer_effects = LayerEffects::default();
         let render = || {
             render_typescript(
                 world.resource::<ReactRegistry>(),
                 world.resource::<ReactRequestRegistry>(),
                 world.resource::<ReactEventRegistry>(),
+                &layer_effects,
             )
         };
         let ts = render();
@@ -583,6 +778,100 @@ mod tests {
             "{ts}"
         );
         // Output is stable across runs (no HashMap iteration order leaking in).
+        assert_eq!(ts, render());
+    }
+
+    /// The single [`UniformKind`] → TypeScript mapping: scalars are `number`,
+    /// vectors are fixed-length tuples (assignable to the intrinsic's
+    /// `number[]`), colors are hex/CSS strings.
+    #[test]
+    fn maps_uniform_kinds_to_typescript() {
+        assert_eq!(uniform_ts_type(UniformKind::F32), "number");
+        assert_eq!(uniform_ts_type(UniformKind::Vec2), "[number, number]");
+        assert_eq!(
+            uniform_ts_type(UniformKind::Vec3),
+            "[number, number, number]"
+        );
+        assert_eq!(
+            uniform_ts_type(UniformKind::Vec4),
+            "[number, number, number, number]"
+        );
+        assert_eq!(uniform_ts_type(UniformKind::Color), "string");
+    }
+
+    /// The exporter mirrors the `<layer>` effect registry: a typed per-effect
+    /// uniforms interface, the `LayerEffects` map (registered effects plus the
+    /// `"none"` builtin), and the typed `Layer` wrapper component.
+    #[test]
+    fn exports_layer_effects() {
+        const VALID_FRAGMENT: &str = "@fragment\nfn fragment(in: UiVertexOutput) -> @location(0) vec4<f32> {\n\
+             \x20   return vec4<f32>(0.0);\n}\n";
+
+        let mut app = App::new();
+        app.register_layer_effect(
+            LayerEffect::new("frost")
+                .fragment_wgsl(VALID_FRAGMENT)
+                .uniform("strength", UniformKind::F32, 0.5)
+                .uniform("tint", UniformKind::Color, Color::WHITE),
+        );
+
+        let world = app.world();
+        let messages = ReactRegistry::default();
+        let requests = ReactRequestRegistry::default();
+        let events = ReactEventRegistry::default();
+        let render = || {
+            render_typescript(
+                &messages,
+                &requests,
+                &events,
+                world.resource::<LayerEffects>(),
+            )
+        };
+        let ts = render();
+
+        // Per-effect uniforms interface: optional fields typed by kind, with
+        // the declared default surfaced in the field doc.
+        assert!(ts.contains("export interface FrostUniforms"), "{ts}");
+        assert!(ts.contains("strength?: number;"), "{ts}");
+        assert!(ts.contains("tint?: string;"), "{ts}");
+        assert!(ts.contains("default `0.5`"), "{ts}");
+        // The effects map carries the registered effect AND the "none" builtin.
+        assert!(ts.contains("export interface LayerEffects"), "{ts}");
+        assert!(ts.contains("frost: FrostUniforms;"), "{ts}");
+        assert!(ts.contains("none: NoneUniforms;"), "{ts}");
+        // "none" declares no uniforms → a closed empty shape.
+        assert!(
+            ts.contains("export type NoneUniforms = Record<string, never>;"),
+            "{ts}"
+        );
+        // The compile-time compat proof, per effect and mapped-type-wrapped
+        // (interfaces lack implicit index signatures — the wrap is what makes
+        // the check compile), must not be dropped silently.
+        assert!(
+            ts.contains(
+                "AssertLayerUniformsCompat<{ [K in keyof FrostUniforms]: FrostUniforms[K] }>"
+            ),
+            "{ts}"
+        );
+        assert!(
+            ts.contains(
+                "AssertLayerUniformsCompat<{ [K in keyof NoneUniforms]: NoneUniforms[K] }>"
+            ),
+            "{ts}"
+        );
+        // The wrapper's supporting types.
+        assert!(ts.contains("export type LayerStyleFor<U>"), "{ts}");
+        assert!(
+            ts.contains("export type LayerProps<E extends keyof LayerEffects>"),
+            "{ts}"
+        );
+        // The typed wrapper: generic over the effect name, defaulting to "none".
+        assert!(
+            ts.contains("export function Layer<E extends keyof LayerEffects = \"none\">"),
+            "{ts}"
+        );
+        assert!(ts.contains("createElement(\"layer\""), "{ts}");
+        // Output is stable across runs.
         assert_eq!(ts, render());
     }
 }

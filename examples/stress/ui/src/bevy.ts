@@ -8,6 +8,12 @@ import {
   addEventListener as rawAddEventListener,
   removeEventListener as rawRemoveEventListener,
 } from "bevy-react";
+import type {
+  BevyLayerProps,
+  BevyLayerStyle,
+  LayerUniformValue,
+} from "bevy-react";
+import { createElement, type ReactElement } from "react";
 
 export type BenchOp = "Create" | "Append1" | "Append1k" | "Insert1" | "InsertEvery2nd" | "UpdateText1" | "UpdateTextEvery2nd" | "UpdateColor1" | "UpdateColorEvery2nd" | "Swap1" | "SwapEvery2nd" | "Remove1" | "RemoveEvery2nd" | "Clear";
 export type BenchStep = { op: BenchOp, n: number, seed: number, };
@@ -36,7 +42,9 @@ repeat: boolean, ctrlKey: boolean, shiftKey: boolean, altKey: boolean,
  * The "Meta"/"Super" key (Windows/Command).
  */
 metaKey: boolean, };
+export type Resize = WindowSize;
 export type StepDone = { js_ms: number, flush_ms: number, };
+export type WindowSize = { width: number, height: number, };
 
 /** Every `emit` name and the payload type it carries. */
 export interface ReactMessages {
@@ -45,6 +53,7 @@ export interface ReactMessages {
 
 /** Every `request` name and its request/response types. */
 export interface ReactRequests {
+  "window.size": { request: null; response: WindowSize };
 }
 
 /** Every Bevy → React event name and the payload it carries. */
@@ -52,6 +61,7 @@ export interface ReactEvents {
   "bench.runStep": BenchStep;
   keyDown: KeyDown;
   keyUp: KeyUp;
+  resize: Resize;
 }
 
 /** Send a typed app message to the Bevy side. */
@@ -94,4 +104,70 @@ export const bevy = {
   bench: {
     stepDone(value: StepDone): void { emit("bench.stepDone", value); },
   },
+  window: {
+    size(): Promise<WindowSize> { return request("window.size", null); },
+  },
 } as const;
+
+// ---- `<layer>` effects ----------------------------------------------------
+
+/** Uniforms for the "chromaticAberration" `<layer>` effect. */
+export interface ChromaticAberrationUniforms {
+  /** `f32` — default `0.0`. */
+  strength?: number;
+  /** `vec2` — default `[1.0, 0.0]`. */
+  direction?: [number, number];
+}
+
+/** Uniforms for the "dissolve" `<layer>` effect. */
+export interface DissolveUniforms {
+  /** `f32` — default `0.0`. */
+  threshold?: number;
+  /** `f32` — default `0.08`. */
+  softness?: number;
+}
+
+/** Uniforms for the "none" `<layer>` effect (declares none). */
+export type NoneUniforms = Record<string, never>;
+
+/** Every registered `<layer>` effect and the uniforms it declares. */
+export interface LayerEffects {
+  chromaticAberration: ChromaticAberrationUniforms;
+  dissolve: DissolveUniforms;
+  none: NoneUniforms;
+}
+
+/** Compile-time proof: every effect's uniforms shape fits the `<layer>`
+ *  intrinsic's `Record<string, LayerUniformValue>` wire type. */
+export type AssertLayerUniformsCompat<
+  T extends Partial<Record<string, LayerUniformValue>>,
+> = T;
+export type LayerUniformsCompat = [
+  AssertLayerUniformsCompat<{ [K in keyof ChromaticAberrationUniforms]: ChromaticAberrationUniforms[K] }>,
+  AssertLayerUniformsCompat<{ [K in keyof DissolveUniforms]: DissolveUniforms[K] }>,
+  AssertLayerUniformsCompat<{ [K in keyof NoneUniforms]: NoneUniforms[K] }>,
+];
+
+/** `BevyLayerStyle` with `uniforms` narrowed to one effect's typed shape. */
+export type LayerStyleFor<U> = Omit<BevyLayerStyle, "uniforms"> & {
+  uniforms?: U;
+};
+
+/** Props for the typed `Layer` wrapper (see `Layer`). */
+export type LayerProps<E extends keyof LayerEffects> = { effect?: E } & Omit<
+  BevyLayerProps,
+  "effect" | "style" | "hoverStyle" | "pressStyle"
+> & {
+    style?: LayerStyleFor<LayerEffects[E]>;
+    hoverStyle?: LayerStyleFor<LayerEffects[E]>;
+    pressStyle?: LayerStyleFor<LayerEffects[E]>;
+  };
+
+/** Typed `<layer>`: choosing an `effect` compile-checks `style.uniforms`
+ *  (and the hover/press variants) against that effect's Rust-declared
+ *  schema. The plain `<layer>` intrinsic stays available untyped. */
+export function Layer<E extends keyof LayerEffects = "none">(
+  props: LayerProps<E>,
+): ReactElement {
+  return createElement("layer", props as BevyLayerProps);
+}

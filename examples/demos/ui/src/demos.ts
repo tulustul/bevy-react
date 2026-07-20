@@ -9,6 +9,9 @@ import { MouseDemo } from "./demos/events/MouseDemo";
 import { KeyboardDemo } from "./demos/events/KeyboardDemo";
 import { WindowDemo } from "./demos/events/WindowDemo";
 import { CanvasDemo } from "./demos/elements/CanvasDemo";
+// Deliberately under `demos/layer/` (not `elements/`): phase 2 grows more
+// layer demos (animated effects, backdrop) beside this one.
+import { LayerDemo } from "./demos/layer/LayerDemo";
 import { PortalDemo } from "./demos/elements/PortalDemo";
 import { SurfaceDemo } from "./demos/elements/surfaceDemo";
 import { OverflowDemo } from "./demos/styling/OverflowDemo";
@@ -70,6 +73,7 @@ export const DEMOS: DemoItem[] = [
       { label: "<editableText>", component: EditableTextDemo },
       { label: "<image>", component: ImageDemo },
       { label: "<canvas>", component: CanvasDemo },
+      { label: "<layer>", component: LayerDemo },
       { label: "<portal>", scene: "CrowdedCubes", component: PortalDemo },
       { label: "<surface>", scene: "Surface", component: SurfaceDemo },
       { label: "<root>", component: RootDemo },

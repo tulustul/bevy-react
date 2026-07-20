@@ -660,3 +660,419 @@ fn root_demo_modal_round_trip() {
     }
     panic!("modal `<root>` never removed after Close");
 }
+
+/// End-to-end check of the `<layer>` demo at the wire level: navigating to the
+/// demo must mount `<layer>` nodes (the effects panel one carrying its
+/// `effect` + declarative `style.uniforms`) with children appended to them,
+/// and clicking the effect selector must emit an `Op::Update` whose delta
+/// swaps the effect and carries the new effect's uniforms — the declarative
+/// uniforms path the Rust reconciler repacks material params from.
+#[test]
+fn layer_demo_round_trip() {
+    use bevy_react::layer::LayerUniformValue;
+
+    let bundle = example_bundle();
+    if !bundle.exists() {
+        eprintln!(
+            "skipping layer_demo_round_trip: bundle not built at {}\n  run: npm install && npm run build -w demos",
+            bundle.display()
+        );
+        return;
+    }
+
+    let (ops_tx, ops_rx) = crossbeam_channel::unbounded::<Vec<Op>>();
+    // Send-instant stamps (devtools pre-apply timing); unread here, held open.
+    let (flush_stamps_tx, _flush_stamps_rx) = crossbeam_channel::unbounded();
+    let (flush_devtools_tx, _flush_devtools_rx) = crossbeam_channel::unbounded();
+    // Held for the duration so emits/requests from the app go nowhere harmlessly.
+    let (emit_tx, _emit_rx) = crossbeam_channel::unbounded::<ReactMessage>();
+    let (request_tx, _request_rx) = crossbeam_channel::unbounded::<RawRequest>();
+    // Held for the duration so animation commands go nowhere harmlessly.
+    let (anim_tx, _anim_rx) = crossbeam_channel::unbounded();
+    let (outbound_tx, outbound_rx) = tokio::sync::mpsc::unbounded_channel::<Outbound>();
+    // Held for the duration: dropping the reload sender would look like shutdown.
+    let (_reload_tx, reload_rx) = tokio::sync::mpsc::unbounded_channel::<()>();
+
+    let vendor = bundle.with_file_name("vendor.js");
+    spawn_js_thread(
+        vendor,
+        bundle,
+        ops_tx,
+        flush_stamps_tx,
+        flush_devtools_tx,
+        emit_tx,
+        request_tx,
+        anim_tx,
+        outbound_rx,
+        reload_rx,
+    );
+
+    let mut buttons: HashSet<u32> = HashSet::new();
+    let mut parent_of: HashMap<u32, u32> = HashMap::new();
+    let mut text_of: HashMap<u32, String> = HashMap::new();
+
+    let click = |id: u32| {
+        outbound_tx
+            .send(Outbound::UiEvent {
+                event: UiEvent {
+                    id,
+                    kind: "click".into(),
+                    ..Default::default()
+                },
+            })
+            .expect("JS thread gone before click");
+    };
+
+    // Navigate to the `<layer>` demo ("Elements" is expanded by default).
+    let nav = drain_until_button(
+        &ops_rx,
+        "<layer>",
+        Duration::from_secs(15),
+        &mut buttons,
+        &mut parent_of,
+        &mut text_of,
+    )
+    .expect("no '<layer>' nav button in initial render");
+    click(nav);
+
+    // The demo mounts two layers: the group-opacity comparison (no `effect`,
+    // `style.opacity` 0.5) and the effects panel (initially `effect="dissolve"`
+    // with declarative `uniforms`). Identify them by the `effect` prop.
+    let mut compare_id: Option<u32> = None;
+    let mut panel_id: Option<u32> = None;
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while (compare_id.is_none() || panel_id.is_none()) && Instant::now() < deadline {
+        if let Ok(batch) = ops_rx.recv_timeout(Duration::from_millis(200)) {
+            for op in &batch {
+                accumulate(op, &mut buttons, &mut parent_of, &mut text_of);
+                if let Op::Create {
+                    id, kind, props, ..
+                } = op
+                    && kind == "layer"
+                {
+                    match props.effect.as_deref() {
+                        Some("dissolve") => {
+                            let style = props.style.as_ref().expect("panel layer has a style");
+                            let uniforms = style
+                                .uniforms
+                                .as_ref()
+                                .expect("declarative uniforms ride the create");
+                            assert_eq!(
+                                uniforms.get("threshold"),
+                                Some(&LayerUniformValue::Scalar(0.35)),
+                                "the demo's initial dissolve threshold crosses the wire"
+                            );
+                            panel_id = Some(*id);
+                        }
+                        None => {
+                            let style = props.style.as_ref().expect("compare layer has a style");
+                            assert_eq!(
+                                style.opacity,
+                                Some(0.5),
+                                "the comparison layer mounts at 50% group opacity"
+                            );
+                            compare_id = Some(*id);
+                        }
+                        other => panic!("unexpected layer effect on create: {other:?}"),
+                    }
+                }
+            }
+        }
+    }
+    let compare_id = compare_id.expect("no comparison `<layer>` create op in the demo");
+    let panel_id = panel_id.expect("no effects-panel `<layer>` create op in the demo");
+
+    // Both layers got children appended (the overlap art / the fx card).
+    assert!(
+        parent_of.values().any(|&p| p == compare_id),
+        "no child appended to the comparison layer"
+    );
+    assert!(
+        parent_of.values().any(|&p| p == panel_id),
+        "no child appended to the effects-panel layer"
+    );
+    eprintln!("OK   layers mounted: compare id={compare_id}, panel id={panel_id}");
+
+    // Switch the effect: clicking the "chromatic" pill re-renders the panel
+    // layer with `effect="chromaticAberration"` and that effect's uniforms.
+    let chroma = find_button("chromatic", &buttons, &parent_of, &text_of)
+        .expect("no 'chromatic' selector pill in the effects panel");
+    click(chroma);
+
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while Instant::now() < deadline {
+        if let Ok(batch) = ops_rx.recv_timeout(Duration::from_millis(200)) {
+            for op in &batch {
+                if let Op::Update { id, props, .. } = op
+                    && *id == panel_id
+                    && props.effect.as_deref() == Some("chromaticAberration")
+                {
+                    let uniforms = props
+                        .style
+                        .as_ref()
+                        .and_then(|s| s.uniforms.as_ref())
+                        .expect("the effect swap carries the new effect's uniforms");
+                    assert!(
+                        matches!(uniforms.get("strength"), Some(LayerUniformValue::Scalar(_))),
+                        "chromaticAberration uniforms carry a scalar `strength`"
+                    );
+                    eprintln!("OK   effect swap update: chromaticAberration + uniforms");
+                    eprintln!("PASS <layer> demo end-to-end");
+                    return;
+                }
+            }
+        }
+    }
+    panic!("no effect-swap update op after clicking the 'chromatic' pill");
+}
+
+/// The `<layer>` demo's SelectDemo navigation event, mirroring the example's
+/// `debug.selectDemo` binding (`examples/demos/screenshot.rs`) so this test can
+/// steer the gallery without a pointer.
+#[bevy_react::react_event(name = "debug.selectDemo")]
+struct SelectDemo {
+    label: String,
+}
+
+/// End-to-end check of the `<layer>` world wiring against the REAL JS runtime
+/// and the REAL op-apply path: a headless (windowless) `App` running
+/// [`ReactUiPlugin`] on the demo bundle. After navigating to the `<layer>`
+/// demo, each mounted layer must have its render-to-texture plumbing (display
+/// material + companion root + offscreen camera targeting the material's
+/// texture), with the demo's declarative uniforms packed into the material
+/// params; clicking the effect selector (through the real picking-message →
+/// `collect_ui_events` path) must swap the composed shader and repack the
+/// params — "material params changed", asserted on the actual asset.
+#[test]
+fn layer_world_wiring_round_trip() {
+    use bevy::camera::{NormalizedRenderTarget, RenderTarget as BevyRenderTarget};
+    use bevy::ecs::system::RunSystemOnce as _;
+    use bevy::picking::backend::HitData;
+    use bevy::picking::events::{Click, Pointer};
+    use bevy::picking::pointer::{Location, PointerButton, PointerId};
+    use bevy::prelude::*;
+    use bevy_react::layer::{LayerCamera, LayerMaterial, LayerRoot, RLayer};
+    use bevy_react::{ReactAppExt as _, ReactEvents, ReactUiPlugin};
+
+    let bundle = example_bundle();
+    if !bundle.exists() {
+        eprintln!(
+            "skipping layer_world_wiring_round_trip: bundle not built at {}\n  run: npm install && npm run build -w demos",
+            bundle.display()
+        );
+        return;
+    }
+
+    let mut app = App::new();
+    // Windowless: the plugin's window/input/picking-fed systems find their
+    // parameters missing (no render, no winit, no picking plugins). Skip those
+    // systems instead of panicking — the op-apply + layer systems this test
+    // exercises have everything they need.
+    app.set_error_handler(bevy::ecs::error::ignore);
+    app.add_plugins((MinimalPlugins, AssetPlugin::default()));
+    // The asset stores a windowless run needs registered up front: `Image`
+    // BEFORE `ReactUiPlugin` (its presence is the plugin's headless-assets
+    // gate), `Font` because the plugin's font setup allocates handles.
+    app.init_asset::<Image>();
+    app.init_asset::<Font>();
+    app.init_asset::<TextureAtlasLayout>();
+    // No picking plugins here — the click below is written as a raw
+    // `Pointer<Click>` message, exactly what a picking backend would produce.
+    app.add_message::<Pointer<Click>>();
+
+    let plugin = ReactUiPlugin::new(&bundle).hot_reload(false);
+    #[cfg(feature = "devtools")]
+    let plugin = plugin.devtools(bevy_react::DevtoolsConfig {
+        enabled: false,
+        ..Default::default()
+    });
+    app.add_plugins(plugin);
+    app.add_react_event::<SelectDemo>();
+
+    // Pump real frames; the JS thread renders/reacts between them.
+    let pump = |app: &mut App, dur: Duration| {
+        let deadline = Instant::now() + dur;
+        while Instant::now() < deadline {
+            app.update();
+            std::thread::sleep(Duration::from_millis(10));
+        }
+    };
+
+    let layers = |app: &mut App| -> Vec<(Entity, RLayer)> {
+        app.world_mut()
+            .query::<(Entity, &RLayer)>()
+            .iter(app.world())
+            .map(|(e, l)| (e, l.clone()))
+            .collect()
+    };
+
+    // Navigate to the `<layer>` demo. The demo app subscribes to
+    // `debug.selectDemo` in an effect after its first render, so keep
+    // re-sending until the layers appear (re-selecting is idempotent).
+    let deadline = Instant::now() + Duration::from_secs(30);
+    while layers(&mut app).len() < 2 {
+        assert!(
+            Instant::now() < deadline,
+            "`<layer>` demo never mounted (its two layers did not appear)"
+        );
+        app.world_mut()
+            .run_system_once(|events: ReactEvents| {
+                events.send(&SelectDemo {
+                    label: "<layer>".into(),
+                });
+            })
+            .expect("send debug.selectDemo");
+        pump(&mut app, Duration::from_millis(500));
+    }
+
+    // Identify the two demo layers by their resolved effect.
+    let all = layers(&mut app);
+    let (compare, _) = *all
+        .iter()
+        .find(|(_, l)| l.effect == "none")
+        .expect("comparison layer (effect \"none\")");
+    let (panel, panel_layer) = all
+        .iter()
+        .find(|(_, l)| l.effect == "dissolve")
+        .map(|(e, l)| (*e, l.clone()))
+        .expect("effects-panel layer (initially \"dissolve\")");
+    assert_eq!(
+        panel_layer.effect, "dissolve",
+        "sanity: the panel started on dissolve"
+    );
+
+    // Give the bind/drive systems a couple frames past the mount, then assert
+    // the full render-to-texture wiring per layer.
+    pump(&mut app, Duration::from_millis(100));
+    let wiring = |app: &mut App, display: Entity| -> LayerMaterial {
+        let world = app.world();
+        let rlayer = world.entity(display).get::<RLayer>().unwrap().clone();
+        let companion = rlayer.companion;
+        assert_eq!(
+            world.entity(companion).get::<LayerRoot>().map(|r| r.0),
+            Some(display),
+            "companion root points back at the display node"
+        );
+        let cam = world
+            .entity(companion)
+            .get::<UiTargetCamera>()
+            .expect("companion bound to an offscreen camera")
+            .0;
+        assert_eq!(
+            world.entity(cam).get::<LayerCamera>().map(|c| c.0),
+            Some(display),
+            "camera points back at the display node"
+        );
+        let material_handle = world
+            .entity(display)
+            .get::<MaterialNode<LayerMaterial>>()
+            .expect("display node renders through MaterialNode<LayerMaterial>")
+            .0
+            .clone();
+        let material = world
+            .resource::<Assets<LayerMaterial>>()
+            .get(&material_handle)
+            .expect("layer material asset exists")
+            .clone();
+        match world.entity(cam).get::<BevyRenderTarget>().unwrap() {
+            BevyRenderTarget::Image(target) => assert_eq!(
+                target.handle, material.layer,
+                "camera renders into the material's layer texture"
+            ),
+            other => panic!("layer camera should target an image, got {other:?}"),
+        }
+        assert_ne!(
+            material.shader,
+            Handle::default(),
+            "the material carries a composed registry shader"
+        );
+        material
+    };
+    let _ = wiring(&mut app, compare);
+    let dissolve_material = wiring(&mut app, panel);
+    // The demo's declarative uniforms (threshold 0.35, softness 0.12) packed
+    // into the dissolve schema's first two lanes.
+    assert_eq!(
+        dissolve_material.packed.params[0].x, 0.35,
+        "initial dissolve threshold packed from `style.uniforms`"
+    );
+    assert_eq!(
+        dissolve_material.packed.params[0].y, 0.12,
+        "initial dissolve softness packed from `style.uniforms`"
+    );
+    eprintln!("OK   wiring: companion+camera+material bound, dissolve uniforms packed");
+
+    // Click the "chromatic" selector pill through the real event path: find its
+    // label's text entity, then feed a `Pointer<Click>` message — exactly what
+    // a picking backend would emit — and let `collect_ui_events` climb to the
+    // owning button and report the click to JS.
+    let label_entity = app
+        .world_mut()
+        .query::<(Entity, &Text)>()
+        .iter(app.world())
+        .find(|(_, t)| t.0.trim() == "chromatic")
+        .map(|(e, _)| e)
+        .expect("no 'chromatic' pill label in the world");
+    app.world_mut().write_message(Pointer::new(
+        PointerId::Mouse,
+        Location {
+            target: NormalizedRenderTarget::Image(bevy::camera::ImageRenderTarget {
+                handle: Handle::default(),
+                scale_factor: 1.0,
+            }),
+            position: Vec2::ZERO,
+        },
+        Click {
+            button: PointerButton::Primary,
+            hit: HitData::new(Entity::PLACEHOLDER, 0.0, None, None),
+            duration: Duration::from_millis(50),
+            count: 1,
+        },
+        label_entity,
+    ));
+
+    // The JS re-render must swap the panel layer's effect and repack the
+    // material params — "material params changed", observed on the asset.
+    let deadline = Instant::now() + Duration::from_secs(10);
+    loop {
+        assert!(
+            Instant::now() < deadline,
+            "panel layer never swapped to chromaticAberration after the click"
+        );
+        pump(&mut app, Duration::from_millis(100));
+        let world = app.world();
+        let Some(rlayer) = world.entity(panel).get::<RLayer>() else {
+            panic!("panel layer display entity vanished");
+        };
+        if rlayer.effect != "chromaticAberration" {
+            continue;
+        }
+        let handle = world
+            .entity(panel)
+            .get::<MaterialNode<LayerMaterial>>()
+            .unwrap()
+            .0
+            .clone();
+        let material = world
+            .resource::<Assets<LayerMaterial>>()
+            .get(&handle)
+            .unwrap();
+        assert_ne!(
+            material.shader, dissolve_material.shader,
+            "the composed shader swapped with the effect"
+        );
+        // strength (lane 0) from the demo's slider state; direction (lanes
+        // 2..4) from the schema default.
+        assert_eq!(
+            material.packed.params[0].x, 0.012,
+            "chromaticAberration strength repacked from `style.uniforms`"
+        );
+        assert_eq!(
+            material.packed.params[0].z, 1.0,
+            "direction.x keeps its schema default"
+        );
+        break;
+    }
+    eprintln!("OK   effect swap: shader + params changed on the material asset");
+    eprintln!("PASS <layer> world wiring end-to-end");
+}

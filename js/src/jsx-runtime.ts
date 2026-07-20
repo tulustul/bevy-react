@@ -15,6 +15,7 @@ import type {
   BevyCanvasProps,
   BevyEditableTextProps,
   BevyImageProps,
+  BevyLayerProps,
   BevyNodeProps,
   BevyPortalProps,
   BevyRootProps,
@@ -48,6 +49,9 @@ export namespace JSX {
     canvas: BevyCanvasProps;
     /** A view of an offscreen Bevy render target (render-to-texture). */
     portal: BevyPortalProps;
+    /** A container composited through a custom-shader effect: its children
+     *  render to an offscreen texture first (group opacity, post-process). */
+    layer: BevyLayerProps;
     /** Renders its subtree into an offscreen texture for use on a 3D material
      *  (the inverse of `portal`). */
     surface: BevySurfaceProps;
