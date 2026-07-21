@@ -740,6 +740,7 @@ fn layer_demo_round_trip() {
     // with declarative `uniforms`). Identify them by the `effect` prop.
     let mut compare_id: Option<u32> = None;
     let mut panel_id: Option<u32> = None;
+    let mut tilt_layers = 0usize;
     let deadline = Instant::now() + Duration::from_secs(10);
     while (compare_id.is_none() || panel_id.is_none()) && Instant::now() < deadline {
         if let Ok(batch) = ops_rx.recv_timeout(Duration::from_millis(200)) {
@@ -766,12 +767,25 @@ fn layer_demo_round_trip() {
                         }
                         None => {
                             let style = props.style.as_ref().expect("compare layer has a style");
-                            assert_eq!(
-                                style.opacity,
-                                Some(0.5),
-                                "the comparison layer mounts at 50% group opacity"
-                            );
-                            compare_id = Some(*id);
+                            // Effect-less layers with a `transform3d` style are
+                            // the tilted ones — the transform3d showcase's static
+                            // tilts (Task 2.2) AND the interactive TapCard's
+                            // tilted twin (Task 2.3); among the effect-less,
+                            // untransformed rest, the group-opacity comparison
+                            // layer is PINNED at `opacity: 0.5` and the pointer
+                            // demo's flat TapCard layer (Task 2.3) carries no
+                            // opacity.
+                            if let Some(spec) = style.transform3d.as_ref() {
+                                assert!(
+                                    !spec.is_identity(),
+                                    "a tilt layer's transform3d spec carries real ops"
+                                );
+                                tilt_layers += 1;
+                                continue;
+                            }
+                            if style.opacity == Some(0.5) {
+                                compare_id = Some(*id);
+                            }
                         }
                         other => panic!("unexpected layer effect on create: {other:?}"),
                     }
@@ -781,6 +795,10 @@ fn layer_demo_round_trip() {
     }
     let compare_id = compare_id.expect("no comparison `<layer>` create op in the demo");
     let panel_id = panel_id.expect("no effects-panel `<layer>` create op in the demo");
+    assert!(
+        tilt_layers >= 1,
+        "the transform3d showcase mounts at least one tilted layer"
+    );
 
     // Both layers got children appended (the overlap art / the fx card).
     assert!(
@@ -1075,4 +1093,343 @@ fn layer_world_wiring_round_trip() {
     }
     eprintln!("OK   effect swap: shader + params changed on the material asset");
     eprintln!("PASS <layer> world wiring end-to-end");
+}
+
+/// End-to-end check of `<layer>` POINTER INPUT against the real JS runtime,
+/// real bevy_ui layout, and real bevy_picking — fully headless. The window
+/// pointer is a `PointerId::Mouse` entity driven by injected `PointerInput`
+/// messages whose target is an offscreen image the default UI camera renders
+/// to (the hit-test probing recipe: never trust window-target geometry
+/// headless), and camera target info is stamped from the image assets since no
+/// render app runs `camera_system`.
+///
+/// Two clicks land on the SAME shared-counter button of the demo's
+/// InteractiveTiltDemo: once inside the FLAT layer (identity mapping), once
+/// inside the 3D-TILTED layer at the button's FORWARD-PROJECTED on-screen
+/// position (computed through the live `LayerTransform`, the same matrix the
+/// inverse mapping must undo). Each click must flow window cursor → HoverMap →
+/// `drive_layer_pointer` (inverse map) → virtual pointer on the layer texture
+/// → bevy_ui picking on the companion tree → `Pointer<Click>` →
+/// `collect_virtual_clicks` → JS `onClick` → React state → `taps N` re-render.
+#[test]
+fn layer_pointer_click_round_trip() {
+    use bevy::camera::{
+        ImageRenderTarget, NormalizedRenderTarget, RenderTarget as BevyRenderTarget,
+        RenderTargetInfo,
+    };
+    use bevy::ecs::system::RunSystemOnce as _;
+    use bevy::picking::pointer::{Location, PointerAction, PointerId, PointerInput};
+    use bevy::prelude::*;
+    use bevy::render::render_resource::TextureFormat;
+    use bevy::ui::{ComputedNode, IsDefaultUiCamera, UiGlobalTransform};
+    use bevy_react::layer::{LayerRoot, LayerTransform};
+    use bevy_react::{ReactAppExt as _, ReactEvents, ReactUiPlugin};
+
+    let bundle = example_bundle();
+    if !bundle.exists() {
+        eprintln!(
+            "skipping layer_pointer_click_round_trip: bundle not built at {}\n  run: npm install && npm run build -w demos",
+            bundle.display()
+        );
+        return;
+    }
+
+    let mut app = App::new();
+    // Headless: skip systems whose params (windows, winit input, render app
+    // resources like text pipelines) are missing rather than panicking.
+    app.set_error_handler(bevy::ecs::error::ignore);
+    app.add_plugins((
+        MinimalPlugins,
+        AssetPlugin::default(),
+        bevy::transform::TransformPlugin,
+        // Visibility propagation: `InheritedVisibility` DEFAULTS TO HIDDEN,
+        // and the UI picking backend filters on it — without the propagate
+        // system every node is invisible to picking.
+        bevy::camera::CameraPlugin,
+        // Real picking: PointerInput processing + hover map + Pointer<..> events.
+        bevy::picking::PickingPlugin,
+        bevy::picking::InteractionPlugin,
+    ));
+    app.init_asset::<Image>();
+    app.init_asset::<Font>();
+    app.init_asset::<TextureAtlasLayout>();
+    // Real bevy_ui layout + the UI picking backend (bundled by UiPlugin).
+    // `ui_layout_system` takes `ResMut<FontCx>` (normally bevy_text's plugin
+    // provides it) — without the resource the ignore-error handler silently
+    // skips layout and everything stays 0x0.
+    app.init_resource::<bevy::text::FontCx>();
+    app.add_plugins(bevy::ui::UiPlugin);
+    // No bevy_input plugin headless: the layer-pointer driver reads this
+    // resource directly, and the test presses/releases it by hand.
+    app.init_resource::<ButtonInput<MouseButton>>();
+
+    let plugin = ReactUiPlugin::new(&bundle).hot_reload(false);
+    #[cfg(feature = "devtools")]
+    let plugin = plugin.devtools(bevy_react::DevtoolsConfig {
+        enabled: false,
+        ..Default::default()
+    });
+    app.add_plugins(plugin);
+    app.add_react_event::<SelectDemo>();
+
+    // The "window": an offscreen image the default UI camera targets. Tall
+    // enough that the whole `<layer>` demo page lays out inside it (a node
+    // outside the camera bounds is skipped by the picking backend's viewport
+    // containment check).
+    let main_handle =
+        app.world_mut()
+            .resource_mut::<Assets<Image>>()
+            .add(Image::new_target_texture(
+                1280,
+                3200,
+                TextureFormat::Rgba8UnormSrgb,
+                None,
+            ));
+    let main_target = ImageRenderTarget {
+        handle: main_handle.clone(),
+        scale_factor: 1.0,
+    };
+    app.world_mut().spawn((
+        Camera2d,
+        BevyRenderTarget::Image(main_target.clone()),
+        IsDefaultUiCamera,
+    ));
+    // The window pointer entity the injected PointerInput messages drive.
+    app.world_mut().spawn(PointerId::Mouse);
+
+    // No render app runs `camera_system` here, so stamp every image camera's
+    // computed target info from its image asset each frame — bevy_ui layout
+    // and the picking backend both read it (unstamped cameras lay out to 0x0,
+    // the probing-recipe trap). Covers the layer cameras `bind_layers` spawns
+    // and follows `drive_layers`' texture resizes.
+    fn stamp_camera_target_info(
+        images: Res<Assets<Image>>,
+        mut cameras: Query<(&mut Camera, &BevyRenderTarget)>,
+    ) {
+        for (mut camera, target) in &mut cameras {
+            let BevyRenderTarget::Image(t) = target else {
+                continue;
+            };
+            let Some(image) = images.get(&t.handle) else {
+                continue;
+            };
+            let stale = camera.computed.target_info.as_ref().is_none_or(|info| {
+                info.physical_size != image.size() || info.scale_factor != t.scale_factor
+            });
+            if stale {
+                camera.computed.target_info = Some(RenderTargetInfo {
+                    physical_size: image.size(),
+                    scale_factor: t.scale_factor,
+                });
+            }
+        }
+    }
+    app.add_systems(First, stamp_camera_target_info);
+
+    let pump = |app: &mut App, dur: Duration| {
+        let deadline = Instant::now() + dur;
+        while Instant::now() < deadline {
+            app.update();
+            std::thread::sleep(Duration::from_millis(10));
+        }
+    };
+
+    // Navigate to the `<layer>` demo (idempotent re-sends until it mounts).
+    let displays_mounted = |app: &mut App| -> usize {
+        app.world_mut()
+            .query::<&bevy_react::layer::RLayer>()
+            .iter(app.world())
+            .count()
+    };
+    let deadline = Instant::now() + Duration::from_secs(30);
+    while displays_mounted(&mut app) < 4 {
+        assert!(
+            Instant::now() < deadline,
+            "`<layer>` demo never mounted its layers"
+        );
+        app.world_mut()
+            .run_system_once(|events: ReactEvents| {
+                events.send(&SelectDemo {
+                    label: "<layer>".into(),
+                });
+            })
+            .expect("send debug.selectDemo");
+        pump(&mut app, Duration::from_millis(500));
+    }
+
+    // Locate the two TapCard "+1" buttons and their layer displays: climb from
+    // each "+1" label to the Interaction-bearing button, then on up to the
+    // companion root, whose `LayerRoot` points back at the display node.
+    let tap_targets = |app: &mut App| -> Vec<(Entity, Entity)> {
+        let plus: Vec<Entity> = app
+            .world_mut()
+            .query::<(Entity, &Text)>()
+            .iter(app.world())
+            .filter(|(_, t)| t.0.trim() == "+1")
+            .map(|(e, _)| e)
+            .collect();
+        let mut out = Vec::new();
+        for label in plus {
+            let mut button = None;
+            let mut cur = label;
+            loop {
+                let entity = app.world().entity(cur);
+                if button.is_none() && entity.get::<Interaction>().is_some() {
+                    button = Some(cur);
+                }
+                if let Some(root) = entity.get::<LayerRoot>() {
+                    if let Some(button) = button {
+                        out.push((button, root.0));
+                    }
+                    break;
+                }
+                match entity.get::<ChildOf>() {
+                    Some(child_of) => cur = child_of.parent(),
+                    None => break,
+                }
+            }
+        }
+        out
+    };
+
+    // Wait for layout: both buttons and both displays need real boxes, and the
+    // tilted display needs its `LayerTransform` mirrored by `drive_layers`.
+    let deadline = Instant::now() + Duration::from_secs(20);
+    let (flat, tilted) = loop {
+        assert!(
+            Instant::now() < deadline,
+            "TapCard buttons/displays never laid out"
+        );
+        pump(&mut app, Duration::from_millis(100));
+        let targets = tap_targets(&mut app);
+        if targets.len() != 2 {
+            continue;
+        }
+        let laid_out = |app: &App, e: Entity| {
+            app.world()
+                .entity(e)
+                .get::<ComputedNode>()
+                .is_some_and(|c| c.size().x > 0.0 && c.size().y > 0.0)
+        };
+        if !targets
+            .iter()
+            .all(|&(b, d)| laid_out(&app, b) && laid_out(&app, d))
+        {
+            continue;
+        }
+        let transform_of = |app: &App, display: Entity| {
+            app.world()
+                .entity(display)
+                .get::<LayerTransform>()
+                .map(|t| t.0)
+                .unwrap_or(Mat4::IDENTITY)
+        };
+        let mut flat = None;
+        let mut tilted = None;
+        for (button, display) in targets {
+            if transform_of(&app, display) == Mat4::IDENTITY {
+                flat = Some((button, display));
+            } else {
+                tilted = Some((button, display));
+            }
+        }
+        if let (Some(flat), Some(tilted)) = (flat, tilted) {
+            break (flat, tilted);
+        }
+    };
+    eprintln!(
+        "OK   demo laid out: flat button {:?} in {:?}, tilted button {:?} in {:?}",
+        flat.0, flat.1, tilted.0, tilted.1
+    );
+
+    // The window-cursor position that should hit `button` inside `display`:
+    // the button's center in texture space (logical == physical at scale 1),
+    // forward-projected through the display's live LayerTransform (identity
+    // for the flat card), offset by the display box's on-screen top-left.
+    let cursor_for = |app: &mut App, button: Entity, display: Entity| -> Vec2 {
+        let world = app.world();
+        let button_center = world
+            .entity(button)
+            .get::<UiGlobalTransform>()
+            .expect("button has a UiGlobalTransform")
+            .translation;
+        let display_node = world.entity(display).get::<ComputedNode>().unwrap();
+        let display_center = world
+            .entity(display)
+            .get::<UiGlobalTransform>()
+            .expect("display has a UiGlobalTransform")
+            .translation;
+        let top_left = display_center - display_node.size() * 0.5;
+        let m = world
+            .entity(display)
+            .get::<LayerTransform>()
+            .map(|t| t.0)
+            .unwrap_or(Mat4::IDENTITY);
+        let p = m * Vec4::new(button_center.x, button_center.y, 0.0, 1.0);
+        assert!(p.w > 0.0, "projected button center in front of the eye");
+        top_left + Vec2::new(p.x / p.w, p.y / p.w)
+    };
+
+    let move_mouse = |app: &mut App, position: Vec2| {
+        let target = NormalizedRenderTarget::Image(main_target.clone());
+        app.world_mut().write_message(PointerInput::new(
+            PointerId::Mouse,
+            Location { target, position },
+            PointerAction::Move { delta: Vec2::ONE },
+        ));
+    };
+
+    // Click `button` inside `display` via the FULL input path, then wait for
+    // the shared counter to render `want`.
+    let click_and_expect = |app: &mut App, button: Entity, display: Entity, want: &str| {
+        let cursor = cursor_for(app, button, display);
+        eprintln!("     clicking at window cursor {cursor:?}");
+        // Hover: window pointer over the display; give the two-frame chain
+        // (HoverMap → virtual pointer → companion HoverMap) time to settle.
+        move_mouse(app, cursor);
+        pump(app, Duration::from_millis(100));
+        // Press...
+        app.world_mut()
+            .resource_mut::<ButtonInput<MouseButton>>()
+            .press(MouseButton::Left);
+        app.update();
+        app.world_mut()
+            .resource_mut::<ButtonInput<MouseButton>>()
+            .clear();
+        pump(app, Duration::from_millis(50));
+        // ...release → Pointer<Click> on the button → JS.
+        app.world_mut()
+            .resource_mut::<ButtonInput<MouseButton>>()
+            .release(MouseButton::Left);
+        app.update();
+        app.world_mut()
+            .resource_mut::<ButtonInput<MouseButton>>()
+            .clear();
+
+        let deadline = Instant::now() + Duration::from_secs(10);
+        loop {
+            assert!(
+                Instant::now() < deadline,
+                "counter never rendered {want:?} after clicking {button:?} in {display:?}"
+            );
+            pump(app, Duration::from_millis(100));
+            let found = app
+                .world_mut()
+                .query::<&Text>()
+                .iter(app.world())
+                .any(|t| t.0.trim() == want);
+            if found {
+                break;
+            }
+        }
+    };
+
+    // Untransformed layer: identity mapping.
+    click_and_expect(&mut app, flat.0, flat.1, "taps 1");
+    eprintln!("OK   flat layer: click inside an untransformed layer reached JS");
+
+    // 3D-tilted layer: the SAME button, clicked at its projected position.
+    click_and_expect(&mut app, tilted.0, tilted.1, "taps 2");
+    eprintln!("OK   tilted layer: inverse-projected click reached JS");
+    eprintln!("PASS <layer> pointer input end-to-end");
 }

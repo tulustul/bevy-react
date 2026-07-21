@@ -44,9 +44,9 @@ use std::fmt::Write as _;
 use bevy::camera::{ImageRenderTarget, RenderTarget as BevyRenderTarget};
 use bevy::prelude::{
     App, Asset, Assets, Camera, Camera2d, ClearColorConfig, Color, ColorToComponents as _,
-    Commands, Component, Entity, Handle, Image, MaterialNode, Node, Query, Reflect, Res, ResMut,
-    Resource, UVec2, UiMaterial, UiMaterialKey, UiTargetCamera, Val, Vec2, Vec4, Visibility, With,
-    Without, default,
+    Commands, Component, Entity, Handle, Image, Mat4, MaterialNode, Node, Query, Reflect, Res,
+    ResMut, Resource, UVec2, UiMaterial, UiMaterialKey, UiTargetCamera, Val, Vec2, Vec3, Vec4,
+    Visibility, With, Without, default,
 };
 use bevy::render::render_resource::{
     AsBindGroup, Extent3d, RenderPipelineDescriptor, ShaderType, TextureFormat,
@@ -57,6 +57,9 @@ use serde::Deserialize;
 
 use crate::bridge::{JsBridge, RNode};
 use crate::protocol::NodeId;
+
+pub mod pointer;
+pub use pointer::{LayerVirtualPointer, drive_layer_pointer, init_layer_pointer};
 
 /// Size of the shared uniform budget, in `vec4<f32>` slots. One slot = 4 float
 /// lanes, so effects get 64 lanes total.
@@ -465,6 +468,145 @@ impl LayerUniformValue {
     }
 }
 
+/// The `style.transform3d` wire spec of a `<layer>`: optional CSS-like 3D
+/// transform ops, applied in a FIXED order regardless of JSON key order
+/// (CSS-transform-like, innermost-last — see [`compose_transform`]):
+///
+/// ```text
+/// perspective → translate → rotateX → rotateY → rotateZ → scale
+/// ```
+///
+/// Angles are DEGREES, lengths logical pixels. `Deserialize`-only and
+/// unknown-key tolerant like every other style struct (no
+/// `deny_unknown_fields` — a stray key is ignored, matching `Style`'s own
+/// tolerance). Module-owned like [`LayerUniformMap`]; `protocol::Style`
+/// references it by path.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LayerTransformSpec {
+    /// CSS-style perspective distance in logical px (`w' = 1 - z/d`): smaller
+    /// = stronger foreshortening. Non-positive values are ignored (CSS
+    /// requires a positive length; `None`/invalid = no perspective).
+    #[serde(default)]
+    pub perspective: Option<f32>,
+    /// Translation along screen x, logical px.
+    #[serde(default)]
+    pub translate_x: Option<f32>,
+    /// Translation along screen y (positive = down), logical px.
+    #[serde(default)]
+    pub translate_y: Option<f32>,
+    /// Translation along z (positive = toward the viewer), logical px. Only
+    /// observable under `perspective`.
+    #[serde(default)]
+    pub translate_z: Option<f32>,
+    /// Rotation about the x axis, DEGREES. Positive tips the TOP edge away
+    /// from the viewer (the CSS `rotateX` convention).
+    #[serde(default)]
+    pub rotate_x: Option<f32>,
+    /// Rotation about the y axis, DEGREES. Positive swings the RIGHT edge
+    /// away from the viewer (the CSS `rotateY` convention).
+    #[serde(default)]
+    pub rotate_y: Option<f32>,
+    /// Rotation in the screen plane, DEGREES. Positive is CLOCKWISE on screen
+    /// (the CSS convention in y-down space).
+    #[serde(default)]
+    pub rotate_z: Option<f32>,
+    /// Uniform scale (both axes), unless overridden per axis.
+    #[serde(default)]
+    pub scale: Option<f32>,
+    /// X-axis scale; overrides [`scale`](Self::scale) on x.
+    #[serde(default)]
+    pub scale_x: Option<f32>,
+    /// Y-axis scale; overrides [`scale`](Self::scale) on y.
+    #[serde(default)]
+    pub scale_y: Option<f32>,
+}
+
+impl LayerTransformSpec {
+    /// Every op absent — the identity transform. Lets callers (and
+    /// [`compose_transform`]) skip the matrix work entirely.
+    pub fn is_identity(&self) -> bool {
+        *self == LayerTransformSpec::default()
+    }
+}
+
+/// Compose `spec` into one matrix over the display box's LOGICAL-pixel space
+/// (origin top-left, x right, y DOWN, z toward the viewer, `size` = the box's
+/// logical dimensions), about the box center:
+///
+/// ```text
+/// M = T(center) · P · T(translate) · Rx · Ry · Rz · S · T(-center)
+/// ```
+///
+/// i.e. CSS-transform semantics with `transform-origin: center` — the
+/// rightmost factor applies to the point first (innermost-last), so `scale`
+/// happens in the untranslated/unrotated box frame and `translate` shifts
+/// along the SCREEN axes, exactly like `transform: perspective(d)
+/// translate3d(…) rotateX(…) rotateY(…) rotateZ(…) scale(…)`.
+///
+/// Sign conventions (all CSS-matching in this y-down/z-toward-viewer frame,
+/// where the standard right-handed rotation matrices reproduce CSS exactly):
+/// positive `rotateX` tips the top edge away from the viewer, positive
+/// `rotateY` swings the right edge away, positive `rotateZ` turns clockwise
+/// on screen. `perspective` is the standard CSS matrix — identity with the
+/// z→w coefficient set to `-1/d` (`w' = 1 - z/d`), so points nearer the
+/// viewer (`z > 0`) divide by a smaller w and appear larger.
+///
+/// The identity spec returns exactly [`Mat4::IDENTITY`] (no
+/// `T(center)·…·T(-center)` float drift).
+pub fn compose_transform(spec: &LayerTransformSpec, size: Vec2) -> Mat4 {
+    if spec.is_identity() {
+        return Mat4::IDENTITY;
+    }
+    let center = Vec3::new(size.x * 0.5, size.y * 0.5, 0.0);
+    let mut m = Mat4::from_translation(center);
+    if let Some(d) = spec.perspective
+        && d > 0.0
+    {
+        // CSS perspective: identity except the z→w coefficient. glam is
+        // column-major, so that coefficient lives in the z basis column's w
+        // component: out.w = in.w + z_axis.w * in.z = 1 - z/d.
+        let mut p = Mat4::IDENTITY;
+        p.z_axis.w = -1.0 / d;
+        m *= p;
+    }
+    let translate = Vec3::new(
+        spec.translate_x.unwrap_or(0.0),
+        spec.translate_y.unwrap_or(0.0),
+        spec.translate_z.unwrap_or(0.0),
+    );
+    if translate != Vec3::ZERO {
+        m *= Mat4::from_translation(translate);
+    }
+    if let Some(deg) = spec.rotate_x {
+        m *= Mat4::from_rotation_x(deg.to_radians());
+    }
+    if let Some(deg) = spec.rotate_y {
+        m *= Mat4::from_rotation_y(deg.to_radians());
+    }
+    if let Some(deg) = spec.rotate_z {
+        m *= Mat4::from_rotation_z(deg.to_radians());
+    }
+    let sx = spec.scale_x.or(spec.scale).unwrap_or(1.0);
+    let sy = spec.scale_y.or(spec.scale).unwrap_or(1.0);
+    if sx != 1.0 || sy != 1.0 {
+        m *= Mat4::from_scale(Vec3::new(sx, sy, 1.0));
+    }
+    m * Mat4::from_translation(-center)
+}
+
+/// The currently composed 3D transform of a `<layer>` display node — the same
+/// matrix `drive_layers` uploads to `packed.transform`, mirrored on the entity
+/// so the input path can invert it (Task 2.3) without re-deriving spec + size.
+/// Identity while the layer has no `transform3d` (or isn't laid out yet).
+///
+/// ABSENCE CONTRACT: the component does not exist until the first
+/// `drive_layers` command flush after the display spawns (it is inserted via
+/// `Commands`, not stamped at create time) — readers must treat absence as
+/// the identity transform.
+#[derive(Component, Debug, Clone, Copy, PartialEq)]
+pub struct LayerTransform(pub Mat4);
+
 /// Marks a `<layer>`'s on-screen **display node**: the styled UI node that
 /// renders the layer's captured subtree through [`LayerMaterial`]. Stamped by
 /// the reconciler's `"layer"` create arm; `companion` is the detached
@@ -541,30 +683,52 @@ pub fn pack_uniforms(
 ///
 /// ```wgsl
 /// struct LayerParams {
+///     transform: mat4x4<f32>,
 ///     params: array<vec4<f32>, 16>,
 ///     misc: vec4<f32>,
 /// }
 /// @group(1) @binding(0) var<uniform> material: LayerParams;
 /// ```
 ///
-/// (`16` = [`MAX_LAYER_UNIFORM_VEC4S`]; a test pins the two in sync.)
+/// (`16` = [`MAX_LAYER_UNIFORM_VEC4S`]; a test pins the two in sync — field
+/// order AND byte layout: the mat4 is 64 bytes at offset 0 with 16-byte
+/// alignment, so `params` follows at offset 64 and `misc` at 320.)
 #[derive(ShaderType, Debug, Clone, PartialEq, Reflect)]
 pub struct LayerPacked {
+    /// The `<layer>`'s composed 3D transform ([`compose_transform`] over the
+    /// retained `style.transform3d` + the display's logical size), written by
+    /// [`drive_layers`] and applied projectively by the common contract's
+    /// vertex entry point in `layer.wgsl`.
+    pub transform: Mat4,
     /// The packed effect uniforms, laid out by [`LayerEffectSchema`] and read
     /// by the generated `u_<name>()` accessors.
     pub params: [Vec4; MAX_LAYER_UNIFORM_VEC4S],
     /// `x` = group alpha (a whole-subtree fade, `u_group_alpha()` in WGSL);
-    /// `yzw` = unused.
+    /// `y` = the display's scale factor (physical px per logical px — the
+    /// vertex shader converts corners into the LOGICAL space `transform` was
+    /// composed in and back); `z` = 3D-transform-enabled flag (`0.0` when
+    /// `transform` is the identity, telling the vertex shader to take the
+    /// bit-exact default-pipeline path — the identity regression guarantee);
+    /// `w` = unused.
+    ///
+    /// LANE BUDGET: `w` is the LAST free lane. Its next occupant must update
+    /// this doc and the `LayerParams` mirror comment in `layer.wgsl` in the
+    /// same change; anything beyond that should add a second vec4 field (and
+    /// extend the layout-pinning test) rather than bit-pack meanings into
+    /// existing lanes.
     pub misc: Vec4,
 }
 
 impl Default for LayerPacked {
-    /// Zeroed params under a group alpha of `1.0` — a fully visible layer with
-    /// every undeclared lane zero, matching [`LayerEffectSchema::packed_defaults`].
+    /// The identity transform and zeroed params under a group alpha of `1.0`,
+    /// scale factor `1.0`, and the transform flag OFF — an untransformed,
+    /// fully visible layer with every undeclared lane zero, matching
+    /// [`LayerEffectSchema::packed_defaults`].
     fn default() -> Self {
         LayerPacked {
+            transform: Mat4::IDENTITY,
             params: [Vec4::ZERO; MAX_LAYER_UNIFORM_VEC4S],
-            misc: Vec4::new(1.0, 0.0, 0.0, 0.0),
+            misc: Vec4::new(1.0, 1.0, 0.0, 0.0),
         }
     }
 }
@@ -638,13 +802,18 @@ impl UiMaterial for LayerMaterial {
         }
         // A default handle (e.g. a default-constructed material) points at no
         // shader asset — overriding with it would stall the pipeline forever.
-        // Leave the embedded fallback in place instead.
+        // Leave the embedded fallback (fragment AND the pipeline's default UI
+        // vertex shader) in place instead; that path never actually renders.
         if key.bind_group_data.shader == Handle::default() {
             return;
         }
         if let Some(fragment) = &mut descriptor.fragment {
-            fragment.shader = key.bind_group_data.shader;
+            fragment.shader = key.bind_group_data.shader.clone();
         }
+        // The composed source also carries the common contract's projective
+        // vertex entry point (`style.transform3d`); every effect pipeline must
+        // run it, or the uploaded matrix would be dead weight for that effect.
+        descriptor.vertex.shader = key.bind_group_data.shader;
     }
 }
 
@@ -664,13 +833,14 @@ const NONE_FRAGMENT_MARKER: &str =
 /// `layer.wgsl`'s contract section.
 const RESERVED_ACCESSOR_NAMES: &[&str] = &["group_alpha"];
 
-/// Count the `@fragment` entry points in `source`, ignoring `//` line comments
-/// (block comments are not stripped — see the caller's known-limitation note).
-fn count_fragment_entry_points(source: &str) -> usize {
+/// Count occurrences of a stage attribute (`"@fragment"` / `"@vertex"`) in
+/// `source`, ignoring `//` line comments (block comments are not stripped —
+/// see the caller's known-limitation note).
+fn count_entry_points(source: &str, attribute: &str) -> usize {
     source
         .lines()
         .map(|line| line.split_once("//").map_or(line, |(code, _)| code))
-        .map(|code| code.matches("@fragment").count())
+        .map(|code| code.matches(attribute).count())
         .sum()
 }
 
@@ -769,11 +939,23 @@ impl LayerEffects {
         // are a redefinition — both would only surface as opaque naga errors.
         // Known limitation: only `//` line comments are stripped before
         // counting, a `@fragment` inside a /* block comment */ still counts.
-        let entry_points = count_fragment_entry_points(&source);
+        // (`@vertex` never substring-matches `@fragment`, so the contract's
+        // vertex entry point doesn't disturb this count.)
+        let entry_points = count_entry_points(&source, "@fragment");
         assert!(
             entry_points == 1,
             "layer effect {name:?}: the composed shader must contain exactly one @fragment \
              entry point, found {entry_points}"
+        );
+        // The common contract contributes the ONE vertex entry point every
+        // effect pipeline runs (`specialize` points the vertex stage at the
+        // composed shader) — an author fragment carrying its own would be a
+        // naga redefinition error at render time.
+        let vertex_entry_points = count_entry_points(&source, "@vertex");
+        assert!(
+            vertex_entry_points == 1,
+            "layer effect {name:?}: the composed shader must contain exactly one @vertex \
+             entry point (the common contract's), found {vertex_entry_points}"
         );
         self.0.insert(
             name,
@@ -1000,6 +1182,13 @@ pub fn bind_layers(
 ///   `Node` so the offscreen subtree lays out at the display's dimensions.
 /// - **Group alpha** — feed the retained `style.opacity` into the material's
 ///   `misc.x` (the shader's `u_group_alpha()`), compare-before-write.
+/// - **3D transform** — compose the retained `style.transform3d` against the
+///   display's LOGICAL size ([`compose_transform`]) into `packed.transform`
+///   and mirror it on the display as [`LayerTransform`], compare-before-write.
+///   Owned HERE (not the reconciler's `LAYER`-dirt repack, which owns only
+///   `params`): a layout resize must recompose even with no style delta, and
+///   the retained-props read makes hover/press variants work for free — one
+///   writer, no double-apply. Identity until the display is laid out.
 /// - **Orphan GC** — despawn companions/cameras whose display entity vanished
 ///   without a reconciler op (e.g. a `DespawnOnExit` sweep of an ancestor).
 ///
@@ -1014,16 +1203,24 @@ pub fn bind_layers(
 /// logical unit inside the layer means exactly what it means on screen, and
 /// logical size x scale = the physical texture size — the subtree fills the
 /// texture.
+#[allow(clippy::too_many_arguments)]
 pub fn drive_layers(
     mut commands: Commands,
     bridge: Res<JsBridge>,
     mut images: ResMut<Assets<Image>>,
     mut materials: ResMut<Assets<LayerMaterial>>,
-    displays: Query<(&RNode, &RLayer, &MaterialNode<LayerMaterial>, &ComputedNode)>,
+    displays: Query<(
+        Entity,
+        &RNode,
+        &RLayer,
+        &MaterialNode<LayerMaterial>,
+        &ComputedNode,
+    )>,
+    mut transforms: Query<&mut LayerTransform>,
     mut companions: Query<(Entity, &LayerRoot, &mut Node)>,
     mut cameras: Query<(Entity, &LayerCamera, &mut BevyRenderTarget)>,
 ) {
-    for (rnode, rlayer, mat_node, computed) in &displays {
+    for (display, rnode, rlayer, mat_node, computed) in &displays {
         // 1. Auto-resize the render target to the display's EXACT physical
         //    box: the companion subtree lays out to that box and the composite
         //    samples the full texture (UV 0→1), so any padding (e.g. portal-
@@ -1031,10 +1228,9 @@ pub fn drive_layers(
         //    with dead margins. Realloc churn during animated resizes is
         //    accepted for phase 1. Zero size = not laid out yet; keep the 1x1.
         let physical = computed.size();
-        if physical.x > 0.0
-            && physical.y > 0.0
-            && let Some(handle) = materials.get(&mat_node.0).map(|m| m.layer.clone())
-        {
+        let laid_out = physical.x > 0.0 && physical.y > 0.0;
+        let logical = physical * computed.inverse_scale_factor;
+        if laid_out && let Some(handle) = materials.get(&mat_node.0).map(|m| m.layer.clone()) {
             let want = exact_size(physical);
             // Read the current size immutably first: `get_mut` flags the asset
             // modified (re-uploading it) even without an actual change.
@@ -1065,11 +1261,7 @@ pub fn drive_layers(
         //    pre-layout the companion keeps its 0x0 base rather than getting a
         //    spurious Px(0) write. Compare-before-write: touching `Node`
         //    relays out the offscreen subtree.
-        if physical.x > 0.0
-            && physical.y > 0.0
-            && let Ok((_, _, mut node)) = companions.get_mut(rlayer.companion)
-        {
-            let logical = physical * computed.inverse_scale_factor;
+        if laid_out && let Ok((_, _, mut node)) = companions.get_mut(rlayer.companion) {
             let (width, height) = (Val::Px(logical.x), Val::Px(logical.y));
             if node.width != width {
                 node.width = width;
@@ -1079,7 +1271,7 @@ pub fn drive_layers(
             }
         }
 
-        // 3. Group alpha from the retained merged style (absent = 1.0).
+        // 3a. Group alpha from the retained merged style (absent = 1.0).
         //    `opacity` on ordinary nodes folds into component colors
         //    (`ui_map::apply_opacity`: BackgroundColor / gradients / text /
         //    image tint); a `<layer>` display node draws its subtree through
@@ -1088,16 +1280,60 @@ pub fn drive_layers(
         //    writing `misc.x` here is the ONLY application of `opacity` to the
         //    captured subtree (no double-apply path). Compare-before-write:
         //    mutating the asset re-prepares its bind group.
-        let alpha = bridge
+        let retained_style = bridge
             .props_cache
             .get(&rnode.0)
-            .and_then(|p| p.style.as_ref())
-            .and_then(|s| s.opacity)
-            .unwrap_or(1.0);
-        if materials.get(&mat_node.0).map(|m| m.packed.misc.x) != Some(alpha)
+            .and_then(|p| p.style.as_ref());
+        let alpha = retained_style.and_then(|s| s.opacity).unwrap_or(1.0);
+
+        // 3b. The 3D transform, composed from the retained `style.transform3d`
+        //     against the display's LOGICAL size (matching the companion's
+        //     layout space — see the sizing model above). Identity while unset
+        //     or before the first layout (a zero-sized box has no meaningful
+        //     center to compose about). The common contract's vertex shader
+        //     applies the uploaded matrix projectively; alongside it ride
+        //     `misc.y` — the display's scale factor (physical px per logical
+        //     px), which the shader needs to move corners into the LOGICAL
+        //     space the matrix was composed in and back — and `misc.z`, the
+        //     transform-enabled flag: `0.0` routes the shader down the
+        //     bit-exact default-pipeline path, so an untransformed layer can
+        //     never drift by the logical/physical round trip's rounding.
+        let matrix = match retained_style.and_then(|s| s.transform3d.as_ref()) {
+            Some(spec) if laid_out => compose_transform(spec, logical),
+            _ => Mat4::IDENTITY,
+        };
+        let scale = if laid_out && computed.inverse_scale_factor > 0.0 {
+            1.0 / computed.inverse_scale_factor
+        } else {
+            1.0
+        };
+        let flag = if matrix == Mat4::IDENTITY { 0.0 } else { 1.0 };
+        let misc = Vec4::new(alpha, scale, flag, 0.0);
+
+        // One guarded write for both packed fields — compare-before-write,
+        // since mutating the asset re-prepares its bind group.
+        if materials
+            .get(&mat_node.0)
+            .map(|m| (m.packed.misc, m.packed.transform))
+            != Some((misc, matrix))
             && let Some(mut material) = materials.get_mut(&mat_node.0)
         {
-            material.packed.misc.x = alpha;
+            material.packed.misc = misc;
+            material.packed.transform = matrix;
+        }
+
+        // Mirror the composed matrix on the display entity for the input
+        // path's inversion (Task 2.3). Compare-before-write; first frame
+        // inserts the component.
+        match transforms.get_mut(display) {
+            Ok(mut t) => {
+                if t.0 != matrix {
+                    t.0 = matrix;
+                }
+            }
+            Err(_) => {
+                commands.entity(display).insert(LayerTransform(matrix));
+            }
         }
     }
 
@@ -1106,7 +1342,7 @@ pub fn drive_layers(
     //     model), and despawn cameras whose display is gone. Mirrors
     //     `drive_surfaces`' stale-camera sweep.
     for (entity, cam, mut target) in &mut cameras {
-        let Ok((_, _, _, computed)) = displays.get(cam.0) else {
+        let Ok((_, _, _, _, computed)) = displays.get(cam.0) else {
             commands.entity(entity).despawn();
             continue;
         };
@@ -1453,6 +1689,26 @@ mod tests {
             "{}",
             glow.source
         );
+        // And exactly the contract's one vertex entry point, so `specialize`
+        // can point the vertex stage at the same composed shader.
+        assert_eq!(
+            count_entry_points(&glow.source, "@vertex"),
+            1,
+            "{}",
+            glow.source
+        );
+    }
+
+    /// An author fragment smuggling its own `@vertex` entry point would
+    /// collide with the common contract's — a naga redefinition error at
+    /// render time. Registration catches it instead.
+    #[test]
+    #[should_panic(expected = "exactly one @vertex")]
+    fn fragment_with_its_own_vertex_entry_point_panics_at_registration() {
+        LayerEffects::default().register(LayerEffect::new("sneaky").fragment_wgsl(
+            "@vertex\nfn my_vertex() -> @builtin(position) vec4<f32> { return vec4<f32>(0.0); }\n\
+             @fragment\nfn fragment(in: UiVertexOutput) -> @location(0) vec4<f32> { return vec4<f32>(1.0); }\n",
+        ));
     }
 
     /// `ensure_shader` mints the shader asset once (same handle on repeat
@@ -1607,6 +1863,279 @@ mod tests {
             LayerUniformValue::Hex("notacolor".into()).resolve(UniformKind::Color),
             None,
             "unparseable hex"
+        );
+    }
+
+    // --- <layer> 3D transform: wire decode + matrix composition ---------------
+
+    /// Apply `m` to the point `(x, y, z)` with the perspective divide — the
+    /// observable the composition tests assert on (screen positions, not raw
+    /// matrix cells).
+    fn project(m: &Mat4, x: f32, y: f32, z: f32) -> Vec3 {
+        let v = *m * Vec4::new(x, y, z, 1.0);
+        assert!(v.w > 0.0, "point must project in front of the eye: {v:?}");
+        v.truncate() / v.w
+    }
+
+    /// `LayerTransformSpec` decodes camelCase wire fields (angles in DEGREES,
+    /// lengths in logical px) and ignores unknown keys — the same tolerance as
+    /// `Style`'s other struct-shaped fields (no `deny_unknown_fields`).
+    #[test]
+    fn transform_spec_decodes_camel_case_and_ignores_unknown_keys() {
+        let spec: LayerTransformSpec = serde_json::from_str(
+            r#"{ "perspective": 500, "translateX": 1, "translateY": 2, "translateZ": 3,
+                 "rotateX": 10, "rotateY": 20, "rotateZ": 30,
+                 "scale": 2, "scaleX": 3, "scaleY": 4 }"#,
+        )
+        .expect("full spec decodes");
+        assert_eq!(spec.perspective, Some(500.0));
+        assert_eq!(spec.translate_x, Some(1.0));
+        assert_eq!(spec.translate_y, Some(2.0));
+        assert_eq!(spec.translate_z, Some(3.0));
+        assert_eq!(spec.rotate_x, Some(10.0));
+        assert_eq!(spec.rotate_y, Some(20.0));
+        assert_eq!(spec.rotate_z, Some(30.0));
+        assert_eq!(spec.scale, Some(2.0));
+        assert_eq!(spec.scale_x, Some(3.0));
+        assert_eq!(spec.scale_y, Some(4.0));
+        assert!(!spec.is_identity());
+
+        // Unknown keys are ignored (`rotate` belongs to the 2D `transform`
+        // path, `bogus` to nobody) — the spec decodes to identity.
+        let spec: LayerTransformSpec =
+            serde_json::from_str(r#"{ "rotate": 45, "bogus": true }"#).expect("tolerant decode");
+        assert!(
+            spec.is_identity(),
+            "unknown keys decode to the identity spec"
+        );
+    }
+
+    /// The all-`None` spec is the identity: `is_identity` short-circuits and
+    /// the composed matrix is exactly `Mat4::IDENTITY` (no float drift from a
+    /// needless T(center)·…·T(-center) round trip).
+    #[test]
+    fn identity_spec_composes_to_identity() {
+        let spec = LayerTransformSpec::default();
+        assert!(spec.is_identity());
+        assert_eq!(
+            compose_transform(&spec, Vec2::new(200.0, 100.0)),
+            Mat4::IDENTITY
+        );
+    }
+
+    /// `rotateZ: 90` in y-down UI space is a quarter turn CLOCKWISE on screen
+    /// (the CSS convention), about the box center: on a 200x100 box the
+    /// top-right corner swings to the lower right, the top-left corner to the
+    /// upper right.
+    #[test]
+    fn rotate_z_90_rotates_corners_clockwise_about_the_center() {
+        let spec: LayerTransformSpec = serde_json::from_str(r#"{ "rotateZ": 90 }"#).unwrap();
+        let m = compose_transform(&spec, Vec2::new(200.0, 100.0));
+        // The center is fixed.
+        assert!(
+            project(&m, 100.0, 50.0, 0.0).abs_diff_eq(Vec3::new(100.0, 50.0, 0.0), 1e-3),
+            "center stays put"
+        );
+        // Top-right (200, 0): offset (+100, -50) → (+50, +100) → (150, 150).
+        assert!(
+            project(&m, 200.0, 0.0, 0.0).abs_diff_eq(Vec3::new(150.0, 150.0, 0.0), 1e-3),
+            "top-right swings below the center (clockwise, y-down)"
+        );
+        // Top-left (0, 0): offset (-100, -50) → (+50, -100) → (150, -50).
+        assert!(
+            project(&m, 0.0, 0.0, 0.0).abs_diff_eq(Vec3::new(150.0, -50.0, 0.0), 1e-3),
+            "top-left swings above the center"
+        );
+    }
+
+    /// `rotateY: 90` swings the box edge-on: the right-mid point's x collapses
+    /// onto the center line, and its z goes NEGATIVE — the right edge moves
+    /// AWAY from the viewer under a positive rotateY (CSS convention; +z is
+    /// toward the viewer).
+    #[test]
+    fn rotate_y_90_collapses_width_onto_the_center_line() {
+        let spec: LayerTransformSpec = serde_json::from_str(r#"{ "rotateY": 90 }"#).unwrap();
+        let m = compose_transform(&spec, Vec2::new(200.0, 100.0));
+        let right_mid = project(&m, 200.0, 50.0, 0.0);
+        assert!(
+            (right_mid.x - 100.0).abs() < 1e-3,
+            "width collapses onto center x: {right_mid:?}"
+        );
+        assert!((right_mid.y - 50.0).abs() < 1e-3, "y untouched by rotateY");
+        assert!(
+            right_mid.z < -99.0,
+            "the right edge recedes (negative z = away from the viewer): {right_mid:?}"
+        );
+    }
+
+    /// `rotateX: 90` swings the box edge-on the other way: the top-mid
+    /// point's y collapses onto the center line and its z goes NEGATIVE —
+    /// the top edge tips AWAY from the viewer under a positive rotateX
+    /// (CSS convention).
+    #[test]
+    fn rotate_x_90_collapses_height_onto_the_center_line() {
+        let spec: LayerTransformSpec = serde_json::from_str(r#"{ "rotateX": 90 }"#).unwrap();
+        let m = compose_transform(&spec, Vec2::new(200.0, 100.0));
+        let top_mid = project(&m, 100.0, 0.0, 0.0);
+        assert!(
+            (top_mid.y - 50.0).abs() < 1e-3,
+            "height collapses onto center y: {top_mid:?}"
+        );
+        assert!(
+            top_mid.z < -49.0,
+            "the top edge recedes (negative z = away from the viewer): {top_mid:?}"
+        );
+    }
+
+    /// A non-positive `perspective` is ignored (CSS requires a positive
+    /// length): alone it composes to the identity, with no z→w coefficient.
+    #[test]
+    fn non_positive_perspective_is_ignored() {
+        let spec: LayerTransformSpec = serde_json::from_str(r#"{ "perspective": -5 }"#).unwrap();
+        let m = compose_transform(&spec, Vec2::new(200.0, 100.0));
+        assert_eq!(m, Mat4::IDENTITY);
+        assert_eq!(m.z_axis.w, 0.0, "no perspective coefficient");
+    }
+
+    /// With `perspective`, a rotateY tilt makes the nearer edge project larger.
+    /// Under a positive rotateY the LEFT edge comes toward the viewer; the raw
+    /// homogeneous w pins the CSS perspective matrix (w' = 1 - z/d): the near
+    /// corner's w < 1 < the far corner's w, and post-divide the near edge spans
+    /// more y than the untransformed box, the far edge less.
+    #[test]
+    fn perspective_rotate_y_enlarges_the_near_edge() {
+        let spec: LayerTransformSpec =
+            serde_json::from_str(r#"{ "perspective": 500, "rotateY": 60 }"#).unwrap();
+        let m = compose_transform(&spec, Vec2::new(200.0, 100.0));
+
+        // Raw homogeneous w, no divide: near (left) vs far (right) corner.
+        let w_of = |x: f32| (m * Vec4::new(x, 0.0, 0.0, 1.0)).w;
+        let (near, far) = (w_of(0.0), w_of(200.0));
+        assert!(
+            near < 1.0 && far > 1.0,
+            "CSS perspective (w' = 1 - z/d): near w {near} < 1 < far w {far}"
+        );
+
+        // Post-divide: the near edge appears larger (bigger y spread).
+        let near_spread = project(&m, 0.0, 100.0, 0.0).y - project(&m, 0.0, 0.0, 0.0).y;
+        let far_spread = project(&m, 200.0, 100.0, 0.0).y - project(&m, 200.0, 0.0, 0.0).y;
+        assert!(
+            near_spread > 100.0 && far_spread < 100.0,
+            "near edge grows ({near_spread}), far edge shrinks ({far_spread})"
+        );
+    }
+
+    /// `scale` is about the center (the center is fixed, corners move out);
+    /// `scaleX`/`scaleY` override the uniform factor per axis.
+    #[test]
+    fn scale_about_center_keeps_the_center_fixed() {
+        let spec: LayerTransformSpec = serde_json::from_str(r#"{ "scale": 2 }"#).unwrap();
+        let m = compose_transform(&spec, Vec2::new(200.0, 100.0));
+        assert!(
+            project(&m, 100.0, 50.0, 0.0).abs_diff_eq(Vec3::new(100.0, 50.0, 0.0), 1e-3),
+            "center fixed under scale"
+        );
+        assert!(
+            project(&m, 0.0, 0.0, 0.0).abs_diff_eq(Vec3::new(-100.0, -50.0, 0.0), 1e-3),
+            "corners move out from the center"
+        );
+
+        let spec: LayerTransformSpec =
+            serde_json::from_str(r#"{ "scale": 2, "scaleX": 0.5 }"#).unwrap();
+        let m = compose_transform(&spec, Vec2::new(200.0, 100.0));
+        assert!(
+            project(&m, 0.0, 0.0, 0.0).abs_diff_eq(Vec3::new(50.0, -50.0, 0.0), 1e-3),
+            "scaleX overrides the uniform factor on x only"
+        );
+    }
+
+    /// The fixed application order is CSS-like (`perspective → translate →
+    /// rotateX → rotateY → rotateZ → scale`, innermost-last): `translate`
+    /// composes OUTSIDE the rotations, so a translateX shifts the rotated box
+    /// along screen x — the offset itself is never rotated.
+    #[test]
+    fn translate_composes_outside_rotation() {
+        let spec: LayerTransformSpec =
+            serde_json::from_str(r#"{ "translateX": 10, "rotateZ": 90 }"#).unwrap();
+        let m = compose_transform(&spec, Vec2::new(200.0, 100.0));
+        // Rotation fixes the center; the translate then shifts it along
+        // screen x by exactly +10 (an inside-the-rotation translate would
+        // shift it along screen y instead).
+        assert!(
+            project(&m, 100.0, 50.0, 0.0).abs_diff_eq(Vec3::new(110.0, 50.0, 0.0), 1e-3),
+            "translate is applied in the unrotated (screen) frame"
+        );
+    }
+
+    /// The WGSL `LayerParams` mirror carries `transform` FIRST, then the
+    /// params array, then `misc` — and the Rust-side uniform layout agrees:
+    /// mat4 at offset 0 (64 bytes), `params` at 64 (16 vec4s, 256 bytes),
+    /// `misc` at 320, 336 bytes total. The default is the identity matrix
+    /// under a group alpha of 1. (The vertex shader consuming `transform`
+    /// lands in Task 2.2.)
+    #[test]
+    fn wgsl_mirror_pins_layer_packed_layout() {
+        let (common, _) = split_layer_wgsl();
+        let transform_at = common
+            .find("transform: mat4x4<f32>")
+            .expect("LayerParams declares transform");
+        let params_at = common
+            .find(&format!(
+                "params: array<vec4<f32>, {MAX_LAYER_UNIFORM_VEC4S}>"
+            ))
+            .expect("LayerParams declares the packed params array");
+        let misc_at = common
+            .find("misc: vec4<f32>")
+            .expect("LayerParams declares misc");
+        assert!(
+            transform_at < params_at && params_at < misc_at,
+            "field order must be transform → params → misc"
+        );
+        assert_eq!(
+            <LayerPacked as ShaderType>::min_size().get(),
+            336,
+            "mat4 (64) + 16 vec4s (256) + misc (16)"
+        );
+        let default = LayerPacked::default();
+        assert_eq!(default.transform, Mat4::IDENTITY);
+        assert_eq!(default.misc.x, 1.0, "group alpha defaults fully visible");
+        assert_eq!(default.misc.y, 1.0, "scale factor defaults to 1");
+        assert_eq!(
+            default.misc.z, 0.0,
+            "transform flag defaults OFF (bit-exact default vertex path)"
+        );
+    }
+
+    /// The common contract carries exactly one vertex entry point (the
+    /// projective `transform3d` vertex shader every composed effect pipeline
+    /// runs) and the view uniform it needs — and the entry-point guard's
+    /// comment-stripping scan agrees.
+    #[test]
+    fn common_contract_carries_the_projective_vertex_entry_point() {
+        let (common, _) = split_layer_wgsl();
+        assert_eq!(
+            count_entry_points(common, "@vertex"),
+            1,
+            "exactly one vertex entry point in the contract"
+        );
+        assert_eq!(
+            count_entry_points(common, "@fragment"),
+            0,
+            "the contract contributes no fragment entry point"
+        );
+        assert!(
+            common.contains("var<uniform> view: View"),
+            "the vertex stage reads the view uniform:\n{common}"
+        );
+        assert!(
+            common.contains("material.transform"),
+            "the vertex stage consumes the uploaded matrix:\n{common}"
+        );
+        // The NAME is load-bearing: `specialize` swaps only `vertex.shader`,
+        // leaving the pipeline's entry_point ("vertex") untouched.
+        assert!(
+            common.contains("fn vertex("),
+            "the vertex entry point must be named `vertex`:\n{common}"
         );
     }
 
@@ -1908,12 +2437,15 @@ mod tests {
             bind_group_data: LayerKey { shader },
         };
 
-        // A real composed-shader handle: premultiplied blend + shader swap.
+        // A real composed-shader handle: premultiplied blend + BOTH stages
+        // swapped to the composed shader (it carries the contract's projective
+        // vertex entry point alongside the effect's fragment).
         let effect_shader = Handle::<Shader>::Uuid(
             bevy::asset::uuid::Uuid::from_u128(7),
             std::marker::PhantomData,
         );
         let mut with_effect = descriptor();
+        let default_vertex_shader = with_effect.vertex.shader.clone();
         LayerMaterial::specialize(&mut with_effect, key(effect_shader.clone()));
         let fragment = with_effect.fragment.as_ref().unwrap();
         assert_eq!(
@@ -1922,8 +2454,13 @@ mod tests {
             "composite must blend premultiplied"
         );
         assert_eq!(fragment.shader, effect_shader, "effect shader swapped in");
+        assert_eq!(
+            with_effect.vertex.shader, effect_shader,
+            "the vertex stage runs the same composed shader (transform3d)"
+        );
 
-        // The default-handle fallback: blend still overridden, shader kept.
+        // The default-handle fallback: blend still overridden, both stages'
+        // shaders kept (pipeline defaults; this path never actually renders).
         let mut fallback = descriptor();
         let original_shader = fallback.fragment.as_ref().unwrap().shader.clone();
         LayerMaterial::specialize(&mut fallback, key(Handle::default()));
@@ -1936,6 +2473,10 @@ mod tests {
         assert_eq!(
             fragment.shader, original_shader,
             "a default handle must not replace the embedded fallback shader"
+        );
+        assert_eq!(
+            fallback.vertex.shader, default_vertex_shader,
+            "a default handle must not replace the pipeline's vertex shader"
         );
     }
 
@@ -2044,6 +2585,150 @@ mod tests {
             material_of(&app, display).packed.misc.x,
             1.0,
             "unset opacity falls back to a group alpha of 1.0"
+        );
+    }
+
+    /// `drive_layers` owns the 3D transform: it composes the retained
+    /// `style.transform3d` against the display's current LOGICAL size into
+    /// `packed.transform` (uploaded; the consuming vertex shader is Task 2.2)
+    /// and mirrors the same matrix on the display entity as
+    /// [`LayerTransform`] (Task 2.3's input inversion reads it). Identity
+    /// while unset or pre-layout; compare-before-write — an identical frame
+    /// must not re-mutate the material asset.
+    #[test]
+    fn layer_transform3d_drives_material_and_component() {
+        #[derive(Resource, Default)]
+        struct ModifiedMaterials(usize);
+        fn count_modified(
+            mut reader: MessageReader<AssetEvent<LayerMaterial>>,
+            mut count: ResMut<ModifiedMaterials>,
+        ) {
+            for ev in reader.read() {
+                if matches!(ev, AssetEvent::Modified { .. }) {
+                    count.0 += 1;
+                }
+            }
+        }
+
+        let (mut app, tx) = systems_app();
+        app.init_resource::<ModifiedMaterials>();
+        app.add_systems(Update, count_modified.after(drive_layers));
+        tx.send(vec![
+            create_layer(
+                1,
+                serde_json::json!({ "style": { "transform3d": { "rotateZ": 90 } } }),
+            ),
+            append(ROOT_ID, 1),
+        ])
+        .unwrap();
+        app.update();
+
+        // Pre-layout (no box yet): the transform stays identity and the
+        // shader-side enable flag stays off.
+        let display = ent(&app, 1);
+        assert_eq!(
+            material_of(&app, display).packed.transform,
+            Mat4::IDENTITY,
+            "no layout yet → identity"
+        );
+        assert_eq!(
+            material_of(&app, display).packed.misc.z,
+            0.0,
+            "identity → the vertex shader's transform flag stays off"
+        );
+
+        // Lay out at physical 400x200 under a 2x scale factor: the matrix is
+        // composed against the LOGICAL 200x100 box.
+        stamp_size_scaled(&mut app, display, 400.0, 200.0, 0.5);
+        app.update();
+        let spec: LayerTransformSpec = serde_json::from_str(r#"{ "rotateZ": 90 }"#).unwrap();
+        let expected = compose_transform(&spec, Vec2::new(200.0, 100.0));
+        assert_ne!(expected, Mat4::IDENTITY);
+        assert_eq!(
+            material_of(&app, display).packed.transform,
+            expected,
+            "packed.transform composes from retained style + logical size"
+        );
+        assert_eq!(
+            material_of(&app, display).packed.misc.y,
+            2.0,
+            "misc.y carries the display's scale factor (physical per logical)"
+        );
+        assert_eq!(
+            material_of(&app, display).packed.misc.z,
+            1.0,
+            "a real transform raises the vertex shader's enable flag"
+        );
+        assert_eq!(
+            app.world()
+                .entity(display)
+                .get::<LayerTransform>()
+                .map(|t| t.0),
+            Some(expected),
+            "the display mirrors the composed matrix as LayerTransform"
+        );
+
+        // Settle, then verify an identical frame leaves the asset untouched.
+        app.update();
+        app.update();
+        let settled = app.world().resource::<ModifiedMaterials>().0;
+        app.update();
+        assert_eq!(
+            app.world().resource::<ModifiedMaterials>().0,
+            settled,
+            "an identical frame must not re-mutate the material asset"
+        );
+
+        // Unsetting transform3d resets both to identity.
+        tx.send(vec![Op::Update {
+            id: 1,
+            props: Props::default(),
+            unset: vec![],
+            style_unset: vec!["transform3d".into()],
+        }])
+        .unwrap();
+        app.update();
+        assert_eq!(
+            material_of(&app, display).packed.transform,
+            Mat4::IDENTITY,
+            "unset transform3d falls back to identity"
+        );
+        assert_eq!(
+            material_of(&app, display).packed.misc.z,
+            0.0,
+            "unset transform3d drops the enable flag (bit-exact default path)"
+        );
+        assert_eq!(
+            app.world()
+                .entity(display)
+                .get::<LayerTransform>()
+                .map(|t| t.0),
+            Some(Mat4::IDENTITY),
+            "the mirrored component resets too"
+        );
+    }
+
+    /// A degenerate `ComputedNode.inverse_scale_factor` of zero (or negative)
+    /// must not divide through to `misc.y` — the scale falls back to `1.0`
+    /// (matching the shader's own `max(k, 1e-6)` guard on its side).
+    #[test]
+    fn zero_inverse_scale_factor_falls_back_to_scale_one() {
+        let (mut app, tx) = systems_app();
+        tx.send(vec![
+            create_layer(1, serde_json::json!({})),
+            append(ROOT_ID, 1),
+        ])
+        .unwrap();
+        app.update();
+
+        let display = ent(&app, 1);
+        stamp_size_scaled(&mut app, display, 200.0, 100.0, 0.0);
+        app.update();
+
+        assert_eq!(
+            material_of(&app, display).packed.misc.y,
+            1.0,
+            "zero inverse_scale_factor must not produce an infinite scale"
         );
     }
 

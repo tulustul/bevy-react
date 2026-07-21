@@ -331,7 +331,9 @@ export function Layer<E extends keyof LayerEffects>(
 
 ### Task 2.1: Transform wire type + matrix composition
 
-**Files:** `crates/core/src/layer.rs`, `crates/core/src/protocol.rs` (style row `(transform, "transform", (LAYER), overlay)`), `js/src/jsx.d.ts`
+**Files:** `crates/core/src/layer.rs`, `crates/core/src/protocol.rs` (style row `(transform3d, "transform3d", (LAYER), overlay)`), `js/src/jsx.d.ts`
+
+- **AMENDMENT (found during execution):** the wire/style name is **`transform3d`**, not `transform` — `Style.transform` already exists as the 2D `UiTransform` path (with CSS-transition semantics) and is inherited by `BevyLayerStyle`. User-confirmed choice; the two fields coexist on a layer (2D transform still moves the display node). Design-doc references to `style.transform` on layers should be read as `transform3d`.
 
 - Wire `LayerTransformSpec`: ordered named ops — decode from an object with fixed application order (document: `perspective` → `translate*` → `rotateX/Y/Z` → `scale*`, CSS-like; degrees for rotations, px for translations).
 - `fn compose(spec, size: Vec2) -> Mat4` about the node center, y-down UI space.
@@ -346,6 +348,8 @@ export function Layer<E extends keyof LayerEffects>(
 - Verification is visual (--shoot with a rotated layer) + one Rust test on the CPU-side matrix (already in 2.1). Add a `--shoot` screenshot to the demo with a static `rotateY: 25` card.
 - Known constraint to verify and document: ancestor `Overflow` clipping scissors the transformed quad (expected, acceptable); the quad may draw outside the layout box (expected).
 
+- **AMENDMENT (found during execution):** the matrix rides to the shader in LOGICAL px, so two `misc` lanes were claimed: `misc.y` = the display's scale factor (physical px per logical px — the shader converts corners logical↔physical around `M`) and `misc.z` = a transform-enabled flag. Flag off ⇒ the shader takes the default UI vertex path **bit-for-bit** (untransformed layers proved pixel-identical to phase 1 by screenshot diff), dodging logical/physical round-trip float drift. The w-fold algebra (`clip = L·vec4(origin·w' + k·p.xy, z·w', w')`, depth unchanged) is documented in `layer.wgsl`. Clip note: bevy_ui clips UI-material quads **on the CPU, pre-transform** (corner positions + UVs shifted in lockstep in `prepare_uimaterial_nodes`), so ancestor clipping trims the layout-space box and the transform then maps the trimmed sub-quad — post-transform pixels are NOT re-scissored (differs from CSS, acceptable; the origin reconstruction is clip-shift-invariant so the math stays exact). Registration now also guards exactly one `@vertex` in composed sources.
+
 ### Task 2.3: `LayerPointer` — inverse-mapped input
 
 **Files:** `crates/core/src/layer.rs` (or `layer/pointer.rs`), `crates/core/src/plugin.rs` (PreUpdate registration `.before(PickingSystems::ProcessInput)`)
@@ -356,7 +360,16 @@ export function Layer<E extends keyof LayerEffects>(
 - Interactive verification: the `verify` skill (xdotool) — hover/click a tilted card in the live demo.
 - Wire `hoverStyle`/`pressStyle` on nodes inside layers: confirm the surface interaction-style path (`apply_surface_interaction_styles`) covers image-target pointers generally, or extend its query — read `collect_surface_*` first; they may only need the layer image added to their target set.
 
-**Checkpoint** — end of phase 2 (demo: tilting interactive card; update demo page + screenshots).
+- **AMENDMENT (found during execution):** shipped as `crates/core/src/layer/pointer.rs` (a submodule of `layer.rs`; re-exported at `layer::{LayerVirtualPointer, init_layer_pointer, drive_layer_pointer}`).
+  - **Inverse math:** the forward map of the z=0 box plane is the 3×3 homography H = M's x/y/w rows × (x, y, w) columns (glam cols 0/1/3, components x/y/w); `H⁻¹·(cursor,1)` recovers `(q,1)/w'`, so the recovered z's SIGN is w''s sign — `≤ 0` = behind the eye. Near-singular guard `|det H| < f32::EPSILON` catches exact edge-on (f32 `cos(90°)` ≈ 4e-8) including the collapsed-center-line cursor.
+  - **Driver:** reads `HoverMap[Mouse]` (one-frame hover lag — the map updates later in `PreUpdate`); hit position comes from the UI backend's normalized `HitData.position`, no window query needed. The `Location` target is the layer CAMERA's `ImageRenderTarget` clone — `NormalizedRenderTarget::Image` equality includes `scale_factor`, so building it by hand with 1.0 would never match a hidpi camera. Positions are texture-LOGICAL px (the backend multiplies by the target scale factor); tested at 2x.
+  - **Nested layers: SINGLE-HOP (v1).** Only window-camera UI lands in `HoverMap[Mouse]`, so the virtual pointer always targets the OUTERMOST layer's texture. An inner display node inside that texture receives its own events (it's an ordinary companion-tree hit) but its interior is non-interactive — chaining needs a pointer per depth, deferred. Guarded by `driver_ignores_non_window_pointer_hover`.
+  - **Collectors generalized, not duplicated:** `collect_surface_*`/`apply_surface_interaction_styles` → `collect_virtual_clicks`/`collect_virtual_pointer_events`/`collect_virtual_hover_events`/`apply_virtual_interaction_styles`, keyed on `PointerId::is_custom()` (any virtual pointer — surface, layer, future); `collect_ui_events` now skips ALL custom pointers. Double-dispatch semantics: the display node's own handlers fire from the WINDOW pointer path (it's a normal node), inner-content handlers from the virtual path — different entities, no duplicate events for one click; a `<layer onClick>` with a button inside fires both on a click over the button (documented, DOM-bubbling-adjacent).
+  - **Bug found by live verification:** a same-frame Press+Release (fast click) left `pressStyle` stuck — `apply_virtual_interaction_styles` processed releases before presses. Fixed (presses first, releases last) + regression test `virtual_same_frame_click_settles_on_hover_style`. Applies to surfaces too.
+  - **E2E (`roundtrip.rs::layer_pointer_click_round_trip`):** FULL headless input chain with real layout + picking — `UiPlugin` + `PickingPlugin`/`InteractionPlugin` + `TransformPlugin` + `CameraPlugin` on `MinimalPlugins`. Three headless traps: `ui_layout_system` silently skips without bevy_text's `FontCx` resource (everything 0×0); `InheritedVisibility` DEFAULTS TO HIDDEN — without `CameraPlugin`'s visibility propagation the picking backend filters every node; no render app runs `camera_system`, so a test system stamps `camera.computed.target_info` from each image target's asset every frame. Window pointer = a spawned `PointerId::Mouse` entity driven by injected `PointerInput` targeting a tall offscreen image (probing-recipe). Clicks the demo's shared-counter button in the FLAT layer, then in the TILTED layer at its forward-projected position (through the live `LayerTransform`).
+  - Demo: 4th Example (`InteractiveTiltDemo`) — the same `TapCard` (counter + `+1` button with hover/press styles + hoverable chips) flat and tilted, one shared counter. `layer_demo_round_trip`'s layer classifier now keys the comparison layer on `opacity: 0.5` specifically.
+
+**Checkpoint** — end of phase 2 (demo: tilting interactive card; update demo page + screenshots). Task 2.3 DONE (verified live via xdotool: flat click → taps 1, tilted click at projected position → taps 2, chip hover ring through the transform).
 
 ---
 

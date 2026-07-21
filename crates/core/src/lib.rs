@@ -84,7 +84,7 @@ pub use canvas::CanvasSurface;
 #[cfg_attr(docsrs, doc(cfg(feature = "devtools")))]
 pub use devtools::DevtoolsConfig;
 pub use event::{ReactEvent, ReactEvents};
-pub use layer::{LayerAppExt, LayerEffect, LayerEffects, UniformKind};
+pub use layer::{LayerAppExt, LayerEffect, LayerEffects, LayerVirtualPointer, UniformKind};
 pub use message::{ReactAppExt, ReactMessage, ReactPayload};
 pub use plugin::{Fonts, PointerCapture, PointerCaptureSet, ReactUiPlugin};
 pub use portal::{

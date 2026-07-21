@@ -238,6 +238,37 @@ test("style.uniforms rides the style diff like any other field", () => {
   assert.deepEqual(removed.styleUnset, ["uniforms"]);
 });
 
+test("style.transform3d rides the style diff like any other field", () => {
+  // A value change arrives as a style delta carrying only `transform3d`.
+  const changed = buildUpdateOp(
+    1,
+    { style: { width: 100, transform3d: { perspective: 500, rotateY: 10 } } },
+    { style: { width: 100, transform3d: { perspective: 500, rotateY: 20 } } },
+  );
+  assert.deepEqual(changed.props.style, {
+    transform3d: { perspective: 500, rotateY: 20 },
+  });
+  assert.equal(changed.styleUnset, undefined);
+
+  // A structurally identical spec produces no op at all.
+  assert.equal(
+    buildUpdateOp(
+      1,
+      { style: { transform3d: { perspective: 500, rotateY: 20 } } },
+      { style: { transform3d: { perspective: 500, rotateY: 20 } } },
+    ),
+    null,
+  );
+
+  // Dropping the field lands in `styleUnset` (reset to the identity matrix).
+  const removed = buildUpdateOp(
+    1,
+    { style: { width: 100, transform3d: { rotateY: 20 } } },
+    { style: { width: 100 } },
+  );
+  assert.deepEqual(removed.styleUnset, ["transform3d"]);
+});
+
 test("a vec uniform in a variant style stays within the depth cap", () => {
   // hoverStyle → uniforms → tint → [1,0,0,1] consumes exactly all four levels
   // of `valuesEqual`'s default depth cap — the deepest structure it admits. If

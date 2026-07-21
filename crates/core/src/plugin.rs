@@ -20,10 +20,10 @@ use crate::message::{ReactAppExt, ReactMessage, ReactRegistry};
 use crate::protocol::{Op, Outbound};
 use crate::reconcile::{
     OpApplyStats, apply_interaction_styles, apply_js_ops, apply_pending_selections,
-    apply_surface_interaction_styles, collect_canvas_resize_events, collect_hover_events,
-    collect_pointer_events, collect_scroll_events, collect_surface_clicks,
-    collect_surface_hover_events, collect_surface_pointer_events, collect_ui_events,
-    on_focus_gained, on_focus_lost, on_text_edit_change, sync_editable_a11y,
+    apply_virtual_interaction_styles, collect_canvas_resize_events, collect_hover_events,
+    collect_pointer_events, collect_scroll_events, collect_ui_events, collect_virtual_clicks,
+    collect_virtual_hover_events, collect_virtual_pointer_events, on_focus_gained, on_focus_lost,
+    on_text_edit_change, sync_editable_a11y,
 };
 use crate::request::{RawRequest, ReactRequestRegistry, RequestReceiver, dispatch_react_requests};
 
@@ -296,20 +296,31 @@ impl Plugin for ReactUiPlugin {
         .init_resource::<crate::portal::RenderTargets>()
         .add_systems(Startup, crate::portal::init_portal_placeholder)
         // The `<surface>` registry (UI subtrees rendered into offscreen textures)
-        // and its single virtual pointer for in-world clicks.
+        // and its single virtual pointer for in-world clicks — plus the
+        // `<layer>` twin that drives clicks inside layer subtrees.
         .init_resource::<crate::surface::Surfaces>()
-        .add_systems(Startup, crate::surface::init_surface_pointer)
+        .add_systems(
+            Startup,
+            (
+                crate::surface::init_surface_pointer,
+                crate::layer::init_layer_pointer,
+            ),
+        )
         .add_systems(Startup, setup)
         .add_systems(
             PreUpdate,
             (dispatch_react_messages, dispatch_react_requests),
         )
-        // Drive the surface virtual pointer (cursor → mesh UV → image render
-        // target) before `bevy_picking` processes inputs, so the offscreen UI is
-        // hit-tested with this frame's cursor.
+        // Drive the virtual pointers before `bevy_picking` processes inputs, so
+        // the offscreen UI is hit-tested with this frame's inputs: the surface
+        // pointer (cursor → mesh UV → image render target) and the layer
+        // pointer (window HoverMap hit → inverse 3D transform → layer texture).
         .add_systems(
             PreUpdate,
-            crate::surface::drive_surface_pointer
+            (
+                crate::surface::drive_surface_pointer,
+                crate::layer::drive_layer_pointer,
+            )
                 .before(bevy::picking::PickingSystems::ProcessInput),
         )
         // Re-filter picking hits against the render-grade inherited clip
@@ -417,14 +428,14 @@ impl Plugin for ReactUiPlugin {
                 // drive the snapshot camera lifecycle.
                 crate::surface::bind_surfaces.after(apply_js_ops),
                 crate::surface::drive_surfaces.after(crate::surface::bind_surfaces),
-                // Surface interaction: turn the virtual pointer's picking events on
-                // the offscreen subtree into `onClick`/`onPointer*` + hover/press
-                // styling. The picking events are produced in `PreUpdate`, so these
-                // read this frame's events.
-                collect_surface_clicks,
-                collect_surface_pointer_events,
-                collect_surface_hover_events,
-                apply_surface_interaction_styles,
+                // Texture-space interaction (`<surface>` + `<layer>`): turn the
+                // virtual pointers' picking events on the offscreen subtrees into
+                // `onClick`/`onPointer*` + hover/press styling. The picking events
+                // are produced in `PreUpdate`, so these read this frame's events.
+                collect_virtual_clicks,
+                collect_virtual_pointer_events,
+                collect_virtual_hover_events,
+                apply_virtual_interaction_styles,
             ),
         );
 

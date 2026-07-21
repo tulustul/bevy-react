@@ -575,6 +575,19 @@ pub struct Style {
     #[serde(default)]
     pub uniforms: Option<crate::layer::LayerUniformMap>,
 
+    /// A `<layer>`'s 3D transform (perspective / translate / rotate / scale,
+    /// CSS-like fixed order), composed about the display box's center against
+    /// its logical size and uploaded to the layer material by
+    /// `layer::drive_layers` (see [`crate::layer::LayerTransformSpec`]).
+    /// Independent of [`transform`](Self::transform) — the 2D `UiTransform`
+    /// path — the two coexist on a layer display node. Unknown keys inside
+    /// the spec are ignored, but a structurally alien member value (a string,
+    /// bool, or object where a number is declared — e.g. `rotateZ: "45deg"`)
+    /// fails the `Style` decode like any other struct-shaped field
+    /// (`scrollbar`/`uniforms` behave identically). Pure-serde, module-owned.
+    #[serde(default)]
+    pub transform3d: Option<crate::layer::LayerTransformSpec>,
+
     // --- text (only meaningful on `<text>` elements/spans) ---
     /// Hex text color.
     #[serde(default)]
@@ -745,6 +758,7 @@ macro_rules! with_style_fields {
             (cursor, "cursor", (CURSOR), overlay),
             (scrollbar, "scrollbar", (SCROLLBAR | LAYOUT), overlay),
             (uniforms, "uniforms", (LAYER), overlay),
+            (transform3d, "transform3d", (LAYER), overlay),
             (
                 transform,
                 "transform",
@@ -3312,26 +3326,60 @@ mod tests {
     }
 
     /// The `<layer>` wire names are pinned through a full `update` op:
-    /// `"effect"` on props, `"uniforms"` inside `style`. The op enum's
-    /// `rename_all` doesn't reach nested/struct-variant fields, so the exact
-    /// wire strings are asserted here rather than derived.
+    /// `"effect"` on props, `"uniforms"` and `"transform3d"` inside `style`
+    /// (with the 3D spec's own camelCase members). The op enum's `rename_all`
+    /// doesn't reach nested/struct-variant fields, so the exact wire strings
+    /// are asserted here rather than derived.
     #[test]
     fn deserializes_layer_update_op_wire_names() {
         let op: Op = serde_json::from_str(
             r##"{"op":"update","id":4,"props":{"effect":"frost",
-                "style":{"uniforms":{"strength":0.5,"tint":"#ff0000ff"}}}}"##,
+                "style":{"uniforms":{"strength":0.5,"tint":"#ff0000ff"},
+                         "transform3d":{"perspective":600,"translateX":4,"rotateY":45}}}}"##,
         )
         .unwrap();
         match op {
             Op::Update { id, props, .. } => {
                 assert_eq!(id, 4);
                 assert_eq!(props.effect.as_deref(), Some("frost"));
-                let uniforms = props.style.unwrap().uniforms.expect("uniforms present");
+                let style = props.style.unwrap();
+                let uniforms = style.uniforms.as_ref().expect("uniforms present");
                 assert!(uniforms.get("strength").is_some());
                 assert!(uniforms.get("tint").is_some());
+                let transform3d = style.transform3d.expect("transform3d present");
+                assert_eq!(transform3d.perspective, Some(600.0));
+                assert_eq!(transform3d.translate_x, Some(4.0));
+                assert_eq!(transform3d.rotate_y, Some(45.0));
             }
             other => panic!("expected update, got {other:?}"),
         }
+    }
+
+    /// A `transform3d` delta dirties exactly the `LAYER` style group — the
+    /// apply path (`drive_layers`) recomposes the layer matrix without any
+    /// other group re-running; the 2D `transform` path is untouched.
+    #[test]
+    fn transform3d_style_field_marks_layer_dirty_group() {
+        let mut cached = Props::default();
+        let (dirty, _) = cached.merge_delta(
+            props(serde_json::json!({ "style": { "transform3d": { "rotateY": 30 } } })),
+            &[],
+            &[],
+        );
+        assert!(cached.style.as_ref().unwrap().transform3d.is_some());
+        assert_eq!(dirty.style, StyleDirty(style_groups::LAYER), "only LAYER");
+    }
+
+    /// `styleUnset: ["transform3d"]` clears the retained spec (back to the
+    /// identity matrix on apply) and re-arms the `LAYER` group.
+    #[test]
+    fn style_unset_transform3d_resets() {
+        let mut cached = props(serde_json::json!({
+            "style": { "transform3d": { "rotateY": 30 } },
+        }));
+        let (dirty, _) = cached.merge_delta(Props::default(), &[], &["transform3d".into()]);
+        assert!(cached.style.as_ref().unwrap().transform3d.is_none());
+        assert!(dirty.style.intersects(style_groups::LAYER));
     }
 
     /// A `uniforms` delta dirties exactly the `LAYER` style group — the apply

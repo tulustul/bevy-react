@@ -235,15 +235,17 @@ pub struct SurfaceVirtualPointer {
 
 /// The mouse buttons forwarded to the virtual pointer, with their picking
 /// analogues — the same left/middle/right set bevy_picking itself forwards for
-/// the window pointer (Back/Forward/Other are ignored there too).
-const FORWARDED_BUTTONS: [(MouseButton, PointerButton); 3] = [
+/// the window pointer (Back/Forward/Other are ignored there too). Shared with
+/// the `<layer>` virtual pointer ([`crate::layer::pointer`]).
+pub(crate) const FORWARDED_BUTTONS: [(MouseButton, PointerButton); 3] = [
     (MouseButton::Left, PointerButton::Primary),
     (MouseButton::Right, PointerButton::Secondary),
     (MouseButton::Middle, PointerButton::Middle),
 ];
 
-/// Index of a forwarded button in [`SurfaceVirtualPointer::pressed`].
-fn button_index(button: PointerButton) -> usize {
+/// Index of a forwarded button in [`SurfaceVirtualPointer::pressed`] (and the
+/// layer pointer's mirror of it).
+pub(crate) fn button_index(button: PointerButton) -> usize {
     match button {
         PointerButton::Primary => 0,
         PointerButton::Secondary => 1,

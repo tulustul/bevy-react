@@ -85,6 +85,7 @@ export const STYLE_FIELDS: Record<string, FieldCategory> = {
   cursor: "keyword",
   scrollbar: "json",
   uniforms: "json", // <layer> effect uniform map
+  transform3d: "json", // <layer> 3D transform spec
   transform: "json",
   opacity: "number",
   transition: "json",

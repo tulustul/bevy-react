@@ -500,6 +500,38 @@ export interface BevyStyle {
  *  a member of this union. */
 export type LayerUniformValue = number | number[] | string;
 
+/** A `<layer>`'s 3D transform. Every op is optional; they apply in a FIXED,
+ *  CSS-like order regardless of key order — `perspective → translate →
+ *  rotateX → rotateY → rotateZ → scale` — about the display box's center, in
+ *  the y-down UI space (z toward the viewer). Angles are DEGREES, lengths
+ *  logical pixels. Sign conventions match CSS: positive `rotateX` tips the
+ *  top edge away from the viewer, positive `rotateY` swings the right edge
+ *  away, positive `rotateZ` turns clockwise on screen. */
+export interface LayerTransform3D {
+  /** CSS-style perspective distance in logical px (smaller = stronger
+   *  foreshortening). Non-positive values are ignored. */
+  perspective?: number;
+  /** Translation along screen x, logical px. */
+  translateX?: number;
+  /** Translation along screen y (positive = down), logical px. */
+  translateY?: number;
+  /** Translation along z (positive = toward the viewer), logical px. Only
+   *  observable under `perspective`. */
+  translateZ?: number;
+  /** Rotation about the x axis, degrees (positive tips the top edge away). */
+  rotateX?: number;
+  /** Rotation about the y axis, degrees (positive swings the right edge away). */
+  rotateY?: number;
+  /** Rotation in the screen plane, degrees (positive = clockwise). */
+  rotateZ?: number;
+  /** Uniform scale (both axes), unless overridden per axis. */
+  scale?: number;
+  /** X-axis scale; overrides `scale` on x. */
+  scaleX?: number;
+  /** Y-axis scale; overrides `scale` on y. */
+  scaleY?: number;
+}
+
 /** A [`BevyStyle`] extended with the `<layer>`-only `uniforms` field. On a
  *  layer, `opacity` means **group** opacity: the subtree is composited to a
  *  texture first, so it fades as one surface (overlapping children never show
@@ -511,6 +543,10 @@ export interface BevyLayerStyle extends BevyStyle {
    *  keep the effect's defaults. Unknown names are flagged by devtools at
    *  runtime. */
   uniforms?: Record<string, LayerUniformValue>;
+  /** The layer's 3D transform (see [`LayerTransform3D`]): perspective /
+   *  translate / rotate / scale about the box center. Independent of the
+   *  inherited 2D `transform` (the `UiTransform` path) — both may be set. */
+  transform3d?: LayerTransform3D;
 }
 
 // TODO(review): the pointer model is bespoke — normalized x/y + clientX/Y and a DOM

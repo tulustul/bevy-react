@@ -1,10 +1,13 @@
 # `<layer>` — subtree-to-texture compositing element
 
-**Status: phase 1 (core composite, effect registry, codegen, demo) implemented and
-reviewed — awaiting user commit. Phases 2-4 (transforms+input, backdrop, animation+ref)
-not started.** Execution amendments (exact texture sizing instead of portal
-quantization, premultiplied-alpha compositing, the stale-bind-group retouch on
-resize) are recorded in the implementation plan.
+**Status: phases 1-2 implemented and reviewed — awaiting user commit. Phase 1:
+core composite, effect registry, codegen, demo. Phase 2: `transform3d` (renamed
+from `transform` — collision with the 2D path), projective vertex shader,
+inverse-mapped pointer input (flat + tilted layers interactive, live-verified).
+Phases 3-4 (backdrop, animation+ref) not started.** Execution amendments (exact
+texture sizing, premultiplied-alpha compositing, stale-bind-group retouch,
+transform3d naming, single-hop nested-input contract, CPU-pre-transform clipping
+semantics) are recorded in the implementation plan.
 
 A `<layer>` renders its React subtree into an offscreen texture and displays that
 texture back inside the UI through a custom-shader material. This unlocks what
