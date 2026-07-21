@@ -44,9 +44,9 @@ use std::fmt::Write as _;
 use bevy::camera::{ImageRenderTarget, RenderTarget as BevyRenderTarget};
 use bevy::prelude::{
     App, Asset, Assets, Camera, Camera2d, ClearColorConfig, Color, ColorToComponents as _,
-    Commands, Component, Entity, Handle, Image, Mat4, MaterialNode, Node, Query, Reflect, Res,
-    ResMut, Resource, UVec2, UiMaterial, UiMaterialKey, UiTargetCamera, Val, Vec2, Vec3, Vec4,
-    Visibility, With, Without, default,
+    Commands, Component, Entity, FromWorld, Handle, Image, Mat4, MaterialNode, Node, Query,
+    Reflect, Res, ResMut, Resource, UVec2, UiMaterial, UiMaterialKey, UiTargetCamera, Val, Vec2,
+    Vec3, Vec4, Visibility, With, Without, default,
 };
 use bevy::render::render_resource::{
     AsBindGroup, Extent3d, RenderPipelineDescriptor, ShaderType, TextureFormat,
@@ -58,6 +58,7 @@ use serde::Deserialize;
 use crate::bridge::{JsBridge, RNode};
 use crate::protocol::NodeId;
 
+pub mod backdrop;
 pub mod pointer;
 pub use pointer::{LayerVirtualPointer, drive_layer_pointer, init_layer_pointer};
 
@@ -330,8 +331,13 @@ impl LayerEffect {
     }
 
     /// Mark the effect as sampling the *backdrop* (what renders behind the
-    /// layer) instead of / in addition to the layer's own subtree. Only stored
-    /// for now; the render plumbing consumes it in a later task.
+    /// UI — the post-processed 3D world) instead of / in addition to the
+    /// layer's own subtree. A live layer on such an effect enables the shared
+    /// capture + blur chain ([`crate::layer::backdrop`]), and the reconciler
+    /// binds the material's backdrop pair to the live capture images instead
+    /// of the transparent dummy; the fragment reads them through the
+    /// contract's `backdrop_uv`/`sample_backdrop`/`sample_backdrop_blurred`
+    /// helpers (see the `"frost"` builtin).
     pub fn backdrop(mut self, backdrop: bool) -> Self {
         self.backdrop = backdrop;
         self
@@ -340,6 +346,12 @@ impl LayerEffect {
     /// Attach the effect's WGSL fragment source (the source text itself, not an
     /// asset path — effects are self-contained Rust definitions, not files the
     /// asset server must locate).
+    ///
+    /// KNOWN LIMIT: a fragment that hand-defines one of the common contract's
+    /// helper *functions* (`u_group_alpha`, `backdrop_uv`, `sample_backdrop`,
+    /// `sample_backdrop_blurred`) is a naga redefinition error at pipeline
+    /// compile — registration can't catch it (only uniform *names* are
+    /// validated, via [`Self::uniform`]'s reserved-name check).
     pub fn fragment_wgsl(mut self, source: impl Into<Cow<'static, str>>) -> Self {
         self.fragment_wgsl = Some(source.into());
         self
@@ -741,6 +753,23 @@ impl Default for LayerPacked {
 /// swaps it into the fragment stage. One bind-group layout thus serves every
 /// effect, and switching effects is a pipeline-key change, not a new material
 /// type.
+///
+/// **Backdrop bindings (3–6).** Every material also binds the backdrop pair —
+/// the shared capture of what renders *behind* the UI (sharp + pre-blurred,
+/// see [`backdrop::BackdropCapture`]) — as two plain texture/sampler pairs.
+/// One layout for every effect means non-backdrop effects bind them too; they
+/// simply get [`LayerAssets::transparent`] (a 1x1 transparent dummy) and never
+/// sample it (naga only errors on *declared-but-missing* bindings, and
+/// `AsBindGroup` always provides all). The reconciler picks dummy vs live
+/// capture handles from the resolved effect's `wants_backdrop` flag, on create
+/// and on every effect swap.
+///
+/// **Enable lag (documented, accepted).** The first frost mount enables the
+/// capture the same frame, but the blit/blur pipelines still compile
+/// asynchronously, so for 1–2 frames the bound capture images read as their
+/// zero-initialized (transparent-black) contents before live backdrop pixels
+/// arrive — a brief dark flash on the very first backdrop layer, gone once
+/// the pipelines are warm (they stay cached for the app's lifetime).
 #[derive(Asset, AsBindGroup, Reflect, Clone)]
 #[bind_group_data(LayerKey)]
 pub struct LayerMaterial {
@@ -751,10 +780,44 @@ pub struct LayerMaterial {
     #[texture(1)]
     #[sampler(2)]
     pub layer: Handle<Image>,
+    /// The sharp backdrop capture ([`backdrop::BackdropCapture::image`]), or
+    /// the transparent dummy when the effect doesn't want the backdrop.
+    #[texture(3)]
+    #[sampler(4)]
+    pub backdrop: Handle<Image>,
+    /// The pre-blurred backdrop ([`backdrop::BackdropCapture::blurred`],
+    /// quarter resolution — the linear sampler upsamples), or the dummy.
+    #[texture(5)]
+    #[sampler(6)]
+    pub backdrop_blurred: Handle<Image>,
     /// The effect's composed fragment shader (from
     /// [`LayerEffects::ensure_shader`]). Not a GPU binding — carried into
     /// [`LayerKey`] and applied by `specialize`.
     pub shader: Handle<Shader>,
+}
+
+/// Shared `<layer>` assets: the 1x1 TRANSPARENT dummy bound as the backdrop
+/// pair of every layer whose effect doesn't want the backdrop (mirroring
+/// [`crate::filter::FilterAssets::white`]). `FromWorld` (not a Startup system)
+/// so test worlds get it from a plain `init_resource` with no ordering to
+/// mind; the plugin inits it under the same asset gate as the layer stores.
+#[derive(Resource, Debug, Clone)]
+pub struct LayerAssets {
+    /// The 1x1 fully-transparent placeholder image.
+    pub transparent: Handle<Image>,
+}
+
+impl FromWorld for LayerAssets {
+    fn from_world(world: &mut bevy::prelude::World) -> Self {
+        let transparent = world.resource_mut::<Assets<Image>>().add(Image::new_fill(
+            Extent3d::default(),
+            bevy::render::render_resource::TextureDimension::D2,
+            &[0, 0, 0, 0],
+            TextureFormat::Rgba8UnormSrgb,
+            bevy::asset::RenderAssetUsages::default(),
+        ));
+        LayerAssets { transparent }
+    }
 }
 
 /// [`LayerMaterial`]'s pipeline-key data: the composed effect shader. Materials
@@ -906,6 +969,19 @@ impl Default for LayerEffects {
                 .uniform("strength", UniformKind::F32, 0.0)
                 .uniform("direction", UniformKind::Vec2, [1.0, 0.0])
                 .fragment_wgsl(include_str!("layer_fx/chromatic.wgsl")),
+        );
+        // Frosted glass over the backdrop (the first backdrop-sampling
+        // builtin — see `layer/backdrop.rs`). `blur` is FROSTINESS (the
+        // sharp↔blurred mix, 0..1), not a pixel radius; `tint` a subtle
+        // straight-alpha white wash; `saturation` a cheap luminance-mix
+        // boost (classic frosted glass pops slightly above 1).
+        effects.register(
+            LayerEffect::new("frost")
+                .backdrop(true)
+                .uniform("blur", UniformKind::F32, 0.7)
+                .uniform("tint", UniformKind::Color, Color::srgba(1.0, 1.0, 1.0, 0.2))
+                .uniform("saturation", UniformKind::F32, 1.1)
+                .fragment_wgsl(include_str!("layer_fx/frost.wgsl")),
         );
         effects
     }
@@ -1622,6 +1698,50 @@ mod tests {
         );
     }
 
+    /// The `"frost"` builtin: the first backdrop-sampling effect. It opts in
+    /// to the backdrop (`wants_backdrop`), declares `blur` (the sharp↔blurred
+    /// MIX — frostiness, not a pixel radius), a subtle white `tint`, and a
+    /// gentle `saturation` boost, and its composed source consumes the
+    /// contract's backdrop helpers.
+    #[test]
+    fn frost_effect_is_registered_by_default_and_wants_backdrop() {
+        let effects = LayerEffects::default();
+        let frost = effects.get("frost").expect("\"frost\" is built in");
+        assert!(frost.wants_backdrop, "frost samples the backdrop");
+
+        let blur = frost.schema.lookup("blur").expect("blur");
+        assert_eq!(blur.kind, UniformKind::F32);
+        assert_eq!(blur.offset, 0);
+        assert_eq!(blur.default[0], 0.7, "frosty by default");
+        let tint = frost.schema.lookup("tint").expect("tint");
+        assert_eq!(tint.kind, UniformKind::Color);
+        assert_eq!(tint.offset, 4, "color starts a fresh vec4 slot");
+        assert_eq!(
+            tint.default,
+            [1.0, 1.0, 1.0, 0.2],
+            "a subtle white wash (white is exact under sRGB→linear)"
+        );
+        let saturation = frost.schema.lookup("saturation").expect("saturation");
+        assert_eq!(saturation.kind, UniformKind::F32);
+        assert_eq!(saturation.offset, 8, "scalar after the color's full slot");
+        assert!((saturation.default[0] - 1.1).abs() < 1e-6);
+
+        // The composed source rides the contract's backdrop helpers and the
+        // generated accessors, and composites the subtree on top.
+        for needle in [
+            "backdrop_uv(",
+            "sample_backdrop(",
+            "sample_backdrop_blurred(",
+            "u_blur()",
+            "u_tint()",
+            "u_saturation()",
+            "u_group_alpha()",
+            "layer_tex",
+        ] {
+            assert!(frost.source.contains(needle), "missing {needle}");
+        }
+    }
+
     /// Registration iterates sorted by name (deterministic — the future codegen
     /// exporter walks it), and re-registering a name is an authoring bug that
     /// panics loudly.
@@ -1635,7 +1755,14 @@ mod tests {
         let names: Vec<&str> = effects.iter().map(|(name, _)| name).collect();
         assert_eq!(
             names,
-            ["alpha", "chromaticAberration", "dissolve", "none", "zeta"],
+            [
+                "alpha",
+                "chromaticAberration",
+                "dissolve",
+                "frost",
+                "none",
+                "zeta"
+            ],
             "iteration sorted by name"
         );
 
@@ -2106,6 +2233,31 @@ mod tests {
         );
     }
 
+    /// The contract's `@group(1)` binding INDICES are pinned to
+    /// [`LayerMaterial`]'s `AsBindGroup` attributes (`uniform(0)`,
+    /// `texture(1)`/`sampler(2)` layer, `texture(3)`/`sampler(4)` backdrop,
+    /// `texture(5)`/`sampler(6)` blurred): the two sides are mirrored by hand,
+    /// and drift would otherwise only surface at GPU pipeline creation.
+    #[test]
+    fn wgsl_mirror_pins_material_binding_indices() {
+        let (common, _) = split_layer_wgsl();
+        for decl in [
+            "@group(1) @binding(0) var<uniform> material: LayerParams;",
+            "@group(1) @binding(1) var layer_tex: texture_2d<f32>;",
+            "@group(1) @binding(2) var layer_smp: sampler;",
+            "@group(1) @binding(3) var backdrop_tex: texture_2d<f32>;",
+            "@group(1) @binding(4) var backdrop_smp: sampler;",
+            "@group(1) @binding(5) var backdrop_blur_tex: texture_2d<f32>;",
+            "@group(1) @binding(6) var backdrop_blur_smp: sampler;",
+        ] {
+            assert!(
+                common.contains(decl),
+                "layer.wgsl's contract must declare exactly {decl:?} — \
+                 keep it in lockstep with LayerMaterial's AsBindGroup attributes"
+            );
+        }
+    }
+
     /// The common contract carries exactly one vertex entry point (the
     /// projective `transform3d` vertex shader every composed effect pipeline
     /// runs) and the view uniform it needs — and the entry-point guard's
@@ -2161,10 +2313,16 @@ mod tests {
         app.init_asset::<crate::filter::FilterMaterial>();
         app.init_resource::<crate::filter::FilterMaterialCache>();
         app.add_systems(Startup, crate::filter::init_filter_assets);
-        // …and the `<layer>` effect registry + material/shader stores.
+        // …and the `<layer>` effect registry + material/shader stores, the
+        // shared layer dummies, and a backdrop capture (so backdrop-sampling
+        // effects bind real capture handles, like a plugin-built app).
         app.init_asset::<LayerMaterial>();
         app.init_asset::<bevy::shader::Shader>();
         app.init_resource::<LayerEffects>();
+        app.init_resource::<LayerAssets>();
+        let capture =
+            backdrop::BackdropCapture::new(&mut app.world_mut().resource_mut::<Assets<Image>>());
+        app.insert_resource(capture);
 
         let (ops_tx, ops_rx) = crossbeam_channel::unbounded::<Vec<Op>>();
         let (out_tx, out_rx) = tokio::sync::mpsc::unbounded_channel::<crate::protocol::Outbound>();
@@ -2311,6 +2469,57 @@ mod tests {
                 .contains(bevy::render::render_resource::TextureUsages::RENDER_ATTACHMENT),
             "the bound texture is a render target, not the blank placeholder"
         );
+    }
+
+    /// The reconciler binds the backdrop pair from the resolved effect's
+    /// `wants_backdrop`: a `"frost"` layer gets the LIVE capture handles
+    /// (sharp + blurred), a non-backdrop layer the shared transparent dummy —
+    /// and an effect swap crossing the boundary swaps the handles BOTH ways.
+    #[test]
+    fn backdrop_handles_follow_the_effect() {
+        let (mut app, tx) = systems_app();
+        tx.send(vec![
+            create_layer(1, serde_json::json!({ "effect": "frost" })),
+            create_layer(2, serde_json::json!({})),
+            append(ROOT_ID, 1),
+            append(ROOT_ID, 2),
+        ])
+        .unwrap();
+        app.update();
+
+        let capture = app.world().resource::<backdrop::BackdropCapture>().clone();
+        let dummy = app.world().resource::<LayerAssets>().transparent.clone();
+        assert_ne!(capture.image, dummy, "sanity: distinct assets");
+
+        // Create arms: frost → capture pair, effect-less ("none") → dummy.
+        let frost_display = ent(&app, 1);
+        let plain_display = ent(&app, 2);
+        let frost_material = material_of(&app, frost_display);
+        assert_eq!(frost_material.backdrop, capture.image);
+        assert_eq!(frost_material.backdrop_blurred, capture.blurred);
+        let plain_material = material_of(&app, plain_display);
+        assert_eq!(plain_material.backdrop, dummy);
+        assert_eq!(plain_material.backdrop_blurred, dummy);
+
+        // Swap frost → none: both handles fall back to the dummy.
+        let update = |effect: &str| Op::Update {
+            id: 1,
+            props: serde_json::from_value(serde_json::json!({ "effect": effect })).unwrap(),
+            unset: vec![],
+            style_unset: vec![],
+        };
+        tx.send(vec![update("none")]).unwrap();
+        app.update();
+        let material = material_of(&app, frost_display);
+        assert_eq!(material.backdrop, dummy, "frost → none unbinds the capture");
+        assert_eq!(material.backdrop_blurred, dummy);
+
+        // Swap none → frost: the capture pair comes back.
+        tx.send(vec![update("frost")]).unwrap();
+        app.update();
+        let material = material_of(&app, frost_display);
+        assert_eq!(material.backdrop, capture.image, "none → frost rebinds");
+        assert_eq!(material.backdrop_blurred, capture.blurred);
     }
 
     /// A `<layer>` nested inside another `<layer>` gets a camera that renders

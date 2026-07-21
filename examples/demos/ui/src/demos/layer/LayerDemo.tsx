@@ -5,17 +5,21 @@ import { Layer } from "@/bevy";
 import { Colors, FontSizes, Gradients } from "@/theme";
 
 // `<layer>` renders its subtree to a texture and re-displays it through an
-// effect shader. Four demos: the group-opacity argument (fade a subtree as
-// ONE image, not node-by-node), the built-in effects driven by declarative
-// `style.uniforms`, static 3D tilts via `style.transform3d`, and pointer
-// input mapped through the inverse transform (the tilted card's button
-// clicks at its projected on-screen position).
+// effect shader. Five demos: frosted glass over the live 3D scene (the
+// backdrop-sampling `"frost"` builtin — first, over the raw viewport), the
+// group-opacity argument (fade a subtree as ONE image, not node-by-node),
+// the built-in effects driven by declarative `style.uniforms`, static 3D
+// tilts via `style.transform3d`, and pointer input mapped through the
+// inverse transform (the tilted card's button clicks at its projected
+// on-screen position). This page runs over the CrowdedCubes scene (see
+// `demos.ts`) so frost has a world to blur.
 //
 // TEST CONTRACT: `roundtrip.rs::layer_demo_round_trip` classifies this page's
-// layer CREATE ops structurally — `effect="dissolve"` marks the effects
-// panel, effect-less + `transform3d` marks a tilt card, the effect-less one
-// PINNED at `opacity: 0.5` is the comparison layer, and any other effect-less
-// untransformed layer is an interactive (tap) layer.
+// layer CREATE ops structurally — `effect="frost"` marks the frost panel
+// (initial `blur: 0.75` is a test key), `effect="dissolve"` marks the
+// effects panel, effect-less + `transform3d` marks a tilt card, the
+// effect-less one PINNED at `opacity: 0.5` is the comparison layer, and any
+// other effect-less untransformed layer is an interactive (tap) layer.
 // `roundtrip.rs::layer_pointer_click_round_trip` additionally clicks the two
 // TapCard `+1` buttons (flat + tilted, shared counter shown as `taps N`).
 // Those props/labels are test keys: changing them (or the initial dissolve
@@ -23,6 +27,8 @@ import { Colors, FontSizes, Gradients } from "@/theme";
 export function LayerDemo() {
   return (
     <>
+      <FrostShowcase />
+
       <Example
         description={
           "opacity on a <layer> fades the whole subtree as one image: where " +
@@ -84,6 +90,56 @@ export function LayerDemo() {
       </Example>
     </>
   );
+}
+
+// ---- frosted glass over the backdrop (the "frost" builtin) -----------------
+
+// Deliberately NOT wrapped in the opaque <Example> card: the frost effect
+// samples the BACKDROP — what renders behind the whole UI (the 3D scene) —
+// so the panel floats over the transparent viewport where the world is
+// directly behind it. V1 semantic (by design): sibling UI drawn behind the
+// panel is NOT frosted; only the world is.
+function FrostShowcase() {
+  const [blur, setBlur] = useState(0.75);
+  const [tint, setTint] = useState(0.12);
+  return (
+    <node style={frostColumn}>
+      <Layer
+        effect="frost"
+        style={{ ...frostPanel, uniforms: { blur, tint: whiteTint(tint) } }}
+      >
+        <text style={frostTitle}>frosted glass</text>
+        <text style={frostNote}>
+          {'effect="frost" blurs the 3D world behind the panel'}
+        </text>
+      </Layer>
+      <node style={frostControls}>
+        <Slider
+          value={blur}
+          onChange={setBlur}
+          label={`blur (frostiness) ${blur.toFixed(2)}`}
+        />
+        <Slider
+          value={tint}
+          max={0.8}
+          onChange={setTint}
+          label={`tint ${tint.toFixed(2)}`}
+        />
+      </node>
+      <text style={caption}>
+        backdrop = the world only — sibling UI cards behind the panel are not
+        frosted (v1)
+      </text>
+    </node>
+  );
+}
+
+/** A white `tint` uniform hex (`#ffffffAA`) from a 0..1 wash strength. */
+function whiteTint(alpha: number): string {
+  const a = Math.round(Math.min(Math.max(alpha, 0), 1) * 255)
+    .toString(16)
+    .padStart(2, "0");
+  return `#ffffff${a}`;
 }
 
 // ---- group opacity vs per-node opacity -------------------------------------
@@ -340,6 +396,44 @@ function InteractiveTiltDemo() {
 }
 
 // ---- styles -----------------------------------------------------------------
+
+// Pushed down from the page top so the glass hangs over the cube field
+// (the scene's upper region is featureless — nothing to visibly blur).
+const frostColumn: BevyStyle = {
+  flexDirection: "column",
+  alignItems: "center",
+  gap: 14,
+  margin: { top: 130 },
+};
+
+// The glass itself, content centered. No backgroundColor — the frost
+// fragment paints the (tinted, blurred) backdrop; a background would draw
+// separate chrome under the composite. No borderRadius either: the material
+// fragment covers the full quad (effects don't apply the radius SDF).
+const frostPanel: BevyStyle = {
+  width: 460,
+  height: 240,
+  flexDirection: "column",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: 8,
+};
+
+const frostTitle: BevyStyle = {
+  color: Colors.textColor400,
+  fontSize: FontSizes.lg,
+  fontWeight: "bold",
+};
+
+const frostNote: BevyStyle = {
+  color: Colors.textColor100,
+  fontSize: FontSizes.xs,
+};
+
+const frostControls: BevyStyle = {
+  flexDirection: "row",
+  gap: 16,
+};
 
 const compareColumn: BevyStyle = {
   flexDirection: "column",

@@ -119,6 +119,16 @@ export interface DissolveUniforms {
   softness?: number;
 }
 
+/** Uniforms for the "frost" `<layer>` effect. */
+export interface FrostUniforms {
+  /** `f32` — default `0.7`. */
+  blur?: number;
+  /** Color, as a CSS color string — default linear RGBA `[1.0, 1.0, 1.0, 0.2]`. */
+  tint?: string;
+  /** `f32` — default `1.1`. */
+  saturation?: number;
+}
+
 /** Uniforms for the "none" `<layer>` effect (declares none). */
 export type NoneUniforms = Record<string, never>;
 
@@ -126,6 +136,7 @@ export type NoneUniforms = Record<string, never>;
 export interface LayerEffects {
   chromaticAberration: ChromaticAberrationUniforms;
   dissolve: DissolveUniforms;
+  frost: FrostUniforms;
   none: NoneUniforms;
 }
 
@@ -137,6 +148,7 @@ export type AssertLayerUniformsCompat<
 export type LayerUniformsCompat = [
   AssertLayerUniformsCompat<{ [K in keyof ChromaticAberrationUniforms]: ChromaticAberrationUniforms[K] }>,
   AssertLayerUniformsCompat<{ [K in keyof DissolveUniforms]: DissolveUniforms[K] }>,
+  AssertLayerUniformsCompat<{ [K in keyof FrostUniforms]: FrostUniforms[K] }>,
   AssertLayerUniformsCompat<{ [K in keyof NoneUniforms]: NoneUniforms[K] }>,
 ];
 

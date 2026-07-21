@@ -28,7 +28,10 @@ use crate::bridge::{
     ScrollStep, SpanKind, StyleVariants, WheelListener,
 };
 use crate::filter::{FilterAssets, FilterMaterial, FilterMaterialCache, filter_material};
-use crate::layer::{LayerEffects, LayerMaterial, LayerPacked, LayerRoot, RLayer, pack_uniforms};
+use crate::layer::backdrop::BackdropCapture;
+use crate::layer::{
+    LayerAssets, LayerEffects, LayerMaterial, LayerPacked, LayerRoot, RLayer, pack_uniforms,
+};
 use crate::plugin::Fonts;
 use crate::protocol::{NodeId, Op, Outbound, Props, ROOT_ID, Style, UiEvent};
 use crate::transition::{ScrollTransitionState, apply_scroll_transition};
@@ -147,6 +150,13 @@ pub struct UiAssets<'w, 's> {
     /// mints composed shaders lazily ([`LayerEffects::ensure_shader`]).
     layer_effects: ResMut<'w, LayerEffects>,
     layer_materials: ResMut<'w, Assets<LayerMaterial>>,
+    /// The shared `<layer>` dummies — the transparent backdrop placeholder
+    /// bound when an effect doesn't sample the backdrop.
+    layer_assets: Res<'w, LayerAssets>,
+    /// The live backdrop capture (sharp + blurred), bound when an effect
+    /// does. `Option`: the backdrop plugin is asset-gated, and a bare test
+    /// world without it simply binds the dummy.
+    backdrop: Option<Res<'w, BackdropCapture>>,
     shaders: ResMut<'w, Assets<bevy::shader::Shader>>,
     /// A `<layer>` display node's material handle + resolved effect, for the
     /// update path (re-pack uniforms / swap the effect shader in place).
@@ -420,6 +430,7 @@ pub fn apply_js_ops(
                         if let Some(map) = props.style.as_ref().and_then(|s| s.uniforms.as_ref()) {
                             pack_uniforms(schema, map, &mut params);
                         }
+                        let (backdrop, backdrop_blurred) = backdrop_pair(&ui_assets, &effect);
                         let material = ui_assets.layer_materials.add(LayerMaterial {
                             // Group alpha defaults to 1.0 (`LayerPacked::default`).
                             packed: LayerPacked {
@@ -427,6 +438,8 @@ pub fn apply_js_ops(
                                 ..Default::default()
                             },
                             layer: images.add(blank_portal_image()),
+                            backdrop,
+                            backdrop_blurred,
                             shader,
                         });
                         // Companion first (empty), so the display's `RLayer` can
@@ -954,15 +967,24 @@ pub fn apply_js_ops(
                         if let Some(map) = props.style.as_ref().and_then(|s| s.uniforms.as_ref()) {
                             pack_uniforms(schema, map, &mut params);
                         }
+                        // An effect swap can also cross the backdrop boundary
+                        // (frost → none and back): re-derive the backdrop pair
+                        // so the material binds the live capture exactly when
+                        // the (new) effect samples it, the dummy otherwise.
+                        let (backdrop, blurred) = backdrop_pair(&ui_assets, &effect);
                         let handle = mat_node.0.clone();
-                        let changed = ui_assets
-                            .layer_materials
-                            .get(&handle)
-                            .is_some_and(|m| m.shader != shader || m.packed.params != params);
+                        let changed = ui_assets.layer_materials.get(&handle).is_some_and(|m| {
+                            m.shader != shader
+                                || m.packed.params != params
+                                || m.backdrop != backdrop
+                                || m.backdrop_blurred != blurred
+                        });
                         if changed && let Some(mut mat) = ui_assets.layer_materials.get_mut(&handle)
                         {
                             mat.shader = shader;
                             mat.packed.params = params;
+                            mat.backdrop = backdrop;
+                            mat.backdrop_blurred = blurred;
                         }
                         if dirty.effect && rlayer.effect != effect {
                             ec.insert(RLayer {
@@ -1218,6 +1240,28 @@ fn resolve_layer_effect(effects: &LayerEffects, requested: Option<&str>) -> Stri
             &format!("unknown layer effect \"{name}\" — falling back to \"none\""),
         );
         "none".to_owned()
+    }
+}
+
+/// The backdrop texture pair a `<layer>` material binds for the (resolved)
+/// `effect`: the live capture images (sharp + blurred) when the effect is
+/// registered with `wants_backdrop` and a capture exists, the shared 1x1
+/// transparent dummy otherwise. Called by the create arm AND the effect-swap
+/// arm, so crossing the backdrop boundary in either direction swaps the
+/// handles. The capture handles are stable for the app's lifetime (see
+/// [`BackdropCapture`]), so a bound material never needs rebinding on
+/// resize/enable churn.
+fn backdrop_pair(ui_assets: &UiAssets, effect: &str) -> (Handle<Image>, Handle<Image>) {
+    let wants = ui_assets
+        .layer_effects
+        .get(effect)
+        .is_some_and(|e| e.wants_backdrop);
+    match ui_assets.backdrop.as_ref() {
+        Some(capture) if wants => (capture.image.clone(), capture.blurred.clone()),
+        _ => (
+            ui_assets.layer_assets.transparent.clone(),
+            ui_assets.layer_assets.transparent.clone(),
+        ),
     }
 }
 
@@ -2528,10 +2572,12 @@ mod tests {
         app.init_asset::<FilterMaterial>();
         app.init_resource::<FilterMaterialCache>();
         app.add_systems(Startup, crate::filter::init_filter_assets);
-        // …and the `<layer>` effect registry + material/shader stores.
+        // …and the `<layer>` effect registry + material/shader stores +
+        // shared dummies (`apply_js_ops` hard-requires `LayerAssets`).
         app.init_asset::<LayerMaterial>();
         app.init_asset::<bevy::shader::Shader>();
         app.init_resource::<LayerEffects>();
+        app.init_resource::<LayerAssets>();
 
         let (ops_tx, ops_rx) = crossbeam_channel::unbounded::<Vec<Op>>();
         let (out_tx, out_rx) = tokio::sync::mpsc::unbounded_channel::<Outbound>();
@@ -3166,10 +3212,12 @@ mod tests {
         app.init_asset::<FilterMaterial>();
         app.init_resource::<FilterMaterialCache>();
         app.add_systems(Startup, crate::filter::init_filter_assets);
-        // …and the `<layer>` effect registry + material/shader stores.
+        // …and the `<layer>` effect registry + material/shader stores +
+        // shared dummies (`apply_js_ops` hard-requires `LayerAssets`).
         app.init_asset::<LayerMaterial>();
         app.init_asset::<bevy::shader::Shader>();
         app.init_resource::<LayerEffects>();
+        app.init_resource::<LayerAssets>();
 
         let (ops_tx, ops_rx) = crossbeam_channel::unbounded::<Vec<Op>>();
         // Keep the outbound receiver alive so the sender stays open.
@@ -3282,10 +3330,12 @@ mod tests {
         app.init_asset::<FilterMaterial>();
         app.init_resource::<FilterMaterialCache>();
         app.add_systems(Startup, crate::filter::init_filter_assets);
-        // …and the `<layer>` effect registry + material/shader stores.
+        // …and the `<layer>` effect registry + material/shader stores +
+        // shared dummies (`apply_js_ops` hard-requires `LayerAssets`).
         app.init_asset::<LayerMaterial>();
         app.init_asset::<bevy::shader::Shader>();
         app.init_resource::<LayerEffects>();
+        app.init_resource::<LayerAssets>();
         let (ops_tx, ops_rx) = crossbeam_channel::unbounded::<Vec<Op>>();
         let (out_tx, _out_rx) = tokio::sync::mpsc::unbounded_channel::<Outbound>();
         let root = app.world_mut().spawn_empty().id();

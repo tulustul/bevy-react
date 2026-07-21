@@ -809,7 +809,7 @@ mod tests {
 
         let mut app = App::new();
         app.register_layer_effect(
-            LayerEffect::new("frost")
+            LayerEffect::new("glow")
                 .fragment_wgsl(VALID_FRAGMENT)
                 .uniform("strength", UniformKind::F32, 0.5)
                 .uniform("tint", UniformKind::Color, Color::WHITE),
@@ -831,14 +831,19 @@ mod tests {
 
         // Per-effect uniforms interface: optional fields typed by kind, with
         // the declared default surfaced in the field doc.
-        assert!(ts.contains("export interface FrostUniforms"), "{ts}");
+        assert!(ts.contains("export interface GlowUniforms"), "{ts}");
         assert!(ts.contains("strength?: number;"), "{ts}");
         assert!(ts.contains("tint?: string;"), "{ts}");
         assert!(ts.contains("default `0.5`"), "{ts}");
-        // The effects map carries the registered effect AND the "none" builtin.
+        // The effects map carries the registered effect AND the builtins —
+        // including the backdrop-sampling "frost".
         assert!(ts.contains("export interface LayerEffects"), "{ts}");
-        assert!(ts.contains("frost: FrostUniforms;"), "{ts}");
+        assert!(ts.contains("glow: GlowUniforms;"), "{ts}");
         assert!(ts.contains("none: NoneUniforms;"), "{ts}");
+        assert!(ts.contains("frost: FrostUniforms;"), "{ts}");
+        assert!(ts.contains("export interface FrostUniforms"), "{ts}");
+        assert!(ts.contains("blur?: number;"), "{ts}");
+        assert!(ts.contains("saturation?: number;"), "{ts}");
         // "none" declares no uniforms → a closed empty shape.
         assert!(
             ts.contains("export type NoneUniforms = Record<string, never>;"),
@@ -849,7 +854,7 @@ mod tests {
         // the check compile), must not be dropped silently.
         assert!(
             ts.contains(
-                "AssertLayerUniformsCompat<{ [K in keyof FrostUniforms]: FrostUniforms[K] }>"
+                "AssertLayerUniformsCompat<{ [K in keyof GlowUniforms]: GlowUniforms[K] }>"
             ),
             "{ts}"
         );

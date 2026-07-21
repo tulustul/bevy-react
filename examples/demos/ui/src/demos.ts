@@ -73,7 +73,10 @@ export const DEMOS: DemoItem[] = [
       { label: "<editableText>", component: EditableTextDemo },
       { label: "<image>", component: ImageDemo },
       { label: "<canvas>", component: CanvasDemo },
-      { label: "<layer>", component: LayerDemo },
+      // The layer demo runs over a live 3D scene so the frost (backdrop)
+      // card has a world to blur — and the other cards read fine over it
+      // (opaque panels on the same stage as every scene demo).
+      { label: "<layer>", scene: "CrowdedCubes", component: LayerDemo },
       { label: "<portal>", scene: "CrowdedCubes", component: PortalDemo },
       { label: "<surface>", scene: "Surface", component: SurfaceDemo },
       { label: "<root>", component: RootDemo },

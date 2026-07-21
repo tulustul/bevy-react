@@ -735,14 +735,19 @@ fn layer_demo_round_trip() {
     .expect("no '<layer>' nav button in initial render");
     click(nav);
 
-    // The demo mounts two layers: the group-opacity comparison (no `effect`,
-    // `style.opacity` 0.5) and the effects panel (initially `effect="dissolve"`
-    // with declarative `uniforms`). Identify them by the `effect` prop.
+    // The demo mounts (among others): the group-opacity comparison (no
+    // `effect`, `style.opacity` 0.5), the effects panel (initially
+    // `effect="dissolve"` with declarative `uniforms`), and the frost
+    // showcase (`effect="frost"`, backdrop-sampling). Identify them by the
+    // `effect` prop.
     let mut compare_id: Option<u32> = None;
     let mut panel_id: Option<u32> = None;
+    let mut frost_id: Option<u32> = None;
     let mut tilt_layers = 0usize;
     let deadline = Instant::now() + Duration::from_secs(10);
-    while (compare_id.is_none() || panel_id.is_none()) && Instant::now() < deadline {
+    while (compare_id.is_none() || panel_id.is_none() || frost_id.is_none())
+        && Instant::now() < deadline
+    {
         if let Ok(batch) = ops_rx.recv_timeout(Duration::from_millis(200)) {
             for op in &batch {
                 accumulate(op, &mut buttons, &mut parent_of, &mut text_of);
@@ -752,6 +757,23 @@ fn layer_demo_round_trip() {
                     && kind == "layer"
                 {
                     match props.effect.as_deref() {
+                        Some("frost") => {
+                            let style = props.style.as_ref().expect("frost layer has a style");
+                            let uniforms = style
+                                .uniforms
+                                .as_ref()
+                                .expect("frost's declarative uniforms ride the create");
+                            assert_eq!(
+                                uniforms.get("blur"),
+                                Some(&LayerUniformValue::Scalar(0.75)),
+                                "the demo's initial frost blur crosses the wire"
+                            );
+                            assert!(
+                                matches!(uniforms.get("tint"), Some(LayerUniformValue::Hex(_))),
+                                "frost's tint uniform is a hex color string"
+                            );
+                            frost_id = Some(*id);
+                        }
                         Some("dissolve") => {
                             let style = props.style.as_ref().expect("panel layer has a style");
                             let uniforms = style
@@ -795,12 +817,13 @@ fn layer_demo_round_trip() {
     }
     let compare_id = compare_id.expect("no comparison `<layer>` create op in the demo");
     let panel_id = panel_id.expect("no effects-panel `<layer>` create op in the demo");
+    let frost_id = frost_id.expect("no frost `<layer>` create op in the demo");
     assert!(
         tilt_layers >= 1,
         "the transform3d showcase mounts at least one tilted layer"
     );
 
-    // Both layers got children appended (the overlap art / the fx card).
+    // All three got children appended (overlap art / fx card / glass text).
     assert!(
         parent_of.values().any(|&p| p == compare_id),
         "no child appended to the comparison layer"
@@ -809,7 +832,13 @@ fn layer_demo_round_trip() {
         parent_of.values().any(|&p| p == panel_id),
         "no child appended to the effects-panel layer"
     );
-    eprintln!("OK   layers mounted: compare id={compare_id}, panel id={panel_id}");
+    assert!(
+        parent_of.values().any(|&p| p == frost_id),
+        "no child appended to the frost layer"
+    );
+    eprintln!(
+        "OK   layers mounted: compare id={compare_id}, panel id={panel_id}, frost id={frost_id}"
+    );
 
     // Switch the effect: clicking the "chromatic" pill re-renders the panel
     // layer with `effect="chromaticAberration"` and that effect's uniforms.
@@ -1019,6 +1048,38 @@ fn layer_world_wiring_round_trip() {
         "initial dissolve softness packed from `style.uniforms`"
     );
     eprintln!("OK   wiring: companion+camera+material bound, dissolve uniforms packed");
+
+    // The frost showcase (backdrop-sampling): its material binds the LIVE
+    // capture pair — sharp + blurred, straight from `BackdropCapture` — while
+    // the dissolve panel (no backdrop) binds the shared transparent dummy;
+    // and the live frost layer is what enables the capture. (The dummy↔live
+    // swap on an effect change is unit-covered:
+    // `layer::tests::backdrop_handles_follow_the_effect`.)
+    {
+        use bevy_react::layer::{LayerAssets, backdrop::BackdropCapture};
+        let (frost, _) = *all
+            .iter()
+            .find(|(_, l)| l.effect == "frost")
+            .expect("frost showcase layer (effect \"frost\")");
+        let frost_material = wiring(&mut app, frost);
+        let capture = app.world().resource::<BackdropCapture>().clone();
+        let dummy = app.world().resource::<LayerAssets>().transparent.clone();
+        assert!(capture.enabled, "a live frost layer enables the capture");
+        assert_eq!(
+            frost_material.backdrop, capture.image,
+            "frost binds the live sharp capture"
+        );
+        assert_eq!(
+            frost_material.backdrop_blurred, capture.blurred,
+            "frost binds the live blurred capture"
+        );
+        assert_eq!(
+            dissolve_material.backdrop, dummy,
+            "a non-backdrop effect binds the transparent dummy"
+        );
+        assert_eq!(dissolve_material.backdrop_blurred, dummy);
+        eprintln!("OK   frost binds the live backdrop pair; non-backdrop layers bind the dummy");
+    }
 
     // Click the "chromatic" selector pill through the real event path: find its
     // label's text entity, then feed a `Pointer<Click>` message — exactly what
@@ -1432,4 +1493,65 @@ fn layer_pointer_click_round_trip() {
     click_and_expect(&mut app, tilted.0, tilted.1, "taps 2");
     eprintln!("OK   tilted layer: inverse-projected click reached JS");
     eprintln!("PASS <layer> pointer input end-to-end");
+}
+
+/// Backdrop-capture wiring smoke: a **windowless** `App` with the full
+/// plugin builds and updates without panicking, with the backdrop resource
+/// present, lazily 1×1, and disabled. The render-world half (extract + the
+/// blit/blur chain between post-processing and the UI pass) never runs here —
+/// there is no `RenderApp` without a GPU — so this asserts only that the
+/// plugin wiring doesn't explode headless; the actual capture is proven
+/// visually by the `<layer>` demo's frost panel (`--shoot "<layer>"` shows
+/// the 3D world blurred behind the glass), and the material↔capture binding
+/// is asserted headless in `layer_world_wiring_round_trip`'s frost/dummy
+/// checks.
+#[test]
+fn backdrop_capture_headless_wiring() {
+    use bevy::asset::AssetPlugin;
+    use bevy::prelude::*;
+    use bevy_react::ReactUiPlugin;
+    use bevy_react::layer::backdrop::BackdropCapture;
+
+    let bundle = example_bundle();
+    if !bundle.exists() {
+        eprintln!(
+            "skipping backdrop_capture_headless_wiring: bundle not built at {}\n  run: npm install && npm run build -w demos",
+            bundle.display()
+        );
+        return;
+    }
+
+    let mut app = App::new();
+    // Windowless: systems with missing params (render/winit/picking) are
+    // skipped rather than panicking — same setup as the other wiring tests.
+    app.set_error_handler(bevy::ecs::error::ignore);
+    app.add_plugins((MinimalPlugins, AssetPlugin::default()));
+    app.init_asset::<Image>();
+    app.init_asset::<Font>();
+    app.init_asset::<TextureAtlasLayout>();
+
+    let plugin = ReactUiPlugin::new(&bundle).hot_reload(false);
+    #[cfg(feature = "devtools")]
+    let plugin = plugin.devtools(bevy_react::DevtoolsConfig {
+        enabled: false,
+        ..Default::default()
+    });
+    app.add_plugins(plugin);
+
+    app.update();
+    app.update();
+
+    let capture = app.world().resource::<BackdropCapture>().clone();
+    assert!(
+        !capture.enabled,
+        "no backdrop-wanting layer is live; the capture must stay disabled"
+    );
+    let size = app
+        .world()
+        .resource::<Assets<Image>>()
+        .get(&capture.image)
+        .expect("backdrop image asset exists")
+        .size();
+    assert_eq!(size, UVec2::ONE, "lazy allocation: 1x1 until first enabled");
+    eprintln!("PASS backdrop capture headless wiring");
 }

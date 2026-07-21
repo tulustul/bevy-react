@@ -216,6 +216,15 @@ impl Plugin for ReactUiPlugin {
         if has_render || has_image_assets {
             app.init_resource::<FilterMaterialCache>()
                 .add_systems(Startup, init_filter_assets);
+            // The `<layer>` dummy assets (the transparent backdrop
+            // placeholder every non-backdrop layer material binds).
+            app.init_resource::<crate::layer::LayerAssets>();
+            // The `<layer>` backdrop capture (Task 3.1): the main-world image +
+            // enable/size driver need `Assets<Image>` (so headless-with-assets
+            // apps get the wiring too); the plugin registers its render-world
+            // half (extract + blit between post-processing and the UI pass)
+            // only when a `RenderApp` exists.
+            app.add_plugins(crate::layer::backdrop::BackdropPlugin);
         }
         // The `<layer>` effect registry lives outside the render gate:
         // registration only composes WGSL source (shader assets are minted

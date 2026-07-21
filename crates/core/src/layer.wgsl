@@ -45,6 +45,18 @@ struct LayerParams {
 // The layer's rendered subtree, as a texture.
 @group(1) @binding(1) var layer_tex: texture_2d<f32>;
 @group(1) @binding(2) var layer_smp: sampler;
+// The BACKDROP pair: what renders BEHIND the UI (the 3D world after
+// post-processing, before the UI pass — see `layer/backdrop.rs`), sharp and
+// pre-blurred. For an effect whose registration doesn't opt in
+// (`LayerEffect::backdrop(true)`), both are a shared 1x1 transparent dummy —
+// the bindings always exist (one bind-group layout serves every effect), only
+// the images differ. The blurred image is QUARTER resolution (the fixed-
+// strength dual-Kawase chain's output); sample it with the same 0..1 screen
+// UV — its linear sampler hides the resolution difference.
+@group(1) @binding(3) var backdrop_tex: texture_2d<f32>;
+@group(1) @binding(4) var backdrop_smp: sampler;
+@group(1) @binding(5) var backdrop_blur_tex: texture_2d<f32>;
+@group(1) @binding(6) var backdrop_blur_smp: sampler;
 
 // The shared vertex entry point of EVERY composed effect pipeline
 // (`LayerMaterial::specialize` points the vertex stage at the composed shader
@@ -133,6 +145,34 @@ fn vertex(
 // channels, never alpha alone.
 fn u_group_alpha() -> f32 {
     return material.misc.x;
+}
+
+// The screen UV of a fragment, for sampling the backdrop pair: the fragment's
+// framebuffer position (`UiVertexOutput.position` — @builtin(position), in
+// physical px) mapped through the view's viewport into 0..1. The backdrop
+// image is a capture of the camera's WHOLE render target, and the default UI
+// camera renders fullscreen (viewport == target), so this is exactly
+// `position.xy / target_size`. KNOWN LIMIT: under a viewport-restricted
+// camera the capture still spans the full target while `view.viewport` spans
+// the restriction, so backdrop sampling would drift — documented out of
+// scope (the backdrop path is specified against the fullscreen UI camera).
+fn backdrop_uv(position: vec4<f32>) -> vec2<f32> {
+    return (position.xy - view.viewport.xy) / view.viewport.zw;
+}
+
+// The sharp backdrop at a screen UV (see `backdrop_uv`). Texel values are the
+// main texture's own (the space UI compositing happens in); alpha is
+// whatever the world rendered (typically 1) — treat the backdrop as opaque.
+fn sample_backdrop(uv: vec2<f32>) -> vec4<f32> {
+    return textureSample(backdrop_tex, backdrop_smp, uv);
+}
+
+// The pre-blurred backdrop at a screen UV: the fixed-strength dual-Kawase
+// chain's quarter-resolution output, linearly upsampled by its sampler. How
+// MUCH blur shows is the effect's own business (e.g. frost mixes sharp vs
+// blurred by its `blur` uniform).
+fn sample_backdrop_blurred(uv: vec2<f32>) -> vec4<f32> {
+    return textureSample(backdrop_blur_tex, backdrop_blur_smp, uv);
 }
 
 // ---- built-in "none" fragment (the common contract ends here) ----

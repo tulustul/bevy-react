@@ -1,13 +1,18 @@
 # `<layer>` — subtree-to-texture compositing element
 
-**Status: phases 1-2 implemented and reviewed — awaiting user commit. Phase 1:
+**Status: phases 1-3 implemented and reviewed — awaiting user commit. Phase 1:
 core composite, effect registry, codegen, demo. Phase 2: `transform3d` (renamed
 from `transform` — collision with the 2D path), projective vertex shader,
-inverse-mapped pointer input (flat + tilted layers interactive, live-verified).
-Phases 3-4 (backdrop, animation+ref) not started.** Execution amendments (exact
-texture sizing, premultiplied-alpha compositing, stale-bind-group retouch,
-transform3d naming, single-hop nested-input contract, CPU-pre-transform clipping
-semantics) are recorded in the implementation plan.
+inverse-mapped pointer input. Phase 3: world backdrop — NOTE: Bevy 0.19 has no
+render graph (camera-driven schedules), so the "render-graph surgery" became
+plain pass systems in the `after(PostProcess).before(ui_pass)` seam; blit
+capture (Rgba16Float) + dual-Kawase quarter-res blur chain + `"frost"` builtin
+(`blur` = frostiness mix, not px radius). Phase 4 (animation+ref) not started.**
+Execution amendments (exact texture sizing, premultiplied-alpha compositing,
+stale-bind-group retouches — now THREE instances of that bug class, all
+force-touch fixed and pinned — transform3d naming, single-hop nested-input
+contract, CPU-pre-transform clipping semantics) are recorded in the
+implementation plan.
 
 A `<layer>` renders its React subtree into an offscreen texture and displays that
 texture back inside the UI through a custom-shader material. This unlocks what

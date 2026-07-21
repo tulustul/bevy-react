@@ -90,7 +90,7 @@ fn main() {
     });
 
     let Some(cfg) = shoot else {
-        run();
+        build_app(window(), /* hot_reload */ true).run();
         return;
     };
 
@@ -184,8 +184,9 @@ fn build_app(window: Window, hot_reload: bool) -> App {
     app
 }
 
-/// Build and run the app with the default window and hot reload enabled. The
-/// shared normal-run path for both the native CLI and the web entry.
+/// Build and run the app with the default window and hot reload enabled (the
+/// web entry point's run path).
+#[cfg(target_arch = "wasm32")]
 fn run() {
     build_app(window(), /* hot_reload */ true).run();
 }
