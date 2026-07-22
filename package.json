@@ -5,7 +5,8 @@
     "js",
     "examples/demos/ui",
     "examples/minimal/ui",
-    "examples/stress/ui"
+    "examples/stress/ui",
+    "examples/layers-stress/ui"
   ],
   "scripts": {
     "lint": "eslint . && npm run typecheck && npm run format:check",

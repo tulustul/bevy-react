@@ -4,6 +4,7 @@
 node_modules/
 examples/demos/ui/dist/
 examples/stress/ui/dist/
+examples/layers-stress/ui/dist/
 
 benchmark_results
 

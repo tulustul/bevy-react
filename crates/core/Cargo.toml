@@ -34,6 +34,11 @@ path = "../../examples/demos/main.rs"
 name = "stress"
 path = "../../examples/stress/main.rs"
 
+# Auto layer-promotion stress test (see `examples/layers-stress/`).
+[[example]]
+name = "layers-stress"
+path = "../../examples/layers-stress/main.rs"
+
 [[example]]
 name = "minimal"
 path = "../../examples/minimal/main.rs"
