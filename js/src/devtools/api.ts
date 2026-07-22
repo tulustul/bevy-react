@@ -52,6 +52,8 @@ export interface DevtoolsWarning {
  *  open, so it reopens on the next launch. */
 export interface DevtoolsSettings {
   open: boolean;
+  /** The active tab ("nodes" | "bridge" | "layers"); validated on restore. */
+  tab: string;
   mode: string;
   width_frac: number;
   float_x_frac: number;
@@ -69,6 +71,40 @@ export interface DevtoolsSettings {
 export interface DevtoolsWindow {
   width: number;
   height: number;
+}
+
+/** A layer rect in a `devtools.layers` payload: logical (CSS) px in window
+ *  space — the same space as `devtools.window` — plus the physical capture
+ *  dims for the texture-memory estimate (`physical_width * physical_height *
+ *  4` bytes). */
+export interface DevtoolsLayerRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  physical_width: number;
+  physical_height: number;
+}
+
+/** One layer in a `devtools.layers` payload. `rect: null` = inactive (hidden,
+ *  zero-sized, or not laid out yet): listed greyed, absent from the map. */
+export interface DevtoolsLayerRow {
+  /** The layer root's wire node id (`0` for the base layer). */
+  id: number;
+  /** Promotion reason labels (`["base"]` for the base layer, else e.g.
+   *  `["opacity"]`) — opaque strings displayed verbatim. */
+  reasons: string[];
+  /** Nesting depth: 0 = base, 1 = top-level layer, 2 = nested, … */
+  depth: number;
+  node_count: number;
+  rect: DevtoolsLayerRect | null;
+}
+
+/** Bevy→JS `devtools.layers`: the current layer set (base + promoted), sorted
+ *  by (depth, id). Streamed only while the Layers tab is active and diffed
+ *  Rust-side — an idle app sends nothing. */
+export interface DevtoolsLayers {
+  layers: DevtoolsLayerRow[];
 }
 
 export function onToggle(cb: (e: DevtoolsToggle) => void): () => void {
@@ -97,6 +133,12 @@ export function onRestore(cb: (s: DevtoolsSettings) => void): () => void {
 /** The window's logical size (on panel open + every resize while open). */
 export function onWindow(cb: (w: DevtoolsWindow) => void): () => void {
   return addEventListener("devtools.window", cb as (v: unknown) => void);
+}
+
+/** The current layer set (see [`DevtoolsLayers`]); streamed while the Layers
+ *  tab is active. */
+export function onLayers(cb: (e: DevtoolsLayers) => void): () => void {
+  return addEventListener("devtools.layers", cb as (v: unknown) => void);
 }
 
 /** Report the panel's layout settings for persistence. Emitted on every
@@ -143,4 +185,11 @@ export function sendHighlight(id: number | null): void {
  *  are unaffected). */
 export function sendOverlay(on: boolean): void {
   emit("devtools.overlay", { on });
+}
+
+/** The Layers tab was shown/hidden — gates the Rust-side layer stream. Sent
+ *  from the Layers panel's mount/unmount, so tab switches, the close button,
+ *  and the toggle key all funnel through it. */
+export function sendLayersOpen(on: boolean): void {
+  emit("devtools.layersOpen", { on });
 }

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Checkbox, Example, ProgressBar, Slider } from "@/components";
+import { Checkbox, Example, Slider } from "@/components";
 import { Colors } from "@/theme";
 import { box, controlColumn, row } from "./shared";
 import { TestBanner } from "@/components/TestBanner";

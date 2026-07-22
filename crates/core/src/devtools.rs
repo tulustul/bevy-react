@@ -27,10 +27,16 @@
 //!   per-batch origin flags so the panel never observes itself),
 //!   `devtools.picked { id }`, `devtools.window { width, height }` (the UI
 //!   viewport's logical size — once when the panel opens and on every resize
-//!   while it is open; the panel's layout is proportional, so JS needs it).
+//!   while it is open; the panel's layout is proportional, so JS needs it),
+//!   `devtools.layers { layers }` (the current layer set — the implicit base
+//!   layer plus every [`crate::layer::LayersRegistry`] row; streamed only
+//!   while the panel's Layers tab is active and diffed against the last
+//!   payload, so an idle app sends nothing).
 //! - JS → Bevy messages: `devtools.open { open }`, `devtools.pick { on }`,
 //!   `devtools.select { id }`, `devtools.highlight { id }`,
 //!   `devtools.overlay { on }`, `devtools.panelRoot { id }`,
+//!   `devtools.layersOpen { on }` (the Layers tab was shown/hidden — gates
+//!   the layer stream),
 //!   `devtools.dock { side, width }` (the panel's space reservation — see
 //!   [`apply_dock_reservation`]), `devtools.settings { … }` (the persisted
 //!   layout blob — see [`DevtoolsSettings`]).
@@ -134,6 +140,11 @@ impl Plugin for DevtoolsPlugin {
         // without `InputPlugin` (wiring-only tests) must not panic on them.
         app.init_resource::<ButtonInput<KeyCode>>();
         app.init_resource::<ButtonInput<MouseButton>>();
+        // `emit_layers` reads the layer registries; idempotent in the full app
+        // (`plugin.rs` inits them too), load-bearing for headless harnesses
+        // that build this plugin without `ReactUiPlugin`.
+        app.init_resource::<crate::layer::LayersRegistry>();
+        app.init_resource::<crate::layer::LayerMembership>();
         // Start collecting apply-time invalid-value warnings (see
         // `crate::diag`): armed for the app's whole lifetime, panel open or
         // not, so warnings from the initial mount are waiting when it opens.
@@ -168,6 +179,7 @@ impl Plugin for DevtoolsPlugin {
         .add_react_handler(on_panel_root_message)
         .add_react_handler(on_dock_message)
         .add_react_handler(on_settings_message)
+        .add_react_handler(on_layers_open_message)
         // Registered in the plugin's OWN tuples — `plugin.rs`'s Update tuple
         // sits at Bevy's 20-arity cap.
         .add_systems(Startup, spawn_highlight_overlay)
@@ -212,6 +224,10 @@ impl Plugin for DevtoolsPlugin {
                 // propagation), not just the Layout set.
                 mark_post_layout.after(UiSystems::PostLayout),
                 emit_batch_stats.after(mark_post_layout),
+                // After the layer geometry sync so the rects are this
+                // frame's; a no-op ordering in harnesses that don't schedule
+                // that system.
+                emit_layers.after(crate::layer::sync_layer_geometry),
             ),
         );
     }
@@ -245,6 +261,9 @@ pub(crate) struct DevtoolsState {
     pub dock_side: Option<DockSide>,
     /// The reserved width in logical pixels (meaningful with `dock_side`).
     pub dock_width: f32,
+    /// Whether the panel's Layers tab is currently shown (reported via
+    /// `devtools.layersOpen`). Gates the `devtools.layers` stream.
+    pub layers_tab_open: bool,
 }
 
 /// The window edge a docked, space-reserving panel sits on.
@@ -266,6 +285,7 @@ impl Default for DevtoolsState {
             panel_root: None,
             dock_side: None,
             dock_width: 0.0,
+            layers_tab_open: false,
         }
     }
 }
@@ -341,6 +361,49 @@ struct DevtoolsWarning {
     message: String,
 }
 
+/// Bevy → JS: the current layer set — the implicit base layer plus every
+/// promoted layer in [`crate::layer::LayersRegistry`] — for the panel's
+/// Layers tab. Streamed by [`emit_layers`] only while the panel is open on
+/// that tab, and diffed against the last payload so an idle app sends
+/// nothing. Deliberately excludes the live group alpha: it changes every
+/// frame during a fade, which would defeat the diff gate.
+#[react_event(name = "devtools.layers")]
+struct DevtoolsLayers {
+    layers: Vec<DevtoolsLayerRow>,
+}
+
+/// One layer in a `devtools.layers` payload.
+#[derive(serde::Serialize, ts_rs::TS, Debug, Clone, PartialEq)]
+struct DevtoolsLayerRow {
+    /// The layer root's wire node id (`0` for the base layer).
+    id: NodeId,
+    /// Human-readable promotion reason labels (`["base"]` for the base layer,
+    /// today otherwise only `["opacity"]`). Opaque strings JS displays
+    /// verbatim — no JS-side table to keep in sync; see [`reason_labels`].
+    reasons: Vec<String>,
+    /// Nesting depth: 0 = base, 1 = top-level layer, 2 = layer in a layer, …
+    depth: u32,
+    /// Reconciled nodes ([`RNode`]) in the layer's capture subtree; 0 for the
+    /// base layer and for inactive layers (membership skips them).
+    node_count: u32,
+    /// Window-space logical rect; `None` while the layer is inactive
+    /// (zero-sized, hidden, or not laid out yet).
+    rect: Option<DevtoolsLayerRect>,
+}
+
+/// A layer rect: logical (CSS) px in window space — the same space as
+/// `devtools.window` — plus the physical capture dims so the panel can
+/// estimate texture memory (`physical_width * physical_height * 4`).
+#[derive(serde::Serialize, ts_rs::TS, Debug, Clone, PartialEq)]
+struct DevtoolsLayerRect {
+    x: f32,
+    y: f32,
+    width: f32,
+    height: f32,
+    physical_width: u32,
+    physical_height: u32,
+}
+
 /// JS → Bevy: the panel opened or closed itself (close button, install sync).
 #[react_message(name = "devtools.open")]
 struct DevtoolsOpenMessage {
@@ -378,6 +441,13 @@ struct DevtoolsOverlayMessage {
 #[react_message(name = "devtools.panelRoot")]
 struct DevtoolsPanelRootMessage {
     id: Option<NodeId>,
+}
+
+/// JS → Bevy: the panel's Layers tab was shown/hidden (mount/unmount of the
+/// Layers panel — tab switch, panel close, F12). Gates [`emit_layers`].
+#[react_message(name = "devtools.layersOpen")]
+struct DevtoolsLayersOpenMessage {
+    on: bool,
 }
 
 /// JS → Bevy: the panel's effective space reservation. `side: None` = no
@@ -420,6 +490,10 @@ fn on_panel_root_message(msg: On<DevtoolsPanelRootMessage>, mut state: ResMut<De
     state.panel_root = msg.event().id;
 }
 
+fn on_layers_open_message(msg: On<DevtoolsLayersOpenMessage>, mut state: ResMut<DevtoolsState>) {
+    state.layers_tab_open = msg.event().on;
+}
+
 fn on_dock_message(msg: On<DevtoolsDockMessage>, mut state: ResMut<DevtoolsState>) {
     state.dock_side = match msg.event().side.as_deref() {
         Some("left") => Some(DockSide::Left),
@@ -450,6 +524,10 @@ fn on_dock_message(msg: On<DevtoolsDockMessage>, mut state: ResMut<DevtoolsState
 pub(crate) struct DevtoolsSettings {
     /// Whether the panel was open — persisted so it reopens on relaunch.
     open: bool,
+    /// The active tab ("nodes" | "bridge" | "layers") — persisted so the
+    /// panel reopens where you left it. Loose string; JS validates on
+    /// restore, unknown values fall back to the default tab.
+    tab: String,
     mode: String,
     width_frac: f32,
     float_x_frac: f32,
@@ -465,6 +543,7 @@ impl Default for DevtoolsSettings {
     fn default() -> Self {
         Self {
             open: false,
+            tab: "nodes".into(),
             mode: "right".into(),
             width_frac: 0.3,
             float_x_frac: 0.08,
@@ -483,6 +562,7 @@ impl Default for DevtoolsSettings {
 #[react_event(name = "devtools.restore")]
 struct DevtoolsRestore {
     open: bool,
+    tab: String,
     mode: String,
     width_frac: f32,
     float_x_frac: f32,
@@ -498,6 +578,7 @@ impl From<&DevtoolsSettings> for DevtoolsRestore {
     fn from(s: &DevtoolsSettings) -> Self {
         Self {
             open: s.open,
+            tab: s.tab.clone(),
             mode: s.mode.clone(),
             width_frac: s.width_frac,
             float_x_frac: s.float_x_frac,
@@ -693,6 +774,10 @@ fn exit_interactions(state: &mut DevtoolsState) {
     state.pick = false;
     state.tree_hover = None;
     state.pick_hover = None;
+    // Belt-and-braces: the JS panel also reports `layersOpen: false` when the
+    // tab unmounts, but every close path must kill the layer stream even if
+    // that message is lost.
+    state.layers_tab_open = false;
 }
 
 /// Flip the panel on the configured key and tell the JS panel the new state.
@@ -1016,6 +1101,140 @@ fn emit_batch_stats(
         command_ms: timers.last_command.as_secs_f64() * 1000.0,
         layout_ms: timers.last_layout.as_secs_f64() * 1000.0,
     });
+}
+
+/// Human labels for promotion-reason bits. The labels are opaque strings the
+/// JS panel displays verbatim (forward-compat by design — no JS-side table to
+/// keep in sync); extend this when a new promotion rule lands in
+/// [`crate::layer::PromotionReasons`].
+fn reason_labels(reasons: crate::layer::PromotionReasons) -> Vec<String> {
+    let mut out = Vec::new();
+    if reasons.0 & crate::layer::PromotionReasons::OPACITY != 0 {
+        out.push("opacity".to_string());
+    }
+    out
+}
+
+/// Physical-pixel twin of [`ui_viewport_size`]: the default UI camera's
+/// physical viewport, falling back to the window's physical resolution.
+fn viewport_physical_size(
+    cameras: &Query<&Camera, With<IsDefaultUiCamera>>,
+    windows: &Query<&Window>,
+) -> Option<UVec2> {
+    if let Ok(camera) = cameras.single()
+        && let Some(size) = camera.physical_viewport_size()
+    {
+        return Some(size);
+    }
+    windows.single().ok().map(|window| {
+        UVec2::new(
+            window.resolution.physical_width(),
+            window.resolution.physical_height(),
+        )
+    })
+}
+
+/// Push `devtools.layers` — the base layer plus every
+/// [`crate::layer::LayersRegistry`] row — while the panel is open on the
+/// Layers tab. Runs in `PostUpdate` after
+/// [`crate::layer::sync_layer_geometry`] so the rects are this frame's
+/// layout. Diffed against a `Local` snapshot (the [`send_window_size`]
+/// pattern): idle apps send nothing, and the snapshot resets while the tab is
+/// hidden so a re-shown tab always gets a fresh full payload. Rows under the
+/// panel's own `<root>` are skipped — a promoted panel node would otherwise
+/// repaint the panel with its own payload, whose layout change produces the
+/// next payload (the same self-observation loop [`emit_batch_stats`] guards
+/// against).
+#[allow(clippy::too_many_arguments)]
+fn emit_layers(
+    state: Res<DevtoolsState>,
+    registry: Res<crate::layer::LayersRegistry>,
+    membership: Res<crate::layer::LayerMembership>,
+    bridge: Option<Res<JsBridge>>,
+    rnodes: Query<(), With<RNode>>,
+    child_of: Query<&ChildOf>,
+    computed: Query<&ComputedNode>,
+    cameras: Query<&Camera, With<IsDefaultUiCamera>>,
+    windows: Query<&Window>,
+    events: ReactEvents,
+    mut last: Local<Option<Vec<DevtoolsLayerRow>>>,
+) {
+    if !(state.open && state.layers_tab_open) {
+        *last = None;
+        return;
+    }
+    let Some(logical) = ui_viewport_size(&cameras, &windows) else {
+        return;
+    };
+    let physical = viewport_physical_size(&cameras, &windows).unwrap_or(UVec2::new(
+        logical.x.round() as u32,
+        logical.y.round() as u32,
+    ));
+    // For registry entities missing `ComputedNode` (never laid out): derive
+    // the scale from the viewport instead.
+    let fallback_inverse_scale = if physical.x > 0 {
+        logical.x / physical.x as f32
+    } else {
+        1.0
+    };
+    let panel_entity = state
+        .panel_root
+        .and_then(|id| bridge.as_ref().and_then(|b| b.nodes.get(&id).copied()));
+
+    let mut rows = Vec::with_capacity(registry.layers.len() + 1);
+    rows.push(DevtoolsLayerRow {
+        id: 0,
+        reasons: vec!["base".to_string()],
+        depth: 0,
+        node_count: 0,
+        rect: Some(DevtoolsLayerRect {
+            x: 0.0,
+            y: 0.0,
+            width: logical.x,
+            height: logical.y,
+            physical_width: physical.x,
+            physical_height: physical.y,
+        }),
+    });
+    for meta in registry.layers.values() {
+        if let Some(panel) = panel_entity
+            && climb(meta.entity, &child_of, |e| e == panel).is_some()
+        {
+            continue;
+        }
+        let inverse_scale = computed
+            .get(meta.entity)
+            .map(|c| c.inverse_scale_factor)
+            .unwrap_or(fallback_inverse_scale);
+        let node_count = membership
+            .node_to_layer
+            .iter()
+            .filter(|&(node, layer)| *layer == meta.entity && rnodes.contains(*node))
+            .count() as u32;
+        rows.push(DevtoolsLayerRow {
+            id: meta.node,
+            reasons: reason_labels(meta.reasons),
+            depth: meta.depth,
+            node_count,
+            rect: meta.capture_rect.map(|r| DevtoolsLayerRect {
+                x: r.min.x as f32 * inverse_scale,
+                y: r.min.y as f32 * inverse_scale,
+                width: r.width() as f32 * inverse_scale,
+                height: r.height() as f32 * inverse_scale,
+                physical_width: r.width(),
+                physical_height: r.height(),
+            }),
+        });
+    }
+    // Deterministic order for the diff AND the panel's back-to-front paint:
+    // base first, then by nesting depth, ties by id.
+    rows.sort_by_key(|r| (r.depth, r.id));
+    if last.as_ref() != Some(&rows) {
+        events.send(&DevtoolsLayers {
+            layers: rows.clone(),
+        });
+        *last = Some(rows);
+    }
 }
 
 /// Drain the [`crate::diag`] runtime sink and ship each **new** warning to JS
@@ -1614,6 +1833,7 @@ mod tests {
     fn sample_settings() -> DevtoolsSettings {
         DevtoolsSettings {
             open: false,
+            tab: "layers".into(),
             mode: "float".into(),
             width_frac: 0.4,
             float_x_frac: 0.05,
@@ -1808,6 +2028,7 @@ mod tests {
         assert_eq!(restores[0]["overlay"], false);
         assert_eq!(restores[0]["split"], 200.0);
         assert_eq!(restores[0]["open"], false, "no persisted open → closed");
+        assert_eq!(restores[0]["tab"], "nodes", "no persisted tab → default");
         let frac = restores[0]["width_frac"].as_f64().expect("a number");
         assert!(
             (frac - f64::from(DevtoolsSettings::default().width_frac)).abs() < 1e-6,
@@ -1883,6 +2104,157 @@ mod tests {
             sizes(&mut rx),
             vec![(640.0, 480.0)],
             "reopen must catch up on a resize that happened while closed"
+        );
+    }
+
+    /// The layer stream is gated on `open && layers_tab_open`, carries the
+    /// synthesized base row plus every registry row (logical rect + physical
+    /// dims), stays silent while nothing changes, re-emits on geometry
+    /// changes, keeps inactive layers listed with a null rect, and resends
+    /// the full payload after the tab is re-shown (the `Local` reset).
+    #[test]
+    fn layers_emit_gated_and_diffed() {
+        use crate::layer::{LayerMeta, LayersRegistry, PromotionReasons};
+        use bevy::window::WindowResolution;
+
+        let (mut app, mut rx) = test_app(DevtoolsConfig {
+            settings_path: None,
+            ..default()
+        });
+        app.world_mut().spawn(Window {
+            resolution: WindowResolution::new(800, 600),
+            ..Default::default()
+        });
+        let entity = app.world_mut().spawn(RNode(7)).id();
+        app.world_mut()
+            .resource_mut::<LayersRegistry>()
+            .layers
+            .insert(
+                7,
+                LayerMeta {
+                    node: 7,
+                    entity,
+                    reasons: PromotionReasons(PromotionReasons::OPACITY),
+                    group_alpha: 0.5,
+                    capture_rect: Some(URect::new(10, 10, 110, 60)),
+                    depth: 1,
+                },
+            );
+        let payloads = |rx: &mut UnboundedReceiver<Outbound>| {
+            drain_events(rx)
+                .into_iter()
+                .filter(|(name, _)| name == "devtools.layers")
+                .map(|(_, v)| v)
+                .collect::<Vec<_>>()
+        };
+
+        app.update();
+        assert!(
+            payloads(&mut rx).is_empty(),
+            "closed panel: no layer stream"
+        );
+
+        {
+            let mut state = app.world_mut().resource_mut::<DevtoolsState>();
+            state.open = true;
+            state.layers_tab_open = true;
+        }
+        app.update();
+        let sent = payloads(&mut rx);
+        assert_eq!(sent.len(), 1, "opening the tab sends one payload");
+        let layers = sent[0]["layers"].as_array().expect("a layers array");
+        assert_eq!(layers.len(), 2, "base row + one registry row");
+        assert_eq!(layers[0]["id"], 0);
+        assert_eq!(layers[0]["reasons"], serde_json::json!(["base"]));
+        assert_eq!(layers[0]["depth"], 0);
+        assert_eq!(layers[0]["rect"]["width"], 800.0);
+        assert_eq!(layers[0]["rect"]["physical_height"], 600);
+        assert_eq!(layers[1]["id"], 7);
+        assert_eq!(layers[1]["reasons"], serde_json::json!(["opacity"]));
+        assert_eq!(layers[1]["depth"], 1);
+        assert_eq!(layers[1]["node_count"], 0, "empty membership map");
+        assert_eq!(layers[1]["rect"]["x"], 10.0);
+        assert_eq!(layers[1]["rect"]["y"], 10.0);
+        assert_eq!(layers[1]["rect"]["width"], 100.0);
+        assert_eq!(layers[1]["rect"]["height"], 50.0);
+        assert_eq!(layers[1]["rect"]["physical_width"], 100);
+
+        app.update();
+        assert!(payloads(&mut rx).is_empty(), "idle frames are silent");
+
+        // A geometry change re-emits once.
+        app.world_mut()
+            .resource_mut::<LayersRegistry>()
+            .layers
+            .get_mut(&7)
+            .unwrap()
+            .capture_rect = Some(URect::new(20, 10, 120, 60));
+        app.update();
+        let sent = payloads(&mut rx);
+        assert_eq!(sent.len(), 1, "a rect change re-emits");
+        assert_eq!(sent[0]["layers"][1]["rect"]["x"], 20.0);
+
+        // Inactive: still listed, rect null.
+        app.world_mut()
+            .resource_mut::<LayersRegistry>()
+            .layers
+            .get_mut(&7)
+            .unwrap()
+            .capture_rect = None;
+        app.update();
+        let sent = payloads(&mut rx);
+        assert_eq!(sent.len(), 1);
+        assert_eq!(sent[0]["layers"].as_array().unwrap().len(), 2);
+        assert!(
+            sent[0]["layers"][1]["rect"].is_null(),
+            "inactive layers stay listed with a null rect"
+        );
+
+        // Hiding the tab silences the stream even while the registry mutates.
+        app.world_mut()
+            .resource_mut::<DevtoolsState>()
+            .layers_tab_open = false;
+        app.world_mut()
+            .resource_mut::<LayersRegistry>()
+            .layers
+            .get_mut(&7)
+            .unwrap()
+            .capture_rect = Some(URect::new(10, 10, 110, 60));
+        app.update();
+        assert!(payloads(&mut rx).is_empty(), "hidden tab: silence");
+
+        // Re-showing the tab resends the full payload (Local reset), even
+        // though it equals a previously-sent one.
+        app.world_mut()
+            .resource_mut::<DevtoolsState>()
+            .layers_tab_open = true;
+        app.update();
+        assert_eq!(
+            payloads(&mut rx).len(),
+            1,
+            "a re-shown tab gets a fresh full payload"
+        );
+    }
+
+    /// The `devtools.layersOpen` message flips the state flag, and every
+    /// panel-close path clears it (via `exit_interactions`) so a lost
+    /// unmount message can't leave the stream armed.
+    #[test]
+    fn layers_open_message_flips_state_and_close_clears_it() {
+        let (mut app, _rx) = test_app(DevtoolsConfig {
+            settings_path: None,
+            ..default()
+        });
+        app.world_mut()
+            .trigger(DevtoolsLayersOpenMessage { on: true });
+        assert!(app.world().resource::<DevtoolsState>().layers_tab_open);
+
+        app.world_mut().trigger(DevtoolsOpenMessage { open: false });
+        let state = app.world().resource::<DevtoolsState>();
+        assert!(!state.open);
+        assert!(
+            !state.layers_tab_open,
+            "closing the panel must kill the layer stream"
         );
     }
 

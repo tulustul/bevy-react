@@ -184,6 +184,78 @@ fn devtools_panel_round_trip() {
     );
     eprintln!("OK   flush origin flags: {flags:?}");
 
+    // Phase 1b: the Layers tab. Clicking it mounts the Layers panel, whose
+    // mount effect announces `devtools.layersOpen { on: true }` (the gate for
+    // the Rust-side layer stream). A hand-built `devtools.layers` payload
+    // must then render — the reason pill's text proves the panel consumed it.
+    let layers_tab = find_button("Layers", &buttons, &parent_of, &text_of)
+        .expect("no Layers tab button in the devtools panel");
+    outbound_tx
+        .send(Outbound::UiEvent {
+            event: UiEvent {
+                id: layers_tab,
+                kind: "click".into(),
+                ..Default::default()
+            },
+        })
+        .expect("JS thread gone before Layers tab click");
+
+    let mut saw_layers_open = false;
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while Instant::now() < deadline && !saw_layers_open {
+        // Keep the ops channel drained — the tab switch re-renders the panel.
+        if let Ok(batch) = ops_rx.recv_timeout(Duration::from_millis(50)) {
+            for op in &batch {
+                accumulate(op, &mut buttons, &mut parent_of, &mut text_of);
+            }
+        }
+        while let Ok(msg) = emit_rx.try_recv() {
+            if msg.name == "devtools.layersOpen" {
+                assert_eq!(
+                    msg.value,
+                    serde_json::json!({ "on": true }),
+                    "opening the tab must announce on: true"
+                );
+                saw_layers_open = true;
+            }
+        }
+    }
+    assert!(
+        saw_layers_open,
+        "no devtools.layersOpen emit after opening the Layers tab"
+    );
+    eprintln!("OK   Layers tab: layersOpen {{ on: true }} emitted");
+
+    outbound_tx
+        .send(Outbound::Event {
+            name: "devtools.layers".into(),
+            value: serde_json::json!({
+                "layers": [
+                    { "id": 0, "reasons": ["base"], "depth": 0, "node_count": 0,
+                      "rect": { "x": 0.0, "y": 0.0, "width": 800.0, "height": 600.0,
+                                "physical_width": 800, "physical_height": 600 } },
+                    { "id": 7, "reasons": ["opacity"], "depth": 1, "node_count": 5,
+                      "rect": { "x": 10.0, "y": 10.0, "width": 100.0, "height": 50.0,
+                                "physical_width": 100, "physical_height": 50 } },
+                ]
+            }),
+        })
+        .expect("JS thread gone before layers payload");
+
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while !text_of.values().any(|t| t.trim() == "opacity") {
+        assert!(
+            Instant::now() < deadline,
+            "the Layers panel never rendered the payload's reason pill"
+        );
+        if let Ok(batch) = ops_rx.recv_timeout(Duration::from_millis(100)) {
+            for op in &batch {
+                accumulate(op, &mut buttons, &mut parent_of, &mut text_of);
+            }
+        }
+    }
+    eprintln!("OK   Layers tab rendered the payload");
+
     // Phase 2: click the panel's own close button.
     outbound_tx
         .send(Outbound::UiEvent {
@@ -197,10 +269,14 @@ fn devtools_panel_round_trip() {
 
     // The self-initiated close must sync Bevy's state over the emit channel AND
     // unmount the `<root>` (the closed panel renders null). Watch both channels.
+    // The panel is on the Layers tab, so the close also unmounts the Layers
+    // panel — its cleanup must report `layersOpen { on: false }` (what stops
+    // the Rust-side layer stream).
     let mut saw_emit = false;
     let mut saw_remove = false;
+    let mut saw_layers_close = false;
     let deadline = Instant::now() + Duration::from_secs(10);
-    while Instant::now() < deadline && !(saw_emit && saw_remove) {
+    while Instant::now() < deadline && !(saw_emit && saw_remove && saw_layers_close) {
         if let Ok(batch) = ops_rx.recv_timeout(Duration::from_millis(100)) {
             for op in &batch {
                 if let Op::Remove { child, .. } = op
@@ -219,6 +295,10 @@ fn devtools_panel_round_trip() {
                 );
                 saw_emit = true;
             }
+            if msg.name == "devtools.layersOpen" && msg.value == serde_json::json!({ "on": false })
+            {
+                saw_layers_close = true;
+            }
         }
     }
     assert!(
@@ -228,6 +308,10 @@ fn devtools_panel_round_trip() {
     assert!(
         saw_emit,
         "no devtools.open emit after clicking close (remove seen: {saw_remove})"
+    );
+    assert!(
+        saw_layers_close,
+        "the Layers panel's unmount cleanup never reported layersOpen: false"
     );
     eprintln!("OK   close: devtools.open {{ open: false }} emitted, <root> removed");
     eprintln!("PASS devtools end-to-end");

@@ -25,6 +25,7 @@ import {
   sendSettings,
 } from "./api";
 import { Inspector } from "./Inspector";
+import { LayersPanel } from "./LayersPanel";
 import { LogPanel } from "./LogPanel";
 import { mirror } from "./mirror";
 import { recorder } from "./recorder";
@@ -32,7 +33,11 @@ import { StatsBar } from "./StatsBar";
 import { theme } from "./theme";
 import { TreeView } from "./TreeView";
 
-type Tab = "nodes" | "bridge";
+type Tab = "nodes" | "layers" | "bridge";
+
+function isTab(v: unknown): v is Tab {
+  return v === "nodes" || v === "layers" || v === "bridge";
+}
 
 /** Panel layout: docked to a window edge, or a floating window. */
 type Mode = "left" | "right" | "float";
@@ -156,6 +161,7 @@ export function DevtoolsHost() {
   useEffect(
     () =>
       onRestore((s) => {
+        if (isTab(s.tab)) setTab(s.tab);
         if (s.mode === "left" || s.mode === "right" || s.mode === "float") {
           setMode(s.mode);
         }
@@ -186,6 +192,7 @@ export function DevtoolsHost() {
     }
     sendSettings({
       open,
+      tab,
       mode,
       width_frac: widthFrac,
       float_x_frac: rect.x,
@@ -196,7 +203,7 @@ export function DevtoolsHost() {
       overlay,
       split,
     });
-  }, [open, mode, widthFrac, rect, reserve, overlay, split]);
+  }, [open, tab, mode, widthFrac, rect, reserve, overlay, split]);
 
   // Fractions resolved to logical px against the live window size, with the
   // pixel floors applied (a proportional panel on a tiny window stays usable;
@@ -340,6 +347,8 @@ export function DevtoolsHost() {
               split={split}
               onSplit={setSplit}
             />
+          ) : tab === "layers" ? (
+            <LayersPanel />
           ) : (
             <LogPanel />
           )}
@@ -506,6 +515,11 @@ function TabBar({ tab, onTab }: { tab: Tab; onTab: (t: Tab) => void }) {
         label="Nodes"
         active={tab === "nodes"}
         onClick={() => onTab("nodes")}
+      />
+      <TabButton
+        label="Layers"
+        active={tab === "layers"}
+        onClick={() => onTab("layers")}
       />
       <TabButton
         label="Bridge"
