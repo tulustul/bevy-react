@@ -764,6 +764,7 @@ fn part_state(dragging: bool, hovered: bool) -> PartState {
 #[allow(clippy::type_complexity)]
 pub fn style_scrollbar_states(
     tracks: Res<ScrollbarTracks>,
+    mut dirt: ResMut<crate::layer::LayerContentDirt>,
     q_config: Query<&ScrollbarConfig>,
     q_hovered: Query<&Hovered>,
     q_drag: Query<&ScrollbarDragState, With<ScrollbarThumb>>,
@@ -795,13 +796,18 @@ pub fn style_scrollbar_states(
                     DEFAULT_TRACK_COLOR,
                     BorderRadius::ZERO,
                 );
-                bg.set_if_neq(v.background);
-                bc.set_if_neq(v.border_color);
+                let mut wrote = bg.set_if_neq(v.background);
+                wrote |= bc.set_if_neq(v.border_color);
                 // `node.border`/`border_radius` guard is manual so we don't trip Node
                 // change detection (a relayout) on a paint-only frame.
                 if node.border != v.border || node.border_radius != v.border_radius {
                     node.border = v.border;
                     node.border_radius = v.border_radius;
+                    wrote = true;
+                }
+                if wrote {
+                    // Layer-cache tap: bar repaint inside a promoted subtree.
+                    dirt.nodes.push(axis.track);
                 }
             }
 
@@ -813,11 +819,15 @@ pub fn style_scrollbar_states(
                     DEFAULT_THUMB_COLOR,
                     thumb_default_radius(thickness),
                 );
-                bg.set_if_neq(v.background);
-                bc.set_if_neq(v.border_color);
+                let mut wrote = bg.set_if_neq(v.background);
+                wrote |= bc.set_if_neq(v.border_color);
                 if thumb.border != v.border || thumb.border_radius != v.border_radius {
                     thumb.border = v.border;
                     thumb.border_radius = v.border_radius;
+                    wrote = true;
+                }
+                if wrote {
+                    dirt.nodes.push(axis.thumb);
                 }
             }
         }

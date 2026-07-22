@@ -35,7 +35,7 @@ use bevy::asset::{AssetServer, Handle};
 use bevy::camera::{Camera, Camera2d, Camera3d};
 use bevy::ecs::system::SystemParamItem;
 use bevy::ecs::system::lifetimeless::SRes;
-use bevy::math::{FloatOrd, Mat4, URect, UVec4};
+use bevy::math::{FloatOrd, Mat4, UVec4};
 use bevy::mesh::VertexBufferLayout;
 use bevy::platform::collections::HashMap;
 use bevy::prelude::*;
@@ -49,7 +49,7 @@ use bevy::render::render_resource::binding_types::{sampler, texture_2d, uniform_
 use bevy::render::render_resource::*;
 use bevy::render::renderer::{RenderContext, RenderDevice, RenderQueue, ViewQuery};
 use bevy::render::sync_world::{MainEntity, RenderEntity, TemporaryRenderEntity};
-use bevy::render::texture::{CachedTexture, TextureCache};
+use bevy::render::texture::CachedTexture;
 use bevy::render::view::{ExtractedView, RetainedViewEntity, ViewUniform};
 use bevy::shader::Shader;
 use bevy::ui::ComputedUiTargetCamera;
@@ -79,14 +79,24 @@ pub struct ExtractedLayer {
     /// Render-world entity of the composite quad (carries
     /// [`LayerCompositeBatch`] after prepare).
     pub quad_entity: Entity,
-    /// Capture rect, physical px, stock UI view space.
-    pub rect: URect,
+    /// Capture anchor: fractional physical px, stock UI view space (top-left
+    /// of the node's border box — translation moves it without re-capturing).
+    pub min: Vec2,
+    /// Capture texture size in whole texels.
+    pub size: UVec2,
     /// Composite-time group alpha.
     pub alpha: f32,
     /// Color format of the camera target — capture textures must match, or
     /// the stolen items' pipelines (specialized against the camera's format)
     /// would be invalid for the capture pass.
     pub target_format: TextureFormat,
+    /// Whether this layer's capture must re-render this frame. `false` = the
+    /// persistent texture in [`LayerTextureStore`] already holds the correct
+    /// pixels: the capture pass skips it, and its stolen phase items are
+    /// dropped instead of re-drawn. Decided at extract time (main-world dirt ∪
+    /// missing/mismatched slot), then propagated up the enclosing chain — a
+    /// re-capturing layer's quad re-draws inside every enclosing capture.
+    pub needs_capture: bool,
 }
 
 /// Per-frame extraction output. `layers` is index-aligned with
@@ -111,15 +121,48 @@ pub struct ExtractedUiLayers {
 
 /// The per-layer offscreen capture textures (spike: one texture per layer;
 /// the planned per-depth shared atlas swaps in behind the same indices).
+/// Index-aligned with [`ExtractedUiLayers::layers`]; entries are clones of the
+/// persistent [`LayerTextureStore`] slots.
 #[derive(Resource, Default)]
 pub struct LayerAtlases {
     pub textures: Vec<CachedTexture>,
 }
 
+/// One layer's persistent capture texture. Unlike Bevy's `TextureCache`
+/// (descriptor-keyed pool — same-size layers can swap textures between frames,
+/// and nothing pins content), a slot is keyed by the layer root's `MainEntity`,
+/// so a clean layer's texture reliably still holds last frame's capture.
+pub struct LayerSlot {
+    pub texture: CachedTexture,
+    pub size: UVec2,
+    pub format: TextureFormat,
+    /// Composite bind group, built lazily and kept until realloc (per-frame
+    /// bind-group creation is real cost at hundreds of layers).
+    pub bind_group: Option<BindGroup>,
+    /// Whether the texture holds a *complete* capture. A capture that runs
+    /// while any of its items' pipelines are still compiling renders those
+    /// items as nothing (`phase.render` skips them silently) — serving that
+    /// from cache would freeze a blank/partial layer on screen. Only a
+    /// capture whose pipelines were all ready marks the content valid;
+    /// until then extraction keeps re-capturing.
+    pub content_valid: bool,
+    pub last_seen: u64,
+}
+
+/// Persistent (cross-frame) capture textures, keyed by layer root — the
+/// resource that makes capture caching possible. Slots are allocated /
+/// reallocated by [`prepare_layer_textures`] and evicted a few frames after
+/// their layer disappears (demote, despawn).
+#[derive(Resource, Default)]
+pub struct LayerTextureStore {
+    pub slots: HashMap<MainEntity, LayerSlot>,
+    pub frame: u64,
+}
+
 /// Extracts promoted layers into the render world and spawns their synthetic
 /// capture views. Must run after `extract_ui_camera_view`: that system ends
 /// with a `retain` that would drop any phase it didn't create.
-#[allow(clippy::type_complexity)]
+#[allow(clippy::type_complexity, clippy::too_many_arguments)]
 pub fn extract_ui_layers(
     mut commands: Commands,
     mut phases: ResMut<ViewSortedRenderPhases<TransparentUi>>,
@@ -136,8 +179,10 @@ pub fn extract_ui_layers(
         >,
     >,
     membership: Extract<Res<LayerMembership>>,
+    repaints: Extract<Res<super::LayerRepaintState>>,
     cameras: Extract<Query<(RenderEntity, &Camera), Or<(With<Camera2d>, With<Camera3d>)>>>,
     main_pass_formats: Res<CameraMainPassTextureFormats>,
+    store: Res<LayerTextureStore>,
 ) {
     extracted.layers.clear();
     extracted.membership.clear();
@@ -176,15 +221,17 @@ pub fn extract_ui_layers(
             extracted.camera_render_entity = Some(camera_render);
         }
 
-        let rect = rect.0;
+        let (min, size) = (rect.min, rect.size);
         // Ortho over the capture rect in stock UI view space: vertices keep
         // their physical screen coordinates; the projection alone remaps the
         // rect to the capture target's clip space. Top-left origin like stock.
+        // The bounds are fractional — the window tracks the node exactly, so
+        // capture content is translation-invariant even subpixel.
         let projection = Mat4::orthographic_rh(
-            rect.min.x as f32,
-            rect.max.x as f32,
-            rect.max.y as f32,
-            rect.min.y as f32,
+            min.x,
+            min.x + size.x as f32,
+            min.y + size.y as f32,
+            min.y,
             0.0,
             UI_CAMERA_FAR,
         );
@@ -202,7 +249,7 @@ pub fn extract_ui_layers(
                     ),
                     clip_from_world: None,
                     target_format,
-                    viewport: UVec4::new(0, 0, rect.width(), rect.height()),
+                    viewport: UVec4::new(0, 0, size.x, size.y),
                     color_grading: Default::default(),
                     invert_culling: false,
                 },
@@ -212,15 +259,27 @@ pub fn extract_ui_layers(
         let quad_entity = commands.spawn(TemporaryRenderEntity).id();
         phases.prepare_for_new_frame(retained);
 
+        // Cache decision: re-capture on main-world dirt, or when the persistent
+        // slot can't serve (first frame, resize realloc, format flip).
+        let cached_ok = store
+            .slots
+            .get(&MainEntity::from(root))
+            .is_some_and(|slot| {
+                slot.content_valid && slot.size == size && slot.format == target_format
+            });
+        let needs_capture = !cached_ok || repaints.dirty.contains(&root);
+
         layer_index.insert(root, extracted.layers.len());
         extracted.layers.push(ExtractedLayer {
             main_entity: MainEntity::from(root),
             view_entity,
             retained,
             quad_entity,
-            rect,
+            min,
+            size,
             alpha: alpha.0.clamp(0.0, 1.0),
             target_format,
+            needs_capture,
         });
     }
 
@@ -249,6 +308,23 @@ pub fn extract_ui_layers(
                 .and_then(|e| layer_index.get(&e).copied())
         })
         .collect();
+    // Propagate `needs_capture` outward: a re-capturing inner layer's quad
+    // re-draws inside its enclosing captures, so those must re-capture too.
+    // (The main-world resolver already propagates its dirt the same way; this
+    // pass additionally covers render-side reasons — a missing/realloc'd
+    // slot — so redistribute can rely on "outer cached ⇒ inner cached".)
+    for i in 0..extracted.layers.len() {
+        if extracted.layers[i].needs_capture {
+            let mut idx = i;
+            while let Some(outer) = extracted.enclosing[idx] {
+                if extracted.layers[outer].needs_capture {
+                    break;
+                }
+                extracted.layers[outer].needs_capture = true;
+                idx = outer;
+            }
+        }
+    }
     // Capture order: innermost first (an outer capture samples its inner
     // quads). depth = length of the enclosing chain.
     let enclosing = extracted.enclosing.clone();
@@ -299,28 +375,31 @@ pub fn redistribute_ui_layers(
         let Some(stock_phase) = phases.get_mut(&stock_view) else {
             return;
         };
-        let keys: Vec<(Entity, MainEntity)> = stock_phase
-            .items
-            .iter()
-            .filter_map(|(key, item)| {
-                extracted
-                    .membership
-                    .contains_key(&item.main_entity())
-                    .then_some(*key)
-            })
-            .collect();
-        for key in keys {
-            if let Some(item) = stock_phase.items.shift_remove(&key) {
-                let idx = extracted.membership[&item.main_entity()];
-                let best = &mut quad_sort_keys[idx];
-                if best.is_none() || item.sort_key < best.unwrap() {
-                    *best = Some(item.sort_key);
-                }
-                stolen.push((idx, key, item));
+        // One O(n) partition pass (order-preserving): a `shift_remove` per
+        // stolen key shifts the IndexMap tail each time — O(n²), ~14ms/frame
+        // at 500 stress layers with most of the phase promoted.
+        let taken = std::mem::take(&mut stock_phase.items);
+        for (key, item) in taken {
+            let Some(&idx) = extracted.membership.get(&item.main_entity()) else {
+                stock_phase.items.insert(key, item);
+                continue;
+            };
+            let best = &mut quad_sort_keys[idx];
+            if best.is_none() || item.sort_key < best.unwrap() {
+                *best = Some(item.sort_key);
             }
+            stolen.push((idx, key, item));
         }
     }
     for (idx, _key, item) in stolen {
+        // A cached layer's items are simply dropped: the persistent texture
+        // already holds their pixels, so nothing re-draws them (and stock
+        // `prepare_uinodes` builds no vertices for them either). The steal
+        // itself is still load-bearing — it keeps the items out of the stock
+        // phase AND recorded each layer's quad sort key above.
+        if !extracted.layers[idx].needs_capture {
+            continue;
+        }
         if let Some(phase) = phases.get_mut(&extracted.layers[idx].retained) {
             phase.add_transient(item);
         }
@@ -348,7 +427,20 @@ pub fn redistribute_ui_layers(
             },
         );
         let target = match extracted.enclosing[idx] {
-            Some(outer) => extracted.layers[outer].retained,
+            Some(outer) => {
+                if !extracted.layers[outer].needs_capture {
+                    // The enclosing capture is cached and already contains this
+                    // quad's pixels — nothing to draw it into. Propagation
+                    // guarantees a re-capturing inner never meets a cached
+                    // outer.
+                    debug_assert!(
+                        !layer.needs_capture,
+                        "inner layer re-captures but its enclosing layer is cached"
+                    );
+                    continue;
+                }
+                extracted.layers[outer].retained
+            }
             None => stock_view,
         };
         if let Some(phase) = phases.get_mut(&target) {
@@ -366,35 +458,86 @@ pub fn redistribute_ui_layers(
     }
 }
 
-/// Allocates the per-layer capture textures (camera target format — stolen
-/// pipelines were specialized against it; sample count 1 — `ui_pass` renders
-/// unsampled).
-pub fn prepare_layer_atlases(
+/// Maintains the persistent per-layer capture textures (camera target format —
+/// stolen pipelines were specialized against it; sample count 1 — `ui_pass`
+/// renders unsampled): get-or-(re)allocate each live layer's
+/// [`LayerTextureStore`] slot, mirror it into the index-aligned
+/// [`LayerAtlases`], and evict slots whose layer is gone. Deliberately not
+/// Bevy's `TextureCache` — capture caching needs each layer to keep *its own*
+/// texture (and its pixels) across frames.
+pub fn prepare_layer_textures(
     extracted: Res<ExtractedUiLayers>,
     render_device: Res<RenderDevice>,
-    mut texture_cache: ResMut<TextureCache>,
+    pipeline_cache: Res<PipelineCache>,
+    phases: Res<ViewSortedRenderPhases<TransparentUi>>,
+    mut store: ResMut<LayerTextureStore>,
     mut atlases: ResMut<LayerAtlases>,
 ) {
     atlases.textures.clear();
+    let store = &mut *store;
+    store.frame += 1;
+    let frame = store.frame;
     for layer in &extracted.layers {
-        let texture = texture_cache.get(
-            &render_device,
-            TextureDescriptor {
-                label: Some("ui_layer_capture"),
-                size: Extent3d {
-                    width: layer.rect.width().max(1),
-                    height: layer.rect.height().max(1),
-                    depth_or_array_layers: 1,
-                },
-                mip_level_count: 1,
-                sample_count: 1,
-                dimension: TextureDimension::D2,
-                format: layer.target_format,
-                usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING,
-                view_formats: &[],
-            },
-        );
-        atlases.textures.push(texture);
+        let wanted = layer.size.max(UVec2::ONE);
+        let slot = store
+            .slots
+            .entry(layer.main_entity)
+            .or_insert_with(|| alloc_layer_slot(&render_device, wanted, layer.target_format));
+        if slot.size != wanted || slot.format != layer.target_format {
+            // Resize / format flip: fresh texture, and the stale bind group
+            // dies with the slot. Extraction already flagged `needs_capture`.
+            *slot = alloc_layer_slot(&render_device, wanted, layer.target_format);
+        }
+        if layer.needs_capture {
+            // This frame's capture is only servable from cache later if every
+            // item actually renders — a still-compiling pipeline makes
+            // `phase.render` skip its item silently, and freezing that
+            // blank/partial capture would blank the layer on screen for good
+            // (the exact failure mode of capturing during app startup).
+            // Conservative by construction: a pipeline that compiles between
+            // here and the capture pass costs one redundant re-capture.
+            slot.content_valid = phases.get(&layer.retained).is_some_and(|phase| {
+                !phase.items.is_empty()
+                    && phase
+                        .items
+                        .values()
+                        .all(|i| pipeline_cache.get_render_pipeline(i.pipeline).is_some())
+            });
+        }
+        slot.last_seen = frame;
+        atlases.textures.push(slot.texture.clone());
+    }
+    // Demoted/despawned layers: keep the slot for a short grace (cheap
+    // re-promotion churn), then free the texture memory.
+    store.slots.retain(|_, slot| slot.last_seen + 3 >= frame);
+}
+
+fn alloc_layer_slot(render_device: &RenderDevice, size: UVec2, format: TextureFormat) -> LayerSlot {
+    let texture = render_device.create_texture(&TextureDescriptor {
+        label: Some("ui_layer_capture"),
+        size: Extent3d {
+            width: size.x,
+            height: size.y,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: TextureDimension::D2,
+        format,
+        usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING,
+        view_formats: &[],
+    });
+    let default_view = texture.create_view(&TextureViewDescriptor::default());
+    LayerSlot {
+        texture: CachedTexture {
+            texture,
+            default_view,
+        },
+        size,
+        format,
+        bind_group: None,
+        content_valid: false,
+        last_seen: 0,
     }
 }
 
@@ -440,7 +583,7 @@ pub struct LayerCompositeBatch {
 pub fn prepare_layer_composites(
     mut commands: Commands,
     extracted: Res<ExtractedUiLayers>,
-    atlases: Res<LayerAtlases>,
+    mut store: ResMut<LayerTextureStore>,
     pipeline: Option<Res<LayerCompositePipeline>>,
     pipeline_cache: Res<PipelineCache>,
     render_device: Res<RenderDevice>,
@@ -461,12 +604,13 @@ pub fn prepare_layer_composites(
     // its (post-sort) phase to write the batch range.
     let mut ranges: Vec<Option<Range<u32>>> = vec![None; extracted.layers.len()];
     for (idx, layer) in extracted.layers.iter().enumerate() {
-        let Some(texture) = atlases.textures.get(idx) else {
+        let Some(slot) = store.slots.get_mut(&layer.main_entity) else {
             continue;
         };
         let start = meta.vertices.len() as u32;
-        let rect = layer.rect;
-        let (min, max) = (rect.min.as_vec2(), rect.max.as_vec2());
+        // Fractional quad position (bilinear sampling smooths subpixel motion
+        // of a cached capture — the browser tradeoff).
+        let (min, max) = (layer.min, layer.min + layer.size.as_vec2());
         // Full-texture UVs (spike: texture == rect; slot-relative UVs arrive
         // with the shared atlas).
         let corners = [
@@ -485,16 +629,22 @@ pub fn prepare_layer_composites(
             });
         }
         ranges[idx] = Some(start..start + 6);
-        meta.atlas_bind_groups.push(render_device.create_bind_group(
-            "ui_layer_composite_atlas",
-            &pipeline_cache.get_bind_group_layout(&pipeline.atlas_layout),
-            &BindGroupEntries::sequential((&texture.default_view, &pipeline.sampler)),
-        ));
+        // Reuse the slot's bind group across frames; it dies on realloc.
+        if slot.bind_group.is_none() {
+            slot.bind_group = Some(render_device.create_bind_group(
+                "ui_layer_composite_atlas",
+                &pipeline_cache.get_bind_group_layout(&pipeline.atlas_layout),
+                &BindGroupEntries::sequential((&slot.texture.default_view, &pipeline.sampler)),
+            ));
+        }
+        let bind_group = slot.bind_group.clone().expect("just set");
+        let atlas_index = meta.atlas_bind_groups.len();
+        meta.atlas_bind_groups.push(bind_group);
         commands
             .entity(layer.quad_entity)
             .insert(LayerCompositeBatch {
                 range: ranges[idx].clone().unwrap(),
-                atlas: idx,
+                atlas: atlas_index,
             });
     }
     meta.vertices.write_buffer(&render_device, &render_queue);
@@ -697,6 +847,11 @@ pub fn ui_layer_capture_pass(
     // only after B's capture pass ran; passes execute in encoder order.
     for &idx in &extracted.capture_order {
         let layer = &extracted.layers[idx];
+        if !layer.needs_capture {
+            // Cached: the persistent texture already holds the pixels — and
+            // skipping keeps the `LoadOp::Clear` below from wiping them.
+            continue;
+        }
         let Some(texture) = atlases.textures.get(idx) else {
             continue;
         };

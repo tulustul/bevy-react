@@ -238,9 +238,10 @@ pub fn blank_canvas_image() -> Image {
 /// (already in physical pixels, so the result is crisp on HiDPI).
 pub fn update_canvas_surfaces(
     mut images: ResMut<Assets<Image>>,
-    mut query: Query<(&ComputedNode, &ImageNode, &mut CanvasSurface)>,
+    mut dirt: ResMut<crate::layer::LayerContentDirt>,
+    mut query: Query<(Entity, &ComputedNode, &ImageNode, &mut CanvasSurface)>,
 ) {
-    for (node, image_node, mut surface) in &mut query {
+    for (entity, node, image_node, mut surface) in &mut query {
         let (w, h) = clamp_physical_size(node.size);
         if w == 0 || h == 0 {
             continue; // not laid out yet; pending commands stay queued
@@ -261,6 +262,9 @@ pub fn update_canvas_surfaces(
         let Some(data) = surface.sync(w, h, scale) else {
             continue;
         };
+        // Real pixel upload → the owning layer's capture is stale. (An idle
+        // canvas returns `None` above and touches nothing.)
+        dirt.nodes.push(entity);
         let Some(mut image) = images.get_mut(&image_node.image) else {
             continue;
         };

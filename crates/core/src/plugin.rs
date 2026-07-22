@@ -210,6 +210,7 @@ impl Plugin for ReactUiPlugin {
                 render_app
                     .init_resource::<lr::ExtractedUiLayers>()
                     .init_resource::<lr::LayerAtlases>()
+                    .init_resource::<lr::LayerTextureStore>()
                     .init_gpu_resource::<SpecializedRenderPipelines<lr::LayerCompositePipeline>>()
                     .init_gpu_resource::<lr::LayerCompositeMeta>()
                     .add_render_command::<TransparentUi, lr::DrawLayerComposite>()
@@ -224,7 +225,7 @@ impl Plugin for ReactUiPlugin {
                             lr::redistribute_ui_layers
                                 .in_set(RenderSystems::PhaseSort)
                                 .before(sort_phase_system::<TransparentUi>),
-                            lr::prepare_layer_atlases.in_set(RenderSystems::PrepareResources),
+                            lr::prepare_layer_textures.in_set(RenderSystems::PrepareResources),
                             lr::prepare_layer_composites.in_set(RenderSystems::PrepareBindGroups),
                         ),
                     )
@@ -469,12 +470,19 @@ impl Plugin for ReactUiPlugin {
         // ping-pong).
         app.init_resource::<crate::layer::LayerMembership>();
         app.init_resource::<crate::layer::LayersRegistry>();
+        app.init_resource::<crate::layer::LayerContentDirt>();
+        app.init_resource::<crate::layer::LayerRepaintState>();
         app.add_systems(
             Update,
-            crate::layer::evaluate_layer_promotions
-                .after(apply_js_ops)
-                .before(apply_interaction_styles)
-                .before(AnimationSet::Apply),
+            (
+                crate::layer::evaluate_layer_promotions
+                    .after(apply_js_ops)
+                    .before(apply_interaction_styles)
+                    .before(AnimationSet::Apply),
+                // Async `<image>` texture arrivals have no other write site the
+                // layer cache could tap.
+                crate::layer::watch_layer_image_assets,
+            ),
         );
         // After bevy_ui layout so capture rects/membership are this frame's
         // geometry (extraction reads them the same frame, post-PostUpdate).
@@ -482,6 +490,12 @@ impl Plugin for ReactUiPlugin {
             PostUpdate,
             (
                 crate::layer::sync_layer_geometry.after(bevy::ui::UiSystems::Layout),
+                // Membership + geometry hashes are this frame's, and bevy_ui's
+                // text systems (PostLayout) have re-shaped — turn the frame's
+                // dirt into per-layer repaint decisions for extraction.
+                crate::layer::resolve_layer_repaints
+                    .after(crate::layer::sync_layer_geometry)
+                    .after(bevy::ui::UiSystems::PostLayout),
                 // Re-clamps deferred controlled-scroll requests (a pin to the
                 // bottom in the same commit that grew the content) against
                 // fresh geometry.

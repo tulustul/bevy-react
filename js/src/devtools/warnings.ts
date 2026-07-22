@@ -35,6 +35,7 @@ const KIND_FIELDS: Record<string, { style?: string[]; props?: string[] }> = {
   flexDirection: { style: ["flexDirection"] },
   flexWrap: { style: ["flexWrap"] },
   gridAutoFlow: { style: ["gridAutoFlow"] },
+  cache: { style: ["cache"] },
   focusPolicy: { style: ["focusPolicy"] },
   textAlign: { style: ["textAlign"] },
   lineBreak: { style: ["lineBreak"] },

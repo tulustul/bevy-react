@@ -53,6 +53,9 @@ impl ReactUiAnimationsPlugin {
 impl Plugin for ReactUiAnimationsPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<SharedValues>()
+            // The apply system reports content writes to the layer cache; the
+            // integrator inits this too, but standalone use shouldn't panic.
+            .init_resource::<crate::layer::LayerContentDirt>()
             .add_message::<AnimationSettled>()
             .insert_resource(AnimationInbox(self.inbox.clone()))
             .configure_sets(
@@ -277,11 +280,13 @@ struct AnimTargets {
 fn apply_animated_nodes(
     mut commands: Commands,
     values: Res<SharedValues>,
+    mut dirt: ResMut<crate::layer::LayerContentDirt>,
     mut query: Query<(Entity, &AnimatedNode, AnimTargets)>,
 ) {
     use AnimatableProperty as P;
     for (entity, anim, mut t) in &mut query {
         let b = &anim.0;
+        let promoted = t.promoted.is_some();
 
         // Stage 1 — transform group: rebuild the whole `UiTransform` from the six
         // channels each frame (unbound channels stay at identity). Grouped because
@@ -303,6 +308,17 @@ fn apply_animated_nodes(
                 b.get(P::Rotate).and_then(|x| eval_scalar(x, &values)),
             );
             if *t.transform != new {
+                // Layer-cache classification: a promoted root's own pure
+                // translation only moves its composite quad — content of the
+                // *enclosing* capture, not its own. Scale/rotate change the
+                // captured pixels (the rect doesn't track them) → content.
+                let translate_only =
+                    t.transform.scale == new.scale && t.transform.rotation == new.rotation;
+                if promoted && translate_only {
+                    dirt.composite_only.push(entity);
+                } else {
+                    dirt.nodes.push(entity);
+                }
                 *t.transform = new;
             }
         }
@@ -314,7 +330,6 @@ fn apply_animated_nodes(
         // root the alpha targets the group instead: colors keep their own
         // alpha and stage 3 writes `LayerGroupAlpha`.
         let opacity_alpha = b.get(P::Opacity).and_then(|x| eval_scalar(x, &values));
-        let promoted = t.promoted.is_some();
 
         // Stage 2 — every non-transform, non-opacity binding. Colors land on their
         // component; lengths/scalars land on `Node`. Opacity is deferred to stage 3
@@ -339,10 +354,14 @@ fn apply_animated_nodes(
                     let color = Color::srgba(rgba[0], rgba[1], rgba[2], rgba[3]);
                     match property {
                         P::BackgroundColor => match &mut t.bg {
-                            Some(c) if c.0 != color => c.0 = color,
+                            Some(c) if c.0 != color => {
+                                c.0 = color;
+                                dirt.nodes.push(entity);
+                            }
                             Some(_) => {}
                             None => {
                                 commands.entity(entity).insert(BackgroundColor(color));
+                                dirt.nodes.push(entity);
                             }
                         },
                         P::BorderColor => {
@@ -353,10 +372,14 @@ fn apply_animated_nodes(
                                 left: color,
                             };
                             match &mut t.border {
-                                Some(c) if **c != bc => **c = bc,
+                                Some(c) if **c != bc => {
+                                    **c = bc;
+                                    dirt.nodes.push(entity);
+                                }
                                 Some(_) => {}
                                 None => {
                                     commands.entity(entity).insert(bc);
+                                    dirt.nodes.push(entity);
                                 }
                             }
                         }
@@ -365,6 +388,7 @@ fn apply_animated_nodes(
                                 && tc.0 != color
                             {
                                 tc.0 = color;
+                                dirt.nodes.push(entity);
                             }
                         }
                         _ => {}
@@ -376,8 +400,12 @@ fn apply_animated_nodes(
                     let Some(v) = eval_scalar(binding, &values) else {
                         continue;
                     };
-                    if let Some(node) = t.node.as_mut() {
-                        write_node_value(node, property, v);
+                    if let Some(node) = t.node.as_mut()
+                        && write_node_value(node, property, v)
+                    {
+                        // Belt: the geometry hash catches the resulting layout
+                        // shift too, one system later.
+                        dirt.nodes.push(entity);
                     }
                 }
             }
@@ -392,6 +420,10 @@ fn apply_animated_nodes(
                 && la.0 != alpha
             {
                 la.0 = alpha;
+                // Composite-only: the group alpha multiplies the cached
+                // texture at composite time; the captured pixels are
+                // unchanged. (It IS content of an enclosing layer, if any.)
+                dirt.composite_only.push(entity);
             }
         } else if let Some(alpha) = opacity_alpha {
             let with_alpha = |color: Color| -> Option<Color> {
@@ -401,20 +433,27 @@ fn apply_animated_nodes(
                     Color::Srgba(s)
                 })
             };
+            let mut wrote = false;
             if let Some(c) = &mut t.bg
                 && let Some(new) = with_alpha(c.0)
             {
                 c.0 = new;
+                wrote = true;
             }
             if let Some(tc) = &mut t.text
                 && let Some(new) = with_alpha(tc.0)
             {
                 tc.0 = new;
+                wrote = true;
             }
             if let Some(img) = &mut t.image
                 && let Some(new) = with_alpha(img.color)
             {
                 img.color = new;
+                wrote = true;
+            }
+            if wrote {
+                dirt.nodes.push(entity);
             }
         }
     }
@@ -427,11 +466,12 @@ fn apply_animated_nodes(
 /// `DerefMut`, so an unchanged value never trips change detection). It also means a
 /// re-render that resets `Node` to its static style is corrected next frame.
 /// Lengths resolve to `Val::Px`: the imperative animation surface is scalar `f32`.
+/// Returns whether anything was actually written (the layer-cache tap keys off it).
 fn write_node_value<N: std::ops::DerefMut<Target = Node>>(
     node: &mut N,
     property: AnimatableProperty,
     v: f32,
-) {
+) -> bool {
     use AnimatableProperty as P;
     let val = Val::Px(v);
     // Each arm's guard reads the live field through `Deref` (no change mark) and
@@ -450,18 +490,23 @@ fn write_node_value<N: std::ops::DerefMut<Target = Node>>(
         P::Bottom if node.bottom != val => node.bottom = val,
         P::FlexBasis if node.flex_basis != val => node.flex_basis = val,
         P::Gap => {
+            let mut wrote = false;
             if node.row_gap != val {
                 node.row_gap = val;
+                wrote = true;
             }
             if node.column_gap != val {
                 node.column_gap = val;
+                wrote = true;
             }
+            return wrote;
         }
         P::RowGap if node.row_gap != val => node.row_gap = val,
         P::ColumnGap if node.column_gap != val => node.column_gap = val,
         P::AspectRatio if node.aspect_ratio != Some(v) => node.aspect_ratio = Some(v),
-        _ => {}
+        _ => return false,
     }
+    true
 }
 
 /// Build a `UiTransform` from the six scalar transform channels (each `None`
@@ -812,6 +857,7 @@ mod tests {
     #[test]
     fn apply_writes_transform_color_then_opacity() {
         let mut world = World::new();
+        world.init_resource::<crate::layer::LayerContentDirt>();
         let mut values = SharedValues::default();
         values.set(1, 25.0); // translateX (px)
         values.set(2, 0.5); // opacity
@@ -861,6 +907,7 @@ mod tests {
     #[test]
     fn apply_drives_node_length_and_border_color() {
         let mut world = World::new();
+        world.init_resource::<crate::layer::LayerContentDirt>();
         let mut values = SharedValues::default();
         values.set(10, 200.0); // width (px)
         values.set(11, 0.0); // border-color progress → output[0] = green
@@ -913,6 +960,7 @@ mod tests {
         struct Dirty(usize);
 
         let mut world = World::new();
+        world.init_resource::<crate::layer::LayerContentDirt>();
         let mut values = SharedValues::default();
         values.set(1, 25.0); // translateX (px)
         values.set(2, 0.5); // opacity

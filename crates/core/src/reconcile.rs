@@ -518,6 +518,12 @@ pub fn apply_js_ops(
                     create_controlled_scroll(&mut bridge, &mut ec, id, &props);
                 }
                 bridge.nodes.insert(id, entity);
+                // `cache: "always"` promotes even a childless node, so no
+                // later child op would ever queue the evaluation — do it here.
+                // (Opacity-driven promotion needs a child, whose Append marks.)
+                if props.style.as_ref().and_then(|s| s.cache).is_some() {
+                    bridge.layer_dirty.insert(id);
+                }
                 // Seed the retained props a later update's delta merges into.
                 // Event-like fields were consumed by the create itself and are
                 // never part of the retained state.
@@ -551,8 +557,10 @@ pub fn apply_js_ops(
                 if let (Some(p), Some(c)) = (resolve(&bridge, parent), resolve(&bridge, child)) {
                     let same_parent = bridge.parent_of.get(&child) == Some(&parent);
                     // Child count may cross 0↔1+: re-evaluate the parent's layer
-                    // promotion (see `crate::layer`).
+                    // promotion (see `crate::layer`). The attach also changes the
+                    // parent's rendered content → re-capture its layer.
                     bridge.layer_dirty.insert(parent);
+                    crate::layer::mark_content_dirty(&mut commands.entity(p));
                     bridge.append_child(parent, child);
                     if same_parent {
                         // Re-append = move to the end: an O(1) shadow reorder, synced
@@ -591,8 +599,10 @@ pub fn apply_js_ops(
                 if let (Some(p), Some(c)) = (resolve(&bridge, parent), resolve(&bridge, child)) {
                     let same_parent = bridge.parent_of.get(&child) == Some(&parent);
                     // Child count may cross 0↔1+: re-evaluate the parent's layer
-                    // promotion (see `crate::layer`).
+                    // promotion (see `crate::layer`). The attach also changes the
+                    // parent's rendered content → re-capture its layer.
                     bridge.layer_dirty.insert(parent);
+                    crate::layer::mark_content_dirty(&mut commands.entity(p));
                     bridge.insert_before(parent, child, before);
                     if !same_parent {
                         // Fresh/cross-parent: attach NOW (at the end — the rebuild
@@ -606,7 +616,12 @@ pub fn apply_js_ops(
             }
             Op::Remove { parent, child } => {
                 // Losing its last child demotes a promoted parent: re-evaluate.
+                // The removal also changes the parent's rendered content →
+                // re-capture its layer.
                 bridge.layer_dirty.insert(parent);
+                if let Some(p) = resolve(&bridge, parent) {
+                    crate::layer::mark_content_dirty(&mut commands.entity(p));
+                }
                 // React emits `Remove` only for the subtree's top node, and Bevy
                 // despawns that node recursively — but a `<surface>`/`<root>` nested
                 // under it is a detached root (no `ChildOf`), so neither reaches it.
@@ -819,6 +834,9 @@ pub fn apply_js_ops(
                             &mut ui_assets.atlas_cache,
                         );
                         ec.insert(img);
+                        // Image attrs dirty without any style dirt (e.g. a bare
+                        // `src` swap) bypasses the `apply_style_masked` tap.
+                        crate::layer::mark_content_dirty(&mut ec);
                     }
                     // A `filter` swaps the node's draw for a `MaterialNode`; run
                     // after the style/image above so it can drop the components it
@@ -913,6 +931,9 @@ pub fn apply_js_ops(
                     } else {
                         commands.entity(e).insert(Text::new(text));
                     }
+                    // Belt: the reshape watcher (`Changed<TextLayoutInfo>`)
+                    // catches this too, but only once Bevy re-shapes.
+                    crate::layer::mark_content_dirty(&mut commands.entity(e));
                 }
             }
             Op::Draw { id, cmds } => {

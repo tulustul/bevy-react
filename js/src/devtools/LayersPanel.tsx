@@ -219,6 +219,11 @@ function LayerRow({
         ))}
       {inactive && <ReasonPill label="inactive" />}
       <node style={{ flexGrow: 1 }} />
+      {row.depth > 0 && (
+        <text style={{ color: theme.textDim, fontSize: 10 }}>
+          {row.repaints} repaints
+        </text>
+      )}
       {row.node_count > 0 && (
         <text style={{ color: theme.textDim, fontSize: 10 }}>
           {row.node_count} nodes

@@ -455,6 +455,13 @@ export interface BevyStyle {
    * each node's own colors. Set `false` to opt out of layer promotion for
    * perf-sensitive spots. Not carried by `hoverStyle`/`pressStyle`. */
   groupAlpha?: boolean;
+  /** Layer-cache hint. `"always"` force-promotes this subtree to a composited
+   * layer so its capture is cached and re-rendered only when content changes —
+   * the `will-change` pattern for static or transform/opacity-animated
+   * subtrees. `"auto"` (default) promotes only when another rule does (e.g.
+   * `opacity`); promoted layers are always cached either way. Not carried by
+   * `hoverStyle`/`pressStyle`. */
+  cache?: "auto" | "always";
   /** CSS-like transition timing. When a `transform` / `opacity` / `backgroundColor`
    * change occurs — via re-render or `hoverStyle`/`pressStyle` — it eases over time
    * (using the same driver/easing engine as `animatedStyle`) instead of snapping. */

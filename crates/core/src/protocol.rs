@@ -358,6 +358,17 @@ pub struct Props {
 /// so it stays reachable as `protocol::DrawCmd` and so [`Props::draw`] can name it.
 pub use crate::canvas::DrawCmd;
 
+/// The [`Style::cache`] keyword: `"always"` force-promotes the subtree to a
+/// cached composited layer; `"auto"` (default) leaves promotion to the other
+/// rules. There is no `"never"` — promoted layers are always cached, and
+/// opting out of *opacity* promotion is `groupAlpha: false`.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum LayerCache {
+    #[default]
+    Auto,
+    Always,
+}
+
 /// A CSS-like style object mapped onto `bevy_ui::Node` and its sibling visual
 /// components. Every field is optional; unset fields keep Bevy's defaults.
 ///
@@ -550,6 +561,15 @@ pub struct Style {
     /// press variant must not be able to flip promotion.
     #[serde(default)]
     pub group_alpha: Option<bool>,
+    /// Layer-cache hint. `"always"` force-promotes the subtree to a composited
+    /// layer (see [`crate::layer`]) so its capture is cached and re-rendered
+    /// only when its content changes — the `will-change` pattern for static
+    /// or transform/opacity-animated subtrees. `"auto"` (or absent, the
+    /// default) promotes only when another rule does (today: `opacity`);
+    /// promoted layers are always cached either way. `no_overlay`: a variant
+    /// must not flip promotion.
+    #[serde(default, deserialize_with = "de_layer_cache")]
+    pub cache: Option<LayerCache>,
     /// CSS-like per-channel transition timing. Present → a change to `transform` /
     /// `opacity` / `backgroundColor` (via re-render or hover/press) animates over
     /// time using the same driver/easing engine as `animatedStyle`, rather than
@@ -749,6 +769,7 @@ macro_rules! with_style_fields {
                 overlay
             ),
             (group_alpha, "groupAlpha", (LAYER), no_overlay),
+            (cache, "cache", (LAYER), no_overlay),
             (
                 transition,
                 "transition",
@@ -1971,6 +1992,9 @@ keyword_fields! {
     fn de_display("display") -> Display {
         "flex" => Flex, "grid" => Grid, "block" => Block, "none" => None,
     }
+    fn de_layer_cache("cache") -> LayerCache {
+        "auto" => Auto, "always" => Always,
+    }
     fn de_box_sizing("boxSizing") -> BoxSizing {
         "borderBox" | "border-box" => BorderBox,
         "contentBox" | "content-box" => ContentBox,
@@ -2617,6 +2641,33 @@ mod tests {
         let style = cached.style.as_ref().expect("style retained");
         assert_eq!(style.group_alpha, Some(false));
         assert_eq!(style.opacity, Some(0.5));
+    }
+
+    /// `cache` decodes its keywords (unknown → warn + default) and a delta
+    /// touching it marks the LAYER group, driving promotion re-evaluation.
+    #[test]
+    fn cache_keyword_decodes_and_dirties_layer() {
+        let s: Style = serde_json::from_str(r#"{ "cache": "always" }"#).expect("style decodes");
+        assert_eq!(s.cache, Some(LayerCache::Always));
+        let s: Style = serde_json::from_str(r#"{ "cache": "auto" }"#).expect("style decodes");
+        assert_eq!(s.cache, Some(LayerCache::Auto));
+        let s: Style = serde_json::from_str("{}").expect("style decodes");
+        assert_eq!(s.cache, None);
+        // Unrecognized keyword: warn + fall back to the default (`auto`).
+        let s: Style = serde_json::from_str(r#"{ "cache": "sometimes" }"#).expect("style decodes");
+        assert_eq!(s.cache, Some(LayerCache::Auto));
+
+        let mut cached = Props::default();
+        let (dirty, _) = cached.merge_delta(
+            props(serde_json::json!({ "style": { "cache": "always" } })),
+            &[],
+            &[],
+        );
+        assert!(dirty.style.intersects(style_groups::LAYER));
+        assert_eq!(
+            cached.style.as_ref().and_then(|s| s.cache),
+            Some(LayerCache::Always)
+        );
     }
 
     /// Angles parse from a bare number (degrees) or a unit string, always landing

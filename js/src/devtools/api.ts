@@ -99,6 +99,9 @@ export interface DevtoolsLayerRow {
   depth: number;
   node_count: number;
   rect: DevtoolsLayerRect | null;
+  /** Frames that re-captured this layer since promotion (cache misses).
+   *  Always `0` for the base layer. */
+  repaints: number;
 }
 
 /** Bevy→JS `devtools.layers`: the current layer set (base + promoted), sorted

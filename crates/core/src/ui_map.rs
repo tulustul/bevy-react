@@ -655,6 +655,15 @@ pub fn apply_style_masked(
     if dirty.intersects(g::TRANSITION) {
         crate::transition::apply_transition(ec, style);
     }
+
+    // Layer-cache tap: any touched style group may have changed this node's
+    // painted appearance — let the resolver re-capture its owning layer (see
+    // `crate::layer::LayerContentDirt`). Deliberately conservative: style
+    // groups can't distinguish a composite-only opacity delta here; the fast
+    // fade paths (animations/transitions) carry precise carve-outs instead.
+    if dirty.any() {
+        crate::layer::mark_content_dirty(ec);
+    }
 }
 
 /// Overlay `overlay` onto `base`, producing the style to apply: every field the

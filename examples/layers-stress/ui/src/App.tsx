@@ -9,7 +9,7 @@ const COUNTS = [20, 100, 500];
 
 export function App() {
   const [n, setN] = useState(20);
-  const [animate, setAnimate] = useState(false);
+  const [animate, setAnimate] = useState(true);
   const [groupAlpha, setGroupAlpha] = useState(true);
 
   const items = useMemo(() => buildItems(n), [n]);

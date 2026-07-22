@@ -236,7 +236,11 @@ impl Plugin for DevtoolsPlugin {
                 // After the layer geometry sync so the rects are this
                 // frame's; a no-op ordering in harnesses that don't schedule
                 // that system.
-                emit_layers.after(crate::layer::sync_layer_geometry),
+                emit_layers
+                    .after(crate::layer::sync_layer_geometry)
+                    // Cache stats (`repaints`/`cached`) are stamped by the
+                    // repaint resolver.
+                    .after(crate::layer::resolve_layer_repaints),
             ),
         );
     }
@@ -408,6 +412,9 @@ struct DevtoolsLayerRow {
     /// Window-space logical rect; `None` while the layer is inactive
     /// (zero-sized, hidden, or not laid out yet).
     rect: Option<DevtoolsLayerRect>,
+    /// Frames that re-captured this layer since promotion (cache misses).
+    /// Always `0` for the base layer (it has no capture to cache).
+    repaints: u64,
 }
 
 /// A layer rect: logical (CSS) px in window space — the same space as
@@ -1214,6 +1221,9 @@ fn reason_labels(reasons: crate::layer::PromotionReasons) -> Vec<String> {
     if reasons.0 & crate::layer::PromotionReasons::OPACITY != 0 {
         out.push("opacity".to_string());
     }
+    if reasons.0 & crate::layer::PromotionReasons::FORCED != 0 {
+        out.push("cache".to_string());
+    }
     out
 }
 
@@ -1297,6 +1307,7 @@ fn emit_layers(
             physical_width: physical.x,
             physical_height: physical.y,
         }),
+        repaints: 0,
     });
     for meta in registry.layers.values() {
         if let Some(panel) = panel_entity
@@ -1326,6 +1337,7 @@ fn emit_layers(
                 physical_width: r.width(),
                 physical_height: r.height(),
             }),
+            repaints: meta.repaints,
         });
     }
     // Deterministic order for the diff AND the panel's back-to-front paint:
@@ -1619,6 +1631,7 @@ mod tests {
             "cursor",
             "lineHeight",
             "letterSpacing",
+            "cache",
         ] {
             assert!(
                 warnings_ts.contains(&format!("{kind}:"))
@@ -2240,6 +2253,8 @@ mod tests {
                     group_alpha: 0.5,
                     capture_rect: Some(URect::new(10, 10, 110, 60)),
                     depth: 1,
+                    repaints: 0,
+                    cached: false,
                 },
             );
         let payloads = |rx: &mut UnboundedReceiver<Outbound>| {

@@ -87,6 +87,7 @@ export const STYLE_FIELDS: Record<string, FieldCategory> = {
   transform: "json",
   opacity: "number",
   groupAlpha: "boolean",
+  cache: "keyword",
   transition: "json",
   // text
   color: "color",

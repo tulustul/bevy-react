@@ -428,6 +428,7 @@ pub fn apply_transition(ec: &mut EntityCommands, style: &Option<Style>) {
 pub fn drive_transitions(
     time: Res<Time>,
     mut commands: Commands,
+    mut dirt: ResMut<crate::layer::LayerContentDirt>,
     mut query: Query<(
         Entity,
         &TransitionInput,
@@ -510,6 +511,15 @@ pub fn drive_transitions(
             // detection every frame (read via `Deref`, write via `DerefMut`).
             let new = build_ui_transform(tx, ty, sc, scx, scy, rot);
             if *transform != new {
+                // Layer-cache classification (see the animation applier): a
+                // promoted root's own pure translation is composite-only.
+                let translate_only =
+                    transform.scale == new.scale && transform.rotation == new.rotation;
+                if promoted.is_some() && translate_only {
+                    dirt.composite_only.push(entity);
+                } else {
+                    dirt.nodes.push(entity);
+                }
                 *transform = new;
             }
         }
@@ -540,10 +550,14 @@ pub fn drive_transitions(
             }
             let color = rgba_to_color(rgba);
             match &mut bg {
-                Some(c) if c.0 != color => c.0 = color,
+                Some(c) if c.0 != color => {
+                    c.0 = color;
+                    dirt.nodes.push(entity);
+                }
                 Some(_) => {}
                 None => {
                     commands.entity(entity).insert(BackgroundColor(color));
+                    dirt.nodes.push(entity);
                 }
             }
         }
@@ -558,22 +572,32 @@ pub fn drive_transitions(
                 && la.0 != alpha
             {
                 la.0 = alpha;
+                // Composite-only: applied to the cached texture at composite
+                // time (content of the *enclosing* layer, if any).
+                dirt.composite_only.push(entity);
             }
         } else if let Some(alpha) = alpha {
+            let mut wrote = false;
             if let Some(c) = &mut bg
                 && c.0.alpha() != alpha
             {
                 c.0 = c.0.with_alpha(alpha);
+                wrote = true;
             }
             if let Some(mut tc) = text_color
                 && tc.0.alpha() != alpha
             {
                 tc.0 = tc.0.with_alpha(alpha);
+                wrote = true;
             }
             if let Some(mut img) = image
                 && img.color.alpha() != alpha
             {
                 img.color = img.color.with_alpha(alpha);
+                wrote = true;
+            }
+            if wrote {
+                dirt.nodes.push(entity);
             }
         }
 
@@ -722,6 +746,7 @@ mod tests {
     /// Build a one-entity world running `drive_transitions`, advancing `Time`.
     fn drive_world() -> (World, Schedule) {
         let mut world = World::new();
+        world.init_resource::<crate::layer::LayerContentDirt>();
         world.insert_resource(Time::<()>::default());
         let mut schedule = Schedule::default();
         schedule.add_systems(drive_transitions);
@@ -1031,6 +1056,7 @@ mod tests {
     #[test]
     fn system_eases_scroll_toward_target() {
         let mut world = World::new();
+        world.init_resource::<crate::layer::LayerContentDirt>();
         world.insert_resource(Time::<()>::default());
         let mut schedule = Schedule::default();
         schedule.add_systems(drive_scroll_transition);
