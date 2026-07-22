@@ -151,6 +151,18 @@ pub struct JsBridge {
     /// Boxed: `Props` is several KB by value (four inline `Style`s), and the
     /// update path moves entries out of and back into the map per op.
     pub props_cache: HashMap<NodeId, Box<crate::protocol::Props>>,
+    /// Nodes whose layer-promotion state may have changed this batch (a delta
+    /// touched a trigger field, or their child count crossed 0↔1+). Marked by
+    /// the op-apply arms, drained by
+    /// [`crate::layer::evaluate_layer_promotions`]. Lives on the bridge (not a
+    /// resource) because `apply_js_ops` is at Bevy's 16-system-param cap.
+    pub layer_dirty: HashSet<NodeId>,
+    /// Nodes currently promoted to composited layers (mirror of the
+    /// [`crate::layer::PromotedLayer`] markers, maintained by the evaluator).
+    /// The op-apply and interaction-restyle paths consult it to suppress the
+    /// per-node opacity fold; rich metadata lives in
+    /// [`crate::layer::LayersRegistry`].
+    pub promoted_layers: HashSet<NodeId>,
     /// Resolved text style of each `<text>` element/span, for span inheritance.
     pub text_styles: HashMap<NodeId, ResolvedTextStyle>,
     /// Node ids whose text content lives in a `TextSpan` component (vs a `Text`),
@@ -237,6 +249,8 @@ impl JsBridge {
             outbound_tx,
             nodes,
             props_cache: HashMap::new(),
+            layer_dirty: HashSet::new(),
+            promoted_layers: HashSet::new(),
             text_styles: HashMap::new(),
             spans: HashMap::new(),
             editable_inputs: HashSet::new(),
@@ -432,6 +446,8 @@ impl JsBridge {
     fn forget_node_data(&mut self, id: NodeId) {
         self.nodes.remove(&id);
         self.props_cache.remove(&id);
+        self.layer_dirty.remove(&id);
+        self.promoted_layers.remove(&id);
         self.text_styles.remove(&id);
         self.spans.remove(&id);
         self.editable_inputs.remove(&id);

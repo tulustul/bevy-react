@@ -438,10 +438,25 @@ pub fn drive_transitions(
         Option<&mut ImageNode>,
         Option<&mut Node>,
         Option<&AnimatedNode>,
+        Option<&crate::layer::PromotedLayer>,
+        Option<&mut crate::layer::LayerGroupAlpha>,
     )>,
 ) {
     let dt = time.delta_secs();
-    for (entity, input, mut state, mut transform, bg, text_color, image, node, anim) in &mut query {
+    for (
+        entity,
+        input,
+        mut state,
+        mut transform,
+        bg,
+        text_color,
+        image,
+        node,
+        anim,
+        promoted,
+        layer_alpha,
+    ) in &mut query
+    {
         // Seed resting values on first sight so a freshly mounted element snaps to
         // its initial style instead of animating in from zero.
         if !state.initialized {
@@ -511,9 +526,16 @@ pub fn drive_transitions(
             None
         };
 
+        // On a promoted layer root the eased opacity drives the group alpha
+        // (below) — colors keep their own alpha, so nothing to bake here. The
+        // spring itself always eases, keeping a mid-ease promote/demote
+        // continuous.
+        let promoted = promoted.is_some();
         if !skip_bg && let Some(target) = input.background_color {
             let mut rgba = state.color.drive(target, input.spec.for_background(), dt);
-            if let Some(a) = alpha {
+            if let Some(a) = alpha
+                && !promoted
+            {
                 rgba[3] = a;
             }
             let color = rgba_to_color(rgba);
@@ -528,7 +550,16 @@ pub fn drive_transitions(
 
         // Opacity always applies when set (even with no opacity transition: it then
         // snaps), so a transitioning background color doesn't clobber the alpha.
-        if let Some(alpha) = alpha {
+        // Promoted → the group alpha is the single target instead.
+        if let Some(alpha) = alpha
+            && promoted
+        {
+            if let Some(mut la) = layer_alpha
+                && la.0 != alpha
+            {
+                la.0 = alpha;
+            }
+        } else if let Some(alpha) = alpha {
             if let Some(c) = &mut bg
                 && c.0.alpha() != alpha
             {

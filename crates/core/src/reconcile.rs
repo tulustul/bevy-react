@@ -33,7 +33,8 @@ use crate::protocol::{NodeId, Op, Outbound, Props, ROOT_ID, Style, UiEvent};
 use crate::transition::{ScrollTransitionState, apply_scroll_transition};
 use crate::ui_map::{
     AtlasLayoutCache, apply_atlas, apply_opacity, apply_style, apply_style_masked,
-    apply_text_style, image_node, overlay_style, parse_color, resolved_text_style, text_layout,
+    apply_text_style, image_node, image_node_promoted, overlay_style, parse_color,
+    resolved_text_style, text_layout,
 };
 
 /// Live instrumentation of the [`apply_js_ops`] hot path. Updated once per frame
@@ -549,6 +550,9 @@ pub fn apply_js_ops(
                 }
                 if let (Some(p), Some(c)) = (resolve(&bridge, parent), resolve(&bridge, child)) {
                     let same_parent = bridge.parent_of.get(&child) == Some(&parent);
+                    // Child count may cross 0↔1+: re-evaluate the parent's layer
+                    // promotion (see `crate::layer`).
+                    bridge.layer_dirty.insert(parent);
                     bridge.append_child(parent, child);
                     if same_parent {
                         // Re-append = move to the end: an O(1) shadow reorder, synced
@@ -586,6 +590,9 @@ pub fn apply_js_ops(
                 // (always dirty) parent. A missing `before` falls back to appending.
                 if let (Some(p), Some(c)) = (resolve(&bridge, parent), resolve(&bridge, child)) {
                     let same_parent = bridge.parent_of.get(&child) == Some(&parent);
+                    // Child count may cross 0↔1+: re-evaluate the parent's layer
+                    // promotion (see `crate::layer`).
+                    bridge.layer_dirty.insert(parent);
                     bridge.insert_before(parent, child, before);
                     if !same_parent {
                         // Fresh/cross-parent: attach NOW (at the end — the rebuild
@@ -597,7 +604,9 @@ pub fn apply_js_ops(
                     inherit_text_style(&mut commands, &bridge, parent, child, c);
                 }
             }
-            Op::Remove { parent: _, child } => {
+            Op::Remove { parent, child } => {
+                // Losing its last child demotes a promoted parent: re-evaluate.
+                bridge.layer_dirty.insert(parent);
                 // React emits `Remove` only for the subtree's top node, and Bevy
                 // despawns that node recursively — but a `<surface>`/`<root>` nested
                 // under it is a detached root (no `ChildOf`), so neither reaches it.
@@ -662,6 +671,18 @@ pub fn apply_js_ops(
                 let (dirty, ev) = cached.merge_delta(props, &unset, &style_unset);
                 let props = cached;
                 use crate::protocol::style_groups as g;
+                // A delta touching a promotion trigger (`opacity`/`groupAlpha`,
+                // both in the LAYER group), a variant style swap (variants can
+                // carry `opacity`), or the animated bindings re-evaluates this
+                // node's layer promotion (see `crate::layer`).
+                if dirty.style.intersects(g::LAYER)
+                    || dirty.animated
+                    || dirty.hover_style
+                    || dirty.press_style
+                    || dirty.focus_style
+                {
+                    bridge.layer_dirty.insert(id);
+                }
                 if bridge.text_styles.contains_key(&id) {
                     // A `<text>` element: refresh its resolved style — but only
                     // when a text-style field actually changed (resolution does
@@ -682,7 +703,9 @@ pub fn apply_js_ops(
                     // apply on mount and never animate. Spans have no `Node` and are
                     // skipped so they never gain a layout box.
                     if text_roots.contains(e) {
-                        apply_style_masked(&mut ec, &props.style, dirty.style);
+                        // Text elements are never layer-promoted (see
+                        // `crate::layer::promotion_reasons`).
+                        apply_style_masked(&mut ec, &props.style, dirty.style, false);
                     }
                     // Parity quirk preserved: a stale `TextLayout` is never removed
                     // when both its fields go absent, only overwritten.
@@ -738,7 +761,12 @@ pub fn apply_js_ops(
                         }
                     }
                     let mut ec = commands.entity(e);
-                    apply_style_masked(&mut ec, &props.style, dirty.style);
+                    apply_style_masked(
+                        &mut ec,
+                        &props.style,
+                        dirty.style,
+                        bridge.promoted_layers.contains(&id),
+                    );
                     if dirty.any_style_variant() {
                         apply_style_variants(&mut ec, &props);
                     }
@@ -750,7 +778,8 @@ pub fn apply_js_ops(
                     let mut ec = commands.entity(e);
                     if dirty.style.any() {
                         let style = overlay_style(&surface_root_base(), &props.style);
-                        apply_style_masked(&mut ec, &style, dirty.style);
+                        // Detached roots are never layer-promoted.
+                        apply_style_masked(&mut ec, &style, dirty.style, false);
                     }
                     if dirty.target
                         && let Some(name) = &props.target
@@ -767,20 +796,22 @@ pub fn apply_js_ops(
                     let mut ec = commands.entity(e);
                     if dirty.style.any() {
                         let style = overlay_style(&root_base(), &props.style);
-                        apply_style_masked(&mut ec, &style, dirty.style);
+                        // Detached roots are never layer-promoted.
+                        apply_style_masked(&mut ec, &style, dirty.style, false);
                     }
                     if dirty.anchor {
                         apply_anchor(&mut ec, &props);
                     }
                 } else {
+                    let promoted = bridge.promoted_layers.contains(&id);
                     let mut ec = commands.entity(e);
-                    apply_style_masked(&mut ec, &props.style, dirty.style);
+                    apply_style_masked(&mut ec, &props.style, dirty.style, promoted);
                     // Image attributes only ever appear on `image` elements, so
                     // their presence is enough to re-apply the texture/tint. A
                     // removed `filter` also lands here: its material made the
                     // `ImageNode` transparent, so the normal image must be rebuilt.
                     if (dirty.image || dirty.style.intersects(g::FILTER)) && is_image(&props) {
-                        let mut img = image_node(&props, &assets);
+                        let mut img = image_node_promoted(&props, &assets, promoted);
                         apply_atlas(
                             &mut img,
                             &props,
@@ -804,6 +835,7 @@ pub fn apply_js_ops(
                                 cache: &mut ui_assets.filter_cache,
                                 white: &ui_assets.filter_assets.white,
                             },
+                            promoted,
                         );
                     }
                     // A `<canvas>`'s new declarative display list: clear + replay
@@ -1047,14 +1079,25 @@ struct FilterCtx<'a> {
 /// twice. Absent → remove any prior filter material so the node reverts to its
 /// normal draw. Must run *after* `apply_style` / the image insert (it removes the
 /// components those add). See [`crate::filter`] for the scope (own surface only).
-fn apply_filter(ec: &mut EntityCommands, props: &Props, assets: &AssetServer, ctx: &mut FilterCtx) {
+fn apply_filter(
+    ec: &mut EntityCommands,
+    props: &Props,
+    assets: &AssetServer,
+    ctx: &mut FilterCtx,
+    promoted: bool,
+) {
     let Some(spec) = props.style.as_ref().and_then(|s| s.filter.as_ref()) else {
         ec.remove::<MaterialNode<FilterMaterial>>();
         return;
     };
     // Base color: the image tint, else the background color, else white. Opacity is
-    // folded into alpha just like the standard background/image paths.
-    let opacity = props.style.as_ref().and_then(|s| s.opacity);
+    // folded into alpha just like the standard background/image paths — and, like
+    // them, suppressed on a promoted layer root (group alpha applies at composite).
+    let opacity = if promoted {
+        None
+    } else {
+        props.style.as_ref().and_then(|s| s.opacity)
+    };
     let base = props
         .tint
         .as_deref()
@@ -1122,7 +1165,9 @@ fn spawn_element(
         _ => {}
     }
     // A `filter` swaps the node's image/background draw for a filter material.
-    apply_filter(&mut ec, props, assets, filter);
+    // Create-time promotion state is always false: a fresh node has no children
+    // yet; the evaluator re-applies on the promote flip.
+    apply_filter(&mut ec, props, assets, filter, false);
     apply_style_variants(&mut ec, props);
     apply_pointer_handlers(&mut ec, props);
     apply_animated(&mut ec, props);
@@ -1382,6 +1427,62 @@ fn apply_button_focus_default(ec: &mut EntityCommands, style: &Option<Style>) {
 }
 
 /// Whether these props carry any `image` element attribute.
+/// Re-derive every opacity-dependent output of a node after its layer-
+/// promotion state flipped (called by
+/// [`crate::layer::evaluate_layer_promotions`]). Bakes the final values in
+/// one shot — promoted → folds suppressed + group alpha written; demoted →
+/// folds resume — so the static path and the composite path never fight
+/// across frames.
+pub(crate) fn reapply_opacity_outputs(
+    commands: &mut Commands,
+    entity: Entity,
+    props: &Props,
+    promoted: bool,
+    assets: &AssetServer,
+    ui_assets: &mut UiAssets,
+    style_variants: &mut Query<&mut StyleVariants>,
+) {
+    use crate::protocol::style_groups as g;
+    // Variant-bearing nodes re-merge through `apply_interaction_styles`
+    // (ordered after the evaluator): poking change detection re-runs the full
+    // merge with the new promotion state without clobbering an active
+    // hover/press overlay.
+    if let Ok(mut variants) = style_variants.get_mut(entity) {
+        variants.set_changed();
+    } else {
+        let mut ec = commands.entity(entity);
+        // Every group `opacity` feeds, minus TRANSITION (transition *state*
+        // persists across flips; only baked outputs re-derive) and TEXT
+        // (text elements never promote).
+        let mask = crate::protocol::StyleDirty(
+            g::BACKGROUND | g::BG_GRADIENT | g::BORDER_GRADIENT | g::TEXT_SHADOW | g::LAYER,
+        );
+        apply_style_masked(&mut ec, &props.style, mask, promoted);
+    }
+    let mut ec = commands.entity(entity);
+    if is_image(props) {
+        let mut img = image_node_promoted(props, assets, promoted);
+        apply_atlas(
+            &mut img,
+            props,
+            &mut ui_assets.layouts,
+            &mut ui_assets.atlas_cache,
+        );
+        ec.insert(img);
+    }
+    apply_filter(
+        &mut ec,
+        props,
+        assets,
+        &mut FilterCtx {
+            materials: &mut ui_assets.filter_materials,
+            cache: &mut ui_assets.filter_cache,
+            white: &ui_assets.filter_assets.white,
+        },
+        promoted,
+    );
+}
+
 fn is_image(props: &Props) -> bool {
     props.src.is_some()
         || props.tint.is_some()
@@ -1945,6 +2046,7 @@ pub fn apply_interaction_styles(
             Option<&Interaction>,
             Option<&FocusState>,
             &StyleVariants,
+            Option<&crate::layer::PromotedLayer>,
         ),
         Or<(
             Changed<Interaction>,
@@ -1954,7 +2056,7 @@ pub fn apply_interaction_styles(
     >,
     rnodes: Query<&RNode>,
 ) {
-    for (entity, interaction, focus, variants) in &query {
+    for (entity, interaction, focus, variants, promoted) in &query {
         let mut style = match interaction {
             Some(Interaction::Pressed) => overlay_style(
                 &overlay_style(&variants.base, &variants.hover),
@@ -1971,7 +2073,15 @@ pub fn apply_interaction_styles(
             .get(entity)
             .ok()
             .map(|r| crate::diag::node_scope(r.0));
-        apply_style(&mut commands.entity(entity), &style);
+        // A promoted layer root's merged `opacity` (base or variant-carried)
+        // drives the group alpha instead of folding into colors. Promotion
+        // itself never flips on interaction (`promotion_reasons` unions
+        // variant presence; `groupAlpha` is `no_overlay`).
+        crate::ui_map::apply_style_promoted(
+            &mut commands.entity(entity),
+            &style,
+            promoted.is_some(),
+        );
     }
 }
 

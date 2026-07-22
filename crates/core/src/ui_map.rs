@@ -413,7 +413,14 @@ fn set_node_if_changed(node: Node) -> impl EntityCommand {
 /// present in the style (and remove ones that are absent, so toggling a style key
 /// off clears the component).
 pub fn apply_style(ec: &mut EntityCommands, style: &Option<Style>) {
-    apply_style_masked(ec, style, StyleDirty::ALL);
+    apply_style_masked(ec, style, StyleDirty::ALL, false);
+}
+
+/// [`apply_style`] for a node whose layer-promotion state is known (see
+/// `crate::layer`): when `promoted`, the per-node `opacity` fold is suppressed
+/// — the value becomes the subtree's composite-time group alpha instead.
+pub fn apply_style_promoted(ec: &mut EntityCommands, style: &Option<Style>, promoted: bool) {
+    apply_style_masked(ec, style, StyleDirty::ALL, promoted);
 }
 
 /// [`apply_style`] restricted to the dirty [`style_groups`]: each derived
@@ -425,7 +432,12 @@ pub fn apply_style(ec: &mut EntityCommands, style: &Option<Style>) {
 /// `style` must always be the **full merged** style, never a delta — a skipped
 /// group keeps its current components, but an executed group trusts `style`
 /// completely (absence = remove).
-pub fn apply_style_masked(ec: &mut EntityCommands, style: &Option<Style>, dirty: StyleDirty) {
+pub fn apply_style_masked(
+    ec: &mut EntityCommands,
+    style: &Option<Style>,
+    dirty: StyleDirty,
+    promoted: bool,
+) {
     use crate::protocol::style_groups as g;
 
     // Guarded in-place update, not a wholesale re-insert: `Op::Update` and the
@@ -439,8 +451,29 @@ pub fn apply_style_masked(ec: &mut EntityCommands, style: &Option<Style>, dirty:
     let s = style.as_ref();
 
     // `opacity` multiplies into the background (and text) alpha — color before
-    // opacity, mirroring the animated path.
-    let opacity = s.and_then(|s| s.opacity);
+    // opacity, mirroring the animated path. On a promoted layer root the fold
+    // is suppressed wholesale (`opacity = None` starves every fold site below)
+    // and the value instead drives the subtree's composite-time group alpha.
+    let opacity = if promoted {
+        None
+    } else {
+        s.and_then(|s| s.opacity)
+    };
+    if promoted && dirty.intersects(g::LAYER) {
+        let alpha = s.and_then(|s| s.opacity).unwrap_or(1.0);
+        // Queued set-if-neq (like `set_node_if_changed`): a settled value must
+        // not trip change detection every restyle.
+        ec.queue(move |mut entity: EntityWorldMut| {
+            match entity.get_mut::<crate::layer::LayerGroupAlpha>() {
+                Some(mut current) => {
+                    current.set_if_neq(crate::layer::LayerGroupAlpha(alpha));
+                }
+                None => {
+                    entity.insert(crate::layer::LayerGroupAlpha(alpha));
+                }
+            }
+        });
+    }
     if dirty.intersects(g::BACKGROUND) {
         // A `filter` makes the node render through a `MaterialNode<FilterMaterial>`
         // (built reconcile-side, where the material assets live), which *replaces* the
@@ -538,7 +571,7 @@ pub fn apply_style_masked(ec: &mut EntityCommands, style: &Option<Style>, dirty:
     // A `<text>` root's drop shadow (block-level). No-op on non-text nodes (no
     // `Text` to shadow); removed when the style drops it on a re-render/hover-out.
     if dirty.intersects(g::TEXT_SHADOW) {
-        match text_shadow(s) {
+        match text_shadow(s, opacity) {
             Some(shadow) => {
                 ec.insert(shadow);
             }
@@ -656,6 +689,12 @@ pub fn overlay_style(base: &Option<Style>, overlay: &Option<Style>) -> Option<St
 /// Build an `ImageNode` from an `image` element's props. `src` loads a texture
 /// via the asset server; without it, a solid-color (tinted) image is used.
 pub fn image_node(props: &Props, assets: &AssetServer) -> ImageNode {
+    image_node_promoted(props, assets, false)
+}
+
+/// [`image_node`] for a node whose layer-promotion state is known: promoted →
+/// the `opacity` tint fold is suppressed (group alpha applies at composite).
+pub fn image_node_promoted(props: &Props, assets: &AssetServer, promoted: bool) -> ImageNode {
     let mut image = match &props.src {
         Some(path) => ImageNode::new(assets.load(path)),
         None => ImageNode::solid_color(
@@ -671,8 +710,11 @@ pub fn image_node(props: &Props, assets: &AssetServer) -> ImageNode {
     }
     // `opacity` multiplies into the image's tint alpha (the tint is multiplied with
     // the texture), so it fades a `src` image too — mirroring how it fades a
-    // background/text color.
-    image.color = apply_opacity(image.color, props.style.as_ref().and_then(|s| s.opacity));
+    // background/text color. Suppressed on a promoted layer root (group alpha
+    // applies once at composite — see `crate::layer`).
+    if !promoted {
+        image.color = apply_opacity(image.color, props.style.as_ref().and_then(|s| s.opacity));
+    }
     image.flip_x = props.flip_x;
     image.flip_y = props.flip_y;
     if let Some(mode) = &props.image_mode {
@@ -865,9 +907,10 @@ fn letter_spacing(spec: &LetterSpacingSpec) -> LetterSpacing {
     }
 }
 
-/// Build a [`TextShadow`] from a style's `textShadow`, folding `opacity` into the
-/// color. Unset offset/color fields fall back to bevy's [`TextShadow::default`].
-fn text_shadow(style: Option<&Style>) -> Option<TextShadow> {
+/// Build a [`TextShadow`] from a style's `textShadow`, folding `opacity` (as
+/// resolved by the caller — `None` on a promoted layer root) into the color.
+/// Unset offset/color fields fall back to bevy's [`TextShadow::default`].
+fn text_shadow(style: Option<&Style>, opacity: Option<f32>) -> Option<TextShadow> {
     let s = style?;
     let spec = s.text_shadow.as_ref()?;
     let mut shadow = TextShadow::default();
@@ -880,7 +923,7 @@ fn text_shadow(style: Option<&Style>) -> Option<TextShadow> {
     if let Some(c) = &spec.color {
         shadow.color = parse_color(c);
     }
-    shadow.color = apply_opacity(shadow.color, s.opacity);
+    shadow.color = apply_opacity(shadow.color, opacity);
     Some(shadow)
 }
 
@@ -1387,15 +1430,18 @@ mod tests {
         let s = style(serde_json::json!({
             "textShadow": { "color": "#ff0000", "offsetX": 2, "offsetY": 3 },
         }));
-        let shadow = text_shadow(Some(&s)).unwrap();
+        let shadow = text_shadow(Some(&s), s.opacity).unwrap();
         assert_eq!(shadow.offset, Vec2::new(2.0, 3.0));
         assert_eq!(shadow.color.to_srgba(), Srgba::hex("ff0000").unwrap());
 
         // Unset offset falls back to bevy's default displacement (4.0).
         let bare = style(serde_json::json!({ "textShadow": {} }));
-        assert_eq!(text_shadow(Some(&bare)).unwrap().offset, Vec2::splat(4.0));
+        assert_eq!(
+            text_shadow(Some(&bare), None).unwrap().offset,
+            Vec2::splat(4.0)
+        );
         // No textShadow → no component.
-        assert!(text_shadow(Some(&style(serde_json::json!({})))).is_none());
+        assert!(text_shadow(Some(&style(serde_json::json!({}))), None).is_none());
     }
 
     #[test]

@@ -190,6 +190,57 @@ impl Plugin for ReactUiPlugin {
             app.add_plugins(UiMaterialPlugin::<FilterMaterial>::default())
                 .init_resource::<FilterMaterialCache>()
                 .add_systems(Startup, init_filter_assets);
+
+            // Layer compositing (see `crate::layer::render`): the capture
+            // pass + composite quad over stock `bevy_ui_render`, public
+            // seams only. Steal window: after Queue, before the stock sort;
+            // prepare after the stock prepares' PrepareBindGroups slot is
+            // irrelevant (disjoint items).
+            embedded_asset!(app, "layer/composite.wgsl");
+            if let Some(render_app) = app.get_sub_app_mut(bevy::render::RenderApp) {
+                use crate::layer::render as lr;
+                use bevy::core_pipeline::schedule::{Core2d, Core2dSystems, Core3d, Core3dSystems};
+                use bevy::render::render_phase::{AddRenderCommand, sort_phase_system};
+                use bevy::render::render_resource::SpecializedRenderPipelines;
+                use bevy::render::{
+                    ExtractSchedule, GpuResourceAppExt, Render, RenderStartup, RenderSystems,
+                };
+                use bevy::ui_render::{TransparentUi, extract_ui_camera_view, ui_pass};
+
+                render_app
+                    .init_resource::<lr::ExtractedUiLayers>()
+                    .init_resource::<lr::LayerAtlases>()
+                    .init_gpu_resource::<SpecializedRenderPipelines<lr::LayerCompositePipeline>>()
+                    .init_gpu_resource::<lr::LayerCompositeMeta>()
+                    .add_render_command::<TransparentUi, lr::DrawLayerComposite>()
+                    .add_systems(RenderStartup, lr::init_layer_composite_pipeline)
+                    .add_systems(
+                        ExtractSchedule,
+                        lr::extract_ui_layers.after(extract_ui_camera_view),
+                    )
+                    .add_systems(
+                        Render,
+                        (
+                            lr::redistribute_ui_layers
+                                .in_set(RenderSystems::PhaseSort)
+                                .before(sort_phase_system::<TransparentUi>),
+                            lr::prepare_layer_atlases.in_set(RenderSystems::PrepareResources),
+                            lr::prepare_layer_composites.in_set(RenderSystems::PrepareBindGroups),
+                        ),
+                    )
+                    .add_systems(
+                        Core2d,
+                        lr::ui_layer_capture_pass
+                            .after(Core2dSystems::PostProcess)
+                            .before(ui_pass),
+                    )
+                    .add_systems(
+                        Core3d,
+                        lr::ui_layer_capture_pass
+                            .after(Core3dSystems::PostProcess)
+                            .before(ui_pass),
+                    );
+            }
         }
 
         // Channels: op batches, app messages, requests, and animation commands flow
@@ -404,6 +455,32 @@ impl Plugin for ReactUiPlugin {
         app.add_systems(
             Update,
             crate::window::send_resize_events.after(apply_js_ops),
+        );
+
+        // Layer promotion (see `crate::layer`). Main-world state registers
+        // unconditionally so headless wiring tests build; the render half is
+        // gated above with the rest of the render-only setup. A separate
+        // `add_systems` call — the Update tuple above is at the arity cap.
+        // Ordering: after the op drain (fresh props/dirty marks; the explicit
+        // constraint also forces a command sync so markers are visible), and
+        // before every later alpha writer this frame — the interaction
+        // restyle, transitions (ordered after it), and the animation appliers
+        // — so they all see the final promotion state (no cross-stage
+        // ping-pong).
+        app.init_resource::<crate::layer::LayerMembership>();
+        app.init_resource::<crate::layer::LayersRegistry>();
+        app.add_systems(
+            Update,
+            crate::layer::evaluate_layer_promotions
+                .after(apply_js_ops)
+                .before(apply_interaction_styles)
+                .before(AnimationSet::Apply),
+        );
+        // After bevy_ui layout so capture rects/membership are this frame's
+        // geometry (extraction reads them the same frame, post-PostUpdate).
+        app.add_systems(
+            PostUpdate,
+            crate::layer::sync_layer_geometry.after(bevy::ui::UiSystems::Layout),
         );
         app.add_react_request_handler(crate::window::handle_window_size_request);
 

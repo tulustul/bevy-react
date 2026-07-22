@@ -405,6 +405,7 @@ dependencies = [
  "anyhow",
  "bevy",
  "bevy-react-macros",
+ "bytemuck",
  "console_error_panic_hook",
  "crossbeam-channel",
  "deno_core",

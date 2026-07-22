@@ -109,6 +109,7 @@ The Rust binding structs are the **single source of truth**. `App::export_react_
 - If you find any linting issue, try to fix it immidiately.
 - If you find any broken unit test, ask user if a fix for it is needed.
 - Ask the user questions if uncertain.
+- Avoid testing application manually using xdotool or similar tools until explicitly asked. It's just too slow. Use Let the human do manual tests. You are allowed to use `--shoot` though.
 
 ### Screenshotting the demos app (visual verification)
 

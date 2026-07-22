@@ -268,6 +268,10 @@ struct AnimTargets {
     text: Option<&'static mut TextColor>,
     image: Option<&'static mut ImageNode>,
     node: Option<&'static mut Node>,
+    // On a promoted layer root (see `crate::layer`) an animated `opacity`
+    // drives the composite-time group alpha instead of the color folds.
+    promoted: Option<&'static crate::layer::PromotedLayer>,
+    layer_alpha: Option<&'static mut crate::layer::LayerGroupAlpha>,
 }
 
 fn apply_animated_nodes(
@@ -306,8 +310,11 @@ fn apply_animated_nodes(
         // Opacity owns the final alpha across background/text/image (stage 3).
         // Resolved once up front so stage 2 can bake it into any color it writes —
         // otherwise the two stages would ping-pong the alpha every frame and the
-        // compare-before-write guards would never settle.
+        // compare-before-write guards would never settle. On a promoted layer
+        // root the alpha targets the group instead: colors keep their own
+        // alpha and stage 3 writes `LayerGroupAlpha`.
         let opacity_alpha = b.get(P::Opacity).and_then(|x| eval_scalar(x, &values));
+        let promoted = t.promoted.is_some();
 
         // Stage 2 — every non-transform, non-opacity binding. Colors land on their
         // component; lengths/scalars land on `Node`. Opacity is deferred to stage 3
@@ -323,7 +330,8 @@ fn apply_animated_nodes(
                     };
                     // Bake the final alpha in for the components stage 3 drives
                     // (border is not one of them: opacity never touches it).
-                    if matches!(property, P::BackgroundColor | P::Color)
+                    if !promoted
+                        && matches!(property, P::BackgroundColor | P::Color)
                         && let Some(alpha) = opacity_alpha
                     {
                         rgba[3] = alpha;
@@ -375,8 +383,17 @@ fn apply_animated_nodes(
             }
         }
 
-        // Stage 3 — opacity owns the final alpha across background/text/image.
-        if let Some(alpha) = opacity_alpha {
+        // Stage 3 — opacity owns the final alpha: the group alpha on a
+        // promoted layer root, else across background/text/image.
+        if let Some(alpha) = opacity_alpha
+            && promoted
+        {
+            if let Some(la) = &mut t.layer_alpha
+                && la.0 != alpha
+            {
+                la.0 = alpha;
+            }
+        } else if let Some(alpha) = opacity_alpha {
             let with_alpha = |color: Color| -> Option<Color> {
                 let mut s = color.to_srgba();
                 (s.alpha != alpha).then(|| {

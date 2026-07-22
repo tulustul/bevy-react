@@ -68,6 +68,7 @@ pub mod protocol;
 // re-exported at the crate root below.
 pub mod animations;
 pub mod canvas;
+pub mod layer;
 pub mod portal;
 pub mod surface;
 

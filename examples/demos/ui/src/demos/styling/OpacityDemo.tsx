@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { Checkbox, Example, Slider } from "@/components";
+import { Checkbox, Example, ProgressBar, Slider } from "@/components";
 import { Colors } from "@/theme";
 import { box, controlColumn, row } from "./shared";
+import { TestBanner } from "@/components/TestBanner";
 
 export function OpacityDemo() {
   return (
@@ -11,6 +12,16 @@ export function OpacityDemo() {
         tsx={`<node style={{ opacity: 0.4 }} />`}
       >
         <OpacityControl />
+      </Example>
+
+      <Example
+        description="opacity on a node with children promotes the subtree to a
+composited layer: the whole widget fades as one group, so
+overlapping translucent pieces never show through each other. groupAlpha:
+false opts out — each node fades on its own (watch the seams appear)."
+        tsx={`<node style={{ opacity, groupAlpha }}>…</node>`}
+      >
+        <GroupOpacityControl />
       </Example>
 
       <Example
@@ -34,6 +45,36 @@ function OpacityControl() {
         max={1}
         onChange={setOpacity}
         label={`opacity ${opacity.toFixed(2)}`}
+      />
+    </node>
+  );
+}
+
+function GroupOpacityControl() {
+  const [opacity, setOpacity] = useState(0.7);
+  const [groupAlpha, setGroupAlpha] = useState(true);
+  return (
+    <node style={controlColumn}>
+      <TestBanner
+        style={{
+          margin: { left: -40, top: -20 },
+          positionType: "absolute",
+        }}
+      />
+      <TestBanner
+        style={{ opacity, groupAlpha, margin: { left: 40, top: 20 } }}
+      />
+      <Slider
+        value={opacity}
+        min={0}
+        max={1}
+        onChange={setOpacity}
+        label={`opacity ${opacity.toFixed(2)}`}
+      />
+      <Checkbox
+        label="groupAlpha"
+        enabled={groupAlpha}
+        onChange={setGroupAlpha}
       />
     </node>
   );

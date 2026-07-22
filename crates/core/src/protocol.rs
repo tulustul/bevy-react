@@ -538,8 +538,18 @@ pub struct Style {
     pub transform: Option<Transform>,
     /// Opacity in `0.0..=1.0`, multiplied into the alpha of the background (and
     /// text) color. With a [`transition`](Self::transition) a change eases.
+    /// On a node with children (unless [`group_alpha`](Self::group_alpha) is
+    /// `false`) the subtree is instead promoted to a composited layer and the
+    /// value applies once to the whole group — see [`crate::layer`].
     #[serde(default)]
     pub opacity: Option<f32>,
+    /// Whether `opacity` on a node with children fades the subtree as a group
+    /// (composited layer) rather than folding into each node's own colors.
+    /// Default `true` (web semantics); `false` opts out of layer promotion for
+    /// perf-sensitive spots, keeping the per-node fold. `no_overlay`: a hover/
+    /// press variant must not be able to flip promotion.
+    #[serde(default)]
+    pub group_alpha: Option<bool>,
     /// CSS-like per-channel transition timing. Present → a change to `transform` /
     /// `opacity` / `backgroundColor` (via re-render or hover/press) animates over
     /// time using the same driver/easing engine as `animatedStyle`, rather than
@@ -645,6 +655,11 @@ pub mod style_groups {
     /// field is *also* in `LAYOUT` because a gutter-positioned bar drives
     /// `Node.scrollbar_width` (see `node_from_style`).
     pub const SCROLLBAR: u32 = 1 << 18;
+    /// Layer-promotion inputs (`crate::layer`): fields that change whether a
+    /// subtree composites as a layer (`group_alpha`). No `apply_style` output
+    /// reads this group — it exists so a delta touching a promotion trigger is
+    /// visible to the promotion evaluator.
+    pub const LAYER: u32 = 1 << 19;
 }
 
 /// The single source of truth for [`Style`]'s field list. Invokes the callback
@@ -729,9 +744,11 @@ macro_rules! with_style_fields {
             (
                 opacity,
                 "opacity",
-                (BACKGROUND | BG_GRADIENT | BORDER_GRADIENT | TEXT_SHADOW | TRANSITION | TEXT),
+                (BACKGROUND | BG_GRADIENT | BORDER_GRADIENT | TEXT_SHADOW | TRANSITION | TEXT
+                    | LAYER),
                 overlay
             ),
+            (group_alpha, "groupAlpha", (LAYER), no_overlay),
             (
                 transition,
                 "transition",
@@ -2571,6 +2588,35 @@ mod tests {
         let transition = s.transition.expect("transition present");
         assert!(transition.for_transform().is_some());
         assert!(transition.for_opacity().is_none());
+    }
+
+    /// `groupAlpha` decodes as a plain bool, defaults to absent, and its wire
+    /// delta dirties the `LAYER` group (the promotion evaluator's trigger),
+    /// as does `opacity`.
+    #[test]
+    fn group_alpha_decodes_and_dirties_layer() {
+        let s: Style = serde_json::from_str(r#"{ "groupAlpha": false }"#).expect("style decodes");
+        assert_eq!(s.group_alpha, Some(false));
+        let s: Style = serde_json::from_str("{}").expect("style decodes");
+        assert_eq!(s.group_alpha, None);
+
+        // Delta-merge marks the LAYER group for both trigger fields.
+        let mut cached = Props::default();
+        let (dirty, _) = cached.merge_delta(
+            props(serde_json::json!({ "style": { "groupAlpha": false } })),
+            &[],
+            &[],
+        );
+        assert!(dirty.style.intersects(style_groups::LAYER));
+        let (dirty, _) = cached.merge_delta(
+            props(serde_json::json!({ "style": { "opacity": 0.5 } })),
+            &[],
+            &[],
+        );
+        assert!(dirty.style.intersects(style_groups::LAYER));
+        let style = cached.style.as_ref().expect("style retained");
+        assert_eq!(style.group_alpha, Some(false));
+        assert_eq!(style.opacity, Some(0.5));
     }
 
     /// Angles parse from a bare number (degrees) or a unit string, always landing

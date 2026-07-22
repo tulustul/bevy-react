@@ -446,8 +446,15 @@ export interface BevyStyle {
     rotate?: Angle;
   };
   /** Opacity in `0..1`, multiplied into the background (and text) alpha. With a
-   * `transition` a change eases. */
+   * `transition` a change eases. On a node with children (unless `groupAlpha`
+   * is `false`) the subtree instead composites as a layer and the value fades
+   * the whole group at once (web semantics). */
   opacity?: number;
+  /** Whether `opacity` on a node with children fades the subtree as a group
+   * (composited layer, the default — web semantics) rather than folding into
+   * each node's own colors. Set `false` to opt out of layer promotion for
+   * perf-sensitive spots. Not carried by `hoverStyle`/`pressStyle`. */
+  groupAlpha?: boolean;
   /** CSS-like transition timing. When a `transform` / `opacity` / `backgroundColor`
    * change occurs — via re-render or `hoverStyle`/`pressStyle` — it eases over time
    * (using the same driver/easing engine as `animatedStyle`) instead of snapping. */

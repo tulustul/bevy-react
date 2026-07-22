@@ -39,8 +39,6 @@ export const caption: BevyStyle = {
   fontSize: FontSizes.xs,
 };
 
-// A live target stacked above its slider(s)/control — the standard layout for the
-// interactive styling examples.
 export const controlColumn: BevyStyle = {
   flexDirection: "column",
   alignItems: "center",

@@ -51,6 +51,7 @@ accesskit = { workspace = true }
 anyhow = { workspace = true }
 bevy = { workspace = true }
 bevy-react-macros = { workspace = true }
+bytemuck = { workspace = true }
 crossbeam-channel = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
