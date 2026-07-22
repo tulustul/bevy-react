@@ -52,7 +52,8 @@ export interface DevtoolsWarning {
  *  open, so it reopens on the next launch. */
 export interface DevtoolsSettings {
   open: boolean;
-  /** The active tab ("nodes" | "bridge" | "layers"); validated on restore. */
+  /** The active tab ("nodes" | "layers" | "console" | "bridge"); validated on
+   *  restore. */
   tab: string;
   mode: string;
   width_frac: number;
@@ -107,6 +108,29 @@ export interface DevtoolsLayers {
   layers: DevtoolsLayerRow[];
 }
 
+/** One row in a `devtools.console` payload: an entry from the Rust-side
+ *  console ring — JS `console.*` output (source "js"), or a Rust diag
+ *  message / JS-runtime failure (source "rust"). */
+export interface DevtoolsConsoleEntry {
+  /** Process-monotonic id (never reused, survives clears). */
+  seq: number;
+  /** Wall-clock epoch milliseconds. */
+  time_ms: number;
+  /** "js" | "rust". */
+  source: string;
+  /** "debug" | "info" | "warn" | "error". */
+  level: string;
+  message: string;
+}
+
+/** Bevy→JS `devtools.console`: console entries, oldest→newest per batch. The
+ *  full ring backlog arrives right after the Console tab announces itself
+ *  (`sendConsoleOpen(true)`); later batches carry only new entries. Nothing
+ *  streams while the tab is hidden. */
+export interface DevtoolsConsole {
+  entries: DevtoolsConsoleEntry[];
+}
+
 export function onToggle(cb: (e: DevtoolsToggle) => void): () => void {
   return addEventListener("devtools.toggle", cb as (v: unknown) => void);
 }
@@ -139,6 +163,12 @@ export function onWindow(cb: (w: DevtoolsWindow) => void): () => void {
  *  tab is active. */
 export function onLayers(cb: (e: DevtoolsLayers) => void): () => void {
   return addEventListener("devtools.layers", cb as (v: unknown) => void);
+}
+
+/** Console entries (see [`DevtoolsConsole`]); streamed while the Console tab
+ *  is active. */
+export function onConsole(cb: (e: DevtoolsConsole) => void): () => void {
+  return addEventListener("devtools.console", cb as (v: unknown) => void);
 }
 
 /** Report the panel's layout settings for persistence. Emitted on every
@@ -192,4 +222,16 @@ export function sendOverlay(on: boolean): void {
  *  and the toggle key all funnel through it. */
 export function sendLayersOpen(on: boolean): void {
   emit("devtools.layersOpen", { on });
+}
+
+/** The Console tab was shown/hidden — gates the Rust-side console stream
+ *  (same mount/unmount contract as [`sendLayersOpen`]). */
+export function sendConsoleOpen(on: boolean): void {
+  emit("devtools.consoleOpen", { on });
+}
+
+/** The Console tab's clear button — empty the Rust-side console ring (the
+ *  panel clears its local list itself). */
+export function sendConsoleClear(): void {
+  emit("devtools.consoleClear", {});
 }

@@ -893,6 +893,7 @@ pub fn apply_js_ops(
                     }
                     update_controlled_scroll(
                         &mut bridge,
+                        &mut ec,
                         &mut scroll_query,
                         e,
                         id,
@@ -1340,7 +1341,13 @@ fn create_controlled_scroll(
             props.scroll_top.unwrap_or(0.0),
         );
         // Overrides the `ZERO` that `Node`'s required `ScrollPosition` defaults to.
-        ec.insert(ScrollPosition(pos));
+        // No geometry exists yet to clamp against, so the raw request also gets
+        // a post-layout settle (see `PendingControlledScroll`): in-range values
+        // settle silently; an overshoot lands on the real max and echoes it.
+        ec.insert((
+            ScrollPosition(pos),
+            crate::scroll::PendingControlledScroll(pos),
+        ));
         bridge.scroll_positions.insert(id, pos);
     } else if props.on_scroll {
         bridge.scroll_positions.insert(id, Vec2::ZERO);
@@ -1359,12 +1366,20 @@ fn create_controlled_scroll(
 /// diverges from the recorded request, so the read-back fires one `"scroll"` with
 /// the real offset — letting a controlled `scrollTop={BIG}` settle to the true max.
 ///
+/// The clamp here uses **pre-layout** geometry: when the same commit also
+/// changed the content (a log appending rows + pinning to the bottom), the
+/// stale range lands the write short — or skips it entirely (stale clamp ==
+/// live offset). An out-of-range request therefore also parks a
+/// [`crate::scroll::PendingControlledScroll`] marker, and
+/// [`crate::scroll::settle_controlled_scroll`] redoes the clamp after layout.
+///
 /// With a scroll transition ([`ScrollTransitionState`] present) the clamped value
 /// becomes the eased **target** instead of being written to `ScrollPosition` — the
 /// `drive_scroll_transition` system moves the offset toward it. The uncontrolled
 /// axis keeps the current target (not the mid-ease position) so it doesn't snap.
 fn update_controlled_scroll(
     bridge: &mut JsBridge,
+    ec: &mut EntityCommands,
     scroll_query: &mut Query<(
         &mut ScrollPosition,
         &ComputedNode,
@@ -1401,6 +1416,11 @@ fn update_controlled_scroll(
                     pos.0 = clamped;
                 }
             }
+        }
+        if requested != clamped {
+            // Out of the STALE range — the same commit may have grown the
+            // content; redo the clamp after layout (see the doc above).
+            ec.insert(crate::scroll::PendingControlledScroll(requested));
         }
         bridge.scroll_positions.insert(id, requested);
     }

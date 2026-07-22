@@ -121,6 +121,14 @@ fn op_log(#[string] level: String, #[string] msg: String) {
         "debug" => debug!(target: "bevy_react::js", "{msg}"),
         _ => info!(target: "bevy_react::js", "{msg}"),
     }
+    // Mirror into the devtools console ring (dev builds only; no-op stub
+    // otherwise) — this single op is the funnel for ALL JS console output,
+    // including the runtime's own error handlers.
+    crate::console_log::push(
+        crate::console_log::Source::Js,
+        crate::console_log::Level::from_js(&level),
+        &msg,
+    );
 }
 
 /// JS -> Bevy: declare/start/stop a shared-value animation. Synchronous,
@@ -246,6 +254,15 @@ globalThis.console = {
   // No-op fallbacks so libraries that probe these never throw:
   group: () => {}, groupCollapsed: () => {}, groupEnd: () => {}, assert: () => {},
 };
+// Unhandled promise rejections: log (→ op_log → the devtools console) and
+// swallow. Returning true suppresses op_dispatch_exception — a deliberate
+// behavior change: previously a rejection errored the event loop, which
+// `pump` treats as a reload and re-executes the whole app bundle. A logged
+// rejection with a live app beats a silent restart.
+Deno.core.setUnhandledPromiseRejectionHandler((_promise, reason) => {
+  console.error("[js] unhandled promise rejection:", __fmtArg(reason));
+  return true;
+});
 "#;
 
 /// What ended a pump of the JS event loop.
@@ -363,6 +380,11 @@ pub fn spawn_js_thread(
                                     // its `mount()` re-parks the event loop and the
                                     // UI stays live. The next good edit applies.
                                     warn!(target: "bevy_react::js", "update rejected ({e}); keeping the previous working version");
+                                    crate::console_log::push(
+                                        crate::console_log::Source::Rust,
+                                        crate::console_log::Level::Error,
+                                        &format!("hot reload rejected ({e}); keeping the previous working version"),
+                                    );
                                     if let Err(e) = runtime
                                         .execute_script("[app-restore]", last_good_app.clone())
                                     {
@@ -370,6 +392,11 @@ pub fn spawn_js_thread(
                                         // (should not happen — it ran moments ago).
                                         // Log and keep pumping rather than wedge.
                                         error!(target: "bevy_react::js", "restoring previous app failed: {e:?}");
+                                        crate::console_log::push(
+                                            crate::console_log::Source::Rust,
+                                            crate::console_log::Level::Error,
+                                            &format!("restoring previous app failed: {e:?}"),
+                                        );
                                     }
                                 }
                             }
@@ -483,7 +510,14 @@ async fn pump(
             Some(Err(e)) => {
                 // Steady-state errors are caught inside the JS event loop, so this
                 // is rare; treat it like a reload so we rebuild rather than wedge.
+                // (Unhandled promise rejections used to land here too — the
+                // prelude's rejection handler now logs them instead.)
                 error!(target: "bevy_react::js", "event loop error: {e}");
+                crate::console_log::push(
+                    crate::console_log::Source::Rust,
+                    crate::console_log::Level::Error,
+                    &format!("JS event loop error: {e}"),
+                );
                 return Pumped::Reload;
             }
             // The loop went idle: a reload with no pending timers, or shutdown.

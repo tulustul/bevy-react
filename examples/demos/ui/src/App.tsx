@@ -9,6 +9,11 @@ import { Navigation } from "./Navigation";
 export function App() {
   const { selectedDemo, setSelectedDemo } = useNavStore();
 
+  // One mount log so the devtools Console tab has real content to show.
+  useEffect(() => {
+    console.log("[demos] ui mounted");
+  }, []);
+
   useEffect(() => {
     bevy.selectScene(selectedDemo.scene ?? null);
   }, [selectedDemo]);

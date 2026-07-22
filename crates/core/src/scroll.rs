@@ -152,6 +152,58 @@ pub fn apply_scroll(
     }
 }
 
+/// A controlled `scrollTop`/`scrollLeft` request (raw, pre-clamp) whose clamp
+/// must be redone after layout. The op-apply clamp
+/// (`reconcile::update_controlled_scroll`) runs before `UiSystems::Layout`,
+/// so when the same commit also changes the content (the canonical case: a
+/// log appending rows AND pinning `scrollTop={BIG}` to the bottom), it clamps
+/// against LAST frame's `ComputedNode` and lands short — or, worse, the stale
+/// clamp equals the live offset and nothing is written at all.
+/// [`settle_controlled_scroll`] re-clamps this raw request against fresh
+/// post-layout geometry and removes the marker. Inserted whenever a
+/// controlled write's request falls outside the stale range (and on create,
+/// where no geometry exists yet at all).
+#[derive(Component, Debug, Clone, Copy, PartialEq)]
+pub struct PendingControlledScroll(pub Vec2);
+
+/// Re-clamp deferred controlled-scroll requests against this frame's layout
+/// (runs in `PostUpdate` after `UiSystems::Layout`). The corrected offset is
+/// applied to child transforms by NEXT frame's layout — one frame late, but
+/// exact. The `!=` guards keep change ticks quiet when the stale clamp was
+/// already right, so the `onScroll` read-back dedup (which compares against
+/// the recorded RAW request) fires exactly once with the real offset when —
+/// and only when — the request overshot.
+pub fn settle_controlled_scroll(
+    mut commands: Commands,
+    mut pending: Query<(
+        Entity,
+        &PendingControlledScroll,
+        &ComputedNode,
+        &mut ScrollPosition,
+        Option<&mut ScrollTransitionState>,
+    )>,
+) {
+    for (entity, request, computed, mut pos, scroll_state) in &mut pending {
+        // Same range formula as `apply_scroll` / `update_controlled_scroll`.
+        let max = (computed.content_size - computed.size + computed.scrollbar_size).max(Vec2::ZERO)
+            * computed.inverse_scale_factor;
+        let clamped = request.0.clamp(Vec2::ZERO, max);
+        match scroll_state {
+            Some(mut state) => {
+                if state.target != clamped {
+                    state.target = clamped;
+                }
+            }
+            None => {
+                if pos.0 != clamped {
+                    pos.0 = clamped;
+                }
+            }
+        }
+        commands.entity(entity).remove::<PendingControlledScroll>();
+    }
+}
+
 /// Deliver raw mouse-wheel deltas to the topmost `onWheel` node under the cursor.
 ///
 /// Unlike [`apply_scroll`] (which only moves `overflow: scroll` containers), this
@@ -488,6 +540,107 @@ mod tests {
             world.entity(container).get::<ScrollPosition>().unwrap().0,
             Vec2::ZERO,
             "an onWheel node on top must block its ancestor scroll container"
+        );
+    }
+
+    /// The post-layout settle: a pinned-to-bottom request (`scrollTop={BIG}`)
+    /// clamped against STALE geometry lands short; `settle_controlled_scroll`
+    /// re-clamps the raw request with fresh `ComputedNode` values and removes
+    /// the marker. This is the "log appends rows + pins to bottom in one
+    /// commit" fix.
+    #[test]
+    fn settle_reclamps_pending_request_with_fresh_geometry() {
+        let mut world = World::new();
+        // Stale clamp landed at 200 (content was 300); fresh layout says the
+        // content grew to 500 → true max 400.
+        let container = world
+            .spawn((
+                ComputedNode {
+                    size: Vec2::new(200.0, 100.0),
+                    content_size: Vec2::new(200.0, 500.0),
+                    inverse_scale_factor: 1.0,
+                    ..default()
+                },
+                ScrollPosition(Vec2::new(0.0, 200.0)),
+                PendingControlledScroll(Vec2::new(0.0, 1e9)),
+            ))
+            .id();
+        world.run_system_once(settle_controlled_scroll).unwrap();
+        assert_eq!(
+            world.entity(container).get::<ScrollPosition>().unwrap().0,
+            Vec2::new(0.0, 400.0),
+            "the raw request must re-clamp against fresh geometry"
+        );
+        assert!(
+            world
+                .entity(container)
+                .get::<PendingControlledScroll>()
+                .is_none(),
+            "the marker is one-shot"
+        );
+    }
+
+    /// With a scroll transition, the settle corrects the eased *target*, not
+    /// the live offset; an already-correct request settles silently.
+    #[test]
+    fn settle_feeds_transition_target_and_in_range_is_silent() {
+        let mut world = World::new();
+        let eased = world
+            .spawn((
+                ComputedNode {
+                    size: Vec2::new(200.0, 100.0),
+                    content_size: Vec2::new(200.0, 500.0),
+                    inverse_scale_factor: 1.0,
+                    ..default()
+                },
+                ScrollPosition(Vec2::new(0.0, 50.0)),
+                ScrollTransitionState::default(),
+                PendingControlledScroll(Vec2::new(0.0, 1e9)),
+            ))
+            .id();
+        world
+            .entity_mut(eased)
+            .get_mut::<ScrollTransitionState>()
+            .unwrap()
+            .target = Vec2::new(0.0, 200.0);
+        // In-range request (created node whose raw offset was fine).
+        let in_range = world
+            .spawn((
+                ComputedNode {
+                    size: Vec2::new(200.0, 100.0),
+                    content_size: Vec2::new(200.0, 500.0),
+                    inverse_scale_factor: 1.0,
+                    ..default()
+                },
+                ScrollPosition(Vec2::new(0.0, 120.0)),
+                PendingControlledScroll(Vec2::new(0.0, 120.0)),
+            ))
+            .id();
+        world.run_system_once(settle_controlled_scroll).unwrap();
+        assert_eq!(
+            world
+                .entity(eased)
+                .get::<ScrollTransitionState>()
+                .unwrap()
+                .target,
+            Vec2::new(0.0, 400.0),
+            "easing: the settle corrects the target"
+        );
+        assert_eq!(
+            world.entity(eased).get::<ScrollPosition>().unwrap().0,
+            Vec2::new(0.0, 50.0),
+            "easing: the live offset is the drive system's job"
+        );
+        assert_eq!(
+            world.entity(in_range).get::<ScrollPosition>().unwrap().0,
+            Vec2::new(0.0, 120.0),
+            "an in-range request settles to itself"
+        );
+        assert!(
+            world
+                .entity(in_range)
+                .get::<PendingControlledScroll>()
+                .is_none()
         );
     }
 

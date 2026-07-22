@@ -256,6 +256,120 @@ fn devtools_panel_round_trip() {
     }
     eprintln!("OK   Layers tab rendered the payload");
 
+    // Phase 1c: the Console tab. Clicking it unmounts the Layers panel
+    // (whose cleanup reports `layersOpen { on: false }`) and mounts the
+    // Console panel (which announces `consoleOpen { on: true }`). A
+    // hand-built `devtools.console` payload must render both a js and a rust
+    // row, and the clear button must emit `devtools.consoleClear`.
+    let console_tab = find_button("Console", &buttons, &parent_of, &text_of)
+        .expect("no Console tab button in the devtools panel");
+    outbound_tx
+        .send(Outbound::UiEvent {
+            event: UiEvent {
+                id: console_tab,
+                kind: "click".into(),
+                ..Default::default()
+            },
+        })
+        .expect("JS thread gone before Console tab click");
+
+    let mut saw_console_open = false;
+    let mut saw_layers_unmount = false;
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while Instant::now() < deadline && !(saw_console_open && saw_layers_unmount) {
+        if let Ok(batch) = ops_rx.recv_timeout(Duration::from_millis(50)) {
+            for op in &batch {
+                accumulate(op, &mut buttons, &mut parent_of, &mut text_of);
+            }
+        }
+        while let Ok(msg) = emit_rx.try_recv() {
+            if msg.name == "devtools.consoleOpen" {
+                assert_eq!(
+                    msg.value,
+                    serde_json::json!({ "on": true }),
+                    "opening the tab must announce on: true"
+                );
+                saw_console_open = true;
+            }
+            if msg.name == "devtools.layersOpen" && msg.value == serde_json::json!({ "on": false })
+            {
+                saw_layers_unmount = true;
+            }
+        }
+    }
+    assert!(
+        saw_console_open,
+        "no devtools.consoleOpen emit after opening the Console tab"
+    );
+    assert!(
+        saw_layers_unmount,
+        "the Layers panel's unmount (tab switch) never reported layersOpen: false"
+    );
+    eprintln!("OK   Console tab: consoleOpen {{ on: true }} emitted (Layers unmounted)");
+
+    outbound_tx
+        .send(Outbound::Event {
+            name: "devtools.console".into(),
+            value: serde_json::json!({
+                "entries": [
+                    { "seq": 1, "time_ms": 1753178400123u64, "source": "js",
+                      "level": "error", "message": "boom from app" },
+                    { "seq": 2, "time_ms": 1753178400124u64, "source": "rust",
+                      "level": "warn", "message": "[color] unrecognized color \"redd\"" },
+                ]
+            }),
+        })
+        .expect("JS thread gone before console payload");
+
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while !(text_of.values().any(|t| t.contains("boom from app"))
+        && text_of.values().any(|t| t.contains("unrecognized color")))
+    {
+        assert!(
+            Instant::now() < deadline,
+            "the Console panel never rendered the payload's rows"
+        );
+        if let Ok(batch) = ops_rx.recv_timeout(Duration::from_millis(100)) {
+            for op in &batch {
+                accumulate(op, &mut buttons, &mut parent_of, &mut text_of);
+            }
+        }
+    }
+    eprintln!("OK   Console tab rendered the payload");
+
+    // The clear button (unambiguous: the Bridge tab's LogPanel — the only
+    // other "clear" — never mounted in this run).
+    let clear = find_button("clear", &buttons, &parent_of, &text_of)
+        .expect("no clear button in the Console tab");
+    outbound_tx
+        .send(Outbound::UiEvent {
+            event: UiEvent {
+                id: clear,
+                kind: "click".into(),
+                ..Default::default()
+            },
+        })
+        .expect("JS thread gone before clear click");
+    let mut saw_clear = false;
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while Instant::now() < deadline && !saw_clear {
+        if let Ok(batch) = ops_rx.recv_timeout(Duration::from_millis(50)) {
+            for op in &batch {
+                accumulate(op, &mut buttons, &mut parent_of, &mut text_of);
+            }
+        }
+        while let Ok(msg) = emit_rx.try_recv() {
+            if msg.name == "devtools.consoleClear" {
+                saw_clear = true;
+            }
+        }
+    }
+    assert!(
+        saw_clear,
+        "no devtools.consoleClear emit after clicking clear"
+    );
+    eprintln!("OK   Console tab: clear emitted devtools.consoleClear");
+
     // Phase 2: click the panel's own close button.
     outbound_tx
         .send(Outbound::UiEvent {
@@ -269,14 +383,14 @@ fn devtools_panel_round_trip() {
 
     // The self-initiated close must sync Bevy's state over the emit channel AND
     // unmount the `<root>` (the closed panel renders null). Watch both channels.
-    // The panel is on the Layers tab, so the close also unmounts the Layers
-    // panel — its cleanup must report `layersOpen { on: false }` (what stops
-    // the Rust-side layer stream).
+    // The panel is on the Console tab, so the close also unmounts the Console
+    // panel — its cleanup must report `consoleOpen { on: false }` (what stops
+    // the Rust-side console stream).
     let mut saw_emit = false;
     let mut saw_remove = false;
-    let mut saw_layers_close = false;
+    let mut saw_console_close = false;
     let deadline = Instant::now() + Duration::from_secs(10);
-    while Instant::now() < deadline && !(saw_emit && saw_remove && saw_layers_close) {
+    while Instant::now() < deadline && !(saw_emit && saw_remove && saw_console_close) {
         if let Ok(batch) = ops_rx.recv_timeout(Duration::from_millis(100)) {
             for op in &batch {
                 if let Op::Remove { child, .. } = op
@@ -295,9 +409,9 @@ fn devtools_panel_round_trip() {
                 );
                 saw_emit = true;
             }
-            if msg.name == "devtools.layersOpen" && msg.value == serde_json::json!({ "on": false })
+            if msg.name == "devtools.consoleOpen" && msg.value == serde_json::json!({ "on": false })
             {
-                saw_layers_close = true;
+                saw_console_close = true;
             }
         }
     }
@@ -310,8 +424,8 @@ fn devtools_panel_round_trip() {
         "no devtools.open emit after clicking close (remove seen: {saw_remove})"
     );
     assert!(
-        saw_layers_close,
-        "the Layers panel's unmount cleanup never reported layersOpen: false"
+        saw_console_close,
+        "the Console panel's unmount cleanup never reported consoleOpen: false"
     );
     eprintln!("OK   close: devtools.open {{ open: false }} emitted, <root> removed");
     eprintln!("PASS devtools end-to-end");

@@ -480,7 +480,13 @@ impl Plugin for ReactUiPlugin {
         // geometry (extraction reads them the same frame, post-PostUpdate).
         app.add_systems(
             PostUpdate,
-            crate::layer::sync_layer_geometry.after(bevy::ui::UiSystems::Layout),
+            (
+                crate::layer::sync_layer_geometry.after(bevy::ui::UiSystems::Layout),
+                // Re-clamps deferred controlled-scroll requests (a pin to the
+                // bottom in the same commit that grew the content) against
+                // fresh geometry.
+                crate::scroll::settle_controlled_scroll.after(bevy::ui::UiSystems::Layout),
+            ),
         );
         app.add_react_request_handler(crate::window::handle_window_size_request);
 

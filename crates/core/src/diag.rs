@@ -93,6 +93,14 @@ mod imp {
     }
 
     pub fn decode_report(kind: &'static str, value: &str, message: &str) {
+        // Mirror into the devtools console ring, independent of DECODE_CAP —
+        // the ring self-bounds and the console wants every occurrence (the
+        // `devtools.warning` inspector-flag path keeps its own dedup).
+        crate::console_log::push(
+            crate::console_log::Source::Rust,
+            crate::console_log::Level::Warn,
+            &format!("[{kind}] {message}"),
+        );
         DECODE.with(|d| {
             let mut d = d.borrow_mut();
             if d.len() < DECODE_CAP {
@@ -139,6 +147,16 @@ mod imp {
             return;
         }
         let node = CURRENT_NODE.with(|c| c.get());
+        // Console-ring mirror (every occurrence, independent of RUNTIME_CAP —
+        // the dedup lives only in the `devtools.warning` path).
+        crate::console_log::push(
+            crate::console_log::Source::Rust,
+            crate::console_log::Level::Warn,
+            &match node {
+                Some(n) => format!("[{kind}] {message} (node {n})"),
+                None => format!("[{kind}] {message}"),
+            },
+        );
         let mut sink = RUNTIME.lock().unwrap_or_else(|e| e.into_inner());
         if sink.len() < RUNTIME_CAP {
             sink.push(RuntimeWarning {

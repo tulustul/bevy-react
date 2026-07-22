@@ -24,6 +24,7 @@ import {
   sendSelect,
   sendSettings,
 } from "./api";
+import { ConsolePanel } from "./ConsolePanel";
 import { Inspector } from "./Inspector";
 import { LayersPanel } from "./LayersPanel";
 import { LogPanel } from "./LogPanel";
@@ -33,10 +34,10 @@ import { StatsBar } from "./StatsBar";
 import { theme } from "./theme";
 import { TreeView } from "./TreeView";
 
-type Tab = "nodes" | "layers" | "bridge";
+type Tab = "nodes" | "layers" | "console" | "bridge";
 
 function isTab(v: unknown): v is Tab {
-  return v === "nodes" || v === "layers" || v === "bridge";
+  return v === "nodes" || v === "layers" || v === "console" || v === "bridge";
 }
 
 /** Panel layout: docked to a window edge, or a floating window. */
@@ -349,6 +350,8 @@ export function DevtoolsHost() {
             />
           ) : tab === "layers" ? (
             <LayersPanel />
+          ) : tab === "console" ? (
+            <ConsolePanel />
           ) : (
             <LogPanel />
           )}
@@ -522,6 +525,11 @@ function TabBar({ tab, onTab }: { tab: Tab; onTab: (t: Tab) => void }) {
         onClick={() => onTab("layers")}
       />
       <TabButton
+        label="Console"
+        active={tab === "console"}
+        onClick={() => onTab("console")}
+      />
+      <TabButton
         label="Bridge"
         active={tab === "bridge"}
         onClick={() => onTab("bridge")}
@@ -567,9 +575,25 @@ function TabButton({
  *  `alignItems: "flexStart"` lets wide rows overflow instead of being forced
  *  to the viewport width, while `minWidth: "100%"` keeps narrow rows (and
  *  their hover/selection backgrounds) spanning the full panel. */
-export function ScrollArea({ children }: { children?: ReactNode }) {
+export function ScrollArea({
+  children,
+  scrollTop,
+  onScroll,
+}: {
+  children?: ReactNode;
+  /** Optional controlled scroll offset (act-now: re-applied only when the
+   *  value changes). Pass a growing over-large value to pin to the bottom —
+   *  the write is clamped to the content range, and the overshoot's
+   *  read-back fires one `onScroll` with the real offset (the true max). */
+  scrollTop?: number;
+  /** Optional scroll read-back (wheel scrolls AND clamped controlled
+   *  writes). */
+  onScroll?: (e: { scrollTop: number; scrollLeft: number }) => void;
+}) {
   return (
     <node
+      scrollTop={scrollTop}
+      onScroll={onScroll}
       style={{
         flexGrow: 1,
         minHeight: 0,
@@ -584,6 +608,42 @@ export function ScrollArea({ children }: { children?: ReactNode }) {
         {children}
       </node>
     </node>
+  );
+}
+
+/** A [`ScrollArea`] for chronological logs (newest at the bottom) that
+ *  auto-scrolls to the bottom when new content arrives — but only while the
+ *  view is already there; scrolling up parks it until the user returns to the
+ *  bottom (Chrome-console behavior).
+ *
+ *  JS can't see the content height, so "bottom" is learned from the scroll
+ *  read-back: each pin write overshoots (`1e9 + pinKey`), Rust re-clamps it
+ *  after layout (`settle_controlled_scroll`) and reports the REAL offset —
+ *  the true max — through `onScroll`; wheel scrolls report through the same
+ *  channel. At-bottom ⇔ the reported offset is within a hairline of the
+ *  largest offset ever seen. The pin value must CHANGE to re-apply
+ *  (`scrollTop` is act-now, sent only when it differs), hence riding
+ *  `pinKey`. */
+export function StickyScrollArea({
+  pinKey,
+  children,
+}: {
+  /** Monotonic marker of the newest content (e.g. the last entry's seq); a
+   *  change re-pins while stuck. `undefined` = no content, no pinning. */
+  pinKey?: number;
+  children?: ReactNode;
+}) {
+  const [stick, setStick] = useState(true);
+  const maxSeen = useRef(0);
+  const onScroll = (e: { scrollTop: number; scrollLeft: number }) => {
+    setStick(e.scrollTop >= maxSeen.current - 2);
+    if (e.scrollTop > maxSeen.current) maxSeen.current = e.scrollTop;
+  };
+  const pin = stick && pinKey !== undefined ? 1e9 + pinKey : undefined;
+  return (
+    <ScrollArea scrollTop={pin} onScroll={onScroll}>
+      {children}
+    </ScrollArea>
   );
 }
 

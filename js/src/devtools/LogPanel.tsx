@@ -1,10 +1,12 @@
 // The bridge log tab: a Network-panel-like live stream of recorded bridge
 // messages — direction badges, per-kind filter chips, pause/clear, and
-// click-to-expand JSON detail. Newest entries render first.
+// click-to-expand JSON detail. Chronological (newest at the bottom); new
+// entries auto-scroll to the bottom while the view is already there
+// (StickyScrollArea — scrolling up parks it).
 
 import { useState, useSyncExternalStore } from "react";
 import { recorder, type LogEntry, type LogKind } from "./recorder";
-import { Chip, IconButton, ScrollArea } from "./DevtoolsHost";
+import { Chip, IconButton, StickyScrollArea } from "./DevtoolsHost";
 import { theme } from "./theme";
 
 const ALL_KINDS: LogKind[] = [
@@ -33,14 +35,14 @@ export function LogPanel() {
       return next;
     });
 
-  const rows = [...recorder.entries()]
-    .reverse()
-    .filter((e) => !hidden.has(e.kind));
+  const all = recorder.entries();
+  const rows = all.filter((e) => !hidden.has(e.kind));
+  const last = all[all.length - 1];
 
   return (
     <>
       <Controls hidden={hidden} onToggleKind={toggleKind} />
-      <ScrollArea>
+      <StickyScrollArea pinKey={last?.seq}>
         {rows.length === 0 ? (
           <text style={{ color: theme.textDim, fontSize: 11, margin: 8 }}>
             No bridge traffic recorded yet.
@@ -57,7 +59,7 @@ export function LogPanel() {
             />
           ))
         )}
-      </ScrollArea>
+      </StickyScrollArea>
     </>
   );
 }
@@ -254,8 +256,9 @@ function StatsBreakdown({ entry }: { entry: LogEntry }) {
 }
 
 /** Wall-clock `HH:MM:SS.mmm` from an epoch-ms stamp. Manual padding — the
- *  embedded isolate has `Date` but no reliable locale formatting. */
-function formatTime(t: number): string {
+ *  embedded isolate has `Date` but no reliable locale formatting. (Also used
+ *  by the Console tab.) */
+export function formatTime(t: number): string {
   const d = new Date(t);
   const p = (n: number, w = 2) => String(n).padStart(w, "0");
   return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}.${p(d.getMilliseconds(), 3)}`;

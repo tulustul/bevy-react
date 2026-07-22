@@ -31,12 +31,16 @@
 //!   `devtools.layers { layers }` (the current layer set — the implicit base
 //!   layer plus every [`crate::layer::LayersRegistry`] row; streamed only
 //!   while the panel's Layers tab is active and diffed against the last
-//!   payload, so an idle app sends nothing).
+//!   payload, so an idle app sends nothing),
+//!   `devtools.console { entries }` (the [`crate::console_log`] ring — JS
+//!   console output, diag messages, JS-runtime failures; the full backlog
+//!   when the Console tab opens, then increments while it stays open).
 //! - JS → Bevy messages: `devtools.open { open }`, `devtools.pick { on }`,
 //!   `devtools.select { id }`, `devtools.highlight { id }`,
 //!   `devtools.overlay { on }`, `devtools.panelRoot { id }`,
 //!   `devtools.layersOpen { on }` (the Layers tab was shown/hidden — gates
-//!   the layer stream),
+//!   the layer stream), `devtools.consoleOpen { on }` (likewise for the
+//!   console stream), `devtools.consoleClear {}` (empty the console ring),
 //!   `devtools.dock { side, width }` (the panel's space reservation — see
 //!   [`apply_dock_reservation`]), `devtools.settings { … }` (the persisted
 //!   layout blob — see [`DevtoolsSettings`]).
@@ -180,6 +184,8 @@ impl Plugin for DevtoolsPlugin {
         .add_react_handler(on_dock_message)
         .add_react_handler(on_settings_message)
         .add_react_handler(on_layers_open_message)
+        .add_react_handler(on_console_open_message)
+        .add_react_handler(on_console_clear_message)
         // Registered in the plugin's OWN tuples — `plugin.rs`'s Update tuple
         // sits at Bevy's 20-arity cap.
         .add_systems(Startup, spawn_highlight_overlay)
@@ -195,6 +201,9 @@ impl Plugin for DevtoolsPlugin {
                 // Entries produced later the same frame (e.g. hover restyles)
                 // simply drain next frame — ordering is deliberately loose.
                 emit_runtime_warnings,
+                // Same loose ordering: console-ring entries pushed later this
+                // frame drain next frame.
+                emit_console,
             ),
         )
         // A quit right after a layout drag must not lose the change: flush
@@ -264,6 +273,14 @@ pub(crate) struct DevtoolsState {
     /// Whether the panel's Layers tab is currently shown (reported via
     /// `devtools.layersOpen`). Gates the `devtools.layers` stream.
     pub layers_tab_open: bool,
+    /// Whether the panel's Console tab is currently shown (reported via
+    /// `devtools.consoleOpen`). Gates the `devtools.console` stream.
+    pub console_tab_open: bool,
+    /// The console stream watermark: the highest [`crate::console_log`] seq
+    /// already sent. `None` = send the full backlog next frame. Lives in the
+    /// resource (not a `Local`) so the `consoleOpen` handler can reset it on
+    /// every flip — a same-frame close→open must never skip the backlog.
+    pub console_last_seq: Option<u64>,
 }
 
 /// The window edge a docked, space-reserving panel sits on.
@@ -286,6 +303,8 @@ impl Default for DevtoolsState {
             dock_side: None,
             dock_width: 0.0,
             layers_tab_open: false,
+            console_tab_open: false,
+            console_last_seq: None,
         }
     }
 }
@@ -404,6 +423,31 @@ struct DevtoolsLayerRect {
     physical_height: u32,
 }
 
+/// Bevy → JS: console entries from the [`crate::console_log`] ring — JS
+/// `console.*` output, [`crate::diag`] messages, and JS-runtime failures.
+/// Streamed by [`emit_console`] only while the panel is open on the Console
+/// tab: the full ring backlog on tab open, then only-new entries per frame.
+/// Native-only content (the web host has no console shim — the ring is
+/// stubbed on wasm).
+#[react_event(name = "devtools.console")]
+struct DevtoolsConsole {
+    entries: Vec<DevtoolsConsoleEntry>,
+}
+
+/// One console row (oldest → newest within a batch).
+#[derive(serde::Serialize, ts_rs::TS, Debug, Clone, PartialEq)]
+struct DevtoolsConsoleEntry {
+    /// Process-monotonic id (never reused, survives clears).
+    seq: u64,
+    /// Wall-clock epoch milliseconds.
+    time_ms: u64,
+    /// `"js"` | `"rust"`.
+    source: String,
+    /// `"debug"` | `"info"` | `"warn"` | `"error"`.
+    level: String,
+    message: String,
+}
+
 /// JS → Bevy: the panel opened or closed itself (close button, install sync).
 #[react_message(name = "devtools.open")]
 struct DevtoolsOpenMessage {
@@ -450,6 +494,21 @@ struct DevtoolsLayersOpenMessage {
     on: bool,
 }
 
+/// JS → Bevy: the panel's Console tab was shown/hidden (mount/unmount of the
+/// Console panel). Gates [`emit_console`].
+#[react_message(name = "devtools.consoleOpen")]
+struct DevtoolsConsoleOpenMessage {
+    on: bool,
+}
+
+/// JS → Bevy: the Console tab's clear button — empty the console ring. The
+/// panel clears its local list immediately; entries logged between the click
+/// and this message arriving may show once in the panel yet miss a later
+/// backlog (browser-console parity — seq monotonicity keeps the stream
+/// watermark consistent either way).
+#[react_message(name = "devtools.consoleClear")]
+struct DevtoolsConsoleClearMessage {}
+
 /// JS → Bevy: the panel's effective space reservation. `side: None` = no
 /// reservation (the reserve toggle is off, the panel floats, or it closed);
 /// otherwise the app UI is pushed off that edge by `width` logical pixels
@@ -494,6 +553,17 @@ fn on_layers_open_message(msg: On<DevtoolsLayersOpenMessage>, mut state: ResMut<
     state.layers_tab_open = msg.event().on;
 }
 
+fn on_console_open_message(msg: On<DevtoolsConsoleOpenMessage>, mut state: ResMut<DevtoolsState>) {
+    state.console_tab_open = msg.event().on;
+    // Reset the watermark on EVERY flip: a fresh open always gets the full
+    // backlog, even when the close and reopen land in the same frame.
+    state.console_last_seq = None;
+}
+
+fn on_console_clear_message(_msg: On<DevtoolsConsoleClearMessage>) {
+    crate::console_log::clear();
+}
+
 fn on_dock_message(msg: On<DevtoolsDockMessage>, mut state: ResMut<DevtoolsState>) {
     state.dock_side = match msg.event().side.as_deref() {
         Some("left") => Some(DockSide::Left),
@@ -524,8 +594,8 @@ fn on_dock_message(msg: On<DevtoolsDockMessage>, mut state: ResMut<DevtoolsState
 pub(crate) struct DevtoolsSettings {
     /// Whether the panel was open — persisted so it reopens on relaunch.
     open: bool,
-    /// The active tab ("nodes" | "bridge" | "layers") — persisted so the
-    /// panel reopens where you left it. Loose string; JS validates on
+    /// The active tab ("nodes" | "layers" | "console" | "bridge") — persisted
+    /// so the panel reopens where you left it. Loose string; JS validates on
     /// restore, unknown values fall back to the default tab.
     tab: String,
     mode: String,
@@ -774,10 +844,12 @@ fn exit_interactions(state: &mut DevtoolsState) {
     state.pick = false;
     state.tree_hover = None;
     state.pick_hover = None;
-    // Belt-and-braces: the JS panel also reports `layersOpen: false` when the
-    // tab unmounts, but every close path must kill the layer stream even if
-    // that message is lost.
+    // Belt-and-braces: the JS panel also reports `layersOpen: false` /
+    // `consoleOpen: false` when those tabs unmount, but every close path must
+    // kill the streams even if the message is lost.
     state.layers_tab_open = false;
+    state.console_tab_open = false;
+    state.console_last_seq = None;
 }
 
 /// Flip the panel on the configured key and tell the JS panel the new state.
@@ -1100,6 +1172,36 @@ fn emit_batch_stats(
         translate_ms: stats.last_translate.as_secs_f64() * 1000.0,
         command_ms: timers.last_command.as_secs_f64() * 1000.0,
         layout_ms: timers.last_layout.as_secs_f64() * 1000.0,
+    });
+}
+
+/// Stream the [`crate::console_log`] ring to the panel while it is open on
+/// the Console tab: the full backlog right after the tab opens (watermark
+/// `None`, reset by [`on_console_open_message`]), then only entries newer
+/// than the watermark. Listener race is safe by construction — the gate flag
+/// only flips via a JS message the panel sends *after* subscribing. No
+/// self-observation loop: an emit re-renders the panel, but rendering logs
+/// nothing.
+fn emit_console(mut state: ResMut<DevtoolsState>, events: ReactEvents) {
+    if !(state.open && state.console_tab_open) {
+        return;
+    }
+    let (entries, watermark) = crate::console_log::since(state.console_last_seq.unwrap_or(0));
+    state.console_last_seq = Some(watermark);
+    if entries.is_empty() {
+        return;
+    }
+    events.send(&DevtoolsConsole {
+        entries: entries
+            .into_iter()
+            .map(|e| DevtoolsConsoleEntry {
+                seq: e.seq,
+                time_ms: e.time_ms,
+                source: e.source.as_str().into(),
+                level: e.level.as_str().into(),
+                message: e.message,
+            })
+            .collect(),
     });
 }
 
@@ -2236,9 +2338,10 @@ mod tests {
         );
     }
 
-    /// The `devtools.layersOpen` message flips the state flag, and every
-    /// panel-close path clears it (via `exit_interactions`) so a lost
-    /// unmount message can't leave the stream armed.
+    /// The `devtools.layersOpen`/`devtools.consoleOpen` messages flip their
+    /// state flags, and every panel-close path clears them (via
+    /// `exit_interactions`) so a lost unmount message can't leave a stream
+    /// armed.
     #[test]
     fn layers_open_message_flips_state_and_close_clears_it() {
         let (mut app, _rx) = test_app(DevtoolsConfig {
@@ -2247,7 +2350,17 @@ mod tests {
         });
         app.world_mut()
             .trigger(DevtoolsLayersOpenMessage { on: true });
-        assert!(app.world().resource::<DevtoolsState>().layers_tab_open);
+        app.world_mut()
+            .trigger(DevtoolsConsoleOpenMessage { on: true });
+        {
+            let state = app.world().resource::<DevtoolsState>();
+            assert!(state.layers_tab_open);
+            assert!(state.console_tab_open);
+        }
+        // Simulate a streamed watermark, then close.
+        app.world_mut()
+            .resource_mut::<DevtoolsState>()
+            .console_last_seq = Some(7);
 
         app.world_mut().trigger(DevtoolsOpenMessage { open: false });
         let state = app.world().resource::<DevtoolsState>();
@@ -2255,6 +2368,134 @@ mod tests {
         assert!(
             !state.layers_tab_open,
             "closing the panel must kill the layer stream"
+        );
+        assert!(
+            !state.console_tab_open,
+            "closing the panel must kill the console stream"
+        );
+        assert_eq!(
+            state.console_last_seq, None,
+            "the console watermark must reset so a reopen resends the backlog"
+        );
+    }
+
+    /// The console stream: silent while closed; full backlog on tab open;
+    /// increments only afterwards; backlog resent after an off→on flip (the
+    /// handler resets the watermark). Global-ring discipline: `test_app`
+    /// holds the diag test lock; assertions filter by unique markers and
+    /// never assume the ring holds ONLY our entries.
+    #[test]
+    fn console_stream_backlog_then_increment() {
+        use crate::console_log::{Level, Source};
+
+        let (mut app, mut rx) = test_app(DevtoolsConfig {
+            settings_path: None,
+            ..default()
+        });
+        let mine = |v: &serde_json::Value| -> Vec<String> {
+            v["entries"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter_map(|e| e["message"].as_str())
+                .filter(|m| m.contains("cons-t1-"))
+                .map(String::from)
+                .collect()
+        };
+        let payloads = |rx: &mut UnboundedReceiver<Outbound>| {
+            drain_events(rx)
+                .into_iter()
+                .filter(|(name, _)| name == "devtools.console")
+                .map(|(_, v)| v)
+                .collect::<Vec<_>>()
+        };
+
+        crate::console_log::push(Source::Rust, Level::Warn, "cons-t1-a");
+        crate::console_log::push(Source::Js, Level::Error, "cons-t1-b");
+        app.update();
+        assert!(
+            payloads(&mut rx).iter().all(|v| mine(v).is_empty()),
+            "closed panel: no console stream"
+        );
+
+        app.world_mut().resource_mut::<DevtoolsState>().open = true;
+        app.world_mut()
+            .trigger(DevtoolsConsoleOpenMessage { on: true });
+        app.update();
+        let sent = payloads(&mut rx);
+        let marked: Vec<String> = sent.iter().flat_map(&mine).collect();
+        assert_eq!(
+            marked,
+            vec!["cons-t1-a".to_string(), "cons-t1-b".to_string()],
+            "tab open sends the backlog, oldest first"
+        );
+        // Field shape spot-check on our own entry.
+        let entry = sent
+            .iter()
+            .flat_map(|v| v["entries"].as_array().unwrap().clone())
+            .find(|e| e["message"] == "cons-t1-b")
+            .unwrap();
+        assert_eq!(entry["source"], "js");
+        assert_eq!(entry["level"], "error");
+        assert!(entry["seq"].as_u64().is_some());
+        assert!(entry["time_ms"].as_u64().is_some());
+
+        crate::console_log::push(Source::Js, Level::Info, "cons-t1-c");
+        app.update();
+        let marked: Vec<String> = payloads(&mut rx).iter().flat_map(&mine).collect();
+        assert_eq!(
+            marked,
+            vec!["cons-t1-c".to_string()],
+            "later frames send only new entries"
+        );
+
+        // Off → on: the handler resets the watermark, so the full backlog
+        // (all three markers) is resent.
+        app.world_mut()
+            .trigger(DevtoolsConsoleOpenMessage { on: false });
+        app.update();
+        assert!(payloads(&mut rx).iter().all(|v| mine(v).is_empty()));
+        app.world_mut()
+            .trigger(DevtoolsConsoleOpenMessage { on: true });
+        app.update();
+        let marked: Vec<String> = payloads(&mut rx).iter().flat_map(mine).collect();
+        assert_eq!(
+            marked,
+            vec![
+                "cons-t1-a".to_string(),
+                "cons-t1-b".to_string(),
+                "cons-t1-c".to_string()
+            ],
+            "a re-shown tab gets the full backlog again"
+        );
+    }
+
+    /// `devtools.consoleClear` empties the ring (seq keeps counting).
+    #[test]
+    fn console_clear_message_empties_ring() {
+        use crate::console_log::{Level, Source};
+
+        let (mut app, _rx) = test_app(DevtoolsConfig {
+            settings_path: None,
+            ..default()
+        });
+        crate::console_log::push(Source::Js, Level::Info, "cons-t2-before");
+        let (_, watermark_before) = crate::console_log::since(0);
+        app.world_mut().trigger(DevtoolsConsoleClearMessage {});
+        let (entries, _) = crate::console_log::since(0);
+        assert!(
+            entries.iter().all(|e| !e.message.contains("cons-t2-")),
+            "clear must drop our entry"
+        );
+        crate::console_log::push(Source::Js, Level::Info, "cons-t2-after");
+        let (entries, _) = crate::console_log::since(0);
+        let after = entries
+            .iter()
+            .find(|e| e.message == "cons-t2-after")
+            .expect("post-clear pushes land");
+        assert!(
+            after.seq > watermark_before,
+            "seq keeps counting across a clear"
         );
     }
 

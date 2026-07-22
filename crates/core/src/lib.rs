@@ -27,6 +27,13 @@ extern crate self as bevy_react;
 mod anchor;
 mod bridge;
 mod cursor;
+// The devtools console ring (JS console output + diag messages + JS-runtime
+// failures). Always declared — the op_log/diag call sites are unconditional —
+// but the real ring only exists with the `devtools` feature on a native debug
+// build; otherwise every fn is an inline no-op stub. `pub` (doc-hidden) so the
+// `console_capture` integration test can poll it.
+#[doc(hidden)]
+pub mod console_log;
 // Devtools diagnostics sinks (invalid style/prop values). Always declared —
 // the protocol/apply call sites are unconditional — but its real implementation
 // only exists with the `devtools` feature on a debug build; otherwise every fn
