@@ -56,6 +56,22 @@ test("valuesEqual: structural objects and arrays", () => {
   assert.ok(valuesEqual({ a: 1, b: undefined }, { a: 1 }));
 });
 
+test("valuesEqual: filter chains compare structurally at full depth", () => {
+  // The deepest style value: chain array → use object → params object →
+  // tuple param (four container levels; the numbers inside are leaves). The
+  // depth cap keeps headroom over this so an unchanged inline chain never
+  // reads as a change.
+  const chain = () => [
+    { name: "blur", params: { radius: 4 } },
+    { name: "tint", params: { tint: [1, 0, 0, 0.5] } },
+  ];
+  assert.ok(valuesEqual(chain(), chain()));
+
+  const changed = chain();
+  changed[1].params.tint[3] = 0.75;
+  assert.ok(!valuesEqual(chain(), changed));
+});
+
 test("valuesEqual: depth cap reports unequal, never wrong", () => {
   const deep = (n) => (n === 0 ? 1 : { d: deep(n - 1) });
   assert.ok(valuesEqual(deep(3), deep(3)));

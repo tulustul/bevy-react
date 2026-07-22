@@ -47,7 +47,6 @@ mod diag;
 #[cfg(feature = "devtools")]
 mod devtools;
 mod event;
-mod filter;
 mod host;
 mod keyboard;
 mod message;
@@ -70,6 +69,10 @@ mod window;
 pub mod js_thread;
 pub mod protocol;
 
+// Filter wire types (the layer-based `filter` chain) and, later, the filter
+// registry. Owns its wire format the way `canvas`/`animations` own theirs.
+pub mod filters;
+
 // The animation engine and the canvas/portal/surface host elements. Public
 // modules so consumers can reach their full APIs; the most-used items are also
 // re-exported at the crate root below.
@@ -81,12 +84,13 @@ pub mod surface;
 
 pub use anchor::{Anchor, AnchorScaling, Anchored};
 pub use animations::ReactUiAnimationsPlugin;
-pub use bevy_react_macros::{react_event, react_message, react_request};
+pub use bevy_react_macros::{react_event, react_filter, react_message, react_request};
 pub use canvas::CanvasSurface;
 #[cfg(feature = "devtools")]
 #[cfg_attr(docsrs, doc(cfg(feature = "devtools")))]
 pub use devtools::DevtoolsConfig;
 pub use event::{ReactEvent, ReactEvents};
+pub use filters::ReactFilter;
 pub use message::{ReactAppExt, ReactMessage, ReactPayload};
 pub use plugin::{Fonts, PointerCapture, PointerCaptureSet, ReactUiPlugin};
 pub use portal::{

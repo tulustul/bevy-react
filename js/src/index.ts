@@ -45,6 +45,12 @@ export type {
   EasingName,
 } from "./animated";
 
+// Layer-based filter chains (`style={{ filter: … }}`). `BevyFilters` is the
+// empty name→params registry interface the generated `bevy.ts` augments
+// (`declare module "bevy-react"`) — it must be exported here for that
+// declaration merging to attach.
+export type { BevyFilters, FilterUse, FilterChainValue } from "./filters";
+
 // World-anchored overlays (`<Anchored.node entity={…} offset={…}/>`).
 export { Anchored } from "./anchored";
 export type { AnchorProps, AnchorScaling, Vec3 } from "./anchored";

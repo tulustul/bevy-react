@@ -411,6 +411,7 @@ dependencies = [
  "deno_core",
  "getrandom 0.3.4",
  "js-sys",
+ "naga",
  "serde",
  "serde-wasm-bindgen",
  "serde_json",

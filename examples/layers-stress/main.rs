@@ -4,9 +4,14 @@
 //! window — each one auto-promotes to its own composited layer (opacity present
 //! on a node with children, see `crates/core/src/layer.rs`). The React UI
 //! switches N (20 / 100 / 500), toggles Rust-driven position/opacity
-//! animations, and toggles `groupAlpha` (off de-promotes every subtree — the
-//! un-layered baseline). An FPS readout ships from Bevy ~4x/sec over a
-//! `#[react_event]`.
+//! animations, toggles `groupAlpha` (off de-promotes every subtree — the
+//! un-layered baseline), and applies layer-based `filter` chains to a share of
+//! items (grayscale/blur, optionally with a JS-driven animated blur radius).
+//! An FPS readout ships from Bevy ~4x/sec over a `#[react_event]`.
+//!
+//! Unattended measurement: bake a scenario into the bundle with
+//! `STRESS_PRESET` (see `ui/build.mjs` and the README), then run with
+//! `--measure <secs>` to log FPS once per second and exit.
 //!
 //! Vsync is always off (`PresentMode::AutoNoVsync`) so FPS reflects actual
 //! throughput instead of pinning at the refresh rate.
@@ -46,7 +51,51 @@ fn main() {
         return;
     }
 
-    build_app(/* hot_reload */ true).run();
+    // `--measure <secs>` runs unattended: log the smoothed FPS to stdout once
+    // per second and exit after <secs>. Preset the scenario by baking a
+    // `STRESS_PRESET` into the bundle first (see `ui/build.mjs`). Hot reload is
+    // off so the file watcher can't perturb the numbers.
+    let measure = args.iter().position(|a| a == "--measure").map(|i| {
+        args.get(i + 1)
+            .and_then(|s| s.parse::<f64>().ok())
+            .expect("--measure requires a duration in seconds")
+    });
+
+    let mut app = build_app(/* hot_reload */ measure.is_none());
+    if let Some(secs) = measure {
+        app.insert_resource(MeasureFor(secs))
+            .add_systems(Update, measure_fps);
+    }
+    app.run();
+}
+
+/// `--measure` duration in seconds.
+#[derive(Resource)]
+struct MeasureFor(f64);
+
+/// Print the smoothed FPS once per second; request exit once the measurement
+/// window has elapsed. The first samples are warm-up (pipeline compilation,
+/// initial captures) — read the steady state off the tail.
+fn measure_fps(
+    time: Res<Time>,
+    diagnostics: Res<bevy::diagnostic::DiagnosticsStore>,
+    cfg: Res<MeasureFor>,
+    mut last_print: Local<f64>,
+    mut exit: MessageWriter<AppExit>,
+) {
+    let t = time.elapsed_secs_f64();
+    if t - *last_print >= 1.0 {
+        *last_print = t;
+        if let Some(fps) = diagnostics
+            .get(&bevy::diagnostic::FrameTimeDiagnosticsPlugin::FPS)
+            .and_then(|d| d.smoothed())
+        {
+            println!("[measure] t={t:.0}s fps={fps:.1}");
+        }
+    }
+    if t >= cfg.0 {
+        exit.write(AppExit::Success);
+    }
 }
 
 /// Build the stress `App`: DefaultPlugins + the React UI layer + a 2D UI camera +

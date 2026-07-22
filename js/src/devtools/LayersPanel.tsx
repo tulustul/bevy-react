@@ -15,6 +15,7 @@ import {
   onLayers,
   sendHighlight,
   sendLayersOpen,
+  type DevtoolsFilterEntry,
   type DevtoolsLayerRow,
 } from "./api";
 import { ScrollArea } from "./DevtoolsHost";
@@ -47,6 +48,21 @@ function formatBytes(bytes: number): string {
   if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${bytes} B`;
+}
+
+/** One compact line for a resolved filter chain: `blur(radius 4.25)
+ *  sepia(amount 1)`. Values arrive display-ready (unit-converted + rounded)
+ *  from Rust — plain number-to-string here, and ASCII-only punctuation (the
+ *  default font may lack fancier separator glyphs). */
+function formatChain(filters: DevtoolsFilterEntry[]): string {
+  return filters
+    .map(
+      (f) =>
+        `${f.name}(${f.params
+          .map(([name, values]) => `${name} ${values.join(",")}`)
+          .join(", ")})`,
+    )
+    .join(" ");
 }
 
 export function LayersPanel() {
@@ -177,69 +193,82 @@ function LayerRow({
       : node
         ? `<${node.kind}> #${row.id}`
         : `#${row.id}`;
+  // Nested layers indent under their enclosing depth.
+  const indent = 10 + Math.max(0, row.depth - 1) * 12;
+  const chain = row.filters ?? [];
   return (
     <node
       style={{
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 6,
-        // Nested layers indent under their enclosing depth.
-        padding: {
-          left: 10 + Math.max(0, row.depth - 1) * 12,
-          right: 10,
-          top: 4,
-          bottom: 4,
-        },
+        flexDirection: "column",
+        padding: { left: indent, right: 10, top: 4, bottom: 4 },
         backgroundColor: hovered ? theme.bgActive : "transparent",
       }}
       {...hoverProps}
     >
-      <node
-        style={{
-          width: 8,
-          height: 8,
-          flexShrink: 0,
-          borderRadius: 2,
-          backgroundColor: inactive ? theme.border : layerColor(row),
-        }}
-      />
-      <text
-        style={{
-          color: inactive ? theme.textDim : theme.text,
-          fontSize: 11,
-          fontFamily: theme.mono,
-        }}
-      >
-        {label}
-      </text>
-      {row.reasons
-        .filter((r) => r !== "base")
-        .map((r) => (
-          <ReasonPill key={r} label={r} />
-        ))}
-      {inactive && <ReasonPill label="inactive" />}
-      <node style={{ flexGrow: 1 }} />
-      {row.depth > 0 && (
+      <node style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+        <node
+          style={{
+            width: 8,
+            height: 8,
+            flexShrink: 0,
+            borderRadius: 2,
+            backgroundColor: inactive ? theme.border : layerColor(row),
+          }}
+        />
+        <text
+          style={{
+            color: inactive ? theme.textDim : theme.text,
+            fontSize: 11,
+            fontFamily: theme.mono,
+          }}
+        >
+          {label}
+        </text>
+        {row.reasons
+          .filter((r) => r !== "base")
+          .map((r) => (
+            <ReasonPill key={r} label={r} />
+          ))}
+        {inactive && <ReasonPill label="inactive" />}
+        <node style={{ flexGrow: 1 }} />
+        {row.depth > 0 && (
+          <text style={{ color: theme.textDim, fontSize: 10 }}>
+            {row.repaints} repaints
+          </text>
+        )}
+        {row.node_count > 0 && (
+          <text style={{ color: theme.textDim, fontSize: 10 }}>
+            {row.node_count} nodes
+          </text>
+        )}
         <text style={{ color: theme.textDim, fontSize: 10 }}>
-          {row.repaints} repaints
+          {/* ASCII "x" — the default font may lack the multiply glyph. */}
+          {row.rect
+            ? `${Math.round(row.rect.width)}x${Math.round(row.rect.height)}`
+            : "-"}
+        </text>
+        <text style={{ color: theme.textDim, fontSize: 10 }}>
+          {row.rect
+            ? formatBytes(
+                row.rect.physical_width * row.rect.physical_height * 4,
+              )
+            : "-"}
+        </text>
+      </node>
+      {chain.length > 0 && (
+        // The resolved chain with LIVE param values (Rust re-streams while
+        // they animate) — indented under the dot + gap of the row above.
+        <text
+          style={{
+            color: theme.textDim,
+            fontSize: 10,
+            fontFamily: theme.mono,
+            margin: { left: 14, top: 2 },
+          }}
+        >
+          {formatChain(chain)}
         </text>
       )}
-      {row.node_count > 0 && (
-        <text style={{ color: theme.textDim, fontSize: 10 }}>
-          {row.node_count} nodes
-        </text>
-      )}
-      <text style={{ color: theme.textDim, fontSize: 10 }}>
-        {/* ASCII "x" — the default font may lack the multiply glyph. */}
-        {row.rect
-          ? `${Math.round(row.rect.width)}x${Math.round(row.rect.height)}`
-          : "-"}
-      </text>
-      <text style={{ color: theme.textDim, fontSize: 10 }}>
-        {row.rect
-          ? formatBytes(row.rect.physical_width * row.rect.physical_height * 4)
-          : "-"}
-      </text>
     </node>
   );
 }

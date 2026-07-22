@@ -29,6 +29,7 @@ use serde::de::DeserializeOwned;
 use ts_rs::TS;
 
 use crate::event::{ReactEvent, ReactEventRegistry};
+use crate::filters::{FilterRegistry, ReactFilter};
 use crate::registry::{NamedEntry, register_entry};
 use crate::request::{ReactRequest, ReactRequestRegistry, RequestEvent};
 use crate::ts_codegen::TsCollector;
@@ -198,15 +199,40 @@ pub trait ReactAppExt {
     where
         E: ReactEvent;
 
+    /// Register a custom filter type (usually a
+    /// [`#[react_filter]`](crate::react_filter) struct) so the `filter` style
+    /// chain can resolve it by `T::NAME` — and so the exporter can mirror its
+    /// params type into the generated TypeScript.
+    ///
+    /// The built-in filters (`blur`, `brightness`, …) are registered
+    /// automatically by [`ReactUiPlugin`](crate::ReactUiPlugin); call this
+    /// only for your own filters. Like events, keep the call in your single
+    /// `register_bindings` site so the exporter path sees the same filters
+    /// the running app does — a filter registered only at runtime never
+    /// appears in the generated typing (see
+    /// [`export_react_typescript`](Self::export_react_typescript)).
+    ///
+    /// To shadow a built-in name, register **after** `ReactUiPlugin` is
+    /// added: the plugin's `build` registers the built-ins and would replace
+    /// an earlier custom (with a warn), while the exporter — which never
+    /// runs the plugin — would still show yours, silently diverging the
+    /// generated types from runtime.
+    fn add_react_filter<T>(&mut self) -> &mut Self
+    where
+        T: ReactFilter + DeserializeOwned + TS;
+
     /// Write a self-contained TypeScript module (conventionally `src/bevy.ts`)
     /// mirroring every registered React binding to `path`.
     ///
-    /// The generated module covers all three app-messaging surfaces in one pass:
-    /// a type declaration per payload (mirrored from the `#[react_message]` /
-    /// `#[react_request]` / `#[react_event]` structs via `ts-rs`), the
-    /// `ReactMessages`/`ReactRequests`/`ReactEvents` name→type maps, typed
-    /// `emit`/`request`/`on` wrappers, and a structured `bevy` proxy whose nested
-    /// methods come from dotted request names (`"board.get"` → `bevy.board.get()`).
+    /// The generated module covers all four typed surfaces in one pass: a type
+    /// declaration per payload (mirrored from the `#[react_message]` /
+    /// `#[react_request]` / `#[react_event]` structs and the filter params types
+    /// via `ts-rs`), the `ReactMessages`/`ReactRequests`/`ReactEvents` name→type
+    /// maps, a `declare module "bevy-react"` block augmenting the `BevyFilters`
+    /// interface with every registered filter (built-ins included, so the
+    /// `filter` style field types each name's params), typed `emit`/`request`/
+    /// `on` wrappers, and a structured `bevy` proxy whose nested methods come
+    /// from dotted request names (`"board.get"` → `bevy.board.get()`).
     /// App code imports that typed surface from `./bevy` instead of the untyped
     /// functions from `"bevy-react"`, so every call is checked against the same
     /// structs Bevy serializes and deserializes.
@@ -286,6 +312,16 @@ impl ReactAppExt for App {
         self.world_mut()
             .get_resource_or_init::<ReactEventRegistry>()
             .register::<E>();
+        self
+    }
+
+    fn add_react_filter<T>(&mut self) -> &mut Self
+    where
+        T: ReactFilter + DeserializeOwned + TS,
+    {
+        self.world_mut()
+            .get_resource_or_init::<FilterRegistry>()
+            .register::<T>();
         self
     }
 

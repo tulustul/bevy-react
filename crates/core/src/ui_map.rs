@@ -475,17 +475,11 @@ pub fn apply_style_masked(
         });
     }
     if dirty.intersects(g::BACKGROUND) {
-        // A `filter` makes the node render through a `MaterialNode<FilterMaterial>`
-        // (built reconcile-side, where the material assets live), which *replaces* the
-        // standard draw and itself paints the filtered background color. So a filtered
-        // node never carries `BackgroundColor` — that also avoids a double draw when
-        // hover/press re-applies this style without rebuilding the material.
-        let has_filter = s.map(|s| s.filter.is_some()).unwrap_or(false);
         match s.and_then(|s| s.background_color.as_deref()) {
-            Some(hex) if !has_filter => {
+            Some(hex) => {
                 ec.insert(BackgroundColor(apply_opacity(parse_color(hex), opacity)));
             }
-            _ => {
+            None => {
                 ec.remove::<BackgroundColor>();
             }
         }
@@ -647,6 +641,26 @@ pub fn apply_style_masked(
         });
     }
 
+    // Mirror the wire `filter` chain onto the entity for the chain resolver
+    // (`crate::filters::resolve_filter_chains`) — the `TransitionInput`
+    // pattern. `s` may be a hover/press/focus-merged style (the field is
+    // `overlay`), so an interaction flip re-stamps the merged chain here and
+    // the resolver — plus the transition's filter channel — picks it up. A
+    // `Some` empty chain is a wire no-op — treated exactly like absent.
+    if dirty.intersects(g::FILTER) {
+        match s
+            .and_then(|s| s.filter.as_ref())
+            .filter(|c| !c.0.is_empty())
+        {
+            Some(chain) => {
+                ec.insert(crate::filters::FilterInput(chain.clone()));
+            }
+            None => {
+                ec.remove::<crate::filters::FilterInput>();
+            }
+        }
+    }
+
     // Stamp the transition engine's input from this (possibly hover/press-merged)
     // style. `drive_transitions` eases the snap values written above to their new
     // targets; see [`crate::transition`]. Skipping when no transitioned channel
@@ -661,7 +675,15 @@ pub fn apply_style_masked(
     // `crate::layer::LayerContentDirt`). Deliberately conservative: style
     // groups can't distinguish a composite-only opacity delta here; the fast
     // fade paths (animations/transitions) carry precise carve-outs instead.
-    if dirty.any() {
+    // The FILTER/LAYER groups are the exception and are masked out: their
+    // outputs are composite/promotion-side (a filter applies to the captured
+    // texture; the capture holds unfiltered content), so a delta touching
+    // only them never dirties a capture — the chain resolver pushes precise
+    // `composite_only` dirt itself. Promotion flips still dirty correctly:
+    // a promote is caught by the first-frame geometry hash, and a demote by
+    // `reapply_opacity_outputs`' restyle (whose dirty groups intersect the
+    // unmasked set) — the hash alone would miss a leaf demote.
+    if dirty.intersects(!(g::FILTER | g::LAYER)) {
         crate::layer::mark_content_dirty(ec);
     }
 }
@@ -677,9 +699,9 @@ pub fn overlay_style(base: &Option<Style>, overlay: &Option<Style>) -> Option<St
     let mut merged = base.clone().unwrap_or_default();
     // Driven by the shared field table (`protocol::with_style_fields`), so a new
     // `Style` field is overlaid automatically (and its absence from the table is
-    // a test failure). Fields tagged `no_overlay` (`filter`, `focus_policy`) are
-    // deliberately NOT carried by hover/press/focus variants — see the table's
-    // docs for why.
+    // a test failure). Fields tagged `no_overlay` (`focus_policy`, `group_alpha`,
+    // `cache`) are deliberately NOT carried by hover/press/focus variants — see
+    // the table's docs for why.
     macro_rules! overlay_field {
         ($(($f:ident, $name:literal, $g:tt, $ov:ident),)*) => {
             $( overlay_field!(@one $f, $ov); )*
@@ -1495,28 +1517,33 @@ mod tests {
         assert_eq!(from_none.background_color.as_deref(), Some("#89b4fa"));
     }
 
-    /// `filter` and `focusPolicy` are deliberately NOT carried by variants:
-    /// the interaction restyle path can't rebuild the filter material, and a
-    /// hover-overlaid filter would drop `BackgroundColor` with nothing painting
-    /// in its place; a variant must not silently toggle pointer capture either.
+    /// `filter` IS carried by variants (a hover filter re-stamps `FilterInput`
+    /// through the merged style; promotion never flips — it unions variant
+    /// presence). `focusPolicy` is NOT: a variant must not silently toggle
+    /// pointer capture.
     #[test]
-    fn overlay_skips_filter_and_focus_policy() {
+    fn overlay_carries_filter_but_skips_focus_policy() {
         let base = Some(style(serde_json::json!({
-            "filter": { "blur": 4 },
+            "filter": { "name": "blur", "params": { "radius": 4 } },
             "focusPolicy": "block",
         })));
         let overlay = Some(style(serde_json::json!({
-            "filter": { "blur": 9 },
+            "filter": { "name": "blur", "params": { "radius": 9 } },
             "focusPolicy": "pass",
             "backgroundColor": "red",
         })));
         let merged = overlay_style(&base, &overlay).unwrap();
-        assert_eq!(
-            merged.filter.unwrap().blur,
-            base.as_ref().unwrap().filter.as_ref().unwrap().blur
-        );
+        // The variant's chain wins wholesale (CSS shorthand semantics, like
+        // `transform`).
+        assert_eq!(merged.filter, overlay.as_ref().unwrap().filter);
+        assert_ne!(merged.filter, base.as_ref().unwrap().filter);
         assert_eq!(merged.focus_policy, Some(FocusPolicy::Block));
         assert_eq!(merged.background_color.as_deref(), Some("red"));
+
+        // A variant with no filter falls through to the base chain.
+        let no_filter = Some(style(serde_json::json!({ "backgroundColor": "red" })));
+        let merged = overlay_style(&base, &no_filter).unwrap();
+        assert_eq!(merged.filter, base.as_ref().unwrap().filter);
     }
 
     #[test]

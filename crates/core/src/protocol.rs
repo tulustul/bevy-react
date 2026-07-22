@@ -498,16 +498,22 @@ pub struct Style {
     pub outline: Option<OutlineSpec>,
     #[serde(default)]
     pub box_shadow: Option<BoxShadowList>,
-    /// CSS-like `filter`: per-pixel visual effects (`blur`, `brightness`,
-    /// `contrast`, `saturate`, `grayscale`, `sepia`, `invert`, `hueRotate`)
-    /// applied to the element's **own surface** (its image or background) via a
-    /// custom `UiMaterial` shader. Unlike CSS it does *not* cascade to descendants
-    /// — a `MaterialNode` renders only the node itself, so children/text draw on
-    /// top unfiltered. Present → the reconciler swaps the node's `ImageNode` /
-    /// `BackgroundColor` draw for a `MaterialNode<FilterMaterial>` (see
-    /// [`crate::filter`]).
+    /// Layer-based, subtree-wide `filter` chain (see [`crate::filters`]): one
+    /// `{ name, params }` object (a 1-element chain) or an ordered array of
+    /// them (chain order = pass order). Omitted params take the filter's
+    /// CSS-shorthand default (a bare `grayscale` is *full* grayscale, while
+    /// `brightness`/`contrast`/`saturate` default to identity). `params`
+    /// stays an untyped map at decode; it is validated later against the
+    /// registered filters
+    /// ([`FilterRegistry`](crate::filters::FilterRegistry)). A non-empty
+    /// chain promotes the node to a composited layer (see [`crate::layer`]);
+    /// hover/press/focus variants carry the field too (with a
+    /// [`transition`](Self::transition) the swap eases — see
+    /// `crate::filters`). A chain carried *only* by a variant still promotes
+    /// eagerly at mount — promotion is presence-based across the base style
+    /// and every variant, so the layer exists before the first hover.
     #[serde(default)]
-    pub filter: Option<FilterSpec>,
+    pub filter: Option<crate::filters::FilterChain>,
     /// Background gradient(s); one gradient or a layered list. bevy paints it
     /// *over* `backgroundColor` (CSS `background-image` semantics): an opaque
     /// gradient hides the color (fallback); transparent stops reveal it.
@@ -631,7 +637,7 @@ pub struct Style {
 pub mod style_groups {
     /// `bevy_ui::Node` (`node_from_style`): every layout field.
     pub const LAYOUT: u32 = 1 << 0;
-    /// `BackgroundColor` (reads `background_color`, `opacity`, `filter`).
+    /// `BackgroundColor` (reads `background_color`, `opacity`).
     pub const BACKGROUND: u32 = 1 << 1;
     /// `UiTransform` (reads `transform`).
     pub const TRANSFORM: u32 = 1 << 2;
@@ -653,11 +659,13 @@ pub mod style_groups {
     pub const GLOBAL_Z_INDEX: u32 = 1 << 10;
     /// `FocusPolicy` (also `apply_button_focus_default` in the reconciler).
     pub const FOCUS_POLICY: u32 = 1 << 11;
-    /// The filter material (`apply_filter` in the reconciler).
+    /// The wire `filter` chain → `FilterInput` (the chain resolver's *and*
+    /// the transition filter channel's target; see `crate::filters`).
     pub const FILTER: u32 = 1 << 12;
     /// `TransitionInput` (`TransitionInput::from_style` reads `transition` plus
     /// every transitioned channel: `transform`, `opacity`, `background_color`,
-    /// `width`, `height`, `max_width`, `max_height`).
+    /// `width`, `height`, `max_width`, `max_height`). The filter channel's
+    /// timing rides the spec here; its *target* is `FilterInput` (FILTER).
     pub const TRANSITION: u32 = 1 << 13;
     /// `ScrollTransitionInput` (reads `transition`).
     pub const SCROLL_TRANSITION: u32 = 1 << 14;
@@ -676,9 +684,10 @@ pub mod style_groups {
     /// `Node.scrollbar_width` (see `node_from_style`).
     pub const SCROLLBAR: u32 = 1 << 18;
     /// Layer-promotion inputs (`crate::layer`): fields that change whether a
-    /// subtree composites as a layer (`group_alpha`). No `apply_style` output
-    /// reads this group — it exists so a delta touching a promotion trigger is
-    /// visible to the promotion evaluator.
+    /// subtree composites as a layer (`opacity`, `group_alpha`, `cache`,
+    /// `filter`). No `apply_style` output reads this group — it exists so a
+    /// delta touching a promotion trigger is visible to the promotion
+    /// evaluator.
     pub const LAYER: u32 = 1 << 19;
 }
 
@@ -689,11 +698,13 @@ pub mod style_groups {
 /// - `ident` / `"wireName"`: the Rust field and its camelCase wire name.
 /// - `(group bits)`: the [`style_groups`] whose derived output reads the field.
 /// - `overlay` / `no_overlay`: whether `overlay_style` (hover/press/focus
-///   merging) carries the field. `filter` is `no_overlay` because the
-///   interaction restyle path can't rebuild the filter material (no asset
-///   access) — a hover-overlaid filter would drop `BackgroundColor` (the
-///   `has_filter` gate) with nothing painting in its place. `focus_policy` is
-///   `no_overlay` so a variant can't silently toggle pointer capture.
+///   merging) carries the field. `focus_policy` is `no_overlay` so a variant
+///   can't silently toggle pointer capture; `group_alpha`/`cache` are
+///   `no_overlay` so interaction can never flip layer promotion. `filter` IS
+///   overlaid: the merged style simply re-stamps `FilterInput`, and promotion
+///   unions variant presence (see `crate::layer::promotion_reasons`), so a
+///   hover filter composites — and, with a `transition`, eases — without ever
+///   flipping the layer.
 ///
 /// Consumers: `overlay_style` (ui_map), [`Style::overlay_delta`],
 /// [`Style::unset_field`], and the field-coverage test. Adding a `Style` field
@@ -747,7 +758,7 @@ macro_rules! with_style_fields {
             (border_radius, "borderRadius", (LAYOUT), overlay),
             (outline, "outline", (OUTLINE), overlay),
             (box_shadow, "boxShadow", (BOX_SHADOW), overlay),
-            (filter, "filter", (BACKGROUND | FILTER), no_overlay),
+            (filter, "filter", (FILTER | LAYER), overlay),
             (background_gradient, "backgroundGradient", (BG_GRADIENT), overlay),
             (border_gradient, "borderGradient", (BORDER_GRADIENT), overlay),
             (z_index, "zIndex", (Z_INDEX), overlay),
@@ -880,8 +891,9 @@ pub struct UpdateEvents {
 impl Style {
     /// Overlay every `Some` field of `delta` onto `self` and return the OR of
     /// the touched fields' [`style_groups`] bits. Unlike `overlay_style` this
-    /// carries **all** fields (including `filter`/`focus_policy`): the delta
-    /// is the app's own base style, not a hover variant.
+    /// carries **all** fields (including the `no_overlay`-tagged ones like
+    /// `focus_policy`): the delta is the app's own base style, not a hover
+    /// variant.
     pub(crate) fn overlay_delta(&mut self, delta: &Style) -> u32 {
         let mut groups = 0u32;
         macro_rules! merge_field {
@@ -931,6 +943,22 @@ impl Style {
 }
 
 impl Props {
+    /// Iterate every present style slot: the base [`Self::style`] plus the
+    /// hover/press/focus variants, in that order. THE definition of "all
+    /// style slots" for presence-based unions (layer promotion's
+    /// opacity/filter reasons, the create-time layer-dirty seed) — a new
+    /// variant slot extends this once, not each call site.
+    pub fn all_styles(&self) -> impl Iterator<Item = &Style> {
+        [
+            &self.style,
+            &self.hover_style,
+            &self.press_style,
+            &self.focus_style,
+        ]
+        .into_iter()
+        .flatten()
+    }
+
     /// Split the event-like fields (see [`UpdateEvents`]) out of `self`,
     /// leaving the retained state. Used to seed the per-node props cache from
     /// a create.
@@ -1235,43 +1263,6 @@ pub struct BoxShadowSpec {
 pub enum BoxShadowList {
     One(BoxShadowSpec),
     Many(Vec<BoxShadowSpec>),
-}
-
-/// A CSS-like `filter`: each field is one filter function, mirroring CSS naming.
-/// Every field is optional; unset means identity (no effect). Amounts follow the
-/// CSS convention: `brightness`/`contrast`/`saturate` are multipliers (`1.0` =
-/// identity), `grayscale`/`sepia`/`invert` are `0.0..=1.0` blends (`0` = identity),
-/// `blur` is a radius (a [`Length`] in px), and `hueRotate` is an [`Angle`]. The
-/// functions are applied in a fixed canonical order (blur → brightness → contrast
-/// → saturate → grayscale → sepia → invert → hueRotate), not the declared order,
-/// so listing the same function twice is not supported. See [`crate::filter`].
-#[derive(Debug, Clone, Default, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct FilterSpec {
-    /// Gaussian blur radius (a [`Length`], px). `0`/absent → no blur.
-    #[serde(default)]
-    pub blur: Option<Length>,
-    /// Brightness multiplier (`1.0` = identity, `0.0` = black, `>1` brighter).
-    #[serde(default)]
-    pub brightness: Option<f32>,
-    /// Contrast multiplier about mid-grey (`1.0` = identity).
-    #[serde(default)]
-    pub contrast: Option<f32>,
-    /// Saturation multiplier (`1.0` = identity, `0.0` = grayscale, `>1` more vivid).
-    #[serde(default)]
-    pub saturate: Option<f32>,
-    /// Grayscale amount (`0.0` = identity, `1.0` = fully desaturated).
-    #[serde(default)]
-    pub grayscale: Option<f32>,
-    /// Sepia amount (`0.0` = identity, `1.0` = full sepia tone).
-    #[serde(default)]
-    pub sepia: Option<f32>,
-    /// Invert amount (`0.0` = identity, `1.0` = fully inverted colors).
-    #[serde(default)]
-    pub invert: Option<f32>,
-    /// Hue rotation (an [`Angle`]; number = degrees). `0`/absent → no rotation.
-    #[serde(default)]
-    pub hue_rotate: Option<Angle>,
 }
 
 /// Line height for a `<text>`. A bare number is a multiple of the font size
@@ -2915,34 +2906,70 @@ mod tests {
         assert_eq!(placed("garbage"), auto);
     }
 
-    /// A `filter` decodes its CSS-like functions: `blur`/`hueRotate` carry units
-    /// (px / degrees), the rest are bare numbers; unset functions stay `None`
-    /// (identity). A malformed unit value falls back to its default, not an abort.
+    /// A `filter` decodes *through* `Style` into the layer-based chain (the
+    /// chain's own decode is unit-tested in `crate::filters`): a single
+    /// `{name, params}` object is a 1-element chain, an array preserves order,
+    /// and a malformed entry degrades the whole chain to empty without
+    /// aborting the containing `Style`.
     #[test]
-    fn deserializes_filter_functions() {
-        let s: Style = serde_json::from_str(
-            r#"{ "filter": {
-                "blur": "4px", "brightness": 1.2, "grayscale": 1,
-                "saturate": 0.5, "hueRotate": 90
-            } }"#,
-        )
-        .expect("filter decodes");
-        let f = s.filter.expect("filter present");
-        assert_eq!(f.blur, Some(Length::Px(4.0)));
-        assert_eq!(f.brightness, Some(1.2));
-        assert_eq!(f.grayscale, Some(1.0));
-        assert_eq!(f.saturate, Some(0.5));
-        assert!((f.hue_rotate.unwrap().radians() - std::f32::consts::FRAC_PI_2).abs() < 1e-5);
-        // Unset functions stay None (identity), never a default value.
-        assert_eq!(f.contrast, None);
-        assert_eq!(f.sepia, None);
-        assert_eq!(f.invert, None);
+    fn deserializes_filter_chain() {
+        use crate::filters::FilterChain;
 
-        // A bad unit value falls back to the type default without aborting the Style.
-        let s: Style = serde_json::from_str(r#"{ "filter": { "blur": "4pxx" }, "opacity": 0.5 }"#)
-            .expect("a bad filter unit must not abort the style");
-        assert_eq!(s.filter.unwrap().blur, Some(Length::default()));
+        // A single object is a 1-element chain; params stay a raw map.
+        let s: Style =
+            serde_json::from_str(r#"{ "filter": { "name": "blur", "params": { "radius": 4 } } }"#)
+                .expect("filter decodes");
+        let chain = s.filter.expect("filter present");
+        assert_eq!(chain.0.len(), 1);
+        assert_eq!(chain.0[0].name, "blur");
+        assert_eq!(chain.0[0].params["radius"], serde_json::json!(4));
+
+        // An array preserves declaration order (chain order = pass order).
+        let s: Style =
+            serde_json::from_str(r#"{ "filter": [{ "name": "blur" }, { "name": "grayscale" }] }"#)
+                .expect("filter decodes");
+        let names: Vec<&str> = s
+            .filter
+            .as_ref()
+            .expect("filter present")
+            .0
+            .iter()
+            .map(|u| u.name.as_str())
+            .collect();
+        assert_eq!(names, ["blur", "grayscale"]);
+
+        // A malformed entry degrades the whole chain to empty without
+        // aborting the Style — the sibling field still decodes.
+        let s: Style =
+            serde_json::from_str(r#"{ "filter": [{ "name": "blur" }, 3], "opacity": 0.5 }"#)
+                .expect("a bad filter entry must not abort the style");
+        assert_eq!(s.filter, Some(FilterChain::default()));
         assert_eq!(s.opacity, Some(0.5));
+    }
+
+    /// A `filter` delta dirties FILTER (the `FilterInput` re-stamp) and LAYER
+    /// (the promotion evaluator's trigger); a variant carrying a filter rides
+    /// the `hover_style` flag, which the reconciler also treats as a layer
+    /// trigger (variant filters promote — the field is `overlay`).
+    #[test]
+    fn filter_delta_dirties_filter_and_layer() {
+        let mut cached = Props::default();
+        let (dirty, _) = cached.merge_delta(
+            props(serde_json::json!({ "style": { "filter": { "name": "blur" } } })),
+            &[],
+            &[],
+        );
+        assert!(dirty.style.intersects(style_groups::FILTER));
+        assert!(dirty.style.intersects(style_groups::LAYER));
+
+        let (dirty, _) = cached.merge_delta(
+            props(serde_json::json!({ "hoverStyle": { "filter": { "name": "blur" } } })),
+            &[],
+            &[],
+        );
+        assert!(dirty.hover_style);
+        let hover = cached.hover_style.as_ref().expect("variant retained");
+        assert!(hover.filter.is_some(), "variant carries the chain");
     }
 
     /// A `change` event serializes its new text as camelCase `value`, while the

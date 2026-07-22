@@ -6,6 +6,7 @@
 import type { Key, ReactNode, Ref } from "react";
 import type { AnimatedStyle } from "./animated";
 import type { BevyCanvasElement, CanvasPainter, DrawCmd } from "./canvas";
+import type { FilterChainValue } from "./filters";
 
 /** Attributes React manages itself (not real host props — React strips `key`
  *  before props reach the reconciler). Shared by every host element so keyed
@@ -186,6 +187,11 @@ export interface BevyTransition {
    * feed `onScroll` back into the same controlled axis, or the round-trip fights the
    * ease (drive the target from buttons/state; read `onScroll` into separate state). */
   scroll?: BevyTransitionSpec;
+  /** Eases the layer-based `filter` chain between style states: same-name chains
+   * interpolate their params; a chain extended/truncated at the end over built-in
+   * filters fades through identity values (hover-adds-blur fades in); anything
+   * else swaps wholesale at the midpoint. */
+  filter?: BevyTransitionSpec;
 }
 
 /** The built-in system cursor keywords (winit's `SystemCursorIcon`, camelCase or CSS
@@ -383,24 +389,14 @@ export interface BevyStyle {
   /** One drop shadow, or an array of shadows stacked back-to-front (first
    *  paints on top), like CSS `box-shadow: a, b, …`. */
   boxShadow?: BoxShadow | BoxShadow[];
-  /** CSS-like per-pixel visual filters, applied to the element's **own surface**
-   *  (its image or background) via a custom shader. Unlike CSS this does *not*
-   *  cascade to children/text — it's most useful on an `<image>` or a leaf node.
-   *  `blur` is a radius (px). `brightness`/`contrast`/`saturate` are multipliers
-   *  (`1` = identity). `grayscale`/`sepia`/`invert` are `0..1` (0 = identity).
-   *  `hueRotate` is an [`Angle`] (number = degrees). Functions apply in a fixed
-   *  order: blur → brightness → contrast → saturate → grayscale → sepia → invert
-   *  → hueRotate. */
-  filter?: {
-    blur?: Length;
-    brightness?: number;
-    contrast?: number;
-    saturate?: number;
-    grayscale?: number;
-    sepia?: number;
-    invert?: number;
-    hueRotate?: Angle;
-  };
+  /** CSS-like `filter` chain: one `{ name, params }` entry (e.g.
+   *  `{ name: "blur", params: { radius: 4 } }`) or an ordered array of them —
+   *  chain order is pass order. Omitted params take the filter's CSS-shorthand
+   *  default (`{ name: "grayscale" }` is full grayscale). Subtree semantics,
+   *  like CSS: the node is promoted to a composited layer and the filter
+   *  applies to its whole captured subtree (images, text, buttons, nested
+   *  nodes) as one image. */
+  filter?: FilterChainValue;
   /** Background gradient(s): one gradient or a layered list. Painted *over*
    *  `backgroundColor` (like CSS `background-image`): an opaque gradient hides
    *  it, so the color is a fallback; transparent stops let it show through. */

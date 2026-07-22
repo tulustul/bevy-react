@@ -85,4 +85,8 @@ getrandom = { workspace = true, features = ["wasm_js"] }
 
 [dev-dependencies]
 crossbeam-channel = { workspace = true }
+# Parse/validate the crate's WGSL in unit tests. Already in the dependency
+# tree via bevy's wgpu; the version requirement must keep resolving to that
+# same copy.
+naga = { version = "29.0", features = ["wgsl-in"] }
 tokio = { workspace = true }

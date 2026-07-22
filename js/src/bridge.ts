@@ -629,9 +629,13 @@ export function serializeProps(
 // Structural equality with a depth cap. Style values are small plain-JSON
 // trees (rects, transforms, shadow lists, gradient stops); comparing them
 // structurally means an inline object literal that didn't actually change
-// doesn't count as a change. Past the cap (or for functions/class instances)
-// it conservatively reports "unequal", which merely re-sends that one field.
-export function valuesEqual(a: unknown, b: unknown, depth = 4): boolean {
+// doesn't count as a change. The cap of 5 gives one level of headroom over
+// the deepest style value — a filter chain `[{name, params: {tint: [r, g,
+// b, a]}}]` has four container levels (leaves compare via `Object.is` before
+// the depth guard, so depth counts containers, not values). Past the cap (or
+// for functions/class instances) it conservatively reports "unequal", which
+// merely re-sends that one field.
+export function valuesEqual(a: unknown, b: unknown, depth = 5): boolean {
   if (Object.is(a, b)) return true;
   if (depth <= 0) return false;
   if (

@@ -30,6 +30,7 @@ use crate::animations::{
     AnimatableProperty, AnimatedNode, Driver, Easing, Lerp, Runner, build_runner,
     build_ui_transform,
 };
+use bevy::ecs::query::QueryData;
 use bevy::prelude::*;
 use bevy::ui::{ScrollPosition, UiTransform};
 use serde::Deserialize;
@@ -60,6 +61,15 @@ pub struct Transition {
     /// both axes. Unlike the others, scroll's target lives in `Props` (it's a
     /// controlled value), so it's fed by the scroll write path, not `from_style`.
     pub scroll: Option<ChannelTransition>,
+    /// Eases the layer-based `filter` chain (see [`crate::filters`]) between
+    /// style states, whole-value: matching chains interpolate their packed
+    /// params; a chain that grows/shrinks at the end over built-in filters
+    /// fades through identity values (hover-adds-blur fades in); anything
+    /// else swaps at the midpoint. Unlike the others, the *target* doesn't
+    /// ride [`TransitionInput`] — it is read live from
+    /// [`crate::filters::FilterInput`] (a filter-only delta re-stamps that
+    /// component but not the input).
+    pub filter: Option<ChannelTransition>,
 }
 
 impl Transition {
@@ -82,6 +92,10 @@ impl Transition {
     /// The transition for the scroll offset (explicit, else `all`).
     pub fn for_scroll(&self) -> Option<&ChannelTransition> {
         self.scroll.as_ref().or(self.all.as_ref())
+    }
+    /// The transition for the filter chain (explicit, else `all`).
+    pub fn for_filter(&self) -> Option<&ChannelTransition> {
+        self.filter.as_ref().or(self.all.as_ref())
     }
 }
 
@@ -211,7 +225,141 @@ pub struct TransitionState {
     height: ProgressChannel<Length>,
     max_width: ProgressChannel<Length>,
     max_height: ProgressChannel<Length>,
+    filter: FilterChannel,
     initialized: bool,
+}
+
+/// The whole-value `filter` channel: eases a promoted root's
+/// [`crate::filters::ResolvedFilterChain`] packed params between wire targets
+/// (see [`crate::filters::plan_filter_ease`] for the strategy). Unlike the
+/// scalar channels, its current reading cannot be re-read from the component —
+/// [`crate::filters::resolve_filter_chains`] snaps the component to the new
+/// target on the retarget frame, before this system runs — so the state owns
+/// the last-written pass list (the `ProgressChannel` state-owned-current
+/// pattern, list-shaped).
+#[derive(Default)]
+struct FilterChannel {
+    /// The last wire chain seen (retarget detection). Empty = no filter.
+    wire: crate::filters::FilterChain,
+    /// The pass list this channel last wrote (or adopted from the resolver) —
+    /// the next ease's start.
+    current: Vec<crate::filters::ResolvedFilterPass>,
+    /// The in-flight ease, present only while animating. A single `Option`
+    /// so the runner and its plan can never go out of sync.
+    ease: Option<ActiveFilterEase>,
+}
+
+/// An armed filter ease: the [`Runner`] eases progress 0→1 and the plan turns
+/// that progress into a pass list. Armed together at retarget, dropped
+/// together on settle/teardown.
+struct ActiveFilterEase {
+    runner: Runner,
+    ease: crate::filters::FilterEase,
+}
+
+impl FilterChannel {
+    /// Advance the filter chain toward the wire target in `input`, writing the
+    /// eased packed params into `resolved`. Returns `true` when it wrote —
+    /// the caller pushes composite-only dirt (filter output never dirties the
+    /// capture, which holds unfiltered content).
+    ///
+    /// Three writers touch [`crate::filters::ResolvedFilterChain`]; precedence
+    /// runs resolver → transition → bindings. On the retarget frame
+    /// [`crate::filters::resolve_filter_chains`] (ordered before
+    /// [`drive_transitions`]) *snaps* the component to the new target; this
+    /// method *eases* over that snap — starting from the state-owned
+    /// `current`, the last value this channel wrote, never the
+    /// already-snapped component; and per-param `animatedStyle` bindings
+    /// (`filter[<i>].<param>`) *re-assert* individual params on top, winning
+    /// by gating this channel out via `skip_filter` (the imperative-wins
+    /// pattern of the scalar channels, coarse: any filter binding parks the
+    /// whole channel).
+    ///
+    /// The target rides [`crate::filters::FilterInput`], NOT
+    /// [`TransitionInput`] — a filter-only delta dirties the FILTER|LAYER
+    /// groups, never TRANSITION, so a target stamped into the input would go
+    /// stale; `FilterInput` is re-stamped by that same delta.
+    fn drive(
+        &mut self,
+        input: Option<&crate::filters::FilterInput>,
+        mut resolved: Option<Mut<crate::filters::ResolvedFilterChain>>,
+        spec: Option<&ChannelTransition>,
+        registry: Option<&crate::filters::FilterRegistry>,
+        assets: Option<&AssetServer>,
+        dt: f32,
+    ) -> bool {
+        let retargeted = match input {
+            Some(fi) => fi.0 != self.wire,
+            None => !self.wire.0.is_empty(),
+        };
+        if retargeted {
+            let to_wire = input.map(|f| f.0.clone()).unwrap_or_default();
+            let from_wire = std::mem::replace(&mut self.wire, to_wire);
+            match (spec, resolved.as_deref()) {
+                // Ease only toward a live resolved chain. An emptied or
+                // unresolvable target has no component to write into
+                // (unset `filter` demotes the layer; an all-invalid chain
+                // attaches none), so it snaps below.
+                (Some(spec), Some(chain)) if !self.wire.0.is_empty() => {
+                    self.ease = Some(ActiveFilterEase {
+                        runner: build_runner(&spec.to_driver(1.0), 0.0),
+                        ease: crate::filters::plan_filter_ease(
+                            &from_wire,
+                            &self.wire,
+                            self.current.clone(),
+                            chain.passes.clone(),
+                            registry,
+                            assets,
+                            chain.scale,
+                        ),
+                    });
+                }
+                _ => {
+                    // Snap: adopt whatever the resolver produced.
+                    self.current = resolved
+                        .as_deref()
+                        .map(|c| c.passes.clone())
+                        .unwrap_or_default();
+                    self.ease = None;
+                }
+            }
+        }
+        let mut wrote = false;
+        if let Some(mut active) = self.ease.take() {
+            match resolved.as_mut() {
+                Some(resolved) => {
+                    let (p, done) = active.runner.step(dt);
+                    // Completion writes the resolver's own snapped output,
+                    // bit-exact, so the two writers agree and stop
+                    // churning (the stage-interplay rule: bake the final
+                    // value, don't approximate it).
+                    let new = if done {
+                        active.ease.settle().to_vec()
+                    } else {
+                        active.ease.sample(p)
+                    };
+                    // Compare via `Deref` first so a no-op frame doesn't
+                    // trip change detection.
+                    if resolved.passes != new {
+                        let chain = &mut **resolved;
+                        chain.passes = new.clone();
+                        chain.version = chain.version.wrapping_add(1);
+                        wrote = true;
+                    }
+                    self.current = new;
+                    if !done {
+                        self.ease = Some(active);
+                    }
+                }
+                None => {
+                    // The chain vanished mid-ease (demotion tore the
+                    // layer down): drop the ease and forget the passes.
+                    self.current = Vec::new();
+                }
+            }
+        }
+        wrote
+    }
 }
 
 /// One scalar channel: its current reading, last target, and active driver.
@@ -420,44 +568,62 @@ pub fn apply_transition(ec: &mut EntityCommands, style: &Option<Style>) {
     }
 }
 
+/// The components a transition can drive, plus the read-only inputs that gate how
+/// it drives them. A `QueryData` struct (rather than a tuple) so a new transition
+/// target component is one field, not a tuple-arity problem — the filter
+/// channel's fields (`filter_input`/`resolved_filter`) live here already.
+/// The per-param filter bindings (`filter[<i>].<param>`) write through the
+/// *animation side* instead: `AnimTargets` (the animations applier's mirror
+/// of this struct) carries its own resolved-chain field. Every target is
+/// optional except `UiTransform` (required by [`TransitionState`]).
+#[derive(QueryData)]
+#[query_data(mutable)]
+pub struct TransitionTargets {
+    transform: &'static mut UiTransform,
+    bg: Option<&'static mut BackgroundColor>,
+    text: Option<&'static mut TextColor>,
+    image: Option<&'static mut ImageNode>,
+    node: Option<&'static mut Node>,
+    /// Imperative `animatedStyle` bindings; any channel they drive is skipped.
+    anim: Option<&'static AnimatedNode>,
+    // On a promoted layer root (see `crate::layer`) a transitioned `opacity`
+    // drives the composite-time group alpha instead of the color folds.
+    promoted: Option<&'static crate::layer::PromotedLayer>,
+    layer_alpha: Option<&'static mut crate::layer::LayerGroupAlpha>,
+    /// The wire `filter` chain — the filter channel's *target*. Read here
+    /// (not from [`TransitionInput`]) because a filter-only delta re-stamps
+    /// this component but never the input: the `filter` style field is in the
+    /// FILTER|LAYER dirty groups, not TRANSITION.
+    filter_input: Option<&'static crate::filters::FilterInput>,
+    /// The resolved chain the filter channel writes eased packed params into
+    /// (promoted roots only; snapped to the target by
+    /// `resolve_filter_chains`, ordered before this system).
+    resolved_filter: Option<&'static mut crate::filters::ResolvedFilterChain>,
+}
+
 /// Advance every transitioning entity toward its [`TransitionInput`] target and
 /// write the eased value onto `UiTransform` / `BackgroundColor` / alpha. Runs
 /// after `apply_interaction_styles` (and thus after the op drain) so its writes
 /// land last in the frame.
-#[allow(clippy::type_complexity)]
 pub fn drive_transitions(
     time: Res<Time>,
     mut commands: Commands,
     mut dirt: ResMut<crate::layer::LayerContentDirt>,
+    // The filter channel resolves identity padding at retarget time. Both are
+    // optional so schedule-only test worlds without asset machinery still
+    // drive the scalar channels; a missing pair degrades a chain extension to
+    // a discrete swap (see `crate::filters::plan_filter_ease`).
+    filter_registry: Option<Res<crate::filters::FilterRegistry>>,
+    assets: Option<Res<AssetServer>>,
     mut query: Query<(
         Entity,
         &TransitionInput,
         &mut TransitionState,
-        &mut UiTransform,
-        Option<&mut BackgroundColor>,
-        Option<&mut TextColor>,
-        Option<&mut ImageNode>,
-        Option<&mut Node>,
-        Option<&AnimatedNode>,
-        Option<&crate::layer::PromotedLayer>,
-        Option<&mut crate::layer::LayerGroupAlpha>,
+        TransitionTargets,
     )>,
 ) {
     let dt = time.delta_secs();
-    for (
-        entity,
-        input,
-        mut state,
-        mut transform,
-        bg,
-        text_color,
-        image,
-        node,
-        anim,
-        promoted,
-        layer_alpha,
-    ) in &mut query
-    {
+    for (entity, input, mut state, mut targets) in &mut query {
         // Seed resting values on first sight so a freshly mounted element snaps to
         // its initial style instead of animating in from zero.
         if !state.initialized {
@@ -483,13 +649,35 @@ pub fn drive_transitions(
             state
                 .max_height
                 .init(input.max_height.unwrap_or(Length::Auto));
+            // Filter: adopt the current wire chain and whatever the resolver
+            // produced, so a freshly mounted filtered element snaps instead
+            // of fading in from identity.
+            state.filter.wire = targets
+                .filter_input
+                .map(|f| f.0.clone())
+                .unwrap_or_default();
+            state.filter.current = targets
+                .resolved_filter
+                .as_deref()
+                .map(|c| c.passes.clone())
+                .unwrap_or_default();
             state.initialized = true;
         }
 
         // `animatedStyle` (imperative) wins: skip any channel it already drives.
-        let skip_transform = anim.is_some_and(|a| a.0.has_transform());
-        let skip_opacity = anim.is_some_and(|a| a.0.contains(AnimatableProperty::Opacity));
-        let skip_bg = anim.is_some_and(|a| a.0.contains(AnimatableProperty::BackgroundColor));
+        let skip_transform = targets.anim.is_some_and(|a| a.0.has_transform());
+        let skip_opacity = targets
+            .anim
+            .is_some_and(|a| a.0.contains(AnimatableProperty::Opacity));
+        let skip_bg = targets
+            .anim
+            .is_some_and(|a| a.0.contains(AnimatableProperty::BackgroundColor));
+        // Coarser than its siblings by design: ANY `filter[<i>].<param>`
+        // binding parks the WHOLE whole-value filter channel — the channel
+        // eases a complete pass list, so there is no per-param seam to merge
+        // an imperative writer into. The bindings then re-assert their params
+        // on top of the resolver's snap every frame (`AnimationSet::Apply`).
+        let skip_filter = targets.anim.is_some_and(|a| a.0.has_filter_params());
 
         // Transform: only when a transform transition is declared; otherwise the
         // static `UiTransform` from `apply_style` stands untouched. Only specified
@@ -510,21 +698,19 @@ pub fn drive_transitions(
             // Compare-before-write so a settled transition doesn't dirty change
             // detection every frame (read via `Deref`, write via `DerefMut`).
             let new = build_ui_transform(tx, ty, sc, scx, scy, rot);
-            if *transform != new {
+            if *targets.transform != new {
                 // Layer-cache classification (see the animation applier): a
                 // promoted root's own pure translation is composite-only.
-                let translate_only =
-                    transform.scale == new.scale && transform.rotation == new.rotation;
-                if promoted.is_some() && translate_only {
+                let translate_only = targets.transform.scale == new.scale
+                    && targets.transform.rotation == new.rotation;
+                if targets.promoted.is_some() && translate_only {
                     dirt.composite_only.push(entity);
                 } else {
                     dirt.nodes.push(entity);
                 }
-                *transform = new;
+                *targets.transform = new;
             }
         }
-
-        let mut bg = bg;
 
         // Opacity owns the final alpha across background/text/image. Resolved
         // before the background write so it can be baked into that color —
@@ -540,7 +726,7 @@ pub fn drive_transitions(
         // (below) — colors keep their own alpha, so nothing to bake here. The
         // spring itself always eases, keeping a mid-ease promote/demote
         // continuous.
-        let promoted = promoted.is_some();
+        let promoted = targets.promoted.is_some();
         if !skip_bg && let Some(target) = input.background_color {
             let mut rgba = state.color.drive(target, input.spec.for_background(), dt);
             if let Some(a) = alpha
@@ -549,7 +735,7 @@ pub fn drive_transitions(
                 rgba[3] = a;
             }
             let color = rgba_to_color(rgba);
-            match &mut bg {
+            match &mut targets.bg {
                 Some(c) if c.0 != color => {
                     c.0 = color;
                     dirt.nodes.push(entity);
@@ -568,7 +754,7 @@ pub fn drive_transitions(
         if let Some(alpha) = alpha
             && promoted
         {
-            if let Some(mut la) = layer_alpha
+            if let Some(la) = &mut targets.layer_alpha
                 && la.0 != alpha
             {
                 la.0 = alpha;
@@ -578,19 +764,19 @@ pub fn drive_transitions(
             }
         } else if let Some(alpha) = alpha {
             let mut wrote = false;
-            if let Some(c) = &mut bg
+            if let Some(c) = &mut targets.bg
                 && c.0.alpha() != alpha
             {
                 c.0 = c.0.with_alpha(alpha);
                 wrote = true;
             }
-            if let Some(mut tc) = text_color
+            if let Some(tc) = &mut targets.text
                 && tc.0.alpha() != alpha
             {
                 tc.0 = tc.0.with_alpha(alpha);
                 wrote = true;
             }
-            if let Some(mut img) = image
+            if let Some(img) = &mut targets.image
                 && img.color.alpha() != alpha
             {
                 img.color = img.color.with_alpha(alpha);
@@ -608,7 +794,7 @@ pub fn drive_transitions(
         // The animations engine never writes `Node`, so no precedence check is
         // needed.
         if input.spec.for_size().is_some()
-            && let Some(mut node) = node
+            && let Some(node) = targets.node.as_mut()
         {
             let s = input.spec.for_size();
             if let Some(t) = input.width {
@@ -635,6 +821,22 @@ pub fn drive_transitions(
                     node.max_height = v;
                 }
             }
+        }
+
+        // Filter: ease the promoted root's resolved chain between wire
+        // targets (see [`FilterChannel::drive`] for the retarget/writer
+        // contract). A write is composite-only dirt, like the resolver's.
+        if !skip_filter
+            && state.filter.drive(
+                targets.filter_input,
+                targets.resolved_filter.as_mut().map(Mut::reborrow),
+                input.spec.for_filter(),
+                filter_registry.as_deref(),
+                assets.as_deref(),
+                dt,
+            )
+        {
+            dirt.composite_only.push(entity);
         }
     }
 }
@@ -687,6 +889,24 @@ mod tests {
         let t: Transition = parse(serde_json::json!({ "opacity": { "duration": 50 } }));
         assert!(t.for_transform().is_none());
         assert!(t.for_opacity().is_some());
+    }
+
+    /// The filter channel resolves like its siblings: explicit entry first,
+    /// else `all`, else none.
+    #[test]
+    fn filter_channel_falls_back_to_all() {
+        let secs = |c: &ChannelTransition| c.duration.map(WireTime::seconds);
+        let t: Transition = parse(serde_json::json!({
+            "all": { "duration": 100 },
+            "filter": { "duration": 400 },
+        }));
+        assert_eq!(secs(t.for_filter().unwrap()), Some(0.4));
+
+        let t: Transition = parse(serde_json::json!({ "all": { "duration": 100 } }));
+        assert_eq!(secs(t.for_filter().unwrap()), Some(0.1));
+
+        let t: Transition = parse(serde_json::json!({ "opacity": { "duration": 50 } }));
+        assert!(t.for_filter().is_none());
     }
 
     #[test]
@@ -902,6 +1122,113 @@ mod tests {
         schedule.run(&mut world);
         // Untouched by the transition: still the imperative 2.0.
         assert_eq!(world.entity(e).get::<UiTransform>().unwrap().scale.x, 2.0);
+    }
+
+    /// A `filter[<i>].<param>` binding parks the WHOLE whole-value filter
+    /// channel (`skip_filter`): on a filter retarget the transition must not
+    /// touch the resolved chain — the per-param binding (the animations
+    /// applier) owns it. A control entity without the binding shows the
+    /// channel would otherwise write.
+    #[test]
+    fn filter_param_binding_gates_filter_transition() {
+        use crate::animations::ValueKind;
+        use std::sync::Arc;
+
+        let (mut world, mut schedule) = drive_world();
+        let spec = Transition {
+            filter: Some(timing(1.0, Easing::Linear)),
+            ..Default::default()
+        };
+        let pass = |amount: f32| crate::filters::ResolvedFilterPass {
+            shader: Handle::default(),
+            params: vec![Vec4::new(amount, 0.0, 0.0, 0.0)],
+            layout: Arc::from(vec![crate::filters::ParamSlot {
+                name: "amount",
+                kind: ValueKind::Scalar,
+                vec: 0,
+                comp: 0,
+                len: 1,
+            }]),
+            wire_index: 0,
+        };
+        let wire = |amount: f32| -> crate::filters::FilterChain {
+            serde_json::from_value(serde_json::json!(
+                { "name": "grayscale", "params": { "amount": amount } }
+            ))
+            .unwrap()
+        };
+        let chain = |amount: f32| crate::filters::ResolvedFilterChain {
+            passes: vec![pass(amount)],
+            outset_px: 0,
+            always_dirty: false,
+            version: 1,
+            scale: 1.0,
+        };
+        let bindings: AnimatedBindings = serde_json::from_value(serde_json::json!({
+            "filter[0].amount": { "type": "shared", "id": 1 }
+        }))
+        .unwrap();
+
+        let spawn = |world: &mut World, gated: bool| {
+            let mut e = world.spawn((
+                TransitionInput {
+                    spec: spec.clone(),
+                    ..Default::default()
+                },
+                TransitionState::default(),
+                UiTransform::default(),
+                crate::filters::FilterInput(wire(0.0)),
+                chain(0.0),
+            ));
+            if gated {
+                e.insert(AnimatedNode(bindings.clone()));
+            }
+            e.id()
+        };
+        let gated = spawn(&mut world, true);
+        let control = spawn(&mut world, false);
+
+        // Seed frame: both channels adopt the current wire chain + passes.
+        schedule.run(&mut world);
+
+        // Retarget: stamp the new wire chain and simulate the resolver's
+        // same-frame snap of the component to the target.
+        for e in [gated, control] {
+            *world
+                .entity_mut(e)
+                .get_mut::<crate::filters::FilterInput>()
+                .unwrap() = crate::filters::FilterInput(wire(1.0));
+            let mut em = world.entity_mut(e);
+            let mut c = em.get_mut::<crate::filters::ResolvedFilterChain>().unwrap();
+            c.passes = vec![pass(1.0)];
+            c.version = 2;
+        }
+        advance(&mut world, 0.1);
+        schedule.run(&mut world);
+
+        // Control: the channel armed a matched ease over the snap and wrote
+        // a mid-ease value — proving the channel was live.
+        let c = world
+            .entity(control)
+            .get::<crate::filters::ResolvedFilterChain>()
+            .unwrap();
+        let w = c.passes[0].params[0].x;
+        assert!(
+            w > 0.0 && w < 1.0,
+            "control: transition eased over the snap, got {w}"
+        );
+        assert_eq!(c.version, 3, "control: transition bumped the version");
+
+        // Gated: `skip_filter` — the snapped chain is untouched.
+        let c = world
+            .entity(gated)
+            .get::<crate::filters::ResolvedFilterChain>()
+            .unwrap();
+        assert_eq!(
+            c.passes[0].params[0].x, 1.0,
+            "gated: the transition must not touch the chain"
+        );
+        assert_eq!(c.version, 2, "gated: version stays the resolver's");
     }
 
     /// Once a transition has settled, `drive_transitions` must stop marking the

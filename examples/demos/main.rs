@@ -19,6 +19,7 @@
 //! the files under `ui/src/`.
 
 mod camera;
+mod filters;
 mod scene;
 mod scenes;
 // Framebuffer capture (`--shoot`) drives Bevy's `Screenshot` + `save_to_disk`, both
@@ -178,6 +179,10 @@ fn build_app(window: Window, hot_reload: bool) -> App {
     // Each scene's plugin registers its own bindings in `build`; only the global
     // scene-selection + debug-navigation handlers are left to register here.
     scene::register_bindings(&mut app);
+    // Custom filters must register AFTER `ReactUiPlugin` (added above): the
+    // plugin's `build` registers the built-in filters and would replace an
+    // earlier same-name custom (see `add_react_filter`'s ordering doc).
+    filters::register_bindings(&mut app);
     // Screenshot navigation rides a `#[react_event]`; native-only (the module is too).
     #[cfg(not(target_arch = "wasm32"))]
     screenshot::register_bindings(&mut app);
@@ -199,6 +204,7 @@ fn run() {
 fn register_react_bindings(app: &mut App) {
     scene::register_bindings(app);
     screenshot::register_bindings(app);
+    filters::register_bindings(app);
     scenes::cubes::register_bindings(app);
     scenes::bouncing_ball::register_bindings(app);
     scenes::crowded_cubes::register_bindings(app);

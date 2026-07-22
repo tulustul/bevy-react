@@ -18,16 +18,29 @@
 //!    each synthetic phase into the layer's offscreen texture (cleared
 //!    transparent). Straight-alpha blending onto transparent black accumulates
 //!    **premultiplied** color, so…
-//! 4. …the composite quad ([`DrawLayerComposite`], drawn inside the stock
-//!    `ui_pass` at the subtree's stacking position) samples the capture with
+//! 4. …a layer with a `filter` chain then replays its staged filter run
+//!    (same graph node, right after that layer's capture): fullscreen passes
+//!    capture → ping-pong textures ([`LayerFilterMeta::runs`], staged by
+//!    [`prepare_layer_filters`]), all of them or none — an uncompiled pass
+//!    pipeline aborts the whole run and [`FilterSlot::output_valid`] stays
+//!    false, so the layer restages and retries next frame. And…
+//! 5. …the composite quad ([`DrawLayerComposite`], drawn inside the stock
+//!    `ui_pass` at the subtree's stacking position) samples the capture — or,
+//!    for a filtered layer, the final filter pass's output — with
 //!    premultiplied blending (`One`/`OneMinusSrcAlpha`) and multiplies rgb
 //!    *and* alpha by the group alpha.
 //!
 //! Re-verify on Bevy upgrades (spike checklist): `TransparentUi` field set,
 //! `SortedRenderPhase::{items, transient_items}` visibility, `prepare_uinodes`
 //! iterating all phases, `ViewSortedRenderPhases::prepare_for_new_frame`
-//! draining transients, straight `ALPHA_BLENDING` in `UiPipeline`, and the
-//! `Queue → PhaseSort → PrepareBindGroups` schedule shape.
+//! draining transients, straight `ALPHA_BLENDING` in `UiPipeline`, the
+//! `Queue → PhaseSort → PrepareBindGroups` schedule shape, naga_oil NOT
+//! re-exporting an import's entry points (the split-stage filter pipelines
+//! rely on pass shaders having no vertex entry of their own), naga's namer
+//! renaming digit-suffixed identifiers (the `pad_a`/`pad_b` constraint in
+//! composable WGSL modules), and wgpu accepting per-stage shader modules in
+//! `RenderPipelineDescriptor` (filter vertex stage = prelude module, fragment
+//! stage = pass module).
 
 use std::ops::Range;
 
@@ -52,10 +65,12 @@ use bevy::render::sync_world::{MainEntity, RenderEntity, TemporaryRenderEntity};
 use bevy::render::texture::CachedTexture;
 use bevy::render::view::{ExtractedView, RetainedViewEntity, ViewUniform};
 use bevy::shader::Shader;
+use bevy::shader::ShaderCacheError;
 use bevy::ui::ComputedUiTargetCamera;
 use bevy::ui_render::{SetUiViewBindGroup, TransparentUi, stack_z_offsets};
 
 use super::{LayerCaptureRect, LayerGroupAlpha, LayerMembership, PromotedLayer};
+use crate::filters::{MAX_FILTER_PARAM_VECS, ResolvedFilterChain};
 
 /// Matches the private `bevy_ui_render::UI_CAMERA_FAR` (the stock UI ortho
 /// far plane / view z) so synthetic views project identically to the stock
@@ -67,6 +82,45 @@ const UI_CAMERA_TRANSFORM_OFFSET: f32 = -0.1;
 /// views key off the *layer root's* main entity, so any constant would be
 /// collision-free — a distinct one keeps `RetainedViewEntity` debugging sane.
 const UI_LAYER_CAPTURE_SUBVIEW: u32 = 2;
+/// Cycle/depth guard for enclosing-chain walks ([`walk_enclosing`] and the
+/// capture-order depth computation): `enclosing` is acyclic by construction,
+/// so a chain longer than this is a bug, not a real hierarchy — walks stop
+/// rather than spin.
+const MAX_LAYER_DEPTH: usize = 64;
+/// Consecutive gated frames ([`FilterSlot::gated_frames`]) before the stuck
+/// composite gate warns about a pipeline that is *still compiling*. A shader
+/// that outright FAILED warns immediately (the gate inspects
+/// [`CachedPipelineState`] each gated frame), so this threshold only covers
+/// the never-completes case; it is deliberately generous because frame count
+/// is FPS-relative — at an uncapped 300 fps, startup compiles legitimately
+/// take hundreds of gated frames (~2 s here; ~10 s at 60 fps).
+const STUCK_GATE_HANG_FRAMES: u32 = 600;
+
+/// One filter pass of an extracted chain: the pass shader plus its packed
+/// uniform params.
+pub struct ExtractedFilterPass {
+    /// The pass's fragment shader (the vertex stage is always the prelude's —
+    /// see [`LayerFilterPipeline`]).
+    pub shader: Handle<Shader>,
+    /// The packed params, zero-padded to the full uniform array. A fixed
+    /// array rather than the main world's `Vec`: `FilterUniforms.params` is
+    /// fixed-size anyway, so padding at extract time makes uniform staging a
+    /// plain copy (unused slots are never read by the pass shader).
+    pub params: [Vec4; MAX_FILTER_PARAM_VECS],
+}
+
+/// A layer's filter chain, extracted from [`ResolvedFilterChain`]. Only the
+/// render-side fields cross: `wire_index`/`layout`/`outset_px`/`scale` are
+/// main-world concerns (animation metadata, capture sizing) and stay there.
+pub struct ExtractedChain {
+    pub passes: Vec<ExtractedFilterPass>,
+    /// Mirrors [`ResolvedFilterChain::version`] — compared against
+    /// [`FilterSlot::params_version`] to detect param changes.
+    pub version: u32,
+    /// Mirrors [`ResolvedFilterChain::always_dirty`] (time-driven filters
+    /// re-run every frame).
+    pub always_dirty: bool,
+}
 
 /// One promoted layer, as seen by the render world this frame.
 pub struct ExtractedLayer {
@@ -97,6 +151,10 @@ pub struct ExtractedLayer {
     /// missing/mismatched slot), then propagated up the enclosing chain — a
     /// re-capturing layer's quad re-draws inside every enclosing capture.
     pub needs_capture: bool,
+    /// The layer root's resolved filter chain, if any (always non-empty when
+    /// present). Drives [`prepare_layer_filters`]; `None` clears the slot's
+    /// filter state (see [`FilterSlot`]).
+    pub chain: Option<ExtractedChain>,
 }
 
 /// Per-frame extraction output. `layers` is index-aligned with
@@ -146,7 +204,55 @@ pub struct LayerSlot {
     /// capture whose pipelines were all ready marks the content valid;
     /// until then extraction keeps re-capturing.
     pub content_valid: bool,
+    /// Filter-pass state, present iff the layer had a chain last frame.
+    /// **Cleared whenever the chain disappears** ([`prepare_layer_textures`]):
+    /// [`ResolvedFilterChain::version`] restarts at 1 per chain lifetime
+    /// (demote/re-promote), so a stale `params_version` surviving the chain's
+    /// absence could collide with a restarted version and skip a needed
+    /// re-run with old params.
+    pub filter: Option<FilterSlot>,
     pub last_seen: u64,
+}
+
+/// A layer's persistent filter-pass resources: two same-size ping-pong
+/// textures (pass 0 samples the capture and writes `textures[0]`, pass 1
+/// samples `textures[0]` and writes `textures[1]`, and so on) plus the
+/// bookkeeping that lets a clean chain skip re-running its passes. Allocated
+/// at the capture's size + format; dies with the [`LayerSlot`] on realloc.
+pub struct FilterSlot {
+    /// The ping-pong targets (`RENDER_ATTACHMENT | TEXTURE_BINDING`).
+    pub textures: [CachedTexture; 2],
+    /// The [`ExtractedChain::version`] the last staged run used; `0` = never
+    /// staged (versions start at 1).
+    pub params_version: u32,
+    /// Whether `textures[output_index]` holds a *complete* filter output.
+    /// Staging a run resets it; [`prepare_layer_filters`] sets it back only
+    /// when the whole staged chain is certain to execute this frame (every
+    /// pass pipeline already compiled AND the source capture valid — the same
+    /// conservative discipline as [`LayerSlot::content_valid`]). While false,
+    /// [`prepare_layer_composites`] withholds the quad's batch (draws
+    /// nothing — never a flash of unfiltered content) and the layer restages
+    /// every frame until the run goes through.
+    pub output_valid: bool,
+    /// Consecutive frames the composite gate has withheld this layer's quad
+    /// (no complete filtered output to sample); reset to 0 when
+    /// [`Self::output_valid`] flips true. Drives the stuck-gate warning (see
+    /// [`Self::gate_warned`]) — a pipeline that never compiles (user WGSL
+    /// error) would otherwise leave the subtree invisible forever with no
+    /// log from this module.
+    pub gated_frames: u32,
+    /// Whether this stuck episode already warned (once per episode; reset
+    /// with [`Self::gated_frames`]). An errored pass pipeline warns
+    /// immediately with the compile error; a still-compiling one only after
+    /// [`STUCK_GATE_HANG_FRAMES`].
+    pub gate_warned: bool,
+    /// Which ping-pong texture the final pass writes: `(len - 1) % 2`.
+    pub output_index: usize,
+    /// Composite bind group sampling `textures[.0]` — built by
+    /// [`prepare_layer_composites`]' filter retarget, kept until realloc like
+    /// [`LayerSlot::bind_group`]; the stored index invalidates it when
+    /// `output_index` flips (pass-count parity change).
+    pub composite_bind_group: Option<(usize, BindGroup)>,
 }
 
 /// Persistent (cross-frame) capture textures, keyed by layer root — the
@@ -174,6 +280,7 @@ pub fn extract_ui_layers(
                 &LayerCaptureRect,
                 &LayerGroupAlpha,
                 &ComputedUiTargetCamera,
+                Option<&ResolvedFilterChain>,
             ),
             With<PromotedLayer>,
         >,
@@ -198,7 +305,7 @@ pub fn extract_ui_layers(
     // v1: all layers composite on one camera — the first layer root's UI
     // target camera. (Multi-camera roots are a documented non-goal for now.)
     let mut layer_index: HashMap<Entity, usize> = HashMap::default();
-    for (root, rect, alpha, target_camera) in layers.iter() {
+    for (root, rect, alpha, target_camera, filter_chain) in layers.iter() {
         let Some(camera_main) = target_camera.get() else {
             continue;
         };
@@ -269,6 +376,37 @@ pub fn extract_ui_layers(
             });
         let needs_capture = !cached_ok || repaints.dirty.contains(&root);
 
+        // The resolver never attaches an empty chain, but guard anyway — an
+        // empty `chain` must read as "no filter machinery" downstream.
+        let chain = filter_chain
+            .filter(|chain| !chain.passes.is_empty())
+            .map(|chain| ExtractedChain {
+                passes: chain
+                    .passes
+                    .iter()
+                    .map(|pass| {
+                        // The registry rejects over-cap packs at resolve; a
+                        // custom `resolve` override that bypassed it would
+                        // otherwise be silently truncated here.
+                        debug_assert!(
+                            pass.params.len() <= MAX_FILTER_PARAM_VECS,
+                            "filter pass packs {} vec4s, over MAX_FILTER_PARAM_VECS",
+                            pass.params.len()
+                        );
+                        let mut params = [Vec4::ZERO; MAX_FILTER_PARAM_VECS];
+                        for (slot, value) in params.iter_mut().zip(&pass.params) {
+                            *slot = *value;
+                        }
+                        ExtractedFilterPass {
+                            shader: pass.shader.clone(),
+                            params,
+                        }
+                    })
+                    .collect(),
+                version: chain.version,
+                always_dirty: chain.always_dirty,
+            });
+
         layer_index.insert(root, extracted.layers.len());
         extracted.layers.push(ExtractedLayer {
             main_entity: MainEntity::from(root),
@@ -280,6 +418,7 @@ pub fn extract_ui_layers(
             alpha: alpha.0.clamp(0.0, 1.0),
             target_format,
             needs_capture,
+            chain,
         });
     }
 
@@ -313,27 +452,28 @@ pub fn extract_ui_layers(
     // (The main-world resolver already propagates its dirt the same way; this
     // pass additionally covers render-side reasons — a missing/realloc'd
     // slot — so redistribute can rely on "outer cached ⇒ inner cached".)
+    let extracted = &mut *extracted;
     for i in 0..extracted.layers.len() {
         if extracted.layers[i].needs_capture {
-            let mut idx = i;
-            while let Some(outer) = extracted.enclosing[idx] {
-                if extracted.layers[outer].needs_capture {
-                    break;
+            let layers = &mut extracted.layers;
+            walk_enclosing(i, &extracted.enclosing, |outer| {
+                if layers[outer].needs_capture {
+                    return false; // its own chain is already propagated
                 }
-                extracted.layers[outer].needs_capture = true;
-                idx = outer;
-            }
+                layers[outer].needs_capture = true;
+                true
+            });
         }
     }
     // Capture order: innermost first (an outer capture samples its inner
     // quads). depth = length of the enclosing chain.
     let enclosing = extracted.enclosing.clone();
     let depth_of = |mut idx: usize| {
-        let mut depth = 0u32;
+        let mut depth = 0usize;
         while let Some(outer) = enclosing[idx] {
             depth += 1;
             idx = outer;
-            if depth > 64 {
+            if depth > MAX_LAYER_DEPTH {
                 break; // cycle guard (impossible by construction)
             }
         }
@@ -462,9 +602,12 @@ pub fn redistribute_ui_layers(
 /// stolen pipelines were specialized against it; sample count 1 — `ui_pass`
 /// renders unsampled): get-or-(re)allocate each live layer's
 /// [`LayerTextureStore`] slot, mirror it into the index-aligned
-/// [`LayerAtlases`], and evict slots whose layer is gone. Deliberately not
-/// Bevy's `TextureCache` — capture caching needs each layer to keep *its own*
-/// texture (and its pixels) across frames.
+/// [`LayerAtlases`], and evict slots whose layer is gone. Also owns the
+/// [`FilterSlot`] lifecycle: ping-pong textures allocated while the layer has
+/// a chain, cleared (with their version bookkeeping — load-bearing, see the
+/// in-body comment) when it doesn't. Deliberately not Bevy's `TextureCache` —
+/// capture caching needs each layer to keep *its own* texture (and its
+/// pixels) across frames.
 pub fn prepare_layer_textures(
     extracted: Res<ExtractedUiLayers>,
     render_device: Res<RenderDevice>,
@@ -485,8 +628,31 @@ pub fn prepare_layer_textures(
             .or_insert_with(|| alloc_layer_slot(&render_device, wanted, layer.target_format));
         if slot.size != wanted || slot.format != layer.target_format {
             // Resize / format flip: fresh texture, and the stale bind group
-            // dies with the slot. Extraction already flagged `needs_capture`.
+            // dies with the slot — as does the filter state (`filter: None`),
+            // which re-allocates at the new size just below. Extraction
+            // already flagged `needs_capture`.
             *slot = alloc_layer_slot(&render_device, wanted, layer.target_format);
+        }
+        if layer.chain.is_some() {
+            // Ping-pong textures ride the capture's size + format; a realloc
+            // above reset `filter` to `None`, so this re-allocates them too
+            // (with `output_valid: false` / `params_version: 0` — the staged
+            // run restarts from scratch).
+            if slot.filter.is_none() {
+                slot.filter = Some(alloc_filter_slot(
+                    &render_device,
+                    wanted,
+                    layer.target_format,
+                ));
+            }
+        } else {
+            // No chain this frame: drop the filter state entirely.
+            // Load-bearing, not just cleanup — `ResolvedFilterChain.version`
+            // restarts at 1 per chain lifetime (demote/re-promote, filter
+            // unset/re-set), so a surviving `params_version` could collide
+            // with a restarted version and skip a needed re-run with stale
+            // params.
+            slot.filter = None;
         }
         if layer.needs_capture {
             // This frame's capture is only servable from cache later if every
@@ -537,7 +703,48 @@ fn alloc_layer_slot(render_device: &RenderDevice, size: UVec2, format: TextureFo
         format,
         bind_group: None,
         content_valid: false,
+        filter: None,
         last_seen: 0,
+    }
+}
+
+/// Allocate a layer's two filter ping-pong textures at the capture's size and
+/// format (same-size passes — the prelude documents `uv` as a 1:1 lookup; the
+/// capture format keeps every pass target compatible with the composite).
+fn alloc_filter_slot(
+    render_device: &RenderDevice,
+    size: UVec2,
+    format: TextureFormat,
+) -> FilterSlot {
+    let alloc = |label: &'static str| {
+        let texture = render_device.create_texture(&TextureDescriptor {
+            label: Some(label),
+            size: Extent3d {
+                width: size.x,
+                height: size.y,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: TextureDimension::D2,
+            format,
+            usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
+        });
+        let default_view = texture.create_view(&TextureViewDescriptor::default());
+        CachedTexture {
+            texture,
+            default_view,
+        }
+    };
+    FilterSlot {
+        textures: [alloc("ui_layer_filter_ping"), alloc("ui_layer_filter_pong")],
+        params_version: 0,
+        output_valid: false,
+        gated_frames: 0,
+        gate_warned: false,
+        output_index: 0,
+        composite_bind_group: None,
     }
 }
 
@@ -589,6 +796,7 @@ pub fn prepare_layer_composites(
     render_device: Res<RenderDevice>,
     render_queue: Res<RenderQueue>,
     mut meta: ResMut<LayerCompositeMeta>,
+    filter_meta: Res<LayerFilterMeta>,
     mut phases: ResMut<ViewSortedRenderPhases<TransparentUi>>,
 ) {
     meta.vertices.clear();
@@ -603,9 +811,107 @@ pub fn prepare_layer_composites(
     // The quads were injected with `index = layer index`; find each again in
     // its (post-sort) phase to write the batch range.
     let mut ranges: Vec<Option<Range<u32>>> = vec![None; extracted.layers.len()];
+    // Filtered layers whose output isn't ready this frame: their quads stay
+    // batch-less, so any enclosing capture rendered without them must not be
+    // served from cache — see the invalidation loop after this one.
+    let mut gated: Vec<usize> = Vec::new();
     for (idx, layer) in extracted.layers.iter().enumerate() {
         let Some(slot) = store.slots.get_mut(&layer.main_entity) else {
             continue;
+        };
+        // Pick the quad's source: the raw capture, or — for a filtered
+        // layer — the final filter pass's ping-pong output.
+        let bind_group = if layer.chain.is_some() {
+            let Some(filter) = slot.filter.as_mut() else {
+                // Allocated by `prepare_layer_textures` whenever a chain is
+                // present; a miss means nothing to sample — gate the quad.
+                gated.push(idx);
+                continue;
+            };
+            // Readiness gate: chain present but no complete filtered output
+            // yet (startup compile, realloc). Skip the batch — the injected
+            // item keeps `batch_range 0..0` and draws nothing. Never fall
+            // back to the raw capture: a frame of unfiltered content is
+            // exactly the flash this gate exists to prevent.
+            if !filter.output_valid {
+                filter.gated_frames = filter.gated_frames.saturating_add(1);
+                // Once per stuck episode: an errored pass pipeline (user WGSL
+                // that failed to compile) warns immediately with the error;
+                // a still-compiling one is normal startup latency and only
+                // warns after the FPS-generous hang threshold.
+                if !filter.gate_warned {
+                    let compile_error = filter_meta
+                        .runs
+                        .get(idx)
+                        .and_then(|run| run.as_ref())
+                        .and_then(|run| {
+                            run.passes.iter().find_map(|pass| {
+                                // Only PERMANENT failures warn immediately.
+                                // `ShaderNotLoaded` / `ShaderImportNotYetAvailable`
+                                // are transient (the cache re-queues them while
+                                // an asset-path shader streams in at startup)
+                                // and fall through to the hang threshold.
+                                match pipeline_cache.get_render_pipeline_state(pass.pipeline) {
+                                    CachedPipelineState::Err(
+                                        e @ (ShaderCacheError::ProcessShaderError(_)
+                                        | ShaderCacheError::CreateShaderModule(_)),
+                                    ) => Some(e.to_string()),
+                                    _ => None,
+                                }
+                            })
+                        });
+                    if let Some(err) = compile_error {
+                        warn!(
+                            "UI layer {:?}: a filter pass shader failed to compile — the \
+                             layer's subtree is invisible (the composite gate never falls \
+                             back to unfiltered content) and its filter run restages every \
+                             frame. Error: {err}",
+                            layer.main_entity,
+                        );
+                        filter.gate_warned = true;
+                    } else if filter.gated_frames == STUCK_GATE_HANG_FRAMES {
+                        warn!(
+                            "UI layer {:?}: composite quad withheld for {} consecutive \
+                             frames and its filter pipeline is still not ready (no compile \
+                             error reported — a hung/queued compile?). Until it resolves, \
+                             the layer's subtree is invisible and its filter run restages \
+                             every frame.",
+                            layer.main_entity, STUCK_GATE_HANG_FRAMES,
+                        );
+                        filter.gate_warned = true;
+                    }
+                }
+                gated.push(idx);
+                continue;
+            }
+            // Cached until realloc; invalidated when `output_index` flips
+            // (pass-count parity change).
+            let output = filter.output_index;
+            if !matches!(&filter.composite_bind_group, Some((built, _)) if *built == output) {
+                filter.composite_bind_group = Some((
+                    output,
+                    render_device.create_bind_group(
+                        "ui_layer_composite_filtered",
+                        &pipeline_cache.get_bind_group_layout(&pipeline.atlas_layout),
+                        &BindGroupEntries::sequential((
+                            &filter.textures[output].default_view,
+                            &pipeline.sampler,
+                        )),
+                    ),
+                ));
+            }
+            let (_, bind_group) = filter.composite_bind_group.as_ref().expect("just set");
+            bind_group.clone()
+        } else {
+            // Reuse the slot's bind group across frames; it dies on realloc.
+            if slot.bind_group.is_none() {
+                slot.bind_group = Some(render_device.create_bind_group(
+                    "ui_layer_composite_atlas",
+                    &pipeline_cache.get_bind_group_layout(&pipeline.atlas_layout),
+                    &BindGroupEntries::sequential((&slot.texture.default_view, &pipeline.sampler)),
+                ));
+            }
+            slot.bind_group.clone().expect("just set")
         };
         let start = meta.vertices.len() as u32;
         // Fractional quad position (bilinear sampling smooths subpixel motion
@@ -629,15 +935,6 @@ pub fn prepare_layer_composites(
             });
         }
         ranges[idx] = Some(start..start + 6);
-        // Reuse the slot's bind group across frames; it dies on realloc.
-        if slot.bind_group.is_none() {
-            slot.bind_group = Some(render_device.create_bind_group(
-                "ui_layer_composite_atlas",
-                &pipeline_cache.get_bind_group_layout(&pipeline.atlas_layout),
-                &BindGroupEntries::sequential((&slot.texture.default_view, &pipeline.sampler)),
-            ));
-        }
-        let bind_group = slot.bind_group.clone().expect("just set");
         let atlas_index = meta.atlas_bind_groups.len();
         meta.atlas_bind_groups.push(bind_group);
         commands
@@ -646,6 +943,19 @@ pub fn prepare_layer_composites(
                 range: ranges[idx].clone().unwrap(),
                 atlas: atlas_index,
             });
+    }
+    // A gated quad drew nothing into its enclosing captures this frame, yet
+    // those captures' `content_valid` was predicted from pipeline readiness
+    // alone — an outer capture with a hole where the filtered subtree belongs
+    // could otherwise be frozen as "valid". Force the enclosing chain to
+    // re-capture until the filtered output exists.
+    for idx in gated {
+        walk_enclosing(idx, &extracted.enclosing, |outer| {
+            if let Some(slot) = store.slots.get_mut(&extracted.layers[outer].main_entity) {
+                slot.content_valid = false;
+            }
+            true
+        });
     }
     meta.vertices.write_buffer(&render_device, &render_queue);
 
@@ -828,57 +1138,652 @@ pub type DrawLayerComposite = (
     DrawLayerQuad,
 );
 
-/// Renders each layer's synthetic phase into its capture texture. Runs in the
-/// camera's schedule right before the stock `ui_pass` consumes the composite
-/// quads.
+/// The Rust mirror of the prelude's `FilterUniforms`
+/// (`layer/filter_prelude.wgsl`) — one entry per staged filter pass in
+/// [`LayerFilterMeta::uniforms`]. The explicit `pad` fields reproduce the
+/// WGSL uniform-address-space layout byte for byte (160 bytes total; asserted
+/// by `filter_uniforms_match_the_documented_wgsl_layout`). The digit-free
+/// `pad_a`/`pad_b` names are load-bearing on the WGSL side: naga's namer
+/// appends `_` to identifiers ending in a digit, which naga_oil rejects in
+/// composable modules — and the mirror matches field for field.
+#[derive(Clone, Copy, ShaderType)]
+pub struct FilterUniforms {
+    /// Seconds since startup (render-world `Time`), for `USES_TIME` filters.
+    pub time: f32,
+    pub pad_a: f32,
+    /// The pass target's size in physical px.
+    pub resolution: Vec2,
+    /// `1.0 / resolution`: one texel step in UV.
+    pub texel_size: Vec2,
+    pub pad_b: Vec2,
+    /// The packed filter params ([`ExtractedFilterPass::params`]).
+    pub params: [Vec4; MAX_FILTER_PARAM_VECS],
+}
+
+/// The filter-pass pipeline: ONE bind group layout for every filter — group 0
+/// is the source texture (the capture, or the previous pass's ping-pong
+/// output), a linear clamp-to-edge sampler, and one dynamically-offset
+/// [`FilterUniforms`] — plus the prelude shader, which is the **vertex stage
+/// of every filter pipeline**.
+///
+/// Split-stage design: the vertex entry (`vertex`, a fullscreen triangle)
+/// lives in the prelude module, the fragment entry (`fragment`) in each pass
+/// shader that `#import`s the prelude for bindings/helpers. naga_oil does not
+/// re-export an import's entry points into the composed module, so the pass
+/// shaders genuinely have no vertex entry — the pipeline descriptor names two
+/// different shader handles, which wgpu supports (per-stage modules; the
+/// cross-stage interface is the prelude's `FullscreenVertexOutput`).
+/// Validated at runtime by the executing filter passes (module-doc spike
+/// checklist); the documented fallback if a Bevy upgrade breaks it is a tiny
+/// per-shader `@vertex` delegating to a prelude helper.
+#[derive(Resource)]
+pub struct LayerFilterPipeline {
+    pub layout: BindGroupLayoutDescriptor,
+    pub sampler: Sampler,
+    /// `layer/filter_prelude.wgsl` — registered with `load_shader_library!`,
+    /// which also embeds it as a loadable asset, so a plain handle to it
+    /// works as a pipeline stage.
+    pub prelude: Handle<Shader>,
+}
+
+pub fn init_layer_filter_pipeline(
+    mut commands: Commands,
+    render_device: Res<RenderDevice>,
+    asset_server: Res<AssetServer>,
+) {
+    let layout = BindGroupLayoutDescriptor::new(
+        "ui_layer_filter_layout",
+        &BindGroupLayoutEntries::sequential(
+            ShaderStages::FRAGMENT,
+            (
+                texture_2d(TextureSampleType::Float { filterable: true }),
+                sampler(SamplerBindingType::Filtering),
+                // `uniform_buffer::<T>` sets `min_binding_size` from
+                // `T::min_size()` — the 160-byte contract.
+                uniform_buffer::<FilterUniforms>(true),
+            ),
+        ),
+    );
+    commands.insert_resource(LayerFilterPipeline {
+        layout,
+        sampler: render_device.create_sampler(&SamplerDescriptor {
+            label: Some("ui_layer_filter_sampler"),
+            address_mode_u: AddressMode::ClampToEdge,
+            address_mode_v: AddressMode::ClampToEdge,
+            mag_filter: FilterMode::Linear,
+            min_filter: FilterMode::Linear,
+            ..Default::default()
+        }),
+        prelude: bevy::asset::load_embedded_asset!(asset_server.as_ref(), "filter_prelude.wgsl"),
+    });
+}
+
+/// Specialization key: the pass's fragment shader plus the target format
+/// (filter targets ride the capture's format). `Handle<Shader>` hashes by
+/// asset id, so it works as a key directly.
+#[derive(Clone, Hash, PartialEq, Eq)]
+pub struct LayerFilterPipelineKey {
+    pub shader: Handle<Shader>,
+    pub target_format: TextureFormat,
+}
+
+impl SpecializedRenderPipeline for LayerFilterPipeline {
+    type Key = LayerFilterPipelineKey;
+
+    fn specialize(&self, key: Self::Key) -> RenderPipelineDescriptor {
+        RenderPipelineDescriptor {
+            // No vertex buffers: the prelude's fullscreen triangle is
+            // generated from `vertex_index` alone.
+            vertex: VertexState {
+                shader: self.prelude.clone(),
+                entry_point: Some("vertex".into()),
+                ..Default::default()
+            },
+            fragment: Some(FragmentState {
+                shader: key.shader,
+                // `filter` is a WGSL reserved word — the prelude's contract
+                // names the entry `fragment`.
+                entry_point: Some("fragment".into()),
+                targets: vec![Some(ColorTargetState {
+                    format: key.target_format,
+                    // Replace-write, no blending: the prelude documents that
+                    // previous target contents are irrelevant and the
+                    // fragment's (premultiplied) output lands verbatim.
+                    blend: None,
+                    write_mask: ColorWrites::ALL,
+                })],
+                ..Default::default()
+            }),
+            layout: vec![self.layout.clone()],
+            label: Some("ui_layer_filter_pipeline".into()),
+            ..Default::default()
+        }
+    }
+}
+
+/// Whether a layer's filter passes must (re-)run this frame: fresh capture
+/// content, changed params, a time-driven chain, or an output that was never
+/// completed (startup, realloc, or a run whose execution was skipped).
+pub const fn needs_filter_run(
+    needs_capture: bool,
+    chain_version: u32,
+    stored_version: u32,
+    always_dirty: bool,
+    output_valid: bool,
+) -> bool {
+    needs_capture || chain_version != stored_version || always_dirty || !output_valid
+}
+
+/// Walks the enclosing-layer chain upward from `start` (exclusive), calling
+/// `visit` with each enclosing ancestor's index. Stops when the chain ends
+/// (`enclosing[cur]` is `None`), when `visit` returns `false`, or after
+/// [`MAX_LAYER_DEPTH`] ancestors — the shared bounded guard for every
+/// enclosing-chain traversal (`enclosing` is acyclic by construction, so the
+/// cap only matters for impossible cycles).
+fn walk_enclosing(start: usize, enclosing: &[Option<usize>], mut visit: impl FnMut(usize) -> bool) {
+    let mut cur = start;
+    for _ in 0..MAX_LAYER_DEPTH {
+        let Some(outer) = enclosing[cur] else {
+            break;
+        };
+        if !visit(outer) {
+            break;
+        }
+        cur = outer;
+    }
+}
+
+/// Ping-pong source for pass `i`: `None` = the layer's capture texture
+/// (pass 0), otherwise the index of the previous pass's target.
+pub const fn filter_source_index(pass: usize) -> Option<usize> {
+    if pass == 0 {
+        None
+    } else {
+        Some((pass - 1) % 2)
+    }
+}
+
+/// Ping-pong target for pass `i`.
+pub const fn filter_target_index(pass: usize) -> usize {
+    pass % 2
+}
+
+/// Which ping-pong texture holds the final output of a `len`-pass chain
+/// (the last pass's target; `len` is at least 1 for any staged run).
+pub const fn filter_output_index(len: usize) -> usize {
+    (len.saturating_sub(1)) % 2
+}
+
+/// One staged filter pass, replayed by [`ui_layer_capture_pass`]: set the
+/// pipeline, bind group 0 at the dynamic offset, render 3 vertices into
+/// `target`.
+pub struct LayerFilterPass {
+    pub pipeline: CachedRenderPipelineId,
+    pub bind_group: BindGroup,
+    pub uniform_offset: u32,
+    pub target: TextureView,
+}
+
+/// A layer's staged filter run this frame.
+pub struct LayerFilterRun {
+    pub passes: Vec<LayerFilterPass>,
+}
+
+/// Per-frame filter staging: the uniform buffer (one entry per staged pass)
+/// and the replay list, index-aligned with [`ExtractedUiLayers::layers`].
+/// `runs[idx] = None` means "no filter work this frame" — either the layer
+/// has no chain, or its cached output is still valid (the composite samples
+/// `FilterSlot.textures[output_index]` either way).
+#[derive(Resource)]
+pub struct LayerFilterMeta {
+    pub uniforms: DynamicUniformBuffer<FilterUniforms>,
+    pub runs: Vec<Option<LayerFilterRun>>,
+}
+
+impl Default for LayerFilterMeta {
+    fn default() -> Self {
+        let mut uniforms = DynamicUniformBuffer::default();
+        uniforms.set_label(Some("ui_layer_filter_uniforms"));
+        Self {
+            uniforms,
+            runs: Vec::new(),
+        }
+    }
+}
+
+/// Stages every resource a layer's filter passes need this frame: pipeline
+/// specialization, one uniform entry per pass, and per-pass bind groups over
+/// the capture/ping-pong textures. Execution happens in
+/// [`ui_layer_capture_pass`], which replays [`LayerFilterMeta::runs`] right
+/// after each layer's capture; this system also *predicts* that execution
+/// (phase 3) and writes [`FilterSlot::output_valid`] accordingly, so the
+/// downstream [`prepare_layer_composites`] gate is same-frame accurate.
+#[allow(clippy::too_many_arguments)]
+pub fn prepare_layer_filters(
+    extracted: Res<ExtractedUiLayers>,
+    mut store: ResMut<LayerTextureStore>,
+    pipeline: Option<Res<LayerFilterPipeline>>,
+    mut specialized: ResMut<SpecializedRenderPipelines<LayerFilterPipeline>>,
+    pipeline_cache: Res<PipelineCache>,
+    render_device: Res<RenderDevice>,
+    render_queue: Res<RenderQueue>,
+    time: Res<Time>,
+    mut meta: ResMut<LayerFilterMeta>,
+) {
+    let LayerFilterMeta { uniforms, runs } = &mut *meta;
+    uniforms.clear();
+    runs.clear();
+    runs.resize_with(extracted.layers.len(), || None);
+    let Some(pipeline) = pipeline else {
+        return;
+    };
+
+    // Phase 1: decide, specialize, and stage uniforms. Bind groups wait for
+    // phase 2 — they must reference the uniform buffer *after* `write_buffer`
+    // (which may reallocate it).
+    struct StagedPass {
+        pipeline: CachedRenderPipelineId,
+        uniform_offset: u32,
+    }
+    let mut staged: Vec<(usize, Vec<StagedPass>)> = Vec::new();
+    for (idx, layer) in extracted.layers.iter().enumerate() {
+        let Some(chain) = &layer.chain else {
+            continue;
+        };
+        let Some(slot) = store.slots.get_mut(&layer.main_entity) else {
+            continue;
+        };
+        // Uniforms describe the pass targets, which share the capture's
+        // (clamped) size.
+        let size = slot.size;
+        let Some(filter) = slot.filter.as_mut() else {
+            continue;
+        };
+        if !needs_filter_run(
+            layer.needs_capture,
+            chain.version,
+            filter.params_version,
+            chain.always_dirty,
+            filter.output_valid,
+        ) {
+            continue;
+        }
+        // The staged run supersedes whatever the output textures hold; phase 3
+        // below marks the output valid again iff the passes will execute.
+        // A CHAIN CHANGE (vs a plain retry) also re-arms the stuck-gate warn:
+        // the edit may swap in different shaders, and their failure deserves
+        // its own once-per-episode report.
+        if filter.params_version != chain.version {
+            filter.gated_frames = 0;
+            filter.gate_warned = false;
+        }
+        filter.params_version = chain.version;
+        filter.output_valid = false;
+        filter.output_index = filter_output_index(chain.passes.len());
+
+        let resolution = size.as_vec2();
+        let texel_size = Vec2::ONE / resolution;
+        let mut passes = Vec::with_capacity(chain.passes.len());
+        for pass in &chain.passes {
+            let id = specialized.specialize(
+                &pipeline_cache,
+                &pipeline,
+                LayerFilterPipelineKey {
+                    shader: pass.shader.clone(),
+                    target_format: layer.target_format,
+                },
+            );
+            let uniform_offset = uniforms.push(&FilterUniforms {
+                time: time.elapsed_secs(),
+                pad_a: 0.0,
+                resolution,
+                texel_size,
+                pad_b: Vec2::ZERO,
+                params: pass.params,
+            });
+            passes.push(StagedPass {
+                pipeline: id,
+                uniform_offset,
+            });
+        }
+        staged.push((idx, passes));
+    }
+    if staged.is_empty() {
+        return;
+    }
+
+    // Phase 2: write the uniforms, then build the per-pass bind groups
+    // against the (possibly fresh) buffer.
+    uniforms.write_buffer(&render_device, &render_queue);
+    let Some(uniform_binding) = uniforms.binding() else {
+        return;
+    };
+    let layout = pipeline_cache.get_bind_group_layout(&pipeline.layout);
+    for (idx, staged_passes) in staged {
+        let layer = &extracted.layers[idx];
+        let Some(slot) = store.slots.get(&layer.main_entity) else {
+            continue;
+        };
+        let Some(filter) = slot.filter.as_ref() else {
+            continue;
+        };
+        let passes = staged_passes
+            .into_iter()
+            .enumerate()
+            .map(|(i, pass)| {
+                let source = match filter_source_index(i) {
+                    None => &slot.texture.default_view,
+                    Some(ping) => &filter.textures[ping].default_view,
+                };
+                let bind_group = render_device.create_bind_group(
+                    "ui_layer_filter",
+                    &layout,
+                    &BindGroupEntries::sequential((
+                        source,
+                        &pipeline.sampler,
+                        uniform_binding.clone(),
+                    )),
+                );
+                LayerFilterPass {
+                    pipeline: pass.pipeline,
+                    bind_group,
+                    uniform_offset: pass.uniform_offset,
+                    target: filter.textures[filter_target_index(i)].default_view.clone(),
+                }
+            })
+            .collect();
+        runs[idx] = Some(LayerFilterRun { passes });
+    }
+
+    // Phase 3: predict execution and mark outputs valid. Mirrors the
+    // `content_valid` discipline in `prepare_layer_textures`: a pipeline that
+    // `get_render_pipeline` resolves *now* is guaranteed to resolve in the
+    // graph node too (compiled pipelines never regress within a frame), so
+    // marking valid here is safe — and a still-compiling pipeline (prediction
+    // false) leaves `output_valid` false, which both gates the composite quad
+    // (no partial/unfiltered flash) and forces a restage + retry next frame.
+    // The source capture must be valid too ([`LayerSlot::content_valid`]):
+    // filtering a blank/partial capture would freeze garbage on screen.
+    for (idx, run) in runs.iter().enumerate() {
+        let Some(run) = run else {
+            continue;
+        };
+        let Some(slot) = store.slots.get_mut(&extracted.layers[idx].main_entity) else {
+            continue;
+        };
+        let ready = run
+            .passes
+            .iter()
+            .all(|pass| pipeline_cache.get_render_pipeline(pass.pipeline).is_some());
+        if ready
+            && slot.content_valid
+            && let Some(filter) = slot.filter.as_mut()
+        {
+            filter.output_valid = true;
+            filter.gated_frames = 0;
+            filter.gate_warned = false;
+        }
+    }
+}
+
+/// Renders each layer's synthetic phase into its capture texture, then
+/// replays the layer's staged filter run (if any) capture → ping-pong
+/// textures. Runs in the camera's schedule right before the stock `ui_pass`
+/// consumes the composite quads.
+#[allow(clippy::too_many_arguments)]
 pub fn ui_layer_capture_pass(
     world: &World,
     view: ViewQuery<Entity>,
     extracted: Res<ExtractedUiLayers>,
     atlases: Res<LayerAtlases>,
     phases: Res<ViewSortedRenderPhases<TransparentUi>>,
+    filter_meta: Res<LayerFilterMeta>,
+    pipeline_cache: Res<PipelineCache>,
     mut ctx: RenderContext,
 ) {
     if extracted.camera_render_entity != Some(view.into_inner()) {
         return;
     }
     // Innermost first ([`ExtractedUiLayers::capture_order`]): a quad sampling
-    // layer B's capture must draw — inside some outer capture or the screen —
-    // only after B's capture pass ran; passes execute in encoder order.
+    // layer B's capture (or B's filtered output) must draw — inside some
+    // outer capture or the screen — only after B's capture *and filter*
+    // passes ran; passes execute in encoder order, and B's filter replay sits
+    // in B's loop iteration, before any enclosing layer's capture.
     for &idx in &extracted.capture_order {
         let layer = &extracted.layers[idx];
-        if !layer.needs_capture {
-            // Cached: the persistent texture already holds the pixels — and
-            // skipping keeps the `LoadOp::Clear` below from wiping them.
-            continue;
+        // Capture. Skipped when cached (`!needs_capture`): the persistent
+        // texture already holds the pixels — and skipping keeps the
+        // `LoadOp::Clear` from wiping them.
+        if layer.needs_capture
+            && let Some(texture) = atlases.textures.get(idx)
+            && let Some(phase) = phases.get(&layer.retained)
+            && !phase.items.is_empty()
+        {
+            let mut pass = ctx.begin_tracked_render_pass(RenderPassDescriptor {
+                label: Some("ui_layer_capture"),
+                color_attachments: &[Some(RenderPassColorAttachment {
+                    view: &texture.default_view,
+                    depth_slice: None,
+                    resolve_target: None,
+                    ops: Operations {
+                        load: LoadOp::Clear(LinearRgba::NONE.into()),
+                        store: StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+                multiview_mask: None,
+            });
+            if let Err(err) = phase.render(&mut pass, world, layer.view_entity) {
+                bevy::log::error!("layer capture pass failed: {err:?}");
+            }
         }
-        let Some(texture) = atlases.textures.get(idx) else {
+
+        // Filter replay — also when the capture above was skipped as cached:
+        // a staged run over a clean capture is a params-only change (slider
+        // move, time tick) re-filtering last frame's pixels.
+        let Some(run) = filter_meta.runs.get(idx).and_then(Option::as_ref) else {
             continue;
         };
-        let Some(phase) = phases.get(&layer.retained) else {
+        // Resolve every pass pipeline up front: a `None` is a still-compiling
+        // pipeline — abort the whole run, never execute a partial chain.
+        // `output_valid` was only set by `prepare_layer_filters` if all of
+        // these resolved back in prepare (compiled pipelines don't regress),
+        // so an abort here means it stayed false: the quad is gated this
+        // frame and the layer restages + retries next frame.
+        let pipelines: Option<Vec<_>> = run
+            .passes
+            .iter()
+            .map(|pass| pipeline_cache.get_render_pipeline(pass.pipeline))
+            .collect();
+        let Some(pipelines) = pipelines else {
             continue;
         };
-        if phase.items.is_empty() {
-            continue;
+        for (pass_data, pipeline) in run.passes.iter().zip(pipelines) {
+            let mut pass = ctx.begin_tracked_render_pass(RenderPassDescriptor {
+                label: Some("ui_layer_filter"),
+                color_attachments: &[Some(RenderPassColorAttachment {
+                    view: &pass_data.target,
+                    depth_slice: None,
+                    resolve_target: None,
+                    ops: Operations {
+                        // The fullscreen triangle replace-writes every texel,
+                        // so `Clear` vs `Load` is content-equivalent; `Clear`
+                        // skips loading stale contents on tiled GPUs.
+                        load: LoadOp::Clear(LinearRgba::NONE.into()),
+                        store: StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+                multiview_mask: None,
+            });
+            pass.set_render_pipeline(pipeline);
+            pass.set_bind_group(0, &pass_data.bind_group, &[pass_data.uniform_offset]);
+            pass.draw(0..3, 0..1);
         }
-        let mut pass = ctx.begin_tracked_render_pass(RenderPassDescriptor {
-            label: Some("ui_layer_capture"),
-            color_attachments: &[Some(RenderPassColorAttachment {
-                view: &texture.default_view,
-                depth_slice: None,
-                resolve_target: None,
-                ops: Operations {
-                    load: LoadOp::Clear(LinearRgba::NONE.into()),
-                    store: StoreOp::Store,
-                },
-            })],
-            depth_stencil_attachment: None,
-            timestamp_writes: None,
-            occlusion_query_set: None,
-            multiview_mask: None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bevy::render::render_resource::encase::UniformBuffer;
+
+    fn f32_at(bytes: &[u8], offset: usize) -> f32 {
+        f32::from_le_bytes(bytes[offset..offset + 4].try_into().unwrap())
+    }
+
+    /// The Rust mirror must reproduce the prelude's documented 160-byte
+    /// uniform layout exactly (`layer/filter_prelude.wgsl`): time@0,
+    /// resolution@8, texel_size@16, params@32 (stride 16), total 160.
+    #[test]
+    fn filter_uniforms_match_the_documented_wgsl_layout() {
+        assert_eq!(FilterUniforms::min_size().get(), 160);
+
+        let mut params = [Vec4::ZERO; MAX_FILTER_PARAM_VECS];
+        params[0] = Vec4::new(1.0, 2.0, 3.0, 4.0);
+        params[7] = Vec4::new(5.0, 6.0, 7.0, 8.0);
+        let value = FilterUniforms {
+            time: 1.5,
+            pad_a: 0.0,
+            resolution: Vec2::new(320.0, 240.0),
+            texel_size: Vec2::new(0.5, 0.25),
+            pad_b: Vec2::ZERO,
+            params,
+        };
+        let mut buffer = UniformBuffer::new(Vec::<u8>::new());
+        buffer.write(&value).expect("uniform write");
+        let bytes = buffer.into_inner();
+        assert_eq!(bytes.len(), 160);
+        // Per-field offsets, per the prelude's comment block.
+        assert_eq!(f32_at(&bytes, 0), 1.5); // time
+        assert_eq!(f32_at(&bytes, 8), 320.0); // resolution.x
+        assert_eq!(f32_at(&bytes, 12), 240.0); // resolution.y
+        assert_eq!(f32_at(&bytes, 16), 0.5); // texel_size.x
+        assert_eq!(f32_at(&bytes, 20), 0.25); // texel_size.y
+        assert_eq!(f32_at(&bytes, 32), 1.0); // params[0].x
+        assert_eq!(f32_at(&bytes, 44), 4.0); // params[0].w
+        assert_eq!(f32_at(&bytes, 32 + 7 * 16), 5.0); // params[7].x
+        assert_eq!(f32_at(&bytes, 32 + 7 * 16 + 12), 8.0); // params[7].w
+    }
+
+    /// The re-run decision, exhaustively: any of "capture re-rendered",
+    /// "params changed", "time-driven", or "output never completed" forces a
+    /// run; only a fully clean layer skips.
+    #[test]
+    fn needs_filter_run_decision_table() {
+        // (needs_capture, chain_version, stored_version, always_dirty,
+        //  output_valid) -> expected
+        let cases = [
+            // Fully clean: same version, valid output, static chain.
+            (false, 3, 3, false, true, false),
+            // Fresh capture content must re-filter.
+            (true, 3, 3, false, true, true),
+            // Param change (version bump).
+            (false, 4, 3, false, true, true),
+            // Version restart collision guard: a *lower* version differs too.
+            (false, 1, 3, false, true, true),
+            // Time-driven chains never settle.
+            (false, 3, 3, true, true, true),
+            // Output never completed (startup, realloc, skipped execution).
+            (false, 3, 3, false, false, true),
+            // Never staged (params_version 0 vs first real version 1).
+            (false, 1, 0, false, false, true),
+        ];
+        for (capture, chain_v, stored_v, dirty, valid, expected) in cases {
+            assert_eq!(
+                needs_filter_run(capture, chain_v, stored_v, dirty, valid),
+                expected,
+                "needs_capture={capture} chain={chain_v} stored={stored_v} \
+                 always_dirty={dirty} output_valid={valid}"
+            );
+        }
+    }
+
+    /// Ping-pong plumbing: pass 0 reads the capture and writes texture 0;
+    /// each later pass reads the previous target and writes the other
+    /// texture; the final output is the last pass's target.
+    #[test]
+    fn filter_ping_pong_indices() {
+        assert_eq!(filter_source_index(0), None);
+        assert_eq!(filter_target_index(0), 0);
+        assert_eq!(filter_source_index(1), Some(0));
+        assert_eq!(filter_target_index(1), 1);
+        assert_eq!(filter_source_index(2), Some(1));
+        assert_eq!(filter_target_index(2), 0);
+        assert_eq!(filter_source_index(3), Some(0));
+        assert_eq!(filter_target_index(3), 1);
+        // Every pass reads what the previous one wrote…
+        for pass in 1..8 {
+            assert_eq!(
+                filter_source_index(pass),
+                Some(filter_target_index(pass - 1)),
+                "pass {pass} must read pass {}'s target",
+                pass - 1
+            );
+            // …and never its own target.
+            assert_ne!(filter_source_index(pass), Some(filter_target_index(pass)));
+        }
+        // The chain's output is the last pass's target.
+        for len in 1..8 {
+            assert_eq!(filter_output_index(len), filter_target_index(len - 1));
+        }
+        assert_eq!(filter_output_index(1), 0);
+        assert_eq!(filter_output_index(2), 1);
+        assert_eq!(filter_output_index(3), 0);
+    }
+
+    /// The shared enclosing-chain walk: visits ancestors bottom-up
+    /// (exclusive of the start), stops at the chain end or the `visit`
+    /// veto, and never exceeds [`MAX_LAYER_DEPTH`] steps even on a
+    /// (construction-impossible) cycle.
+    #[test]
+    fn walk_enclosing_table() {
+        let visited = |start: usize, enclosing: &[Option<usize>]| {
+            let mut seen = Vec::new();
+            walk_enclosing(start, enclosing, |outer| {
+                seen.push(outer);
+                true
+            });
+            seen
+        };
+
+        // Simple chain: 2 → 1 → 0 → (root).
+        let chain = [None, Some(0), Some(1)];
+        assert_eq!(visited(2, &chain), vec![1, 0]);
+        assert_eq!(visited(1, &chain), vec![0]);
+
+        // `None` stops immediately: a root layer visits nothing.
+        assert_eq!(visited(0, &chain), Vec::<usize>::new());
+
+        // A chain longer than MAX_LAYER_DEPTH truncates at the cap.
+        let long: Vec<Option<usize>> = (0..MAX_LAYER_DEPTH + 10)
+            .map(|i| i.checked_sub(1))
+            .collect();
+        let seen = visited(long.len() - 1, &long);
+        assert_eq!(seen.len(), MAX_LAYER_DEPTH);
+        assert_eq!(seen[0], long.len() - 2);
+        assert_eq!(seen[MAX_LAYER_DEPTH - 1], long.len() - 1 - MAX_LAYER_DEPTH);
+
+        // A self-cycle terminates (bounded), visiting the cycle node
+        // MAX_LAYER_DEPTH times.
+        let cycle = [Some(0)];
+        assert_eq!(visited(0, &cycle), vec![0; MAX_LAYER_DEPTH]);
+
+        // A two-node cycle terminates too.
+        let cycle2 = [Some(1), Some(0)];
+        assert_eq!(visited(0, &cycle2).len(), MAX_LAYER_DEPTH);
+
+        // `visit` returning false stops the walk (the needs_capture
+        // propagation's "already propagated" early-out).
+        let mut seen = Vec::new();
+        walk_enclosing(2, &chain, |outer| {
+            seen.push(outer);
+            false
         });
-        if let Err(err) = phase.render(&mut pass, world, layer.view_entity) {
-            bevy::log::error!("layer capture pass failed: {err:?}");
-        }
+        assert_eq!(seen, vec![1]);
     }
 }

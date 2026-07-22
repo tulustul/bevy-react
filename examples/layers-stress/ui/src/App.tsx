@@ -3,28 +3,69 @@ import { BevyStyle } from "bevy-react/jsx";
 import { on } from "./bevy";
 import { buildItems } from "./items";
 import { StressItem } from "./Item";
+import { PRESET, type FilterMode } from "./preset";
 import { Colors, FontSizes } from "./theme";
 
 const COUNTS = [20, 100, 500];
 
+const FILTER_MODES: { mode: FilterMode; label: string }[] = [
+  { mode: "off", label: "filters: off" },
+  { mode: "half", label: "filters: 50%" },
+  { mode: "all", label: "filters: 100%" },
+];
+
+/** Static blur radius; also the center of the animated 2..10 oscillation. */
+const BLUR_RADIUS = 6;
+
 export function App() {
-  const [n, setN] = useState(20);
-  const [animate, setAnimate] = useState(true);
-  const [groupAlpha, setGroupAlpha] = useState(true);
+  const [n, setN] = useState(PRESET.n);
+  const [animate, setAnimate] = useState(PRESET.animate);
+  const [groupAlpha, setGroupAlpha] = useState(PRESET.groupAlpha);
+  const [filterMode, setFilterMode] = useState<FilterMode>(PRESET.filterMode);
+  const [blur, setBlur] = useState(PRESET.blur);
+  const [animateFilter, setAnimateFilter] = useState(PRESET.animateFilter);
+
+  // One shared driver for every filtered item's blur radius: a JS interval
+  // oscillating 2..10 px. Unlike the Rust-driven opacity/translate animations
+  // this deliberately crosses the bridge every tick — it stresses the
+  // params-only filter update path (re-run filter passes, no re-capture).
+  const [radius, setRadius] = useState(BLUR_RADIUS);
+  useEffect(() => {
+    if (!(animateFilter && blur && filterMode !== "off")) return;
+    const t0 = Date.now();
+    const id = setInterval(() => {
+      setRadius(BLUR_RADIUS + 4 * Math.sin((Date.now() - t0) / 300));
+    }, 16);
+    return () => {
+      clearInterval(id);
+      setRadius(BLUR_RADIUS);
+    };
+  }, [animateFilter, blur, filterMode]);
+
+  const isFiltered = (id: number) =>
+    filterMode === "all" || (filterMode === "half" && id % 2 === 0);
 
   const items = useMemo(() => buildItems(n), [n]);
 
   return (
     <node style={appStyle}>
       <node style={fieldStyle}>
-        {items.map((item) => (
-          <StressItem
-            key={item.id}
-            item={item}
-            animate={animate}
-            groupAlpha={groupAlpha}
-          />
-        ))}
+        {items.map((item) => {
+          const filtered = isFiltered(item.id);
+          return (
+            <StressItem
+              key={item.id}
+              item={item}
+              animate={animate}
+              groupAlpha={groupAlpha}
+              filtered={filtered}
+              blur={blur}
+              // 0 for items whose style has no radius, so the shared radius
+              // ticking doesn't touch their props (memo bails).
+              blurRadius={filtered && blur ? radius : 0}
+            />
+          );
+        })}
       </node>
 
       {/* Rendered after the field so the controls paint above it. */}
@@ -47,6 +88,24 @@ export function App() {
           label={groupAlpha ? "groupAlpha: on" : "groupAlpha: off"}
           selected={groupAlpha}
           onClick={() => setGroupAlpha((g) => !g)}
+        />
+        {FILTER_MODES.map(({ mode, label }) => (
+          <Btn
+            key={mode}
+            label={label}
+            selected={mode === filterMode}
+            onClick={() => setFilterMode(mode)}
+          />
+        ))}
+        <Btn
+          label={blur ? "filter: blur" : "filter: grayscale"}
+          selected={blur}
+          onClick={() => setBlur((b) => !b)}
+        />
+        <Btn
+          label={animateFilter ? "animate filter: on" : "animate filter: off"}
+          selected={animateFilter}
+          onClick={() => setAnimateFilter((a) => !a)}
         />
         <FpsReadout />
       </node>

@@ -1,7 +1,8 @@
 //! Auto-promotion of UI subtrees to composited **layers**.
 //!
 //! A node whose style makes it a *layer root* (`opacity` present on a node
-//! with children unless `groupAlpha: false`, or `cache: "always"`) has its
+//! with children unless `groupAlpha: false`, a non-empty `filter` chain, or
+//! `cache: "always"`) has its
 //! whole subtree captured into an offscreen atlas by a custom render pass and
 //! drawn back as one quad — so `opacity` fades the subtree as a group (web
 //! semantics) instead of folding into each node's own colors (which shows
@@ -22,12 +23,12 @@
 //! post-queue system moves the subtree's already-queued phase items into a
 //! per-layer synthetic view rendered to the atlas. See `render` for details.
 //!
-//! Extensibility contract: each future promotion rule (transform3d, filter,
+//! Extensibility contract: each future promotion rule (transform3d,
 //! backdrop) is one evaluator producing one [`PromotionReasons`] flag plus
 //! composite parameters the render pass forwards without interpreting.
 //! Promotion is `!reasons.is_empty()`; demotion is the flags emptying.
 
-use bevy::platform::collections::HashMap;
+use bevy::platform::collections::{HashMap, HashSet};
 use bevy::prelude::*;
 use bevy::ui::{ComputedNode, UiGlobalTransform};
 
@@ -44,13 +45,19 @@ pub struct PromotionReasons(pub u32);
 impl PromotionReasons {
     /// `opacity` present on a node with children (group alpha).
     pub const OPACITY: u32 = 1 << 0;
+    /// Non-empty `filter` chain in the base style or any hover/press/focus
+    /// variant (presence union, like [`Self::OPACITY`] — interaction never
+    /// flips promotion). Like [`Self::FORCED`] it skips the child-count and
+    /// `groupAlpha` gates: the effect is subtree-wide by definition, and a
+    /// filtered leaf (e.g. a grayscale `<image>`) is valid.
+    pub const FILTER: u32 = 1 << 2;
     /// `cache: "always"` — user-forced promotion for capture caching. Unlike
     /// [`Self::OPACITY`] it has no visual effect of its own (no opacity → the
     /// group alpha stays `1.0`), so it skips the child-count and `groupAlpha`
     /// gates: a leaf with an expensive paint is a valid cache unit.
     pub const FORCED: u32 = 1 << 4;
     // Reserved for future rules (one evaluator + one flag each):
-    // TRANSFORM3D = 1 << 1, FILTER = 1 << 2, BACKDROP = 1 << 3.
+    // TRANSFORM3D = 1 << 1, BACKDROP = 1 << 3.
 
     pub fn is_empty(self) -> bool {
         self.0 == 0
@@ -71,7 +78,9 @@ pub struct PromotedLayer {
 pub struct LayerGroupAlpha(pub f32);
 
 /// The layer's capture rectangle in *physical* pixels, in the same
-/// screen space as `UiGlobalTransform` — the node's border box. Recomputed
+/// screen space as `UiGlobalTransform` — the node's border box, inflated on
+/// every side by the node's **quantized filter outset** (blur reads/writes
+/// beyond the border box; see [`crate::filters::quantize_outset`]). Recomputed
 /// every frame after layout by [`sync_layer_geometry`]; consumed by
 /// extraction. v1 clips the capture to this box (web opacity does not clip —
 /// known divergence, diag-warned).
@@ -80,11 +89,13 @@ pub struct LayerGroupAlpha(pub f32);
 /// translation — even subpixel — shifts the capture window and the composite
 /// quad by the same amount and never changes the captured pixels (the layer
 /// cache holds; the quad is sampled bilinearly at its fractional position).
-/// Only `size` (whole texels, ceil of the border box) keys texture allocation.
+/// Only `size` (whole texels, ceil of the border box plus outset) keys
+/// texture allocation.
 #[derive(Component, Debug, Clone, Copy, PartialEq)]
 pub struct LayerCaptureRect {
-    /// Top-left of the border box, fractional physical px (may be negative
-    /// for a partially-offscreen layer — capture is layer-local).
+    /// Top-left of the capture window (border box minus the outset margin),
+    /// fractional physical px (may be negative for a partially-offscreen
+    /// layer — capture is layer-local).
     pub min: Vec2,
     /// Capture texture size in whole texels.
     pub size: UVec2,
@@ -119,8 +130,13 @@ pub struct LayerMeta {
     /// Live composite alpha (animations/transitions included).
     pub group_alpha: f32,
     /// Physical-pixel capture rect; `None` while the layer is inactive
-    /// (zero-sized, hidden, or not laid out yet).
-    pub capture_rect: Option<URect>,
+    /// (zero-sized, hidden, or not laid out yet). Includes the quantized
+    /// filter-outset margin — the *actual* capture (bleed included), not just
+    /// the border box. **Signed** on purpose: outset inflation routinely
+    /// pushes the min past the viewport origin (a filtered layer near the
+    /// window edge), and the observability rect must report that truthfully
+    /// instead of clamping to 0 and overstating the far edge.
+    pub capture_rect: Option<IRect>,
     /// Nesting depth: 1 = top-level layer, 2 = layer inside a layer, …
     pub depth: u32,
     /// How many frames re-captured this layer since promotion (cache misses).
@@ -163,7 +179,7 @@ pub struct LayerContentDirt {
 #[derive(Resource, Debug, Default)]
 pub struct LayerRepaintState {
     /// Layer roots whose capture must re-render this frame.
-    pub dirty: bevy::platform::collections::HashSet<Entity>,
+    pub dirty: HashSet<Entity>,
     /// This frame's per-root subtree geometry hash, staged by
     /// [`sync_layer_geometry`] and compared/swapped by the resolver.
     pub geo_hashes: HashMap<Entity, u64>,
@@ -189,7 +205,13 @@ pub fn mark_content_dirty(ec: &mut EntityCommands) {
 /// The promotion rule set — pure, one flag per rule (see the module doc's
 /// extensibility contract). [`PromotionReasons::FORCED`] is `cache: "always"`
 /// in the base style, gated only on element eligibility (no visual semantics
-/// of its own — no child or `groupAlpha` gate). [`PromotionReasons::OPACITY`]:
+/// of its own — no child or `groupAlpha` gate). [`PromotionReasons::FILTER`]
+/// is a non-empty `filter` chain in the base style OR any hover/press/focus
+/// variant, gated the same way (the effect is subtree-wide by definition, and
+/// a filtered leaf is valid). Like opacity the union is presence-based:
+/// interaction must never flip promotion, so a hover-only filter promotes
+/// eagerly — the layer (and its capture) exists before the first hover.
+/// [`PromotionReasons::OPACITY`]:
 ///
 /// - `opacity` **present** — value-blind (an explicit `opacity: 1` stays
 ///   promoted, so fades crossing 1.0 never thrash), unioned across the base
@@ -208,12 +230,7 @@ pub fn promotion_reasons(
     child_count: usize,
     ineligible_element: bool,
 ) -> PromotionReasons {
-    let style_opacity =
-        |s: &Option<crate::protocol::Style>| s.as_ref().is_some_and(|s| s.opacity.is_some());
-    let opacity_present = style_opacity(&props.style)
-        || style_opacity(&props.hover_style)
-        || style_opacity(&props.press_style)
-        || style_opacity(&props.focus_style)
+    let opacity_present = props.all_styles().any(|s| s.opacity.is_some())
         || props
             .animated
             .as_ref()
@@ -232,6 +249,21 @@ pub fn promotion_reasons(
         props.style.as_ref().and_then(|s| s.cache) == Some(crate::protocol::LayerCache::Always);
     if forced && !ineligible_element {
         reasons |= PromotionReasons::FORCED;
+    }
+    // A non-empty `filter` chain (a `Some` empty chain is a no-op), unioned
+    // across the base style and the hover/press/focus variants like OPACITY
+    // (interaction must never flip promotion — a hover filter promotes
+    // eagerly, so the capture exists before the first hover). Animated
+    // bindings deliberately do NOT join the union: a `FilterParam` binding
+    // without a `filter` style has no chain to drive (the binding's bind-time
+    // validation warns `filterBinding` and stays inert instead).
+    // No child or `groupAlpha` gate: the effect is subtree-wide by
+    // definition, so even a leaf is a valid layer (same reasoning as FORCED).
+    let filtered = props
+        .all_styles()
+        .any(|s| s.filter.as_ref().is_some_and(|chain| !chain.0.is_empty()));
+    if filtered && !ineligible_element {
+        reasons |= PromotionReasons::FILTER;
     }
     PromotionReasons(reasons)
 }
@@ -318,9 +350,14 @@ pub fn evaluate_layer_promotions(
                 );
             }
         } else if was_promoted {
-            commands
-                .entity(entity)
-                .remove::<(PromotedLayer, LayerGroupAlpha, LayerCaptureRect)>();
+            // `ResolvedFilterChain` is promotion-scoped state; `FilterInput`
+            // is NOT removed here (it mirrors the style, not the promotion).
+            commands.entity(entity).remove::<(
+                PromotedLayer,
+                LayerGroupAlpha,
+                LayerCaptureRect,
+                crate::filters::ResolvedFilterChain,
+            )>();
             bridge.promoted_layers.remove(&id);
             registry.layers.remove(&id);
             if let Some(props) = bridge.props_cache.get(&id) {
@@ -339,11 +376,16 @@ pub fn evaluate_layer_promotions(
     }
 }
 
-/// Recomputes each promoted layer's capture rect, the subtree membership map,
-/// and each layer's content-geometry hash (see [`fold_member_geometry`]).
+/// Recomputes each promoted layer's capture rect (inflated by the node's
+/// quantized filter outset — blur reads/writes beyond the border box, and the
+/// composite quad, texture allocation, and synthetic-view ortho all derive
+/// from this rect), the subtree membership map, and each layer's
+/// content-geometry hash (see [`fold_member_geometry`]). Also warns
+/// (`filterBleed`) when a nested filtered layer's inflated rect escapes its
+/// enclosing layer's capture — v1 clips there, losing part of the bleed.
 /// Runs in `PostUpdate` after `bevy_ui` layout so `ComputedNode` /
 /// `UiGlobalTransform` are this frame's values.
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments, clippy::type_complexity)]
 pub fn sync_layer_geometry(
     mut commands: Commands,
     roots: Query<
@@ -353,6 +395,8 @@ pub fn sync_layer_geometry(
             &UiGlobalTransform,
             &crate::bridge::RNode,
             &LayerGroupAlpha,
+            Option<&crate::filters::ResolvedFilterChain>,
+            Option<&crate::filters::FilterInput>,
         ),
         With<PromotedLayer>,
     >,
@@ -364,20 +408,35 @@ pub fn sync_layer_geometry(
     mut membership: ResMut<LayerMembership>,
     mut registry: ResMut<LayersRegistry>,
     mut repaints: ResMut<LayerRepaintState>,
+    // Bleed-warn dedup: inner root → the (inner, outer) rect pair last warned
+    // about. `diag::report` mirrors every call into the console ring, so a
+    // per-frame re-report would spam it (the devtools `warning` event path
+    // dedups on its own; the console does not).
+    mut warned_bleeds: Local<HashMap<Entity, (LayerCaptureRect, LayerCaptureRect)>>,
 ) {
     membership.node_to_layer.clear();
     membership.enclosing.clear();
     // Post-swap leftovers from last frame's resolver; this frame's hashes are
     // staged fresh below.
     repaints.geo_hashes.clear();
-    for (root, computed, transform, rnode, alpha) in &roots {
+    // This frame's rects by root, for the bleed pass below (`enclosing` roots
+    // may be visited in any order, so containment is checked in a second pass
+    // once every rect is known).
+    let mut frame_rects: HashMap<Entity, LayerCaptureRect> = HashMap::default();
+    // Filtered roots with a non-zero outset: (root, node id, quantized outset,
+    // first wire filter name — the warning `value` the devtools inspector
+    // matches against the retained `filter` style row).
+    let mut bleed_candidates: Vec<(Entity, NodeId, u32, String)> = Vec::new();
+    for (root, computed, transform, rnode, alpha, chain, filter_input) in &roots {
         let row = registry.layers.get_mut(&rnode.0);
         if let Some(row) = &row {
             debug_assert_eq!(row.entity, root);
         }
         let size = computed.size();
         if size.x <= 0.5 || size.y <= 0.5 {
-            // Zero-sized / not laid out yet: inactive this frame.
+            // Zero-sized / not laid out yet: inactive this frame. The gate
+            // reads the CONTENT size (pre-inflation) on purpose — a filter
+            // outset alone must not activate an empty node.
             if let Some(row) = row {
                 row.capture_rect = None;
             }
@@ -387,7 +446,7 @@ pub fn sync_layer_geometry(
         // anchor tracks the node exactly so translation never re-captures;
         // only a size change reallocs.
         let min = transform.translation - size * 0.5;
-        let rect = LayerCaptureRect {
+        let mut rect = LayerCaptureRect {
             min,
             size: UVec2::new(size.x.ceil() as u32, size.y.ceil() as u32),
         };
@@ -397,16 +456,38 @@ pub fn sync_layer_geometry(
             }
             continue;
         }
+        // A filter chain reads/writes beyond the border box (blur bleed):
+        // grow the capture window by the chain's outset on every side.
+        // Quantized to 16px steps because an animated blur radius changes
+        // `outset_px` every frame — coarse steps keep the capture size, and
+        // with it the geometry hash (size is folded below) and the texture
+        // allocation, stable within a step; crossing a step re-captures
+        // automatically.
+        let outset = chain.map_or(0, |c| crate::filters::quantize_outset(c.outset_px));
+        if outset > 0 {
+            rect.min -= Vec2::splat(outset as f32);
+            rect.size += UVec2::splat(2 * outset);
+            let value = filter_input
+                .and_then(|i| i.0.0.first())
+                .map_or_else(|| "filter".to_owned(), |u| u.name.clone());
+            bleed_candidates.push((root, rnode.0, outset, value));
+        }
+        frame_rects.insert(root, rect);
         if existing_rects.get(root) != Ok(&rect) {
             commands.entity(root).insert(rect);
         }
         // Mirror live geometry + alpha into the observability registry (the
-        // registry keeps integer px for display — round the anchor). Depth
-        // (1 = top-level) is refreshed below once `enclosing` is known.
+        // registry keeps integer px for display — round the anchor; the rect
+        // includes the filter-outset margin, i.e. the real capture, and the
+        // min is signed so a partially-offscreen or outset-inflated layer
+        // displays truthfully). Depth (1 = top-level) is refreshed below once
+        // `enclosing` is known.
         if let Some(row) = row {
-            let display_min =
-                UVec2::new(min.x.round().max(0.0) as u32, min.y.round().max(0.0) as u32);
-            row.capture_rect = Some(URect::from_corners(display_min, display_min + rect.size));
+            let display_min = IVec2::new(rect.min.x.round() as i32, rect.min.y.round() as i32);
+            row.capture_rect = Some(IRect::from_corners(
+                display_min,
+                display_min + rect.size.as_ivec2(),
+            ));
             row.group_alpha = alpha.0;
         }
         // Everything under `root` (itself included) belongs to its nearest
@@ -453,6 +534,66 @@ pub fn sync_layer_geometry(
         if let Some(row) = registry.layers.get_mut(&rnode.0) {
             row.depth = depth;
         }
+    }
+    // Bleed check: v1 composites a nested layer's quad inside the ENCLOSING
+    // layer's capture, which clips at its rect — a filtered layer whose
+    // inflated rect escapes it loses part of its bleed (web filters don't
+    // clip; known divergence, hence the warn). Top-level layers composite to
+    // the screen and are exempt. Deduped per root on the (inner, outer) rect
+    // pair so a steady bleed reports once and any geometry change re-reports.
+    // Bound the dedup map to this frame's candidates — not all active roots:
+    // a root that stays promoted (e.g. via opacity) while its filter is
+    // unset must drop its entry, or re-adding the identical filter with
+    // unchanged geometry would be wrongly suppressed.
+    let candidate_roots: HashSet<Entity> = bleed_candidates.iter().map(|(r, ..)| *r).collect();
+    warned_bleeds.retain(|e, _| candidate_roots.contains(e));
+    for (root, node, outset, value) in bleed_candidates {
+        let outer = match membership.enclosing.get(&root) {
+            Some(&Some(outer)) => outer,
+            _ => {
+                warned_bleeds.remove(&root);
+                continue;
+            }
+        };
+        let (Some(&inner_rect), Some(&outer_rect)) =
+            (frame_rects.get(&root), frame_rects.get(&outer))
+        else {
+            warned_bleeds.remove(&root);
+            continue;
+        };
+        let inner_max = inner_rect.min + inner_rect.size.as_vec2();
+        let outer_max = outer_rect.min + outer_rect.size.as_vec2();
+        let mut sides: Vec<&str> = Vec::new();
+        if inner_rect.min.x < outer_rect.min.x {
+            sides.push("left");
+        }
+        if inner_rect.min.y < outer_rect.min.y {
+            sides.push("top");
+        }
+        if inner_max.x > outer_max.x {
+            sides.push("right");
+        }
+        if inner_max.y > outer_max.y {
+            sides.push("bottom");
+        }
+        if sides.is_empty() {
+            warned_bleeds.remove(&root);
+            continue;
+        }
+        let pair = (inner_rect, outer_rect);
+        if warned_bleeds.get(&root) == Some(&pair) {
+            continue;
+        }
+        warned_bleeds.insert(root, pair);
+        let _scope = crate::diag::node_scope(node);
+        crate::diag::report(
+            "filterBleed",
+            &value,
+            &format!(
+                "filter outset ({outset}px) bleeds past the enclosing promoted layer's capture on the {} side and is clipped there — leave ≥{outset}px between this node and that ancestor's edge, or avoid nesting it under a promoted layer",
+                sides.join("/")
+            ),
+        );
     }
 }
 
@@ -724,6 +865,49 @@ mod tests {
         assert!(!promoted(&auto, 1, false));
         // Element eligibility still applies to forced promotion.
         assert!(!promoted(&forced, 1, true));
+
+        // A non-empty `filter` chain promotes — even a leaf (the effect is
+        // subtree-wide by definition; no child or `groupAlpha` gate, same
+        // reasoning as FORCED).
+        let filtered = props(serde_json::json!({ "style": { "filter": { "name": "blur" } } }));
+        assert_eq!(
+            promotion_reasons(&filtered, 0, false).0,
+            PromotionReasons::FILTER
+        );
+        // A present-but-empty chain (`filter: []`) is a no-op — no promotion.
+        let empty_chain = props(serde_json::json!({ "style": { "filter": [] } }));
+        assert!(!promoted(&empty_chain, 1, false));
+        // Filter + opacity on an eligible node sets both bits.
+        let filter_and_opacity = props(serde_json::json!({
+            "style": { "filter": { "name": "blur" }, "opacity": 0.5 }
+        }));
+        assert_eq!(
+            promotion_reasons(&filter_and_opacity, 1, false).0,
+            PromotionReasons::FILTER | PromotionReasons::OPACITY
+        );
+        // Element eligibility still applies to filter promotion.
+        assert!(!promoted(&filtered, 0, true));
+        // Variant-carried filters count — presence union, like opacity
+        // (interaction must never flip promotion): a hover/press/focus-only
+        // filter promotes EAGERLY, even while not hovered, so the capture
+        // exists before the first hover.
+        for variant in ["hoverStyle", "pressStyle", "focusStyle"] {
+            let variant_filter = props(serde_json::json!({
+                "style": { "width": 10 },
+                (variant): { "filter": { "name": "blur" } },
+            }));
+            assert_eq!(
+                promotion_reasons(&variant_filter, 0, false).0,
+                PromotionReasons::FILTER,
+                "{variant}-only filter promotes eagerly"
+            );
+        }
+        // A variant carrying only an EMPTY chain is still a no-op.
+        let empty_variant = props(serde_json::json!({
+            "style": { "width": 10 },
+            "hoverStyle": { "filter": [] },
+        }));
+        assert!(!promoted(&empty_variant, 1, false));
     }
 
     /// Spin up the op-apply + evaluator pipeline headless (mirrors
@@ -737,9 +921,6 @@ mod tests {
         app.init_resource::<crate::plugin::Fonts>();
         app.init_resource::<crate::reconcile::OpApplyStats>();
         app.init_resource::<crate::ui_map::AtlasLayoutCache>();
-        app.init_asset::<crate::filter::FilterMaterial>();
-        app.init_resource::<crate::filter::FilterMaterialCache>();
-        app.add_systems(Startup, crate::filter::init_filter_assets);
         app.init_resource::<LayersRegistry>();
         app.init_resource::<LayerMembership>();
 
@@ -877,6 +1058,83 @@ mod tests {
 
         ops_tx
             .send(vec![update(1, serde_json::json!({}), &["cache"])])
+            .unwrap();
+        app.update();
+        assert!(app.world().get::<PromotedLayer>(e).is_none(), "demoted");
+        assert!(app.world().resource::<LayersRegistry>().layers.is_empty());
+    }
+
+    /// A `filter` chain promotes a childless node with the FILTER reason and
+    /// a registry row; unsetting the filter demotes.
+    #[test]
+    fn filter_promotion_lifecycle() {
+        let (mut app, ops_tx) = layer_app();
+        ops_tx
+            .send(vec![create(
+                1,
+                serde_json::json!({ "style": { "filter": { "name": "grayscale" } } }),
+            )])
+            .unwrap();
+        app.update();
+        let e = entity_of(&app, 1);
+        let promoted = app.world().get::<PromotedLayer>(e).expect("promoted");
+        assert_eq!(promoted.reasons.0, PromotionReasons::FILTER);
+        // No opacity → the composite alpha is neutral.
+        assert_eq!(
+            app.world().get::<LayerGroupAlpha>(e),
+            Some(&LayerGroupAlpha(1.0))
+        );
+        let registry = app.world().resource::<LayersRegistry>();
+        assert_eq!(registry.layers.len(), 1);
+        assert_eq!(registry.layers[&1].reasons.0, PromotionReasons::FILTER);
+
+        ops_tx
+            .send(vec![update(1, serde_json::json!({}), &["filter"])])
+            .unwrap();
+        app.update();
+        assert!(app.world().get::<PromotedLayer>(e).is_none(), "demoted");
+        assert!(app.world().resource::<LayersRegistry>().layers.is_empty());
+    }
+
+    /// A `hoverStyle`-only filter promotes EAGERLY — from creation, while the
+    /// node is not (and never has been) hovered — exactly like variant-carried
+    /// opacity: the union is presence-based, so interaction never flips
+    /// promotion and the capture exists before the first hover (no
+    /// first-hover hitch). Unsetting the variant demotes.
+    #[test]
+    fn hover_filter_promotes_eagerly_from_creation() {
+        let (mut app, ops_tx) = layer_app();
+        ops_tx
+            .send(vec![create(
+                1,
+                serde_json::json!({
+                    "style": { "width": 10 },
+                    "hoverStyle": { "filter": { "name": "blur", "params": { "radius": 8 } } },
+                }),
+            )])
+            .unwrap();
+        app.update();
+        let e = entity_of(&app, 1);
+        let promoted = app
+            .world()
+            .get::<PromotedLayer>(e)
+            .expect("promoted before any hover");
+        assert_eq!(promoted.reasons.0, PromotionReasons::FILTER);
+        assert_eq!(
+            app.world().resource::<LayersRegistry>().layers[&1]
+                .reasons
+                .0,
+            PromotionReasons::FILTER
+        );
+
+        // Dropping the hover variant (React removed `hoverStyle`) demotes.
+        ops_tx
+            .send(vec![Op::Update {
+                id: 1,
+                props: props(serde_json::json!({})),
+                unset: vec!["hoverStyle".into()],
+                style_unset: vec![],
+            }])
             .unwrap();
         app.update();
         assert!(app.world().get::<PromotedLayer>(e).is_none(), "demoted");
@@ -1068,6 +1326,200 @@ mod tests {
             node(Vec2::new(30.0, 30.0), Vec2::new(40.0, 25.0 - 1e-4)),
         ];
         assert_eq!(base, fold(&noisy, Vec2::new(10.0, 20.0)));
+    }
+
+    /// World + schedule harness for [`sync_layer_geometry`] +
+    /// [`resolve_layer_repaints`]: promoted roots are hand-spawned with
+    /// laid-out geometry (`ComputedNode` / `UiGlobalTransform`), and filter
+    /// state is inserted directly ([`crate::filters::ResolvedFilterChain`]) —
+    /// the resolver system does not run here.
+    fn geometry_world() -> (World, Schedule) {
+        let mut world = World::new();
+        world.init_resource::<LayerMembership>();
+        world.init_resource::<LayersRegistry>();
+        world.init_resource::<LayerRepaintState>();
+        world.init_resource::<LayerContentDirt>();
+        let mut schedule = Schedule::default();
+        schedule.add_systems((sync_layer_geometry, resolve_layer_repaints).chain());
+        (world, schedule)
+    }
+
+    /// `center` is the node's `UiGlobalTransform` translation (its center, as
+    /// in the real UI transform), so the un-inflated rect min is
+    /// `center - size/2`.
+    fn spawn_layer_root(world: &mut World, id: NodeId, size: Vec2, center: Vec2) -> Entity {
+        world
+            .spawn((
+                ComputedNode {
+                    size,
+                    ..Default::default()
+                },
+                UiGlobalTransform::from(bevy::math::Affine2::from_translation(center)),
+                crate::bridge::RNode(id),
+                LayerGroupAlpha(1.0),
+                PromotedLayer {
+                    reasons: PromotionReasons(PromotionReasons::FILTER),
+                },
+            ))
+            .id()
+    }
+
+    fn filter_outset(world: &mut World, e: Entity, outset_px: u32) {
+        world
+            .entity_mut(e)
+            .insert(crate::filters::ResolvedFilterChain {
+                outset_px,
+                ..Default::default()
+            });
+    }
+
+    /// A filtered root's capture rect grows by the QUANTIZED outset on every
+    /// side: min shifts by `-q`, size by `+2q` per axis (blur reads/writes
+    /// beyond the border box, so capture and composite quad must both cover
+    /// the bleed).
+    #[test]
+    fn outset_inflates_rect_by_quantized_margin() {
+        let (mut world, mut schedule) = geometry_world();
+        let size = Vec2::new(100.0, 60.0);
+        let center = Vec2::new(50.0, 30.0);
+        let plain = spawn_layer_root(&mut world, 1, size, center);
+        let blurred = spawn_layer_root(&mut world, 2, size, center);
+        filter_outset(&mut world, blurred, 12); // blur radius 4 → 3×4 = 12
+        let big = spawn_layer_root(&mut world, 3, size, center);
+        filter_outset(&mut world, big, 60); // blur radius 20 → 60
+        schedule.run(&mut world);
+
+        let base = *world.get::<LayerCaptureRect>(plain).expect("baseline rect");
+        assert_eq!(base.min, Vec2::ZERO);
+        assert_eq!(base.size, UVec2::new(100, 60));
+        // quantize_outset(12) = 16.
+        let rect = *world.get::<LayerCaptureRect>(blurred).expect("rect");
+        assert_eq!(rect.min, base.min - Vec2::splat(16.0));
+        assert_eq!(rect.size, base.size + UVec2::splat(32));
+        // quantize_outset(60) = 64.
+        let rect = *world.get::<LayerCaptureRect>(big).expect("rect");
+        assert_eq!(rect.min, base.min - Vec2::splat(64.0));
+        assert_eq!(rect.size, base.size + UVec2::splat(128));
+    }
+
+    /// An outset change WITHIN one 16px quantize step keeps the rect — and
+    /// therefore the geometry hash and the capture cache — untouched (the
+    /// point of quantizing: an animated radius must not realloc every frame).
+    #[test]
+    fn outset_within_quantize_step_holds_rect_and_cache() {
+        let (mut world, mut schedule) = geometry_world();
+        let e = spawn_layer_root(&mut world, 1, Vec2::new(100.0, 60.0), Vec2::new(50.0, 30.0));
+        filter_outset(&mut world, e, 12);
+        schedule.run(&mut world);
+        assert!(
+            world.resource::<LayerRepaintState>().dirty.contains(&e),
+            "first frame repaints"
+        );
+        let before = *world.get::<LayerCaptureRect>(e).expect("rect");
+
+        filter_outset(&mut world, e, 14); // same step: quantize(14) == quantize(12) == 16
+        schedule.run(&mut world);
+        assert_eq!(*world.get::<LayerCaptureRect>(e).expect("rect"), before);
+        assert!(
+            world.resource::<LayerRepaintState>().dirty.is_empty(),
+            "no repaint within a quantize step"
+        );
+    }
+
+    /// Crossing a quantize step changes the rect size, which is folded into
+    /// the geometry hash — so the layer re-captures automatically at the new
+    /// size.
+    #[test]
+    fn outset_crossing_quantize_step_recaptures() {
+        let (mut world, mut schedule) = geometry_world();
+        let e = spawn_layer_root(&mut world, 1, Vec2::new(100.0, 60.0), Vec2::new(50.0, 30.0));
+        filter_outset(&mut world, e, 14); // quantize → 16
+        schedule.run(&mut world);
+        schedule.run(&mut world); // settle: steady state is clean
+        assert!(world.resource::<LayerRepaintState>().dirty.is_empty());
+        let before = *world.get::<LayerCaptureRect>(e).expect("rect");
+
+        filter_outset(&mut world, e, 18); // quantize → 32: next step
+        schedule.run(&mut world);
+        let after = *world.get::<LayerCaptureRect>(e).expect("rect");
+        assert_eq!(after.min, before.min - Vec2::splat(16.0));
+        assert_eq!(after.size, before.size + UVec2::splat(32));
+        assert!(
+            world.resource::<LayerRepaintState>().dirty.contains(&e),
+            "step crossing re-captures"
+        );
+    }
+
+    /// The inactive gate reads the CONTENT size: a zero-sized filtered node
+    /// must not become an active layer just because its outset is non-zero.
+    #[test]
+    fn zero_content_size_stays_inactive_despite_outset() {
+        let (mut world, mut schedule) = geometry_world();
+        let e = spawn_layer_root(&mut world, 1, Vec2::ZERO, Vec2::ZERO);
+        filter_outset(&mut world, e, 60);
+        schedule.run(&mut world);
+        assert!(
+            world.get::<LayerCaptureRect>(e).is_none(),
+            "zero content size stays inactive"
+        );
+    }
+
+    /// A nested filtered layer whose INFLATED rect escapes the enclosing
+    /// layer's rect warns (`filterBleed`, attributed to the node, naming the
+    /// clipped sides); a fully-contained bleed does not, and a steady bleed
+    /// re-reports only when the rect pair changes.
+    #[cfg(all(feature = "devtools", debug_assertions))]
+    #[test]
+    fn nested_filter_bleed_warns_when_clipped() {
+        let _lock = crate::diag::test_lock();
+        crate::diag::arm_runtime();
+        let _ = crate::diag::take_runtime_warnings();
+
+        let (mut world, mut schedule) = geometry_world();
+        // Outer layer: 200×200 at (0,0)-(200,200).
+        let outer = spawn_layer_root(&mut world, 1, Vec2::splat(200.0), Vec2::splat(100.0));
+        // Inner filtered layer: 100×100 centered → un-inflated (50,50)-(150,150).
+        let inner = spawn_layer_root(&mut world, 2, Vec2::splat(100.0), Vec2::splat(100.0));
+        world.entity_mut(inner).insert((
+            ChildOf(outer),
+            crate::filters::FilterInput(crate::filters::FilterChain(vec![
+                crate::filters::FilterUse {
+                    name: "blur".into(),
+                    params: Default::default(),
+                },
+            ])),
+        ));
+        // Contained: quantize(12)=16 → (34,34)-(166,166) fits inside.
+        filter_outset(&mut world, inner, 12);
+        schedule.run(&mut world);
+        let bleeds = |warns: Vec<crate::diag::RuntimeWarning>| -> Vec<_> {
+            warns
+                .into_iter()
+                .filter(|w| w.kind == "filterBleed")
+                .collect()
+        };
+        assert!(
+            bleeds(crate::diag::take_runtime_warnings()).is_empty(),
+            "contained bleed does not warn"
+        );
+
+        // Escaped: quantize(60)=64 → (-14,-14)-(214,214), clipped on all sides.
+        filter_outset(&mut world, inner, 60);
+        schedule.run(&mut world);
+        let warns = bleeds(crate::diag::take_runtime_warnings());
+        assert_eq!(warns.len(), 1, "{warns:?}");
+        assert_eq!(warns[0].node, Some(2));
+        assert_eq!(warns[0].value, "blur");
+        for side in ["left", "top", "right", "bottom"] {
+            assert!(warns[0].message.contains(side), "{}", warns[0].message);
+        }
+
+        // Steady state (same rect pair): no re-report.
+        schedule.run(&mut world);
+        assert!(
+            bleeds(crate::diag::take_runtime_warnings()).is_empty(),
+            "unchanged bleed is not re-reported"
+        );
     }
 
     /// Removing a promoted node prunes its registry row (despawn cleans the

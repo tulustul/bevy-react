@@ -53,6 +53,12 @@ const KIND_FIELDS: Record<string, { style?: string[]; props?: string[] }> = {
   },
   gridPlacement: { style: ["gridRow", "gridColumn"] },
   borderColor: { style: ["borderColor"] },
+  filterParams: { style: ["filter"] },
+  filterUnknown: { style: ["filter"] },
+  filterBleed: { style: ["filter"] },
+  // Per-param filter animation bindings: the warning value is the wire key
+  // (`filter[0].radius`), which matches the retained `animated` prop's key.
+  filterBinding: { style: ["filter"], props: ["animated"] },
   scrollbar: { style: ["scrollbar"] },
   animatedStyle: { props: ["animated"] },
   // Apply-time (runtime sink) kinds.

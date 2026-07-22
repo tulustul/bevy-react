@@ -233,20 +233,32 @@ fn devtools_panel_round_trip() {
                 "layers": [
                     { "id": 0, "reasons": ["base"], "depth": 0, "node_count": 0,
                       "rect": { "x": 0.0, "y": 0.0, "width": 800.0, "height": 600.0,
-                                "physical_width": 800, "physical_height": 600 } },
-                    { "id": 7, "reasons": ["opacity"], "depth": 1, "node_count": 5,
+                                "physical_width": 800, "physical_height": 600 },
+                      "repaints": 0, "filters": [] },
+                    { "id": 7, "reasons": ["opacity", "filter"], "depth": 1, "node_count": 5,
                       "rect": { "x": 10.0, "y": 10.0, "width": 100.0, "height": 50.0,
-                                "physical_width": 100, "physical_height": 50 } },
+                                "physical_width": 100, "physical_height": 50 },
+                      "repaints": 0,
+                      "filters": [
+                          { "name": "blur", "params": [["radius", [4.25]]] },
+                          { "name": "sepia", "params": [["amount", [1.0]]] },
+                      ] },
                 ]
             }),
         })
         .expect("JS thread gone before layers payload");
 
     let deadline = Instant::now() + Duration::from_secs(10);
-    while !text_of.values().any(|t| t.trim() == "opacity") {
+    // The reason pill proves the row rendered; the chain line proves the
+    // resolved-filter display consumed the per-wire entries + param values.
+    while !(text_of.values().any(|t| t.trim() == "opacity")
+        && text_of
+            .values()
+            .any(|t| t.trim() == "blur(radius 4.25) sepia(amount 1)"))
+    {
         assert!(
             Instant::now() < deadline,
-            "the Layers panel never rendered the payload's reason pill"
+            "the Layers panel never rendered the payload's reason pill + filter chain"
         );
         if let Ok(batch) = ops_rx.recv_timeout(Duration::from_millis(100)) {
             for op in &batch {
@@ -254,7 +266,7 @@ fn devtools_panel_round_trip() {
             }
         }
     }
-    eprintln!("OK   Layers tab rendered the payload");
+    eprintln!("OK   Layers tab rendered the payload (reason pill + filter chain)");
 
     // Phase 1c: the Console tab. Clicking it unmounts the Layers panel
     // (whose cleanup reports `layersOpen { on: false }`) and mounts the

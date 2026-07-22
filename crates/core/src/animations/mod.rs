@@ -275,15 +275,30 @@ struct AnimTargets {
     // drives the composite-time group alpha instead of the color folds.
     promoted: Option<&'static crate::layer::PromotedLayer>,
     layer_alpha: Option<&'static mut crate::layer::LayerGroupAlpha>,
+    /// The packed filter passes per-param `filter[<i>].<param>` bindings write
+    /// into. Promoted-root-only by construction: the chain only exists on
+    /// promoted roots (`crate::filters::resolve_filter_chains`).
+    resolved_filter: Option<&'static mut crate::filters::ResolvedFilterChain>,
+    /// Reconciler identity, for attributing `filterBinding` validation
+    /// warnings to the node's devtools inspector.
+    rnode: Option<&'static crate::bridge::RNode>,
 }
 
 fn apply_animated_nodes(
     mut commands: Commands,
     values: Res<SharedValues>,
     mut dirt: ResMut<crate::layer::LayerContentDirt>,
-    mut query: Query<(Entity, &AnimatedNode, AnimTargets)>,
+    // Bind-time validation memory for the filter-param stage: entity → the
+    // chain's POST-apply version (None = no chain) as of the last frame.
+    // Warnings re-fire only when the bindings restamp or the chain
+    // re-resolves — never per frame: stage 4's own version bump (an actively
+    // animating valid binding) is stamped back after the apply so it never
+    // reads as a re-resolve.
+    mut validated: Local<HashMap<Entity, Option<u32>>>,
+    mut query: Query<(Entity, Ref<AnimatedNode>, AnimTargets)>,
 ) {
     use AnimatableProperty as P;
+    let mut filter_bound: Vec<Entity> = Vec::new();
     for (entity, anim, mut t) in &mut query {
         let b = &anim.0;
         let promoted = t.promoted.is_some();
@@ -333,9 +348,11 @@ fn apply_animated_nodes(
 
         // Stage 2 — every non-transform, non-opacity binding. Colors land on their
         // component; lengths/scalars land on `Node`. Opacity is deferred to stage 3
-        // so it owns the final alpha after any color write (the original ordering).
-        for (&property, binding) in b.iter() {
-            if property.is_transform() || property == P::Opacity {
+        // so it owns the final alpha after any color write (the original ordering);
+        // filter params to stage 4 (they write the resolved chain, not components,
+        // and their value kind comes from the chain layout — not `value_kind`).
+        for (property, binding) in b.iter() {
+            if property.is_transform() || matches!(property, P::Opacity | P::FilterParam { .. }) {
                 continue;
             }
             match property.value_kind() {
@@ -456,6 +473,245 @@ fn apply_animated_nodes(
                 dirt.nodes.push(entity);
             }
         }
+
+        // Stage 4 — per-param filter bindings (`filter[<i>].<param>`): write
+        // the evaluated values straight into the resolved chain's packed
+        // params (promoted-root-only by construction — the chain only exists
+        // there). Values are applied in the param's wire unit: logical px for
+        // `Length` slots (× `chain.scale`, the resolver's physical-px
+        // rewrite), degrees for `Angle` slots (→ packed radians), raw
+        // scalars, rgba via `interpolateColor` for `Color` slots. A binding
+        // addresses a WIRE chain position, so it writes the named slot in
+        // every pass with that `wire_index` (blur's H+V both carry `radius`).
+        // Compare-before-write; a real change bumps `version` once and
+        // pushes composite-only dirt — the capture holds unfiltered content,
+        // so `dirt.nodes` is never touched. Because this runs every frame
+        // after `resolve_filter_chains`, a style delta that rebuilt the chain
+        // mid-animation is re-asserted the same frame. While any such binding
+        // exists the whole-value `filter` transition channel is parked
+        // (`skip_filter` in `transition.rs`'s `drive_transitions`), so this
+        // stage and that ease never interleave on one node.
+        if b.has_filter_params() {
+            filter_bound.push(entity);
+            // Bind-time validation gate: warn when the bindings restamped
+            // (`Ref` change tick — `apply_animated` re-inserts on prop
+            // updates) or the chain re-resolved/appeared/vanished.
+            let pre = t.resolved_filter.as_ref().map(|c| c.version);
+            let validate = anim.is_changed() || validated.get(&entity) != Some(&pre);
+            apply_filter_params(
+                entity,
+                b,
+                &values,
+                t.resolved_filter.as_mut(),
+                t.rnode,
+                validate,
+                &mut dirt,
+            );
+            // Stamp the POST-write version: the apply above bumps `version`
+            // itself on a changed frame, and stamping the pre-write value
+            // would make that bump look like a re-resolve next frame —
+            // re-warning invalid bindings every animated frame. A real
+            // re-resolve (the resolver runs before this stage) still lands
+            // between this read and the next frame's `pre`, so it mismatches
+            // and re-validates.
+            let post = t.resolved_filter.as_ref().map(|c| c.version);
+            if validate || post != pre {
+                validated.insert(entity, post);
+            }
+        }
+    }
+    // Drop validation memory for entities that no longer carry filter
+    // bindings (despawned, or the bindings were removed), so a later
+    // re-appearance re-validates and the map stays bounded.
+    if validated.len() > filter_bound.len() {
+        validated.retain(|e, _| filter_bound.contains(e));
+    }
+}
+
+/// Stage 4's body: validate (when `validate`) and apply every
+/// [`AnimatableProperty::FilterParam`] binding of one node against its
+/// resolved chain. See the call site for the unit/routing/dirt contract.
+fn apply_filter_params(
+    entity: Entity,
+    bindings: &AnimatedBindings,
+    values: &SharedValues,
+    chain: Option<&mut Mut<crate::filters::ResolvedFilterChain>>,
+    rnode: Option<&crate::bridge::RNode>,
+    validate: bool,
+    dirt: &mut crate::layer::LayerContentDirt,
+) {
+    // Attribute validation warnings to the node's devtools inspector.
+    let _diag = rnode.map(|r| crate::diag::node_scope(r.0));
+    // Lazy on purpose: `make` (which allocates the key + message) runs only
+    // when a warning actually fires, so the per-bound-param per-frame path
+    // stays allocation-free in every build.
+    fn warn(validate: bool, make: impl FnOnce() -> (String, String)) {
+        if validate {
+            let (key, msg) = make();
+            crate::diag::report("filterBinding", &key, &msg);
+        }
+    }
+
+    let Some(chain) = chain else {
+        for (property, _) in bindings.iter() {
+            if let AnimatableProperty::FilterParam { index, name } = property {
+                warn(validate, || {
+                    (
+                        format!("filter[{index}].{name}"),
+                        format!(
+                            "animatedStyle filter[{index}].{name}: the node has no resolved \
+                             filter chain to drive (no valid `filter` style) — binding ignored"
+                        ),
+                    )
+                });
+            }
+        }
+        return;
+    };
+
+    // Phase A — read-only (through `Deref`, no change mark): evaluate each
+    // binding against the chain layout and collect the components that
+    // actually differ.
+    let mut writes: Vec<(usize, usize, usize, f32)> = Vec::new();
+    {
+        let chain: &crate::filters::ResolvedFilterChain = chain;
+        for (property, binding) in bindings.iter() {
+            let AnimatableProperty::FilterParam { index, name } = property else {
+                continue;
+            };
+            // The slot metadata from the first matching pass — passes sharing
+            // a `wire_index` come from one `pack`, so the layout agrees.
+            let slot = chain
+                .passes
+                .iter()
+                .filter(|p| p.wire_index == *index)
+                .find_map(|p| p.layout.iter().find(|s| s.name == name.as_str()).copied());
+            let Some(slot) = slot else {
+                if chain.passes.iter().any(|p| p.wire_index == *index) {
+                    warn(validate, || {
+                        let key = format!("filter[{index}].{name}");
+                        let msg = format!(
+                            "{key}: chain entry {index} has no param {name:?} — binding ignored"
+                        );
+                        (key, msg)
+                    });
+                } else {
+                    warn(validate, || {
+                        let key = format!("filter[{index}].{name}");
+                        let msg = format!(
+                            "{key}: the resolved filter chain has no entry at index {index} — \
+                             binding ignored"
+                        );
+                        (key, msg)
+                    });
+                }
+                continue;
+            };
+            // Resolve the bound value per the slot's authoritative kind.
+            enum Resolved {
+                Scalar(f32),
+                Color([f32; 4]),
+            }
+            let resolved = match slot.kind {
+                ValueKind::Color => match eval_color(binding, values) {
+                    Some(rgba) => Resolved::Color(rgba),
+                    None => {
+                        // A scalar binding can never drive a color slot; a
+                        // missing shared value is transient and stays silent
+                        // (every stage skips it).
+                        if !matches!(binding, Binding::InterpolateColor { .. }) {
+                            warn(validate, || {
+                                let key = format!("filter[{index}].{name}");
+                                let msg = format!(
+                                    "{key}: param {name:?} is a color — bind an \
+                                     interpolateColor, not a scalar value"
+                                );
+                                (key, msg)
+                            });
+                        }
+                        continue;
+                    }
+                },
+                _ if slot.len != 1 => {
+                    // Multi-component non-color slots (direction vectors …)
+                    // are not addressable per-param in v1 — a scalar splat
+                    // would be wrong for them.
+                    warn(validate, || {
+                        let key = format!("filter[{index}].{name}");
+                        let msg = format!(
+                            "{key}: param {name:?} spans {} components — multi-component \
+                             params are not animatable per-param",
+                            slot.len
+                        );
+                        (key, msg)
+                    });
+                    continue;
+                }
+                kind => match eval_scalar(binding, values) {
+                    Some(v) => Resolved::Scalar(match kind {
+                        // The param's wire unit: degrees → packed radians.
+                        ValueKind::Angle => v.to_radians(),
+                        // Logical px → physical, the resolver's own rewrite.
+                        ValueKind::Length => v * chain.scale,
+                        _ => v,
+                    }),
+                    None => {
+                        if matches!(binding, Binding::InterpolateColor { .. }) {
+                            warn(validate, || {
+                                let key = format!("filter[{index}].{name}");
+                                let msg = format!(
+                                    "{key}: param {name:?} is a scalar — an \
+                                     interpolateColor binding cannot drive it"
+                                );
+                                (key, msg)
+                            });
+                        }
+                        continue;
+                    }
+                },
+            };
+            // Route to every pass at this wire position, defending bounds
+            // like the resolver's physical-px rewrite.
+            for (pi, pass) in chain.passes.iter().enumerate() {
+                if pass.wire_index != *index {
+                    continue;
+                }
+                let Some(slot) = pass.layout.iter().find(|s| s.name == name.as_str()) else {
+                    continue;
+                };
+                let Some(vec) = pass.params.get(slot.vec) else {
+                    continue;
+                };
+                match &resolved {
+                    Resolved::Scalar(v) => {
+                        // Same bounds defense as `rewrite_length_slots`: a
+                        // hand-written filter's bad layout degrades (slot
+                        // skipped), never panics.
+                        if slot.comp < 4 && vec[slot.comp] != *v {
+                            writes.push((pi, slot.vec, slot.comp, *v));
+                        }
+                    }
+                    Resolved::Color(rgba) => {
+                        for comp in slot.comp..(slot.comp + slot.len).min(4) {
+                            let v = rgba[comp - slot.comp];
+                            if vec[comp] != v {
+                                writes.push((pi, slot.vec, comp, v));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Phase B — one write, one version bump, composite-only dirt.
+    if !writes.is_empty() {
+        let chain = &mut **chain;
+        for (pass, vec, comp, v) in writes {
+            chain.passes[pass].params[vec][comp] = v;
+        }
+        chain.version = chain.version.wrapping_add(1);
+        dirt.composite_only.push(entity);
     }
 }
 
@@ -469,7 +725,7 @@ fn apply_animated_nodes(
 /// Returns whether anything was actually written (the layer-cache tap keys off it).
 fn write_node_value<N: std::ops::DerefMut<Target = Node>>(
     node: &mut N,
-    property: AnimatableProperty,
+    property: &AnimatableProperty,
     v: f32,
 ) -> bool {
     use AnimatableProperty as P;
@@ -1013,5 +1269,437 @@ mod tests {
             0,
             "an apply with settled values must not dirty anything"
         );
+    }
+
+    // -- per-param filter bindings (stage 4) ---------------------------------
+
+    #[test]
+    fn filter_param_from_wire_parses_strictly() {
+        use AnimatableProperty as P;
+        assert_eq!(
+            P::from_wire("filter[0].radius"),
+            Some(P::FilterParam {
+                index: 0,
+                name: "radius".into()
+            })
+        );
+        assert_eq!(
+            P::from_wire("filter[12].intensity"),
+            Some(P::FilterParam {
+                index: 12,
+                name: "intensity".into()
+            })
+        );
+        for bad in [
+            "filter[].x",
+            "filter[0].",
+            "filter[a].x",
+            "filter",
+            "filter[0]x",
+            "filter[-1].x",
+            "filter[256].x", // beyond the u8 wire-index space
+        ] {
+            assert_eq!(P::from_wire(bad), None, "{bad:?} must not parse");
+        }
+    }
+
+    /// Mixed bindings decode and iterate deterministically: the `BTreeMap`
+    /// orders by variant declaration order, `FilterParam` last (by index,
+    /// then name).
+    #[test]
+    fn bindings_with_filter_params_iterate_deterministically() {
+        use AnimatableProperty as P;
+        let bindings: AnimatedBindings = serde_json::from_value(serde_json::json!({
+            "filter[2].b": { "type": "shared", "id": 1 },
+            "filter[0].radius": { "type": "shared", "id": 2 },
+            "opacity": { "type": "shared", "id": 3 },
+            "scale": { "type": "shared", "id": 4 },
+        }))
+        .unwrap();
+        assert!(bindings.has_filter_params());
+        assert!(bindings.has_transform());
+        let keys: Vec<_> = bindings.iter().map(|(p, _)| p.clone()).collect();
+        assert_eq!(
+            keys,
+            vec![
+                P::Scale,
+                P::Opacity,
+                P::FilterParam {
+                    index: 0,
+                    name: "radius".into()
+                },
+                P::FilterParam {
+                    index: 2,
+                    name: "b".into()
+                },
+            ]
+        );
+    }
+
+    fn slot(
+        name: &'static str,
+        kind: ValueKind,
+        vec: usize,
+        comp: usize,
+        len: usize,
+    ) -> crate::filters::ParamSlot {
+        crate::filters::ParamSlot {
+            name,
+            kind,
+            vec,
+            comp,
+            len,
+        }
+    }
+
+    fn pass(
+        wire_index: u8,
+        params: Vec<Vec4>,
+        layout: Vec<crate::filters::ParamSlot>,
+    ) -> crate::filters::ResolvedFilterPass {
+        crate::filters::ResolvedFilterPass {
+            shader: Handle::default(),
+            params,
+            layout: std::sync::Arc::from(layout),
+            wire_index,
+        }
+    }
+
+    fn chain(
+        passes: Vec<crate::filters::ResolvedFilterPass>,
+        scale: f32,
+    ) -> crate::filters::ResolvedFilterChain {
+        crate::filters::ResolvedFilterChain {
+            passes,
+            outset_px: 0,
+            always_dirty: false,
+            version: 1,
+            scale,
+        }
+    }
+
+    fn filter_world(value: f32) -> (World, Schedule) {
+        let mut world = World::new();
+        world.init_resource::<crate::layer::LayerContentDirt>();
+        let mut values = SharedValues::default();
+        values.set(1, value);
+        world.insert_resource(values);
+        let mut schedule = Schedule::default();
+        schedule.add_systems(apply_animated_nodes);
+        (world, schedule)
+    }
+
+    fn drain_dirt(world: &mut World) {
+        let mut dirt = world.resource_mut::<crate::layer::LayerContentDirt>();
+        dirt.nodes.clear();
+        dirt.composite_only.clear();
+    }
+
+    /// A bound scalar param follows the shared value: the packed component
+    /// updates, the version bumps once per changed frame, dirt is
+    /// composite-only (never capture), and a settled value goes quiet. A
+    /// mid-animation chain rebuild (the resolver snapping the params back)
+    /// is re-asserted on the next apply — the scar-test mechanism.
+    #[test]
+    fn filter_param_binding_drives_scalar_slot_composite_only() {
+        let (mut world, mut schedule) = filter_world(0.25);
+        let bindings: AnimatedBindings = serde_json::from_value(serde_json::json!({
+            "filter[0].amount": { "type": "shared", "id": 1 },
+        }))
+        .unwrap();
+        let e = world
+            .spawn((
+                AnimatedNode(bindings),
+                UiTransform::default(),
+                chain(
+                    vec![pass(
+                        0,
+                        vec![Vec4::new(1.0, 0.0, 0.0, 0.0)],
+                        vec![slot("amount", ValueKind::Scalar, 0, 0, 1)],
+                    )],
+                    1.0,
+                ),
+            ))
+            .id();
+
+        schedule.run(&mut world);
+        {
+            let c = world
+                .entity(e)
+                .get::<crate::filters::ResolvedFilterChain>()
+                .unwrap();
+            assert_eq!(c.passes[0].params[0].x, 0.25, "param follows the value");
+            assert_eq!(c.version, 2, "one bump per changed frame");
+        }
+        let dirt = world.resource::<crate::layer::LayerContentDirt>();
+        assert_eq!(dirt.composite_only, vec![e], "composite-only dirt");
+        assert!(dirt.nodes.is_empty(), "the capture is never dirtied");
+
+        // Settled: no version churn, no dirt.
+        drain_dirt(&mut world);
+        schedule.run(&mut world);
+        {
+            let c = world
+                .entity(e)
+                .get::<crate::filters::ResolvedFilterChain>()
+                .unwrap();
+            assert_eq!(c.version, 2, "settled value is version-quiet");
+        }
+        let dirt = world.resource::<crate::layer::LayerContentDirt>();
+        assert!(dirt.composite_only.is_empty() && dirt.nodes.is_empty());
+
+        // A re-resolve snapped the param back to the static style: the
+        // binding re-asserts on the next apply.
+        {
+            let mut em = world.entity_mut(e);
+            let mut c = em.get_mut::<crate::filters::ResolvedFilterChain>().unwrap();
+            c.passes[0].params[0].x = 1.0;
+            c.version = c.version.wrapping_add(1); // 3
+        }
+        schedule.run(&mut world);
+        let c = world
+            .entity(e)
+            .get::<crate::filters::ResolvedFilterChain>()
+            .unwrap();
+        assert_eq!(c.passes[0].params[0].x, 0.25, "binding re-asserts");
+        assert_eq!(c.version, 4);
+    }
+
+    /// A binding addresses a WIRE chain position: every resolved pass with
+    /// that `wire_index` gets the write (blur's H+V), other positions stay
+    /// untouched; `Length` slots are applied as logical px × the chain's
+    /// scale (the resolver's physical-px rewrite).
+    #[test]
+    fn filter_param_binding_routes_wire_index_and_scales_lengths() {
+        let (mut world, mut schedule) = filter_world(5.0);
+        let bindings: AnimatedBindings = serde_json::from_value(serde_json::json!({
+            "filter[0].radius": { "type": "shared", "id": 1 },
+        }))
+        .unwrap();
+        let radius_layout = || vec![slot("radius", ValueKind::Length, 0, 0, 1)];
+        let e = world
+            .spawn((
+                AnimatedNode(bindings),
+                UiTransform::default(),
+                chain(
+                    vec![
+                        pass(0, vec![Vec4::new(20.0, 1.0, 0.0, 0.0)], radius_layout()),
+                        pass(0, vec![Vec4::new(20.0, 0.0, 1.0, 0.0)], radius_layout()),
+                        pass(1, vec![Vec4::new(20.0, 0.0, 0.0, 0.0)], radius_layout()),
+                    ],
+                    2.0,
+                ),
+            ))
+            .id();
+
+        schedule.run(&mut world);
+        let c = world
+            .entity(e)
+            .get::<crate::filters::ResolvedFilterChain>()
+            .unwrap();
+        assert_eq!(c.passes[0].params[0].x, 10.0, "H pass: 5 logical × 2");
+        assert_eq!(c.passes[1].params[0].x, 10.0, "V pass too");
+        assert_eq!(c.passes[0].params[0].y, 1.0, "direction untouched");
+        assert_eq!(c.passes[2].params[0].x, 20.0, "other wire entry untouched");
+    }
+
+    /// `Angle` slots take the bound value in DEGREES (the param's wire unit)
+    /// and pack radians; `Color` slots take an `interpolateColor` binding and
+    /// write all four components.
+    #[test]
+    fn filter_param_binding_converts_angle_and_writes_color() {
+        let (mut world, mut schedule) = filter_world(90.0);
+        world.resource_mut::<SharedValues>().set(2, 0.0);
+        let bindings: AnimatedBindings = serde_json::from_value(serde_json::json!({
+            "filter[0].angle": { "type": "shared", "id": 1 },
+            "filter[0].tint": { "type": "interpolateColor", "id": 2,
+                "input": [0, 1], "output": [[1, 0, 0, 1], [0, 0, 1, 1]] },
+        }))
+        .unwrap();
+        let e = world
+            .spawn((
+                AnimatedNode(bindings),
+                UiTransform::default(),
+                chain(
+                    vec![pass(
+                        0,
+                        vec![Vec4::ZERO, Vec4::ZERO],
+                        vec![
+                            slot("angle", ValueKind::Angle, 0, 0, 1),
+                            slot("tint", ValueKind::Color, 1, 0, 4),
+                        ],
+                    )],
+                    1.0,
+                ),
+            ))
+            .id();
+
+        schedule.run(&mut world);
+        let c = world
+            .entity(e)
+            .get::<crate::filters::ResolvedFilterChain>()
+            .unwrap();
+        assert!(
+            (c.passes[0].params[0].x - std::f32::consts::FRAC_PI_2).abs() < 1e-6,
+            "90° packs as π/2 radians, got {}",
+            c.passes[0].params[0].x
+        );
+        assert_eq!(
+            c.passes[0].params[1],
+            Vec4::new(1.0, 0.0, 0.0, 1.0),
+            "color slot takes all four components"
+        );
+    }
+
+    /// Bind-time validation: an unknown param name, an out-of-range index, a
+    /// multi-component scalar slot, and a missing chain each warn
+    /// (`filterBinding`, attributed to the node) exactly once — not per frame
+    /// — and the binding stays inert. A chain re-resolve re-validates.
+    #[cfg(all(feature = "devtools", debug_assertions))]
+    #[test]
+    fn filter_param_validation_warns_once_and_stays_inert() {
+        let _lock = crate::diag::test_lock();
+        crate::diag::arm_runtime();
+        let _ = crate::diag::take_runtime_warnings();
+
+        let (mut world, mut schedule) = filter_world(1.0);
+        let bindings: AnimatedBindings = serde_json::from_value(serde_json::json!({
+            "filter[0].nope": { "type": "shared", "id": 1 },
+            "filter[3].amount": { "type": "shared", "id": 1 },
+            "filter[0].dir": { "type": "shared", "id": 1 },
+        }))
+        .unwrap();
+        let e = world
+            .spawn((
+                AnimatedNode(bindings.clone()),
+                UiTransform::default(),
+                crate::bridge::RNode(9),
+                chain(
+                    vec![pass(
+                        0,
+                        vec![Vec4::new(0.5, 0.0, 0.0, 0.0)],
+                        vec![
+                            slot("amount", ValueKind::Scalar, 0, 0, 1),
+                            slot("dir", ValueKind::Scalar, 0, 1, 2),
+                        ],
+                    )],
+                    1.0,
+                ),
+            ))
+            .id();
+
+        schedule.run(&mut world);
+        {
+            let c = world
+                .entity(e)
+                .get::<crate::filters::ResolvedFilterChain>()
+                .unwrap();
+            assert_eq!(
+                c.passes[0].params[0],
+                Vec4::new(0.5, 0.0, 0.0, 0.0),
+                "inert"
+            );
+            assert_eq!(c.version, 1, "no version churn from inert bindings");
+        }
+        let warns = crate::diag::take_runtime_warnings();
+        let mine: Vec<_> = warns.iter().filter(|w| w.node == Some(9)).collect();
+        assert_eq!(mine.len(), 3, "{warns:?}");
+        assert!(mine.iter().all(|w| w.kind == "filterBinding"));
+        let values: Vec<_> = mine.iter().map(|w| w.value.as_str()).collect();
+        assert!(values.contains(&"filter[0].nope"), "{values:?}");
+        assert!(values.contains(&"filter[3].amount"), "{values:?}");
+        assert!(values.contains(&"filter[0].dir"), "{values:?}");
+
+        // Steady state: no re-warn.
+        schedule.run(&mut world);
+        assert!(
+            crate::diag::take_runtime_warnings()
+                .iter()
+                .all(|w| w.node != Some(9)),
+            "validation warnings must not repeat per frame"
+        );
+
+        // A chain re-resolve (version bump) re-validates.
+        world
+            .entity_mut(e)
+            .get_mut::<crate::filters::ResolvedFilterChain>()
+            .unwrap()
+            .version = 7;
+        schedule.run(&mut world);
+        let refires = crate::diag::take_runtime_warnings()
+            .iter()
+            .filter(|w| w.node == Some(9))
+            .count();
+        assert_eq!(refires, 3, "a re-resolved chain re-validates");
+
+        // No chain at all: one warn per filter binding, still inert.
+        let e2 = world
+            .spawn((
+                AnimatedNode(bindings),
+                UiTransform::default(),
+                crate::bridge::RNode(10),
+            ))
+            .id();
+        schedule.run(&mut world);
+        let chainless = crate::diag::take_runtime_warnings()
+            .iter()
+            .filter(|w| w.node == Some(10))
+            .count();
+        assert_eq!(chainless, 3, "chainless node warns per binding");
+        assert!(
+            world
+                .entity(e2)
+                .get::<crate::filters::ResolvedFilterChain>()
+                .is_none()
+        );
+
+        // Mixed: a VALID binding actively animating (the shared value changes
+        // every frame, so stage 4 itself bumps the chain `version` every
+        // frame) next to an invalid binding on the same node. The validation
+        // stamp stores the POST-write version, so stage 4's own bump never
+        // reads as a re-resolve — the invalid binding warns exactly once, not
+        // once per animated frame.
+        let mixed: AnimatedBindings = serde_json::from_value(serde_json::json!({
+            "filter[0].amount": { "type": "shared", "id": 1 },
+            "filter[0].nope": { "type": "shared", "id": 1 },
+        }))
+        .unwrap();
+        let e3 = world
+            .spawn((
+                AnimatedNode(mixed),
+                UiTransform::default(),
+                crate::bridge::RNode(11),
+                chain(
+                    vec![pass(
+                        0,
+                        vec![Vec4::ZERO],
+                        vec![slot("amount", ValueKind::Scalar, 0, 0, 1)],
+                    )],
+                    1.0,
+                ),
+            ))
+            .id();
+        for (frame, v) in [0.1f32, 0.2, 0.3, 0.4].into_iter().enumerate() {
+            world.resource_mut::<SharedValues>().set(1, v);
+            schedule.run(&mut world);
+            let version = world
+                .entity(e3)
+                .get::<crate::filters::ResolvedFilterChain>()
+                .unwrap()
+                .version;
+            assert_eq!(
+                version as usize,
+                2 + frame,
+                "the valid binding writes (bumps version) every animated frame"
+            );
+        }
+        let warns = crate::diag::take_runtime_warnings();
+        let mine: Vec<_> = warns.iter().filter(|w| w.node == Some(11)).collect();
+        assert_eq!(
+            mine.len(),
+            1,
+            "an animating valid binding must not re-warn the invalid one per frame: {warns:?}"
+        );
+        assert_eq!(mine[0].value, "filter[0].nope");
     }
 }

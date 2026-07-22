@@ -121,7 +121,10 @@ pub enum Binding {
 /// not a new named field on a fixed struct. The wire key is camelCase (see
 /// [`AnimatableProperty::from_wire`]); the JS side mirrors this set in
 /// `js/src/animated.ts`'s `AnimatableProperty` union.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+///
+/// Not `Copy` ([`Self::FilterParam`] carries the param name); the fieldless
+/// variants are still constructed freely at call sites.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum AnimatableProperty {
     /// Post-layout x translation, in px (drives `UiTransform`).
     TranslateX,
@@ -164,13 +167,36 @@ pub enum AnimatableProperty {
     // not here: they're relative weights, not magnitudes — animating them has no
     // intuitive visual meaning, unlike a size or `aspectRatio`.)
     AspectRatio,
+
+    /// One named parameter of the node's resolved `filter` chain — the wire
+    /// key is `filter[<index>].<param>` (e.g. `filter[0].radius`). `index`
+    /// addresses the **wire** chain entry, so a binding writes the named slot
+    /// in *every* resolved pass carrying that
+    /// [`wire_index`](crate::filters::ResolvedFilterPass::wire_index) (blur's
+    /// H+V passes both carry `radius`). `name` is a
+    /// [`ParamSlot`](crate::filters::ParamSlot) name in the pass layout.
+    ///
+    /// The bound value is applied in the **same unit as the param's wire
+    /// form**: logical px for `Length` slots (scale-rewritten to physical px
+    /// like the resolver), **degrees** for `Angle` slots (converted to the
+    /// packed radians), raw for single-component `Scalar` slots; `Color`
+    /// slots take an `interpolateColor` binding. Index/name/kind are
+    /// validated against the resolved chain at bind time (`filterBinding`
+    /// devtools warnings); an unmatched binding stays inert.
+    FilterParam {
+        index: u8,
+        name: String,
+    },
 }
 
 impl AnimatableProperty {
     /// Wire (camelCase) key → property, or `None` for an unrecognised key. The
     /// deserializer skips unknown keys rather than failing, so a JS bundle newer
     /// than this binary degrades gracefully instead of dropping the whole node's
-    /// `animatedStyle`.
+    /// `animatedStyle`. `filter[<index>].<param>` keys parse into
+    /// [`Self::FilterParam`] (strict: decimal index that fits the `u8`
+    /// wire-index space, a literal `].`, a non-empty param name — anything
+    /// else is unrecognised).
     pub fn from_wire(key: &str) -> Option<Self> {
         Some(match key {
             "translateX" => Self::TranslateX,
@@ -198,14 +224,30 @@ impl AnimatableProperty {
             "rowGap" => Self::RowGap,
             "columnGap" => Self::ColumnGap,
             "aspectRatio" => Self::AspectRatio,
-            _ => return None,
+            _ => return Self::filter_param_from_wire(key),
+        })
+    }
+
+    /// Parse a `filter[<index>].<param>` wire key (see [`Self::from_wire`]).
+    fn filter_param_from_wire(key: &str) -> Option<Self> {
+        let rest = key.strip_prefix("filter[")?;
+        let (digits, name) = rest.split_once("].")?;
+        if digits.is_empty() || !digits.bytes().all(|b| b.is_ascii_digit()) || name.is_empty() {
+            return None;
+        }
+        // Indices beyond the `u8` wire-index space are unaddressable (chains
+        // decode-cap at 256 entries) — treat them as unrecognised keys.
+        let index: u8 = digits.parse().ok()?;
+        Some(Self::FilterParam {
+            index,
+            name: name.to_owned(),
         })
     }
 
     /// The kind of value this property animates — picks scalar-vs-color resolution
     /// in the apply layer. `Rotate` is an `Angle` but, imperatively, JS already
     /// sends radians, so the applier resolves it as a scalar.
-    pub fn value_kind(self) -> ValueKind {
+    pub fn value_kind(&self) -> ValueKind {
         match self {
             Self::TranslateX
             | Self::TranslateY
@@ -228,12 +270,17 @@ impl AnimatableProperty {
             }
             Self::Rotate => ValueKind::Angle,
             Self::BackgroundColor | Self::BorderColor | Self::Color => ValueKind::Color,
+            // Never consulted for `FilterParam` — the applier reads the
+            // authoritative kind from the resolved chain's `ParamSlot`
+            // layout (`crate::filters`). A documented fallback, not a
+            // semantic: the slot decides scalar-vs-color, not this arm.
+            Self::FilterParam { .. } => ValueKind::Scalar,
         }
     }
 
     /// Whether this property feeds the `UiTransform` (built from all transform
     /// channels together), so the apply layer can rebuild the transform once.
-    pub fn is_transform(self) -> bool {
+    pub fn is_transform(&self) -> bool {
         matches!(
             self,
             Self::TranslateX
@@ -285,6 +332,16 @@ impl AnimatedBindings {
     /// `UiTransform` when something actually drives it).
     pub fn has_transform(&self) -> bool {
         self.0.keys().any(|p| p.is_transform())
+    }
+
+    /// Whether any per-param filter binding ([`AnimatableProperty::FilterParam`])
+    /// is bound — gates the applier's filter stage and, in the transition
+    /// engine, `skip_filter` (any filter binding parks the *whole* whole-value
+    /// filter channel).
+    pub fn has_filter_params(&self) -> bool {
+        self.0
+            .keys()
+            .any(|p| matches!(p, AnimatableProperty::FilterParam { .. }))
     }
 
     /// Iterate the bound (property, binding) pairs in property order.

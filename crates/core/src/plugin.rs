@@ -10,8 +10,6 @@ use bevy::asset::embedded_asset;
 use bevy::prelude::*;
 use bevy::window::CustomCursorImage;
 
-use crate::filter::{FilterMaterial, FilterMaterialCache, init_filter_assets};
-
 use crate::bridge::{JsBridge, OpReceiver, OutboundResource, OutboundSender};
 use crate::event::ReactEventRegistry;
 use crate::host::{self, HostConfig, HostSenders};
@@ -175,28 +173,35 @@ impl ReactUiPlugin {
     }
 }
 
+/// Register the layer/filter shader assets: the importable filter-pass
+/// prelude (`#import bevy_react::filter`, see `layer/filter_prelude.wgsl`)
+/// plus the embedded pass shaders. `load_shader_library!` both embeds the
+/// prelude and loads it as a `Shader`, which registers its
+/// `#define_import_path` with the shader composer.
+///
+/// Split out of [`Plugin::build`]'s render-gated block so asset-capable tests
+/// (see `filters.rs`) can register the shaders without the render sub-app;
+/// callers must have `AssetPlugin` and the `Shader` asset set up.
+pub(crate) fn register_layer_shader_assets(app: &mut App) {
+    bevy::shader::load_shader_library!(app, "layer/filter_prelude.wgsl");
+    embedded_asset!(app, "layer/composite.wgsl");
+    embedded_asset!(app, "layer/color_matrix.wgsl");
+    embedded_asset!(app, "layer/blur.wgsl");
+}
+
 impl Plugin for ReactUiPlugin {
     fn build(&self, app: &mut App) {
-        // The `filter` style's shader, embedded so it ships with the crate (no
-        // `assets/` folder needed by consumers). The `UiMaterialPlugin` registers
-        // the `FilterMaterial` asset + render pipeline; `init_filter_assets`
-        // creates the shared white pixel for solid-color filtered nodes. Gated on
-        // a render pipeline being present (the canonical `DefaultPlugins`-first
-        // setup), since `embedded_asset!`/`UiMaterialPlugin` need the asset + render
-        // infrastructure — a headless `App` with neither (e.g. wiring-only tests)
-        // simply skips it.
+        // Render-side wiring, gated on a render pipeline being present (the
+        // canonical `DefaultPlugins`-first setup), since `embedded_asset!` and the
+        // render sub-app need the asset + render infrastructure — a headless `App`
+        // with neither (e.g. wiring-only tests) simply skips it.
         if app.is_plugin_added::<bevy::render::RenderPlugin>() {
-            embedded_asset!(app, "filter.wgsl");
-            app.add_plugins(UiMaterialPlugin::<FilterMaterial>::default())
-                .init_resource::<FilterMaterialCache>()
-                .add_systems(Startup, init_filter_assets);
-
             // Layer compositing (see `crate::layer::render`): the capture
             // pass + composite quad over stock `bevy_ui_render`, public
             // seams only. Steal window: after Queue, before the stock sort;
             // prepare after the stock prepares' PrepareBindGroups slot is
             // irrelevant (disjoint items).
-            embedded_asset!(app, "layer/composite.wgsl");
+            register_layer_shader_assets(app);
             if let Some(render_app) = app.get_sub_app_mut(bevy::render::RenderApp) {
                 use crate::layer::render as lr;
                 use bevy::core_pipeline::schedule::{Core2d, Core2dSystems, Core3d, Core3dSystems};
@@ -213,8 +218,16 @@ impl Plugin for ReactUiPlugin {
                     .init_resource::<lr::LayerTextureStore>()
                     .init_gpu_resource::<SpecializedRenderPipelines<lr::LayerCompositePipeline>>()
                     .init_gpu_resource::<lr::LayerCompositeMeta>()
+                    .init_gpu_resource::<SpecializedRenderPipelines<lr::LayerFilterPipeline>>()
+                    .init_gpu_resource::<lr::LayerFilterMeta>()
                     .add_render_command::<TransparentUi, lr::DrawLayerComposite>()
-                    .add_systems(RenderStartup, lr::init_layer_composite_pipeline)
+                    .add_systems(
+                        RenderStartup,
+                        (
+                            lr::init_layer_composite_pipeline,
+                            lr::init_layer_filter_pipeline,
+                        ),
+                    )
                     .add_systems(
                         ExtractSchedule,
                         lr::extract_ui_layers.after(extract_ui_camera_view),
@@ -226,6 +239,14 @@ impl Plugin for ReactUiPlugin {
                                 .in_set(RenderSystems::PhaseSort)
                                 .before(sort_phase_system::<TransparentUi>),
                             lr::prepare_layer_textures.in_set(RenderSystems::PrepareResources),
+                            // Filter staging: allocates/specializes everything
+                            // a filter pass needs; `ui_layer_capture_pass`
+                            // replays the staged runs after each layer's
+                            // capture.
+                            lr::prepare_layer_filters
+                                .in_set(RenderSystems::PrepareBindGroups)
+                                .after(lr::prepare_layer_textures)
+                                .before(lr::prepare_layer_composites),
                             lr::prepare_layer_composites.in_set(RenderSystems::PrepareBindGroups),
                         ),
                     )
@@ -449,6 +470,11 @@ impl Plugin for ReactUiPlugin {
             ),
         );
 
+        // The built-in `filter` registry (blur + the color-matrix ops), beside
+        // the other name-keyed registries above. Registration is
+        // `AssetServer`-free — shaders load lazily inside each entry's resolve.
+        crate::filters::register_builtin_filters(app);
+
         // The built-in `"resize"` event + `bevy.window.size()` request (see
         // `crate::window`). A separate `add_systems` call — the Update tuple
         // above is at Bevy's arity cap. `.after(apply_js_ops)` so the initial
@@ -483,6 +509,20 @@ impl Plugin for ReactUiPlugin {
                 // layer cache could tap.
                 crate::layer::watch_layer_image_assets,
             ),
+        );
+        // Resolve each promoted root's wire `filter` chain into packed render
+        // passes (see `crate::filters::resolve_filter_chains`). After the
+        // interaction restyle — the last `FilterInput` writer this frame (and,
+        // transitively, after the promotion evaluator, so `Added<PromotedLayer>`
+        // is visible) — and before the transition/animation appliers so future
+        // filter-param animation writes onto an already-resolved chain. Its own
+        // `add_systems` call — the Update tuple above is at the arity cap.
+        app.add_systems(
+            Update,
+            crate::filters::resolve_filter_chains
+                .after(apply_interaction_styles)
+                .before(crate::transition::drive_transitions)
+                .before(AnimationSet::Apply),
         );
         // After bevy_ui layout so capture rects/membership are this frame's
         // geometry (extraction reads them the same frame, post-PostUpdate).

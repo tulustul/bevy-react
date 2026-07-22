@@ -132,7 +132,15 @@ export type AnimatableProperty =
   // Layout scalars. (`flexGrow`/`flexShrink` are intentionally omitted: they're
   // relative weights, not magnitudes, so animating them has no intuitive meaning —
   // animate `flexBasis`/`width` instead.)
-  | "aspectRatio";
+  | "aspectRatio"
+  // One named param of the node's `filter` chain, addressed by wire position:
+  // `filter[0].radius` drives blur's radius at chain entry 0 (both of blur's
+  // expanded passes). Deliberately loose typing — the index/param name (and the
+  // binding kind vs. the param's kind) are validated Rust-side against the
+  // resolved chain (`filterBinding` devtools warnings; an unmatched binding is
+  // inert). Values use the param's wire unit: logical px for lengths, degrees
+  // for angles, raw scalars; color params take an `interpolateColor` binding.
+  | `filter[${number}].${string}`;
 
 /** The animation-driven half of an `Animated.node`'s style: each animatable
  *  property bound to a shared value or interpolation. */

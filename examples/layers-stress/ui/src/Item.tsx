@@ -6,6 +6,7 @@ import {
   withRepeat,
   withTiming,
 } from "bevy-react";
+import type { FilterUse } from "bevy-react";
 import { BevyStyle } from "bevy-react/jsx";
 import { TestBanner } from "./TestBanner";
 import type { Item } from "./items";
@@ -21,10 +22,20 @@ export const StressItem = memo(function StressItem({
   item,
   animate,
   groupAlpha,
+  filtered,
+  blur,
+  blurRadius,
 }: {
   item: Item;
   animate: boolean;
   groupAlpha: boolean;
+  /** Whether this item carries a `filter` chain (share picked by the App). */
+  filtered: boolean;
+  /** Filter variant: `blur` (2-pass, outset) instead of `grayscale`. */
+  blur: boolean;
+  /** Blur radius in px. `0` for unfiltered/grayscale items keeps the prop
+   *  referentially stable so the memo bails while the radius animates. */
+  blurRadius: number;
 }) {
   // Stable instances per mounted item (useSharedValue is useRef-backed), so a
   // re-render serializes `animatedStyle` to structurally identical bindings and
@@ -57,9 +68,20 @@ export const StressItem = memo(function StressItem({
     }
   }, [animate, item, tx, ty, op]);
 
+  // The filter chain, when this item is in the filtered share. Grayscale is
+  // the cheap single-pass filter; blur the expensive 2-pass one (its radius
+  // also outsets the layer texture). A radius-only change re-renders just this
+  // memo and emits a params-only style delta — the no-re-capture update path.
+  const filter = useMemo<FilterUse[] | undefined>(() => {
+    if (!filtered) return undefined;
+    return blur
+      ? [{ name: "blur", params: { radius: blurRadius } }]
+      : [{ name: "grayscale" }];
+  }, [filtered, blur, blurRadius]);
+
   // Promotion root: `opacity` present + ≥1 child (the banner) promotes the
-  // subtree to its own composited layer; `groupAlpha: false` (base style)
-  // opts out, de-promoting it.
+  // subtree to its own composited layer (a `filter` chain force-promotes it
+  // regardless); `groupAlpha: false` (base style) opts out, de-promoting it.
   const style = useMemo<BevyStyle>(
     () => ({
       positionType: "absolute",
@@ -67,8 +89,9 @@ export const StressItem = memo(function StressItem({
       top: `${item.top}%`,
       opacity: item.opacity,
       ...(groupAlpha ? {} : { groupAlpha: false }),
+      ...(filter ? { filter } : {}),
     }),
-    [item, groupAlpha],
+    [item, groupAlpha, filter],
   );
 
   return (

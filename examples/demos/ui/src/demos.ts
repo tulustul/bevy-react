@@ -37,6 +37,7 @@ import { SizingDemo } from "./demos/styling/SizingDemo";
 import { TransformDemo } from "./demos/styling/TransformDemo";
 import { ShadowDemo } from "./demos/styling/ShadowDemo";
 import { FilterDemo } from "./demos/styling/FilterDemo";
+import { CustomFiltersDemo } from "./demos/styling/CustomFiltersDemo";
 import { GradientsDemo } from "./demos/styling/GradientsDemo";
 import { OpacityDemo } from "./demos/styling/OpacityDemo";
 import { ZIndexDemo } from "./demos/styling/ZIndexDemo";
@@ -99,6 +100,7 @@ export const DEMOS: DemoItem[] = [
       { label: "Transform", component: TransformDemo },
       { label: "Shadow", component: ShadowDemo },
       { label: "Filter", component: FilterDemo },
+      { label: "Custom filters", component: CustomFiltersDemo },
       { label: "Gradients", component: GradientsDemo },
       { label: "Opacity", component: OpacityDemo },
       { label: "Z-Index", component: ZIndexDemo },

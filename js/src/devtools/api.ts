@@ -87,6 +87,15 @@ export interface DevtoolsLayerRect {
   physical_height: number;
 }
 
+/** One wire filter in a layer's resolved chain: the wire name plus each
+ *  param's live values, already unit-converted (angles in degrees, lengths in
+ *  logical px, colors as 4 components) and rounded to 3 decimals Rust-side —
+ *  display them verbatim. `params` pairs are `[slot name, values]`. */
+export interface DevtoolsFilterEntry {
+  name: string;
+  params: [string, number[]][];
+}
+
 /** One layer in a `devtools.layers` payload. `rect: null` = inactive (hidden,
  *  zero-sized, or not laid out yet): listed greyed, absent from the map. */
 export interface DevtoolsLayerRow {
@@ -98,10 +107,15 @@ export interface DevtoolsLayerRow {
   /** Nesting depth: 0 = base, 1 = top-level layer, 2 = nested, … */
   depth: number;
   node_count: number;
+  /** `x`/`y` may be NEGATIVE: the capture rect includes the filter-outset
+   *  margin, which routinely pushes past the viewport origin. */
   rect: DevtoolsLayerRect | null;
   /** Frames that re-captured this layer since promotion (cache misses).
    *  Always `0` for the base layer. */
   repaints: number;
+  /** The resolved `filter` chain with live param values; empty when the
+   *  layer has none. Optional defensively (older Rust peers omit it). */
+  filters?: DevtoolsFilterEntry[];
 }
 
 /** Bevy→JS `devtools.layers`: the current layer set (base + promoted), sorted

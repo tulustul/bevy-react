@@ -389,7 +389,11 @@ struct DevtoolsWarning {
 /// Layers tab. Streamed by [`emit_layers`] only while the panel is open on
 /// that tab, and diffed against the last payload so an idle app sends
 /// nothing. Deliberately excludes the live group alpha: it changes every
-/// frame during a fade, which would defeat the diff gate.
+/// frame during a fade, which would defeat the diff gate. Filter params are
+/// the opposite call — they ARE included live (rounded; see
+/// [`filter_entries`]): watching what a filter animation is doing is the
+/// point of the chain display, so a running param animation streams while
+/// the tab is open.
 #[react_event(name = "devtools.layers")]
 struct DevtoolsLayers {
     layers: Vec<DevtoolsLayerRow>,
@@ -415,6 +419,19 @@ struct DevtoolsLayerRow {
     /// Frames that re-captured this layer since promotion (cache misses).
     /// Always `0` for the base layer (it has no capture to cache).
     repaints: u64,
+    /// The layer's resolved `filter` chain, one entry per wire filter with
+    /// live display-unit param values (see [`filter_entries`]). Empty for the
+    /// base layer and for unfiltered layers.
+    filters: Vec<DevtoolsFilterEntry>,
+}
+
+/// One wire filter in a layer's resolved chain: the wire name plus each
+/// param's live display values (`(slot name, values)` — multi-component
+/// params carry several). Built by [`filter_entries`].
+#[derive(serde::Serialize, ts_rs::TS, Debug, Clone, PartialEq)]
+struct DevtoolsFilterEntry {
+    name: String,
+    params: Vec<(String, Vec<f64>)>,
 }
 
 /// A layer rect: logical (CSS) px in window space — the same space as
@@ -1221,8 +1238,75 @@ fn reason_labels(reasons: crate::layer::PromotionReasons) -> Vec<String> {
     if reasons.0 & crate::layer::PromotionReasons::OPACITY != 0 {
         out.push("opacity".to_string());
     }
+    if reasons.0 & crate::layer::PromotionReasons::FILTER != 0 {
+        out.push("filter".to_string());
+    }
     if reasons.0 & crate::layer::PromotionReasons::FORCED != 0 {
         out.push("cache".to_string());
+    }
+    out
+}
+
+/// Round to 3 decimals for display. Load-bearing twice over: the diff gate in
+/// [`emit_layers`] is exact row equality, so this rounding IS the rate
+/// limiter — sub-0.001 f32 noise from a running animation never re-emits,
+/// while any visible param change does (per frame while the tab is open,
+/// which is the intended live view). And it rounds **in f64**, returning f64:
+/// rounding in f32 and widening afterwards would resurrect the noise on the
+/// JSON wire (`0.4f32 as f64` prints `0.4000000059604645`; the f64-rounded
+/// value prints `0.4`).
+fn round3(v: f32) -> f64 {
+    (f64::from(v) * 1000.0).round() / 1000.0
+}
+
+/// Flatten a layer's [`crate::filters::ResolvedFilterChain`] into display
+/// entries — one per **wire** filter, not per render pass: a multi-pass
+/// filter (blur's H+V) expands into consecutive passes sharing a
+/// `wire_index`, and the first pass of each group carries the shared display
+/// params (blur's direction components are unnamed in the layout, so they
+/// never show). Params are unpacked via the pass layout into the wire's
+/// units: angles pack as radians → shown in degrees, `Length` slots are
+/// stored **physical** px (the resolver's upload rewrite) → divided by
+/// `chain.scale` back to logical px, scalars and color components as-is.
+fn filter_entries(
+    chain: &crate::filters::ResolvedFilterChain,
+    input: Option<&crate::filters::FilterInput>,
+) -> Vec<DevtoolsFilterEntry> {
+    use crate::animations::ValueKind;
+    let scale = if chain.scale > 0.0 { chain.scale } else { 1.0 };
+    let mut out: Vec<DevtoolsFilterEntry> = Vec::new();
+    let mut last_wire = None;
+    for pass in &chain.passes {
+        if last_wire == Some(pass.wire_index) {
+            continue;
+        }
+        last_wire = Some(pass.wire_index);
+        // wire_index → name via the wire-chain mirror on the same entity
+        // (invalid entries skipped by the resolver keep their index gap, so
+        // positions line up). Defensive fallback — a mirror momentarily out
+        // of step must not panic or mislabel: show the raw index.
+        let name = input
+            .and_then(|i| i.0.0.get(pass.wire_index as usize))
+            .map(|u| u.name.clone())
+            .unwrap_or_else(|| format!("#{}", pass.wire_index));
+        let params = pass
+            .layout
+            .iter()
+            .map(|slot| {
+                let values = (slot.comp..(slot.comp + slot.len).min(4))
+                    .map(|comp| {
+                        let raw = pass.params.get(slot.vec).map_or(0.0, |v| v[comp]);
+                        round3(match slot.kind {
+                            ValueKind::Angle => raw.to_degrees(),
+                            ValueKind::Length => raw / scale,
+                            ValueKind::Scalar | ValueKind::Color => raw,
+                        })
+                    })
+                    .collect();
+                (slot.name.to_string(), values)
+            })
+            .collect();
+        out.push(DevtoolsFilterEntry { name, params });
     }
     out
 }
@@ -1266,6 +1350,10 @@ fn emit_layers(
     rnodes: Query<(), With<RNode>>,
     child_of: Query<&ChildOf>,
     computed: Query<&ComputedNode>,
+    chains: Query<(
+        Option<&crate::filters::ResolvedFilterChain>,
+        Option<&crate::filters::FilterInput>,
+    )>,
     cameras: Query<&Camera, With<IsDefaultUiCamera>>,
     windows: Query<&Window>,
     events: ReactEvents,
@@ -1308,6 +1396,7 @@ fn emit_layers(
             physical_height: physical.y,
         }),
         repaints: 0,
+        filters: Vec::new(),
     });
     for meta in registry.layers.values() {
         if let Some(panel) = panel_entity
@@ -1324,20 +1413,32 @@ fn emit_layers(
             .iter()
             .filter(|&(node, layer)| *layer == meta.entity && rnodes.contains(*node))
             .count() as u32;
+        // The resolved chain + wire mirror live on the layer entity — read
+        // them directly rather than mirroring them into `LayerMeta` (which
+        // would duplicate live state the filter systems already maintain).
+        let filters = chains
+            .get(meta.entity)
+            .ok()
+            .and_then(|(chain, input)| chain.map(|c| filter_entries(c, input)))
+            .unwrap_or_default();
         rows.push(DevtoolsLayerRow {
             id: meta.node,
             reasons: reason_labels(meta.reasons),
             depth: meta.depth,
             node_count,
+            // The registry rect min is signed (filter outset routinely pushes
+            // it negative near the viewport edge); width/height stay positive
+            // by construction.
             rect: meta.capture_rect.map(|r| DevtoolsLayerRect {
                 x: r.min.x as f32 * inverse_scale,
                 y: r.min.y as f32 * inverse_scale,
                 width: r.width() as f32 * inverse_scale,
                 height: r.height() as f32 * inverse_scale,
-                physical_width: r.width(),
-                physical_height: r.height(),
+                physical_width: r.width().max(0) as u32,
+                physical_height: r.height().max(0) as u32,
             }),
             repaints: meta.repaints,
+            filters,
         });
     }
     // Deterministic order for the diff AND the panel's back-to-front paint:
@@ -1595,7 +1696,8 @@ mod tests {
     /// or that kind degrades to a broad all-style-fields value scan. Kind
     /// literals live at the `decode_warn` call sites (`protocol.rs`,
     /// `scrollbar.rs`, `animations/protocol.rs`) and the `diag::report` sites
-    /// (`ui_map.rs`, `cursor.rs`); extend BOTH this list and the table when
+    /// (`ui_map.rs`, `cursor.rs`, `filters.rs`, `layer.rs`,
+    /// `animations/mod.rs`); extend BOTH this list and the table when
     /// adding one. (`length`/`angle`/`time` are deliberately table-less —
     /// they're the broad-scan kinds.)
     #[test]
@@ -1624,6 +1726,10 @@ mod tests {
             "gridTrack",
             "gridPlacement",
             "borderColor",
+            "filterParams",
+            "filterUnknown",
+            "filterBleed",
+            "filterBinding",
             "scrollbar",
             "animatedStyle",
             "color",
@@ -1639,6 +1745,21 @@ mod tests {
                 "js/src/devtools/warnings.ts KIND_FIELDS is missing kind \"{kind}\""
             );
         }
+    }
+
+    /// Every live promotion rule has a [`reason_labels`] entry — extend this
+    /// when a new [`crate::layer::PromotionReasons`] bit lands.
+    #[test]
+    fn reason_labels_cover_all_rules() {
+        use crate::layer::PromotionReasons;
+        let labels = |bits: u32| reason_labels(PromotionReasons(bits));
+        assert_eq!(labels(PromotionReasons::OPACITY), ["opacity"]);
+        assert_eq!(labels(PromotionReasons::FILTER), ["filter"]);
+        assert_eq!(labels(PromotionReasons::FORCED), ["cache"]);
+        assert_eq!(
+            labels(PromotionReasons::OPACITY | PromotionReasons::FILTER | PromotionReasons::FORCED),
+            ["opacity", "filter", "cache"]
+        );
     }
 
     #[test]
@@ -2251,7 +2372,7 @@ mod tests {
                     entity,
                     reasons: PromotionReasons(PromotionReasons::OPACITY),
                     group_alpha: 0.5,
-                    capture_rect: Some(URect::new(10, 10, 110, 60)),
+                    capture_rect: Some(IRect::new(10, 10, 110, 60)),
                     depth: 1,
                     repaints: 0,
                     cached: false,
@@ -2295,21 +2416,31 @@ mod tests {
         assert_eq!(layers[1]["rect"]["width"], 100.0);
         assert_eq!(layers[1]["rect"]["height"], 50.0);
         assert_eq!(layers[1]["rect"]["physical_width"], 100);
+        assert_eq!(
+            layers[1]["filters"],
+            serde_json::json!([]),
+            "no resolved chain on the entity: empty filters"
+        );
 
         app.update();
         assert!(payloads(&mut rx).is_empty(), "idle frames are silent");
 
-        // A geometry change re-emits once.
+        // A geometry change re-emits once — with a NEGATIVE min (filter
+        // outset near the viewport edge): the signed registry rect must
+        // report it truthfully, not clamp to 0.
         app.world_mut()
             .resource_mut::<LayersRegistry>()
             .layers
             .get_mut(&7)
             .unwrap()
-            .capture_rect = Some(URect::new(20, 10, 120, 60));
+            .capture_rect = Some(IRect::new(-20, -10, 80, 40));
         app.update();
         let sent = payloads(&mut rx);
         assert_eq!(sent.len(), 1, "a rect change re-emits");
-        assert_eq!(sent[0]["layers"][1]["rect"]["x"], 20.0);
+        assert_eq!(sent[0]["layers"][1]["rect"]["x"], -20.0);
+        assert_eq!(sent[0]["layers"][1]["rect"]["y"], -10.0);
+        assert_eq!(sent[0]["layers"][1]["rect"]["width"], 100.0);
+        assert_eq!(sent[0]["layers"][1]["rect"]["physical_height"], 50);
 
         // Inactive: still listed, rect null.
         app.world_mut()
@@ -2336,7 +2467,7 @@ mod tests {
             .layers
             .get_mut(&7)
             .unwrap()
-            .capture_rect = Some(URect::new(10, 10, 110, 60));
+            .capture_rect = Some(IRect::new(10, 10, 110, 60));
         app.update();
         assert!(payloads(&mut rx).is_empty(), "hidden tab: silence");
 
@@ -2350,6 +2481,186 @@ mod tests {
             payloads(&mut rx).len(),
             1,
             "a re-shown tab gets a fresh full payload"
+        );
+    }
+
+    /// A filtered layer's row carries its resolved chain: one entry per WIRE
+    /// filter (blur's H+V passes group into one), names joined from the
+    /// `FilterInput` mirror by `wire_index` (with the defensive `#<i>`
+    /// fallback when the mirror is short), params unpacked per layout slot
+    /// into display units — angles in degrees, `Length` slots back to
+    /// logical px (they are stored physical; here `scale: 2`), colors as 4
+    /// components — and rounded to 3 decimals. The rounding doubles as the
+    /// stream's rate limiter: a sub-0.001 display-value wiggle must NOT
+    /// re-emit, a visible change must.
+    #[test]
+    fn layers_emit_resolved_filter_chain() {
+        use crate::animations::ValueKind;
+        use crate::filters::{
+            FilterChain, FilterInput, FilterUse, ParamSlot, ResolvedFilterChain, ResolvedFilterPass,
+        };
+        use crate::layer::{LayerMeta, LayersRegistry, PromotionReasons};
+        use bevy::window::WindowResolution;
+        use std::sync::Arc;
+
+        let slot =
+            |name: &'static str, kind: ValueKind, vec: usize, comp: usize, len: usize| ParamSlot {
+                name,
+                kind,
+                vec,
+                comp,
+                len,
+            };
+        let blur_layout: Arc<[ParamSlot]> =
+            Arc::from(vec![slot("radius", ValueKind::Length, 0, 0, 1)]);
+        // Physical radius 8.5 at scale 2 → logical 4.25. The direction
+        // components (y/z) are unnamed in the layout, so they never display.
+        let blur_pass = |dir: (f32, f32)| ResolvedFilterPass {
+            shader: Handle::default(),
+            params: vec![Vec4::new(8.5, dir.0, dir.1, 0.0)],
+            layout: blur_layout.clone(),
+            wire_index: 0,
+        };
+        let hue_pass = ResolvedFilterPass {
+            shader: Handle::default(),
+            params: vec![
+                Vec4::new(std::f32::consts::FRAC_PI_2, 0.0, 0.0, 0.0),
+                Vec4::new(1.0, 0.5, 0.0, 1.0),
+            ],
+            layout: Arc::from(vec![
+                slot("angle", ValueKind::Angle, 0, 0, 1),
+                slot("tint", ValueKind::Color, 1, 0, 4),
+            ]),
+            wire_index: 1,
+        };
+        // 4.24999 pins the rounding: → 4.25 on the wire.
+        let sepia_pass = ResolvedFilterPass {
+            shader: Handle::default(),
+            params: vec![Vec4::new(4.249_99, 0.0, 0.0, 0.0)],
+            layout: Arc::from(vec![slot("amount", ValueKind::Scalar, 0, 0, 1)]),
+            wire_index: 2,
+        };
+        // wire_index 3 has NO FilterInput entry → the `#3` fallback. 0.4 also
+        // pins the f64 rounding path: 0.4f32 widened naively is
+        // 0.4000000059604645 on the JSON wire — it must arrive as 0.4.
+        let orphan_pass = ResolvedFilterPass {
+            shader: Handle::default(),
+            params: vec![Vec4::new(0.4, 0.0, 0.0, 0.0)],
+            layout: Arc::from(vec![slot("x", ValueKind::Scalar, 0, 0, 1)]),
+            wire_index: 3,
+        };
+        let wire = |name: &str| FilterUse {
+            name: name.to_string(),
+            params: serde_json::Map::new(),
+        };
+
+        let (mut app, mut rx) = test_app(DevtoolsConfig {
+            settings_path: None,
+            ..default()
+        });
+        app.world_mut().spawn(Window {
+            resolution: WindowResolution::new(800, 600),
+            ..Default::default()
+        });
+        let entity = app
+            .world_mut()
+            .spawn((
+                RNode(7),
+                ResolvedFilterChain {
+                    passes: vec![
+                        blur_pass((1.0, 0.0)),
+                        blur_pass((0.0, 1.0)),
+                        hue_pass,
+                        sepia_pass,
+                        orphan_pass,
+                    ],
+                    outset_px: 26,
+                    always_dirty: false,
+                    version: 1,
+                    scale: 2.0,
+                },
+                FilterInput(FilterChain(vec![
+                    wire("blur"),
+                    wire("hueRotate"),
+                    wire("sepia"),
+                ])),
+            ))
+            .id();
+        app.world_mut()
+            .resource_mut::<LayersRegistry>()
+            .layers
+            .insert(
+                7,
+                LayerMeta {
+                    node: 7,
+                    entity,
+                    reasons: PromotionReasons(PromotionReasons::FILTER),
+                    group_alpha: 1.0,
+                    capture_rect: Some(IRect::new(10, 10, 110, 60)),
+                    depth: 1,
+                    repaints: 0,
+                    cached: false,
+                },
+            );
+        {
+            let mut state = app.world_mut().resource_mut::<DevtoolsState>();
+            state.open = true;
+            state.layers_tab_open = true;
+        }
+        let payloads = |rx: &mut UnboundedReceiver<Outbound>| {
+            drain_events(rx)
+                .into_iter()
+                .filter(|(name, _)| name == "devtools.layers")
+                .map(|(_, v)| v)
+                .collect::<Vec<_>>()
+        };
+
+        app.update();
+        let sent = payloads(&mut rx);
+        assert_eq!(sent.len(), 1);
+        assert_eq!(
+            sent[0]["layers"][1]["filters"],
+            serde_json::json!([
+                { "name": "blur", "params": [["radius", [4.25]]] },
+                { "name": "hueRotate",
+                  "params": [["angle", [90.0]], ["tint", [1.0, 0.5, 0.0, 1.0]]] },
+                { "name": "sepia", "params": [["amount", [4.25]]] },
+                { "name": "#3", "params": [["x", [0.4]]] },
+            ]),
+            "wire-grouped chain with display-unit, rounded params"
+        );
+
+        // Sub-rounding noise: physical 8.5008 → logical 4.2504 → rounds to
+        // the same 4.25 → the diff gate stays quiet.
+        app.world_mut()
+            .entity_mut(entity)
+            .get_mut::<ResolvedFilterChain>()
+            .unwrap()
+            .passes[0]
+            .params[0]
+            .x = 8.5008;
+        app.update();
+        assert!(
+            payloads(&mut rx).is_empty(),
+            "sub-0.001 display noise must not re-emit (rounding is the rate limiter)"
+        );
+
+        // A visible change re-emits with the live value: physical 9 →
+        // logical 4.5 (dyadic on purpose — exact through the f32→JSON path).
+        app.world_mut()
+            .entity_mut(entity)
+            .get_mut::<ResolvedFilterChain>()
+            .unwrap()
+            .passes[0]
+            .params[0]
+            .x = 9.0;
+        app.update();
+        let sent = payloads(&mut rx);
+        assert_eq!(sent.len(), 1, "a visible param change re-emits");
+        assert_eq!(
+            sent[0]["layers"][1]["filters"][0]["params"][0],
+            serde_json::json!(["radius", [4.5]]),
+            "live value in display units"
         );
     }
 

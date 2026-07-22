@@ -27,14 +27,12 @@ use crate::bridge::{
     CanvasSizeTracker, FocusState, HoverState, JsBridge, PointerHandlers, RNode, ScrollListener,
     ScrollStep, SpanKind, StyleVariants, WheelListener,
 };
-use crate::filter::{FilterAssets, FilterMaterial, FilterMaterialCache, filter_material};
 use crate::plugin::Fonts;
 use crate::protocol::{NodeId, Op, Outbound, Props, ROOT_ID, Style, UiEvent};
 use crate::transition::{ScrollTransitionState, apply_scroll_transition};
 use crate::ui_map::{
-    AtlasLayoutCache, apply_atlas, apply_opacity, apply_style, apply_style_masked,
-    apply_text_style, image_node, image_node_promoted, overlay_style, parse_color,
-    resolved_text_style, text_layout,
+    AtlasLayoutCache, apply_atlas, apply_style, apply_style_masked, apply_text_style, image_node,
+    image_node_promoted, overlay_style, resolved_text_style, text_layout,
 };
 
 /// Live instrumentation of the [`apply_js_ops`] hot path. Updated once per frame
@@ -131,16 +129,12 @@ pub struct FlushMeta<'w> {
 }
 
 /// The asset stores + caches the op-apply path builds components from: the
-/// `<image atlas>` `TextureAtlasLayout`s and the `filter` style's
-/// [`FilterMaterial`]s (plus the shared white pixel). Bundled as one `SystemParam`
+/// `<image atlas>` `TextureAtlasLayout`s. Bundled as one `SystemParam`
 /// so [`apply_js_ops`] stays under Bevy's per-system parameter limit.
 #[derive(SystemParam)]
 pub struct UiAssets<'w> {
     layouts: ResMut<'w, Assets<TextureAtlasLayout>>,
     atlas_cache: ResMut<'w, AtlasLayoutCache>,
-    filter_materials: ResMut<'w, Assets<FilterMaterial>>,
-    filter_cache: ResMut<'w, FilterMaterialCache>,
-    filter_assets: Res<'w, FilterAssets>,
 }
 
 /// Apply every queued reconciler op to the ECS. Runs in `Update`; ops simply
@@ -154,9 +148,9 @@ pub fn apply_js_ops(
     fonts: Res<Fonts>,
     mut images: ResMut<Assets<Image>>,
     // Sprite-sheet grids for `<image atlas>`, plus the cache that keeps repeated
-    // commits from leaking a `TextureAtlasLayout` per frame (see `AtlasLayoutCache`).
-    // Asset stores + caches for `<image atlas>` and the `filter` material, bundled
-    // into one `SystemParam` so `apply_js_ops` stays within Bevy's 16-param limit.
+    // commits from leaking a `TextureAtlasLayout` per frame (see `AtlasLayoutCache`),
+    // bundled into one `SystemParam` so `apply_js_ops` stays within Bevy's
+    // 16-param limit.
     mut ui_assets: UiAssets,
     children: Query<&Children>,
     rnodes: Query<&RNode>,
@@ -469,11 +463,6 @@ pub fn apply_js_ops(
                         &assets,
                         &mut ui_assets.layouts,
                         &mut ui_assets.atlas_cache,
-                        &mut FilterCtx {
-                            materials: &mut ui_assets.filter_materials,
-                            cache: &mut ui_assets.filter_cache,
-                            white: &ui_assets.filter_assets.white,
-                        },
                     ),
                 };
                 if matches!(kind.as_str(), "text" | "textSpan") {
@@ -518,10 +507,18 @@ pub fn apply_js_ops(
                     create_controlled_scroll(&mut bridge, &mut ec, id, &props);
                 }
                 bridge.nodes.insert(id, entity);
-                // `cache: "always"` promotes even a childless node, so no
-                // later child op would ever queue the evaluation — do it here.
-                // (Opacity-driven promotion needs a child, whose Append marks.)
-                if props.style.as_ref().and_then(|s| s.cache).is_some() {
+                // `cache: "always"` and a `filter` chain — base or variant-
+                // carried (the promotion union is presence-based, so a
+                // hover-only filter promotes eagerly at creation) — promote
+                // even a childless node, so no later child op would ever queue
+                // the evaluation — do it here. (Opacity-driven promotion needs
+                // a child, whose Append marks.) Over-seeding — `cache: "auto"`,
+                // an empty chain — is fine: the dirty set is a conservative
+                // "evaluate me" hint, the evaluator is authoritative, and a
+                // spurious evaluation is cheap.
+                if props.style.as_ref().is_some_and(|s| s.cache.is_some())
+                    || props.all_styles().any(|s| s.filter.is_some())
+                {
                     bridge.layer_dirty.insert(id);
                 }
                 // Seed the retained props a later update's delta merges into.
@@ -686,10 +683,11 @@ pub fn apply_js_ops(
                 let (dirty, ev) = cached.merge_delta(props, &unset, &style_unset);
                 let props = cached;
                 use crate::protocol::style_groups as g;
-                // A delta touching a promotion trigger (`opacity`/`groupAlpha`,
-                // both in the LAYER group), a variant style swap (variants can
-                // carry `opacity`), or the animated bindings re-evaluates this
-                // node's layer promotion (see `crate::layer`).
+                // A delta touching a promotion trigger (`opacity`/`groupAlpha`/
+                // `filter`, all in the LAYER group), a variant style swap
+                // (variants can carry `opacity` and `filter`), or the animated
+                // bindings re-evaluates this node's layer promotion (see
+                // `crate::layer`).
                 if dirty.style.intersects(g::LAYER)
                     || dirty.animated
                     || dirty.hover_style
@@ -822,10 +820,8 @@ pub fn apply_js_ops(
                     let mut ec = commands.entity(e);
                     apply_style_masked(&mut ec, &props.style, dirty.style, promoted);
                     // Image attributes only ever appear on `image` elements, so
-                    // their presence is enough to re-apply the texture/tint. A
-                    // removed `filter` also lands here: its material made the
-                    // `ImageNode` transparent, so the normal image must be rebuilt.
-                    if (dirty.image || dirty.style.intersects(g::FILTER)) && is_image(&props) {
+                    // their presence is enough to re-apply the texture/tint.
+                    if dirty.image && is_image(&props) {
                         let mut img = image_node_promoted(&props, &assets, promoted);
                         apply_atlas(
                             &mut img,
@@ -837,24 +833,6 @@ pub fn apply_js_ops(
                         // Image attrs dirty without any style dirt (e.g. a bare
                         // `src` swap) bypasses the `apply_style_masked` tap.
                         crate::layer::mark_content_dirty(&mut ec);
-                    }
-                    // A `filter` swaps the node's draw for a `MaterialNode`; run
-                    // after the style/image above so it can drop the components it
-                    // replaces. Absent → it removes any prior filter material. Its
-                    // material bakes tint/src (image attrs) plus filter, opacity and
-                    // background color, so any of those dirties re-runs it.
-                    if dirty.image || dirty.style.intersects(g::FILTER | g::BACKGROUND) {
-                        apply_filter(
-                            &mut ec,
-                            &props,
-                            &assets,
-                            &mut FilterCtx {
-                                materials: &mut ui_assets.filter_materials,
-                                cache: &mut ui_assets.filter_cache,
-                                white: &ui_assets.filter_assets.white,
-                            },
-                            promoted,
-                        );
                     }
                     // A `<canvas>`'s new declarative display list: clear + replay
                     // on the retained surface. Queued (not re-inserted) so the
@@ -1086,79 +1064,7 @@ fn root_base() -> Option<Style> {
     })
 }
 
-/// The resources [`apply_filter`] needs to build/cache a `FilterMaterial` and bind
-/// the shared white pixel — bundled so the call sites don't thread three params.
-struct FilterCtx<'a> {
-    materials: &'a mut Assets<FilterMaterial>,
-    cache: &'a mut FilterMaterialCache,
-    white: &'a Handle<Image>,
-}
-
-/// Apply (or clear) a `filter` style on an element. Present → build a
-/// [`FilterMaterial`] (source = the `<image>`'s texture, else the shared white
-/// pixel tinted by `base_color`) and insert a `MaterialNode<FilterMaterial>`,
-/// dropping the standard `ImageNode` / `BackgroundColor` so the node isn't drawn
-/// twice. Absent → remove any prior filter material so the node reverts to its
-/// normal draw. Must run *after* `apply_style` / the image insert (it removes the
-/// components those add). See [`crate::filter`] for the scope (own surface only).
-fn apply_filter(
-    ec: &mut EntityCommands,
-    props: &Props,
-    assets: &AssetServer,
-    ctx: &mut FilterCtx,
-    promoted: bool,
-) {
-    let Some(spec) = props.style.as_ref().and_then(|s| s.filter.as_ref()) else {
-        ec.remove::<MaterialNode<FilterMaterial>>();
-        return;
-    };
-    // Base color: the image tint, else the background color, else white. Opacity is
-    // folded into alpha just like the standard background/image paths — and, like
-    // them, suppressed on a promoted layer root (group alpha applies at composite).
-    let opacity = if promoted {
-        None
-    } else {
-        props.style.as_ref().and_then(|s| s.opacity)
-    };
-    let base = props
-        .tint
-        .as_deref()
-        .or_else(|| {
-            props
-                .style
-                .as_ref()
-                .and_then(|s| s.background_color.as_deref())
-        })
-        .map(parse_color)
-        .unwrap_or(Color::WHITE);
-    let texture = match &props.src {
-        Some(path) => assets.load(path),
-        None => ctx.white.clone(),
-    };
-    let mat = filter_material(spec, texture, apply_opacity(base, opacity));
-    let handle = ctx.cache.handle(ctx.materials, mat);
-
-    // The material replaces the node's own draw (so a filtered node never carries a
-    // visible `BackgroundColor` — that's already dropped in `apply_style`).
-    if props.src.is_some() {
-        // A `MaterialNode` has no content measure, so a filtered `<image>` with only
-        // a `width` would collapse to zero height. Keep the `ImageNode` (it measures
-        // the texture's intrinsic size) but make it transparent so only the filter
-        // material paints — no double draw.
-        let mut img = image_node(props, assets);
-        img.color = img.color.with_alpha(0.0);
-        ec.insert(img);
-    } else {
-        // A solid-colored node: the material paints the (filtered) color; drop any
-        // `ImageNode` a prior render left behind.
-        ec.remove::<ImageNode>();
-    }
-    ec.remove::<BackgroundColor>();
-    ec.insert(MaterialNode(handle));
-}
-
 /// Spawn a `node`, `button`, or `image` host element with its style.
-#[allow(clippy::too_many_arguments)]
 fn spawn_element(
     commands: &mut Commands,
     id: NodeId,
@@ -1167,7 +1073,6 @@ fn spawn_element(
     assets: &AssetServer,
     layouts: &mut Assets<TextureAtlasLayout>,
     atlas_cache: &mut AtlasLayoutCache,
-    filter: &mut FilterCtx,
 ) -> Entity {
     let mut ec = commands.spawn(RNode(id));
     apply_style(&mut ec, &props.style);
@@ -1186,10 +1091,6 @@ fn spawn_element(
         }
         _ => {}
     }
-    // A `filter` swaps the node's image/background draw for a filter material.
-    // Create-time promotion state is always false: a fresh node has no children
-    // yet; the evaluator re-applies on the promote flip.
-    apply_filter(&mut ec, props, assets, filter, false);
     apply_style_variants(&mut ec, props);
     apply_pointer_handlers(&mut ec, props);
     apply_animated(&mut ec, props);
@@ -1467,7 +1368,6 @@ fn apply_button_focus_default(ec: &mut EntityCommands, style: &Option<Style>) {
     }
 }
 
-/// Whether these props carry any `image` element attribute.
 /// Re-derive every opacity-dependent output of a node after its layer-
 /// promotion state flipped (called by
 /// [`crate::layer::evaluate_layer_promotions`]). Bakes the final values in
@@ -1511,19 +1411,9 @@ pub(crate) fn reapply_opacity_outputs(
         );
         ec.insert(img);
     }
-    apply_filter(
-        &mut ec,
-        props,
-        assets,
-        &mut FilterCtx {
-            materials: &mut ui_assets.filter_materials,
-            cache: &mut ui_assets.filter_cache,
-            white: &ui_assets.filter_assets.white,
-        },
-        promoted,
-    );
 }
 
+/// Whether these props carry any `image` element attribute.
 fn is_image(props: &Props) -> bool {
     props.src.is_some()
         || props.tint.is_some()
@@ -2115,9 +2005,11 @@ pub fn apply_interaction_styles(
             .ok()
             .map(|r| crate::diag::node_scope(r.0));
         // A promoted layer root's merged `opacity` (base or variant-carried)
-        // drives the group alpha instead of folding into colors. Promotion
-        // itself never flips on interaction (`promotion_reasons` unions
-        // variant presence; `groupAlpha` is `no_overlay`).
+        // drives the group alpha instead of folding into colors, and its
+        // merged `filter` re-stamps `FilterInput` (a hover filter — with a
+        // `transition` — eases). Promotion itself never flips on interaction
+        // (`promotion_reasons` unions variant presence; `groupAlpha` is
+        // `no_overlay`).
         crate::ui_map::apply_style_promoted(
             &mut commands.entity(entity),
             &style,
@@ -2471,10 +2363,6 @@ mod tests {
         app.init_resource::<Fonts>();
         app.init_resource::<OpApplyStats>();
         app.init_resource::<AtlasLayoutCache>();
-        // `apply_js_ops` reads the `filter` material assets/cache + white pixel.
-        app.init_asset::<FilterMaterial>();
-        app.init_resource::<FilterMaterialCache>();
-        app.add_systems(Startup, crate::filter::init_filter_assets);
 
         let (ops_tx, ops_rx) = crossbeam_channel::unbounded::<Vec<Op>>();
         let (out_tx, out_rx) = tokio::sync::mpsc::unbounded_channel::<Outbound>();
@@ -3003,10 +2891,6 @@ mod tests {
         app.init_resource::<Fonts>();
         app.init_resource::<OpApplyStats>();
         app.init_resource::<AtlasLayoutCache>();
-        // `apply_js_ops` reads the `filter` material assets/cache + white pixel.
-        app.init_asset::<FilterMaterial>();
-        app.init_resource::<FilterMaterialCache>();
-        app.add_systems(Startup, crate::filter::init_filter_assets);
 
         let (ops_tx, ops_rx) = crossbeam_channel::unbounded::<Vec<Op>>();
         // Keep the outbound receiver alive so the sender stays open.
@@ -3115,10 +2999,6 @@ mod tests {
         app.init_resource::<Fonts>();
         app.init_resource::<OpApplyStats>();
         app.init_resource::<AtlasLayoutCache>();
-        // `apply_js_ops` reads the `filter` material assets/cache + white pixel.
-        app.init_asset::<FilterMaterial>();
-        app.init_resource::<FilterMaterialCache>();
-        app.add_systems(Startup, crate::filter::init_filter_assets);
         let (ops_tx, ops_rx) = crossbeam_channel::unbounded::<Vec<Op>>();
         let (out_tx, _out_rx) = tokio::sync::mpsc::unbounded_channel::<Outbound>();
         let root = app.world_mut().spawn_empty().id();
