@@ -1,19 +1,22 @@
-//! The nine built-in filters, one file per shader family: [`color_matrix`]
+//! The ten built-in filters, one file per shader family: [`color_matrix`]
 //! (the seven color ops sharing one pass shader and packing — six declared by
 //! the `color_matrix_filters!` macro plus the hand-written `hueRotate`),
-//! [`blur`] (the two-pass separable Gaussian), and [`bloom`] (bright-pass →
-//! blur → combine, reusing blur's shader for its middle passes). This module
+//! [`blur`] (the two-pass separable Gaussian), [`bloom`] (bright-pass → blur
+//! → combine, reusing blur's shader for its middle passes), and
+//! [`chromatic_aberration`] (single-pass directional RGB split). This module
 //! owns their registration; cross-family tests (the shorthand-default and
 //! identity tables, WGSL validation) live here too.
 
 mod bloom;
 mod blur;
+mod chromatic_aberration;
 mod color_matrix;
 
 use bevy::prelude::*;
 
 pub use bloom::BloomParams;
 pub use blur::BlurParams;
+pub use chromatic_aberration::ChromaticAberrationParams;
 pub use color_matrix::{
     BrightnessParams, ContrastParams, GrayscaleParams, HueRotateParams, InvertParams,
     SaturateParams, SepiaParams,
@@ -22,7 +25,7 @@ pub use color_matrix::{
 use super::registry::FilterRegistry;
 
 impl FilterRegistry {
-    /// Register the nine built-in filters into this registry. Two callers:
+    /// Register the ten built-in filters into this registry. Two callers:
     /// [`register_builtin_filters`] (the runtime path, via
     /// `ReactUiPlugin::build`) and the TypeScript exporter
     /// (`crate::ts_codegen`), which seeds a throwaway registry with them so
@@ -31,6 +34,7 @@ impl FilterRegistry {
     pub(crate) fn register_builtins(&mut self) {
         self.register::<BloomParams>();
         self.register::<BlurParams>();
+        self.register::<ChromaticAberrationParams>();
         self.register::<BrightnessParams>();
         self.register::<ContrastParams>();
         self.register::<SaturateParams>();
@@ -41,7 +45,7 @@ impl FilterRegistry {
     }
 }
 
-/// Register the nine built-in filters. Called by `ReactUiPlugin::build`.
+/// Register the ten built-in filters. Called by `ReactUiPlugin::build`.
 /// Deliberately `AssetServer`-free: shader loads happen lazily inside each
 /// entry's `resolve`.
 pub fn register_builtin_filters(app: &mut App) {
@@ -82,6 +86,10 @@ mod tests {
         assert_eq!(b.radius, Length::Px(12.0));
         assert_eq!(b.threshold, 0.7);
         assert_eq!(b.intensity, 1.0);
+        // A bare `{name:"chromaticAberration"}` is visible fringing along +X.
+        let ca = params::<ChromaticAberrationParams>(json!({}));
+        assert_eq!(ca.offset, Length::Px(4.0));
+        assert_eq!(ca.angle.radians(), 0.0);
     }
 
     /// Unknown param keys are rejected (deny-unknown-fields), both at the
@@ -121,6 +129,10 @@ mod tests {
         );
         assert_eq!(
             (r.entries["bloom"].identity)().unwrap()["intensity"],
+            json!(0.0)
+        );
+        assert_eq!(
+            (r.entries["chromaticAberration"].identity)().unwrap()["offset"],
             json!(0.0)
         );
 
@@ -216,6 +228,11 @@ mod tests {
         validate(
             "bloom.wgsl",
             &splice(&prelude_body, include_str!("bloom.wgsl")),
+            &["vertex", "fragment"],
+        );
+        validate(
+            "chromatic_aberration.wgsl",
+            &splice(&prelude_body, include_str!("chromatic_aberration.wgsl")),
             &["vertex", "fragment"],
         );
 

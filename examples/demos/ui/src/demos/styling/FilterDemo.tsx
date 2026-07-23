@@ -115,6 +115,19 @@ radius 0)."
       </Example>
 
       <Example
+        description="chromaticAberration is a directional RGB split: the red
+channel shifts offset px along angle (degrees, clockwise from +X), blue the
+same distance opposite, green stays put — the whole layer splits uniformly.
+Identity is offset 0, so it transitions and animates like blur's radius; the
+angle lerps shortest-arc like hueRotate's."
+        tsx={`<image src="images/parrot.png"
+  style={{ filter: { name: "chromaticAberration",
+    params: { offset: 4, angle: 0 } } }} />`}
+      >
+        <ChromaticAberrationControl />
+      </Example>
+
+      <Example
         description="transition: { filter } eases the chain between style
 states — with one sharp edge: easing to an EMPTY chain snaps, because the
 resolved chain detaches and the fade has nothing left to write into. The
@@ -180,6 +193,35 @@ intensity.value = withRepeat(
         <CyberpunkDemo />
       </Example>
     </>
+  );
+}
+
+// Directional fringing: the whole banner splits uniformly along the angle.
+function ChromaticAberrationControl() {
+  const [offset, setOffset] = useState(4);
+  const [angle, setAngle] = useState(0);
+  return (
+    <node style={controlColumn}>
+      <TestBanner
+        style={{
+          filter: { name: "chromaticAberration", params: { offset, angle } },
+        }}
+      />
+      <Slider
+        value={offset}
+        min={0}
+        max={20}
+        onChange={setOffset}
+        label={`offset ${offset.toFixed(1)}px`}
+      />
+      <Slider
+        value={angle}
+        min={0}
+        max={360}
+        onChange={setAngle}
+        label={`angle ${angle.toFixed(0)}°`}
+      />
+    </node>
   );
 }
 
@@ -459,12 +501,11 @@ function NodeFilterControl() {
   const [hue, setHue] = useState(180);
   return (
     <node style={controlColumn}>
-      <node
+      <image
+        src="images/parrot.png"
         style={{
           width: 150,
-          height: 90,
           borderRadius: 12,
-          backgroundColor: Colors.red100,
           filter: { name: "hueRotate", params: { angle: hue } },
         }}
       />
@@ -495,11 +536,16 @@ function CyberpunkDemo() {
             name: "glitch",
             params: { intensity: 0.5 },
           },
+          {
+            name: "chromaticAberration",
+            params: { offset: 2, angle: 0 },
+          },
         ],
       }}
     >
       <CyberpunkKeybinding label="Draw Weapon" keybinding="Alt" />
       <CyberpunkKeybinding label="Crouch" keybinding="C" />
+      <CyberpunkKeybinding label="Reload" keybinding="R" />
     </node>
   );
 }

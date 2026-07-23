@@ -18,7 +18,7 @@
 //! [`ResolvedFilterPass`]es: deserialize the raw params (strict:
 //! deny-unknown-fields), pack them into a `Vec4` uniform array with a
 //! [`ParamSlot`] layout (no-straddle rule: a slot never crosses a `Vec4`
-//! boundary), and pick the pass shader. The nine built-ins register via
+//! boundary), and pick the pass shader. The ten built-ins register via
 //! [`register_builtin_filters`]; custom filters are `#[react_filter]` structs
 //! registered with `add_react_filter`.
 //!
@@ -40,7 +40,7 @@
 //! File map: `wire` (the wire format + warn-don't-abort decode), `params`
 //! (packing layout, caps, param value types, interpolation), `registry` (the
 //! [`ReactFilter`] trait, resolved passes, the registry), `builtin` (the
-//! nine built-ins), `transition` (whole-value `filter` transition planning),
+//! ten built-ins), `transition` (whole-value `filter` transition planning),
 //! `resolve` (the chain resolve system). Submodules are private; everything
 //! is re-exported here, so `crate::filters::X` is the one path.
 
@@ -57,8 +57,9 @@ mod macro_tests;
 pub(crate) mod test_util;
 
 pub use builtin::{
-    BloomParams, BlurParams, BrightnessParams, ContrastParams, GrayscaleParams, HueRotateParams,
-    InvertParams, SaturateParams, SepiaParams, register_builtin_filters,
+    BloomParams, BlurParams, BrightnessParams, ChromaticAberrationParams, ContrastParams,
+    GrayscaleParams, HueRotateParams, InvertParams, SaturateParams, SepiaParams,
+    register_builtin_filters,
 };
 pub use params::{
     FilterColor, MAX_FILTER_OUTSET_PX, MAX_FILTER_PARAM_VECS, ParamSlot, length_logical_px,

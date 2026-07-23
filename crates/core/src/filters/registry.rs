@@ -322,10 +322,10 @@ mod tests {
         );
     }
 
-    /// `register_builtin_filters` registers all nine names; running it again
+    /// `register_builtin_filters` registers all ten names; running it again
     /// (same types) is a no-op per `register_entry` semantics.
     #[test]
-    fn builtin_filters_register_all_nine() {
+    fn builtin_filters_register_all_ten() {
         let mut app = App::new();
         register_builtin_filters(&mut app);
         let registry = app.world().resource::<FilterRegistry>();
@@ -337,6 +337,7 @@ mod tests {
                 "bloom",
                 "blur",
                 "brightness",
+                "chromaticAberration",
                 "contrast",
                 "grayscale",
                 "hueRotate",
@@ -347,7 +348,7 @@ mod tests {
         );
         assert!(registry.entries.values().all(|r| !r.uses_time));
         register_builtin_filters(&mut app);
-        assert_eq!(app.world().resource::<FilterRegistry>().entries.len(), 9);
+        assert_eq!(app.world().resource::<FilterRegistry>().entries.len(), 10);
     }
 
     /// Every built-in entry carries working TS-export slots — `ts_name` names
@@ -462,6 +463,11 @@ mod tests {
         assert_eq!(
             &path_of(&blur),
             "embedded://bevy_react/filters/builtin/blur.wgsl"
+        );
+
+        assert_eq!(
+            &path_of(&shader_of("chromaticAberration")),
+            "embedded://bevy_react/filters/builtin/chromatic_aberration.wgsl"
         );
 
         // Bloom deliberately mixes shaders across its passes, so it can't go

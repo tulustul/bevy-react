@@ -23,6 +23,7 @@ export type BallState = { x: number, y: number, vx: number, vy: number, };
 export type BloomParams = { radius: number | string, threshold: number, intensity: number, };
 export type BlurParams = { radius: number | string, };
 export type BrightnessParams = { amount: number, };
+export type ChromaticAberrationParams = { offset: number | string, angle: number | string, };
 export type ContrastParams = { amount: number, };
 export type CubeInfo = { entity: bigint, label: string, };
 export type CubesSpawned = { cubes: Array<CubeInfo>, };
@@ -123,6 +124,7 @@ declare module "bevy-react" {
     bloom: BloomParams;
     blur: BlurParams;
     brightness: BrightnessParams;
+    chromaticAberration: ChromaticAberrationParams;
     contrast: ContrastParams;
     dissolve: Dissolve;
     glitch: Glitch;
