@@ -1,15 +1,18 @@
-//! The eight built-in filters, one file per shader family: [`color_matrix`]
+//! The nine built-in filters, one file per shader family: [`color_matrix`]
 //! (the seven color ops sharing one pass shader and packing — six declared by
-//! the `color_matrix_filters!` macro plus the hand-written `hueRotate`) and
-//! [`blur`] (the two-pass separable Gaussian). This module owns their
-//! registration; cross-family tests (the shorthand-default and identity
-//! tables, WGSL validation) live here too.
+//! the `color_matrix_filters!` macro plus the hand-written `hueRotate`),
+//! [`blur`] (the two-pass separable Gaussian), and [`bloom`] (bright-pass →
+//! blur → combine, reusing blur's shader for its middle passes). This module
+//! owns their registration; cross-family tests (the shorthand-default and
+//! identity tables, WGSL validation) live here too.
 
+mod bloom;
 mod blur;
 mod color_matrix;
 
 use bevy::prelude::*;
 
+pub use bloom::BloomParams;
 pub use blur::BlurParams;
 pub use color_matrix::{
     BrightnessParams, ContrastParams, GrayscaleParams, HueRotateParams, InvertParams,
@@ -19,13 +22,14 @@ pub use color_matrix::{
 use super::registry::FilterRegistry;
 
 impl FilterRegistry {
-    /// Register the eight built-in filters into this registry. Two callers:
+    /// Register the nine built-in filters into this registry. Two callers:
     /// [`register_builtin_filters`] (the runtime path, via
     /// `ReactUiPlugin::build`) and the TypeScript exporter
     /// (`crate::ts_codegen`), which seeds a throwaway registry with them so
     /// built-ins are always exported even though the bare exporter `App`
     /// (`register_bindings` only) never adds the plugin.
     pub(crate) fn register_builtins(&mut self) {
+        self.register::<BloomParams>();
         self.register::<BlurParams>();
         self.register::<BrightnessParams>();
         self.register::<ContrastParams>();
@@ -37,7 +41,7 @@ impl FilterRegistry {
     }
 }
 
-/// Register the eight built-in filters. Called by `ReactUiPlugin::build`.
+/// Register the nine built-in filters. Called by `ReactUiPlugin::build`.
 /// Deliberately `AssetServer`-free: shader loads happen lazily inside each
 /// entry's `resolve`.
 pub fn register_builtin_filters(app: &mut App) {
@@ -73,6 +77,11 @@ mod tests {
         assert_eq!(g.pack().0[0].w, 1.0);
         assert_eq!(params::<BlurParams>(json!({})).radius, Length::Px(0.0));
         assert_eq!(params::<HueRotateParams>(json!({})).angle.radians(), 0.0);
+        // A bare `{name:"bloom"}` is a visible glow.
+        let b = params::<BloomParams>(json!({}));
+        assert_eq!(b.radius, Length::Px(12.0));
+        assert_eq!(b.threshold, 0.7);
+        assert_eq!(b.intensity, 1.0);
     }
 
     /// Unknown param keys are rejected (deny-unknown-fields), both at the
@@ -110,6 +119,10 @@ mod tests {
             (r.entries["hueRotate"].identity)().unwrap()["angle"],
             json!(0.0)
         );
+        assert_eq!(
+            (r.entries["bloom"].identity)().unwrap()["intensity"],
+            json!(0.0)
+        );
 
         let app = asset_app();
         let assets = app.world().resource::<AssetServer>();
@@ -117,6 +130,16 @@ mod tests {
             (r.entries["grayscale"].resolve)(&(r.entries["grayscale"].identity)().unwrap(), assets)
                 .expect("identity resolves");
         assert_eq!(passes[0].params[0].w, 0.0, "identity packing, no effect");
+
+        // Bloom's identity resolves to the same four-pass structure (so
+        // transitions stay `Aligned`) with intensity 0 packed in every pass —
+        // the combine returns exactly the original regardless of
+        // radius/threshold.
+        let passes =
+            (r.entries["bloom"].resolve)(&(r.entries["bloom"].identity)().unwrap(), assets)
+                .expect("identity resolves");
+        assert_eq!(passes.len(), 4);
+        assert!(passes.iter().all(|p| p.params[1].y == 0.0));
     }
 
     /// The filter-pass WGSL parses and validates as naga modules. naga has no
@@ -188,6 +211,11 @@ mod tests {
         validate(
             "blur.wgsl",
             &splice(&prelude_body, include_str!("blur.wgsl")),
+            &["vertex", "fragment"],
+        );
+        validate(
+            "bloom.wgsl",
+            &splice(&prelude_body, include_str!("bloom.wgsl")),
             &["vertex", "fragment"],
         );
 

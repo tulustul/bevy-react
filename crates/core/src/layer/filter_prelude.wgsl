@@ -32,11 +32,14 @@
 
 // Group 0 is the whole binding surface of a filter pass. The filter-pass
 // pipeline (`layer/render.rs`) binds: the source texture (layer capture or
-// previous pass output), a linear clamp-to-edge sampler, and one
-// `FilterUniforms`.
+// previous pass output), a linear clamp-to-edge sampler, one
+// `FilterUniforms`, and the layer's original capture — always bound, so any
+// pass (not just pass 0) can sample the unfiltered input alongside the
+// running chain output (e.g. bloom's combine pass).
 @group(0) @binding(0) var source_texture: texture_2d<f32>;
 @group(0) @binding(1) var source_sampler: sampler;
 @group(0) @binding(2) var<uniform> uniforms: FilterUniforms;
+@group(0) @binding(3) var capture_texture: texture_2d<f32>;
 
 // Per-pass uniforms. The explicit `pad` members make the uniform-address-
 // space layout unambiguous; the Rust mirror (`FilterUniforms` in

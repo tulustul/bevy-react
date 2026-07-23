@@ -566,9 +566,10 @@ mod tests {
     }
 
     /// The `declare module "bevy-react"` block listing every filter, with the
-    /// eight built-ins and any customs merged and sorted by wire name.
+    /// nine built-ins and any customs merged and sorted by wire name.
     const BEVY_FILTERS_WITH_GLOW: &str = "declare module \"bevy-react\" {\n\
          \x20 interface BevyFilters {\n\
+         \x20   bloom: BloomParams;\n\
          \x20   blur: BlurParams;\n\
          \x20   brightness: BrightnessParams;\n\
          \x20   contrast: ContrastParams;\n\
@@ -692,7 +693,7 @@ mod tests {
     }
 
     /// With no filter registered at all (the empty-registry fallback), the
-    /// eight built-ins are still seeded — they are always available at runtime
+    /// nine built-ins are still seeded — they are always available at runtime
     /// via `ReactUiPlugin`, which the bare exporter `App` never adds.
     #[test]
     fn empty_filter_registry_still_exports_builtins() {
@@ -703,6 +704,7 @@ mod tests {
             &FilterRegistry::default(),
         );
         for (name, ts_name) in [
+            ("bloom", "BloomParams"),
             ("blur", "BlurParams"),
             ("brightness", "BrightnessParams"),
             ("contrast", "ContrastParams"),

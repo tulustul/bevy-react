@@ -322,10 +322,10 @@ mod tests {
         );
     }
 
-    /// `register_builtin_filters` registers all eight names; running it again
+    /// `register_builtin_filters` registers all nine names; running it again
     /// (same types) is a no-op per `register_entry` semantics.
     #[test]
-    fn builtin_filters_register_all_eight() {
+    fn builtin_filters_register_all_nine() {
         let mut app = App::new();
         register_builtin_filters(&mut app);
         let registry = app.world().resource::<FilterRegistry>();
@@ -334,6 +334,7 @@ mod tests {
         assert_eq!(
             names,
             [
+                "bloom",
                 "blur",
                 "brightness",
                 "contrast",
@@ -346,7 +347,7 @@ mod tests {
         );
         assert!(registry.entries.values().all(|r| !r.uses_time));
         register_builtin_filters(&mut app);
-        assert_eq!(app.world().resource::<FilterRegistry>().entries.len(), 8);
+        assert_eq!(app.world().resource::<FilterRegistry>().entries.len(), 9);
     }
 
     /// Every built-in entry carries working TS-export slots — `ts_name` names
@@ -416,8 +417,9 @@ mod tests {
 
     /// Under the asset-capable harness every built-in resolves to real
     /// embedded shader handles: the seven color ops share
-    /// `color_matrix.wgsl`, blur's two passes share `blur.wgsl`, and the two
-    /// shaders are distinct.
+    /// `color_matrix.wgsl`, blur's two passes share `blur.wgsl`, the two
+    /// shaders are distinct, and bloom's four passes mix `bloom.wgsl`
+    /// (bright-pass/combine) with blur's handle (its middle passes).
     #[test]
     fn resolve_returns_embedded_shader_handles() {
         let mut app = asset_app();
@@ -461,5 +463,18 @@ mod tests {
             &path_of(&blur),
             "embedded://bevy_react/filters/builtin/blur.wgsl"
         );
+
+        // Bloom deliberately mixes shaders across its passes, so it can't go
+        // through `shader_of`.
+        let passes =
+            (registry.entries["bloom"].resolve)(&json!({}), assets).expect("bloom resolves");
+        assert_eq!(passes.len(), 4);
+        assert_eq!(
+            &path_of(&passes[0].shader),
+            "embedded://bevy_react/filters/builtin/bloom.wgsl"
+        );
+        assert_eq!(passes[3].shader, passes[0].shader);
+        assert_eq!(passes[1].shader, blur, "middle passes reuse blur's shader");
+        assert_eq!(passes[2].shader, blur);
     }
 }

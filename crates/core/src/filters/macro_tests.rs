@@ -292,7 +292,7 @@ fn add_react_filter_on_builtin_is_a_noop() {
     let mut app = App::new();
     register_builtin_filters(&mut app);
     app.add_react_filter::<BlurParams>();
-    assert_eq!(app.world().resource::<FilterRegistry>().entries.len(), 8);
+    assert_eq!(app.world().resource::<FilterRegistry>().entries.len(), 9);
 }
 
 /// Registration bakes the TS-export slots with the event registry's exact

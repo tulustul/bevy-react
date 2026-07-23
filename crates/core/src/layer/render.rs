@@ -1113,9 +1113,10 @@ pub struct FilterUniforms {
 
 /// The filter-pass pipeline: ONE bind group layout for every filter — group 0
 /// is the source texture (the capture, or the previous pass's ping-pong
-/// output), a linear clamp-to-edge sampler, and one dynamically-offset
-/// [`FilterUniforms`] — plus the prelude shader, which is the **vertex stage
-/// of every filter pipeline**.
+/// output), a linear clamp-to-edge sampler, one dynamically-offset
+/// [`FilterUniforms`], and the layer's original capture (always bound, so any
+/// pass can sample the unfiltered input) — plus the prelude shader, which is
+/// the **vertex stage of every filter pipeline**.
 ///
 /// Split-stage design: the vertex entry (`vertex`, a fullscreen triangle)
 /// lives in the prelude module, the fragment entry (`fragment`) in each pass
@@ -1152,6 +1153,8 @@ pub fn init_layer_filter_pipeline(
                 // `uniform_buffer::<T>` sets `min_binding_size` from
                 // `T::min_size()` — the 160-byte contract.
                 uniform_buffer::<FilterUniforms>(true),
+                // The layer's original capture (prelude `capture_texture`).
+                texture_2d(TextureSampleType::Float { filterable: true }),
             ),
         ),
     );
@@ -1436,6 +1439,7 @@ pub fn prepare_layer_filters(
                         source,
                         &pipeline.sampler,
                         uniform_binding.clone(),
+                        &slot.texture.default_view,
                     )),
                 );
                 LayerFilterPass {

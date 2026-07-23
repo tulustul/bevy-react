@@ -10,6 +10,7 @@ import { BevyStyle } from "bevy-react/jsx";
 import { Button, Checkbox, Example, Slider } from "@/components";
 import { Colors, FontSizes } from "@/theme";
 import { caption, column, controlColumn } from "./shared";
+import { TestBanner } from "@/components/TestBanner";
 
 // `filter` is a chain of named filter passes: one { name, params } entry or an
 // ordered array of them (chain order = pass order). Omitted params take the
@@ -86,6 +87,34 @@ hueRotate spins the background color. Drag to rotate."
       </Example>
 
       <Example
+        description="bloom makes bright content bleed light: a bright-pass
+(everything above threshold), blurred by radius, added back scaled by
+intensity. threshold is a cut on 0–1 luminance — 1 blooms nothing, 0 blooms
+everything. The glow spreads past the card's border box, like blur."
+        tsx={`<node style={{ filter: { name: "bloom",
+  params: { radius: 14, threshold: 0.6, intensity: 1.2 } } }}>
+  <text>NEON</text>
+</node>`}
+      >
+        <BloomControl />
+      </Example>
+
+      <Example
+        description="bloom's true identity is intensity 0 — keep it in the
+base style and raise only the intensity in hoverStyle, and transition:
+{ filter } eases the light both ways (the same two-way-fade pattern as blur's
+radius 0)."
+        tsx={`<node
+  style={{ filter: [{ name: "bloom",
+      params: { radius: 16, threshold: 0.5, intensity: 0 } }],
+    transition: { filter: { duration: 300, easing: "easeOut" } } }}
+  hoverStyle={{ filter: [{ name: "bloom",
+    params: { radius: 16, threshold: 0.5, intensity: 1.5 } }] }} />`}
+      >
+        <BloomHoverControl />
+      </Example>
+
+      <Example
         description="transition: { filter } eases the chain between style
 states — with one sharp edge: easing to an EMPTY chain snaps, because the
 resolved chain detaches and the fade has nothing left to write into. The
@@ -128,7 +157,142 @@ radius.value = withRepeat(
       >
         <FocusPulseControl />
       </Example>
+
+      <Example
+        description="The same per-param binding drives bloom:
+filter[0].intensity pulses the glow Bevy-side. The capture and even the
+blurred bright-pass params are untouched frame to frame — only the pass
+uniforms update."
+        tsx={`const intensity = useSharedValue(0);
+intensity.value = withRepeat(
+  withTiming(1.6, { duration: 1200, easing: "easeInOut" }),
+  -1, true);
+
+<Animated.node
+  style={{ filter: [{ name: "bloom",
+    params: { radius: 14, threshold: 0.5, intensity: 0 } }] }}
+  animatedStyle={{ "filter[0].intensity": intensity }}>…</Animated.node>`}
+      >
+        <BloomPulseControl />
+      </Example>
+
+      <Example>
+        <CyberpunkDemo />
+      </Example>
     </>
+  );
+}
+
+// Bright text on a dark card, glowing. The sliders sit outside the filtered
+// card so only the sign blooms.
+function BloomControl() {
+  const [radius, setRadius] = useState(14);
+  const [threshold, setThreshold] = useState(0.6);
+  const [intensity, setIntensity] = useState(1.2);
+  return (
+    <node style={controlColumn}>
+      <node
+        style={{
+          ...neonCard,
+          filter: { name: "bloom", params: { radius, threshold, intensity } },
+        }}
+      >
+        <text style={neonText}>NEON</text>
+        <image
+          src="images/parrot.png"
+          style={{
+            width: 110,
+            borderRadius: 8,
+            filter: { name: "bloom", params: { radius, threshold, intensity } },
+          }}
+        />
+        <text style={{ ...caption, color: Colors.textColor300 }}>
+          dim text stays under the threshold
+        </text>
+      </node>
+      <Slider
+        value={radius}
+        min={0}
+        max={30}
+        onChange={setRadius}
+        label={`radius ${radius.toFixed(1)}px`}
+      />
+      <Slider
+        value={threshold}
+        min={0}
+        max={1}
+        onChange={setThreshold}
+        label={`threshold ${threshold.toFixed(2)}`}
+      />
+      <Slider
+        value={intensity}
+        min={0}
+        max={10}
+        onChange={setIntensity}
+        label={`intensity ${intensity.toFixed(2)}`}
+      />
+    </node>
+  );
+}
+
+// Two-way glow fade: identity bloom (intensity 0) in the base style, full
+// bloom on hover.
+function BloomHoverControl() {
+  return (
+    <node
+      style={{
+        ...neonCard,
+        filter: [
+          {
+            name: "bloom",
+            params: { radius: 16, threshold: 0.5, intensity: 0 },
+          },
+        ],
+        transition: { filter: { duration: 300, easing: "easeOut" } },
+      }}
+      hoverStyle={{
+        filter: [
+          {
+            name: "bloom",
+            params: { radius: 16, threshold: 0.5, intensity: 1.5 },
+          },
+        ],
+      }}
+    >
+      <text style={neonText}>hover me</text>
+    </node>
+  );
+}
+
+// An endless glow pulse, driven Bevy-side like the blur focus pulse.
+function BloomPulseControl() {
+  const intensity = useSharedValue(0);
+  useEffect(() => {
+    intensity.value = withRepeat(
+      withTiming(1.6, { duration: 1200, easing: "easeInOut" }),
+      -1,
+      true,
+    );
+    return () => cancelAnimation(intensity);
+  }, [intensity]);
+  return (
+    <node style={controlColumn}>
+      <Animated.node
+        style={{
+          ...neonCard,
+          filter: [
+            {
+              name: "bloom",
+              params: { radius: 14, threshold: 0.5, intensity: 0 },
+            },
+          ],
+        }}
+        animatedStyle={{ "filter[0].intensity": intensity }}
+      >
+        <text style={neonText}>OPEN</text>
+      </Animated.node>
+      <text style={caption}>breathing glow — hands off, Bevy drives it</text>
+    </node>
   );
 }
 
@@ -315,6 +479,62 @@ function NodeFilterControl() {
   );
 }
 
+function CyberpunkDemo() {
+  return (
+    <node
+      style={{
+        flexDirection: "column",
+        gap: 10,
+        transform3d: { rotateY: -30, rotateX: 10, perspective: 300 },
+        filter: [
+          {
+            name: "bloom",
+            params: { intensity: 0.5, radius: 2, threshold: 0.1 },
+          },
+          {
+            name: "glitch",
+            params: { intensity: 0.5 },
+          },
+        ],
+      }}
+    >
+      <CyberpunkKeybinding label="Draw Weapon" keybinding="Alt" />
+      <CyberpunkKeybinding label="Crouch" keybinding="C" />
+    </node>
+  );
+}
+
+function CyberpunkKeybinding({
+  label,
+  keybinding,
+}: {
+  label: string;
+  keybinding: string;
+}) {
+  const keyFontSize = 18 - keybinding.length * 2;
+  return (
+    <node style={{ gap: 10, alignItems: "center", justifyContent: "flexEnd" }}>
+      <text style={{ color: Colors.red100 }}>{label}</text>
+      <text
+        style={{
+          color: Colors.sky100,
+          border: 2,
+          borderColor: Colors.sky100,
+          borderRadius: 5,
+          padding: 5,
+          width: 30,
+          height: 30,
+          fontSize: keyFontSize,
+          textAlign: "center",
+          lineHeight: "15px",
+        }}
+      >
+        {keybinding}
+      </text>
+    </node>
+  );
+}
+
 function Swatch({
   label,
   filter,
@@ -329,6 +549,23 @@ function Swatch({
     </node>
   );
 }
+
+const neonCard: BevyStyle = {
+  flexDirection: "column",
+  alignItems: "center",
+  gap: 6,
+  padding: { top: 24, bottom: 24, left: 40, right: 40 },
+  borderRadius: 12,
+  backgroundColor: Colors.surface100,
+  border: 2,
+  borderColor: Colors.purple100,
+};
+
+const neonText: BevyStyle = {
+  color: Colors.red100,
+  fontSize: FontSizes.xl,
+  fontWeight: "bold",
+};
 
 const hoverCard: BevyStyle = {
   flexDirection: "column",

@@ -434,6 +434,54 @@ mod tests {
         );
     }
 
+    /// A >2-pass wire entry (bloom's four) rewrites its `Length` slot in
+    /// EVERY pass on a scale change, leaving the pass-internal components
+    /// (mode/direction) and the scalar slots untouched.
+    #[test]
+    fn bloom_chain_rewrites_length_slots_in_all_four_passes() {
+        let (mut app, ops_tx) = resolve_app();
+        ops_tx
+            .send(vec![create(
+                1,
+                json!({ "style": {
+                    "filter": { "name": "bloom", "params": {
+                        "radius": 4, "threshold": 0.5, "intensity": 2
+                    } }
+                } }),
+            )])
+            .unwrap();
+        app.update();
+        let e = entity_of(&app, 1);
+        {
+            let chain = app.world().get::<ResolvedFilterChain>(e).expect("chain");
+            assert_eq!(chain.passes.len(), 4, "bright + blur H + blur V + combine");
+            let wire: Vec<u8> = chain.passes.iter().map(|p| p.wire_index).collect();
+            assert_eq!(wire, [0, 0, 0, 0]);
+            assert_eq!(chain.outset_px, 12, "3 radii, physical px");
+        }
+
+        app.world_mut()
+            .get_mut::<ComputedNode>(e)
+            .expect("computed node")
+            .inverse_scale_factor = 0.5;
+        drain_dirt(&mut app);
+        app.update();
+        let chain = app.world().get::<ResolvedFilterChain>(e).expect("chain");
+        assert_eq!(chain.scale, 2.0);
+        for pass in &chain.passes {
+            assert_eq!(pass.params[0].x, 8.0, "radius rewritten in every pass");
+            // Scalar slots are not Length slots — untouched.
+            assert_eq!(pass.params[1].x, 0.5);
+            assert_eq!(pass.params[1].y, 2.0);
+        }
+        // Pass-internal components (blur direction, bloom mode) — untouched.
+        assert_eq!(chain.passes[1].params[0].y, 1.0);
+        assert_eq!(chain.passes[2].params[0].z, 1.0);
+        assert_eq!(chain.passes[0].params[0].w, 0.0, "bright mode");
+        assert_eq!(chain.passes[3].params[0].w, 1.0, "combine mode");
+        assert_eq!(chain.outset_px, 24, "logical 12 × scale 2");
+    }
+
     /// Unsetting the filter style demotes the node AND removes the resolved
     /// chain (the demote arm's cleanup).
     #[test]

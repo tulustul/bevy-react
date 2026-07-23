@@ -338,6 +338,11 @@ mod tests {
             classify_filter_transition(&wire(&["blur", "sepia"]), &wire(&["blur"]), Some(&r)),
             Extended
         );
+        // Bloom carries an identity (`intensity: 0`), so it extends too.
+        assert_eq!(
+            classify_filter_transition(&wire(&["blur"]), &wire(&["blur", "bloom"]), Some(&r)),
+            Extended
+        );
     }
 
     /// `Extended` pads the SHORTER side at the END with identity passes of
@@ -416,6 +421,67 @@ mod tests {
         assert_eq!(target[..2], short_passes[..]);
         assert_eq!(target[2].wire_index, 1);
         assert_eq!(target[2].params[1].x, 0.0, "sepia fades out to identity");
+    }
+
+    /// A multi-pass trailing entry pads whole: adding a bloom fades in as
+    /// FOUR identity passes (intensity 0 in every one), and a mid-ease sample
+    /// lerps the named slots while the pass-internal mode components ride the
+    /// target side.
+    #[test]
+    fn plan_pads_added_bloom_with_four_identity_passes() {
+        let app = asset_app();
+        let assets = app.world().resource::<AssetServer>();
+        let r = builtin_registry();
+
+        let from = wire(&["blur"]);
+        let to = wire(&["blur", "bloom"]);
+        let blur = (r.entries["blur"].resolve)(&json!({ "radius": 4 }), assets).unwrap();
+        let mut bloom = (r.entries["bloom"].resolve)(
+            &json!({ "radius": 8, "threshold": 0.5, "intensity": 2 }),
+            assets,
+        )
+        .unwrap();
+        for pass in &mut bloom {
+            pass.wire_index = 1;
+        }
+        let short_passes = blur.clone();
+        let mut long_passes = blur.clone();
+        long_passes.extend(bloom);
+
+        let ease = plan_filter_ease(
+            &from,
+            &to,
+            short_passes.clone(),
+            long_passes.clone(),
+            Some(&r),
+            Some(assets),
+            1.0,
+        );
+        let FilterEase::Aligned { start, target, .. } = &ease else {
+            panic!("expected aligned");
+        };
+        assert_eq!(target, &long_passes);
+        assert_eq!(start.len(), 6, "blur H+V plus four padded bloom passes");
+        assert_eq!(start[..2], short_passes[..], "existing passes untouched");
+        for (pad, tgt) in start[2..].iter().zip(&long_passes[2..]) {
+            assert_eq!(pad.wire_index, 1);
+            assert_eq!(pad.shader, tgt.shader);
+            assert_eq!(pad.layout, tgt.layout);
+            assert_eq!(pad.params[1].y, 0.0, "identity bloom: intensity 0");
+        }
+
+        // Mid-ease: named slots lerp identity → target (radius 12→8,
+        // threshold 0.7→0.5, intensity 0→2); the layout-uncovered mode
+        // component copies from the target, keeping each pass's role.
+        let mid = ease.sample(0.5);
+        let bloom_mid = &mid[2..];
+        for pass in bloom_mid {
+            assert_eq!(pass.params[0].x, 10.0);
+            assert!((pass.params[1].x - 0.6).abs() < 1e-6);
+            assert_eq!(pass.params[1].y, 1.0);
+        }
+        assert_eq!(bloom_mid[0].params[0].w, 0.0, "bright mode");
+        assert_eq!(bloom_mid[3].params[0].w, 1.0, "combine mode");
     }
 
     /// The defensive alignment check also requires matching shaders: a

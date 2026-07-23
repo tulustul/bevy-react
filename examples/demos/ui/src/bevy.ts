@@ -20,6 +20,7 @@ wall: Wall,
  */
 speed: number, };
 export type BallState = { x: number, y: number, vx: number, vy: number, };
+export type BloomParams = { radius: number | string, threshold: number, intensity: number, };
 export type BlurParams = { radius: number | string, };
 export type BrightnessParams = { amount: number, };
 export type ContrastParams = { amount: number, };
@@ -119,6 +120,7 @@ export interface ReactEvents {
  *  `filter` style field types each name's params. */
 declare module "bevy-react" {
   interface BevyFilters {
+    bloom: BloomParams;
     blur: BlurParams;
     brightness: BrightnessParams;
     contrast: ContrastParams;

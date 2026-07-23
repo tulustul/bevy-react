@@ -193,6 +193,7 @@ pub(crate) fn register_layer_shader_assets(app: &mut App) {
     embedded_asset!(app, "layer/render/mip_blit.wgsl");
     embedded_asset!(app, "filters/builtin/color_matrix.wgsl");
     embedded_asset!(app, "filters/builtin/blur.wgsl");
+    embedded_asset!(app, "filters/builtin/bloom.wgsl");
 }
 
 impl Plugin for ReactUiPlugin {
