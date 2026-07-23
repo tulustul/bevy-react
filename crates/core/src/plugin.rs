@@ -180,13 +180,18 @@ impl ReactUiPlugin {
 /// `#define_import_path` with the shader composer.
 ///
 /// Split out of [`Plugin::build`]'s render-gated block so asset-capable tests
-/// (see `filters.rs`) can register the shaders without the render sub-app;
-/// callers must have `AssetPlugin` and the `Shader` asset set up.
+/// (see `filters/test_util.rs`) can register the shaders without the render
+/// sub-app; callers must have `AssetPlugin` and the `Shader` asset set up.
+///
+/// Each shader lives next to its loading code — the built-in pass shaders
+/// beside `filters/builtin`'s `ReactFilter::shader` impls, the prelude and
+/// composite beside `layer/render.rs`'s pipelines — and the embedded paths
+/// mirror that layout (this macro roots them at THIS file's directory).
 pub(crate) fn register_layer_shader_assets(app: &mut App) {
     bevy::shader::load_shader_library!(app, "layer/filter_prelude.wgsl");
     embedded_asset!(app, "layer/composite.wgsl");
-    embedded_asset!(app, "layer/color_matrix.wgsl");
-    embedded_asset!(app, "layer/blur.wgsl");
+    embedded_asset!(app, "filters/builtin/color_matrix.wgsl");
+    embedded_asset!(app, "filters/builtin/blur.wgsl");
 }
 
 impl Plugin for ReactUiPlugin {

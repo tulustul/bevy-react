@@ -121,6 +121,7 @@ Runtime behavior worth knowing: `transition: { filter }` eases matching chains p
 - If you find any broken unit test, ask user if a fix for it is needed.
 - Ask the user questions if uncertain.
 - Avoid testing application manually using xdotool or similar tools until explicitly asked. It's just too slow. Use Let the human do manual tests. You are allowed to use `--shoot` though.
+- Avoid big files. 500 lines is optimal, 1000 is a max. Split if needed.
 
 ### Screenshotting the demos app (visual verification)
 
