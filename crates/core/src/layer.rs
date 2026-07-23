@@ -15,6 +15,17 @@
 //! translate/opacity animation of a promoted subtree costs no re-capture —
 //! promotion is the `will-change` pattern, an optimization rather than a tax.
 //!
+//! Captures are also **clip-independent**: ancestor clipping (a scroll
+//! container or the viewport) never reaches the captured pixels — members
+//! are captured under *interior* clips only (the cascade restarted at the
+//! layer root, [`clip`]) and the ancestor clip clamps the **composite quad**
+//! at draw time instead (web semantics: `overflow` clips the filtered
+//! *result*). This is what makes the translation-invariance above actually
+//! hold under scroll: without it, a capture taken while clipped would be
+//! served stale after scrolling into view. An offscreen layer still captures
+//! when dirty (its quad just draws nothing) — the accepted cost is invisible
+//! re-captures for continuously-animated offscreen subtrees.
+//!
 //! Promotion is a *render-side* concern: the subtree stays in the main UI tree
 //! (layout, picking, refs, animations untouched); promoting inserts the
 //! [`PromotedLayer`] marker on the existing entity and demoting removes it.
@@ -35,6 +46,7 @@ use bevy::ui::{ComputedNode, UiGlobalTransform};
 use crate::animations::AnimatableProperty;
 use crate::protocol::{NodeId, Props};
 
+pub mod clip;
 pub mod render;
 
 /// Why a node is promoted — one bit per rule, OR'd together. A node is
@@ -89,8 +101,10 @@ pub struct LayerGroupAlpha(pub f32);
 /// translation — even subpixel — shifts the capture window and the composite
 /// quad by the same amount and never changes the captured pixels (the layer
 /// cache holds; the quad is sampled bilinearly at its fractional position).
-/// Only `size` (whole texels, ceil of the border box plus outset) keys
-/// texture allocation.
+/// Ancestor clipping cannot break this invariance: captures are
+/// clip-independent (see [`clip`]) and the ancestor clip clamps the quad at
+/// composite time instead. Only `size` (whole texels, ceil of the border box
+/// plus outset) keys texture allocation.
 #[derive(Component, Debug, Clone, Copy, PartialEq)]
 pub struct LayerCaptureRect {
     /// Top-left of the capture window (border box minus the outset margin),
@@ -539,7 +553,9 @@ pub fn sync_layer_geometry(
     // layer's capture, which clips at its rect — a filtered layer whose
     // inflated rect escapes it loses part of its bleed (web filters don't
     // clip; known divergence, hence the warn). Top-level layers composite to
-    // the screen and are exempt. Deduped per root on the (inner, outer) rect
+    // the screen and are exempt. (Distinct from ancestor *overflow* clipping,
+    // which is composite-time — see [`clip`] — and clips bleed correctly:
+    // this is the capture TEXTURE's own bounds, the ortho window.) Deduped per root on the (inner, outer) rect
     // pair so a steady bleed reports once and any geometry change re-reports.
     // Bound the dedup map to this frame's candidates — not all active roots:
     // a root that stays promoted (e.g. via opacity) while its filter is

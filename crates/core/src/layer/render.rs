@@ -42,6 +42,8 @@
 //! `RenderPipelineDescriptor` (filter vertex stage = prelude module, fragment
 //! stage = pass module).
 
+pub mod clip;
+
 use std::ops::Range;
 
 use bevy::asset::{AssetServer, Handle};
@@ -138,6 +140,10 @@ pub struct ExtractedLayer {
     pub min: Vec2,
     /// Capture texture size in whole texels.
     pub size: UVec2,
+    /// The screen-space rect the composite quad clamps to (the layer root's
+    /// ancestor clipping, applied at composite time instead of capture time —
+    /// see [`clip`]). `None` = unclipped.
+    pub quad_clip: Option<bevy::math::Rect>,
     /// Composite-time group alpha.
     pub alpha: f32,
     /// Color format of the camera target — capture textures must match, or
@@ -287,6 +293,7 @@ pub fn extract_ui_layers(
     >,
     membership: Extract<Res<LayerMembership>>,
     repaints: Extract<Res<super::LayerRepaintState>>,
+    clips: Extract<Res<crate::layer::clip::LayerClips>>,
     cameras: Extract<Query<(RenderEntity, &Camera), Or<(With<Camera2d>, With<Camera3d>)>>>,
     main_pass_formats: Res<CameraMainPassTextureFormats>,
     store: Res<LayerTextureStore>,
@@ -415,6 +422,7 @@ pub fn extract_ui_layers(
             quad_entity,
             min,
             size,
+            quad_clip: clips.quads.get(&root).copied().flatten(),
             alpha: alpha.0.clamp(0.0, 1.0),
             target_format,
             needs_capture,
@@ -915,17 +923,26 @@ pub fn prepare_layer_composites(
         };
         let start = meta.vertices.len() as u32;
         // Fractional quad position (bilinear sampling smooths subpixel motion
-        // of a cached capture — the browser tradeoff).
-        let (min, max) = (layer.min, layer.min + layer.size.as_vec2());
-        // Full-texture UVs (spike: texture == rect; slot-relative UVs arrive
-        // with the shared atlas).
+        // of a cached capture — the browser tradeoff), clamped to the layer's
+        // ancestor clip: the CAPTURE is clip-independent (interior clips
+        // only — see `clip::swap_interior_clips_in`), so the quad is where
+        // scroll/viewport clipping applies, with UVs shifted proportionally
+        // on clamped sides. A fully clipped-away layer draws no quad at all
+        // (`ranges[idx]` stays `None`, the item's batch_range stays `0..0`).
+        let Some(q) = clip::clip_quad(layer.min, layer.size, layer.quad_clip) else {
+            continue;
+        };
+        let (min, max) = (q.pos_min, q.pos_max);
+        let (uv_min, uv_max) = (q.uv_min, q.uv_max);
+        // UVs are quad-relative (spike: texture == rect; slot-relative UVs
+        // arrive with the shared atlas).
         let corners = [
-            ([min.x, min.y, 0.0], [0.0, 0.0]),
-            ([max.x, min.y, 0.0], [1.0, 0.0]),
-            ([max.x, max.y, 0.0], [1.0, 1.0]),
-            ([min.x, min.y, 0.0], [0.0, 0.0]),
-            ([max.x, max.y, 0.0], [1.0, 1.0]),
-            ([min.x, max.y, 0.0], [0.0, 1.0]),
+            ([min.x, min.y, 0.0], [uv_min.x, uv_min.y]),
+            ([max.x, min.y, 0.0], [uv_max.x, uv_min.y]),
+            ([max.x, max.y, 0.0], [uv_max.x, uv_max.y]),
+            ([min.x, min.y, 0.0], [uv_min.x, uv_min.y]),
+            ([max.x, max.y, 0.0], [uv_max.x, uv_max.y]),
+            ([min.x, max.y, 0.0], [uv_min.x, uv_max.y]),
         ];
         for (position, uv) in corners {
             meta.vertices.push(LayerCompositeVertex {

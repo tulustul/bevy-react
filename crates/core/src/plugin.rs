@@ -215,7 +215,9 @@ impl Plugin for ReactUiPlugin {
                 use bevy::render::{
                     ExtractSchedule, GpuResourceAppExt, Render, RenderStartup, RenderSystems,
                 };
-                use bevy::ui_render::{TransparentUi, extract_ui_camera_view, ui_pass};
+                use bevy::ui_render::{
+                    RenderUiSystems, TransparentUi, extract_ui_camera_view, ui_pass,
+                };
 
                 render_app
                     .init_resource::<lr::ExtractedUiLayers>()
@@ -233,9 +235,47 @@ impl Plugin for ReactUiPlugin {
                             lr::init_layer_filter_pipeline,
                         ),
                     )
+                    .init_resource::<lr::clip::SwappedClips>()
                     .add_systems(
                         ExtractSchedule,
-                        lr::extract_ui_layers.after(extract_ui_camera_view),
+                        (
+                            lr::extract_ui_layers.after(extract_ui_camera_view),
+                            // The extract-window clip swap: members'
+                            // CalculatedClip carries INTERIOR clips for
+                            // exactly the span of the stock UI extraction
+                            // sets (the main world is exclusively borrowed
+                            // here, so nothing main-world can observe it).
+                            // Explicitly bracket every RenderUiSystems set —
+                            // there is no umbrella set to hang onto.
+                            lr::clip::swap_interior_clips_in
+                                .before(RenderUiSystems::ExtractCameraViews)
+                                .before(RenderUiSystems::ExtractBoxShadows)
+                                .before(RenderUiSystems::ExtractBackgrounds)
+                                .before(RenderUiSystems::ExtractImages)
+                                .before(RenderUiSystems::ExtractTextureSlice)
+                                .before(RenderUiSystems::ExtractBorders)
+                                .before(RenderUiSystems::ExtractViewportNodes)
+                                .before(RenderUiSystems::ExtractTextBackgrounds)
+                                .before(RenderUiSystems::ExtractTextShadows)
+                                .before(RenderUiSystems::ExtractText)
+                                .before(RenderUiSystems::ExtractCursor)
+                                .before(RenderUiSystems::ExtractDebug)
+                                .before(RenderUiSystems::ExtractGradient),
+                            lr::clip::swap_interior_clips_out
+                                .after(RenderUiSystems::ExtractCameraViews)
+                                .after(RenderUiSystems::ExtractBoxShadows)
+                                .after(RenderUiSystems::ExtractBackgrounds)
+                                .after(RenderUiSystems::ExtractImages)
+                                .after(RenderUiSystems::ExtractTextureSlice)
+                                .after(RenderUiSystems::ExtractBorders)
+                                .after(RenderUiSystems::ExtractViewportNodes)
+                                .after(RenderUiSystems::ExtractTextBackgrounds)
+                                .after(RenderUiSystems::ExtractTextShadows)
+                                .after(RenderUiSystems::ExtractText)
+                                .after(RenderUiSystems::ExtractCursor)
+                                .after(RenderUiSystems::ExtractDebug)
+                                .after(RenderUiSystems::ExtractGradient),
+                        ),
                     )
                     .add_systems(
                         Render,
@@ -503,6 +543,7 @@ impl Plugin for ReactUiPlugin {
         app.init_resource::<crate::layer::LayersRegistry>();
         app.init_resource::<crate::layer::LayerContentDirt>();
         app.init_resource::<crate::layer::LayerRepaintState>();
+        app.init_resource::<crate::layer::clip::LayerClips>();
         app.add_systems(
             Update,
             (
@@ -539,6 +580,14 @@ impl Plugin for ReactUiPlugin {
                 // text systems (PostLayout) have re-shaped — turn the frame's
                 // dirt into per-layer repaint decisions for extraction.
                 crate::layer::resolve_layer_repaints
+                    .after(crate::layer::sync_layer_geometry)
+                    .after(bevy::ui::UiSystems::PostLayout),
+                // Interior/quad clip maps: needs this frame's membership
+                // (sync_layer_geometry) and bevy_ui's final CalculatedClip
+                // (PostLayout). Deliberately NOT feeding
+                // resolve_layer_repaints — clip changes never dirty a
+                // capture (scrolling must stay a cache hit).
+                crate::layer::clip::sync_layer_clips
                     .after(crate::layer::sync_layer_geometry)
                     .after(bevy::ui::UiSystems::PostLayout),
                 // Re-clamps deferred controlled-scroll requests (a pin to the
