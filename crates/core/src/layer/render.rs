@@ -24,11 +24,18 @@
 //!    [`prepare_layer_filters`]), all of them or none — an uncompiled pass
 //!    pipeline aborts the whole run and [`FilterSlot::output_valid`] stays
 //!    false, so the layer restages and retries next frame. And…
-//! 5. …the composite quad ([`DrawLayerComposite`], drawn inside the stock
+//! 5. …a layer with the `TRANSFORM3D` promotion reason replays its staged
+//!    mip-downsample chain last in the iteration ([`mips`]) — its sampled
+//!    texture (capture, or filter output) carries a full mip chain, rebuilt
+//!    only when level 0 was rewritten. Finally…
+//! 6. …the composite quad ([`DrawLayerComposite`], drawn inside the stock
 //!    `ui_pass` at the subtree's stacking position) samples the capture — or,
 //!    for a filtered layer, the final filter pass's output — with
 //!    premultiplied blending (`One`/`OneMinusSrcAlpha`) and multiplies rgb
-//!    *and* alpha by the group alpha.
+//!    *and* alpha by the group alpha. 3D-transformed quads sample trilinear +
+//!    anisotropic over the mip chain (minification shimmer) and feather ~1px
+//!    of coverage at their silhouette (`composite.wgsl`'s edge AA — diagonal
+//!    edges rasterize without MSAA).
 //!
 //! Re-verify on Bevy upgrades (spike checklist): `TransparentUi` field set,
 //! `SortedRenderPhase::{items, transient_items}` visibility, `prepare_uinodes`
@@ -43,7 +50,11 @@
 //! stage = pass module).
 
 pub mod clip;
+pub mod mips;
+pub mod store;
 pub mod transform3d;
+
+pub use store::*;
 
 use std::ops::Range;
 
@@ -65,7 +76,6 @@ use bevy::render::render_resource::binding_types::{sampler, texture_2d, uniform_
 use bevy::render::render_resource::*;
 use bevy::render::renderer::{RenderContext, RenderDevice, RenderQueue, ViewQuery};
 use bevy::render::sync_world::{MainEntity, RenderEntity, TemporaryRenderEntity};
-use bevy::render::texture::CachedTexture;
 use bevy::render::view::{ExtractedView, RetainedViewEntity, ViewUniform};
 use bevy::shader::Shader;
 use bevy::shader::ShaderCacheError;
@@ -166,6 +176,13 @@ pub struct ExtractedLayer {
     /// from `LayerTransform3dMatrix`). `None` = untransformed (absent style
     /// or identity params) — the quad takes the CPU clip path unchanged.
     pub transform3d: Option<Mat4>,
+    /// Whether the layer carries the `TRANSFORM3D` promotion reason — its
+    /// sampled texture allocates a mip chain (see [`mips`]). Keyed on the
+    /// *reason*, not the matrix value: identity↔non-identity changes must
+    /// never realloc/re-capture, and the chain stays warm for the first
+    /// animated frame. Trilinear sampling itself engages only when
+    /// [`Self::transform3d`] is `Some` AND the chain is valid.
+    pub wants_mips: bool,
 }
 
 /// Per-frame extraction output. `layers` is index-aligned with
@@ -188,94 +205,6 @@ pub struct ExtractedUiLayers {
     pub capture_order: Vec<usize>,
 }
 
-/// The per-layer offscreen capture textures (spike: one texture per layer;
-/// the planned per-depth shared atlas swaps in behind the same indices).
-/// Index-aligned with [`ExtractedUiLayers::layers`]; entries are clones of the
-/// persistent [`LayerTextureStore`] slots.
-#[derive(Resource, Default)]
-pub struct LayerAtlases {
-    pub textures: Vec<CachedTexture>,
-}
-
-/// One layer's persistent capture texture. Unlike Bevy's `TextureCache`
-/// (descriptor-keyed pool — same-size layers can swap textures between frames,
-/// and nothing pins content), a slot is keyed by the layer root's `MainEntity`,
-/// so a clean layer's texture reliably still holds last frame's capture.
-pub struct LayerSlot {
-    pub texture: CachedTexture,
-    pub size: UVec2,
-    pub format: TextureFormat,
-    /// Composite bind group, built lazily and kept until realloc (per-frame
-    /// bind-group creation is real cost at hundreds of layers).
-    pub bind_group: Option<BindGroup>,
-    /// Whether the texture holds a *complete* capture. A capture that runs
-    /// while any of its items' pipelines are still compiling renders those
-    /// items as nothing (`phase.render` skips them silently) — serving that
-    /// from cache would freeze a blank/partial layer on screen. Only a
-    /// capture whose pipelines were all ready marks the content valid;
-    /// until then extraction keeps re-capturing.
-    pub content_valid: bool,
-    /// Filter-pass state, present iff the layer had a chain last frame.
-    /// **Cleared whenever the chain disappears** ([`prepare_layer_textures`]):
-    /// [`ResolvedFilterChain::version`] restarts at 1 per chain lifetime
-    /// (demote/re-promote), so a stale `params_version` surviving the chain's
-    /// absence could collide with a restarted version and skip a needed
-    /// re-run with old params.
-    pub filter: Option<FilterSlot>,
-    pub last_seen: u64,
-}
-
-/// A layer's persistent filter-pass resources: two same-size ping-pong
-/// textures (pass 0 samples the capture and writes `textures[0]`, pass 1
-/// samples `textures[0]` and writes `textures[1]`, and so on) plus the
-/// bookkeeping that lets a clean chain skip re-running its passes. Allocated
-/// at the capture's size + format; dies with the [`LayerSlot`] on realloc.
-pub struct FilterSlot {
-    /// The ping-pong targets (`RENDER_ATTACHMENT | TEXTURE_BINDING`).
-    pub textures: [CachedTexture; 2],
-    /// The [`ExtractedChain::version`] the last staged run used; `0` = never
-    /// staged (versions start at 1).
-    pub params_version: u32,
-    /// Whether `textures[output_index]` holds a *complete* filter output.
-    /// Staging a run resets it; [`prepare_layer_filters`] sets it back only
-    /// when the whole staged chain is certain to execute this frame (every
-    /// pass pipeline already compiled AND the source capture valid — the same
-    /// conservative discipline as [`LayerSlot::content_valid`]). While false,
-    /// [`prepare_layer_composites`] withholds the quad's batch (draws
-    /// nothing — never a flash of unfiltered content) and the layer restages
-    /// every frame until the run goes through.
-    pub output_valid: bool,
-    /// Consecutive frames the composite gate has withheld this layer's quad
-    /// (no complete filtered output to sample); reset to 0 when
-    /// [`Self::output_valid`] flips true. Drives the stuck-gate warning (see
-    /// [`Self::gate_warned`]) — a pipeline that never compiles (user WGSL
-    /// error) would otherwise leave the subtree invisible forever with no
-    /// log from this module.
-    pub gated_frames: u32,
-    /// Whether this stuck episode already warned (once per episode; reset
-    /// with [`Self::gated_frames`]). An errored pass pipeline warns
-    /// immediately with the compile error; a still-compiling one only after
-    /// [`STUCK_GATE_HANG_FRAMES`].
-    pub gate_warned: bool,
-    /// Which ping-pong texture the final pass writes: `(len - 1) % 2`.
-    pub output_index: usize,
-    /// Composite bind group sampling `textures[.0]` — built by
-    /// [`prepare_layer_composites`]' filter retarget, kept until realloc like
-    /// [`LayerSlot::bind_group`]; the stored index invalidates it when
-    /// `output_index` flips (pass-count parity change).
-    pub composite_bind_group: Option<(usize, BindGroup)>,
-}
-
-/// Persistent (cross-frame) capture textures, keyed by layer root — the
-/// resource that makes capture caching possible. Slots are allocated /
-/// reallocated by [`prepare_layer_textures`] and evicted a few frames after
-/// their layer disappears (demote, despawn).
-#[derive(Resource, Default)]
-pub struct LayerTextureStore {
-    pub slots: HashMap<MainEntity, LayerSlot>,
-    pub frame: u64,
-}
-
 /// Extracts promoted layers into the render world and spawns their synthetic
 /// capture views. Must run after `extract_ui_camera_view`: that system ends
 /// with a `retain` that would drop any phase it didn't create.
@@ -285,17 +214,15 @@ pub fn extract_ui_layers(
     mut phases: ResMut<ViewSortedRenderPhases<TransparentUi>>,
     mut extracted: ResMut<ExtractedUiLayers>,
     layers: Extract<
-        Query<
-            (
-                Entity,
-                &LayerCaptureRect,
-                &LayerGroupAlpha,
-                &ComputedUiTargetCamera,
-                Option<&ResolvedFilterChain>,
-                Option<&crate::layer::transform3d::LayerTransform3dMatrix>,
-            ),
-            With<PromotedLayer>,
-        >,
+        Query<(
+            Entity,
+            &LayerCaptureRect,
+            &LayerGroupAlpha,
+            &ComputedUiTargetCamera,
+            Option<&ResolvedFilterChain>,
+            Option<&crate::layer::transform3d::LayerTransform3dMatrix>,
+            &PromotedLayer,
+        )>,
     >,
     membership: Extract<Res<LayerMembership>>,
     repaints: Extract<Res<super::LayerRepaintState>>,
@@ -318,7 +245,7 @@ pub fn extract_ui_layers(
     // v1: all layers composite on one camera — the first layer root's UI
     // target camera. (Multi-camera roots are a documented non-goal for now.)
     let mut layer_index: HashMap<Entity, usize> = HashMap::default();
-    for (root, rect, alpha, target_camera, filter_chain, transform3d) in layers.iter() {
+    for (root, rect, alpha, target_camera, filter_chain, transform3d, promoted) in layers.iter() {
         let Some(camera_main) = target_camera.get() else {
             continue;
         };
@@ -379,13 +306,18 @@ pub fn extract_ui_layers(
         let quad_entity = commands.spawn(TemporaryRenderEntity).id();
         phases.prepare_for_new_frame(retained);
 
+        let wants_mips = promoted.reasons.0 & crate::layer::PromotionReasons::TRANSFORM3D != 0;
         // Cache decision: re-capture on main-world dirt, or when the persistent
-        // slot can't serve (first frame, resize realloc, format flip).
+        // slot can't serve (first frame, resize realloc, format flip, or a
+        // mip-state flip — the fresh mipped/unmipped texture needs content).
         let cached_ok = store
             .slots
             .get(&MainEntity::from(root))
             .is_some_and(|slot| {
-                slot.content_valid && slot.size == size && slot.format == target_format
+                slot.content_valid
+                    && slot.size == size
+                    && slot.format == target_format
+                    && slot.mips.is_some() == wants_mips
             });
         let needs_capture = !cached_ok || repaints.dirty.contains(&root);
 
@@ -436,6 +368,7 @@ pub fn extract_ui_layers(
             // Identity matrices stay `None`: the quad renders exactly like an
             // untransformed layer (CPU clip path), and picking stays inert.
             transform3d: transform3d.filter(|m| !m.identity).map(|m| m.model),
+            wants_mips,
         });
     }
 
@@ -615,156 +548,6 @@ pub fn redistribute_ui_layers(
     }
 }
 
-/// Maintains the persistent per-layer capture textures (camera target format —
-/// stolen pipelines were specialized against it; sample count 1 — `ui_pass`
-/// renders unsampled): get-or-(re)allocate each live layer's
-/// [`LayerTextureStore`] slot, mirror it into the index-aligned
-/// [`LayerAtlases`], and evict slots whose layer is gone. Also owns the
-/// [`FilterSlot`] lifecycle: ping-pong textures allocated while the layer has
-/// a chain, cleared (with their version bookkeeping — load-bearing, see the
-/// in-body comment) when it doesn't. Deliberately not Bevy's `TextureCache` —
-/// capture caching needs each layer to keep *its own* texture (and its
-/// pixels) across frames.
-pub fn prepare_layer_textures(
-    extracted: Res<ExtractedUiLayers>,
-    render_device: Res<RenderDevice>,
-    pipeline_cache: Res<PipelineCache>,
-    phases: Res<ViewSortedRenderPhases<TransparentUi>>,
-    mut store: ResMut<LayerTextureStore>,
-    mut atlases: ResMut<LayerAtlases>,
-) {
-    atlases.textures.clear();
-    let store = &mut *store;
-    store.frame += 1;
-    let frame = store.frame;
-    for layer in &extracted.layers {
-        let wanted = layer.size.max(UVec2::ONE);
-        let slot = store
-            .slots
-            .entry(layer.main_entity)
-            .or_insert_with(|| alloc_layer_slot(&render_device, wanted, layer.target_format));
-        if slot.size != wanted || slot.format != layer.target_format {
-            // Resize / format flip: fresh texture, and the stale bind group
-            // dies with the slot — as does the filter state (`filter: None`),
-            // which re-allocates at the new size just below. Extraction
-            // already flagged `needs_capture`.
-            *slot = alloc_layer_slot(&render_device, wanted, layer.target_format);
-        }
-        if layer.chain.is_some() {
-            // Ping-pong textures ride the capture's size + format; a realloc
-            // above reset `filter` to `None`, so this re-allocates them too
-            // (with `output_valid: false` / `params_version: 0` — the staged
-            // run restarts from scratch).
-            if slot.filter.is_none() {
-                slot.filter = Some(alloc_filter_slot(
-                    &render_device,
-                    wanted,
-                    layer.target_format,
-                ));
-            }
-        } else {
-            // No chain this frame: drop the filter state entirely.
-            // Load-bearing, not just cleanup — `ResolvedFilterChain.version`
-            // restarts at 1 per chain lifetime (demote/re-promote, filter
-            // unset/re-set), so a surviving `params_version` could collide
-            // with a restarted version and skip a needed re-run with stale
-            // params.
-            slot.filter = None;
-        }
-        if layer.needs_capture {
-            // This frame's capture is only servable from cache later if every
-            // item actually renders — a still-compiling pipeline makes
-            // `phase.render` skip its item silently, and freezing that
-            // blank/partial capture would blank the layer on screen for good
-            // (the exact failure mode of capturing during app startup).
-            // Conservative by construction: a pipeline that compiles between
-            // here and the capture pass costs one redundant re-capture.
-            slot.content_valid = phases.get(&layer.retained).is_some_and(|phase| {
-                !phase.items.is_empty()
-                    && phase
-                        .items
-                        .values()
-                        .all(|i| pipeline_cache.get_render_pipeline(i.pipeline).is_some())
-            });
-        }
-        slot.last_seen = frame;
-        atlases.textures.push(slot.texture.clone());
-    }
-    // Demoted/despawned layers: keep the slot for a short grace (cheap
-    // re-promotion churn), then free the texture memory.
-    store.slots.retain(|_, slot| slot.last_seen + 3 >= frame);
-}
-
-fn alloc_layer_slot(render_device: &RenderDevice, size: UVec2, format: TextureFormat) -> LayerSlot {
-    let texture = render_device.create_texture(&TextureDescriptor {
-        label: Some("ui_layer_capture"),
-        size: Extent3d {
-            width: size.x,
-            height: size.y,
-            depth_or_array_layers: 1,
-        },
-        mip_level_count: 1,
-        sample_count: 1,
-        dimension: TextureDimension::D2,
-        format,
-        usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING,
-        view_formats: &[],
-    });
-    let default_view = texture.create_view(&TextureViewDescriptor::default());
-    LayerSlot {
-        texture: CachedTexture {
-            texture,
-            default_view,
-        },
-        size,
-        format,
-        bind_group: None,
-        content_valid: false,
-        filter: None,
-        last_seen: 0,
-    }
-}
-
-/// Allocate a layer's two filter ping-pong textures at the capture's size and
-/// format (same-size passes — the prelude documents `uv` as a 1:1 lookup; the
-/// capture format keeps every pass target compatible with the composite).
-fn alloc_filter_slot(
-    render_device: &RenderDevice,
-    size: UVec2,
-    format: TextureFormat,
-) -> FilterSlot {
-    let alloc = |label: &'static str| {
-        let texture = render_device.create_texture(&TextureDescriptor {
-            label: Some(label),
-            size: Extent3d {
-                width: size.x,
-                height: size.y,
-                depth_or_array_layers: 1,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: TextureDimension::D2,
-            format,
-            usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING,
-            view_formats: &[],
-        });
-        let default_view = texture.create_view(&TextureViewDescriptor::default());
-        CachedTexture {
-            texture,
-            default_view,
-        }
-    };
-    FilterSlot {
-        textures: [alloc("ui_layer_filter_ping"), alloc("ui_layer_filter_pong")],
-        params_version: 0,
-        output_valid: false,
-        gated_frames: 0,
-        gate_warned: false,
-        output_index: 0,
-        composite_bind_group: None,
-    }
-}
-
 /// One composite-quad vertex: physical screen position (the stock UI view
 /// projects it), capture UV, and the group alpha. Future composite params
 /// (per-rule) extend this struct — the pass stays rule-agnostic.
@@ -800,6 +583,27 @@ pub struct LayerCompositeBatch {
     pub atlas: usize,
     /// Dynamic offset of this quad's [`transform3d::CompositeUniforms`] entry.
     pub uniform_offset: u32,
+}
+
+/// Edge-AA inflation for 3D-transformed composite quads, in pre-transform
+/// local px: the quad grows this much on every side (UVs extended
+/// proportionally past `[0, 1]`, clamped by the sampler) so the fragment
+/// stage can center a feather of the same width on the true rect edge — the
+/// outside half lands on the inflated ring, the inside half on real content.
+const EDGE_AA_INFLATE_PX: f32 = 1.0;
+
+/// The transformed quad's geometry, inflated by `inset` local px on every
+/// side with UVs extended proportionally — `uv ∈ [0, 1]` still maps exactly
+/// the true rect, which is what the shader's coverage term measures against.
+fn inflated_transform_quad(min: Vec2, size: UVec2, inset: f32) -> clip::ClippedQuad {
+    let size = size.as_vec2().max(Vec2::ONE);
+    let uv_inset = inset / size;
+    clip::ClippedQuad {
+        pos_min: min - inset,
+        pos_max: min + size + inset,
+        uv_min: -uv_inset,
+        uv_max: Vec2::ONE + uv_inset,
+    }
 }
 
 /// Builds composite-quad vertices + bind groups and stamps
@@ -909,21 +713,60 @@ pub fn prepare_layer_composites(
             // Cached until realloc; invalidated when `output_index` flips
             // (pass-count parity change).
             let output = filter.output_index;
-            if !matches!(&filter.composite_bind_group, Some((built, _)) if *built == output) {
-                filter.composite_bind_group = Some((
-                    output,
-                    render_device.create_bind_group(
-                        "ui_layer_composite_filtered",
-                        &pipeline_cache.get_bind_group_layout(&pipeline.atlas_layout),
-                        &BindGroupEntries::sequential((
-                            &filter.textures[output].default_view,
-                            &pipeline.sampler,
-                        )),
-                    ),
+            // Trilinear only for a non-identity quad over a valid mip chain;
+            // otherwise the bilinear level-0 view (correct, just unmipped —
+            // never a gate, never a stale mip).
+            if layer.transform3d.is_some() && filter.mips_valid {
+                let Some(chain) = &filter.mips[output] else {
+                    unreachable!("mips_valid implies a staged chain");
+                };
+                if !matches!(&filter.composite_bind_group_mips, Some((built, _)) if *built == output)
+                {
+                    filter.composite_bind_group_mips = Some((
+                        output,
+                        render_device.create_bind_group(
+                            "ui_layer_composite_filtered_mips",
+                            &pipeline_cache.get_bind_group_layout(&pipeline.atlas_layout),
+                            &BindGroupEntries::sequential((
+                                &chain.full_view,
+                                &pipeline.sampler_mips,
+                            )),
+                        ),
+                    ));
+                }
+                let (_, bind_group) = filter.composite_bind_group_mips.as_ref().expect("just set");
+                bind_group.clone()
+            } else {
+                if !matches!(&filter.composite_bind_group, Some((built, _)) if *built == output) {
+                    filter.composite_bind_group = Some((
+                        output,
+                        render_device.create_bind_group(
+                            "ui_layer_composite_filtered",
+                            &pipeline_cache.get_bind_group_layout(&pipeline.atlas_layout),
+                            &BindGroupEntries::sequential((
+                                &filter.textures[output].default_view,
+                                &pipeline.sampler,
+                            )),
+                        ),
+                    ));
+                }
+                let (_, bind_group) = filter.composite_bind_group.as_ref().expect("just set");
+                bind_group.clone()
+            }
+        } else if layer.transform3d.is_some()
+            && slot.mips_valid
+            && let Some(chain) = &slot.mips
+        {
+            // Trilinear variant over the capture's full-mip view (same layout
+            // slot — any Filtering sampler fits). Lazy like `bind_group`.
+            if slot.bind_group_mips.is_none() {
+                slot.bind_group_mips = Some(render_device.create_bind_group(
+                    "ui_layer_composite_atlas_mips",
+                    &pipeline_cache.get_bind_group_layout(&pipeline.atlas_layout),
+                    &BindGroupEntries::sequential((&chain.full_view, &pipeline.sampler_mips)),
                 ));
             }
-            let (_, bind_group) = filter.composite_bind_group.as_ref().expect("just set");
-            bind_group.clone()
+            slot.bind_group_mips.clone().expect("just set")
         } else {
             // Reuse the slot's bind group across frames; it dies on realloc.
             if slot.bind_group.is_none() {
@@ -946,27 +789,24 @@ pub fn prepare_layer_composites(
         //
         // A 3D-transformed quad can't be CPU-clamped (the clip rect is
         // axis-aligned in screen space; the transformed quad isn't): it keeps
-        // its full geometry/UVs and the ancestor clip moves into the fragment
-        // stage via the per-quad uniform. A "fully clipped away" verdict is
-        // likewise unknowable pre-transform, so the transformed path always
-        // draws. Untransformed quads keep the CPU path and an open clip
-        // sentinel — the shader stays single-path.
-        let (q, model, clip_rect) = match layer.transform3d {
+        // its full geometry/UVs — inflated for the edge-AA feather — and the
+        // ancestor clip moves into the fragment stage via the per-quad
+        // uniform. A "fully clipped away" verdict is likewise unknowable
+        // pre-transform, so the transformed path always draws. Untransformed
+        // quads keep the CPU path, an open clip sentinel, and a zero feather —
+        // the shader stays single-path and pixel-identical for them.
+        let (q, model, clip_rect, feather) = match layer.transform3d {
             Some(model) => (
-                clip::ClippedQuad {
-                    pos_min: layer.min,
-                    pos_max: layer.min + layer.size.as_vec2(),
-                    uv_min: Vec2::ZERO,
-                    uv_max: Vec2::ONE,
-                },
+                inflated_transform_quad(layer.min, layer.size, EDGE_AA_INFLATE_PX),
                 model,
                 layer.quad_clip,
+                EDGE_AA_INFLATE_PX,
             ),
             None => {
                 let Some(q) = clip::clip_quad(layer.min, layer.size, layer.quad_clip) else {
                     continue;
                 };
-                (q, Mat4::IDENTITY, None)
+                (q, Mat4::IDENTITY, None, 0.0)
             }
         };
         let (min, max) = (q.pos_min, q.pos_max);
@@ -998,6 +838,9 @@ pub fn prepare_layer_composites(
                 model,
                 clip_min: clip_rect.map_or(open_min, |r| r.min),
                 clip_max: clip_rect.map_or(open_max, |r| r.max),
+                edge_feather: feather,
+                pad_a: 0.0,
+                pad_b: Vec2::ZERO,
             });
         commands
             .entity(layer.quad_entity)
@@ -1065,6 +908,12 @@ pub struct LayerCompositePipeline {
     /// offset) — 3D model matrix + fragment clip rect.
     pub uniform_layout: BindGroupLayoutDescriptor,
     pub sampler: Sampler,
+    /// Trilinear + anisotropic sampler for non-identity 3D-transformed quads
+    /// over a valid mip chain (see [`mips`]) — tilting minifies the capture,
+    /// where bilinear-over-level-0 shimmers. Same layout slot as
+    /// [`Self::sampler`] (any Filtering sampler fits), selected per quad via
+    /// the variant bind groups.
+    pub sampler_mips: Sampler,
     pub shader: Handle<Shader>,
 }
 
@@ -1105,6 +954,17 @@ pub fn init_layer_composite_pipeline(
             label: Some("ui_layer_composite_sampler"),
             mag_filter: FilterMode::Linear,
             min_filter: FilterMode::Linear,
+            ..Default::default()
+        }),
+        // Anisotropy needs no wgpu feature; it requires all three filters
+        // Linear (which trilinear wants anyway) and a texture that actually
+        // has a mip chain — the bind-group selection guarantees that.
+        sampler_mips: render_device.create_sampler(&SamplerDescriptor {
+            label: Some("ui_layer_composite_sampler_mips"),
+            mag_filter: FilterMode::Linear,
+            min_filter: FilterMode::Linear,
+            mipmap_filter: bevy::render::render_resource::MipmapFilterMode::Linear,
+            anisotropy_clamp: 8,
             ..Default::default()
         }),
         shader: bevy::asset::load_embedded_asset!(asset_server.as_ref(), "composite.wgsl"),
@@ -1510,6 +1370,9 @@ pub fn prepare_layer_filters(
         }
         filter.params_version = chain.version;
         filter.output_valid = false;
+        // The run rewrites the output's level 0 — its mip chain goes stale
+        // until `prepare_layer_mips` (ordered after this system) restages it.
+        filter.mips_valid = false;
         filter.output_index = filter_output_index(chain.passes.len());
 
         let resolution = size.as_vec2();
@@ -1629,6 +1492,7 @@ pub fn ui_layer_capture_pass(
     atlases: Res<LayerAtlases>,
     phases: Res<ViewSortedRenderPhases<TransparentUi>>,
     filter_meta: Res<LayerFilterMeta>,
+    mip_meta: Res<mips::LayerMipMeta>,
     pipeline_cache: Res<PipelineCache>,
     mut ctx: RenderContext,
 ) {
@@ -1674,46 +1538,78 @@ pub fn ui_layer_capture_pass(
         // Filter replay — also when the capture above was skipped as cached:
         // a staged run over a clean capture is a params-only change (slider
         // move, time tick) re-filtering last frame's pixels.
-        let Some(run) = filter_meta.runs.get(idx).and_then(Option::as_ref) else {
-            continue;
-        };
-        // Resolve every pass pipeline up front: a `None` is a still-compiling
-        // pipeline — abort the whole run, never execute a partial chain.
-        // `output_valid` was only set by `prepare_layer_filters` if all of
-        // these resolved back in prepare (compiled pipelines don't regress),
-        // so an abort here means it stayed false: the quad is gated this
-        // frame and the layer restages + retries next frame.
-        let pipelines: Option<Vec<_>> = run
-            .passes
-            .iter()
-            .map(|pass| pipeline_cache.get_render_pipeline(pass.pipeline))
-            .collect();
-        let Some(pipelines) = pipelines else {
-            continue;
-        };
-        for (pass_data, pipeline) in run.passes.iter().zip(pipelines) {
-            let mut pass = ctx.begin_tracked_render_pass(RenderPassDescriptor {
-                label: Some("ui_layer_filter"),
-                color_attachments: &[Some(RenderPassColorAttachment {
-                    view: &pass_data.target,
-                    depth_slice: None,
-                    resolve_target: None,
-                    ops: Operations {
-                        // The fullscreen triangle replace-writes every texel,
-                        // so `Clear` vs `Load` is content-equivalent; `Clear`
-                        // skips loading stale contents on tiled GPUs.
-                        load: LoadOp::Clear(LinearRgba::NONE.into()),
-                        store: StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: None,
-                timestamp_writes: None,
-                occlusion_query_set: None,
-                multiview_mask: None,
-            });
-            pass.set_render_pipeline(pipeline);
-            pass.set_bind_group(0, &pass_data.bind_group, &[pass_data.uniform_offset]);
-            pass.draw(0..3, 0..1);
+        if let Some(run) = filter_meta.runs.get(idx).and_then(Option::as_ref) {
+            // Resolve every pass pipeline up front: a `None` is a
+            // still-compiling pipeline — abort the whole run, never execute a
+            // partial chain. `output_valid` was only set by
+            // `prepare_layer_filters` if all of these resolved back in
+            // prepare (compiled pipelines don't regress), so an abort here
+            // means it stayed false: the quad is gated this frame and the
+            // layer restages + retries next frame.
+            let pipelines: Option<Vec<_>> = run
+                .passes
+                .iter()
+                .map(|pass| pipeline_cache.get_render_pipeline(pass.pipeline))
+                .collect();
+            if let Some(pipelines) = pipelines {
+                for (pass_data, pipeline) in run.passes.iter().zip(pipelines) {
+                    let mut pass = ctx.begin_tracked_render_pass(RenderPassDescriptor {
+                        label: Some("ui_layer_filter"),
+                        color_attachments: &[Some(RenderPassColorAttachment {
+                            view: &pass_data.target,
+                            depth_slice: None,
+                            resolve_target: None,
+                            ops: Operations {
+                                // The fullscreen triangle replace-writes every
+                                // texel, so `Clear` vs `Load` is
+                                // content-equivalent; `Clear` skips loading
+                                // stale contents on tiled GPUs.
+                                load: LoadOp::Clear(LinearRgba::NONE.into()),
+                                store: StoreOp::Store,
+                            },
+                        })],
+                        depth_stencil_attachment: None,
+                        timestamp_writes: None,
+                        occlusion_query_set: None,
+                        multiview_mask: None,
+                    });
+                    pass.set_render_pipeline(pipeline);
+                    pass.set_bind_group(0, &pass_data.bind_group, &[pass_data.uniform_offset]);
+                    pass.draw(0..3, 0..1);
+                }
+            }
+        }
+
+        // Mip downsample replay — after capture AND filter, so the chain
+        // reads this frame's level 0 (of whichever texture the composite
+        // samples). Staged only when stale (`mips_valid` — a cached capture
+        // keeps last frame's mips and stages nothing); the pipeline was
+        // verified compiled at staging, so a `None` here is unreachable-in-
+        // practice and simply skips.
+        if let Some(run) = mip_meta.runs.get(idx).and_then(Option::as_ref)
+            && let Some(pipeline) = pipeline_cache.get_render_pipeline(run.pipeline)
+        {
+            for level in &run.levels {
+                let mut pass = ctx.begin_tracked_render_pass(RenderPassDescriptor {
+                    label: Some("ui_layer_mip_blit"),
+                    color_attachments: &[Some(RenderPassColorAttachment {
+                        view: &level.target,
+                        depth_slice: None,
+                        resolve_target: None,
+                        ops: Operations {
+                            load: LoadOp::Clear(LinearRgba::NONE.into()),
+                            store: StoreOp::Store,
+                        },
+                    })],
+                    depth_stencil_attachment: None,
+                    timestamp_writes: None,
+                    occlusion_query_set: None,
+                    multiview_mask: None,
+                });
+                pass.set_render_pipeline(pipeline);
+                pass.set_bind_group(0, &level.bind_group, &[]);
+                pass.draw(0..3, 0..1);
+            }
         }
     }
 }
@@ -1876,5 +1772,26 @@ mod tests {
             false
         });
         assert_eq!(seen, vec![1]);
+    }
+
+    /// The edge-AA inflation grows the quad symmetrically and extends UVs so
+    /// `uv ∈ [0, 1]` still maps exactly the true rect; a degenerate size
+    /// doesn't divide by zero.
+    #[test]
+    fn inflated_transform_quad_extends_uvs_proportionally() {
+        let q = inflated_transform_quad(Vec2::new(100.0, 50.0), UVec2::new(200, 100), 1.0);
+        assert_eq!(q.pos_min, Vec2::new(99.0, 49.0));
+        assert_eq!(q.pos_max, Vec2::new(301.0, 151.0));
+        assert_eq!(q.uv_min, Vec2::new(-1.0 / 200.0, -1.0 / 100.0));
+        assert_eq!(q.uv_max, Vec2::new(1.0 + 1.0 / 200.0, 1.0 + 1.0 / 100.0));
+        // uv=0 must still land on the true rect min: interpolating position
+        // by the uv fraction of the true edge recovers `min`.
+        let span = q.pos_max - q.pos_min;
+        let uv_span = q.uv_max - q.uv_min;
+        let at_uv_zero = q.pos_min + span * (Vec2::ZERO - q.uv_min) / uv_span;
+        assert!(at_uv_zero.abs_diff_eq(Vec2::new(100.0, 50.0), 1e-4));
+
+        let degenerate = inflated_transform_quad(Vec2::ZERO, UVec2::ZERO, 1.0);
+        assert!(degenerate.uv_min.is_finite());
     }
 }

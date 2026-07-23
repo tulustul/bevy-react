@@ -19,8 +19,9 @@ use bevy::render::render_phase::{
 use bevy::render::render_resource::{BindGroup, DynamicUniformBuffer, ShaderType};
 
 /// Per-quad composite params. Field order matches `CompositeParams` in
-/// `composite.wgsl` byte for byte (80 bytes; guarded by
-/// `composite_uniforms_match_the_documented_wgsl_layout`).
+/// `composite.wgsl` byte for byte (96 bytes; guarded by
+/// `composite_uniforms_match_the_documented_wgsl_layout`). Pad names are
+/// digit-free on purpose (the naga-namer constraint, see `FilterUniforms`).
 #[derive(Clone, Copy, ShaderType)]
 pub struct CompositeUniforms {
     /// Screen-space model matrix (physical px, homogeneous — the vertex stage
@@ -31,6 +32,14 @@ pub struct CompositeUniforms {
     /// quads against ([`open_clip`] sentinel = unclipped / already CPU-clamped).
     pub clip_min: Vec2,
     pub clip_max: Vec2,
+    /// Edge-feather width in screen px for the analytic edge AA of transformed
+    /// quads (their diagonal silhouettes rasterize without MSAA). `0.0`
+    /// disables the coverage term entirely — the untransformed path, which
+    /// must stay pixel-identical (its CPU-clamped UVs sit inside `[0,1]` at
+    /// clipped edges, where uv-distance feathering would be wrong).
+    pub edge_feather: f32,
+    pub pad_a: f32,
+    pub pad_b: Vec2,
 }
 
 /// The clip sentinel: an interval no on-screen fragment escapes, making the
@@ -88,11 +97,37 @@ impl<P: PhaseItem, const I: usize> RenderCommand<P> for SetCompositeUniforms<I> 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bevy::render::render_resource::encase::UniformBuffer;
 
-    /// The WGSL `CompositeParams` struct in `composite.wgsl` documents an
-    /// 80-byte uniform layout (mat4x4 + 2×vec2); the Rust mirror must match.
+    fn f32_at(bytes: &[u8], offset: usize) -> f32 {
+        f32::from_le_bytes(bytes[offset..offset + 4].try_into().unwrap())
+    }
+
+    /// The WGSL `CompositeParams` struct in `composite.wgsl` documents a
+    /// 96-byte uniform layout (mat4x4 + clip vec2s + feather + pads); the
+    /// Rust mirror must match field for field.
     #[test]
     fn composite_uniforms_match_the_documented_wgsl_layout() {
-        assert_eq!(CompositeUniforms::min_size().get(), 80);
+        assert_eq!(CompositeUniforms::min_size().get(), 96);
+
+        let value = CompositeUniforms {
+            model: Mat4::from_translation(bevy::math::Vec3::new(9.0, 0.0, 0.0)),
+            clip_min: Vec2::new(1.0, 2.0),
+            clip_max: Vec2::new(3.0, 4.0),
+            edge_feather: 1.5,
+            pad_a: 0.0,
+            pad_b: Vec2::ZERO,
+        };
+        let mut buffer = UniformBuffer::new(Vec::<u8>::new());
+        buffer.write(&value).expect("uniform write");
+        let bytes = buffer.into_inner();
+        assert_eq!(bytes.len(), 96);
+        // Per-field offsets, per the WGSL struct's comment block.
+        assert_eq!(f32_at(&bytes, 48), 9.0); // model.w_axis.x (col 3 @ 48)
+        assert_eq!(f32_at(&bytes, 64), 1.0); // clip_min.x
+        assert_eq!(f32_at(&bytes, 68), 2.0); // clip_min.y
+        assert_eq!(f32_at(&bytes, 72), 3.0); // clip_max.x
+        assert_eq!(f32_at(&bytes, 76), 4.0); // clip_max.y
+        assert_eq!(f32_at(&bytes, 80), 1.5); // edge_feather
     }
 }

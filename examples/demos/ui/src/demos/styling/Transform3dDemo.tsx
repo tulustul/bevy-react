@@ -254,6 +254,6 @@ const card: BevyStyle = {
 };
 
 const cardTitle: BevyStyle = {
-  fontSize: FontSizes.md,
+  fontSize: FontSizes.lg,
   color: Colors.textColor100,
 };

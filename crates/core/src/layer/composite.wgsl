@@ -18,12 +18,17 @@
 @group(1) @binding(0) var atlas_texture: texture_2d<f32>;
 @group(1) @binding(1) var atlas_sampler: sampler;
 
-// Mirrored byte-for-byte by `render/transform3d.rs::CompositeUniforms` (80
+// Mirrored byte-for-byte by `render/transform3d.rs::CompositeUniforms` (96
 // bytes, guarded by `composite_uniforms_match_the_documented_wgsl_layout`).
+// Offsets: model @0, clip_min @64, clip_max @72, edge_feather @80. Pad names
+// are digit-free (naga's namer appends `_` to digit-suffixed identifiers).
 struct CompositeParams {
     model: mat4x4<f32>,
     clip_min: vec2<f32>,
     clip_max: vec2<f32>,
+    edge_feather: f32,
+    pad_a: f32,
+    pad_b: vec2<f32>,
 }
 
 @group(2) @binding(0) var<uniform> params: CompositeParams;
@@ -66,12 +71,29 @@ fn vertex(
 
 @fragment
 fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
+    // Analytic edge AA for transformed quads: their diagonal silhouettes
+    // rasterize without MSAA, so coverage feathers over ~edge_feather px
+    // centered on the TRUE rect edge (uv 0/1 — the quad geometry is inflated
+    // by the same width, providing the outside half; see
+    // `inflated_transform_quad`). Derivatives convert uv distance to screen
+    // px per axis BEFORE the min — correct under anisotropic compression —
+    // and must be computed before the clip discard (uniform control flow).
+    // `edge_feather == 0` hard-disables the term: untransformed quads are
+    // CPU-clamped (uv_min/max inside [0,1] at clipped edges, where this
+    // distance would feather wrongly) and must stay pixel-identical.
+    let dist = min(in.uv, vec2(1.0) - in.uv);
+    let dist_px = dist / max(fwidth(in.uv), vec2(1e-6));
+    let edge_px = min(dist_px.x, dist_px.y);
+    let feathered = clamp(0.5 + edge_px / max(params.edge_feather, 1e-6), 0.0, 1.0);
+    let coverage = select(1.0, feathered, params.edge_feather > 0.0);
+
     // Ancestor clip of a transformed quad (screen-space rect vs. the true
-    // screen position). Open-sentinel bounds make this a no-op for
-    // CPU-clamped/unclipped quads.
+    // screen position) — a HARD cut, like every other overflow edge.
+    // Open-sentinel bounds make this a no-op for CPU-clamped/unclipped quads.
     let screen = in.screen_pos / in.screen_w;
     if any(screen < params.clip_min) || any(screen > params.clip_max) {
         discard;
     }
-    return textureSample(atlas_texture, atlas_sampler, in.uv) * in.alpha;
+    // Premultiplied output: coverage multiplies rgb AND a, like the group alpha.
+    return textureSample(atlas_texture, atlas_sampler, in.uv) * in.alpha * coverage;
 }

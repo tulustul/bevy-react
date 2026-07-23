@@ -190,6 +190,7 @@ impl ReactUiPlugin {
 pub(crate) fn register_layer_shader_assets(app: &mut App) {
     bevy::shader::load_shader_library!(app, "layer/filter_prelude.wgsl");
     embedded_asset!(app, "layer/composite.wgsl");
+    embedded_asset!(app, "layer/render/mip_blit.wgsl");
     embedded_asset!(app, "filters/builtin/color_matrix.wgsl");
     embedded_asset!(app, "filters/builtin/blur.wgsl");
 }
@@ -228,12 +229,15 @@ impl Plugin for ReactUiPlugin {
                     .init_gpu_resource::<lr::transform3d::CompositeUniformsMeta>()
                     .init_gpu_resource::<SpecializedRenderPipelines<lr::LayerFilterPipeline>>()
                     .init_gpu_resource::<lr::LayerFilterMeta>()
+                    .init_gpu_resource::<SpecializedRenderPipelines<lr::mips::LayerBlitPipeline>>()
+                    .init_gpu_resource::<lr::mips::LayerMipMeta>()
                     .add_render_command::<TransparentUi, lr::DrawLayerComposite>()
                     .add_systems(
                         RenderStartup,
                         (
                             lr::init_layer_composite_pipeline,
                             lr::init_layer_filter_pipeline,
+                            lr::mips::init_layer_blit_pipeline,
                         ),
                     )
                     .init_resource::<lr::clip::SwappedClips>()
@@ -292,6 +296,14 @@ impl Plugin for ReactUiPlugin {
                             lr::prepare_layer_filters
                                 .in_set(RenderSystems::PrepareBindGroups)
                                 .after(lr::prepare_layer_textures)
+                                .before(lr::prepare_layer_composites),
+                            // Mip staging: after filters (`output_valid` /
+                            // `output_index` decided — mips build on the
+                            // filter output), before composites (its
+                            // bind-group choice reads `mips_valid`).
+                            lr::mips::prepare_layer_mips
+                                .in_set(RenderSystems::PrepareBindGroups)
+                                .after(lr::prepare_layer_filters)
                                 .before(lr::prepare_layer_composites),
                             lr::prepare_layer_composites.in_set(RenderSystems::PrepareBindGroups),
                         ),
