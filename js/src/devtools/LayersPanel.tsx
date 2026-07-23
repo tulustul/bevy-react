@@ -124,6 +124,8 @@ export function LayersPanel() {
               backgroundColor: theme.bgAlt,
               border: 1,
               borderColor: theme.border,
+              overflowX: "hidden",
+              overflowY: "hidden",
             }}
           >
             {layers
