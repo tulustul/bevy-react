@@ -43,6 +43,7 @@
 //! stage = pass module).
 
 pub mod clip;
+pub mod transform3d;
 
 use std::ops::Range;
 
@@ -161,6 +162,10 @@ pub struct ExtractedLayer {
     /// present). Drives [`prepare_layer_filters`]; `None` clears the slot's
     /// filter state (see [`FilterSlot`]).
     pub chain: Option<ExtractedChain>,
+    /// The layer's composite-time 3D model matrix (screen-space homography,
+    /// from `LayerTransform3dMatrix`). `None` = untransformed (absent style
+    /// or identity params) — the quad takes the CPU clip path unchanged.
+    pub transform3d: Option<Mat4>,
 }
 
 /// Per-frame extraction output. `layers` is index-aligned with
@@ -287,6 +292,7 @@ pub fn extract_ui_layers(
                 &LayerGroupAlpha,
                 &ComputedUiTargetCamera,
                 Option<&ResolvedFilterChain>,
+                Option<&crate::layer::transform3d::LayerTransform3dMatrix>,
             ),
             With<PromotedLayer>,
         >,
@@ -312,7 +318,7 @@ pub fn extract_ui_layers(
     // v1: all layers composite on one camera — the first layer root's UI
     // target camera. (Multi-camera roots are a documented non-goal for now.)
     let mut layer_index: HashMap<Entity, usize> = HashMap::default();
-    for (root, rect, alpha, target_camera, filter_chain) in layers.iter() {
+    for (root, rect, alpha, target_camera, filter_chain, transform3d) in layers.iter() {
         let Some(camera_main) = target_camera.get() else {
             continue;
         };
@@ -427,6 +433,9 @@ pub fn extract_ui_layers(
             target_format,
             needs_capture,
             chain,
+            // Identity matrices stay `None`: the quad renders exactly like an
+            // untransformed layer (CPU clip path), and picking stays inert.
+            transform3d: transform3d.filter(|m| !m.identity).map(|m| m.model),
         });
     }
 
@@ -789,6 +798,8 @@ pub struct LayerCompositeBatch {
     pub range: Range<u32>,
     /// Index into [`LayerCompositeMeta::atlas_bind_groups`].
     pub atlas: usize,
+    /// Dynamic offset of this quad's [`transform3d::CompositeUniforms`] entry.
+    pub uniform_offset: u32,
 }
 
 /// Builds composite-quad vertices + bind groups and stamps
@@ -804,11 +815,14 @@ pub fn prepare_layer_composites(
     render_device: Res<RenderDevice>,
     render_queue: Res<RenderQueue>,
     mut meta: ResMut<LayerCompositeMeta>,
+    mut uniforms_meta: ResMut<transform3d::CompositeUniformsMeta>,
     filter_meta: Res<LayerFilterMeta>,
     mut phases: ResMut<ViewSortedRenderPhases<TransparentUi>>,
 ) {
     meta.vertices.clear();
     meta.atlas_bind_groups.clear();
+    uniforms_meta.uniforms.clear();
+    uniforms_meta.bind_group = None;
     let Some(pipeline) = pipeline else {
         return;
     };
@@ -929,8 +943,31 @@ pub fn prepare_layer_composites(
         // scroll/viewport clipping applies, with UVs shifted proportionally
         // on clamped sides. A fully clipped-away layer draws no quad at all
         // (`ranges[idx]` stays `None`, the item's batch_range stays `0..0`).
-        let Some(q) = clip::clip_quad(layer.min, layer.size, layer.quad_clip) else {
-            continue;
+        //
+        // A 3D-transformed quad can't be CPU-clamped (the clip rect is
+        // axis-aligned in screen space; the transformed quad isn't): it keeps
+        // its full geometry/UVs and the ancestor clip moves into the fragment
+        // stage via the per-quad uniform. A "fully clipped away" verdict is
+        // likewise unknowable pre-transform, so the transformed path always
+        // draws. Untransformed quads keep the CPU path and an open clip
+        // sentinel — the shader stays single-path.
+        let (q, model, clip_rect) = match layer.transform3d {
+            Some(model) => (
+                clip::ClippedQuad {
+                    pos_min: layer.min,
+                    pos_max: layer.min + layer.size.as_vec2(),
+                    uv_min: Vec2::ZERO,
+                    uv_max: Vec2::ONE,
+                },
+                model,
+                layer.quad_clip,
+            ),
+            None => {
+                let Some(q) = clip::clip_quad(layer.min, layer.size, layer.quad_clip) else {
+                    continue;
+                };
+                (q, Mat4::IDENTITY, None)
+            }
         };
         let (min, max) = (q.pos_min, q.pos_max);
         let (uv_min, uv_max) = (q.uv_min, q.uv_max);
@@ -954,11 +991,20 @@ pub fn prepare_layer_composites(
         ranges[idx] = Some(start..start + 6);
         let atlas_index = meta.atlas_bind_groups.len();
         meta.atlas_bind_groups.push(bind_group);
+        let (open_min, open_max) = transform3d::open_clip();
+        let uniform_offset = uniforms_meta
+            .uniforms
+            .push(&transform3d::CompositeUniforms {
+                model,
+                clip_min: clip_rect.map_or(open_min, |r| r.min),
+                clip_max: clip_rect.map_or(open_max, |r| r.max),
+            });
         commands
             .entity(layer.quad_entity)
             .insert(LayerCompositeBatch {
                 range: ranges[idx].clone().unwrap(),
                 atlas: atlas_index,
+                uniform_offset,
             });
     }
     // A gated quad drew nothing into its enclosing captures this frame, yet
@@ -975,6 +1021,18 @@ pub fn prepare_layer_composites(
         });
     }
     meta.vertices.write_buffer(&render_device, &render_queue);
+    // Composite uniforms: write, then bind the (possibly fresh) buffer — one
+    // whole-buffer bind group, per-quad entries selected by dynamic offset.
+    uniforms_meta
+        .uniforms
+        .write_buffer(&render_device, &render_queue);
+    uniforms_meta.bind_group = uniforms_meta.uniforms.binding().map(|binding| {
+        render_device.create_bind_group(
+            "ui_layer_composite_uniforms",
+            &pipeline_cache.get_bind_group_layout(&pipeline.uniform_layout),
+            &BindGroupEntries::single(binding),
+        )
+    });
 
     // Mark the injected quads drawable (post-sort, pre-draw). A phase item's
     // `batch_range` is an *item-skip count* — `SortedRenderPhase::render`
@@ -1003,6 +1061,9 @@ pub fn prepare_layer_composites(
 pub struct LayerCompositePipeline {
     pub view_layout: BindGroupLayoutDescriptor,
     pub atlas_layout: BindGroupLayoutDescriptor,
+    /// Group 2: the per-quad [`transform3d::CompositeUniforms`] (dynamic
+    /// offset) — 3D model matrix + fragment clip rect.
+    pub uniform_layout: BindGroupLayoutDescriptor,
     pub sampler: Sampler,
     pub shader: Handle<Shader>,
 }
@@ -1029,9 +1090,17 @@ pub fn init_layer_composite_pipeline(
             ),
         ),
     );
+    let uniform_layout = BindGroupLayoutDescriptor::new(
+        "ui_layer_composite_uniform_layout",
+        &BindGroupLayoutEntries::single(
+            ShaderStages::VERTEX_FRAGMENT,
+            uniform_buffer::<transform3d::CompositeUniforms>(true),
+        ),
+    );
     commands.insert_resource(LayerCompositePipeline {
         view_layout,
         atlas_layout,
+        uniform_layout,
         sampler: render_device.create_sampler(&SamplerDescriptor {
             label: Some("ui_layer_composite_sampler"),
             mag_filter: FilterMode::Linear,
@@ -1088,7 +1157,11 @@ impl SpecializedRenderPipeline for LayerCompositePipeline {
                 })],
                 ..Default::default()
             }),
-            layout: vec![self.view_layout.clone(), self.atlas_layout.clone()],
+            layout: vec![
+                self.view_layout.clone(),
+                self.atlas_layout.clone(),
+                self.uniform_layout.clone(),
+            ],
             label: Some("ui_layer_composite_pipeline".into()),
             ..Default::default()
         }
@@ -1152,6 +1225,7 @@ pub type DrawLayerComposite = (
     SetItemPipeline,
     SetUiViewBindGroup<0>,
     SetLayerAtlasBindGroup<1>,
+    transform3d::SetCompositeUniforms<2>,
     DrawLayerQuad,
 );
 

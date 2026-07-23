@@ -225,6 +225,7 @@ impl Plugin for ReactUiPlugin {
                     .init_resource::<lr::LayerTextureStore>()
                     .init_gpu_resource::<SpecializedRenderPipelines<lr::LayerCompositePipeline>>()
                     .init_gpu_resource::<lr::LayerCompositeMeta>()
+                    .init_gpu_resource::<lr::transform3d::CompositeUniformsMeta>()
                     .init_gpu_resource::<SpecializedRenderPipelines<lr::LayerFilterPipeline>>()
                     .init_gpu_resource::<lr::LayerFilterMeta>()
                     .add_render_command::<TransparentUi, lr::DrawLayerComposite>()
@@ -386,6 +387,7 @@ impl Plugin for ReactUiPlugin {
         // and its single virtual pointer for in-world clicks.
         .init_resource::<crate::surface::Surfaces>()
         .add_systems(Startup, crate::surface::init_surface_pointer)
+        .add_systems(Startup, crate::layer::pick3d::init_transform3d_pointer)
         .add_systems(Startup, setup)
         .add_systems(
             PreUpdate,
@@ -399,6 +401,15 @@ impl Plugin for ReactUiPlugin {
             crate::surface::drive_surface_pointer
                 .before(bevy::picking::PickingSystems::ProcessInput),
         )
+        // Remap the window cursor into 3D-transformed layers (inverse
+        // homography → virtual pointer) before input processing, like the
+        // surface driver. Reads last frame's matrices — the composite quad
+        // the user sees is last frame's too, so picking matches the visual.
+        .add_systems(
+            PreUpdate,
+            crate::layer::pick3d::drive_transform3d_pointer
+                .before(bevy::picking::PickingSystems::ProcessInput),
+        )
         // Re-filter picking hits against the render-grade inherited clip
         // (`CalculatedClip`) — bevy_ui 0.19's own clip check misses hits on
         // scrolled/clipped-away nodes whose direct parent doesn't clip (see
@@ -408,6 +419,16 @@ impl Plugin for ReactUiPlugin {
             PreUpdate,
             crate::pick_clip::filter_clipped_pointer_hits
                 .after(bevy::picking::PickingSystems::Backend)
+                .before(bevy::picking::PickingSystems::Hover),
+        )
+        // Scope hits around the transformed-layer remap (stale layout rects
+        // for the mouse, layer-membership for the virtual pointer) — after
+        // the clip filter for a deterministic filter order.
+        .add_systems(
+            PreUpdate,
+            crate::layer::pick3d::suppress_transformed_layer_hits
+                .after(bevy::picking::PickingSystems::Backend)
+                .after(crate::pick_clip::filter_clipped_pointer_hits)
                 .before(bevy::picking::PickingSystems::Hover),
         )
         .add_systems(
@@ -554,6 +575,13 @@ impl Plugin for ReactUiPlugin {
                 // Async `<image>` texture arrivals have no other write site the
                 // layer cache could tap.
                 crate::layer::watch_layer_image_assets,
+                // Override `ui_focus_system`'s geometric (stale-rect) verdict
+                // for members of visually-transformed layers with the virtual
+                // pointer's, before styling/enter-leave/drag-position readers.
+                crate::layer::pick3d::correct_transformed_interactions
+                    .before(apply_interaction_styles)
+                    .before(collect_hover_events)
+                    .before(crate::reconcile::collect_pointer_events),
             ),
         );
         // Resolve each promoted root's wire `filter` chain into packed render
@@ -582,6 +610,12 @@ impl Plugin for ReactUiPlugin {
                 crate::layer::resolve_layer_repaints
                     .after(crate::layer::sync_layer_geometry)
                     .after(bevy::ui::UiSystems::PostLayout),
+                // Derives each transformed layer's composite matrix from this
+                // frame's layout; pushes composite-only dirt the resolver
+                // drains, so it slots between geometry sync and the resolver.
+                crate::layer::transform3d::sync_transform3d_matrices
+                    .after(crate::layer::sync_layer_geometry)
+                    .before(crate::layer::resolve_layer_repaints),
                 // Interior/quad clip maps: needs this frame's membership
                 // (sync_layer_geometry) and bevy_ui's final CalculatedClip
                 // (PostLayout). Deliberately NOT feeding

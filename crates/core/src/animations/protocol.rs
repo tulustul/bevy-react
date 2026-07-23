@@ -187,6 +187,35 @@ pub enum AnimatableProperty {
         index: u8,
         name: String,
     },
+
+    /// One field of the node's `transform3d` style — the wire key is
+    /// `transform3d.<field>` (e.g. `transform3d.rotateY`). Drives the
+    /// composite-time 3D transform of a promoted layer
+    /// ([`crate::layer::transform3d`]); unbound fields keep the static style
+    /// value. Values arrive in the **declarative field's wire units**: logical
+    /// px for translations/perspective/origin, **degrees** for rotations
+    /// (unlike the imperative 2D `rotate`, which is radians — the 3D group
+    /// matches its own style field instead), raw scalars for scales.
+    Transform3d(Transform3dField),
+}
+
+/// The addressable fields of [`AnimatableProperty::Transform3d`]. Origin
+/// animates as two px offsets (`originX`/`originY`) — a percent origin that
+/// must track the node's size belongs in the static style instead.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum Transform3dField {
+    Perspective,
+    TranslateX,
+    TranslateY,
+    TranslateZ,
+    RotateX,
+    RotateY,
+    RotateZ,
+    Scale,
+    ScaleX,
+    ScaleY,
+    OriginX,
+    OriginY,
 }
 
 impl AnimatableProperty {
@@ -224,7 +253,10 @@ impl AnimatableProperty {
             "rowGap" => Self::RowGap,
             "columnGap" => Self::ColumnGap,
             "aspectRatio" => Self::AspectRatio,
-            _ => return Self::filter_param_from_wire(key),
+            _ => {
+                return Self::filter_param_from_wire(key)
+                    .or_else(|| Self::transform3d_from_wire(key));
+            }
         })
     }
 
@@ -242,6 +274,29 @@ impl AnimatableProperty {
             index,
             name: name.to_owned(),
         })
+    }
+
+    /// Parse a `transform3d.<field>` wire key (see [`Self::from_wire`]).
+    /// Unknown fields are unrecognised keys (skip-and-warn upstream), like
+    /// every other wire key.
+    fn transform3d_from_wire(key: &str) -> Option<Self> {
+        use Transform3dField as F;
+        let field = match key.strip_prefix("transform3d.")? {
+            "perspective" => F::Perspective,
+            "translateX" => F::TranslateX,
+            "translateY" => F::TranslateY,
+            "translateZ" => F::TranslateZ,
+            "rotateX" => F::RotateX,
+            "rotateY" => F::RotateY,
+            "rotateZ" => F::RotateZ,
+            "scale" => F::Scale,
+            "scaleX" => F::ScaleX,
+            "scaleY" => F::ScaleY,
+            "originX" => F::OriginX,
+            "originY" => F::OriginY,
+            _ => return None,
+        };
+        Some(Self::Transform3d(field))
     }
 
     /// The kind of value this property animates — picks scalar-vs-color resolution
@@ -269,6 +324,15 @@ impl AnimatableProperty {
                 ValueKind::Scalar
             }
             Self::Rotate => ValueKind::Angle,
+            Self::Transform3d(field) => match field {
+                Transform3dField::RotateX
+                | Transform3dField::RotateY
+                | Transform3dField::RotateZ => ValueKind::Angle,
+                Transform3dField::Scale | Transform3dField::ScaleX | Transform3dField::ScaleY => {
+                    ValueKind::Scalar
+                }
+                _ => ValueKind::Length,
+            },
             Self::BackgroundColor | Self::BorderColor | Self::Color => ValueKind::Color,
             // Never consulted for `FilterParam` — the applier reads the
             // authoritative kind from the resolved chain's `ParamSlot`
@@ -342,6 +406,16 @@ impl AnimatedBindings {
         self.0
             .keys()
             .any(|p| matches!(p, AnimatableProperty::FilterParam { .. }))
+    }
+
+    /// Whether any `transform3d.<field>` binding is bound — gates the
+    /// applier's transform3d stage and, in the transition engine,
+    /// `skip_transform3d` (any binding parks the whole channel group: the
+    /// stage rebuilds the full params struct).
+    pub fn has_transform3d(&self) -> bool {
+        self.0
+            .keys()
+            .any(|p| matches!(p, AnimatableProperty::Transform3d(_)))
     }
 
     /// Iterate the bound (property, binding) pairs in property order.

@@ -192,6 +192,11 @@ export interface BevyTransition {
    * filters fades through identity values (hover-adds-blur fades in); anything
    * else swaps wholesale at the midpoint. */
   filter?: BevyTransitionSpec;
+  /** Eases the `transform3d` fields together (composite-time — animating never
+   * re-captures the layer). `perspective` snaps when either endpoint is
+   * orthographic; unsetting the whole `transform3d` style demotes and snaps —
+   * keep an identity `{}` in the base style when removal should ease. */
+  transform3d?: BevyTransitionSpec;
 }
 
 /** The built-in system cursor keywords (winit's `SystemCursorIcon`, camelCase or CSS
@@ -440,6 +445,41 @@ export interface BevyStyle {
     scaleX?: number;
     scaleY?: number;
     rotate?: Angle;
+  };
+  /** 3D perspective transform, applied to the subtree's *rendered result* at
+   * composite time (group semantics, like `opacity`/`filter`). Its presence —
+   * even an empty `{}` — promotes the subtree to a composited layer; animating
+   * it never re-captures (composite-time cost, like translation). Picking,
+   * hover, and cursor follow the transformed visual. Field order is fixed:
+   * scale → rotateX → rotateY → rotateZ → translate, then the self
+   * `perspective` projection, all around `origin`.
+   *
+   * Units: translations and `perspective` are logical px; rotations are
+   * [`Angle`]s (bare number = degrees); `origin` is per-axis px-or-percent of
+   * the border box (default `"50%"`/`"50%"` = center). `translateZ` is only
+   * visible with `perspective` (positive = toward the viewer = magnify).
+   * Backfaces render mirrored and stay clickable.
+   *
+   * With `transition: { transform3d }` changes ease field-wise (perspective
+   * snaps when either endpoint is orthographic). Unsetting the whole field
+   * demotes the layer and **snaps** — keep an identity `{}` in the base style
+   * when removal should ease. Avoid hover-triggered transforms that move the
+   * element out from under the cursor (hover flips off → moves back →
+   * oscillates, as in CSS). */
+  transform3d?: {
+    /** Focal distance in logical px (CSS `perspective(d)`); unset = orthographic. */
+    perspective?: number;
+    translateX?: number;
+    translateY?: number;
+    translateZ?: number;
+    rotateX?: Angle;
+    rotateY?: Angle;
+    rotateZ?: Angle;
+    scale?: number;
+    scaleX?: number;
+    scaleY?: number;
+    /** Pivot + vanishing point, relative to the border box. */
+    origin?: { x: Length; y: Length };
   };
   /** Opacity in `0..1`, multiplied into the background (and text) alpha. With a
    * `transition` a change eases. On a node with children (unless `groupAlpha`

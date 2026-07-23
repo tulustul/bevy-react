@@ -35,6 +35,7 @@ import { BordersDemo } from "./demos/styling/BordersDemo";
 import { SpacingDemo } from "./demos/styling/SpacingDemo";
 import { SizingDemo } from "./demos/styling/SizingDemo";
 import { TransformDemo } from "./demos/styling/TransformDemo";
+import { Transform3dDemo } from "./demos/styling/Transform3dDemo";
 import { ShadowDemo } from "./demos/styling/ShadowDemo";
 import { FilterDemo } from "./demos/styling/FilterDemo";
 import { CustomFiltersDemo } from "./demos/styling/CustomFiltersDemo";
@@ -98,6 +99,7 @@ export const DEMOS: DemoItem[] = [
       { label: "Sizing", component: SizingDemo },
       { label: "Overflow", component: OverflowDemo },
       { label: "Transform", component: TransformDemo },
+      { label: "Transform 3D", component: Transform3dDemo },
       { label: "Shadow", component: ShadowDemo },
       { label: "Filter", component: FilterDemo },
       { label: "Custom filters", component: CustomFiltersDemo },

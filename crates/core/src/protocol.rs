@@ -553,6 +553,16 @@ pub struct Style {
     /// a change eases instead of snapping.
     #[serde(default)]
     pub transform: Option<Transform>,
+    /// 3D perspective transform, applied to the subtree's *rendered result* at
+    /// composite time (group semantics, like `opacity`/`filter`). Presence —
+    /// even an identity `{}` — promotes the subtree to a composited layer (see
+    /// [`crate::layer`]); the captured texture is drawn as one quad through the
+    /// matrix, so animating it never re-captures. Unlike `transform` (which
+    /// stays main-world and bakes into the capture), this never touches layout,
+    /// and ancestor clips clamp the transformed result. With a
+    /// [`transition`](Self::transition) a change eases field-wise.
+    #[serde(default)]
+    pub transform3d: Option<Transform3d>,
     /// Opacity in `0.0..=1.0`, multiplied into the alpha of the background (and
     /// text) color. With a [`transition`](Self::transition) a change eases.
     /// On a node with children (unless [`group_alpha`](Self::group_alpha) is
@@ -685,10 +695,14 @@ pub mod style_groups {
     pub const SCROLLBAR: u32 = 1 << 18;
     /// Layer-promotion inputs (`crate::layer`): fields that change whether a
     /// subtree composites as a layer (`opacity`, `group_alpha`, `cache`,
-    /// `filter`). No `apply_style` output reads this group — it exists so a
-    /// delta touching a promotion trigger is visible to the promotion
-    /// evaluator.
+    /// `filter`, `transform3d`). No `apply_style` output reads this group — it
+    /// exists so a delta touching a promotion trigger is visible to the
+    /// promotion evaluator.
     pub const LAYER: u32 = 1 << 19;
+    /// `LayerTransform3d` (reads `transform3d`) — the composite-time 3D
+    /// transform on a promoted layer (`crate::layer::transform3d`). Never
+    /// content dirt: matrix changes reshape the composite quad only.
+    pub const TRANSFORM3D: u32 = 1 << 20;
 }
 
 /// The single source of truth for [`Style`]'s field list. Invokes the callback
@@ -770,6 +784,12 @@ macro_rules! with_style_fields {
                 transform,
                 "transform",
                 (TRANSFORM | TRANSITION),
+                overlay
+            ),
+            (
+                transform3d,
+                "transform3d",
+                (TRANSFORM3D | LAYER | TRANSITION),
                 overlay
             ),
             (
@@ -1541,6 +1561,88 @@ pub struct Transform {
     pub rotate: Option<Angle>,
 }
 
+/// The `transform3d` style: a 3D perspective transform composited onto a
+/// promoted layer's quad (see [`Style::transform3d`]). Every field is optional;
+/// unset channels stay at identity. Canonical application order around
+/// [`origin`](Self::origin): scale → rotateX → rotateY → rotateZ → translate,
+/// then the self-`perspective` projection.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Transform3d {
+    /// Self-perspective focal distance in logical pixels (CSS
+    /// `transform: perspective(d)`), the vanishing point at `origin`. Unset →
+    /// orthographic (rotations foreshorten but nothing diverges with depth).
+    pub perspective: Option<f32>,
+    /// Translation along x in logical pixels.
+    pub translate_x: Option<f32>,
+    /// Translation along y in logical pixels.
+    pub translate_y: Option<f32>,
+    /// Translation along z in logical pixels. Positive is toward the viewer —
+    /// visible only with `perspective`.
+    pub translate_z: Option<f32>,
+    /// Rotation about the x axis (number = degrees, or `"1.5rad"`).
+    pub rotate_x: Option<Angle>,
+    /// Rotation about the y axis (number = degrees, or `"1.5rad"`).
+    pub rotate_y: Option<Angle>,
+    /// Rotation about the z axis (number = degrees, or `"1.5rad"`).
+    pub rotate_z: Option<Angle>,
+    /// Uniform scale (x and y), unless overridden by `scale_x`/`scale_y`.
+    pub scale: Option<f32>,
+    pub scale_x: Option<f32>,
+    pub scale_y: Option<f32>,
+    /// Pivot for rotation/scale and the perspective vanishing point, relative
+    /// to the node's border box. Defaults to the center (`50%`/`50%`).
+    pub origin: Option<Transform3dOrigin>,
+}
+
+impl Transform3d {
+    /// Whether every channel is at identity (an empty `{}` or explicit identity
+    /// values). Promotion is presence-based and ignores this; the render and
+    /// picking paths use it to skip transform work entirely.
+    pub fn is_identity(&self) -> bool {
+        let Self {
+            perspective,
+            translate_x,
+            translate_y,
+            translate_z,
+            rotate_x,
+            rotate_y,
+            rotate_z,
+            scale,
+            scale_x,
+            scale_y,
+            origin: _, // the pivot of an identity transform is irrelevant
+        } = *self;
+        perspective.is_none()
+            && translate_x.unwrap_or(0.0) == 0.0
+            && translate_y.unwrap_or(0.0) == 0.0
+            && translate_z.unwrap_or(0.0) == 0.0
+            && rotate_x.unwrap_or_default().radians() == 0.0
+            && rotate_y.unwrap_or_default().radians() == 0.0
+            && rotate_z.unwrap_or_default().radians() == 0.0
+            && scale.unwrap_or(1.0) == 1.0
+            && scale_x.unwrap_or(1.0) == 1.0
+            && scale_y.unwrap_or(1.0) == 1.0
+    }
+}
+
+/// The `transform3d` pivot: a per-axis [`Length`] resolved against the node's
+/// border box (`"50%"` = center, a number = logical pixels from the top-left).
+#[derive(Debug, Clone, Copy, PartialEq, Deserialize)]
+pub struct Transform3dOrigin {
+    pub x: Length,
+    pub y: Length,
+}
+
+impl Default for Transform3dOrigin {
+    fn default() -> Self {
+        Self {
+            x: Length::Percent(50.0),
+            y: Length::Percent(50.0),
+        }
+    }
+}
+
 /// A length value mirroring `bevy_ui::Val`, parsed from the wire form (a number
 /// is logical pixels; a string carries an explicit unit).
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -1629,6 +1731,12 @@ impl Angle {
     /// This angle in radians.
     pub fn radians(self) -> f32 {
         self.0
+    }
+
+    /// An angle from radians (the internal unit) — the write half of
+    /// [`Self::radians`], for engine code re-emitting eased values.
+    pub fn from_radians(radians: f32) -> Self {
+        Angle(radians)
     }
 }
 
@@ -2603,6 +2711,53 @@ mod tests {
         let transition = s.transition.expect("transition present");
         assert!(transition.for_transform().is_some());
         assert!(transition.for_opacity().is_none());
+    }
+
+    /// `transform3d` decodes its full field set (degrees and rad-string angles,
+    /// percent-or-px origin), a malformed angle falls back to identity, an
+    /// empty object is identity, and a wire delta dirties
+    /// `TRANSFORM3D | LAYER | TRANSITION`.
+    #[test]
+    fn deserializes_transform3d() {
+        let s: Style = serde_json::from_str(
+            r#"{
+                "transform3d": {
+                    "perspective": 800,
+                    "translateZ": -20,
+                    "rotateY": 45,
+                    "rotateX": "1.5rad",
+                    "rotateZ": "not-an-angle",
+                    "scale": 1.25,
+                    "origin": { "x": "50%", "y": 10 }
+                }
+            }"#,
+        )
+        .expect("style decodes");
+        let t = s.transform3d.expect("transform3d present");
+        assert_eq!(t.perspective, Some(800.0));
+        assert_eq!(t.translate_z, Some(-20.0));
+        assert_eq!(t.rotate_y.unwrap().radians(), 45f32.to_radians());
+        assert_eq!(t.rotate_x.unwrap().radians(), 1.5);
+        // Malformed angle → warn-and-identity, never a decode failure.
+        assert_eq!(t.rotate_z.unwrap().radians(), 0.0);
+        assert_eq!(t.scale, Some(1.25));
+        let origin = t.origin.expect("origin present");
+        assert_eq!(origin.x, Length::Percent(50.0));
+        assert_eq!(origin.y, Length::Px(10.0));
+        assert!(!t.is_identity());
+
+        let s: Style = serde_json::from_str(r#"{ "transform3d": {} }"#).expect("style decodes");
+        assert!(s.transform3d.expect("present").is_identity());
+
+        let mut cached = Props::default();
+        let (dirty, _) = cached.merge_delta(
+            props(serde_json::json!({ "style": { "transform3d": { "rotateY": 45 } } })),
+            &[],
+            &[],
+        );
+        assert!(dirty.style.intersects(style_groups::TRANSFORM3D));
+        assert!(dirty.style.intersects(style_groups::LAYER));
+        assert!(dirty.style.intersects(style_groups::TRANSITION));
     }
 
     /// `groupAlpha` decodes as a plain bool, defaults to absent, and its wire

@@ -282,6 +282,10 @@ struct AnimTargets {
     /// Reconciler identity, for attributing `filterBinding` validation
     /// warnings to the node's devtools inspector.
     rnode: Option<&'static crate::bridge::RNode>,
+    /// The composite-time 3D transform params (`transform3d.<field>` bindings
+    /// overwrite single fields; `sync_transform3d_matrices` derives the
+    /// matrix + composite-only dirt from the change — no dirt push here).
+    transform3d: Option<&'static mut crate::layer::transform3d::LayerTransform3d>,
 }
 
 fn apply_animated_nodes(
@@ -338,6 +342,57 @@ fn apply_animated_nodes(
             }
         }
 
+        // Stage 1b — transform3d group: bound fields overwrite the current
+        // params (the static style base — the transition engine parks its
+        // whole channel group while any binding exists), unbound fields keep
+        // it. Values arrive in the declarative wire units: px lengths,
+        // DEGREES for rotations (converted to the stored radians), raw
+        // scalars. No dirt push — the matrix sync detects the change.
+        if b.has_transform3d()
+            && let Some(t3d) = &mut t.transform3d
+        {
+            use crate::animations::protocol::Transform3dField as F;
+            use crate::protocol::{Angle, Length, Transform3dOrigin};
+            let mut new = t3d.0;
+            for (property, binding) in b.iter() {
+                let P::Transform3d(field) = property else {
+                    continue;
+                };
+                let Some(v) = eval_scalar(binding, &values) else {
+                    continue;
+                };
+                let deg = || Some(Angle::from_radians(v.to_radians()));
+                let origin = |o: &crate::protocol::Transform3d| o.origin.unwrap_or_default();
+                match field {
+                    F::Perspective => new.perspective = Some(v),
+                    F::TranslateX => new.translate_x = Some(v),
+                    F::TranslateY => new.translate_y = Some(v),
+                    F::TranslateZ => new.translate_z = Some(v),
+                    F::RotateX => new.rotate_x = deg(),
+                    F::RotateY => new.rotate_y = deg(),
+                    F::RotateZ => new.rotate_z = deg(),
+                    F::Scale => new.scale = Some(v),
+                    F::ScaleX => new.scale_x = Some(v),
+                    F::ScaleY => new.scale_y = Some(v),
+                    F::OriginX => {
+                        new.origin = Some(Transform3dOrigin {
+                            x: Length::Px(v),
+                            y: origin(&new).y,
+                        });
+                    }
+                    F::OriginY => {
+                        new.origin = Some(Transform3dOrigin {
+                            x: origin(&new).x,
+                            y: Length::Px(v),
+                        });
+                    }
+                }
+            }
+            if t3d.0 != new {
+                t3d.0 = new;
+            }
+        }
+
         // Opacity owns the final alpha across background/text/image (stage 3).
         // Resolved once up front so stage 2 can bake it into any color it writes —
         // otherwise the two stages would ping-pong the alpha every frame and the
@@ -352,7 +407,12 @@ fn apply_animated_nodes(
         // filter params to stage 4 (they write the resolved chain, not components,
         // and their value kind comes from the chain layout — not `value_kind`).
         for (property, binding) in b.iter() {
-            if property.is_transform() || matches!(property, P::Opacity | P::FilterParam { .. }) {
+            if property.is_transform()
+                || matches!(
+                    property,
+                    P::Opacity | P::FilterParam { .. } | P::Transform3d(_)
+                )
+            {
                 continue;
             }
             match property.value_kind() {
@@ -1301,6 +1361,90 @@ mod tests {
         ] {
             assert_eq!(P::from_wire(bad), None, "{bad:?} must not parse");
         }
+    }
+
+    // -- transform3d bindings (stage 1b) -------------------------------------
+
+    #[test]
+    fn transform3d_from_wire_parses_known_fields_only() {
+        use crate::animations::protocol::Transform3dField as F;
+        use AnimatableProperty as P;
+        assert_eq!(
+            P::from_wire("transform3d.rotateY"),
+            Some(P::Transform3d(F::RotateY))
+        );
+        assert_eq!(
+            P::from_wire("transform3d.perspective"),
+            Some(P::Transform3d(F::Perspective))
+        );
+        assert_eq!(
+            P::from_wire("transform3d.originX"),
+            Some(P::Transform3d(F::OriginX))
+        );
+        for bad in [
+            "transform3d.",
+            "transform3d",
+            "transform3d.origin.x",
+            "transform3d.rotate",
+        ] {
+            assert_eq!(P::from_wire(bad), None, "{bad:?} must not parse");
+        }
+    }
+
+    /// `transform3d.<field>` bindings overwrite their field over the static
+    /// params (unbound fields untouched), convert rotation degrees to stored
+    /// radians, and settle without re-dirtying the component.
+    #[test]
+    fn transform3d_bindings_drive_layer_params() {
+        use crate::layer::transform3d::LayerTransform3d;
+        use crate::protocol::Transform3d;
+
+        let mut world = World::new();
+        world.init_resource::<crate::layer::LayerContentDirt>();
+        let mut values = SharedValues::default();
+        values.set(1, 90.0); // rotateY, degrees on the wire
+        world.insert_resource(values);
+
+        let bindings: AnimatedBindings = serde_json::from_value(serde_json::json!({
+            "transform3d.rotateY": { "type": "shared", "id": 1 },
+        }))
+        .unwrap();
+        assert!(bindings.has_transform3d());
+        assert!(!bindings.has_transform(), "distinct from the 2D group");
+
+        let static_params = Transform3d {
+            perspective: Some(500.0),
+            ..Default::default()
+        };
+        let e = world
+            .spawn((
+                AnimatedNode(bindings),
+                UiTransform::default(),
+                LayerTransform3d(static_params),
+            ))
+            .id();
+
+        let mut apply = Schedule::default();
+        apply.add_systems(apply_animated_nodes);
+        apply.run(&mut world);
+        let t = world.entity(e).get::<LayerTransform3d>().unwrap().0;
+        assert_eq!(
+            t.rotate_y.unwrap().radians(),
+            std::f32::consts::FRAC_PI_2,
+            "degrees on the wire, radians stored"
+        );
+        assert_eq!(t.perspective, Some(500.0), "unbound fields keep the base");
+
+        // Settled value → no change-detection churn on re-apply.
+        let tick_before = world.entity(e).get_ref::<LayerTransform3d>().unwrap();
+        let last = tick_before.last_changed();
+        apply.run(&mut world);
+        let tick_after = world.entity(e).get_ref::<LayerTransform3d>().unwrap();
+        assert_eq!(
+            tick_after.last_changed(),
+            last,
+            "a settled binding must not re-mark the params changed"
+        );
     }
 
     /// Mixed bindings decode and iterate deterministically: the `BTreeMap`

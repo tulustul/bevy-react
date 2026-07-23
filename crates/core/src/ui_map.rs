@@ -501,6 +501,26 @@ pub fn apply_style_masked(
             t.rotate.map(Angle::radians),
         ));
     }
+    // `transform3d` params mirror the `UiTransform` never-remove rule: when
+    // absent the component is left untouched (demotion owns removal — see
+    // `evaluate_layer_promotions` — and an in-flight transition/animation
+    // isn't reset by a coincident re-render). Queued set-if-neq like the
+    // group alpha above: a settled value must not trip change detection.
+    if dirty.intersects(g::TRANSFORM3D)
+        && let Some(t) = s.and_then(|s| s.transform3d)
+    {
+        ec.queue(move |mut entity: EntityWorldMut| {
+            use crate::layer::transform3d::LayerTransform3d;
+            match entity.get_mut::<LayerTransform3d>() {
+                Some(mut current) => {
+                    current.set_if_neq(LayerTransform3d(t));
+                }
+                None => {
+                    entity.insert(LayerTransform3d(t));
+                }
+            }
+        });
+    }
     if dirty.intersects(g::BORDER_COLOR) {
         match s.and_then(|s| s.border_color.as_ref()) {
             Some(spec) => {
@@ -675,15 +695,16 @@ pub fn apply_style_masked(
     // `crate::layer::LayerContentDirt`). Deliberately conservative: style
     // groups can't distinguish a composite-only opacity delta here; the fast
     // fade paths (animations/transitions) carry precise carve-outs instead.
-    // The FILTER/LAYER groups are the exception and are masked out: their
-    // outputs are composite/promotion-side (a filter applies to the captured
-    // texture; the capture holds unfiltered content), so a delta touching
-    // only them never dirties a capture — the chain resolver pushes precise
-    // `composite_only` dirt itself. Promotion flips still dirty correctly:
-    // a promote is caught by the first-frame geometry hash, and a demote by
-    // `reapply_opacity_outputs`' restyle (whose dirty groups intersect the
-    // unmasked set) — the hash alone would miss a leaf demote.
-    if dirty.intersects(!(g::FILTER | g::LAYER)) {
+    // The FILTER/LAYER/TRANSFORM3D groups are the exception and are masked
+    // out: their outputs are composite/promotion-side (a filter applies to
+    // the captured texture; the capture holds unfiltered content; the 3D
+    // matrix reshapes the quad), so a delta touching only them never dirties
+    // a capture — the chain resolver and `sync_transform3d_matrices` push
+    // precise `composite_only` dirt themselves. Promotion flips still dirty
+    // correctly: a promote is caught by the first-frame geometry hash, and a
+    // demote by `reapply_opacity_outputs`' restyle (whose dirty groups
+    // intersect the unmasked set) — the hash alone would miss a leaf demote.
+    if dirty.intersects(!(g::FILTER | g::LAYER | g::TRANSFORM3D)) {
         crate::layer::mark_content_dirty(ec);
     }
 }

@@ -140,7 +140,14 @@ export type AnimatableProperty =
   // resolved chain (`filterBinding` devtools warnings; an unmatched binding is
   // inert). Values use the param's wire unit: logical px for lengths, degrees
   // for angles, raw scalars; color params take an `interpolateColor` binding.
-  | `filter[${number}].${string}`;
+  | `filter[${number}].${string}`
+  // One field of the node's `transform3d` style (a composited-layer 3D
+  // transform, composite-time — animating it never re-captures). Loose typing
+  // like `filter[…]` — unknown field names are skipped Rust-side. Values use
+  // the declarative wire units: logical px for translations/perspective/
+  // originX/originY, **degrees** for rotateX/Y/Z (unlike the imperative 2D
+  // `rotate`, which is radians), raw scalars for scales.
+  | `transform3d.${string}`;
 
 /** The animation-driven half of an `Animated.node`'s style: each animatable
  *  property bound to a shared value or interpolation. */

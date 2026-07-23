@@ -38,6 +38,8 @@ use serde::Deserialize;
 use crate::protocol::{Length, Style, Time as WireTime};
 use crate::ui_map::{length_to_val, parse_color};
 
+mod transform3d;
+
 /// CSS-like per-channel transition timing, set on [`Style::transition`]. Each
 /// field, if present, makes that channel ease on change; `all` is the fallback for
 /// channels without an explicit entry. `transform` covers all six transform
@@ -70,6 +72,14 @@ pub struct Transition {
     /// [`crate::filters::FilterInput`] (a filter-only delta re-stamps that
     /// component but not the input).
     pub filter: Option<ChannelTransition>,
+    /// Applies to every `transform3d` channel together (field-wise easing of
+    /// the composite-time 3D transform on a promoted layer — see
+    /// [`crate::layer::transform3d`]). `perspective` snaps whenever either
+    /// endpoint is orthographic (no numeric identity for "no perspective");
+    /// unsetting the whole `transform3d` style demotes the layer and snaps,
+    /// like `filter`'s ease-to-empty — keep an identity `{}` in the base
+    /// style when removal should ease.
+    pub transform3d: Option<ChannelTransition>,
 }
 
 impl Transition {
@@ -96,6 +106,10 @@ impl Transition {
     /// The transition for the filter chain (explicit, else `all`).
     pub fn for_filter(&self) -> Option<&ChannelTransition> {
         self.filter.as_ref().or(self.all.as_ref())
+    }
+    /// The transition for the transform3d channels (explicit, else `all`).
+    pub fn for_transform3d(&self) -> Option<&ChannelTransition> {
+        self.transform3d.as_ref().or(self.all.as_ref())
     }
 }
 
@@ -178,6 +192,9 @@ pub struct TransitionInput {
     pub height: Option<Length>,
     pub max_width: Option<Length>,
     pub max_height: Option<Length>,
+    /// Target `transform3d` params, eased field-wise onto the layer's
+    /// [`LayerTransform3d`](crate::layer::transform3d::LayerTransform3d).
+    pub transform3d: Option<crate::protocol::Transform3d>,
 }
 
 impl TransitionInput {
@@ -202,6 +219,7 @@ impl TransitionInput {
             height: style.height,
             max_width: style.max_width,
             max_height: style.max_height,
+            transform3d: style.transform3d,
         })
     }
 }
@@ -226,6 +244,7 @@ pub struct TransitionState {
     max_width: ProgressChannel<Length>,
     max_height: ProgressChannel<Length>,
     filter: FilterChannel,
+    transform3d: transform3d::Transform3dChannels,
     initialized: bool,
 }
 
@@ -599,6 +618,10 @@ pub struct TransitionTargets {
     /// (promoted roots only; snapped to the target by
     /// `resolve_filter_chains`, ordered before this system).
     resolved_filter: Option<&'static mut crate::filters::ResolvedFilterChain>,
+    /// The composite-time 3D transform params on a promoted root; the eased
+    /// value lands here and `sync_transform3d_matrices` (PostUpdate) turns
+    /// the change into the matrix + composite-only dirt — no dirt push here.
+    transform3d: Option<&'static mut crate::layer::transform3d::LayerTransform3d>,
 }
 
 /// Advance every transitioning entity toward its [`TransitionInput`] target and
@@ -661,6 +684,9 @@ pub fn drive_transitions(
                 .as_deref()
                 .map(|c| c.passes.clone())
                 .unwrap_or_default();
+            state
+                .transform3d
+                .init(&input.transform3d.unwrap_or_default());
             state.initialized = true;
         }
 
@@ -678,6 +704,9 @@ pub fn drive_transitions(
         // an imperative writer into. The bindings then re-assert their params
         // on top of the resolver's snap every frame (`AnimationSet::Apply`).
         let skip_filter = targets.anim.is_some_and(|a| a.0.has_filter_params());
+        // Any `transform3d.<field>` binding parks the whole channel group,
+        // like `filter` (the bindings rebuild the full params struct).
+        let skip_transform3d = targets.anim.is_some_and(|a| a.0.has_transform3d());
 
         // Transform: only when a transform transition is declared; otherwise the
         // static `UiTransform` from `apply_style` stands untouched. Only specified
@@ -709,6 +738,27 @@ pub fn drive_transitions(
                     dirt.nodes.push(entity);
                 }
                 *targets.transform = new;
+            }
+        }
+
+        // transform3d: eased field-wise onto the layer's params component;
+        // `sync_transform3d_matrices` (PostUpdate) derives the matrix and the
+        // composite-only dirt from the change, so no dirt push here. A
+        // demoted/never-promoted entity has no component — nothing to drive.
+        // Mid-ease unset removes the component with the promotion (snap
+        // semantics, like filter's ease-to-empty).
+        if input.spec.for_transform3d().is_some()
+            && !skip_transform3d
+            && let Some(target) = &input.transform3d
+            && let Some(t3d) = &mut targets.transform3d
+        {
+            let new = state
+                .transform3d
+                .drive(target, input.spec.for_transform3d(), dt);
+            // Compare-before-write: a settled ease must not re-trigger the
+            // matrix sync's change detection every frame.
+            if t3d.0 != new {
+                t3d.0 = new;
             }
         }
 
@@ -1035,6 +1085,109 @@ mod tests {
             (sx - 0.975).abs() < 1e-2,
             "mid-release expected ~0.975, got {sx}"
         );
+    }
+
+    /// `transition.transform3d` eases the layer's params field-wise; without a
+    /// spec the write snaps; perspective snaps when the previous target was
+    /// orthographic; a demoted entity (no `LayerTransform3d`) is a no-op.
+    #[test]
+    fn system_eases_transform3d() {
+        use crate::layer::transform3d::LayerTransform3d;
+        use crate::protocol::Transform3d;
+
+        let (mut world, mut schedule) = drive_world();
+        let spec = Transition {
+            transform3d: Some(timing(1.0, Easing::Linear)),
+            ..Default::default()
+        };
+        let base = Transform3d::default();
+        let e = world
+            .spawn((
+                TransitionInput {
+                    spec: spec.clone(),
+                    transform3d: Some(base),
+                    ..Default::default()
+                },
+                TransitionState::default(),
+                UiTransform::default(),
+                LayerTransform3d(base),
+            ))
+            .id();
+
+        // First frame seeds resting state: identity, no ease-in from nowhere.
+        schedule.run(&mut world);
+        let t = world.entity(e).get::<LayerTransform3d>().unwrap().0;
+        assert!(t.is_identity());
+
+        // Retarget rotateY 90° (+ a perspective from an orthographic start —
+        // that channel snaps while the rotation eases).
+        let target = Transform3d {
+            rotate_y: Some(crate::protocol::Angle::from_radians(
+                std::f32::consts::FRAC_PI_2,
+            )),
+            perspective: Some(800.0),
+            ..Default::default()
+        };
+        world
+            .entity_mut(e)
+            .get_mut::<TransitionInput>()
+            .unwrap()
+            .transform3d = Some(target);
+        advance(&mut world, 0.5);
+        schedule.run(&mut world);
+        let t = world.entity(e).get::<LayerTransform3d>().unwrap().0;
+        let ry = t.rotate_y.unwrap().radians();
+        assert!(
+            (ry - std::f32::consts::FRAC_PI_4).abs() < 0.05,
+            "mid-ease expected ~45°, got {}°",
+            ry.to_degrees()
+        );
+        assert_eq!(t.perspective, Some(800.0), "ortho→perspective snaps");
+
+        // Finish the ease.
+        advance(&mut world, 0.6);
+        schedule.run(&mut world);
+        let t = world.entity(e).get::<LayerTransform3d>().unwrap().0;
+        assert!((t.rotate_y.unwrap().radians() - std::f32::consts::FRAC_PI_2).abs() < 1e-3);
+
+        // No spec → snap. (Fresh entity, `all`-less spec without transform3d.)
+        let e2 = world
+            .spawn((
+                TransitionInput {
+                    spec: Transition {
+                        opacity: Some(timing(1.0, Easing::Linear)),
+                        ..Default::default()
+                    },
+                    transform3d: Some(target),
+                    ..Default::default()
+                },
+                TransitionState::default(),
+                UiTransform::default(),
+                LayerTransform3d(base),
+            ))
+            .id();
+        schedule.run(&mut world);
+        // Without a transform3d (or `all`) spec the drive block never runs —
+        // the static style applier owns the component (stays at `base` here,
+        // since this harness has no style apply).
+        let t2 = world.entity(e2).get::<LayerTransform3d>().unwrap().0;
+        assert!(t2.is_identity());
+
+        // Demoted entity (no LayerTransform3d): driving is a no-op, no panic.
+        let e3 = world
+            .spawn((
+                TransitionInput {
+                    spec,
+                    transform3d: Some(target),
+                    ..Default::default()
+                },
+                TransitionState::default(),
+                UiTransform::default(),
+            ))
+            .id();
+        advance(&mut world, 0.1);
+        schedule.run(&mut world);
+        assert!(world.entity(e3).get::<LayerTransform3d>().is_none());
     }
 
     #[test]

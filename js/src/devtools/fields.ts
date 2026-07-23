@@ -85,6 +85,7 @@ export const STYLE_FIELDS: Record<string, FieldCategory> = {
   cursor: "keyword",
   scrollbar: "json",
   transform: "json",
+  transform3d: "json",
   opacity: "number",
   groupAlpha: "boolean",
   cache: "keyword",

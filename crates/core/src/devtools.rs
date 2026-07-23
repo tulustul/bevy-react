@@ -1241,6 +1241,9 @@ fn reason_labels(reasons: crate::layer::PromotionReasons) -> Vec<String> {
     if reasons.0 & crate::layer::PromotionReasons::FILTER != 0 {
         out.push("filter".to_string());
     }
+    if reasons.0 & crate::layer::PromotionReasons::TRANSFORM3D != 0 {
+        out.push("transform3d".to_string());
+    }
     if reasons.0 & crate::layer::PromotionReasons::FORCED != 0 {
         out.push("cache".to_string());
     }
@@ -1755,10 +1758,16 @@ mod tests {
         let labels = |bits: u32| reason_labels(PromotionReasons(bits));
         assert_eq!(labels(PromotionReasons::OPACITY), ["opacity"]);
         assert_eq!(labels(PromotionReasons::FILTER), ["filter"]);
+        assert_eq!(labels(PromotionReasons::TRANSFORM3D), ["transform3d"]);
         assert_eq!(labels(PromotionReasons::FORCED), ["cache"]);
         assert_eq!(
-            labels(PromotionReasons::OPACITY | PromotionReasons::FILTER | PromotionReasons::FORCED),
-            ["opacity", "filter", "cache"]
+            labels(
+                PromotionReasons::OPACITY
+                    | PromotionReasons::FILTER
+                    | PromotionReasons::TRANSFORM3D
+                    | PromotionReasons::FORCED
+            ),
+            ["opacity", "filter", "transform3d", "cache"]
         );
     }
 

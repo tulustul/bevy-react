@@ -124,6 +124,9 @@ pub fn drive_cursor_icon(
     windowed: Query<(&ComputedNode, &UiGlobalTransform, &NodeCursor)>,
     hover_map: Option<Res<HoverMap>>,
     surface_pointer: Option<Res<SurfaceVirtualPointer>>,
+    transform3d_pointer: Option<Res<crate::layer::pick3d::Transform3dPointer>>,
+    membership: Option<Res<crate::layer::LayerMembership>>,
+    matrices: Query<&crate::layer::transform3d::LayerTransform3dMatrix>,
     custom_cursors: Res<CustomCursors>,
     node_cursors: Query<&NodeCursor>,
     child_of: Query<&ChildOf>,
@@ -133,16 +136,33 @@ pub fn drive_cursor_icon(
         return;
     };
 
+    // Members of visually-transformed layers render elsewhere than layout put
+    // them: the window scan must skip them (their rects are stale), and the
+    // transform3d virtual pointer's hover — which follows the visual — takes
+    // over, exactly like the surface pointer does for texture-space UI.
+    let transformed_members = membership
+        .as_deref()
+        .map(|membership| crate::layer::pick3d::visually_transformed_members(membership, &matrices))
+        .unwrap_or_default();
+
     // Surface UI wins: the in-world virtual pointer is the only thing that knows the
     // pointer is over an offscreen subtree (the window hit-test can't — its geometry
-    // is in texture space). Fall through to the main-window hit-test otherwise.
+    // is in texture space). Then the transform3d remap, then the main-window scan.
     let named = surface_pointer
         .as_deref()
         .zip(hover_map.as_deref())
         .and_then(|(pointer, hover_map)| {
             surface_cursor_for(pointer.id, hover_map, &node_cursors, &child_of)
         })
-        .or_else(|| window_cursor(window, &ui_stack, &windowed));
+        .or_else(|| {
+            transform3d_pointer
+                .as_deref()
+                .zip(hover_map.as_deref())
+                .and_then(|(pointer, hover_map)| {
+                    surface_cursor_for(pointer.id, hover_map, &node_cursors, &child_of)
+                })
+        })
+        .or_else(|| window_cursor(window, &ui_stack, &windowed, &transformed_members));
 
     // No cursor-bearing node under the pointer → the app default. Routing it through
     // `resolve_cursor("default", …)` (rather than a hardcoded arrow) lets a custom
@@ -171,13 +191,19 @@ fn window_cursor(
     window: &Window,
     ui_stack: &UiStack,
     windowed: &Query<(&ComputedNode, &UiGlobalTransform, &NodeCursor)>,
+    skip: &bevy::platform::collections::HashSet<Entity>,
 ) -> Option<(String, Entity)> {
     // `ComputedNode`/`UiGlobalTransform` are physical; the window cursor is logical
     // (see the note in `crate::scroll::apply_scroll`). Match them for the hit-test.
     let cursor = window.cursor_position()? * window.scale_factor();
     // `uinodes` is back-to-front, so reversed is topmost-first: the first
-    // cursor-bearing node whose rect contains the pointer wins.
+    // cursor-bearing node whose rect contains the pointer wins. `skip` holds
+    // members of visually-transformed layers — their layout rects are stale
+    // (the transform3d virtual pointer's hover covers them instead).
     ui_stack.uinodes.iter().rev().find_map(|&entity| {
+        if skip.contains(&entity) {
+            return None;
+        }
         let (computed, transform, node_cursor) = windowed.get(entity).ok()?;
         computed
             .contains_point(*transform, cursor)

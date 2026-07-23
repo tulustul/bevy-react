@@ -47,7 +47,9 @@ use crate::animations::AnimatableProperty;
 use crate::protocol::{NodeId, Props};
 
 pub mod clip;
+pub mod pick3d;
 pub mod render;
+pub mod transform3d;
 
 /// Why a node is promoted — one bit per rule, OR'd together. A node is
 /// promoted iff any bit is set; it demotes when the set empties.
@@ -68,8 +70,15 @@ impl PromotionReasons {
     /// group alpha stays `1.0`), so it skips the child-count and `groupAlpha`
     /// gates: a leaf with an expensive paint is a valid cache unit.
     pub const FORCED: u32 = 1 << 4;
+    /// `transform3d` present in the base style or any hover/press/focus
+    /// variant (presence union, value-blind — an identity `{}` promotes, so
+    /// the layer exists before the matrix animates and interaction never
+    /// flips promotion). Like [`Self::FILTER`]/[`Self::FORCED`] it skips the
+    /// child-count and `groupAlpha` gates: the transform applies to the
+    /// captured result, so a leaf is a valid layer.
+    pub const TRANSFORM3D: u32 = 1 << 1;
     // Reserved for future rules (one evaluator + one flag each):
-    // TRANSFORM3D = 1 << 1, BACKDROP = 1 << 3.
+    // BACKDROP = 1 << 3.
 
     pub fn is_empty(self) -> bool {
         self.0 == 0
@@ -279,6 +288,13 @@ pub fn promotion_reasons(
     if filtered && !ineligible_element {
         reasons |= PromotionReasons::FILTER;
     }
+    // `transform3d` presence — value-blind like FILTER (identity promotes, so
+    // animating from identity never flips promotion), no child/`groupAlpha`
+    // gate (the transform reshapes the captured result; a leaf is valid).
+    let transformed3d = props.all_styles().any(|s| s.transform3d.is_some());
+    if transformed3d && !ineligible_element {
+        reasons |= PromotionReasons::TRANSFORM3D;
+    }
     PromotionReasons(reasons)
 }
 
@@ -371,6 +387,8 @@ pub fn evaluate_layer_promotions(
                 LayerGroupAlpha,
                 LayerCaptureRect,
                 crate::filters::ResolvedFilterChain,
+                transform3d::LayerTransform3d,
+                transform3d::LayerTransform3dMatrix,
             )>();
             bridge.promoted_layers.remove(&id);
             registry.layers.remove(&id);
@@ -924,6 +942,44 @@ mod tests {
             "hoverStyle": { "filter": [] },
         }));
         assert!(!promoted(&empty_variant, 1, false));
+
+        // `transform3d` presence promotes — value-blind (an identity `{}`
+        // still promotes, so animating from identity never flips promotion),
+        // even on a leaf (no child/`groupAlpha` gate).
+        let transformed = props(serde_json::json!({
+            "style": { "transform3d": { "rotateY": 45 } }
+        }));
+        assert_eq!(
+            promotion_reasons(&transformed, 0, false).0,
+            PromotionReasons::TRANSFORM3D
+        );
+        let identity_3d = props(serde_json::json!({ "style": { "transform3d": {} } }));
+        assert_eq!(
+            promotion_reasons(&identity_3d, 0, false).0,
+            PromotionReasons::TRANSFORM3D
+        );
+        // `groupAlpha: false` does NOT gate it (that knob is opacity-only).
+        let opted_out = props(serde_json::json!({
+            "style": { "transform3d": {}, "groupAlpha": false }
+        }));
+        assert!(promoted(&opted_out, 0, false));
+        // Variant-only presence promotes eagerly (interaction never flips
+        // promotion), and element eligibility still applies.
+        for variant in ["hoverStyle", "pressStyle", "focusStyle"] {
+            let variant_3d = props(serde_json::json!({
+                "style": { "width": 10 },
+                (variant): { "transform3d": { "rotateX": 10 } },
+            }));
+            assert_eq!(
+                promotion_reasons(&variant_3d, 0, false).0,
+                PromotionReasons::TRANSFORM3D,
+                "{variant}-only transform3d promotes eagerly"
+            );
+        }
+        assert!(!promoted(&transformed, 0, true));
+        // Absent → no bit; unset (style without the field) demotes.
+        let plain = props(serde_json::json!({ "style": { "width": 10 } }));
+        assert!(!promoted(&plain, 1, false));
     }
 
     /// Spin up the op-apply + evaluator pipeline headless (mirrors
