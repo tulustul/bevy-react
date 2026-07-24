@@ -22,7 +22,7 @@ export function BackdropFilterDemo() {
     <>
       <DemoRow>
         <GlassCardDemo />
-        <ChainDemo />
+        <HueDemo />
       </DemoRow>
 
       <DemoRow>
@@ -44,11 +44,11 @@ const glass = {
 };
 
 function GlassCardDemo() {
-  const [radius, setRadius] = useState(20);
+  const [radius, setRadius] = useState(40);
 
   return (
     <Example
-      title="Frosted glass"
+      title="Blur"
       description="A semi-transparent panel with backdropFilter blur is the
 classic glass card: the moving cubes stay readable as soft shapes behind it.
 Drag the radius — only the backdrop passes re-run; the panel's own content
@@ -70,15 +70,19 @@ paints."
           }}
         >
           <text
-            style={{ color: Colors.textColor100, fontSize: FontSizes.base }}
+            style={{
+              color: Colors.textColor100,
+              fontSize: FontSizes.xl,
+              fontWeight: "bold",
+            }}
           >
-            frosted glass
+            FROSTED GLASS
           </text>
         </node>
         <Slider
           value={radius}
           min={0}
-          max={24}
+          max={50}
           onChange={setRadius}
           label={`radius ${radius.toFixed(1)}px`}
         />
@@ -87,12 +91,12 @@ paints."
   );
 }
 
-function ChainDemo() {
-  const [radius, setRadius] = useState(6);
+function HueDemo() {
+  const [hue, setHue] = useState(180);
 
   return (
     <Example
-      title="Blur"
+      title="Hue"
       description="Chains work on the backdrop too, in pass order: grayscale
 first, then blur — the world behind the panel turns to soft monochrome while
 the UI in front keeps its colors."
@@ -105,22 +109,15 @@ the UI in front keeps its colors."
         <node
           style={{
             ...glass,
-            backdropFilter: [
-              { name: "grayscale" },
-              { name: "blur", params: { radius } },
-            ],
+            backdropFilter: [{ name: "hueRotate", params: { angle: hue } }],
           }}
-        >
-          <text style={{ color: Colors.primary100, fontSize: FontSizes.base }}>
-            color survives in front
-          </text>
-        </node>
+        ></node>
         <Slider
-          value={radius}
+          value={hue}
           min={0}
-          max={20}
-          onChange={setRadius}
-          label={`radius ${radius.toFixed(1)}px`}
+          max={360}
+          onChange={setHue}
+          label={`hue ${hue.toFixed(1)}`}
         />
       </node>
     </Example>
@@ -128,7 +125,7 @@ the UI in front keeps its colors."
 }
 
 function BothChainsDemo() {
-  const [content, setContent] = useState(1);
+  const [content, setContent] = useState(3);
 
   return (
     <Example
@@ -145,19 +142,30 @@ panel's own children. Each resolves, transitions, and animates on its own."
         <node
           style={{
             ...glass,
-            backdropFilter: { name: "blur", params: { radius: 8 } },
-            filter: { name: "grayscale", params: { amount: content } },
+            backdropFilter: { name: "blur", params: { radius: 20 } },
+            filter: [
+              {
+                name: "ripple",
+                params: { amplitude: 2, frequency: 30, speed: 2 },
+              },
+              { name: "chromaticAberration" },
+            ],
           }}
         >
-          <text style={{ color: Colors.primary100, fontSize: FontSizes.base }}>
-            content chain
+          <text
+            style={{
+              color: Colors.textColor100,
+              fontSize: FontSizes.xl,
+              fontWeight: "bold",
+            }}
+          >
+            FILTERED CONTENT
           </text>
-          <text style={caption}>backdrop stays a plain blur</text>
         </node>
         <Slider
           value={content}
           min={0}
-          max={1}
+          max={10}
           onChange={setContent}
           label={`content grayscale ${content.toFixed(2)}`}
         />

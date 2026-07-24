@@ -2,12 +2,14 @@
 //! can grab with the mouse and zoom with the wheel, plus a directional light. All
 //! of it is bundled into [`CameraPlugin`].
 
+use bevy::camera::visibility::RenderLayers;
 use bevy::input::mouse::{AccumulatedMouseMotion, AccumulatedMouseScroll, MouseScrollUnit};
 use bevy::post_process::bloom::Bloom;
 use bevy::prelude::*;
 use bevy::ui::IsDefaultUiCamera;
 
 use crate::scene::Scene;
+use crate::scenes::ambient::AURORA_LAYER;
 
 /// Owns the shared camera: spawns it (+ light) at startup and runs the orbit/zoom
 /// controller and the per-scene reframe.
@@ -43,6 +45,9 @@ fn setup_camera_and_light(mut commands: Commands) {
         Bloom::NATURAL,
         Transform::from_xyz(0.0, 4.0, DEFAULT_RADIUS).looking_at(Vec3::ZERO, Vec3::Y),
         IsDefaultUiCamera,
+        // Layer 0 (scene content) plus the aurora backdrop's dedicated layer —
+        // extra world cameras (portals, minimap) never see the backdrop quad.
+        RenderLayers::from_layers(&[0, AURORA_LAYER]),
     ));
 
     commands.spawn((

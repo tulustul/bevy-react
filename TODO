@@ -5,7 +5,7 @@
 ☐ Transform3dDemo - nicer examples
 ☐ BackdropFilters - nicer examples
 ✔ camera not moving when over ui @done(26-07-24 23:55)
-☐ add aurora background to each scene
+✔ add aurora background to each scene @done(26-07-25 00:54)
 ☐ aurora should always move in one direction
 ☐ animations demos rework, combine multiple examples in one page. Pages:
   ☐ style transitions
