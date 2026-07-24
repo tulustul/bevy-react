@@ -3,6 +3,7 @@ import { bevy } from "@/bevy";
 import type { BallState } from "@/bevy";
 import { Example } from "@/components";
 import { Colors, FontSizes } from "@/theme";
+import { useDemoPage, type ExplanationData } from "@/explanationStore";
 
 const TYPESCRIPT = "const ball = await bevy.pollingDemo.getBall();";
 
@@ -25,7 +26,16 @@ fn report_ball(
 
 app.add_react_request_handler(report_ball);`;
 
+const PAGE: ExplanationData = {
+  title: "Bevy <-> React",
+  description:
+    "React <-> Bevy: an awaited bevy.pollingDemo.getBall() request (a #[react_request] observed as On<Request<GetBall>> and answered with req.respond) returns a typed BallState. The demo polls it every 50ms for live position/velocity telemetry; an unknown or failed request rejects the promise instead of hanging.",
+  tsx: TYPESCRIPT,
+  rust: RUST,
+};
+
 export function BidirectionCommunicationDemo() {
+  useDemoPage(PAGE);
   const [state, setState] = useState<BallState | null>(null);
 
   useEffect(() => {
@@ -56,11 +66,7 @@ export function BidirectionCommunicationDemo() {
   }, []);
 
   return (
-    <Example
-      description="React <-> Bevy: an awaited request returns a typed response, polled here for live telemetry."
-      tsx={TYPESCRIPT}
-      rust={RUST}
-    >
+    <Example>
       {state ? (
         <node style={{ flexDirection: "column", gap: 8, alignItems: "start" }}>
           <Row label="position" x={state.x} y={state.y} />

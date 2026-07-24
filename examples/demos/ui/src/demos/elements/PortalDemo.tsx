@@ -3,6 +3,7 @@ import { BevyStyle } from "bevy-react/jsx";
 import { bevy } from "@/bevy";
 import { Button, Checkbox, Example } from "@/components";
 import { Colors, FontSizes } from "@/theme";
+import { useDemoPage, type ExplanationData } from "@/explanationStore";
 
 // A demo of the `<portal>` host element: a UI rectangle that shows an offscreen
 // Bevy render target (render-to-texture). Two cameras in the CrowdedCubes scene
@@ -28,7 +29,16 @@ commands.spawn((
     PortalCamera("minimap".into()),
 ));`;
 
+const PAGE: ExplanationData = {
+  title: "<portal>",
+  description:
+    'A UI rectangle that shows an offscreen Bevy render target (render-to-texture): Rust creates named targets and points cameras at them, and <portal target="…"> displays one. Here the CrowdedCubes scene drives two — a 3D chase cam ("follow"), switchable between continuous rendering and a frozen snapshot, and a 2D minimap. The card carries cache: "never": a live portal writes pixels outside the layer dirt tracking\'s sight, so the enclosing composited layer opts out of capture caching.',
+  tsx: TYPESCRIPT,
+  rust: RUST,
+};
+
 export function PortalDemo() {
+  useDemoPage(PAGE);
   const [continuous, setContinuous] = useState(true);
 
   // Keep Bevy's "follow" render mode in sync with the checkbox. We emit on every
@@ -45,11 +55,7 @@ export function PortalDemo() {
   }, [continuous]);
 
   return (
-    <Example
-      description="A view of an offscreen Bevy camera, rendered to a texture and shown in the UI."
-      tsx={TYPESCRIPT}
-      rust={RUST}
-    >
+    <Example style={{ cache: "never" }}>
       <node style={row}>
         <node style={column}>
           <text style={label}>Follow cam</text>

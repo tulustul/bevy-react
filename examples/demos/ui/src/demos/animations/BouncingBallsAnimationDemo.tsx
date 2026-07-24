@@ -13,6 +13,7 @@ import {
 import { BevyStyle } from "bevy-react/jsx";
 import { Example } from "@/components";
 import { Colors, FontSizes } from "@/theme";
+import { useDemoPage, type ExplanationData } from "@/explanationStore";
 
 type Mode = "linear" | "easeInOut" | "spring";
 
@@ -47,14 +48,19 @@ const WARM = [
   Colors.sky100,
 ];
 
+const PAGE: ExplanationData = {
+  title: "Bouncing Squares",
+  description:
+    "Staggered squares compose withRepeat(withSequence(withDelay(...))) for the horizontal bounce, while an independent withRepeat ping-pong pulse feeds interpolate (scale) and interpolateColor (hue). Switch the easing live: withTiming for linear/easeInOut, withSpring for spring — a mode change glides back to the loop start before re-arming so the repeat stays seamless.",
+  tsx: TYPESCRIPT,
+};
+
 export function BouncingBallsAnimationDemo() {
+  useDemoPage(PAGE);
   const [mode, setMode] = useState<Mode>("easeInOut");
 
   return (
-    <Example
-      description="Staggered squares compose sequence/repeat/delay drivers; switch the easing live."
-      tsx={TYPESCRIPT}
-    >
+    <Example>
       <node style={lanesStyle}>
         {Array.from({ length: COUNT }, (_, i) => (
           <BouncingSquare key={i} index={i} mode={mode} />

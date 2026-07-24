@@ -2,6 +2,8 @@ export const Colors = {
   primary100: "#7aa2f7",
   primary200: "#89b4fa",
   primary300: "#5a7fd6",
+  primary400: "#2b4685ff",
+  primary500: "#213563ff",
   primaryOverlay: "#7aa2f733",
 
   textColor100: "#cdd6f4",
@@ -33,6 +35,7 @@ export const Colors = {
   transparent: "#00000000",
 } as const;
 
+import { FilterChainValue } from "bevy-react";
 // --- Gradient presets -------------------------------------------------------
 // Built from the palette above so the whole app shares one tunable set. Each is
 // a `backgroundGradient`/`borderGradient` value; tweak here to retune app-wide.
@@ -57,10 +60,18 @@ export const Gradients = {
   surface: linear(180, Colors.surface500, Colors.surface300),
   surfaceHover: linear(180, Colors.surface500, Colors.surface600),
   // card / panel depth
-  card: linear(160, Colors.surface200, Colors.surface100),
+  card: linear(160, Colors.surface200 + "cc", Colors.surface100 + "cc"),
   track: linear(180, Colors.surface300, Colors.surface400),
+  trackFilled: linear(180, Colors.primary300, Colors.primary400),
   // showy multi-hue border for cards (borderGradient)
   accentBorder: linear(135, Colors.primary300, Colors.sky100, Colors.purple100),
+  // resting Example cards; full-strength accentBorder marks the selected one
+  accentBorderDim: linear(
+    135,
+    Colors.primary300 + "66",
+    Colors.sky100 + "66",
+    Colors.purple100 + "66",
+  ),
   // immersive nav backdrop: dark vertical base + faint primary glow at top
   navBackdrop: [
     linear(180, Colors.surface100, Colors.surface200),
@@ -102,3 +113,12 @@ export const FontSizes = {
   xxl: 28,
   xxxl: 50,
 } as const;
+
+export const Filters = {
+  backdrop: [
+    {
+      name: "blur",
+      params: { radius: 20 },
+    },
+  ] satisfies FilterChainValue,
+};

@@ -4,6 +4,7 @@ import { BevyStyle } from "bevy-react/jsx";
 import { Example, Slider } from "@/components";
 import { column, playButton, playLabel } from "./shared";
 import { Colors, FontSizes } from "@/theme";
+import { useDemoPage, type ExplanationData } from "@/explanationStore";
 
 // The four easing curves, raced side by side over the same distance/duration so
 // their acceleration profiles are easy to compare.
@@ -23,15 +24,20 @@ const TYPESCRIPT = `x.value = withTiming(200, {
   easing: "easeInOut",
 });`;
 
+const PAGE: ExplanationData = {
+  title: "Easing",
+  description:
+    "The four withTiming easing curves (linear, easeIn, easeOut, easeInOut) raced side by side over the same distance and duration, so their acceleration profiles are easy to compare. Press Play to restart the race; the slider changes the shared duration.",
+  tsx: TYPESCRIPT,
+};
+
 export function EasingDemo() {
+  useDemoPage(PAGE);
   const [duration, setDuration] = useState(800);
   const [play, setPlay] = useState(0);
 
   return (
-    <Example
-      description="Same distance, same duration: press Play to compare the four easings."
-      tsx={TYPESCRIPT}
-    >
+    <Example>
       <node style={column}>
         <node style={{ flexDirection: "column", gap: 8 }}>
           {LANES.map((lane) => (

@@ -3,6 +3,7 @@ import { BevyStyle } from "bevy-react/jsx";
 import { bevy } from "@/bevy";
 import { Button } from "@/components";
 import { Colors, FontSizes, Gradients } from "@/theme";
+import { useDemoPage, type ExplanationData } from "@/explanationStore";
 
 type Mode = "monitor" | "flat";
 
@@ -27,7 +28,14 @@ const FEATURES: Feature[] = [
   },
 ];
 
+const PAGE: ExplanationData = {
+  title: "bevy-react",
+  description:
+    "A gallery of bevy-react demos: React components rendered as native bevy_ui, grouped by area — elements, layout, styling, communication, animations and events. Pick a demo in the side panel; this panel shows the page's explanation, and clicking a titled card focuses its details. The landing page itself renders inside a <surface> on the CRT monitor's screen texture — switch to flat to render it as plain UI.",
+};
+
 export function Home() {
+  useDemoPage(PAGE);
   const [mode, setMode] = useState<Mode>("monitor");
 
   useEffect(() => {

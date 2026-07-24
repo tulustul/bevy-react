@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { BevyStyle } from "bevy-react/jsx";
-import { Button, Example, Slider } from "@/components";
+import { Button, DemoRow, Example, Slider } from "@/components";
 import { Colors, Gradients } from "@/theme";
+import { useDemoPage, type ExplanationData } from "@/explanationStore";
 
 // Demos of the `<image>` host element, one Example per feature:
 //   1. an asset loaded by `src`, with `tint`, `flipX`, and `flipY`;
@@ -11,6 +12,12 @@ import { Colors, Gradients } from "@/theme";
 //      the 400×220 logo);
 //   4. `atlas` — treat the logo as a 2×2 sprite-sheet grid and select a cell by
 //      `index` (the sprite-animation primitive), cycled by a button.
+
+const PAGE: ExplanationData = {
+  title: "<image>",
+  description:
+    'The <image> host element draws a texture asset loaded by src. tint multiplies the texture color; flipX/flipY mirror it per axis. imageMode { type: "sliced" } enables 9-slice scaling, so a frame resizes without distorting its corners. sourceRect crops a sub-rectangle of the texture, and atlas treats the texture as a uniform sprite-sheet grid whose cell is selected by index — the sprite-animation primitive (the atlas layout asset is built once and reused).',
+};
 
 const FLIP_TSX = `<image src="bevy-react-logo.png" tint="#7aa2f7" flipX flipY />`;
 
@@ -31,45 +38,32 @@ const ATLAS_TSX = `<image
 />`;
 
 export function ImageDemo() {
+  useDemoPage(PAGE);
   return (
     <>
-      <Example
-        description="An image asset loaded by src, with an optional tint and per-axis flips."
-        tsx={FLIP_TSX}
-      >
-        <FlipControl />
-      </Example>
+      <DemoRow>
+        <FlipDemo />
+        <SlicedDemo />
+      </DemoRow>
 
-      <Example
-        description="9-slice scaling resizes a frame without distorting its corners. Drag the sliders: the corners stay crisp while the edges stretch."
-        tsx={SLICE_TSX}
-      >
-        <SliceControl />
-      </Example>
-
-      <Example
-        description="sourceRect crops a sub-rectangle of the texture. Drag to pan the 200×110 window across the 400×220 logo — only that region is drawn."
-        tsx={RECT_TSX}
-      >
-        <SourceRectControl />
-      </Example>
-
-      <Example
-        description="atlas treats src as a uniform sprite-sheet grid; index selects a cell (here a 2×2 grid over the logo). Step the index to flip frames — the layout asset is built once and reused."
-        tsx={ATLAS_TSX}
-      >
-        <AtlasControl />
-      </Example>
+      <DemoRow>
+        <SourceRectDemo />
+        <AtlasDemo />
+      </DemoRow>
     </>
   );
 }
 
-function FlipControl() {
+function FlipDemo() {
   const [flipX, setFlipX] = useState(false);
   const [flipY, setFlipY] = useState(false);
 
   return (
-    <>
+    <Example
+      title="tint & flips"
+      description="An image asset loaded by src, with an optional tint and per-axis flips."
+      tsx={FLIP_TSX}
+    >
       <node style={{ flexDirection: "row", gap: 24, alignItems: "center" }}>
         <image
           src="bevy-react-logo.png"
@@ -94,97 +88,115 @@ function FlipControl() {
           flipY: {flipY ? "on" : "off"}
         </Button>
       </node>
-    </>
+    </Example>
   );
 }
 
-function SliceControl() {
+function SlicedDemo() {
   const [width, setWidth] = useState(280);
   const [height, setHeight] = useState(160);
 
   return (
-    <node style={{ flexDirection: "column", alignItems: "center", gap: 12 }}>
-      <node style={frameBox}>
-        <image
-          src="modal.png"
-          style={{ width, height }}
-          imageMode={{ type: "sliced", border: 120, maxCornerScale: 0.7 }}
+    <Example
+      title="9-slice"
+      description="9-slice scaling resizes a frame without distorting its corners. Drag the sliders: the corners stay crisp while the edges stretch."
+      tsx={SLICE_TSX}
+    >
+      <node style={{ flexDirection: "column", alignItems: "center", gap: 12 }}>
+        <node style={frameBox}>
+          <image
+            src="modal.png"
+            style={{ width, height }}
+            imageMode={{ type: "sliced", border: 120, maxCornerScale: 0.7 }}
+          />
+        </node>
+
+        <Slider
+          value={width}
+          min={80}
+          max={360}
+          onChange={(v) => setWidth(Math.round(v))}
+          label={`width ${Math.round(width)}`}
+        />
+        <Slider
+          value={height}
+          min={80}
+          max={240}
+          onChange={(v) => setHeight(Math.round(v))}
+          label={`height ${Math.round(height)}`}
         />
       </node>
-
-      <Slider
-        value={width}
-        min={80}
-        max={360}
-        onChange={(v) => setWidth(Math.round(v))}
-        label={`width ${Math.round(width)}`}
-      />
-      <Slider
-        value={height}
-        min={80}
-        max={240}
-        onChange={(v) => setHeight(Math.round(v))}
-        label={`height ${Math.round(height)}`}
-      />
-    </node>
+    </Example>
   );
 }
 
-function SourceRectControl() {
+function SourceRectDemo() {
   const [x, setX] = useState(0);
   const [y, setY] = useState(0);
 
   return (
-    <node style={{ flexDirection: "column", alignItems: "center", gap: 12 }}>
-      <node style={cellBox}>
-        <image
-          src="bevy-react-logo.png"
-          style={{ width: 200, height: 110 }}
-          sourceRect={{ x, y, width: 200, height: 110 }}
+    <Example
+      title="sourceRect"
+      description="sourceRect crops a sub-rectangle of the texture. Drag to pan the 200×110 window across the 400×220 logo — only that region is drawn."
+      tsx={RECT_TSX}
+    >
+      <node style={{ flexDirection: "column", alignItems: "center", gap: 12 }}>
+        <node style={cellBox}>
+          <image
+            src="bevy-react-logo.png"
+            style={{ width: 200, height: 110 }}
+            sourceRect={{ x, y, width: 200, height: 110 }}
+          />
+        </node>
+
+        <Slider
+          value={x}
+          min={0}
+          max={200}
+          onChange={(v) => setX(Math.round(v))}
+          label={`x ${Math.round(x)}`}
+        />
+        <Slider
+          value={y}
+          min={0}
+          max={110}
+          onChange={(v) => setY(Math.round(v))}
+          label={`y ${Math.round(y)}`}
         />
       </node>
-
-      <Slider
-        value={x}
-        min={0}
-        max={200}
-        onChange={(v) => setX(Math.round(v))}
-        label={`x ${Math.round(x)}`}
-      />
-      <Slider
-        value={y}
-        min={0}
-        max={110}
-        onChange={(v) => setY(Math.round(v))}
-        label={`y ${Math.round(y)}`}
-      />
-    </node>
+    </Example>
   );
 }
 
-function AtlasControl() {
+function AtlasDemo() {
   const [index, setIndex] = useState(0);
 
   return (
-    <node style={{ flexDirection: "column", alignItems: "center", gap: 12 }}>
-      <node style={cellBox}>
-        <image
-          src="bevy-react-logo.png"
-          style={{ width: 200, height: 110 }}
-          atlas={{
-            tileWidth: 200,
-            tileHeight: 110,
-            columns: 2,
-            rows: 2,
-            index,
-          }}
-        />
-      </node>
+    <Example
+      title="atlas"
+      description="atlas treats src as a uniform sprite-sheet grid; index selects a cell (here a 2×2 grid over the logo). Step the index to flip frames — the layout asset is built once and reused."
+      tsx={ATLAS_TSX}
+    >
+      <node style={{ flexDirection: "column", alignItems: "center", gap: 12 }}>
+        <node style={cellBox}>
+          <image
+            src="bevy-react-logo.png"
+            style={{ width: 200, height: 110 }}
+            atlas={{
+              tileWidth: 200,
+              tileHeight: 110,
+              columns: 2,
+              rows: 2,
+              index,
+            }}
+          />
+        </node>
 
-      <Button onClick={() => setIndex((i) => (i + 1) % 4)}>
-        cell {index} of 4 — next
-      </Button>
-    </node>
+        <Button onClick={() => setIndex((i) => (i + 1) % 4)}>
+          cell {index} of 4 — next
+        </Button>
+      </node>
+    </Example>
   );
 }
 

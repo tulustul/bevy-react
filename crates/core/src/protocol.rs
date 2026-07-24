@@ -358,15 +358,18 @@ pub struct Props {
 /// so it stays reachable as `protocol::DrawCmd` and so [`Props::draw`] can name it.
 pub use crate::canvas::DrawCmd;
 
-/// The [`Style::cache`] keyword: `"always"` force-promotes the subtree to a
-/// cached composited layer; `"auto"` (default) leaves promotion to the other
-/// rules. There is no `"never"` — promoted layers are always cached, and
-/// opting out of *opacity* promotion is `groupAlpha: false`.
+/// The [`Style::cache`] keyword: `"auto"` (default) leaves promotion to the
+/// other rules; `"always"` force-promotes the subtree to a cached composited
+/// layer; `"never"` force-promotes it too but re-captures it **every frame** —
+/// the escape hatch for content whose pixels are written outside the dirt
+/// tracking's sight (a live `<portal>` render target, an app-owned texture).
+/// Opting out of *opacity* promotion is `groupAlpha: false`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum LayerCache {
     #[default]
     Auto,
     Always,
+    Never,
 }
 
 /// A CSS-like style object mapped onto `bevy_ui::Node` and its sibling visual
@@ -590,10 +593,11 @@ pub struct Style {
     /// Layer-cache hint. `"always"` force-promotes the subtree to a composited
     /// layer (see [`crate::layer`]) so its capture is cached and re-rendered
     /// only when its content changes — the `will-change` pattern for static
-    /// or transform/opacity-animated subtrees. `"auto"` (or absent, the
-    /// default) promotes only when another rule does (today: `opacity`);
-    /// promoted layers are always cached either way. `no_overlay`: a variant
-    /// must not flip promotion.
+    /// or transform/opacity-animated subtrees. `"never"` also force-promotes,
+    /// but the capture re-runs **every frame** — for content written outside
+    /// the dirt tracking's sight (live `<portal>` targets, app-owned textures).
+    /// `"auto"` (or absent, the default) promotes only when another rule does
+    /// (today: `opacity`). `no_overlay`: a variant must not flip promotion.
     #[serde(default, deserialize_with = "de_layer_cache")]
     pub cache: Option<LayerCache>,
     /// CSS-like per-channel transition timing. Present → a change to `transform` /
@@ -2109,7 +2113,7 @@ keyword_fields! {
         "flex" => Flex, "grid" => Grid, "block" => Block, "none" => None,
     }
     fn de_layer_cache("cache") -> LayerCache {
-        "auto" => Auto, "always" => Always,
+        "auto" => Auto, "always" => Always, "never" => Never,
     }
     fn de_box_sizing("boxSizing") -> BoxSizing {
         "borderBox" | "border-box" => BorderBox,
@@ -2814,6 +2818,8 @@ mod tests {
         assert_eq!(s.cache, Some(LayerCache::Always));
         let s: Style = serde_json::from_str(r#"{ "cache": "auto" }"#).expect("style decodes");
         assert_eq!(s.cache, Some(LayerCache::Auto));
+        let s: Style = serde_json::from_str(r#"{ "cache": "never" }"#).expect("style decodes");
+        assert_eq!(s.cache, Some(LayerCache::Never));
         let s: Style = serde_json::from_str("{}").expect("style decodes");
         assert_eq!(s.cache, None);
         // Unrecognized keyword: warn + fall back to the default (`auto`).

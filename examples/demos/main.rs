@@ -1,14 +1,19 @@
 //! Example consumer of the `bevy_react` library: one Bevy app whose UI is a React
 //! app (see `ui/`), overlaid on a live 3D scene. A left-nav switches between the
 //! demos; React drives the active 3D scene with `bevy.selectScene(id)` (or
-//! `null` for an empty viewport). There are three scenes, each its own plugin:
+//! `null` for the ambient backdrop). Each scene is its own plugin:
 //!
+//!   * Ambient       — the default full-screen shader backdrop (gentle aurora)
+//!     behind scene-less demos.
+//!   * Space cubes   — glowing cubes orbiting and tumbling in space (the
+//!     backdrop-filter demo's scene).
 //!   * Cubes         — React `bevy.basicDemo.setCount(n)` → that many spinning cubes.
 //!   * Bouncing ball — a ball pushes `bevyEventsDemo.ballBounced` toasts and answers
 //!     `bevy.pollingDemo.getBall()` polls (one scene, both bridge directions).
 //!   * Crowded cubes — UI badges anchored to ~100 wandering 3D cubes on a plane.
 //!
-//! Pure-UI demos (Animations, Events, …) declare no scene and select `null`.
+//! Pure-UI demos (Animations, Events, …) declare no scene and select `null`,
+//! landing on Ambient.
 //!
 //! Run with:
 //!
@@ -34,10 +39,12 @@ use bevy_react::ReactUiPlugin;
 
 use camera::CameraPlugin;
 use scene::Scene;
+use scenes::ambient::AmbientScenePlugin;
 use scenes::bouncing_ball::BouncingBallScenePlugin;
 use scenes::crowded_cubes::CrowdedCubesScenePlugin;
 use scenes::cubes::CubesScenePlugin;
 use scenes::monitor::MonitorScenePlugin;
+use scenes::space_cubes::SpaceCubesScenePlugin;
 
 /// Web entry. `wasm-bindgen --target web` wires this as the module's start, so the
 /// loader's `await init()` builds and starts the Bevy app — installing
@@ -167,10 +174,12 @@ fn build_app(window: Window, hot_reload: bool) -> App {
         // The shared 3D camera (auto-orbit + mouse-drag + wheel-zoom + per-scene reframe).
         .add_plugins(CameraPlugin)
         .add_plugins((
+            AmbientScenePlugin,
             CubesScenePlugin,
             BouncingBallScenePlugin,
             CrowdedCubesScenePlugin,
             MonitorScenePlugin,
+            SpaceCubesScenePlugin,
         ));
     // The devtools inspector (F12) needs no registration: `ReactUiPlugin`
     // auto-enables it in dev builds. Whether the panel is open persists in
@@ -205,6 +214,7 @@ fn register_react_bindings(app: &mut App) {
     scene::register_bindings(app);
     screenshot::register_bindings(app);
     filters::register_bindings(app);
+    // `scenes::ambient` is intentionally absent: it registers no bindings.
     scenes::cubes::register_bindings(app);
     scenes::bouncing_ball::register_bindings(app);
     scenes::crowded_cubes::register_bindings(app);

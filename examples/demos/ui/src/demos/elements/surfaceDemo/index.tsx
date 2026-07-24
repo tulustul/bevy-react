@@ -1,5 +1,6 @@
 import { BevyStyle } from "bevy-react/jsx";
 import { Colors } from "@/theme";
+import { useDemoPage, type ExplanationData } from "@/explanationStore";
 import { MonitorApp } from "./MonitorApp";
 
 // A demo of the `<surface>` host element: the inverse of `<portal>`. Its subtree is
@@ -8,7 +9,14 @@ import { MonitorApp } from "./MonitorApp";
 // `SurfacePointer`, the UI on it is a real, clickable in-world app — a tiny "OS" with a
 // menu bar, taskbar, code viewer, dialogs, and a reboot power-cycle, all driven by React.
 
+const PAGE: ExplanationData = {
+  title: "<surface>",
+  description:
+    'The <surface> host element is the inverse of <portal>: its subtree renders into an offscreen texture that the Bevy app drapes over a 3D mesh — here the screen of a monitor model (scenes/monitor.rs). The name identifies the surface to the Rust side. Because the screen mesh is tagged SurfacePointer, the UI on it is a real, clickable in-world app: a tiny "OS" with a menu bar, taskbar, code viewer, dialogs, and a reboot power-cycle, all driven by React.',
+};
+
 export function SurfaceDemo() {
+  useDemoPage(PAGE);
   return (
     <surface name="monitor" style={screenRoot}>
       <MonitorApp />

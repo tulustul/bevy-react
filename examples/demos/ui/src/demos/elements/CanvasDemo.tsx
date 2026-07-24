@@ -5,8 +5,9 @@ import type {
   RetainedCanvasContext,
 } from "bevy-react";
 import { BevyStyle } from "bevy-react/jsx";
-import { Button, Example } from "@/components";
+import { Button, DemoRow, Example } from "@/components";
 import { Colors } from "@/theme";
+import { useDemoPage, type ExplanationData } from "@/explanationStore";
 
 // A pure-UI demo of the `<canvas>` host element: an anti-aliased vector line
 // chart drawn entirely with HTML-canvas-style commands (axes, gridlines, a
@@ -14,6 +15,12 @@ import { Colors } from "@/theme";
 // reshuffles on its own every few seconds — and on click — animating to the new
 // positions; each frame re-renders React, which repaints the texture on the Bevy
 // side. No 3D scene: the viewport stays empty.
+
+const PAGE: ExplanationData = {
+  title: "<canvas>",
+  description:
+    "The <canvas> host element is a web-faithful retained pixel surface: paint accumulates in a persistent texture, and styles plus the current path survive across batches. Two write paths: the declarative draw prop (the surface clears and the callback replays whenever it changes) and the imperative ref handle (getContext() — commands batch on a microtask and flush outside React commits, so drawing costs no re-render). A layout resize clears the surface (HTML width/height-set semantics), updates the handle's width/height, and fires onResize; a stored declarative painter replays automatically.",
+};
 
 const W = 460;
 const H = 260;
@@ -41,15 +48,23 @@ const easeInOut = (t: number): number =>
   t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 
 export function CanvasDemo() {
+  useDemoPage(PAGE);
+  // The declarative (`draw`-prop) canvas must stay mounted before the
+  // imperative one: a Rust integration test relies on the first canvas create
+  // op being the declarative example's.
   return (
     <>
-      <GraphExample />
-      <PaintExample />
+      <DemoRow>
+        <GraphDemo />
+      </DemoRow>
+      <DemoRow>
+        <PaintDemo />
+      </DemoRow>
     </>
   );
 }
 
-function GraphExample() {
+function GraphDemo() {
   const [values, setValues] = useState<number[]>(() => randomData(POINTS));
   // Latest displayed values, so a tween always starts from where we are now
   // (a mid-flight reshuffle retargets smoothly).
@@ -144,7 +159,8 @@ function GraphExample() {
 
   return (
     <Example
-      description="A declarative vector drawing: the draw prop clears and replays whenever it changes."
+      title="Declarative draw"
+      description="A declarative vector drawing: the draw prop clears and replays whenever it changes. The data reshuffles every few seconds — and on click — tweening to new positions through React state."
       tsx={`<canvas
   draw={(ctx) => {
     ctx.strokeStyle = "#7aa2f7";
@@ -158,7 +174,7 @@ function GraphExample() {
   );
 }
 
-function PaintExample() {
+function PaintDemo() {
   const ref = useRef<BevyCanvasElement>(null);
   // The in-flight stroke's last point (drawing happens between pointer events,
   // entirely outside React state — no re-renders while doodling).
@@ -219,6 +235,7 @@ function PaintExample() {
 
   return (
     <Example
+      title="Retained surface"
       description="A retained drawing surface, driven imperatively through a ref handle. Drag to doodle — strokes accumulate with no React renders; the surface clears on resize and onResize repaints the background."
       tsx={`const ref = useRef<BevyCanvasElement>(null);
 

@@ -105,7 +105,7 @@ export const DEMOS: DemoItem[] = [
       { label: "Filter", component: FilterDemo },
       {
         label: "Backdrop filter",
-        scene: "CrowdedCubes",
+        scene: "SpaceCubes",
         component: BackdropFilterDemo,
       },
       { label: "Custom filters", component: CustomFiltersDemo },

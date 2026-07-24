@@ -2,10 +2,10 @@ import { useState } from "react";
 import { BevyStyle } from "bevy-react/jsx";
 import { Colors, FontSizes, Gradients, Scrollbar } from "@/theme";
 import { DEMOS, type DemoItem } from "./demos";
-import { useNavStore } from "./store";
+import { useDemosStore } from "./demosStore";
 
 export function Navigation() {
-  const { selectedDemo, setSelectedDemo } = useNavStore();
+  const { selectedDemo, setSelectedDemo } = useDemosStore();
 
   return (
     <node style={navStyle}>

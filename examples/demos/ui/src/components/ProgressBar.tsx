@@ -55,8 +55,7 @@ const fillStyle: BevyStyle = {
   top: 0,
   height: "100%",
   borderRadius: 6,
-  backgroundColor: Colors.primary100,
-  backgroundGradient: Gradients.primary,
+  backgroundGradient: Gradients.trackFilled,
 };
 
 const labelWrap: BevyStyle = {

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { BevyStyle } from "bevy-react/jsx";
 import { Example } from "@/components";
 import { Colors, FontSizes } from "@/theme";
+import { useDemoPage, type ExplanationData } from "@/explanationStore";
 
 const TYPESCRIPT = `<editableText
   value={first}
@@ -14,6 +15,13 @@ const TYPESCRIPT = `<editableText
   focusStyle={{ borderColor: Colors.primary200 }}
 />`;
 
+const PAGE: ExplanationData = {
+  title: "<editableText>",
+  description:
+    "Focusable text inputs: a controlled value (value + onChange) plus a Bevy-side focusStyle overlaid while the field has focus — applied with no onFocus/onBlur round-trip or React focus state. The element reports focus and selection via onFocus/onBlur/onSelect (onBlur for the old field fires after onFocus for the new one). maxLength caps input, autofocus grabs focus on mount, and IME and clipboard (Ctrl+C/V/X) work out of the box.",
+  tsx: TYPESCRIPT,
+};
+
 type Selection = {
   start: number;
   end: number;
@@ -22,6 +30,7 @@ type Selection = {
 };
 
 export function EditableTextDemo() {
+  useDemoPage(PAGE);
   const [first, setFirst] = useState("");
   const [last, setLast] = useState("");
   const [focused, setFocused] = useState<string | null>(null);
@@ -46,10 +55,7 @@ export function EditableTextDemo() {
     });
 
   return (
-    <Example
-      description="Focusable text inputs: controlled value + a Bevy-side focusStyle (no React focus state). The box reports focus and selection via onFocus/onBlur/onSelect. IME and clipboard (Ctrl+C/V/X) work out of the box."
-      tsx={TYPESCRIPT}
-    >
+    <Example>
       <text>What's your first name?</text>
       <editableText
         value={first}

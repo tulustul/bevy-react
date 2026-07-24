@@ -10,6 +10,7 @@ import {
 import { BevyStyle } from "bevy-react/jsx";
 import { Example } from "@/components";
 import { Colors } from "@/theme";
+import { useDemoPage, type ExplanationData } from "@/explanationStore";
 
 const GROW_MS = 900;
 
@@ -24,14 +25,15 @@ t.value = withRepeat(withTiming(1, { duration: 900 }), -1, true);
   }}
 />`;
 
-/**
- * Drives *layout* (`width`/`height`, which re-flow the surrounding row) and
- * `borderColor` from a single shared value — properties the old fixed channel set
- * couldn't reach. The generic apply layer maps each key to its `Node`/`BorderColor`
- * field; `width`/`height` write `Node` only when they change, so layout isn't
- * thrashed once the value settles.
- */
+const PAGE: ExplanationData = {
+  title: "Layout & Color",
+  description:
+    "A single shared value (withRepeat + withTiming, ping-pong) drives layout — width/height, which re-flow the surrounding row — and borderColor via interpolate / interpolateColor. Any continuous style value is animatable, not just transform and opacity; width/height write the Node only when they change, so layout isn't thrashed once the value settles.",
+  tsx: TYPESCRIPT,
+};
+
 export function LayoutAnimationDemo() {
+  useDemoPage(PAGE);
   const t = useSharedValue(0);
 
   useEffect(() => {
@@ -43,10 +45,7 @@ export function LayoutAnimationDemo() {
   }, [t]);
 
   return (
-    <Example
-      description="A shared value drives layout (width/height) and borderColor — any continuous style value is animatable, not just transform and opacity."
-      tsx={TYPESCRIPT}
-    >
+    <Example>
       <node style={stageStyle}>
         <Animated.node
           style={boxStyle}

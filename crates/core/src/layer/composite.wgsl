@@ -18,10 +18,11 @@
 @group(1) @binding(0) var atlas_texture: texture_2d<f32>;
 @group(1) @binding(1) var atlas_sampler: sampler;
 
-// Mirrored byte-for-byte by `render/transform3d.rs::CompositeUniforms` (96
+// Mirrored byte-for-byte by `render/transform3d.rs::CompositeUniforms` (128
 // bytes, guarded by `composite_uniforms_match_the_documented_wgsl_layout`).
-// Offsets: model @0, clip_min @64, clip_max @72, edge_feather @80. Pad names
-// are digit-free (naga's namer appends `_` to digit-suffixed identifiers).
+// Offsets: model @0, clip_min @64, clip_max @72, edge_feather @80, radius
+// @96, box_center @112, box_size @120. Pad names are digit-free (naga's
+// namer appends `_` to digit-suffixed identifiers).
 struct CompositeParams {
     model: mat4x4<f32>,
     clip_min: vec2<f32>,
@@ -29,6 +30,13 @@ struct CompositeParams {
     edge_feather: f32,
     pad_a: f32,
     pad_b: vec2<f32>,
+    // Rounded-corner mask: per-corner radii [TL, TR, BR, BL] (physical px,
+    // the node's layout-resolved values) over the UNCLIPPED border box.
+    // All-zero disables the mask (the edge_feather pattern); today only
+    // backdrop quads set it — frost clipped to the rounded panel.
+    radius: vec4<f32>,
+    box_center: vec2<f32>,
+    box_size: vec2<f32>,
 }
 
 @group(2) @binding(0) var<uniform> params: CompositeParams;
@@ -43,6 +51,29 @@ struct VertexOutput {
     // of the render target (screen or a nested layer's capture texture).
     @location(2) screen_pos: vec2<f32>,
     @location(3) screen_w: f32,
+}
+
+// Signed distance from `point` (measured from the box CENTER) to a rounded
+// box of `size` with per-quadrant `corner_radii` [TL, TR, BR, BL]; negative
+// inside. Ported verbatim from bevy_ui_render's `ui.wgsl::sd_rounded_box`
+// (including the .xy/.wz quadrant-select swap) so the frost's corner math is
+// bit-identical to the one bevy_ui paints the node's own background with.
+fn sd_rounded_box(point: vec2<f32>, size: vec2<f32>, corner_radii: vec4<f32>) -> f32 {
+    // If 0.0 < y then select bottom left (w) and bottom right corner radius (z).
+    // Else select top left (x) and top right corner radius (y).
+    let rs = select(corner_radii.xy, corner_radii.wz, 0.0 < point.y);
+    // w and z are swapped above so that both pairs are in left-to-right order, otherwise this second
+    // select statement would return the incorrect value for the bottom pair.
+    let radius = select(rs.x, rs.y, 0.0 < point.x);
+    // Vector from the corner closest to the point, to the point.
+    let corner_to_point = abs(point) - 0.5 * size;
+    // Vector from the center of the radius circle to the point.
+    let q = corner_to_point + radius;
+    // Length from center of the radius circle to the point, zeros a component if the point is not
+    // within the quadrant of the radius circle that is part of the curved corner.
+    let l = length(max(q, vec2(0.0)));
+    let m = min(max(q.x, q.y), 0.0);
+    return l + m - radius;
 }
 
 @vertex
@@ -85,12 +116,25 @@ fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
     let dist_px = dist / max(fwidth(in.uv), vec2(1e-6));
     let edge_px = min(dist_px.x, dist_px.y);
     let feathered = clamp(0.5 + edge_px / max(params.edge_feather, 1e-6), 0.0, 1.0);
-    let coverage = select(1.0, feathered, params.edge_feather > 0.0);
+    var coverage = select(1.0, feathered, params.edge_feather > 0.0);
+
+    // True screen position (perspective divide) — shared by the rounded mask
+    // and the ancestor-clip test below.
+    let screen = in.screen_pos / in.screen_w;
+
+    // Rounded-corner mask (backdrop quads): clip coverage to the node's
+    // rounded border box, antialiased with bevy_ui's own convention —
+    // `saturate(0.5 - sd)` on the raw physical-px distance (ui.wgsl's
+    // `antialias`; deliberately no fwidth) — so the frost edge coincides
+    // with the node's painted rounded background. All-zero radii disable the
+    // term exactly (content quads, square backdrops stay pixel-identical).
+    let sd = sd_rounded_box(screen - params.box_center, params.box_size, params.radius);
+    let rounded = saturate(0.5 - sd);
+    coverage *= select(1.0, rounded, any(params.radius > vec4(0.0)));
 
     // Ancestor clip of a transformed quad (screen-space rect vs. the true
     // screen position) — a HARD cut, like every other overflow edge.
     // Open-sentinel bounds make this a no-op for CPU-clamped/unclipped quads.
-    let screen = in.screen_pos / in.screen_w;
     if any(screen < params.clip_min) || any(screen > params.clip_max) {
         discard;
     }

@@ -2,8 +2,10 @@ import { useEffect, useState } from "react";
 import { bevy, type WindowSize } from "@/bevy";
 import { Example } from "@/components";
 import { Colors, FontSizes } from "@/theme";
+import { useDemoPage, type ExplanationData } from "@/explanationStore";
 
 export function WindowDemo() {
+  useDemoPage(PAGE);
   return <WindowSizeExample />;
 }
 
@@ -14,6 +16,13 @@ useEffect(() => {
   return bevy.on("resize", setSize);     // live updates
 }, []);`;
 
+const PAGE: ExplanationData = {
+  title: "Window",
+  description:
+    'Built into the core plugin, no registration needed: bevy.on("resize") streams the UI viewport\'s logical size, and the bevy.window.size() request pulls it on demand (here: once on mount). Resize the app window to see it update.',
+  tsx: RESIZE_TYPESCRIPT,
+};
+
 function WindowSizeExample() {
   const [size, setSize] = useState<WindowSize | null>(null);
 
@@ -23,11 +32,7 @@ function WindowSizeExample() {
   }, []);
 
   return (
-    <Example
-      description={`Built into the core plugin, no registration needed: bevy.on("resize") streams the UI viewport's logical size, and bevy.window.size() pulls it on demand (here: once on mount). Resize the app window to see it update.`}
-      tsx={RESIZE_TYPESCRIPT}
-    >
-      <text style={{ fontSize: FontSizes.lg }}>Window</text>
+    <Example title="Window">
       <text
         style={{
           fontSize: FontSizes.xxxl,

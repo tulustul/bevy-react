@@ -2408,6 +2408,7 @@ mod tests {
                     depth: 1,
                     repaints: 0,
                     cached: false,
+                    cache_policy: Default::default(),
                 },
             );
         let payloads = |rx: &mut UnboundedReceiver<Outbound>| {
@@ -2632,6 +2633,7 @@ mod tests {
                     depth: 1,
                     repaints: 0,
                     cached: false,
+                    cache_policy: Default::default(),
                 },
             );
         {

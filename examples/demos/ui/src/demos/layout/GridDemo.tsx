@@ -1,10 +1,17 @@
 import { useState } from "react";
 import { BevyStyle, Gradient } from "bevy-react/jsx";
-import { Example, Radio, RadioOption, Slider } from "@/components";
+import { DemoRow, Example, Radio, RadioOption, Slider } from "@/components";
 import { Colors, FontSizes, Gradients } from "@/theme";
+import { useDemoPage, type ExplanationData } from "@/explanationStore";
 
 // `display: "grid"` opts a `<node>` into CSS-grid layout. Tracks accept the full
 // CSS syntax: `repeat(n, …)`, fr units, fixed sizes, and `span`/line placement.
+
+const PAGE: ExplanationData = {
+  title: "Grid",
+  description:
+    'display: "grid" opts a <node> into CSS-grid layout. Track lists (gridTemplateColumns, gridTemplateRows, gridAutoRows) accept the full CSS syntax: repeat(n, …), fr units, and fixed sizes. Children place themselves with gridColumn/gridRow, including "span n" and explicit line placement; gap spaces the tracks.',
+};
 
 const CELLS = Gradients.spectrum;
 
@@ -42,90 +49,115 @@ const COLS_OPTIONS: RadioOption<number>[] = [
   { label: "4", value: 4 },
 ];
 
-function GridPlayground() {
-  const [cols, setCols] = useState(3);
-  const [gap, setGap] = useState(8);
+export function GridDemo() {
+  useDemoPage(PAGE);
   return (
-    <node style={controlColumn}>
-      <node
-        style={{ ...frame, gridTemplateColumns: `repeat(${cols}, 1fr)`, gap }}
-      >
-        <Cells count={cols * 2} />
-      </node>
-      <Radio options={COLS_OPTIONS} value={cols} onChange={setCols} />
-      <Slider
-        value={gap}
-        min={0}
-        max={20}
-        onChange={setGap}
-        label={`gap ${gap.toFixed(0)}`}
-      />
-    </node>
+    <>
+      <DemoRow>
+        <GridPlaygroundDemo />
+        <MixedTracksDemo />
+      </DemoRow>
+
+      <DemoRow>
+        <ColumnSpanDemo />
+        <RowSpanDemo />
+      </DemoRow>
+    </>
   );
 }
 
-export function GridDemo() {
+function GridPlaygroundDemo() {
+  const [cols, setCols] = useState(3);
+  const [gap, setGap] = useState(8);
   return (
-    <>
-      <Example
-        description="repeat(n, 1fr) makes n equal, flexible columns. Try the count and gap."
-        tsx={`<node style={{
+    <Example
+      title="repeat & fr"
+      description="repeat(n, 1fr) makes n equal, flexible columns. Try the count and gap."
+      tsx={`<node style={{
   display: "grid",
   gridTemplateColumns: "repeat(3, 1fr)",
   gap: 8,
 }}>`}
-      >
-        <GridPlayground />
-      </Example>
-
-      <Example
-        description="Mixed tracks: a fixed sidebar and a flexible body column."
-        tsx={`gridTemplateColumns: "80px 1fr"`}
-      >
-        <node style={{ ...frame, gridTemplateColumns: "80px 1fr" }}>
-          <Cells count={4} />
+    >
+      <node style={controlColumn}>
+        <node
+          style={{ ...frame, gridTemplateColumns: `repeat(${cols}, 1fr)`, gap }}
+        >
+          <Cells count={cols * 2} />
         </node>
-      </Example>
+        <Radio options={COLS_OPTIONS} value={cols} onChange={setCols} />
+        <Slider
+          value={gap}
+          min={0}
+          max={20}
+          onChange={setGap}
+          label={`gap ${gap.toFixed(0)}`}
+        />
+      </node>
+    </Example>
+  );
+}
 
-      <Example
-        description="gridColumn: span 2 makes a cell straddle two columns."
-        tsx={`<node style={{ gridColumn: "span 2" }}>`}
-      >
-        <node style={{ ...frame, gridTemplateColumns: "repeat(3, 1fr)" }}>
-          <node
-            style={{
-              ...cell,
-              gridColumn: "span 2",
-              backgroundGradient: CELLS[0],
-            }}
-          >
-            <text style={cellText}>span 2</text>
-          </node>
-          <Cells count={4} from={1} />
-        </node>
-      </Example>
+function MixedTracksDemo() {
+  return (
+    <Example
+      title="Mixed tracks"
+      description="Mixed tracks: a fixed sidebar and a flexible body column."
+      tsx={`gridTemplateColumns: "80px 1fr"`}
+    >
+      <node style={{ ...frame, gridTemplateColumns: "80px 1fr" }}>
+        <Cells count={4} />
+      </node>
+    </Example>
+  );
+}
 
-      <Example
-        description="gridRow: span 2 with explicit rows builds a feature cell."
-        tsx={`gridTemplateRows: "repeat(2, 48px)"
-gridRow: "span 2"`}
-      >
+function ColumnSpanDemo() {
+  return (
+    <Example
+      title="gridColumn span"
+      description="gridColumn: span 2 makes a cell straddle two columns."
+      tsx={`<node style={{ gridColumn: "span 2" }}>`}
+    >
+      <node style={{ ...frame, gridTemplateColumns: "repeat(3, 1fr)" }}>
         <node
           style={{
-            ...frame,
-            gridTemplateColumns: "repeat(3, 1fr)",
-            gridTemplateRows: "repeat(2, 48px)",
+            ...cell,
+            gridColumn: "span 2",
+            backgroundGradient: CELLS[0],
           }}
         >
-          <node
-            style={{ ...cell, gridRow: "span 2", backgroundGradient: CELLS[0] }}
-          >
-            <text style={cellText}>tall</text>
-          </node>
-          <Cells count={4} from={1} />
+          <text style={cellText}>span 2</text>
         </node>
-      </Example>
-    </>
+        <Cells count={4} from={1} />
+      </node>
+    </Example>
+  );
+}
+
+function RowSpanDemo() {
+  return (
+    <Example
+      title="gridRow span"
+      description="gridRow: span 2 with explicit rows builds a feature cell."
+      tsx={`gridTemplateRows: "repeat(2, 48px)"
+gridRow: "span 2"`}
+    >
+      <node
+        style={{
+          ...frame,
+          gridTemplateColumns: "repeat(3, 1fr)",
+          gridTemplateRows: "repeat(2, 48px)",
+        }}
+      >
+        <node
+          style={{ ...cell, gridRow: "span 2", backgroundGradient: CELLS[0] }}
+        >
+          <text style={cellText}>tall</text>
+        </node>
+        <Cells count={4} from={1} />
+      </node>
+    </Example>
   );
 }
 

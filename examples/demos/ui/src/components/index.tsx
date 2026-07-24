@@ -6,3 +6,4 @@ export * from "./Button";
 export * from "./Radio";
 export * from "./TextMono";
 export * from "./Typewriter";
+export * from "./DemoRow";

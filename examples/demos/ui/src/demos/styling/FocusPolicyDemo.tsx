@@ -3,13 +3,23 @@ import { BevyStyle } from "bevy-react/jsx";
 import { Checkbox, Example } from "@/components";
 import { Colors, FontSizes } from "@/theme";
 import { caption, controlColumn } from "./shared";
+import { useDemoPage, type ExplanationData } from "@/explanationStore";
+
+const PAGE: ExplanationData = {
+  title: "focusPolicy",
+  description: `focusPolicy decides whether a node captures pointer
+interaction or lets it fall through. A front box overlaps a clickable back
+box: by default a node PASSES pointer interaction through, so overlap clicks
+fall through the front box to the back box (the front box still reacts to its
+own clicks too). Set focusPolicy: "block" and the front box CAPTURES the
+click, so the back box no longer receives it.`,
+  tsx: `<node style={{ focusPolicy: pass ? "pass" : "block" }} />`,
+};
 
 export function FocusPolicyDemo() {
+  useDemoPage(PAGE);
   return (
-    <Example
-      description="A front box overlaps a clickable back box. By default a node PASSES pointer interaction through, so overlap clicks fall through the front box to the back box (the front box still reacts to its own clicks too). Set focusPolicy: 'block' and the front box CAPTURES the click, so the back box no longer receives it."
-      tsx={`<node style={{ focusPolicy: pass ? "pass" : "block" }} />`}
-    >
+    <Example>
       <FocusPolicyControl />
     </Example>
   );

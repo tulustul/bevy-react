@@ -3,6 +3,7 @@ import { bevy, type KeyboardEventData } from "@/bevy";
 import { Example } from "@/components";
 import { Colors, FontSizes } from "@/theme";
 import { TextMono } from "@/components/TextMono";
+import { useDemoPage, type ExplanationData } from "@/explanationStore";
 
 const TYPESCRIPT = `import { bevy } from "@/bevy";
 
@@ -27,7 +28,15 @@ function modifierLabel(e: KeyboardEventData | null): string {
   return mods.length ? mods.join(" + ") : "-";
 }
 
+const PAGE: ExplanationData = {
+  title: "Keyboard",
+  description:
+    'Bevy -> React: window-global keystrokes. Focus the app window and press any key — no node needs focus. Built into the core plugin as the typed bevy.on("keyDown") / bevy.on("keyUp") events, carrying key, code, repeat and the modifier flags.',
+  tsx: TYPESCRIPT,
+};
+
 export function KeyboardDemo() {
+  useDemoPage(PAGE);
   const [lastEvent, setLastEvent] = useState<KeyboardEventData | null>(null);
   const [held, setHeld] = useState<string[]>([]);
 
@@ -49,10 +58,7 @@ export function KeyboardDemo() {
   }, []);
 
   return (
-    <Example
-      description={`Bevy -> React: window-global keystrokes. Focus the app window and press any key — no node needs focus. Built into the core plugin as the typed bevy.on("keyDown"/"keyUp") events.`}
-      tsx={TYPESCRIPT}
-    >
+    <Example>
       <text
         style={{
           fontSize: FontSizes.xl,

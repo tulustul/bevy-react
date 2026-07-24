@@ -3,6 +3,7 @@ import { bevy } from "@/bevy";
 import { Button, Example } from "@/components";
 import { BevyStyle } from "bevy-react/jsx";
 import { Colors, FontSizes } from "@/theme";
+import { useDemoPage, type ExplanationData } from "@/explanationStore";
 
 const MAX = 8;
 const TYPESCRIPT = "bevy.basicDemo.setCount(n);";
@@ -19,7 +20,16 @@ fn apply_set_count(
 
 app.add_react_handler(apply_set_count);`;
 
+const PAGE: ExplanationData = {
+  title: "Bevy <- React",
+  description:
+    "React -> Bevy: a typed emit — here the generated bevy.basicDemo.setCount(n) wrapper for the #[react_message] — notifies the ECS fire-and-forget; an observer applies the count and the scene spawns that many cubes.",
+  tsx: TYPESCRIPT,
+  rust: RUST,
+};
+
 export function ReactToBevyDemo() {
+  useDemoPage(PAGE);
   const [count, setCount] = useState(3);
 
   useEffect(() => {
@@ -27,11 +37,7 @@ export function ReactToBevyDemo() {
   }, [count]);
 
   return (
-    <Example
-      description="React -> Bevy: a typed `emit` notifies the ECS, which spawns that many cubes."
-      tsx={TYPESCRIPT}
-      rust={RUST}
-    >
+    <Example>
       <text style={countStyle}>
         Cubes: <text style={{ color: Colors.primary100 }}>{count}</text>
       </text>

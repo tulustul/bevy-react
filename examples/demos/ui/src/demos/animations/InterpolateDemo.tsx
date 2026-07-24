@@ -9,6 +9,7 @@ import { BevyStyle } from "bevy-react/jsx";
 import { Example, Slider } from "@/components";
 import { column } from "./shared";
 import { Colors } from "@/theme";
+import { useDemoPage, type ExplanationData } from "@/explanationStore";
 
 // One shared value, many outputs: a slider sets it directly, and interpolate /
 // interpolateColor map it onto scale and background color each frame in Bevy.
@@ -20,7 +21,15 @@ const TYPESCRIPT = `animatedStyle={{
   ),
 }}`;
 
+const PAGE: ExplanationData = {
+  title: "Interpolate",
+  description:
+    "One shared value, many outputs: the slider sets the value directly (no driver), and interpolate / interpolateColor map it onto scale and background color each frame on the Bevy side. Drag 0 to 1 and watch both bindings follow.",
+  tsx: TYPESCRIPT,
+};
+
 export function InterpolateDemo() {
+  useDemoPage(PAGE);
   const t = useSharedValue(0);
   const [v, setV] = useState(0);
 
@@ -30,10 +39,7 @@ export function InterpolateDemo() {
   };
 
   return (
-    <Example
-      description="Drag the value 0 to 1 and watch one shared value drive both scale and color."
-      tsx={TYPESCRIPT}
-    >
+    <Example>
       <node style={column}>
         <node style={stage}>
           <Animated.node

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { BevyStyle } from "bevy-react/jsx";
 import { Button, Example } from "@/components";
 import { Colors } from "@/theme";
+import { useDemoPage, type ExplanationData } from "@/explanationStore";
 
 // The `<root>` host element: a **detached, screen-space top-level tree** — the
 // on-screen twin of `<surface>`. Wherever the element sits in your component
@@ -30,20 +31,23 @@ const TYPESCRIPT = `const [open, setOpen] = useState(false);
   </root>
 )}`;
 
+const PAGE: ExplanationData = {
+  title: "<root>",
+  description:
+    "A <root> is a detached, screen-space top-level tree — the on-screen twin of <surface>. Wherever the element sits in your component tree, its children render as an independent window-filling layer floating above the whole app (top of the global stack by default) — the natural home for modals, toasts, and other overlays. The <root> fills the window (a centered column by default), so backdrop styling goes straight on it. Its name labels the root in the devtools root selector (F12): while the modal here is open, the devtools list a selectable root named 'modal'.",
+  tsx: TYPESCRIPT,
+};
+
 export function RootDemo() {
+  useDemoPage(PAGE);
   const [open, setOpen] = useState(false);
 
   return (
-    <Example
-      description="A <root> renders its children as a detached, window-filling layer above the whole app — a modal that escapes this card entirely. While it is open, the devtools (F12) list it as a selectable root named 'modal'."
-      tsx={TYPESCRIPT}
-    >
-      <node style={panelStyle}>
-        <text style={hintStyle}>
-          The dialog is declared right here, inside this small card…
-        </text>
-        <Button onClick={() => setOpen(true)}>Open modal</Button>
-      </node>
+    <Example>
+      <text style={hintStyle}>
+        The dialog is declared right here, inside this small card.
+      </text>
+      <Button onClick={() => setOpen(true)}>Open modal</Button>
 
       {open && (
         <root name="modal" style={backdropStyle}>

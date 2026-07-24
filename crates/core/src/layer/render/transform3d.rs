@@ -11,7 +11,7 @@
 
 use bevy::ecs::system::SystemParamItem;
 use bevy::ecs::system::lifetimeless::SRes;
-use bevy::math::{Mat4, Vec2};
+use bevy::math::{Mat4, Vec2, Vec4};
 use bevy::prelude::*;
 use bevy::render::render_phase::{
     PhaseItem, RenderCommand, RenderCommandResult, TrackedRenderPass,
@@ -19,7 +19,7 @@ use bevy::render::render_phase::{
 use bevy::render::render_resource::{BindGroup, DynamicUniformBuffer, ShaderType};
 
 /// Per-quad composite params. Field order matches `CompositeParams` in
-/// `composite.wgsl` byte for byte (96 bytes; guarded by
+/// `composite.wgsl` byte for byte (128 bytes; guarded by
 /// `composite_uniforms_match_the_documented_wgsl_layout`). Pad names are
 /// digit-free on purpose (the naga-namer constraint, see `FilterUniforms`).
 #[derive(Clone, Copy, ShaderType)]
@@ -40,6 +40,20 @@ pub struct CompositeUniforms {
     pub edge_feather: f32,
     pub pad_a: f32,
     pub pad_b: Vec2,
+    /// Rounded-corner mask radii, `[top_left, top_right, bottom_right,
+    /// bottom_left]` physical px — the node's layout-resolved
+    /// `ComputedNode.border_radius` (already clamped per corner to
+    /// `0.5 * min(w, h)`; Bevy's rule, not the CSS proportional-shrink one —
+    /// matching what bevy_ui *paints* is the point: the frost edge must
+    /// coincide with the node's own rounded background). All-zero disables
+    /// the mask term entirely (the `edge_feather` pattern) — today only
+    /// backdrop quads set it.
+    pub radius: Vec4,
+    /// The UNCLIPPED border box the radii round, screen-space physical px.
+    /// Carried separately because the CPU clip clamps the quad's *geometry*
+    /// — the SDF must still measure against the true box.
+    pub box_center: Vec2,
+    pub box_size: Vec2,
 }
 
 /// The clip sentinel: an interval no on-screen fragment escapes, making the
@@ -104,11 +118,12 @@ mod tests {
     }
 
     /// The WGSL `CompositeParams` struct in `composite.wgsl` documents a
-    /// 96-byte uniform layout (mat4x4 + clip vec2s + feather + pads); the
-    /// Rust mirror must match field for field.
+    /// 128-byte uniform layout (mat4x4 + clip vec2s + feather + pads +
+    /// corner radii + border box); the Rust mirror must match field for
+    /// field.
     #[test]
     fn composite_uniforms_match_the_documented_wgsl_layout() {
-        assert_eq!(CompositeUniforms::min_size().get(), 96);
+        assert_eq!(CompositeUniforms::min_size().get(), 128);
 
         let value = CompositeUniforms {
             model: Mat4::from_translation(bevy::math::Vec3::new(9.0, 0.0, 0.0)),
@@ -117,11 +132,14 @@ mod tests {
             edge_feather: 1.5,
             pad_a: 0.0,
             pad_b: Vec2::ZERO,
+            radius: Vec4::new(5.0, 6.0, 7.0, 8.0),
+            box_center: Vec2::new(10.0, 11.0),
+            box_size: Vec2::new(12.0, 13.0),
         };
         let mut buffer = UniformBuffer::new(Vec::<u8>::new());
         buffer.write(&value).expect("uniform write");
         let bytes = buffer.into_inner();
-        assert_eq!(bytes.len(), 96);
+        assert_eq!(bytes.len(), 128);
         // Per-field offsets, per the WGSL struct's comment block.
         assert_eq!(f32_at(&bytes, 48), 9.0); // model.w_axis.x (col 3 @ 48)
         assert_eq!(f32_at(&bytes, 64), 1.0); // clip_min.x
@@ -129,5 +147,13 @@ mod tests {
         assert_eq!(f32_at(&bytes, 72), 3.0); // clip_max.x
         assert_eq!(f32_at(&bytes, 76), 4.0); // clip_max.y
         assert_eq!(f32_at(&bytes, 80), 1.5); // edge_feather
+        assert_eq!(f32_at(&bytes, 96), 5.0); // radius.x (top_left)
+        assert_eq!(f32_at(&bytes, 100), 6.0); // radius.y (top_right)
+        assert_eq!(f32_at(&bytes, 104), 7.0); // radius.z (bottom_right)
+        assert_eq!(f32_at(&bytes, 108), 8.0); // radius.w (bottom_left)
+        assert_eq!(f32_at(&bytes, 112), 10.0); // box_center.x
+        assert_eq!(f32_at(&bytes, 116), 11.0); // box_center.y
+        assert_eq!(f32_at(&bytes, 120), 12.0); // box_size.x
+        assert_eq!(f32_at(&bytes, 124), 13.0); // box_size.y
     }
 }

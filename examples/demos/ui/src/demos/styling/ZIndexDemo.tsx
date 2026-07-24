@@ -1,26 +1,26 @@
 import { useState } from "react";
 import { BevyStyle } from "bevy-react/jsx";
-import { Example, Radio, RadioOption } from "@/components";
+import { DemoRow, Example, Radio, RadioOption } from "@/components";
+import { useDemoPage, type ExplanationData } from "@/explanationStore";
 import { Colors, FontSizes } from "@/theme";
 import { caption, controlColumn } from "./shared";
 
-export function ZIndexDemo() {
-  return (
-    <>
-      <Example
-        description="zIndex reorders a node among its SIBLINGS. Both chips share one parent, so it decides which is painted on top."
-        tsx={`<node style={{ zIndex: 2 }} />`}
-      >
-        <LocalControl />
-      </Example>
+const PAGE: ExplanationData = {
+  title: "zIndex",
+  description: `zIndex reorders a node among its SIBLINGS — it is local to
+the parent's stacking context, so a nested node can never out-stack an
+unrelated subtree with it. globalZIndex lifts the node into the UI's
+top-level stack instead, the tool for popovers and overlays that must render
+in front of everything.`,
+};
 
-      <Example
-        description="A popover nested in the back card overhangs the front card. zIndex only sorts it within its own card, so it stays buried — globalZIndex lifts it into the UI's top-level stack and out in front."
-        tsx={`<node style={{ globalZIndex: 99 }} />`}
-      >
-        <GlobalControl />
-      </Example>
-    </>
+export function ZIndexDemo() {
+  useDemoPage(PAGE);
+  return (
+    <DemoRow>
+      <LocalZIndexDemo />
+      <GlobalZIndexDemo />
+    </DemoRow>
   );
 }
 
@@ -32,32 +32,38 @@ const FRONT_OPTIONS: RadioOption<Front>[] = [
   { label: "red front", value: "red" },
 ];
 
-function LocalControl() {
+function LocalZIndexDemo() {
   const [front, setFront] = useState<Front>("red");
   return (
-    <node style={controlColumn}>
-      <node style={overlapStage}>
-        <node
-          style={{
-            ...chip,
-            left: 18,
-            top: 14,
-            backgroundColor: Colors.primary100,
-            zIndex: front === "blue" ? 2 : 1,
-          }}
-        />
-        <node
-          style={{
-            ...chip,
-            left: 50,
-            top: 30,
-            backgroundColor: Colors.red100,
-            zIndex: front === "red" ? 2 : 1,
-          }}
-        />
+    <Example
+      title="zIndex"
+      description="zIndex reorders a node among its SIBLINGS. Both chips share one parent, so it decides which is painted on top."
+      tsx={`<node style={{ zIndex: 2 }} />`}
+    >
+      <node style={controlColumn}>
+        <node style={overlapStage}>
+          <node
+            style={{
+              ...chip,
+              left: 18,
+              top: 14,
+              backgroundColor: Colors.primary100,
+              zIndex: front === "blue" ? 2 : 1,
+            }}
+          />
+          <node
+            style={{
+              ...chip,
+              left: 50,
+              top: 30,
+              backgroundColor: Colors.red100,
+              zIndex: front === "red" ? 2 : 1,
+            }}
+          />
+        </node>
+        <Radio options={FRONT_OPTIONS} value={front} onChange={setFront} />
       </node>
-      <Radio options={FRONT_OPTIONS} value={front} onChange={setFront} />
-    </node>
+    </Example>
   );
 }
 
@@ -76,7 +82,7 @@ const HINTS: Record<Mode, string> = {
   globalZIndex: "globalZIndex: 99 — popover jumps in front",
 };
 
-function GlobalControl() {
+function GlobalZIndexDemo() {
   const [mode, setMode] = useState<Mode>("globalZIndex");
   const popoverZ: BevyStyle =
     mode === "zIndex"
@@ -85,23 +91,29 @@ function GlobalControl() {
         ? { globalZIndex: 99 }
         : {};
   return (
-    <node style={controlColumn}>
-      <node style={cardRow}>
-        {/* Back card (painted first) — owns the overhanging popover. */}
-        <node style={{ ...card, backgroundColor: Colors.primary100 }}>
-          <text style={cardLabel}>back</text>
-          <node style={{ ...popover, ...popoverZ }}>
-            <text style={popoverLabel}>popover</text>
+    <Example
+      title="globalZIndex"
+      description="A popover nested in the back card overhangs the front card. zIndex only sorts it within its own card, so it stays buried — globalZIndex lifts it into the UI's top-level stack and out in front."
+      tsx={`<node style={{ globalZIndex: 99 }} />`}
+    >
+      <node style={controlColumn}>
+        <node style={cardRow}>
+          {/* Back card (painted first) — owns the overhanging popover. */}
+          <node style={{ ...card, backgroundColor: Colors.primary100 }}>
+            <text style={cardLabel}>back</text>
+            <node style={{ ...popover, ...popoverZ }}>
+              <text style={popoverLabel}>popover</text>
+            </node>
+          </node>
+          {/* Front card (painted second) — covers anything below it in the stack. */}
+          <node style={{ ...card, backgroundColor: Colors.red100 }}>
+            <text style={cardLabel}>front</text>
           </node>
         </node>
-        {/* Front card (painted second) — covers anything below it in the stack. */}
-        <node style={{ ...card, backgroundColor: Colors.red100 }}>
-          <text style={cardLabel}>front</text>
-        </node>
+        <Radio options={MODE_OPTIONS} value={mode} onChange={setMode} />
+        <text style={caption}>{HINTS[mode]}</text>
       </node>
-      <Radio options={MODE_OPTIONS} value={mode} onChange={setMode} />
-      <text style={caption}>{HINTS[mode]}</text>
-    </node>
+    </Example>
   );
 }
 

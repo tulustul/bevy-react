@@ -1,152 +1,72 @@
-import { PropsWithChildren, useState } from "react";
+import { PropsWithChildren, useEffect, useRef } from "react";
 import { BevyStyle } from "bevy-react/jsx";
-import { Colors, FontSizes, Gradients } from "@/theme";
-import { TextMono } from "./TextMono";
+import { Colors, Filters, Gradients } from "@/theme";
+import { useExplanationStore } from "@/explanationStore";
 
 export type ExampleProps = PropsWithChildren & {
-  // A one/two-line note shown on the right, above the code.
+  style?: BevyStyle;
+  title?: string;
   description?: string;
   tsx?: string;
   rust?: string;
 };
 
-export function Example({ children, description, tsx, rust }: ExampleProps) {
-  const hasCode = !!(rust || tsx);
-  const hasAside = !!(description || hasCode);
-
-  // Code snippets are shown by default but can be collapsed so a tall card
-  // doesn't overlay the scene behind it.
-  const [open, setOpen] = useState(true);
-
-  return (
-    <node style={cardStyle}>
-      <node style={demoStyle}>{children}</node>
-
-      {hasCode && (
-        <button
-          onClick={() => setOpen((o) => !o)}
-          style={codeToggleStyle}
-          hoverStyle={{ backgroundGradient: Gradients.surfaceHover }}
-        >
-          <TextMono style={codeToggleLabelStyle}>{open ? "-" : "+"}</TextMono>
-        </button>
-      )}
-
-      {hasAside && (
-        <node style={asideStyle}>
-          {description && <text style={descriptionStyle}>{description}</text>}
-
-          {hasCode && (
-            <node
-              style={{
-                flexDirection: "column",
-                gap: 8,
-                overflowY: "clip",
-                maxHeight: open ? estimateCodeHeight(rust, tsx) : 0,
-                transition: { size: { duration: 300, easing: "easeOut" } },
-              }}
-            >
-              {rust && <Code lang="rust" code={rust} />}
-              {tsx && <Code lang="tsx" code={tsx} />}
-            </node>
-          )}
-        </node>
-      )}
-    </node>
+export function Example({
+  children,
+  style,
+  title,
+  description,
+  tsx,
+  rust,
+}: ExampleProps) {
+  // Stable per-instance identity for the selection (survives hot reload).
+  const key = useRef({}).current;
+  const selectable = title !== undefined;
+  const isSelected = useExplanationStore(
+    (s) => selectable && s.selected?.key === key,
   );
-}
+  const select = useExplanationStore((s) => s.select);
 
-// `maxHeight` only clips, so a generous overshoot is safe: when it exceeds the
-// content the snippets take their natural height. Estimate from line counts so
-// the open animation reaches full height without clipping the last line.
-function estimateCodeHeight(rust?: string, typescript?: string): number {
-  const lines = (s?: string) => (s ? s.split("\n").length : 0);
-  const PER_LINE_PX = 20;
-  const PER_SNIPPET_PX = 60; // lang label + paddings
-  const snippets = [rust, typescript].filter(Boolean) as string[];
-  const lineTotal = snippets.reduce((sum, s) => sum + lines(s), 0);
-  return lineTotal * PER_LINE_PX + snippets.length * PER_SNIPPET_PX;
-}
+  // A selected card unmounting (in-page conditional rendering) falls back to
+  // the page default; page switches are already covered by setPage.
+  useEffect(() => {
+    return () => useExplanationStore.getState().deselect(key);
+  }, [key]);
 
-type CodeProps = {
-  lang: "tsx" | "rust";
-  code: string;
-};
-function Code({ lang, code }: CodeProps) {
   return (
-    <node style={{ flexDirection: "column" }}>
-      <TextMono style={{ fontSize: FontSizes.sm, padding: { bottom: 5 } }}>
-        {lang}
-      </TextMono>
-      <TextMono
-        style={{
-          fontSize: FontSizes.xxs,
-          color: Colors.textColor200,
-        }}
-      >
-        {code}
-      </TextMono>
+    <node
+      style={{ ...cardStyle, ...(isSelected ? selectedStyle : null), ...style }}
+      onClick={
+        selectable
+          ? () => select(key, { title: title!, description, rust, tsx })
+          : undefined
+      }
+    >
+      {title !== undefined && (
+        <text style={{ textAlign: "center" }}>{title}</text>
+      )}
+      {children}
     </node>
   );
 }
 
 const cardStyle: BevyStyle = {
   alignItems: "stretch",
-  justifyContent: "center",
-  minWidth: 320,
-  backgroundColor: Colors.surface200,
+  justifyContent: "flexStart",
+  flexDirection: "column",
+  minWidth: 150,
+  padding: 10,
+  gap: 8,
+  backdropFilter: Filters.backdrop,
   backgroundGradient: Gradients.card,
   borderRadius: 16,
   border: 2,
   borderColor: Colors.primary100,
-  borderGradient: Gradients.accentBorder,
-  zIndex: 1000,
+  borderGradient: Gradients.accentBorderDim,
   boxShadow: { blurRadius: 15, spreadRadius: 5, color: Colors.shadow100 },
 };
 
-const demoStyle: BevyStyle = {
-  flexDirection: "column",
-  gap: 8,
-  alignItems: "center",
-  justifyContent: "center",
-  border: { right: 2 },
-  borderColor: Colors.primary100,
+const selectedStyle: BevyStyle = {
   borderGradient: Gradients.accentBorder,
-  padding: 28,
-};
-
-const asideStyle: BevyStyle = {
-  flexDirection: "column",
-  justifyContent: "center",
-  gap: 8,
-  padding: 16,
-};
-
-const codeToggleStyle: BevyStyle = {
-  positionType: "absolute",
-  top: 8,
-  right: 8,
-  width: 24,
-  height: 24,
-  justifyContent: "center",
-  alignItems: "center",
-  borderRadius: 6,
-  backgroundColor: Colors.surface300,
-  backgroundGradient: Gradients.surface,
-  zIndex: 1,
-  transition: { backgroundColor: { duration: 200 } },
-};
-
-const codeToggleLabelStyle: BevyStyle = {
-  color: Colors.textColor100,
-  fontSize: FontSizes.base,
-  fontWeight: "bold",
-};
-
-const descriptionStyle: BevyStyle = {
-  color: Colors.textColor200,
-  fontSize: FontSizes.sm,
-  maxWidth: 320,
-  padding: 5,
-  margin: { bottom: 15 },
+  boxShadow: { blurRadius: 20, spreadRadius: 6, color: Colors.primaryOverlay },
 };

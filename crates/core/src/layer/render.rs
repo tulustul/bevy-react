@@ -80,7 +80,7 @@ use bevy::render::sync_world::{MainEntity, RenderEntity, TemporaryRenderEntity};
 use bevy::render::view::{ExtractedView, RetainedViewEntity, ViewUniform};
 use bevy::shader::Shader;
 use bevy::shader::ShaderCacheError;
-use bevy::ui::ComputedUiTargetCamera;
+use bevy::ui::{ComputedNode, ComputedUiTargetCamera};
 use bevy::ui_render::{SetUiViewBindGroup, TransparentUi, stack_z_offsets};
 
 use super::{LayerCaptureRect, LayerGroupAlpha, LayerMembership, PromotedLayer};
@@ -221,6 +221,13 @@ pub struct ExtractedLayer {
     /// ([`LayerCaptureRect::outset`]). The backdrop quad shrinks by this to
     /// the un-inflated border box — frost must not paint in the outset ring.
     pub outset: u32,
+    /// The node's layout-resolved corner radii, `[top_left, top_right,
+    /// bottom_right, bottom_left]` physical px (from
+    /// `ComputedNode.border_radius` — already clamped per corner to
+    /// `0.5 * min(w, h)`, Bevy's rule; matching what bevy_ui paints is the
+    /// point). Consumed only by the backdrop quad's uniform push: the frost
+    /// is masked to the rounded border box. All-zero = square.
+    pub corner_radius: [f32; 4],
     /// The layer's composite-time 3D model matrix (screen-space homography,
     /// from `LayerTransform3dMatrix`). `None` = untransformed (absent style
     /// or identity params) — the quad takes the CPU clip path unchanged.
@@ -272,6 +279,7 @@ pub fn extract_ui_layers(
             Option<&crate::filters::ResolvedBackdropChain>,
             Option<&crate::layer::transform3d::LayerTransform3dMatrix>,
             &PromotedLayer,
+            Option<&ComputedNode>,
         )>,
     >,
     membership: Extract<Res<LayerMembership>>,
@@ -295,8 +303,17 @@ pub fn extract_ui_layers(
     // v1: all layers composite on one camera — the first layer root's UI
     // target camera. (Multi-camera roots are a documented non-goal for now.)
     let mut layer_index: HashMap<Entity, usize> = HashMap::default();
-    for (root, rect, alpha, target_camera, filter_chain, backdrop, transform3d, promoted) in
-        layers.iter()
+    for (
+        root,
+        rect,
+        alpha,
+        target_camera,
+        filter_chain,
+        backdrop,
+        transform3d,
+        promoted,
+        computed,
+    ) in layers.iter()
     {
         let Some(camera_main) = target_camera.get() else {
             continue;
@@ -394,6 +411,7 @@ pub fn extract_ui_layers(
             backdrop_chain,
             backdrop_quad_entity,
             outset: rect.outset,
+            corner_radius: computed.map_or([0.0; 4], |c| c.border_radius.into()),
             // Identity matrices stay `None`: the quad renders exactly like an
             // untransformed layer (CPU clip path), and picking stays inert.
             transform3d: transform3d.filter(|m| !m.identity).map(|m| m.model),
@@ -904,6 +922,11 @@ pub fn prepare_layer_composites(
                 edge_feather: feather,
                 pad_a: 0.0,
                 pad_b: Vec2::ZERO,
+                // Content quads never round: the capture already holds the
+                // node's own rounded paint. Zero radii disable the mask.
+                radius: Vec4::ZERO,
+                box_center: Vec2::ZERO,
+                box_size: Vec2::ZERO,
             });
         commands
             .entity(layer.quad_entity)
@@ -971,6 +994,11 @@ pub fn prepare_layer_composites(
         backdrop_ranges[idx] = Some(start..start + 6);
         let atlas_index = meta.atlas_bind_groups.len();
         meta.atlas_bind_groups.push(bind_group);
+        // The UNCLIPPED border box (the same shrink `backdrop_quad` applies)
+        // for the rounded-corner mask: the CPU clip may have clamped the
+        // quad's geometry above, but the SDF must measure the true box.
+        let box_min = layer.min + Vec2::splat(layer.outset as f32);
+        let box_max = layer.min + layer.size.as_vec2() - Vec2::splat(layer.outset as f32);
         let (open_min, open_max) = transform3d::open_clip();
         let uniform_offset = uniforms_meta
             .uniforms
@@ -981,6 +1009,12 @@ pub fn prepare_layer_composites(
                 edge_feather: 0.0,
                 pad_a: 0.0,
                 pad_b: Vec2::ZERO,
+                // Frost is masked to the node's rounded border box; the radii
+                // are the layout-resolved ones bevy_ui paints with, so the
+                // frost edge coincides with the panel's own rounded edge.
+                radius: Vec4::from(layer.corner_radius),
+                box_center: (box_min + box_max) * 0.5,
+                box_size: box_max - box_min,
             });
         commands
             .entity(backdrop_quad_entity)

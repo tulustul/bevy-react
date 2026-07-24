@@ -81,7 +81,7 @@ frequency: number,
  */
 speed: number, };
 export type SaturateParams = { amount: number, };
-export type SceneId = "Cubes" | "BouncingBall" | "CrowdedCubes" | "Surface";
+export type SceneId = "Ambient" | "Cubes" | "BouncingBall" | "CrowdedCubes" | "SpaceCubes" | "Surface";
 export type SelectDemo = { label: string, };
 export type SelectScene = SceneId | null;
 export type SepiaParams = { amount: number, };

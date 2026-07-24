@@ -177,6 +177,11 @@ pub struct LayerMeta {
     pub repaints: u64,
     /// Whether the last resolved frame served the cached capture (no repaint).
     pub cached: bool,
+    /// The node's `cache` style keyword. `Never` makes
+    /// [`resolve_layer_repaints`] dirty this layer every frame (its pixels
+    /// are written outside the dirt tracking's sight — live portals,
+    /// app-owned render targets).
+    pub cache_policy: crate::protocol::LayerCache,
 }
 
 /// Public registry of currently promoted layers — the observability surface
@@ -275,12 +280,15 @@ pub fn promotion_reasons(
     if opacity_present && group_gate && child_count >= 1 && !ineligible_element {
         reasons |= PromotionReasons::OPACITY;
     }
-    // `cache: "always"` — forced promotion for capture caching. Base style
-    // only (`no_overlay`), and deliberately NOT gated on children or
-    // `groupAlpha`: it has no visual semantics of its own, so the only gates
-    // are the element-kind ones.
-    let forced =
-        props.style.as_ref().and_then(|s| s.cache) == Some(crate::protocol::LayerCache::Always);
+    // `cache: "always"`/`"never"` — forced promotion (for capture caching /
+    // for an always-recaptured live layer). Base style only (`no_overlay`),
+    // and deliberately NOT gated on children or `groupAlpha`: it has no
+    // visual semantics of its own, so the only gates are the element-kind
+    // ones.
+    let forced = matches!(
+        props.style.as_ref().and_then(|s| s.cache),
+        Some(crate::protocol::LayerCache::Always | crate::protocol::LayerCache::Never)
+    );
     if forced && !ineligible_element {
         reasons |= PromotionReasons::FORCED;
     }
@@ -368,6 +376,12 @@ pub fn evaluate_layer_promotions(
                 .and_then(|p| p.style.as_ref())
                 .and_then(|s| s.opacity)
                 .unwrap_or(1.0);
+            let cache_policy = bridge
+                .props_cache
+                .get(&id)
+                .and_then(|p| p.style.as_ref())
+                .and_then(|s| s.cache)
+                .unwrap_or_default();
             commands
                 .entity(entity)
                 .insert((PromotedLayer { reasons }, LayerGroupAlpha(alpha)));
@@ -383,10 +397,12 @@ pub fn evaluate_layer_promotions(
                 depth: 1,
                 repaints: 0,
                 cached: false,
+                cache_policy,
             });
             row.entity = entity;
             row.reasons = reasons;
             row.group_alpha = alpha;
+            row.cache_policy = cache_policy;
             if !was_promoted && let Some(props) = bridge.props_cache.get(&id) {
                 // Promote flip: colors were folded while unpromoted — bake
                 // the unfolded values + group alpha now, in one shot.
@@ -840,7 +856,16 @@ pub fn resolve_layer_repaints(
         }
     }
     std::mem::swap(&mut state.prev_hashes, &mut state.geo_hashes);
-    // 6. Propagate outward: a dirty inner layer's composite quad re-draws
+    // 6. `cache: "never"` — the layer's pixels are written outside the dirt
+    //    tracking's sight (live portal targets, app-owned textures), so it
+    //    re-captures unconditionally. Seeded before the outward propagation:
+    //    live pixels defeat ancestor caching (same rationale as backdrop).
+    for meta in registry.layers.values() {
+        if meta.cache_policy == crate::protocol::LayerCache::Never {
+            state.dirty.insert(meta.entity);
+        }
+    }
+    // 7. Propagate outward: a dirty inner layer's composite quad re-draws
     //    inside its enclosing captures, so every outer layer re-captures too.
     let seeds: Vec<Entity> = state.dirty.iter().copied().collect();
     for mut layer in seeds {
@@ -851,7 +876,7 @@ pub fn resolve_layer_repaints(
             layer = outer;
         }
     }
-    // 7. Observability: per-layer cache stats for devtools.
+    // 8. Observability: per-layer cache stats for devtools.
     for meta in registry.layers.values_mut() {
         let dirty = state.dirty.contains(&meta.entity);
         meta.cached = !dirty;
@@ -1206,6 +1231,51 @@ mod tests {
         assert!(app.world().resource::<LayersRegistry>().layers.is_empty());
     }
 
+    /// `cache: "never"` force-promotes like `"always"` (same FORCED reason)
+    /// but records the `Never` policy on the registry row; flipping between
+    /// the two updates the policy without a demote/promote cycle, and
+    /// unsetting demotes.
+    #[test]
+    fn never_cache_lifecycle_and_policy() {
+        use crate::protocol::LayerCache;
+        let (mut app, ops_tx) = layer_app();
+        ops_tx
+            .send(vec![create(
+                1,
+                serde_json::json!({ "style": { "cache": "never" } }),
+            )])
+            .unwrap();
+        app.update();
+        let e = entity_of(&app, 1);
+        let promoted = app.world().get::<PromotedLayer>(e).expect("promoted");
+        assert_eq!(promoted.reasons.0, PromotionReasons::FORCED);
+        let row = app.world().resource::<LayersRegistry>().layers[&1];
+        assert_eq!(row.cache_policy, LayerCache::Never);
+
+        // Flip to "always": still promoted (same entity), policy updates.
+        ops_tx
+            .send(vec![update(
+                1,
+                serde_json::json!({ "style": { "cache": "always" } }),
+                &[],
+            )])
+            .unwrap();
+        app.update();
+        assert!(
+            app.world().get::<PromotedLayer>(e).is_some(),
+            "stays promoted"
+        );
+        let row = app.world().resource::<LayersRegistry>().layers[&1];
+        assert_eq!(row.cache_policy, LayerCache::Always);
+
+        ops_tx
+            .send(vec![update(1, serde_json::json!({}), &["cache"])])
+            .unwrap();
+        app.update();
+        assert!(app.world().get::<PromotedLayer>(e).is_none(), "demoted");
+        assert!(app.world().resource::<LayersRegistry>().layers.is_empty());
+    }
+
     /// A `filter` chain promotes a childless node with the FILTER reason and
     /// a registry row; unsetting the filter demotes.
     #[test]
@@ -1426,6 +1496,67 @@ mod tests {
         }
         let dirty = run(&mut world);
         assert!(dirty.contains(&outer) && !dirty.contains(&inner));
+    }
+
+    /// A `cache: "never"` layer is dirty every frame with no other dirt —
+    /// and, being ordinary dirt, propagates out through its enclosing layers
+    /// (live pixels defeat ancestor caching). Unrelated layers stay cached.
+    #[test]
+    fn never_policy_repaints_every_frame() {
+        use crate::protocol::LayerCache;
+        let mut world = World::new();
+        world.init_resource::<LayerContentDirt>();
+        world.init_resource::<LayerRepaintState>();
+        world.init_resource::<LayersRegistry>();
+
+        let outer = world.spawn_empty().id();
+        let inner = world.spawn_empty().id(); // cache: "never", nested in outer
+        let other = world.spawn_empty().id(); // unrelated top-level layer
+        let mut membership = LayerMembership::default();
+        membership.node_to_layer.insert(outer, outer);
+        membership.node_to_layer.insert(inner, inner);
+        membership.node_to_layer.insert(other, other);
+        membership.enclosing.insert(outer, None);
+        membership.enclosing.insert(inner, Some(outer));
+        membership.enclosing.insert(other, None);
+        world.insert_resource(membership);
+
+        let meta = |node: NodeId, entity: Entity, policy: LayerCache| LayerMeta {
+            node,
+            entity,
+            reasons: PromotionReasons(PromotionReasons::FORCED),
+            group_alpha: 1.0,
+            capture_rect: None,
+            depth: 1,
+            repaints: 0,
+            cached: false,
+            cache_policy: policy,
+        };
+        {
+            let mut registry = world.resource_mut::<LayersRegistry>();
+            registry.layers.insert(1, meta(1, outer, LayerCache::Auto));
+            registry.layers.insert(2, meta(2, inner, LayerCache::Never));
+            registry
+                .layers
+                .insert(3, meta(3, other, LayerCache::Always));
+        }
+
+        let mut schedule = Schedule::default();
+        schedule.add_systems(resolve_layer_repaints);
+        for frame in 0..2 {
+            schedule.run(&mut world);
+            let state = world.resource::<LayerRepaintState>();
+            assert!(
+                state.dirty.contains(&inner) && state.dirty.contains(&outer),
+                "frame {frame}: {:?}",
+                state.dirty
+            );
+            assert!(!state.dirty.contains(&other), "frame {frame}");
+        }
+        let registry = world.resource::<LayersRegistry>();
+        assert_eq!(registry.layers[&2].repaints, 2);
+        assert!(!registry.layers[&2].cached);
+        assert!(registry.layers[&3].cached);
     }
 
     /// The geometry fold cancels a uniform translation of root + members

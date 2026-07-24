@@ -10,6 +10,7 @@ import { BevyStyle } from "bevy-react/jsx";
 import { Example } from "@/components";
 import { column, playButton, playLabel } from "./shared";
 import { Colors } from "@/theme";
+import { useDemoPage, type ExplanationData } from "@/explanationStore";
 
 // withSequence chains drivers — each starts where the previous ended — and
 // withDelay inserts the pauses between them. The trailing function is the
@@ -24,7 +25,15 @@ const TYPESCRIPT = `x.value = withSequence(
   (finished) => setRunning(false),
 );`;
 
+const PAGE: ExplanationData = {
+  title: "Sequence",
+  description:
+    "withSequence chains drivers — each starts where the previous ended — and withDelay inserts the pauses between them: slide right, pause, slide left, pause, return, as one composed driver. The trailing function is the completion callback (Reanimated-style): it fires once when Bevy reports the whole sequence settled (finished=false if interrupted), and here re-enables the Play button.",
+  tsx: TYPESCRIPT,
+};
+
 export function SequenceDemo() {
+  useDemoPage(PAGE);
   const x = useSharedValue(0);
   const [running, setRunning] = useState(false);
 
@@ -39,10 +48,7 @@ export function SequenceDemo() {
   };
 
   return (
-    <Example
-      description="Press Play: slide right, pause, slide left, pause, return - one composed driver. Its completion callback re-enables the button."
-      tsx={TYPESCRIPT}
-    >
+    <Example>
       <node style={column}>
         <node style={stage}>
           <Animated.node style={square} animatedStyle={{ translateX: x }} />

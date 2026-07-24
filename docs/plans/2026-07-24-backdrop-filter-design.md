@@ -114,9 +114,10 @@ Key Bevy seams (re-verify on upgrade, alongside the existing spike list in
 
 - Backdrop source is the 3D frame only; UI painted beneath the node is not
   in the backdrop (phase 2, below).
-- Rect-only: no `borderRadius` mask on the backdrop quad (a rounded panel
-  shows frost at its corners). Later: SDF rounded-rect mask in the
-  composite fragment.
+- ~~Rect-only: no `borderRadius` mask on the backdrop quad.~~ RESOLVED
+  2026-07-24: the composite fragment masks backdrop coverage with bevy_ui's
+  own rounded-box SDF + antialias convention over the layout-resolved
+  `ComputedNode.border_radius`.
 - `transform3d` on the same node samples the axis-aligned pre-transform
   rect.
 - Snapshot + chain re-run every frame (live source); cost scales with node

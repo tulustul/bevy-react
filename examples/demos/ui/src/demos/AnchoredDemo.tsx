@@ -5,12 +5,22 @@ import { bevy } from "@/bevy";
 import type { CubeInfo } from "@/bevy";
 import { Checkbox, Example, Slider } from "@/components";
 import { Colors, FontSizes, Gradients } from "@/theme";
+import { useDemoPage, type ExplanationData } from "@/explanationStore";
 
 const TYPESCRIPT = `<Anchored.node entity={cube.entity} offset={[0, 0.8, 0]}>
   <text>{cube.label}</text>
 </Anchored.node>`;
 
+const PAGE: ExplanationData = {
+  title: "<Anchored.node>",
+  description:
+    'UI nodes pinned to a 3D entity, tracking it on screen and optionally scaling with distance. The scene reports its cubes over a typed bevy.on("crowdedCubes.spawned") event; each badge is an <Anchored.node> with a world-space offset and an optional scale config (min/max/factor/baseDistance).',
+  tsx: TYPESCRIPT,
+};
+
 export function AnchoredDemo() {
+  useDemoPage(PAGE);
+
   const [cubes, setCubes] = useState<CubeInfo[]>([]);
   const [scalingEnabled, setScalingEnabled] = useState(true);
   const [baseDistance, setBaseDistance] = useState(24);
@@ -35,10 +45,7 @@ export function AnchoredDemo() {
 
   return (
     <>
-      <Example
-        description="UI nodes pinned to a 3D entity, tracking it on screen and optionally scaling with distance."
-        tsx={TYPESCRIPT}
-      >
+      <Example>
         <Checkbox
           label="Scale with distance"
           enabled={scalingEnabled}

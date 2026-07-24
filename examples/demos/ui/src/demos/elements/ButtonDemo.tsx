@@ -2,6 +2,7 @@ import { useState } from "react";
 import { BevyStyle } from "bevy-react/jsx";
 import { Example } from "@/components";
 import { Colors, FontSizes } from "@/theme";
+import { useDemoPage, type ExplanationData } from "@/explanationStore";
 
 // A pure-UI demo of the `<button>` host element: a clickable container that
 // reacts to hover and press via `hoverStyle` / `pressStyle`, driving a React
@@ -19,14 +20,19 @@ const TYPESCRIPT = `<button
   pressStyle={{ backgroundColor: "#5a7fd6" }}
 />`;
 
+const PAGE: ExplanationData = {
+  title: "<button>",
+  description:
+    'A clickable control that reacts to hover and press via hoverStyle/pressStyle, driving React state on onClick. It styles exactly like a <node>; the difference is intent: as a discrete control it blocks pointer interaction by default (focusPolicy: "block"), so a click stops at the button instead of passing through to a sibling, an ancestor, or the 3D scene behind it. A <node> passes interaction through by default — set focusPolicy on either to override.',
+  tsx: TYPESCRIPT,
+};
+
 export function ButtonDemo() {
+  useDemoPage(PAGE);
   const [count, setCount] = useState(0);
 
   return (
-    <Example
-      description="A clickable control with hover and press style overrides, driving React state. Unlike a <node>, a <button> blocks pointer interaction by default — the click stops here instead of passing through to whatever is behind it (override with focusPolicy)."
-      tsx={TYPESCRIPT}
-    >
+    <Example>
       <text style={countStyle}>
         Clicks: <text style={{ color: Colors.primary100 }}>{count}</text>
       </text>

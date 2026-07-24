@@ -44,7 +44,7 @@ export function Slider({
 }
 
 const sliderTrack: BevyStyle = {
-  width: 240,
+  width: "100%",
   height: 20,
   borderRadius: 6,
   backgroundColor: Colors.surface400,

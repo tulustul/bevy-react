@@ -152,9 +152,21 @@ fn orbit_camera(
 /// Reset the orbit distance to suit the active scene whenever it changes (and on
 /// startup): the cube-field scene needs a wider frame than the small
 /// origin-centered scenes. The user can zoom from there.
-fn reframe_camera(state: Res<State<Scene>>, mut rig: ResMut<CameraRig>) {
+fn reframe_camera(
+    state: Res<State<Scene>>,
+    mut rig: ResMut<CameraRig>,
+    space_cubes: Res<crate::scenes::space_cubes::SpaceCubesConfig>,
+) {
     match state.get() {
+        // Ambient's backdrop quad is camera-locked, so the orbit radius is
+        // irrelevant there — it falls through to the default arm.
         Scene::CrowdedCubes => rig.radius = 24.0,
+        // Frame the whole configured swarm volume; sitting inside it (radius
+        // below the swarm's reach) puts cubes both in front of and behind the
+        // UI plane's focus, which reads nicely — but never closer than default.
+        Scene::SpaceCubes => {
+            rig.radius = (space_cubes.radius * 1.4).clamp(DEFAULT_RADIUS, MAX_RADIUS);
+        }
         // The monitor sits at the origin (its screen centered there); frame it
         // head-on (`yaw = π/2` looks down +Z at the screen face), a touch above,
         // and close. Auto-orbit is off for this scene but the user can mouse-rotate.

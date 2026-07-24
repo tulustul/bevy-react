@@ -1,10 +1,17 @@
 import { useState } from "react";
 import { BevyStyle } from "bevy-react/jsx";
-import { Example, Radio, RadioOption } from "@/components";
+import { DemoRow, Example, Radio, RadioOption } from "@/components";
 import { Colors, Gradients } from "@/theme";
+import { useDemoPage, type ExplanationData } from "@/explanationStore";
 
 // `<node>` is a flexbox container by default. These snippets show the main flex
 // knobs; see Layout → Grid for `display: "grid"`.
+
+const PAGE: ExplanationData = {
+  title: "Flexbox",
+  description:
+    'A <node> is a flexbox container by default — no display property needed. flexDirection, justifyContent, and alignItems are the main knobs. Note that "start"/"end" are physical (writing-direction relative) while "flexStart"/"flexEnd" follow flexDirection — they diverge under "rowReverse". flexWrap pushes overflowing children onto the next line, and flexGrow lets a child absorb the remaining space. For grid layout, see the Grid demo under Layout.',
+};
 
 const SWATCHES = Gradients.spectrum;
 
@@ -37,6 +44,22 @@ const ALIGN_OPTIONS: RadioOption<AlignItems>[] = [
   { label: "stretch", value: "stretch" },
 ];
 
+export function FlexDemo() {
+  useDemoPage(PAGE);
+  return (
+    <>
+      <DemoRow>
+        <FlexPlaygroundDemo />
+      </DemoRow>
+
+      <DemoRow>
+        <FlexWrapDemo />
+        <FlexGrowDemo />
+      </DemoRow>
+    </>
+  );
+}
+
 function Swatches({ count = 4 }: { count?: number }) {
   return (
     <>
@@ -49,81 +72,84 @@ function Swatches({ count = 4 }: { count?: number }) {
 
 // An interactive container: flip the three main flex knobs and watch the swatches
 // rearrange live.
-function FlexPlayground() {
+function FlexPlaygroundDemo() {
   const [flexDirection, setFlexDirection] = useState<FlexDirection>("row");
   const [justifyContent, setJustifyContent] =
     useState<JustifyContent>("center");
   const [alignItems, setAlignItems] = useState<AlignItems>("center");
 
   return (
-    <node style={{ flexDirection: "column", gap: 12, alignItems: "center" }}>
-      <node
-        style={{ ...playground, flexDirection, justifyContent, alignItems }}
-      >
-        <Swatches />
-      </node>
-
-      <Radio
-        options={DIRECTION_OPTIONS}
-        value={flexDirection}
-        onChange={setFlexDirection}
-      />
-      <Radio
-        options={JUSTIFY_OPTIONS}
-        value={justifyContent}
-        onChange={setJustifyContent}
-      />
-      <Radio
-        options={ALIGN_OPTIONS}
-        value={alignItems}
-        onChange={setAlignItems}
-      />
-    </node>
-  );
-}
-
-export function FlexDemo() {
-  return (
-    <>
-      <Example
-        description="Flip the three main flex knobs live and watch the swatches rearrange."
-        tsx={`<node style={{
+    <Example
+      title="Flex playground"
+      description="Flip the three main flex knobs live and watch the swatches rearrange."
+      tsx={`<node style={{
   flexDirection,
   justifyContent,
   alignItems
 }}>`}
-      >
-        <FlexPlayground />
-      </Example>
-
-      <Example
-        description="flexWrap pushes overflowing children onto the next line."
-        tsx={`<node style={{ flexWrap: "wrap", gap: 8 }}>`}
-      >
-        <node style={{ ...frame, width: 152, flexWrap: "wrap", gap: 8 }}>
-          {Array.from({ length: 8 }, (_, i) => (
-            <node
-              key={i}
-              style={{
-                ...swatch,
-                backgroundGradient: SWATCHES[i % SWATCHES.length],
-              }}
-            />
-          ))}
+    >
+      <node style={{ flexDirection: "column", gap: 12, alignItems: "center" }}>
+        <node
+          style={{ ...playground, flexDirection, justifyContent, alignItems }}
+        >
+          <Swatches />
         </node>
-      </Example>
 
-      <Example
-        description="flexGrow lets a child absorb the remaining space."
-        tsx={`<node style={{ flexGrow: 1 }}>`}
-      >
-        <node style={{ ...frame, width: 260, gap: 8 }}>
-          <node style={{ ...swatch, backgroundGradient: SWATCHES[0] }} />
-          <node style={{ ...grow, backgroundGradient: SWATCHES[1] }} />
-          <node style={{ ...swatch, backgroundGradient: SWATCHES[2] }} />
-        </node>
-      </Example>
-    </>
+        <Radio
+          options={DIRECTION_OPTIONS}
+          value={flexDirection}
+          onChange={setFlexDirection}
+        />
+        <Radio
+          options={JUSTIFY_OPTIONS}
+          value={justifyContent}
+          onChange={setJustifyContent}
+        />
+        <Radio
+          options={ALIGN_OPTIONS}
+          value={alignItems}
+          onChange={setAlignItems}
+        />
+      </node>
+    </Example>
+  );
+}
+
+function FlexWrapDemo() {
+  return (
+    <Example
+      title="flexWrap"
+      description="flexWrap pushes overflowing children onto the next line."
+      tsx={`<node style={{ flexWrap: "wrap", gap: 8 }}>`}
+    >
+      <node style={{ ...frame, width: 152, flexWrap: "wrap", gap: 8 }}>
+        {Array.from({ length: 8 }, (_, i) => (
+          <node
+            key={i}
+            style={{
+              ...swatch,
+              backgroundGradient: SWATCHES[i % SWATCHES.length],
+            }}
+          />
+        ))}
+      </node>
+    </Example>
+  );
+}
+
+function FlexGrowDemo() {
+  return (
+    <Example
+      title="flexGrow"
+      description="flexGrow lets a child absorb the remaining space."
+      tsx={`<node style={{ flexGrow: 1 }}>`}
+    >
+      <node style={{ ...frame, width: 260, gap: 8 }}>
+        <node style={{ ...swatch, backgroundGradient: SWATCHES[0] }} />
+        <node style={{ ...grow, backgroundGradient: SWATCHES[1] }} />
+        <node style={{ ...swatch, backgroundGradient: SWATCHES[2] }} />
+      </node>
+    </Example>
   );
 }
 

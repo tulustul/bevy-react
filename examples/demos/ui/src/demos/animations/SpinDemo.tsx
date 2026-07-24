@@ -10,6 +10,7 @@ import { BevyStyle } from "bevy-react/jsx";
 import { Example } from "@/components";
 import { column, playButton, playLabel } from "./shared";
 import { Colors, FontSizes } from "@/theme";
+import { useDemoPage, type ExplanationData } from "@/explanationStore";
 
 // withRepeat loops a driver forever (count -1); cancelAnimation freezes the
 // shared value wherever it currently is.
@@ -20,7 +21,15 @@ const TYPESCRIPT = `rot.value = withRepeat(
 );
 cancelAnimation(rot); // freeze`;
 
+const PAGE: ExplanationData = {
+  title: "Spin",
+  description:
+    "An endless rotation: withRepeat with count -1 loops a linear withTiming over a full turn forever. Stop calls cancelAnimation, which freezes the shared value wherever it currently is instead of snapping back.",
+  tsx: TYPESCRIPT,
+};
+
 export function SpinDemo() {
+  useDemoPage(PAGE);
   const rot = useSharedValue(0);
   const [spinning, setSpinning] = useState(false);
 
@@ -39,10 +48,7 @@ export function SpinDemo() {
   };
 
   return (
-    <Example
-      description="An endless rotation via withRepeat; Stop calls cancelAnimation to freeze it."
-      tsx={TYPESCRIPT}
-    >
+    <Example>
       <node style={column}>
         <node style={stage}>
           <Animated.node style={square} animatedStyle={{ rotate: rot }}>

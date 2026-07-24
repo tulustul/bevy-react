@@ -1,7 +1,8 @@
 import { useRef, useState } from "react";
 import { BevyStyle, PointerEventData, WheelEventData } from "bevy-react/jsx";
-import { Example } from "@/components";
+import { DemoRow, Example } from "@/components";
 import { Colors, FontSizes } from "@/theme";
+import { useDemoPage, type ExplanationData } from "@/explanationStore";
 
 // A pure-UI demo of the raw pointer events the bridge reports: `click`
 // (left-button only, on release over the pressed node), `pointerDown`,
@@ -22,17 +23,29 @@ const clamp = (v: number, lo: number, hi: number) =>
 
 type LogLine = { id: number; text: string };
 
+const PAGE: ExplanationData = {
+  title: "Mouse",
+  description:
+    "The raw pointer events the bridge reports: click (left-button only, on release over the pressed node), pointerDown / pointerMove / pointerUp (any mouse button), the hover boundary pointerEnter / pointerLeave, and onWheel for raw wheel deltas. Events carry both normalized x/y (clamped to the node) and absolute clientX/clientY. No Bevy scene: the 3D viewport stays empty.",
+};
+
 export function MouseDemo() {
+  useDemoPage(PAGE);
+
   return (
     <>
-      <DragExample />
-      <HoverExample />
-      <WheelExample />
+      <DemoRow>
+        <DragDemo />
+      </DemoRow>
+      <DemoRow>
+        <HoverDemo />
+        <WheelDemo />
+      </DemoRow>
     </>
   );
 }
 
-function DragExample() {
+function DragDemo() {
   const [pos, setPos] = useState({
     left: (STAGE_W - BOX) / 2,
     top: (STAGE_H - BOX) / 2,
@@ -82,7 +95,8 @@ function DragExample() {
 
   return (
     <Example
-      description="Raw pointer events the bridge reports. Grab the box and drag it around the stage."
+      title="Drag"
+      description="Raw pointer events the bridge reports. Grab the box and drag it around the stage — dragging uses the absolute clientX/clientY deltas (the normalized x/y are clamped to the box and can't drive free movement); the log shows each event with its DOM button number."
       tsx={`<node
   onClick={...}
   onPointerDown={...}
@@ -130,12 +144,13 @@ function DragExample() {
   );
 }
 
-function HoverExample() {
+function HoverDemo() {
   const [hovering, setHovering] = useState(false);
 
   return (
     <Example
-      description="Hover boundary events: onPointerEnter / onPointerLeave fire once per crossing."
+      title="Hover"
+      description="Hover boundary events: onPointerEnter / onPointerLeave fire once per crossing. Move the cursor on and off the left box to drive the right one's transition."
       tsx={`<node
   onPointerEnter={...}
   onPointerLeave={...}
@@ -173,7 +188,7 @@ function HoverExample() {
 // a bigger per-step factor than pixel-unit (trackpad) deltas. Handling the wheel
 // also traps it from world systems — the `over_ui` claim is what lets a zoomable
 // `<canvas>` map coexist with an orbit camera behind the UI (no scene here).
-function WheelExample() {
+function WheelDemo() {
   const [zoom, setZoom] = useState(1);
 
   const onWheel = (e: WheelEventData) => {
@@ -186,7 +201,8 @@ function WheelExample() {
 
   return (
     <Example
-      description="onWheel hands any node the raw wheel deltas (no overflow: scroll). Scroll the wheel over the box to zoom it."
+      title="Wheel"
+      description="onWheel hands any node the raw wheel deltas (no overflow: scroll needed) — line-unit notches and pixel-unit trackpad deltas are scaled differently. Scroll the wheel over the box to zoom it; handling the wheel also traps it from world systems."
       tsx={`<node onWheel={(e) => {
   const step = e.deltaMode === "line" ? e.deltaY * 0.1 : e.deltaY * 0.005;
   setZoom((z) => clamp(z - step, 0.5, 3));

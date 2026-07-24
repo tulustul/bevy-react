@@ -509,10 +509,13 @@ export interface BevyStyle {
   /** Layer-cache hint. `"always"` force-promotes this subtree to a composited
    * layer so its capture is cached and re-rendered only when content changes —
    * the `will-change` pattern for static or transform/opacity-animated
-   * subtrees. `"auto"` (default) promotes only when another rule does (e.g.
-   * `opacity`); promoted layers are always cached either way. Not carried by
+   * subtrees. `"never"` also force-promotes, but re-captures every frame —
+   * the escape hatch for content whose pixels change outside the dirt
+   * tracking's sight (a live `<portal>` render target, an app-owned texture);
+   * every enclosing layer re-captures too. `"auto"` (default) promotes only
+   * when another rule does (e.g. `opacity`). Not carried by
    * `hoverStyle`/`pressStyle`. */
-  cache?: "auto" | "always";
+  cache?: "auto" | "always" | "never";
   /** CSS-like transition timing. When a `transform` / `opacity` / `backgroundColor`
    * change occurs — via re-render or `hoverStyle`/`pressStyle` — it eases over time
    * (using the same driver/easing engine as `animatedStyle`) instead of snapping. */
