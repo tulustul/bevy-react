@@ -183,9 +183,11 @@ export interface BevyTransition {
   size?: BevyTransitionSpec;
   /** Eases the scroll offset (`ScrollPosition`) of an `overflow: scroll` node
    * toward its target — a controlled `scrollTop`/`scrollLeft` change or accumulated
-   * wheel input — instead of snapping (smooth scroll). Covers both axes. Don't also
-   * feed `onScroll` back into the same controlled axis, or the round-trip fights the
-   * ease (drive the target from buttons/state; read `onScroll` into separate state). */
+   * wheel input — instead of snapping (smooth scroll). Covers both axes. Direct
+   * scrollbar manipulation (thumb drag, track click) bypasses the ease and snaps.
+   * Don't also feed `onScroll` back into the same controlled axis, or the round-trip
+   * fights the ease (drive the target from buttons/state; read `onScroll` into
+   * separate state). */
   scroll?: BevyTransitionSpec;
   /** Eases the layer-based `filter` chain between style states: same-name chains
    * interpolate their params; a chain extended/truncated at the end over built-in

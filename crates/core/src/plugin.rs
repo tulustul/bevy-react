@@ -491,8 +491,10 @@ impl Plugin for ReactUiPlugin {
                     crate::scroll::collect_wheel_events
                         .in_set(PointerCaptureSet)
                         .after(collect_pointer_events),
-                    // A scrollbar-thumb drag claims the pointer (so world input
-                    // ignores it) and pins any eased scroll target. In the set,
+                    // Hovering a scrollbar part claims the hover channel (the
+                    // widget has `Hovered`, not `Interaction`, so a press on it
+                    // would otherwise start a world grab); a thumb drag claims
+                    // the pointer outright and snaps any eased scroll state. In the set,
                     // after `collect_pointer_events` so its `over_ui` claim survives.
                     crate::scrollbar::bridge_scrollbar_capture
                         .in_set(PointerCaptureSet)

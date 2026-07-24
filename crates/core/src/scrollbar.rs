@@ -720,17 +720,27 @@ pub fn position_scrollbars(
     }
 }
 
-/// Bridge Bevy's scrollbar interaction into bevy-react's frame state: while a
-/// thumb is being dragged, claim the pointer for the UI (so world-input systems
-/// ignore it) and — if the target container eases its scroll — keep the eased
-/// target pinned to the live offset so `drive_scroll_transition` doesn't fight the
-/// direct write.
+/// Bridge Bevy's scrollbar interaction into bevy-react's frame state. Hovering
+/// any scrollbar part claims the hover channel — the widget entities carry
+/// picking's `Hovered`, not `Interaction`, so `collect_pointer_events` can't see
+/// them, and a world grab (the camera) latches on the *press* frame, before
+/// Bevy's drag threshold flips `ScrollbarDragState.dragging` on. While a thumb
+/// is then being dragged, claim the pointer for the whole gesture (so world
+/// input ignores it even once the cursor leaves the bar) and — if the target
+/// container eases its scroll — keep the eased state snapped to the live offset
+/// so `drive_scroll_transition` neither lags the drag nor lets a same-frame
+/// wheel target pull the offset out from under it.
+#[allow(clippy::type_complexity)]
 pub fn bridge_scrollbar_capture(
     q_drag: Query<(&ScrollbarDragState, &ChildOf), With<ScrollbarThumb>>,
+    q_hover: Query<&Hovered, Or<(With<Scrollbar>, With<ScrollbarThumb>)>>,
     q_scrollbar: Query<&Scrollbar>,
     mut q_scroll: Query<(&ScrollPosition, &mut ScrollTransitionState)>,
     mut capture: ResMut<PointerCapture>,
 ) {
+    if q_hover.iter().any(|h| h.0) {
+        capture.over_ui = true;
+    }
     for (drag, child_of) in &q_drag {
         if !drag.dragging {
             continue;
@@ -740,7 +750,7 @@ pub fn bridge_scrollbar_capture(
         if let Ok(scrollbar) = q_scrollbar.get(child_of.parent())
             && let Ok((pos, mut state)) = q_scroll.get_mut(scrollbar.target)
         {
-            state.target = pos.0;
+            state.snap_to(pos.0);
         }
     }
 }
@@ -1027,5 +1037,141 @@ mod tests {
         );
         assert_eq!(pos, Vec2::new(10.0, 20.0));
         assert_eq!(dims, Vec2::new(200.0, 12.0));
+    }
+
+    /// A thumb drag on an eased container bypasses the ease entirely: the widget's
+    /// direct `ScrollPosition` write survives `bridge_scrollbar_capture` +
+    /// `drive_scroll_transition` exactly — zero lag, no ease-back to the stale target.
+    #[test]
+    fn thumb_drag_bypasses_scroll_easing() {
+        use crate::animations::Easing;
+        use crate::protocol::Time as WireTime;
+        use crate::transition::{
+            ChannelTransition, ScrollTransitionInput, drive_scroll_transition,
+        };
+        use bevy::ecs::system::RunSystemOnce;
+        use bevy::ui::ScrollPosition;
+        use std::time::Duration;
+
+        let spec = ChannelTransition {
+            duration: Some(WireTime::from_secs(1.0)),
+            easing: Easing::Linear,
+            delay: WireTime::from_secs(0.0),
+            stiffness: None,
+            damping: None,
+            mass: 1.0,
+        };
+
+        let mut world = World::new();
+        world.insert_resource(Time::<()>::default());
+        world.insert_resource(PointerCapture::default());
+        let container = world
+            .spawn((
+                ScrollPosition::default(),
+                ScrollTransitionInput(spec),
+                ScrollTransitionState::default(),
+            ))
+            .id();
+        let track = world
+            .spawn(Scrollbar::new(
+                container,
+                ControlOrientation::Vertical,
+                20.0,
+            ))
+            .id();
+        let thumb = world
+            .spawn((ScrollbarThumb::default(), ChildOf(track)))
+            .id();
+
+        // Same frame order as `plugin.rs`: the bridge (PointerCaptureSet) runs
+        // before the ease.
+        fn tick(world: &mut World, dt: f32) {
+            world
+                .resource_mut::<Time>()
+                .advance_by(Duration::from_secs_f32(dt));
+            world.run_system_once(bridge_scrollbar_capture).unwrap();
+            world.run_system_once(drive_scroll_transition).unwrap();
+        }
+
+        // Seed the resting state, then leave a stale ease mid-flight toward y=100.
+        tick(&mut world, 0.0);
+        world
+            .entity_mut(container)
+            .get_mut::<ScrollTransitionState>()
+            .unwrap()
+            .target = Vec2::new(0.0, 100.0);
+        tick(&mut world, 0.5);
+        let mid = world.entity(container).get::<ScrollPosition>().unwrap().0;
+        assert!(
+            mid.y > 0.0 && mid.y < 100.0,
+            "mid-ease expected, got {mid:?}"
+        );
+
+        // Drag starts: Bevy's widget writes the offset directly each frame.
+        world
+            .entity_mut(thumb)
+            .get_mut::<ScrollbarDragState>()
+            .unwrap()
+            .dragging = true;
+        world
+            .entity_mut(container)
+            .get_mut::<ScrollPosition>()
+            .unwrap()
+            .0 = Vec2::new(0.0, 55.0);
+        tick(&mut world, 0.5);
+        assert_eq!(
+            world.entity(container).get::<ScrollPosition>().unwrap().0,
+            Vec2::new(0.0, 55.0),
+            "the drag write must survive the ease untouched"
+        );
+        assert!(world.resource::<PointerCapture>().dragging);
+
+        // Still parked on later frames — the stale y=100 target is gone.
+        world
+            .entity_mut(thumb)
+            .get_mut::<ScrollbarDragState>()
+            .unwrap()
+            .dragging = false;
+        tick(&mut world, 0.5);
+        assert_eq!(
+            world.entity(container).get::<ScrollPosition>().unwrap().0,
+            Vec2::new(0.0, 55.0)
+        );
+    }
+
+    /// Hovering any scrollbar part claims the hover channel: the widget entities
+    /// carry picking's `Hovered`, not `Interaction`, so without this claim a press
+    /// on the bar reads as free ground and a world grab (the orbit camera) latches
+    /// on the press frame — before the drag threshold flips `dragging` on.
+    #[test]
+    fn hovering_a_scrollbar_part_claims_the_pointer() {
+        use bevy::ecs::system::RunSystemOnce;
+        use bevy::ui::ScrollPosition;
+
+        let mut world = World::new();
+        world.insert_resource(PointerCapture::default());
+        let container = world.spawn(ScrollPosition::default()).id();
+        let track = world
+            .spawn((
+                Scrollbar::new(container, ControlOrientation::Vertical, 20.0),
+                Hovered(true),
+            ))
+            .id();
+        world.spawn((ScrollbarThumb::default(), Hovered(false), ChildOf(track)));
+
+        world.run_system_once(bridge_scrollbar_capture).unwrap();
+        let capture = *world.resource::<PointerCapture>();
+        assert!(
+            capture.over_ui,
+            "hovering the track must claim the hover channel"
+        );
+        assert!(!capture.dragging, "hover alone is not a drag claim");
+
+        // No part hovered → no claim (world input stays free). `Hovered` is an
+        // immutable component — replace it wholesale.
+        world.entity_mut(track).insert(Hovered(false));
+        world.insert_resource(PointerCapture::default());
+        world.run_system_once(bridge_scrollbar_capture).unwrap();
+        assert!(!world.resource::<PointerCapture>().over_ui);
     }
 }

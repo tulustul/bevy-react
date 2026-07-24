@@ -530,6 +530,18 @@ pub struct ScrollTransitionState {
     initialized: bool,
 }
 
+impl ScrollTransitionState {
+    /// Snap the eased state to `value`: target + both channels, runners dropped.
+    /// Used when the offset is manipulated directly (scrollbar thumb drag /
+    /// track click) so easing neither lags nor reverts the direct write.
+    pub(crate) fn snap_to(&mut self, value: Vec2) {
+        self.target = value;
+        self.x.init(value.x);
+        self.y.init(value.y);
+        self.initialized = true;
+    }
+}
+
 /// Stamp (or clear) the scroll-ease components from `transition.scroll`. Called
 /// from the reconciler's generic node paths (scroll containers are plain `<node>`s),
 /// alongside `apply_scroll_listener`/`apply_scroll_step`. The spec input is always
@@ -556,6 +568,11 @@ pub fn apply_scroll_transition(ec: &mut EntityCommands, style: &Option<Style>) {
 /// frame the eased value actually moved, so a settled offset doesn't spam
 /// `Changed<ScrollPosition>` (and thus `onScroll`). The target is pre-clamped by the
 /// feeders; Bevy clamps the *rendered* offset regardless.
+///
+/// A `ScrollPosition` that moved *underneath* the easing (it no longer matches the
+/// channels' last-written value) was written directly by scrollbar manipulation —
+/// Bevy's widget writes the offset itself on thumb drag and track-click paging —
+/// and snaps: direct manipulation bypasses the animation entirely.
 pub fn drive_scroll_transition(
     time: Res<Time>,
     mut query: Query<(
@@ -573,6 +590,15 @@ pub fn drive_scroll_transition(
             state.y.init(pos.0.y);
             state.target = pos.0;
             state.initialized = true;
+        }
+        // After a drive the offset exactly equals (x.current, y.current) — on eased
+        // containers every in-crate feeder writes `state.target`, so a mismatch means
+        // the scrollbar widget wrote `ScrollPosition` directly this frame (thumb
+        // drag, track-click page, or the final release-frame write): snap to it.
+        let current = Vec2::new(state.x.current, state.y.current);
+        if pos.0 != current {
+            state.snap_to(pos.0);
+            continue;
         }
         let spec = &input.0;
         let target = state.target;
@@ -1627,5 +1653,98 @@ mod tests {
             world.entity(e).get::<ScrollPosition>().unwrap().0,
             Vec2::new(0.0, 100.0)
         );
+    }
+
+    /// A direct external write to `ScrollPosition` mid-ease (the scrollbar widget's
+    /// thumb-drag and track-click paging write the offset directly) snaps: the
+    /// written value survives exactly and nothing eases back toward the stale target.
+    #[test]
+    fn scroll_direct_write_snaps_the_ease() {
+        let mut world = World::new();
+        world.init_resource::<crate::layer::LayerContentDirt>();
+        world.insert_resource(Time::<()>::default());
+        let mut schedule = Schedule::default();
+        schedule.add_systems(drive_scroll_transition);
+
+        let e = world
+            .spawn((
+                ScrollTransitionInput(timing(1.0, Easing::Linear)),
+                ScrollTransitionState::default(),
+                ScrollPosition::default(),
+            ))
+            .id();
+        schedule.run(&mut world); // seed resting state at 0
+
+        // Leave an ease mid-flight toward y=100.
+        world
+            .entity_mut(e)
+            .get_mut::<ScrollTransitionState>()
+            .unwrap()
+            .target = Vec2::new(0.0, 100.0);
+        advance(&mut world, 0.5);
+        schedule.run(&mut world);
+        let y = world.entity(e).get::<ScrollPosition>().unwrap().0.y;
+        assert!(y > 0.0 && y < 100.0, "mid-ease expected, got {y}");
+
+        // The widget writes the offset directly: the value must survive as-is...
+        world.entity_mut(e).get_mut::<ScrollPosition>().unwrap().0 = Vec2::new(0.0, 42.0);
+        advance(&mut world, 0.25);
+        schedule.run(&mut world);
+        assert_eq!(
+            world.entity(e).get::<ScrollPosition>().unwrap().0,
+            Vec2::new(0.0, 42.0)
+        );
+        // ...and stay put on later frames (target adopted, runners dropped).
+        advance(&mut world, 0.25);
+        schedule.run(&mut world);
+        assert_eq!(
+            world.entity(e).get::<ScrollPosition>().unwrap().0,
+            Vec2::new(0.0, 42.0)
+        );
+    }
+
+    /// `snap_to` (what `bridge_scrollbar_capture` calls each drag frame) parks a
+    /// mid-flight ease at the live offset: the stale target stops mattering.
+    #[test]
+    fn scroll_snap_to_parks_a_mid_flight_ease() {
+        let mut world = World::new();
+        world.init_resource::<crate::layer::LayerContentDirt>();
+        world.insert_resource(Time::<()>::default());
+        let mut schedule = Schedule::default();
+        schedule.add_systems(drive_scroll_transition);
+
+        let e = world
+            .spawn((
+                ScrollTransitionInput(timing(1.0, Easing::Linear)),
+                ScrollTransitionState::default(),
+                ScrollPosition::default(),
+            ))
+            .id();
+        schedule.run(&mut world); // seed resting state at 0
+
+        world
+            .entity_mut(e)
+            .get_mut::<ScrollTransitionState>()
+            .unwrap()
+            .target = Vec2::new(0.0, 100.0);
+        advance(&mut world, 0.5);
+        schedule.run(&mut world);
+        let live = world.entity(e).get::<ScrollPosition>().unwrap().0;
+        assert!(
+            live.y > 0.0 && live.y < 100.0,
+            "mid-ease expected, got {live:?}"
+        );
+
+        world
+            .entity_mut(e)
+            .get_mut::<ScrollTransitionState>()
+            .unwrap()
+            .snap_to(live);
+        advance(&mut world, 0.5);
+        schedule.run(&mut world);
+        assert_eq!(world.entity(e).get::<ScrollPosition>().unwrap().0, live);
+        advance(&mut world, 0.5);
+        schedule.run(&mut world);
+        assert_eq!(world.entity(e).get::<ScrollPosition>().unwrap().0, live);
     }
 }

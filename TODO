@@ -4,7 +4,7 @@
 ☐ ScrollbarDemo - split scrollbars into multiple examples
 ☐ Transform3dDemo - nicer examples
 ☐ BackdropFilters - nicer examples
-☐ camera not moving when over ui
+✔ camera not moving when over ui @done(26-07-24 23:55)
 ☐ add aurora background to each scene
 ☐ aurora should always move in one direction
 ☐ animations demos rework, combine multiple examples in one page. Pages:
@@ -12,7 +12,7 @@
   ☐ declarative animations(?)
   ☐ filters/other deep properties
 ☐ nicer navigation
-☐ scrollbar should not animate when dragged with a mouse
+✔ scrollbar should not animate when dragged with a mouse @done(26-07-25 00:18)
 
 
 # Keep the descriptions short and to the point. Don't put any details here until required.
