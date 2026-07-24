@@ -42,7 +42,7 @@ pub const MAX_FILTER_OUTSET_PX: u32 = 1024;
 /// **Length contract:** a slot with `kind == ValueKind::Length` holds the
 /// param's *logical*-px value as produced by
 /// [`ReactFilter::pack`](crate::filters::ReactFilter::pack); the chain
-/// resolve system ([`resolve_filter_chains`](crate::filters::resolve_filter_chains))
+/// resolve system ([`resolve_chains`](crate::filters::resolve_chains))
 /// rewrites those components to physical px using this layout metadata before
 /// upload. Every other kind packs in its final unit (scalars as-is, angles in
 /// radians).

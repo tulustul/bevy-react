@@ -188,6 +188,16 @@ pub enum AnimatableProperty {
         name: String,
     },
 
+    /// One named parameter of the node's resolved `backdropFilter` chain —
+    /// the wire key is `backdropFilter[<index>].<param>`. Identical
+    /// addressing, units, and bind-time validation as
+    /// [`Self::FilterParam`] (warn kind `backdropFilterBinding`), against
+    /// the backdrop chain instead of the content one.
+    BackdropParam {
+        index: u8,
+        name: String,
+    },
+
     /// One field of the node's `transform3d` style — the wire key is
     /// `transform3d.<field>` (e.g. `transform3d.rotateY`). Drives the
     /// composite-time 3D transform of a promoted layer
@@ -260,9 +270,13 @@ impl AnimatableProperty {
         })
     }
 
-    /// Parse a `filter[<index>].<param>` wire key (see [`Self::from_wire`]).
+    /// Parse a `filter[<index>].<param>` or `backdropFilter[<index>].<param>`
+    /// wire key (see [`Self::from_wire`]).
     fn filter_param_from_wire(key: &str) -> Option<Self> {
-        let rest = key.strip_prefix("filter[")?;
+        let (rest, backdrop) = match key.strip_prefix("filter[") {
+            Some(rest) => (rest, false),
+            None => (key.strip_prefix("backdropFilter[")?, true),
+        };
         let (digits, name) = rest.split_once("].")?;
         if digits.is_empty() || !digits.bytes().all(|b| b.is_ascii_digit()) || name.is_empty() {
             return None;
@@ -270,9 +284,11 @@ impl AnimatableProperty {
         // Indices beyond the `u8` wire-index space are unaddressable (chains
         // decode-cap at 256 entries) — treat them as unrecognised keys.
         let index: u8 = digits.parse().ok()?;
-        Some(Self::FilterParam {
-            index,
-            name: name.to_owned(),
+        let name = name.to_owned();
+        Some(if backdrop {
+            Self::BackdropParam { index, name }
+        } else {
+            Self::FilterParam { index, name }
         })
     }
 
@@ -334,11 +350,11 @@ impl AnimatableProperty {
                 _ => ValueKind::Length,
             },
             Self::BackgroundColor | Self::BorderColor | Self::Color => ValueKind::Color,
-            // Never consulted for `FilterParam` — the applier reads the
+            // Never consulted for the chain params — the applier reads the
             // authoritative kind from the resolved chain's `ParamSlot`
             // layout (`crate::filters`). A documented fallback, not a
             // semantic: the slot decides scalar-vs-color, not this arm.
-            Self::FilterParam { .. } => ValueKind::Scalar,
+            Self::FilterParam { .. } | Self::BackdropParam { .. } => ValueKind::Scalar,
         }
     }
 
@@ -406,6 +422,14 @@ impl AnimatedBindings {
         self.0
             .keys()
             .any(|p| matches!(p, AnimatableProperty::FilterParam { .. }))
+    }
+
+    /// The backdrop analog of [`Self::has_filter_params`] — gates the
+    /// applier's backdrop stage and the transition engine's `skip_backdrop`.
+    pub fn has_backdrop_params(&self) -> bool {
+        self.0
+            .keys()
+            .any(|p| matches!(p, AnimatableProperty::BackdropParam { .. }))
     }
 
     /// Whether any `transform3d.<field>` binding is bound — gates the

@@ -49,6 +49,7 @@
 //! `RenderPipelineDescriptor` (filter vertex stage = prelude module, fragment
 //! stage = pass module).
 
+pub mod backdrop;
 pub mod clip;
 pub mod mips;
 pub mod store;
@@ -135,6 +136,40 @@ pub struct ExtractedChain {
     pub always_dirty: bool,
 }
 
+/// Map a main-world resolved chain into its render-side [`ExtractedChain`].
+/// The resolver never attaches an empty chain, but guard anyway — an empty
+/// chain must read as "no filter machinery" downstream.
+fn extract_chain(chain: Option<&ResolvedFilterChain>) -> Option<ExtractedChain> {
+    chain
+        .filter(|chain| !chain.passes.is_empty())
+        .map(|chain| ExtractedChain {
+            passes: chain
+                .passes
+                .iter()
+                .map(|pass| {
+                    // The registry rejects over-cap packs at resolve; a
+                    // custom `resolve` override that bypassed it would
+                    // otherwise be silently truncated here.
+                    debug_assert!(
+                        pass.params.len() <= MAX_FILTER_PARAM_VECS,
+                        "filter pass packs {} vec4s, over MAX_FILTER_PARAM_VECS",
+                        pass.params.len()
+                    );
+                    let mut params = [Vec4::ZERO; MAX_FILTER_PARAM_VECS];
+                    for (slot, value) in params.iter_mut().zip(&pass.params) {
+                        *slot = *value;
+                    }
+                    ExtractedFilterPass {
+                        shader: pass.shader.clone(),
+                        params,
+                    }
+                })
+                .collect(),
+            version: chain.version,
+            always_dirty: chain.always_dirty,
+        })
+}
+
 /// One promoted layer, as seen by the render world this frame.
 pub struct ExtractedLayer {
     /// The layer root's main-world entity (subtree identity).
@@ -172,6 +207,20 @@ pub struct ExtractedLayer {
     /// present). Drives [`prepare_layer_filters`]; `None` clears the slot's
     /// filter state (see [`FilterSlot`]).
     pub chain: Option<ExtractedChain>,
+    /// The layer root's resolved `backdropFilter` chain, if any (always
+    /// non-empty and `always_dirty` when present — the source frame is
+    /// live). Drives the backdrop snapshot + filter staging
+    /// ([`backdrop::prepare_layer_backdrops`]); `None` clears the slot's
+    /// backdrop state.
+    pub backdrop_chain: Option<ExtractedChain>,
+    /// Render-world entity of the backdrop composite quad (the frosted
+    /// underlay drawn one epsilon below the content quad). Spawned only when
+    /// [`Self::backdrop_chain`] is present.
+    pub backdrop_quad_entity: Option<Entity>,
+    /// The quantized outset margin baked into `min`/`size`
+    /// ([`LayerCaptureRect::outset`]). The backdrop quad shrinks by this to
+    /// the un-inflated border box — frost must not paint in the outset ring.
+    pub outset: u32,
     /// The layer's composite-time 3D model matrix (screen-space homography,
     /// from `LayerTransform3dMatrix`). `None` = untransformed (absent style
     /// or identity params) — the quad takes the CPU clip path unchanged.
@@ -220,6 +269,7 @@ pub fn extract_ui_layers(
             &LayerGroupAlpha,
             &ComputedUiTargetCamera,
             Option<&ResolvedFilterChain>,
+            Option<&crate::filters::ResolvedBackdropChain>,
             Option<&crate::layer::transform3d::LayerTransform3dMatrix>,
             &PromotedLayer,
         )>,
@@ -245,7 +295,9 @@ pub fn extract_ui_layers(
     // v1: all layers composite on one camera — the first layer root's UI
     // target camera. (Multi-camera roots are a documented non-goal for now.)
     let mut layer_index: HashMap<Entity, usize> = HashMap::default();
-    for (root, rect, alpha, target_camera, filter_chain, transform3d, promoted) in layers.iter() {
+    for (root, rect, alpha, target_camera, filter_chain, backdrop, transform3d, promoted) in
+        layers.iter()
+    {
         let Some(camera_main) = target_camera.get() else {
             continue;
         };
@@ -321,36 +373,10 @@ pub fn extract_ui_layers(
             });
         let needs_capture = !cached_ok || repaints.dirty.contains(&root);
 
-        // The resolver never attaches an empty chain, but guard anyway — an
-        // empty `chain` must read as "no filter machinery" downstream.
-        let chain = filter_chain
-            .filter(|chain| !chain.passes.is_empty())
-            .map(|chain| ExtractedChain {
-                passes: chain
-                    .passes
-                    .iter()
-                    .map(|pass| {
-                        // The registry rejects over-cap packs at resolve; a
-                        // custom `resolve` override that bypassed it would
-                        // otherwise be silently truncated here.
-                        debug_assert!(
-                            pass.params.len() <= MAX_FILTER_PARAM_VECS,
-                            "filter pass packs {} vec4s, over MAX_FILTER_PARAM_VECS",
-                            pass.params.len()
-                        );
-                        let mut params = [Vec4::ZERO; MAX_FILTER_PARAM_VECS];
-                        for (slot, value) in params.iter_mut().zip(&pass.params) {
-                            *slot = *value;
-                        }
-                        ExtractedFilterPass {
-                            shader: pass.shader.clone(),
-                            params,
-                        }
-                    })
-                    .collect(),
-                version: chain.version,
-                always_dirty: chain.always_dirty,
-            });
+        let chain = extract_chain(filter_chain);
+        let backdrop_chain = extract_chain(backdrop.map(|b| &b.0));
+        let backdrop_quad_entity =
+            (backdrop_chain.is_some()).then(|| commands.spawn(TemporaryRenderEntity).id());
 
         layer_index.insert(root, extracted.layers.len());
         extracted.layers.push(ExtractedLayer {
@@ -365,6 +391,9 @@ pub fn extract_ui_layers(
             target_format,
             needs_capture,
             chain,
+            backdrop_chain,
+            backdrop_quad_entity,
+            outset: rect.outset,
             // Identity matrices stay `None`: the quad renders exactly like an
             // untransformed layer (CPU clip path), and picking stays inert.
             transform3d: transform3d.filter(|m| !m.identity).map(|m| m.model),
@@ -409,6 +438,24 @@ pub fn extract_ui_layers(
             walk_enclosing(i, &extracted.enclosing, |outer| {
                 if layers[outer].needs_capture {
                     return false; // its own chain is already propagated
+                }
+                layers[outer].needs_capture = true;
+                true
+            });
+        }
+    }
+    // A nested backdrop layer's quad holds LIVE screen pixels (the snapshot
+    // re-blits every frame), so every enclosing capture containing that quad
+    // can never serve from cache — force the chain dirty unconditionally,
+    // each frame. The backdrop layer's OWN content capture still caches
+    // normally (the frost is a separate quad, not part of its capture).
+    // Documented cost: nesting a backdrop defeats ancestor capture caching.
+    for i in 0..extracted.layers.len() {
+        if extracted.layers[i].backdrop_chain.is_some() {
+            let layers = &mut extracted.layers;
+            walk_enclosing(i, &extracted.enclosing, |outer| {
+                if layers[outer].needs_capture {
+                    return false; // already dirty ⇒ its chain already is too
                 }
                 layers[outer].needs_capture = true;
                 true
@@ -534,6 +581,21 @@ pub fn redistribute_ui_layers(
             None => stock_view,
         };
         if let Some(phase) = phases.get_mut(&target) {
+            // The frosted backdrop draws one epsilon UNDER the whole subtree
+            // (`BACKGROUND_COLOR` is 0.0 — the content quad sits exactly at
+            // the first stolen key, so "under" needs an explicit offset).
+            if let Some(backdrop_quad_entity) = layer.backdrop_quad_entity {
+                phase.add_transient(TransparentUi {
+                    sort_key: FloatOrd(sort_key.0 - backdrop::BACKDROP_UNDERLAY_EPSILON),
+                    entity: (backdrop_quad_entity, layer.main_entity),
+                    pipeline,
+                    draw_function,
+                    batch_range: 0..0,
+                    extra_index: PhaseItemExtraIndex::None,
+                    index: idx,
+                    indexed: false,
+                });
+            }
             phase.add_transient(TransparentUi {
                 sort_key: FloatOrd(sort_key.0 + stack_z_offsets::BACKGROUND_COLOR),
                 entity: (layer.quad_entity, layer.main_entity),
@@ -621,6 +683,7 @@ pub fn prepare_layer_composites(
     mut meta: ResMut<LayerCompositeMeta>,
     mut uniforms_meta: ResMut<transform3d::CompositeUniformsMeta>,
     filter_meta: Res<LayerFilterMeta>,
+    backdrop_meta: Res<backdrop::BackdropMeta>,
     mut phases: ResMut<ViewSortedRenderPhases<TransparentUi>>,
 ) {
     meta.vertices.clear();
@@ -850,6 +913,83 @@ pub fn prepare_layer_composites(
                 uniform_offset,
             });
     }
+    // Backdrop quads: the frosted underlay, staged after the content quads so
+    // both share the vertex buffer + bind-group list. Geometry is the
+    // UN-inflated border box (never the outset ring), UVs into the inflated
+    // chain output, alpha = group alpha (a fading panel fades its frost),
+    // identity model + zero feather + CPU clip clamp (the untransformed path
+    // — a backdrop under a 3D-transformed layer stays axis-aligned, the
+    // documented v1 limit). A gated backdrop stays batch-less and draws
+    // nothing — the region shows the real frame, graceful by construction,
+    // and no enclosing invalidation is needed (extraction already forces
+    // enclosing re-capture every frame for backdrop layers).
+    let mut backdrop_ranges: Vec<Option<Range<u32>>> = vec![None; extracted.layers.len()];
+    for (idx, layer) in extracted.layers.iter().enumerate() {
+        let Some(backdrop_quad_entity) = layer.backdrop_quad_entity else {
+            continue;
+        };
+        let Some(slot) = store.slots.get_mut(&layer.main_entity) else {
+            continue;
+        };
+        let Some(backdrop_slot) = slot.backdrop.as_mut() else {
+            continue;
+        };
+        let Some(bind_group) = backdrop::backdrop_gate(
+            idx,
+            layer.main_entity,
+            backdrop_slot,
+            &backdrop_meta,
+            &pipeline_cache,
+            &render_device,
+            &pipeline.atlas_layout,
+            &pipeline.sampler,
+        ) else {
+            continue;
+        };
+        let Some(q) = backdrop::backdrop_quad(layer.min, layer.size, layer.outset, layer.quad_clip)
+        else {
+            continue;
+        };
+        let start = meta.vertices.len() as u32;
+        let (min, max) = (q.pos_min, q.pos_max);
+        let (uv_min, uv_max) = (q.uv_min, q.uv_max);
+        let corners = [
+            ([min.x, min.y, 0.0], [uv_min.x, uv_min.y]),
+            ([max.x, min.y, 0.0], [uv_max.x, uv_min.y]),
+            ([max.x, max.y, 0.0], [uv_max.x, uv_max.y]),
+            ([min.x, min.y, 0.0], [uv_min.x, uv_min.y]),
+            ([max.x, max.y, 0.0], [uv_max.x, uv_max.y]),
+            ([min.x, max.y, 0.0], [uv_min.x, uv_max.y]),
+        ];
+        for (position, uv) in corners {
+            meta.vertices.push(LayerCompositeVertex {
+                position,
+                uv,
+                alpha: layer.alpha,
+            });
+        }
+        backdrop_ranges[idx] = Some(start..start + 6);
+        let atlas_index = meta.atlas_bind_groups.len();
+        meta.atlas_bind_groups.push(bind_group);
+        let (open_min, open_max) = transform3d::open_clip();
+        let uniform_offset = uniforms_meta
+            .uniforms
+            .push(&transform3d::CompositeUniforms {
+                model: Mat4::IDENTITY,
+                clip_min: open_min,
+                clip_max: open_max,
+                edge_feather: 0.0,
+                pad_a: 0.0,
+                pad_b: Vec2::ZERO,
+            });
+        commands
+            .entity(backdrop_quad_entity)
+            .insert(LayerCompositeBatch {
+                range: backdrop_ranges[idx].clone().unwrap(),
+                atlas: atlas_index,
+                uniform_offset,
+            });
+    }
     // A gated quad drew nothing into its enclosing captures this frame, yet
     // those captures' `content_valid` was predicted from pipeline readiness
     // alone — an outer capture with a hole where the filtered subtree belongs
@@ -883,12 +1023,17 @@ pub fn prepare_layer_composites(
     // quad is exactly `0..1`; its vertex range rides `LayerCompositeBatch`.
     for phase in phases.values_mut() {
         for item in phase.items.values_mut() {
-            if extracted
+            let drawable = extracted
                 .layers
                 .iter()
                 .position(|l| l.quad_entity == item.entity())
                 .is_some_and(|idx| ranges[idx].is_some())
-            {
+                || extracted
+                    .layers
+                    .iter()
+                    .position(|l| l.backdrop_quad_entity == Some(item.entity()))
+                    .is_some_and(|idx| backdrop_ranges[idx].is_some());
+            if drawable {
                 item.batch_range = 0..1;
             }
         }
@@ -1497,12 +1642,19 @@ pub fn ui_layer_capture_pass(
     phases: Res<ViewSortedRenderPhases<TransparentUi>>,
     filter_meta: Res<LayerFilterMeta>,
     mip_meta: Res<mips::LayerMipMeta>,
+    backdrop_meta: Res<backdrop::BackdropMeta>,
+    blit_pipeline: Option<Res<backdrop::BackdropBlitPipeline>>,
     pipeline_cache: Res<PipelineCache>,
     mut ctx: RenderContext,
 ) {
     if extracted.camera_render_entity != Some(view.into_inner()) {
         return;
     }
+    // The camera's CURRENT main texture — post-PostProcess, pre-`ui_pass`:
+    // the tonemapped 3D frame with no UI on it, the v1 backdrop source.
+    // Fetched here (not prepare) because the a/b buffer selection flips
+    // during PostProcess.
+    let main_texture = backdrop::camera_main_texture(world, extracted.camera_render_entity);
     // Innermost first ([`ExtractedUiLayers::capture_order`]): a quad sampling
     // layer B's capture (or B's filtered output) must draw — inside some
     // outer capture or the screen — only after B's capture *and filter*
@@ -1510,6 +1662,19 @@ pub fn ui_layer_capture_pass(
     // in B's loop iteration, before any enclosing layer's capture.
     for &idx in &extracted.capture_order {
         let layer = &extracted.layers[idx];
+        // Backdrop first: blit the frame region into the snapshot, then run
+        // the backdrop chain. Independent of the content capture below (the
+        // source is the pre-UI frame, static across this whole loop in v1).
+        if let Some(main_texture) = &main_texture {
+            backdrop::run_backdrop_passes(
+                idx,
+                &backdrop_meta,
+                blit_pipeline.as_deref(),
+                main_texture,
+                &pipeline_cache,
+                &mut ctx,
+            );
+        }
         // Capture. Skipped when cached (`!needs_capture`): the persistent
         // texture already holds the pixels — and skipping keeps the
         // `LoadOp::Clear` from wiping them.

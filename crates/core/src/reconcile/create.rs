@@ -233,8 +233,8 @@ pub(super) fn apply_create(
         create_controlled_scroll(bridge, &mut ec, id, &props);
     }
     bridge.nodes.insert(id, entity);
-    // `cache: "always"` and a `filter` chain — base or variant-
-    // carried (the promotion union is presence-based, so a
+    // `cache: "always"` and a `filter`/`backdropFilter` chain — base or
+    // variant-carried (the promotion union is presence-based, so a
     // hover-only filter promotes eagerly at creation) — promote
     // even a childless node, so no later child op would ever queue
     // the evaluation — do it here. (Opacity-driven promotion needs
@@ -243,7 +243,9 @@ pub(super) fn apply_create(
     // "evaluate me" hint, the evaluator is authoritative, and a
     // spurious evaluation is cheap.
     if props.style.as_ref().is_some_and(|s| s.cache.is_some())
-        || props.all_styles().any(|s| s.filter.is_some())
+        || props
+            .all_styles()
+            .any(|s| s.filter.is_some() || s.backdrop_filter.is_some())
     {
         bridge.layer_dirty.insert(id);
     }

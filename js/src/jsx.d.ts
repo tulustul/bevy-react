@@ -192,6 +192,11 @@ export interface BevyTransition {
    * filters fades through identity values (hover-adds-blur fades in); anything
    * else swaps wholesale at the midpoint. */
   filter?: BevyTransitionSpec;
+  /** Eases the `backdropFilter` chain — the second, independent instance of the
+   * `filter` channel (same whole-value strategy and ease-to-empty snap: unsetting
+   * `backdropFilter` demotes and snaps, so keep an identity entry — e.g.
+   * `{ name: "blur", params: { radius: 0 } }` — when removal should ease). */
+  backdropFilter?: BevyTransitionSpec;
   /** Eases the `transform3d` fields together (composite-time — animating never
    * re-captures the layer). `perspective` snaps when either endpoint is
    * orthographic; unsetting the whole `transform3d` style demotes and snaps —
@@ -402,6 +407,16 @@ export interface BevyStyle {
    *  applies to its whole captured subtree (images, text, buttons, nested
    *  nodes) as one image. */
   filter?: FilterChainValue;
+  /** Backdrop filter chain — same wire shape as `filter`, but it filters what is
+   *  rendered BEHIND the node (v1: the camera's post-processed 3D scene — UI
+   *  painted beneath the node is not included) and draws the result under the
+   *  node's own content, like CSS `backdrop-filter` frosted glass. The node
+   *  promotes to a composited layer; the filtered region is the node's
+   *  rectangular border box (no `borderRadius` mask in v1) and re-renders every
+   *  frame (live source). Unsetting the chain demotes and snaps — keep an
+   *  identity entry (e.g. `{ name: "blur", params: { radius: 0 } }`) when
+   *  removal should transition smoothly. */
+  backdropFilter?: FilterChainValue;
   /** Background gradient(s): one gradient or a layered list. Painted *over*
    *  `backgroundColor` (like CSS `background-image`): an opaque gradient hides
    *  it, so the color is a fallback; transparent stops let it show through. */

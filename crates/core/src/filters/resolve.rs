@@ -11,18 +11,66 @@ use super::registry::{FilterRegistry, ResolvedFilterPass, stamp_and_push};
 use super::wire::FilterChain;
 use crate::layer::{LayerContentDirt, PromotedLayer};
 
-/// The wire `filter` chain of a node, mirrored off the base style by the
+/// The wire `filter` chain of a node, mirrored off the applied style by the
 /// apply path (`crate::ui_map::apply_style_masked`'s FILTER arm) — present
 /// iff the style carries a non-empty chain. The thin input side of the
-/// [`resolve_filter_chains`] system, mirroring the
+/// [`resolve_chains`] system, mirroring the
 /// `crate::transition::TransitionInput` pattern: the style apply owns writes,
-/// the resolver only reads. (Variants can't carry `filter`, so the base style
-/// is the only source.)
+/// the resolver only reads. The applied style may be a hover/press/focus-
+/// merged one (the field is `overlay`), so an interaction flip re-stamps the
+/// merged chain here.
 #[derive(Component, Debug, Clone, Default, PartialEq)]
 pub struct FilterInput(pub FilterChain);
 
+/// Input side of one [`resolve_chains`] instance: which wire-chain component
+/// feeds it, its diag kinds, and per-instance semantics. Implemented by
+/// [`FilterInput`] (the content `filter` chain) and
+/// [`BackdropInput`](crate::filters::BackdropInput) (`backdropFilter`).
+pub trait ChainInput: Component {
+    /// Diag kind reported for an unknown filter name.
+    const KIND_UNKNOWN: &'static str;
+    /// Diag kind reported for rejected params.
+    const KIND_PARAMS: &'static str;
+    /// Force `always_dirty` on every resolved chain. Backdrop chains set
+    /// this: their source (the frame behind the node) is live, so the filter
+    /// run must re-stage every frame regardless of `USES_TIME`.
+    const FORCE_ALWAYS_DIRTY: bool;
+    fn chain(&self) -> &FilterChain;
+}
+
+impl ChainInput for FilterInput {
+    const KIND_UNKNOWN: &'static str = "filterUnknown";
+    const KIND_PARAMS: &'static str = "filterParams";
+    const FORCE_ALWAYS_DIRTY: bool = false;
+    fn chain(&self) -> &FilterChain {
+        &self.0
+    }
+}
+
+/// Output side of one [`resolve_chains`] instance — a component wrapping (or
+/// being) a [`ResolvedFilterChain`]. The newtype projection keeps every
+/// downstream consumer (extract, transitions, animations, devtools) on the
+/// one inner type.
+pub trait ResolvedChain: Component<Mutability = bevy::ecs::component::Mutable> + Sized {
+    fn from_inner(inner: ResolvedFilterChain) -> Self;
+    fn inner(&self) -> &ResolvedFilterChain;
+    fn inner_mut(&mut self) -> &mut ResolvedFilterChain;
+}
+
+impl ResolvedChain for ResolvedFilterChain {
+    fn from_inner(inner: ResolvedFilterChain) -> Self {
+        inner
+    }
+    fn inner(&self) -> &ResolvedFilterChain {
+        self
+    }
+    fn inner_mut(&mut self) -> &mut ResolvedFilterChain {
+        self
+    }
+}
+
 /// A node's fully resolved `filter` chain, attached to promoted layer roots
-/// by [`resolve_filter_chains`]. Absent on a promoted root whose chain has no
+/// by [`resolve_chains`]. Absent on a promoted root whose chain has no
 /// valid entries (pure capture/composite — no filter machinery).
 #[derive(Component, Debug, Clone, Default)]
 pub struct ResolvedFilterChain {
@@ -42,7 +90,7 @@ pub struct ResolvedFilterChain {
     /// matters) on every real change so downstream caches can detect it.
     /// Writer registry — exactly three systems bump this counter, and every
     /// one must use `wrapping_add(1)` so they share one overflow semantics:
-    /// the resolver's snap ([`resolve_filter_chains`]), the transition's
+    /// the resolver's snap ([`resolve_chains`]), the transition's
     /// whole-value filter-channel ease (`transition.rs`'s
     /// `drive_transitions`), and the animation stage-4 per-param re-assert
     /// (`animations`' `apply_filter_params`).
@@ -60,26 +108,30 @@ pub fn quantize_outset(o: u32) -> u32 {
     o.div_ceil(16) * 16
 }
 
-/// Turn each promoted root's wire [`FilterInput`] into a packed
-/// [`ResolvedFilterChain`]. Runs in `Update` after the interaction restyle
-/// (the last [`FilterInput`] writer this frame) and before the transition/
-/// animation appliers — both write onto the resolved chain: the transition's
-/// filter-channel ease and stage 4's per-param `filter[<i>].<param>` bindings.
+/// Turn each promoted root's wire chain input `I` into a packed resolved
+/// chain `R`. Two instances run in `Update` after the interaction restyle
+/// (the last input writer this frame) and before the transition/animation
+/// appliers — both write onto the resolved chain: the content instance
+/// (`FilterInput` → `ResolvedFilterChain`, the `filter` style) and the
+/// backdrop instance (`BackdropInput` → `ResolvedBackdropChain`, the
+/// `backdropFilter` style — see `crate::filters::backdrop`).
 ///
 /// Re-resolves when the input changed, the node was (re-)promoted, or the
 /// node's scale factor no longer matches the one baked into the existing
 /// chain. Per the plan's identity-fallback rule, an unknown filter name
-/// (`filterUnknown`) or rejected params (`filterParams`) warn into
-/// [`crate::diag`] under the node's scope and skip that entry; a chain with
-/// no valid entries attaches no [`ResolvedFilterChain`] at all (the node
-/// stays promoted — promotion reads the wire chain).
+/// ([`ChainInput::KIND_UNKNOWN`]) or rejected params
+/// ([`ChainInput::KIND_PARAMS`]) warn into [`crate::diag`] under the node's
+/// scope and skip that entry; a chain with no valid entries attaches no
+/// resolved component at all (the node stays promoted — promotion reads the
+/// wire chain).
 ///
 /// Writes are compare-before-write: an identical re-resolve neither bumps
 /// `version` nor produces dirt; a real change bumps it and pushes the root
 /// into [`LayerContentDirt::composite_only`] (filter output changes never
-/// dirty the capture — it holds unfiltered content).
+/// dirty the capture — it holds unfiltered content, and a backdrop touches
+/// only pixels behind the node).
 #[allow(clippy::type_complexity)]
-pub fn resolve_filter_chains(
+pub fn resolve_chains<I: ChainInput, R: ResolvedChain>(
     mut commands: Commands,
     registry: Res<FilterRegistry>,
     assets: Res<AssetServer>,
@@ -87,13 +139,13 @@ pub fn resolve_filter_chains(
     mut roots: Query<(
         Entity,
         &crate::bridge::RNode,
-        Ref<FilterInput>,
+        Ref<I>,
         Ref<PromotedLayer>,
-        Option<&mut ResolvedFilterChain>,
+        Option<&mut R>,
         &ComputedNode,
     )>,
-    mut unset: RemovedComponents<FilterInput>,
-    stale: Query<(), With<ResolvedFilterChain>>,
+    mut unset: RemovedComponents<I>,
+    stale: Query<(), With<R>>,
 ) {
     for (entity, rnode, input, promoted, existing, computed) in &mut roots {
         // Physical pixels per logical pixel, from this frame's layout output.
@@ -109,7 +161,7 @@ pub fn resolve_filter_chains(
         // `Or<(Changed<FilterInput>, Added<PromotedLayer>)>` would kill it.
         let needs_resolve = input.is_changed()
             || promoted.is_added()
-            || existing.as_ref().is_some_and(|c| c.scale != scale);
+            || existing.as_ref().is_some_and(|c| c.inner().scale != scale);
         if !needs_resolve {
             continue;
         }
@@ -118,11 +170,11 @@ pub fn resolve_filter_chains(
 
         let mut passes: Vec<ResolvedFilterPass> = Vec::new();
         let mut outset_px = 0u32;
-        let mut always_dirty = false;
-        for (index, fu) in input.0.0.iter().enumerate() {
+        let mut always_dirty = I::FORCE_ALWAYS_DIRTY;
+        for (index, fu) in input.chain().0.iter().enumerate() {
             let Some(reg) = registry.entries.get(fu.name.as_str()) else {
                 crate::diag::report(
-                    "filterUnknown",
+                    I::KIND_UNKNOWN,
                     &fu.name,
                     &format!("unknown filter {:?} — entry skipped", fu.name),
                 );
@@ -131,12 +183,12 @@ pub fn resolve_filter_chains(
             let params = Value::Object(fu.params.clone());
             // `resolve` and `outset` are separate baked fns by design (see
             // `FilterRegistration`); either rejecting skips the entry with
-            // one `filterParams` warning.
+            // one params warning.
             let (resolved, outset) = match ((reg.resolve)(&params, &assets), (reg.outset)(&params))
             {
                 (Ok(resolved), Ok(outset)) => (resolved, outset),
                 (Err(msg), _) | (_, Err(msg)) => {
-                    crate::diag::report("filterParams", &params.to_string(), &msg);
+                    crate::diag::report(I::KIND_PARAMS, &params.to_string(), &msg);
                     continue;
                 }
             };
@@ -153,13 +205,14 @@ pub fn resolve_filter_chains(
         if passes.is_empty() {
             // All entries invalid (or an empty input): pure capture/composite.
             if existing.is_some() {
-                commands.entity(entity).remove::<ResolvedFilterChain>();
+                commands.entity(entity).remove::<R>();
                 dirt.composite_only.push(entity);
             }
             continue;
         }
         match existing {
-            Some(mut chain) => {
+            Some(mut resolved) => {
+                let chain = resolved.inner_mut();
                 if chain.passes == passes
                     && chain.outset_px == outset_px
                     && chain.always_dirty == always_dirty
@@ -181,13 +234,15 @@ pub fn resolve_filter_chains(
                 dirt.composite_only.push(entity);
             }
             None => {
-                commands.entity(entity).insert(ResolvedFilterChain {
-                    passes,
-                    outset_px,
-                    always_dirty,
-                    version: 1,
-                    scale,
-                });
+                commands
+                    .entity(entity)
+                    .insert(R::from_inner(ResolvedFilterChain {
+                        passes,
+                        outset_px,
+                        always_dirty,
+                        version: 1,
+                        scale,
+                    }));
                 dirt.composite_only.push(entity);
             }
         }
@@ -201,7 +256,7 @@ pub fn resolve_filter_chains(
     // the contains-check keeps `commands.entity()` off them.
     for entity in unset.read() {
         if stale.contains(entity) {
-            commands.entity(entity).remove::<ResolvedFilterChain>();
+            commands.entity(entity).remove::<R>();
             dirt.composite_only.push(entity);
         }
     }
@@ -628,7 +683,7 @@ mod tests {
     /// The scar test: a filter style delta mid-animation rebuilds the chain
     /// (the resolver snaps the params to the new static style) — the binding
     /// re-asserts the driven value the same frame (`AnimationSet::Apply` runs
-    /// after [`resolve_filter_chains`]), so the driven param never shows the
+    /// after [`resolve_chains`]), so the driven param never shows the
     /// static value on screen.
     #[test]
     fn filter_param_binding_reasserts_after_chain_rebuild() {

@@ -198,6 +198,7 @@ function LayerRow({
   // Nested layers indent under their enclosing depth.
   const indent = 10 + Math.max(0, row.depth - 1) * 12;
   const chain = row.filters ?? [];
+  const backdropChain = row.backdrop_filters ?? [];
   return (
     <node
       style={{
@@ -269,6 +270,19 @@ function LayerRow({
           }}
         >
           {formatChain(chain)}
+        </text>
+      )}
+      {backdropChain.length > 0 && (
+        // The backdrop chain, prefixed to distinguish it from the content one.
+        <text
+          style={{
+            color: theme.textDim,
+            fontSize: 10,
+            fontFamily: theme.mono,
+            margin: { left: 14, top: 2 },
+          }}
+        >
+          {"backdrop: " + formatChain(backdropChain)}
         </text>
       )}
     </node>

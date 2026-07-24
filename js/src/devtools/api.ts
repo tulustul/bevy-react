@@ -116,6 +116,9 @@ export interface DevtoolsLayerRow {
   /** The resolved `filter` chain with live param values; empty when the
    *  layer has none. Optional defensively (older Rust peers omit it). */
   filters?: DevtoolsFilterEntry[];
+  /** The resolved `backdropFilter` chain, same shape/liveness as `filters` —
+   *  rendered as a second chain line. */
+  backdrop_filters?: DevtoolsFilterEntry[];
 }
 
 /** Bevy→JS `devtools.layers`: the current layer set (base + promoted), sorted

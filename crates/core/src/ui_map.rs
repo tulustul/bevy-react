@@ -662,7 +662,7 @@ pub fn apply_style_masked(
     }
 
     // Mirror the wire `filter` chain onto the entity for the chain resolver
-    // (`crate::filters::resolve_filter_chains`) — the `TransitionInput`
+    // (`crate::filters::resolve_chains`) — the `TransitionInput`
     // pattern. `s` may be a hover/press/focus-merged style (the field is
     // `overlay`), so an interaction flip re-stamps the merged chain here and
     // the resolver — plus the transition's filter channel — picks it up. A
@@ -681,6 +681,23 @@ pub fn apply_style_masked(
         }
     }
 
+    // Same mirror for the `backdropFilter` chain → the backdrop resolver
+    // (`crate::filters::backdrop`). Independent channel: content and backdrop
+    // chains stamp, resolve, and transition separately.
+    if dirty.intersects(g::BACKDROP) {
+        match s
+            .and_then(|s| s.backdrop_filter.as_ref())
+            .filter(|c| !c.0.is_empty())
+        {
+            Some(chain) => {
+                ec.insert(crate::filters::BackdropInput(chain.clone()));
+            }
+            None => {
+                ec.remove::<crate::filters::BackdropInput>();
+            }
+        }
+    }
+
     // Stamp the transition engine's input from this (possibly hover/press-merged)
     // style. `drive_transitions` eases the snap values written above to their new
     // targets; see [`crate::transition`]. Skipping when no transitioned channel
@@ -695,16 +712,17 @@ pub fn apply_style_masked(
     // `crate::layer::LayerContentDirt`). Deliberately conservative: style
     // groups can't distinguish a composite-only opacity delta here; the fast
     // fade paths (animations/transitions) carry precise carve-outs instead.
-    // The FILTER/LAYER/TRANSFORM3D groups are the exception and are masked
-    // out: their outputs are composite/promotion-side (a filter applies to
-    // the captured texture; the capture holds unfiltered content; the 3D
+    // The FILTER/BACKDROP/LAYER/TRANSFORM3D groups are the exception and are
+    // masked out: their outputs are composite/promotion-side (a filter
+    // applies to the captured texture; the capture holds unfiltered content;
+    // a backdrop filters pixels *behind* the node, never the capture; the 3D
     // matrix reshapes the quad), so a delta touching only them never dirties
-    // a capture — the chain resolver and `sync_transform3d_matrices` push
+    // a capture — the chain resolvers and `sync_transform3d_matrices` push
     // precise `composite_only` dirt themselves. Promotion flips still dirty
     // correctly: a promote is caught by the first-frame geometry hash, and a
     // demote by `reapply_opacity_outputs`' restyle (whose dirty groups
     // intersect the unmasked set) — the hash alone would miss a leaf demote.
-    if dirty.intersects(!(g::FILTER | g::LAYER | g::TRANSFORM3D)) {
+    if dirty.intersects(!(g::FILTER | g::LAYER | g::TRANSFORM3D | g::BACKDROP)) {
         crate::layer::mark_content_dirty(ec);
     }
 }

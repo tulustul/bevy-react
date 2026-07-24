@@ -59,6 +59,10 @@ const KIND_FIELDS: Record<string, { style?: string[]; props?: string[] }> = {
   // Per-param filter animation bindings: the warning value is the wire key
   // (`filter[0].radius`), which matches the retained `animated` prop's key.
   filterBinding: { style: ["filter"], props: ["animated"] },
+  backdropFilterParams: { style: ["backdropFilter"] },
+  backdropFilterUnknown: { style: ["backdropFilter"] },
+  // Same wire-key match as filterBinding, over the backdrop namespace.
+  backdropFilterBinding: { style: ["backdropFilter"], props: ["animated"] },
   scrollbar: { style: ["scrollbar"] },
   animatedStyle: { props: ["animated"] },
   // Apply-time (runtime sink) kinds.

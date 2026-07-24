@@ -68,6 +68,10 @@ pub struct LayerSlot {
     /// `params_version` surviving the chain's absence could collide with a
     /// restarted version and skip a needed re-run with old params.
     pub filter: Option<FilterSlot>,
+    /// Backdrop state (snapshot + its ping-pong pair), present iff the layer
+    /// had a `backdropFilter` chain last frame. Same clear-on-absence rule
+    /// as [`Self::filter`], for the same version-restart reason.
+    pub backdrop: Option<super::backdrop::BackdropSlot>,
     pub last_seen: u64,
 }
 
@@ -205,6 +209,20 @@ pub fn prepare_layer_textures(
             // params.
             slot.filter = None;
         }
+        // Backdrop slot: same lifecycle as the filter slot (allocated while
+        // a chain exists, cleared — with its version bookkeeping — when it
+        // doesn't; a realloc above dropped it implicitly).
+        if layer.backdrop_chain.is_some() {
+            if slot.backdrop.is_none() {
+                slot.backdrop = Some(super::backdrop::alloc_backdrop_slot(
+                    &render_device,
+                    wanted,
+                    layer.target_format,
+                ));
+            }
+        } else {
+            slot.backdrop = None;
+        }
         if layer.needs_capture {
             // This frame's capture is only servable from cache later if every
             // item actually renders — a still-compiling pipeline makes
@@ -236,7 +254,7 @@ pub fn prepare_layer_textures(
 /// mipped, the returned `default_view` is **base-mip-only** (see
 /// [`LayerSlot::texture`] for why that keeps every consumer valid) and the
 /// per-level + full views come back as a [`mips::MipChain`].
-fn alloc_capture_texture(
+pub(super) fn alloc_capture_texture(
     render_device: &RenderDevice,
     label: &'static str,
     size: UVec2,
@@ -294,6 +312,7 @@ fn alloc_layer_slot(
         bind_group_mips: None,
         content_valid: false,
         filter: None,
+        backdrop: None,
         last_seen: 0,
     }
 }

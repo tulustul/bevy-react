@@ -72,6 +72,14 @@ pub struct Transition {
     /// [`crate::filters::FilterInput`] (a filter-only delta re-stamps that
     /// component but not the input).
     pub filter: Option<ChannelTransition>,
+    /// Eases the `backdropFilter` chain — the second, independent instance of
+    /// the `filter` channel (same whole-value strategy, same target rule: the
+    /// target is read live from [`crate::filters::BackdropInput`], not
+    /// [`TransitionInput`]). The same ease-to-empty snap applies: unsetting
+    /// `backdropFilter` demotes the layer (no resolved chain to write into),
+    /// so keep an identity entry — e.g. `{ name: "blur", params: { radius:
+    /// 0 } }` — in the base chain when removal should ease.
+    pub backdrop_filter: Option<ChannelTransition>,
     /// Applies to every `transform3d` channel together (field-wise easing of
     /// the composite-time 3D transform on a promoted layer — see
     /// [`crate::layer::transform3d`]). `perspective` snaps whenever either
@@ -106,6 +114,10 @@ impl Transition {
     /// The transition for the filter chain (explicit, else `all`).
     pub fn for_filter(&self) -> Option<&ChannelTransition> {
         self.filter.as_ref().or(self.all.as_ref())
+    }
+    /// The transition for the backdrop-filter chain (explicit, else `all`).
+    pub fn for_backdrop_filter(&self) -> Option<&ChannelTransition> {
+        self.backdrop_filter.as_ref().or(self.all.as_ref())
     }
     /// The transition for the transform3d channels (explicit, else `all`).
     pub fn for_transform3d(&self) -> Option<&ChannelTransition> {
@@ -244,6 +256,7 @@ pub struct TransitionState {
     max_width: ProgressChannel<Length>,
     max_height: ProgressChannel<Length>,
     filter: FilterChannel,
+    backdrop_filter: FilterChannel,
     transform3d: transform3d::Transform3dChannels,
     initialized: bool,
 }
@@ -252,7 +265,7 @@ pub struct TransitionState {
 /// [`crate::filters::ResolvedFilterChain`] packed params between wire targets
 /// (see [`crate::filters::plan_filter_ease`] for the strategy). Unlike the
 /// scalar channels, its current reading cannot be re-read from the component —
-/// [`crate::filters::resolve_filter_chains`] snaps the component to the new
+/// [`crate::filters::resolve_chains`] snaps the component to the new
 /// target on the retarget frame, before this system runs — so the state owns
 /// the last-written pass list (the `ProgressChannel` state-owned-current
 /// pattern, list-shaped).
@@ -284,7 +297,7 @@ impl FilterChannel {
     ///
     /// Three writers touch [`crate::filters::ResolvedFilterChain`]; precedence
     /// runs resolver → transition → bindings. On the retarget frame
-    /// [`crate::filters::resolve_filter_chains`] (ordered before
+    /// [`crate::filters::resolve_chains`] (ordered before
     /// [`drive_transitions`]) *snaps* the component to the new target; this
     /// method *eases* over that snap — starting from the state-owned
     /// `current`, the last value this channel wrote, never the
@@ -294,13 +307,16 @@ impl FilterChannel {
     /// pattern of the scalar channels, coarse: any filter binding parks the
     /// whole channel).
     ///
-    /// The target rides [`crate::filters::FilterInput`], NOT
-    /// [`TransitionInput`] — a filter-only delta dirties the FILTER|LAYER
-    /// groups, never TRANSITION, so a target stamped into the input would go
-    /// stale; `FilterInput` is re-stamped by that same delta.
+    /// The target rides the wire-chain component (`FilterInput` /
+    /// `BackdropInput` — the caller projects to the inner [`FilterChain`]),
+    /// NOT [`TransitionInput`] — a chain-only delta dirties the
+    /// FILTER/BACKDROP|LAYER groups, never TRANSITION, so a target stamped
+    /// into the input would go stale; the chain component is re-stamped by
+    /// that same delta. Both channel instances (filter, backdropFilter) run
+    /// this same code over their own component pair.
     fn drive(
         &mut self,
-        input: Option<&crate::filters::FilterInput>,
+        input: Option<&crate::filters::FilterChain>,
         mut resolved: Option<Mut<crate::filters::ResolvedFilterChain>>,
         spec: Option<&ChannelTransition>,
         registry: Option<&crate::filters::FilterRegistry>,
@@ -308,11 +324,11 @@ impl FilterChannel {
         dt: f32,
     ) -> bool {
         let retargeted = match input {
-            Some(fi) => fi.0 != self.wire,
+            Some(fi) => *fi != self.wire,
             None => !self.wire.0.is_empty(),
         };
         if retargeted {
-            let to_wire = input.map(|f| f.0.clone()).unwrap_or_default();
+            let to_wire = input.cloned().unwrap_or_default();
             let from_wire = std::mem::replace(&mut self.wire, to_wire);
             match (spec, resolved.as_deref()) {
                 // Ease only toward a live resolved chain. An emptied or
@@ -616,8 +632,14 @@ pub struct TransitionTargets {
     filter_input: Option<&'static crate::filters::FilterInput>,
     /// The resolved chain the filter channel writes eased packed params into
     /// (promoted roots only; snapped to the target by
-    /// `resolve_filter_chains`, ordered before this system).
+    /// `resolve_chains`, ordered before this system).
     resolved_filter: Option<&'static mut crate::filters::ResolvedFilterChain>,
+    /// The `backdropFilter` channel's target — same live-read rule as
+    /// [`Self::filter_input`].
+    backdrop_input: Option<&'static crate::filters::BackdropInput>,
+    /// The resolved backdrop chain the second filter-channel instance writes
+    /// into (projected to the inner chain via `Mut::map_unchanged`).
+    resolved_backdrop: Option<&'static mut crate::filters::ResolvedBackdropChain>,
     /// The composite-time 3D transform params on a promoted root; the eased
     /// value lands here and `sync_transform3d_matrices` (PostUpdate) turns
     /// the change into the matrix + composite-only dirt — no dirt push here.
@@ -684,6 +706,15 @@ pub fn drive_transitions(
                 .as_deref()
                 .map(|c| c.passes.clone())
                 .unwrap_or_default();
+            state.backdrop_filter.wire = targets
+                .backdrop_input
+                .map(|f| f.0.clone())
+                .unwrap_or_default();
+            state.backdrop_filter.current = targets
+                .resolved_backdrop
+                .as_deref()
+                .map(|c| c.0.passes.clone())
+                .unwrap_or_default();
             state
                 .transform3d
                 .init(&input.transform3d.unwrap_or_default());
@@ -704,6 +735,9 @@ pub fn drive_transitions(
         // an imperative writer into. The bindings then re-assert their params
         // on top of the resolver's snap every frame (`AnimationSet::Apply`).
         let skip_filter = targets.anim.is_some_and(|a| a.0.has_filter_params());
+        // Same coarse rule for the backdrop channel — independent of the
+        // content one (a `backdropFilter[…]` binding parks only backdrop).
+        let skip_backdrop = targets.anim.is_some_and(|a| a.0.has_backdrop_params());
         // Any `transform3d.<field>` binding parks the whole channel group,
         // like `filter` (the bindings rebuild the full params struct).
         let skip_transform3d = targets.anim.is_some_and(|a| a.0.has_transform3d());
@@ -878,9 +912,28 @@ pub fn drive_transitions(
         // contract). A write is composite-only dirt, like the resolver's.
         if !skip_filter
             && state.filter.drive(
-                targets.filter_input,
+                targets.filter_input.map(|f| &f.0),
                 targets.resolved_filter.as_mut().map(Mut::reborrow),
                 input.spec.for_filter(),
+                filter_registry.as_deref(),
+                assets.as_deref(),
+                dt,
+            )
+        {
+            dirt.composite_only.push(entity);
+        }
+
+        // Backdrop filter: the second instance of the same channel, over the
+        // backdrop component pair (targets projected to the shared inner
+        // types). A write is composite-only dirt like the content one.
+        if !skip_backdrop
+            && state.backdrop_filter.drive(
+                targets.backdrop_input.map(|f| &f.0),
+                targets
+                    .resolved_backdrop
+                    .as_mut()
+                    .map(|m| m.reborrow().map_unchanged(|b| &mut b.0)),
+                input.spec.for_backdrop_filter(),
                 filter_registry.as_deref(),
                 assets.as_deref(),
                 dt,

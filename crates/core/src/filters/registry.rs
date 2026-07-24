@@ -116,7 +116,7 @@ pub struct ResolvedFilterPass {
     /// Index of the originating [`FilterUse`](crate::filters::FilterUse) in
     /// the wire chain — blur's two expanded passes share one. Resolve fns
     /// always emit `0`; the chain resolve system
-    /// ([`resolve_filter_chains`](crate::filters::resolve_filter_chains))
+    /// ([`resolve_chains`](crate::filters::resolve_chains))
     /// rewrites it per chain position.
     ///
     /// **Rewrite rule:** chains longer than `u8::MAX` saturate — the
@@ -130,7 +130,7 @@ pub struct ResolvedFilterPass {
 /// Physical-px rewrite: `Length` slots are packed logical (the [`ParamSlot`]
 /// contract) — scale them for upload. Bounds are defended so a custom
 /// filter's bad layout can't panic here. Shared by
-/// [`resolve_filter_chains`](crate::filters::resolve_filter_chains) and the
+/// [`resolve_chains`](crate::filters::resolve_chains) and the
 /// transition padding
 /// ([`plan_filter_ease`](crate::filters::plan_filter_ease)) via
 /// [`stamp_and_push`].
@@ -207,7 +207,7 @@ impl NamedEntry for FilterRegistration {
 /// Known filters, keyed by wire name. Populated by
 /// [`register_builtin_filters`](crate::filters::register_builtin_filters);
 /// consumed by
-/// [`resolve_filter_chains`](crate::filters::resolve_filter_chains).
+/// [`resolve_chains`](crate::filters::resolve_chains).
 #[derive(Resource, Default)]
 pub struct FilterRegistry {
     pub(crate) entries: HashMap<&'static str, FilterRegistration>,

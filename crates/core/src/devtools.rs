@@ -423,6 +423,9 @@ struct DevtoolsLayerRow {
     /// live display-unit param values (see [`filter_entries`]). Empty for the
     /// base layer and for unfiltered layers.
     filters: Vec<DevtoolsFilterEntry>,
+    /// The layer's resolved `backdropFilter` chain, same shape and liveness
+    /// as [`Self::filters`] — the panel renders it as a second chain line.
+    backdrop_filters: Vec<DevtoolsFilterEntry>,
 }
 
 /// One wire filter in a layer's resolved chain: the wire name plus each
@@ -1244,6 +1247,9 @@ fn reason_labels(reasons: crate::layer::PromotionReasons) -> Vec<String> {
     if reasons.0 & crate::layer::PromotionReasons::TRANSFORM3D != 0 {
         out.push("transform3d".to_string());
     }
+    if reasons.0 & crate::layer::PromotionReasons::BACKDROP != 0 {
+        out.push("backdrop".to_string());
+    }
     if reasons.0 & crate::layer::PromotionReasons::FORCED != 0 {
         out.push("cache".to_string());
     }
@@ -1273,7 +1279,7 @@ fn round3(v: f32) -> f64 {
 /// `chain.scale` back to logical px, scalars and color components as-is.
 fn filter_entries(
     chain: &crate::filters::ResolvedFilterChain,
-    input: Option<&crate::filters::FilterInput>,
+    input: Option<&crate::filters::FilterChain>,
 ) -> Vec<DevtoolsFilterEntry> {
     use crate::animations::ValueKind;
     let scale = if chain.scale > 0.0 { chain.scale } else { 1.0 };
@@ -1289,7 +1295,7 @@ fn filter_entries(
         // positions line up). Defensive fallback — a mirror momentarily out
         // of step must not panic or mislabel: show the raw index.
         let name = input
-            .and_then(|i| i.0.0.get(pass.wire_index as usize))
+            .and_then(|i| i.0.get(pass.wire_index as usize))
             .map(|u| u.name.clone())
             .unwrap_or_else(|| format!("#{}", pass.wire_index));
         let params = pass
@@ -1344,7 +1350,7 @@ fn viewport_physical_size(
 /// repaint the panel with its own payload, whose layout change produces the
 /// next payload (the same self-observation loop [`emit_batch_stats`] guards
 /// against).
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments, clippy::type_complexity)]
 fn emit_layers(
     state: Res<DevtoolsState>,
     registry: Res<crate::layer::LayersRegistry>,
@@ -1356,6 +1362,8 @@ fn emit_layers(
     chains: Query<(
         Option<&crate::filters::ResolvedFilterChain>,
         Option<&crate::filters::FilterInput>,
+        Option<&crate::filters::ResolvedBackdropChain>,
+        Option<&crate::filters::BackdropInput>,
     )>,
     cameras: Query<&Camera, With<IsDefaultUiCamera>>,
     windows: Query<&Window>,
@@ -1400,6 +1408,7 @@ fn emit_layers(
         }),
         repaints: 0,
         filters: Vec::new(),
+        backdrop_filters: Vec::new(),
     });
     for meta in registry.layers.values() {
         if let Some(panel) = panel_entity
@@ -1419,10 +1428,18 @@ fn emit_layers(
         // The resolved chain + wire mirror live on the layer entity — read
         // them directly rather than mirroring them into `LayerMeta` (which
         // would duplicate live state the filter systems already maintain).
-        let filters = chains
+        let (filters, backdrop_filters) = chains
             .get(meta.entity)
-            .ok()
-            .and_then(|(chain, input)| chain.map(|c| filter_entries(c, input)))
+            .map(|(chain, input, bchain, binput)| {
+                (
+                    chain
+                        .map(|c| filter_entries(c, input.map(|i| &i.0)))
+                        .unwrap_or_default(),
+                    bchain
+                        .map(|c| filter_entries(&c.0, binput.map(|i| &i.0)))
+                        .unwrap_or_default(),
+                )
+            })
             .unwrap_or_default();
         rows.push(DevtoolsLayerRow {
             id: meta.node,
@@ -1442,6 +1459,7 @@ fn emit_layers(
             }),
             repaints: meta.repaints,
             filters,
+            backdrop_filters,
         });
     }
     // Deterministic order for the diff AND the panel's back-to-front paint:
@@ -1733,6 +1751,9 @@ mod tests {
             "filterUnknown",
             "filterBleed",
             "filterBinding",
+            "backdropFilterParams",
+            "backdropFilterUnknown",
+            "backdropFilterBinding",
             "scrollbar",
             "animatedStyle",
             "color",
@@ -1759,15 +1780,17 @@ mod tests {
         assert_eq!(labels(PromotionReasons::OPACITY), ["opacity"]);
         assert_eq!(labels(PromotionReasons::FILTER), ["filter"]);
         assert_eq!(labels(PromotionReasons::TRANSFORM3D), ["transform3d"]);
+        assert_eq!(labels(PromotionReasons::BACKDROP), ["backdrop"]);
         assert_eq!(labels(PromotionReasons::FORCED), ["cache"]);
         assert_eq!(
             labels(
                 PromotionReasons::OPACITY
                     | PromotionReasons::FILTER
                     | PromotionReasons::TRANSFORM3D
+                    | PromotionReasons::BACKDROP
                     | PromotionReasons::FORCED
             ),
-            ["opacity", "filter", "transform3d", "cache"]
+            ["opacity", "filter", "transform3d", "backdrop", "cache"]
         );
     }
 

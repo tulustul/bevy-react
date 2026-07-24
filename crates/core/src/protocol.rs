@@ -514,6 +514,16 @@ pub struct Style {
     /// and every variant, so the layer exists before the first hover.
     #[serde(default)]
     pub filter: Option<crate::filters::FilterChain>,
+    /// Layer-based `backdropFilter` chain — same wire shape as
+    /// [`filter`](Self::filter) (one `{ name, params }` or an ordered array,
+    /// validated against the same registry), but it filters what is rendered
+    /// *behind* the node (v1: the camera's post-processed 3D frame — no UI)
+    /// and draws the result as an opaque quad under the node's own content.
+    /// A non-empty chain promotes (presence union across base + variants,
+    /// like `filter`). Unsetting it demotes, so an eased removal needs an
+    /// identity entry left in the base chain (same snap rule as `filter`).
+    #[serde(default)]
+    pub backdrop_filter: Option<crate::filters::FilterChain>,
     /// Background gradient(s); one gradient or a layered list. bevy paints it
     /// *over* `backgroundColor` (CSS `background-image` semantics): an opaque
     /// gradient hides the color (fallback); transparent stops reveal it.
@@ -703,6 +713,12 @@ pub mod style_groups {
     /// transform on a promoted layer (`crate::layer::transform3d`). Never
     /// content dirt: matrix changes reshape the composite quad only.
     pub const TRANSFORM3D: u32 = 1 << 20;
+    /// The wire `backdropFilter` chain → `BackdropInput` (the backdrop chain
+    /// resolver's *and* the backdrop transition channel's target; see
+    /// `crate::filters::backdrop`). Composite-side only, like
+    /// [`Self::TRANSFORM3D`]: a backdrop delta re-stages the snapshot filter
+    /// run and reshapes nothing in the subtree — never content dirt.
+    pub const BACKDROP: u32 = 1 << 21;
 }
 
 /// The single source of truth for [`Style`]'s field list. Invokes the callback
@@ -773,6 +789,7 @@ macro_rules! with_style_fields {
             (outline, "outline", (OUTLINE), overlay),
             (box_shadow, "boxShadow", (BOX_SHADOW), overlay),
             (filter, "filter", (FILTER | LAYER), overlay),
+            (backdrop_filter, "backdropFilter", (BACKDROP | LAYER), overlay),
             (background_gradient, "backgroundGradient", (BG_GRADIENT), overlay),
             (border_gradient, "borderGradient", (BORDER_GRADIENT), overlay),
             (z_index, "zIndex", (Z_INDEX), overlay),
@@ -3125,6 +3142,39 @@ mod tests {
         assert!(dirty.hover_style);
         let hover = cached.hover_style.as_ref().expect("variant retained");
         assert!(hover.filter.is_some(), "variant carries the chain");
+    }
+
+    /// A `backdropFilter` delta dirties BACKDROP (the `BackdropInput`
+    /// re-stamp) and LAYER (the promotion trigger) — and never FILTER: the
+    /// two chains are independent channels. `styleUnset` re-fires the same
+    /// groups so the removal reaches the apply arm and the evaluator.
+    #[test]
+    fn backdrop_filter_delta_dirties_backdrop_and_layer() {
+        let mut cached = Props::default();
+        let (dirty, _) = cached.merge_delta(
+            props(serde_json::json!({ "style": { "backdropFilter": { "name": "blur" } } })),
+            &[],
+            &[],
+        );
+        assert!(dirty.style.intersects(style_groups::BACKDROP));
+        assert!(dirty.style.intersects(style_groups::LAYER));
+        assert!(!dirty.style.intersects(style_groups::FILTER));
+        assert!(
+            cached
+                .style
+                .as_ref()
+                .is_some_and(|s| s.backdrop_filter.is_some())
+        );
+
+        let (dirty, _) = cached.merge_delta(Props::default(), &[], &["backdropFilter".into()]);
+        assert!(dirty.style.intersects(style_groups::BACKDROP));
+        assert!(dirty.style.intersects(style_groups::LAYER));
+        assert!(
+            cached
+                .style
+                .as_ref()
+                .is_some_and(|s| s.backdrop_filter.is_none())
+        );
     }
 
     /// A `change` event serializes its new text as camelCase `value`, while the

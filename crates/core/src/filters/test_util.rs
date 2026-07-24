@@ -3,9 +3,10 @@
 use bevy::prelude::*;
 use bevy::shader::Shader;
 
+use super::backdrop::{BackdropInput, ResolvedBackdropChain};
 use super::builtin::register_builtin_filters;
 use super::registry::FilterRegistry;
-use super::resolve::resolve_filter_chains;
+use super::resolve::{FilterInput, ResolvedFilterChain, resolve_chains};
 use crate::bridge::JsBridge;
 use crate::layer::LayerContentDirt;
 use crate::protocol::{NodeId, Op, Outbound, Props};
@@ -122,9 +123,9 @@ fn op_app(manual_time: bool) -> (App, crossbeam_channel::Sender<Vec<Op>>) {
 }
 
 /// The smallest app that runs `apply_js_ops` → `evaluate_layer_promotions`
-/// → [`resolve_filter_chains`] in order: `layer.rs`'s op harness plus the
-/// `Shader` asset machinery of [`asset_app`] (real embedded handles) and
-/// the built-in filter registry.
+/// → [`resolve_chains`] (both instances) in order: `layer.rs`'s op harness
+/// plus the `Shader` asset machinery of [`asset_app`] (real embedded
+/// handles) and the built-in filter registry.
 pub(crate) fn resolve_app() -> (App, crossbeam_channel::Sender<Vec<Op>>) {
     let (mut app, ops_tx) = op_app(false);
     app.add_systems(
@@ -132,15 +133,19 @@ pub(crate) fn resolve_app() -> (App, crossbeam_channel::Sender<Vec<Op>>) {
         (
             crate::reconcile::apply_js_ops,
             crate::layer::evaluate_layer_promotions.after(crate::reconcile::apply_js_ops),
-            resolve_filter_chains.after(crate::layer::evaluate_layer_promotions),
+            (
+                resolve_chains::<FilterInput, ResolvedFilterChain>,
+                resolve_chains::<BackdropInput, ResolvedBackdropChain>,
+            )
+                .after(crate::layer::evaluate_layer_promotions),
         ),
     );
     (app, ops_tx)
 }
 
 /// [`resolve_app`] plus the transition engine: the interaction restyle
-/// (`apply_interaction_styles`, the last `FilterInput` writer) and
-/// `drive_transitions` run after [`resolve_filter_chains`]'s inputs in
+/// (`apply_interaction_styles`, the last chain-input writer) and
+/// `drive_transitions` run after [`resolve_chains`]'s inputs in
 /// the plugin's ordering, with `TimePlugin` disabled in favor of a
 /// manually advanced `Time` so eases step deterministically.
 pub(crate) fn ease_app() -> (App, crossbeam_channel::Sender<Vec<Op>>) {
@@ -152,15 +157,25 @@ pub(crate) fn ease_app() -> (App, crossbeam_channel::Sender<Vec<Op>>) {
             crate::layer::evaluate_layer_promotions.after(crate::reconcile::apply_js_ops),
             crate::reconcile::apply_interaction_styles
                 .after(crate::layer::evaluate_layer_promotions),
-            resolve_filter_chains.after(crate::reconcile::apply_interaction_styles),
-            crate::transition::drive_transitions.after(resolve_filter_chains),
+            (
+                resolve_chains::<FilterInput, ResolvedFilterChain>,
+                resolve_chains::<BackdropInput, ResolvedBackdropChain>,
+            )
+                .in_set(ResolveSet)
+                .after(crate::reconcile::apply_interaction_styles),
+            crate::transition::drive_transitions.after(ResolveSet),
         ),
     );
     (app, ops_tx)
 }
 
+/// Label for the resolver pair so downstream test systems can order after
+/// both instances at once.
+#[derive(bevy::ecs::schedule::SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) struct ResolveSet;
+
 /// [`ease_app`] plus the animations engine, `AnimationSet::Apply` ordered
-/// after [`resolve_filter_chains`] like the plugin does — the ops →
+/// after [`resolve_chains`] like the plugin does — the ops →
 /// promotion → resolve → per-param-binding-apply pipeline.
 pub(crate) fn anim_app() -> (
     App,
@@ -173,7 +188,7 @@ pub(crate) fn anim_app() -> (
     app.configure_sets(
         Update,
         crate::animations::AnimationSet::Apply
-            .after(resolve_filter_chains)
+            .after(ResolveSet)
             .after(crate::reconcile::apply_js_ops),
     );
     (app, ops_tx, anim_tx)

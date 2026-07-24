@@ -38,6 +38,7 @@ import { TransformDemo } from "./demos/styling/TransformDemo";
 import { Transform3dDemo } from "./demos/styling/Transform3dDemo";
 import { ShadowDemo } from "./demos/styling/ShadowDemo";
 import { FilterDemo } from "./demos/styling/FilterDemo";
+import { BackdropFilterDemo } from "./demos/styling/BackdropFilterDemo";
 import { CustomFiltersDemo } from "./demos/styling/CustomFiltersDemo";
 import { GradientsDemo } from "./demos/styling/GradientsDemo";
 import { OpacityDemo } from "./demos/styling/OpacityDemo";
@@ -102,6 +103,11 @@ export const DEMOS: DemoItem[] = [
       { label: "Transform 3D", component: Transform3dDemo },
       { label: "Shadow", component: ShadowDemo },
       { label: "Filter", component: FilterDemo },
+      {
+        label: "Backdrop filter",
+        scene: "CrowdedCubes",
+        component: BackdropFilterDemo,
+      },
       { label: "Custom filters", component: CustomFiltersDemo },
       { label: "Gradients", component: GradientsDemo },
       { label: "Opacity", component: OpacityDemo },

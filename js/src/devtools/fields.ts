@@ -77,6 +77,7 @@ export const STYLE_FIELDS: Record<string, FieldCategory> = {
   outline: "json",
   boxShadow: "json",
   filter: "json",
+  backdropFilter: "json",
   backgroundGradient: "json",
   borderGradient: "json",
   zIndex: "number",

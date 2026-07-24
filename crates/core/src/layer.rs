@@ -77,8 +77,12 @@ impl PromotionReasons {
     /// child-count and `groupAlpha` gates: the transform applies to the
     /// captured result, so a leaf is a valid layer.
     pub const TRANSFORM3D: u32 = 1 << 1;
-    // Reserved for future rules (one evaluator + one flag each):
-    // BACKDROP = 1 << 3.
+    /// Non-empty `backdropFilter` chain in the base style or any variant —
+    /// same presence-union, value-blind rules as [`Self::FILTER`], same
+    /// skipped gates (a leaf frosted region is valid). The chain filters the
+    /// frame *behind* the node; the layer exists so the composite pass has a
+    /// stacking position to draw the filtered backdrop quad at.
+    pub const BACKDROP: u32 = 1 << 3;
 
     pub fn is_empty(self) -> bool {
         self.0 == 0
@@ -122,6 +126,13 @@ pub struct LayerCaptureRect {
     pub min: Vec2,
     /// Capture texture size in whole texels.
     pub size: UVec2,
+    /// The applied quantized outset margin (physical px, per side) — the
+    /// max of the content and backdrop chains' outsets. Carried so the
+    /// render side can recover the un-inflated border box
+    /// (`min + outset .. min + size − outset`): the backdrop composite quad
+    /// must cover only the border box (frost never paints in the outset
+    /// ring), while its UVs map into the inflated snapshot.
+    pub outset: u32,
 }
 
 /// Which layer root each node under a promoted subtree belongs to
@@ -295,6 +306,16 @@ pub fn promotion_reasons(
     if transformed3d && !ineligible_element {
         reasons |= PromotionReasons::TRANSFORM3D;
     }
+    // A non-empty `backdropFilter` chain — same rules as FILTER (presence
+    // union across variants, value-blind, no child/`groupAlpha` gate: a leaf
+    // "frosted glass" region is valid; animated `backdropFilter[i].param`
+    // bindings do not join the union).
+    let backdrop = props
+        .all_styles()
+        .any(|s| s.backdrop_filter.as_ref().is_some_and(|c| !c.0.is_empty()));
+    if backdrop && !ineligible_element {
+        reasons |= PromotionReasons::BACKDROP;
+    }
     PromotionReasons(reasons)
 }
 
@@ -380,13 +401,15 @@ pub fn evaluate_layer_promotions(
                 );
             }
         } else if was_promoted {
-            // `ResolvedFilterChain` is promotion-scoped state; `FilterInput`
-            // is NOT removed here (it mirrors the style, not the promotion).
+            // The resolved chains are promotion-scoped state; `FilterInput`/
+            // `BackdropInput` are NOT removed here (they mirror the style,
+            // not the promotion).
             commands.entity(entity).remove::<(
                 PromotedLayer,
                 LayerGroupAlpha,
                 LayerCaptureRect,
                 crate::filters::ResolvedFilterChain,
+                crate::filters::ResolvedBackdropChain,
                 transform3d::LayerTransform3d,
                 transform3d::LayerTransform3dMatrix,
             )>();
@@ -429,6 +452,7 @@ pub fn sync_layer_geometry(
             &LayerGroupAlpha,
             Option<&crate::filters::ResolvedFilterChain>,
             Option<&crate::filters::FilterInput>,
+            Option<&crate::filters::ResolvedBackdropChain>,
         ),
         With<PromotedLayer>,
     >,
@@ -459,7 +483,7 @@ pub fn sync_layer_geometry(
     // first wire filter name — the warning `value` the devtools inspector
     // matches against the retained `filter` style row).
     let mut bleed_candidates: Vec<(Entity, NodeId, u32, String)> = Vec::new();
-    for (root, computed, transform, rnode, alpha, chain, filter_input) in &roots {
+    for (root, computed, transform, rnode, alpha, chain, filter_input, backdrop_chain) in &roots {
         let row = registry.layers.get_mut(&rnode.0);
         if let Some(row) = &row {
             debug_assert_eq!(row.entity, root);
@@ -481,6 +505,7 @@ pub fn sync_layer_geometry(
         let mut rect = LayerCaptureRect {
             min,
             size: UVec2::new(size.x.ceil() as u32, size.y.ceil() as u32),
+            outset: 0,
         };
         if rect.size.x == 0 || rect.size.y == 0 {
             if let Some(row) = row {
@@ -494,15 +519,27 @@ pub fn sync_layer_geometry(
         // `outset_px` every frame — coarse steps keep the capture size, and
         // with it the geometry hash (size is folded below) and the texture
         // allocation, stable within a step; crossing a step re-captures
-        // automatically.
-        let outset = chain.map_or(0, |c| crate::filters::quantize_outset(c.outset_px));
+        // automatically. The backdrop chain contributes too (its blur needs
+        // source pixels beyond the border box in the snapshot): one shared
+        // window, inflated by the max of both chains' outsets.
+        let content_outset = chain.map_or(0, |c| crate::filters::quantize_outset(c.outset_px));
+        let backdrop_outset =
+            backdrop_chain.map_or(0, |c| crate::filters::quantize_outset(c.0.outset_px));
+        let outset = content_outset.max(backdrop_outset);
         if outset > 0 {
             rect.min -= Vec2::splat(outset as f32);
             rect.size += UVec2::splat(2 * outset);
+            rect.outset = outset;
+        }
+        // Bleed candidacy stays keyed to the CONTENT chain only: a backdrop
+        // never bleeds into an enclosing capture (its snapshot is sampled
+        // from the frame, edge-clamped; the quad is clamped to the border
+        // box), so a backdrop-only outset must not warn.
+        if content_outset > 0 {
             let value = filter_input
                 .and_then(|i| i.0.0.first())
                 .map_or_else(|| "filter".to_owned(), |u| u.name.clone());
-            bleed_candidates.push((root, rnode.0, outset, value));
+            bleed_candidates.push((root, rnode.0, content_outset, value));
         }
         frame_rects.insert(root, rect);
         if existing_rects.get(root) != Ok(&rect) {
@@ -977,6 +1014,39 @@ mod tests {
             );
         }
         assert!(!promoted(&transformed, 0, true));
+
+        // A non-empty `backdropFilter` chain promotes — same rules as FILTER:
+        // even a leaf, value-blind, empty chain is a no-op, variant presence
+        // unions, and element eligibility still applies.
+        let backdrop =
+            props(serde_json::json!({ "style": { "backdropFilter": { "name": "blur" } } }));
+        assert_eq!(
+            promotion_reasons(&backdrop, 0, false).0,
+            PromotionReasons::BACKDROP
+        );
+        let empty_backdrop = props(serde_json::json!({ "style": { "backdropFilter": [] } }));
+        assert!(!promoted(&empty_backdrop, 1, false));
+        // Backdrop + content filter are independent bits.
+        let both_chains = props(serde_json::json!({
+            "style": { "backdropFilter": { "name": "blur" }, "filter": { "name": "sepia" } }
+        }));
+        assert_eq!(
+            promotion_reasons(&both_chains, 0, false).0,
+            PromotionReasons::BACKDROP | PromotionReasons::FILTER
+        );
+        for variant in ["hoverStyle", "pressStyle", "focusStyle"] {
+            let variant_backdrop = props(serde_json::json!({
+                "style": { "width": 10 },
+                (variant): { "backdropFilter": { "name": "blur" } },
+            }));
+            assert_eq!(
+                promotion_reasons(&variant_backdrop, 0, false).0,
+                PromotionReasons::BACKDROP,
+                "{variant}-only backdropFilter promotes eagerly"
+            );
+        }
+        assert!(!promoted(&backdrop, 0, true));
+
         // Absent → no bit; unset (style without the field) demotes.
         let plain = props(serde_json::json!({ "style": { "width": 10 } }));
         assert!(!promoted(&plain, 1, false));
@@ -1162,6 +1232,38 @@ mod tests {
 
         ops_tx
             .send(vec![update(1, serde_json::json!({}), &["filter"])])
+            .unwrap();
+        app.update();
+        assert!(app.world().get::<PromotedLayer>(e).is_none(), "demoted");
+        assert!(app.world().resource::<LayersRegistry>().layers.is_empty());
+    }
+
+    /// The BACKDROP lifecycle mirrors FILTER: a `backdropFilter` create
+    /// promotes with the BACKDROP reason (neutral group alpha, registry
+    /// entry), and `styleUnset` demotes and empties the registry.
+    #[test]
+    fn backdrop_promotion_lifecycle() {
+        let (mut app, ops_tx) = layer_app();
+        ops_tx
+            .send(vec![create(
+                1,
+                serde_json::json!({ "style": { "backdropFilter": { "name": "grayscale" } } }),
+            )])
+            .unwrap();
+        app.update();
+        let e = entity_of(&app, 1);
+        let promoted = app.world().get::<PromotedLayer>(e).expect("promoted");
+        assert_eq!(promoted.reasons.0, PromotionReasons::BACKDROP);
+        assert_eq!(
+            app.world().get::<LayerGroupAlpha>(e),
+            Some(&LayerGroupAlpha(1.0))
+        );
+        let registry = app.world().resource::<LayersRegistry>();
+        assert_eq!(registry.layers.len(), 1);
+        assert_eq!(registry.layers[&1].reasons.0, PromotionReasons::BACKDROP);
+
+        ops_tx
+            .send(vec![update(1, serde_json::json!({}), &["backdropFilter"])])
             .unwrap();
         app.update();
         assert!(app.world().get::<PromotedLayer>(e).is_none(), "demoted");
@@ -1445,6 +1547,17 @@ mod tests {
             });
     }
 
+    fn backdrop_outset(world: &mut World, e: Entity, outset_px: u32) {
+        world
+            .entity_mut(e)
+            .insert(crate::filters::ResolvedBackdropChain(
+                crate::filters::ResolvedFilterChain {
+                    outset_px,
+                    ..Default::default()
+                },
+            ));
+    }
+
     /// A filtered root's capture rect grows by the QUANTIZED outset on every
     /// side: min shifts by `-q`, size by `+2q` per axis (blur reads/writes
     /// beyond the border box, so capture and composite quad must both cover
@@ -1472,6 +1585,35 @@ mod tests {
         let rect = *world.get::<LayerCaptureRect>(big).expect("rect");
         assert_eq!(rect.min, base.min - Vec2::splat(64.0));
         assert_eq!(rect.size, base.size + UVec2::splat(128));
+    }
+
+    /// The backdrop chain's outset inflates the shared capture window too,
+    /// and when both chains carry one, the MAX wins (one window serves both);
+    /// the applied margin is recorded on `rect.outset` so the render side can
+    /// recover the un-inflated border box for the backdrop quad.
+    #[test]
+    fn backdrop_outset_inflates_rect_and_maxes_with_content() {
+        let (mut world, mut schedule) = geometry_world();
+        let size = Vec2::new(100.0, 60.0);
+        let center = Vec2::new(50.0, 30.0);
+        let plain = spawn_layer_root(&mut world, 1, size, center);
+        let frosted = spawn_layer_root(&mut world, 2, size, center);
+        backdrop_outset(&mut world, frosted, 12); // quantize → 16
+        let both = spawn_layer_root(&mut world, 3, size, center);
+        filter_outset(&mut world, both, 4); // quantize → 16
+        backdrop_outset(&mut world, both, 40); // quantize → 48, wins
+        schedule.run(&mut world);
+
+        let base = *world.get::<LayerCaptureRect>(plain).expect("baseline");
+        assert_eq!(base.outset, 0);
+        let rect = *world.get::<LayerCaptureRect>(frosted).expect("rect");
+        assert_eq!(rect.min, base.min - Vec2::splat(16.0));
+        assert_eq!(rect.size, base.size + UVec2::splat(32));
+        assert_eq!(rect.outset, 16);
+        let rect = *world.get::<LayerCaptureRect>(both).expect("rect");
+        assert_eq!(rect.min, base.min - Vec2::splat(48.0));
+        assert_eq!(rect.size, base.size + UVec2::splat(96));
+        assert_eq!(rect.outset, 48);
     }
 
     /// An outset change WITHIN one 16px quantize step keeps the rect — and

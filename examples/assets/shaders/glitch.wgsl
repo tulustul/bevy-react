@@ -1,6 +1,6 @@
 // Custom filter `glitch` (see `examples/demos/filters.rs`): broken-signal
 // horizontal slice offsets + RGB channel split, re-seeded a few times per
-// second from `uniforms.time`. Fully procedural (a sine-fract hash of slice
+// second from `uniforms.time`. Fully procedural (an integer PCG hash of slice
 // row x time step) — no noise textures. `time = true`, so it animates with
 // zero re-captures.
 //
@@ -16,9 +16,17 @@
 
 #import bevy_react::filter::{FullscreenVertexOutput, source_sampler, source_texture, uniforms}
 
-// Cheap stateless hash: seed -> [0, 1).
-fn hash(seed: f32) -> f32 {
-    return fract(sin(seed * 127.1) * 43758.5453);
+// Cheap stateless integer hash (PCG, Jarzynski & Olano): seed -> [0, 1).
+// Deliberately NOT `fract(sin(x) * 43758.5453)`: the seed grows with
+// `uniforms.time` without bound, and drivers range-reduce `sin` as
+// `hw_sin(fract(x / 2pi))` in f32 — once `x / 2pi` passes 2^21 (~2.5 min of
+// runtime here) that fract quantizes to quarters, sin collapses to {0, +-1},
+// and every hash lands below the gate threshold: the glitch freezes forever.
+// Integer ops are exact at any uptime.
+fn hash(seed: u32) -> f32 {
+    let state = seed * 747796405u + 2891336453u;
+    let word = ((state >> ((state >> 28u) + 4u)) ^ state) * 277803737u;
+    return f32((word >> 22u) ^ word) / 4294967296.0;
 }
 
 // How often the corruption pattern re-rolls, in Hz.
@@ -38,14 +46,16 @@ const SPLIT_GATED_BOOST: f32 = 5.0;
 fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     let intensity = uniforms.params[0].x;
 
-    // Quantize time so each corruption pattern holds for a moment.
-    let seed = floor(uniforms.time * RESEED_HZ) * 57.0;
-    let slice = floor(in.uv.y * SLICES);
+    // Quantize time so each corruption pattern holds for a moment. `* 97u`
+    // keeps (slice, reseed) pairs collision-free (97 > SLICES); the large odd
+    // offset picks an unrelated hash stream for the shift amount.
+    let reseed = u32(floor(uniforms.time * RESEED_HZ));
+    let slice = u32(floor(in.uv.y * SLICES));
 
-    // Per-slice, per-seed: does this slice glitch, and by how much? More
+    // Per-slice, per-reseed: does this slice glitch, and by how much? More
     // intensity gates more slices in and shifts them further.
-    let gate = step(1.0 - MAX_GATED * intensity, hash(slice * 7.31 + seed));
-    let shift = (hash(slice + seed) * 2.0 - 1.0) * gate * intensity * MAX_SHIFT;
+    let gate = step(1.0 - MAX_GATED * intensity, hash(slice + reseed * 97u));
+    let shift = (hash(slice + reseed * 97u + 1469598103u) * 2.0 - 1.0) * gate * intensity * MAX_SHIFT;
     let uv = vec2<f32>(in.uv.x + shift, in.uv.y);
 
     let split = vec2<f32>(

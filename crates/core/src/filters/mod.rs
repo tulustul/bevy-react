@@ -23,7 +23,7 @@
 //! registered with `add_react_filter`.
 //!
 //! The module also owns the runtime write path of a chain.
-//! [`resolve_filter_chains`] turns a promoted root's [`FilterInput`] into a
+//! [`resolve_chains`] turns a promoted root's [`FilterInput`] into a
 //! [`ResolvedFilterChain`] component — resolving each entry against the
 //! registry (invalid entries skip with a `filterParams` warning), rewriting
 //! `Length` slots to physical px, stamping [`ResolvedFilterPass::wire_index`],
@@ -44,6 +44,7 @@
 //! `resolve` (the chain resolve system). Submodules are private; everything
 //! is re-exported here, so `crate::filters::X` is the one path.
 
+mod backdrop;
 mod builtin;
 mod params;
 mod registry;
@@ -56,6 +57,7 @@ mod macro_tests;
 #[cfg(test)]
 pub(crate) mod test_util;
 
+pub use backdrop::{BackdropInput, ResolvedBackdropChain};
 pub use builtin::{
     BloomParams, BlurParams, BrightnessParams, ChromaticAberrationParams, ContrastParams,
     GrayscaleParams, HueRotateParams, InvertParams, SaturateParams, SepiaParams,
@@ -68,6 +70,8 @@ pub use params::{
 pub use registry::{
     FilterRegistration, FilterRegistry, ReactFilter, ResolvedFilterPass, resolve_single_pass,
 };
-pub use resolve::{FilterInput, ResolvedFilterChain, quantize_outset, resolve_filter_chains};
+pub use resolve::{
+    ChainInput, FilterInput, ResolvedChain, ResolvedFilterChain, quantize_outset, resolve_chains,
+};
 pub(crate) use transition::{FilterEase, plan_filter_ease};
 pub use wire::{FilterChain, FilterUse, MAX_CHAIN_LEN};

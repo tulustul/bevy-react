@@ -130,7 +130,7 @@ impl FilterEase {
 ///
 /// `start` is the transition state's own current pass list — the engine owns
 /// its current value, since
-/// [`resolve_filter_chains`](crate::filters::resolve_filter_chains) already
+/// [`resolve_chains`](crate::filters::resolve_chains) already
 /// snapped the component to the target this frame — and `target` is that
 /// freshly snapped resolver output. `scale` is the resolved chain's
 /// physical-px factor, applied to padding passes exactly like the resolver's

@@ -277,8 +277,11 @@ struct AnimTargets {
     layer_alpha: Option<&'static mut crate::layer::LayerGroupAlpha>,
     /// The packed filter passes per-param `filter[<i>].<param>` bindings write
     /// into. Promoted-root-only by construction: the chain only exists on
-    /// promoted roots (`crate::filters::resolve_filter_chains`).
+    /// promoted roots (`crate::filters::resolve_chains`).
     resolved_filter: Option<&'static mut crate::filters::ResolvedFilterChain>,
+    /// The backdrop analog: `backdropFilter[<i>].<param>` bindings write into
+    /// this chain (projected to the shared inner type at the call site).
+    resolved_backdrop: Option<&'static mut crate::filters::ResolvedBackdropChain>,
     /// Reconciler identity, for attributing `filterBinding` validation
     /// warnings to the node's devtools inspector.
     rnode: Option<&'static crate::bridge::RNode>,
@@ -288,6 +291,7 @@ struct AnimTargets {
     transform3d: Option<&'static mut crate::layer::transform3d::LayerTransform3d>,
 }
 
+#[allow(clippy::type_complexity)]
 fn apply_animated_nodes(
     mut commands: Commands,
     values: Res<SharedValues>,
@@ -298,7 +302,7 @@ fn apply_animated_nodes(
     // re-resolves — never per frame: stage 4's own version bump (an actively
     // animating valid binding) is stamped back after the apply so it never
     // reads as a re-resolve.
-    mut validated: Local<HashMap<Entity, Option<u32>>>,
+    mut validated: Local<HashMap<Entity, (Option<u32>, Option<u32>)>>,
     mut query: Query<(Entity, Ref<AnimatedNode>, AnimTargets)>,
 ) {
     use AnimatableProperty as P;
@@ -546,35 +550,63 @@ fn apply_animated_nodes(
         // Compare-before-write; a real change bumps `version` once and
         // pushes composite-only dirt — the capture holds unfiltered content,
         // so `dirt.nodes` is never touched. Because this runs every frame
-        // after `resolve_filter_chains`, a style delta that rebuilt the chain
+        // after `resolve_chains`, a style delta that rebuilt the chain
         // mid-animation is re-asserted the same frame. While any such binding
         // exists the whole-value `filter` transition channel is parked
         // (`skip_filter` in `transition.rs`'s `drive_transitions`), so this
         // stage and that ease never interleave on one node.
-        if b.has_filter_params() {
+        let has_filter = b.has_filter_params();
+        let has_backdrop = b.has_backdrop_params();
+        if has_filter || has_backdrop {
             filter_bound.push(entity);
             // Bind-time validation gate: warn when the bindings restamped
             // (`Ref` change tick — `apply_animated` re-inserts on prop
-            // updates) or the chain re-resolved/appeared/vanished.
-            let pre = t.resolved_filter.as_ref().map(|c| c.version);
-            let validate = anim.is_changed() || validated.get(&entity) != Some(&pre);
-            apply_filter_params(
-                entity,
-                b,
-                &values,
-                t.resolved_filter.as_mut(),
-                t.rnode,
-                validate,
-                &mut dirt,
+            // updates) or either chain re-resolved/appeared/vanished. One
+            // shared gate for both channels: the version pair is the key.
+            let pre = (
+                t.resolved_filter.as_ref().map(|c| c.version),
+                t.resolved_backdrop.as_ref().map(|c| c.0.version),
             );
-            // Stamp the POST-write version: the apply above bumps `version`
-            // itself on a changed frame, and stamping the pre-write value
+            let validate = anim.is_changed() || validated.get(&entity) != Some(&pre);
+            if has_filter {
+                apply_filter_params(
+                    entity,
+                    b,
+                    &values,
+                    t.resolved_filter.as_mut(),
+                    t.rnode,
+                    validate,
+                    &mut dirt,
+                    false,
+                );
+            }
+            if has_backdrop {
+                let mut backdrop = t
+                    .resolved_backdrop
+                    .as_mut()
+                    .map(|m| m.reborrow().map_unchanged(|b| &mut b.0));
+                apply_filter_params(
+                    entity,
+                    b,
+                    &values,
+                    backdrop.as_mut(),
+                    t.rnode,
+                    validate,
+                    &mut dirt,
+                    true,
+                );
+            }
+            // Stamp the POST-write versions: the applies above bump `version`
+            // themselves on a changed frame, and stamping the pre-write value
             // would make that bump look like a re-resolve next frame —
             // re-warning invalid bindings every animated frame. A real
             // re-resolve (the resolver runs before this stage) still lands
             // between this read and the next frame's `pre`, so it mismatches
             // and re-validates.
-            let post = t.resolved_filter.as_ref().map(|c| c.version);
+            let post = (
+                t.resolved_filter.as_ref().map(|c| c.version),
+                t.resolved_backdrop.as_ref().map(|c| c.0.version),
+            );
             if validate || post != pre {
                 validated.insert(entity, post);
             }
@@ -589,8 +621,12 @@ fn apply_animated_nodes(
 }
 
 /// Stage 4's body: validate (when `validate`) and apply every
-/// [`AnimatableProperty::FilterParam`] binding of one node against its
-/// resolved chain. See the call site for the unit/routing/dirt contract.
+/// [`AnimatableProperty::FilterParam`] (or, with `backdrop`,
+/// [`AnimatableProperty::BackdropParam`]) binding of one node against the
+/// matching resolved chain. See the call site for the unit/routing/dirt
+/// contract — identical for both channels; only the addressed chain, the
+/// wire-key prefix, and the warn kind differ.
+#[allow(clippy::too_many_arguments)]
 fn apply_filter_params(
     entity: Entity,
     bindings: &AnimatedBindings,
@@ -599,28 +635,44 @@ fn apply_filter_params(
     rnode: Option<&crate::bridge::RNode>,
     validate: bool,
     dirt: &mut crate::layer::LayerContentDirt,
+    backdrop: bool,
 ) {
+    let (prefix, kind, style_field) = if backdrop {
+        ("backdropFilter", "backdropFilterBinding", "backdropFilter")
+    } else {
+        ("filter", "filterBinding", "filter")
+    };
+    // The channel's bound params: `FilterParam` rows for the content chain,
+    // `BackdropParam` rows for the backdrop one.
+    fn channel_param(property: &AnimatableProperty, backdrop: bool) -> Option<(u8, &String)> {
+        match (property, backdrop) {
+            (AnimatableProperty::FilterParam { index, name }, false)
+            | (AnimatableProperty::BackdropParam { index, name }, true) => Some((*index, name)),
+            _ => None,
+        }
+    }
     // Attribute validation warnings to the node's devtools inspector.
     let _diag = rnode.map(|r| crate::diag::node_scope(r.0));
     // Lazy on purpose: `make` (which allocates the key + message) runs only
     // when a warning actually fires, so the per-bound-param per-frame path
     // stays allocation-free in every build.
-    fn warn(validate: bool, make: impl FnOnce() -> (String, String)) {
+    let warn = |validate: bool, make: &dyn Fn() -> (String, String)| {
         if validate {
             let (key, msg) = make();
-            crate::diag::report("filterBinding", &key, &msg);
+            crate::diag::report(kind, &key, &msg);
         }
-    }
+    };
 
     let Some(chain) = chain else {
         for (property, _) in bindings.iter() {
-            if let AnimatableProperty::FilterParam { index, name } = property {
-                warn(validate, || {
+            if let Some((index, name)) = channel_param(property, backdrop) {
+                warn(validate, &|| {
                     (
-                        format!("filter[{index}].{name}"),
+                        format!("{prefix}[{index}].{name}"),
                         format!(
-                            "animatedStyle filter[{index}].{name}: the node has no resolved \
-                             filter chain to drive (no valid `filter` style) — binding ignored"
+                            "animatedStyle {prefix}[{index}].{name}: the node has no resolved \
+                             {prefix} chain to drive (no valid `{style_field}` style) — \
+                             binding ignored"
                         ),
                     )
                 });
@@ -636,7 +688,7 @@ fn apply_filter_params(
     {
         let chain: &crate::filters::ResolvedFilterChain = chain;
         for (property, binding) in bindings.iter() {
-            let AnimatableProperty::FilterParam { index, name } = property else {
+            let Some((index, name)) = channel_param(property, backdrop) else {
                 continue;
             };
             // The slot metadata from the first matching pass — passes sharing
@@ -644,22 +696,22 @@ fn apply_filter_params(
             let slot = chain
                 .passes
                 .iter()
-                .filter(|p| p.wire_index == *index)
+                .filter(|p| p.wire_index == index)
                 .find_map(|p| p.layout.iter().find(|s| s.name == name.as_str()).copied());
             let Some(slot) = slot else {
-                if chain.passes.iter().any(|p| p.wire_index == *index) {
-                    warn(validate, || {
-                        let key = format!("filter[{index}].{name}");
+                if chain.passes.iter().any(|p| p.wire_index == index) {
+                    warn(validate, &|| {
+                        let key = format!("{prefix}[{index}].{name}");
                         let msg = format!(
                             "{key}: chain entry {index} has no param {name:?} — binding ignored"
                         );
                         (key, msg)
                     });
                 } else {
-                    warn(validate, || {
-                        let key = format!("filter[{index}].{name}");
+                    warn(validate, &|| {
+                        let key = format!("{prefix}[{index}].{name}");
                         let msg = format!(
-                            "{key}: the resolved filter chain has no entry at index {index} — \
+                            "{key}: the resolved {prefix} chain has no entry at index {index} — \
                              binding ignored"
                         );
                         (key, msg)
@@ -680,8 +732,8 @@ fn apply_filter_params(
                         // missing shared value is transient and stays silent
                         // (every stage skips it).
                         if !matches!(binding, Binding::InterpolateColor { .. }) {
-                            warn(validate, || {
-                                let key = format!("filter[{index}].{name}");
+                            warn(validate, &|| {
+                                let key = format!("{prefix}[{index}].{name}");
                                 let msg = format!(
                                     "{key}: param {name:?} is a color — bind an \
                                      interpolateColor, not a scalar value"
@@ -696,8 +748,8 @@ fn apply_filter_params(
                     // Multi-component non-color slots (direction vectors …)
                     // are not addressable per-param in v1 — a scalar splat
                     // would be wrong for them.
-                    warn(validate, || {
-                        let key = format!("filter[{index}].{name}");
+                    warn(validate, &|| {
+                        let key = format!("{prefix}[{index}].{name}");
                         let msg = format!(
                             "{key}: param {name:?} spans {} components — multi-component \
                              params are not animatable per-param",
@@ -717,8 +769,8 @@ fn apply_filter_params(
                     }),
                     None => {
                         if matches!(binding, Binding::InterpolateColor { .. }) {
-                            warn(validate, || {
-                                let key = format!("filter[{index}].{name}");
+                            warn(validate, &|| {
+                                let key = format!("{prefix}[{index}].{name}");
                                 let msg = format!(
                                     "{key}: param {name:?} is a scalar — an \
                                      interpolateColor binding cannot drive it"
@@ -733,7 +785,7 @@ fn apply_filter_params(
             // Route to every pass at this wire position, defending bounds
             // like the resolver's physical-px rewrite.
             for (pi, pass) in chain.passes.iter().enumerate() {
-                if pass.wire_index != *index {
+                if pass.wire_index != index {
                     continue;
                 }
                 let Some(slot) = pass.layout.iter().find(|s| s.name == name.as_str()) else {

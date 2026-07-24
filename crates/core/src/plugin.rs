@@ -191,6 +191,7 @@ pub(crate) fn register_layer_shader_assets(app: &mut App) {
     bevy::shader::load_shader_library!(app, "layer/filter_prelude.wgsl");
     embedded_asset!(app, "layer/composite.wgsl");
     embedded_asset!(app, "layer/render/mip_blit.wgsl");
+    embedded_asset!(app, "layer/render/backdrop_blit.wgsl");
     embedded_asset!(app, "filters/builtin/color_matrix.wgsl");
     embedded_asset!(app, "filters/builtin/blur.wgsl");
     embedded_asset!(app, "filters/builtin/bloom.wgsl");
@@ -233,6 +234,8 @@ impl Plugin for ReactUiPlugin {
                     .init_gpu_resource::<lr::LayerFilterMeta>()
                     .init_gpu_resource::<SpecializedRenderPipelines<lr::mips::LayerBlitPipeline>>()
                     .init_gpu_resource::<lr::mips::LayerMipMeta>()
+                    .init_gpu_resource::<SpecializedRenderPipelines<lr::backdrop::BackdropBlitPipeline>>()
+                    .init_gpu_resource::<lr::backdrop::BackdropMeta>()
                     .add_render_command::<TransparentUi, lr::DrawLayerComposite>()
                     .add_systems(
                         RenderStartup,
@@ -240,6 +243,7 @@ impl Plugin for ReactUiPlugin {
                             lr::init_layer_composite_pipeline,
                             lr::init_layer_filter_pipeline,
                             lr::mips::init_layer_blit_pipeline,
+                            lr::backdrop::init_backdrop_blit_pipeline,
                         ),
                     )
                     .init_resource::<lr::clip::SwappedClips>()
@@ -296,6 +300,13 @@ impl Plugin for ReactUiPlugin {
                             // replays the staged runs after each layer's
                             // capture.
                             lr::prepare_layer_filters
+                                .in_set(RenderSystems::PrepareBindGroups)
+                                .after(lr::prepare_layer_textures)
+                                .before(lr::prepare_layer_composites),
+                            // Backdrop staging: snapshot blit + a second
+                            // filter run per backdrop layer; the composite
+                            // gate reads its `output_valid`.
+                            lr::backdrop::prepare_layer_backdrops
                                 .in_set(RenderSystems::PrepareBindGroups)
                                 .after(lr::prepare_layer_textures)
                                 .before(lr::prepare_layer_composites),
@@ -598,16 +609,26 @@ impl Plugin for ReactUiPlugin {
                     .before(crate::reconcile::collect_pointer_events),
             ),
         );
-        // Resolve each promoted root's wire `filter` chain into packed render
-        // passes (see `crate::filters::resolve_filter_chains`). After the
-        // interaction restyle — the last `FilterInput` writer this frame (and,
-        // transitively, after the promotion evaluator, so `Added<PromotedLayer>`
-        // is visible) — and before the transition/animation appliers so future
-        // filter-param animation writes onto an already-resolved chain. Its own
-        // `add_systems` call — the Update tuple above is at the arity cap.
+        // Resolve each promoted root's wire `filter` and `backdropFilter`
+        // chains into packed render passes — the two instances of
+        // `crate::filters::resolve_chains`. After the interaction restyle —
+        // the last input writer this frame (and, transitively, after the
+        // promotion evaluator, so `Added<PromotedLayer>` is visible) — and
+        // before the transition/animation appliers so filter-param writes
+        // land on an already-resolved chain. Its own `add_systems` call — the
+        // Update tuple above is at the arity cap.
         app.add_systems(
             Update,
-            crate::filters::resolve_filter_chains
+            (
+                crate::filters::resolve_chains::<
+                    crate::filters::FilterInput,
+                    crate::filters::ResolvedFilterChain,
+                >,
+                crate::filters::resolve_chains::<
+                    crate::filters::BackdropInput,
+                    crate::filters::ResolvedBackdropChain,
+                >,
+            )
                 .after(apply_interaction_styles)
                 .before(crate::transition::drive_transitions)
                 .before(AnimationSet::Apply),

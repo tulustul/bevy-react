@@ -525,7 +525,6 @@ function CyberpunkDemo() {
     <node
       style={{
         flexDirection: "column",
-        gap: 10,
         transform3d: { rotateY: -30, rotateX: 10, perspective: 300 },
         filter: [
           {
@@ -559,7 +558,24 @@ function CyberpunkKeybinding({
 }) {
   const keyFontSize = 18 - keybinding.length * 2;
   return (
-    <node style={{ gap: 10, alignItems: "center", justifyContent: "flexEnd" }}>
+    <node
+      style={{
+        gap: 10,
+        padding: 5,
+        alignItems: "center",
+        justifyContent: "flexEnd",
+        transform: { scale: 1.0 },
+        backgroundColor: Colors.transparent,
+        transition: {
+          transform: { duration: 200, easing: "easeInOut" },
+          backgroundColor: { duration: 200, easing: "easeInOut" },
+        },
+      }}
+      hoverStyle={{
+        transform: { scale: 1.1 },
+        backgroundColor: Colors.surface100,
+      }}
+    >
       <text style={{ color: Colors.red100 }}>{label}</text>
       <text
         style={{

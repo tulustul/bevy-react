@@ -141,6 +141,10 @@ export type AnimatableProperty =
   // inert). Values use the param's wire unit: logical px for lengths, degrees
   // for angles, raw scalars; color params take an `interpolateColor` binding.
   | `filter[${number}].${string}`
+  // The backdrop analog: one named param of the node's `backdropFilter` chain
+  // (`backdropFilter[0].radius`). Same loose typing, units, and Rust-side
+  // validation (`backdropFilterBinding` warnings).
+  | `backdropFilter[${number}].${string}`
   // One field of the node's `transform3d` style (a composited-layer 3D
   // transform, composite-time — animating it never re-captures). Loose typing
   // like `filter[…]` — unknown field names are skipped Rust-side. Values use
