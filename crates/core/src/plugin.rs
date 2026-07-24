@@ -46,13 +46,22 @@ pub struct PointerCapture {
     /// The pointer is over an interactive UI element (its `Interaction` is
     /// `Hovered` or `Pressed`).
     pub over_ui: bool,
+    /// The UI consumed this frame's wheel input: a scroll container actually
+    /// moved, an `onWheel` listener claimed the delta, or an overlay (devtools
+    /// pick mode) owns the pointer. Unlike `over_ui`, merely hovering
+    /// interactive UI does not set this — a world wheel-consumer (a zoom
+    /// camera) can gate on it alone to keep zooming over pass-through elements.
+    pub wheel_captured: bool,
 }
 
 impl PointerCapture {
     /// The UI owns the current pointer input; world systems should ignore the
-    /// mouse. True while dragging a UI element or while over interactive UI.
+    /// mouse. True while dragging a UI element, while over interactive UI, or
+    /// when the UI consumed this frame's wheel. Coarse by design — consumers
+    /// wanting finer behavior (e.g. a camera that zooms over pass-through UI)
+    /// read the individual fields instead.
     pub fn is_captured(&self) -> bool {
-        self.dragging || self.over_ui
+        self.dragging || self.over_ui || self.wheel_captured
     }
 }
 
@@ -859,4 +868,38 @@ fn setup(
 
     let ops_rx = channels.ops_rx.take().expect("setup runs once");
     commands.insert_resource(JsBridge::new(ops_rx, channels.outbound_tx.clone(), root));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `is_captured` must cover every capture channel: a UI drag, hovering
+    /// interactive UI, and a UI-consumed wheel each count as "the UI owns the
+    /// pointer" for consumers that don't need finer grain.
+    #[test]
+    fn is_captured_covers_all_channels() {
+        assert!(!PointerCapture::default().is_captured());
+        assert!(
+            PointerCapture {
+                dragging: true,
+                ..default()
+            }
+            .is_captured()
+        );
+        assert!(
+            PointerCapture {
+                over_ui: true,
+                ..default()
+            }
+            .is_captured()
+        );
+        assert!(
+            PointerCapture {
+                wheel_captured: true,
+                ..default()
+            }
+            .is_captured()
+        );
+    }
 }

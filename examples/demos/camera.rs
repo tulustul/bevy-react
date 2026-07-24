@@ -88,6 +88,22 @@ impl Default for CameraRig {
     }
 }
 
+/// The grab latch: whether the camera owns the left-button gesture after this
+/// frame. A grab begins only on the press frame, and only when the UI doesn't
+/// own the pointer (`captured` — a UI drag, or hovering interactive UI); once
+/// latched it survives the cursor crossing UI mid-drag, and only releasing the
+/// button ends it. A press that landed on UI stays ungrabbed for its whole
+/// gesture, even if the cursor later leaves the UI while held.
+fn update_grab(prev: bool, just_pressed: bool, pressed: bool, captured: bool) -> bool {
+    if !pressed {
+        false
+    } else if just_pressed {
+        !captured
+    } else {
+        prev
+    }
+}
+
 /// The shared camera controller, run in every demo: the camera orbits the origin
 /// automatically, the user can grab the orbit with left-drag (auto-orbit resumes
 /// from the current angle on release), and the mouse wheel zooms within
@@ -102,15 +118,22 @@ fn orbit_camera(
     capture: Res<bevy_react::PointerCapture>,
     state: Res<State<Scene>>,
     mut rig: ResMut<CameraRig>,
+    mut grabbed: Local<bool>,
     // Exclude the offscreen portal cameras (the follow/minimap render-target cams)
     // so only the shared main camera orbits.
     mut cam: Query<&mut Transform, (With<Camera3d>, Without<bevy_react::PortalCamera>)>,
 ) {
-    // When the React UI owns the pointer (a drag, or hovering/pressing UI), don't
-    // let the same mouse input drive the camera too.
-    let captured = capture.is_captured();
+    // A grab starts only on a press over non-interactive ground (the UI neither
+    // dragging nor hovered); once latched it keeps rotating across UI until the
+    // button is released.
+    *grabbed = update_grab(
+        *grabbed,
+        buttons.just_pressed(MouseButton::Left),
+        buttons.pressed(MouseButton::Left),
+        capture.is_captured(),
+    );
 
-    if buttons.pressed(MouseButton::Left) && !captured {
+    if *grabbed {
         rig.yaw += motion.delta.x * MOUSE_SENS;
         rig.pitch = (rig.pitch + motion.delta.y * MOUSE_SENS).clamp(-1.4, 1.4);
     } else if *state.get() != Scene::Surface {
@@ -126,7 +149,10 @@ fn orbit_camera(
         MouseScrollUnit::Line => scroll.delta.y,
         MouseScrollUnit::Pixel => scroll.delta.y / PIXELS_PER_NOTCH,
     };
-    if notches != 0.0 && !captured {
+    // Zoom anywhere the UI didn't actually consume the wheel: hovering clickable
+    // (pass-through) elements doesn't trap it — only a scrolled container, an
+    // `onWheel` node, devtools pick mode, or an active UI drag does.
+    if notches != 0.0 && !capture.dragging && !capture.wheel_captured {
         rig.radius = (rig.radius - notches * ZOOM_SENS).clamp(MIN_RADIUS, MAX_RADIUS);
     }
 
@@ -146,6 +172,35 @@ fn orbit_camera(
     for mut transform in &mut cam {
         transform.translation = target + pos;
         transform.look_at(target, Vec3::Y);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The grab latch: a left press on free ground (not captured) begins a camera
+    /// grab; a press that lands on captured UI never does — not even if the
+    /// cursor later leaves the UI while still held.
+    #[test]
+    fn grab_begins_only_on_uncaptured_press() {
+        // just_pressed on free ground → grab.
+        assert!(update_grab(false, true, true, false));
+        // just_pressed while the UI owns the pointer → no grab…
+        assert!(!update_grab(false, true, true, true));
+        // …and the gesture stays ungrabbed when the cursor leaves the UI mid-hold.
+        assert!(!update_grab(false, false, true, false));
+    }
+
+    /// An in-progress grab persists across UI: once latched, crossing captured
+    /// UI mid-drag must not release it; only releasing the button does.
+    #[test]
+    fn grab_persists_over_ui_until_release() {
+        // Held over captured UI: the latch holds.
+        assert!(update_grab(true, false, true, true));
+        // Button released: the latch drops, captured or not.
+        assert!(!update_grab(true, false, false, false));
+        assert!(!update_grab(true, false, false, true));
     }
 }
 

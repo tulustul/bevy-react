@@ -4,7 +4,7 @@
 
 use bevy::picking::events::{Click, Pointer};
 use bevy::picking::pointer::{PointerButton, PointerId};
-use bevy::platform::collections::HashSet;
+use bevy::platform::collections::HashMap;
 use bevy::prelude::*;
 use bevy::ui::RelativeCursorPosition;
 use bevy::ui::{ComputedNode, ScrollPosition, UiGlobalTransform};
@@ -31,10 +31,14 @@ pub fn collect_ui_events(
     targets: Query<&RNode, With<Interaction>>,
     child_of: Query<&ChildOf>,
 ) {
-    // One gesture fans out to every entity in the pointer's hover map (a button
-    // AND its pass-through label); climbing resolves them to the same owner, so
-    // dedupe per (pointer, owner) within the frame.
-    let mut seen: HashSet<(PointerId, Entity)> = HashSet::new();
+    // One gesture fans out to every entity in the pointer's hover map (a
+    // pass-through node stacks the whole ancestor chain under the cursor).
+    // Clicks do NOT bubble: per pointer, only the topmost resolving hit — the
+    // one with the smallest `HitData.depth` (bevy_ui's backend assigns 0.0 to
+    // the topmost node, +ε per node beneath) — owns the click. Depth, not
+    // arrival order, decides: the hover map is a HashMap, so message order
+    // carries no meaning.
+    let mut topmost: HashMap<PointerId, (f32, Entity)> = HashMap::new();
     for ev in clicks.read() {
         if ev.button != PointerButton::Primary {
             continue;
@@ -47,10 +51,20 @@ pub fn collect_ui_events(
         }
         // Resolve the picked leaf (often a text span) to the nearest interactive
         // ancestor, so a click on a button's label still fires the button.
-        if let Some(target) = climb(ev.entity, &child_of, |e| targets.contains(e))
-            && seen.insert((ev.pointer_id, target))
-            && let Ok(rnode) = targets.get(target)
-        {
+        if let Some(target) = climb(ev.entity, &child_of, |e| targets.contains(e)) {
+            let candidate = (ev.hit.depth, target);
+            topmost
+                .entry(ev.pointer_id)
+                .and_modify(|best| {
+                    if candidate.0 < best.0 {
+                        *best = candidate;
+                    }
+                })
+                .or_insert(candidate);
+        }
+    }
+    for (_, (_, target)) in topmost {
+        if let Ok(rnode) = targets.get(target) {
             debug!("click -> reconciler node {}", rnode.0);
             send_ui_event(&bridge, rnode.0, "click", None, None, None);
         }

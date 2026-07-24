@@ -140,10 +140,11 @@ pub fn apply_scroll(
                 Some(mut state) => state.target = next,
                 None => pos.0 = next,
             }
-            // The wheel actually moved this container — claim it for the UI so
-            // world-input systems that honor `PointerCapture` (the orbit camera's
-            // wheel-zoom, etc.) ignore the same wheel this frame.
-            capture.over_ui = true;
+            // The wheel actually moved this container — claim the wheel channel
+            // so world wheel-consumers that honor `PointerCapture` (the orbit
+            // camera's wheel-zoom, etc.) ignore the same wheel this frame. Not
+            // a hover claim: `over_ui` stays as `collect_pointer_events` set it.
+            capture.wheel_captured = true;
             break;
         }
         // Nothing to scroll here (content fits the container) — keep scanning lower
@@ -273,9 +274,10 @@ pub fn collect_wheel_events(
                 ..default()
             },
         });
-        // The node handled the wheel — claim the pointer so world-input systems that
-        // honor `PointerCapture` ignore the same wheel this frame.
-        capture.over_ui = true;
+        // The node handled the wheel — claim the wheel channel so world
+        // wheel-consumers that honor `PointerCapture` ignore the same wheel
+        // this frame. Not a hover claim: `over_ui` stays untouched.
+        capture.wheel_captured = true;
         break;
     }
 }
@@ -290,8 +292,13 @@ mod tests {
     /// logical), with a non-scrolling child node ("text") on top of it (also carrying a
     /// `ScrollPosition`, since every `Node` does). Starts the container at `start`,
     /// applies one `Line` wheel tick of `wheel`, and returns the container's resulting
-    /// `ScrollPosition` plus whether the pointer was flagged as UI-owned.
-    fn run_with_content(cursor: Vec2, start: Vec2, wheel: Vec2, content_h: f32) -> (Vec2, bool) {
+    /// `ScrollPosition` plus the resulting [`PointerCapture`].
+    fn run_with_content(
+        cursor: Vec2,
+        start: Vec2,
+        wheel: Vec2,
+        content_h: f32,
+    ) -> (Vec2, PointerCapture) {
         let mut world = World::new();
 
         let mut window = Window::default();
@@ -345,12 +352,12 @@ mod tests {
         world.run_system_once(apply_scroll).unwrap();
 
         let pos = world.entity(container).get::<ScrollPosition>().unwrap().0;
-        let over_ui = world.resource::<PointerCapture>().over_ui;
-        (pos, over_ui)
+        let capture = *world.resource::<PointerCapture>();
+        (pos, capture)
     }
 
     /// Like [`run_with_content`] with the default 300px content (scroll range `[0, 200]`).
-    fn run(cursor: Vec2, start: Vec2, wheel: Vec2) -> (Vec2, bool) {
+    fn run(cursor: Vec2, start: Vec2, wheel: Vec2) -> (Vec2, PointerCapture) {
         run_with_content(cursor, start, wheel, 300.0)
     }
 
@@ -425,9 +432,17 @@ mod tests {
     fn scrolls_container_when_cursor_is_over_its_child_text() {
         // Cursor over the child "text"; wheel down (delta.y < 0) reveals lower content
         // → offset.y increases by LINE_HEIGHT, within the [0, 200] range.
-        let (pos, over_ui) = run(Vec2::new(300.0, 200.0), Vec2::ZERO, Vec2::new(0.0, -1.0));
+        let (pos, capture) = run(Vec2::new(300.0, 200.0), Vec2::ZERO, Vec2::new(0.0, -1.0));
         assert_eq!(pos, Vec2::new(0.0, LINE_HEIGHT));
-        assert!(over_ui, "scrolling should claim the pointer for the UI");
+        assert!(
+            capture.wheel_captured,
+            "a consumed wheel must claim the wheel channel"
+        );
+        assert!(
+            !capture.over_ui,
+            "consuming the wheel is not a hover claim — `over_ui` stays untouched \
+             so world drag/press gating is unaffected"
+        );
     }
 
     #[test]
@@ -456,13 +471,13 @@ mod tests {
     #[test]
     fn ignores_wheel_when_cursor_is_outside_the_container() {
         // In-window but outside the container's rect (x:200..400, y:150..250).
-        let (pos, over_ui) = run(
+        let (pos, capture) = run(
             Vec2::new(50.0, 50.0),
             Vec2::new(0.0, 30.0),
             Vec2::new(0.0, -1.0),
         );
         assert_eq!(pos, Vec2::new(0.0, 30.0));
-        assert!(!over_ui);
+        assert!(!capture.wheel_captured);
     }
 
     #[test]
@@ -471,7 +486,7 @@ mod tests {
         // range is empty) under the cursor. The wheel must NOT be consumed: position stays
         // put and the pointer is left un-owned so a world system (e.g. the orbit camera's
         // wheel-zoom behind a transparent, non-overflowing scroll pane) still receives it.
-        let (pos, over_ui) = run_with_content(
+        let (pos, capture) = run_with_content(
             Vec2::new(300.0, 200.0),
             Vec2::ZERO,
             Vec2::new(0.0, -1.0),
@@ -479,7 +494,7 @@ mod tests {
         );
         assert_eq!(pos, Vec2::ZERO);
         assert!(
-            !over_ui,
+            !capture.wheel_captured,
             "a container with nothing to scroll must not claim the wheel"
         );
     }
@@ -646,8 +661,12 @@ mod tests {
 
     /// Drive `collect_wheel_events` against a single 200×100 `WheelListener` node (id 7)
     /// centered at (300, 200), with one wheel tick of `wheel` in `unit`. Returns the
-    /// emitted `wheel` `UiEvent` (if any) and whether the pointer was flagged UI-owned.
-    fn run_wheel(cursor: Vec2, wheel: Vec2, unit: MouseScrollUnit) -> (Option<UiEvent>, bool) {
+    /// emitted `wheel` `UiEvent` (if any) and the resulting [`PointerCapture`].
+    fn run_wheel(
+        cursor: Vec2,
+        wheel: Vec2,
+        unit: MouseScrollUnit,
+    ) -> (Option<UiEvent>, PointerCapture) {
         let mut world = World::new();
 
         let mut window = Window::default();
@@ -684,15 +703,15 @@ mod tests {
             Outbound::UiEvent { event } => event,
             other => panic!("expected a UiEvent, got {other:?}"),
         });
-        let over_ui = world.resource::<PointerCapture>().over_ui;
-        (event, over_ui)
+        let capture = *world.resource::<PointerCapture>();
+        (event, capture)
     }
 
     #[test]
     fn wheel_over_listener_emits_raw_delta_and_claims() {
         // Cursor over the node; the raw delta rides through untouched (no ScrollStep
         // scaling), tagged with its unit, and the wheel is claimed for the UI.
-        let (event, over_ui) = run_wheel(
+        let (event, capture) = run_wheel(
             Vec2::new(300.0, 200.0),
             Vec2::new(3.0, -2.0),
             MouseScrollUnit::Line,
@@ -709,8 +728,12 @@ mod tests {
         assert_eq!(event.client_x, Some(300.0));
         assert_eq!(event.client_y, Some(200.0));
         assert!(
-            over_ui,
-            "handling the wheel must claim the pointer for the UI"
+            capture.wheel_captured,
+            "a handled wheel must claim the wheel channel"
+        );
+        assert!(
+            !capture.over_ui,
+            "handling the wheel is not a hover claim — `over_ui` stays untouched"
         );
     }
 
@@ -731,20 +754,20 @@ mod tests {
     fn wheel_outside_listener_emits_nothing() {
         // In-window but outside the node's rect (x:200..400, y:150..250) → no event, and
         // the wheel is left un-owned so world systems still receive it.
-        let (event, over_ui) = run_wheel(
+        let (event, capture) = run_wheel(
             Vec2::new(50.0, 50.0),
             Vec2::new(0.0, -1.0),
             MouseScrollUnit::Line,
         );
         assert!(event.is_none(), "no listener under the cursor");
-        assert!(!over_ui);
+        assert!(!capture.wheel_captured);
     }
 
     #[test]
     fn zero_wheel_emits_nothing() {
-        let (event, over_ui) =
+        let (event, capture) =
             run_wheel(Vec2::new(300.0, 200.0), Vec2::ZERO, MouseScrollUnit::Line);
         assert!(event.is_none(), "a zero delta must not emit a wheel event");
-        assert!(!over_ui);
+        assert!(!capture.wheel_captured);
     }
 }

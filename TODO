@@ -1,4 +1,4 @@
-☐ click bubbles
+✔ click bubbles @done(26-07-24 23:31)
 ☐ example and explanation styling
 ☐ button and slider color blends bad
 ☐ ScrollbarDemo - split scrollbars into multiple examples
@@ -6,12 +6,14 @@
 ☐ BackdropFilters - nicer examples
 ☐ camera not moving when over ui
 ☐ add aurora background to each scene
-☐ auroda should always move in one direction
+☐ aurora should always move in one direction
 ☐ animations demos rework, combine multiple examples in one page. Pages:
   ☐ style transitions
   ☐ declarative animations(?)
   ☐ filters/other deep properties
 ☐ nicer navigation
+☐ scrollbar should not animate when dragged with a mouse
+
 
 # Keep the descriptions short and to the point. Don't put any details here until required.
 

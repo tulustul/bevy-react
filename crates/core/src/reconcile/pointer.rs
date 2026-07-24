@@ -160,9 +160,12 @@ pub fn collect_pointer_events(
     // Publish whether the UI owns the pointer so world systems (e.g. a camera
     // controller) can ignore the mouse. `dragging` spans the whole gesture even
     // once the cursor leaves the element; `over_ui` covers hover/press on any
-    // interactive node (so e.g. wheel-zoom over UI can be trapped too).
+    // interactive node (a wheel the UI consumes is `wheel_captured`'s job).
     capture.dragging = drag.entity.is_some();
     capture.over_ui = interactions.iter().any(|i| *i != Interaction::None);
+    // This system is the frame's assigner; the wheel systems (`apply_scroll`,
+    // `collect_wheel_events` — ordered after, same set) re-claim per frame.
+    capture.wheel_captured = false;
 }
 
 /// Emit `pointerEnter` / `pointerLeave` for main-window nodes that declared those
@@ -425,6 +428,128 @@ mod tests {
             .release(MouseButton::Left);
         app.update();
         assert_eq!(kinds(&mut out_rx), ["pointerUp"]);
+    }
+
+    /// [`collect_pointer_events`] is the frame's `PointerCapture` assigner: a
+    /// `wheel_captured` claim from last frame's wheel systems must be reset so
+    /// a single scrolled frame doesn't trap world wheel-consumers forever.
+    #[test]
+    fn pointer_capture_wheel_claim_resets_each_frame() {
+        let (mut app, _out_rx) = click_app();
+        app.init_resource::<ButtonInput<MouseButton>>();
+        app.init_resource::<crate::PointerCapture>();
+        app.add_systems(Update, collect_pointer_events);
+
+        app.world_mut()
+            .resource_mut::<crate::PointerCapture>()
+            .wheel_captured = true;
+        app.update();
+
+        assert!(
+            !app.world()
+                .resource::<crate::PointerCapture>()
+                .wheel_captured,
+            "a frame with no wheel claim must clear `wheel_captured`"
+        );
+    }
+
+    /// Clicks do NOT bubble: when nested `Interaction` owners are all under the
+    /// cursor (pass-through hit stack), only the topmost owner — the resolving
+    /// hit with the smallest `HitData.depth`, not the first message (hover-map
+    /// order is arbitrary) — gets the click.
+    #[test]
+    fn nested_onclick_owners_click_topmost_only() {
+        let (mut app, mut out_rx) = click_app();
+        app.add_systems(Update, collect_ui_events);
+
+        let outer = app.world_mut().spawn((RNode(1), Interaction::None)).id();
+        let inner = app
+            .world_mut()
+            .spawn((RNode(2), Interaction::None, ChildOf(outer)))
+            .id();
+        let leaf = app.world_mut().spawn(ChildOf(inner)).id();
+
+        let click = |entity, depth| {
+            Pointer::new(
+                PointerId::Mouse,
+                click_location(),
+                Click {
+                    button: PointerButton::Primary,
+                    hit: bevy::picking::backend::HitData::new(
+                        Entity::PLACEHOLDER,
+                        depth,
+                        None,
+                        None,
+                    ),
+                    duration: std::time::Duration::ZERO,
+                    count: 1,
+                },
+                entity,
+            )
+        };
+        // Adversarial order: the DEEPEST hit arrives first (the hover map is a
+        // HashMap — message order carries no meaning). Depths mirror the
+        // bevy_ui backend: topmost 0.0, +0.00001 per node beneath.
+        app.world_mut().write_message(click(outer, 0.00002));
+        app.world_mut().write_message(click(leaf, 0.0));
+        app.world_mut().write_message(click(inner, 0.00001));
+        app.update();
+
+        let events = drain_clicks(&mut out_rx);
+        assert_eq!(
+            events.len(),
+            1,
+            "a click over nested owners must fire only the topmost owner"
+        );
+        assert_eq!(events[0].id, 2, "the inner (topmost) node owns the click");
+    }
+
+    /// [`collect_surface_clicks`] applies the same no-bubbling rule: nested
+    /// surface owners under one virtual-pointer gesture click only the topmost.
+    #[test]
+    fn surface_nested_onclick_owners_click_topmost_only() {
+        let (mut app, mut out_rx) = click_app();
+        app.add_systems(Startup, crate::surface::init_surface_pointer);
+        app.add_systems(Update, collect_surface_clicks);
+        app.update(); // Run Startup so the pointer resource exists.
+
+        let outer = app.world_mut().spawn((RNode(1), Interaction::None)).id();
+        let inner = app
+            .world_mut()
+            .spawn((RNode(2), Interaction::None, ChildOf(outer)))
+            .id();
+
+        let surface_id = app.world().resource::<SurfaceVirtualPointer>().id;
+        let click = |entity, depth| {
+            Pointer::new(
+                surface_id,
+                click_location(),
+                Click {
+                    button: PointerButton::Primary,
+                    hit: bevy::picking::backend::HitData::new(
+                        Entity::PLACEHOLDER,
+                        depth,
+                        None,
+                        None,
+                    ),
+                    duration: std::time::Duration::ZERO,
+                    count: 1,
+                },
+                entity,
+            )
+        };
+        // Deepest-first again: selection must ride depth, not arrival order.
+        app.world_mut().write_message(click(outer, 0.00001));
+        app.world_mut().write_message(click(inner, 0.0));
+        app.update();
+
+        let events = drain_clicks(&mut out_rx);
+        assert_eq!(
+            events.len(),
+            1,
+            "a surface click over nested owners must fire only the topmost owner"
+        );
+        assert_eq!(events[0].id, 2, "the inner (topmost) node owns the click");
     }
 
     /// The surface virtual pointer's clicks belong to `collect_surface_clicks`

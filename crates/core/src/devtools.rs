@@ -1018,9 +1018,11 @@ fn drive_pick_mode(
         return;
     }
     // Claim the pointer for the whole pick session so world input (camera
-    // orbit/zoom) ignores the picking gestures.
+    // orbit/zoom) ignores the picking gestures — both channels: hover
+    // (`over_ui` blocks drags/presses) and wheel (`wheel_captured` blocks zoom).
     if let Some(mut capture) = capture {
         capture.over_ui = true;
+        capture.wheel_captured = true;
     }
 
     // The panel's own root, resolved to its entity. `None` (not yet reported /
@@ -1547,6 +1549,28 @@ mod tests {
             }
         }
         out
+    }
+
+    /// An active pick session owns the pointer completely: it must claim the
+    /// hover channel (`over_ui` — no world drags start) AND the wheel channel
+    /// (`wheel_captured` — no world zoom), every frame it is active.
+    #[test]
+    fn pick_mode_claims_hover_and_wheel_channels() {
+        let (mut app, _rx) = test_app(DevtoolsConfig::default());
+        app.init_resource::<crate::PointerCapture>();
+        {
+            let mut state = app.world_mut().resource_mut::<DevtoolsState>();
+            state.open = true;
+            state.pick = true;
+        }
+        app.update();
+
+        let capture = app.world().resource::<crate::PointerCapture>();
+        assert!(capture.over_ui, "pick mode must claim the hover channel");
+        assert!(
+            capture.wheel_captured,
+            "pick mode must claim the wheel channel too"
+        );
     }
 
     #[test]

@@ -65,6 +65,7 @@ const asideStyle: BevyStyle = {
   positionType: "absolute",
   right: 0,
   width: WIDTH,
+  maxHeight: "100vh",
   flexDirection: "column",
   justifyContent: "flexStart",
   gap: 8,

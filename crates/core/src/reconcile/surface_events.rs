@@ -36,9 +36,10 @@ pub fn collect_surface_clicks(
 ) {
     let Some(pointer) = pointer else { return };
     // A pass-through node stacked over the target makes one gesture fan out to
-    // every entity in the hover map; climbing can resolve them to the same
-    // owner, so dedupe per owner within the frame.
-    let mut seen: HashSet<Entity> = HashSet::new();
+    // every entity in the hover map. Same no-bubbling rule as
+    // `collect_ui_events`: only the topmost resolving hit (smallest
+    // `HitData.depth` — hover-map message order is arbitrary) owns the click.
+    let mut topmost: Option<(f32, Entity)> = None;
     for ev in clicks.read() {
         // Like DOM `click` (and `collect_ui_events`), only the primary button
         // clicks; right/middle ride the `onPointer*` events.
@@ -48,12 +49,16 @@ pub fn collect_surface_clicks(
         // Resolve the picked leaf to the nearest interactive ancestor (the button),
         // so a click on its label text still fires the button's handler.
         if let Some(target) = climb(ev.entity, &child_of, |e| targets.contains(e))
-            && seen.insert(target)
-            && let Ok(rnode) = targets.get(target)
+            && !topmost.is_some_and(|(depth, _)| depth <= ev.hit.depth)
         {
-            debug!("surface click -> reconciler node {}", rnode.0);
-            send_ui_event(&bridge, rnode.0, "click", None, None, None);
+            topmost = Some((ev.hit.depth, target));
         }
+    }
+    if let Some((_, target)) = topmost
+        && let Ok(rnode) = targets.get(target)
+    {
+        debug!("surface click -> reconciler node {}", rnode.0);
+        send_ui_event(&bridge, rnode.0, "click", None, None, None);
     }
 }
 
