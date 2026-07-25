@@ -4,7 +4,7 @@ import { Home } from "./demos/Home";
 import { ReactToBevyDemo } from "./demos/communication/ReactToBevyDemo";
 import { BevyToReactDemo } from "./demos/communication/BevyToReactDemo";
 import { BidirectionCommunicationDemo } from "./demos/communication/BidirectionCommunicationDemo";
-import { AnchoredDemo } from "./demos/AnchoredDemo";
+import { AnchorDemo } from "./demos/AnchorDemo";
 import { MouseDemo } from "./demos/events/MouseDemo";
 import { KeyboardDemo } from "./demos/events/KeyboardDemo";
 import { WindowDemo } from "./demos/events/WindowDemo";
@@ -70,11 +70,7 @@ export const DEMOS: DemoItem[] = [
       { label: "<portal>", scene: "CrowdedCubes", component: PortalDemo },
       { label: "<surface>", scene: "Surface", component: SurfaceDemo },
       { label: "<root>", component: RootDemo },
-      {
-        label: "<Anchored.node>",
-        scene: "CrowdedCubes",
-        component: AnchoredDemo,
-      },
+      { label: "<anchor>", scene: "CrowdedCubes", component: AnchorDemo },
     ],
   },
   {

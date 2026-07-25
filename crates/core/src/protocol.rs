@@ -245,7 +245,7 @@ pub struct Props {
     #[serde(default)]
     pub on_wheel: bool,
 
-    /// World-anchor binding for an `Anchored.node`: the Bevy entity to follow and
+    /// World-anchor binding for an `<anchor>` element: the Bevy entity to follow and
     /// an optional offset. Present → the reconciler stamps a [`crate::anchor::Anchored`]
     /// so the per-frame positioning system tracks it. Pure-serde, Bevy-free.
     #[serde(default)]

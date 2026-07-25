@@ -1,4 +1,4 @@
-//! Headless reproduction of the `Anchored -> other -> Anchored` demo-switch crash
+//! Headless reproduction of the `<anchor> -> other -> <anchor>` demo-switch crash
 //! (React #327 "Should not already be working"). Like `roundtrip.rs`, this drives
 //! the real JS thread over channels — no GPU/window — so the bug is observable in
 //! `cargo test` instead of only in the live app.
@@ -174,7 +174,7 @@ fn demo_switch_anchored_survives() {
                     accumulate(op, &mut buttons, &mut parent_of, &mut text_of);
                 }
                 anchored_btn = anchored_btn
-                    .or_else(|| find_button("<Anchored.node>", &buttons, &parent_of, &text_of));
+                    .or_else(|| find_button("<anchor>", &buttons, &parent_of, &text_of));
                 other_btn =
                     other_btn.or_else(|| find_button("Events", &buttons, &parent_of, &text_of));
             }
@@ -183,7 +183,7 @@ fn demo_switch_anchored_survives() {
         }
     }
 
-    let anchored_btn = anchored_btn.expect("no '<Anchored.node>' nav button in initial render");
+    let anchored_btn = anchored_btn.expect("no '<anchor>' nav button in initial render");
     let other_btn = other_btn.expect("no 'Events' nav button in initial render");
     eprintln!("OK   nav buttons: anchored={anchored_btn}, other={other_btn}");
 
@@ -201,7 +201,7 @@ fn demo_switch_anchored_survives() {
 
     // The failing user flow, repeated a few times to shake out timing races.
     for round in 0..3 {
-        eprintln!("--- round {round}: -> Anchored");
+        eprintln!("--- round {round}: -> <anchor>");
         click(anchored_btn);
         send_cubes_spawned(&outbound_tx);
         pump(

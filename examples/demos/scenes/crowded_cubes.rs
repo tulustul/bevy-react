@@ -112,7 +112,7 @@ struct CubesSpawned {
     cubes: Vec<CubeInfo>,
 }
 
-/// One cube in [`CubesSpawned`]: its `Entity` (as bits, for `Anchored.node`) and a
+/// One cube in [`CubesSpawned`]: its `Entity` (as bits, for `<anchor>`) and a
 /// short label to show in the badge.
 #[derive(Serialize, TS)]
 struct CubeInfo {

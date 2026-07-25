@@ -17,6 +17,7 @@ import {
   createCanvasElement,
   dropHandlers,
   flush,
+  packAnchorProps,
   push,
   ROOT_ID,
   serializeProps,
@@ -129,6 +130,8 @@ const hostConfig: any = {
     const id = allocId();
     // A nested `<text>` is a styled span; a top-level one is a text block root.
     const kind = type === "text" && hostContext.inText ? "textSpan" : type;
+    // An `<anchor>`'s flat `entity`/`offset`/`scale` cross as one `anchor` object.
+    const wireProps = type === "anchor" ? packAnchorProps(props) : props;
     // A single-string `<text>` child rides inline on the create op (see
     // shouldSetTextContent) instead of spawning its own text entity.
     const child = props.children;
@@ -139,8 +142,14 @@ const hostConfig: any = {
         : undefined;
     push(
       text === undefined
-        ? { op: "create", id, kind, props: serializeProps(id, props) }
-        : { op: "create", id, kind, props: serializeProps(id, props), text },
+        ? { op: "create", id, kind, props: serializeProps(id, wireProps) }
+        : {
+            op: "create",
+            id,
+            kind,
+            props: serializeProps(id, wireProps),
+            text,
+          },
     );
     // A `<canvas>`'s instance is its persistent element handle (what a ref
     // resolves to via `getPublicInstance`); it satisfies `Instance`.
@@ -225,7 +234,16 @@ const hostConfig: any = {
     _internalHandle: unknown,
   ) {
     const id = instance.id;
-    const op = buildUpdateOp(id, oldProps, newProps);
+    // An `<anchor>` diffs in packed form so an `entity`/`offset`/`scale` change
+    // re-sends the full `anchor` object (replaced atomically on the Rust side).
+    const op =
+      type === "anchor"
+        ? buildUpdateOp(
+            id,
+            packAnchorProps(oldProps),
+            packAnchorProps(newProps),
+          )
+        : buildUpdateOp(id, oldProps, newProps);
     if (op) push(op);
     // Inline-text `<text>` (shouldSetTextContent): its string child rides as `text`,
     // so its change arrives here (not via commitTextUpdate).

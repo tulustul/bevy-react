@@ -256,7 +256,9 @@ pub(super) fn apply_create(
     bridge.props_cache.insert(id, Box::new(state));
 }
 
-/// Spawn a `node`, `button`, or `image` host element with its style.
+/// Spawn a `node`, `button`, or `image` host element with its style. Also the
+/// landing spot for `anchor` (via `apply_create`'s `_` arm): an `<anchor>` is a
+/// plain node whose `anchor` prop `stamp_common` → `apply_anchor` binds.
 fn spawn_element(
     commands: &mut Commands,
     id: NodeId,
@@ -401,6 +403,71 @@ mod tests {
             app.world().entity(e).get::<RPortal>().map(|p| p.0.clone()),
             Some("minimap".to_string()),
             "an update rebinds the portal's target name"
+        );
+    }
+
+    /// An `<anchor>` rides the plain-node fallback path: the kind has no dedicated
+    /// match arm, but its `anchor` prop stamps an [`Anchored`] binding via
+    /// `stamp_common` → `apply_anchor`. Pins the fallback contract the JS bridge
+    /// relies on (create, rebind on delta, and unset → component removal).
+    #[test]
+    fn anchor_kind_mounts_and_rebinds() {
+        use crate::anchor::Anchored;
+        let (mut app, tx, _root) = ordering_app();
+        let target = app.world_mut().spawn_empty().id();
+        let bits = target.to_bits() as f64;
+        tx.send(vec![Op::Create {
+            id: 1,
+            kind: "anchor".into(),
+            props: serde_json::from_value(serde_json::json!({
+                "anchor": { "entity": bits, "offset": [0.0, 1.0, 0.0] }
+            }))
+            .expect("valid anchor props"),
+            text: None,
+        }])
+        .unwrap();
+        app.update();
+
+        let e = ent(&app, 1);
+        assert!(
+            app.world().entity(e).get::<Node>().is_some(),
+            "an anchor is a plain node host element"
+        );
+        let anchored = app
+            .world()
+            .entity(e)
+            .get::<Anchored>()
+            .expect("the anchor prop stamps an Anchored binding")
+            .clone();
+        assert_eq!(anchored.target, target, "follows the wire entity");
+        assert_eq!(anchored.offset, Vec3::new(0.0, 1.0, 0.0));
+
+        // A delta with a new offset re-stamps the binding (the JS side always
+        // re-sends the full anchor object).
+        tx.send(vec![update_delta(
+            1,
+            serde_json::from_value(serde_json::json!({
+                "anchor": { "entity": bits, "offset": [0.0, 2.0, 0.0] }
+            }))
+            .expect("valid anchor props"),
+            &[],
+            &[],
+        )])
+        .unwrap();
+        app.update();
+        assert_eq!(
+            app.world().entity(e).get::<Anchored>().map(|a| a.offset),
+            Some(Vec3::new(0.0, 2.0, 0.0)),
+            "a delta rebinds the anchor offset"
+        );
+
+        // Unsetting the anchor prop removes the binding entirely.
+        tx.send(vec![update_delta(1, Props::default(), &["anchor"], &[])])
+            .unwrap();
+        app.update();
+        assert!(
+            app.world().entity(e).get::<Anchored>().is_none(),
+            "unset removes the Anchored binding"
         );
     }
 

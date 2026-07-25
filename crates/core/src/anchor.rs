@@ -1,4 +1,4 @@
-//! World-anchored UI overlays (`Anchored.node`).
+//! World-anchored UI overlays (the `<anchor>` element).
 //!
 //! An anchored element is an ordinary screen-space `bevy_ui` node, but each frame
 //! its on-screen position is recomputed by projecting a target entity's world
@@ -11,7 +11,7 @@ use bevy::prelude::*;
 use bevy::ui::{IsDefaultUiCamera, UiGlobalTransform, UiTransform};
 use serde::Deserialize;
 
-/// The wire form of an `Anchored.node`'s `anchor` prop: the Bevy entity to follow
+/// The wire form of an `<anchor>`'s `anchor` prop: the Bevy entity to follow
 /// (as `Entity::to_bits()`), an optional world-space offset, and optional
 /// distance-based scaling. Pure-serde, like the rest of [`crate::protocol`].
 #[derive(Debug, Clone, Deserialize)]
@@ -97,7 +97,7 @@ fn distance_scale(c: &AnchorScaling, dist: f32) -> f32 {
 #[derive(Component, Debug, Clone, Copy)]
 pub struct AnchorLayer;
 
-/// Component stamped (by the main reconciler) on any `Anchored.node`. Carries the
+/// Component stamped (by the main reconciler) on any `<anchor>` element. Carries the
 /// followed entity, world-space offset, and optional distance scaling. Requires
 /// `Visibility` so the system can hide the overlay when its anchor is behind the
 /// camera, and `UiTransform` so it can apply the distance scale.

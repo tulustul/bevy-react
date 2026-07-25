@@ -13,7 +13,7 @@
   ✔ filters/other deep properties @done(26-07-25 11:54)
 ✘ nicer navigation @cancelled(26-07-25 14:21)
 ✔ scrollbar should not animate when dragged with a mouse @done(26-07-25 00:18)
-☐ <Anchored.node> -> <anchor>
+✔ <Anchored.node> -> <anchor> @done(26-07-25)
 
 
 # Keep the descriptions short and to the point. Don't put any details here until required.

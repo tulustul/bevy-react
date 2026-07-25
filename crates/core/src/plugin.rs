@@ -847,7 +847,7 @@ fn setup(
         ))
         .id();
 
-    // The shared overlay container for world-anchored nodes (`Anchored.node`).
+    // The shared overlay container for world-anchored nodes (`<anchor>`).
     // `position_anchored_nodes` reparents every anchored overlay under this so it lives
     // in its own hierarchy and never inflates an app container's flex layout or
     // scrollable `content_size`. Zero-size at the window origin (absolute, left/top 0)

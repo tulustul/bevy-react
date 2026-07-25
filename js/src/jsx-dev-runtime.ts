@@ -6,6 +6,7 @@ import type * as React from "react";
 export { Fragment, jsxDEV } from "react/jsx-dev-runtime";
 
 import type {
+  BevyAnchorProps,
   BevyCanvasProps,
   BevyEditableTextProps,
   BevyImageProps,
@@ -41,5 +42,6 @@ export namespace JSX {
     root: BevyRootProps;
     text: BevyTextProps;
     editableText: BevyEditableTextProps;
+    anchor: BevyAnchorProps;
   }
 }

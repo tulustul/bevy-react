@@ -654,6 +654,38 @@ export interface BevyNodeProps extends BevyAttributes {
   children?: ReactNode;
 }
 
+/** A world-space vector `[x, y, z]` in Bevy world units. */
+export type Vec3 = [number, number, number];
+
+/** Distance-based scaling for an anchored overlay. The Bevy side applies
+ *  `clamp(1 + factor * (baseDistance / distance - 1), min, max)`, so the overlay
+ *  renders at scale 1 when the camera is `baseDistance` away, grows as it gets
+ *  closer, and shrinks farther out. Omit `scale` entirely to keep a constant size. */
+export interface AnchorScaling {
+  min: number;
+  max: number;
+  /** Scaling strength: `0` disables scaling, `1` is true perspective (apparent
+   *  size halves at twice `baseDistance`), `2` scales twice as fast. */
+  factor: number;
+  /** Camera distance at which the overlay renders at scale 1. */
+  baseDistance: number;
+}
+
+/** Props for the `anchor` element: a node-like container whose screen position
+ *  Bevy recomputes every frame by projecting the target entity's world position
+ *  (plus `offset`) onto the screen. Because it stays a flat overlay, clicks/
+ *  hover work exactly like any other node — nest buttons, images, and text as
+ *  children to anchor them. */
+export interface BevyAnchorProps extends BevyNodeProps {
+  /** The Bevy entity to follow, as `Entity::to_bits()` (received from Bevy).
+   *  A `u64` arrives from typed bindings as a `bigint`; either form is accepted. */
+  entity: number | bigint;
+  /** World-space offset added to the entity's position before projecting. */
+  offset?: Vec3;
+  /** When set, the overlay scales with camera distance (see `AnchorScaling`). */
+  scale?: AnchorScaling;
+}
+
 /** Props for the `text` element (maps to `bevy_ui::Text` / `TextSpan`). Style
  *  its `color`/`fontSize`/`fontWeight`/`textAlign`/`lineHeight`/`letterSpacing`/
  *  `textShadow`/`lineBreak` via `style`; nest `<text>` to restyle a run. */

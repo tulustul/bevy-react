@@ -33,7 +33,7 @@ const bundled = await build({
   logLevel: "silent",
 });
 const code = Buffer.from(bundled.outputFiles[0].contents).toString("base64");
-const { buildUpdateOp, valuesEqual } = await import(
+const { buildUpdateOp, packAnchorProps, valuesEqual } = await import(
   `data:text/javascript;base64,${code}`
 );
 
@@ -283,4 +283,57 @@ test("a changed draw painter re-sends the recorded display list", () => {
 
   // Dropping the painter is a no-op (retained pixels stay), not an unset.
   assert.equal(buildUpdateOp(1, { draw: (ctx) => ctx.fill() }, {}), null);
+});
+
+test("packAnchorProps packs entity/offset/scale into one anchor object", () => {
+  const style = { width: 10 };
+  const onClick = () => {};
+  const packed = packAnchorProps({
+    entity: 5n, // bigint from typed bindings → plain number on the wire
+    offset: [0, 1, 0],
+    style,
+    onClick,
+  });
+  assert.equal(packed.anchor.entity, 5);
+  assert.deepEqual(packed.anchor.offset, [0, 1, 0]);
+  assert.equal(packed.anchor.scale, undefined);
+  // The flat props are stripped; everything else passes through untouched.
+  assert.equal(packed.entity, undefined);
+  assert.equal(packed.offset, undefined);
+  assert.equal(packed.style, style);
+  assert.equal(packed.onClick, onClick);
+
+  // No entity → no anchor binding at all.
+  assert.equal(packAnchorProps({ style }).anchor, undefined);
+});
+
+test("anchor delta re-sends the full packed object", () => {
+  // An offset-only change must carry the whole anchor object — Rust replaces
+  // it atomically (OBJECT_PROP_KEYS), it can't merge a partial one.
+  const op = buildUpdateOp(
+    1,
+    packAnchorProps({ entity: 5, offset: [0, 1, 0] }),
+    packAnchorProps({ entity: 5, offset: [0, 2, 0] }),
+  );
+  assert.equal(op.props.anchor.entity, 5);
+  assert.deepEqual(op.props.anchor.offset, [0, 2, 0]);
+});
+
+test("anchor re-render with identical values is silent", () => {
+  // Fresh prop bags every render (as React produces them) — structural
+  // compare, not identity.
+  const bag = () => ({ entity: 7, offset: [0, 1, 0], scale: { min: 0.4 } });
+  assert.equal(
+    buildUpdateOp(1, packAnchorProps(bag()), packAnchorProps(bag())),
+    null,
+  );
+});
+
+test("dropping the anchor entity unsets the binding", () => {
+  const op = buildUpdateOp(
+    1,
+    packAnchorProps({ entity: 5, offset: [0, 1, 0] }),
+    packAnchorProps({ offset: [0, 1, 0] }),
+  );
+  assert.deepEqual(op.unset, ["anchor"]);
 });

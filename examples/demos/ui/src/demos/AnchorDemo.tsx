@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Anchored, AnchorScaling } from "bevy-react";
+import { AnchorScaling } from "bevy-react";
 import { BevyStyle } from "bevy-react/jsx";
 import { bevy } from "@/bevy";
 import type { CubeInfo } from "@/bevy";
@@ -7,21 +7,21 @@ import { Checkbox, Example, Slider } from "@/components";
 import { Colors, FontSizes, Gradients } from "@/theme";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
 
-const TYPESCRIPT = `<Anchored.node
+const TYPESCRIPT = `<anchor
   entity={cube.entity}
   offset={[0, 0.8, 0]}
 >
   <text>{cube.label}</text>
-</Anchored.node>`;
+</anchor>`;
 
 const PAGE: ExplanationData = {
-  title: "<Anchored.node>",
+  title: "<anchor>",
   description:
-    'UI nodes pinned to a 3D entity, tracking it on screen and optionally scaling with distance. The scene reports its cubes over a typed bevy.on("crowdedCubes.spawned") event; each badge is an <Anchored.node> with a world-space offset and an optional scale config (min/max/factor/baseDistance).',
+    'UI nodes pinned to a 3D entity, tracking it on screen and optionally scaling with distance. The scene reports its cubes over a typed bevy.on("crowdedCubes.spawned") event; each badge is an <anchor> with a world-space offset and an optional scale config (min/max/factor/baseDistance).',
   tsx: TYPESCRIPT,
 };
 
-export function AnchoredDemo() {
+export function AnchorDemo() {
   useDemoPage(PAGE);
 
   const [cubes, setCubes] = useState<CubeInfo[]>([]);
@@ -89,14 +89,14 @@ type BadgeProps = {
 
 function Badge({ cube, scaling }: BadgeProps) {
   return (
-    <Anchored.node
+    <anchor
       entity={cube.entity}
       offset={[0, 0.8, 0]}
       scale={scaling}
       style={badgeStyle}
     >
       <text style={badgeText}>{cube.label}</text>
-    </Anchored.node>
+    </anchor>
   );
 }
 

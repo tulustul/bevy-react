@@ -12,6 +12,7 @@ import type * as React from "react";
 export { Fragment, jsx, jsxs } from "react/jsx-runtime";
 
 import type {
+  BevyAnchorProps,
   BevyCanvasProps,
   BevyEditableTextProps,
   BevyImageProps,
@@ -58,5 +59,8 @@ export namespace JSX {
     text: BevyTextProps;
     /** A focusable, editable text field (maps to `bevy_text::EditableText`). */
     editableText: BevyEditableTextProps;
+    /** A world-anchored container: Bevy repositions it every frame to track the
+     *  target `entity`'s projected world position. */
+    anchor: BevyAnchorProps;
   }
 }

@@ -108,7 +108,7 @@ export interface SerializedProps extends Partial<
   hoverStyle?: Record<string, unknown>;
   pressStyle?: Record<string, unknown>;
   focusStyle?: Record<string, unknown>;
-  // World-anchor binding (an `Anchored.node`'s entity + offset), opaque like style;
+  // World-anchor binding (an `<anchor>`'s entity + offset), opaque like style;
   // decoded on the Rust side into `Anchor`.
   anchor?: Record<string, unknown>;
   color?: string;
@@ -496,7 +496,7 @@ export function registerHandlers(
 //   Bevy overlays the hover/press/focus variants onto the base style from the
 //   node's interaction state; `focusStyle` applies while an `editableText` is
 //   focused, no React focus state needed.
-// - An `Anchored.node`'s `anchor` (entity + optional offset) is opaque too;
+// - An `<anchor>`'s `anchor` (entity + optional offset) is opaque too;
 //   Bevy projects the entity's world position to the screen each frame.
 // Animated bindings ride *inside* `style` (the `{ animated }` wrapper) and
 // cross opaque like every other style value — Rust derives the node's
@@ -601,6 +601,21 @@ function serializePropInto(
     return true;
   }
   return false;
+}
+
+// Package an `<anchor>` element's flat `entity`/`offset`/`scale` props into the
+// single opaque `anchor` object the wire carries (the renderer calls this for
+// both the create and update prop bags, so delta diffs compare packed forms).
+// The entity crosses as a plain number: `op_flush`'s serde_v8 can't decode a
+// struct `u64` field from either a JS number (f64) or a BigInt, so the Rust
+// `Anchor.entity` is an `f64` — lossless for realistic `Entity::to_bits()`
+// values (well under 2^53) — and cast back to the entity id on apply.
+export function packAnchorProps(
+  props: Record<string, unknown>,
+): Record<string, unknown> {
+  const { entity, offset, scale, ...rest } = props;
+  if (entity === undefined || entity === null) return rest;
+  return { ...rest, anchor: { entity: Number(entity), offset, scale } };
 }
 
 export function serializeProps(

@@ -8,14 +8,8 @@ import {
 import { BevyStyle } from "bevy-react/jsx";
 import { Button, DemoRow, Example, Slider } from "@/components";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
-import { Colors, FontSizes } from "@/theme";
-import { box, caption, controlColumn } from "./shared";
-
-// transform3d applies a real 3D perspective transform to the subtree's
-// RENDERED RESULT at composite time: its presence promotes the subtree to a
-// composited layer, and animating it never re-captures (composite-time cost,
-// like translation). Picking, hover styling, and the cursor all follow the
-// transformed visual — the button inside the flipped card below really works.
+import { box, controlColumn } from "./shared";
+import { TestBanner } from "@/components/TestBanner";
 
 const PAGE: ExplanationData = {
   title: "transform3d",
@@ -41,7 +35,6 @@ export function Transform3dDemo() {
       <DemoRow>
         <FlipCardDemo />
         <WobbleDemo />
-        <ClipDemo />
       </DemoRow>
     </>
   );
@@ -61,23 +54,16 @@ function TiltDemo() {
 }`}
     >
       <node style={controlColumn}>
-        <node style={stage}>
-          <node
-            style={{
-              ...card,
-              transform3d: {
-                perspective: persp ? 600 : undefined,
-                rotateX: rx,
-                rotateY: ry,
-              },
-            }}
-          >
-            <text style={cardTitle}>3D</text>
-            <text style={caption}>
-              {persp ? "perspective 600" : "orthographic"}
-            </text>
-          </node>
-        </node>
+        <TestBanner
+          style={{
+            transform3d: {
+              perspective: persp ? 600 : undefined,
+              rotateX: rx,
+              rotateY: ry,
+            },
+          }}
+        />
+
         <Slider
           value={rx}
           min={-80}
@@ -102,7 +88,7 @@ function TiltDemo() {
 
 function FlipCardDemo() {
   const [flipped, setFlipped] = useState(false);
-  const [count, setCount] = useState(0);
+
   return (
     <Example
       title="Flip card"
@@ -119,28 +105,15 @@ transition: {
 }`}
     >
       <node style={controlColumn}>
-        <node style={stage}>
-          <node
-            style={{
-              ...card,
-              backgroundColor: flipped ? Colors.purple100 : Colors.primary100,
-              // Identity when resting — presence keeps the layer (and the ease
-              // back) alive; unsetting the field entirely would demote + snap.
-              transform3d: { perspective: 700, rotateY: flipped ? 180 : 0 },
-              transition: {
-                transform3d: { duration: 0.6, easing: "easeInOut" },
-              },
-            }}
-          >
-            <text style={cardTitle}>{flipped ? "BACK" : "front"}</text>
-            <Button onClick={() => setCount((c) => c + 1)}>
-              clicks: {count}
-            </Button>
-          </node>
-        </node>
-        <Button onClick={() => setFlipped((v) => !v)}>
-          {flipped ? "Flip back" : "Flip"}
-        </Button>
+        <TestBanner
+          style={{
+            transform3d: { perspective: 700, rotateY: flipped ? 180 : 0 },
+            transition: {
+              transform3d: { duration: 0.6, easing: "easeInOut" },
+            },
+          }}
+        />
+        <Button onClick={() => setFlipped((v) => !v)}>"Flip"</Button>
       </node>
     </Example>
   );
@@ -149,6 +122,7 @@ transition: {
 function OriginDemo() {
   const [hinged, setHinged] = useState(true);
   const [open, setOpen] = useState(true);
+
   return (
     <Example
       title="origin"
@@ -159,22 +133,17 @@ function OriginDemo() {
 }`}
     >
       <node style={controlColumn}>
-        <node style={stage}>
-          <node
-            style={{
-              ...card,
-              backgroundColor: Colors.amber100,
-              transform3d: {
-                perspective: 800,
-                rotateY: open ? 55 : 0,
-                origin: hinged ? { x: "0%", y: "50%" } : { x: "50%", y: "50%" },
-              },
-              transition: { transform3d: { duration: 0.4, easing: "easeOut" } },
-            }}
-          >
-            <text style={cardTitle}>{hinged ? "hinge left" : "center"}</text>
-          </node>
-        </node>
+        <TestBanner
+          style={{
+            transform3d: {
+              perspective: 800,
+              rotateY: open ? 55 : 0,
+              origin: hinged ? { x: "0%", y: "50%" } : { x: "50%", y: "50%" },
+            },
+            transition: { transform3d: { duration: 0.4, easing: "easeOut" } },
+          }}
+        />
+
         <node style={{ flexDirection: "row", gap: 10 }}>
           <Button onClick={() => setOpen((v) => !v)}>
             {open ? "Close" : "Swing"}
@@ -194,7 +163,7 @@ function WobbleDemo() {
 
   const start = () => {
     wobble.value = withRepeat(
-      withTiming(25, { duration: 900, easing: "easeInOut" }),
+      withTiming(45, { duration: 900, easing: "easeInOut" }),
       -1,
       true, // ping-pong
     );
@@ -215,83 +184,19 @@ function WobbleDemo() {
 } }}`}
     >
       <node style={controlColumn}>
-        <node style={stage}>
-          <node
-            style={{
-              ...card,
-              backgroundColor: Colors.green100,
-              transform3d: {
-                perspective: 600,
-                rotateX: { animated: wobble },
-                rotateY: { animated: wobble },
-              },
-            }}
-          >
-            <text style={cardTitle}>wobble</text>
-          </node>
-        </node>
-        <Button onClick={spinning ? stop : start}>
-          {spinning ? "Stop" : "Wobble"}
-        </Button>
-      </node>
-    </Example>
-  );
-}
-
-function ClipDemo() {
-  const [clipped, setClipped] = useState(true);
-  return (
-    <Example
-      title="Ancestor clip"
-      description="An ancestor's overflow clips the transformed RESULT (web semantics): the tilted card clamps at the clipping container's edge, not at its layout rect."
-      tsx={`overflowX: "clip"  // on the parent`}
-    >
-      <node style={controlColumn}>
-        <node
+        <TestBanner
           style={{
-            ...stage,
-            width: 170,
-            overflowX: clipped ? "clip" : "visible",
-            overflowY: clipped ? "clip" : "visible",
+            transform3d: {
+              perspective: 600,
+              rotateX: { animated: wobble },
+              rotateY: { animated: wobble },
+            },
           }}
-        >
-          <node
-            style={{
-              ...card,
-              width: 190,
-              backgroundColor: Colors.red100,
-              transform3d: { perspective: 500, rotateY: -35 },
-            }}
-          >
-            <text style={cardTitle}>clipped</text>
-          </node>
-        </node>
-        <Button onClick={() => setClipped((v) => !v)}>
-          overflow: {clipped ? '"clip"' : '"visible"'}
-        </Button>
+        />
       </node>
+      <Button onClick={spinning ? stop : start}>
+        {spinning ? "Stop" : "Wobble"}
+      </Button>
     </Example>
   );
 }
-
-const stage: BevyStyle = {
-  alignItems: "center",
-  justifyContent: "center",
-  width: 220,
-  height: 170,
-  backgroundColor: Colors.surface100,
-  borderRadius: 12,
-};
-
-const card: BevyStyle = {
-  ...box,
-  width: 130,
-  height: 110,
-  flexDirection: "column",
-  gap: 8,
-};
-
-const cardTitle: BevyStyle = {
-  fontSize: FontSizes.lg,
-  color: Colors.textColor100,
-};

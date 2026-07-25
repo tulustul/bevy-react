@@ -333,11 +333,9 @@ commands.entity(screen_mesh).insert(SurfacePointer::new("monitor"));
 Pin UI to a 3D entity so it tracks the entity on screen as the camera moves.
 
 ```tsx
-import { Anchored } from "bevy-react";
-
-<Anchored.node entity={cube} offset={[0, 1, 0]} style={{ padding: 8 }}>
+<anchor entity={cube} offset={[0, 1, 0]} style={{ padding: 8 }}>
   <text>Label</text>
-</Anchored.node>;
+</anchor>
 ```
 
 ![Dozens of colored cubes in a 3D scene, each with a numbered React badge anchored above it that tracks its cube as the camera moves.](https://raw.githubusercontent.com/tulustul/bevy-react/main/screenshots/anchored-nodes.png)

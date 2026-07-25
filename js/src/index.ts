@@ -50,9 +50,8 @@ export type {
 // declaration merging to attach.
 export type { BevyFilters, FilterUse, FilterChainValue } from "./filters";
 
-// World-anchored overlays (`<Anchored.node entity={…} offset={…}/>`).
-export { Anchored } from "./anchored";
-export type { AnchorProps, AnchorScaling, Vec3 } from "./anchored";
+// World-anchored overlays (`<anchor entity={…} offset={…}>…</anchor>`).
+export type { AnchorScaling, BevyAnchorProps, Vec3 } from "./jsx";
 
 // Canvas drawing. `CanvasContext` records an HTML-canvas-like display list
 // rasterized on the Bevy side — declaratively via `<canvas draw={(ctx) => …}/>`,
