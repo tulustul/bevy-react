@@ -75,15 +75,13 @@ export function ControlledScrollDemo() {
 }
 
 // Smooth (eased) scroll. The `transition: { scroll }` style eases `ScrollPosition`
-// toward its target, so the buttons animate to the ends and the wheel glides
-// (`scrollStep` sets the per-line distance). Per the easing caveat, `scrollTop` is
-// driven only by the buttons; `onScroll` updates a *separate* readout so the
-// round-trip doesn't keep resetting the target mid-ease.
+// toward its target instead of snapping, so each wheel notch glides
+// (`scrollStep` sets the per-line distance).
 export function SmoothScrollDemo() {
   return (
     <Example
       title="Smooth scroll"
-      description="Smooth scroll: a scroll transition eases the offset instead of snapping. The buttons set a target and it animates there; the wheel eases too (scrollStep sets the per-line distance). onScroll feeds a separate readout — feeding it back into scrollTop would fight the ease."
+      description="A scroll transition eases the offset instead of snapping: each wheel notch glides to its target (scrollStep sets the per-line distance). Compare with the plain wheel list, which jumps."
       tsx={`<node
   style={{
     overflowY: "scroll",
@@ -95,10 +93,6 @@ export function SmoothScrollDemo() {
     },
   }}
   scrollStep={50}
-  // set by buttons only
-  scrollTop={target}
-  onScroll={(e) =>
-    setReadout(e.scrollTop)}
 >`}
     >
       <node style={controlColumn}>
@@ -124,68 +118,114 @@ export function SmoothScrollDemo() {
   );
 }
 
-// A row of scrollable lists that differ only in their `scrollbar` style: the
-// built-in "default" bar, a custom-styled gutter bar, a floating bar, and a
-// left-side bar. Each is draggable (thumb) and pages on a track click.
-export function ScrollbarShowcaseDemo() {
+// One card per scrollbar variant: the same scrollable list, differing only in
+// its `scrollbar` style. Every bar is draggable (thumb) and pages on a track
+// click.
+export function ScrollbarDefaultDemo() {
   return (
     <Example
-      title="scrollbar"
-      description="A visible, draggable scrollbar. Set style.scrollbar to 'default' for a built-in bar, or an object to style the track/thumb, pick a side, and reserve a gutter (content shrinks) vs float over content. Drag the thumb or click the track to page."
-      tsx={`style={{
+      title='scrollbar: "default"'
+      description="style.scrollbar adds a visible, draggable scrollbar; 'default' is the built-in bar. Drag the thumb or click the track to page."
+      tsx={`<node style={{
   overflowY: "scroll",
   scrollbar: "default",
-}}
+}}>`}
+    >
+      <ScrollList scrollbar="default" />
+    </Example>
+  );
+}
 
-// or fully styled:
-scrollbar: {
+export function ScrollbarStyledDemo() {
+  return (
+    <Example
+      title="Styled scrollbar"
+      description="A fully styled bar: track and thumb take node-like styles (color, radius), and thickness sets its width. By default the bar reserves a gutter, so the content shrinks to make room."
+      tsx={`scrollbar: {
   track: {
-    backgroundColor: "#00000022",
-    borderRadius: 6,
+    backgroundColor: "#00000088",
+    borderRadius: 8,
   },
   thumb: {
-    backgroundColor: "#8b5cf6",
-    borderRadius: 6,
+    backgroundColor: "#7aa2f7",
+    borderRadius: 8,
   },
-  thickness: 10,
-  // or "gutter" (default)
+  thickness: 20,
+}`}
+    >
+      <ScrollList scrollbar={customBar} />
+    </Example>
+  );
+}
+
+export function ScrollbarFloatDemo() {
+  return (
+    <Example
+      title='position: "float"'
+      description='position: "float" overlays the bar on the content instead of reserving a gutter — the list keeps its full width and the bar rides on top. The default is "gutter".'
+      tsx={`scrollbar: {
+  // ...track, thumb, thickness
   position: "float",
-  // or "right"
+}`}
+    >
+      <ScrollList scrollbar={floatBar} />
+    </Example>
+  );
+}
+
+export function ScrollbarLeftDemo() {
+  return (
+    <Example
+      title='verticalSide: "left"'
+      description='verticalSide picks the edge the vertical bar sits on: "left" moves it across from the default "right".'
+      tsx={`scrollbar: {
+  // ...track, thumb, thickness
   verticalSide: "left",
 }`}
     >
-      <node style={{ flexDirection: "column", gap: 16 }}>
-        <ScrollList label={'scrollbar: "default"'} scrollbar="default" />
-        <ScrollList label="custom (gutter)" scrollbar={customBar} />
-        <ScrollList label='position: "float"' scrollbar={floatBar} />
-        <ScrollList label='verticalSide: "left"' scrollbar={leftBar} />
-        <ScrollList label="hover + pressed" scrollbar={statesBar} />
-      </node>
+      <ScrollList scrollbar={leftBar} />
+    </Example>
+  );
+}
+
+export function ScrollbarStatesDemo() {
+  return (
+    <Example
+      title="Thumb hover & pressed"
+      description="hover and pressed styles nest inside thumb: this one brightens on hover and turns blue while dragging (pressed wins over hover)."
+      tsx={`scrollbar: {
+  thumb: {
+    backgroundColor: "#313244",
+    borderRadius: 8,
+    hover: {
+      backgroundColor: "#a6adc8",
+    },
+    pressed: {
+      backgroundColor: "#7aa2f7",
+    },
+  },
+  thickness: 10,
+}`}
+    >
+      <ScrollList scrollbar={statesBar} />
     </Example>
   );
 }
 
 function ScrollList({
-  label,
   scrollbar,
 }: {
-  label: string;
   scrollbar: "none" | "default" | ScrollbarStyle;
 }) {
   return (
-    <node style={{ flexDirection: "column", gap: 6 }}>
-      <text style={caption}>{label}</text>
-      <node style={{ ...showcaseList, scrollbar }}>
-        {ITEMS.map((item) => (
-          <node key={item} style={rowStyle}>
-            <text
-              style={{ color: Colors.textColor100, fontSize: FontSizes.sm }}
-            >
-              {item}
-            </text>
-          </node>
-        ))}
-      </node>
+    <node style={{ ...showcaseList, scrollbar }}>
+      {ITEMS.map((item) => (
+        <node key={item} style={rowStyle}>
+          <text style={{ color: Colors.textColor100, fontSize: FontSizes.sm }}>
+            {item}
+          </text>
+        </node>
+      ))}
     </node>
   );
 }
@@ -304,7 +344,7 @@ const leftBar: ScrollbarStyle = {
   verticalSide: "left",
 };
 
-// The thumb brightens on hover and turns violet while dragging (pressed > hover).
+// The thumb brightens on hover and turns blue while dragging (pressed > hover).
 const statesBar: ScrollbarStyle = {
   track: { backgroundColor: "#00000022", borderRadius: 8 },
   thumb: {

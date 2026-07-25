@@ -152,9 +152,10 @@ function OriginDemo() {
       title="Origin"
       description="origin sets the pivot (and the vanishing point). The door swings on an endless animated loop — pause, open, pause, close — while the slider drags the hinge from the left edge to the right: at 0% it swings like a door, at 50% it flips in place."
       tsx={`transform3d: {
+  perspective: 800,
   rotateY: { animated: swing },
   origin: {
-    x: "0%", y: "50%",
+    x: \`\${origin}%\`, y: "0%",
   },
 }`}
     >
@@ -199,9 +200,9 @@ function FlipCardDemo() {
       description="An endless flip loop: rest, flip to the back, rest, flip home. Past 90° the mirrored backface still renders and picks — hover the banner mid-flip and the interaction follows the transformed visual, not the layout rect."
       tsx={`flip.value = withRepeat(
   withSequence(
-    withDelay(1400,
+    withDelay(700,
       withTiming(180)),
-    withDelay(1400,
+    withDelay(700,
       withTiming(0)),
   ),
 );

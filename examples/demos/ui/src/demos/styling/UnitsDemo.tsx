@@ -138,7 +138,8 @@ function TimeDemo() {
     <Example
       title="Time"
       description="Time: a bare number is milliseconds; strings carry ms/s. Both boxes ease identically — click either to toggle."
-      tsx={`duration: "300ms"  ≡  duration: "0.3s"`}
+      tsx={`duration: "300ms"
+duration: "0.3s" // the same`}
     >
       <node style={{ ...row, gap: 20 }}>
         <TimeBox

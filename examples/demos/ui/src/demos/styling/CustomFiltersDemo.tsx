@@ -229,8 +229,10 @@ progress.value = withRepeat(
       duration: 1400,
       easing: "easeIn",
     })),
-    withDelay(500,
-      withTiming(0, { duration: 500 })),
+    withDelay(500, withTiming(0, {
+      duration: 1400,
+      easing: "easeOut",
+    })),
   ), // loops forever by default
 );
 
@@ -267,7 +269,35 @@ progress.value = withRepeat(
 
 function CyberpunkDemo() {
   return (
-    <Example title="Cyberpunk2077 style" style={{ cache: "never" }}>
+    <Example
+      title="Cyberpunk2077 style"
+      description="Filters compose with the other layer styles: a transform3d
+tilts the keybinding panel in perspective while a bloom + glitch +
+chromaticAberration chain runs over the same capture — the whole HUD look is
+one style object. Hover a row: plain transitions keep easing inside the
+filtered layer."
+      tsx={`<node style={{
+  transform3d: {
+    rotateY: -30,
+    rotateX: 10,
+    perspective: 300,
+  },
+  filter: [
+    { name: "bloom", params: {
+      intensity: 0.5,
+      radius: 2,
+      threshold: 0.1,
+    } },
+    { name: "glitch",
+      params: { intensity: 0.5 } },
+    { name: "chromaticAberration",
+      params: {
+        offset: 2, angle: 0,
+      } },
+  ],
+}}>…</node>`}
+      style={{ cache: "never" }}
+    >
       <node
         style={{
           flexDirection: "column",

@@ -30,7 +30,8 @@ const SLICE_TSX = `<image
   src="modal.png"
   imageMode={{
     type: "sliced",
-    border: 60,
+    border: 120,
+    maxCornerScale: 0.7,
   }}
   style={{ width, height }}
 />`;

@@ -101,13 +101,12 @@ function HueDemo() {
   return (
     <Example
       title="Hue"
-      description="Chains work on the backdrop too, in pass order: grayscale
-first, then blur — the world behind the panel turns to soft monochrome while
-the UI in front keeps its colors."
+      description="Any built-in works on the backdrop: here hueRotate recolors
+the scene behind the panel while the UI in front keeps its colors. Drag the
+slider to spin the hue."
       tsx={`<node style={{ backdropFilter: [
-  { name: "grayscale" },
-  { name: "blur",
-    params: { radius: 6 } },
+  { name: "hueRotate",
+    params: { angle } },
 ] }}>…</node>`}
     >
       <node style={controlColumn}>
@@ -134,14 +133,22 @@ function BothChainsDemo() {
     <Example
       title="filter + backdropFilter"
       description="backdropFilter and filter are independent chains on one
-node: the backdrop blurs the scene while the content chain desaturates the
-panel's own children. Each resolves, transitions, and animates on its own."
+node: the backdrop blurs the scene while the content chain (ripple +
+chromaticAberration) warps and fringes the panel's own children. Each
+resolves, transitions, and animates on its own."
       tsx={`<node style={{
   backdropFilter: {
     name: "blur",
-    params: { radius: 8 },
+    params: { radius: 20 },
   },
-  filter: { name: "grayscale" },
+  filter: [
+    { name: "ripple", params: {
+      amplitude: 2,
+      frequency: 30,
+      speed: 2,
+    } },
+    { name: "chromaticAberration" },
+  ],
 }}>…</node>`}
     >
       <node style={controlColumn}>
@@ -180,6 +187,21 @@ function CustomFilterDemo() {
       description="Custom #[react_filter]s run on the backdrop unchanged —
 this glass warps, fringes, and glitches the scene behind it (ripple +
 chromaticAberration + glitch)."
+      tsx={`<node style={{
+  backdropFilter: [
+    { name: "ripple", params: {
+      amplitude: 5,
+      frequency: 12,
+      speed: 2,
+    } },
+    { name: "chromaticAberration",
+      params: {
+        offset: 5, angle: 0,
+      } },
+    { name: "glitch",
+      params: { intensity: 0.5 } },
+  ],
+}} />`}
     >
       <node
         style={{

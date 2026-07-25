@@ -41,7 +41,7 @@ const TYPESCRIPT = `const [open, setOpen] =
 const PAGE: ExplanationData = {
   title: "<root>",
   description:
-    "A <root> is a detached, screen-space top-level tree — the on-screen twin of <surface>. Wherever the element sits in your component tree, its children render as an independent window-filling layer floating above the whole app (top of the global stack by default) — the natural home for modals, toasts, and other overlays. The <root> fills the window (a centered column by default), so backdrop styling goes straight on it. Its name labels the root in the devtools root selector (F12): while the modal here is open, the devtools list a selectable root named 'modal'.",
+    "A <root> is a detached, screen-space top-level tree — the on-screen twin of <surface>. Wherever it sits in your component tree, its children render as a window-filling layer floating above the whole app (top of the global stack by default) — the natural home for modals, toasts, and other overlays. Since it fills the window, backdrop styling goes straight on it. Its name labels the root in the devtools root selector (F12): open the modal and a root named 'modal' appears there.",
   tsx: TYPESCRIPT,
 };
 

@@ -18,7 +18,7 @@ const RUST = `let minimap = render_targets.create(
     &mut images,
     "minimap",
     RenderTargetSpec {
-        mode: RenderMode::Snapshot,
+        mode: RenderMode::Live,
         ..default()
     },
 );

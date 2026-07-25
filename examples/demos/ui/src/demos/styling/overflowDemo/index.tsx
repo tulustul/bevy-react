@@ -4,7 +4,11 @@ import { ClipVsHiddenDemo, OverflowModesDemo } from "./clipDemos";
 import {
   ControlledScrollDemo,
   HorizontalScrollbarDemo,
-  ScrollbarShowcaseDemo,
+  ScrollbarDefaultDemo,
+  ScrollbarFloatDemo,
+  ScrollbarLeftDemo,
+  ScrollbarStatesDemo,
+  ScrollbarStyledDemo,
   SmoothScrollDemo,
   WheelScrollDemo,
 } from "./scrollDemos";
@@ -35,7 +39,13 @@ export function OverflowDemo() {
         <SmoothScrollDemo />
       </DemoRow>
       <DemoRow>
-        <ScrollbarShowcaseDemo />
+        <ScrollbarDefaultDemo />
+        <ScrollbarStyledDemo />
+        <ScrollbarFloatDemo />
+      </DemoRow>
+      <DemoRow>
+        <ScrollbarLeftDemo />
+        <ScrollbarStatesDemo />
         <HorizontalScrollbarDemo />
       </DemoRow>
     </>

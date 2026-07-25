@@ -35,7 +35,11 @@ function WindowSizeExample() {
   }, []);
 
   return (
-    <Example title="Window">
+    <Example
+      title="Window"
+      description="The live viewport size: seeded once on mount by the bevy.window.size() request, then kept fresh by the built-in resize event. Resize the app window to see it change."
+      tsx={RESIZE_TYPESCRIPT}
+    >
       <text
         style={{
           fontSize: FontSizes.xxxl,

@@ -16,7 +16,7 @@ const TYPESCRIPT = `<node style={{ padding: 16, gap: 12 }}>
 const PAGE: ExplanationData = {
   title: "<node>",
   description:
-    "The <node> host element is a styleable, nestable box — the building block every other layout is made of. It's a plain container you style and nest; children flow inside it (a flexbox container by default). Drag the slider to space the boxes out. See the Flex and Grid demos under Layout for arranging its children.",
+    "The <node> host element is a styleable, nestable box — the building block every layout is made of. It's a flexbox container by default; children flow inside it. Drag the slider to space the boxes out. See the Flex and Grid demos under Layout for arranging children.",
   tsx: TYPESCRIPT,
 };
 

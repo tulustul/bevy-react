@@ -28,7 +28,7 @@ const TYPESCRIPT = `<button
 const PAGE: ExplanationData = {
   title: "<button>",
   description:
-    'A clickable control that reacts to hover and press via hoverStyle/pressStyle, driving React state on onClick. It styles exactly like a <node>; the difference is intent: as a discrete control it blocks pointer interaction by default (focusPolicy: "block"), so a click stops at the button instead of passing through to a sibling, an ancestor, or the 3D scene behind it. A <node> passes interaction through by default — set focusPolicy on either to override.',
+    'A clickable control that reacts to hover and press via hoverStyle/pressStyle, driving React state on onClick. It styles exactly like a <node>; the difference is intent: a button blocks pointer interaction by default (focusPolicy: "block"), so a click stops at it instead of passing through to whatever is behind, while a <node> passes interaction through. Set focusPolicy on either to override.',
   tsx: TYPESCRIPT,
 };
 

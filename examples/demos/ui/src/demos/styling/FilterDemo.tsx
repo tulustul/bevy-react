@@ -47,7 +47,14 @@ function GrayscaleDemo() {
   const [grayscale, setGrayscale] = useState(1);
 
   return (
-    <Example title="Grayscale">
+    <Example
+      title="Grayscale"
+      description="grayscale desaturates the subtree; amount 0–1 blends from full color to monochrome."
+      tsx={`filter: {
+  name: "grayscale",
+  params: { amount },
+}`}
+    >
       <image
         src="images/parrot.png"
         style={{
@@ -70,7 +77,14 @@ function SepiaDemo() {
   const [sepia, setSepia] = useState(1);
 
   return (
-    <Example title="Sepia">
+    <Example
+      title="Sepia"
+      description="sepia warms the subtree toward an old-photograph brown; amount 0–1 blends the effect in."
+      tsx={`filter: {
+  name: "sepia",
+  params: { amount },
+}`}
+    >
       <image
         src="images/parrot.png"
         style={{
@@ -93,7 +107,14 @@ function InvertDemo() {
   const [invert, setInvert] = useState(1);
 
   return (
-    <Example title="Invert">
+    <Example
+      title="Invert"
+      description="invert flips every color to its negative; amount 0–1 blends toward the inverted image."
+      tsx={`filter: {
+  name: "invert",
+  params: { amount },
+}`}
+    >
       <image
         src="images/parrot.png"
         style={{
@@ -118,7 +139,7 @@ function ChromaticAberrationDemo() {
 
   return (
     <Example
-      title="Chromatic abberation"
+      title="Chromatic aberration"
       description="chromaticAberration is a directional RGB split: the red
 channel shifts offset px along angle (degrees, clockwise from +X), blue the
 same distance opposite, green stays put — the whole layer splits uniformly.
@@ -174,9 +195,9 @@ everything. The glow spreads past the card's border box, like blur."
       tsx={`<node style={{ filter: {
   name: "bloom",
   params: {
-    radius: 14,
-    threshold: 0.6,
-    intensity: 1.2,
+    radius: 3,
+    threshold: 0.45,
+    intensity: 6,
   },
 } }}>
   <text>NEON</text>
@@ -318,7 +339,14 @@ function HueDemo() {
   const [hue, setHue] = useState(180);
 
   return (
-    <Example title="Hue">
+    <Example
+      title="Hue"
+      description="hueRotate spins every color around the hue wheel by angle degrees; 360 is a full turn back to the original."
+      tsx={`filter: {
+  name: "hueRotate",
+  params: { angle },
+}`}
+    >
       <node style={controlColumn}>
         <Parrot
           style={{ filter: { name: "hueRotate", params: { angle: hue } } }}

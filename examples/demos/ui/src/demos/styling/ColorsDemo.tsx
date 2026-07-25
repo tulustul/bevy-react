@@ -45,7 +45,7 @@ function ColorFormatsDemo() {
     <Example
       title="Color formats"
       description="Any CSS color works: hex, named, rgb()/hsl()/oklch(), or transparent."
-      tsx={`backgroundColor: "rebeccapurple""`}
+      tsx={`backgroundColor: "rebeccapurple"`}
     >
       <node
         style={{
