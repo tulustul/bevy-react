@@ -108,9 +108,6 @@ export interface SerializedProps extends Partial<
   hoverStyle?: Record<string, unknown>;
   pressStyle?: Record<string, unknown>;
   focusStyle?: Record<string, unknown>;
-  // Animation bindings (an `Animated.node`'s `animatedStyle`), opaque like style;
-  // decoded on the Rust side into `AnimatedBindings`.
-  animated?: Record<string, unknown>;
   // World-anchor binding (an `Anchored.node`'s entity + offset), opaque like style;
   // decoded on the Rust side into `Anchor`.
   anchor?: Record<string, unknown>;
@@ -501,14 +498,15 @@ export function registerHandlers(
 //   focused, no React focus state needed.
 // - An `Anchored.node`'s `anchor` (entity + optional offset) is opaque too;
 //   Bevy projects the entity's world position to the screen each frame.
-// - `animatedStyle` is converted by `serializeAnimatedStyle` (wire: `animated`).
+// Animated bindings ride *inside* `style` (the `{ animated }` wrapper) and
+// cross opaque like every other style value — Rust derives the node's
+// bindings from the merged style, so there is no separate animation prop.
 const OBJECT_PROP_KEYS = new Set([
   "style",
   "hoverStyle",
   "pressStyle",
   "focusStyle",
   "anchor",
-  "animatedStyle",
 ]);
 
 // Text + `image` + `editableText` element attributes that pass through by name.
@@ -548,7 +546,6 @@ const BOOL_PROP_KEYS = new Set(["flipX", "flipY", "multiline", "autofocus"]);
 // element to a named render target); they never coexist.
 const WIRE_NAME: Record<string, string> = {
   name: "target",
-  animatedStyle: "animated",
 };
 
 // "Act now" props: present = do something once (push a controlled value, draw a
@@ -583,14 +580,7 @@ function serializePropInto(
   }
   if (OBJECT_PROP_KEYS.has(key)) {
     if (!value || typeof value !== "object") return false;
-    if (key === "animatedStyle") {
-      // An `Animated.node`'s `animatedStyle`: each property is bound to a shared
-      // value (or an interpolation). A bare `SharedValue` becomes a `shared`
-      // binding; `interpolate`/`interpolateColor` results pass through as-is.
-      out.animated = serializeAnimatedStyle(value as Record<string, unknown>);
-    } else {
-      rec[key] = value;
-    }
+    rec[key] = value;
     return true;
   }
   // A `canvas`'s `draw`: a painter callback (recorded against a fresh context)
@@ -627,15 +617,17 @@ export function serializeProps(
 }
 
 // Structural equality with a depth cap. Style values are small plain-JSON
-// trees (rects, transforms, shadow lists, gradient stops); comparing them
-// structurally means an inline object literal that didn't actually change
-// doesn't count as a change. The cap of 5 gives one level of headroom over
-// the deepest style value — a filter chain `[{name, params: {tint: [r, g,
-// b, a]}}]` has four container levels (leaves compare via `Object.is` before
-// the depth guard, so depth counts containers, not values). Past the cap (or
-// for functions/class instances) it conservatively reports "unequal", which
-// merely re-sends that one field.
-export function valuesEqual(a: unknown, b: unknown, depth = 5): boolean {
+// trees (rects, transforms, shadow lists, gradient stops, `{ animated }`
+// binding wrappers); comparing them structurally means an inline object
+// literal that didn't actually change doesn't count as a change. The cap of 8
+// gives headroom over the deepest style value — a filter chain
+// `[{name, params: {tint: {animated: {output: [[r,g,b,a], …]}}}}]` has seven
+// container levels (leaves compare via `Object.is` before the depth guard, so
+// depth counts containers, not values; a reference-stable `SharedValue`
+// short-circuits at its leaf). Past the cap (or for functions/class
+// instances) it conservatively reports "unequal", which merely re-sends that
+// one field.
+export function valuesEqual(a: unknown, b: unknown, depth = 8): boolean {
   if (Object.is(a, b)) return true;
   if (depth <= 0) return false;
   if (
@@ -810,24 +802,6 @@ export function buildUpdateOp(
   if (acc.unset) op.unset = acc.unset;
   if (acc.styleUnset) op.styleUnset = acc.styleUnset;
   return op;
-}
-
-// Convert an `animatedStyle` object into its wire form. Each property value is
-// either a `SharedValue` (carries an `id`) → a `shared` binding, or an already-
-// built binding descriptor (carries a `type`) → passed through unchanged.
-function serializeAnimatedStyle(
-  style: Record<string, unknown>,
-): Record<string, unknown> {
-  const out: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(style)) {
-    if (!value || typeof value !== "object") continue;
-    if ("type" in value) {
-      out[key] = value; // an interpolate / interpolateColor binding
-    } else if ("id" in value) {
-      out[key] = { type: "shared", id: (value as { id: number }).id };
-    }
-  }
-  return out;
 }
 
 export function dropHandlers(id: number): void {

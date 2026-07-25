@@ -1,6 +1,5 @@
 import { useState } from "react";
 import {
-  Animated,
   cancelAnimation,
   useSharedValue,
   withRepeat,
@@ -27,8 +26,8 @@ re-captures. Fields apply in a fixed order — scale, rotateX/Y/Z (degrees),
 translate, perspective — around origin. Picking, hover styling, and the
 cursor all follow the transformed visual. transition: { transform3d } eases
 field-wise, but unsetting the whole field demotes the layer and snaps — keep
-an identity {} in the base style when removal should ease. animatedStyle
-drives single fields via "transform3d.<field>" keys.`,
+an identity {} in the base style when removal should ease. An { animated }
+wrapper on any field drives it from the animation engine.`,
 };
 
 export function Transform3dDemo() {
@@ -208,27 +207,28 @@ function WobbleDemo() {
 
   return (
     <Example
-      title="animatedStyle"
-      description="animatedStyle drives single fields (degrees for rotations) straight from the animation engine — a continuous wobble is a composite-time cache hit, never a re-capture."
-      tsx={`animatedStyle={{
-  "transform3d.rotateY": wobble,
-}}`}
+      title="Animated fields"
+      description="An { animated } wrapper drives single fields (degrees for rotations) straight from the animation engine — a continuous wobble is a composite-time cache hit, never a re-capture."
+      tsx={`style={{ transform3d: {
+  perspective: 600,
+  rotateY: { animated: wobble },
+} }}`}
     >
       <node style={controlColumn}>
         <node style={stage}>
-          <Animated.node
+          <node
             style={{
               ...card,
               backgroundColor: Colors.green100,
-              transform3d: { perspective: 600 },
-            }}
-            animatedStyle={{
-              "transform3d.rotateY": wobble,
-              "transform3d.rotateX": wobble,
+              transform3d: {
+                perspective: 600,
+                rotateX: { animated: wobble },
+                rotateY: { animated: wobble },
+              },
             }}
           >
             <text style={cardTitle}>wobble</text>
-          </Animated.node>
+          </node>
         </node>
         <Button onClick={spinning ? stop : start}>
           {spinning ? "Stop" : "Wobble"}

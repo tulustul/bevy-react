@@ -1,20 +1,26 @@
 // Reanimated-style animation API for bevy-react.
 //
-// Mirrors React Native Reanimated: declare a `SharedValue` (one animatable
-// number with a stable id), assign it a *driver* (`withTiming`, `withSpring`,
-// `withRepeat`, `withSequence`), and bind style properties to it on an
-// `Animated.node`. The declaration crosses the bridge once; the Bevy side drives
-// the value every frame — per-frame interpolation never round-trips to JS. The
-// one thing that crosses back is completion: a driver with a callback settles
-// exactly one `animationFinished` event (routed in `bridge.ts`).
+// Mirrors React Native Reanimated's value model: declare a `SharedValue` (one
+// animatable number with a stable id) and assign it a *driver* (`withTiming`,
+// `withSpring`, `withRepeat`, `withSequence`). The declaration crosses the
+// bridge once; the Bevy side drives the value every frame — per-frame
+// interpolation never round-trips to JS. The one thing that crosses back is
+// completion: a driver with a callback settles exactly one `animationFinished`
+// event (routed in `bridge.ts`).
+//
+// Unlike Reanimated there is no `Animated.View`/`animatedStyle`: a binding is
+// written **inline in `style`** behind the explicit `{ animated: … }` wrapper
+// (`opacity: { animated: sv }`, `filter: { name, params: { radius:
+// { animated: sv } } }`) on plain intrinsic elements — see [`Animatable`].
+// The style crosses the wire untouched; the Rust side decodes the wrapper and
+// derives the node's bindings from the merged style.
 //
 // These shapes are hand-mirrored against `bevy_react::animations::protocol` on the
 // Rust side (the same contract `bridge.ts` keeps with `protocol::Op`). Keep them
 // in sync.
 
-import { createElement, useRef, type FunctionComponent } from "react";
+import { useRef } from "react";
 import { animate, registerAnimationCallback } from "./bridge";
-import type { BevyImageProps, BevyNodeProps, BevyTextProps } from "./jsx";
 
 /** Easing curve names understood by `withTiming` (mirrors Rust `Easing`). */
 export type EasingName = "linear" | "easeIn" | "easeOut" | "easeInOut";
@@ -94,68 +100,27 @@ export interface SharedValue {
  *  directly) or an interpolation binding. */
 export type AnimatedValue = SharedValue | Binding;
 
-/** The continuous style properties an `Animated.node` can drive. Mirrors the Rust
- *  `AnimatableProperty` enum (`crates/animations/src/protocol.rs`) — keep the two
- *  in sync (hand-synced, like the rest of the animation wire surface). Transform
- *  channels (`translateX`…`rotate`) map to `UiTransform`; `opacity` drives color
- *  alpha; `backgroundColor` drives the background color. `rotate` is in **radians**
- *  (an imperative numeric channel — unlike the declarative static `transform.rotate`,
- *  which takes a CSS angle/degrees). */
-export type AnimatableProperty =
-  // Transform → `UiTransform` (post-layout, no relayout).
-  | "translateX"
-  | "translateY"
-  | "scale"
-  | "scaleX"
-  | "scaleY"
-  | "rotate"
-  // Color / alpha.
-  | "opacity"
-  | "backgroundColor"
-  | "borderColor"
-  | "color"
-  // Layout lengths (px) — drive `Node`, so these re-flow surrounding content.
-  | "width"
-  | "height"
-  | "minWidth"
-  | "minHeight"
-  | "maxWidth"
-  | "maxHeight"
-  | "left"
-  | "right"
-  | "top"
-  | "bottom"
-  | "flexBasis"
-  | "gap"
-  | "rowGap"
-  | "columnGap"
-  // Layout scalars. (`flexGrow`/`flexShrink` are intentionally omitted: they're
-  // relative weights, not magnitudes, so animating them has no intuitive meaning —
-  // animate `flexBasis`/`width` instead.)
-  | "aspectRatio"
-  // One named param of the node's `filter` chain, addressed by wire position:
-  // `filter[0].radius` drives blur's radius at chain entry 0 (both of blur's
-  // expanded passes). Deliberately loose typing — the index/param name (and the
-  // binding kind vs. the param's kind) are validated Rust-side against the
-  // resolved chain (`filterBinding` devtools warnings; an unmatched binding is
-  // inert). Values use the param's wire unit: logical px for lengths, degrees
-  // for angles, raw scalars; color params take an `interpolateColor` binding.
-  | `filter[${number}].${string}`
-  // The backdrop analog: one named param of the node's `backdropFilter` chain
-  // (`backdropFilter[0].radius`). Same loose typing, units, and Rust-side
-  // validation (`backdropFilterBinding` warnings).
-  | `backdropFilter[${number}].${string}`
-  // One field of the node's `transform3d` style (a composited-layer 3D
-  // transform, composite-time — animating it never re-captures). Loose typing
-  // like `filter[…]` — unknown field names are skipped Rust-side. Values use
-  // the declarative wire units: logical px for translations/perspective/
-  // originX/originY, **degrees** for rotateX/Y/Z (unlike the imperative 2D
-  // `rotate`, which is radians), raw scalars for scales.
-  | `transform3d.${string}`;
-
-/** The animation-driven half of an `Animated.node`'s style: each animatable
- *  property bound to a shared value or interpolation. */
-export type AnimatedStyle = Partial<Record<AnimatableProperty, AnimatedValue>>;
+/** A style position that can hold either a static value or an inline
+ *  animation binding: `T`, or the explicit `{ animated: … }` wrapper around a
+ *  shared value / `interpolate` / `interpolateColor` result. The wrapper is
+ *  decoded Rust-side (the style crosses the wire untouched) and the binding
+ *  drives the property every frame — the field then has **no static value**.
+ *
+ *  Which positions accept it is visible in [`BevyStyle`]'s field types:
+ *  opacity, colors, layout lengths (bound lengths animate in **px**),
+ *  `transform` channels (bound `rotate` is **degrees**, like the static
+ *  field), every `transform3d` field, and filter/backdropFilter params
+ *  (validated Rust-side against the resolved chain — `filterBinding`
+ *  warnings; an unmatched binding is inert).
+ *
+ *  `seed` (filter/backdrop params only): the static value the chain resolver
+ *  uses in the wrapper's place. Resolve-time derivations read only static
+ *  params — most visibly a blur's capture outset — so size it for the
+ *  animation's range: `radius: { animated: sv, seed: 10 }`.
+ *
+ *  Bindings are honored in the base `style` only; a wrapper inside
+ *  `hoverStyle`/`pressStyle`/`focusStyle` is ignored with a warning. */
+export type Animatable<T> = T | { animated: AnimatedValue; seed?: T };
 
 // Per-runtime shared-value id allocator. The isolate persists across hot
 // reloads (only the app bundle re-executes; this module lives in the vendor
@@ -348,18 +313,3 @@ function hexToRgba(hex: string): [number, number, number, number] {
   const a = h.length >= 8 ? parseInt(h.slice(6, 8), 16) / 255 : 1;
   return [r, g, b, a];
 }
-
-// Thin host wrappers, so apps write `<Animated.node animatedStyle={…}/>` the way
-// Reanimated apps write `<Animated.View/>`. The animation lives in `animatedStyle`
-// (the intrinsic elements accept it; see jsx.d.ts).
-function host<P extends object>(type: string) {
-  return (props: P) =>
-    createElement(type as unknown as FunctionComponent<P>, props);
-}
-
-export const Animated = {
-  node: host<BevyNodeProps>("node"),
-  button: host<BevyNodeProps>("button"),
-  image: host<BevyImageProps>("image"),
-  text: host<BevyTextProps>("text"),
-};

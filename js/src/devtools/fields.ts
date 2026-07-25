@@ -104,7 +104,7 @@ export const STYLE_FIELDS: Record<string, FieldCategory> = {
 };
 
 /** Top-level props the inspector lets you edit. Everything else (handlers,
- *  opaque objects like `animated`/`anchor`, structural props) is read-only. */
+ *  opaque objects like `anchor`, structural props) is read-only. */
 export const EDITABLE_PROPS: Record<string, FieldCategory> = {
   value: "string",
   src: "string",

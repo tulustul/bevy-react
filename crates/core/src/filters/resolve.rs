@@ -180,7 +180,24 @@ pub fn resolve_chains<I: ChainInput, R: ResolvedChain>(
                 );
                 continue;
             };
-            let params = Value::Object(fu.params.clone());
+            // `{ animated: … }`-wrapped params are bindings, not values: the
+            // strict typed decode sees the wrapper's optional `seed` in its
+            // place (or nothing — registry default). The seed sizes
+            // resolve-time derivations like the capture outset; the per-param
+            // binding (`crate::style_bindings`) overwrites the packed slot
+            // every frame after this resolve runs.
+            let params = Value::Object(
+                fu.params
+                    .iter()
+                    .filter_map(
+                        |(k, v)| match crate::style_bindings::animated_param_seed(v) {
+                            None => Some((k.clone(), v.clone())),
+                            Some(Some(seed)) => Some((k.clone(), seed.clone())),
+                            Some(None) => None,
+                        },
+                    )
+                    .collect(),
+            );
             // `resolve` and `outset` are separate baked fns by design (see
             // `FilterRegistration`); either rejecting skips the entry with
             // one params warning.
@@ -637,8 +654,8 @@ mod tests {
             .send(vec![create(
                 1,
                 json!({
-                    "style": { "filter": { "name": "blur", "params": { "radius": 10 } } },
-                    "animated": { "filter[0].radius": { "type": "shared", "id": 1 } },
+                    "style": { "filter": { "name": "blur",
+                        "params": { "radius": { "animated": { "id": 1 } } } } },
                 }),
             )])
             .unwrap();
@@ -681,10 +698,11 @@ mod tests {
     }
 
     /// The scar test: a filter style delta mid-animation rebuilds the chain
-    /// (the resolver snaps the params to the new static style) — the binding
-    /// re-asserts the driven value the same frame (`AnimationSet::Apply` runs
-    /// after [`resolve_chains`]), so the driven param never shows the
-    /// static value on screen.
+    /// (the resolver snaps the params to the wrapper's static `seed`) — the
+    /// binding re-asserts the driven value the same frame
+    /// (`AnimationSet::Apply` runs after [`resolve_chains`]), so the driven
+    /// param never shows the seed on screen. The seed itself lands in the
+    /// resolve-time outset (that is what it exists for).
     #[test]
     fn filter_param_binding_reasserts_after_chain_rebuild() {
         let (mut app, ops_tx, anim_tx) = anim_app();
@@ -695,22 +713,25 @@ mod tests {
             .send(vec![create(
                 1,
                 json!({
-                    "style": { "filter": { "name": "blur", "params": { "radius": 10 } } },
-                    "animated": { "filter[0].radius": { "type": "shared", "id": 1 } },
+                    "style": { "filter": { "name": "blur",
+                        "params": { "radius": { "animated": { "id": 1 }, "seed": 10 } } } },
                 }),
             )])
             .unwrap();
         app.update();
         let e = entity_of(&app, 1);
-        let v0 = app.world().get::<ResolvedFilterChain>(e).unwrap().version;
+        let chain = app.world().get::<ResolvedFilterChain>(e).unwrap();
+        assert_eq!(chain.outset_px, 30, "seed sizes the outset (3 × 10)");
+        let v0 = chain.version;
 
-        // The delta rebuilds the chain (radius 12, and a real outset change
-        // so the resolver's compare-before-write sees a difference even
-        // against the driven params) …
+        // A delta rebuilds the chain (seed 12 — a real outset change so the
+        // resolver's compare-before-write sees a difference even against the
+        // driven params) …
         ops_tx
             .send(vec![update(
                 1,
-                json!({ "style": { "filter": { "name": "blur", "params": { "radius": 12 } } } }),
+                json!({ "style": { "filter": { "name": "blur",
+                    "params": { "radius": { "animated": { "id": 1 }, "seed": 12 } } } } }),
                 &[],
             )])
             .unwrap();
@@ -721,7 +742,7 @@ mod tests {
         assert_eq!(chain.passes[1].params[0].x, 4.0, "V re-asserted");
         assert_eq!(
             chain.outset_px, 36,
-            "the rebuild itself landed (3 × radius 12)"
+            "the rebuild itself landed (3 × seed 12)"
         );
         assert!(chain.version > v0, "resolver + binding both bumped");
     }

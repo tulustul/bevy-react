@@ -1,11 +1,5 @@
 import { memo, useEffect, useMemo } from "react";
-import {
-  Animated,
-  useSharedValue,
-  withDelay,
-  withRepeat,
-  withTiming,
-} from "bevy-react";
+import { useSharedValue, withDelay, withRepeat, withTiming } from "bevy-react";
 import type { FilterUse } from "bevy-react";
 import { BevyStyle } from "bevy-react/jsx";
 import { TestBanner } from "./TestBanner";
@@ -38,8 +32,8 @@ export const StressItem = memo(function StressItem({
   blurRadius: number;
 }) {
   // Stable instances per mounted item (useSharedValue is useRef-backed), so a
-  // re-render serializes `animatedStyle` to structurally identical bindings and
-  // the delta diff emits no op.
+  // re-render's inline `{ animated }` wrappers compare structurally identical
+  // and the delta diff emits no op.
   const tx = useSharedValue(0);
   const ty = useSharedValue(0);
   const op = useSharedValue(item.opacity);
@@ -79,27 +73,27 @@ export const StressItem = memo(function StressItem({
       : [{ name: "grayscale" }];
   }, [filtered, blur, blurRadius]);
 
-  // Promotion root: `opacity` present + ≥1 child (the banner) promotes the
-  // subtree to its own composited layer (a `filter` chain force-promotes it
-  // regardless); `groupAlpha: false` (base style) opts out, de-promoting it.
+  // Promotion root: `opacity` present (an `{ animated }` one counts) + ≥1
+  // child (the banner) promotes the subtree to its own composited layer (a
+  // `filter` chain force-promotes it regardless); `groupAlpha: false` (base
+  // style) opts out, de-promoting it. The shared values are useRef-stable, so
+  // the memo'd style stays referentially stable per item.
   const style = useMemo<BevyStyle>(
     () => ({
       positionType: "absolute",
       left: `${item.left}%`,
       top: `${item.top}%`,
-      opacity: item.opacity,
+      opacity: { animated: op },
+      transform: { translateX: { animated: tx }, translateY: { animated: ty } },
       ...(groupAlpha ? {} : { groupAlpha: false }),
       ...(filter ? { filter } : {}),
     }),
-    [item, groupAlpha, filter],
+    [item, groupAlpha, filter, tx, ty, op],
   );
 
   return (
-    <Animated.node
-      style={style}
-      animatedStyle={{ translateX: tx, translateY: ty, opacity: op }}
-    >
+    <node style={style}>
       <TestBanner />
-    </Animated.node>
+    </node>
   );
 });

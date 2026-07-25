@@ -22,15 +22,15 @@ use bevy::prelude::*;
 use bevy::ui::{ComputedNode, UiGlobalTransform};
 
 use super::{LayerContentDirt, PromotedLayer};
-use crate::protocol::{self, Length, Transform3d};
+use crate::protocol::{self, AnimatableField, Length, Transform3d};
 
 /// The `transform3d` style params on a promoted layer root, exactly as merged
 /// from the wire (base style + active interaction variants). Written by
 /// `apply_style_masked` under the `TRANSFORM3D` group; the transition and
-/// animatedStyle drivers overwrite it per-frame. Removed on demotion (see
+/// animation drivers overwrite it per-frame. Removed on demotion (see
 /// `evaluate_layer_promotions`) — style apply never removes it, mirroring the
 /// `UiTransform` never-remove rule.
-#[derive(Component, Debug, Clone, Copy, PartialEq)]
+#[derive(Component, Debug, Clone, PartialEq)]
 pub struct LayerTransform3d(pub Transform3d);
 
 /// The matrix derived from [`LayerTransform3d`] + this frame's layout, in
@@ -68,9 +68,14 @@ fn resolve_origin_axis(len: Length, extent: f32, scale_factor: f32) -> (f32, boo
 /// this stays pure for tests). Percent resolves against the **border box**,
 /// not the outset-inflated capture rect: a blur outset must not move the pivot.
 pub fn resolve_origin(params: &Transform3d, size: Vec2, scale_factor: f32) -> (Vec2, bool) {
-    let origin = params.origin.unwrap_or_default();
-    let (x, warn_x) = resolve_origin_axis(origin.x, size.x, scale_factor);
-    let (y, warn_y) = resolve_origin_axis(origin.y, size.y, scale_factor);
+    let origin = params.origin.clone().unwrap_or_default();
+    // An animated axis reads as its default center until the animation applier
+    // overwrites the params with the evaluated static value each frame.
+    let axis = |a: &crate::protocol::Animatable<Length>| {
+        a.value().copied().unwrap_or(Length::Percent(50.0))
+    };
+    let (x, warn_x) = resolve_origin_axis(axis(&origin.x), size.x, scale_factor);
+    let (y, warn_y) = resolve_origin_axis(axis(&origin.y), size.y, scale_factor);
     (Vec2::new(x, y), warn_x || warn_y)
 }
 
@@ -91,27 +96,27 @@ pub fn build_transform3d_matrix(
 
     // `scale` is uniform unless a per-axis override wins (same precedence as
     // the 2D `build_ui_transform`). Z never scales: the subtree is a plane.
-    let uniform = params.scale.unwrap_or(1.0);
+    let uniform = params.scale.static_val().unwrap_or(1.0);
     let scale = Mat4::from_scale(Vec3::new(
-        params.scale_x.unwrap_or(uniform),
-        params.scale_y.unwrap_or(uniform),
+        params.scale_x.static_val().unwrap_or(uniform),
+        params.scale_y.static_val().unwrap_or(uniform),
         1.0,
     ));
-    let rx = Mat4::from_rotation_x(params.rotate_x.unwrap_or_default().radians());
-    let ry = Mat4::from_rotation_y(params.rotate_y.unwrap_or_default().radians());
-    let rz = Mat4::from_rotation_z(params.rotate_z.unwrap_or_default().radians());
+    let rx = Mat4::from_rotation_x(params.rotate_x.static_val().unwrap_or_default().radians());
+    let ry = Mat4::from_rotation_y(params.rotate_y.static_val().unwrap_or_default().radians());
+    let rz = Mat4::from_rotation_z(params.rotate_z.static_val().unwrap_or_default().radians());
     let translate = Mat4::from_translation(
         Vec3::new(
-            params.translate_x.unwrap_or(0.0),
-            params.translate_y.unwrap_or(0.0),
-            params.translate_z.unwrap_or(0.0),
+            params.translate_x.static_val().unwrap_or(0.0),
+            params.translate_y.static_val().unwrap_or(0.0),
+            params.translate_z.static_val().unwrap_or(0.0),
         ) * scale_factor,
     );
     // Self-perspective: w' = 1 − z/d (z toward the viewer shrinks w →
     // magnifies after the divide). A non-positive focal distance is
     // meaningless — treat like unset (orthographic).
     let mut perspective = Mat4::IDENTITY;
-    if let Some(d) = params.perspective.filter(|d| *d > 0.0) {
+    if let Some(d) = params.perspective.static_val().filter(|d| *d > 0.0) {
         perspective.z_axis.w = -1.0 / (d * scale_factor);
     }
 
@@ -131,7 +136,7 @@ pub fn build_transform3d_matrix(
 /// layout) and before `resolve_layer_repaints` (which drains the dirt).
 ///
 /// This is the **single dirt choke point** for the transform: the style
-/// applier, transitions, and animatedStyle all just write the params
+/// applier, transitions, and animation bindings all just write the params
 /// component; whatever actually changed the matrix lands here once.
 #[allow(clippy::type_complexity)]
 pub fn sync_transform3d_matrices(
@@ -180,7 +185,7 @@ pub fn sync_transform3d_matrices(
 
 /// Convenience for the wire params carried by a style, if any.
 pub fn style_transform3d(style: &Option<protocol::Style>) -> Option<Transform3d> {
-    style.as_ref().and_then(|s| s.transform3d)
+    style.as_ref().and_then(|s| s.transform3d.clone())
 }
 
 #[cfg(test)]
@@ -188,8 +193,18 @@ mod tests {
     use super::*;
     use crate::protocol::Transform3dOrigin;
 
-    fn deg(v: f32) -> Option<crate::protocol::Angle> {
+    fn deg(v: f32) -> Option<crate::protocol::Animatable<crate::protocol::Angle>> {
         serde_json::from_value(serde_json::json!(v)).ok()
+    }
+
+    /// Static-wrap a scalar channel value.
+    fn st(v: f32) -> Option<crate::protocol::Animatable<f32>> {
+        Some(crate::protocol::Animatable::Static(v))
+    }
+
+    /// Static-wrap an origin axis.
+    fn ax(l: Length) -> crate::protocol::Animatable<Length> {
+        crate::protocol::Animatable::Static(l)
     }
 
     /// The resolved origin is the fixed point of the transform for any
@@ -199,10 +214,10 @@ mod tests {
         let params = Transform3d {
             rotate_z: deg(45.0),
             rotate_y: deg(30.0),
-            scale: Some(2.0),
+            scale: st(2.0),
             origin: Some(Transform3dOrigin {
-                x: Length::Px(10.0),
-                y: Length::Px(20.0),
+                x: ax(Length::Px(10.0)),
+                y: ax(Length::Px(20.0)),
             }),
             ..Default::default()
         };
@@ -242,11 +257,11 @@ mod tests {
     #[test]
     fn perspective_divide_magnifies_toward_viewer() {
         let params = Transform3d {
-            perspective: Some(100.0),
-            translate_z: Some(50.0),
+            perspective: st(100.0),
+            translate_z: st(50.0),
             origin: Some(Transform3dOrigin {
-                x: Length::Px(0.0),
-                y: Length::Px(0.0),
+                x: ax(Length::Px(0.0)),
+                y: ax(Length::Px(0.0)),
             }),
             ..Default::default()
         };
@@ -263,11 +278,11 @@ mod tests {
     #[test]
     fn per_axis_scale_overrides_uniform() {
         let params = Transform3d {
-            scale: Some(2.0),
-            scale_x: Some(3.0),
+            scale: st(2.0),
+            scale_x: st(3.0),
             origin: Some(Transform3dOrigin {
-                x: Length::Px(0.0),
-                y: Length::Px(0.0),
+                x: ax(Length::Px(0.0)),
+                y: ax(Length::Px(0.0)),
             }),
             ..Default::default()
         };
@@ -281,10 +296,10 @@ mod tests {
     #[test]
     fn scale_factor_converts_logical_lengths() {
         let params = Transform3d {
-            translate_x: Some(10.0),
+            translate_x: st(10.0),
             origin: Some(Transform3dOrigin {
-                x: Length::Px(5.0),
-                y: Length::Percent(50.0),
+                x: ax(Length::Px(5.0)),
+                y: ax(Length::Percent(50.0)),
             }),
             ..Default::default()
         };
@@ -361,11 +376,11 @@ mod tests {
     fn origin_fallback_and_bad_perspective() {
         let params = Transform3d {
             origin: Some(Transform3dOrigin {
-                x: Length::Auto,
-                y: Length::Px(0.0),
+                x: ax(Length::Auto),
+                y: ax(Length::Px(0.0)),
             }),
-            perspective: Some(0.0),
-            translate_z: Some(50.0),
+            perspective: st(0.0),
+            translate_z: st(50.0),
             ..Default::default()
         };
         let (offset, warned) = resolve_origin(&params, Vec2::new(80.0, 60.0), 1.0);

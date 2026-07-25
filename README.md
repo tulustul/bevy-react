@@ -221,11 +221,13 @@ spring config.
 ### Animations
 
 For richer motion, use Reanimated-style shared values driven on the Bevy side (no
-per-frame JS). Create a value with `useSharedValue`, assign it a driver, and bind it
-through `animatedStyle` on an `Animated.*` element.
+per-frame JS). Create a value with `useSharedValue`, assign it a driver, and bind
+it **inline in `style`** with the `{ animated: … }` wrapper — on any plain
+element, in any animatable position (opacity, colors, layout lengths, transform
+channels, `transform3d` fields, filter params).
 
 ```tsx
-import { Animated, useSharedValue, withRepeat, withTiming } from "bevy-react";
+import { useSharedValue, withRepeat, withTiming } from "bevy-react";
 import { useEffect } from "react";
 
 function Pulse() {
@@ -239,16 +241,16 @@ function Pulse() {
   }, [opacity]);
 
   return (
-    <Animated.node
-      style={{ width: 80, height: 80 }}
-      animatedStyle={{ opacity }}
-    />
+    <node style={{ width: 80, height: 80, opacity: { animated: opacity } }} />
   );
 }
 ```
 
 Drivers: `withTiming`, `withSpring`, `withRepeat`, `withSequence`, `withDelay`, plus
-`interpolate` / `interpolateColor` to map one value through a curve.
+`interpolate` / `interpolateColor` to map one value through a curve
+(`width: { animated: interpolate(t, [0, 1], [88, 200]) }`). Rotations bind in
+degrees, bound lengths animate in px, and bindings are honored in the base
+`style` only.
 
 ### Fonts
 

@@ -16,7 +16,7 @@ the filter passes. Built-ins: blur, grayscale, sepia, invert, hueRotate,
 bloom, chromaticAberration. transition: { filter } eases params, but easing to
 an empty chain snaps (the layer demotes) — keep an identity entry, e.g.
 { name: "blur", params: { radius: 0 } }, when removal should fade.
-animatedStyle drives single params via "filter[<i>].<param>" keys.`,
+An { animated } wrapper on a param drives it from the animation engine.`,
 };
 
 export function FilterDemo() {

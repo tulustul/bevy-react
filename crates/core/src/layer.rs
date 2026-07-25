@@ -43,8 +43,7 @@ use bevy::platform::collections::{HashMap, HashSet};
 use bevy::prelude::*;
 use bevy::ui::{ComputedNode, UiGlobalTransform};
 
-use crate::animations::AnimatableProperty;
-use crate::protocol::{NodeId, Props};
+use crate::protocol::{AnimatableField, NodeId, Props};
 
 pub mod clip;
 pub mod pick3d;
@@ -269,11 +268,10 @@ pub fn promotion_reasons(
     child_count: usize,
     ineligible_element: bool,
 ) -> PromotionReasons {
-    let opacity_present = props.all_styles().any(|s| s.opacity.is_some())
-        || props
-            .animated
-            .as_ref()
-            .is_some_and(|b| b.contains(AnimatableProperty::Opacity));
+    // Presence-based, value-blind — and an `{ animated }` opacity is presence
+    // too (the field is `Some(Animatable::Animated)`), so an animated-only
+    // opacity promotes exactly like a static one.
+    let opacity_present = props.all_styles().any(|s| s.opacity.is_some());
     let group_gate = props.style.as_ref().and_then(|s| s.group_alpha) != Some(false);
 
     let mut reasons = 0;
@@ -374,7 +372,7 @@ pub fn evaluate_layer_promotions(
                 .props_cache
                 .get(&id)
                 .and_then(|p| p.style.as_ref())
-                .and_then(|s| s.opacity)
+                .and_then(|s| s.opacity.static_val())
                 .unwrap_or(1.0);
             let cache_policy = bridge
                 .props_cache
@@ -926,9 +924,9 @@ mod tests {
             "hoverStyle": { "opacity": 0.8 },
         }));
         assert!(promoted(&hover_only, 1, false));
-        // An animated binding counts even with no static value.
+        // An `{ animated }` opacity is field presence like a static one.
         let animated = props(serde_json::json!({
-            "animated": { "opacity": { "type": "shared", "id": 1 } },
+            "style": { "opacity": { "animated": { "id": 1 } } },
         }));
         assert!(promoted(&animated, 1, false));
         // Ineligible element kinds (text / detached roots) never promote.

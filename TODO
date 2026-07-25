@@ -11,7 +11,7 @@
   ✔ style transitions @done(26-07-25 11:54)
   ✔ declarative animations(?) @done(26-07-25 11:54)
   ✔ filters/other deep properties @done(26-07-25 11:54)
-☐ nicer navigation
+✘ nicer navigation @cancelled(26-07-25 14:21)
 ✔ scrollbar should not animate when dragged with a mouse @done(26-07-25 00:18)
 ☐ <Anchored.node> -> <anchor>
 

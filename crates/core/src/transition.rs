@@ -23,7 +23,7 @@
 //! target and writes the interpolated value onto `UiTransform`/`BackgroundColor`/
 //! alpha — *last* in the frame, so a coincident re-render's snap value never wins.
 //!
-//! A channel also driven by `animatedStyle` (imperative) is left to the animations
+//! A channel also driven by an inline `{ animated }` binding is left to the animations
 //! plugin: the transition skips any channel bound by the entity's `AnimatedNode`.
 
 use crate::animations::{
@@ -35,7 +35,7 @@ use bevy::prelude::*;
 use bevy::ui::{ScrollPosition, UiTransform};
 use serde::Deserialize;
 
-use crate::protocol::{Length, Style, Time as WireTime};
+use crate::protocol::{AnimatableField, Length, Style, Time as WireTime};
 use crate::ui_map::{length_to_val, parse_color};
 
 mod transform3d;
@@ -213,25 +213,28 @@ impl TransitionInput {
     /// Build the input from a resolved style, or `None` if it has no `transition`.
     fn from_style(style: &Style) -> Option<Self> {
         let spec = style.transition.clone()?;
-        let t = style.transform.unwrap_or_default();
+        let t = style.transform.clone().unwrap_or_default();
+        // `static_val` throughout: an `{ animated }` channel has no static
+        // target to ease toward — it reads as unset here, and the per-channel
+        // skip rules park it anyway (bindings win over transitions).
         Some(Self {
             spec,
-            translate_x: t.translate_x,
-            translate_y: t.translate_y,
-            scale: t.scale,
-            scale_x: t.scale_x,
-            scale_y: t.scale_y,
-            rotate: t.rotate.map(crate::protocol::Angle::radians),
-            opacity: style.opacity,
+            translate_x: t.translate_x.static_val(),
+            translate_y: t.translate_y.static_val(),
+            scale: t.scale.static_val(),
+            scale_x: t.scale_x.static_val(),
+            scale_y: t.scale_y.static_val(),
+            rotate: t.rotate.static_val().map(crate::protocol::Angle::radians),
+            opacity: style.opacity.static_val(),
             background_color: style
                 .background_color
-                .as_deref()
+                .static_ref()
                 .map(|hex| color_to_rgba(parse_color(hex))),
-            width: style.width,
-            height: style.height,
-            max_width: style.max_width,
-            max_height: style.max_height,
-            transform3d: style.transform3d,
+            width: style.width.static_val(),
+            height: style.height.static_val(),
+            max_width: style.max_width.static_val(),
+            max_height: style.max_height.static_val(),
+            transform3d: style.transform3d.clone(),
         })
     }
 }
@@ -301,7 +304,7 @@ impl FilterChannel {
     /// [`drive_transitions`]) *snaps* the component to the new target; this
     /// method *eases* over that snap — starting from the state-owned
     /// `current`, the last value this channel wrote, never the
-    /// already-snapped component; and per-param `animatedStyle` bindings
+    /// already-snapped component; and per-param animation bindings
     /// (`filter[<i>].<param>`) *re-assert* individual params on top, winning
     /// by gating this channel out via `skip_filter` (the imperative-wins
     /// pattern of the scalar channels, coarse: any filter binding parks the
@@ -645,7 +648,7 @@ pub struct TransitionTargets {
     text: Option<&'static mut TextColor>,
     image: Option<&'static mut ImageNode>,
     node: Option<&'static mut Node>,
-    /// Imperative `animatedStyle` bindings; any channel they drive is skipped.
+    /// The node's derived animation bindings; any channel they drive is skipped.
     anim: Option<&'static AnimatedNode>,
     // On a promoted layer root (see `crate::layer`) a transitioned `opacity`
     // drives the composite-time group alpha instead of the color folds.
@@ -743,11 +746,11 @@ pub fn drive_transitions(
                 .unwrap_or_default();
             state
                 .transform3d
-                .init(&input.transform3d.unwrap_or_default());
+                .init(&input.transform3d.clone().unwrap_or_default());
             state.initialized = true;
         }
 
-        // `animatedStyle` (imperative) wins: skip any channel it already drives.
+        // Imperative bindings win: skip any channel an `{ animated }` wrapper drives.
         let skip_transform = targets.anim.is_some_and(|a| a.0.has_transform());
         let skip_opacity = targets
             .anim
@@ -1184,50 +1187,56 @@ mod tests {
             .spawn((
                 TransitionInput {
                     spec: spec.clone(),
-                    transform3d: Some(base),
+                    transform3d: Some(base.clone()),
                     ..Default::default()
                 },
                 TransitionState::default(),
                 UiTransform::default(),
-                LayerTransform3d(base),
+                LayerTransform3d(base.clone()),
             ))
             .id();
 
         // First frame seeds resting state: identity, no ease-in from nowhere.
         schedule.run(&mut world);
-        let t = world.entity(e).get::<LayerTransform3d>().unwrap().0;
+        let t = world.entity(e).get::<LayerTransform3d>().unwrap().0.clone();
         assert!(t.is_identity());
 
         // Retarget rotateY 90° (+ a perspective from an orthographic start —
         // that channel snaps while the rotation eases).
         let target = Transform3d {
-            rotate_y: Some(crate::protocol::Angle::from_radians(
-                std::f32::consts::FRAC_PI_2,
+            rotate_y: Some(crate::protocol::Animatable::Static(
+                crate::protocol::Angle::from_radians(std::f32::consts::FRAC_PI_2),
             )),
-            perspective: Some(800.0),
+            perspective: Some(crate::protocol::Animatable::Static(800.0)),
             ..Default::default()
         };
         world
             .entity_mut(e)
             .get_mut::<TransitionInput>()
             .unwrap()
-            .transform3d = Some(target);
+            .transform3d = Some(target.clone());
         advance(&mut world, 0.5);
         schedule.run(&mut world);
-        let t = world.entity(e).get::<LayerTransform3d>().unwrap().0;
-        let ry = t.rotate_y.unwrap().radians();
+        let t = world.entity(e).get::<LayerTransform3d>().unwrap().0.clone();
+        let ry = t.rotate_y.static_val().unwrap().radians();
         assert!(
             (ry - std::f32::consts::FRAC_PI_4).abs() < 0.05,
             "mid-ease expected ~45°, got {}°",
             ry.to_degrees()
         );
-        assert_eq!(t.perspective, Some(800.0), "ortho→perspective snaps");
+        assert_eq!(
+            t.perspective.static_val(),
+            Some(800.0),
+            "ortho→perspective snaps"
+        );
 
         // Finish the ease.
         advance(&mut world, 0.6);
         schedule.run(&mut world);
-        let t = world.entity(e).get::<LayerTransform3d>().unwrap().0;
-        assert!((t.rotate_y.unwrap().radians() - std::f32::consts::FRAC_PI_2).abs() < 1e-3);
+        let t = world.entity(e).get::<LayerTransform3d>().unwrap().0.clone();
+        assert!(
+            (t.rotate_y.static_val().unwrap().radians() - std::f32::consts::FRAC_PI_2).abs() < 1e-3
+        );
 
         // No spec → snap. (Fresh entity, `all`-less spec without transform3d.)
         let e2 = world
@@ -1237,7 +1246,7 @@ mod tests {
                         opacity: Some(timing(1.0, Easing::Linear)),
                         ..Default::default()
                     },
-                    transform3d: Some(target),
+                    transform3d: Some(target.clone()),
                     ..Default::default()
                 },
                 TransitionState::default(),
@@ -1249,7 +1258,12 @@ mod tests {
         // Without a transform3d (or `all`) spec the drive block never runs —
         // the static style applier owns the component (stays at `base` here,
         // since this harness has no style apply).
-        let t2 = world.entity(e2).get::<LayerTransform3d>().unwrap().0;
+        let t2 = world
+            .entity(e2)
+            .get::<LayerTransform3d>()
+            .unwrap()
+            .0
+            .clone();
         assert!(t2.is_identity());
 
         // Demoted entity (no LayerTransform3d): driving is a no-op, no panic.
@@ -1257,7 +1271,7 @@ mod tests {
             .spawn((
                 TransitionInput {
                     spec,
-                    transform3d: Some(target),
+                    transform3d: Some(target.clone()),
                     ..Default::default()
                 },
                 TransitionState::default(),
@@ -1327,10 +1341,13 @@ mod tests {
         };
         // The entity also has an AnimatedNode binding for scale → transition must
         // not touch the transform (the imperative path owns it).
-        let bindings: AnimatedBindings = serde_json::from_value(serde_json::json!({
-            "scale": { "type": "shared", "id": 1 }
-        }))
-        .unwrap();
+        let bindings = AnimatedBindings(
+            [(
+                crate::animations::AnimatableProperty::Scale,
+                crate::animations::protocol::Binding::Shared { id: 1 },
+            )]
+            .into(),
+        );
         let e = world
             .spawn((
                 TransitionInput {
@@ -1396,10 +1413,16 @@ mod tests {
             version: 1,
             scale: 1.0,
         };
-        let bindings: AnimatedBindings = serde_json::from_value(serde_json::json!({
-            "filter[0].amount": { "type": "shared", "id": 1 }
-        }))
-        .unwrap();
+        let bindings = AnimatedBindings(
+            [(
+                crate::animations::AnimatableProperty::FilterParam {
+                    index: 0,
+                    name: "amount".into(),
+                },
+                crate::animations::protocol::Binding::Shared { id: 1 },
+            )]
+            .into(),
+        );
 
         let spawn = |world: &mut World, gated: bool| {
             let mut e = world.spawn((

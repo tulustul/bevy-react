@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  Animated,
   interpolate,
   interpolateColor,
   useSharedValue,
@@ -20,9 +19,10 @@ const TYPESCRIPT = `withRepeat(withSequence(
   withDelay(280, withTiming(110)),
   withDelay(280, withTiming(-110)),
 ), -1);
-animatedStyle={{
-  translateX, scale, backgroundColor,
-}}`;
+style={{ transform: {
+  translateX: { animated: x },
+  scale: { animated: pulse },
+} }}`;
 
 const COUNT = 4;
 const AMP = 110; // horizontal travel, ± from center (px)
@@ -130,16 +130,20 @@ function BouncingSquare({ index, mode }: { index: number; mode: Mode }) {
 
   return (
     <node style={laneStyle}>
-      <Animated.node
-        style={{ ...squareStyle, backgroundColor: COOL[index] }}
-        animatedStyle={{
-          translateX: x,
-          scale: interpolate(pulse, [0, 1], [0.9, 1.1]),
-          backgroundColor: interpolateColor(
-            pulse,
-            [0, 1],
-            [COOL[index], WARM[index]],
-          ),
+      <node
+        style={{
+          ...squareStyle,
+          transform: {
+            translateX: { animated: x },
+            scale: { animated: interpolate(pulse, [0, 1], [0.9, 1.1]) },
+          },
+          backgroundColor: {
+            animated: interpolateColor(
+              pulse,
+              [0, 1],
+              [COOL[index], WARM[index]],
+            ),
+          },
         }}
       />
     </node>

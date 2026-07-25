@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import {
-  Animated,
   useSharedValue,
   withDelay,
   withRepeat,
@@ -220,10 +219,10 @@ function BurnDemo() {
     <Example
       title="Filter animation"
       description="The payoff: dissolve's progress bound to a shared value
-via animatedStyle. A withRepeat driver loops the sequence forever — burn to 1,
-hold, re-materialize, rest — and every cycle happens Bevy-side: zero React
-re-renders, zero re-captures, just the dissolve pass re-running over the
-reused capture with a fresh progress each frame."
+written inline in the filter's params. A withRepeat driver loops the sequence
+forever — burn to 1, hold, re-materialize, rest — and every cycle happens
+Bevy-side: zero React re-renders, zero re-captures, just the dissolve pass
+re-running over the reused capture with a fresh progress each frame."
       tsx={`const progress = useSharedValue(0);
 progress.value = withRepeat(
   withSequence(
@@ -237,31 +236,32 @@ progress.value = withRepeat(
   -1, // loop forever
 );
 
-<Animated.image
+<image
   src="images/parrot.png"
   style={{ filter: {
     name: "dissolve",
-    params: { progress: 0 },
+    params: { progress: {
+      animated: progress,
+    } },
   } }}
-  animatedStyle={{
-    "filter[0].progress": progress,
-  }}
 />`}
     >
       <node style={controlColumn}>
-        <Animated.node
+        <node
           style={{
             ...card,
-            filter: { name: "dissolve", params: { progress: 0 } },
+            filter: {
+              name: "dissolve",
+              params: { progress: { animated: progress } },
+            },
           }}
-          animatedStyle={{ "filter[0].progress": progress }}
         >
           <image
             src="images/parrot.png"
             style={{ width: 130, borderRadius: 8 }}
           />
           <text style={cardTitle}>Burning!!!</text>
-        </Animated.node>
+        </node>
       </node>
     </Example>
   );

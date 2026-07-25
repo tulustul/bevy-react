@@ -8,7 +8,15 @@
 //! while every other field keeps easing.
 
 use super::{Channel, ChannelTransition, ProgressChannel};
-use crate::protocol::{Angle, Length, Transform3d, Transform3dOrigin};
+use crate::protocol::Animatable::Static;
+use crate::protocol::{Angle, AnimatableField, Length, Transform3d, Transform3dOrigin};
+
+/// The origin's per-axis static length; an `{ animated }` origin axis eases as
+/// its default (the axis is driven per-frame by the binding anyway — any node
+/// with a transform3d binding parks this whole channel via `skip_transform3d`).
+fn origin_axis(axis: &crate::protocol::Animatable<Length>) -> Length {
+    axis.value().copied().unwrap_or(Length::Percent(50.0))
+}
 
 #[derive(Default)]
 pub(super) struct Transform3dChannels {
@@ -33,20 +41,27 @@ impl Transform3dChannels {
     /// Seed the resting state from the mount-time params so a fresh element
     /// snaps to its initial transform instead of easing in from identity.
     pub(super) fn init(&mut self, t: &Transform3d) {
-        let origin = t.origin.unwrap_or_default();
-        self.perspective.init(t.perspective.unwrap_or(0.0));
+        let origin = t.origin.clone().unwrap_or_default();
+        self.perspective
+            .init(t.perspective.static_val().unwrap_or(0.0));
         self.had_perspective = t.perspective.is_some();
-        self.translate_x.init(t.translate_x.unwrap_or(0.0));
-        self.translate_y.init(t.translate_y.unwrap_or(0.0));
-        self.translate_z.init(t.translate_z.unwrap_or(0.0));
-        self.rotate_x.init(t.rotate_x.unwrap_or_default().radians());
-        self.rotate_y.init(t.rotate_y.unwrap_or_default().radians());
-        self.rotate_z.init(t.rotate_z.unwrap_or_default().radians());
-        self.scale.init(t.scale.unwrap_or(1.0));
-        self.scale_x.init(t.scale_x.unwrap_or(1.0));
-        self.scale_y.init(t.scale_y.unwrap_or(1.0));
-        self.origin_x.init(origin.x);
-        self.origin_y.init(origin.y);
+        self.translate_x
+            .init(t.translate_x.static_val().unwrap_or(0.0));
+        self.translate_y
+            .init(t.translate_y.static_val().unwrap_or(0.0));
+        self.translate_z
+            .init(t.translate_z.static_val().unwrap_or(0.0));
+        self.rotate_x
+            .init(t.rotate_x.static_val().unwrap_or_default().radians());
+        self.rotate_y
+            .init(t.rotate_y.static_val().unwrap_or_default().radians());
+        self.rotate_z
+            .init(t.rotate_z.static_val().unwrap_or_default().radians());
+        self.scale.init(t.scale.static_val().unwrap_or(1.0));
+        self.scale_x.init(t.scale_x.static_val().unwrap_or(1.0));
+        self.scale_y.init(t.scale_y.static_val().unwrap_or(1.0));
+        self.origin_x.init(origin_axis(&origin.x));
+        self.origin_y.init(origin_axis(&origin.y));
     }
 
     /// Advance every field toward `target` (`spec` `Some` eases, `None`
@@ -61,51 +76,66 @@ impl Transform3dChannels {
     ) -> Transform3d {
         // Perspective: numeric→numeric eases; an orthographic endpoint on
         // either side snaps (there is no focal distance meaning "none").
-        let perspective = match (self.had_perspective, target.perspective) {
-            (true, Some(d)) => Some(self.perspective.drive(d, spec, dt)),
+        let perspective = match (self.had_perspective, target.perspective.static_val()) {
+            (true, Some(d)) => Some(Static(self.perspective.drive(d, spec, dt))),
             (false, Some(d)) => {
                 self.perspective.init(d);
-                Some(d)
+                Some(Static(d))
             }
             (_, None) => None,
         };
         self.had_perspective = target.perspective.is_some();
-        let origin = target.origin.unwrap_or_default();
+        let origin = target.origin.clone().unwrap_or_default();
         Transform3d {
             perspective,
-            translate_x: Some(
-                self.translate_x
-                    .drive(target.translate_x.unwrap_or(0.0), spec, dt),
-            ),
-            translate_y: Some(
-                self.translate_y
-                    .drive(target.translate_y.unwrap_or(0.0), spec, dt),
-            ),
-            translate_z: Some(
-                self.translate_z
-                    .drive(target.translate_z.unwrap_or(0.0), spec, dt),
-            ),
-            rotate_x: Some(Angle::from_radians(self.rotate_x.drive(
-                target.rotate_x.unwrap_or_default().radians(),
+            translate_x: Some(Static(self.translate_x.drive(
+                target.translate_x.static_val().unwrap_or(0.0),
                 spec,
                 dt,
             ))),
-            rotate_y: Some(Angle::from_radians(self.rotate_y.drive(
-                target.rotate_y.unwrap_or_default().radians(),
+            translate_y: Some(Static(self.translate_y.drive(
+                target.translate_y.static_val().unwrap_or(0.0),
                 spec,
                 dt,
             ))),
-            rotate_z: Some(Angle::from_radians(self.rotate_z.drive(
-                target.rotate_z.unwrap_or_default().radians(),
+            translate_z: Some(Static(self.translate_z.drive(
+                target.translate_z.static_val().unwrap_or(0.0),
                 spec,
                 dt,
             ))),
-            scale: Some(self.scale.drive(target.scale.unwrap_or(1.0), spec, dt)),
-            scale_x: Some(self.scale_x.drive(target.scale_x.unwrap_or(1.0), spec, dt)),
-            scale_y: Some(self.scale_y.drive(target.scale_y.unwrap_or(1.0), spec, dt)),
+            rotate_x: Some(Static(Angle::from_radians(self.rotate_x.drive(
+                target.rotate_x.static_val().unwrap_or_default().radians(),
+                spec,
+                dt,
+            )))),
+            rotate_y: Some(Static(Angle::from_radians(self.rotate_y.drive(
+                target.rotate_y.static_val().unwrap_or_default().radians(),
+                spec,
+                dt,
+            )))),
+            rotate_z: Some(Static(Angle::from_radians(self.rotate_z.drive(
+                target.rotate_z.static_val().unwrap_or_default().radians(),
+                spec,
+                dt,
+            )))),
+            scale: Some(Static(self.scale.drive(
+                target.scale.static_val().unwrap_or(1.0),
+                spec,
+                dt,
+            ))),
+            scale_x: Some(Static(self.scale_x.drive(
+                target.scale_x.static_val().unwrap_or(1.0),
+                spec,
+                dt,
+            ))),
+            scale_y: Some(Static(self.scale_y.drive(
+                target.scale_y.static_val().unwrap_or(1.0),
+                spec,
+                dt,
+            ))),
             origin: Some(Transform3dOrigin {
-                x: self.origin_x.drive(origin.x, spec, dt),
-                y: self.origin_y.drive(origin.y, spec, dt),
+                x: Static(self.origin_x.drive(origin_axis(&origin.x), spec, dt)),
+                y: Static(self.origin_y.drive(origin_axis(&origin.y), spec, dt)),
             }),
         }
     }

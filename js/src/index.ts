@@ -20,9 +20,9 @@ export {
 } from "./bridge";
 export type { Op, SerializedProps, UiEvent } from "./bridge";
 
-// Reanimated-style animations.
+// Reanimated-style animations (bindings ride inline in `style` behind the
+// `{ animated: … }` wrapper — see `Animatable`).
 export {
-  Animated,
   Easing,
   useSharedValue,
   withTiming,
@@ -39,8 +39,7 @@ export type {
   Driver,
   Binding,
   AnimatedValue,
-  AnimatedStyle,
-  AnimatableProperty,
+  Animatable,
   AnimationCallback,
   EasingName,
 } from "./animated";

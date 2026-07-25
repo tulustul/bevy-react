@@ -8,12 +8,13 @@ import { useDemoPage, type ExplanationData } from "@/explanationStore";
 
 // A pure-UI demo of CSS-like `transition`: a style change (hover/press, or React
 // state) *eases* instead of snapping, governed by the same Bevy animation engine
-// as `animatedStyle` — but fully declarative, no shared values or event wiring.
+// as the inline `{ animated }` bindings — but fully declarative, no shared
+// values or event wiring.
 
 const PAGE: ExplanationData = {
   title: "Style Transitions",
   description:
-    "CSS-like transition: a style change (hover/press, or React state) eases instead of snapping, governed by the same Bevy animation engine as animatedStyle — but fully declarative, no shared values or event wiring. Each field gets its own timing (duration + easing) or spring (stiffness + damping) config.",
+    "CSS-like transition: a style change (hover/press, or React state) eases instead of snapping, governed by the same Bevy animation engine as the inline { animated } bindings — but fully declarative, no shared values or event wiring. Each field gets its own timing (duration + easing) or spring (stiffness + damping) config.",
 };
 
 export function TransitionDemo() {

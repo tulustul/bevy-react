@@ -81,12 +81,11 @@ pub(super) fn apply_update(
     let props = cached;
     use crate::protocol::style_groups as g;
     // A delta touching a promotion trigger (`opacity`/`groupAlpha`/
-    // `filter`, all in the LAYER group), a variant style swap
-    // (variants can carry `opacity` and `filter`), or the animated
-    // bindings re-evaluates this node's layer promotion (see
-    // `crate::layer`).
+    // `filter`, all in the LAYER group — an `{ animated }` opacity is
+    // field presence like any other) or a variant style swap (variants
+    // can carry `opacity` and `filter`) re-evaluates this node's layer
+    // promotion (see `crate::layer`).
     if dirty.style.intersects(g::LAYER)
-        || dirty.animated
         || dirty.hover_style
         || dirty.press_style
         || dirty.focus_style
@@ -278,7 +277,9 @@ pub(super) fn apply_update(
         if dirty.style.intersects(g::SCROLL_TRANSITION) {
             apply_scroll_transition(&mut ec, &props.style);
         }
-        if dirty.animated {
+        // Bindings are derived from the merged style, so any style change may
+        // add/remove/retarget them (bind/unbind is an ordinary field delta).
+        if dirty.style.any() {
             apply_animated(&mut ec, &props);
         }
         if dirty.anchor {

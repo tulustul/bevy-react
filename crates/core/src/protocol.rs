@@ -245,12 +245,6 @@ pub struct Props {
     #[serde(default)]
     pub on_wheel: bool,
 
-    /// Per-property animation bindings for an `Animated.node` (Reanimated-style).
-    /// Present → the main reconciler stamps a `crate::animations::AnimatedNode`
-    /// on the entity so the animations plugin drives the listed props each frame.
-    /// Bevy-free, pure-serde, like the rest of the protocol.
-    #[serde(default)]
-    pub animated: Option<crate::animations::AnimatedBindings>,
     /// World-anchor binding for an `Anchored.node`: the Bevy entity to follow and
     /// an optional offset. Present → the reconciler stamps a [`crate::anchor::Anchored`]
     /// so the per-frame positioning system tracks it. Pure-serde, Bevy-free.
@@ -402,29 +396,29 @@ pub struct Style {
 
     // --- inset ---
     #[serde(default)]
-    pub left: Option<Length>,
+    pub left: Option<Animatable<Length>>,
     #[serde(default)]
-    pub right: Option<Length>,
+    pub right: Option<Animatable<Length>>,
     #[serde(default)]
-    pub top: Option<Length>,
+    pub top: Option<Animatable<Length>>,
     #[serde(default)]
-    pub bottom: Option<Length>,
+    pub bottom: Option<Animatable<Length>>,
 
     // --- size ---
     #[serde(default)]
-    pub width: Option<Length>,
+    pub width: Option<Animatable<Length>>,
     #[serde(default)]
-    pub height: Option<Length>,
+    pub height: Option<Animatable<Length>>,
     #[serde(default)]
-    pub min_width: Option<Length>,
+    pub min_width: Option<Animatable<Length>>,
     #[serde(default)]
-    pub min_height: Option<Length>,
+    pub min_height: Option<Animatable<Length>>,
     #[serde(default)]
-    pub max_width: Option<Length>,
+    pub max_width: Option<Animatable<Length>>,
     #[serde(default)]
-    pub max_height: Option<Length>,
+    pub max_height: Option<Animatable<Length>>,
     #[serde(default)]
-    pub aspect_ratio: Option<f32>,
+    pub aspect_ratio: Option<Animatable<f32>>,
 
     // --- alignment ---
     #[serde(default, deserialize_with = "de_align_items")]
@@ -458,13 +452,13 @@ pub struct Style {
     #[serde(default)]
     pub flex_shrink: Option<f32>,
     #[serde(default)]
-    pub flex_basis: Option<Length>,
+    pub flex_basis: Option<Animatable<Length>>,
     #[serde(default)]
-    pub gap: Option<Length>,
+    pub gap: Option<Animatable<Length>>,
     #[serde(default)]
-    pub row_gap: Option<Length>,
+    pub row_gap: Option<Animatable<Length>>,
     #[serde(default)]
-    pub column_gap: Option<Length>,
+    pub column_gap: Option<Animatable<Length>>,
 
     // --- grid ---
     #[serde(default, deserialize_with = "de_grid_auto_flow")]
@@ -486,13 +480,16 @@ pub struct Style {
     pub grid_column: Option<GridPlacement>,
 
     // --- visual (sibling components) ---
-    /// Hex background color (`#rrggbb` / `#rrggbbaa`).
+    /// Hex background color (`#rrggbb` / `#rrggbbaa`). Animated via an
+    /// `interpolateColor` binding (`{ animated: … }`).
     #[serde(default)]
-    pub background_color: Option<String>,
+    pub background_color: Option<Animatable<String>>,
     /// Border color: a single CSS color (all four sides) or a
     /// `{ top, right, bottom, left }` object (omitted sides → transparent).
+    /// Only the single-color form is animatable (the binding drives all four
+    /// sides); per-side `{ animated }` wrappers warn and are ignored.
     #[serde(default)]
-    pub border_color: Option<BorderColorSpec>,
+    pub border_color: Option<Animatable<BorderColorSpec>>,
     /// Corner radii; same forms as the other rect fields (corners are
     /// top-left, top-right, bottom-right, bottom-left).
     #[serde(default)]
@@ -582,7 +579,7 @@ pub struct Style {
     /// `false`) the subtree is instead promoted to a composited layer and the
     /// value applies once to the whole group — see [`crate::layer`].
     #[serde(default)]
-    pub opacity: Option<f32>,
+    pub opacity: Option<Animatable<f32>>,
     /// Whether `opacity` on a node with children fades the subtree as a group
     /// (composited layer) rather than folding into each node's own colors.
     /// Default `true` (web semantics); `false` opts out of layer promotion for
@@ -602,7 +599,7 @@ pub struct Style {
     pub cache: Option<LayerCache>,
     /// CSS-like per-channel transition timing. Present → a change to `transform` /
     /// `opacity` / `backgroundColor` (via re-render or hover/press) animates over
-    /// time using the same driver/easing engine as `animatedStyle`, rather than
+    /// time using the same driver/easing engine as `{ animated }` bindings, rather than
     /// snapping. See [`crate::transition`].
     #[serde(default)]
     pub transition: Option<crate::transition::Transition>,
@@ -615,9 +612,9 @@ pub struct Style {
     pub scrollbar: Option<crate::scrollbar::ScrollbarSpec>,
 
     // --- text (only meaningful on `<text>` elements/spans) ---
-    /// Hex text color.
+    /// Hex text color. Animated via an `interpolateColor` binding.
     #[serde(default)]
-    pub color: Option<String>,
+    pub color: Option<Animatable<String>>,
     /// Font size: a number (logical pixels) or a unit string (`"24px"`, `"2vw"`,
     /// `"1.5rem"`). See [`FontSize`].
     #[serde(default)]
@@ -885,8 +882,6 @@ pub struct PropsDirty {
     pub wheel: bool,
     /// `scrollStep` changed.
     pub scroll_step: bool,
-    /// `animated` bindings changed.
-    pub animated: bool,
     /// `anchor` changed.
     pub anchor: bool,
     /// Any `image` attribute (`src`/`tint`/`flipX`/`flipY`/`imageMode`/
@@ -1101,7 +1096,6 @@ impl Props {
         }
         merge_option!(
             scroll_step => scroll_step,
-            animated => animated,
             anchor => anchor,
             src => image,
             tint => image,
@@ -1195,10 +1189,6 @@ impl Props {
                 "scrollStep" => {
                     self.scroll_step = None;
                     dirty.scroll_step = true;
-                }
-                "animated" => {
-                    self.animated = None;
-                    dirty.animated = true;
                 }
                 "anchor" => {
                     self.anchor = None;
@@ -1562,24 +1552,141 @@ pub struct AtlasSpec {
     pub index: usize,
 }
 
+/// A style field that is either a static `T` or an inline animation binding —
+/// the `{ animated: <shared value | interpolate descriptor> }` wire form. The
+/// animated variant carries **no static value**: read sites see the field as
+/// absent (the animation applier drives the target every frame), and
+/// `crate::animations` derives the node's `AnimatedBindings` from the merged
+/// style. `{ animated: sv }` reaches the wire with the shared value's `id`
+/// (its other enumerable props are ignored); a descriptor object is told apart
+/// by its `type` tag. A malformed wrapper warns (`styleBinding`) and decodes
+/// to an inert binding (shared id `0` is never allocated by JS), so one typo
+/// can't abort the batch.
+///
+/// Filter/backdrop chain params never decode through this type (their param
+/// maps stay raw); their wrappers additionally accept a static **`seed`**
+/// (`{ animated: sv, seed: 10 }`) that the chain resolver decodes in the
+/// wrapper's place — see `crate::style_bindings::animated_param_seed`.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Animatable<T> {
+    Static(T),
+    Animated(crate::animations::protocol::Binding),
+}
+
+impl<T> Animatable<T> {
+    /// The static value; `None` while animated.
+    pub fn value(&self) -> Option<&T> {
+        match self {
+            Animatable::Static(v) => Some(v),
+            Animatable::Animated(_) => None,
+        }
+    }
+
+    /// The binding; `None` when static.
+    pub fn binding(&self) -> Option<&crate::animations::protocol::Binding> {
+        match self {
+            Animatable::Static(_) => None,
+            Animatable::Animated(b) => Some(b),
+        }
+    }
+}
+
+/// Read helpers for the `Option<Animatable<T>>` style fields, so read sites
+/// stay as terse as the plain `Option<T>` they replaced.
+pub trait AnimatableField<T> {
+    /// The static value by copy; `None` when absent **or** animated.
+    fn static_val(&self) -> Option<T>
+    where
+        T: Copy;
+    /// The static value by reference; `None` when absent or animated.
+    fn static_ref(&self) -> Option<&T>;
+    /// The binding; `None` when absent or static.
+    fn binding(&self) -> Option<&crate::animations::protocol::Binding>;
+}
+
+impl<T> AnimatableField<T> for Option<Animatable<T>> {
+    fn static_val(&self) -> Option<T>
+    where
+        T: Copy,
+    {
+        self.static_ref().copied()
+    }
+    fn static_ref(&self) -> Option<&T> {
+        self.as_ref().and_then(Animatable::value)
+    }
+    fn binding(&self) -> Option<&crate::animations::protocol::Binding> {
+        self.as_ref().and_then(Animatable::binding)
+    }
+}
+
+impl<'de, T: de::DeserializeOwned> Deserialize<'de> for Animatable<T> {
+    fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        let v = serde_json::Value::deserialize(d)?;
+        if let Some(inner) = v.as_object().and_then(|m| m.get("animated")) {
+            return Ok(Animatable::Animated(binding_from_wrapper(inner)));
+        }
+        T::deserialize(v)
+            .map(Animatable::Static)
+            .map_err(de::Error::custom)
+    }
+}
+
+/// Decode the payload of an `{ animated: … }` wrapper: a descriptor object
+/// (tagged by `type`) decodes as a [`Binding`](crate::animations::protocol::Binding);
+/// a bare shared value is recognized by its numeric `id` (every other
+/// enumerable field of the JS handle is ignored). Malformed → warn + inert.
+pub(crate) fn binding_from_wrapper(
+    inner: &serde_json::Value,
+) -> crate::animations::protocol::Binding {
+    use crate::animations::protocol::Binding;
+    let inert = Binding::Shared { id: 0 };
+    let Some(map) = inner.as_object() else {
+        decode_warn(
+            "styleBinding",
+            &inner.to_string(),
+            "animated must be a shared value or an interpolate/interpolateColor descriptor",
+        );
+        return inert;
+    };
+    if map.contains_key("type") {
+        match Binding::deserialize(inner) {
+            Ok(b) => b,
+            Err(e) => {
+                decode_warn("styleBinding", &inner.to_string(), &e.to_string());
+                inert
+            }
+        }
+    } else if let Some(id) = map.get("id").and_then(serde_json::Value::as_u64) {
+        Binding::Shared { id: id as u32 }
+    } else {
+        decode_warn(
+            "styleBinding",
+            &inner.to_string(),
+            "animated needs a shared value ({id}) or a descriptor ({type, id, …})",
+        );
+        inert
+    }
+}
+
 /// A static 2D transform mirroring the animated transform channels. Every field
 /// is optional; unset channels stay at identity (no translation, unit scale, no
 /// rotation). `scale` is uniform; `scaleX`/`scaleY` override a single axis.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Transform {
     /// Translation along x — a length (number = logical pixels, or a unit string
     /// like `"50%"`, resolved against the node's own size by `bevy_ui`).
-    pub translate_x: Option<Length>,
+    pub translate_x: Option<Animatable<Length>>,
     /// Translation along y — a length (number = logical pixels, or a unit string
     /// like `"50%"`).
-    pub translate_y: Option<Length>,
+    pub translate_y: Option<Animatable<Length>>,
     /// Uniform scale (both axes), unless overridden by `scale_x`/`scale_y`.
-    pub scale: Option<f32>,
-    pub scale_x: Option<f32>,
-    pub scale_y: Option<f32>,
+    pub scale: Option<Animatable<f32>>,
+    pub scale_x: Option<Animatable<f32>>,
+    pub scale_y: Option<Animatable<f32>>,
     /// Clockwise rotation (number = degrees, or a unit string like `"1.5rad"`).
-    pub rotate: Option<Angle>,
+    /// An animated binding's per-frame values are read as **degrees** too.
+    pub rotate: Option<Animatable<Angle>>,
 }
 
 /// The `transform3d` style: a 3D perspective transform composited onto a
@@ -1587,30 +1694,30 @@ pub struct Transform {
 /// unset channels stay at identity. Canonical application order around
 /// [`origin`](Self::origin): scale → rotateX → rotateY → rotateZ → translate,
 /// then the self-`perspective` projection.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Transform3d {
     /// Self-perspective focal distance in logical pixels (CSS
     /// `transform: perspective(d)`), the vanishing point at `origin`. Unset →
     /// orthographic (rotations foreshorten but nothing diverges with depth).
-    pub perspective: Option<f32>,
+    pub perspective: Option<Animatable<f32>>,
     /// Translation along x in logical pixels.
-    pub translate_x: Option<f32>,
+    pub translate_x: Option<Animatable<f32>>,
     /// Translation along y in logical pixels.
-    pub translate_y: Option<f32>,
+    pub translate_y: Option<Animatable<f32>>,
     /// Translation along z in logical pixels. Positive is toward the viewer —
     /// visible only with `perspective`.
-    pub translate_z: Option<f32>,
+    pub translate_z: Option<Animatable<f32>>,
     /// Rotation about the x axis (number = degrees, or `"1.5rad"`).
-    pub rotate_x: Option<Angle>,
+    pub rotate_x: Option<Animatable<Angle>>,
     /// Rotation about the y axis (number = degrees, or `"1.5rad"`).
-    pub rotate_y: Option<Angle>,
+    pub rotate_y: Option<Animatable<Angle>>,
     /// Rotation about the z axis (number = degrees, or `"1.5rad"`).
-    pub rotate_z: Option<Angle>,
+    pub rotate_z: Option<Animatable<Angle>>,
     /// Uniform scale (x and y), unless overridden by `scale_x`/`scale_y`.
-    pub scale: Option<f32>,
-    pub scale_x: Option<f32>,
-    pub scale_y: Option<f32>,
+    pub scale: Option<Animatable<f32>>,
+    pub scale_x: Option<Animatable<f32>>,
+    pub scale_y: Option<Animatable<f32>>,
     /// Pivot for rotation/scale and the perspective vanishing point, relative
     /// to the node's border box. Defaults to the center (`50%`/`50%`).
     pub origin: Option<Transform3dOrigin>,
@@ -1633,33 +1740,51 @@ impl Transform3d {
             scale_x,
             scale_y,
             origin: _, // the pivot of an identity transform is irrelevant
-        } = *self;
+        } = self;
+        // An animated channel is never identity: the binding drives it to
+        // arbitrary values each frame (`static_val()` is `None`, so the
+        // `unwrap_or(identity)` shortcut would wrongly report identity).
+        let no_binding = |f: &Option<Animatable<f32>>| f.binding().is_none();
+        let no_angle_binding = |f: &Option<Animatable<Angle>>| f.binding().is_none();
         perspective.is_none()
-            && translate_x.unwrap_or(0.0) == 0.0
-            && translate_y.unwrap_or(0.0) == 0.0
-            && translate_z.unwrap_or(0.0) == 0.0
-            && rotate_x.unwrap_or_default().radians() == 0.0
-            && rotate_y.unwrap_or_default().radians() == 0.0
-            && rotate_z.unwrap_or_default().radians() == 0.0
-            && scale.unwrap_or(1.0) == 1.0
-            && scale_x.unwrap_or(1.0) == 1.0
-            && scale_y.unwrap_or(1.0) == 1.0
+            && [
+                translate_x,
+                translate_y,
+                translate_z,
+                scale,
+                scale_x,
+                scale_y,
+            ]
+            .iter()
+            .all(|f| no_binding(f))
+            && [rotate_x, rotate_y, rotate_z]
+                .iter()
+                .all(|f| no_angle_binding(f))
+            && translate_x.static_val().unwrap_or(0.0) == 0.0
+            && translate_y.static_val().unwrap_or(0.0) == 0.0
+            && translate_z.static_val().unwrap_or(0.0) == 0.0
+            && rotate_x.static_val().unwrap_or_default().radians() == 0.0
+            && rotate_y.static_val().unwrap_or_default().radians() == 0.0
+            && rotate_z.static_val().unwrap_or_default().radians() == 0.0
+            && scale.static_val().unwrap_or(1.0) == 1.0
+            && scale_x.static_val().unwrap_or(1.0) == 1.0
+            && scale_y.static_val().unwrap_or(1.0) == 1.0
     }
 }
 
 /// The `transform3d` pivot: a per-axis [`Length`] resolved against the node's
 /// border box (`"50%"` = center, a number = logical pixels from the top-left).
-#[derive(Debug, Clone, Copy, PartialEq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct Transform3dOrigin {
-    pub x: Length,
-    pub y: Length,
+    pub x: Animatable<Length>,
+    pub y: Animatable<Length>,
 }
 
 impl Default for Transform3dOrigin {
     fn default() -> Self {
         Self {
-            x: Length::Percent(50.0),
-            y: Length::Percent(50.0),
+            x: Animatable::Static(Length::Percent(50.0)),
+            y: Animatable::Static(Length::Percent(50.0)),
         }
     }
 }
@@ -2723,12 +2848,12 @@ mod tests {
         )
         .expect("style decodes");
         let t = s.transform.expect("transform present");
-        assert_eq!(t.scale, Some(0.95));
+        assert_eq!(t.scale.static_val(), Some(0.95));
         // A bare number is logical pixels; a unit string carries an explicit unit.
-        assert_eq!(t.translate_x, Some(Length::Px(4.0)));
-        assert_eq!(t.translate_y, Some(Length::Percent(50.0)));
+        assert_eq!(t.translate_x.static_val(), Some(Length::Px(4.0)));
+        assert_eq!(t.translate_y.static_val(), Some(Length::Percent(50.0)));
         assert_eq!(t.scale_x, None);
-        assert_eq!(s.opacity, Some(0.5));
+        assert_eq!(s.opacity.static_val(), Some(0.5));
         let transition = s.transition.expect("transition present");
         assert!(transition.for_transform().is_some());
         assert!(transition.for_opacity().is_none());
@@ -2754,17 +2879,20 @@ mod tests {
             }"#,
         )
         .expect("style decodes");
-        let t = s.transform3d.expect("transform3d present");
-        assert_eq!(t.perspective, Some(800.0));
-        assert_eq!(t.translate_z, Some(-20.0));
-        assert_eq!(t.rotate_y.unwrap().radians(), 45f32.to_radians());
-        assert_eq!(t.rotate_x.unwrap().radians(), 1.5);
+        let t = s.transform3d.clone().expect("transform3d present");
+        assert_eq!(t.perspective.static_val(), Some(800.0));
+        assert_eq!(t.translate_z.static_val(), Some(-20.0));
+        assert_eq!(
+            t.rotate_y.static_val().unwrap().radians(),
+            45f32.to_radians()
+        );
+        assert_eq!(t.rotate_x.static_val().unwrap().radians(), 1.5);
         // Malformed angle → warn-and-identity, never a decode failure.
-        assert_eq!(t.rotate_z.unwrap().radians(), 0.0);
-        assert_eq!(t.scale, Some(1.25));
-        let origin = t.origin.expect("origin present");
-        assert_eq!(origin.x, Length::Percent(50.0));
-        assert_eq!(origin.y, Length::Px(10.0));
+        assert_eq!(t.rotate_z.static_val().unwrap().radians(), 0.0);
+        assert_eq!(t.scale.static_val(), Some(1.25));
+        let origin = t.origin.clone().expect("origin present");
+        assert_eq!(origin.x.value(), Some(&Length::Percent(50.0)));
+        assert_eq!(origin.y.value(), Some(&Length::Px(10.0)));
         assert!(!t.is_identity());
 
         let s: Style = serde_json::from_str(r#"{ "transform3d": {} }"#).expect("style decodes");
@@ -2807,7 +2935,7 @@ mod tests {
         assert!(dirty.style.intersects(style_groups::LAYER));
         let style = cached.style.as_ref().expect("style retained");
         assert_eq!(style.group_alpha, Some(false));
-        assert_eq!(style.opacity, Some(0.5));
+        assert_eq!(style.opacity.static_val(), Some(0.5));
     }
 
     /// `cache` decodes its keywords (unknown → warn + default) and a delta
@@ -2859,7 +2987,10 @@ mod tests {
         // Scalar string → every side set (the historical form).
         let uniform: Style =
             serde_json::from_str(r#"{ "borderColor": "white" }"#).expect("scalar decodes");
-        let bc = uniform.border_color.expect("border_color present");
+        let bc = uniform
+            .border_color
+            .static_ref()
+            .expect("border_color present");
         assert_eq!(bc.top.as_deref(), Some("white"));
         assert_eq!(bc.right.as_deref(), Some("white"));
         assert_eq!(bc.bottom.as_deref(), Some("white"));
@@ -2869,7 +3000,10 @@ mod tests {
         let sided: Style =
             serde_json::from_str(r##"{ "borderColor": { "top": "#f00", "left": "blue" } }"##)
                 .expect("object decodes");
-        let bc = sided.border_color.expect("border_color present");
+        let bc = sided
+            .border_color
+            .static_ref()
+            .expect("border_color present");
         assert_eq!(bc.top.as_deref(), Some("#f00"));
         assert_eq!(bc.left.as_deref(), Some("blue"));
         assert_eq!(bc.right, None);
@@ -2881,7 +3015,10 @@ mod tests {
         let bogus: Style =
             serde_json::from_str(r#"{ "borderColor": { "middle": "red", "top": "blue" } }"#)
                 .expect("unknown side key must not abort deserialization");
-        let bc = bogus.border_color.expect("border_color present");
+        let bc = bogus
+            .border_color
+            .static_ref()
+            .expect("border_color present");
         assert_eq!(bc.top.as_deref(), Some("blue"));
         assert_eq!(bc.right, None);
         assert_eq!(bc.bottom, None);
@@ -2896,8 +3033,8 @@ mod tests {
         // Bad `width` (unknown unit) → default, sibling `height` intact.
         let s: Style = serde_json::from_str(r#"{ "width": "100pixels", "height": "40px" }"#)
             .expect("a bad length must not abort deserialization");
-        assert_eq!(s.width, Some(Length::default()));
-        assert_eq!(s.height, Some(Length::Px(40.0)));
+        assert_eq!(s.width.static_val(), Some(Length::default()));
+        assert_eq!(s.height.static_val(), Some(Length::Px(40.0)));
 
         // Bad `fontSize` → default `Px(0.0)`.
         let s: Style = serde_json::from_str(r#"{ "fontSize": "16pxx" }"#)
@@ -2907,8 +3044,8 @@ mod tests {
         // Bad transform `rotate` (angle) → default `Angle(0)`, valid `translateX` intact.
         let t: Transform = serde_json::from_str(r#"{ "rotate": "45degg", "translateX": "50%" }"#)
             .expect("bad angle must not abort");
-        assert_eq!(t.rotate, Some(Angle::default()));
-        assert_eq!(t.translate_x, Some(Length::Percent(50.0)));
+        assert_eq!(t.rotate.static_val(), Some(Angle::default()));
+        assert_eq!(t.translate_x.static_val(), Some(Length::Percent(50.0)));
 
         // Rect shorthand (`padding`/`margin`/`border`/`borderRadius`): a bad token
         // defaults just that side; a good shorthand still decodes; a bad value-count
@@ -3122,7 +3259,7 @@ mod tests {
             serde_json::from_str(r#"{ "filter": [{ "name": "blur" }, 3], "opacity": 0.5 }"#)
                 .expect("a bad filter entry must not abort the style");
         assert_eq!(s.filter, Some(FilterChain::default()));
-        assert_eq!(s.opacity, Some(0.5));
+        assert_eq!(s.opacity.static_val(), Some(0.5));
     }
 
     /// A `filter` delta dirties FILTER (the `FilterInput` re-stamp) and LAYER
@@ -3276,8 +3413,11 @@ mod tests {
         );
 
         let style = cached.style.as_ref().unwrap();
-        assert_eq!(style.width, Some(Length::Px(100.0)));
-        assert_eq!(style.background_color.as_deref(), Some("red"));
+        assert_eq!(style.width.static_val(), Some(Length::Px(100.0)));
+        assert_eq!(
+            style.background_color.static_ref().map(String::as_str),
+            Some("red")
+        );
         assert!(style.outline.is_some(), "untouched style fields preserved");
         assert!(cached.hover_style.is_some(), "untouched props preserved");
         assert!(cached.on_click);
@@ -3314,7 +3454,7 @@ mod tests {
         let style = cached.style.as_ref().unwrap();
         assert_eq!(style.background_color, None);
         assert_eq!(
-            style.width,
+            style.width.static_val(),
             Some(Length::Px(50.0)),
             "other style fields kept"
         );
@@ -3408,7 +3548,10 @@ mod tests {
             &["nope".into(), "value".into()],
             &["alsoNope".into()],
         );
-        assert_eq!(cached.style.as_ref().unwrap().width, Some(Length::Px(10.0)));
+        assert_eq!(
+            cached.style.as_ref().unwrap().width.static_val(),
+            Some(Length::Px(10.0))
+        );
         assert!(!dirty.style.any());
     }
 

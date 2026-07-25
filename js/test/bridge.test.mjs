@@ -75,8 +75,8 @@ test("valuesEqual: filter chains compare structurally at full depth", () => {
 test("valuesEqual: depth cap reports unequal, never wrong", () => {
   const deep = (n) => (n === 0 ? 1 : { d: deep(n - 1) });
   assert.ok(valuesEqual(deep(3), deep(3)));
-  // Past the default cap the comparison gives up (conservative "changed").
-  assert.ok(!valuesEqual(deep(9), deep(9)));
+  // Past the default cap (8) the comparison gives up (conservative "changed").
+  assert.ok(!valuesEqual(deep(12), deep(12)));
 });
 
 test("no Bevy-visible change returns null", () => {
@@ -124,13 +124,76 @@ test("handlers diff by presence, not identity", () => {
   assert.deepEqual(lost.props, {});
 });
 
-test("wire-name mapping for unset (name → target, animatedStyle → animated)", () => {
-  const op = buildUpdateOp(
+test("wire-name mapping for unset (name → target)", () => {
+  const op = buildUpdateOp(1, { name: "panel" }, {});
+  assert.deepEqual(op.unset, ["target"]);
+});
+
+// A stable SharedValue handle, as `useSharedValue` returns it: reference-held
+// across renders, with a live accessor next to the id.
+const sharedValue = (id) => ({
+  id,
+  get value() {
+    return 0;
+  },
+});
+
+test("re-render silence: identical inline { animated } styles emit no op", () => {
+  const sv = sharedValue(1);
+  // Fresh wrapper/chain/interpolation objects every render (only `sv` is
+  // reference-stable), including the deepest case: an interpolateColor
+  // binding inside filter params — seven container levels, inside the
+  // valuesEqual depth cap.
+  const style = () => ({
+    opacity: { animated: sv },
+    transform: {
+      translateX: {
+        animated: {
+          type: "interpolate",
+          id: 1,
+          input: [0, 1],
+          output: [0, 40],
+        },
+      },
+    },
+    filter: [
+      {
+        name: "tint",
+        params: {
+          tint: {
+            animated: {
+              type: "interpolateColor",
+              id: 1,
+              input: [0, 1],
+              output: [
+                [1, 0, 0, 1],
+                [0, 0, 1, 1],
+              ],
+            },
+          },
+        },
+      },
+    ],
+  });
+  assert.equal(buildUpdateOp(1, { style: style() }, { style: style() }), null);
+});
+
+test("bind and unbind are ordinary style field deltas", () => {
+  const sv = sharedValue(2);
+  // Static → bound: the field changes value (wrapper crosses inside style).
+  const bound = buildUpdateOp(
     1,
-    { name: "panel", animatedStyle: { opacity: { id: 3 } } },
-    {},
+    { style: { opacity: 0.5 } },
+    { style: { opacity: { animated: sv } } },
   );
-  assert.deepEqual(new Set(op.unset), new Set(["target", "animated"]));
+  assert.deepEqual(bound.props.style, { opacity: { animated: sv } });
+  // Bound → static again: plain delta back to the number.
+  const unbound = buildUpdateOp(
+    1,
+    { style: { opacity: { animated: sv } } },
+    { style: { opacity: 0.5 } },
+  );
+  assert.deepEqual(unbound.props.style, { opacity: 0.5 });
 });
 
 test("event-like props are sent when changed but never unset", () => {

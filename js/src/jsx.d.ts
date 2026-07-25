@@ -4,7 +4,7 @@
 // Import `BevyStyle` here to type a shared style object.
 
 import type { Key, ReactNode, Ref } from "react";
-import type { AnimatedStyle } from "./animated";
+import type { Animatable } from "./animated";
 import type { BevyCanvasElement, CanvasPainter, DrawCmd } from "./canvas";
 import type { FilterChainValue } from "./filters";
 
@@ -306,20 +306,20 @@ export interface BevyStyle {
   overflowY?: "visible" | "clip" | "hidden" | "scroll";
   scrollbarWidth?: number;
 
-  // inset
-  left?: Length;
-  right?: Length;
-  top?: Length;
-  bottom?: Length;
+  // inset — animatable ([`Animatable`]; a bound length animates in px)
+  left?: Animatable<Length>;
+  right?: Animatable<Length>;
+  top?: Animatable<Length>;
+  bottom?: Animatable<Length>;
 
-  // size
-  width?: Length;
-  height?: Length;
-  minWidth?: Length;
-  minHeight?: Length;
-  maxWidth?: Length;
-  maxHeight?: Length;
-  aspectRatio?: number;
+  // size — animatable ([`Animatable`]; a bound length animates in px)
+  width?: Animatable<Length>;
+  height?: Animatable<Length>;
+  minWidth?: Animatable<Length>;
+  minHeight?: Animatable<Length>;
+  maxWidth?: Animatable<Length>;
+  maxHeight?: Animatable<Length>;
+  aspectRatio?: Animatable<number>;
 
   // alignment
   alignItems?:
@@ -372,10 +372,10 @@ export interface BevyStyle {
   flexWrap?: "nowrap" | "wrap" | "wrapReverse";
   flexGrow?: number;
   flexShrink?: number;
-  flexBasis?: Length;
-  gap?: Length;
-  rowGap?: Length;
-  columnGap?: Length;
+  flexBasis?: Animatable<Length>;
+  gap?: Animatable<Length>;
+  rowGap?: Animatable<Length>;
+  columnGap?: Animatable<Length>;
 
   // grid
   gridAutoFlow?: "row" | "column" | "rowDense" | "columnDense";
@@ -387,14 +387,16 @@ export interface BevyStyle {
   gridColumn?: string;
 
   // visual (sibling components)
-  /** Background color (any CSS [`Color`], e.g. `"#1e1e2e"` or `"rebeccapurple"`). */
-  backgroundColor?: Color;
+  /** Background color (any CSS [`Color`], e.g. `"#1e1e2e"` or
+   *  `"rebeccapurple"`). Animatable via an `interpolateColor` binding. */
+  backgroundColor?: Animatable<Color>;
   /** Border color: one CSS [`Color`] for all sides, or a per-side object.
    *  Omitted sides are transparent. Per-side colors must use the object form —
    *  a multi-value string is not supported (CSS color functions contain spaces).
-   *  Needs a `border` width to be visible. */
+   *  Needs a `border` width to be visible. Only the single-color form is
+   *  animatable (the binding drives all four sides). */
   borderColor?:
-    | Color
+    | Animatable<Color>
     | { top?: Color; right?: Color; bottom?: Color; left?: Color };
   borderRadius?: Rect;
   outline?: { width?: Length; offset?: Length; color?: Color };
@@ -456,12 +458,13 @@ export interface BevyStyle {
    * `scale` is uniform; `scaleX`/`scaleY` override one axis. `rotate` is an
    * [`Angle`] (bare number = degrees, e.g. `45`, or `"1.5rad"`). */
   transform?: {
-    translateX?: Length;
-    translateY?: Length;
-    scale?: number;
-    scaleX?: number;
-    scaleY?: number;
-    rotate?: Angle;
+    translateX?: Animatable<Length>;
+    translateY?: Animatable<Length>;
+    scale?: Animatable<number>;
+    scaleX?: Animatable<number>;
+    scaleY?: Animatable<number>;
+    /** Bound values are **degrees**, like the static [`Angle`] form. */
+    rotate?: Animatable<Angle>;
   };
   /** 3D perspective transform, applied to the subtree's *rendered result* at
    * composite time (group semantics, like `opacity`/`filter`). Its presence —
@@ -485,24 +488,25 @@ export interface BevyStyle {
    * oscillates, as in CSS). */
   transform3d?: {
     /** Focal distance in logical px (CSS `perspective(d)`); unset = orthographic. */
-    perspective?: number;
-    translateX?: number;
-    translateY?: number;
-    translateZ?: number;
-    rotateX?: Angle;
-    rotateY?: Angle;
-    rotateZ?: Angle;
-    scale?: number;
-    scaleX?: number;
-    scaleY?: number;
-    /** Pivot + vanishing point, relative to the border box. */
-    origin?: { x: Length; y: Length };
+    perspective?: Animatable<number>;
+    translateX?: Animatable<number>;
+    translateY?: Animatable<number>;
+    translateZ?: Animatable<number>;
+    rotateX?: Animatable<Angle>;
+    rotateY?: Animatable<Angle>;
+    rotateZ?: Animatable<Angle>;
+    scale?: Animatable<number>;
+    scaleX?: Animatable<number>;
+    scaleY?: Animatable<number>;
+    /** Pivot + vanishing point, relative to the border box (bound axes in px). */
+    origin?: { x: Animatable<Length>; y: Animatable<Length> };
   };
   /** Opacity in `0..1`, multiplied into the background (and text) alpha. With a
    * `transition` a change eases. On a node with children (unless `groupAlpha`
    * is `false`) the subtree instead composites as a layer and the value fades
-   * the whole group at once (web semantics). */
-  opacity?: number;
+   * the whole group at once (web semantics) — an `{ animated }` opacity
+   * promotes the same way. */
+  opacity?: Animatable<number>;
   /** Whether `opacity` on a node with children fades the subtree as a group
    * (composited layer, the default — web semantics) rather than folding into
    * each node's own colors. Set `false` to opt out of layer promotion for
@@ -520,7 +524,8 @@ export interface BevyStyle {
   cache?: "auto" | "always" | "never";
   /** CSS-like transition timing. When a `transform` / `opacity` / `backgroundColor`
    * change occurs — via re-render or `hoverStyle`/`pressStyle` — it eases over time
-   * (using the same driver/easing engine as `animatedStyle`) instead of snapping. */
+   * (using the same driver/easing engine as the inline `{ animated }`
+   * bindings) instead of snapping. */
   transition?: BevyTransition;
   /** A visible scrollbar for an `overflow: scroll` node. `"none"` (default) hides
    *  it; `"default"` is a built-in neutral bar; an object configures it. Draggable
@@ -528,8 +533,8 @@ export interface BevyStyle {
   scrollbar?: "none" | "default" | ScrollbarStyle;
 
   // text (only meaningful on `<text>` elements/spans)
-  /** Text color (any CSS [`Color`]). */
-  color?: Color;
+  /** Text color (any CSS [`Color`]). Animatable via `interpolateColor`. */
+  color?: Animatable<Color>;
   /** Font size: a bare number is logical pixels, or a unit string (`"24px"`,
    * `"2vw"`, `"1.5rem"`). See [`FontSize`]. */
   fontSize?: FontSize;
@@ -610,9 +615,6 @@ export interface BevyNodeProps extends BevyAttributes {
   hoverStyle?: BevyStyle;
   /** Style overlaid on `style` (and `hoverStyle`) while the element is pressed. */
   pressStyle?: BevyStyle;
-  /** Reanimated-style animation bindings (see `Animated.node`). Each property is
-   *  driven by a shared value and updated every frame on the Bevy side. */
-  animatedStyle?: AnimatedStyle;
   /** Clicked with the primary (left) mouse button: fires on release over the
    *  element the press landed on (press, drag off, release elsewhere does not
    *  click — DOM `click` semantics). For right/middle interactions use
@@ -674,8 +676,6 @@ export interface BevyCanvasProps extends BevyAttributes {
   hoverStyle?: BevyStyle;
   /** Style overlaid on `style` (and `hoverStyle`) while the element is pressed. */
   pressStyle?: BevyStyle;
-  /** Reanimated-style animation bindings (see `Animated.node`). */
-  animatedStyle?: AnimatedStyle;
   /** The declarative drawing: either a painter that receives an HTML-canvas-like
    *  context (`CanvasContext`), or a pre-recorded `DrawCmd[]` display list.
    *  Whenever this prop changes, the retained surface is **cleared and the
@@ -715,8 +715,6 @@ export interface BevyPortalProps extends BevyAttributes {
   hoverStyle?: BevyStyle;
   /** Style overlaid on `style` (and `hoverStyle`) while the element is pressed. */
   pressStyle?: BevyStyle;
-  /** Reanimated-style animation bindings (see `Animated.node`). */
-  animatedStyle?: AnimatedStyle;
   /** The render-target name to display. The Bevy app registers it (via
    *  `RenderTargets::create`) and hands the name to React over the typed event
    *  channel; an unregistered name shows transparent until it appears. */
@@ -779,8 +777,6 @@ export interface BevySurfaceProps extends BevyAttributes {
   hoverStyle?: BevyStyle;
   /** Style overlaid on `style` (and `hoverStyle`) while a child is pressed. */
   pressStyle?: BevyStyle;
-  /** Reanimated-style animation bindings (see `Animated.node`). */
-  animatedStyle?: AnimatedStyle;
   onClick?: () => void;
   /** Pointer pressed on this element (an in-world drag begins). */
   onPointerDown?: (e: PointerEventData) => void;
@@ -805,8 +801,6 @@ export interface BevyImageProps extends BevyAttributes {
   hoverStyle?: BevyStyle;
   /** Style overlaid on `style` (and `hoverStyle`) while the element is pressed. */
   pressStyle?: BevyStyle;
-  /** Reanimated-style animation bindings (see `Animated.image`). */
-  animatedStyle?: AnimatedStyle;
   /** Asset path resolved by Bevy's `AssetServer` (relative to `assets/`). */
   src?: string;
   /** Tint multiplied with the image (any CSS [`Color`]); also the fill of a

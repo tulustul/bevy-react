@@ -472,8 +472,20 @@ mod tests {
     use super::*;
     use crate::protocol::{Transform3d, Transform3dOrigin};
 
-    fn deg(v: f32) -> Option<crate::protocol::Angle> {
-        Some(crate::protocol::Angle::from_radians(v.to_radians()))
+    fn deg(v: f32) -> Option<crate::protocol::Animatable<crate::protocol::Angle>> {
+        Some(crate::protocol::Animatable::Static(
+            crate::protocol::Angle::from_radians(v.to_radians()),
+        ))
+    }
+
+    /// Static-wrap a scalar channel value.
+    fn st(v: f32) -> Option<crate::protocol::Animatable<f32>> {
+        Some(crate::protocol::Animatable::Static(v))
+    }
+
+    /// Static-wrap an origin axis.
+    fn ax(l: crate::protocol::Length) -> crate::protocol::Animatable<crate::protocol::Length> {
+        crate::protocol::Animatable::Static(l)
     }
 
     /// Forward-project plane points through a perspective matrix, invert the
@@ -481,14 +493,14 @@ mod tests {
     #[test]
     fn homography_inversion_round_trips() {
         let params = Transform3d {
-            perspective: Some(600.0),
+            perspective: st(600.0),
             rotate_y: deg(35.0),
             rotate_x: deg(-12.0),
-            translate_x: Some(30.0),
-            scale: Some(1.2),
+            translate_x: st(30.0),
+            scale: st(1.2),
             origin: Some(Transform3dOrigin {
-                x: crate::protocol::Length::Percent(25.0),
-                y: crate::protocol::Length::Percent(50.0),
+                x: ax(crate::protocol::Length::Percent(25.0)),
+                y: ax(crate::protocol::Length::Percent(50.0)),
             }),
             ..Default::default()
         };
@@ -513,8 +525,8 @@ mod tests {
     fn edge_on_misses_backface_hits() {
         let base = Transform3d {
             origin: Some(Transform3dOrigin {
-                x: crate::protocol::Length::Percent(50.0),
-                y: crate::protocol::Length::Percent(50.0),
+                x: ax(crate::protocol::Length::Percent(50.0)),
+                y: ax(crate::protocol::Length::Percent(50.0)),
             }),
             ..Default::default()
         };
@@ -523,14 +535,14 @@ mod tests {
 
         let edge_on = Transform3d {
             rotate_y: deg(90.0),
-            ..base
+            ..base.clone()
         };
         let m = super::super::transform3d::build_transform3d_matrix(&edge_on, min, size, 1.0);
         assert!(invert_screen_to_plane(&m, Vec2::new(50.0, 50.0)).is_none());
 
         let backface = Transform3d {
             rotate_y: deg(150.0),
-            perspective: Some(800.0),
+            perspective: st(800.0),
             ..base
         };
         let m = super::super::transform3d::build_transform3d_matrix(&backface, min, size, 1.0);

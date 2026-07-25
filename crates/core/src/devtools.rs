@@ -1779,7 +1779,7 @@ mod tests {
             "backdropFilterUnknown",
             "backdropFilterBinding",
             "scrollbar",
-            "animatedStyle",
+            "styleBinding",
             "color",
             "fontFamily",
             "cursor",

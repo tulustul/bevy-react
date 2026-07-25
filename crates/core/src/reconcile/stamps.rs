@@ -18,13 +18,17 @@ use crate::bridge::{
 use crate::protocol::{NodeId, Props, Style};
 use crate::transition::ScrollTransitionState;
 
-/// Stamp (or clear) the [`AnimatedNode`] bindings on a host element. Present →
-/// the animations plugin drives the listed props each frame (no-op if animations
-/// are disabled — nothing reads the component).
+/// Stamp (or clear) the [`AnimatedNode`] bindings on a host element, derived
+/// from the merged base style's `{ animated }` wrappers
+/// (`crate::style_bindings`). Present → the animations plugin drives the
+/// listed props each frame (no-op if animations are disabled — nothing reads
+/// the component). Also warns (once per apply, devtools-mirrored) about
+/// wrappers in hover/press/focus variants, which are ignored by design.
 pub(super) fn apply_animated(ec: &mut EntityCommands, props: &Props) {
-    match &props.animated {
+    crate::style_bindings::warn_variant_bindings(props);
+    match crate::style_bindings::derive_bindings(props.style.as_ref()) {
         Some(bindings) => {
-            ec.insert(AnimatedNode(bindings.clone()));
+            ec.insert(AnimatedNode(bindings));
         }
         None => {
             ec.remove::<AnimatedNode>();

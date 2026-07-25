@@ -119,11 +119,11 @@ test("variant style props are always scanned", () => {
   ]);
 });
 
-test("animatedStyle kind matches the animated prop by key", () => {
-  const n = node({}, { animated: { opacityy: { id: 3 } } });
+test("styleBinding kind matches the variant carrying the ignored wrapper", () => {
+  const n = node({}, { hoverStyle: { opacity: { animated: { id: 3 } } } });
   assert.deepEqual(
-    matchWarning(n, { kind: "animatedStyle", value: "opacityy" }),
-    ["prop:animated"],
+    matchWarning(n, { kind: "styleBinding", value: "hoverStyle" }),
+    ["prop:hoverStyle"],
   );
 });
 

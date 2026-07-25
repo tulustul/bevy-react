@@ -12,8 +12,8 @@ post-processed 3D frame (UI painted beneath the node is not included) — and
 composites the result under the node's own background. The frosted quad covers
 the node's border box and respects borderRadius. The backdrop is live, so its
 passes re-run every frame; the node's own content still caches. Transitions
-and animatedStyle ("backdropFilter[<i>].<param>") mirror filter, including the
-empty-chain snap on removal.`,
+and { animated } param wrappers mirror filter, including the empty-chain snap
+on removal.`,
 };
 
 export function BackdropFilterDemo() {

@@ -328,7 +328,11 @@ fn apply_animated_nodes(
                 b.get(P::Scale).and_then(|x| eval_scalar(x, &values)),
                 b.get(P::ScaleX).and_then(|x| eval_scalar(x, &values)),
                 b.get(P::ScaleY).and_then(|x| eval_scalar(x, &values)),
-                b.get(P::Rotate).and_then(|x| eval_scalar(x, &values)),
+                // Degrees on the wire (like declarative `transform.rotate` and
+                // the `transform3d` rotations), radians in `UiTransform`.
+                b.get(P::Rotate)
+                    .and_then(|x| eval_scalar(x, &values))
+                    .map(f32::to_radians),
             );
             if *t.transform != new {
                 // Layer-cache classification: a promoted root's own pure
@@ -356,8 +360,9 @@ fn apply_animated_nodes(
             && let Some(t3d) = &mut t.transform3d
         {
             use crate::animations::protocol::Transform3dField as F;
+            use crate::protocol::Animatable::Static;
             use crate::protocol::{Angle, Length, Transform3dOrigin};
-            let mut new = t3d.0;
+            let mut new = t3d.0.clone();
             for (property, binding) in b.iter() {
                 let P::Transform3d(field) = property else {
                     continue;
@@ -365,29 +370,30 @@ fn apply_animated_nodes(
                 let Some(v) = eval_scalar(binding, &values) else {
                     continue;
                 };
-                let deg = || Some(Angle::from_radians(v.to_radians()));
-                let origin = |o: &crate::protocol::Transform3d| o.origin.unwrap_or_default();
+                let deg = || Some(Static(Angle::from_radians(v.to_radians())));
+                let origin =
+                    |o: &crate::protocol::Transform3d| o.origin.clone().unwrap_or_default();
                 match field {
-                    F::Perspective => new.perspective = Some(v),
-                    F::TranslateX => new.translate_x = Some(v),
-                    F::TranslateY => new.translate_y = Some(v),
-                    F::TranslateZ => new.translate_z = Some(v),
+                    F::Perspective => new.perspective = Some(Static(v)),
+                    F::TranslateX => new.translate_x = Some(Static(v)),
+                    F::TranslateY => new.translate_y = Some(Static(v)),
+                    F::TranslateZ => new.translate_z = Some(Static(v)),
                     F::RotateX => new.rotate_x = deg(),
                     F::RotateY => new.rotate_y = deg(),
                     F::RotateZ => new.rotate_z = deg(),
-                    F::Scale => new.scale = Some(v),
-                    F::ScaleX => new.scale_x = Some(v),
-                    F::ScaleY => new.scale_y = Some(v),
+                    F::Scale => new.scale = Some(Static(v)),
+                    F::ScaleX => new.scale_x = Some(Static(v)),
+                    F::ScaleY => new.scale_y = Some(Static(v)),
                     F::OriginX => {
                         new.origin = Some(Transform3dOrigin {
-                            x: Length::Px(v),
+                            x: Static(Length::Px(v)),
                             y: origin(&new).y,
                         });
                     }
                     F::OriginY => {
                         new.origin = Some(Transform3dOrigin {
                             x: origin(&new).x,
-                            y: Length::Px(v),
+                            y: Static(Length::Px(v)),
                         });
                     }
                 }
@@ -670,7 +676,7 @@ fn apply_filter_params(
                     (
                         format!("{prefix}[{index}].{name}"),
                         format!(
-                            "animatedStyle {prefix}[{index}].{name}: the node has no resolved \
+                            "binding {prefix}[{index}].{name}: the node has no resolved \
                              {prefix} chain to drive (no valid `{style_field}` style) — \
                              binding ignored"
                         ),
@@ -1010,6 +1016,35 @@ fn piecewise_impl<T: Lerp>(x: f32, input: &[f32], output: &[T]) -> T {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::protocol::AnimatableField;
+
+    /// Build bindings the way production does: decode a style carrying inline
+    /// `{ animated }` wrappers and derive (`crate::style_bindings`).
+    fn style_bindings(style: serde_json::Value) -> AnimatedBindings {
+        let style: crate::protocol::Style = serde_json::from_value(style).expect("style decodes");
+        crate::style_bindings::derive_bindings(Some(&style)).expect("style carries bindings")
+    }
+
+    /// Direct construction for the stage-4 chain tests: they pair bindings
+    /// with synthetic resolved chains at explicit wire indices — including
+    /// deliberately mismatched index/name combinations a real style can't
+    /// express (validation must warn and stay inert).
+    fn filter_bindings(entries: &[(u8, &str, Binding)]) -> AnimatedBindings {
+        AnimatedBindings(
+            entries
+                .iter()
+                .map(|(index, name, b)| {
+                    (
+                        AnimatableProperty::FilterParam {
+                            index: *index,
+                            name: (*name).into(),
+                        },
+                        b.clone(),
+                    )
+                })
+                .collect(),
+        )
+    }
 
     fn timing(to: f32, duration: f32) -> Driver {
         Driver::Timing {
@@ -1193,30 +1228,14 @@ mod tests {
         .unwrap();
         assert!(matches!(cmd, AnimationCommand::Animate { token: None, .. }));
 
-        let bindings: AnimatedBindings = serde_json::from_str(
-            r#"{ "translateX": { "type": "shared", "id": 1 },
-                 "backgroundColor": { "type": "interpolateColor", "id": 1,
-                     "input": [0, 1], "output": [[0,0,0,1],[1,1,1,1]] } }"#,
-        )
-        .unwrap();
+        let bindings = style_bindings(serde_json::json!({
+            "transform": { "translateX": { "animated": { "id": 1 } } },
+            "backgroundColor": { "animated": { "type": "interpolateColor", "id": 1,
+                "input": [0, 1], "output": [[0,0,0,1],[1,1,1,1]] } },
+        }));
         assert!(bindings.contains(AnimatableProperty::TranslateX));
         assert!(bindings.contains(AnimatableProperty::BackgroundColor));
         assert!(bindings.has_transform());
-    }
-
-    #[test]
-    fn animated_bindings_skips_unknown_properties() {
-        // A newer JS bundle can send a property this binary doesn't know yet; the
-        // unknown key is skipped and the recognised ones still decode (rather than
-        // the whole `animatedStyle` failing).
-        let bindings: AnimatedBindings = serde_json::from_str(
-            r#"{ "scale": { "type": "shared", "id": 7 },
-                 "someFutureProp": { "type": "shared", "id": 8 } }"#,
-        )
-        .unwrap();
-        assert!(bindings.contains(AnimatableProperty::Scale));
-        assert!(bindings.has_transform());
-        assert_eq!(bindings.iter().count(), 1, "unknown property dropped");
     }
 
     /// The table-driven applier writes the transform translation, the interpolated
@@ -1232,13 +1251,12 @@ mod tests {
         values.set(3, 0.0); // color progress → output[0] = red
         world.insert_resource(values);
 
-        let bindings: AnimatedBindings = serde_json::from_value(serde_json::json!({
-            "translateX": { "type": "shared", "id": 1 },
-            "opacity": { "type": "shared", "id": 2 },
-            "backgroundColor": { "type": "interpolateColor", "id": 3,
-                "input": [0, 1], "output": [[1, 0, 0, 1], [0, 0, 1, 1]] },
-        }))
-        .unwrap();
+        let bindings = style_bindings(serde_json::json!({
+            "transform": { "translateX": { "animated": { "id": 1 } } },
+            "opacity": { "animated": { "id": 2 } },
+            "backgroundColor": { "animated": { "type": "interpolateColor", "id": 3,
+                "input": [0, 1], "output": [[1, 0, 0, 1], [0, 0, 1, 1]] } },
+        }));
 
         let e = world
             .spawn((
@@ -1268,6 +1286,37 @@ mod tests {
         assert!((s.alpha - 0.5).abs() < 1e-4, "opacity owns final alpha");
     }
 
+    /// The 2D `rotate` binding takes **degrees** on the wire (matching the
+    /// declarative `transform.rotate` position it lives in) and stores
+    /// radians in `UiTransform` — same contract as the `transform3d`
+    /// rotations.
+    #[test]
+    fn rotate_binding_converts_degrees_to_radians() {
+        let mut world = World::new();
+        world.init_resource::<crate::layer::LayerContentDirt>();
+        let mut values = SharedValues::default();
+        values.set(1, 90.0); // degrees
+        world.insert_resource(values);
+
+        let bindings = style_bindings(serde_json::json!({
+            "transform": { "rotate": { "animated": { "id": 1 } } },
+        }));
+        let e = world
+            .spawn((AnimatedNode(bindings), UiTransform::default()))
+            .id();
+
+        let mut schedule = Schedule::default();
+        schedule.add_systems(apply_animated_nodes);
+        schedule.run(&mut world);
+
+        let t = world.entity(e).get::<UiTransform>().unwrap();
+        assert!(
+            (t.rotation.as_radians() - std::f32::consts::FRAC_PI_2).abs() < 1e-5,
+            "90° on the wire → π/2 stored, got {}",
+            t.rotation.as_radians()
+        );
+    }
+
     /// A layout length lands on `Node` (as px); a `borderColor` binding inserts a
     /// `BorderColor` on all sides when absent; and a re-render that resets `Node`
     /// is corrected on the next apply (the compare-before-write re-applies because
@@ -1281,12 +1330,11 @@ mod tests {
         values.set(11, 0.0); // border-color progress → output[0] = green
         world.insert_resource(values);
 
-        let bindings: AnimatedBindings = serde_json::from_value(serde_json::json!({
-            "width": { "type": "shared", "id": 10 },
-            "borderColor": { "type": "interpolateColor", "id": 11,
-                "input": [0, 1], "output": [[0, 1, 0, 1], [1, 0, 0, 1]] },
-        }))
-        .unwrap();
+        let bindings = style_bindings(serde_json::json!({
+            "width": { "animated": { "id": 10 } },
+            "borderColor": { "animated": { "type": "interpolateColor", "id": 11,
+                "input": [0, 1], "output": [[0, 1, 0, 1], [1, 0, 0, 1]] } },
+        }));
 
         let e = world
             .spawn((
@@ -1336,14 +1384,13 @@ mod tests {
         world.insert_resource(values);
         world.init_resource::<Dirty>();
 
-        let bindings: AnimatedBindings = serde_json::from_value(serde_json::json!({
-            "translateX": { "type": "shared", "id": 1 },
-            "opacity": { "type": "shared", "id": 2 },
-            "backgroundColor": { "type": "interpolateColor", "id": 3,
-                "input": [0, 1], "output": [[1, 0, 0, 1], [0, 0, 1, 1]] },
-            "width": { "type": "shared", "id": 1 },
-        }))
-        .unwrap();
+        let bindings = style_bindings(serde_json::json!({
+            "transform": { "translateX": { "animated": { "id": 1 } } },
+            "opacity": { "animated": { "id": 2 } },
+            "backgroundColor": { "animated": { "type": "interpolateColor", "id": 3,
+                "input": [0, 1], "output": [[1, 0, 0, 1], [0, 0, 1, 1]] } },
+            "width": { "animated": { "id": 1 } },
+        }));
 
         world.spawn((
             AnimatedNode(bindings),
@@ -1385,63 +1432,7 @@ mod tests {
 
     // -- per-param filter bindings (stage 4) ---------------------------------
 
-    #[test]
-    fn filter_param_from_wire_parses_strictly() {
-        use AnimatableProperty as P;
-        assert_eq!(
-            P::from_wire("filter[0].radius"),
-            Some(P::FilterParam {
-                index: 0,
-                name: "radius".into()
-            })
-        );
-        assert_eq!(
-            P::from_wire("filter[12].intensity"),
-            Some(P::FilterParam {
-                index: 12,
-                name: "intensity".into()
-            })
-        );
-        for bad in [
-            "filter[].x",
-            "filter[0].",
-            "filter[a].x",
-            "filter",
-            "filter[0]x",
-            "filter[-1].x",
-            "filter[256].x", // beyond the u8 wire-index space
-        ] {
-            assert_eq!(P::from_wire(bad), None, "{bad:?} must not parse");
-        }
-    }
-
     // -- transform3d bindings (stage 1b) -------------------------------------
-
-    #[test]
-    fn transform3d_from_wire_parses_known_fields_only() {
-        use crate::animations::protocol::Transform3dField as F;
-        use AnimatableProperty as P;
-        assert_eq!(
-            P::from_wire("transform3d.rotateY"),
-            Some(P::Transform3d(F::RotateY))
-        );
-        assert_eq!(
-            P::from_wire("transform3d.perspective"),
-            Some(P::Transform3d(F::Perspective))
-        );
-        assert_eq!(
-            P::from_wire("transform3d.originX"),
-            Some(P::Transform3d(F::OriginX))
-        );
-        for bad in [
-            "transform3d.",
-            "transform3d",
-            "transform3d.origin.x",
-            "transform3d.rotate",
-        ] {
-            assert_eq!(P::from_wire(bad), None, "{bad:?} must not parse");
-        }
-    }
 
     /// `transform3d.<field>` bindings overwrite their field over the static
     /// params (unbound fields untouched), convert rotation degrees to stored
@@ -1457,15 +1448,14 @@ mod tests {
         values.set(1, 90.0); // rotateY, degrees on the wire
         world.insert_resource(values);
 
-        let bindings: AnimatedBindings = serde_json::from_value(serde_json::json!({
-            "transform3d.rotateY": { "type": "shared", "id": 1 },
-        }))
-        .unwrap();
+        let bindings = style_bindings(serde_json::json!({
+            "transform3d": { "rotateY": { "animated": { "id": 1 } } },
+        }));
         assert!(bindings.has_transform3d());
         assert!(!bindings.has_transform(), "distinct from the 2D group");
 
         let static_params = Transform3d {
-            perspective: Some(500.0),
+            perspective: Some(crate::protocol::Animatable::Static(500.0)),
             ..Default::default()
         };
         let e = world
@@ -1479,13 +1469,17 @@ mod tests {
         let mut apply = Schedule::default();
         apply.add_systems(apply_animated_nodes);
         apply.run(&mut world);
-        let t = world.entity(e).get::<LayerTransform3d>().unwrap().0;
+        let t = world.entity(e).get::<LayerTransform3d>().unwrap().0.clone();
         assert_eq!(
-            t.rotate_y.unwrap().radians(),
+            t.rotate_y.static_val().unwrap().radians(),
             std::f32::consts::FRAC_PI_2,
             "degrees on the wire, radians stored"
         );
-        assert_eq!(t.perspective, Some(500.0), "unbound fields keep the base");
+        assert_eq!(
+            t.perspective.static_val(),
+            Some(500.0),
+            "unbound fields keep the base"
+        );
 
         // Settled value → no change-detection churn on re-apply.
         let tick_before = world.entity(e).get_ref::<LayerTransform3d>().unwrap();
@@ -1505,13 +1499,15 @@ mod tests {
     #[test]
     fn bindings_with_filter_params_iterate_deterministically() {
         use AnimatableProperty as P;
-        let bindings: AnimatedBindings = serde_json::from_value(serde_json::json!({
-            "filter[2].b": { "type": "shared", "id": 1 },
-            "filter[0].radius": { "type": "shared", "id": 2 },
-            "opacity": { "type": "shared", "id": 3 },
-            "scale": { "type": "shared", "id": 4 },
-        }))
-        .unwrap();
+        let bindings = style_bindings(serde_json::json!({
+            "filter": [
+                { "name": "blur", "params": { "radius": { "animated": { "id": 2 } } } },
+                { "name": "grayscale" },
+                { "name": "custom", "params": { "b": { "animated": { "id": 1 } } } },
+            ],
+            "opacity": { "animated": { "id": 3 } },
+            "transform": { "scale": { "animated": { "id": 4 } } },
+        }));
         assert!(bindings.has_filter_params());
         assert!(bindings.has_transform());
         let keys: Vec<_> = bindings.iter().map(|(p, _)| p.clone()).collect();
@@ -1599,10 +1595,7 @@ mod tests {
     #[test]
     fn filter_param_binding_drives_scalar_slot_composite_only() {
         let (mut world, mut schedule) = filter_world(0.25);
-        let bindings: AnimatedBindings = serde_json::from_value(serde_json::json!({
-            "filter[0].amount": { "type": "shared", "id": 1 },
-        }))
-        .unwrap();
+        let bindings = filter_bindings(&[(0, "amount", Binding::Shared { id: 1 })]);
         let e = world
             .spawn((
                 AnimatedNode(bindings),
@@ -1668,10 +1661,7 @@ mod tests {
     #[test]
     fn filter_param_binding_routes_wire_index_and_scales_lengths() {
         let (mut world, mut schedule) = filter_world(5.0);
-        let bindings: AnimatedBindings = serde_json::from_value(serde_json::json!({
-            "filter[0].radius": { "type": "shared", "id": 1 },
-        }))
-        .unwrap();
+        let bindings = filter_bindings(&[(0, "radius", Binding::Shared { id: 1 })]);
         let radius_layout = || vec![slot("radius", ValueKind::Length, 0, 0, 1)];
         let e = world
             .spawn((
@@ -1706,12 +1696,18 @@ mod tests {
     fn filter_param_binding_converts_angle_and_writes_color() {
         let (mut world, mut schedule) = filter_world(90.0);
         world.resource_mut::<SharedValues>().set(2, 0.0);
-        let bindings: AnimatedBindings = serde_json::from_value(serde_json::json!({
-            "filter[0].angle": { "type": "shared", "id": 1 },
-            "filter[0].tint": { "type": "interpolateColor", "id": 2,
-                "input": [0, 1], "output": [[1, 0, 0, 1], [0, 0, 1, 1]] },
-        }))
-        .unwrap();
+        let bindings = filter_bindings(&[
+            (0, "angle", Binding::Shared { id: 1 }),
+            (
+                0,
+                "tint",
+                Binding::InterpolateColor {
+                    id: 2,
+                    input: vec![0.0, 1.0],
+                    output: vec![[1.0, 0.0, 0.0, 1.0], [0.0, 0.0, 1.0, 1.0]],
+                },
+            ),
+        ]);
         let e = world
             .spawn((
                 AnimatedNode(bindings),
@@ -1759,12 +1755,11 @@ mod tests {
         let _ = crate::diag::take_runtime_warnings();
 
         let (mut world, mut schedule) = filter_world(1.0);
-        let bindings: AnimatedBindings = serde_json::from_value(serde_json::json!({
-            "filter[0].nope": { "type": "shared", "id": 1 },
-            "filter[3].amount": { "type": "shared", "id": 1 },
-            "filter[0].dir": { "type": "shared", "id": 1 },
-        }))
-        .unwrap();
+        let bindings = filter_bindings(&[
+            (0, "nope", Binding::Shared { id: 1 }),
+            (3, "amount", Binding::Shared { id: 1 }),
+            (0, "dir", Binding::Shared { id: 1 }),
+        ]);
         let e = world
             .spawn((
                 AnimatedNode(bindings.clone()),
@@ -1855,11 +1850,10 @@ mod tests {
         // stamp stores the POST-write version, so stage 4's own bump never
         // reads as a re-resolve — the invalid binding warns exactly once, not
         // once per animated frame.
-        let mixed: AnimatedBindings = serde_json::from_value(serde_json::json!({
-            "filter[0].amount": { "type": "shared", "id": 1 },
-            "filter[0].nope": { "type": "shared", "id": 1 },
-        }))
-        .unwrap();
+        let mixed = filter_bindings(&[
+            (0, "amount", Binding::Shared { id: 1 }),
+            (0, "nope", Binding::Shared { id: 1 }),
+        ]);
         let e3 = world
             .spawn((
                 AnimatedNode(mixed),

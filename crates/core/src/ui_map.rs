@@ -17,10 +17,11 @@ use bevy::ui::widget::NodeImageMode;
 use crate::cursor::NodeCursor;
 use crate::plugin::Fonts;
 use crate::protocol::{
-    Angle, AngularStop, AtlasSpec, BoxShadowList, BoxShadowSpec, ConicGradientSpec, FontSize,
-    GradientList, GradientSpec, GradientStop, ImageMode, ImageModeSpec, Length, LetterSpacingSpec,
-    LineHeightSpec, LinearGradientSpec, Props, RadialGradientSpec, RadialShapeSpec, Rect,
-    SliceBorder, SliceScale, SliceSpec, Style, StyleDirty,
+    Angle, AngularStop, AnimatableField, AtlasSpec, BoxShadowList, BoxShadowSpec,
+    ConicGradientSpec, FontSize, GradientList, GradientSpec, GradientStop, ImageMode,
+    ImageModeSpec, Length, LetterSpacingSpec, LineHeightSpec, LinearGradientSpec, Props,
+    RadialGradientSpec, RadialShapeSpec, Rect, SliceBorder, SliceScale, SliceSpec, Style,
+    StyleDirty,
 };
 use crate::scrollbar::{ScrollbarConfig, ScrollbarPosition};
 
@@ -271,38 +272,38 @@ pub fn node_from_style(style: &Option<Style>) -> Node {
         }
     }
 
-    if let Some(v) = s.left {
+    if let Some(v) = s.left.static_val() {
         node.left = length_to_val(v);
     }
-    if let Some(v) = s.right {
+    if let Some(v) = s.right.static_val() {
         node.right = length_to_val(v);
     }
-    if let Some(v) = s.top {
+    if let Some(v) = s.top.static_val() {
         node.top = length_to_val(v);
     }
-    if let Some(v) = s.bottom {
+    if let Some(v) = s.bottom.static_val() {
         node.bottom = length_to_val(v);
     }
 
-    if let Some(v) = s.width {
+    if let Some(v) = s.width.static_val() {
         node.width = length_to_val(v);
     }
-    if let Some(v) = s.height {
+    if let Some(v) = s.height.static_val() {
         node.height = length_to_val(v);
     }
-    if let Some(v) = s.min_width {
+    if let Some(v) = s.min_width.static_val() {
         node.min_width = length_to_val(v);
     }
-    if let Some(v) = s.min_height {
+    if let Some(v) = s.min_height.static_val() {
         node.min_height = length_to_val(v);
     }
-    if let Some(v) = s.max_width {
+    if let Some(v) = s.max_width.static_val() {
         node.max_width = length_to_val(v);
     }
-    if let Some(v) = s.max_height {
+    if let Some(v) = s.max_height.static_val() {
         node.max_height = length_to_val(v);
     }
-    if let Some(v) = s.aspect_ratio {
+    if let Some(v) = s.aspect_ratio.static_val() {
         node.aspect_ratio = Some(v);
     }
 
@@ -347,17 +348,17 @@ pub fn node_from_style(style: &Option<Style>) -> Node {
     if let Some(v) = s.flex_shrink {
         node.flex_shrink = v;
     }
-    if let Some(v) = s.flex_basis {
+    if let Some(v) = s.flex_basis.static_val() {
         node.flex_basis = length_to_val(v);
     }
-    if let Some(v) = s.gap {
+    if let Some(v) = s.gap.static_val() {
         node.row_gap = length_to_val(v);
         node.column_gap = length_to_val(v);
     }
-    if let Some(v) = s.row_gap {
+    if let Some(v) = s.row_gap.static_val() {
         node.row_gap = length_to_val(v);
     }
-    if let Some(v) = s.column_gap {
+    if let Some(v) = s.column_gap.static_val() {
         node.column_gap = length_to_val(v);
     }
 
@@ -457,10 +458,10 @@ pub fn apply_style_masked(
     let opacity = if promoted {
         None
     } else {
-        s.and_then(|s| s.opacity)
+        s.and_then(|s| s.opacity.static_val())
     };
     if promoted && dirty.intersects(g::LAYER) {
-        let alpha = s.and_then(|s| s.opacity).unwrap_or(1.0);
+        let alpha = s.and_then(|s| s.opacity.static_val()).unwrap_or(1.0);
         // Queued set-if-neq (like `set_node_if_changed`): a settled value must
         // not trip change detection every restyle.
         ec.queue(move |mut entity: EntityWorldMut| {
@@ -475,7 +476,7 @@ pub fn apply_style_masked(
         });
     }
     if dirty.intersects(g::BACKGROUND) {
-        match s.and_then(|s| s.background_color.as_deref()) {
+        match s.and_then(|s| s.background_color.static_ref()) {
             Some(hex) => {
                 ec.insert(BackgroundColor(apply_opacity(parse_color(hex), opacity)));
             }
@@ -490,15 +491,15 @@ pub fn apply_style_masked(
     // `AnimatedNode`/transition entities is never violated, and an in-flight
     // animation/transition isn't reset by a coincident re-render.
     if dirty.intersects(g::TRANSFORM)
-        && let Some(t) = s.and_then(|s| s.transform)
+        && let Some(t) = s.and_then(|s| s.transform.as_ref())
     {
         ec.insert(build_ui_transform(
-            t.translate_x.map(length_to_val),
-            t.translate_y.map(length_to_val),
-            t.scale,
-            t.scale_x,
-            t.scale_y,
-            t.rotate.map(Angle::radians),
+            t.translate_x.static_val().map(length_to_val),
+            t.translate_y.static_val().map(length_to_val),
+            t.scale.static_val(),
+            t.scale_x.static_val(),
+            t.scale_y.static_val(),
+            t.rotate.static_val().map(Angle::radians),
         ));
     }
     // `transform3d` params mirror the `UiTransform` never-remove rule: when
@@ -507,7 +508,7 @@ pub fn apply_style_masked(
     // isn't reset by a coincident re-render). Queued set-if-neq like the
     // group alpha above: a settled value must not trip change detection.
     if dirty.intersects(g::TRANSFORM3D)
-        && let Some(t) = s.and_then(|s| s.transform3d)
+        && let Some(t) = s.and_then(|s| s.transform3d.clone())
     {
         ec.queue(move |mut entity: EntityWorldMut| {
             use crate::layer::transform3d::LayerTransform3d;
@@ -522,7 +523,7 @@ pub fn apply_style_masked(
         });
     }
     if dirty.intersects(g::BORDER_COLOR) {
-        match s.and_then(|s| s.border_color.as_ref()) {
+        match s.and_then(|s| s.border_color.static_ref()) {
             Some(spec) => {
                 let side =
                     |c: &Option<String>| c.as_deref().map(parse_color).unwrap_or(Color::NONE);
@@ -783,7 +784,10 @@ pub fn image_node_promoted(props: &Props, assets: &AssetServer, promoted: bool) 
     // background/text color. Suppressed on a promoted layer root (group alpha
     // applies once at composite — see `crate::layer`).
     if !promoted {
-        image.color = apply_opacity(image.color, props.style.as_ref().and_then(|s| s.opacity));
+        image.color = apply_opacity(
+            image.color,
+            props.style.as_ref().and_then(|s| s.opacity.static_val()),
+        );
     }
     image.flip_x = props.flip_x;
     image.flip_y = props.flip_y;
@@ -1015,11 +1019,11 @@ pub fn resolved_text_style(
         font.font = FontSource::Handle(h.clone());
     }
     if let Some(s) = style.as_ref() {
-        if let Some(c) = &s.color {
+        if let Some(c) = s.color.static_ref() {
             color = TextColor(parse_color(c));
         }
         if s.opacity.is_some() {
-            color = TextColor(apply_opacity(color.0, s.opacity));
+            color = TextColor(apply_opacity(color.0, s.opacity.static_val()));
         }
         if let Some(size) = s.font_size {
             font.font_size = font_size_to_bevy(size);
@@ -1349,10 +1353,19 @@ mod tests {
         let s = style(serde_json::json!({
             "width": "50%", "height": "auto", "maxWidth": "100vw", "minHeight": 24
         }));
-        assert_eq!(length_to_val(s.width.unwrap()), Val::Percent(50.0));
-        assert_eq!(length_to_val(s.height.unwrap()), Val::Auto);
-        assert_eq!(length_to_val(s.max_width.unwrap()), Val::Vw(100.0));
-        assert_eq!(length_to_val(s.min_height.unwrap()), Val::Px(24.0));
+        assert_eq!(
+            length_to_val(s.width.static_val().unwrap()),
+            Val::Percent(50.0)
+        );
+        assert_eq!(length_to_val(s.height.static_val().unwrap()), Val::Auto);
+        assert_eq!(
+            length_to_val(s.max_width.static_val().unwrap()),
+            Val::Vw(100.0)
+        );
+        assert_eq!(
+            length_to_val(s.min_height.static_val().unwrap()),
+            Val::Px(24.0)
+        );
     }
 
     #[test]
@@ -1500,7 +1513,7 @@ mod tests {
         let s = style(serde_json::json!({
             "textShadow": { "color": "#ff0000", "offsetX": 2, "offsetY": 3 },
         }));
-        let shadow = text_shadow(Some(&s), s.opacity).unwrap();
+        let shadow = text_shadow(Some(&s), s.opacity.static_val()).unwrap();
         assert_eq!(shadow.offset, Vec2::new(2.0, 3.0));
         assert_eq!(shadow.color.to_srgba(), Srgba::hex("ff0000").unwrap());
 
@@ -1542,18 +1555,33 @@ mod tests {
 
         // None overlay leaves base untouched.
         let unchanged = overlay_style(&base, &None).unwrap();
-        assert_eq!(unchanged.background_color.as_deref(), Some("#111111"));
+        assert_eq!(
+            unchanged.background_color.static_ref().map(String::as_str),
+            Some("#111111")
+        );
 
         // Overlaid fields win; unset overlay fields fall through to base.
         let overlay = Some(style(serde_json::json!({ "backgroundColor": "#89b4fa" })));
         let merged = overlay_style(&base, &overlay).unwrap();
-        assert_eq!(merged.background_color.as_deref(), Some("#89b4fa")); // overridden
-        assert_eq!(length_to_val(merged.width.unwrap()), Val::Px(64.0)); // kept from base
-        assert_eq!(merged.color.as_deref(), Some("#ffffff")); // kept from base
+        assert_eq!(
+            merged.background_color.static_ref().map(String::as_str),
+            Some("#89b4fa")
+        ); // overridden
+        assert_eq!(
+            length_to_val(merged.width.static_val().unwrap()),
+            Val::Px(64.0)
+        ); // kept from base
+        assert_eq!(
+            merged.color.static_ref().map(String::as_str),
+            Some("#ffffff")
+        ); // kept from base
 
         // Overlay onto an absent base still yields the overlay's fields.
         let from_none = overlay_style(&None, &overlay).unwrap();
-        assert_eq!(from_none.background_color.as_deref(), Some("#89b4fa"));
+        assert_eq!(
+            from_none.background_color.static_ref().map(String::as_str),
+            Some("#89b4fa")
+        );
     }
 
     /// `filter` IS carried by variants (a hover filter re-stamps `FilterInput`
@@ -1577,7 +1605,10 @@ mod tests {
         assert_eq!(merged.filter, overlay.as_ref().unwrap().filter);
         assert_ne!(merged.filter, base.as_ref().unwrap().filter);
         assert_eq!(merged.focus_policy, Some(FocusPolicy::Block));
-        assert_eq!(merged.background_color.as_deref(), Some("red"));
+        assert_eq!(
+            merged.background_color.static_ref().map(String::as_str),
+            Some("red")
+        );
 
         // A variant with no filter falls through to the base chain.
         let no_filter = Some(style(serde_json::json!({ "backgroundColor": "red" })));
@@ -1595,7 +1626,7 @@ mod tests {
         let press = Some(style(serde_json::json!({ "transform": { "scale": 0.95 } })));
         let merged = overlay_style(&base, &press).unwrap();
         let t = merged.transform.unwrap();
-        assert_eq!(t.scale, Some(0.95));
+        assert_eq!(t.scale.static_val(), Some(0.95));
         assert_eq!(t.translate_x, None);
     }
 

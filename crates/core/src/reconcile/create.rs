@@ -293,8 +293,12 @@ fn spawn_element(
 /// other field) via the element's `style` prop.
 pub(super) fn surface_root_base() -> Option<Style> {
     Some(Style {
-        width: Some(crate::protocol::Length::Percent(100.0)),
-        height: Some(crate::protocol::Length::Percent(100.0)),
+        width: Some(crate::protocol::Animatable::Static(
+            crate::protocol::Length::Percent(100.0),
+        )),
+        height: Some(crate::protocol::Animatable::Static(
+            crate::protocol::Length::Percent(100.0),
+        )),
         ..Default::default()
     })
 }
@@ -313,8 +317,12 @@ pub(super) fn surface_root_base() -> Option<Style> {
 /// with no style value).
 pub(super) fn root_base() -> Option<Style> {
     Some(Style {
-        width: Some(crate::protocol::Length::Percent(100.0)),
-        height: Some(crate::protocol::Length::Percent(100.0)),
+        width: Some(crate::protocol::Animatable::Static(
+            crate::protocol::Length::Percent(100.0),
+        )),
+        height: Some(crate::protocol::Animatable::Static(
+            crate::protocol::Length::Percent(100.0),
+        )),
         // Default to a column, like the main UI root (plugin.rs). Bevy's own
         // default is `row`, but a row container mis-measures a single
         // content-sized child that has `maxWidth` + wrapping text: the text is

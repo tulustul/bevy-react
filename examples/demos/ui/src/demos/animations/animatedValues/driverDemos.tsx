@@ -1,6 +1,5 @@
 import { useState } from "react";
 import {
-  Animated,
   cancelAnimation,
   useSharedValue,
   withDelay,
@@ -42,9 +41,11 @@ export function SpringDemo() {
     >
       <node style={column}>
         <node style={springStage}>
-          <Animated.node
-            style={springSquare}
-            animatedStyle={{ translateX: x }}
+          <node
+            style={{
+              ...springSquare,
+              transform: { translateX: { animated: x } },
+            }}
           />
         </node>
         <Slider
@@ -127,9 +128,11 @@ export function SequenceDemo() {
     >
       <node style={column}>
         <node style={sequenceStage}>
-          <Animated.node
-            style={sequenceSquare}
-            animatedStyle={{ translateX: x }}
+          <node
+            style={{
+              ...sequenceSquare,
+              transform: { translateX: { animated: x } },
+            }}
           />
         </node>
         <button
@@ -164,7 +167,7 @@ const sequenceSquare: BevyStyle = {
 // shared value wherever it currently is.
 
 const SPIN_TSX = `rot.value = withRepeat(
-  withTiming(Math.PI * 2, {
+  withTiming(360, { // degrees
     easing: "linear",
   }),
   -1,
@@ -178,7 +181,8 @@ export function SpinDemo() {
   const start = () => {
     rot.value = 0;
     rot.value = withRepeat(
-      withTiming(Math.PI * 2, { duration: 1200, easing: "linear" }),
+      // Rotation binds in degrees, like the static transform.rotate field.
+      withTiming(360, { duration: 1200, easing: "linear" }),
       -1,
     );
     setSpinning(true);
@@ -197,9 +201,11 @@ export function SpinDemo() {
     >
       <node style={column}>
         <node style={spinStage}>
-          <Animated.node style={spinSquare} animatedStyle={{ rotate: rot }}>
+          <node
+            style={{ ...spinSquare, transform: { rotate: { animated: rot } } }}
+          >
             <text style={spinSquareText}>^</text>
-          </Animated.node>
+          </node>
         </node>
         <node style={{ flexDirection: "row", gap: 10 }}>
           <button

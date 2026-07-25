@@ -15,6 +15,8 @@
 // untyped — filters are registry-defined, there is no loose fallback. Run
 // your app's exporter (`npm run bevy:generate`) to populate the union.
 
+import type { Animatable } from "./animated";
+
 /** Registry of filter names → their params type. Empty by design; augmented by
  *  the generated `bevy.ts` (see the module doc above). */
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type
@@ -23,9 +25,19 @@ export interface BevyFilters {}
 /** One filter invocation in a chain: a registered filter name (e.g. `"blur"`,
  *  `"hueRotate"`) plus its parameters, typed per name via [`BevyFilters`].
  *  Omitted params take the filter's CSS-shorthand default —
- *  `{ name: "grayscale" }` is *full* grayscale, like CSS `grayscale()`. */
+ *  `{ name: "grayscale" }` is *full* grayscale, like CSS `grayscale()`.
+ *
+ *  Every param position is [`Animatable`]: `params: { radius: { animated:
+ *  sv } }` binds it to a shared value (chain position = binding address, so
+ *  reordering the chain keeps bindings attached). The wrapper's optional
+ *  `seed` is the static value the resolver decodes in its place — size it
+ *  for the animation's range when the param feeds a resolve-time derivation
+ *  (a blur radius's capture outset). */
 export type FilterUse = {
-  [K in keyof BevyFilters]: { name: K; params?: BevyFilters[K] };
+  [K in keyof BevyFilters]: {
+    name: K;
+    params?: { [P in keyof BevyFilters[K]]: Animatable<BevyFilters[K][P]> };
+  };
 }[keyof BevyFilters];
 
 /** The `filter` style value: one [`FilterUse`] (a 1-element chain) or an

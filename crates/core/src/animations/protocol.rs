@@ -9,7 +9,6 @@
 use std::collections::BTreeMap;
 
 use serde::Deserialize;
-use serde::de::{self, Deserializer, MapAccess, Visitor};
 
 /// Identity of a shared value (Reanimated's `useSharedValue`). Allocated on the
 /// JS side; lives in the [`crate::animations::SharedValues`] table on the Bevy side. Its own
@@ -95,7 +94,7 @@ pub enum AnimationCommand {
 /// Binds one animated style property to a shared value. Lives in the reconciler
 /// `Props.animated` (see [`AnimatedBindings`]); evaluated each frame by the
 /// orchestration system.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum Binding {
     /// Use the shared value's current reading directly (numeric props).
@@ -118,9 +117,9 @@ pub enum Binding {
 /// Identity of one continuous, animation-driveable style property. This is the
 /// open set the generic apply layer dispatches on — adding a new animatable
 /// property is a new variant here plus a row in the apply table (`crate::animations`),
-/// not a new named field on a fixed struct. The wire key is camelCase (see
-/// [`AnimatableProperty::from_wire`]); the JS side mirrors this set in
-/// `js/src/animated.ts`'s `AnimatableProperty` union.
+/// not a new named field on a fixed struct. Derived from the merged style's
+/// inline `{ animated }` wrappers (`crate::style_bindings`), which is also
+/// where each variant's style position is defined.
 ///
 /// Not `Copy` ([`Self::FilterParam`] carries the param name); the fieldless
 /// variants are still constructed freely at call sites.
@@ -134,7 +133,9 @@ pub enum AnimatableProperty {
     Scale,
     ScaleX,
     ScaleY,
-    /// Clockwise rotation in radians.
+    /// Clockwise rotation, **degrees** on the wire (matching the declarative
+    /// `transform.rotate` field it lives in and the `transform3d` rotations);
+    /// applied as radians.
     Rotate,
     /// Multiplies color alpha across background/text/image.
     Opacity,
@@ -204,8 +205,8 @@ pub enum AnimatableProperty {
     /// ([`crate::layer::transform3d`]); unbound fields keep the static style
     /// value. Values arrive in the **declarative field's wire units**: logical
     /// px for translations/perspective/origin, **degrees** for rotations
-    /// (unlike the imperative 2D `rotate`, which is radians — the 3D group
-    /// matches its own style field instead), raw scalars for scales.
+    /// (like the 2D [`Rotate`](Self::Rotate) and every other rotation in the
+    /// system), raw scalars for scales.
     Transform3d(Transform3dField),
 }
 
@@ -229,95 +230,9 @@ pub enum Transform3dField {
 }
 
 impl AnimatableProperty {
-    /// Wire (camelCase) key → property, or `None` for an unrecognised key. The
-    /// deserializer skips unknown keys rather than failing, so a JS bundle newer
-    /// than this binary degrades gracefully instead of dropping the whole node's
-    /// `animatedStyle`. `filter[<index>].<param>` keys parse into
-    /// [`Self::FilterParam`] (strict: decimal index that fits the `u8`
-    /// wire-index space, a literal `].`, a non-empty param name — anything
-    /// else is unrecognised).
-    pub fn from_wire(key: &str) -> Option<Self> {
-        Some(match key {
-            "translateX" => Self::TranslateX,
-            "translateY" => Self::TranslateY,
-            "scale" => Self::Scale,
-            "scaleX" => Self::ScaleX,
-            "scaleY" => Self::ScaleY,
-            "rotate" => Self::Rotate,
-            "opacity" => Self::Opacity,
-            "backgroundColor" => Self::BackgroundColor,
-            "borderColor" => Self::BorderColor,
-            "color" => Self::Color,
-            "width" => Self::Width,
-            "height" => Self::Height,
-            "minWidth" => Self::MinWidth,
-            "minHeight" => Self::MinHeight,
-            "maxWidth" => Self::MaxWidth,
-            "maxHeight" => Self::MaxHeight,
-            "left" => Self::Left,
-            "right" => Self::Right,
-            "top" => Self::Top,
-            "bottom" => Self::Bottom,
-            "flexBasis" => Self::FlexBasis,
-            "gap" => Self::Gap,
-            "rowGap" => Self::RowGap,
-            "columnGap" => Self::ColumnGap,
-            "aspectRatio" => Self::AspectRatio,
-            _ => {
-                return Self::filter_param_from_wire(key)
-                    .or_else(|| Self::transform3d_from_wire(key));
-            }
-        })
-    }
-
-    /// Parse a `filter[<index>].<param>` or `backdropFilter[<index>].<param>`
-    /// wire key (see [`Self::from_wire`]).
-    fn filter_param_from_wire(key: &str) -> Option<Self> {
-        let (rest, backdrop) = match key.strip_prefix("filter[") {
-            Some(rest) => (rest, false),
-            None => (key.strip_prefix("backdropFilter[")?, true),
-        };
-        let (digits, name) = rest.split_once("].")?;
-        if digits.is_empty() || !digits.bytes().all(|b| b.is_ascii_digit()) || name.is_empty() {
-            return None;
-        }
-        // Indices beyond the `u8` wire-index space are unaddressable (chains
-        // decode-cap at 256 entries) — treat them as unrecognised keys.
-        let index: u8 = digits.parse().ok()?;
-        let name = name.to_owned();
-        Some(if backdrop {
-            Self::BackdropParam { index, name }
-        } else {
-            Self::FilterParam { index, name }
-        })
-    }
-
-    /// Parse a `transform3d.<field>` wire key (see [`Self::from_wire`]).
-    /// Unknown fields are unrecognised keys (skip-and-warn upstream), like
-    /// every other wire key.
-    fn transform3d_from_wire(key: &str) -> Option<Self> {
-        use Transform3dField as F;
-        let field = match key.strip_prefix("transform3d.")? {
-            "perspective" => F::Perspective,
-            "translateX" => F::TranslateX,
-            "translateY" => F::TranslateY,
-            "translateZ" => F::TranslateZ,
-            "rotateX" => F::RotateX,
-            "rotateY" => F::RotateY,
-            "rotateZ" => F::RotateZ,
-            "scale" => F::Scale,
-            "scaleX" => F::ScaleX,
-            "scaleY" => F::ScaleY,
-            "originX" => F::OriginX,
-            "originY" => F::OriginY,
-            _ => return None,
-        };
-        Some(Self::Transform3d(field))
-    }
-
     /// The kind of value this property animates — picks scalar-vs-color resolution
-    /// in the apply layer. `Rotate` is an `Angle` but, imperatively, JS already
-    /// sends radians, so the applier resolves it as a scalar.
+    /// in the apply layer. `Rotate` is an `Angle`: the bound value is degrees
+    /// on the wire, resolved as a scalar and converted by the applier.
     pub fn value_kind(&self) -> ValueKind {
         match self {
             Self::TranslateX
@@ -388,11 +303,11 @@ pub enum ValueKind {
     Angle,
 }
 
-/// The per-node `animatedStyle`: which style properties are animation-driven and
-/// by what. An open property→[`Binding`] map (mirrors the JS object shape: every
-/// camelCase style key maps to a binding). Decodes the same opaque-object way
-/// `Style` does — unknown keys are skipped (warn-and-continue) so a newer JS
-/// bundle never breaks an older binary's whole node. A `BTreeMap` keeps iteration
+/// A node's animation-driven style properties and what drives each: an open
+/// property→[`Binding`] map. Not a wire type — it is **derived** from the
+/// merged style's inline `{ animated }` wrappers by
+/// `crate::style_bindings::derive_bindings` after every style change, and
+/// stamped on the entity as `AnimatedNode`. A `BTreeMap` keeps iteration
 /// deterministic (stable transform-group rebuild and test assertions).
 #[derive(Debug, Clone, Default)]
 pub struct AnimatedBindings(pub BTreeMap<AnimatableProperty, Binding>);
@@ -450,48 +365,6 @@ impl AnimatedBindings {
     /// Whether nothing is bound.
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
-    }
-}
-
-impl<'de> Deserialize<'de> for AnimatedBindings {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        struct BindingsVisitor;
-
-        impl<'de> Visitor<'de> for BindingsVisitor {
-            type Value = AnimatedBindings;
-
-            fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-                f.write_str("a map of animatable style properties to bindings")
-            }
-
-            fn visit_map<M>(self, mut map: M) -> Result<Self::Value, M::Error>
-            where
-                M: MapAccess<'de>,
-            {
-                let mut out = BTreeMap::new();
-                while let Some(key) = map.next_key::<String>()? {
-                    match AnimatableProperty::from_wire(&key) {
-                        Some(property) => {
-                            out.insert(property, map.next_value::<Binding>()?);
-                        }
-                        None => {
-                            // Consume the value so deserialization stays in sync,
-                            // then skip: forward-compat with a newer JS surface.
-                            map.next_value::<de::IgnoredAny>()?;
-                            let msg = format!("animatedStyle: ignoring unknown property {key:?}");
-                            tracing::warn!(target: "bevy_react", "{msg}");
-                            crate::diag::decode_report("animatedStyle", &key, &msg);
-                        }
-                    }
-                }
-                Ok(AnimatedBindings(out))
-            }
-        }
-
-        deserializer.deserialize_map(BindingsVisitor)
     }
 }
 

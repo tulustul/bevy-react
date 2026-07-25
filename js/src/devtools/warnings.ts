@@ -57,14 +57,19 @@ const KIND_FIELDS: Record<string, { style?: string[]; props?: string[] }> = {
   filterUnknown: { style: ["filter"] },
   filterBleed: { style: ["filter"] },
   // Per-param filter animation bindings: the warning value is the wire key
-  // (`filter[0].radius`), which matches the retained `animated` prop's key.
-  filterBinding: { style: ["filter"], props: ["animated"] },
+  // (`filter[0].radius`); the binding lives inline in the chain entry's
+  // params (`{ animated }` wrapper), so the chain's own row is flagged.
+  filterBinding: { style: ["filter"] },
   backdropFilterParams: { style: ["backdropFilter"] },
   backdropFilterUnknown: { style: ["backdropFilter"] },
   // Same wire-key match as filterBinding, over the backdrop namespace.
-  backdropFilterBinding: { style: ["backdropFilter"], props: ["animated"] },
+  backdropFilterBinding: { style: ["backdropFilter"] },
   scrollbar: { style: ["scrollbar"] },
-  animatedStyle: { props: ["animated"] },
+  // Inline `{ animated }` wrapper problems: a malformed wrapper (decode
+  // sink, attributed to the style row per-op) or a wrapper in a variant
+  // style, where bindings are ignored (the warning value names the variant —
+  // the always-scanned variant props cover the row match).
+  styleBinding: {},
   // Apply-time (runtime sink) kinds.
   color: {
     style: [
@@ -118,15 +123,25 @@ export function matchWarning(
   const out: string[] = [];
   // No table entry (broad kinds like length/angle/time, or a future kind this
   // table lags behind on) → every style field is a candidate.
+  // A warning whose value *names* the field flags that field directly (e.g.
+  // `styleBinding`'s "hoverStyle": bindings ignored in a variant style).
   const styleFields = spec ? (spec.style ?? []) : Object.keys(node.style);
   for (const field of styleFields) {
-    if (field in node.style && valueMatches(node.style[field], warning.value)) {
+    if (
+      field in node.style &&
+      (field === warning.value ||
+        valueMatches(node.style[field], warning.value))
+    ) {
       out.push(`style:${field}`);
     }
   }
   const propFields = [...(spec?.props ?? []), ...VARIANT_STYLE_PROPS];
   for (const field of propFields) {
-    if (field in node.props && valueMatches(node.props[field], warning.value)) {
+    if (
+      field in node.props &&
+      (field === warning.value ||
+        valueMatches(node.props[field], warning.value))
+    ) {
       out.push(`prop:${field}`);
     }
   }

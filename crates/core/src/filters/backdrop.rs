@@ -373,7 +373,7 @@ mod tests {
         assert!(app.world().get::<ResolvedBackdropChain>(e).is_none());
     }
 
-    /// `backdropFilter[<i>].<param>` animatedStyle bindings drive the
+    /// Inline `{ animated }` backdrop-param bindings drive the
     /// backdrop chain through the whole ops → resolve → apply pipeline
     /// (blur's H+V passes both driven, physical-px rewrite, composite-only
     /// dirt), while the CONTENT chain — same node, same param name — stays
@@ -390,9 +390,9 @@ mod tests {
                 json!({
                     "style": {
                         "filter": { "name": "blur", "params": { "radius": 10 } },
-                        "backdropFilter": { "name": "blur", "params": { "radius": 10 } },
+                        "backdropFilter": { "name": "blur",
+                            "params": { "radius": { "animated": { "id": 1 } } } },
                     },
-                    "animated": { "backdropFilter[0].radius": { "type": "shared", "id": 1 } },
                 }),
             )])
             .unwrap();
@@ -426,35 +426,5 @@ mod tests {
         let dirt = app.world().resource::<LayerContentDirt>();
         assert!(dirt.composite_only.contains(&e), "{dirt:?}");
         assert!(!dirt.nodes.contains(&e), "never capture dirt: {dirt:?}");
-    }
-
-    /// The `backdropFilter[<i>].<param>` wire-key grammar parses (and
-    /// malformed forms stay unrecognised), mirroring the `filter[...]` rules.
-    #[test]
-    fn backdrop_param_wire_keys_parse() {
-        use crate::animations::AnimatableProperty as P;
-        assert_eq!(
-            P::from_wire("backdropFilter[0].radius"),
-            Some(P::BackdropParam {
-                index: 0,
-                name: "radius".into()
-            })
-        );
-        assert_eq!(
-            P::from_wire("filter[2].amount"),
-            Some(P::FilterParam {
-                index: 2,
-                name: "amount".into()
-            })
-        );
-        for bad in [
-            "backdropFilter[].radius",
-            "backdropFilter[0]radius",
-            "backdropFilter[x].radius",
-            "backdropFilter[0].",
-            "backdropfilter[0].radius",
-        ] {
-            assert_eq!(P::from_wire(bad), None, "{bad}");
-        }
     }
 }

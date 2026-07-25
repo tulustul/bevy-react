@@ -1,10 +1,5 @@
 import { useState } from "react";
-import {
-  Animated,
-  interpolate,
-  interpolateColor,
-  useSharedValue,
-} from "bevy-react";
+import { interpolate, interpolateColor, useSharedValue } from "bevy-react";
 import { BevyStyle } from "bevy-react/jsx";
 import { DemoRow, Example, Slider } from "@/components";
 import { column } from "./shared";
@@ -12,8 +7,8 @@ import { Colors } from "@/theme";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
 
 // One shared value, many outputs: interpolate / interpolateColor map it onto
-// style bindings each frame in Bevy. The sliders set the value directly (no
-// driver), but the same bindings work under any driver.
+// inline { animated } style bindings each frame in Bevy. The sliders set the
+// value directly (no driver), but the same bindings work under any driver.
 
 const PAGE: ExplanationData = {
   title: "Interpolation",
@@ -23,14 +18,14 @@ on the Bevy side. The input/output arrays can hold any number of matching
 stops, and the value clamps outside the input range. Here the sliders set the
 shared value directly — no driver — but the same bindings ride withTiming,
 withSpring, or any other driver unchanged. Click a card for details.`,
-  tsx: `animatedStyle={{
-  scale: interpolate(
-    t, [0, 1], [0.6, 1.4],
-  ),
-  backgroundColor: interpolateColor(
-    t, [0, 1],
-    ["#7aa2f7", "#f7768e"],
-  ),
+  tsx: `style={{
+  transform: { scale: { animated:
+    interpolate(t, [0, 1], [0.6, 1.4]),
+  } },
+  backgroundColor: { animated:
+    interpolateColor(t, [0, 1],
+      ["#7aa2f7", "#f7768e"]),
+  },
 }}`,
 };
 
@@ -45,14 +40,14 @@ export function InterpolateDemo() {
   );
 }
 
-const SCALE_COLOR_TSX = `animatedStyle={{
-  scale: interpolate(
-    t, [0, 1], [0.6, 1.4],
-  ),
-  backgroundColor: interpolateColor(
-    t, [0, 1],
-    ["#7aa2f7", "#f7768e"],
-  ),
+const SCALE_COLOR_TSX = `style={{
+  transform: { scale: { animated:
+    interpolate(t, [0, 1], [0.6, 1.4]),
+  } },
+  backgroundColor: { animated:
+    interpolateColor(t, [0, 1],
+      ["#7aa2f7", "#f7768e"]),
+  },
 }}`;
 
 function ScaleColorDemo() {
@@ -72,15 +67,19 @@ function ScaleColorDemo() {
     >
       <node style={column}>
         <node style={scaleStage}>
-          <Animated.node
-            style={scaleSquare}
-            animatedStyle={{
-              scale: interpolate(t, [0, 1], [0.6, 1.4]),
-              backgroundColor: interpolateColor(
-                t,
-                [0, 1],
-                [Colors.primary100, Colors.red100],
-              ),
+          <node
+            style={{
+              ...scaleSquare,
+              transform: {
+                scale: { animated: interpolate(t, [0, 1], [0.6, 1.4]) },
+              },
+              backgroundColor: {
+                animated: interpolateColor(
+                  t,
+                  [0, 1],
+                  [Colors.primary100, Colors.red100],
+                ),
+              },
             }}
           />
         </node>
@@ -112,15 +111,16 @@ const scaleSquare: BevyStyle = {
   backgroundColor: Colors.primary100,
 };
 
-const MULTI_STOP_TSX = `animatedStyle={{
-  translateX: interpolate(
-    t, [0, 1], [-84, 84],
-  ),
-  translateY: interpolate(t,
-    [0, 0.25, 0.5, 0.75, 1],
-    [34, -34, 34, -34, 34],
-  ),
-}}`;
+const MULTI_STOP_TSX = `style={{ transform: {
+  translateX: { animated:
+    interpolate(t, [0, 1], [-84, 84]),
+  },
+  translateY: { animated:
+    interpolate(t,
+      [0, 0.25, 0.5, 0.75, 1],
+      [34, -34, 34, -34, 34]),
+  },
+} }}`;
 
 function MultiStopDemo() {
   const t = useSharedValue(0);
@@ -139,15 +139,19 @@ function MultiStopDemo() {
     >
       <node style={column}>
         <node style={zigStage}>
-          <Animated.node
-            style={zigDot}
-            animatedStyle={{
-              translateX: interpolate(t, [0, 1], [-84, 84]),
-              translateY: interpolate(
-                t,
-                [0, 0.25, 0.5, 0.75, 1],
-                [34, -34, 34, -34, 34],
-              ),
+          <node
+            style={{
+              ...zigDot,
+              transform: {
+                translateX: { animated: interpolate(t, [0, 1], [-84, 84]) },
+                translateY: {
+                  animated: interpolate(
+                    t,
+                    [0, 0.25, 0.5, 0.75, 1],
+                    [34, -34, 34, -34, 34],
+                  ),
+                },
+              },
             }}
           />
         </node>
@@ -189,10 +193,11 @@ const BAR_COLORS = [
 
 const CLAMPED_TSX = `// bar i only moves inside
 // its own window of t
-height: interpolate(t,
-  [i * 0.16, i * 0.16 + 0.36],
-  [10, 68],
-)`;
+height: { animated:
+  interpolate(t,
+    [i * 0.16, i * 0.16 + 0.36],
+    [10, 68]),
+}`;
 
 function ClampedWindowsDemo() {
   const t = useSharedValue(0);
@@ -212,11 +217,18 @@ function ClampedWindowsDemo() {
       <node style={column}>
         <node style={barsStage}>
           {BAR_COLORS.map((color, i) => (
-            <Animated.node
+            <node
               key={i}
-              style={{ ...bar, backgroundColor: color }}
-              animatedStyle={{
-                height: interpolate(t, [i * 0.16, i * 0.16 + 0.36], [10, 68]),
+              style={{
+                ...bar,
+                backgroundColor: color,
+                height: {
+                  animated: interpolate(
+                    t,
+                    [i * 0.16, i * 0.16 + 0.36],
+                    [10, 68],
+                  ),
+                },
               }}
             />
           ))}

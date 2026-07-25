@@ -19,6 +19,6 @@ for setting up a project end to end.
 ## What's in here
 
 - `mount`, host-element JSX types (`<node>`, `<text>`, `<button>`, …)
-- Animations: `Animated.*`, `useSharedValue`, `withTiming`, `withSpring`, …
+- Animations: inline `{ animated }` style bindings, `useSharedValue`, `withTiming`, `withSpring`, …
 - `bevy-react/build-lib` — esbuild-based bundling with React Fast Refresh
 - `npx bevy-react init ui` — scaffold the React UI for a new project

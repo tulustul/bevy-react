@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  Animated,
   EasingName,
   useSharedValue,
   withRepeat,
@@ -23,9 +22,9 @@ opacity.value = withRepeat(
   withTiming(0, { duration: 500 }),
   -1, true, // ping-pong
 );
-<Animated.node
-  animatedStyle={{ opacity }}
-/>`;
+<node style={{
+  opacity: { animated: opacity },
+}} />`;
 
 export function FadeDemo() {
   const opacity = useSharedValue(1);
@@ -41,11 +40,11 @@ export function FadeDemo() {
   return (
     <Example
       title="Fade"
-      description="A shared value drives animatedStyle imperatively: withTiming eases opacity to 0, and withRepeat(-1, true) loops it forever, ping-ponging back to 1. The animation runs on the Bevy side — React renders once and never re-renders per frame."
+      description="A shared value drives the style's { animated } binding imperatively: withTiming eases opacity to 0, and withRepeat(-1, true) loops it forever, ping-ponging back to 1. The animation runs on the Bevy side — React renders once and never re-renders per frame."
       tsx={FADE_TSX}
     >
       <node style={fadeStageStyle}>
-        <Animated.node style={fadeSquareStyle} animatedStyle={{ opacity }} />
+        <node style={{ ...fadeSquareStyle, opacity: { animated: opacity } }} />
       </node>
     </Example>
   );
@@ -143,9 +142,12 @@ function Lane({ name, easing, color, duration, play }: LaneProps) {
     <node style={lane}>
       <text style={laneLabel}>{name}</text>
       <node style={track}>
-        <Animated.node
-          style={{ ...dot, backgroundColor: color }}
-          animatedStyle={{ translateX: x }}
+        <node
+          style={{
+            ...dot,
+            backgroundColor: color,
+            transform: { translateX: { animated: x } },
+          }}
         />
       </node>
     </node>
@@ -190,22 +192,22 @@ t.value = withRepeat(
   -1, true,
 );
 // Any continuous style value is
-// animatable now — not just
-// transform/opacity.
-<Animated.node
-  animatedStyle={{
-    width: interpolate(
-      t, [0, 1], [88, 200],
-    ),
-    height: interpolate(
-      t, [0, 1], [88, 120],
-    ),
-    borderColor: interpolateColor(
+// animatable — bindings ride the
+// style itself.
+<node style={{
+  width: { animated: interpolate(
+    t, [0, 1], [88, 200],
+  ) },
+  height: { animated: interpolate(
+    t, [0, 1], [88, 120],
+  ) },
+  borderColor: {
+    animated: interpolateColor(
       t, [0, 1],
       ["#3b82f6", "#ec4899"],
     ),
-  }}
-/>`;
+  },
+}} />`;
 
 export function LayoutColorDemo() {
   const t = useSharedValue(0);
@@ -225,16 +227,18 @@ export function LayoutColorDemo() {
       tsx={LAYOUT_TSX}
     >
       <node style={layoutStageStyle}>
-        <Animated.node
-          style={layoutBoxStyle}
-          animatedStyle={{
-            width: interpolate(t, [0, 1], [88, 200]),
-            height: interpolate(t, [0, 1], [88, 120]),
-            borderColor: interpolateColor(
-              t,
-              [0, 1],
-              [Colors.sky100, Colors.purple100],
-            ),
+        <node
+          style={{
+            ...layoutBoxStyle,
+            width: { animated: interpolate(t, [0, 1], [88, 200]) },
+            height: { animated: interpolate(t, [0, 1], [88, 120]) },
+            borderColor: {
+              animated: interpolateColor(
+                t,
+                [0, 1],
+                [Colors.sky100, Colors.purple100],
+              ),
+            },
           }}
         />
       </node>
