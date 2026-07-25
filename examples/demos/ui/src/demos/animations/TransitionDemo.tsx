@@ -24,7 +24,7 @@ export function TransitionDemo() {
     <>
       <DemoRow>
         <HoverPressDemo />
-        <StateToggleDemo />
+        <ToggleSwitchDemo />
       </DemoRow>
       <DemoRow>
         <TimingVsSpringDemo />
@@ -83,43 +83,57 @@ function HoverPressDemo() {
   );
 }
 
-function StateToggleDemo() {
+function ToggleSwitchDemo() {
   const [on, setOn] = useState(false);
 
   return (
     <Example
-      title="React state"
-      description="Transitions also ease plain React-state changes: clicking toggles the style, and a spring (stiffness/damping) drives the transform while opacity and color fade on timers."
-      tsx={`<button
+      title="Toggle switch"
+      description="Transitions also ease plain React-state changes — here a toggle switch built from two styles: the click flips a boolean, a spring (stiffness/damping) slides the knob, and the track color fades on a timer. No animation code, just the two states."
+      tsx={`<button // track
+  onClick={() => setOn((v) => !v)}
   style={{
-    transform: {
-      translateX: on ? 36 : -36,
-    },
+    backgroundColor: on
+      ? "#9ece6a" : "#42425e",
     transition: {
-      transform: {
-        stiffness: 180,
-        damping: 14,
+      backgroundColor: {
+        duration: 200,
       },
     },
   }}
-/>`}
+>
+  <node // knob
+    style={{
+      transform: {
+        translateX: on ? 36 : 0,
+      },
+      transition: { transform: {
+        stiffness: 180,
+        damping: 14,
+      } },
+    }}
+  />
+</button>`}
     >
-      <button
-        onClick={() => setOn((v) => !v)}
-        style={{
-          ...pillStyle,
-          backgroundColor: on ? Colors.green100 : Colors.surface500,
-          opacity: on ? 1 : 0.6,
-          transform: { translateX: on ? 36 : -36 },
-          transition: {
-            transform: { stiffness: 180, damping: 14 },
-            opacity: { duration: 200 },
-            backgroundColor: { duration: 200 },
-          },
-        }}
-      >
-        <text style={labelStyle}>{on ? "ON" : "OFF"}</text>
-      </button>
+      <node style={switchRow}>
+        <button
+          onClick={() => setOn((v) => !v)}
+          style={{
+            ...switchTrack,
+            backgroundColor: on ? Colors.green100 : Colors.surface500,
+            transition: { backgroundColor: { duration: 200 } },
+          }}
+        >
+          <node
+            style={{
+              ...switchKnob,
+              transform: { translateX: on ? 36 : 0 },
+              transition: { transform: { stiffness: 180, damping: 14 } },
+            }}
+          />
+        </button>
+        <text style={switchLabel}>{on ? "ON" : "OFF"}</text>
+      </node>
     </Example>
   );
 }
@@ -276,6 +290,42 @@ const pillStyle: BevyStyle = {
 const labelStyle: BevyStyle = {
   color: Colors.textColor400,
   fontSize: FontSizes.base,
+  fontWeight: "bold",
+};
+
+const switchRow: BevyStyle = {
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 14,
+  height: 96,
+};
+
+// The pill-shaped track: the knob slides inside its padding, and the click
+// target is the whole pill.
+const switchTrack: BevyStyle = {
+  flexDirection: "row",
+  justifyContent: "flexStart",
+  alignItems: "center",
+  width: 76,
+  height: 40,
+  padding: 4,
+  borderRadius: 999,
+  cursor: "pointer",
+};
+
+// travel = track width − 2·padding − knob width = 36
+const switchKnob: BevyStyle = {
+  width: 32,
+  height: 32,
+  borderRadius: 999,
+  backgroundColor: Colors.textColor100,
+  boxShadow: { blurRadius: 4, spreadRadius: 1, color: Colors.shadow100 },
+};
+
+const switchLabel: BevyStyle = {
+  width: 36,
+  color: Colors.textColor200,
+  fontSize: FontSizes.sm,
   fontWeight: "bold",
 };
 

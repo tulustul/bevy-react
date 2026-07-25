@@ -16,7 +16,7 @@ import { useDemoPage, type ExplanationData } from "@/explanationStore";
 
 const STAGE_W = 380;
 const STAGE_H = 240;
-const BOX = 72;
+const BOX = 100;
 
 const clamp = (v: number, lo: number, hi: number) =>
   Math.max(lo, Math.min(hi, v));
@@ -229,10 +229,11 @@ function WheelDemo() {
             alignItems: "center",
             backgroundColor: Colors.primary100,
             flexDirection: "column",
+            padding: 10,
           }}
           onWheel={onWheel}
         >
-          <text style={boxLabelStyle}>Zoom me</text>
+          <text style={boxLabelStyle}>Scroll me</text>
           <text style={boxLabelStyle}>{`${zoom.toFixed(2)}×`}</text>
         </node>
       </node>

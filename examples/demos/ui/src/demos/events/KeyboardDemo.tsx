@@ -64,17 +64,27 @@ export function KeyboardDemo() {
   }, []);
 
   return (
-    <Example>
+    <Example title="Keyboard events">
+      <text style={{ fontSize: FontSizes.sm, color: Colors.textColor100 }}>
+        Press the keys to test the events
+      </text>
       <text
         style={{
           fontSize: FontSizes.xl,
           fontWeight: "bold",
           color: Colors.yellow100,
+          textAlign: "center",
         }}
       >
         {held.join("+")}
       </text>
-      <TextMono style={{ fontSize: FontSizes.sm, color: Colors.textColor200 }}>
+      <TextMono
+        style={{
+          fontSize: FontSizes.sm,
+          color: Colors.textColor200,
+          textAlign: "center",
+        }}
+      >
         {`modifiers: ${modifierLabel(lastEvent) || "-"}`}
       </TextMono>
     </Example>
