@@ -1,13 +1,14 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Animated,
   useSharedValue,
   withDelay,
+  withRepeat,
   withSequence,
   withTiming,
 } from "bevy-react";
 import { BevyStyle } from "bevy-react/jsx";
-import { Button, DemoRow, Example, Slider } from "@/components";
+import { DemoRow, Example, Slider } from "@/components";
 import { Colors, FontSizes } from "@/theme";
 import { controlColumn } from "./shared";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
@@ -22,9 +23,16 @@ point "fragment", and follow the prelude's premultiplied-alpha rules.
 time = true feeds the clock uniform and re-runs the pass every frame without
 re-capturing; outset reserves extra pixels past the node's box for effects
 that displace outward.`,
-  rust: `#[react_filter(shader = "shaders/ripple.wgsl",
-  outset = 12.0, time = true)]
-struct Ripple { amplitude: f32, frequency: f32, speed: f32 }`,
+  rust: `#[react_filter(
+  shader = "shaders/ripple.wgsl",
+  outset = 12.0,
+  time = true,
+)]
+struct Ripple {
+  amplitude: f32,
+  frequency: f32,
+  speed: f32,
+}`,
 };
 
 export function CustomFiltersDemo() {
@@ -57,11 +65,24 @@ struct + shaders/ripple.wgsl). Declared with time = true, it reads the
 uniform clock and re-renders every frame — animating with zero re-captures:
 the subtree is captured once and only the filter pass re-runs. The wave
 displaces up to the macro's outset (12px) past the card edge."
-      rust={`#[react_filter(shader = "shaders/ripple.wgsl",
-  outset = 12.0, time = true)]
-struct Ripple { amplitude: f32, frequency: f32, speed: f32 }`}
-      tsx={`<node style={{ filter: { name: "ripple",
-  params: { amplitude, frequency: 12, speed: 1 } } }}>…</node>`}
+      rust={`#[react_filter(
+  shader = "shaders/ripple.wgsl",
+  outset = 12.0,
+  time = true,
+)]
+struct Ripple {
+  amplitude: f32,
+  frequency: f32,
+  speed: f32,
+}`}
+      tsx={`<node style={{ filter: {
+  name: "ripple",
+  params: {
+    amplitude,
+    frequency: 12,
+    speed: 1,
+  },
+} }}>…</node>`}
     >
       <node style={controlColumn}>
         <node
@@ -102,10 +123,15 @@ function GlitchDemo() {
 split, hashed procedurally in the shader — no noise textures. Also time = true,
 so the corruption pattern re-rolls a few times a second while the layer's
 capture stays untouched. One f32 param packs as params[0].x."
-      rust={`#[react_filter(shader = "shaders/glitch.wgsl", time = true)]
+      rust={`#[react_filter(
+  shader = "shaders/glitch.wgsl",
+  time = true,
+)]
 struct Glitch { intensity: f32 }`}
-      tsx={`<node style={{ filter: { name: "glitch",
-  params: { intensity } } }}>…</node>`}
+      tsx={`<node style={{ filter: {
+  name: "glitch",
+  params: { intensity },
+} }}>…</node>`}
     >
       <node style={controlColumn}>
         <node
@@ -142,10 +168,17 @@ function DissolveDemo() {
 noise falls below progress go fully transparent, with an ember edge at the
 front. No time uniform — this layer repaints only when the slider moves, a
 pure params-only update over the reused capture."
-      rust={`#[react_filter(shader = "shaders/dissolve.wgsl")]
+      rust={`#[react_filter(
+  shader = "shaders/dissolve.wgsl",
+)]
 struct Dissolve { progress: f32 }`}
-      tsx={`<image src="images/parrot.png" style={{ filter: {
-  name: "dissolve", params: { progress } } }} />`}
+      tsx={`<image
+  src="images/parrot.png"
+  style={{ filter: {
+    name: "dissolve",
+    params: { progress },
+  } }}
+/>`}
     >
       <node style={controlColumn}>
         <node
@@ -174,46 +207,61 @@ struct Dissolve { progress: f32 }`}
 
 function BurnDemo() {
   const progress = useSharedValue(0);
-  const [burning, setBurning] = useState(false);
-  const burn = () => {
-    setBurning(true);
-    progress.value = withSequence(
-      withTiming(1, { duration: 1400, easing: "easeIn" }),
-      withDelay(500, withTiming(0, { duration: 500, easing: "easeOut" })),
-      (finished) => {
-        if (finished) setBurning(false);
-      },
+  useEffect(() => {
+    progress.value = withRepeat(
+      withSequence(
+        withDelay(600, withTiming(1, { duration: 1400, easing: "easeIn" })),
+        withDelay(500, withTiming(0, { duration: 1400, easing: "easeOut" })),
+      ),
+      -1,
     );
-  };
+  }, [progress]);
   return (
     <Example
       title="Filter animation"
       description="The payoff: dissolve's progress bound to a shared value
-via animatedStyle. One click assigns a withSequence driver — burn to 1, hold,
-re-materialize — and the whole run happens Bevy-side: zero React re-renders,
-zero re-captures, just the dissolve pass re-running over the reused capture
-with a fresh progress each frame."
+via animatedStyle. A withRepeat driver loops the sequence forever — burn to 1,
+hold, re-materialize, rest — and every cycle happens Bevy-side: zero React
+re-renders, zero re-captures, just the dissolve pass re-running over the
+reused capture with a fresh progress each frame."
       tsx={`const progress = useSharedValue(0);
-progress.value = withSequence(
-  withTiming(1, { duration: 1400, easing: "easeIn" }),
-  withDelay(500, withTiming(0, { duration: 500 })));
+progress.value = withRepeat(
+  withSequence(
+    withDelay(600, withTiming(1, {
+      duration: 1400,
+      easing: "easeIn",
+    })),
+    withDelay(500,
+      withTiming(0, { duration: 500 })),
+  ),
+  -1, // loop forever
+);
 
-<Animated.image src="images/parrot.png"
-  style={{ filter: { name: "dissolve", params: { progress: 0 } } }}
-  animatedStyle={{ "filter[0].progress": progress }} />`}
+<Animated.image
+  src="images/parrot.png"
+  style={{ filter: {
+    name: "dissolve",
+    params: { progress: 0 },
+  } }}
+  animatedStyle={{
+    "filter[0].progress": progress,
+  }}
+/>`}
     >
       <node style={controlColumn}>
-        <Animated.image
-          src="images/parrot.png"
+        <Animated.node
           style={{
-            width: 150,
+            ...card,
             filter: { name: "dissolve", params: { progress: 0 } },
           }}
           animatedStyle={{ "filter[0].progress": progress }}
-        />
-        <Button onClick={burn}>
-          {burning ? "Burning..." : "Burn it down"}
-        </Button>
+        >
+          <image
+            src="images/parrot.png"
+            style={{ width: 130, borderRadius: 8 }}
+          />
+          <text style={cardTitle}>Burning!!!</text>
+        </Animated.node>
       </node>
     </Example>
   );
@@ -226,7 +274,13 @@ function CyberpunkDemo() {
         style={{
           flexDirection: "column",
           cache: "never",
-          transform3d: { rotateY: -30, rotateX: 10, perspective: 300 },
+          transform3d: {
+            rotateY: -30,
+            rotateX: 10,
+            perspective: 300,
+            translateX: -20,
+            translateY: 20,
+          },
           filter: [
             {
               name: "bloom",

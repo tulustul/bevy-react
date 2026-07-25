@@ -237,18 +237,26 @@ function PaintDemo() {
     <Example
       title="Retained surface"
       description="A retained drawing surface, driven imperatively through a ref handle. Drag to doodle — strokes accumulate with no React renders; the surface clears on resize and onResize repaints the background."
-      tsx={`const ref = useRef<BevyCanvasElement>(null);
+      tsx={`const ref =
+  useRef<BevyCanvasElement>(null);
 
 <canvas
   ref={ref}
-  onResize={() => paintBackground(ref.current!)}
+  onResize={() =>
+    paintBackground(ref.current!)}
   onPointerDown={begin}
   onPointerMove={(e) => {
-    const ctx = ref.current!.getContext();
+    const ctx =
+      ref.current!.getContext();
     ctx.beginPath();
     ctx.moveTo(last.x, last.y);
-    ctx.lineTo(e.x * ref.current!.width, e.y * ref.current!.height);
-    ctx.stroke(); // accumulates — nothing else is repainted
+    ctx.lineTo(
+      e.x * ref.current!.width,
+      e.y * ref.current!.height,
+    );
+    // accumulates — nothing else
+    // is repainted
+    ctx.stroke();
   }}
 />`}
     >

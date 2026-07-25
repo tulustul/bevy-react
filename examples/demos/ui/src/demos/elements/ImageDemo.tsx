@@ -19,22 +19,41 @@ const PAGE: ExplanationData = {
     'The <image> host element draws a texture asset loaded by src. tint multiplies the texture color; flipX/flipY mirror it per axis. imageMode { type: "sliced" } enables 9-slice scaling, so a frame resizes without distorting its corners. sourceRect crops a sub-rectangle of the texture, and atlas treats the texture as a uniform sprite-sheet grid whose cell is selected by index — the sprite-animation primitive (the atlas layout asset is built once and reused).',
 };
 
-const FLIP_TSX = `<image src="bevy-react-logo.png" tint="#7aa2f7" flipX flipY />`;
+const FLIP_TSX = `<image
+  src="bevy-react-logo.png"
+  tint="#7aa2f7"
+  flipX
+  flipY
+/>`;
 
 const SLICE_TSX = `<image
   src="modal.png"
-  imageMode={{ type: "sliced", border: 60 }}
+  imageMode={{
+    type: "sliced",
+    border: 60,
+  }}
   style={{ width, height }}
 />`;
 
 const RECT_TSX = `<image
   src="bevy-react-logo.png"
-  sourceRect={{ x: 0, y: 0, width: 200, height: 110 }}
+  sourceRect={{
+    x: 0,
+    y: 0,
+    width: 200,
+    height: 110,
+  }}
 />`;
 
 const ATLAS_TSX = `<image
   src="bevy-react-logo.png"
-  atlas={{ tileWidth: 200, tileHeight: 110, columns: 2, rows: 2, index }}
+  atlas={{
+    tileWidth: 200,
+    tileHeight: 110,
+    columns: 2,
+    rows: 2,
+    index,
+  }}
 />`;
 
 export function ImageDemo() {

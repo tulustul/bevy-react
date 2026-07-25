@@ -10,20 +10,40 @@ const PAGE: ExplanationData = {
     "The <text> host element renders styled glyph runs. fontSize and fontWeight scale and weight the type; fontFamily selects a font registered up front on the Rust side (ReactUiPlugin::new(bundle).font(name, path)) — fonts are not loaded from JS at runtime. <text> nests: an inner <text> restyles a span (color, weight) inline within its parent's run. lineHeight, letterSpacing and textShadow tune typography, and lineBreak picks the wrapping mode when text overflows its width.",
 };
 
-const SIZE_TS = `<text style={{ fontSize: 28, fontWeight: "bold" }}>
+const SIZE_TS = `<text style={{
+  fontSize: 28,
+  fontWeight: "bold",
+}}>
   Big & bold
 </text>`;
 
 // Font families are loaded upfront on the Rust side, then selected by name from React.
-const FAMILY_RUST = `ReactUiPlugin::new(bundle)
-    .font("DancingScript", "fonts/DancingScript-VariableFont_wght.ttf");`;
+const FAMILY_RUST = `ReactUiPlugin::new(bundle).font(
+    "DancingScript",
+    "fonts/DancingScript-\\
+     VariableFont_wght.ttf",
+);`;
 
-const FAMILY_TS = `<text style={{ fontFamily: "DancingScript" }}>`;
+const FAMILY_TS = `<text style={{
+  fontFamily: "DancingScript",
+}}>`;
 
-const TYPOGRAPHY_TS = `<text style={{ lineHeight: 1.8, letterSpacing: 2 }}>
-<text style={{ textShadow: { color: "#000", offsetX: 2, offsetY: 2 } }}>`;
+const TYPOGRAPHY_TS = `<text style={{
+  lineHeight: 1.8,
+  letterSpacing: 2,
+}}>
+<text style={{
+  textShadow: {
+    color: "#000",
+    offsetX: 2,
+    offsetY: 2,
+  },
+}}>`;
 
-const WRAP_TS = `<text style={{ width: 220, lineBreak: "anyCharacter" }}>`;
+const WRAP_TS = `<text style={{
+  width: 220,
+  lineBreak: "anyCharacter",
+}}>`;
 
 const PARAGRAPH =
   "Line height, letter spacing, and a drop shadow give a block of text its rhythm and weight.";

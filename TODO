@@ -1,18 +1,19 @@
 ✔ click bubbles @done(26-07-24 23:31)
-☐ example and explanation styling
-☐ button and slider color blends bad
+✔ example and explanation styling @done(26-07-25 12:16)
+✔ button and slider color blends bad @done(26-07-25 12:16)
 ☐ ScrollbarDemo - split scrollbars into multiple examples
 ☐ Transform3dDemo - nicer examples
 ☐ BackdropFilters - nicer examples
 ✔ camera not moving when over ui @done(26-07-24 23:55)
 ✔ add aurora background to each scene @done(26-07-25 00:54)
-☐ aurora should always move in one direction
-☐ animations demos rework, combine multiple examples in one page. Pages:
-  ☐ style transitions
-  ☐ declarative animations(?)
-  ☐ filters/other deep properties
+✔ aurora should always move in one direction @done(26-07-25 11:13)
+✔ animations demos rework, combine multiple examples in one page. Pages: @done(26-07-25 11:54)
+  ✔ style transitions @done(26-07-25 11:54)
+  ✔ declarative animations(?) @done(26-07-25 11:54)
+  ✔ filters/other deep properties @done(26-07-25 11:54)
 ☐ nicer navigation
 ✔ scrollbar should not animate when dragged with a mouse @done(26-07-25 00:18)
+☐ <Anchored.node> -> <anchor>
 
 
 # Keep the descriptions short and to the point. Don't put any details here until required.

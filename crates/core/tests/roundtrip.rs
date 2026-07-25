@@ -323,7 +323,8 @@ fn animation_callback_round_trip() {
             .expect("JS thread gone before click");
     };
 
-    // Navigate the left-nav: expand "Animations", select "Sequence".
+    // Navigate the left-nav: expand "Animations", select "Animated Values"
+    // (the Sequence card lives there).
     let animations = drain_until_button(
         &ops_rx,
         "Animations",
@@ -335,16 +336,16 @@ fn animation_callback_round_trip() {
     .expect("no 'Animations' nav button in initial render");
     click(animations);
 
-    let sequence = drain_until_button(
+    let animated_values = drain_until_button(
         &ops_rx,
-        "Sequence",
+        "Animated Values",
         Duration::from_secs(10),
         &mut buttons,
         &mut parent_of,
         &mut text_of,
     )
-    .expect("no 'Sequence' nav button after expanding 'Animations'");
-    click(sequence);
+    .expect("no 'Animated Values' nav button after expanding 'Animations'");
+    click(animated_values);
 
     let play = drain_until_button(
         &ops_rx,

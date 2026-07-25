@@ -7,7 +7,10 @@ import { Checkbox, Example, Slider } from "@/components";
 import { Colors, FontSizes, Gradients } from "@/theme";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
 
-const TYPESCRIPT = `<Anchored.node entity={cube.entity} offset={[0, 0.8, 0]}>
+const TYPESCRIPT = `<Anchored.node
+  entity={cube.entity}
+  offset={[0, 0.8, 0]}
+>
   <text>{cube.label}</text>
 </Anchored.node>`;
 

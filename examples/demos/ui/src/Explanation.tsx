@@ -3,7 +3,7 @@ import { Button, TextMono } from "./components";
 import { Colors, Filters, FontSizes, Gradients, Scrollbar } from "./theme";
 import { useExplanationStore } from "./explanationStore";
 
-const WIDTH = 300;
+const WIDTH = 350;
 
 export function Explanation() {
   const { pageDefault, selected, deselect } = useExplanationStore();
@@ -26,8 +26,8 @@ export function Explanation() {
   return (
     <node style={asideStyle}>
       <node style={{ justifyContent: "spaceBetween" }}>
-        <text>{shown.title}</text>
         {selected && <Button onClick={() => deselect()}>Back</Button>}
+        <text>{shown.title}</text>
       </node>
       {shown.description && (
         <text style={descriptionStyle}>{shown.description}</text>
@@ -45,7 +45,14 @@ type CodeProps = {
 };
 function Code({ lang, code }: CodeProps) {
   return (
-    <node style={{ flexDirection: "column" }}>
+    <node
+      style={{
+        flexDirection: "column",
+        backgroundColor: Colors.surface100,
+        padding: 5,
+        borderRadius: 10,
+      }}
+    >
       <TextMono style={{ fontSize: FontSizes.sm, padding: { bottom: 5 } }}>
         {lang}
       </TextMono>
@@ -69,19 +76,20 @@ const asideStyle: BevyStyle = {
   flexDirection: "column",
   justifyContent: "flexStart",
   gap: 8,
-  padding: 16,
+  padding: 10,
   backdropFilter: Filters.backdrop,
   backgroundGradient: Gradients.card,
   overflowY: "scroll",
   scrollbar: Scrollbar,
-  border: { left: 2 },
+  border: { left: 2, bottom: 2 },
+  borderRadius: { left: 15 },
   borderGradient: Gradients.primary,
 };
 
 const descriptionStyle: BevyStyle = {
-  color: Colors.textColor200,
+  color: Colors.textColor100,
   fontSize: FontSizes.sm,
   maxWidth: 320,
   padding: 5,
-  margin: { bottom: 15 },
+  margin: { bottom: 10 },
 };

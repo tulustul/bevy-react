@@ -8,7 +8,9 @@ import { useDemoPage, type ExplanationData } from "@/explanationStore";
 // other layout is made of. See Layout → Flex/Grid for arranging its children.
 
 const TYPESCRIPT = `<node style={{ padding: 16, gap: 12 }}>
-  <node style={{ width: 48, height: 48 }} />
+  <node
+    style={{ width: 48, height: 48 }}
+  />
 </node>`;
 
 const PAGE: ExplanationData = {

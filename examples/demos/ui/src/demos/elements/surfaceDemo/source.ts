@@ -10,6 +10,8 @@ let screen = surfaces.create(
 );
 // drape it on the glTF screen mesh and
 // make it clickable in 3D
-material.base_color_texture = Some(screen);
-commands.entity(screen_mesh)
-    .insert(SurfacePointer("monitor".into()));`;
+material.base_color_texture =
+    Some(screen);
+commands.entity(screen_mesh).insert(
+    SurfacePointer("monitor".into()),
+);`;

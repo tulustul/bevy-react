@@ -9,11 +9,14 @@ export function WindowDemo() {
   return <WindowSizeExample />;
 }
 
-const RESIZE_TYPESCRIPT = `const [size, setSize] = useState<WindowSize | null>(null);
+const RESIZE_TYPESCRIPT = `const [size, setSize] =
+  useState<WindowSize | null>(null);
 
 useEffect(() => {
-  void bevy.window.size().then(setSize); // current value on mount
-  return bevy.on("resize", setSize);     // live updates
+  // current value on mount
+  void bevy.window.size().then(setSize);
+  // live updates
+  return bevy.on("resize", setSize);
 }, []);`;
 
 const PAGE: ExplanationData = {

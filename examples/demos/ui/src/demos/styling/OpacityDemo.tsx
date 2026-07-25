@@ -61,17 +61,20 @@ function GroupAlphaDemo() {
 composited layer: the whole widget fades as one group, so
 overlapping translucent pieces never show through each other. groupAlpha:
 false opts out — each node fades on its own (watch the seams appear)."
-      tsx={`<node style={{ opacity, groupAlpha }}>…</node>`}
+      tsx={`<node style={{
+  opacity,
+  groupAlpha,
+}}>…</node>`}
     >
       <node style={controlColumn}>
         <TestBanner
           style={{
-            margin: { left: -40, top: -20 },
+            margin: { left: -40 },
             positionType: "absolute",
           }}
         />
         <TestBanner
-          style={{ opacity, groupAlpha, margin: { left: 40, top: 20 } }}
+          style={{ opacity, groupAlpha, margin: { left: 40, top: 40 } }}
         />
         <Slider
           value={opacity}

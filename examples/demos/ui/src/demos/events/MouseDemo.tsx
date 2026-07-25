@@ -204,8 +204,13 @@ function WheelDemo() {
       title="Wheel"
       description="onWheel hands any node the raw wheel deltas (no overflow: scroll needed) — line-unit notches and pixel-unit trackpad deltas are scaled differently. Scroll the wheel over the box to zoom it; handling the wheel also traps it from world systems."
       tsx={`<node onWheel={(e) => {
-  const step = e.deltaMode === "line" ? e.deltaY * 0.1 : e.deltaY * 0.005;
-  setZoom((z) => clamp(z - step, 0.5, 3));
+  const step =
+    e.deltaMode === "line"
+      ? e.deltaY * 0.1
+      : e.deltaY * 0.005;
+  setZoom((z) =>
+    clamp(z - step, 0.5, 3),
+  );
 }} />`}
     >
       <node

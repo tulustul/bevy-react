@@ -91,7 +91,9 @@ function BackgroundColorDemo() {
     <Example
       title="backgroundColor"
       description="backgroundColor fills a node. Mix it from R/G/B channels."
-      tsx={`<node style={{ backgroundColor: "#7aa2f7" }} />`}
+      tsx={`<node style={{
+  backgroundColor: "#7aa2f7",
+}} />`}
     >
       <node style={controlColumn}>
         <node

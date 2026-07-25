@@ -85,9 +85,12 @@ function PerSideDemo() {
     <Example
       title="Per-side values"
       description="Each border attribute also takes a per-side object"
-      tsx={`borderRadius: { top, right, bottom, left }
-borderColor: { top, right, bottom, left }
-border: { top, right, bottom, left }`}
+      tsx={`borderRadius:
+  { top, right, bottom, left }
+borderColor:
+  { top, right, bottom, left }
+border:
+  { top, right, bottom, left }`}
     >
       <node style={controlColumn}>
         <node
@@ -125,7 +128,11 @@ function OutlineDemo() {
     <Example
       title="outline"
       description="outline draws a ring outside the box, ignored by layout."
-      tsx={`outline: { width: 3, offset: 4, color: "#f9e2af" }`}
+      tsx={`outline: {
+  width: 3,
+  offset: 4,
+  color: "#f9e2af",
+}`}
     >
       <node style={controlColumn}>
         <node

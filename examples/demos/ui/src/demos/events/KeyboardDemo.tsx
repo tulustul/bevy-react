@@ -8,10 +8,16 @@ import { useDemoPage, type ExplanationData } from "@/explanationStore";
 const TYPESCRIPT = `import { bevy } from "@/bevy";
 
 useEffect(() => {
-  const offDown = bevy.on("keyDown", (e) => {
-    if (e.key === "Escape") close();
-  });
-  const offUp = bevy.on("keyUp", (e) => { /* ... */ });
+  const offDown = bevy.on(
+    "keyDown",
+    (e) => {
+      if (e.key === "Escape") close();
+    },
+  );
+  const offUp = bevy.on(
+    "keyUp",
+    (e) => { /* ... */ },
+  );
   return () => { offDown(); offUp(); };
 }, []);`;
 

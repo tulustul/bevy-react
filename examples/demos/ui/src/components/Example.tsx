@@ -36,6 +36,7 @@ export function Example({
   return (
     <node
       style={{ ...cardStyle, ...(isSelected ? selectedStyle : null), ...style }}
+      hoverStyle={selectable && !isSelected ? hoverStyle : undefined}
       onClick={
         selectable
           ? () => select(key, { title: title!, description, rust, tsx })
@@ -61,12 +62,21 @@ const cardStyle: BevyStyle = {
   backgroundGradient: Gradients.card,
   borderRadius: 16,
   border: 2,
-  borderColor: Colors.primary100,
   borderGradient: Gradients.accentBorderDim,
   boxShadow: { blurRadius: 15, spreadRadius: 5, color: Colors.shadow100 },
+  cursor: "pointer",
+};
+
+// Hover feedback for a selectable, not-yet-selected card: one surface step
+// lighter and a brighter accent border. The selected state goes further —
+// a primary-tinted background and the full-strength border.
+const hoverStyle: BevyStyle = {
+  backgroundGradient: Gradients.cardHover,
+  borderGradient: Gradients.accentBorderHover,
 };
 
 const selectedStyle: BevyStyle = {
+  backgroundGradient: Gradients.cardSelected,
   borderGradient: Gradients.accentBorder,
   boxShadow: { blurRadius: 20, spreadRadius: 6, color: Colors.primaryOverlay },
 };

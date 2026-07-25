@@ -66,8 +66,17 @@ fn fbm(p: vec2<f32>) -> f32 {
     return 0.533 * vnoise(p) + 0.267 * vnoise(p * 2.03 + 17.3) + 0.133 * vnoise(p * 4.01 + 41.7);
 }
 
+struct FragmentOutput {
+    @location(0) color: vec4<f32>,
+    // Pinned to the reverse-Z far plane: the backdrop always loses the depth
+    // test to real scene geometry, so it can never clip anything regardless of
+    // camera zoom or scene extents. The quad's world placement only provides
+    // pixel coverage.
+    @builtin(frag_depth) depth: f32,
+}
+
 @fragment
-fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
+fn fragment(in: VertexOutput) -> FragmentOutput {
     let uv = (in.position.xy - view.viewport.xy) / view.viewport.zw;
     let aspect = view.viewport.z / view.viewport.w;
     let sweep = globals.time * SWEEP_SPEED;
@@ -121,5 +130,5 @@ fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
     // Animated ±1/255 dither so the dark sky doesn't band.
     rgb += (hash12(in.position.xy + fract(globals.time) * 289.0) - 0.5) * (2.0 / 255.0);
 
-    return vec4<f32>(rgb, 1.0);
+    return FragmentOutput(vec4<f32>(rgb, 1.0), 0.0);
 }

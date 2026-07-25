@@ -20,15 +20,9 @@ import { GridDemo } from "./demos/layout/GridDemo";
 import { ButtonDemo } from "./demos/elements/ButtonDemo";
 import { TextDemo } from "./demos/elements/TextDemo";
 import { ImageDemo } from "./demos/elements/ImageDemo";
-import { FadeAnimationDemo } from "./demos/animations/FadeAnimationDemo";
-import { BouncingBallsAnimationDemo } from "./demos/animations/BouncingBallsAnimationDemo";
 import { TransitionDemo } from "./demos/animations/TransitionDemo";
-import { EasingDemo } from "./demos/animations/EasingDemo";
-import { SpringDemo } from "./demos/animations/SpringDemo";
-import { SequenceDemo } from "./demos/animations/SequenceDemo";
-import { SpinDemo } from "./demos/animations/SpinDemo";
+import { AnimatedValuesDemo } from "./demos/animations/animatedValues";
 import { InterpolateDemo } from "./demos/animations/InterpolateDemo";
-import { LayoutAnimationDemo } from "./demos/animations/LayoutAnimationDemo";
 import { UnitsDemo } from "./demos/styling/UnitsDemo";
 import { ColorsDemo } from "./demos/styling/ColorsDemo";
 import { BordersDemo } from "./demos/styling/BordersDemo";
@@ -135,15 +129,9 @@ export const DEMOS: DemoItem[] = [
   {
     label: "Animations",
     children: [
-      { label: "Fade", component: FadeAnimationDemo },
-      { label: "Easing", component: EasingDemo },
-      { label: "Spring", component: SpringDemo },
-      { label: "Sequence", component: SequenceDemo },
-      { label: "Spin", component: SpinDemo },
-      { label: "Interpolate", component: InterpolateDemo },
-      { label: "Layout & Color", component: LayoutAnimationDemo },
-      { label: "Bouncing Squares", component: BouncingBallsAnimationDemo },
-      { label: "Style Transition", component: TransitionDemo },
+      { label: "Style Transitions", component: TransitionDemo },
+      { label: "Animated Values", component: AnimatedValuesDemo },
+      { label: "Interpolation", component: InterpolateDemo },
     ],
   },
   {

@@ -11,9 +11,12 @@ import { useDemoPage, type ExplanationData } from "@/explanationStore";
 // modals, toasts, and other overlays. The `name` labels the root in the
 // devtools root selector (F12).
 
-const TYPESCRIPT = `const [open, setOpen] = useState(false);
+const TYPESCRIPT = `const [open, setOpen] =
+  useState(false);
 
-<Button onClick={() => setOpen(true)}>Open modal</Button>;
+<Button onClick={() => setOpen(true)}>
+  Open modal
+</Button>;
 
 {open && (
   <root
@@ -26,7 +29,11 @@ const TYPESCRIPT = `const [open, setOpen] = useState(false);
   >
     <node style={dialogStyle}>
       <text>Detached modal</text>
-      <Button onClick={() => setOpen(false)}>Close</Button>
+      <Button
+        onClick={() => setOpen(false)}
+      >
+        Close
+      </Button>
     </node>
   </root>
 )}`;
@@ -66,15 +73,6 @@ export function RootDemo() {
     </Example>
   );
 }
-
-const panelStyle: BevyStyle = {
-  flexDirection: "column",
-  alignItems: "flexStart",
-  gap: 12,
-  padding: 16,
-  backgroundColor: Colors.surface100,
-  borderRadius: 12,
-};
 
 const hintStyle: BevyStyle = {
   color: Colors.textColor200,

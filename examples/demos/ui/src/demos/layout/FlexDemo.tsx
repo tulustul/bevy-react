@@ -120,7 +120,10 @@ function FlexWrapDemo() {
     <Example
       title="flexWrap"
       description="flexWrap pushes overflowing children onto the next line."
-      tsx={`<node style={{ flexWrap: "wrap", gap: 8 }}>`}
+      tsx={`<node style={{
+  flexWrap: "wrap",
+  gap: 8,
+}}>`}
     >
       <node style={{ ...frame, width: 152, flexWrap: "wrap", gap: 8 }}>
         {Array.from({ length: 8 }, (_, i) => (

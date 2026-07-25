@@ -5,26 +5,43 @@ import { Example } from "@/components";
 import { Colors, FontSizes } from "@/theme";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
 
-const TYPESCRIPT = "const ball = await bevy.pollingDemo.getBall();";
+const TYPESCRIPT = `const ball =
+  await bevy.pollingDemo.getBall();`;
 
-const RUST = `#[react_request(name = "pollingDemo.getBall", response = BallState)]
+const RUST = `#[react_request(
+    name = "pollingDemo.getBall",
+    response = BallState
+)]
 struct GetBall;
 
 #[derive(Serialize, TS)]
-struct BallState { x: f32, y: f32, vx: f32, vy: f32 }
+struct BallState {
+    x: f32,
+    y: f32,
+    vx: f32,
+    vy: f32,
+}
 
 fn report_ball(
     req: On<Request<GetBall>>,
-    balls: Query<(&Transform, &Velocity)>,
+    balls: Query<(
+        &Transform,
+        &Velocity,
+    )>,
 ) {
-    let (t, v) = balls.single().unwrap();
+    let (t, v) =
+        balls.single().unwrap();
     req.respond(BallState {
-        x: t.translation.x, y: t.translation.y,
-        vx: v.0.x, vy: v.0.y,
+        x: t.translation.x,
+        y: t.translation.y,
+        vx: v.0.x,
+        vy: v.0.y,
     });
 }
 
-app.add_react_request_handler(report_ball);`;
+app.add_react_request_handler(
+    report_ball,
+);`;
 
 const PAGE: ExplanationData = {
   title: "Bevy <-> React",

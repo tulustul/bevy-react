@@ -15,9 +15,14 @@ import { useDemoPage, type ExplanationData } from "@/explanationStore";
 // through by default — set `focusPolicy` on either to override.
 
 const TYPESCRIPT = `<button
-  onClick={() => setCount((c) => c + 1)}
-  hoverStyle={{ backgroundColor: "#89b4fa" }}
-  pressStyle={{ backgroundColor: "#5a7fd6" }}
+  onClick={() =>
+    setCount((c) => c + 1)}
+  hoverStyle={{
+    backgroundColor: "#89b4fa",
+  }}
+  pressStyle={{
+    backgroundColor: "#5a7fd6",
+  }}
 />`;
 
 const PAGE: ExplanationData = {

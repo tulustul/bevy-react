@@ -39,11 +39,13 @@ export function ControlledScrollDemo() {
     <Example
       title="Controlled scrollTop"
       description="A controlled scroll container: scrollTop is React state. onScroll syncs it from the wheel; the buttons jump the offset by writing scrollTop back. The readout shows the live value."
-      tsx={`const [scrollTop, setScrollTop] = useState(0);
+      tsx={`const [scrollTop, setScrollTop] =
+  useState(0);
 <node
   style={{ overflowY: "scroll" }}
   scrollTop={scrollTop}
-  onScroll={(e) => setScrollTop(e.scrollTop)}
+  onScroll={(e) =>
+    setScrollTop(e.scrollTop)}
 >`}
     >
       <node style={controlColumn}>
@@ -83,11 +85,20 @@ export function SmoothScrollDemo() {
       title="Smooth scroll"
       description="Smooth scroll: a scroll transition eases the offset instead of snapping. The buttons set a target and it animates there; the wheel eases too (scrollStep sets the per-line distance). onScroll feeds a separate readout — feeding it back into scrollTop would fight the ease."
       tsx={`<node
-  style={{ overflowY: "scroll",
-    transition: { scroll: { duration: 200, easing: "easeOut" } } }}
+  style={{
+    overflowY: "scroll",
+    transition: {
+      scroll: {
+        duration: 200,
+        easing: "easeOut",
+      },
+    },
+  }}
   scrollStep={50}
-  scrollTop={target}              // set by buttons only
-  onScroll={(e) => setReadout(e.scrollTop)}
+  // set by buttons only
+  scrollTop={target}
+  onScroll={(e) =>
+    setReadout(e.scrollTop)}
 >`}
     >
       <node style={controlColumn}>
@@ -121,15 +132,26 @@ export function ScrollbarShowcaseDemo() {
     <Example
       title="scrollbar"
       description="A visible, draggable scrollbar. Set style.scrollbar to 'default' for a built-in bar, or an object to style the track/thumb, pick a side, and reserve a gutter (content shrinks) vs float over content. Drag the thumb or click the track to page."
-      tsx={`style={{ overflowY: "scroll", scrollbar: "default" }}
+      tsx={`style={{
+  overflowY: "scroll",
+  scrollbar: "default",
+}}
 
 // or fully styled:
 scrollbar: {
-  track: { backgroundColor: "#00000022", borderRadius: 6 },
-  thumb: { backgroundColor: "#8b5cf6", borderRadius: 6 },
+  track: {
+    backgroundColor: "#00000022",
+    borderRadius: 6,
+  },
+  thumb: {
+    backgroundColor: "#8b5cf6",
+    borderRadius: 6,
+  },
   thickness: 10,
-  position: "float",      // or "gutter" (default)
-  verticalSide: "left",   // or "right"
+  // or "gutter" (default)
+  position: "float",
+  // or "right"
+  verticalSide: "left",
 }`}
     >
       <node style={{ flexDirection: "column", gap: 16 }}>
@@ -178,9 +200,13 @@ export function HorizontalScrollbarDemo() {
       tsx={`<node style={{
   overflowX: "scroll",
   scrollbar: {
-    thumb: { backgroundColor: "#7aa2f7", borderRadius: 8 },
+    thumb: {
+      backgroundColor: "#7aa2f7",
+      borderRadius: 8,
+    },
     thickness: 10,
-    horizontalSide: "bottom",  // or "top"
+    // or "top"
+    horizontalSide: "bottom",
   },
 }}>`}
     >

@@ -13,7 +13,10 @@ box: by default a node PASSES pointer interaction through, so overlap clicks
 fall through the front box to the back box (the front box still reacts to its
 own clicks too). Set focusPolicy: "block" and the front box CAPTURES the
 click, so the back box no longer receives it.`,
-  tsx: `<node style={{ focusPolicy: pass ? "pass" : "block" }} />`,
+  tsx: `<node style={{
+  focusPolicy:
+    pass ? "pass" : "block",
+}} />`,
 };
 
 export function FocusPolicyDemo() {

@@ -20,8 +20,10 @@ export function OverflowModesDemo() {
       title="overflowX / overflowY"
       description="overflowX/overflowY decide what happens to a child that is bigger than its box: visible spills out, clip/hidden cut it off, scroll clips it and adds a wheel scrollbar."
       tsx={`overflowX: value,
-overflowY: value,  // visible | clip | hidden | scroll
-scrollbarWidth: value === "scroll" ? 8 : 0,`}
+// visible | clip | hidden | scroll
+overflowY: value,
+scrollbarWidth:
+  value === "scroll" ? 8 : 0,`}
     >
       <node style={controlColumn}>
         <node
@@ -58,8 +60,12 @@ export function ClipVsHiddenDemo() {
       title="clip vs hidden"
       description="clip and hidden clip the same pixels — the difference is layout. As a flex item, a clip box keeps its content width as a minimum (so it overflows the row), while a hidden box may shrink to 0 and let the row compress it. Both boxes hold the same 220px-wide child and sit in the same 300px row next to a fixed sibling."
       tsx={`// flex row, width 300
-<node style={{ overflowX: "clip" }}>   // stays 220 wide, overflows
-<node style={{ overflowX: "hidden" }}> // shrinks, content clipped`}
+
+// stays 220 wide, overflows
+<node style={{ overflowX: "clip" }}>
+
+// shrinks, content clipped
+<node style={{ overflowX: "hidden" }}>`}
     >
       <node style={{ flexDirection: "column", gap: 16 }}>
         <SqueezeRow mode="clip" />

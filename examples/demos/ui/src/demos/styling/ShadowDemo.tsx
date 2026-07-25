@@ -30,8 +30,16 @@ function StackedShadowsDemo() {
       title="Stacked shadows"
       description="An array of shadows stacks back-to-front — here a tight red drop plus a wide soft glow."
       tsx={`boxShadow: [
-  { color: "#FF000066", yOffset: 4, blurRadius: 6 },
-  { color: "#4F8CFF55", blurRadius: 28, spreadRadius: 6 },
+  {
+    color: "#FF000066",
+    yOffset: 4,
+    blurRadius: 6,
+  },
+  {
+    color: "#4F8CFF55",
+    blurRadius: 28,
+    spreadRadius: 6,
+  },
 ]`}
     >
       <node style={controlColumn}>

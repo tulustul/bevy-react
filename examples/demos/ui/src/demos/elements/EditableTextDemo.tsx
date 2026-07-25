@@ -7,12 +7,15 @@ import { useDemoPage, type ExplanationData } from "@/explanationStore";
 const TYPESCRIPT = `<editableText
   value={first}
   onChange={setFirst}
-  onFocus={() => setFocused("First name")}
+  onFocus={() =>
+    setFocused("First name")}
   onBlur={() => setFocused(null)}
   onSelect={(s) => setSel(s)}
   autofocus
   style={inputStyle}
-  focusStyle={{ borderColor: Colors.primary200 }}
+  focusStyle={{
+    borderColor: Colors.primary200,
+  }}
 />`;
 
 const PAGE: ExplanationData = {

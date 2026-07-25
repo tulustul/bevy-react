@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { DemoRow, Example, Slider } from "@/components";
 import { Colors, FontSizes } from "@/theme";
-import { caption, controlColumn } from "./shared";
+import { controlColumn } from "./shared";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
 
 const PAGE: ExplanationData = {
@@ -56,8 +56,12 @@ never re-captures. The frost respects borderRadius: it is masked to the
 panel's rounded border box with the same antialiased edge the background
 paints."
       tsx={`<node style={{
-  backgroundColor: "rgba(26, 27, 38, 0.35)",
-  backdropFilter: { name: "blur", params: { radius: 8 } },
+  backgroundColor:
+    "rgba(26, 27, 38, 0.35)",
+  backdropFilter: {
+    name: "blur",
+    params: { radius: 8 },
+  },
 }}>
   <text>frosted glass</text>
 </node>`}
@@ -102,7 +106,8 @@ first, then blur — the world behind the panel turns to soft monochrome while
 the UI in front keeps its colors."
       tsx={`<node style={{ backdropFilter: [
   { name: "grayscale" },
-  { name: "blur", params: { radius: 6 } },
+  { name: "blur",
+    params: { radius: 6 } },
 ] }}>…</node>`}
     >
       <node style={controlColumn}>
@@ -134,7 +139,10 @@ function BothChainsDemo() {
 node: the backdrop blurs the scene while the content chain desaturates the
 panel's own children. Each resolves, transitions, and animates on its own."
       tsx={`<node style={{
-  backdropFilter: { name: "blur", params: { radius: 8 } },
+  backdropFilter: {
+    name: "blur",
+    params: { radius: 8 },
+  },
   filter: { name: "grayscale" },
 }}>…</node>`}
     >

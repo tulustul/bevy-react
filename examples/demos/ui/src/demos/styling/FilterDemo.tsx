@@ -124,9 +124,13 @@ channel shifts offset px along angle (degrees, clockwise from +X), blue the
 same distance opposite, green stays put — the whole layer splits uniformly.
 Identity is offset 0, so it transitions and animates like blur's radius; the
 angle lerps shortest-arc like hueRotate's."
-      tsx={`<image src="images/parrot.png"
-  style={{ filter: { name: "chromaticAberration",
-    params: { offset: 4, angle: 0 } } }} />`}
+      tsx={`<image
+  src="images/parrot.png"
+  style={{ filter: {
+    name: "chromaticAberration",
+    params: { offset: 4, angle: 0 },
+  } }}
+/>`}
     >
       <node style={controlColumn}>
         <TestBanner
@@ -167,8 +171,14 @@ function BloomDemo() {
 (everything above threshold), blurred by radius, added back scaled by
 intensity. threshold is a cut on 0–1 luminance — 1 blooms nothing, 0 blooms
 everything. The glow spreads past the card's border box, like blur."
-      tsx={`<node style={{ filter: { name: "bloom",
-  params: { radius: 14, threshold: 0.6, intensity: 1.2 } } }}>
+      tsx={`<node style={{ filter: {
+  name: "bloom",
+  params: {
+    radius: 14,
+    threshold: 0.6,
+    intensity: 1.2,
+  },
+} }}>
   <text>NEON</text>
 </node>`}
     >
@@ -220,7 +230,11 @@ function SubtreeFilterDemo() {
 grayscale on the card desaturates the image, text and button as a group — the
 classic disabled-card look. Toggle it to promote/demote the layer live; the
 button keeps working underneath."
-      tsx={`<node style={{ filter: soldOut ? { name: "grayscale" } : [] }}>
+      tsx={`<node style={{
+  filter: soldOut
+    ? { name: "grayscale" }
+    : [],
+}}>
   <image src="images/parrot.png" />
   <text>Parrot, deluxe</text>
   <Button>Add to cart</Button>

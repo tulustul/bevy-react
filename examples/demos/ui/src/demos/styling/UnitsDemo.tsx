@@ -100,7 +100,11 @@ function AngleDemo() {
     <Example
       title="Angles"
       description="Angles: a bare number is degrees; strings carry deg/rad/turn/grad. These four are the same 45° written four ways."
-      tsx={`rotate: "45deg" | "0.785rad" | "0.125turn" | "50grad"`}
+      tsx={`rotate:
+  | "45deg"
+  | "0.785rad"
+  | "0.125turn"
+  | "50grad"`}
     >
       <node style={{ ...row, gap: 24 }}>
         {ANGLES.map((angle) => (

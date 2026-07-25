@@ -2,8 +2,9 @@ export const Colors = {
   primary100: "#7aa2f7",
   primary200: "#89b4fa",
   primary300: "#5a7fd6",
-  primary400: "#2b4685ff",
-  primary500: "#213563ff",
+  primary400: "#2b4685",
+  primary500: "#213563",
+  primary600: "#111b33",
   primaryOverlay: "#7aa2f733",
 
   textColor100: "#cdd6f4",
@@ -47,6 +48,17 @@ const linear = (angle: number, ...colors: string[]): Gradient => ({
   stops: colors.map((color) => ({ color })),
 });
 
+const cardBase = linear(
+  160,
+  Colors.surface200 + "cc",
+  Colors.surface100 + "cc",
+);
+const cardLift = linear(
+  160,
+  Colors.surface300 + "cc",
+  Colors.surface200 + "cc",
+);
+
 export const Gradients = {
   // accent — active nav item, radio "selected", progress fill, primary buttons
   primary: linear(135, Colors.primary300, Colors.primary100, Colors.primary200),
@@ -57,20 +69,32 @@ export const Gradients = {
     Colors.sky100,
   ),
   // neutral surface lifts — unselected pills, generic buttons, code toggle
-  surface: linear(180, Colors.surface500, Colors.surface300),
-  surfaceHover: linear(180, Colors.surface500, Colors.surface600),
-  // card / panel depth
-  card: linear(160, Colors.surface200 + "cc", Colors.surface100 + "cc"),
-  track: linear(180, Colors.surface300, Colors.surface400),
+  surface: linear(180, Colors.surface600, Colors.surface400),
+  surfaceHover: linear(180, Colors.surface600, Colors.surface700),
+  // card / panel depth; hover lifts one surface step, selected adds a primary
+  // tint on top of the lift so it reads clearly stronger than hover
+  card: cardBase,
+  cardHover: cardLift,
+  cardSelected: [
+    linear(160, Colors.surface200 + "ee", Colors.surface100 + "ee"),
+  ] satisfies Gradient[],
+  track: linear(180, Colors.surface500, Colors.surface500),
   trackFilled: linear(180, Colors.primary300, Colors.primary400),
   // showy multi-hue border for cards (borderGradient)
   accentBorder: linear(135, Colors.primary300, Colors.sky100, Colors.purple100),
-  // resting Example cards; full-strength accentBorder marks the selected one
+  // resting Example cards; hover brightens partway, full accentBorder marks
+  // the selected one
   accentBorderDim: linear(
     135,
-    Colors.primary300 + "66",
-    Colors.sky100 + "66",
-    Colors.purple100 + "66",
+    Colors.primary300 + "44",
+    Colors.sky100 + "44",
+    Colors.purple100 + "44",
+  ),
+  accentBorderHover: linear(
+    135,
+    Colors.primary300 + "ff",
+    Colors.sky100 + "ff",
+    Colors.purple100 + "ff",
   ),
   // immersive nav backdrop: dark vertical base + faint primary glow at top
   navBackdrop: [

@@ -139,9 +139,15 @@ function LayeredGradientsDemo() {
       description="Pass an array to layer translucent gradients. Hover the swatch to swap the gradient (proves hoverStyle merging)."
       tsx={`backgroundGradient: [
   { type: "linear", angle: 45,
-    stops: [{ color: "#f7768e80" }, { color: "#00000000" }] },
+    stops: [
+      { color: "#f7768e80" },
+      { color: "#00000000" },
+    ] },
   { type: "linear", angle: 135,
-    stops: [{ color: "#7aa2f780" }, { color: "#00000000" }] },
+    stops: [
+      { color: "#7aa2f780" },
+      { color: "#00000000" },
+    ] },
 ]`}
     >
       <node style={stage}>

@@ -46,7 +46,7 @@ const track: BevyStyle = {
   width: "100%",
   height: 20,
   borderRadius: 6,
-  backgroundColor: Colors.surface400,
+  backgroundColor: Colors.surface500,
   backgroundGradient: Gradients.track,
 };
 

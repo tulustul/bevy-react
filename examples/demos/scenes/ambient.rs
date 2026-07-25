@@ -19,7 +19,9 @@ use bevy::ui::IsDefaultUiCamera;
 
 /// How far in front of the camera the backdrop quad sits, and its size. At
 /// distance 30 the default 45° vertical fov needs ~25 world units of height;
-/// 200 covers any reasonable aspect with a wide margin.
+/// 200 covers any reasonable aspect with a wide margin. The distance only
+/// governs pixel coverage, not occlusion: the fragment shader pins its depth
+/// to the far plane, so scene geometry beyond 30 units still draws in front.
 const QUAD_DISTANCE: f32 = 30.0;
 const QUAD_SIZE: f32 = 200.0;
 

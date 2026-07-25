@@ -8,7 +8,9 @@ import { useDemoPage, type ExplanationData } from "@/explanationStore";
 const MAX = 8;
 const TYPESCRIPT = "bevy.basicDemo.setCount(n);";
 
-const RUST = `#[react_message(name = "basicDemo.setCount")]
+const RUST = `#[react_message(
+    name = "basicDemo.setCount"
+)]
 struct SetCount(usize);
 
 fn apply_set_count(

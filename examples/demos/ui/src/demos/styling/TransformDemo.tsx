@@ -37,7 +37,10 @@ function TranslateDemo() {
     <Example
       title="translate"
       description="translate shifts a node after layout, without moving siblings."
-      tsx={`transform: { translateX: 16, translateY: 0 }`}
+      tsx={`transform: {
+  translateX: 16,
+  translateY: 0,
+}`}
     >
       <node style={controlColumn}>
         <node style={stage}>
@@ -70,7 +73,9 @@ function PercentTranslateDemo() {
     <Example
       title="Percent translate"
       description="translate also takes responsive units — translateX '50%' shifts a node by half its own width, regardless of pixel size (and eases with a transition)."
-      tsx={`transform: { translateX: on ? "50%" : "0%" }`}
+      tsx={`transform: {
+  translateX: on ? "50%" : "0%",
+}`}
     >
       <node style={controlColumn}>
         <node style={stage}>

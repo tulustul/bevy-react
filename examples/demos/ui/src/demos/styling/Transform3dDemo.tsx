@@ -56,7 +56,10 @@ function TiltDemo() {
     <Example
       title="rotateX / rotateY"
       description="rotateX/rotateY tilt the rendered subtree in 3D. perspective sets the focal distance (smaller = more dramatic); without it the projection is orthographic — foreshortening only, no divergence."
-      tsx={`transform3d: { perspective: 600, rotateY: 40 }`}
+      tsx={`transform3d: {
+  perspective: 600,
+  rotateY: 40,
+}`}
     >
       <node style={controlColumn}>
         <node style={stage}>
@@ -105,8 +108,16 @@ function FlipCardDemo() {
     <Example
       title="Flip card"
       description="A click-to-flip card easing through transition.transform3d. The counter button INSIDE the card stays clickable at its transformed position — past 90° the mirrored backface still renders and picks. The base style keeps an identity transform3d so the flip-back eases instead of snapping."
-      tsx={`transform3d: { perspective: 700, rotateY: flipped ? 180 : 0 },
-transition: { transform3d: { duration: 0.6, easing: "easeInOut" } }`}
+      tsx={`transform3d: {
+  perspective: 700,
+  rotateY: flipped ? 180 : 0,
+},
+transition: {
+  transform3d: {
+    duration: 0.6,
+    easing: "easeInOut",
+  },
+}`}
     >
       <node style={controlColumn}>
         <node style={stage}>
@@ -143,7 +154,10 @@ function OriginDemo() {
     <Example
       title="origin"
       description="origin sets the pivot (and the vanishing point): a left-edge hinge swings like a door, the center flips in place."
-      tsx={`transform3d: { rotateY: 60, origin: { x: "0%", y: "50%" } }`}
+      tsx={`transform3d: {
+  rotateY: 60,
+  origin: { x: "0%", y: "50%" },
+}`}
     >
       <node style={controlColumn}>
         <node style={stage}>
@@ -196,7 +210,9 @@ function WobbleDemo() {
     <Example
       title="animatedStyle"
       description="animatedStyle drives single fields (degrees for rotations) straight from the animation engine — a continuous wobble is a composite-time cache hit, never a re-capture."
-      tsx={`animatedStyle={{ "transform3d.rotateY": wobble }}`}
+      tsx={`animatedStyle={{
+  "transform3d.rotateY": wobble,
+}}`}
     >
       <node style={controlColumn}>
         <node style={stage}>

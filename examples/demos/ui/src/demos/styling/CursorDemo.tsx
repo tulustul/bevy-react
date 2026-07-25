@@ -81,9 +81,13 @@ function CursorKeywordsDemo() {
 // then selected by name from React with `cursor: "<name>"`.
 const CUSTOM_RUST = `ReactUiPlugin::new(bundle)
     .cursor(
-        "hand",             // name React selects with cursor: "hand"
-        "cursor-hand.png",  // image path (relative to the asset root)
-        (0, 0),            // hotspot: the click-point pixel in the image
+        // selected from React with
+        // cursor: "hand"
+        "hand",
+        // path relative to asset root
+        "cursor-hand.png",
+        // hotspot pixel in the image
+        (0, 0),
     );`;
 
 const CUSTOM_TS = `<node style={{ cursor: "hand" }}>`;

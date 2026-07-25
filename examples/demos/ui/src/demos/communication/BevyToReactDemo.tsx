@@ -9,18 +9,26 @@ export function BevyToReactDemo() {
   return <BounceExample />;
 }
 
-const BOUNCE_TYPESCRIPT = `bevy.on("bevyEventsDemo.ballBounced", (e) => {
-  setBounces((n) => n + 1);
-});`;
+const BOUNCE_TYPESCRIPT = `bevy.on(
+  "bevyEventsDemo.ballBounced",
+  (e) => setBounces((n) => n + 1),
+);`;
 
-const BOUNCE_RUST = `#[react_event(name = "bevyEventsDemo.ballBounced")]
+const BOUNCE_RUST = `#[react_event(
+    name = "bevyEventsDemo.ballBounced"
+)]
 struct BallBounced {
     wall: Wall,
     speed: f32,
 }
 
-fn bounce(events: ReactEvents, /* ... */) {
-    events.send(&BallBounced { wall, speed });
+fn bounce(
+    events: ReactEvents,
+    /* ... */
+) {
+    events.send(
+        &BallBounced { wall, speed },
+    );
 }
 
 app.add_react_event::<BallBounced>();`;
