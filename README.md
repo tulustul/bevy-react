@@ -251,6 +251,105 @@ Drivers: `withTiming`, `withSpring`, `withRepeat`, `withSequence`, `withDelay`, 
 degrees, bound lengths animate in px, and bindings are honored in the base
 `style` only.
 
+### Filters
+
+The `filter` style runs a chain of GPU post-processing passes over an element
+**and its whole subtree**. The value is one `{ name, params }` object or an
+ordered array (pass order). Built-ins: `blur`, `grayscale`, `sepia`, `invert`,
+`brightness`, `contrast`, `saturate`, `hueRotate`, `bloom`,
+`chromaticAberration`.
+
+```tsx
+// One filter…
+<image
+  src="images/parrot.png"
+  style={{ filter: { name: "grayscale", params: { amount: 1 } } }}
+/>
+
+// …or an ordered chain.
+<node
+  style={{
+    filter: [
+      { name: "blur", params: { radius: 4 } },
+      { name: "sepia", params: { amount: 1 } },
+    ],
+  }}
+/>
+```
+
+Filter params animate like any other style: ease them with
+`transition: { filter }` or drive a single param with an inline
+`{ animated: sharedValue }` binding — all on the Bevy side, with no per-frame
+JS and no re-capture of the subtree.
+
+![A gallery of built-in filters: grayscale, sepia, invert, and hue-rotate parrots, a grayscaled subtree card, a blur+sepia chain, bloom on neon text, and chromatic aberration.](https://raw.githubusercontent.com/tulustul/bevy-react/main/screenshots/filters.png)
+
+Behind the scenes, some styles automatically promote a subtree to a
+**composited layer**: a non-empty `filter` or `backdropFilter`, `opacity` on a
+node with children (group alpha), a `transform3d`, or an explicit
+`cache: "always"` / `"never"`. The subtree is captured into an offscreen
+texture and cached — a clean layer skips re-capture, and moving, fading, or
+animating filter params is composite-time only. This is purely render-side:
+layout, picking, and refs are untouched, and there is nothing to opt into.
+
+### Backdrop filters
+
+`backdropFilter` takes the same `{ name, params }` chains but filters **what
+is rendered behind the node** — the 3D scene — and composites the result under
+the node's own content. It respects `borderRadius`, so the classic
+frosted-glass card just works.
+
+```tsx
+<node
+  style={{
+    backgroundColor: "rgba(26, 27, 38, 0.35)",
+    backdropFilter: { name: "blur", params: { radius: 8 } },
+  }}
+>
+  <text>frosted glass</text>
+</node>
+```
+
+![A frosted-glass panel with backdropFilter blur over a live 3D scene: the moving cubes behind it soften into shapes while the panel's own text stays sharp.](https://raw.githubusercontent.com/tulustul/bevy-react/main/screenshots/backdropFilter.gif)
+
+### Custom filters
+
+A custom filter is a Rust params struct plus a WGSL fragment shader. Register
+it and it is usable from `filter` / `backdropFilter` by name, with **typed
+params in TSX** via the generated `bevy.ts` (the same codegen flow as messages
+and events).
+
+```rust
+use bevy_react::{ReactAppExt, react_filter};
+
+// Fields pack into the shader's `uniforms.params` in declaration order.
+#[react_filter(shader = "shaders/dissolve.wgsl")]
+struct Dissolve {
+    progress: f32,
+}
+
+app.add_react_filter::<Dissolve>();
+```
+
+```tsx
+<node
+  style={{
+    filter: { name: "dissolve", params: { progress } } },
+  }}
+/>
+```
+
+The shader `#import`s `bevy_react::filter` for the bind-group contract (source
+texture, params, time, resolution) and names its entry point `fragment`. See
+[`examples/assets/shaders/`](https://github.com/tulustul/bevy-react/tree/main/examples/assets/shaders)
+(`ripple`, `glitch`, `dissolve`) and
+[`examples/demos/filters.rs`](https://github.com/tulustul/bevy-react/blob/main/examples/demos/filters.rs)
+for complete examples, including time-driven (`time = true`) and bleed-outset
+(`outset = …`) filters. Register the filter in both the running app and the
+`--export-bindings` path, then regenerate `bevy.ts`.
+
+![Custom WGSL filters running on live UI: a ripple distortion, a glitch effect, and an animated dissolve driven by a shared value.](https://raw.githubusercontent.com/tulustul/bevy-react/main/screenshots/customFilters.gif)
+
 ### Fonts
 
 Register a font on the host, then select it by name in any `<text>` style.

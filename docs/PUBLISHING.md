@@ -38,35 +38,40 @@ npm run build:web:prod -w demos
 
 ```sh
 cargo run --release -p bevy-react --example stress -- --run table-ops --out benchmark_results/<version>.json
+cargo run -p bevy-react --example layers-stress --release
 ```
 
-### 6. Dry-run both publishes
+### 6. Update the CHANGELOG.md file
+
+### 7. Commit the version bump with message `bump <version>`
+
+### 8. Dry-run both publishes
 
 ```sh
 cargo publish --workspace --dry-run
 npm publish --dry-run -w bevy-react
 ```
 
-### 7. Publish to crates.io
+### 9. Publish to crates.io
 
 ```sh
 cargo publish --workspace
 ```
 
-### 8. Publish to npm
+### 10. Publish to npm
 
 ```sh
 npm publish -w bevy-react
 ```
 
-### 9. Tag the release
+### 11. Tag the release
 
 ```sh
 git tag v<version>
 git push origin v<version>
 ```
 
-### 10. Deploy web demo to Github Pages
+### 12. Deploy web demo to Github Pages
 
 ```sh
 npm run deploy:web -w demos
