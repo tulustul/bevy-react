@@ -130,8 +130,6 @@ the UI in front keeps its colors."
 }
 
 function BothChainsDemo() {
-  const [content, setContent] = useState(3);
-
   return (
     <Example
       title="filter + backdropFilter"
@@ -170,13 +168,6 @@ panel's own children. Each resolves, transitions, and animates on its own."
             FILTERED CONTENT
           </text>
         </node>
-        <Slider
-          value={content}
-          min={0}
-          max={10}
-          onChange={setContent}
-          label={`content grayscale ${content.toFixed(2)}`}
-        />
       </node>
     </Example>
   );

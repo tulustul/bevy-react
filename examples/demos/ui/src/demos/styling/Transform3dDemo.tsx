@@ -1,11 +1,12 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
-  cancelAnimation,
   useSharedValue,
+  withDelay,
   withRepeat,
+  withSequence,
   withTiming,
 } from "bevy-react";
-import { Button, DemoRow, Example, Slider } from "@/components";
+import { DemoRow, Example, Slider } from "@/components";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
 import { controlColumn } from "./shared";
 import { TestBanner } from "@/components/TestBanner";
@@ -28,27 +29,29 @@ export function Transform3dDemo() {
   return (
     <>
       <DemoRow>
-        <TiltDemo />
-        <OriginDemo />
+        <PerspectiveDemo />
+        <OrthographicDemo />
       </DemoRow>
       <DemoRow>
+        <OriginDemo />
         <FlipCardDemo />
-        <WobbleDemo />
+        <SpinningDemo />
       </DemoRow>
     </>
   );
 }
 
-function TiltDemo() {
+function PerspectiveDemo() {
   const [rx, setRx] = useState(14);
   const [ry, setRy] = useState(40);
-  const [persp, setPersp] = useState(true);
+  const [persp, setPersp] = useState(600);
   return (
     <Example
-      title="rotateX / rotateY"
-      description="rotateX/rotateY tilt the rendered subtree in 3D. perspective sets the focal distance (smaller = more dramatic); without it the projection is orthographic — foreshortening only, no divergence."
+      title="Perspective"
+      description="perspective sets the focal distance of the projection: small values put the camera close (dramatic divergence, near edges balloon), large values flatten toward orthographic. Match the tilt on the orthographic card next door to compare the projections."
       tsx={`transform3d: {
   perspective: 600,
+  rotateX: 14,
   rotateY: 40,
 }`}
     >
@@ -56,7 +59,7 @@ function TiltDemo() {
         <TestBanner
           style={{
             transform3d: {
-              perspective: persp ? 600 : undefined,
+              perspective: persp,
               rotateX: rx,
               rotateY: ry,
             },
@@ -77,58 +80,82 @@ function TiltDemo() {
           onChange={setRy}
           label={`rotateY ${ry.toFixed(0)}°`}
         />
-        <Button onClick={() => setPersp((v) => !v)}>
-          {persp ? "to orthographic" : "to perspective"}
-        </Button>
+        <Slider
+          value={persp}
+          min={200}
+          max={1000}
+          onChange={setPersp}
+          label={`perspective ${persp.toFixed(0)}`}
+        />
       </node>
     </Example>
   );
 }
 
-function FlipCardDemo() {
-  const [flipped, setFlipped] = useState(false);
-
+function OrthographicDemo() {
+  const [rx, setRx] = useState(14);
+  const [ry, setRy] = useState(40);
   return (
     <Example
-      title="Flip card"
-      description="A click-to-flip card easing through transition.transform3d. The counter button INSIDE the card stays clickable at its transformed position — past 90° the mirrored backface still renders and picks. The base style keeps an identity transform3d so the flip-back eases instead of snapping."
+      title="Orthographic"
+      description="The same tilt without a perspective field: an orthographic projection foreshortens (the rotated face gets narrower) but parallel edges never diverge — no vanishing point, no near-edge magnification."
       tsx={`transform3d: {
-  perspective: 700,
-  rotateY: flipped ? 180 : 0,
-},
-transition: {
-  transform3d: {
-    duration: 0.6,
-    easing: "easeInOut",
-  },
+  // no perspective field
+  rotateX: 14,
+  rotateY: 40,
 }`}
     >
       <node style={controlColumn}>
         <TestBanner
           style={{
-            transform3d: { perspective: 700, rotateY: flipped ? 180 : 0 },
-            transition: {
-              transform3d: { duration: 600, easing: "easeInOut" },
+            transform3d: {
+              rotateX: rx,
+              rotateY: ry,
             },
           }}
         />
-        <Button onClick={() => setFlipped((v) => !v)}>"Flip"</Button>
+
+        <Slider
+          value={rx}
+          min={-80}
+          max={80}
+          onChange={setRx}
+          label={`rotateX ${rx.toFixed(0)}°`}
+        />
+        <Slider
+          value={ry}
+          min={-80}
+          max={80}
+          onChange={setRy}
+          label={`rotateY ${ry.toFixed(0)}°`}
+        />
       </node>
     </Example>
   );
 }
 
 function OriginDemo() {
-  const [open, setOpen] = useState(true);
+  const swing = useSharedValue(0);
   const [origin, setOrigin] = useState(0);
+
+  useEffect(() => {
+    swing.value = withRepeat(
+      withSequence(
+        withDelay(600, withTiming(55, { duration: 700, easing: "easeInOut" })),
+        withDelay(600, withTiming(0, { duration: 700, easing: "easeInOut" })),
+      ),
+    );
+  }, [swing]);
 
   return (
     <Example
-      title="origin"
-      description="origin sets the pivot (and the vanishing point): a left-edge hinge swings like a door, the center flips in place."
+      title="Origin"
+      description="origin sets the pivot (and the vanishing point). The door swings on an endless animated loop — pause, open, pause, close — while the slider drags the hinge from the left edge to the right: at 0% it swings like a door, at 50% it flips in place."
       tsx={`transform3d: {
-  rotateY: 60,
-  origin: { x: "0%", y: "50%" },
+  rotateY: { animated: swing },
+  origin: {
+    x: "0%", y: "50%",
+  },
 }`}
     >
       <node style={controlColumn}>
@@ -136,70 +163,105 @@ function OriginDemo() {
           style={{
             transform3d: {
               perspective: 800,
-              rotateY: open ? 55 : 0,
+              rotateY: { animated: swing },
               origin: { x: `${origin}%`, y: "0%" },
             },
-            transition: { transform3d: { duration: 400, easing: "easeOut" } },
           }}
         />
 
-        <node style={{ flexDirection: "row", gap: 10 }}>
-          <Button onClick={() => setOpen((v) => !v)}>
-            {open ? "Close" : "Swing"}
-          </Button>
-        </node>
+        <Slider
+          value={origin}
+          min={0}
+          max={100}
+          onChange={setOrigin}
+          label={`origin ${origin.toFixed(0)}%`}
+        />
       </node>
-
-      <Slider
-        value={origin}
-        min={0}
-        max={100}
-        onChange={setOrigin}
-        label={`origin ${origin.toFixed(0)}%`}
-      />
     </Example>
   );
 }
 
-function WobbleDemo() {
-  const wobble = useSharedValue(0);
-  const [spinning, setSpinning] = useState(false);
+function FlipCardDemo() {
+  const flip = useSharedValue(0);
 
-  const start = () => {
-    wobble.value = withRepeat(
-      withTiming(45, { duration: 900, easing: "easeInOut" }),
-      { reverse: true },
+  useEffect(() => {
+    flip.value = withRepeat(
+      withSequence(
+        withDelay(700, withTiming(180, { duration: 600, easing: "easeInOut" })),
+        withDelay(700, withTiming(0, { duration: 600, easing: "easeInOut" })),
+      ),
     );
-    setSpinning(true);
-  };
-  const stop = () => {
-    cancelAnimation(wobble);
-    setSpinning(false);
-  };
+  }, [flip]);
 
   return (
     <Example
-      title="Animated fields"
-      description="An { animated } wrapper drives single fields (degrees for rotations) straight from the animation engine — a continuous wobble is a composite-time cache hit, never a re-capture."
-      tsx={`style={{ transform3d: {
+      title="Flip card"
+      description="An endless flip loop: rest, flip to the back, rest, flip home. Past 90° the mirrored backface still renders and picks — hover the banner mid-flip and the interaction follows the transformed visual, not the layout rect."
+      tsx={`flip.value = withRepeat(
+  withSequence(
+    withDelay(1400,
+      withTiming(180)),
+    withDelay(1400,
+      withTiming(0)),
+  ),
+);
+transform3d: {
+  perspective: 700,
+  rotateY: { animated: flip },
+}`}
+    >
+      <node style={controlColumn}>
+        <TestBanner
+          style={{
+            transform3d: {
+              perspective: 700,
+              rotateY: { animated: flip },
+            },
+          }}
+        />
+      </node>
+    </Example>
+  );
+}
+
+function SpinningDemo() {
+  const spin = useSharedValue(0);
+
+  const start = () => {
+    spin.value = 0;
+    spin.value = withRepeat(
+      withTiming(360, { duration: 2400, easing: "linear" }),
+    );
+  };
+  useEffect(start, [spin]);
+
+  return (
+    <Example
+      title="Spinning"
+      description="An { animated } wrapper drives single fields (degrees for rotations) straight from the animation engine — one shared value spins both axes indefinitely, and every frame is a composite-time cache hit, never a re-capture."
+      tsx={`spin.value = withRepeat(
+  withTiming(360, {
+    duration: 2400,
+    easing: "linear",
+  }),
+);
+transform3d: {
   perspective: 600,
-  rotateY: { animated: wobble },
-} }}`}
+  rotateX: { animated: spin },
+  rotateY: { animated: spin },
+}`}
     >
       <node style={controlColumn}>
         <TestBanner
           style={{
             transform3d: {
               perspective: 600,
-              rotateX: { animated: wobble },
-              rotateY: { animated: wobble },
+              rotateX: { animated: spin },
+              rotateY: { animated: spin },
             },
           }}
         />
       </node>
-      <Button onClick={spinning ? stop : start}>
-        {spinning ? "Stop" : "Wobble"}
-      </Button>
     </Example>
   );
 }

@@ -2,8 +2,8 @@
 ✔ example and explanation styling @done(26-07-25 12:16)
 ✔ button and slider color blends bad @done(26-07-25 12:16)
 ☐ ScrollbarDemo - split scrollbars into multiple examples
-☐ Transform3dDemo - nicer examples
-☐ BackdropFilters - nicer examples
+✔ Transform3dDemo - nicer examples @done(26-07-25 16:49)
+✔ BackdropFilters - nicer examples @done(26-07-25 16:49)
 ✔ camera not moving when over ui @done(26-07-24 23:55)
 ✔ add aurora background to each scene @done(26-07-25 00:54)
 ✔ aurora should always move in one direction @done(26-07-25 11:13)

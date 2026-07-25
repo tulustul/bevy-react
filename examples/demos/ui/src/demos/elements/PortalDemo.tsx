@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { BevyStyle } from "bevy-react/jsx";
 import { bevy } from "@/bevy";
-import { Button, Checkbox, Example } from "@/components";
-import { Colors, FontSizes } from "@/theme";
+import { Button, Checkbox, DemoRow, Example } from "@/components";
+import { Colors } from "@/theme";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
 
 // A demo of the `<portal>` host element: a UI rectangle that shows an offscreen
@@ -32,13 +32,22 @@ commands.spawn((
 const PAGE: ExplanationData = {
   title: "<portal>",
   description:
-    'A UI rectangle that shows an offscreen Bevy render target (render-to-texture): Rust creates named targets and points cameras at them, and <portal target="…"> displays one. Here the CrowdedCubes scene drives two — a 3D chase cam ("follow"), switchable between continuous rendering and a frozen snapshot, and a 2D minimap. The card carries cache: "never": a live portal writes pixels outside the layer dirt tracking\'s sight, so the enclosing composited layer opts out of capture caching.',
+    'A UI rectangle that shows an offscreen Bevy render target (render-to-texture): Rust creates named targets and points cameras at them, and <portal target="…"> displays one. Here the CrowdedCubes scene drives two — a 3D chase cam ("follow"), switchable between continuous rendering and a frozen snapshot, and a 2D minimap. The cards carry cache: "never": a live portal writes pixels outside the layer dirt tracking\'s sight, so the enclosing composited layer opts out of capture caching.',
   tsx: TYPESCRIPT,
   rust: RUST,
 };
 
 export function PortalDemo() {
   useDemoPage(PAGE);
+  return (
+    <DemoRow>
+      <FollowCamDemo />
+      <MinimapDemo />
+    </DemoRow>
+  );
+}
+
+function FollowCamDemo() {
   const [continuous, setContinuous] = useState(true);
 
   // Keep Bevy's "follow" render mode in sync with the checkbox. We emit on every
@@ -55,35 +64,53 @@ export function PortalDemo() {
   }, [continuous]);
 
   return (
-    <Example style={{ cache: "never" }}>
-      <node style={row}>
-        <node style={column}>
-          <text style={label}>Follow cam</text>
-          <portal target="follow" style={followView} />
-          <Button onClick={() => bevy.crowdedCubes.followRandom(null)}>
-            Pick another cube
-          </Button>
-          <Checkbox
-            label="Continuous"
-            enabled={continuous}
-            onChange={setContinuous}
-          />
-        </node>
-
-        <node style={column}>
-          <text style={label}>Minimap</text>
-          <portal target="minimap" style={minimapView} />
-        </node>
+    <Example
+      title="Follow cam"
+      description='A 3D chase camera renders the tracked cube into the "follow" target. The checkbox switches the target between continuous rendering and a frozen snapshot (a React message the Rust side maps to RenderMode::Live / Snapshot); picking another cube re-snapshots.'
+      style={{ cache: "never" }}
+      tsx={`<portal
+  target="follow"
+  style={{
+    width: 160,
+    height: 160,
+  }}
+/>`}
+    >
+      <node style={column}>
+        <portal target="follow" style={portalView} />
+        <Button onClick={() => bevy.crowdedCubes.followRandom(null)}>
+          Pick another cube
+        </Button>
+        <Checkbox
+          label="Continuous"
+          enabled={continuous}
+          onChange={setContinuous}
+        />
       </node>
     </Example>
   );
 }
 
-const row: BevyStyle = {
-  flexDirection: "row",
-  alignItems: "flexStart",
-  gap: 16,
-};
+function MinimapDemo() {
+  return (
+    <Example
+      title="Minimap"
+      description={`A 2D camera on an isolated render layer draws flat markers for every cube into the live "minimap" target — a classic top-down map, rendered by Bevy and placed in the UI like any other node. Live pixels bypass the layer dirt tracking, hence the card's cache: "never".`}
+      style={{ cache: "never" }}
+      tsx={`<portal
+  target="minimap"
+  style={{
+    width: 160,
+    height: 160,
+  }}
+/>`}
+    >
+      <node style={column}>
+        <portal target="minimap" style={portalView} />
+      </node>
+    </Example>
+  );
+}
 
 const column: BevyStyle = {
   flexDirection: "column",
@@ -91,22 +118,7 @@ const column: BevyStyle = {
   gap: 8,
 };
 
-const label: BevyStyle = {
-  color: Colors.textColor200,
-  fontSize: FontSizes.sm,
-  fontWeight: "semibold",
-};
-
-const followView: BevyStyle = {
-  width: 160,
-  height: 160,
-  borderRadius: 8,
-  border: 2,
-  borderColor: Colors.surface500,
-  backgroundColor: Colors.surface100,
-};
-
-const minimapView: BevyStyle = {
+const portalView: BevyStyle = {
   width: 160,
   height: 160,
   borderRadius: 8,

@@ -128,7 +128,7 @@ fn spawn_ball(
     commands.spawn((
         Mesh3d(meshes.add(Cuboid::new(side, side, side))),
         MeshMaterial3d(materials.add(StandardMaterial {
-            base_color: Color::srgba(0.48, 0.64, 0.97, 0.04),
+            base_color: Color::srgba(0.48, 0.64, 0.97, 0.4),
             alpha_mode: AlphaMode::Blend,
             cull_mode: None,
             double_sided: true,
@@ -142,6 +142,9 @@ fn spawn_ball(
         Mesh3d(meshes.add(Sphere::new(BALL_RADIUS))),
         MeshMaterial3d(materials.add(StandardMaterial {
             base_color: Color::srgb(0.97, 0.79, 0.36),
+            // Self-lit so the ball reads as the scene's light source and stays
+            // vivid seen through the tinted glass walls.
+            emissive: Color::srgb(0.97, 0.79, 0.36).to_linear(),
             ..default()
         })),
         Transform::from_xyz(0.0, 0.0, 0.0),
