@@ -235,8 +235,7 @@ function Pulse() {
   useEffect(() => {
     opacity.value = withRepeat(
       withTiming(0, { duration: 500, easing: "easeInOut" }),
-      -1, // repeat forever
-      true, // ping-pong
+      { reverse: true }, // ping-pong; loops forever unless `count` is given
     );
   }, [opacity]);
 

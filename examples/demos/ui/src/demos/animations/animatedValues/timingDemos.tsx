@@ -20,7 +20,7 @@ const FADE_MS = 500;
 const FADE_TSX = `const opacity = useSharedValue(1);
 opacity.value = withRepeat(
   withTiming(0, { duration: 500 }),
-  -1, true, // ping-pong
+  { reverse: true }, // ping-pong
 );
 <node style={{
   opacity: { animated: opacity },
@@ -32,15 +32,14 @@ export function FadeDemo() {
   useEffect(() => {
     opacity.value = withRepeat(
       withTiming(0, { duration: FADE_MS, easing: "easeInOut" }),
-      -1,
-      true, // ping-pong back to 1
+      { reverse: true }, // ping-pong back to 1
     );
   }, [opacity]);
 
   return (
     <Example
       title="Fade"
-      description="A shared value drives the style's { animated } binding imperatively: withTiming eases opacity to 0, and withRepeat(-1, true) loops it forever, ping-ponging back to 1. The animation runs on the Bevy side — React renders once and never re-renders per frame."
+      description="A shared value drives the style's { animated } binding imperatively: withTiming eases opacity to 0, and withRepeat with { reverse: true } loops it forever, ping-ponging back to 1. The animation runs on the Bevy side — React renders once and never re-renders per frame."
       tsx={FADE_TSX}
     >
       <node style={fadeStageStyle}>
@@ -189,7 +188,7 @@ const GROW_MS = 900;
 const LAYOUT_TSX = `const t = useSharedValue(0);
 t.value = withRepeat(
   withTiming(1, { duration: 900 }),
-  -1, true,
+  { reverse: true },
 );
 // Any continuous style value is
 // animatable — bindings ride the
@@ -215,8 +214,7 @@ export function LayoutColorDemo() {
   useEffect(() => {
     t.value = withRepeat(
       withTiming(1, { duration: GROW_MS, easing: "easeInOut" }),
-      -1,
-      true, // ping-pong
+      { reverse: true }, // ping-pong
     );
   }, [t]);
 

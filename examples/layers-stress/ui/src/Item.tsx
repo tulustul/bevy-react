@@ -45,8 +45,7 @@ export const StressItem = memo(function StressItem({
           item.delay,
           withRepeat(
             withTiming(to, { duration, easing: "easeInOut" }),
-            -1,
-            true, // ping-pong back to the start value
+            { reverse: true }, // ping-pong back to the start value
           ),
         );
       tx.value = loop(item.dx, item.durMove);

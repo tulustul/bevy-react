@@ -199,50 +199,72 @@ function toWireDriver(driver: Driver, nested: boolean): Driver {
   }
 }
 
-/** Animate to `to` over `duration` ms (default 300) with `easing` (default
- *  linear). `callback` fires once on settlement (see [`AnimationCallback`]). */
-export function withTiming(
-  to: number,
-  config?: { duration?: number; easing?: EasingName },
-  callback?: AnimationCallback,
-): Driver {
+/** Config for [`withTiming`]. */
+export type TimingConfig = {
+  /** Duration in ms (default `300`). */
+  duration?: number;
+  /** Easing curve (default `"linear"`). */
+  easing?: EasingName;
+  /** Fires once on settlement (see [`AnimationCallback`]). */
+  onComplete?: AnimationCallback;
+};
+
+/** Animate to `to` over `duration` ms with `easing`. */
+export function withTiming(to: number, config?: TimingConfig): Driver {
   return {
     type: "timing",
     to,
     duration: (config?.duration ?? 300) / 1000,
     easing: config?.easing ?? "linear",
-    callback,
+    callback: config?.onComplete,
   };
 }
 
-/** Settle on `to` with a damped spring. `callback` fires once on settlement
- *  (see [`AnimationCallback`]). */
-export function withSpring(
-  to: number,
-  config?: { stiffness?: number; damping?: number; mass?: number },
-  callback?: AnimationCallback,
-): Driver {
+/** Config for [`withSpring`]. */
+export type SpringConfig = {
+  /** Spring stiffness (default `100`). */
+  stiffness?: number;
+  /** Spring damping (default `10`). */
+  damping?: number;
+  /** Spring mass (default `1`). */
+  mass?: number;
+  /** Fires once on settlement (see [`AnimationCallback`]). */
+  onComplete?: AnimationCallback;
+};
+
+/** Settle on `to` with a damped spring. */
+export function withSpring(to: number, config?: SpringConfig): Driver {
   return {
     type: "spring",
     to,
     stiffness: config?.stiffness ?? 100,
     damping: config?.damping ?? 10,
     mass: config?.mass ?? 1,
-    callback,
+    callback: config?.onComplete,
   };
 }
 
-/** Repeat `animation` `count` times (`-1` = forever, the default). `reverse`
- *  ping-pongs the endpoints (timing/spring) instead of restarting from the top.
- *  `callback` fires once on settlement (never for an infinite repeat, unless
- *  interrupted — see [`AnimationCallback`]). */
-export function withRepeat(
-  animation: Driver,
-  count = -1,
-  reverse = false,
-  callback?: AnimationCallback,
-): Driver {
-  return { type: "repeat", animation, count, reverse, callback };
+/** Config for [`withRepeat`]. */
+export type RepeatConfig = {
+  /** How many times to play `animation`; omitted = repeat forever. */
+  count?: number;
+  /** Ping-pong the endpoints (timing/spring) instead of restarting
+   *  from the top (default `false`). */
+  reverse?: boolean;
+  /** Fires once on settlement — never for an infinite repeat, unless
+   *  interrupted (see [`AnimationCallback`]). */
+  onComplete?: AnimationCallback;
+};
+
+/** Repeat `animation` — forever by default, or `count` times. */
+export function withRepeat(animation: Driver, config?: RepeatConfig): Driver {
+  return {
+    type: "repeat",
+    animation,
+    count: config?.count ?? -1,
+    reverse: config?.reverse ?? false,
+    callback: config?.onComplete,
+  };
 }
 
 /** Run each driver in order, each starting where the previous ended. A trailing

@@ -163,14 +163,13 @@ const sequenceSquare: BevyStyle = {
   backgroundColor: Colors.green100,
 };
 
-// withRepeat loops a driver forever (count -1); cancelAnimation freezes the
-// shared value wherever it currently is.
+// withRepeat loops a driver forever unless a count is given; cancelAnimation
+// freezes the shared value wherever it currently is.
 
 const SPIN_TSX = `rot.value = withRepeat(
   withTiming(360, { // degrees
     easing: "linear",
-  }),
-  -1,
+  }), // loops forever by default
 );
 cancelAnimation(rot); // freeze`;
 
@@ -183,7 +182,6 @@ export function SpinDemo() {
     rot.value = withRepeat(
       // Rotation binds in degrees, like the static transform.rotate field.
       withTiming(360, { duration: 1200, easing: "linear" }),
-      -1,
     );
     setSpinning(true);
   };
@@ -196,7 +194,7 @@ export function SpinDemo() {
   return (
     <Example
       title="Spin"
-      description="An endless rotation: withRepeat with count -1 loops a linear withTiming over a full turn forever. Stop calls cancelAnimation, which freezes the shared value wherever it currently is instead of snapping back."
+      description="An endless rotation: withRepeat (no count) loops a linear withTiming over a full turn forever. Stop calls cancelAnimation, which freezes the shared value wherever it currently is instead of snapping back."
       tsx={SPIN_TSX}
     >
       <node style={column}>

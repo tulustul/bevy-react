@@ -5,10 +5,9 @@ import {
   withRepeat,
   withTiming,
 } from "bevy-react";
-import { BevyStyle } from "bevy-react/jsx";
 import { Button, DemoRow, Example, Slider } from "@/components";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
-import { box, controlColumn } from "./shared";
+import { controlColumn } from "./shared";
 import { TestBanner } from "@/components/TestBanner";
 
 const PAGE: ExplanationData = {
@@ -109,7 +108,7 @@ transition: {
           style={{
             transform3d: { perspective: 700, rotateY: flipped ? 180 : 0 },
             transition: {
-              transform3d: { duration: 0.6, easing: "easeInOut" },
+              transform3d: { duration: 600, easing: "easeInOut" },
             },
           }}
         />
@@ -120,8 +119,8 @@ transition: {
 }
 
 function OriginDemo() {
-  const [hinged, setHinged] = useState(true);
   const [open, setOpen] = useState(true);
+  const [origin, setOrigin] = useState(0);
 
   return (
     <Example
@@ -138,9 +137,9 @@ function OriginDemo() {
             transform3d: {
               perspective: 800,
               rotateY: open ? 55 : 0,
-              origin: hinged ? { x: "0%", y: "50%" } : { x: "50%", y: "50%" },
+              origin: { x: `${origin}%`, y: "0%" },
             },
-            transition: { transform3d: { duration: 0.4, easing: "easeOut" } },
+            transition: { transform3d: { duration: 400, easing: "easeOut" } },
           }}
         />
 
@@ -148,11 +147,16 @@ function OriginDemo() {
           <Button onClick={() => setOpen((v) => !v)}>
             {open ? "Close" : "Swing"}
           </Button>
-          <Button onClick={() => setHinged((v) => !v)}>
-            origin: {hinged ? '"0%"' : '"50%"'}
-          </Button>
         </node>
       </node>
+
+      <Slider
+        value={origin}
+        min={0}
+        max={100}
+        onChange={setOrigin}
+        label={`origin ${origin.toFixed(0)}%`}
+      />
     </Example>
   );
 }
@@ -164,8 +168,7 @@ function WobbleDemo() {
   const start = () => {
     wobble.value = withRepeat(
       withTiming(45, { duration: 900, easing: "easeInOut" }),
-      -1,
-      true, // ping-pong
+      { reverse: true },
     );
     setSpinning(true);
   };

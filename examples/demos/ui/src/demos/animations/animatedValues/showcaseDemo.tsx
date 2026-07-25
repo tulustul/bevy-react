@@ -18,7 +18,7 @@ type Mode = "linear" | "easeInOut" | "spring";
 const TYPESCRIPT = `withRepeat(withSequence(
   withDelay(280, withTiming(110)),
   withDelay(280, withTiming(-110)),
-), -1);
+));
 style={{ transform: {
   translateX: { animated: x },
   scale: { animated: pulse },
@@ -92,8 +92,7 @@ function BouncingSquare({ index, mode }: { index: number; mode: Mode }) {
       index * STAGGER_MS,
       withRepeat(
         withTiming(1, { duration: PULSE_MS, easing: "easeInOut" }),
-        -1,
-        true, // ping-pong 0↔1
+        { reverse: true }, // ping-pong 0↔1
       ),
     );
   }, [pulse, index]);
@@ -111,7 +110,6 @@ function BouncingSquare({ index, mode }: { index: number; mode: Mode }) {
         withDelay(STOP_MS, move(AMP)),
         withDelay(STOP_MS, move(-AMP)),
       ),
-      -1,
     );
 
     // On a mode change the value is mid-bounce; a non-reverse repeat re-anchors to

@@ -42,6 +42,9 @@ export type {
   Animatable,
   AnimationCallback,
   EasingName,
+  TimingConfig,
+  SpringConfig,
+  RepeatConfig,
 } from "./animated";
 
 // Layer-based filter chains (`style={{ filter: … }}`). `BevyFilters` is the

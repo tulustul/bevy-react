@@ -212,7 +212,6 @@ function BurnDemo() {
         withDelay(600, withTiming(1, { duration: 1400, easing: "easeIn" })),
         withDelay(500, withTiming(0, { duration: 1400, easing: "easeOut" })),
       ),
-      -1,
     );
   }, [progress]);
   return (
@@ -232,8 +231,7 @@ progress.value = withRepeat(
     })),
     withDelay(500,
       withTiming(0, { duration: 500 })),
-  ),
-  -1, // loop forever
+  ), // loops forever by default
 );
 
 <image
