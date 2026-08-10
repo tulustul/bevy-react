@@ -307,6 +307,19 @@ pub struct Props {
     #[serde(default)]
     pub target: Option<String>,
 
+    // --- `svg` element + shape-child attributes ---
+    /// The folded SVG attributes of a shape child (`<circle>`/`<rect>`/…)
+    /// inside an `<svg>` element. The JS side folds the flat JSX attrs into
+    /// this one object; on update it **replaces atomically** (see
+    /// [`Props::merge_delta`]).
+    #[serde(default)]
+    pub shape: Option<crate::svg::ShapeAttrs>,
+    /// The `<svg>` element's `viewBox` (`"minX minY width height"`), parsed
+    /// at the serde boundary. (`rename_all = "camelCase"` yields exactly the
+    /// `viewBox` wire name — pinned by a test.)
+    #[serde(default, deserialize_with = "crate::svg::de_view_box")]
+    pub view_box: Option<crate::svg::ViewBox>,
+
     // --- `editableText` element attributes ---
     /// The controlled text value of an `editableText`. Seeds the field on create;
     /// on update it's pushed into the widget only when it diverges from the live
@@ -351,6 +364,14 @@ pub struct Props {
 /// module (which owns the host element and its rasterizer), and is re-exported here
 /// so it stays reachable as `protocol::DrawCmd` and so [`Props::draw`] can name it.
 pub use crate::canvas::DrawCmd;
+
+/// The JSX `<svg>` shape wire types, owned by [`crate::svg`] (same ownership
+/// pattern as `DrawCmd`), re-exported so they stay reachable as
+/// `protocol::ShapeAttrs` etc. alongside the `Props` fields naming them.
+pub use crate::svg::{
+    FillRuleKind, LinecapKind, LinejoinKind, PathData, PathSeg, ShapeAttrs, ShapePaint,
+    ShapeTransform, ViewBox,
+};
 
 /// The [`Style::cache`] keyword: `"auto"` (default) leaves promotion to the
 /// other rules; `"always"` force-promotes the subtree to a cached composited
@@ -906,6 +927,10 @@ pub struct PropsDirty {
     pub image: bool,
     /// `target` (portal/surface binding) changed.
     pub target: bool,
+    /// `shape` (an SVG shape child's folded attrs) changed.
+    pub shape: bool,
+    /// `viewBox` (an `<svg>` element's user-unit rect) changed.
+    pub view_box: bool,
     /// Any `editableText` handler flag (`onChange`/`onSelect`/`onFocus`/
     /// `onBlur`) toggled.
     pub editable_handlers: bool,
@@ -1059,6 +1084,27 @@ impl Props {
         if delta.focus_style.is_some() {
             self.focus_style = delta.focus_style;
             dirty.focus_style = true;
+        }
+        // `shape` replaces ATOMICALLY (the variant-style precedent above),
+        // deliberately not field-wise like `style`: a shape change has a
+        // single Rust-side consequence — a full re-raster of the enclosing
+        // `<svg>` surface, with no per-field dirty groups to save — the
+        // object is small, and atomic replace handles JSX attr *removal*
+        // correctly by construction (JS sends the complete folded object
+        // whenever anything changed, so an attr absent from the new value is
+        // an attr removed, no `unset` bookkeeping needed). Compare-before-set
+        // keeps an idempotent re-send silent, like the rest of the delta.
+        if let Some(shape) = delta.shape
+            && self.shape.as_ref() != Some(&shape)
+        {
+            self.shape = Some(shape);
+            dirty.shape = true;
+        }
+        if let Some(view_box) = delta.view_box
+            && self.view_box != Some(view_box)
+        {
+            self.view_box = Some(view_box);
+            dirty.view_box = true;
         }
         // Handler/flag booleans: the delta only ever carries `true` (a handler
         // appeared / a flag turned on); turning one off rides `unset`.
@@ -1238,6 +1284,14 @@ impl Props {
                 "target" => {
                     self.target = None;
                     dirty.target = true;
+                }
+                "shape" => {
+                    self.shape = None;
+                    dirty.shape = true;
+                }
+                "viewBox" => {
+                    self.view_box = None;
+                    dirty.view_box = true;
                 }
                 "ariaLabel" => {
                     self.aria_label = None;
@@ -1644,32 +1698,56 @@ impl BackgroundImageMode {
 }
 
 /// A style field that is either a static `T` or an inline animation binding —
-/// the `{ animated: <shared value | interpolate descriptor> }` wire form. The
-/// animated variant carries **no static value**: read sites see the field as
-/// absent (the animation applier drives the target every frame), and
-/// `crate::animations` derives the node's `AnimatedBindings` from the merged
-/// style. `{ animated: sv }` reaches the wire with the shared value's `id`
-/// (its other enumerable props are ignored); a descriptor object is told apart
-/// by its `type` tag. A malformed wrapper warns (`styleBinding`) and decodes
-/// to an inert binding (shared id `0` is never allocated by JS), so one typo
-/// can't abort the batch.
+/// the `{ animated: <shared value | interpolate descriptor>, seed? }` wire
+/// form. The animated variant carries **no static value**: style read sites
+/// see the field as absent (the animation applier drives the target every
+/// frame), and `crate::animations` derives the node's `AnimatedBindings` from
+/// the merged style. `{ animated: sv }` reaches the wire with the shared
+/// value's `id` (its other enumerable props are ignored); a descriptor object
+/// is told apart by its `type` tag. A malformed wrapper warns (`styleBinding`)
+/// and decodes to an inert binding (shared id `0` is never allocated by JS),
+/// so one typo can't abort the batch.
 ///
-/// Filter/backdrop chain params never decode through this type (their param
-/// maps stay raw); their wrappers additionally accept a static **`seed`**
-/// (`{ animated: sv, seed: 10 }`) that the chain resolver decodes in the
-/// wrapper's place — see `crate::style_bindings::animated_param_seed`.
+/// The wrapper's optional **`seed`** (`{ animated: sv, seed: 10 }`) is the
+/// static value a consumer may decode in the wrapper's place. Style read
+/// sites ([`AnimatableField::static_val`]/[`static_ref`](AnimatableField::static_ref))
+/// deliberately ignore it — the driver owns the on-screen value — but SVG
+/// shape attrs render it ([`AnimatableField::static_or_seed`]) until a driver
+/// writes, mirroring the filter-param resolver's seed semantics
+/// (`crate::style_bindings::animated_param_seed`; filter/backdrop chain
+/// params never decode through this type — their param maps stay raw).
+//
+// `PartialEq` includes `seed` DELIBERATELY: shape-attr dirt depends on it —
+// the seed renders (`static_or_seed`), and the animation apply stage writes
+// driven values *into* the seed slot, so seed equality is what makes
+// compare-before-write + `Changed<SvgShape>` sound. For style fields (whose
+// read sites ignore the seed) a seed-only delta re-applies redundantly, but
+// the appliers' `set_if_neq` discipline absorbs it.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Animatable<T> {
     Static(T),
-    Animated(crate::animations::protocol::Binding),
+    Animated {
+        binding: crate::animations::protocol::Binding,
+        /// The wrapper's sibling `seed`, decoded as `T` (a malformed seed
+        /// warns `styleBinding` and drops to `None`).
+        ///
+        /// While an animation driver runs, the seed carries the **last driven
+        /// value**: the apply stage (`crate::animations`' shape-attr stage)
+        /// writes each frame's resolved value into this slot — never
+        /// replacing the variant with `Static`, which would destroy the
+        /// binding — so seed-rendering read sites (`static_or_seed`) see the
+        /// live value while the binding survives re-derivation.
+        seed: Option<T>,
+    },
 }
 
 impl<T> Animatable<T> {
-    /// The static value; `None` while animated.
+    /// The static value; `None` while animated (the seed is NOT a static
+    /// value — see [`Self::seed`]).
     pub fn value(&self) -> Option<&T> {
         match self {
             Animatable::Static(v) => Some(v),
-            Animatable::Animated(_) => None,
+            Animatable::Animated { .. } => None,
         }
     }
 
@@ -1677,7 +1755,15 @@ impl<T> Animatable<T> {
     pub fn binding(&self) -> Option<&crate::animations::protocol::Binding> {
         match self {
             Animatable::Static(_) => None,
-            Animatable::Animated(b) => Some(b),
+            Animatable::Animated { binding, .. } => Some(binding),
+        }
+    }
+
+    /// The animated wrapper's `seed`; `None` when static or seed-less.
+    pub fn seed(&self) -> Option<&T> {
+        match self {
+            Animatable::Static(_) => None,
+            Animatable::Animated { seed, .. } => seed.as_ref(),
         }
     }
 }
@@ -1691,6 +1777,14 @@ pub trait AnimatableField<T> {
         T: Copy;
     /// The static value by reference; `None` when absent or animated.
     fn static_ref(&self) -> Option<&T>;
+    /// The static value — or, while animated, the wrapper's `seed`; `None`
+    /// when absent or animated seed-less. The read helper for fields whose
+    /// consumers should *render* the seed until a driver writes (SVG shape
+    /// attrs); style read sites use [`Self::static_val`] instead (their
+    /// animated fields read as absent by design).
+    fn static_or_seed(&self) -> Option<T>
+    where
+        T: Copy;
     /// The binding; `None` when absent or static.
     fn binding(&self) -> Option<&crate::animations::protocol::Binding>;
 }
@@ -1705,6 +1799,14 @@ impl<T> AnimatableField<T> for Option<Animatable<T>> {
     fn static_ref(&self) -> Option<&T> {
         self.as_ref().and_then(Animatable::value)
     }
+    fn static_or_seed(&self) -> Option<T>
+    where
+        T: Copy,
+    {
+        self.as_ref()
+            .and_then(|a| a.value().or_else(|| a.seed()))
+            .copied()
+    }
     fn binding(&self) -> Option<&crate::animations::protocol::Binding> {
         self.as_ref().and_then(Animatable::binding)
     }
@@ -1713,8 +1815,24 @@ impl<T> AnimatableField<T> for Option<Animatable<T>> {
 impl<'de, T: de::DeserializeOwned> Deserialize<'de> for Animatable<T> {
     fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
         let v = serde_json::Value::deserialize(d)?;
-        if let Some(inner) = v.as_object().and_then(|m| m.get("animated")) {
-            return Ok(Animatable::Animated(binding_from_wrapper(inner)));
+        if let Some(map) = v.as_object()
+            && let Some(inner) = map.get("animated")
+        {
+            let seed = map.get("seed").and_then(|s| match T::deserialize(s) {
+                Ok(seed) => Some(seed),
+                Err(e) => {
+                    decode_warn(
+                        "styleBinding",
+                        &s.to_string(),
+                        &format!("invalid seed: {e}"),
+                    );
+                    None
+                }
+            });
+            return Ok(Animatable::Animated {
+                binding: binding_from_wrapper(inner),
+                seed,
+            });
         }
         T::deserialize(v)
             .map(Animatable::Static)
@@ -3667,6 +3785,79 @@ mod tests {
         assert_eq!(hover.background_color, None, "atomic replace, not a merge");
         assert_eq!(hover.width, None);
         assert!(dirty.hover_style);
+    }
+
+    /// `shape` replaces atomically — the delta value is the whole new object,
+    /// so an attr absent from it is an attr removed (the amended-C1 semantics:
+    /// NOT a field-wise merge like `style`) — while an identical re-send stays
+    /// silent, and `"shape"` in `unset` clears it.
+    #[test]
+    fn merge_delta_replaces_shape_atomically() {
+        let mut cached = props(serde_json::json!({ "shape": { "cx": 5, "r": 2 } }));
+        let (dirty, _) =
+            cached.merge_delta(props(serde_json::json!({ "shape": { "cx": 9 } })), &[], &[]);
+        let shape = cached.shape.as_ref().unwrap();
+        assert_eq!(shape.cx.static_val(), Some(9.0));
+        assert_eq!(shape.r, None, "atomic replace: the absent attr is removed");
+        assert!(dirty.shape);
+
+        // Idempotent re-send: compare-before-set keeps the delta silent.
+        let (dirty, _) =
+            cached.merge_delta(props(serde_json::json!({ "shape": { "cx": 9 } })), &[], &[]);
+        assert!(!dirty.shape, "an identical shape re-send must not dirty");
+
+        let (dirty, _) = cached.merge_delta(Props::default(), &["shape".into()], &[]);
+        assert!(cached.shape.is_none());
+        assert!(dirty.shape);
+    }
+
+    /// The `viewBox` wire name (camelCase of `view_box`, pinned here) decodes
+    /// into `Props::view_box`; merge dirties on change only, and `"viewBox"`
+    /// in `unset` clears it.
+    #[test]
+    fn merge_delta_view_box_wire_name_set_and_unset() {
+        let mut cached = Props::default();
+        let (dirty, _) = cached.merge_delta(
+            props(serde_json::json!({ "viewBox": "0 0 100 50" })),
+            &[],
+            &[],
+        );
+        assert_eq!(
+            cached.view_box,
+            Some(ViewBox {
+                min: bevy::math::Vec2::ZERO,
+                size: bevy::math::Vec2::new(100.0, 50.0),
+            }),
+            "the camelCase `viewBox` wire name must land in `view_box`"
+        );
+        assert!(dirty.view_box);
+
+        let (dirty, _) = cached.merge_delta(
+            props(serde_json::json!({ "viewBox": "0 0 100 50" })),
+            &[],
+            &[],
+        );
+        assert!(
+            !dirty.view_box,
+            "an identical viewBox re-send must not dirty"
+        );
+
+        let (dirty, _) = cached.merge_delta(Props::default(), &["viewBox".into()], &[]);
+        assert!(cached.view_box.is_none());
+        assert!(dirty.view_box);
+    }
+
+    /// `shape`/`viewBox` are retained state, not act-now events: they survive
+    /// `split_events` untouched.
+    #[test]
+    fn shape_and_view_box_are_retained_not_events() {
+        let p = props(serde_json::json!({
+            "shape": { "cx": 1 },
+            "viewBox": "0 0 10 10",
+        }));
+        let (retained, ev) = p.split_events();
+        assert!(retained.shape.is_some() && retained.view_box.is_some());
+        assert!(ev.value.is_none() && ev.draw.is_none());
     }
 
     /// Unknown names in `unset`/`style_unset` warn and are ignored — a delta

@@ -68,6 +68,29 @@ const KIND_FIELDS: Record<string, { style?: string[]; props?: string[] }> = {
   // backgroundImage: decode fallbacks (bad mode keyword, missing `src`,
   // ignored `scale`) and the apply-time "element owns its image" report.
   backgroundImage: { style: ["backgroundImage"] },
+  // svg-mode <image>: `atlas`/`sourceRect` are ignored (the document rasters
+  // whole at laid-out size — no source texture to grid or crop).
+  svgImageAttrs: { props: ["atlas", "sourceRect"] },
+  // SVG shape children are Node-less (no ScrollPosition, no wheel surface):
+  // `onScroll`/`onWheel` on a shape never fire. The warning value names the
+  // offending prop, so the field-name match flags the exact row.
+  svgShapeScroll: { props: ["onScroll", "onWheel"] },
+  // JSX <svg> shape protocol: retained props hold the folded `shape` object
+  // (path d, points, paints, keyword enums, transform all live inside it) and
+  // the <svg> root's `viewBox` string.
+  viewBox: { props: ["viewBox"] },
+  shapePath: { props: ["shape"] },
+  shapePoints: { props: ["shape"] },
+  shapePaint: { props: ["shape"] },
+  shapeEnum: { props: ["shape"] },
+  shapeTransform: { props: ["shape"] },
+  // Shape `transition` timing (rides the folded shape object): an unknown /
+  // non-numeric attr key or a malformed per-attr spec warns and drops the key.
+  shapeTransition: { props: ["shape"] },
+  // Shape-attr animation bindings (the apply stage's bind-time validation):
+  // the warning value is the attr's wire name (`r`), and the `{ animated }`
+  // wrapper lives inline in the folded `shape` object.
+  shapeBinding: { props: ["shape"] },
   // Inline `{ animated }` wrapper problems: a malformed wrapper (decode
   // sink, attributed to the style row per-op) or a wrapper in a variant
   // style, where bindings are ignored (the warning value names the variant —

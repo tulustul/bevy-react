@@ -55,7 +55,7 @@ pub enum Driver {
 }
 
 /// Easing curve for [`Driver::Timing`]. Cubic in/out variants.
-#[derive(Debug, Clone, Copy, Default, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Easing {
     #[default]
@@ -202,6 +202,20 @@ pub enum AnimatableProperty {
         name: String,
     },
 
+    /// One numeric attribute of an SVG shape entity (`<circle>`/`<rect>`/…),
+    /// addressed by its **wire** name — the camelCase key in the folded
+    /// `shape` object (`"cx"`, `"r"`, `"strokeWidth"`, …; the full set is
+    /// `crate::svg::NUMERIC_ATTRS`). Derived from `{ animated }` wrappers on
+    /// the shape's numeric attrs
+    /// (`crate::style_bindings::derive_shape_bindings`); the apply stage
+    /// drives the entity's `SvgShape.attrs` field of that name per frame.
+    /// Bound values are in **wire units**: SVG user-space units for geometry
+    /// and `strokeWidth` (the viewBox maps them onto the layout box at
+    /// raster), `0..1` for `opacity`.
+    ShapeAttr {
+        name: String,
+    },
+
     /// One field of the node's `transform3d` style — the wire key is
     /// `transform3d.<field>` (e.g. `transform3d.rotateY`). Drives the
     /// composite-time 3D transform of a promoted layer
@@ -275,6 +289,11 @@ impl AnimatableProperty {
             // layout (`crate::filters`). A documented fallback, not a
             // semantic: the slot decides scalar-vs-color, not this arm.
             Self::FilterParam { .. } | Self::BackdropParam { .. } => ValueKind::Scalar,
+            // Genuinely scalar (unlike the chain params' documented fallback
+            // above): shape attrs are raw user-space numbers — no logical→
+            // physical px rewrite applies (the viewBox scales them at
+            // raster), so `Length` semantics would be wrong here.
+            Self::ShapeAttr { .. } => ValueKind::Scalar,
         }
     }
 
@@ -350,6 +369,16 @@ impl AnimatedBindings {
         self.0
             .keys()
             .any(|p| matches!(p, AnimatableProperty::BackdropParam { .. }))
+    }
+
+    /// Whether any SVG shape-attr binding ([`AnimatableProperty::ShapeAttr`])
+    /// is bound — gates the applier's shape stage and, in the transition
+    /// engine, the shape channel's coarse skip (any attr binding parks the
+    /// whole shape group).
+    pub fn has_shape_attrs(&self) -> bool {
+        self.0
+            .keys()
+            .any(|p| matches!(p, AnimatableProperty::ShapeAttr { .. }))
     }
 
     /// Whether any `transform3d.<field>` binding is bound — gates the

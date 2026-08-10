@@ -29,9 +29,23 @@
 use bevy::camera::Camera;
 use bevy::ecs::message::MessageMutator;
 use bevy::picking::backend::PointerHits;
-use bevy::picking::pointer::{PointerId, PointerLocation};
+use bevy::picking::pointer::{Location, PointerId, PointerLocation};
 use bevy::prelude::*;
 use bevy::ui::{CalculatedClip, ComputedNode};
+
+/// A pointer's position in **physical viewport coordinates** — the space node
+/// geometry (`UiGlobalTransform`, `CalculatedClip`) lives in. Mirrors the UI
+/// picking backend's own cursor math; `target_scaling_factor` resolves per
+/// render target, so window pointers (window scale factor) and image-target
+/// virtual pointers (surface/transform3d) take the same path. Shared with the
+/// svg per-shape hit refinement ([`crate::svg::pick`]).
+pub(crate) fn pointer_physical_position(location: &Location, camera: &Camera) -> Vec2 {
+    let mut point = location.position * camera.target_scaling_factor().unwrap_or(1.0);
+    if let Some(viewport) = camera.physical_viewport_rect() {
+        point -= viewport.min.as_vec2();
+    }
+    point
+}
 
 /// Drop picking hits whose pointer position falls outside the hit node's
 /// inherited [`CalculatedClip`]. See the module docs for why bevy's own clip
@@ -76,13 +90,9 @@ pub fn filter_clipped_pointer_hits(
                 return true;
             };
             // Pointer position in physical viewport coordinates — the same
-            // space `CalculatedClip` rects live in (mirrors the UI picking
-            // backend's own cursor math).
-            let mut point = location.position * camera.target_scaling_factor().unwrap_or(1.0);
-            if let Some(viewport) = camera.physical_viewport_rect() {
-                point -= viewport.min.as_vec2();
-            }
-            clip.clip.contains(point)
+            // space `CalculatedClip` rects live in.
+            clip.clip
+                .contains(pointer_physical_position(&location, camera))
         });
     }
 }

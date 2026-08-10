@@ -56,6 +56,20 @@ export type { BevyFilters, FilterUse, FilterChainValue } from "./filters";
 // World-anchored overlays (`<anchor entity={…} offset={…}>…</anchor>`).
 export type { AnchorScaling, BevyAnchorProps, Vec3 } from "./jsx";
 
+// SVG vector drawings (`<svg viewBox="0 0 24 24"><circle cx={12} … /></svg>`).
+export type {
+  BevyCircleProps,
+  BevyEllipseProps,
+  BevyGProps,
+  BevyLineShapeProps,
+  BevyPathShapeProps,
+  BevyPolygonProps,
+  BevyPolylineProps,
+  BevyRectShapeProps,
+  BevyShapeCommonProps,
+  BevySvgProps,
+} from "./jsx";
+
 // Canvas drawing. `CanvasContext` records an HTML-canvas-like display list
 // rasterized on the Bevy side — declaratively via `<canvas draw={(ctx) => …}/>`,
 // or imperatively through a `<canvas ref={…}>`'s persistent `BevyCanvasElement`

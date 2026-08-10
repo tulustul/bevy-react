@@ -33,9 +33,8 @@ const bundled = await build({
   logLevel: "silent",
 });
 const code = Buffer.from(bundled.outputFiles[0].contents).toString("base64");
-const { buildUpdateOp, packAnchorProps, valuesEqual } = await import(
-  `data:text/javascript;base64,${code}`
-);
+const { buildUpdateOp, packAnchorProps, packShapeProps, valuesEqual } =
+  await import(`data:text/javascript;base64,${code}`);
 
 test("valuesEqual: primitives and reference identity", () => {
   assert.ok(valuesEqual(1, 1));
@@ -336,4 +335,103 @@ test("dropping the anchor entity unsets the binding", () => {
     packAnchorProps({ offset: [0, 1, 0] }),
   );
   assert.deepEqual(op.unset, ["anchor"]);
+});
+
+test("packShapeProps folds shape attrs into one shape object", () => {
+  const onClick = () => {};
+  const points = [0, 0, 10, 0, 5, 8];
+  const packed = packShapeProps({
+    cx: 5,
+    cy: 6,
+    r: 4,
+    fill: "red",
+    strokeWidth: 2,
+    points,
+    onClick,
+    children: [],
+  });
+  assert.deepEqual(packed.shape, {
+    cx: 5,
+    cy: 6,
+    r: 4,
+    fill: "red",
+    strokeWidth: 2,
+    points,
+  });
+  // The flat attrs are stripped; non-attr keys pass through untouched (they
+  // must all land in a diff bucket — see the invariant at packShapeProps).
+  assert.equal(packed.cx, undefined);
+  assert.equal(packed.fill, undefined);
+  assert.equal(packed.onClick, onClick);
+
+  // No shape attr present → no shape key at all (so removing the last attr
+  // diffs as `unset: ["shape"]`, not an empty object).
+  assert.equal("shape" in packShapeProps({ onClick }), false);
+  assert.equal("shape" in packShapeProps({ cx: undefined }), false);
+
+  // An `{ animated }` binding wrapper on a numeric attr passes through the
+  // fold as an opaque object — Rust decodes it at its serde boundary; the JS
+  // side needs no special casing.
+  const wrapper = { animated: { id: 7 }, seed: 4 };
+  assert.equal(packShapeProps({ r: wrapper }).shape.r, wrapper);
+});
+
+test("shape delta re-sends the full packed object", () => {
+  // A one-attr change must carry the whole shape object — Rust replaces it
+  // atomically (OBJECT_PROP_KEYS), it can't merge a partial one.
+  const op = buildUpdateOp(
+    1,
+    packShapeProps({ cx: 5, cy: 6, r: 4, fill: "red" }),
+    packShapeProps({ cx: 5, cy: 6, r: 9, fill: "red" }),
+  );
+  assert.deepEqual(op.props.shape, { cx: 5, cy: 6, r: 9, fill: "red" });
+  assert.equal(op.unset, undefined);
+});
+
+test("shape re-render with identical values is silent", () => {
+  // Fresh prop bags every render (as React produces them) — structural
+  // compare, not identity. No leftover key may leak past the packing, or this
+  // would emit an empty `{op:"update",props:{}}` every render.
+  const bag = () => ({
+    d: "M 0 0 L 10 10",
+    fill: "none",
+    stroke: "#abc",
+    strokeLinejoin: "round",
+    onClick: () => {},
+  });
+  assert.equal(
+    buildUpdateOp(1, packShapeProps(bag()), packShapeProps(bag())),
+    null,
+  );
+});
+
+test("shape transition rides the folded shape object", () => {
+  // `transition` is a shape attr key: it folds into `props.shape` (atomic
+  // replace like every other attr), so the Rust side finds the spec inside
+  // the decoded ShapeAttrs — shapes have no `style` to carry it.
+  const transition = { cx: { duration: 200 }, r: { stiffness: 120 } };
+  const packed = packShapeProps({ cx: 5, r: 4, transition });
+  assert.deepEqual(packed.shape, { cx: 5, r: 4, transition });
+  assert.equal(packed.transition, undefined);
+
+  // A spec-only change re-sends the whole shape object (atomic replace).
+  const op = buildUpdateOp(
+    1,
+    packShapeProps({ cx: 5, transition: { cx: { duration: 100 } } }),
+    packShapeProps({ cx: 5, transition: { cx: { duration: 300 } } }),
+  );
+  assert.deepEqual(op.props.shape, {
+    cx: 5,
+    transition: { cx: { duration: 300 } },
+  });
+});
+
+test("removing every shape attr unsets the shape object", () => {
+  const op = buildUpdateOp(
+    1,
+    packShapeProps({ cx: 5, r: 4 }),
+    packShapeProps({}),
+  );
+  assert.deepEqual(op.unset, ["shape"]);
+  assert.deepEqual(op.props, {});
 });

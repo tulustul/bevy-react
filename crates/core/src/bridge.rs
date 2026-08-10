@@ -190,6 +190,17 @@ pub struct JsBridge {
     /// `apply_js_ops` is at Bevy's 16-system-param cap, like
     /// [`Self::layer_dirty`].
     pub foreign_images: HashSet<NodeId>,
+    /// Node ids that are JSX `<svg>` roots. Their `viewBox` deltas write into
+    /// the entity's [`crate::svg::SvgSurface`] (the general update arm,
+    /// gated on this set); the rasterizer walks their `Children` for the
+    /// shape children. They are also in [`Self::foreign_images`] (the
+    /// `ImageNode` is element-owned, like `canvas`).
+    pub svg_roots: HashSet<NodeId>,
+    /// Node ids that are SVG shape children ([`crate::svg::SvgShape`]):
+    /// Node-less entities (the `textSpan` precedent) whose deltas rewrite
+    /// only the folded `shape` attrs — the update path must skip styling,
+    /// background images, and every other stamp for them.
+    pub shapes: HashSet<NodeId>,
     /// The last text value emitted to JS for each `editableText`, used to dedup
     /// `TextEditChange` (which also fires on cursor moves) into real `"change"`s.
     pub editable_values: HashMap<NodeId, String>,
@@ -267,6 +278,8 @@ impl JsBridge {
             surfaces: HashSet::new(),
             roots: HashSet::new(),
             foreign_images: HashSet::new(),
+            svg_roots: HashSet::new(),
+            shapes: HashSet::new(),
             editable_values: HashMap::new(),
             editable_selections: HashMap::new(),
             editable_select_handlers: HashSet::new(),
@@ -465,6 +478,8 @@ impl JsBridge {
         self.surfaces.remove(&id);
         self.roots.remove(&id);
         self.foreign_images.remove(&id);
+        self.svg_roots.remove(&id);
+        self.shapes.remove(&id);
         self.editable_values.remove(&id);
         self.editable_selections.remove(&id);
         self.editable_select_handlers.remove(&id);

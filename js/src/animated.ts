@@ -113,10 +113,14 @@ export type AnimatedValue = SharedValue | Binding;
  *  (validated Rust-side against the resolved chain — `filterBinding`
  *  warnings; an unmatched binding is inert).
  *
- *  `seed` (filter/backdrop params only): the static value the chain resolver
- *  uses in the wrapper's place. Resolve-time derivations read only static
- *  params — most visibly a blur's capture outset — so size it for the
- *  animation's range: `radius: { animated: sv, seed: 10 }`.
+ *  `seed` (filter/backdrop params and SVG shape attrs): the static value a
+ *  consumer uses in the wrapper's place. For chain params, resolve-time
+ *  derivations read only static params — most visibly a blur's capture
+ *  outset — so size it for the animation's range:
+ *  `radius: { animated: sv, seed: 10 }`. For numeric SVG shape attributes
+ *  (`cx`, `r`, `strokeWidth`, …) the seed is what renders until the
+ *  animation driver writes; seed-less, the attribute reads as absent (its
+ *  SVG default) until then. Style fields ignore `seed`.
  *
  *  Bindings are honored in the base `style` only; a wrapper inside
  *  `hoverStyle`/`pressStyle`/`focusStyle` is ignored with a warning. */

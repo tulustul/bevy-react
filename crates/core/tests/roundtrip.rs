@@ -661,3 +661,340 @@ fn root_demo_modal_round_trip() {
     }
     panic!("modal `<root>` never removed after Close");
 }
+
+/// End-to-end check of the JSX `<svg>` pipeline: navigating to the `<svg>`
+/// demo must mount an `svg` element whose `viewBox` decoded, shape children
+/// whose attrs crossed as the folded `shape` object, every shape attached via
+/// Append/Insert — and, once the render settles, a quiet window with **no
+/// empty update ops** (the delta-diff invariant, end-to-end).
+#[test]
+fn svg_jsx_render_round_trip() {
+    use bevy_react::protocol::Props;
+
+    let bundle = example_bundle();
+    if !bundle.exists() {
+        eprintln!(
+            "skipping svg_jsx_render_round_trip: bundle not built at {}\n  run: npm install && npm run build -w demos",
+            bundle.display()
+        );
+        return;
+    }
+
+    let (ops_tx, ops_rx) = crossbeam_channel::unbounded::<Vec<Op>>();
+    // Send-instant stamps (devtools pre-apply timing); unread here, held open.
+    let (flush_stamps_tx, _flush_stamps_rx) = crossbeam_channel::unbounded();
+    let (flush_devtools_tx, _flush_devtools_rx) = crossbeam_channel::unbounded();
+    // Held for the duration so emits/requests from the app go nowhere harmlessly.
+    let (emit_tx, _emit_rx) = crossbeam_channel::unbounded::<ReactMessage>();
+    let (request_tx, _request_rx) = crossbeam_channel::unbounded::<RawRequest>();
+    // Held for the duration so animation commands go nowhere harmlessly.
+    let (anim_tx, _anim_rx) = crossbeam_channel::unbounded();
+    let (outbound_tx, outbound_rx) = tokio::sync::mpsc::unbounded_channel::<Outbound>();
+    // Held for the duration: dropping the reload sender would look like shutdown.
+    let (_reload_tx, reload_rx) = tokio::sync::mpsc::unbounded_channel::<()>();
+
+    let vendor = bundle.with_file_name("vendor.js");
+    spawn_js_thread(
+        vendor,
+        bundle,
+        ops_tx,
+        flush_stamps_tx,
+        flush_devtools_tx,
+        emit_tx,
+        request_tx,
+        anim_tx,
+        outbound_rx,
+        reload_rx,
+    );
+
+    let mut buttons: HashSet<u32> = HashSet::new();
+    let mut parent_of: HashMap<u32, u32> = HashMap::new();
+    let mut text_of: HashMap<u32, String> = HashMap::new();
+
+    // Navigate to the `<svg>` demo ("Elements" is expanded by default).
+    let nav = drain_until_button(
+        &ops_rx,
+        "<svg>",
+        Duration::from_secs(15),
+        &mut buttons,
+        &mut parent_of,
+        &mut text_of,
+    )
+    .expect("no '<svg>' nav button in initial render");
+    outbound_tx
+        .send(Outbound::UiEvent {
+            event: UiEvent {
+                id: nav,
+                kind: "click".into(),
+                ..Default::default()
+            },
+        })
+        .expect("JS thread gone before nav click");
+
+    // The demo's chart card mounts an `<svg viewBox>` element with shape
+    // children (rect/circle/line/path/polyline under a transformed <g>).
+    let mut svg_seen = false;
+    let mut chart_rect: Option<u32> = None;
+    let mut shape_ids: Vec<u32> = Vec::new();
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while Instant::now() < deadline && !(svg_seen && chart_rect.is_some()) {
+        if let Ok(batch) = ops_rx.recv_timeout(Duration::from_millis(500)) {
+            for op in &batch {
+                accumulate(op, &mut buttons, &mut parent_of, &mut text_of);
+                if let Op::Create {
+                    id, kind, props, ..
+                } = op
+                {
+                    match kind.as_str() {
+                        "svg" => {
+                            assert!(
+                                props.view_box.is_some(),
+                                "the chart <svg>'s viewBox must decode on its create op"
+                            );
+                            svg_seen = true;
+                        }
+                        "rect" | "circle" | "line" | "path" | "polyline" | "polygon"
+                        | "ellipse" | "g" => {
+                            let shape = props.shape.as_ref().unwrap_or_else(|| {
+                                panic!("<{kind}> created without a folded shape object")
+                            });
+                            if kind == "rect"
+                                && shape.x.is_some()
+                                && shape.width.is_some()
+                                && shape.fill.is_some()
+                            {
+                                chart_rect = Some(*id);
+                            }
+                            shape_ids.push(*id);
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+    }
+    assert!(svg_seen, "no <svg> create op in the '<svg>' demo");
+    let chart_rect =
+        chart_rect.expect("no chart <rect> with x/width/fill in its folded shape object");
+
+    // Let the render settle (drain whatever the mount still flushes)…
+    let settle_deadline = Instant::now() + Duration::from_secs(2);
+    while Instant::now() < settle_deadline {
+        if let Ok(batch) = ops_rx.recv_timeout(Duration::from_millis(100)) {
+            for op in &batch {
+                accumulate(op, &mut buttons, &mut parent_of, &mut text_of);
+            }
+        }
+    }
+    // Children arrive via Append/Insert: every created shape got a parent.
+    // Checked after the settle drain so a multi-commit mount (attaches in a
+    // later batch than the creates) can't false-fail.
+    for id in &shape_ids {
+        assert!(
+            parent_of.contains_key(id),
+            "shape node {id} was created but never attached via Append/Insert"
+        );
+    }
+    eprintln!(
+        "OK   chart mounted: <svg viewBox> present, {} shape nodes attached, rect id={chart_rect}",
+        shape_ids.len()
+    );
+    // …then a quiet window: an idle tree must emit NO empty update op
+    // (`{props: {}}`, nothing unset) — a state-neutral re-render is op silence.
+    let empty_props = format!("{:?}", Props::default());
+    let quiet_deadline = Instant::now() + Duration::from_secs(1);
+    let mut updates = 0usize;
+    while Instant::now() < quiet_deadline {
+        if let Ok(batch) = ops_rx.recv_timeout(Duration::from_millis(100)) {
+            for op in &batch {
+                if let Op::Update {
+                    id,
+                    props,
+                    unset,
+                    style_unset,
+                } = op
+                {
+                    updates += 1;
+                    assert!(
+                        !(unset.is_empty()
+                            && style_unset.is_empty()
+                            && format!("{props:?}") == empty_props),
+                        "empty update op for node {id} during the quiet window \
+                         (a no-change re-render must emit no op at all)"
+                    );
+                }
+            }
+        }
+    }
+    eprintln!("OK   quiet window: {updates} update ops, none empty");
+    eprintln!("PASS <svg> JSX render end-to-end");
+}
+
+/// End-to-end check of per-shape events, JS side: a shape's `NodeId` receiving
+/// a `click` UiEvent must run the app's React handler (counter text updates),
+/// and a `pointerEnter` must run the hover handler (the shape's folded object
+/// re-crosses with a swapped fill). Keys on stable signals — the demo's unique
+/// clickable `<circle>` (handler flags on its create op) and the `clicks: N`
+/// text — never on op order.
+#[test]
+fn svg_shape_click_round_trip() {
+    let bundle = example_bundle();
+    if !bundle.exists() {
+        eprintln!(
+            "skipping svg_shape_click_round_trip: bundle not built at {}\n  run: npm install && npm run build -w demos",
+            bundle.display()
+        );
+        return;
+    }
+
+    let (ops_tx, ops_rx) = crossbeam_channel::unbounded::<Vec<Op>>();
+    // Send-instant stamps (devtools pre-apply timing); unread here, held open.
+    let (flush_stamps_tx, _flush_stamps_rx) = crossbeam_channel::unbounded();
+    let (flush_devtools_tx, _flush_devtools_rx) = crossbeam_channel::unbounded();
+    // Held for the duration so emits/requests from the app go nowhere harmlessly.
+    let (emit_tx, _emit_rx) = crossbeam_channel::unbounded::<ReactMessage>();
+    let (request_tx, _request_rx) = crossbeam_channel::unbounded::<RawRequest>();
+    // Held for the duration so animation commands go nowhere harmlessly.
+    let (anim_tx, _anim_rx) = crossbeam_channel::unbounded();
+    let (outbound_tx, outbound_rx) = tokio::sync::mpsc::unbounded_channel::<Outbound>();
+    // Held for the duration: dropping the reload sender would look like shutdown.
+    let (_reload_tx, reload_rx) = tokio::sync::mpsc::unbounded_channel::<()>();
+
+    let vendor = bundle.with_file_name("vendor.js");
+    spawn_js_thread(
+        vendor,
+        bundle,
+        ops_tx,
+        flush_stamps_tx,
+        flush_devtools_tx,
+        emit_tx,
+        request_tx,
+        anim_tx,
+        outbound_rx,
+        reload_rx,
+    );
+
+    let mut buttons: HashSet<u32> = HashSet::new();
+    let mut parent_of: HashMap<u32, u32> = HashMap::new();
+    let mut text_of: HashMap<u32, String> = HashMap::new();
+
+    let send = |event: UiEvent| {
+        outbound_tx
+            .send(Outbound::UiEvent { event })
+            .expect("JS thread gone mid-test");
+    };
+
+    // Navigate to the `<svg>` demo ("Elements" is expanded by default).
+    let nav = drain_until_button(
+        &ops_rx,
+        "<svg>",
+        Duration::from_secs(15),
+        &mut buttons,
+        &mut parent_of,
+        &mut text_of,
+    )
+    .expect("no '<svg>' nav button in initial render");
+    send(UiEvent {
+        id: nav,
+        kind: "click".into(),
+        ..Default::default()
+    });
+
+    // The interactive card mounts the demo's ONE clickable shape: a `<circle>`
+    // whose create op carries the click + hover handler flags (the chart's
+    // shapes carry none). Its initial fill is recorded to assert the hover
+    // swap later. The `clicks: 0` counter text rides inline on its create op
+    // (single-string `<text>`, the `shouldSetTextContent` fast path).
+    let mut circle: Option<(u32, String)> = None;
+    let mut saw_counter = false;
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while Instant::now() < deadline && !(circle.is_some() && saw_counter) {
+        if let Ok(batch) = ops_rx.recv_timeout(Duration::from_millis(500)) {
+            for op in &batch {
+                if let Op::Create {
+                    id,
+                    kind,
+                    props,
+                    text,
+                } = op
+                {
+                    if kind == "circle" && props.on_click {
+                        assert!(
+                            props.on_pointer_enter && props.on_pointer_leave,
+                            "clickable circle created without its hover handler flags"
+                        );
+                        let shape = props
+                            .shape
+                            .as_ref()
+                            .expect("clickable circle created without a folded shape object");
+                        let fill = shape.fill.as_ref().expect("clickable circle has no fill");
+                        circle = Some((*id, format!("{fill:?}")));
+                    }
+                    if text.as_deref().map(str::trim) == Some("clicks: 0") {
+                        saw_counter = true;
+                    }
+                }
+            }
+        }
+    }
+    let (circle_id, initial_fill) = circle.expect("no clickable <circle> create op");
+    assert!(saw_counter, "initial 'clicks: 0' text not rendered");
+    eprintln!("OK   interactive card: clickable circle id={circle_id}, 'clicks: 0' present");
+
+    // Play Bevy's part: report a click on the shape's NodeId (the collectors
+    // emit `click` with no coords, like any node click). The app handler must
+    // increment its counter, arriving as an UpdateText to `clicks: 1`.
+    send(UiEvent {
+        id: circle_id,
+        kind: "click".into(),
+        ..Default::default()
+    });
+    let deadline = Instant::now() + Duration::from_secs(10);
+    let mut clicked = false;
+    while !clicked && Instant::now() < deadline {
+        if let Ok(batch) = ops_rx.recv_timeout(Duration::from_millis(500)) {
+            for op in &batch {
+                if let Op::UpdateText { text, .. } = op
+                    && text.trim() == "clicks: 1"
+                {
+                    clicked = true;
+                }
+            }
+        }
+    }
+    assert!(clicked, "no 'clicks: 1' update after shape click");
+    eprintln!("OK   shape click round trip: counter updated to 'clicks: 1'");
+
+    // Hover: a `pointerEnter` (coords in user space, as the shape synthesis
+    // reports them) must run the enter handler — the fill swaps, and the
+    // whole folded shape object re-crosses on an update op.
+    send(UiEvent {
+        id: circle_id,
+        kind: "pointerEnter".into(),
+        x: Some(100.0),
+        y: Some(60.0),
+        ..Default::default()
+    });
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while Instant::now() < deadline {
+        if let Ok(batch) = ops_rx.recv_timeout(Duration::from_millis(500)) {
+            for op in &batch {
+                if let Op::Update { id, props, .. } = op
+                    && *id == circle_id
+                    && let Some(shape) = props.shape.as_ref()
+                {
+                    let fill = shape.fill.as_ref().expect("hovered circle lost its fill");
+                    assert_ne!(
+                        format!("{fill:?}"),
+                        initial_fill,
+                        "hover update re-crossed the shape without swapping the fill"
+                    );
+                    eprintln!("OK   hover round trip: circle fill swapped on pointerEnter");
+                    eprintln!("PASS <svg> shape events end-to-end");
+                    return;
+                }
+            }
+        }
+    }
+    panic!("no shape update after pointerEnter — hover handler never fired");
+}

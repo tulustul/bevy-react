@@ -104,6 +104,43 @@ export const STYLE_FIELDS: Record<string, FieldCategory> = {
   lineBreak: "keyword",
 };
 
+/** Every wire field of an SVG shape child's folded `shape` object
+ *  (`svg/protocol.rs`'s `ShapeAttrs`) — the inspector renders the object as
+ *  its own read-only section, one row per present field, and flags keys not
+ *  listed here as unknown. A Rust test
+ *  (`devtools.rs::js_shape_field_table_covers_shape_attrs`) `include_str!`s
+ *  this file and asserts each wire name appears, so extend BOTH that list and
+ *  this table when a `ShapeAttrs` field lands. */
+export const SHAPE_FIELDS: Record<string, FieldCategory> = {
+  // geometry (SVG user units)
+  x: "number",
+  y: "number",
+  width: "number",
+  height: "number",
+  cx: "number",
+  cy: "number",
+  r: "number",
+  rx: "number",
+  ry: "number",
+  x1: "number",
+  y1: "number",
+  x2: "number",
+  y2: "number",
+  points: "json", // flat number array [x0, y0, x1, y1, …]
+  d: "string", // SVG path data
+  // paint — the wire carries CSS color strings (or the "none" keyword,
+  // still a string, so the color category's check holds)
+  fill: "color",
+  stroke: "color",
+  strokeWidth: "number",
+  opacity: "number",
+  fillRule: "keyword",
+  strokeLinecap: "keyword",
+  strokeLinejoin: "keyword",
+  transform: "string", // SVG transform list ("translate(10 20) rotate(45)")
+  transition: "json", // per-attr easing timing { cx: { duration, … }, … }
+};
+
 /** Top-level props the inspector lets you edit. Everything else (handlers,
  *  opaque objects like `anchor`, structural props) is read-only. */
 export const EDITABLE_PROPS: Record<string, FieldCategory> = {

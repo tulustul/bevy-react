@@ -4,7 +4,9 @@
 //!
 //! File map: `apply` (the op-apply system + lifecycle/hierarchy arms),
 //! `create`/`update` (the two big op arms), `stamps` (props → component
-//! helpers shared by both), `stats` (instrumentation + the `SystemParam`
+//! helpers shared by both), `image` (the `<image>` rebuild glue, incl. the
+//! svg-mode branch), `svg_ops` (the JSX `<svg>`/shape create + update
+//! bodies), `stats` (instrumentation + the `SystemParam`
 //! bundles), `events` (main-window click/scroll/canvas collectors + shared
 //! utilities), `pointer` (drag/hover), `interaction` (the hover/press/focus
 //! restyle), `editable` (`editableText` events + a11y), `surface_events`
@@ -15,13 +17,17 @@ mod apply;
 mod create;
 mod editable;
 mod events;
+mod image;
 mod interaction;
 mod pointer;
 mod stamps;
 mod stats;
 mod surface_events;
+mod svg_ops;
 mod update;
 
+#[cfg(test)]
+mod svg_tests;
 #[cfg(test)]
 pub(crate) mod test_util;
 

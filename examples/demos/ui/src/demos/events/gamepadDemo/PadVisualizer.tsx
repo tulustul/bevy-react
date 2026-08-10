@@ -5,7 +5,6 @@
 import { useMemo } from "react";
 import { BevyStyle } from "bevy-react/jsx";
 import { Colors, FontSizes } from "@/theme";
-import { TextMono } from "@/components/TextMono";
 import { makePadPainter, PAD_CANVAS_H, PAD_CANVAS_W } from "./padPainter";
 import type { PadState } from "./usePads";
 

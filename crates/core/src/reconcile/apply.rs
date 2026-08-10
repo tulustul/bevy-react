@@ -166,6 +166,8 @@ pub fn apply_js_ops(
                 bridge.surfaces.clear();
                 bridge.roots.clear();
                 bridge.foreign_images.clear();
+                bridge.svg_roots.clear();
+                bridge.shapes.clear();
                 bridge.editable_values.clear();
                 bridge.editable_selections.clear();
                 bridge.editable_select_handlers.clear();

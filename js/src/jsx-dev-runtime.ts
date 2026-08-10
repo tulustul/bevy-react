@@ -8,12 +8,21 @@ export { Fragment, jsxDEV } from "react/jsx-dev-runtime";
 import type {
   BevyAnchorProps,
   BevyCanvasProps,
+  BevyCircleProps,
   BevyEditableTextProps,
+  BevyEllipseProps,
+  BevyGProps,
   BevyImageProps,
+  BevyLineShapeProps,
   BevyNodeProps,
+  BevyPathShapeProps,
+  BevyPolygonProps,
+  BevyPolylineProps,
   BevyPortalProps,
+  BevyRectShapeProps,
   BevyRootProps,
   BevySurfaceProps,
+  BevySvgProps,
   BevyTextProps,
 } from "./jsx";
 
@@ -43,5 +52,14 @@ export namespace JSX {
     text: BevyTextProps;
     editableText: BevyEditableTextProps;
     anchor: BevyAnchorProps;
+    svg: BevySvgProps;
+    path: BevyPathShapeProps;
+    rect: BevyRectShapeProps;
+    circle: BevyCircleProps;
+    ellipse: BevyEllipseProps;
+    line: BevyLineShapeProps;
+    polyline: BevyPolylineProps;
+    polygon: BevyPolygonProps;
+    g: BevyGProps;
   }
 }

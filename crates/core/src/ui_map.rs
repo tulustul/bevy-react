@@ -766,7 +766,7 @@ pub fn image_node(props: &Props, assets: &AssetServer) -> ImageNode {
 /// [`image_node`] for a node whose layer-promotion state is known: promoted →
 /// the `opacity` tint fold is suppressed (group alpha applies at composite).
 pub fn image_node_promoted(props: &Props, assets: &AssetServer, promoted: bool) -> ImageNode {
-    let mut image = match &props.src {
+    let base = match &props.src {
         Some(path) => ImageNode::new(assets.load(path)),
         None => ImageNode::solid_color(
             props
@@ -776,6 +776,26 @@ pub fn image_node_promoted(props: &Props, assets: &AssetServer, promoted: bool) 
                 .unwrap_or(Color::WHITE),
         ),
     };
+    finish_image_node(base, props, promoted)
+}
+
+/// The svg-mode `<image>` node: the same prop styling as
+/// [`image_node_promoted`] (tint / opacity fold / flips / `visualBox`) around
+/// a texture the caller patches in afterwards (the element-owned raster
+/// target — `src` is never loaded as an `Image`; see `crate::svg`).
+/// `imageMode` is forced to `Stretch` (the raster is repainted at laid-out
+/// size, so any other mode is meaningless) and `sourceRect` is dropped
+/// (warned svg-side, like `atlas`).
+pub fn svg_image_node(props: &Props, promoted: bool) -> ImageNode {
+    let mut image = finish_image_node(ImageNode::default(), props, promoted);
+    image.image_mode = NodeImageMode::Stretch;
+    image.rect = None;
+    image
+}
+
+/// Shared tail of the image builders: fold the `<image>` element props into
+/// `image` (everything except the texture choice).
+fn finish_image_node(mut image: ImageNode, props: &Props, promoted: bool) -> ImageNode {
     if let Some(tint) = &props.tint {
         image.color = parse_color(tint);
     }

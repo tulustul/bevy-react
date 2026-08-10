@@ -150,8 +150,8 @@ cargo run --example demos
 ### Elements & styling
 
 Host elements `<node>`, `<button>`, `<text>`, `<image>`, `<editableText>`,
-`<canvas>`, `<portal>`, and `<surface>` cover layout, input, drawing, embedded 3D
-views, and UI rendered onto 3D meshes.
+`<canvas>`, `<svg>`, `<portal>`, and `<surface>` cover layout, input, drawing,
+vector graphics, embedded 3D views, and UI rendered onto 3D meshes.
 Style them with a flexbox/grid object (colors, spacing, borders, radius, shadows,
 transforms).
 
@@ -380,6 +380,32 @@ rasterized into a texture. Returning fresh drawing each render makes it reactive
     ctx.stroke();
   }}
 />
+```
+
+### SVG — files and JSX shapes
+
+Two web-faithful doors. An `<image>` whose `src` names an `.svg` file renders it as
+a true vector: parsed once, re-rasterized at the laid-out size × DPI, pixel-crisp at
+every size (layout uses the file's intrinsic size, like a bitmap). And `<svg>` is a
+React-composed drawing surface: shape children (`<circle>`, `<rect>`, `<path>`,
+`<g>`, …) are real elements with props, per-shape pointer events (hit-testing
+follows painted geometry; event coords arrive in viewBox user units), `{ animated }`
+bindings on numeric attrs, and a `transition` prop for eased changes. SVG `<text>`
+in files is available behind the off-by-default `svg-text` cargo feature.
+
+```tsx
+<svg viewBox="0 0 100 100" style={{ width: 200, height: 200 }}>
+  <circle cx={50} cy={50} r={{ animated: pulse, seed: 20 }} fill="#89b4fa" />
+  <rect
+    x={10}
+    y={70}
+    width={30}
+    height={20}
+    rx={4}
+    transition={{ height: { duration: 300 } }}
+    onClick={() => grow()}
+  />
+</svg>
 ```
 
 ### Render-target portals

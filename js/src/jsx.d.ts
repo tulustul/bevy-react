@@ -944,3 +944,20 @@ export interface BevyEditableTextProps extends BevyAttributes {
   /** Fires when the field loses focus. */
   onBlur?: () => void;
 }
+
+// The `<svg>` element + SVG shape-child prop types live in `jsx-svg.d.ts`
+// (split for file size); re-exported here so `bevy-react/jsx` remains the one
+// import surface for host-element props.
+export type {
+  BevyCircleProps,
+  BevyEllipseProps,
+  BevyGProps,
+  BevyLineShapeProps,
+  BevyPathShapeProps,
+  BevyPolygonProps,
+  BevyPolylineProps,
+  BevyRectShapeProps,
+  BevyShapeCommonProps,
+  BevyShapeTransition,
+  BevySvgProps,
+} from "./jsx-svg";

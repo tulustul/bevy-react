@@ -399,8 +399,9 @@ fn apply_cmds(pixmap: &mut Pixmap, state: &mut RasterState, cmds: &[DrawCmd], sc
 
 /// Copy the pixmap out as an RGBA8 (straight-alpha, sRGB) pixel buffer.
 /// tiny-skia stores premultiplied alpha; Bevy's UI shader expects straight
-/// alpha, so demultiply each pixel on the way out.
-fn to_straight_alpha(pixmap: &Pixmap) -> Vec<u8> {
+/// alpha, so demultiply each pixel on the way out. Shared with `crate::svg`,
+/// whose resvg output is premultiplied the same way.
+pub(crate) fn to_straight_alpha(pixmap: &Pixmap) -> Vec<u8> {
     let mut out = Vec::with_capacity((pixmap.width() * pixmap.height() * 4) as usize);
     for px in pixmap.pixels() {
         let c = px.demultiply();

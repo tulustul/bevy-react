@@ -77,6 +77,11 @@ pub struct PointerCaptureSet;
 /// reports interactions back to React, and — unless disabled — hot reloads the
 /// app when the bundle changes on disk. In dev builds it also enables the
 /// devtools inspector (toggled with `F12`; see [`Self::devtools`]).
+///
+/// Requires Bevy's `AssetPlugin` (satisfied by `DefaultPlugins`): `build`
+/// registers the [`SvgDocument`](crate::svg::SvgDocument) asset + loader, so a
+/// headless/minimal app must add `AssetPlugin` (plus its task-pool
+/// prerequisites, e.g. via `MinimalPlugins`) before this plugin.
 pub struct ReactUiPlugin {
     bundle: PathBuf,
     hot_reload: bool,
@@ -413,6 +418,13 @@ impl Plugin for ReactUiPlugin {
         .init_resource::<crate::scrollbar::ScrollbarTracks>()
         .init_resource::<Fonts>()
         .init_resource::<crate::cursor::CustomCursors>()
+        // SVG documents (`<image src="x.svg">`): parsed once per file into a
+        // resolution-independent asset, rasterized per node at laid-out size.
+        .init_asset::<crate::svg::SvgDocument>()
+        .register_asset_loader(crate::svg::SvgAssetLoader)
+        // Per-pointer refined svg shape hits — the picking refinement's
+        // handoff to the Interaction/event synthesis.
+        .init_resource::<crate::svg::pick::SvgPointerShapeHits>()
         // The offscreen render-target ("portal") registry and its shared blank
         // placeholder texture, created before the first portal can mount.
         .init_resource::<crate::portal::RenderTargets>()
@@ -463,6 +475,20 @@ impl Plugin for ReactUiPlugin {
             crate::layer::pick3d::suppress_transformed_layer_hits
                 .after(bevy::picking::PickingSystems::Backend)
                 .after(crate::pick_clip::filter_clipped_pointer_hits)
+                .before(bevy::picking::PickingSystems::Hover),
+        )
+        // Refine hits on JSX `<svg>` nodes into hits on the topmost painted
+        // shape under the cursor (svg::pick module docs). Last of the three
+        // hit rewriters — after the transform3d suppression: suppression must
+        // settle first so a refinement only ever amplifies a SURVIVING svg-node
+        // hit (refining a hit that suppression then strips would leave a
+        // shape hit with no live node under it).
+        .add_systems(
+            PreUpdate,
+            crate::svg::pick::refine_svg_pointer_hits
+                .after(bevy::picking::PickingSystems::Backend)
+                .after(crate::pick_clip::filter_clipped_pointer_hits)
+                .after(crate::layer::pick3d::suppress_transformed_layer_hits)
                 .before(bevy::picking::PickingSystems::Hover),
         )
         .add_systems(
@@ -535,6 +561,25 @@ impl Plugin for ReactUiPlugin {
                 (
                     crate::canvas::update_canvas_surfaces.after(apply_js_ops),
                     collect_canvas_resize_events.after(apply_js_ops),
+                    // Repaint svg surfaces the same way — svg-mode `<image>`
+                    // documents and JSX `<svg>` shape trees: reads last
+                    // frame's `ComputedNode` after the op drain (fresh
+                    // `SvgSurface`s AND the flushed queued `SvgShape`/child
+                    // writes visible — the JSX dirt derivation needs them
+                    // same-frame), rasters at laid-out size. Also after the
+                    // animation appliers: their shape-attr stage writes driven
+                    // `SvgShape` seeds, and the raster must read them the same
+                    // frame or a driven animation paints one frame late
+                    // (pinned by `driven_shape_attr_repaints_same_frame`).
+                    // With animations disabled the set is empty and the edge
+                    // is vacuous. Also after `drive_transitions`: the shape
+                    // transition channel writes eased `SvgShape` attrs and the
+                    // raster must paint them the SAME frame (pinned by
+                    // `eased_shape_attr_repaints_same_frame`).
+                    crate::svg::update_svg_surfaces
+                        .after(apply_js_ops)
+                        .after(AnimationSet::Apply)
+                        .after(crate::transition::drive_transitions),
                     crate::cursor::drive_cursor_icon.after(apply_js_ops),
                     // Spawn/teardown the Bevy scrollbar widget over each
                     // `overflow: scroll` container that declared a `scrollbar`
@@ -653,6 +698,28 @@ impl Plugin for ReactUiPlugin {
                     .before(crate::reconcile::collect_pointer_events),
             ),
         );
+        // Synthesize `Interaction`/`RelativeCursorPosition`/user-space cursor
+        // for handler-bearing SVG shape children from the hover map + the
+        // refined per-shape hits (`svg::interact` module docs) — shapes are
+        // Node-less, so `ui_focus_system` never sees them. Same slot as
+        // `correct_transformed_interactions` above: before styling,
+        // enter/leave, and drag-position readers so they all see the
+        // synthesized state — and AFTER `correct_transformed_interactions`
+        // itself: for a handler-bearing shape inside a visually-transformed
+        // layer both systems write the same `RelativeCursorPosition` (pick3d
+        // writes `normalized: None` — shapes have no `ComputedNode`), and
+        // without an explicit order the winner is nondeterministic and the
+        // two writes ping-pong `Changed` every frame. The svg synthesis must
+        // land last: it holds the refined user-space hit. A separate
+        // `add_systems` call — the Update tuple above is at Bevy's arity cap.
+        app.add_systems(
+            Update,
+            crate::svg::interact::sync_shape_interactions
+                .after(crate::layer::pick3d::correct_transformed_interactions)
+                .before(apply_interaction_styles)
+                .before(collect_hover_events)
+                .before(crate::reconcile::collect_pointer_events),
+        );
         // Resolve each promoted root's wire `filter` and `backdropFilter`
         // chains into packed render passes — the two instances of
         // `crate::filters::resolve_chains`. After the interaction restyle —
@@ -708,6 +775,18 @@ impl Plugin for ReactUiPlugin {
                 // fresh geometry.
                 crate::scroll::settle_controlled_scroll.after(bevy::ui::UiSystems::Layout),
             ),
+        );
+        // Re-stamp the svg intrinsic measure after `bevy_ui`'s
+        // `update_image_content_size_system` (`UiSystems::Content`), which
+        // clears the `ContentSize` of any non-`Auto` `ImageNode` that changed
+        // this frame — every svg-mode prop rebuild re-inserts the `ImageNode`,
+        // so without this the measure vanishes on each delta. Before `Layout`
+        // so the re-stamp feeds the same frame's layout pass.
+        app.add_systems(
+            PostUpdate,
+            crate::svg::stamp_svg_measures
+                .after(bevy::ui::widget::update_image_content_size_system)
+                .before(bevy::ui::UiSystems::Layout),
         );
         app.add_react_request_handler(crate::window::handle_window_size_request);
 

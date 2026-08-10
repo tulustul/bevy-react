@@ -19,10 +19,20 @@ fn temp_bundle(tag: &str) -> std::path::PathBuf {
     app
 }
 
+/// `ReactUiPlugin::build` registers the `SvgDocument` asset + loader, so even
+/// this resource-presence check needs `AssetPlugin` (and its task-pool
+/// prerequisites via `MinimalPlugins`) — the reconcile test harness
+/// (`reconcile/test_util.rs::ordering_app`) builds its app the same way.
+fn minimal_app() -> App {
+    let mut app = App::new();
+    app.add_plugins((MinimalPlugins, bevy::asset::AssetPlugin::default()));
+    app
+}
+
 #[test]
 fn animations_enabled_by_default() {
     let bundle = temp_bundle("default");
-    let mut app = App::new();
+    let mut app = minimal_app();
     app.add_plugins(ReactUiPlugin::new(&bundle).hot_reload(false));
     assert!(
         app.world().get_resource::<SharedValues>().is_some(),
@@ -33,7 +43,7 @@ fn animations_enabled_by_default() {
 #[test]
 fn animations_can_be_disabled() {
     let bundle = temp_bundle("disabled");
-    let mut app = App::new();
+    let mut app = minimal_app();
     app.add_plugins(
         ReactUiPlugin::new(&bundle)
             .hot_reload(false)

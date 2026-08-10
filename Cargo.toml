@@ -20,7 +20,22 @@ crossbeam-channel = "0.5.15"
 deno_core = "0.404.0"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.150"
-tiny-skia = "0.11"
+tiny-skia = "0.12"
+# SVG parse (usvg) + CPU raster (resvg). Default features off: we skip the
+# `text` feature (fontdb/rustybuzz font machinery — SVG text unsupported in v1)
+# and resvg's `raster-images` (embedded png/jpeg/gif/webp bitmaps: resvg warns
+# and skips them, vector content still renders; re-enable with
+# `features = ["raster-images"]` — no font deps — if embedded bitmaps are ever
+# needed). resvg renders into the same tiny-skia 0.12 the canvas module uses.
+resvg = { version = "0.47", default-features = false }
+usvg = { version = "0.47", default-features = false }
+# SVG micro-grammar parsers (path `d`, transform lists, viewBox) for the JSX
+# shape protocol. The resvg-family crate usvg 0.47 already depends on — same
+# version, so it adds nothing to the tree.
+svgtypes = "0.16"
+# 2D curve math for SVG hit-testing (winding + nearest-point). Pinned to the
+# exact version svgtypes/usvg already pull so the tree keeps a single copy.
+kurbo = "0.13.1"
 tracing = "0.1"
 tokio = { version = "1.52.3", features = ["rt", "macros", "sync"] }
 ts-rs = "10"

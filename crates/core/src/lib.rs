@@ -84,6 +84,8 @@ pub mod canvas;
 pub mod layer;
 pub mod portal;
 pub mod surface;
+// The SVG subsystem (parse + CPU rasterization via resvg/tiny-skia).
+pub mod svg;
 
 pub use anchor::{Anchor, AnchorScaling, Anchored};
 pub use animations::ReactUiAnimationsPlugin;

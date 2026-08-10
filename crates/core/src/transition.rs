@@ -38,6 +38,7 @@ use serde::Deserialize;
 use crate::protocol::{AnimatableField, Length, Style, Time as WireTime};
 use crate::ui_map::{length_to_val, parse_color};
 
+mod shape_channel;
 mod transform3d;
 
 /// CSS-like per-channel transition timing, set on [`Style::transition`]. Each
@@ -129,7 +130,7 @@ impl Transition {
 /// default, a timing curve. `duration`/`delay` are [`WireTime`]s: a bare number is
 /// milliseconds (the JS-facing unit), a string carries an explicit unit
 /// (`"200ms"`/`"0.2s"`), and both decode to the seconds the [`Driver`] consumes.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ChannelTransition {
     /// Timing duration (default `0.3s`). Ignored for a spring.
@@ -261,6 +262,10 @@ pub struct TransitionState {
     filter: FilterChannel,
     backdrop_filter: FilterChannel,
     transform3d: transform3d::Transform3dChannels,
+    /// SVG shape-attr easing (spec + targets both ride `SvgShape.attrs` —
+    /// shapes have no style). Self-seeding per attr, so it doesn't
+    /// participate in the `initialized` block.
+    shape: shape_channel::ShapeChannel,
     initialized: bool,
 }
 
@@ -632,6 +637,27 @@ pub fn apply_transition(ec: &mut EntityCommands, style: &Option<Style>) {
     }
 }
 
+/// Stamp (or clear) the transition components on an SVG **shape** entity from
+/// its folded attrs. Shapes have no style, so the spec rides
+/// `attrs.transition` (see `crate::svg::ShapeTransitionSpec`) and the stamped
+/// [`TransitionInput`] is an empty default whose only job is making the
+/// [`drive_transitions`] query match — the shape channel reads spec and
+/// targets live from `SvgShape`. Sibling of [`apply_transition`], called
+/// from the reconciler's shape create/update paths.
+pub fn apply_shape_transition(ec: &mut EntityCommands, attrs: Option<&crate::svg::ShapeAttrs>) {
+    match attrs.is_some_and(|a| a.transition.is_some()) {
+        true => {
+            // Both persist across re-sends (the input carries nothing).
+            ec.insert_if_new(TransitionInput::default());
+            ec.insert_if_new(TransitionState::default());
+        }
+        false => {
+            ec.remove::<TransitionInput>();
+            ec.remove::<TransitionState>();
+        }
+    }
+}
+
 /// The components a transition can drive, plus the read-only inputs that gate how
 /// it drives them. A `QueryData` struct (rather than a tuple) so a new transition
 /// target component is one field, not a tuple-arity problem — the filter
@@ -673,6 +699,11 @@ pub struct TransitionTargets {
     /// value lands here and `sync_transform3d_matrices` (PostUpdate) turns
     /// the change into the matrix + composite-only dirt — no dirt push here.
     transform3d: Option<&'static mut crate::layer::transform3d::LayerTransform3d>,
+    /// An SVG shape child's kind + folded attrs — the shape channel's target
+    /// AND spec carrier (`attrs.transition`; shapes have no style, so
+    /// nothing rides [`TransitionInput`]). Snapped to the target by the op
+    /// merge (`apply_js_ops`), ordered before this system.
+    shape: Option<&'static mut crate::svg::SvgShape>,
 }
 
 /// Advance every transitioning entity toward its [`TransitionInput`] target and
@@ -969,6 +1000,21 @@ pub fn drive_transitions(
             )
         {
             dirt.composite_only.push(entity);
+        }
+
+        // SVG shape attrs: ease the numeric attrs toward the values the op
+        // merge snapped into `SvgShape.attrs` (spec AND targets ride the
+        // component — see `shape_channel`). Coarse park like `skip_filter`:
+        // ANY `ShapeAttr` binding parks the WHOLE channel (the animation
+        // driver owns bound attrs via the seed slot); parked state resets so
+        // unparking re-seeds at the live values. No dirt push — the
+        // `Changed<SvgShape>` tick from a real write is the raster's signal.
+        if let Some(shape) = &mut targets.shape {
+            if targets.anim.is_some_and(|a| a.0.has_shape_attrs()) {
+                state.shape.reset();
+            } else {
+                state.shape.drive(shape, dt);
+            }
         }
     }
 }

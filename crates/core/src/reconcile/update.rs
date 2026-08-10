@@ -1,6 +1,7 @@
 //! The `Op::Update` path: merge a props delta into the retained per-node
 //! props and re-apply exactly the dirty groups, branching per element
-//! category (text root/span, editableText, surface, root, general). Also owns
+//! category (text root/span, editableText, surface, root, SVG shape,
+//! general). Also owns
 //! [`reapply_opacity_outputs`], the layer evaluator's hook for re-deriving
 //! opacity-dependent outputs when a node's promotion state flips.
 
@@ -11,6 +12,7 @@ use bevy::ui::{ComputedNode, ScrollPosition};
 
 use super::apply::resolve;
 use super::create::{root_base, surface_root_base};
+use super::image::{is_image, rebuild_image};
 use super::stamps::{
     apply_anchor, apply_animated, apply_button_focus_default, apply_pointer_handlers,
     apply_scroll_listener, apply_scroll_step, apply_style_variants, apply_wheel_listener,
@@ -23,10 +25,7 @@ use crate::plugin::Fonts;
 use crate::portal::RPortal;
 use crate::protocol::{NodeId, Props};
 use crate::transition::{ScrollTransitionState, apply_scroll_transition};
-use crate::ui_map::{
-    apply_atlas, apply_style_masked, image_node_promoted, overlay_style, resolved_text_style,
-    text_layout,
-};
+use crate::ui_map::{apply_style_masked, overlay_style, resolved_text_style, text_layout};
 
 /// Apply one `Op::Update`: merge the delta into the retained props and
 /// re-apply only what it dirtied. Extracted from the `apply_js_ops` match;
@@ -231,6 +230,29 @@ pub(super) fn apply_update(
         if dirty.anchor {
             apply_anchor(&mut ec, &props);
         }
+    } else if bridge.shapes.contains(&id) {
+        // An SVG shape child: a Node-less entity (no style, no layout) whose
+        // prop surface is the atomically-replaced `shape` attrs plus the
+        // pointer handlers — nothing else applies to a shape (see `svg_ops`).
+        if dirty.shape {
+            super::svg_ops::update_shape_attrs(&mut commands.entity(e), &props);
+            // Bindings derive from the (atomically replaced) attrs — their
+            // only source on a styleless shape — so any shape change may
+            // add/remove/retarget them.
+            apply_animated(&mut commands.entity(e), &props);
+            // Same for the transition stamp: the spec rides the attrs, so an
+            // atomic replace may add or remove it.
+            crate::transition::apply_shape_transition(
+                &mut commands.entity(e),
+                props.shape.as_ref(),
+            );
+        }
+        if dirty.pointer {
+            super::svg_ops::apply_shape_pointer(&mut commands.entity(e), &props);
+        }
+        if dirty.scroll_listener || dirty.wheel {
+            super::svg_ops::warn_shape_scroll(&props);
+        }
     } else {
         let promoted = bridge.promoted_layers.contains(&id);
         let mut ec = commands.entity(e);
@@ -249,14 +271,7 @@ pub(super) fn apply_update(
         // Image attributes only ever appear on `image` elements, so
         // their presence is enough to re-apply the texture/tint.
         if dirty.image && is_image(&props) {
-            let mut img = image_node_promoted(&props, assets, promoted);
-            apply_atlas(
-                &mut img,
-                &props,
-                &mut ui_assets.layouts,
-                &mut ui_assets.atlas_cache,
-            );
-            ec.insert(img);
+            rebuild_image(&mut ec, &props, assets, ui_assets, promoted, true);
             // Image attrs dirty without any style dirt (e.g. a bare
             // `src` swap) bypasses the `apply_style_masked` tap.
             crate::layer::mark_content_dirty(&mut ec);
@@ -271,6 +286,13 @@ pub(super) fn apply_update(
                     surface.set_display_list(cmds);
                 }
             });
+        }
+        // An `<svg>` root's `viewBox`: write the merged value into its
+        // surface and request a re-raster (see `svg_ops`). Svg roots
+        // otherwise flow through this general arm as normal styled nodes
+        // (`foreign_images` already guards their element-owned `ImageNode`).
+        if dirty.view_box && bridge.svg_roots.contains(&id) {
+            super::svg_ops::update_view_box(&mut ec, &props);
         }
         // A `<portal>`'s new target name: rebind it (the binding system
         // points its `ImageNode` at the new target next frame).
@@ -378,27 +400,10 @@ pub(crate) fn reapply_opacity_outputs(
     }
     let mut ec = commands.entity(entity);
     if is_image(props) {
-        let mut img = image_node_promoted(props, assets, promoted);
-        apply_atlas(
-            &mut img,
-            props,
-            &mut ui_assets.layouts,
-            &mut ui_assets.atlas_cache,
-        );
-        ec.insert(img);
+        // The promotion flip carries no new props, so the svg ignored-attr
+        // warning would only repeat the create/update one — skip it.
+        rebuild_image(&mut ec, props, assets, ui_assets, promoted, false);
     }
-}
-
-/// Whether these props carry any `image` element attribute.
-fn is_image(props: &Props) -> bool {
-    props.src.is_some()
-        || props.tint.is_some()
-        || props.image_mode.is_some()
-        || props.flip_x
-        || props.flip_y
-        || props.source_rect.is_some()
-        || props.atlas.is_some()
-        || props.visual_box.is_some()
 }
 
 #[cfg(test)]

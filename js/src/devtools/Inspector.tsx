@@ -14,7 +14,7 @@ import {
   enableStyle,
   orderedStyleFields,
 } from "./edits";
-import { EDITABLE_PROPS, STYLE_FIELDS } from "./fields";
+import { EDITABLE_PROPS, SHAPE_FIELDS, STYLE_FIELDS } from "./fields";
 import { mirror } from "./mirror";
 import { theme } from "./theme";
 import { useMirrorVersion } from "./TreeView";
@@ -33,7 +33,13 @@ export function Inspector({ id }: { id: number | null }) {
       </text>
     );
   }
-  const props = Object.entries(node.props);
+  // An SVG shape child's folded `shape` object renders as its own section
+  // (one row per present field) rather than as one JSON blob in props.
+  const props = Object.entries(node.props).filter(([key]) => key !== "shape");
+  const shape =
+    typeof node.props.shape === "object" && node.props.shape !== null
+      ? (node.props.shape as Record<string, unknown>)
+      : undefined;
   // Disabled declarations: gone from the live style (and the
   // mirror), listed from the remembered-value store, dimmed + unchecked.
   // Rendered as ONE list in stable first-seen order (`orderedStyleFields`),
@@ -97,6 +103,40 @@ export function Inspector({ id }: { id: number | null }) {
         );
       })}
       <AddStyleRow id={id} {...rowProps("add")} />
+      {shape && (
+        <>
+          <SectionHeader label="shape" />
+          {/* Shape decode warnings (bad paint/path/points/…) attribute to the
+              whole folded object (it replaces atomically), so the Rust-
+              reported warning renders once under the header. */}
+          {node.warnings?.get("prop:shape") && (
+            <text
+              style={{
+                color: theme.warn,
+                fontSize: 10,
+                margin: { left: 16, bottom: 2 },
+              }}
+            >
+              {node.warnings.get("prop:shape")}
+            </text>
+          )}
+          {Object.entries(shape).map(([field, value]) => (
+            <EditRow
+              key={field}
+              field={field}
+              value={value}
+              editable={false}
+              warning={
+                field in SHAPE_FIELDS
+                  ? undefined
+                  : `unknown shape field "${field}" (ignored by Bevy)`
+              }
+              apply={() => null}
+              {...rowProps(`shape:${field}`)}
+            />
+          ))}
+        </>
+      )}
       {props.length > 0 && <SectionHeader label="props" />}
       {props.map(([field, value]) => (
         <EditRow

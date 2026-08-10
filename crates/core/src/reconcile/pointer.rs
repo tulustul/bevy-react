@@ -8,6 +8,17 @@ use bevy::ui::RelativeCursorPosition;
 use super::events::{normalized_01, send_ui_event};
 use crate::bridge::{HoverState, JsBridge, PointerHandlers, RNode};
 use crate::protocol::{Outbound, UiEvent};
+use crate::svg::SvgUserPos;
+
+/// Event x/y for a node: an SVG shape's **user-space** cursor when its
+/// [`SvgUserPos`] slot carries one (written by the shape synthesis while
+/// hovered — see `crate::svg::interact`), else the clamped `0..1` normalized
+/// position. `None` when neither is known. The single home of the
+/// user-pos-wins rule — both the drag and hover collectors go through it.
+fn event_pos(user: Option<&SvgUserPos>, rel: Option<&RelativeCursorPosition>) -> Option<Vec2> {
+    user.and_then(|u| u.0)
+        .or_else(|| rel.and_then(normalized_01))
+}
 
 /// The mouse buttons the pointer pipeline reports, paired with their DOM
 /// `MouseEvent.button` numbers (`0`/`1`/`2` = left/middle/right — the same set
@@ -58,6 +69,7 @@ impl Default for ActiveDrag {
 /// `RelativeCursorPosition::normalized` is centered (`-0.5` = left/top edge,
 /// `0.5` = right/bottom); we shift it to a `0..1` top-left origin to match the
 /// CSS-like coordinates the JS handlers expect.
+#[allow(clippy::type_complexity)]
 pub fn collect_pointer_events(
     bridge: Res<JsBridge>,
     buttons: Res<ButtonInput<MouseButton>>,
@@ -68,6 +80,8 @@ pub fn collect_pointer_events(
         &Interaction,
         &RelativeCursorPosition,
         &PointerHandlers,
+        // SVG shapes report x/y in user units instead (see [`event_pos`]).
+        Option<&SvgUserPos>,
     )>,
     interactions: Query<&Interaction>,
     mut capture: ResMut<crate::PointerCapture>,
@@ -98,7 +112,7 @@ pub fn collect_pointer_events(
             if !buttons.just_pressed(mb) {
                 continue;
             }
-            for (entity, rnode, interaction, rel, handlers) in &nodes {
+            for (entity, rnode, interaction, rel, handlers, user) in &nodes {
                 let over = if mb == MouseButton::Left {
                     // `ui_focus_system` attributes left presses for us (it
                     // honors `FocusPolicy` blocking).
@@ -111,7 +125,7 @@ pub fn collect_pointer_events(
                     *interaction != Interaction::None && rel.cursor_over()
                 };
                 if over {
-                    let pos = normalized_01(rel).unwrap_or(drag.last_pos);
+                    let pos = event_pos(user, Some(rel)).unwrap_or(drag.last_pos);
                     let abs = cursor_abs.unwrap_or(drag.last_abs);
                     drag.entity = Some(entity);
                     drag.button = mb;
@@ -133,9 +147,9 @@ pub fn collect_pointer_events(
     // flooding the bridge with one identical event per frame.
     if buttons.pressed(drag.button)
         && let Some(entity) = drag.entity
-        && let Ok((_, rnode, _, rel, handlers)) = nodes.get(entity)
+        && let Ok((_, rnode, _, rel, handlers, user)) = nodes.get(entity)
     {
-        let pos = normalized_01(rel).unwrap_or(drag.last_pos);
+        let pos = event_pos(user, Some(rel)).unwrap_or(drag.last_pos);
         let abs = cursor_abs.unwrap_or(drag.last_abs);
         let cursor_moved = abs != drag.last_abs;
         drag.last_pos = pos;
@@ -148,9 +162,9 @@ pub fn collect_pointer_events(
     // End the drag when the initiating button is released.
     if buttons.just_released(drag.button)
         && let Some(entity) = drag.entity.take()
-        && let Ok((_, rnode, _, rel, handlers)) = nodes.get(entity)
+        && let Ok((_, rnode, _, rel, handlers, user)) = nodes.get(entity)
     {
-        let pos = normalized_01(rel).unwrap_or(drag.last_pos);
+        let pos = event_pos(user, Some(rel)).unwrap_or(drag.last_pos);
         let abs = cursor_abs.unwrap_or(drag.last_abs);
         if handlers.up {
             emit(rnode, "pointerUp", pos, abs, drag.dom_button);
@@ -186,12 +200,14 @@ pub fn collect_hover_events(
             &PointerHandlers,
             &RNode,
             Option<&RelativeCursorPosition>,
+            // SVG shapes report x/y in user units instead (see [`event_pos`]).
+            Option<&SvgUserPos>,
         ),
         Changed<Interaction>,
     >,
 ) {
     let cursor_abs = windows.iter().next().and_then(|w| w.cursor_position());
-    for (interaction, mut hover, handlers, rnode, rel) in &mut nodes {
+    for (interaction, mut hover, handlers, rnode, rel, user) in &mut nodes {
         let inside = *interaction != Interaction::None;
         if inside == hover.0 {
             continue; // A `Hovered`↔`Pressed` change, not a boundary crossing.
@@ -203,7 +219,7 @@ pub fn collect_hover_events(
             "pointerLeave"
         };
         if (inside && handlers.enter) || (!inside && handlers.leave) {
-            let pos = rel.and_then(normalized_01).unwrap_or(Vec2::ZERO);
+            let pos = event_pos(user, rel).unwrap_or(Vec2::ZERO);
             let abs = cursor_abs.unwrap_or(Vec2::ZERO);
             send_ui_event(&bridge, rnode.0, kind, Some(pos), Some(abs), None);
         }
@@ -550,6 +566,156 @@ mod tests {
             "a surface click over nested owners must fire only the topmost owner"
         );
         assert_eq!(events[0].id, 2, "the inner (topmost) node owns the click");
+    }
+
+    /// SVG shapes report pointer-event x/y in SVG **user units**: a node
+    /// carrying `SvgUserPos(Some(..))` (written by the shape synthesis while
+    /// hovered) emits those coordinates; once the slot is `None` the clamped
+    /// normalized position is the fallback.
+    #[test]
+    fn svg_user_pos_overrides_pointer_event_coords() {
+        let (mut app, mut out_rx) = click_app();
+        app.init_resource::<ButtonInput<MouseButton>>();
+        app.init_resource::<crate::PointerCapture>();
+        app.add_systems(Update, collect_pointer_events);
+
+        let mut window = Window::default();
+        window.set_physical_cursor_position(Some(bevy::math::DVec2::new(100.0, 100.0)));
+        app.world_mut().spawn(window);
+
+        let node = app
+            .world_mut()
+            .spawn((
+                RNode(1),
+                Interaction::Pressed,
+                RelativeCursorPosition {
+                    cursor_over: true,
+                    normalized: Some(Vec2::ZERO),
+                },
+                PointerHandlers {
+                    down: true,
+                    up: true,
+                    ..default()
+                },
+                crate::svg::SvgUserPos(Some(Vec2::new(42.0, 17.0))),
+            ))
+            .id();
+
+        // Press: the down event carries the user-space cursor.
+        app.world_mut()
+            .resource_mut::<ButtonInput<MouseButton>>()
+            .press(MouseButton::Left);
+        app.update();
+        let events = drain_clicks(&mut out_rx);
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].kind, "pointerDown");
+        assert_eq!(
+            (events[0].x, events[0].y),
+            (Some(42.0), Some(17.0)),
+            "a present user pos wins over the normalized position"
+        );
+
+        // Release with the slot cleared (the synthesis clears it on leave):
+        // the up event falls back to the normalized 0..1 position.
+        app.world_mut()
+            .get_mut::<crate::svg::SvgUserPos>(node)
+            .unwrap()
+            .0 = None;
+        app.world_mut()
+            .resource_mut::<ButtonInput<MouseButton>>()
+            .clear();
+        app.world_mut()
+            .resource_mut::<ButtonInput<MouseButton>>()
+            .release(MouseButton::Left);
+        app.update();
+        let events = drain_clicks(&mut out_rx);
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].kind, "pointerUp");
+        assert_eq!(
+            (events[0].x, events[0].y),
+            (Some(0.5), Some(0.5)),
+            "an empty user-pos slot falls back to normalized coordinates"
+        );
+    }
+
+    /// [`collect_hover_events`] applies the same user-space override: a
+    /// `pointerEnter` on a shape reports the SVG user-space cursor.
+    #[test]
+    fn svg_user_pos_overrides_hover_event_coords() {
+        let (mut app, mut out_rx) = click_app();
+        app.add_systems(Update, collect_hover_events);
+
+        let e = app
+            .world_mut()
+            .spawn((
+                Interaction::None,
+                HoverState(false),
+                PointerHandlers {
+                    enter: true,
+                    ..default()
+                },
+                RNode(1),
+                RelativeCursorPosition {
+                    cursor_over: true,
+                    normalized: Some(Vec2::ZERO),
+                },
+                crate::svg::SvgUserPos(Some(Vec2::new(30.0, 60.0))),
+            ))
+            .id();
+        app.update(); // Mount frame: still outside.
+        *app.world_mut().get_mut::<Interaction>(e).unwrap() = Interaction::Hovered;
+        app.update();
+
+        let events = drain_clicks(&mut out_rx);
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].kind, "pointerEnter");
+        assert_eq!(
+            (events[0].x, events[0].y),
+            (Some(30.0), Some(60.0)),
+            "enter coordinates ride the user-space cursor"
+        );
+    }
+
+    /// No-regression pin for handler fallthrough: a click picked on a
+    /// handler-less shape (no `Interaction`) climbs the `ChildOf` chain to
+    /// the `<svg>` root's own `Interaction` — the root still owns the click.
+    #[test]
+    fn handlerless_shape_click_falls_to_svg_root() {
+        let (mut app, mut out_rx) = click_app();
+        app.add_systems(Update, collect_ui_events);
+
+        let root = app.world_mut().spawn((RNode(1), Interaction::None)).id();
+        let shape = app
+            .world_mut()
+            .spawn((
+                RNode(2),
+                crate::svg::SvgShape {
+                    kind: crate::svg::ShapeKind::Circle,
+                    attrs: crate::svg::ShapeAttrs::default(),
+                },
+                ChildOf(root),
+            ))
+            .id();
+
+        app.world_mut().write_message(Pointer::new(
+            PointerId::Mouse,
+            click_location(),
+            Click {
+                button: PointerButton::Primary,
+                hit: bevy::picking::backend::HitData::new(Entity::PLACEHOLDER, 0.0, None, None),
+                duration: std::time::Duration::ZERO,
+                count: 1,
+            },
+            shape,
+        ));
+        app.update();
+
+        let events = drain_clicks(&mut out_rx);
+        assert_eq!(events.len(), 1, "the click resolves to exactly one owner");
+        assert_eq!(
+            events[0].id, 1,
+            "a handler-less shape's click belongs to the <svg> root"
+        );
     }
 
     /// The surface virtual pointer's clicks belong to `collect_surface_clicks`

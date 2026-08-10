@@ -111,6 +111,12 @@ export interface SerializedProps extends Partial<
   // World-anchor binding (an `<anchor>`'s entity + offset), opaque like style;
   // decoded on the Rust side into `Anchor`.
   anchor?: Record<string, unknown>;
+  // An SVG shape child's folded attributes (`packShapeProps`), opaque like
+  // `anchor`; decoded on the Rust side into `ShapeAttrs`.
+  shape?: Record<string, unknown>;
+  // An `<svg>` element's `viewBox` (`"minX minY width height"`), parsed on
+  // the Rust side.
+  viewBox?: string;
   color?: string;
   fontSize?: number;
   // Controlled scroll offsets (logical px) for any node with `overflow: scroll`.
@@ -498,6 +504,9 @@ export function registerHandlers(
 //   focused, no React focus state needed.
 // - An `<anchor>`'s `anchor` (entity + optional offset) is opaque too;
 //   Bevy projects the entity's world position to the screen each frame.
+// - An SVG shape child's `shape` (its folded attributes — `packShapeProps`)
+//   replaces atomically as well: a shape change has a single rasterization
+//   consequence, so Rust never merges shape fields.
 // Animated bindings ride *inside* `style` (the `{ animated }` wrapper) and
 // cross opaque like every other style value — Rust derives the node's
 // bindings from the merged style, so there is no separate animation prop.
@@ -507,9 +516,11 @@ const OBJECT_PROP_KEYS = new Set([
   "pressStyle",
   "focusStyle",
   "anchor",
+  "shape",
 ]);
 
-// Text + `image` + `editableText` element attributes that pass through by name.
+// Text + `image` + `editableText` + `svg` element attributes that pass through
+// by name (the wire name for each is the React prop name, `viewBox` included).
 const PASSTHROUGH_PROP_KEYS = new Set([
   "color",
   "fontSize",
@@ -532,6 +543,7 @@ const PASSTHROUGH_PROP_KEYS = new Set([
   "scrollTop",
   "scrollLeft",
   "scrollStep",
+  "viewBox",
 ]);
 
 // Bool flag props. Rust's `Props::merge_delta` (protocol.rs `merge_bool!`)
@@ -617,6 +629,11 @@ export function packAnchorProps(
   if (entity === undefined || entity === null) return rest;
   return { ...rest, anchor: { entity: Number(entity), offset, scale } };
 }
+
+// The `shape`-object analogue for SVG shape children lives in `svg.ts` (the
+// JS mirror of the Rust `svg` module); re-exported here beside its anchor
+// precedent so the reconciler imports both packers from one place.
+export { packShapeProps, SHAPE_KINDS } from "./svg";
 
 export function serializeProps(
   id: number,

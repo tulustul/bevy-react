@@ -16,7 +16,7 @@
 //! orchestration systems, and receives commands through an [`AnimationInbox`]
 //! channel the integrator hands it.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use bevy::ecs::query::QueryData;
 use bevy::prelude::*;
@@ -25,6 +25,7 @@ use crossbeam_channel::Receiver;
 
 pub mod protocol;
 mod runner;
+mod shape_stage;
 
 pub use protocol::{
     AnimatableProperty, AnimatedBindings, AnimationCommand, Binding, Driver, Easing, SharedId,
@@ -289,6 +290,11 @@ struct AnimTargets {
     /// overwrite single fields; `sync_transform3d_matrices` derives the
     /// matrix + composite-only dirt from the change — no dirt push here).
     transform3d: Option<&'static mut crate::layer::transform3d::LayerTransform3d>,
+    /// The SVG shape entity's kind + folded attrs — stage 5 (`shape_stage`)
+    /// writes driven `ShapeAttr` values into the bound attrs' seed slots.
+    /// Present only on JSX `<svg>` shape children (Node-less entities);
+    /// `<g>` groups qualify too (their `opacity` is bindable).
+    shape: Option<&'static mut crate::svg::SvgShape>,
 }
 
 #[allow(clippy::type_complexity)]
@@ -303,10 +309,15 @@ fn apply_animated_nodes(
     // animating valid binding) is stamped back after the apply so it never
     // reads as a re-resolve.
     mut validated: Local<HashMap<Entity, (Option<u32>, Option<u32>)>>,
+    // The shape-attr analog (stage 5): entities whose `ShapeAttr` bindings
+    // were validated since they last restamped (`Ref` change tick) — the
+    // once-per-restamp warn gate; no version pair needed (no chain here).
+    mut shape_validated: Local<HashSet<Entity>>,
     mut query: Query<(Entity, Ref<AnimatedNode>, AnimTargets)>,
 ) {
     use AnimatableProperty as P;
     let mut filter_bound: Vec<Entity> = Vec::new();
+    let mut shape_bound: Vec<Entity> = Vec::new();
     for (entity, anim, mut t) in &mut query {
         let b = &anim.0;
         let promoted = t.promoted.is_some();
@@ -420,7 +431,11 @@ fn apply_animated_nodes(
             if property.is_transform()
                 || matches!(
                     property,
-                    P::Opacity | P::FilterParam { .. } | P::Transform3d(_)
+                    // `ShapeAttr` is stage 5's: it writes `SvgShape.attrs`,
+                    // not `Node` — skipped explicitly rather than relying on
+                    // the scalar fallthrough being inert (shape entities are
+                    // Node-less, but the intent should be in the code).
+                    P::Opacity | P::FilterParam { .. } | P::Transform3d(_) | P::ShapeAttr { .. }
                 )
             {
                 continue;
@@ -632,12 +647,33 @@ fn apply_animated_nodes(
                 validated.insert(entity, post);
             }
         }
+
+        // Stage 5 — SVG shape-attr bindings (`shape.<attr>` wrappers): write
+        // the resolved values into the bound attrs' **seed slots** (see
+        // `shape_stage` for the seed-slot design and the write-ordering
+        // contract). NOTHING extra is dirtied here: the `Changed<SvgShape>`
+        // tick from a real write IS the raster's derived-dirt signal —
+        // `svg::update_svg_surfaces` (ordered after `AnimationSet::Apply` in
+        // `plugin.rs`, so the write lands the same frame) repaints and taps
+        // the layer dirt itself.
+        if b.has_shape_attrs() {
+            shape_bound.push(entity);
+            let validate = anim.is_changed() || !shape_validated.contains(&entity);
+            shape_stage::apply_shape_attrs(b, &values, t.shape.as_mut(), t.rnode, validate);
+            if validate {
+                shape_validated.insert(entity);
+            }
+        }
     }
     // Drop validation memory for entities that no longer carry filter
     // bindings (despawned, or the bindings were removed), so a later
     // re-appearance re-validates and the map stays bounded.
     if validated.len() > filter_bound.len() {
         validated.retain(|e, _| filter_bound.contains(e));
+    }
+    // Same retention rule for the shape-attr memory.
+    if shape_validated.len() > shape_bound.len() {
+        shape_validated.retain(|e| shape_bound.contains(e));
     }
 }
 

@@ -7,7 +7,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { bevy, type GamepadInputEvent } from "@/bevy";
 import { Example } from "@/components";
-import { Colors, FontSizes } from "@/theme";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
 import { GameMenu } from "./GameMenu";
 import { PadVisualizer } from "./PadVisualizer";
@@ -158,7 +157,6 @@ export function GamepadDemo() {
   );
 
   const pads = usePads(handleBatch);
-  const hasPads = Object.keys(pads).length > 0;
 
   // A pad that disconnects stops sending events; kill its held repeats.
   useEffect(() => {
@@ -178,11 +176,6 @@ export function GamepadDemo() {
 
   return (
     <node style={{ flexDirection: "column", gap: 20, alignItems: "center" }}>
-      {!hasPads && (
-        <text style={{ fontSize: FontSizes.sm, color: Colors.textColor200 }}>
-          Connect a controller - or use the mouse
-        </text>
-      )}
       <GameMenu
         nav={nav}
         pulseKey={pulseKey}

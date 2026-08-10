@@ -27,7 +27,7 @@ use crate::surface::RSurface;
 use crate::transition::apply_scroll_transition;
 use crate::ui_map::{
     AtlasLayoutCache, apply_atlas, apply_style, apply_text_style, image_node, overlay_style,
-    resolved_text_style, text_layout,
+    resolved_text_style, svg_image_node, text_layout,
 };
 
 /// Apply one `Op::Create`: spawn the element for `kind` and record it in the
@@ -48,6 +48,9 @@ pub(super) fn apply_create(
     // Attribute apply-time parse warnings (colors, fonts, …) fired
     // while building this node to its id (see `crate::diag`).
     let _diag = crate::diag::node_scope(id);
+    // Resolved once for the four sites that branch on "is this an SVG shape
+    // child" (spawn dispatch, `bridge.shapes`, the background-image no-op).
+    let shape_kind = crate::svg::ShapeKind::from_kind(&kind);
     let entity = match kind.as_str() {
         // A `<text>` root: a UI node carrying the text block + style.
         // A single-string child rides inline as `text` (no child span).
@@ -100,6 +103,9 @@ pub(super) fn apply_create(
             stamp_common(&mut ec, &props);
             ec.id()
         }
+        // A JSX `<svg>`: a styled node with an element-owned texture the
+        // svg rasterizer paints from the Node-less `SvgShape` children.
+        "svg" => super::svg_ops::create_svg_root(commands, images, id, &props),
         // A `<surface>`: a styled container whose subtree renders into
         // an offscreen image instead of the on-screen UI. It is a
         // **detached UI root** — `crate::surface::bind_surfaces`
@@ -186,15 +192,21 @@ pub(super) fn apply_create(
             apply_anchor(&mut ec, &props);
             ec.id()
         }
-        _ => spawn_element(
-            commands,
-            id,
-            &kind,
-            &props,
-            assets,
-            &mut ui_assets.layouts,
-            &mut ui_assets.atlas_cache,
-        ),
+        // SVG shape kinds (`<circle>`/`<rect>`/…/`<g>`) mount as Node-less
+        // `SvgShape` entities — dispatched here so they never fall through
+        // to the plain-node `spawn_element` path.
+        _ => match shape_kind {
+            Some(shape) => super::svg_ops::create_shape(commands, id, shape, &props),
+            None => spawn_element(
+                commands,
+                id,
+                &kind,
+                &props,
+                assets,
+                &mut ui_assets.layouts,
+                &mut ui_assets.atlas_cache,
+            ),
+        },
     };
     if matches!(kind.as_str(), "text" | "textSpan") {
         bridge
@@ -221,9 +233,16 @@ pub(super) fn apply_create(
     if kind == "root" {
         bridge.roots.insert(id);
     }
+    if kind == "svg" {
+        bridge.svg_roots.insert(id);
+    }
+    if shape_kind.is_some() {
+        bridge.shapes.insert(id);
+    }
     // Controlled scroll + the `onScroll` listener apply to any node
-    // (anything with `overflow: scroll`). A `textSpan` has no `Node`
-    // and so never matches the read-back query — harmless there.
+    // (anything with `overflow: scroll`). A `textSpan` or an SVG shape
+    // child has no `Node` and so never matches the read-back query —
+    // harmless there.
     {
         let mut ec = commands.entity(entity);
         apply_scroll_listener(&mut ec, &props);
@@ -233,23 +252,27 @@ pub(super) fn apply_create(
         create_controlled_scroll(bridge, &mut ec, id, &props);
     }
     // `backgroundImage`: applied on any element EXCEPT those whose
-    // `ImageNode` belongs to the element itself (image/canvas/portal — the
-    // set also guards the update/restyle paths) and `surface` (a detached
+    // `ImageNode` belongs to the element itself (image/canvas/portal/svg —
+    // the set also guards the update/restyle paths) and `surface` (a detached
     // root with its own branches everywhere). The build needs `assets`, so
     // it can't live in `apply_style` — see `crate::background_image`.
     match kind.as_str() {
-        "image" | "canvas" | "portal" => {
+        "image" | "canvas" | "portal" | "svg" => {
             bridge.foreign_images.insert(id);
             let element: &'static str = match kind.as_str() {
                 "image" => "image",
                 "canvas" => "canvas",
-                _ => "portal",
+                "portal" => "portal",
+                "svg" => "svg",
+                _ => unreachable!("guarded by the outer arm"),
             };
             crate::background_image::warn_ignored(element, &props);
         }
         "surface" => crate::background_image::warn_ignored("surface", &props),
         // A `textSpan` has no `Node`/box of its own to paint into.
         "textSpan" => {}
+        // Neither has an SVG shape child (Node-less, unstyled).
+        _ if shape_kind.is_some() => {}
         _ => {
             let mut ec = commands.entity(entity);
             crate::background_image::apply_background_image(
@@ -306,6 +329,17 @@ fn spawn_element(
             // Buttons capture the pointer by default; `apply_style` already
             // defaulted this entity to `Pass`, so override unless the prop is set.
             apply_button_focus_default(&mut ec, &props.style);
+        }
+        // An `.svg` src (case-insensitive) enters **svg mode**: the texture is
+        // an element-owned raster target painted at laid-out size, the parsed
+        // document rides an `SvgSurface`, and the path is never loaded as an
+        // `Image` (see `crate::svg`). `atlas`/`sourceRect` have no source
+        // texture to apply to — warned here, under the op's diag node scope.
+        "image" if props.src.as_deref().is_some_and(crate::svg::is_svg_src) => {
+            crate::svg::warn_ignored_attrs(props.atlas.is_some(), props.source_rect.is_some());
+            let path = props.src.clone().expect("guarded by the arm");
+            let img = svg_image_node(props, false);
+            ec.queue(move |entity: EntityWorldMut| crate::svg::ensure_svg_image(entity, path, img));
         }
         "image" => {
             let mut img = image_node(props, assets);

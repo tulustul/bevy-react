@@ -14,12 +14,21 @@ export { Fragment, jsx, jsxs } from "react/jsx-runtime";
 import type {
   BevyAnchorProps,
   BevyCanvasProps,
+  BevyCircleProps,
   BevyEditableTextProps,
+  BevyEllipseProps,
+  BevyGProps,
   BevyImageProps,
+  BevyLineShapeProps,
   BevyNodeProps,
+  BevyPathShapeProps,
+  BevyPolygonProps,
+  BevyPolylineProps,
   BevyPortalProps,
+  BevyRectShapeProps,
   BevyRootProps,
   BevySurfaceProps,
+  BevySvgProps,
   BevyTextProps,
 } from "./jsx";
 
@@ -62,5 +71,26 @@ export namespace JSX {
     /** A world-anchored container: Bevy repositions it every frame to track the
      *  target `entity`'s projected world position. */
     anchor: BevyAnchorProps;
+    /** A resolution-independent vector drawing composed of SVG shape children,
+     *  rasterized at the element's laid-out size. */
+    svg: BevySvgProps;
+    /** SVG path geometry (`d` path data). Valid inside `<svg>`/`<g>` only. */
+    path: BevyPathShapeProps;
+    /** SVG rectangle (optionally rounded). Valid inside `<svg>`/`<g>` only. */
+    rect: BevyRectShapeProps;
+    /** SVG circle. Valid inside `<svg>`/`<g>` only. */
+    circle: BevyCircleProps;
+    /** SVG ellipse. Valid inside `<svg>`/`<g>` only. */
+    ellipse: BevyEllipseProps;
+    /** SVG line segment (stroke only). Valid inside `<svg>`/`<g>` only. */
+    line: BevyLineShapeProps;
+    /** SVG open poly-segment run (flat `points`). Valid inside `<svg>`/`<g>`
+     *  only. */
+    polyline: BevyPolylineProps;
+    /** SVG closed polygon (flat `points`). Valid inside `<svg>`/`<g>` only. */
+    polygon: BevyPolygonProps;
+    /** An SVG group: transforms/fades its shape children together. Valid
+     *  inside `<svg>` only. */
+    g: BevyGProps;
   }
 }

@@ -12,17 +12,41 @@ use crate::ui_map::AtlasLayoutCache;
 /// Spin up a minimal app wired to `apply_js_ops`, returning the app and the
 /// op sender (the outbound receiver is leaked to keep the sender open).
 pub(crate) fn op_app() -> (App, crossbeam_channel::Sender<Vec<Op>>) {
-    let (app, ops_tx, _root) = ordering_app();
+    let (app, ops_tx, _root) = build_op_app(false);
+    (app, ops_tx)
+}
+
+/// [`op_app`] with `TimePlugin` swapped for a manually-advanced `Time` (the
+/// `filters::test_util` precedent) — for tests that assert on eased values
+/// at exact points along a transition.
+pub(crate) fn op_app_manual_time() -> (App, crossbeam_channel::Sender<Vec<Op>>) {
+    let (app, ops_tx, _root) = build_op_app(true);
     (app, ops_tx)
 }
 
 /// [`op_app`] that also exposes the spawned UI root entity, for tests that
 /// assert on the root's `Children`.
 pub(crate) fn ordering_app() -> (App, crossbeam_channel::Sender<Vec<Op>>, Entity) {
+    build_op_app(false)
+}
+
+fn build_op_app(manual_time: bool) -> (App, crossbeam_channel::Sender<Vec<Op>>, Entity) {
     let mut app = App::new();
-    app.add_plugins((MinimalPlugins, AssetPlugin::default()));
+    if manual_time {
+        app.add_plugins((
+            MinimalPlugins.build().disable::<bevy::time::TimePlugin>(),
+            AssetPlugin::default(),
+        ));
+        app.insert_resource(Time::<()>::default());
+    } else {
+        app.add_plugins((MinimalPlugins, AssetPlugin::default()));
+    }
     app.init_asset::<Image>();
     app.init_asset::<TextureAtlasLayout>();
+    // `<image src="*.svg">` (svg mode) requests an `SvgDocument`; mirror the
+    // plugin's asset registration so those creates work in the harness.
+    app.init_asset::<crate::svg::SvgDocument>();
+    app.register_asset_loader(crate::svg::SvgAssetLoader);
     app.init_resource::<Fonts>();
     app.init_resource::<OpApplyStats>();
     app.init_resource::<AtlasLayoutCache>();

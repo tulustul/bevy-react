@@ -50,6 +50,11 @@ path = "../../examples/minimal/main.rs"
 [features]
 default = ["devtools"]
 devtools = []
+# SVG `<text>` element support: pulls in usvg's font machinery (fontdb + a
+# system-font scan). Off by default — most icon/illustration SVGs have no text.
+# usvg splits the two halves: `text` is shaping (fontdb + rustybuzz),
+# `system-fonts` is fontdb's filesystem scan — loading system fonts needs both.
+svg-text = ["usvg/text", "usvg/system-fonts"]
 
 [dependencies]
 accesskit = { workspace = true }
@@ -58,9 +63,13 @@ bevy = { workspace = true }
 bevy-react-macros = { workspace = true }
 bytemuck = { workspace = true }
 crossbeam-channel = { workspace = true }
+kurbo = { workspace = true }
+resvg = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+svgtypes = { workspace = true }
 tiny-skia = { workspace = true }
+usvg = { workspace = true }
 tracing = { workspace = true }
 ts-rs = { workspace = true }
 uuid = { workspace = true }
