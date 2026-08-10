@@ -154,6 +154,36 @@ export type ImageMode =
       stretchValue?: number;
     };
 
+/** How a `backgroundImage` fits its node: `"stretch"` (default — fill the box
+ *  exactly, aspect ignored) or the repeat modes (tile at the texture's logical
+ *  size × `scale`). Unlike an `<image>`'s [`ImageMode`] there is no `"auto"` —
+ *  a background never affects layout. */
+export type BackgroundImageMode = "stretch" | "repeat" | "repeatX" | "repeatY";
+
+/** A `backgroundImage` style value. `src` is an asset path (like an `<image>`'s
+ *  `src`), or `{ texture }` naming a render target the app registered in
+ *  `RenderTargets` — it binds late (transparent until registered; prefer
+ *  fixed-resolution targets: a background never drives an auto target's size). */
+export type BackgroundImage = {
+  /** Asset path, or `{ texture }` naming an app-registered texture
+   *  (`RenderTargets::register`) — **static** content that binds late
+   *  (transparent until registered). For live/continuously-updating content
+   *  use a `<portal>` element instead; backgrounds don't participate in
+   *  live-repaint tracking. */
+  src: string | { texture: string };
+  /** Tint multiplied with the texture; `opacity` fades it like a background
+   *  color. Animatable via an `interpolateColor` binding — in the base style
+   *  only (variant styles ignore bindings). */
+  tint?: Animatable<Color>;
+  /** Fit/repeat mode (default `"stretch"`). */
+  mode?: BackgroundImageMode;
+  /** Tile scale for the repeat modes, in logical px (`1` = the texture's own
+   *  size at 1× DPI, on every display). Ignored — with a devtools warning —
+   *  under `"stretch"`. An `{ animated }` wrapper decodes but does not drive
+   *  the value yet. */
+  scale?: number;
+};
+
 /** Timing for one transition channel: a timing curve (default) or, if `stiffness`
  *  or `damping` is given, a spring. `duration`/`delay` are [`Time`]s — a bare
  *  number is **milliseconds**, or a unit string (`"0.2s"`). */
@@ -428,6 +458,15 @@ export interface BevyStyle {
   /** Border gradient(s): one gradient or a layered list. Painted *over*
    *  `borderColor` (needs a `border` width to be visible). */
   borderGradient?: Gradient | Gradient[];
+  /** Background image: painted *over* `backgroundColor` AND
+   *  `backgroundGradient`, under the node's content (bevy's fixed paint
+   *  order — the color/gradient show through transparency and while the
+   *  texture loads). Never affects layout. Rounded corners clip it under
+   *  `"stretch"`, but NOT under the repeat modes (bevy's tiling pipeline
+   *  limitation); a swap snaps (no cross-fade). Ignored — with a devtools
+   *  warning — on `<image>`/`<canvas>`/`<portal>` (their `ImageNode` belongs
+   *  to the element) and `<surface>`. */
+  backgroundImage?: BackgroundImage;
   zIndex?: number;
   /** Lifts the node (and its subtree) into the UI's global stacking order,
    *  escaping the parent stacking context — so a deeply-nested overlay can paint

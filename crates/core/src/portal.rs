@@ -166,6 +166,28 @@ impl RenderTargets {
         RenderTarget { handle }
     }
 
+    /// Register an **app-owned texture** under `name` — a procedurally
+    /// generated, pre-rendered, or loaded `Image` the app already holds — so
+    /// a `<portal target>` or a `backgroundImage` `{ texture }` source can
+    /// display it. Static content: nothing renders into, resizes, or
+    /// invalidates it (the entry is inert to [`drive_render_targets`]); for
+    /// live/continuously-updating content use [`create`](Self::create) with a
+    /// camera — and prefer a `<portal>` on the UI side. Re-registering an
+    /// existing name replaces it.
+    pub fn register(&mut self, name: impl Into<String>, handle: Handle<Image>) {
+        self.entries.insert(
+            name.into(),
+            Entry {
+                handle,
+                mode: RenderMode::Snapshot,
+                resolution: Resolution::Fixed(UVec2::ONE),
+                binder: None,
+                dirty: false,
+                last_size: UVec2::ONE,
+            },
+        );
+    }
+
     /// The backing texture handle for `name`, if registered.
     pub fn get(&self, name: &str) -> Option<Handle<Image>> {
         self.entries.get(name).map(|e| e.handle.clone())
@@ -365,6 +387,40 @@ mod tests {
             .resource_mut::<RenderTargets>()
             .remove("follow");
         assert_eq!(app.world().resource::<RenderTargets>().get("follow"), None);
+    }
+
+    /// `register` exposes an app-owned handle under a name (static content):
+    /// `get` resolves it, `drive_render_targets` leaves it untouched, and
+    /// `remove` drops it.
+    #[test]
+    fn register_app_texture_is_inert() {
+        let mut app = test_app();
+        app.add_systems(Update, drive_render_targets);
+        let handle = {
+            let mut images = app.world_mut().resource_mut::<Assets<Image>>();
+            images.add(blank_portal_image())
+        };
+        app.world_mut()
+            .resource_mut::<RenderTargets>()
+            .register("checker", handle.clone());
+        assert_eq!(
+            app.world().resource::<RenderTargets>().get("checker"),
+            Some(handle.clone())
+        );
+
+        // A camera-less, Fixed-resolution entry: the drive system must not
+        // resize or otherwise touch it.
+        app.update();
+        assert_eq!(
+            app.world().resource::<RenderTargets>().get("checker"),
+            Some(handle),
+            "the registered handle survives the drive system"
+        );
+
+        app.world_mut()
+            .resource_mut::<RenderTargets>()
+            .remove("checker");
+        assert_eq!(app.world().resource::<RenderTargets>().get("checker"), None);
     }
 
     /// `set_mode` flips the mode and marks dirty only when it actually changes;

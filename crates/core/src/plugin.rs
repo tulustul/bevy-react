@@ -586,6 +586,24 @@ impl Plugin for ReactUiPlugin {
             crate::window::send_resize_events.after(apply_js_ops),
         );
 
+        // `backgroundImage` runtime systems (see `crate::background_image`).
+        // A separate `add_systems` call — the Update tuple above is at the
+        // arity cap. Ordered after the op drain AND the interaction restyle
+        // (both stamp `RBackgroundTexture` / insert `ImageNode`s; the explicit
+        // edges also force the command syncs), so a freshly-styled node binds
+        // and gets its DPI-corrected tile scale the same frame.
+        app.add_systems(
+            Update,
+            (
+                crate::background_image::bind_background_textures
+                    .after(apply_js_ops)
+                    .after(apply_interaction_styles),
+                crate::background_image::sync_background_tile_scale
+                    .after(apply_js_ops)
+                    .after(apply_interaction_styles),
+            ),
+        );
+
         // Layer promotion (see `crate::layer`). Main-world state registers
         // unconditionally so headless wiring tests build; the render half is
         // gated above with the rest of the render-only setup. A separate

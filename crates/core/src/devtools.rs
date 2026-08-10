@@ -1780,6 +1780,7 @@ mod tests {
             "backdropFilterBinding",
             "scrollbar",
             "styleBinding",
+            "backgroundImage",
             "color",
             "fontFamily",
             "cursor",

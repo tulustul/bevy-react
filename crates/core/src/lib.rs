@@ -78,6 +78,7 @@ pub mod filters;
 // modules so consumers can reach their full APIs; the most-used items are also
 // re-exported at the crate root below.
 pub mod animations;
+pub mod background_image;
 pub mod canvas;
 pub mod layer;
 pub mod portal;

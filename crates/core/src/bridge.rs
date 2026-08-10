@@ -180,6 +180,16 @@ pub struct JsBridge {
     /// top-level trees on the default UI camera. Like surfaces they are never
     /// parented into the Bevy hierarchy; see [`Self::is_detached_root`].
     pub roots: HashSet<NodeId>,
+    /// Node ids whose `ImageNode` belongs to the **element** (`image`,
+    /// `canvas`, `portal`): the `backgroundImage` style must never touch it
+    /// (it is ignored there, with a diag warning). Consulted by the update
+    /// path, the interaction restyles, and the layer-promotion rebuild —
+    /// membership also answers removal ownership: on any node NOT in this
+    /// set, a present `ImageNode` was inserted by `backgroundImage` and is
+    /// safe to remove. On the bridge (not a marker component) because
+    /// `apply_js_ops` is at Bevy's 16-system-param cap, like
+    /// [`Self::layer_dirty`].
+    pub foreign_images: HashSet<NodeId>,
     /// The last text value emitted to JS for each `editableText`, used to dedup
     /// `TextEditChange` (which also fires on cursor moves) into real `"change"`s.
     pub editable_values: HashMap<NodeId, String>,
@@ -256,6 +266,7 @@ impl JsBridge {
             editable_inputs: HashSet::new(),
             surfaces: HashSet::new(),
             roots: HashSet::new(),
+            foreign_images: HashSet::new(),
             editable_values: HashMap::new(),
             editable_selections: HashMap::new(),
             editable_select_handlers: HashSet::new(),
@@ -453,6 +464,7 @@ impl JsBridge {
         self.editable_inputs.remove(&id);
         self.surfaces.remove(&id);
         self.roots.remove(&id);
+        self.foreign_images.remove(&id);
         self.editable_values.remove(&id);
         self.editable_selections.remove(&id);
         self.editable_select_handlers.remove(&id);

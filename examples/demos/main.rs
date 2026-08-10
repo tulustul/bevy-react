@@ -109,6 +109,52 @@ fn main() {
     app.run();
 }
 
+/// Generate a small plaid texture CPU-side and register it as `"checker"` in
+/// [`bevy_react::portal::RenderTargets`] — the app-owned **static** texture a
+/// `backgroundImage` `{ texture }` source (or a `<portal>`) can display.
+/// Painted once at startup; nothing ever renders into it.
+fn register_host_textures(
+    mut targets: ResMut<bevy_react::portal::RenderTargets>,
+    mut images: ResMut<Assets<Image>>,
+) {
+    use bevy::asset::RenderAssetUsages;
+    use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
+
+    const SIZE: u32 = 64;
+    const CELL: u32 = 8;
+    // Tokyo-night plaid: two checker tones + an accent grid line per band.
+    const DARK: [u8; 4] = [0x24, 0x28, 0x3b, 0xff];
+    const LIGHT: [u8; 4] = [0x41, 0x48, 0x68, 0xff];
+    const ACCENT: [u8; 4] = [0x7a, 0xa2, 0xf7, 0xff];
+
+    let mut data = Vec::with_capacity((SIZE * SIZE * 4) as usize);
+    for y in 0..SIZE {
+        for x in 0..SIZE {
+            let px = if x.is_multiple_of(CELL * 2) || y.is_multiple_of(CELL * 2) {
+                ACCENT
+            } else if ((x / CELL) + (y / CELL)).is_multiple_of(2) {
+                DARK
+            } else {
+                LIGHT
+            };
+            data.extend_from_slice(&px);
+        }
+    }
+    let image = Image::new(
+        Extent3d {
+            width: SIZE,
+            height: SIZE,
+            depth_or_array_layers: 1,
+        },
+        TextureDimension::D2,
+        data,
+        TextureFormat::Rgba8UnormSrgb,
+        RenderAssetUsages::MAIN_WORLD | RenderAssetUsages::RENDER_WORLD,
+    );
+    let handle = images.add(image);
+    targets.register("checker", handle);
+}
+
 /// The primary window descriptor, shared by every entry point.
 fn window() -> Window {
     Window {
@@ -184,6 +230,11 @@ fn build_app(window: Window, hot_reload: bool) -> App {
     // The devtools inspector (F12) needs no registration: `ReactUiPlugin`
     // auto-enables it in dev builds. Whether the panel is open persists in
     // `.bevy-react-devtools.json`, so it reopens where you left it.
+
+    // A one-time host-generated texture the Background Image demo displays
+    // via `src: { texture: "checker" }` (the static-texture path — live
+    // rendering belongs to `<portal>`).
+    app.add_systems(Startup, register_host_textures);
 
     // Each scene's plugin registers its own bindings in `build`; only the global
     // scene-selection + debug-navigation handlers are left to register here.

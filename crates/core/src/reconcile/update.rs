@@ -115,6 +115,13 @@ pub(super) fn apply_update(
             // Text elements are never layer-promoted (see
             // `crate::layer::promotion_reasons`).
             apply_style_masked(&mut ec, &props.style, dirty.style, false);
+            crate::background_image::apply_background_image(
+                &mut ec,
+                &props.style,
+                dirty.style,
+                false,
+                assets,
+            );
         }
         // Parity quirk preserved: a stale `TextLayout` is never removed
         // when both its fields go absent, only overwritten.
@@ -170,11 +177,14 @@ pub(super) fn apply_update(
             }
         }
         let mut ec = commands.entity(e);
-        apply_style_masked(
+        let promoted = bridge.promoted_layers.contains(&id);
+        apply_style_masked(&mut ec, &props.style, dirty.style, promoted);
+        crate::background_image::apply_background_image(
             &mut ec,
             &props.style,
             dirty.style,
-            bridge.promoted_layers.contains(&id),
+            promoted,
+            assets,
         );
         if dirty.any_style_variant() {
             apply_style_variants(&mut ec, &props);
@@ -189,6 +199,9 @@ pub(super) fn apply_update(
             let style = overlay_style(&surface_root_base(), &props.style);
             // Detached roots are never layer-promoted.
             apply_style_masked(&mut ec, &style, dirty.style, false);
+        }
+        if dirty.style.intersects(g::BG_IMAGE) {
+            crate::background_image::warn_ignored("surface", &props);
         }
         if dirty.target
             && let Some(name) = &props.target
@@ -207,6 +220,13 @@ pub(super) fn apply_update(
             let style = overlay_style(&root_base(), &props.style);
             // Detached roots are never layer-promoted.
             apply_style_masked(&mut ec, &style, dirty.style, false);
+            crate::background_image::apply_background_image(
+                &mut ec,
+                &style,
+                dirty.style,
+                false,
+                assets,
+            );
         }
         if dirty.anchor {
             apply_anchor(&mut ec, &props);
@@ -215,6 +235,17 @@ pub(super) fn apply_update(
         let promoted = bridge.promoted_layers.contains(&id);
         let mut ec = commands.entity(e);
         apply_style_masked(&mut ec, &props.style, dirty.style, promoted);
+        // `backgroundImage` — except where the entity's `ImageNode` is
+        // element-owned (image/canvas/portal; warned at create).
+        if !bridge.foreign_images.contains(&id) {
+            crate::background_image::apply_background_image(
+                &mut ec,
+                &props.style,
+                dirty.style,
+                promoted,
+                assets,
+            );
+        }
         // Image attributes only ever appear on `image` elements, so
         // their presence is enough to re-apply the texture/tint.
         if dirty.image && is_image(&props) {
@@ -305,11 +336,13 @@ pub(super) fn apply_update(
 /// one shot — promoted → folds suppressed + group alpha written; demoted →
 /// folds resume — so the static path and the composite path never fight
 /// across frames.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn reapply_opacity_outputs(
     commands: &mut Commands,
     entity: Entity,
     props: &Props,
     promoted: bool,
+    foreign_image: bool,
     assets: &AssetServer,
     ui_assets: &mut UiAssets,
     style_variants: &mut Query<&mut StyleVariants>,
@@ -330,6 +363,18 @@ pub(crate) fn reapply_opacity_outputs(
             g::BACKGROUND | g::BG_GRADIENT | g::BORDER_GRADIENT | g::TEXT_SHADOW | g::LAYER,
         );
         apply_style_masked(&mut ec, &props.style, mask, promoted);
+        // The background image's tint fold re-derives the same way — unless
+        // the entity's `ImageNode` is element-owned (image/canvas/portal),
+        // where the style is ignored and the image rebuild below owns it.
+        if !foreign_image {
+            crate::background_image::apply_background_image(
+                &mut ec,
+                &props.style,
+                crate::protocol::StyleDirty(g::BG_IMAGE),
+                promoted,
+                assets,
+            );
+        }
     }
     let mut ec = commands.entity(entity);
     if is_image(props) {
@@ -552,6 +597,160 @@ mod tests {
             entity.get::<Node>().unwrap().width,
             Val::Px(10.0),
             "the retained width survives the unset"
+        );
+    }
+
+    /// `styleUnset: ["backgroundImage"]` removes the `ImageNode` and both
+    /// marker components; a delta swapping a `{ texture }` source for a path
+    /// drops the stale `RBackgroundTexture` (or the bind system would stomp
+    /// the asset handle).
+    #[test]
+    fn background_image_unset_and_source_swap() {
+        use crate::background_image::{BackgroundTileScale, RBackgroundTexture};
+        use bevy::ui::widget::ImageNode;
+        let (mut app, ops_tx) = op_app();
+        ops_tx
+            .send(vec![Op::Create {
+                id: 1,
+                kind: "node".into(),
+                props: serde_json::from_value(serde_json::json!({
+                    "style": { "backgroundImage": {
+                        "src": { "texture": "minimap" }, "mode": "repeat"
+                    } }
+                }))
+                .unwrap(),
+                text: None,
+            }])
+            .unwrap();
+        app.update();
+        let e = app.world().resource::<JsBridge>().nodes[&1];
+        assert!(app.world().entity(e).get::<RBackgroundTexture>().is_some());
+        assert!(app.world().entity(e).get::<BackgroundTileScale>().is_some());
+
+        // texture → path source swap: marker (and tile scale, mode now
+        // defaults to stretch) must go; the ImageNode stays.
+        ops_tx
+            .send(vec![update_delta(
+                1,
+                serde_json::from_value(serde_json::json!({
+                    "style": { "backgroundImage": { "src": "images/bg.png" } }
+                }))
+                .unwrap(),
+                &[],
+                &[],
+            )])
+            .unwrap();
+        app.update();
+        let entity = app.world().entity(e);
+        assert!(
+            entity.get::<RBackgroundTexture>().is_none(),
+            "a path source drops the stale texture marker"
+        );
+        assert!(entity.get::<BackgroundTileScale>().is_none());
+        assert!(entity.get::<ImageNode>().is_some());
+
+        ops_tx
+            .send(vec![update_delta(
+                1,
+                Props::default(),
+                &[],
+                &["backgroundImage"],
+            )])
+            .unwrap();
+        app.update();
+        let entity = app.world().entity(e);
+        assert!(
+            entity.get::<ImageNode>().is_none(),
+            "unsetting backgroundImage removes the ImageNode"
+        );
+        assert!(entity.get::<BackgroundTileScale>().is_none());
+    }
+
+    /// An opacity-only delta re-folds the background image's tint alpha (the
+    /// `opacity` table row carries `BG_IMAGE`), and a delta on a `<canvas>`
+    /// leaves its element-owned `ImageNode` untouched.
+    #[test]
+    fn background_image_opacity_refold_and_canvas_guard() {
+        use bevy::ui::widget::ImageNode;
+        let (mut app, ops_tx) = op_app();
+        ops_tx
+            .send(vec![
+                Op::Create {
+                    id: 1,
+                    kind: "node".into(),
+                    props: serde_json::from_value(serde_json::json!({
+                        "style": { "backgroundImage": {
+                            "src": "images/bg.png", "tint": "#ffffff"
+                        } }
+                    }))
+                    .unwrap(),
+                    text: None,
+                },
+                Op::Create {
+                    id: 2,
+                    kind: "canvas".into(),
+                    props: serde_json::from_value(serde_json::json!({})).unwrap(),
+                    text: None,
+                },
+            ])
+            .unwrap();
+        app.update();
+        let bridge = app.world().resource::<JsBridge>();
+        let (e1, e2) = (bridge.nodes[&1], bridge.nodes[&2]);
+        assert_eq!(
+            app.world()
+                .entity(e1)
+                .get::<ImageNode>()
+                .unwrap()
+                .color
+                .alpha(),
+            1.0
+        );
+        let canvas_handle = app
+            .world()
+            .entity(e2)
+            .get::<ImageNode>()
+            .unwrap()
+            .image
+            .clone();
+
+        ops_tx
+            .send(vec![
+                update_delta(
+                    1,
+                    serde_json::from_value(serde_json::json!({ "style": { "opacity": 0.5 } }))
+                        .unwrap(),
+                    &[],
+                    &[],
+                ),
+                // A backgroundImage delta on the canvas must not retarget its
+                // element-owned texture.
+                update_delta(
+                    2,
+                    serde_json::from_value(serde_json::json!({
+                        "style": { "backgroundImage": { "src": { "texture": "x" } } }
+                    }))
+                    .unwrap(),
+                    &[],
+                    &[],
+                ),
+            ])
+            .unwrap();
+        app.update();
+        assert_eq!(
+            app.world()
+                .entity(e1)
+                .get::<ImageNode>()
+                .unwrap()
+                .color
+                .alpha(),
+            0.5,
+            "an opacity-only delta re-folds the background tint"
+        );
+        assert_eq!(
+            app.world().entity(e2).get::<ImageNode>().unwrap().image,
+            canvas_handle,
+            "the canvas keeps its own texture despite the ignored style"
         );
     }
 

@@ -217,15 +217,32 @@ pub fn apply_surface_interaction_styles(
     variants: Query<&StyleVariants>,
     child_of: Query<&ChildOf>,
     rnodes: Query<&RNode>,
+    assets: Res<AssetServer>,
+    // `Option`: headless test harnesses build partial apps without the bridge.
+    bridge: Option<Res<crate::bridge::JsBridge>>,
 ) {
     let Some(pointer) = pointer else { return };
     let mut restyle = |entity: Entity, style: Option<Style>| {
         // Attribute re-parse warnings (e.g. a bad hoverStyle color) to the node.
-        let _diag = rnodes
-            .get(entity)
-            .ok()
-            .map(|r| crate::diag::node_scope(r.0));
-        apply_style(&mut commands.entity(entity), &style);
+        let rnode = rnodes.get(entity).ok();
+        let _diag = rnode.map(|r| crate::diag::node_scope(r.0));
+        let mut ec = commands.entity(entity);
+        apply_style(&mut ec, &style);
+        // The merged `backgroundImage` needs the asset server, so it can't
+        // ride `apply_style`; surface interiors are never promoted layers.
+        let foreign = bridge
+            .as_ref()
+            .zip(rnode)
+            .is_some_and(|(b, r)| b.foreign_images.contains(&r.0));
+        if !foreign {
+            crate::background_image::apply_background_image(
+                &mut ec,
+                &style,
+                crate::protocol::StyleDirty::ALL,
+                false,
+                &assets,
+            );
+        }
     };
     // Resolve a picked leaf to the nearest ancestor with hover/press variants (the
     // button), so its label text highlights the button rather than nothing.

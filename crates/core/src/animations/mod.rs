@@ -433,7 +433,10 @@ fn apply_animated_nodes(
                     // Bake the final alpha in for the components stage 3 drives
                     // (border is not one of them: opacity never touches it).
                     if !promoted
-                        && matches!(property, P::BackgroundColor | P::Color)
+                        && matches!(
+                            property,
+                            P::BackgroundColor | P::Color | P::BackgroundImageTint
+                        )
                         && let Some(alpha) = opacity_alpha
                     {
                         rgba[3] = alpha;
@@ -475,6 +478,18 @@ fn apply_animated_nodes(
                                 && tc.0 != color
                             {
                                 tc.0 = color;
+                                dirt.nodes.push(entity);
+                            }
+                        }
+                        // A `backgroundImage` tint: drive the ImageNode's
+                        // color. Inert when the node carries no ImageNode
+                        // (e.g. the spec was ignored on a foreign element or
+                        // the style lost the field).
+                        P::BackgroundImageTint => {
+                            if let Some(img) = &mut t.image
+                                && img.color != color
+                            {
+                                img.color = color;
                                 dirt.nodes.push(entity);
                             }
                         }
@@ -1284,6 +1299,58 @@ mod tests {
         assert!(s.green.abs() < 1e-4);
         assert!(s.blue.abs() < 1e-4);
         assert!((s.alpha - 0.5).abs() < 1e-4, "opacity owns final alpha");
+    }
+
+    /// An animated `backgroundImage.tint` drives the `ImageNode.color` rgb
+    /// while opacity owns the final alpha (the stage-2 bake keeps the two
+    /// from ping-ponging), and a settled re-run leaves the component clean.
+    #[test]
+    fn apply_drives_background_image_tint_with_opacity() {
+        use bevy::ui::widget::ImageNode;
+        let mut world = World::new();
+        world.init_resource::<crate::layer::LayerContentDirt>();
+        let mut values = SharedValues::default();
+        values.set(1, 0.0); // tint progress → output[0] = red
+        values.set(2, 0.5); // opacity
+        world.insert_resource(values);
+
+        let bindings = style_bindings(serde_json::json!({
+            "backgroundImage": { "src": "bg.png", "tint": { "animated": {
+                "type": "interpolateColor", "id": 1,
+                "input": [0, 1], "output": [[1, 0, 0, 1], [0, 0, 1, 1]] } } },
+            "opacity": { "animated": { "id": 2 } },
+        }));
+        let e = world
+            .spawn((AnimatedNode(bindings), ImageNode::default()))
+            .id();
+
+        let mut schedule = Schedule::default();
+        schedule.add_systems(apply_animated_nodes);
+        schedule.run(&mut world);
+
+        let s = world.entity(e).get::<ImageNode>().unwrap().color.to_srgba();
+        assert!((s.red - 1.0).abs() < 1e-4, "tint rgb follows the binding");
+        assert!(s.green.abs() < 1e-4);
+        assert!(s.blue.abs() < 1e-4);
+        assert!((s.alpha - 0.5).abs() < 1e-4, "opacity owns final alpha");
+
+        // Settled: a second run with unchanged values must not dirty the
+        // component (compare-before-write on both stages).
+        let tick = world
+            .entity(e)
+            .get_ref::<ImageNode>()
+            .unwrap()
+            .last_changed();
+        schedule.run(&mut world);
+        assert_eq!(
+            world
+                .entity(e)
+                .get_ref::<ImageNode>()
+                .unwrap()
+                .last_changed(),
+            tick,
+            "settled re-run leaves ImageNode untouched"
+        );
     }
 
     /// The 2D `rotate` binding takes **degrees** on the wire (matching the

@@ -65,6 +65,9 @@ const KIND_FIELDS: Record<string, { style?: string[]; props?: string[] }> = {
   // Same wire-key match as filterBinding, over the backdrop namespace.
   backdropFilterBinding: { style: ["backdropFilter"] },
   scrollbar: { style: ["scrollbar"] },
+  // backgroundImage: decode fallbacks (bad mode keyword, missing `src`,
+  // ignored `scale`) and the apply-time "element owns its image" report.
+  backgroundImage: { style: ["backgroundImage"] },
   // Inline `{ animated }` wrapper problems: a malformed wrapper (decode
   // sink, attributed to the style row per-op) or a wrapper in a variant
   // style, where bindings are ignored (the warning value names the variant —
@@ -81,6 +84,7 @@ const KIND_FIELDS: Record<string, { style?: string[]; props?: string[] }> = {
       "textShadow",
       "backgroundGradient",
       "borderGradient",
+      "backgroundImage",
     ],
     props: ["tint"],
   },

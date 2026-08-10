@@ -17,15 +17,17 @@ use bevy_react::js_thread::spawn_js_thread;
 use bevy_react::protocol::{Op, Outbound};
 use bevy_react::{RawRequest, ReactMessage};
 
-/// Flush one batch with three invalid values (a bad length, a bad keyword, a
-/// bad rect token — the last two on a different node), then ship whatever
-/// `op_take_decode_warnings` drains back over the emit channel.
+/// Flush one batch with four invalid values (a bad length, a bad keyword, a
+/// bad rect token, a bad backgroundImage mode — each after the first on a
+/// different node), then ship whatever `op_take_decode_warnings` drains back
+/// over the emit channel.
 const APP: &str = r#"
 const ops = Deno.core.ops;
 ops.op_flush([
   { op: "create", id: 1, kind: "node", props: { style: { width: "aa16" } } },
   { op: "append", parent: 0, child: 1 },
   { op: "update", id: 2, props: { style: { display: "flexx", padding: "1px bogus" } } },
+  { op: "update", id: 3, props: { style: { backgroundImage: { src: "x.png", mode: "tile" } } } },
 ], false);
 ops.op_emit("decodeWarnings", ops.op_take_decode_warnings());
 "#;
@@ -66,7 +68,7 @@ fn decode_warnings_round_trip() {
     let batch = ops_rx
         .recv_timeout(Duration::from_secs(15))
         .expect("no op batch from the JS thread");
-    assert_eq!(batch.len(), 3, "fallback decoding must not drop ops");
+    assert_eq!(batch.len(), 4, "fallback decoding must not drop ops");
 
     // The drained warnings come back over the emit channel.
     let deadline = Instant::now() + Duration::from_secs(15);
@@ -101,6 +103,7 @@ fn decode_warnings_round_trip() {
             (Some(1), "length", "aa16"),
             (Some(2), "display", "flexx"),
             (Some(2), "rect", "bogus"),
+            (Some(3), "backgroundImage", "tile"),
         ],
         "serde_v8 decode must attribute each warning to its op's node"
     );

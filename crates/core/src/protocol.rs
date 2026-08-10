@@ -533,6 +533,15 @@ pub struct Style {
     /// `borderColor` (needs a `border` width to be visible).
     #[serde(default)]
     pub border_gradient: Option<GradientList>,
+    /// Background image: painted *over* `backgroundColor` **and**
+    /// `backgroundGradient`, under the node's content (bevy's fixed per-node
+    /// paint order). `src` is an asset path, or `{ texture }` naming a render
+    /// target registered in `crate::portal::RenderTargets`. Never affects
+    /// layout (the layout-driving `Auto` image mode is never emitted).
+    /// Ignored — with a devtools warning — on `image`/`canvas`/`portal`
+    /// (their `ImageNode` belongs to the element) and `surface`.
+    #[serde(default, deserialize_with = "de_background_image")]
+    pub background_image: Option<BackgroundImageSpec>,
     #[serde(default)]
     pub z_index: Option<i32>,
     /// Global stacking order: lifts the node (and its subtree) into the UI's
@@ -720,6 +729,13 @@ pub mod style_groups {
     /// [`Self::TRANSFORM3D`]: a backdrop delta re-stages the snapshot filter
     /// run and reshapes nothing in the subtree — never content dirt.
     pub const BACKDROP: u32 = 1 << 21;
+    /// `ImageNode` from `background_image` (plus the `opacity` fold into its
+    /// tint). Built at the reconcile call sites — the build needs
+    /// `AssetServer`, which `apply_style_masked` doesn't hold — via
+    /// `crate::background_image::apply_background_image`; there is no arm for
+    /// it inside `apply_style_masked` (the end-of-apply layer content-dirty
+    /// tap still fires from this bit).
+    pub const BG_IMAGE: u32 = 1 << 22;
 }
 
 /// The single source of truth for [`Style`]'s field list. Invokes the callback
@@ -793,6 +809,7 @@ macro_rules! with_style_fields {
             (backdrop_filter, "backdropFilter", (BACKDROP | LAYER), overlay),
             (background_gradient, "backgroundGradient", (BG_GRADIENT), overlay),
             (border_gradient, "borderGradient", (BORDER_GRADIENT), overlay),
+            (background_image, "backgroundImage", (BG_IMAGE), overlay),
             (z_index, "zIndex", (Z_INDEX), overlay),
             (global_z_index, "globalZIndex", (GLOBAL_Z_INDEX), overlay),
             (focus_policy, "focusPolicy", (FOCUS_POLICY), no_overlay),
@@ -813,8 +830,8 @@ macro_rules! with_style_fields {
             (
                 opacity,
                 "opacity",
-                (BACKGROUND | BG_GRADIENT | BORDER_GRADIENT | TEXT_SHADOW | TRANSITION | TEXT
-                    | LAYER),
+                (BACKGROUND | BG_GRADIENT | BORDER_GRADIENT | BG_IMAGE | TEXT_SHADOW
+                    | TRANSITION | TEXT | LAYER),
                 overlay
             ),
             (group_alpha, "groupAlpha", (LAYER), no_overlay),
@@ -1550,6 +1567,80 @@ pub struct AtlasSpec {
     /// Which cell to display (row-major). Default `0`.
     #[serde(default)]
     pub index: usize,
+}
+
+/// Where a [`Style::background_image`] samples from: a bare string is an
+/// asset path (`AssetServer`-loaded, like an `image` element's `src`); the
+/// `{ texture }` object names an **app-registered texture** in
+/// `crate::portal::RenderTargets` (typically `RenderTargets::register` —
+/// bound late: an unknown name shows the transparent placeholder until the
+/// app registers it). Texture backgrounds are for **static** content — they
+/// don't participate in live-repaint tracking; continuously-updating render
+/// targets belong in a `<portal>` element.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(untagged)]
+pub enum BackgroundImageSource {
+    Path(String),
+    Texture { texture: String },
+}
+
+/// The decoded `backgroundImage` style object. Deliberately NOT
+/// [`ImageMode`]: that type admits `"auto"` (whose intrinsic-size measure
+/// drives layout — a background must never do that) and `"sliced"`, and its
+/// unknown-keyword fallback is `Auto`. This spec's modes all map to
+/// layout-inert `NodeImageMode`s.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BackgroundImageSpec {
+    /// Required — a spec with nothing to paint is dropped at decode
+    /// (tint-only fills are `backgroundColor`'s job).
+    pub src: BackgroundImageSource,
+    /// Tint multiplied with the texture (hex); also where `opacity` folds.
+    /// Animatable via an inline `{ animated: interpolateColor(...) }` binding
+    /// (`AnimatableProperty::BackgroundImageTint` drives `ImageNode.color`
+    /// per frame; the static build then leaves the color at white).
+    #[serde(default)]
+    pub tint: Option<Animatable<String>>,
+    /// Fit: `"stretch"` (default — fill the box exactly) or the repeat
+    /// modes `"repeat"`/`"repeatX"`/`"repeatY"` (tile at the texture's
+    /// logical size × [`scale`](Self::scale)).
+    #[serde(default, deserialize_with = "de_bg_image_mode")]
+    pub mode: Option<BackgroundImageMode>,
+    /// Tile scale for the repeat modes, in logical-px terms (`1.0` = the
+    /// texture's own size at 1× DPI; DPI correction is applied by
+    /// `crate::background_image::sync_background_tile_scale`). Ignored — with
+    /// a warning — under `"stretch"`. Decodes an `{ animated }` wrapper but
+    /// the binding is inert in v1 (read via `static_val`).
+    #[serde(default)]
+    pub scale: Option<Animatable<f32>>,
+}
+
+/// [`BackgroundImageSpec::mode`] keywords. Every variant maps to a
+/// layout-inert `NodeImageMode` (`Stretch` or `Tiled`) — never `Auto`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum BackgroundImageMode {
+    #[default]
+    Stretch,
+    Repeat,
+    RepeatX,
+    RepeatY,
+}
+
+impl BackgroundImageMode {
+    /// Whether this mode tiles at all (any repeat variant).
+    pub fn tiles(self) -> bool {
+        self != Self::Stretch
+    }
+
+    /// The per-axis tile flags (`tile_x`, `tile_y`) for `NodeImageMode::Tiled`.
+    pub fn tile_axes(self) -> (bool, bool) {
+        match self {
+            Self::Stretch => (false, false),
+            Self::Repeat => (true, true),
+            Self::RepeatX => (true, false),
+            Self::RepeatY => (false, true),
+        }
+    }
 }
 
 /// A style field that is either a static `T` or an inline animation binding —
@@ -2310,6 +2401,46 @@ keyword_fields! {
     fn de_line_break("lineBreak") -> LineBreak {
         "wordBoundary" => WordBoundary, "anyCharacter" => AnyCharacter,
         "wordOrCharacter" => WordOrCharacter, "noWrap" => NoWrap,
+    }
+    // Unknown keywords (incl. `<image>`-only modes like "auto"/"sliced") fall
+    // back to the layout-inert `Stretch`.
+    fn de_bg_image_mode("backgroundImage") -> BackgroundImageMode {
+        "stretch" => Stretch, "repeat" => Repeat,
+        "repeatX" => RepeatX, "repeatY" => RepeatY,
+    }
+}
+
+/// Totalizing decode for [`Style::background_image`]: any malformed value —
+/// a bare string (there is no shorthand form), a spec missing `src`, a
+/// non-object — warns and decodes to `None` rather than aborting the whole
+/// batch (the repo-wide decode invariant). Also warns on a `scale` that a
+/// non-repeat `mode` would silently ignore.
+fn de_background_image<'de, D: Deserializer<'de>>(
+    d: D,
+) -> Result<Option<BackgroundImageSpec>, D::Error> {
+    let v = serde_json::Value::deserialize(d)?;
+    if v.is_null() {
+        return Ok(None);
+    }
+    match BackgroundImageSpec::deserialize(&v) {
+        Ok(spec) => {
+            if spec.scale.is_some() && !spec.mode.unwrap_or_default().tiles() {
+                decode_warn(
+                    "backgroundImage",
+                    &v.to_string(),
+                    "backgroundImage `scale` only applies to the repeat modes; ignored under \"stretch\"",
+                );
+            }
+            Ok(Some(spec))
+        }
+        Err(err) => {
+            decode_warn(
+                "backgroundImage",
+                &v.to_string(),
+                &format!("invalid backgroundImage (object with `src` required): {err}"),
+            );
+            Ok(None)
+        }
     }
 }
 
@@ -3755,5 +3886,105 @@ mod tests {
         let (dirty, _) = cached.merge_delta(Props::default(), &[], &["cursor".into()]);
         assert_eq!(cached.style.as_ref().unwrap().cursor, None);
         assert!(dirty.style.intersects(style_groups::CURSOR));
+    }
+
+    /// `backgroundImage` decode: both `src` forms, mode keywords, and the
+    /// totalizing fallbacks (unknown mode → `Stretch`, invalid value → `None`
+    /// without aborting the style).
+    #[test]
+    fn background_image_decodes() {
+        let s: Style = serde_json::from_value(serde_json::json!({
+            "backgroundImage": {
+                "src": "images/bg.png",
+                "mode": "repeatX",
+                "scale": 2.0,
+                "tint": "#ff0000",
+            }
+        }))
+        .unwrap();
+        let spec = s.background_image.expect("spec decodes");
+        assert!(matches!(&spec.src, BackgroundImageSource::Path(p) if p == "images/bg.png"));
+        assert_eq!(spec.mode, Some(BackgroundImageMode::RepeatX));
+        assert_eq!(spec.scale.static_val(), Some(2.0));
+        assert_eq!(spec.tint.static_ref().map(String::as_str), Some("#ff0000"));
+
+        // An `{ animated }` tint decodes as a binding: the static read sees
+        // the field as absent (the animation applier drives it per frame).
+        let s: Style = serde_json::from_value(serde_json::json!({
+            "backgroundImage": {
+                "src": "bg.png",
+                "tint": { "animated": { "id": 7 } },
+            }
+        }))
+        .unwrap();
+        let spec = s.background_image.expect("animated tint decodes");
+        assert!(spec.tint.static_ref().is_none());
+        assert!(spec.tint.binding().is_some());
+
+        let s: Style = serde_json::from_value(serde_json::json!({
+            "backgroundImage": { "src": { "texture": "minimap" } }
+        }))
+        .unwrap();
+        let spec = s.background_image.expect("texture source decodes");
+        assert!(
+            matches!(&spec.src, BackgroundImageSource::Texture { texture } if texture == "minimap")
+        );
+        assert_eq!(spec.mode, None);
+
+        // `<image>`-only keywords fall back to the layout-inert Stretch.
+        let s: Style = serde_json::from_value(serde_json::json!({
+            "backgroundImage": { "src": "bg.png", "mode": "auto" }
+        }))
+        .unwrap();
+        assert_eq!(
+            s.background_image.unwrap().mode,
+            Some(BackgroundImageMode::Stretch)
+        );
+
+        // A bare string (no shorthand form) or a spec without `src` drops the
+        // field, keeping sibling fields of the same style.
+        for bad in [
+            serde_json::json!("bg.png"),
+            serde_json::json!({ "tint": "red" }),
+        ] {
+            let s: Style = serde_json::from_value(serde_json::json!({
+                "backgroundImage": bad, "width": 10,
+            }))
+            .unwrap();
+            assert!(s.background_image.is_none());
+            assert!(s.width.is_some(), "sibling fields survive the bad value");
+        }
+    }
+
+    /// Repeat-axis mapping for `NodeImageMode::Tiled`.
+    #[test]
+    fn background_image_mode_axes() {
+        use BackgroundImageMode::*;
+        assert_eq!(Stretch.tile_axes(), (false, false));
+        assert_eq!(Repeat.tile_axes(), (true, true));
+        assert_eq!(RepeatX.tile_axes(), (true, false));
+        assert_eq!(RepeatY.tile_axes(), (false, true));
+        assert!(!Stretch.tiles() && Repeat.tiles());
+    }
+
+    /// The delta merge marks the `BG_IMAGE` group; `styleUnset` clears the
+    /// field and returns the same bit.
+    #[test]
+    fn merge_delta_background_image_group() {
+        let mut cached = Props::default();
+        let (dirty, _) = cached.merge_delta(
+            props(serde_json::json!({
+                "style": { "backgroundImage": { "src": "bg.png", "mode": "repeat" } }
+            })),
+            &[],
+            &[],
+        );
+        assert!(cached.style.as_ref().unwrap().background_image.is_some());
+        assert!(dirty.style.intersects(style_groups::BG_IMAGE));
+        assert!(!dirty.style.intersects(style_groups::LAYOUT));
+
+        let (dirty, _) = cached.merge_delta(Props::default(), &[], &["backgroundImage".into()]);
+        assert!(cached.style.as_ref().unwrap().background_image.is_none());
+        assert!(dirty.style.intersects(style_groups::BG_IMAGE));
     }
 }

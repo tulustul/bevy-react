@@ -145,6 +145,9 @@ pub enum AnimatableProperty {
     BorderColor,
     /// Drives `TextColor` (a `<text>` node's color).
     Color,
+    /// Drives the `ImageNode.color` of a `backgroundImage`-styled node (the
+    /// spec's `tint`). Inert when no `ImageNode` is present.
+    BackgroundImageTint,
 
     // Layout lengths (px) — write `Node`, which re-triggers Bevy layout. The
     // applier writes the field only when it actually changes (no idle relayout).
@@ -264,7 +267,9 @@ impl AnimatableProperty {
                 }
                 _ => ValueKind::Length,
             },
-            Self::BackgroundColor | Self::BorderColor | Self::Color => ValueKind::Color,
+            Self::BackgroundColor | Self::BorderColor | Self::Color | Self::BackgroundImageTint => {
+                ValueKind::Color
+            }
             // Never consulted for the chain params — the applier reads the
             // authoritative kind from the resolved chain's `ParamSlot`
             // layout (`crate::filters`). A documented fallback, not a

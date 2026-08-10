@@ -232,6 +232,35 @@ pub(super) fn apply_create(
         apply_scroll_transition(&mut ec, &props.style);
         create_controlled_scroll(bridge, &mut ec, id, &props);
     }
+    // `backgroundImage`: applied on any element EXCEPT those whose
+    // `ImageNode` belongs to the element itself (image/canvas/portal — the
+    // set also guards the update/restyle paths) and `surface` (a detached
+    // root with its own branches everywhere). The build needs `assets`, so
+    // it can't live in `apply_style` — see `crate::background_image`.
+    match kind.as_str() {
+        "image" | "canvas" | "portal" => {
+            bridge.foreign_images.insert(id);
+            let element: &'static str = match kind.as_str() {
+                "image" => "image",
+                "canvas" => "canvas",
+                _ => "portal",
+            };
+            crate::background_image::warn_ignored(element, &props);
+        }
+        "surface" => crate::background_image::warn_ignored("surface", &props),
+        // A `textSpan` has no `Node`/box of its own to paint into.
+        "textSpan" => {}
+        _ => {
+            let mut ec = commands.entity(entity);
+            crate::background_image::apply_background_image(
+                &mut ec,
+                &props.style,
+                crate::protocol::StyleDirty::ALL,
+                false,
+                assets,
+            );
+        }
+    }
     bridge.nodes.insert(id, entity);
     // `cache: "always"` and a `filter`/`backdropFilter` chain — base or
     // variant-carried (the promotion union is presence-based, so a
@@ -404,6 +433,119 @@ mod tests {
             Some("minimap".to_string()),
             "an update rebinds the portal's target name"
         );
+    }
+
+    /// A `backgroundImage` style on a plain node mounts an `ImageNode` on the
+    /// same entity: repeat mode → `Tiled` with the wire scale (the DPI sync
+    /// corrects it live) + a `BackgroundTileScale` marker; a `{ texture }`
+    /// source stamps `RBackgroundTexture`.
+    #[test]
+    fn background_image_mounts_on_plain_node() {
+        use crate::background_image::{BackgroundTileScale, RBackgroundTexture};
+        use bevy::ui::widget::{ImageNode, NodeImageMode};
+        let (mut app, tx, _root) = ordering_app();
+        tx.send(vec![
+            Op::Create {
+                id: 1,
+                kind: "node".into(),
+                props: serde_json::from_value(serde_json::json!({
+                    "style": { "backgroundImage": {
+                        "src": "images/bg.png", "mode": "repeat", "scale": 2.0
+                    } }
+                }))
+                .expect("valid props"),
+                text: None,
+            },
+            Op::Create {
+                id: 2,
+                kind: "node".into(),
+                props: serde_json::from_value(serde_json::json!({
+                    "style": { "backgroundImage": { "src": { "texture": "minimap" } } }
+                }))
+                .expect("valid props"),
+                text: None,
+            },
+        ])
+        .unwrap();
+        app.update();
+
+        let e = ent(&app, 1);
+        let img = app
+            .world()
+            .entity(e)
+            .get::<ImageNode>()
+            .expect("backgroundImage inserts an ImageNode");
+        match img.image_mode {
+            NodeImageMode::Tiled {
+                tile_x,
+                tile_y,
+                stretch_value,
+            } => {
+                assert!(tile_x && tile_y, "repeat tiles both axes");
+                assert_eq!(stretch_value, 2.0, "wire scale lands in stretch_value");
+            }
+            ref other => panic!("expected Tiled, got {other:?}"),
+        }
+        assert_eq!(
+            app.world()
+                .entity(e)
+                .get::<BackgroundTileScale>()
+                .map(|s| s.0),
+            Some(2.0)
+        );
+        assert!(app.world().entity(e).get::<RBackgroundTexture>().is_none());
+
+        let e2 = ent(&app, 2);
+        assert_eq!(
+            app.world()
+                .entity(e2)
+                .get::<RBackgroundTexture>()
+                .map(|t| t.0.clone()),
+            Some("minimap".to_string()),
+            "a texture source stamps the bind marker"
+        );
+        assert!(
+            matches!(
+                app.world()
+                    .entity(e2)
+                    .get::<ImageNode>()
+                    .unwrap()
+                    .image_mode,
+                NodeImageMode::Stretch
+            ),
+            "default mode is Stretch"
+        );
+    }
+
+    /// A `backgroundImage` on a `<canvas>` is ignored (the canvas owns its
+    /// `ImageNode`): no marker components appear and the canvas texture is
+    /// left alone.
+    #[test]
+    fn background_image_ignored_on_canvas() {
+        use crate::background_image::{BackgroundTileScale, RBackgroundTexture};
+        use bevy::ui::widget::ImageNode;
+        let (mut app, tx, _root) = ordering_app();
+        tx.send(vec![Op::Create {
+            id: 1,
+            kind: "canvas".into(),
+            props: serde_json::from_value(serde_json::json!({
+                "style": { "backgroundImage": {
+                    "src": { "texture": "x" }, "mode": "repeat"
+                } }
+            }))
+            .expect("valid props"),
+            text: None,
+        }])
+        .unwrap();
+        app.update();
+
+        let e = ent(&app, 1);
+        assert!(
+            app.world().entity(e).get::<ImageNode>().is_some(),
+            "the canvas keeps its own ImageNode"
+        );
+        assert!(app.world().entity(e).get::<RBackgroundTexture>().is_none());
+        assert!(app.world().entity(e).get::<BackgroundTileScale>().is_none());
     }
 
     /// An `<anchor>` rides the plain-node fallback path: the kind has no dedicated

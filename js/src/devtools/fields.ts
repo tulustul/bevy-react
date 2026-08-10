@@ -80,6 +80,7 @@ export const STYLE_FIELDS: Record<string, FieldCategory> = {
   backdropFilter: "json",
   backgroundGradient: "json",
   borderGradient: "json",
+  backgroundImage: "json",
   zIndex: "number",
   globalZIndex: "number",
   focusPolicy: "keyword",

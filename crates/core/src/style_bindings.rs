@@ -147,6 +147,14 @@ pub(crate) fn derive_bindings(style: Option<&Style>) -> Option<AnimatedBindings>
         }
     }
 
+    // The one animatable field nested inside `backgroundImage` (its `scale`
+    // stays static-only for now).
+    if let Some(bg) = &style.background_image
+        && let Some(crate::protocol::Animatable::Animated(b)) = &bg.tint
+    {
+        out.insert(P::BackgroundImageTint, b.clone());
+    }
+
     chain_bindings(style.filter.as_ref(), false, &mut out);
     chain_bindings(style.backdrop_filter.as_ref(), true, &mut out);
 
@@ -217,6 +225,28 @@ mod tests {
         assert_eq!(b.get(P::Transform3d(F::Perspective)), None);
         // The static halves survive the decode next to the bindings.
         assert!(s.transform3d.as_ref().unwrap().perspective.is_some());
+    }
+
+    /// The nested `backgroundImage.tint` derives its binding; a static tint
+    /// (or a spec-less style) derives nothing.
+    #[test]
+    fn derives_background_image_tint() {
+        let s = style(serde_json::json!({
+            "backgroundImage": {
+                "src": "bg.png",
+                "tint": { "animated": { "id": 9 } },
+            },
+        }));
+        let b = derive_bindings(Some(&s)).expect("bindings derived");
+        assert_eq!(b.get(P::BackgroundImageTint), Some(&shared(9)));
+
+        let s = style(serde_json::json!({
+            "backgroundImage": { "src": "bg.png", "tint": "#ff0000" },
+        }));
+        assert!(
+            derive_bindings(Some(&s)).is_none(),
+            "a static tint derives no bindings"
+        );
     }
 
     /// Filter/backdrop chain params derive by chain position (single object =
