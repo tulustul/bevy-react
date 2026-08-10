@@ -586,6 +586,21 @@ impl Plugin for ReactUiPlugin {
             crate::window::send_resize_events.after(apply_js_ops),
         );
 
+        // The built-in gamepad events (see `crate::gamepad`). A separate
+        // `add_systems` call — the Update tuple above is at the arity cap.
+        // `.after(apply_js_ops)` so the late-join announce goes out the same
+        // frame the first batch applies. The `add_message` calls are idempotent
+        // (`InputPlugin` registers both in real apps) and keep the collector's
+        // and observers' params valid in headless `MinimalPlugins` apps.
+        app.init_resource::<crate::gamepad::GamepadRegistry>();
+        app.add_message::<bevy::input::gamepad::GamepadEvent>();
+        app.add_message::<bevy::input::gamepad::GamepadConnectionEvent>();
+        app.add_message::<bevy::input::gamepad::GamepadRumbleRequest>();
+        app.add_systems(
+            Update,
+            crate::gamepad::collect_gamepad_events.after(apply_js_ops),
+        );
+
         // `backgroundImage` runtime systems (see `crate::background_image`).
         // A separate `add_systems` call — the Update tuple above is at the
         // arity cap. Ordered after the op drain AND the interaction restyle
@@ -695,6 +710,14 @@ impl Plugin for ReactUiPlugin {
             ),
         );
         app.add_react_request_handler(crate::window::handle_window_size_request);
+
+        // The built-in rumble messages (`bevy.gamepad.rumble` / `.stopRumble`,
+        // see `crate::gamepad`): registers the payloads in `ReactRegistry` and
+        // attaches the observers in one call each. `bevy.gamepad.getAll()` is
+        // the pull companion to `gamepadConnected` for late-mounted components.
+        app.add_react_handler(crate::gamepad::on_rumble);
+        app.add_react_handler(crate::gamepad::on_stop_rumble);
+        app.add_react_request_handler(crate::gamepad::handle_gamepad_get_all);
 
         // Frame-start stamp for the devtools frame-wait / pre-apply split
         // (native only — no usable `Instant::now` on wasm). `First`: before

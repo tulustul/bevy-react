@@ -6,6 +6,7 @@ import { BevyToReactDemo } from "./demos/communication/BevyToReactDemo";
 import { BidirectionCommunicationDemo } from "./demos/communication/BidirectionCommunicationDemo";
 import { AnchorDemo } from "./demos/AnchorDemo";
 import { MouseDemo } from "./demos/events/MouseDemo";
+import { GamepadDemo } from "./demos/events/gamepadDemo";
 import { KeyboardDemo } from "./demos/events/KeyboardDemo";
 import { WindowDemo } from "./demos/events/WindowDemo";
 import { CanvasDemo } from "./demos/elements/CanvasDemo";
@@ -137,6 +138,7 @@ export const DEMOS: DemoItem[] = [
     children: [
       { label: "Mouse", component: MouseDemo },
       { label: "Keyboard", component: KeyboardDemo },
+      { label: "Gamepad", component: GamepadDemo },
       { label: "Window", component: WindowDemo },
     ],
   },

@@ -33,6 +33,62 @@ export type Dissolve = {
  */
 progress: number, };
 export type FollowRandom = null;
+export type GamepadAxisChange = { gamepad: number, axis: GamepadAxisName, value: number, };
+export type GamepadAxisName = "leftStickX" | "leftStickY" | "leftZ" | "rightStickX" | "rightStickY" | "rightZ" | { "other": number };
+export type GamepadButtonChange = { gamepad: number, button: GamepadButtonName, 
+/**
+ * Digital state after the change (thresholds from `GamepadSettings`).
+ */
+pressed: boolean, 
+/**
+ * Analog value in `0.0..=1.0` (triggers report the full range).
+ */
+value: number, };
+export type GamepadButtonName = "south" | "east" | "north" | "west" | "c" | "z" | "leftTrigger" | "leftTrigger2" | "rightTrigger" | "rightTrigger2" | "select" | "start" | "mode" | "leftThumb" | "rightThumb" | "dPadUp" | "dPadDown" | "dPadLeft" | "dPadRight" | { "other": number };
+export type GamepadConnected = GamepadConnectedData;
+export type GamepadConnectedData = { 
+/**
+ * Monotonic wire id — never reused across reconnects.
+ */
+gamepad: number, 
+/**
+ * OS-provided device name.
+ */
+name: string, 
+/**
+ * USB vendor id, when the backend knows it.
+ */
+vendorId: number | null, 
+/**
+ * USB product id, when the backend knows it.
+ */
+productId: number | null, };
+export type GamepadDisconnected = GamepadDisconnectedData;
+export type GamepadDisconnectedData = { 
+/**
+ * The wire id the pad was announced under. Retired for good.
+ */
+gamepad: number, };
+export type GamepadInputData = { buttons: Array<GamepadButtonChange>, axes: Array<GamepadAxisChange>, };
+export type GamepadInputEvent = GamepadInputData;
+export type GamepadRumble = { 
+/**
+ * Wire id from [`GamepadConnected`].
+ */
+gamepad: number, 
+/**
+ * Milliseconds (web-`playEffect`-like). Negative values clamp to 0.
+ */
+duration: number, 
+/**
+ * Low-frequency motor intensity, clamped to `0.0..=1.0`.
+ */
+strongMotor: number, 
+/**
+ * High-frequency motor intensity, clamped to `0.0..=1.0`.
+ */
+weakMotor: number, };
+export type GamepadStopRumble = { gamepad: number, };
 export type Glitch = { 
 /**
  * Overall strength, 0 (clean) ..= 1 (heavily corrupted).
@@ -96,12 +152,15 @@ export interface ReactMessages {
   "basicDemo.setCount": SetCount;
   "crowdedCubes.followRandom": FollowRandom;
   "crowdedCubes.setFollowMode": SetFollowMode;
+  "gamepad.rumble": GamepadRumble;
+  "gamepad.stopRumble": GamepadStopRumble;
   selectScene: SelectScene;
   "surfaceDemo.setCrt": SetCrt;
 }
 
 /** Every `request` name and its request/response types. */
 export interface ReactRequests {
+  "gamepad.getAll": { request: null; response: Array<GamepadConnectedData> };
   "pollingDemo.getBall": { request: null; response: BallState };
   "window.size": { request: null; response: WindowSize };
 }
@@ -111,6 +170,9 @@ export interface ReactEvents {
   "bevyEventsDemo.ballBounced": BallBounced;
   "crowdedCubes.spawned": CubesSpawned;
   "debug.selectDemo": SelectDemo;
+  gamepadConnected: GamepadConnected;
+  gamepadDisconnected: GamepadDisconnected;
+  gamepadInput: GamepadInputEvent;
   keyDown: KeyDown;
   keyUp: KeyUp;
   resize: Resize;
@@ -180,6 +242,11 @@ export const bevy = {
   crowdedCubes: {
     followRandom(value: FollowRandom): void { emit("crowdedCubes.followRandom", value); },
     setFollowMode(value: SetFollowMode): void { emit("crowdedCubes.setFollowMode", value); },
+  },
+  gamepad: {
+    getAll(): Promise<Array<GamepadConnectedData>> { return request("gamepad.getAll", null); },
+    rumble(value: GamepadRumble): void { emit("gamepad.rumble", value); },
+    stopRumble(value: GamepadStopRumble): void { emit("gamepad.stopRumble", value); },
   },
   pollingDemo: {
     getBall(): Promise<BallState> { return request("pollingDemo.getBall", null); },

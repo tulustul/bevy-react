@@ -63,19 +63,42 @@ pub(crate) fn render_typescript(
     collector.add::<crate::keyboard::KeyDown>();
     collector.add::<crate::keyboard::KeyUp>();
     collector.add::<crate::window::Resize>();
+    // The gamepad built-ins (see `crate::gamepad`): three events and the two
+    // rumble messages. Payload/union deps (`GamepadConnectedData`,
+    // `GamepadButtonName`, …) are collected transitively.
+    collector.add::<crate::gamepad::GamepadConnected>();
+    collector.add::<crate::gamepad::GamepadDisconnected>();
+    collector.add::<crate::gamepad::GamepadInputEvent>();
+    collector.add::<crate::gamepad::GamepadRumble>();
+    collector.add::<crate::gamepad::GamepadStopRumble>();
 
-    // Sorted name lists keep the maps and proxy stable across runs.
+    // `gamepad.rumble`/`gamepad.stopRumble` are reserved for the built-in
+    // rumble messages (see `crate::gamepad`); drop any app message that
+    // collides, then append the built-ins (always present — the plugin
+    // registers their observers). Sorted name lists keep the maps and proxy
+    // stable across runs.
+    const BUILTIN_MESSAGES: [&str; 2] = ["gamepad.rumble", "gamepad.stopRumble"];
     let mut message_names: Vec<(&str, String)> = messages
         .handlers
         .iter()
         .map(|(name, reg)| (*name, (reg.ts_name)()))
+        .filter(|(name, _)| !BUILTIN_MESSAGES.contains(name))
         .collect();
+    message_names.push((
+        "gamepad.rumble",
+        <crate::gamepad::GamepadRumble as TS>::name(),
+    ));
+    message_names.push((
+        "gamepad.stopRumble",
+        <crate::gamepad::GamepadStopRumble as TS>::name(),
+    ));
     message_names.sort();
 
-    // `window.size` is reserved for the built-in viewport request (see
-    // `crate::window`); drop any app request that collides, then append the
-    // built-in (always present — the plugin registers its handler).
-    const BUILTIN_REQUESTS: [&str; 1] = ["window.size"];
+    // `window.size`/`gamepad.getAll` are reserved for the built-in requests
+    // (see `crate::window` / `crate::gamepad`); drop any app request that
+    // collides, then append the built-ins (always present — the plugin
+    // registers their handlers).
+    const BUILTIN_REQUESTS: [&str; 2] = ["window.size", "gamepad.getAll"];
     let mut request_rows: Vec<RequestRow> = requests
         .handlers
         .iter()
@@ -93,12 +116,25 @@ pub(crate) fn render_typescript(
         response_ts: <crate::window::WindowSize as TS>::name(),
         void: true,
     });
+    request_rows.push(RequestRow {
+        name: "gamepad.getAll",
+        request_ts: <crate::gamepad::GamepadGetAll as TS>::name(),
+        response_ts: <Vec<crate::gamepad::GamepadConnectedData> as TS>::name(),
+        void: true,
+    });
     request_rows.sort_by(|a, b| a.name.cmp(b.name));
 
-    // `keyDown`/`keyUp`/`resize` are reserved for the built-in events; drop any
-    // app event that collides so the generated interface can't get a duplicate key,
-    // then append the built-ins (always present).
-    const BUILTIN_EVENTS: [&str; 3] = ["keyDown", "keyUp", "resize"];
+    // The keyboard/resize/gamepad names are reserved for the built-in events;
+    // drop any app event that collides so the generated interface can't get a
+    // duplicate key, then append the built-ins (always present).
+    const BUILTIN_EVENTS: [&str; 6] = [
+        "keyDown",
+        "keyUp",
+        "resize",
+        "gamepadConnected",
+        "gamepadDisconnected",
+        "gamepadInput",
+    ];
     let mut event_names: Vec<(&str, String)> = events
         .handlers
         .iter()
@@ -108,6 +144,18 @@ pub(crate) fn render_typescript(
     event_names.push(("keyDown", <crate::keyboard::KeyDown as TS>::name()));
     event_names.push(("keyUp", <crate::keyboard::KeyUp as TS>::name()));
     event_names.push(("resize", <crate::window::Resize as TS>::name()));
+    event_names.push((
+        "gamepadConnected",
+        <crate::gamepad::GamepadConnected as TS>::name(),
+    ));
+    event_names.push((
+        "gamepadDisconnected",
+        <crate::gamepad::GamepadDisconnected as TS>::name(),
+    ));
+    event_names.push((
+        "gamepadInput",
+        <crate::gamepad::GamepadInputEvent as TS>::name(),
+    ));
     event_names.sort();
 
     // Filters: app-registered customs plus the eight built-ins, seeded here —
@@ -639,6 +687,50 @@ mod tests {
         );
         assert!(ts.contains("keyDown: KeyDown;"), "{ts}");
         assert!(ts.contains("keyUp: KeyUp;"), "{ts}");
+        // So are the built-in gamepad events and rumble messages …
+        assert!(
+            ts.contains("export type GamepadConnected = GamepadConnectedData;"),
+            "{ts}"
+        );
+        assert!(ts.contains("gamepadConnected: GamepadConnected;"), "{ts}");
+        assert!(
+            ts.contains("gamepadDisconnected: GamepadDisconnected;"),
+            "{ts}"
+        );
+        assert!(ts.contains("gamepadInput: GamepadInputEvent;"), "{ts}");
+        assert!(ts.contains(r#""gamepad.rumble": GamepadRumble;"#), "{ts}");
+        assert!(
+            ts.contains(r#""gamepad.stopRumble": GamepadStopRumble;"#),
+            "{ts}"
+        );
+        // … whose button union keeps the externally-tagged non-standard arm
+        // (the TS type must agree with the serde wire shape).
+        assert!(ts.contains("export type GamepadButtonName = "), "{ts}");
+        assert!(ts.contains(r#"{ "other": number }"#), "{ts}");
+        assert!(
+            ts.contains(r#"rumble(value: GamepadRumble): void { emit("gamepad.rumble", value); }"#),
+            "{ts}"
+        );
+        assert!(
+            ts.contains(
+                r#"stopRumble(value: GamepadStopRumble): void { emit("gamepad.stopRumble", value); }"#
+            ),
+            "{ts}"
+        );
+        // The pull companion request lands in the same `gamepad` proxy
+        // namespace as the rumble messages (mixed message + request leaves).
+        assert!(
+            ts.contains(
+                r#""gamepad.getAll": { request: null; response: Array<GamepadConnectedData> };"#
+            ),
+            "{ts}"
+        );
+        assert!(
+            ts.contains(
+                r#"getAll(): Promise<Array<GamepadConnectedData>> { return request("gamepad.getAll", null); }"#
+            ),
+            "{ts}"
+        );
         // So are the built-in viewport-size event and request.
         assert!(ts.contains("export type WindowSize = "), "{ts}");
         assert!(ts.contains("export type Resize = WindowSize;"), "{ts}");
@@ -720,6 +812,45 @@ mod tests {
             assert!(ts.contains(&format!("export type {ts_name} = ")), "{ts}");
         }
         assert!(ts.contains("declare module \"bevy-react\" {"), "{ts}");
+        // Gamepad events + rumble messages are seeded from fully empty
+        // registries too (the plugin always registers their handlers).
+        assert!(ts.contains("gamepadConnected: GamepadConnected;"), "{ts}");
+        assert!(ts.contains("gamepadInput: GamepadInputEvent;"), "{ts}");
+        assert!(ts.contains(r#""gamepad.rumble": GamepadRumble;"#), "{ts}");
+        assert!(
+            ts.contains(r#""gamepad.stopRumble": GamepadStopRumble;"#),
+            "{ts}"
+        );
+    }
+
+    /// An app message claiming a built-in message name loses to the built-in
+    /// (same reservation rule as built-in events), and the name appears
+    /// exactly once.
+    #[test]
+    fn app_message_claiming_builtin_name_is_dropped() {
+        #[react_message(name = "gamepad.rumble")]
+        #[allow(dead_code)]
+        struct ImposterRumble(u32);
+
+        let mut messages = ReactRegistry::default();
+        messages.register::<ImposterRumble>();
+        let ts = render_typescript(
+            &messages,
+            &ReactRequestRegistry::default(),
+            &ReactEventRegistry::default(),
+            &FilterRegistry::default(),
+        );
+        assert!(ts.contains(r#""gamepad.rumble": GamepadRumble;"#), "{ts}");
+        // The imposter never reaches the map or the proxy. (Its orphaned type
+        // decl still renders — same as any app type colliding with a built-in;
+        // harmless, and consistent with the `window.size` request rule.)
+        assert!(!ts.contains(r#""gamepad.rumble": ImposterRumble;"#), "{ts}");
+        assert!(!ts.contains("value: ImposterRumble"), "{ts}");
+        assert_eq!(ts.matches(r#""gamepad.rumble":"#).count(), 1, "{ts}"); // the map entry
+        assert!(
+            ts.contains(r#"rumble(value: GamepadRumble): void { emit("gamepad.rumble", value); }"#),
+            "{ts}"
+        );
     }
 
     /// A custom filter claiming a built-in wire name wins over the seeded

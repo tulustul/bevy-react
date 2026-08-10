@@ -47,6 +47,7 @@ mod diag;
 #[cfg(feature = "devtools")]
 mod devtools;
 mod event;
+mod gamepad;
 mod host;
 mod keyboard;
 mod message;
