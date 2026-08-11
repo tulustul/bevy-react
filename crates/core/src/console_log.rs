@@ -5,8 +5,8 @@
 //! event-loop errors).
 //!
 //! Collection is always-on in dev builds; nothing crosses the bridge until the
-//! panel's Console tab opens, at which point `devtools::emit_console` sends the
-//! backlog once and then streams increments by sequence number. `clear`
+//! panel's Console tab opens, at which point `devtools::console::emit_console`
+//! sends the backlog once and then streams increments by sequence number. `clear`
 //! empties the ring but never resets `seq`, so the stream watermark stays
 //! monotonic across clears.
 //!
