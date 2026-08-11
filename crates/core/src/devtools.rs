@@ -1743,7 +1743,7 @@ mod tests {
     /// `scrollbar.rs`, `animations/protocol.rs`, `svg/protocol.rs`) and the
     /// `diag::report` sites
     /// (`ui_map.rs`, `cursor.rs`, `filters.rs`, `layer.rs`,
-    /// `animations/{mod,shape_stage}.rs`, `svg/image.rs`,
+    /// `animations/apply/{filter_params,shape,warn}.rs`, `svg/image.rs`,
     /// `reconcile/svg_ops.rs`); extend
     /// BOTH this list and the table when
     /// adding one. (`length`/`angle`/`time` are deliberately table-less —

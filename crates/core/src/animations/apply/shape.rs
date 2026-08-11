@@ -33,10 +33,16 @@
 //! [`LayerContentDirt`](crate::layer::LayerContentDirt) itself when it
 //! repaints. (Write timing for E3, the transition engine: this stage is the
 //! last `SvgShape` writer of the frame — op merge first, driver second.)
+//! While any shape binding exists the transition engine's shape channel is
+//! parked — and, uniquely, RESET for re-seed — see
+//! [`ChannelId`](super::super::props::ChannelId) for the authoritative park
+//! semantics.
 
 use bevy::prelude::*;
 
-use super::{AnimatableProperty, AnimatedBindings, Binding, SharedValues, eval_scalar};
+use super::super::protocol::{AnimatableProperty, AnimatedBindings, Binding};
+use super::super::{SharedValues, eval_scalar};
+use super::warn::warn_if;
 use crate::protocol::Animatable;
 use crate::svg::{SvgShape, numeric_attr, numeric_attr_mut};
 
@@ -56,13 +62,9 @@ pub(super) fn apply_shape_attrs(
 ) {
     // Attribute validation warnings to the node's devtools inspector.
     let _diag = rnode.map(|r| crate::diag::node_scope(r.0));
-    // Lazy like stage 4: `make` allocates only when a warning actually
-    // fires, keeping the per-bound-attr per-frame path allocation-free.
+    // Lazy like stage 4 — see `warn::warn_if`.
     let warn = |validate: bool, make: &dyn Fn() -> (String, String)| {
-        if validate {
-            let (key, msg) = make();
-            crate::diag::report("shapeBinding", &key, &msg);
-        }
+        warn_if(validate, "shapeBinding", make)
     };
 
     let Some(shape) = shape else {
@@ -167,7 +169,7 @@ pub(super) fn apply_shape_attrs(
 
 #[cfg(test)]
 mod tests {
-    use super::super::{
+    use crate::animations::{
         AnimatedNode, Driver, Easing, SharedValues, apply_animated_nodes, protocol,
     };
     use crate::protocol::{Animatable, AnimatableField};

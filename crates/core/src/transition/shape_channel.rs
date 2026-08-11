@@ -34,7 +34,7 @@
 
 use bevy::prelude::*;
 
-use super::Channel;
+use super::channels::Channel;
 use crate::protocol::Animatable;
 use crate::svg::{NUMERIC_ATTR_COUNT, NUMERIC_ATTRS, SvgShape};
 
@@ -65,7 +65,11 @@ pub(super) struct ShapeChannel {
 impl ShapeChannel {
     /// Drop all tracking so the next [`Self::drive`] snaps. Called while the
     /// channel is parked (any `ShapeAttr` binding on the entity): unparking
-    /// must re-seed at the live values, not ease from stale ones.
+    /// must re-seed at the live values, not ease from stale ones. This
+    /// reset-while-parked rule is unique to the shape channel — every
+    /// `ChannelId` channel retains its state instead; see
+    /// [`ChannelId`](crate::animations::props::ChannelId), the authoritative
+    /// park-semantics reference.
     pub(super) fn reset(&mut self) {
         self.slots = Default::default();
     }

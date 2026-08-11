@@ -250,65 +250,38 @@ impl AnimatableProperty {
     /// The kind of value this property animates — picks scalar-vs-color resolution
     /// in the apply layer. `Rotate` is an `Angle`: the bound value is degrees
     /// on the wire, resolved as a scalar and converted by the applier.
+    ///
+    /// Static rows generate from the property table
+    /// (`crate::animations::props`); the dynamic domains keep explicit arms.
+    #[allow(unused_parens)]
     pub fn value_kind(&self) -> ValueKind {
-        match self {
-            Self::TranslateX
-            | Self::TranslateY
-            | Self::Width
-            | Self::Height
-            | Self::MinWidth
-            | Self::MinHeight
-            | Self::MaxWidth
-            | Self::MaxHeight
-            | Self::Left
-            | Self::Right
-            | Self::Top
-            | Self::Bottom
-            | Self::FlexBasis
-            | Self::Gap
-            | Self::RowGap
-            | Self::ColumnGap => ValueKind::Length,
-            Self::Scale | Self::ScaleX | Self::ScaleY | Self::Opacity | Self::AspectRatio => {
-                ValueKind::Scalar
-            }
-            Self::Rotate => ValueKind::Angle,
-            Self::Transform3d(field) => match field {
-                Transform3dField::RotateX
-                | Transform3dField::RotateY
-                | Transform3dField::RotateZ => ValueKind::Angle,
-                Transform3dField::Scale | Transform3dField::ScaleX | Transform3dField::ScaleY => {
-                    ValueKind::Scalar
+        use AnimatableProperty as P;
+        use Transform3dField as F;
+        macro_rules! kind_arms {
+            ($(($prop:tt, $kind:ident, $acc:tt, $write:tt, $stage:ident, $park:ident),)*) => {
+                match self {
+                    $($prop => ValueKind::$kind,)*
+                    // Never consulted for the chain params — the applier reads the
+                    // authoritative kind from the resolved chain's `ParamSlot`
+                    // layout (`crate::filters`). A documented fallback, not a
+                    // semantic: the slot decides scalar-vs-color, not this arm.
+                    Self::FilterParam { .. } | Self::BackdropParam { .. } => ValueKind::Scalar,
+                    // Genuinely scalar (unlike the chain params' documented fallback
+                    // above): shape attrs are raw user-space numbers — no logical→
+                    // physical px rewrite applies (the viewBox scales them at
+                    // raster), so `Length` semantics would be wrong here.
+                    Self::ShapeAttr { .. } => ValueKind::Scalar,
                 }
-                _ => ValueKind::Length,
-            },
-            Self::BackgroundColor | Self::BorderColor | Self::Color | Self::BackgroundImageTint => {
-                ValueKind::Color
-            }
-            // Never consulted for the chain params — the applier reads the
-            // authoritative kind from the resolved chain's `ParamSlot`
-            // layout (`crate::filters`). A documented fallback, not a
-            // semantic: the slot decides scalar-vs-color, not this arm.
-            Self::FilterParam { .. } | Self::BackdropParam { .. } => ValueKind::Scalar,
-            // Genuinely scalar (unlike the chain params' documented fallback
-            // above): shape attrs are raw user-space numbers — no logical→
-            // physical px rewrite applies (the viewBox scales them at
-            // raster), so `Length` semantics would be wrong here.
-            Self::ShapeAttr { .. } => ValueKind::Scalar,
+            };
         }
+        crate::animations::props::with_animatable_props!(kind_arms)
     }
 
     /// Whether this property feeds the `UiTransform` (built from all transform
     /// channels together), so the apply layer can rebuild the transform once.
+    /// The channel set is the table's `Transform` stage (`crate::animations::props`).
     pub fn is_transform(&self) -> bool {
-        matches!(
-            self,
-            Self::TranslateX
-                | Self::TranslateY
-                | Self::Scale
-                | Self::ScaleX
-                | Self::ScaleY
-                | Self::Rotate
-        )
+        self.stage() == crate::animations::props::PropStage::Transform
     }
 }
 
@@ -333,7 +306,7 @@ pub enum ValueKind {
 /// `crate::style_bindings::derive_bindings` after every style change, and
 /// stamped on the entity as `AnimatedNode`. A `BTreeMap` keeps iteration
 /// deterministic (stable transform-group rebuild and test assertions).
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct AnimatedBindings(pub BTreeMap<AnimatableProperty, Binding>);
 
 impl AnimatedBindings {
@@ -347,10 +320,17 @@ impl AnimatedBindings {
         self.0.contains_key(&property)
     }
 
+    /// Whether any binding belongs to the given apply stage — the one
+    /// predicate behind every `has_*` gate (stages come from the property
+    /// table, `crate::animations::props`).
+    fn has_stage(&self, stage: crate::animations::props::PropStage) -> bool {
+        self.0.keys().any(|p| p.stage() == stage)
+    }
+
     /// Whether any transform channel is bound (so the orchestrator only writes
     /// `UiTransform` when something actually drives it).
     pub fn has_transform(&self) -> bool {
-        self.0.keys().any(|p| p.is_transform())
+        self.has_stage(crate::animations::props::PropStage::Transform)
     }
 
     /// Whether any per-param filter binding ([`AnimatableProperty::FilterParam`])
@@ -358,17 +338,13 @@ impl AnimatedBindings {
     /// engine, `skip_filter` (any filter binding parks the *whole* whole-value
     /// filter channel).
     pub fn has_filter_params(&self) -> bool {
-        self.0
-            .keys()
-            .any(|p| matches!(p, AnimatableProperty::FilterParam { .. }))
+        self.has_stage(crate::animations::props::PropStage::Filter)
     }
 
     /// The backdrop analog of [`Self::has_filter_params`] — gates the
     /// applier's backdrop stage and the transition engine's `skip_backdrop`.
     pub fn has_backdrop_params(&self) -> bool {
-        self.0
-            .keys()
-            .any(|p| matches!(p, AnimatableProperty::BackdropParam { .. }))
+        self.has_stage(crate::animations::props::PropStage::Backdrop)
     }
 
     /// Whether any SVG shape-attr binding ([`AnimatableProperty::ShapeAttr`])
@@ -376,9 +352,7 @@ impl AnimatedBindings {
     /// engine, the shape channel's coarse skip (any attr binding parks the
     /// whole shape group).
     pub fn has_shape_attrs(&self) -> bool {
-        self.0
-            .keys()
-            .any(|p| matches!(p, AnimatableProperty::ShapeAttr { .. }))
+        self.has_stage(crate::animations::props::PropStage::Shape)
     }
 
     /// Whether any `transform3d.<field>` binding is bound — gates the
@@ -386,9 +360,7 @@ impl AnimatedBindings {
     /// `skip_transform3d` (any binding parks the whole channel group: the
     /// stage rebuilds the full params struct).
     pub fn has_transform3d(&self) -> bool {
-        self.0
-            .keys()
-            .any(|p| matches!(p, AnimatableProperty::Transform3d(_)))
+        self.has_stage(crate::animations::props::PropStage::Transform3d)
     }
 
     /// Iterate the bound (property, binding) pairs in property order.

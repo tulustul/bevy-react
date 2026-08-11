@@ -73,88 +73,63 @@ fn chain_bindings(chain: Option<&FilterChain>, backdrop: bool, out: &mut BTreeMa
 /// Derive the complete binding map from a merged style, or `None` when the
 /// style carries no `{ animated }` wrapper anywhere (the node then has no
 /// [`AnimatedNode`](crate::animations::AnimatedNode) component at all).
+///
+/// The static-property walk is generated from the property table
+/// (`crate::animations::props` — the accessor column knows where each
+/// property lives in the style); only the chain walks stay hand-written
+/// (dynamic domains). A property missing its accessor would be a silently
+/// inert binding, so the maximal-style test below pins every row.
 pub(crate) fn derive_bindings(style: Option<&Style>) -> Option<AnimatedBindings> {
     let style = style?;
     let mut out = BTreeMap::new();
+    use crate::protocol::Animatable;
 
-    macro_rules! field {
-        ($field:ident, $prop:expr) => {
-            if let Some(crate::protocol::Animatable::Animated { binding: b, .. }) = &style.$field {
+    // One rule per accessor shape (see the table's column contract).
+    macro_rules! row {
+        ($prop:tt, (base $field:ident)) => {
+            if let Some(Animatable::Animated { binding: b, .. }) = &style.$field {
+                out.insert($prop, b.clone());
+            }
+        };
+        ($prop:tt, (transform $field:ident)) => {
+            if let Some(t) = &style.transform
+                && let Some(Animatable::Animated { binding: b, .. }) = &t.$field
+            {
+                out.insert($prop, b.clone());
+            }
+        };
+        ($prop:tt, (t3d $field:ident $($unit:tt)*)) => {
+            if let Some(t) = &style.transform3d
+                && let Some(Animatable::Animated { binding: b, .. }) = &t.$field
+            {
+                out.insert($prop, b.clone());
+            }
+        };
+        // `origin.x`/`origin.y` are `Animatable` directly (not `Option`).
+        ($prop:tt, (t3d_origin $axis:ident)) => {
+            if let Some(t) = &style.transform3d
+                && let Some(origin) = &t.origin
+                && let Animatable::Animated { binding: b, .. } = &origin.$axis
+            {
+                out.insert($prop, b.clone());
+            }
+        };
+        // The one animatable field nested inside `backgroundImage` (its
+        // `scale` stays static-only for now).
+        ($prop:tt, (bg_tint)) => {
+            if let Some(bg) = &style.background_image
+                && let Some(Animatable::Animated { binding: b, .. }) = &bg.tint
+            {
                 out.insert($prop, b.clone());
             }
         };
     }
-    field!(left, P::Left);
-    field!(right, P::Right);
-    field!(top, P::Top);
-    field!(bottom, P::Bottom);
-    field!(width, P::Width);
-    field!(height, P::Height);
-    field!(min_width, P::MinWidth);
-    field!(min_height, P::MinHeight);
-    field!(max_width, P::MaxWidth);
-    field!(max_height, P::MaxHeight);
-    field!(aspect_ratio, P::AspectRatio);
-    field!(flex_basis, P::FlexBasis);
-    field!(gap, P::Gap);
-    field!(row_gap, P::RowGap);
-    field!(column_gap, P::ColumnGap);
-    field!(opacity, P::Opacity);
-    field!(background_color, P::BackgroundColor);
-    field!(border_color, P::BorderColor);
-    field!(color, P::Color);
-
-    if let Some(t) = &style.transform {
-        macro_rules! tfield {
-            ($field:ident, $prop:expr) => {
-                if let Some(crate::protocol::Animatable::Animated { binding: b, .. }) = &t.$field {
-                    out.insert($prop, b.clone());
-                }
-            };
-        }
-        tfield!(translate_x, P::TranslateX);
-        tfield!(translate_y, P::TranslateY);
-        tfield!(scale, P::Scale);
-        tfield!(scale_x, P::ScaleX);
-        tfield!(scale_y, P::ScaleY);
-        tfield!(rotate, P::Rotate);
+    macro_rules! walk {
+        ($(($prop:tt, $kind:ident, $acc:tt, $write:tt, $stage:ident, $park:ident),)*) => {
+            $(row!($prop, $acc);)*
+        };
     }
-
-    if let Some(t) = &style.transform3d {
-        macro_rules! tfield {
-            ($field:ident, $prop:expr) => {
-                if let Some(crate::protocol::Animatable::Animated { binding: b, .. }) = &t.$field {
-                    out.insert(P::Transform3d($prop), b.clone());
-                }
-            };
-        }
-        tfield!(perspective, F::Perspective);
-        tfield!(translate_x, F::TranslateX);
-        tfield!(translate_y, F::TranslateY);
-        tfield!(translate_z, F::TranslateZ);
-        tfield!(rotate_x, F::RotateX);
-        tfield!(rotate_y, F::RotateY);
-        tfield!(rotate_z, F::RotateZ);
-        tfield!(scale, F::Scale);
-        tfield!(scale_x, F::ScaleX);
-        tfield!(scale_y, F::ScaleY);
-        if let Some(origin) = &t.origin {
-            if let crate::protocol::Animatable::Animated { binding: b, .. } = &origin.x {
-                out.insert(P::Transform3d(F::OriginX), b.clone());
-            }
-            if let crate::protocol::Animatable::Animated { binding: b, .. } = &origin.y {
-                out.insert(P::Transform3d(F::OriginY), b.clone());
-            }
-        }
-    }
-
-    // The one animatable field nested inside `backgroundImage` (its `scale`
-    // stays static-only for now).
-    if let Some(bg) = &style.background_image
-        && let Some(crate::protocol::Animatable::Animated { binding: b, .. }) = &bg.tint
-    {
-        out.insert(P::BackgroundImageTint, b.clone());
-    }
+    crate::animations::props::with_animatable_props!(walk);
 
     chain_bindings(style.filter.as_ref(), false, &mut out);
     chain_bindings(style.backdrop_filter.as_ref(), true, &mut out);
@@ -421,6 +396,78 @@ mod tests {
             derive_props_bindings(&neither).is_none(),
             "both-empty removes the stamp"
         );
+    }
+
+    /// A style animating EVERY static table row (plus both chains) derives a
+    /// binding for every one of the 38 static properties — the permanent belt
+    /// against a silently missed accessor (an inert binding, invisible to
+    /// type checks). Verified old-vs-new against the hand-written walker at
+    /// the table swap; this completeness pin is what remains.
+    #[test]
+    fn maximal_style_derives_every_static_row() {
+        let maximal = serde_json::json!({
+            "left": { "animated": { "id": 1 } },
+            "right": { "animated": { "id": 2 } },
+            "top": { "animated": { "id": 3 } },
+            "bottom": { "animated": { "id": 4 } },
+            "width": { "animated": { "id": 5 } },
+            "height": { "animated": { "id": 6 } },
+            "minWidth": { "animated": { "id": 7 } },
+            "minHeight": { "animated": { "id": 8 } },
+            "maxWidth": { "animated": { "id": 9 } },
+            "maxHeight": { "animated": { "id": 10 } },
+            "aspectRatio": { "animated": { "id": 11 } },
+            "flexBasis": { "animated": { "id": 12 } },
+            "gap": { "animated": { "id": 13 } },
+            "rowGap": { "animated": { "id": 14 } },
+            "columnGap": { "animated": { "id": 15 } },
+            "opacity": { "animated": { "id": 16 } },
+            "backgroundColor": { "animated": { "type": "interpolateColor", "id": 17,
+                "input": [0, 1], "output": [[0, 0, 0, 1], [1, 1, 1, 1]] } },
+            "borderColor": { "animated": { "type": "interpolateColor", "id": 18,
+                "input": [0, 1], "output": [[0, 0, 0, 1], [1, 1, 1, 1]] } },
+            "color": { "animated": { "type": "interpolateColor", "id": 19,
+                "input": [0, 1], "output": [[0, 0, 0, 1], [1, 1, 1, 1]] } },
+            "transform": {
+                "translateX": { "animated": { "id": 20 } },
+                "translateY": { "animated": { "id": 21 } },
+                "scale": { "animated": { "id": 22 } },
+                "scaleX": { "animated": { "id": 23 } },
+                "scaleY": { "animated": { "id": 24 } },
+                "rotate": { "animated": { "id": 25 } },
+            },
+            "transform3d": {
+                "perspective": { "animated": { "id": 26 } },
+                "translateX": { "animated": { "id": 27 } },
+                "translateY": { "animated": { "id": 28 } },
+                "translateZ": { "animated": { "id": 29 } },
+                "rotateX": { "animated": { "id": 30 } },
+                "rotateY": { "animated": { "id": 31 } },
+                "rotateZ": { "animated": { "id": 32 } },
+                "scale": { "animated": { "id": 33 } },
+                "scaleX": { "animated": { "id": 34 } },
+                "scaleY": { "animated": { "id": 35 } },
+                "origin": {
+                    "x": { "animated": { "id": 36 } },
+                    "y": { "animated": { "id": 37 } },
+                },
+            },
+            "backgroundImage": { "src": "bg.png", "tint": { "animated": { "id": 38 } } },
+            "filter": { "name": "blur", "params": { "radius": { "animated": { "id": 39 } } } },
+            "backdropFilter": { "name": "blur", "params": { "radius": { "animated": { "id": 40 } } } },
+        });
+        // Every static row derives from the maximal style — the permanent
+        // completeness pin (chains covered by their own arms above).
+        let b = derive_bindings(Some(&style(maximal))).expect("maximal style derives");
+        macro_rules! rows {
+            ($(($prop:tt, $kind:ident, $acc:tt, $write:tt, $stage:ident, $park:ident),)*) => {
+                vec![$($prop),*]
+            };
+        }
+        let all: Vec<P> = crate::animations::props::with_animatable_props!(rows);
+        for p in all {
+            assert!(b.contains(p.clone()), "static row {p:?} did not derive");
+        }
     }
 
     /// The wrapper decode is junk-tolerant (a live `SharedValue` handle
