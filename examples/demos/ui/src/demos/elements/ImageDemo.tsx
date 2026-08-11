@@ -11,12 +11,15 @@ import { useDemoPage, type ExplanationData } from "@/explanationStore";
 //   3. `sourceRect` — crop a sub-rectangle of the texture (here one quadrant of
 //      the 400×220 logo);
 //   4. `atlas` — treat the logo as a 2×2 sprite-sheet grid and select a cell by
-//      `index` (the sprite-animation primitive), cycled by a button.
+//      `index` (the sprite-animation primitive), cycled by a button;
+//   5. an `.svg` src — extension-detected, parsed once into an SvgDocument
+//      asset, and re-rasterized at the laid-out size (times DPI), so one file
+//      stays crisp at every size (and the viewBox is the intrinsic size).
 
 const PAGE: ExplanationData = {
   title: "<image>",
   description:
-    'The <image> host element draws a texture asset loaded by src. tint multiplies the texture color; flipX/flipY mirror it per axis. imageMode { type: "sliced" } enables 9-slice scaling, so a frame resizes without distorting its corners. sourceRect crops a sub-rectangle of the texture, and atlas treats the texture as a uniform sprite-sheet grid whose cell is selected by index — the sprite-animation primitive (the atlas layout asset is built once and reused).',
+    'The <image> host element draws a texture asset loaded by src. tint multiplies the texture color; flipX/flipY mirror it per axis. imageMode { type: "sliced" } enables 9-slice scaling, so a frame resizes without distorting its corners. sourceRect crops a sub-rectangle of the texture, and atlas treats the texture as a uniform sprite-sheet grid whose cell is selected by index — the sprite-animation primitive (the atlas layout asset is built once and reused). An .svg src renders as a vector instead: the document parses once into an SvgDocument asset and re-rasterizes at the laid-out size (times DPI), pixel-crisp at every size, with the file\'s viewBox as the intrinsic size when no width/height is set.',
 };
 
 const FLIP_TSX = `<image
@@ -57,6 +60,13 @@ const ATLAS_TSX = `<image
   }}
 />`;
 
+const SVG_TSX = `<image
+  src="gear.svg"
+  style={{
+    width: 160,
+  }}
+/>`;
+
 export function ImageDemo() {
   useDemoPage(PAGE);
   return (
@@ -69,6 +79,10 @@ export function ImageDemo() {
       <DemoRow>
         <SourceRectDemo />
         <AtlasDemo />
+      </DemoRow>
+
+      <DemoRow>
+        <SvgDemo />
       </DemoRow>
     </>
   );
@@ -219,6 +233,52 @@ function AtlasDemo() {
     </Example>
   );
 }
+
+// --- SVG-file cards: an .svg src re-rasterized at laid-out size ------------
+
+const SIZES = [64, 160];
+
+function SvgDemo() {
+  return (
+    <Example
+      title="Svg image"
+      description="The same gear.svg laid out at three sizes. Each re-rasterizes at its own laid-out size, so all three are equally crisp — the large one is not a scaled-up small one."
+      tsx={SVG_TSX}
+    >
+      <node style={svgRowStyle}>
+        <node style={svgItemStyle}>
+          <image src="gear.svg" />
+          <text style={svgCaptionStyle}>Intrinsic size</text>
+        </node>
+        {SIZES.map((size) => (
+          <node key={size} style={svgItemStyle}>
+            <image src="gear.svg" style={{ width: size }} />
+            <text style={svgCaptionStyle}>{size}px</text>
+          </node>
+        ))}
+      </node>
+    </Example>
+  );
+}
+
+const svgRowStyle: BevyStyle = {
+  flexDirection: "row",
+  alignItems: "flexEnd",
+  justifyContent: "center",
+  gap: 24,
+  padding: 12,
+};
+
+const svgItemStyle: BevyStyle = {
+  flexDirection: "column",
+  alignItems: "center",
+  gap: 8,
+};
+
+const svgCaptionStyle: BevyStyle = {
+  fontSize: 12,
+  color: Colors.textColor200,
+};
 
 const logoStyle: BevyStyle = {
   width: 120,

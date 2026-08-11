@@ -1,82 +1,174 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useSharedValue, withRepeat, withTiming } from "bevy-react";
 import { BevyStyle } from "bevy-react/jsx";
 import { DemoRow, Example } from "@/components";
-import { playButton, playLabel } from "../animations/shared";
 import { Colors } from "@/theme";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
 
-// Demos of SVG rendering through the `<image>` host element: an `.svg` src
-// parses once into an SvgDocument asset and re-rasterizes at the laid-out
-// size (times DPI) into an element-owned texture, so one file stays crisp at
-// every size. Without an explicit width/height, the file's viewBox feeds
-// layout as the intrinsic size. No 3D scene: the viewport stays empty.
+// Demos of the `<svg>` host element: JSX shape children (the 8 intrinsics)
+// painted in viewBox user units, with per-shape pointer events reported in
+// user-space coordinates and shape attributes that animate like style fields
+// ({ animated } bindings and attr transitions). Rendering an `.svg` *file*
+// is the `<image>` element's job — see the <image> demo. No 3D scene: the
+// viewport stays empty.
 
 const PAGE: ExplanationData = {
   title: "<svg>",
   description:
-    "An <image> whose src names an .svg file renders it as a vector: the document parses once into an SvgDocument asset and re-rasterizes at the laid-out size (times DPI) into an element-owned texture, so the same file is pixel-crisp at every size — no fixed-resolution bitmap to blur. Without an explicit width/height, the file's viewBox provides the intrinsic size for layout, exactly like a bitmap image's pixel dimensions.",
+    "The <svg> host element draws vector graphics from JSX shape children: path, rect, circle, ellipse, line, polyline, polygon, and g. Geometry lives in viewBox user units, so a whole drawing scales with the element's laid-out size while staying pixel-crisp. Shapes take the same pointer handlers as nodes — hit-testing follows the painted geometry, and events report user-space coordinates — and numeric attributes animate like style fields, via { animated } bindings or a transition prop. (Rendering an .svg file is the <image> element's job.)",
 };
-
-const SIZES = [24, 64, 160];
-
-const SIZES_TSX = `{[24, 64, 160].map((size) => (
-  <image
-    key={size}
-    src="gear.svg"
-    style={{
-      width: size,
-      height: size,
-    }}
-  />
-))}`;
-
-const INTRINSIC_TSX = `// No width/height: layout uses
-// the file's viewBox size
-// (here 24 by 24).
-<image src="gear.svg" />`;
 
 export function SvgDemo() {
   useDemoPage(PAGE);
   return (
-    <DemoRow>
-      <ScalableIconsDemo />
-      <IntrinsicSizeDemo />
-      <ShapesChartDemo />
-      <InteractiveShapesDemo />
-      <AnimatedShapesDemo />
-    </DemoRow>
+    <>
+      <DemoRow>
+        <PrimitivesDemo />
+        <ShapesChartDemo />
+        <InteractiveShapesDemo />
+      </DemoRow>
+
+      <DemoRow>
+        <SharedValueShapesDemo />
+        <TransitionShapesDemo />
+      </DemoRow>
+    </>
   );
 }
 
-function ScalableIconsDemo() {
+// --- Primitives card: a labeled grid of all 8 shape intrinsics -------------
+
+// A 5-point star centered at (20, 21), outer radius 14, inner radius 6.
+const STAR_POINTS = [
+  20, 7, 23.5, 16.1, 33.3, 16.7, 25.7, 22.9, 28.2, 32.3, 20, 27, 11.8, 32.3,
+  14.3, 22.9, 6.7, 16.7, 16.5, 16.1,
+];
+
+const HEART_D = "M 20 33 C 7 23 6 9 20 15 C 34 9 33 23 20 33 Z";
+
+const PRIMS_TSX = `// One cell per intrinsic, each
+// its own 40-by-40 viewBox.
+<rect
+  x={6} y={10}
+  width={28} height={20}
+  rx={4} fill={blue}
+/>
+<circle cx={20} cy={20} r={13} />
+<ellipse
+  cx={20} cy={20}
+  rx={15} ry={9}
+/>
+<line
+  x1={6} y1={30}
+  x2={34} y2={10}
+  stroke={amber} strokeWidth={3}
+  strokeLinecap="round"
+/>
+<polyline
+  points={[6,28, 16,12,
+           24,22, 34,8]}
+  fill="none" stroke={green}
+  strokeWidth={3}
+/>
+<polygon points={star} />
+<path
+  d="M 20 33 C 7 23 6 9 20 15
+     C 34 9 33 23 20 33 Z"
+/>
+<g
+  transform="translate(20 22)
+             rotate(-14)"
+>
+  <rect x={-13} y={-9} (etc.) />
+  <rect x={1} y={-9} (etc.) />
+</g>`;
+
+function Prim({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <Example
-      title="Scalable icons"
-      description="The same gear.svg laid out at three sizes. Each re-rasterizes at its own laid-out size, so all three are equally crisp — the large one is not a scaled-up small one."
-      tsx={SIZES_TSX}
-    >
-      <node style={rowStyle}>
-        {SIZES.map((size) => (
-          <node key={size} style={itemStyle}>
-            <image src="gear.svg" style={{ width: size, height: size }} />
-            <text style={captionStyle}>{size}px</text>
-          </node>
-        ))}
-      </node>
-    </Example>
+    <node style={itemStyle}>
+      <svg viewBox="0 0 40 40" style={{ width: 56, height: 56 }}>
+        {children}
+      </svg>
+      <text style={captionStyle}>{label}</text>
+    </node>
   );
 }
 
-function IntrinsicSizeDemo() {
+function PrimitivesDemo() {
   return (
     <Example
-      title="Intrinsic size"
-      description="No width/height style: the file's viewBox (24 by 24) becomes the intrinsic size, and layout measures the node from it — just like a bitmap's pixel dimensions."
-      tsx={INTRINSIC_TSX}
+      title="Shape primitives"
+      description="All eight shape intrinsics, one per cell: filled rect, circle, ellipse and polygon (a star from a flat points list), stroked line and polyline, a path from an SVG d string (the heart), and g — a group whose translate/rotate transform moves its two rects together. Each cell is its own <svg> with a 40 by 40 viewBox."
+      tsx={PRIMS_TSX}
     >
-      <node style={rowStyle}>
-        <image src="gear.svg" />
+      <node style={gridStyle}>
+        <node style={gridRowStyle}>
+          <Prim label="rect">
+            <rect
+              x={6}
+              y={10}
+              width={28}
+              height={20}
+              rx={4}
+              fill={Colors.primary100}
+            />
+          </Prim>
+          <Prim label="circle">
+            <circle cx={20} cy={20} r={13} fill={Colors.sky100} />
+          </Prim>
+          <Prim label="ellipse">
+            <ellipse cx={20} cy={20} rx={15} ry={9} fill={Colors.teal100} />
+          </Prim>
+          <Prim label="line">
+            <line
+              x1={6}
+              y1={30}
+              x2={34}
+              y2={10}
+              stroke={Colors.amber100}
+              strokeWidth={3}
+              strokeLinecap="round"
+            />
+          </Prim>
+        </node>
+        <node style={gridRowStyle}>
+          <Prim label="polyline">
+            <polyline
+              points={[6, 28, 16, 12, 24, 22, 34, 8]}
+              fill="none"
+              stroke={Colors.green100}
+              strokeWidth={3}
+              strokeLinejoin="round"
+              strokeLinecap="round"
+            />
+          </Prim>
+          <Prim label="polygon">
+            <polygon points={STAR_POINTS} fill={Colors.purple100} />
+          </Prim>
+          <Prim label="path">
+            <path d={HEART_D} fill={Colors.red100} />
+          </Prim>
+          <Prim label="g">
+            <g transform="translate(20 22) rotate(-14)">
+              <rect
+                x={-13}
+                y={-9}
+                width={12}
+                height={18}
+                rx={3}
+                fill={Colors.orange100}
+              />
+              <rect
+                x={1}
+                y={-9}
+                width={12}
+                height={18}
+                rx={3}
+                fill={Colors.primary100}
+              />
+            </g>
+          </Prim>
+        </node>
       </node>
     </Example>
   );
@@ -299,19 +391,16 @@ function InteractiveShapesDemo() {
   );
 }
 
-// --- Animated shapes card: { animated } bindings + attr transitions -------
-
-// Two datasets the spring bars retarget between on click.
-const BARS_A = [34, 66, 46];
-const BARS_B = [72, 38, 58];
-const BAR_FILLS = [Colors.primary100, Colors.teal100, Colors.purple100];
+// --- Shared-value shapes card: { animated } bindings -----------------------
 
 // Pulse range for the circle's radius binding; the seed renders until the
 // driver's first write reaches Bevy.
 const PULSE_MIN = 12;
 const PULSE_MAX = 26;
 
-const ANIMATED_TSX = `// A binding drives r per frame
+const SHARED_VALUE_TSX = `// A binding drives r per frame,
+// in user-space units — React
+// never re-renders.
 const pulse = useSharedValue(12);
 useEffect(() => {
   pulse.value = withRepeat(
@@ -324,18 +413,65 @@ useEffect(() => {
 }, [pulse]);
 
 <circle
-  cx={172}
-  cy={52}
+  cx={60}
+  cy={60}
   r={{
     animated: pulse,
     seed: 12,
   }}
-/>
+/>`;
 
-// Clicks retarget; springs ease.
-// (Kept on separate shapes: a
-// binding on a shape parks that
-// shape's attr transitions.)
+function SharedValueShapesDemo() {
+  const pulse = useSharedValue(PULSE_MIN);
+
+  useEffect(() => {
+    pulse.value = withRepeat(
+      withTiming(PULSE_MAX, { duration: 700, easing: "easeInOut" }),
+      { reverse: true }, // ping-pong back down
+    );
+  }, [pulse]);
+
+  return (
+    <Example
+      title="Animated: shared values"
+      description="A numeric shape attribute takes an { animated } binding, exactly like a style field. A shared value (withRepeat + withTiming, ping-pong) drives the circle's r per frame in user-space units, with seed as the static value until the driver's first write reaches Bevy — the React tree never re-renders while the animation runs."
+      tsx={SHARED_VALUE_TSX}
+    >
+      <node style={interactiveStyle}>
+        <svg viewBox="0 0 120 120" style={{ width: 144, height: 144 }}>
+          <circle
+            cx={60}
+            cy={60}
+            r={{ animated: pulse, seed: PULSE_MIN }}
+            fill={Colors.amber100 + "cc"}
+            stroke={Colors.amber100}
+            strokeWidth={2}
+          />
+        </svg>
+      </node>
+    </Example>
+  );
+}
+
+// --- Transition shapes card: attr transitions on static changes ------------
+
+// Two datasets the spring bars retarget between every second.
+const BARS_A = [34, 66, 46];
+const BARS_B = [72, 38, 58];
+const BAR_FILLS = [Colors.primary100, Colors.teal100, Colors.purple100];
+
+const TRANSITION_TSX = `// Every second the data
+// retargets; springs ease the
+// bars to the new geometry.
+const [alt, setAlt] = useState(false);
+useEffect(() => {
+  const id = setInterval(
+    () => setAlt((v) => !v),
+    1000,
+  );
+  return () => clearInterval(id);
+}, []);
+
 <rect
   y={100 - v}
   height={v}
@@ -351,31 +487,30 @@ useEffect(() => {
   }}
 />`;
 
-function AnimatedShapesDemo() {
+function TransitionShapesDemo() {
   const [alt, setAlt] = useState(false);
-  const pulse = useSharedValue(PULSE_MIN);
 
+  // Retarget the bar dataset every second; each flip re-renders new
+  // static y/height attrs and the springs carry the bars over.
   useEffect(() => {
-    pulse.value = withRepeat(
-      withTiming(PULSE_MAX, { duration: 700, easing: "easeInOut" }),
-      { reverse: true }, // ping-pong back down
-    );
-  }, [pulse]);
+    const id = setInterval(() => setAlt((v) => !v), 1000);
+    return () => clearInterval(id);
+  }, []);
 
   const values = alt ? BARS_B : BARS_A;
 
   return (
     <Example
-      title="Animated shapes"
-      description="Shape attributes animate like style fields. The circle's r carries an { animated } binding: a shared value (withRepeat + withTiming, ping-pong) drives the radius per frame in user-space units, with seed as the static value until the driver writes. The bars ease through transition: clicking retargets y/height and a spring carries each bar to its new geometry. Bindings and transitions live on separate shapes — any binding on a shape parks that shape's attr transitions."
-      tsx={ANIMATED_TSX}
+      title="Animated: transitions"
+      description="A transition prop on a shape eases static attr changes: every second the dataset retargets y/height and a spring carries each bar to its new geometry. Transitions and { animated } bindings live on separate shapes — any binding on a shape parks that shape's attr transitions."
+      tsx={TRANSITION_TSX}
     >
       <node style={interactiveStyle}>
-        <svg viewBox="0 0 210 120" style={{ width: 252, height: 144 }}>
+        <svg viewBox="0 0 130 120" style={{ width: 156, height: 144 }}>
           <line
             x1={8}
             y1={100}
-            x2={202}
+            x2={122}
             y2={100}
             stroke={Colors.surface500}
             strokeWidth={1.5}
@@ -395,26 +530,22 @@ function AnimatedShapesDemo() {
               }}
             />
           ))}
-          <circle
-            cx={172}
-            cy={52}
-            r={{ animated: pulse, seed: PULSE_MIN }}
-            fill={Colors.amber100 + "cc"}
-            stroke={Colors.amber100}
-            strokeWidth={2}
-          />
         </svg>
-        <button
-          style={playButton}
-          pressStyle={{ transform: { scale: 0.92 } }}
-          onClick={() => setAlt((v) => !v)}
-        >
-          <text style={playLabel}>Retarget bars</text>
-        </button>
       </node>
     </Example>
   );
 }
+
+const gridStyle: BevyStyle = {
+  flexDirection: "column",
+  gap: 16,
+  padding: 12,
+};
+
+const gridRowStyle: BevyStyle = {
+  flexDirection: "row",
+  gap: 20,
+};
 
 const interactiveStyle: BevyStyle = {
   flexDirection: "column",
