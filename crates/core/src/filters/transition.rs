@@ -252,7 +252,7 @@ mod tests {
     use super::*;
     use crate::filters::{BlurParams, ReactFilter, ResolvedFilterChain};
     use crate::layer::{LayerContentDirt, PromotedLayer};
-    use crate::protocol::Op;
+    use crate::protocol::op::Op;
 
     fn wire(names: &[&str]) -> FilterChain {
         FilterChain(

@@ -6,7 +6,7 @@ use bevy::ui::ScrollPosition;
 
 use super::channels::Channel;
 use super::spec::ChannelTransition;
-use crate::protocol::Style;
+use crate::protocol::style::Style;
 
 /// The scroll-easing **spec** input: the `transition.scroll` timing, reinserted
 /// fresh on every render (like [`TransitionInput`]) so a changed spec takes effect.

@@ -25,7 +25,7 @@ use crate::animations::protocol::{
     AnimatableProperty as P, AnimatedBindings, Binding, Transform3dField as F,
 };
 use crate::filters::FilterChain;
-use crate::protocol::{Props, Style, binding_from_wrapper};
+use crate::protocol::{animatable::binding_from_wrapper, props::Props, style::Style};
 use crate::svg::ShapeAttrs;
 
 /// Classify a raw filter-param value for the chain resolver: `None` = a plain
@@ -82,7 +82,7 @@ fn chain_bindings(chain: Option<&FilterChain>, backdrop: bool, out: &mut BTreeMa
 pub(crate) fn derive_bindings(style: Option<&Style>) -> Option<AnimatedBindings> {
     let style = style?;
     let mut out = BTreeMap::new();
-    use crate::protocol::Animatable;
+    use crate::protocol::animatable::Animatable;
 
     // One rule per accessor shape (see the table's column contract).
     macro_rules! row {
@@ -148,7 +148,9 @@ pub(crate) fn derive_shape_bindings(shape: Option<&ShapeAttrs>) -> Option<Animat
     let shape = shape?;
     let mut out = BTreeMap::new();
     for (name, field, _) in &crate::svg::NUMERIC_ATTRS {
-        if let Some(crate::protocol::Animatable::Animated { binding, .. }) = field(shape) {
+        if let Some(crate::protocol::animatable::Animatable::Animated { binding, .. }) =
+            field(shape)
+        {
             out.insert(
                 P::ShapeAttr {
                     name: (*name).to_string(),
@@ -372,8 +374,9 @@ mod tests {
     /// `AnimatedNode` stamp decision.
     #[test]
     fn props_bindings_union_style_and_shape() {
-        let props =
-            |v: serde_json::Value| -> crate::protocol::Props { serde_json::from_value(v).unwrap() };
+        let props = |v: serde_json::Value| -> crate::protocol::props::Props {
+            serde_json::from_value(v).unwrap()
+        };
         let both = props(serde_json::json!({
             "style": { "opacity": { "animated": { "id": 1 } } },
             "shape": { "cx": { "animated": { "id": 2 } } },

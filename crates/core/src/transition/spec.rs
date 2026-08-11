@@ -7,7 +7,9 @@ use bevy::prelude::*;
 use serde::Deserialize;
 
 use crate::animations::{Driver, Easing};
-use crate::protocol::{AnimatableField, Length, Style, Time as WireTime};
+use crate::protocol::{
+    animatable::AnimatableField, style::Style, units::Length, units::Time as WireTime,
+};
 use crate::ui_map::parse_color;
 
 use super::color_to_rgba;
@@ -199,7 +201,7 @@ pub struct TransitionInput {
     pub max_height: Option<Length>,
     /// Target `transform3d` params, eased field-wise onto the layer's
     /// [`LayerTransform3d`](crate::layer::transform3d::LayerTransform3d).
-    pub transform3d: Option<crate::protocol::Transform3d>,
+    pub transform3d: Option<crate::protocol::transform::Transform3d>,
 }
 
 impl TransitionInput {
@@ -217,7 +219,10 @@ impl TransitionInput {
             scale: t.scale.static_val(),
             scale_x: t.scale_x.static_val(),
             scale_y: t.scale_y.static_val(),
-            rotate: t.rotate.static_val().map(crate::protocol::Angle::radians),
+            rotate: t
+                .rotate
+                .static_val()
+                .map(crate::protocol::units::Angle::radians),
             opacity: style.opacity.static_val(),
             background_color: style
                 .background_color

@@ -13,7 +13,7 @@ use bevy::window::PrimaryWindow;
 
 use crate::bridge::{JsBridge, RNode, ScrollStep, WheelListener};
 use crate::plugin::PointerCapture;
-use crate::protocol::{Outbound, UiEvent};
+use crate::protocol::{outbound::Outbound, outbound::UiEvent};
 use crate::transition::ScrollTransitionState;
 
 /// Default logical pixels scrolled per wheel "line" (mice report `Line` units;
@@ -673,7 +673,7 @@ mod tests {
         window.set_physical_cursor_position(Some(cursor.as_dvec2()));
         world.spawn((window, PrimaryWindow));
 
-        let (_ops_tx, ops_rx) = crossbeam_channel::unbounded::<Vec<crate::protocol::Op>>();
+        let (_ops_tx, ops_rx) = crossbeam_channel::unbounded::<Vec<crate::protocol::op::Op>>();
         let (out_tx, mut out_rx) = tokio::sync::mpsc::unbounded_channel::<Outbound>();
         let root = world.spawn_empty().id();
         world.insert_resource(JsBridge::new(ops_rx, out_tx, root));

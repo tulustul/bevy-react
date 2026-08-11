@@ -10,7 +10,7 @@ use bevy::ui::widget::ImageNode;
 use bevy::ui::{ComputedNode, ContentSize};
 
 use super::*;
-use crate::protocol::{Op, ROOT_ID};
+use crate::protocol::{ROOT_ID, op::Op};
 use crate::reconcile::test_util::{ent, op_app, update_delta};
 use crate::svg::{CIRCLE_SVG, parse_svg_bytes};
 
@@ -70,8 +70,8 @@ fn rasterizes_at_target_size() {
 }
 
 /// `Op::Create` for an `<image>` pointing at an `.svg` src.
-fn svg_image_create(id: u32) -> crate::protocol::Op {
-    crate::protocol::Op::Create {
+fn svg_image_create(id: u32) -> crate::protocol::op::Op {
+    crate::protocol::op::Op::Create {
         id,
         kind: "image".into(),
         props: serde_json::from_value(serde_json::json!({ "src": "icons/a.svg" }))
@@ -831,7 +831,7 @@ fn removing_the_last_shape_clears_the_raster() {
 // --- Animation-driven shape attrs (E2) ---
 
 use crate::animations::{AnimationCommand, AnimationSet, ReactUiAnimationsPlugin};
-use crate::protocol::AnimatableField;
+use crate::protocol::animatable::AnimatableField;
 
 /// [`jsx_app`] plus the animations engine, wired with the SAME ordering the
 /// plugin declares (`plugin.rs`): `AnimationSet::Apply` after `apply_js_ops`,

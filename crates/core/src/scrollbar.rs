@@ -36,7 +36,7 @@ use serde::Deserialize;
 use serde::de::{self, Deserializer, MapAccess, Visitor};
 
 use crate::plugin::PointerCapture;
-use crate::protocol::{BorderColorSpec, Rect};
+use crate::protocol::{units::Rect, visual::BorderColorSpec};
 use crate::transition::ScrollTransitionState;
 use crate::ui_map::{parse_color, rect_to_border_radius, rect_to_uirect};
 
@@ -171,7 +171,7 @@ impl<'de> Deserialize<'de> for ScrollbarPartStyle {
 }
 
 /// A fully-configured scrollbar (the payload of [`ScrollbarSpec::Styled`]). Boxed
-/// in the enum so `ScrollbarSpec` — and thus [`crate::protocol::Style`], which
+/// in the enum so `ScrollbarSpec` — and thus [`crate::protocol::style::Style`], which
 /// embeds it four times over — stays small.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct ScrollbarStyled {
@@ -847,7 +847,7 @@ pub fn style_scrollbar_states(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::protocol::Style;
+    use crate::protocol::style::Style;
 
     #[test]
     fn decodes_none_and_default_keywords() {
@@ -1045,7 +1045,7 @@ mod tests {
     #[test]
     fn thumb_drag_bypasses_scroll_easing() {
         use crate::animations::Easing;
-        use crate::protocol::Time as WireTime;
+        use crate::protocol::units::Time as WireTime;
         use crate::transition::{
             ChannelTransition, ScrollTransitionInput, drive_scroll_transition,
         };

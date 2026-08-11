@@ -1,7 +1,7 @@
 //! Bevy → React named events: an app-level signal pushed from the ECS to the
 //! listeners the React app registers with `bevy.on(name, cb)`.
 //!
-//! Unlike a [`UiEvent`](crate::protocol::UiEvent) (a click on a specific node),
+//! Unlike a [`UiEvent`](crate::protocol::outbound::UiEvent) (a click on a specific node),
 //! a [`ReactEvent`] is a named, typed broadcast. Send one from any system with
 //! the [`ReactEvents`] param:
 //!
@@ -26,7 +26,7 @@ use serde::Serialize;
 use ts_rs::TS;
 
 use crate::bridge::OutboundResource;
-use crate::protocol::Outbound;
+use crate::protocol::outbound::Outbound;
 use crate::registry::{NamedEntry, register_entry};
 use crate::ts_codegen::TsCollector;
 

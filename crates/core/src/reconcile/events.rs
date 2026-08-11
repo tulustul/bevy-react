@@ -11,7 +11,7 @@ use bevy::ui::{ComputedNode, ScrollPosition, UiGlobalTransform};
 
 use crate::bridge::{CanvasSizeTracker, JsBridge, RNode, ScrollListener};
 use crate::canvas::{CanvasSurface, clamp_physical_size};
-use crate::protocol::{NodeId, Outbound, UiEvent};
+use crate::protocol::{NodeId, outbound::Outbound, outbound::UiEvent};
 use crate::surface::SurfaceVirtualPointer;
 
 /// Report clicks on reconciler-owned nodes to the JS thread. Rides bevy_picking's
@@ -220,7 +220,7 @@ pub(crate) fn climb(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::protocol::Op;
+    use crate::protocol::op::Op;
 
     /// [`collect_scroll_events`] reports a `"scroll"` for a `ScrollListener` node
     /// whose offset diverges from the recorded one, ignores non-listener nodes, and

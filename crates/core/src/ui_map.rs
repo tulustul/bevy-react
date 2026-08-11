@@ -17,11 +17,13 @@ use bevy::ui::widget::NodeImageMode;
 use crate::cursor::NodeCursor;
 use crate::plugin::Fonts;
 use crate::protocol::{
-    Angle, AngularStop, AnimatableField, AtlasSpec, BoxShadowList, BoxShadowSpec,
-    ConicGradientSpec, FontSize, GradientList, GradientSpec, GradientStop, ImageMode,
-    ImageModeSpec, Length, LetterSpacingSpec, LineHeightSpec, LinearGradientSpec, Props,
-    RadialGradientSpec, RadialShapeSpec, Rect, SliceBorder, SliceScale, SliceSpec, Style,
-    StyleDirty,
+    animatable::AnimatableField, background_image::AtlasSpec, background_image::ImageMode,
+    background_image::ImageModeSpec, background_image::SliceBorder, background_image::SliceScale,
+    background_image::SliceSpec, props::Props, style::Style, style::StyleDirty, units::Angle,
+    units::FontSize, units::Length, units::Rect, visual::AngularStop, visual::BoxShadowList,
+    visual::BoxShadowSpec, visual::ConicGradientSpec, visual::GradientList, visual::GradientSpec,
+    visual::GradientStop, visual::LetterSpacingSpec, visual::LineHeightSpec,
+    visual::LinearGradientSpec, visual::RadialGradientSpec, visual::RadialShapeSpec,
 };
 use crate::scrollbar::{ScrollbarConfig, ScrollbarPosition};
 
@@ -439,7 +441,7 @@ pub fn apply_style_masked(
     dirty: StyleDirty,
     promoted: bool,
 ) {
-    use crate::protocol::style_groups as g;
+    use crate::protocol::style::style_groups as g;
 
     // Guarded in-place update, not a wholesale re-insert: `Op::Update` and the
     // hover/press restyle systems all funnel through here, and re-inserting `Node`
@@ -753,7 +755,7 @@ pub fn overlay_style(base: &Option<Style>, overlay: &Option<Style>) -> Option<St
         };
         (@one $f:ident, no_overlay) => {};
     }
-    crate::protocol::with_style_fields!(overlay_field);
+    crate::protocol::style::with_style_fields!(overlay_field);
     Some(merged)
 }
 
@@ -1093,7 +1095,7 @@ pub fn text_layout(style: &Option<Style>) -> Option<TextLayout> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::protocol::{Props, Style};
+    use crate::protocol::{props::Props, style::Style};
 
     /// An unrecognized color reports into the diag runtime sink under the
     /// enclosing node scope, so devtools can flag the row. The sink is

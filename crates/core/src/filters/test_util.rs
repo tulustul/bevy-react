@@ -9,7 +9,7 @@ use super::registry::FilterRegistry;
 use super::resolve::{FilterInput, ResolvedFilterChain, resolve_chains};
 use crate::bridge::JsBridge;
 use crate::layer::LayerContentDirt;
-use crate::protocol::{NodeId, Op, Outbound, Props};
+use crate::protocol::{NodeId, op::Op, outbound::Outbound, props::Props};
 
 /// A headless app that owns a real `AssetServer` for `resolve` calls,
 /// with the `Shader` asset + the crate's embedded filter shaders

@@ -14,7 +14,7 @@
 //! space of composite-quad vertices and `UiGlobalTransform`), x right,
 //! y down, z toward the viewer (CSS's screen space). Wire lengths are logical
 //! px and scale by the node's scale factor; angles arrive as radians from
-//! [`protocol::Angle`]. Self-perspective divides by `w = 1 − z/d` so positive
+//! [`protocol::units::Angle`]. Self-perspective divides by `w = 1 − z/d` so positive
 //! `translateZ` moves toward the viewer and magnifies, with the vanishing
 //! point at the resolved `origin`.
 
@@ -22,7 +22,7 @@ use bevy::prelude::*;
 use bevy::ui::{ComputedNode, UiGlobalTransform};
 
 use super::{LayerContentDirt, PromotedLayer};
-use crate::protocol::{self, AnimatableField, Length, Transform3d};
+use crate::protocol::{self, animatable::AnimatableField, transform::Transform3d, units::Length};
 
 /// The `transform3d` style params on a promoted layer root, exactly as merged
 /// from the wire (base style + active interaction variants). Written by
@@ -71,7 +71,7 @@ pub fn resolve_origin(params: &Transform3d, size: Vec2, scale_factor: f32) -> (V
     let origin = params.origin.clone().unwrap_or_default();
     // An animated axis reads as its default center until the animation applier
     // overwrites the params with the evaluated static value each frame.
-    let axis = |a: &crate::protocol::Animatable<Length>| {
+    let axis = |a: &crate::protocol::animatable::Animatable<Length>| {
         a.value().copied().unwrap_or(Length::Percent(50.0))
     };
     let (x, warn_x) = resolve_origin_axis(axis(&origin.x), size.x, scale_factor);
@@ -184,27 +184,29 @@ pub fn sync_transform3d_matrices(
 }
 
 /// Convenience for the wire params carried by a style, if any.
-pub fn style_transform3d(style: &Option<protocol::Style>) -> Option<Transform3d> {
+pub fn style_transform3d(style: &Option<protocol::style::Style>) -> Option<Transform3d> {
     style.as_ref().and_then(|s| s.transform3d.clone())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::protocol::Transform3dOrigin;
+    use crate::protocol::transform::Transform3dOrigin;
 
-    fn deg(v: f32) -> Option<crate::protocol::Animatable<crate::protocol::Angle>> {
+    fn deg(
+        v: f32,
+    ) -> Option<crate::protocol::animatable::Animatable<crate::protocol::units::Angle>> {
         serde_json::from_value(serde_json::json!(v)).ok()
     }
 
     /// Static-wrap a scalar channel value.
-    fn st(v: f32) -> Option<crate::protocol::Animatable<f32>> {
-        Some(crate::protocol::Animatable::Static(v))
+    fn st(v: f32) -> Option<crate::protocol::animatable::Animatable<f32>> {
+        Some(crate::protocol::animatable::Animatable::Static(v))
     }
 
     /// Static-wrap an origin axis.
-    fn ax(l: Length) -> crate::protocol::Animatable<Length> {
-        crate::protocol::Animatable::Static(l)
+    fn ax(l: Length) -> crate::protocol::animatable::Animatable<Length> {
+        crate::protocol::animatable::Animatable::Static(l)
     }
 
     /// The resolved origin is the fixed point of the transform for any

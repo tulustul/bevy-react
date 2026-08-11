@@ -8,7 +8,7 @@ use bevy::math::Vec2;
 use super::{
     FillRuleKind, LinecapKind, LinejoinKind, ShapeAttrs, ShapePaint, ShapeTransform, ViewBox,
 };
-use crate::protocol::AnimatableField;
+use crate::protocol::animatable::AnimatableField;
 
 fn attrs(json: serde_json::Value) -> ShapeAttrs {
     serde_json::from_value(json).expect("shape attrs decode never fails the batch")
@@ -275,7 +275,10 @@ fn view_box_object_warns_and_drops() {
 #[test]
 fn plain_number_still_decodes_static() {
     let a = attrs(serde_json::json!({ "r": 4 }));
-    assert_eq!(a.r, Some(crate::protocol::Animatable::Static(4.0)));
+    assert_eq!(
+        a.r,
+        Some(crate::protocol::animatable::Animatable::Static(4.0))
+    );
     assert_eq!(a.r.static_val(), Some(4.0));
     // PartialEq holds across the wrapper type (the compare-before-write
     // discipline in `update_shape_attrs` relies on it).
@@ -378,7 +381,7 @@ fn unsupported_transform_warns_and_drops() {
 /// `ViewBox` parses both whitespace- and comma-separated forms; a
 /// non-positive size or garbage warns (`viewBox`) and drops. (Wire-name and
 /// merge behavior of the `viewBox` *prop* are covered in
-/// `crate::protocol::tests`.)
+/// `crate::protocol::merge::tests`.)
 #[test]
 fn view_box_parses_and_validates() {
     #[cfg(all(feature = "devtools", debug_assertions))]
@@ -429,7 +432,10 @@ fn shape_transition_decodes_per_attr_specs() {
     }));
     let spec = a.transition.as_ref().expect("transition decodes");
     let cx = spec.for_attr("cx").expect("cx entry present");
-    assert_eq!(cx.duration.map(crate::protocol::Time::seconds), Some(0.2));
+    assert_eq!(
+        cx.duration.map(crate::protocol::units::Time::seconds),
+        Some(0.2)
+    );
     assert!(
         spec.for_attr("strokeWidth")
             .is_some_and(|s| s.stiffness == Some(120.0)),

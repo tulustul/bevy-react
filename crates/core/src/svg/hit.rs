@@ -55,7 +55,7 @@ use kurbo::{BezPath, ParamCurveNearest, PathEl, PathSeg as KSeg, Point, Shape};
 
 use super::paint::{KAPPA, valid_radius};
 use super::{FillRuleKind, PathData, PathSeg, ShapeAttrs, ShapeKind, ShapePaint};
-use crate::protocol::{Animatable, AnimatableField};
+use crate::protocol::{animatable::Animatable, animatable::AnimatableField};
 
 #[cfg(test)]
 mod tests;

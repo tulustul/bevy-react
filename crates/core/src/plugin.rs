@@ -14,7 +14,7 @@ use crate::bridge::{JsBridge, OpReceiver, OutboundResource, OutboundSender};
 use crate::event::ReactEventRegistry;
 use crate::host::{self, HostConfig, HostSenders};
 use crate::message::{ReactAppExt, ReactMessage, ReactRegistry};
-use crate::protocol::{Op, Outbound};
+use crate::protocol::{op::Op, outbound::Outbound};
 use crate::reconcile::{
     OpApplyStats, apply_interaction_styles, apply_js_ops, apply_pending_selections,
     apply_surface_interaction_styles, collect_canvas_resize_events, collect_hover_events,

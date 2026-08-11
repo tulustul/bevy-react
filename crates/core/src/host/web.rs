@@ -21,7 +21,7 @@ use crate::animations::AnimationCommand;
 
 use crate::bridge::OutboundSender;
 use crate::message::ReactMessage;
-use crate::protocol::{Op, OpBatch, Outbound};
+use crate::protocol::{op::Op, op::OpBatch, outbound::Outbound};
 use crate::request::RawRequest;
 
 use super::{HostConfig, HostSenders};

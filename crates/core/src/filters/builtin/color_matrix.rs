@@ -12,7 +12,7 @@ use serde_json::Value;
 use crate::animations::ValueKind;
 use crate::filters::params::{ParamSlot, static_layout};
 use crate::filters::registry::ReactFilter;
-use crate::protocol::Angle;
+use crate::protocol::units::Angle;
 
 /// The shared shader for the seven color ops — one color-matrix pass with the
 /// canonical packing `params[0] = (brightness, contrast, saturate, grayscale)`,

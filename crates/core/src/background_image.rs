@@ -16,7 +16,8 @@ use bevy::prelude::*;
 use bevy::ui::widget::NodeImageMode;
 
 use crate::protocol::{
-    AnimatableField, BackgroundImageSource, Props, Style, StyleDirty, style_groups,
+    animatable::AnimatableField, background_image::BackgroundImageSource, props::Props,
+    style::Style, style::StyleDirty, style::style_groups,
 };
 use crate::ui_map::{apply_opacity, parse_color};
 

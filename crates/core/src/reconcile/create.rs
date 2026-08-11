@@ -22,7 +22,7 @@ use crate::bridge::{CanvasSizeTracker, JsBridge, RNode, SpanKind};
 use crate::canvas::{CanvasSurface, blank_canvas_image};
 use crate::plugin::Fonts;
 use crate::portal::{RPortal, blank_portal_image};
-use crate::protocol::{NodeId, Props, Style};
+use crate::protocol::{NodeId, props::Props, style::Style};
 use crate::surface::RSurface;
 use crate::transition::apply_scroll_transition;
 use crate::ui_map::{
@@ -278,7 +278,7 @@ pub(super) fn apply_create(
             crate::background_image::apply_background_image(
                 &mut ec,
                 &props.style,
-                crate::protocol::StyleDirty::ALL,
+                crate::protocol::style::StyleDirty::ALL,
                 false,
                 assets,
             );
@@ -358,11 +358,11 @@ fn spawn_element(
 /// other field) via the element's `style` prop.
 pub(super) fn surface_root_base() -> Option<Style> {
     Some(Style {
-        width: Some(crate::protocol::Animatable::Static(
-            crate::protocol::Length::Percent(100.0),
+        width: Some(crate::protocol::animatable::Animatable::Static(
+            crate::protocol::units::Length::Percent(100.0),
         )),
-        height: Some(crate::protocol::Animatable::Static(
-            crate::protocol::Length::Percent(100.0),
+        height: Some(crate::protocol::animatable::Animatable::Static(
+            crate::protocol::units::Length::Percent(100.0),
         )),
         ..Default::default()
     })
@@ -382,11 +382,11 @@ pub(super) fn surface_root_base() -> Option<Style> {
 /// with no style value).
 pub(super) fn root_base() -> Option<Style> {
     Some(Style {
-        width: Some(crate::protocol::Animatable::Static(
-            crate::protocol::Length::Percent(100.0),
+        width: Some(crate::protocol::animatable::Animatable::Static(
+            crate::protocol::units::Length::Percent(100.0),
         )),
-        height: Some(crate::protocol::Animatable::Static(
-            crate::protocol::Length::Percent(100.0),
+        height: Some(crate::protocol::animatable::Animatable::Static(
+            crate::protocol::units::Length::Percent(100.0),
         )),
         // Default to a column, like the main UI root (plugin.rs). Bevy's own
         // default is `row`, but a row container mis-measures a single
@@ -424,7 +424,7 @@ pub(super) fn editable_a11y_node(props: &Props) -> accesskit::Node {
 mod tests {
     use super::super::test_util::{children_of, create_node, ent, ordering_app, update_delta};
     use super::*;
-    use crate::protocol::{Op, ROOT_ID};
+    use crate::protocol::{ROOT_ID, op::Op};
 
     /// A `<portal>` mounts to an `ImageNode` carrying an `RPortal` with its target
     /// name; an update rebinds the name.

@@ -43,7 +43,7 @@ use bevy::platform::collections::{HashMap, HashSet};
 use bevy::prelude::*;
 use bevy::ui::{ComputedNode, UiGlobalTransform};
 
-use crate::protocol::{AnimatableField, NodeId, Props};
+use crate::protocol::{NodeId, animatable::AnimatableField, props::Props};
 
 pub mod clip;
 pub mod pick3d;
@@ -180,7 +180,7 @@ pub struct LayerMeta {
     /// [`resolve_layer_repaints`] dirty this layer every frame (its pixels
     /// are written outside the dirt tracking's sight — live portals,
     /// app-owned render targets).
-    pub cache_policy: crate::protocol::LayerCache,
+    pub cache_policy: crate::protocol::style::LayerCache,
 }
 
 /// Public registry of currently promoted layers — the observability surface
@@ -285,7 +285,9 @@ pub fn promotion_reasons(
     // ones.
     let forced = matches!(
         props.style.as_ref().and_then(|s| s.cache),
-        Some(crate::protocol::LayerCache::Always | crate::protocol::LayerCache::Never)
+        Some(
+            crate::protocol::style::LayerCache::Always | crate::protocol::style::LayerCache::Never
+        )
     );
     if forced && !ineligible_element {
         reasons |= PromotionReasons::FORCED;
@@ -861,7 +863,7 @@ pub fn resolve_layer_repaints(
     //    re-captures unconditionally. Seeded before the outward propagation:
     //    live pixels defeat ancestor caching (same rationale as backdrop).
     for meta in registry.layers.values() {
-        if meta.cache_policy == crate::protocol::LayerCache::Never {
+        if meta.cache_policy == crate::protocol::style::LayerCache::Never {
             state.dirty.insert(meta.entity);
         }
     }
@@ -890,7 +892,7 @@ pub fn resolve_layer_repaints(
 mod tests {
     use super::*;
     use crate::bridge::JsBridge;
-    use crate::protocol::{NodeId, Op, Outbound, Props};
+    use crate::protocol::{NodeId, op::Op, outbound::Outbound, props::Props};
     use bevy::ui::BackgroundColor;
 
     fn props(json: serde_json::Value) -> Props {
@@ -1237,7 +1239,7 @@ mod tests {
     /// unsetting demotes.
     #[test]
     fn never_cache_lifecycle_and_policy() {
-        use crate::protocol::LayerCache;
+        use crate::protocol::style::LayerCache;
         let (mut app, ops_tx) = layer_app();
         ops_tx
             .send(vec![create(
@@ -1503,7 +1505,7 @@ mod tests {
     /// (live pixels defeat ancestor caching). Unrelated layers stay cached.
     #[test]
     fn never_policy_repaints_every_frame() {
-        use crate::protocol::LayerCache;
+        use crate::protocol::style::LayerCache;
         let mut world = World::new();
         world.init_resource::<LayerContentDirt>();
         world.init_resource::<LayerRepaintState>();

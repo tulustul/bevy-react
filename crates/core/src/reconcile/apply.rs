@@ -15,7 +15,7 @@ use super::{create, update};
 use crate::bridge::{JsBridge, RNode, SpanKind};
 use crate::canvas::CanvasSurface;
 use crate::plugin::Fonts;
-use crate::protocol::{NodeId, Op, ROOT_ID};
+use crate::protocol::{NodeId, ROOT_ID, op::Op};
 use crate::transition::ScrollTransitionState;
 
 /// Apply every queued reconciler op to the ECS. Runs in `Update`; ops simply
@@ -466,7 +466,7 @@ pub(super) fn resolve(bridge: &JsBridge, id: NodeId) -> Option<Entity> {
 mod tests {
     use super::super::test_util::{children_of, create_node, ent, ordering_app};
     use super::*;
-    use crate::protocol::Props;
+    use crate::protocol::props::Props;
 
     /// Append-only construction yields the appended order — and does so within a
     /// single batch, where the live `Children` is not yet readable.

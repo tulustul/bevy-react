@@ -10,7 +10,7 @@ use bevy::prelude::*;
 use tiny_skia::Transform;
 
 use super::{ShapeKind, SvgShape, SvgSurface};
-use crate::protocol::AnimatableField;
+use crate::protocol::animatable::AnimatableField;
 
 /// Defensive bound on `ChildOf` climbs and group-nesting recursion. Deep
 /// nesting is app-authored input (65 nested `<g>`s), not an engine invariant,

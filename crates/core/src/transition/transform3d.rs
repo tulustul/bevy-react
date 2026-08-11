@@ -9,13 +9,16 @@
 
 use super::channels::{Channel, ProgressChannel};
 use super::spec::ChannelTransition;
-use crate::protocol::Animatable::Static;
-use crate::protocol::{Angle, AnimatableField, Length, Transform3d, Transform3dOrigin};
+use crate::protocol::animatable::Animatable::Static;
+use crate::protocol::{
+    animatable::AnimatableField, transform::Transform3d, transform::Transform3dOrigin,
+    units::Angle, units::Length,
+};
 
 /// The origin's per-axis static length; an `{ animated }` origin axis eases as
 /// its default (the axis is driven per-frame by the binding anyway — any node
 /// with a transform3d binding parks this whole channel via `skip_transform3d`).
-fn origin_axis(axis: &crate::protocol::Animatable<Length>) -> Length {
+fn origin_axis(axis: &crate::protocol::animatable::Animatable<Length>) -> Length {
     axis.value().copied().unwrap_or(Length::Percent(50.0))
 }
 

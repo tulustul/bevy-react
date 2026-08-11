@@ -73,7 +73,7 @@ pub fn apply_interaction_styles(
             crate::background_image::apply_background_image(
                 &mut ec,
                 &style,
-                crate::protocol::StyleDirty::ALL,
+                crate::protocol::style::StyleDirty::ALL,
                 promoted.is_some(),
                 &assets,
             );
@@ -86,7 +86,7 @@ mod tests {
     use super::super::test_util::op_app;
     use super::*;
     use crate::bridge::JsBridge;
-    use crate::protocol::Op;
+    use crate::protocol::op::Op;
     use bevy::ui::widget::ImageNode;
 
     /// A hover variant swaps the whole `backgroundImage` Bevy-side (new

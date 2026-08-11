@@ -14,7 +14,7 @@ use bevy::ui::{ComputedNode, UiGlobalTransform};
 
 use super::events::{climb, dom_button, send_ui_event, surface_relative};
 use crate::bridge::{JsBridge, PointerHandlers, RNode, StyleVariants};
-use crate::protocol::Style;
+use crate::protocol::style::Style;
 use crate::surface::SurfaceVirtualPointer;
 use crate::ui_map::{apply_style, overlay_style};
 
@@ -238,7 +238,7 @@ pub fn apply_surface_interaction_styles(
             crate::background_image::apply_background_image(
                 &mut ec,
                 &style,
-                crate::protocol::StyleDirty::ALL,
+                crate::protocol::style::StyleDirty::ALL,
                 false,
                 &assets,
             );

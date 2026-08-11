@@ -19,7 +19,7 @@ use crossbeam_channel::Sender;
 use crate::animations::AnimationCommand;
 
 use crate::message::ReactMessage;
-use crate::protocol::Op;
+use crate::protocol::op::Op;
 use crate::request::RawRequest;
 
 /// The JS→Bevy channel senders the host hands to the JS runtime. These are the

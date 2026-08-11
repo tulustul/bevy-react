@@ -68,7 +68,7 @@
 //! [`FilterParam`]: super::protocol::AnimatableProperty::FilterParam
 //! [`BackdropParam`]: super::protocol::AnimatableProperty::BackdropParam
 //! [`ShapeAttr`]: super::protocol::AnimatableProperty::ShapeAttr
-//! [`Style`]: crate::protocol::Style
+//! [`Style`]: crate::protocol::style::Style
 
 /// Invoke `$cb!` with every static property row (see the module doc for the
 /// column contract). The callback receives the full row list in one call:

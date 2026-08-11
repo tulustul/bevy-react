@@ -109,7 +109,7 @@ pub fn collect_keyboard_events(
 mod tests {
     use super::*;
     use crate::bridge::OutboundResource;
-    use crate::protocol::Outbound;
+    use crate::protocol::outbound::Outbound;
     use bevy::input::keyboard::{Key, KeyCode, KeyboardInput};
     use tokio::sync::mpsc::{UnboundedReceiver, unbounded_channel};
 

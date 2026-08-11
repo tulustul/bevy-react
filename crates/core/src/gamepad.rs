@@ -497,7 +497,7 @@ mod tests {
     use crate::ReactAppExt;
     use crate::bridge::{OutboundResource, OutboundSender};
     use crate::message::{ReactMessage, ReactRegistry};
-    use crate::protocol::{Outbound, ResponseResult};
+    use crate::protocol::{outbound::Outbound, outbound::ResponseResult};
     use crate::request::{RawRequest, ReactRequestRegistry};
     use bevy::ecs::world::CommandQueue;
     use bevy::input::ButtonState;

@@ -11,7 +11,7 @@ use serde_json::Value;
 use crate::animations::ValueKind;
 use crate::filters::params::{ParamSlot, length_logical_px, static_layout};
 use crate::filters::registry::{ReactFilter, ResolvedFilterPass, resolve_single_pass};
-use crate::protocol::{Angle, Length};
+use crate::protocol::{units::Angle, units::Length};
 
 fn default_offset() -> Length {
     Length::Px(4.0)

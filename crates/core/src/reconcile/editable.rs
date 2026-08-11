@@ -9,7 +9,7 @@ use bevy::prelude::*;
 use bevy::text::{EditableText, FontCx, LayoutCx, TextEditChange};
 
 use crate::bridge::{FocusState, JsBridge, RNode};
-use crate::protocol::{NodeId, Outbound, UiEvent};
+use crate::protocol::{NodeId, outbound::Outbound, outbound::UiEvent};
 
 /// Report `editableText` edits back to JS. Bevy triggers [`TextEditChange`] after
 /// applying edits — but also on cursor/selection moves — so this single observer

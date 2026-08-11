@@ -259,8 +259,8 @@ fn stage_transform3d(b: &AnimatedBindings, values: &SharedValues, t: &mut AnimTa
         return;
     };
     use crate::animations::protocol::Transform3dField as F;
-    use crate::protocol::Animatable::Static;
-    use crate::protocol::{Angle, Length, Transform3dOrigin};
+    use crate::protocol::animatable::Animatable::Static;
+    use crate::protocol::{transform::Transform3dOrigin, units::Angle, units::Length};
     let mut new = t3d.0.clone();
     for (property, binding) in b.iter() {
         if !matches!(property, P::Transform3d(_)) {
@@ -270,7 +270,8 @@ fn stage_transform3d(b: &AnimatedBindings, values: &SharedValues, t: &mut AnimTa
             continue;
         };
         let deg = || Some(Static(Angle::from_radians(v.to_radians())));
-        let origin = |o: &crate::protocol::Transform3d| o.origin.clone().unwrap_or_default();
+        let origin =
+            |o: &crate::protocol::transform::Transform3d| o.origin.clone().unwrap_or_default();
         // Field writes generate from the property table's t3d rows
         // (the same rows that drive the transition channel group —
         // `angle` fields arrive as wire degrees, stored as radians;

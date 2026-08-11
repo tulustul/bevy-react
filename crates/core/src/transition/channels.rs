@@ -6,7 +6,7 @@
 use bevy::prelude::*;
 
 use crate::animations::{Lerp, Runner, build_runner};
-use crate::protocol::Length;
+use crate::protocol::units::Length;
 
 use super::spec::ChannelTransition;
 use super::{shape_channel, transform3d};

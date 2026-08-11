@@ -287,7 +287,7 @@ mod tests {
         anim_app, create, create_kind, drain_dirt, entity_of, resolve_app, tick, update,
     };
     use super::*;
-    use crate::protocol::Op;
+    use crate::protocol::op::Op;
 
     #[test]
     fn quantize_outset_rounds_up_to_16() {

@@ -54,7 +54,7 @@ use super::{
     FillRuleKind, LinecapKind, LinejoinKind, PathData, PathSeg, ShapeAttrs, ShapeKind, ShapePaint,
     ShapeTransform, ViewBox,
 };
-use crate::protocol::{Animatable, AnimatableField};
+use crate::protocol::{animatable::Animatable, animatable::AnimatableField};
 
 #[cfg(test)]
 mod tests;

@@ -1515,7 +1515,7 @@ fn emit_runtime_warnings(
 mod tests {
     use super::*;
     use crate::bridge::{OutboundResource, RRoot};
-    use crate::protocol::Outbound;
+    use crate::protocol::outbound::Outbound;
     use tokio::sync::mpsc::{UnboundedReceiver, unbounded_channel};
 
     /// Headless app with the toggle/auto-open systems and a drainable outbound
@@ -1668,7 +1668,7 @@ mod tests {
 
     /// The JS editor validates against its own field table
     /// (`js/src/devtools/fields.ts`); assert it names every wire field of
-    /// `protocol.rs`'s `with_style_fields!` table, so adding a `Style` field
+    /// `protocol/style.rs`'s `with_style_fields!` table, so adding a `Style` field
     /// can't silently leave it un-editable in devtools. Matches the key either
     /// bare (`width:`) or quoted (`"width":`) — prettier decides which.
     /// camelCase wire names make the bare `name:` probe unambiguous (a missing
@@ -1739,7 +1739,7 @@ mod tests {
 
     /// `warnings.ts`'s `KIND_FIELDS` must know every warning kind Rust emits,
     /// or that kind degrades to a broad all-style-fields value scan. Kind
-    /// literals live at the `decode_warn` call sites (`protocol.rs`,
+    /// literals live at the `decode_warn` call sites (the `protocol/` submodules,
     /// `scrollbar.rs`, `animations/protocol.rs`, `svg/protocol.rs`) and the
     /// `diag::report` sites
     /// (`ui_map.rs`, `cursor.rs`, `filters.rs`, `layer.rs`,
@@ -1850,7 +1850,7 @@ mod tests {
                 )*
             };
         }
-        crate::protocol::with_style_fields!(check_fields);
+        crate::protocol::style::with_style_fields!(check_fields);
     }
 
     /// `fields.ts`'s `SHAPE_FIELDS` must know every wire field of
@@ -1983,7 +1983,7 @@ mod tests {
     fn report_panel_root(world: &mut World, id: NodeId, panel_entity: Entity) {
         let (out_tx, out_rx) = unbounded_channel::<Outbound>();
         std::mem::forget(out_rx);
-        let (ops_tx, ops_rx) = crossbeam_channel::unbounded::<Vec<crate::protocol::Op>>();
+        let (ops_tx, ops_rx) = crossbeam_channel::unbounded::<Vec<crate::protocol::op::Op>>();
         std::mem::forget(ops_tx);
         let root = world.spawn_empty().id();
         let mut bridge = JsBridge::new(ops_rx, out_tx, root);

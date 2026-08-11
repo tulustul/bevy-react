@@ -7,12 +7,13 @@ use bevy::ui::UiTransform;
 use super::super::protocol::{AnimatableProperty, AnimatedBindings, Binding, ValueKind};
 use super::super::{AnimatedNode, SharedValues};
 use super::{ValidationMemory, apply_animated_nodes};
-use crate::protocol::AnimatableField;
+use crate::protocol::animatable::AnimatableField;
 
 /// Build bindings the way production does: decode a style carrying inline
 /// `{ animated }` wrappers and derive (`crate::style_bindings`).
 fn style_bindings(style: serde_json::Value) -> AnimatedBindings {
-    let style: crate::protocol::Style = serde_json::from_value(style).expect("style decodes");
+    let style: crate::protocol::style::Style =
+        serde_json::from_value(style).expect("style decodes");
     crate::style_bindings::derive_bindings(Some(&style)).expect("style carries bindings")
 }
 
@@ -390,7 +391,7 @@ fn settled_apply_does_not_dirty_components() {
 #[test]
 fn transform3d_bindings_drive_layer_params() {
     use crate::layer::transform3d::LayerTransform3d;
-    use crate::protocol::Transform3d;
+    use crate::protocol::transform::Transform3d;
 
     let mut world = World::new();
     world.init_resource::<crate::layer::LayerContentDirt>();
@@ -405,7 +406,7 @@ fn transform3d_bindings_drive_layer_params() {
     assert!(!bindings.has_transform(), "distinct from the 2D group");
 
     let static_params = Transform3d {
-        perspective: Some(crate::protocol::Animatable::Static(500.0)),
+        perspective: Some(crate::protocol::animatable::Animatable::Static(500.0)),
         ..Default::default()
     };
     let e = world

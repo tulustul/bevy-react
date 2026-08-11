@@ -32,7 +32,7 @@ use serde::de::DeserializeOwned;
 use ts_rs::TS;
 
 use crate::bridge::{OutboundResource, OutboundSender};
-use crate::protocol::{Outbound, ResponseResult};
+use crate::protocol::{outbound::Outbound, outbound::ResponseResult};
 use crate::registry::{NamedEntry, register_entry};
 use crate::ts_codegen::TsCollector;
 

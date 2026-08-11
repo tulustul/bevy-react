@@ -12,7 +12,7 @@ use bevy::ui::widget::{ImageNode, NodeImageMode};
 
 use super::test_util::{children_of, ent, op_app, update_delta};
 use crate::bridge::{JsBridge, PointerHandlers};
-use crate::protocol::{AnimatableField, Op, Props, ROOT_ID};
+use crate::protocol::{ROOT_ID, animatable::AnimatableField, op::Op, props::Props};
 use crate::svg::{ShapeAttrs, ShapeKind, SvgShape, SvgSurface, SvgUserPos};
 
 /// `Op::Create` for an `<image>` with the given props JSON.

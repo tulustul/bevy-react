@@ -7,7 +7,7 @@ use bevy::ui::RelativeCursorPosition;
 
 use super::events::{normalized_01, send_ui_event};
 use crate::bridge::{HoverState, JsBridge, PointerHandlers, RNode};
-use crate::protocol::{Outbound, UiEvent};
+use crate::protocol::{outbound::Outbound, outbound::UiEvent};
 use crate::svg::SvgUserPos;
 
 /// Event x/y for a node: an SVG shape's **user-space** cursor when its
@@ -235,7 +235,7 @@ mod tests {
     use super::super::events::collect_ui_events;
     use super::super::surface_events::collect_surface_clicks;
     use super::*;
-    use crate::protocol::{Op, UiEvent};
+    use crate::protocol::{op::Op, outbound::UiEvent};
     use crate::surface::SurfaceVirtualPointer;
 
     /// A synthetic picking `Pointer<Click>` location: the render target is

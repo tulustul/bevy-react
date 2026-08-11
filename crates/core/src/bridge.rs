@@ -6,7 +6,7 @@ use bevy::prelude::*;
 use bevy::text::{LetterSpacing, LineHeight};
 use crossbeam_channel::Receiver;
 
-use crate::protocol::{NodeId, Op, Outbound, Style};
+use crate::protocol::{NodeId, op::Op, outbound::Outbound, style::Style};
 
 /// The text appearance a `<text>` element/span carries, kept so inheriting child
 /// runs (bare strings) can copy it on append without an ECS query (Bevy commands
@@ -144,13 +144,13 @@ pub struct JsBridge {
     /// Maps reconciler node ids to their spawned entities.
     pub nodes: HashMap<NodeId, Entity>,
     /// The last applied props per node (event-like fields stripped — see
-    /// [`crate::protocol::Props::split_events`]). Every [`crate::protocol::Op::Update`]
+    /// [`crate::protocol::props::Props::split_events`]). Every [`crate::protocol::op::Op::Update`]
     /// merges its delta into this retained state, so the apply path always works
     /// from the full merged props even though only the changed fields crossed
     /// the boundary. Seeded on create.
     /// Boxed: `Props` is several KB by value (four inline `Style`s), and the
     /// update path moves entries out of and back into the map per op.
-    pub props_cache: HashMap<NodeId, Box<crate::protocol::Props>>,
+    pub props_cache: HashMap<NodeId, Box<crate::protocol::props::Props>>,
     /// Nodes whose layer-promotion state may have changed this batch (a delta
     /// touched a trigger field, or their child count crossed 0↔1+). Marked by
     /// the op-apply arms, drained by

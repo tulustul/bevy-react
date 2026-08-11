@@ -3,7 +3,7 @@
 use super::channels::{Channel, ProgressChannel};
 use super::*;
 use crate::animations::{AnimatedBindings, Driver, Easing, Lerp};
-use crate::protocol::{AnimatableField, Time as WireTime};
+use crate::protocol::{animatable::AnimatableField, units::Time as WireTime};
 use std::time::Duration;
 
 fn timing(duration: f32, easing: Easing) -> ChannelTransition {
@@ -233,7 +233,7 @@ fn system_eases_scale_on_press_then_release() {
 #[test]
 fn system_eases_transform3d() {
     use crate::layer::transform3d::LayerTransform3d;
-    use crate::protocol::Transform3d;
+    use crate::protocol::transform::Transform3d;
 
     let (mut world, mut schedule) = drive_world();
     let spec = Transition {
@@ -262,10 +262,10 @@ fn system_eases_transform3d() {
     // Retarget rotateY 90° (+ a perspective from an orthographic start —
     // that channel snaps while the rotation eases).
     let target = Transform3d {
-        rotate_y: Some(crate::protocol::Animatable::Static(
-            crate::protocol::Angle::from_radians(std::f32::consts::FRAC_PI_2),
+        rotate_y: Some(crate::protocol::animatable::Animatable::Static(
+            crate::protocol::units::Angle::from_radians(std::f32::consts::FRAC_PI_2),
         )),
-        perspective: Some(crate::protocol::Animatable::Static(800.0)),
+        perspective: Some(crate::protocol::animatable::Animatable::Static(800.0)),
         ..Default::default()
     };
     world

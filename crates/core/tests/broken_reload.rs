@@ -14,7 +14,7 @@
 use std::time::Duration;
 
 use bevy_react::js_thread::spawn_js_thread;
-use bevy_react::protocol::{Op, Outbound, UiEvent};
+use bevy_react::protocol::{op::Op, outbound::Outbound, outbound::UiEvent};
 use bevy_react::{RawRequest, ReactMessage};
 
 // A working bundle: cold start parks the event loop; re-execution (hot update)

@@ -35,7 +35,7 @@
 use bevy::prelude::*;
 
 use super::channels::Channel;
-use crate::protocol::Animatable;
+use crate::protocol::animatable::Animatable;
 use crate::svg::{NUMERIC_ATTR_COUNT, NUMERIC_ATTRS, SvgShape};
 
 /// One tracked attr: the eased [`Channel`] plus the value this channel last
@@ -178,7 +178,7 @@ mod tests {
     }
 
     fn cx(world: &World, e: Entity) -> f32 {
-        use crate::protocol::AnimatableField;
+        use crate::protocol::animatable::AnimatableField;
         world
             .entity(e)
             .get::<SvgShape>()
@@ -191,7 +191,7 @@ mod tests {
 
     fn set_cx(world: &mut World, e: Entity, v: f32) {
         world.entity_mut(e).get_mut::<SvgShape>().unwrap().attrs.cx =
-            Some(crate::protocol::Animatable::Static(v));
+            Some(crate::protocol::animatable::Animatable::Static(v));
     }
 
     const SPECCED: &str = r#"{
@@ -302,7 +302,7 @@ mod tests {
         {
             let mut shape = world.entity_mut(e);
             let mut shape = shape.get_mut::<SvgShape>().unwrap();
-            shape.attrs.cx = Some(crate::protocol::Animatable::Static(70.0));
+            shape.attrs.cx = Some(crate::protocol::animatable::Animatable::Static(70.0));
             shape.attrs.points = Some(vec![Vec2::ZERO, Vec2::splat(99.0)]);
         }
         advance(&mut world, 0.5);
@@ -359,7 +359,7 @@ mod tests {
         assert!(
             matches!(
                 shape.attrs.cx,
-                Some(crate::protocol::Animatable::Animated { seed: Some(s), .. }) if s == 10.0
+                Some(crate::protocol::animatable::Animatable::Animated { seed: Some(s), .. }) if s == 10.0
             ),
             "the animated slot (wrapper + seed) survives untouched"
         );
@@ -395,11 +395,11 @@ mod tests {
         {
             let mut em = world.entity_mut(e);
             em.get_mut::<SvgShape>().unwrap().attrs.r =
-                Some(crate::protocol::Animatable::Static(50.0));
+                Some(crate::protocol::animatable::Animatable::Static(50.0));
         }
         advance(&mut world, 0.5);
         schedule.run(&mut world);
-        use crate::protocol::AnimatableField;
+        use crate::protocol::animatable::AnimatableField;
         assert_eq!(
             world
                 .entity(e)
@@ -419,7 +419,7 @@ mod tests {
         {
             let mut em = world.entity_mut(e);
             em.get_mut::<SvgShape>().unwrap().attrs.r =
-                Some(crate::protocol::Animatable::Static(10.0));
+                Some(crate::protocol::animatable::Animatable::Static(10.0));
         }
         advance(&mut world, 0.5);
         schedule.run(&mut world);

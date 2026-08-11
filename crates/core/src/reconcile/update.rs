@@ -23,7 +23,7 @@ use crate::bridge::{JsBridge, RNode, SpanKind, StyleVariants};
 use crate::canvas::CanvasSurface;
 use crate::plugin::Fonts;
 use crate::portal::RPortal;
-use crate::protocol::{NodeId, Props};
+use crate::protocol::{NodeId, props::Props};
 use crate::transition::{ScrollTransitionState, apply_scroll_transition};
 use crate::ui_map::{apply_style_masked, overlay_style, resolved_text_style, text_layout};
 
@@ -78,7 +78,7 @@ pub(super) fn apply_update(
     });
     let (dirty, ev) = cached.merge_delta(props, &unset, &style_unset);
     let props = cached;
-    use crate::protocol::style_groups as g;
+    use crate::protocol::style::style_groups as g;
     // A delta touching a promotion trigger (`opacity`/`groupAlpha`/
     // `filter`, all in the LAYER group — an `{ animated }` opacity is
     // field presence like any other) or a variant style swap (variants
@@ -369,7 +369,7 @@ pub(crate) fn reapply_opacity_outputs(
     ui_assets: &mut UiAssets,
     style_variants: &mut Query<&mut StyleVariants>,
 ) {
-    use crate::protocol::style_groups as g;
+    use crate::protocol::style::style_groups as g;
     // Variant-bearing nodes re-merge through `apply_interaction_styles`
     // (ordered after the evaluator): poking change detection re-runs the full
     // merge with the new promotion state without clobbering an active
@@ -381,7 +381,7 @@ pub(crate) fn reapply_opacity_outputs(
         // Every group `opacity` feeds, minus TRANSITION (transition *state*
         // persists across flips; only baked outputs re-derive) and TEXT
         // (text elements never promote).
-        let mask = crate::protocol::StyleDirty(
+        let mask = crate::protocol::style::StyleDirty(
             g::BACKGROUND | g::BG_GRADIENT | g::BORDER_GRADIENT | g::TEXT_SHADOW | g::LAYER,
         );
         apply_style_masked(&mut ec, &props.style, mask, promoted);
@@ -392,7 +392,7 @@ pub(crate) fn reapply_opacity_outputs(
             crate::background_image::apply_background_image(
                 &mut ec,
                 &props.style,
-                crate::protocol::StyleDirty(g::BG_IMAGE),
+                crate::protocol::style::StyleDirty(g::BG_IMAGE),
                 promoted,
                 assets,
             );
@@ -413,7 +413,7 @@ mod tests {
     use super::super::test_util::{op_app, text_props, update_delta};
     use super::*;
     use crate::bridge::PointerHandlers;
-    use crate::protocol::Op;
+    use crate::protocol::op::Op;
     use crate::transition::TransitionInput;
 
     /// A `<text>` root's `transform`/`transition` must update on re-render — not

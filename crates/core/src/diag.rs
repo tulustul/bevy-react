@@ -8,7 +8,7 @@
 //! - **Decode sink** (thread-local): the serde-boundary deserializers in
 //!   [`crate::protocol`] fall back during `op_flush`'s argument decode, on the
 //!   single-threaded JS host thread, where no node id is in scope. The
-//!   [`crate::protocol::OpBatch`] wrapper brackets each op's decode with
+//!   [`crate::protocol::op::OpBatch`] wrapper brackets each op's decode with
 //!   [`decode_watermark`]/[`decode_attribute_since`] to stamp entries with the
 //!   op's target node; the host drains the batch's entries right after the
 //!   flush via [`take_decode_warnings`] and hands them to the devtools mirror.

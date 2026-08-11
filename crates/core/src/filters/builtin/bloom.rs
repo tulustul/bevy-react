@@ -12,7 +12,7 @@ use crate::animations::ValueKind;
 use crate::filters::builtin::BlurParams;
 use crate::filters::params::{ParamSlot, length_logical_px, static_layout};
 use crate::filters::registry::{ReactFilter, ResolvedFilterPass};
-use crate::protocol::Length;
+use crate::protocol::units::Length;
 
 /// Bright-pass mode marker in `params[0].w` (see `bloom.wgsl`).
 const MODE_BRIGHT: f32 = 0.0;

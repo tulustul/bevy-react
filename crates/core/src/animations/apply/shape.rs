@@ -12,10 +12,10 @@
 //! `Static(driven)`, which would destroy the binding. Why this is right:
 //!
 //! - The read path already renders seeds
-//!   ([`static_or_seed`](crate::protocol::AnimatableField::static_or_seed) —
+//!   ([`static_or_seed`](crate::protocol::animatable::AnimatableField::static_or_seed) —
 //!   paint, hit, and the group walk all use it), so no consumer changes.
 //! - [`ShapeAttrs`](crate::svg::ShapeAttrs)' `PartialEq` includes the seed
-//!   (deliberately — see the `Animatable` derive note in `protocol.rs`), so
+//!   (deliberately — see the `Animatable` derive note in `protocol/animatable.rs`), so
 //!   compare-before-write and the raster's `Changed<SvgShape>` derived dirt
 //!   (C5) stay sound.
 //! - A JS atomic attrs re-send restoring the original seed is corrected the
@@ -43,7 +43,7 @@ use bevy::prelude::*;
 use super::super::protocol::{AnimatableProperty, AnimatedBindings, Binding};
 use super::super::{SharedValues, eval_scalar};
 use super::warn::warn_if;
-use crate::protocol::Animatable;
+use crate::protocol::animatable::Animatable;
 use crate::svg::{SvgShape, numeric_attr, numeric_attr_mut};
 
 /// Validate (when `validate`) and apply every
@@ -172,7 +172,7 @@ mod tests {
     use crate::animations::{
         AnimatedNode, Driver, Easing, SharedValues, apply_animated_nodes, protocol,
     };
-    use crate::protocol::{Animatable, AnimatableField};
+    use crate::protocol::{animatable::Animatable, animatable::AnimatableField};
     use crate::svg::{ShapeAttrs, ShapeKind, SvgShape};
     use bevy::prelude::*;
     use bevy::ui::UiTransform;

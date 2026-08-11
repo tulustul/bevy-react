@@ -6,7 +6,7 @@ use super::apply_js_ops;
 use super::stats::OpApplyStats;
 use crate::bridge::JsBridge;
 use crate::plugin::Fonts;
-use crate::protocol::{NodeId, Op, Outbound, Props};
+use crate::protocol::{NodeId, op::Op, outbound::Outbound, props::Props};
 use crate::ui_map::AtlasLayoutCache;
 
 /// Spin up a minimal app wired to `apply_js_ops`, returning the app and the

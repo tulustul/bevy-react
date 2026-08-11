@@ -5,7 +5,7 @@ use bevy::prelude::*;
 
 use crate::bridge::OutboundSender;
 use crate::js_thread::spawn_js_thread;
-use crate::protocol::Outbound;
+use crate::protocol::outbound::Outbound;
 
 use super::{HostConfig, HostSenders};
 

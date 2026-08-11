@@ -243,7 +243,7 @@ fn set_visibility(visibility: &mut Mut<Visibility>, next: Visibility) {
 #[cfg(test)]
 mod tests {
     use super::{AnchorScaling, distance_scale};
-    use crate::protocol::Props;
+    use crate::protocol::props::Props;
 
     fn scaling(min: f32, max: f32, factor: f32, base_distance: f32) -> AnchorScaling {
         AnchorScaling {

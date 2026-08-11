@@ -9,7 +9,7 @@
 //! typed validation happens later against the registry, not during decode.
 //!
 //! Decoding follows the protocol's warn-don't-abort convention (see
-//! [`Length`](crate::protocol::Length)'s custom `Deserialize`): a malformed
+//! [`Length`](crate::protocol::units::Length)'s custom `Deserialize`): a malformed
 //! value emits a `decode_warn` and the whole chain degrades to empty, never
 //! failing the containing `Style`'s deserialization.
 //!

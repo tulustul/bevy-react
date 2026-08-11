@@ -31,7 +31,7 @@ use bevy::ecs::query::QueryData;
 use bevy::prelude::*;
 use bevy::ui::UiTransform;
 
-use crate::protocol::{Length, Style};
+use crate::protocol::{style::Style, units::Length};
 use crate::ui_map::length_to_val;
 
 mod channels;

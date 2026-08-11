@@ -5,7 +5,7 @@
 use bevy::prelude::*;
 
 use super::stats::UiAssets;
-use crate::protocol::Props;
+use crate::protocol::props::Props;
 use crate::ui_map::{apply_atlas, image_node_promoted, svg_image_node};
 
 /// (Re)build an `<image>`'s `ImageNode` from its merged props, branching on

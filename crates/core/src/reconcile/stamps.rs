@@ -15,7 +15,7 @@ use crate::bridge::{
     FocusState, HoverState, JsBridge, PointerHandlers, ScrollListener, ScrollStep, StyleVariants,
     WheelListener,
 };
-use crate::protocol::{NodeId, Props, Style};
+use crate::protocol::{NodeId, props::Props, style::Style};
 use crate::transition::ScrollTransitionState;
 
 /// Stamp (or clear) the [`AnimatedNode`] bindings on a host element, derived
@@ -350,7 +350,7 @@ pub(super) fn queue_pending_selection(
 mod tests {
     use super::super::test_util::{op_app, update_delta};
     use super::*;
-    use crate::protocol::Op;
+    use crate::protocol::op::Op;
 
     /// A plain `<node onClick>` — no hover/press style, not a `<button>` — must get
     /// an `Interaction` so `collect_ui_events` can report its clicks. Regression:

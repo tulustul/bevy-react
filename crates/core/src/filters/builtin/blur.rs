@@ -11,7 +11,7 @@ use serde_json::Value;
 use crate::animations::ValueKind;
 use crate::filters::params::{ParamSlot, length_logical_px, static_layout};
 use crate::filters::registry::{ReactFilter, ResolvedFilterPass};
-use crate::protocol::Length;
+use crate::protocol::units::Length;
 
 /// `blur`: separable Gaussian blur. `radius` defaults to `0` — CSS `blur()`
 /// with the value omitted means `0` (identity).

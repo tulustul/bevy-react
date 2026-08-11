@@ -23,7 +23,7 @@ use tokio::sync::mpsc::UnboundedReceiver;
 use crate::animations::AnimationCommand;
 
 use crate::message::ReactMessage;
-use crate::protocol::{Op, OpBatch, Outbound};
+use crate::protocol::{op::Op, op::OpBatch, outbound::Outbound};
 use crate::request::RawRequest;
 
 /// Sender half stored in `OpState` so `op_flush` can hand op batches to Bevy.
@@ -141,7 +141,7 @@ fn op_animate(state: &mut OpState, #[serde] cmd: AnimationCommand) {
 }
 
 /// JS -> Bevy: send a correlated request. The reply comes back asynchronously as
-/// an [`Outbound::Response`](crate::protocol::Outbound) with the same `id`, which
+/// an [`Outbound::Response`](crate::protocol::outbound::Outbound) with the same `id`, which
 /// the JS event loop matches to the pending promise. `id` is a `BigInt` on the JS
 /// side (well under 2^53 in practice).
 #[op2]

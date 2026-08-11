@@ -14,7 +14,7 @@ use crossbeam_channel::{Receiver, RecvTimeoutError};
 
 use bevy_react::animations::AnimationCommand;
 use bevy_react::js_thread::spawn_js_thread;
-use bevy_react::protocol::{Op, Outbound, UiEvent};
+use bevy_react::protocol::{op::Op, outbound::Outbound, outbound::UiEvent};
 use bevy_react::{RawRequest, ReactMessage};
 
 fn example_bundle() -> PathBuf {
@@ -411,7 +411,7 @@ fn animation_callback_round_trip() {
 /// shape, so the demo's structure can change freely.
 #[test]
 fn canvas_resize_replay_round_trip() {
-    use bevy_react::protocol::DrawCmd;
+    use bevy_react::canvas::DrawCmd;
 
     let bundle = example_bundle();
     if !bundle.exists() {
@@ -669,7 +669,7 @@ fn root_demo_modal_round_trip() {
 /// empty update ops** (the delta-diff invariant, end-to-end).
 #[test]
 fn svg_jsx_render_round_trip() {
-    use bevy_react::protocol::Props;
+    use bevy_react::protocol::props::Props;
 
     let bundle = example_bundle();
     if !bundle.exists() {

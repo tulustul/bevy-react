@@ -9,7 +9,7 @@ use bevy::math::Vec4;
 use serde::{Deserialize, Deserializer};
 
 use crate::animations::ValueKind;
-use crate::protocol::Length;
+use crate::protocol::units::Length;
 
 /// Cap on the packed `Vec4` array per pass — the fixed-size uniform array the
 /// filter shaders declare.

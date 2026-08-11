@@ -470,22 +470,26 @@ pub fn visually_transformed_members(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::protocol::{Transform3d, Transform3dOrigin};
+    use crate::protocol::{transform::Transform3d, transform::Transform3dOrigin};
 
-    fn deg(v: f32) -> Option<crate::protocol::Animatable<crate::protocol::Angle>> {
-        Some(crate::protocol::Animatable::Static(
-            crate::protocol::Angle::from_radians(v.to_radians()),
+    fn deg(
+        v: f32,
+    ) -> Option<crate::protocol::animatable::Animatable<crate::protocol::units::Angle>> {
+        Some(crate::protocol::animatable::Animatable::Static(
+            crate::protocol::units::Angle::from_radians(v.to_radians()),
         ))
     }
 
     /// Static-wrap a scalar channel value.
-    fn st(v: f32) -> Option<crate::protocol::Animatable<f32>> {
-        Some(crate::protocol::Animatable::Static(v))
+    fn st(v: f32) -> Option<crate::protocol::animatable::Animatable<f32>> {
+        Some(crate::protocol::animatable::Animatable::Static(v))
     }
 
     /// Static-wrap an origin axis.
-    fn ax(l: crate::protocol::Length) -> crate::protocol::Animatable<crate::protocol::Length> {
-        crate::protocol::Animatable::Static(l)
+    fn ax(
+        l: crate::protocol::units::Length,
+    ) -> crate::protocol::animatable::Animatable<crate::protocol::units::Length> {
+        crate::protocol::animatable::Animatable::Static(l)
     }
 
     /// Forward-project plane points through a perspective matrix, invert the
@@ -499,8 +503,8 @@ mod tests {
             translate_x: st(30.0),
             scale: st(1.2),
             origin: Some(Transform3dOrigin {
-                x: ax(crate::protocol::Length::Percent(25.0)),
-                y: ax(crate::protocol::Length::Percent(50.0)),
+                x: ax(crate::protocol::units::Length::Percent(25.0)),
+                y: ax(crate::protocol::units::Length::Percent(50.0)),
             }),
             ..Default::default()
         };
@@ -525,8 +529,8 @@ mod tests {
     fn edge_on_misses_backface_hits() {
         let base = Transform3d {
             origin: Some(Transform3dOrigin {
-                x: ax(crate::protocol::Length::Percent(50.0)),
-                y: ax(crate::protocol::Length::Percent(50.0)),
+                x: ax(crate::protocol::units::Length::Percent(50.0)),
+                y: ax(crate::protocol::units::Length::Percent(50.0)),
             }),
             ..Default::default()
         };

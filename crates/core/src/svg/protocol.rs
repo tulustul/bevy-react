@@ -18,7 +18,7 @@ use serde::Deserialize;
 use serde::de::{self, Deserializer, Visitor};
 
 use crate::canvas::parse_css_color;
-use crate::protocol::{Animatable, decode_warn};
+use crate::protocol::{animatable::Animatable, decode_warn};
 
 mod path;
 #[cfg(test)]
@@ -30,7 +30,7 @@ pub use path::{PathData, PathSeg};
 /// `<line>`, `<polyline>`, `<polygon>`, `<path>`, `<g>`, …). All-`Option`:
 /// absent means "attribute not set", and the shape kind decides which fields
 /// it reads. On update the whole object **replaces atomically** (see
-/// [`crate::protocol::Props::merge_delta`]).
+/// [`crate::protocol::props::Props::merge_delta`]).
 ///
 /// The **numeric** attrs (the [`NUMERIC_ATTRS`] set) accept the inline
 /// `{ animated: …, seed? }` wrapper ([`Animatable`], the style-field wire
@@ -38,7 +38,7 @@ pub use path::{PathData, PathSeg};
 /// [`AnimatableProperty::ShapeAttr`](crate::animations::protocol::AnimatableProperty)
 /// entry and the animation driver writes the attr per frame. Consumers
 /// (paint/hit/walk) read these fields via
-/// [`static_or_seed`](crate::protocol::AnimatableField::static_or_seed): an
+/// [`static_or_seed`](crate::protocol::animatable::AnimatableField::static_or_seed): an
 /// animated attr with no `seed` reads as **absent** — the attr's own default
 /// (geometry `0`, `strokeWidth` `1`, `opacity` `1`) — until the driver
 /// writes; a `seed` renders as the static value in the wrapper's place.
@@ -367,7 +367,7 @@ impl ViewBox {
     }
 }
 
-/// `deserialize_with` for [`crate::protocol::Props::view_box`]: warn-and-drop
+/// `deserialize_with` for [`crate::protocol::props::Props::view_box`]: warn-and-drop
 /// on a malformed string — or on an object (`viewBox` is not animatable and
 /// takes no `{ animated }` wrapper) — like every other wire decode.
 pub(crate) fn de_view_box<'de, D: Deserializer<'de>>(d: D) -> Result<Option<ViewBox>, D::Error> {

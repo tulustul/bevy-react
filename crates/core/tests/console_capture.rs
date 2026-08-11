@@ -16,7 +16,7 @@ use std::time::{Duration, Instant};
 
 use bevy_react::console_log::{self, Level, Source};
 use bevy_react::js_thread::spawn_js_thread;
-use bevy_react::protocol::{Op, Outbound};
+use bevy_react::protocol::{op::Op, outbound::Outbound};
 use bevy_react::{RawRequest, ReactMessage};
 
 /// Exercise every console level plus an unhandled rejection, then park on

@@ -11,7 +11,7 @@ use bevy::ui::widget::NodeImageMode;
 use super::stamps::{apply_animated, apply_pointer_handlers, stamp_common};
 use crate::bridge::RNode;
 use crate::canvas::blank_canvas_image;
-use crate::protocol::{NodeId, Props};
+use crate::protocol::{NodeId, props::Props};
 use crate::svg::{ShapeKind, SvgShape, SvgSurface, SvgUserPos};
 use crate::ui_map::apply_style;
 

@@ -28,7 +28,7 @@ pub struct OpApplyStats {
     /// Count of non-empty op batches applied since startup (one increment per
     /// frame that applied at least one op).
     pub applied_count: u64,
-    /// Count of [`Op::Reset`](crate::protocol::Op::Reset)s applied (a cold
+    /// Count of [`Op::Reset`](crate::protocol::op::Op::Reset)s applied (a cold
     /// hot-reload tears the tree down).
     /// Devtools uses it to clear its warning-dedup state, so a reloaded app's
     /// re-decoded invalid values flag again (the JS mirror was also reset).
@@ -140,7 +140,7 @@ pub(super) fn split_pre_apply(
 mod tests {
     use super::super::test_util::op_app;
     use super::*;
-    use crate::protocol::{NodeId, Op, Props};
+    use crate::protocol::{NodeId, op::Op, props::Props};
 
     /// The per-batch origin flags attribute applies: a devtools-flagged batch
     /// bumps `applied_count` but not `app_applied_count`, so devtools batch

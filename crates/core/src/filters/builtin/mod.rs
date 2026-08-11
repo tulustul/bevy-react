@@ -62,7 +62,7 @@ mod tests {
     use crate::filters::params::MAX_FILTER_PARAM_VECS;
     use crate::filters::registry::ReactFilter;
     use crate::filters::test_util::{asset_app, builtin_registry, params};
-    use crate::protocol::Length;
+    use crate::protocol::units::Length;
 
     /// `{}` params take each filter's CSS-shorthand default: 1.0 for the six
     /// amount ops (identity for brightness/contrast/saturate, full effect for

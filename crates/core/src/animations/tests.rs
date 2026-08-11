@@ -15,7 +15,8 @@ fn timing(to: f32, duration: f32) -> Driver {
 /// Build bindings the way production does: decode a style carrying inline
 /// `{ animated }` wrappers and derive (`crate::style_bindings`).
 fn style_bindings(style: serde_json::Value) -> AnimatedBindings {
-    let style: crate::protocol::Style = serde_json::from_value(style).expect("style decodes");
+    let style: crate::protocol::style::Style =
+        serde_json::from_value(style).expect("style decodes");
     crate::style_bindings::derive_bindings(Some(&style)).expect("style carries bindings")
 }
 

@@ -11,7 +11,7 @@ use serde_json::json;
 use super::test_util::asset_app;
 use super::{FilterColor, FilterRegistry, ParamSlot, ReactFilter, register_builtin_filters};
 use crate::animations::ValueKind;
-use crate::protocol::{Angle, Length};
+use crate::protocol::{units::Angle, units::Length};
 use crate::react_filter;
 use crate::ts_codegen::TsCollector;
 
