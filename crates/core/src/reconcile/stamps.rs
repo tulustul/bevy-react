@@ -374,7 +374,7 @@ mod tests {
                 Op::Create {
                     id: 2,
                     kind: "node".into(),
-                    props: Props::default(),
+                    props: Box::default(),
                     text: None,
                 },
             ])
@@ -443,21 +443,23 @@ mod tests {
                 Op::Create {
                     id: 1,
                     kind: "button".into(),
-                    props: Props::default(),
+                    props: Box::default(),
                     text: None,
                 },
                 // 2: bare node → Pass default.
                 Op::Create {
                     id: 2,
                     kind: "node".into(),
-                    props: Props::default(),
+                    props: Box::default(),
                     text: None,
                 },
                 // 3: button with explicit focusPolicy "pass" → overrides the default.
                 Op::Create {
                     id: 3,
                     kind: "button".into(),
-                    props: node_props(serde_json::json!({ "style": { "focusPolicy": "pass" } })),
+                    props: Box::new(node_props(
+                        serde_json::json!({ "style": { "focusPolicy": "pass" } }),
+                    )),
                     text: None,
                 },
             ])

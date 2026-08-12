@@ -1112,7 +1112,7 @@ mod tests {
         Op::Create {
             id,
             kind: "node".into(),
-            props: props(json),
+            props: Box::new(props(json)),
             text: None,
         }
     }
@@ -1120,7 +1120,7 @@ mod tests {
     fn update(id: NodeId, json: serde_json::Value, style_unset: &[&str]) -> Op {
         Op::Update {
             id,
-            props: props(json),
+            props: Box::new(props(json)),
             unset: vec![],
             style_unset: style_unset.iter().map(|s| s.to_string()).collect(),
         }
@@ -1377,7 +1377,7 @@ mod tests {
         ops_tx
             .send(vec![Op::Update {
                 id: 1,
-                props: props(serde_json::json!({})),
+                props: Box::new(props(serde_json::json!({}))),
                 unset: vec!["hoverStyle".into()],
                 style_unset: vec![],
             }])

@@ -736,7 +736,7 @@ mod tests {
             Op::Create {
                 id: 2,
                 kind: "root".into(),
-                props: Props::default(),
+                props: Box::default(),
                 text: None,
             },
             create_node(3), // panel content inside the <root>

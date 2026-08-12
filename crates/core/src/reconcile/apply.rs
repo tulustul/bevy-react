@@ -200,7 +200,7 @@ pub fn apply_js_ops(
                     &mut ui_assets,
                     id,
                     kind,
-                    props,
+                    *props,
                     text,
                 );
             }
@@ -348,7 +348,7 @@ pub fn apply_js_ops(
                     &mut a11y_nodes,
                     &text_roots,
                     id,
-                    props,
+                    *props,
                     unset,
                     style_unset,
                 );
@@ -466,7 +466,6 @@ pub(super) fn resolve(bridge: &JsBridge, id: NodeId) -> Option<Entity> {
 mod tests {
     use super::super::test_util::{children_of, create_node, ent, ordering_app};
     use super::*;
-    use crate::protocol::props::Props;
 
     /// Append-only construction yields the appended order — and does so within a
     /// single batch, where the live `Children` is not yet readable.
@@ -908,13 +907,13 @@ mod tests {
                 Op::Create {
                     id: 1,
                     kind: "text".into(),
-                    props: Props::default(),
+                    props: Box::default(),
                     text: None,
                 },
                 Op::Create {
                     id: 2,
                     kind: "textSpan".into(),
-                    props: Props::default(),
+                    props: Box::default(),
                     text: Some("0".into()),
                 },
                 Op::Append {
@@ -955,7 +954,7 @@ mod tests {
             Op::Create {
                 id: 1,
                 kind: "root".into(),
-                props: Props::default(),
+                props: Box::default(),
                 text: None,
             },
             Op::Append {
@@ -1134,7 +1133,7 @@ mod tests {
             Op::Create {
                 id: 3,
                 kind: "editableText".into(),
-                props: Props::default(),
+                props: Box::default(),
                 text: None,
             },
             Op::Append {

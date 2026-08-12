@@ -63,7 +63,7 @@ pub(crate) fn create_node(id: NodeId) -> Op {
     Op::Create {
         id,
         kind: "node".into(),
-        props: Props::default(),
+        props: Box::default(),
         text: None,
     }
 }
@@ -72,7 +72,7 @@ pub(crate) fn create_node(id: NodeId) -> Op {
 pub(crate) fn update_delta(id: NodeId, props: Props, unset: &[&str], style_unset: &[&str]) -> Op {
     Op::Update {
         id,
-        props,
+        props: Box::new(props),
         unset: unset.iter().map(|s| s.to_string()).collect(),
         style_unset: style_unset.iter().map(|s| s.to_string()).collect(),
     }

@@ -140,7 +140,7 @@ pub(super) fn split_pre_apply(
 mod tests {
     use super::super::test_util::op_app;
     use super::*;
-    use crate::protocol::{NodeId, op::Op, props::Props};
+    use crate::protocol::{NodeId, op::Op};
 
     /// The per-batch origin flags attribute applies: a devtools-flagged batch
     /// bumps `applied_count` but not `app_applied_count`, so devtools batch
@@ -155,7 +155,7 @@ mod tests {
         let create = |id: NodeId| Op::Create {
             id,
             kind: "node".into(),
-            props: Props::default(),
+            props: Box::default(),
             text: None,
         };
 
@@ -217,7 +217,7 @@ mod tests {
             .send(vec![Op::Create {
                 id: 1,
                 kind: "node".into(),
-                props: Props::default(),
+                props: Box::default(),
                 text: None,
             }])
             .unwrap();

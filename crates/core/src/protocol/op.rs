@@ -14,6 +14,14 @@ use super::props::Props;
 /// A single mutation produced by the React reconciler during a commit. The
 /// reconciler batches a `Vec<Op>` per commit and flushes it across the boundary
 /// in one call.
+///
+/// The prop-bearing variants box their [`Props`] deliberately. An enum is as
+/// wide as its widest variant, and `Props` inlines four [`super::style::Style`]s
+/// (base + hover/press/focus) — several kilobytes. Unboxed, *every* element of
+/// the flushed `Vec<Op>` paid that width, so a batch of 5k `Remove`s moved tens
+/// of megabytes for ops carrying no props at all, and the decode/translate legs
+/// scaled with the widest variant instead of the actual payload. Boxing keeps
+/// `Op` pointer-sized (see `op_stays_narrow` below).
 #[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "op", rename_all = "camelCase")]
 pub enum Op {
@@ -25,7 +33,7 @@ pub enum Op {
         id: NodeId,
         kind: String,
         #[serde(default)]
-        props: Props,
+        props: Box<Props>,
         /// Inline text content for a single-string `<text>`/`<textSpan>` (the
         /// `shouldSetTextContent` fast path — no separate child text entity).
         #[serde(default)]
@@ -64,7 +72,7 @@ pub enum Op {
     Update {
         id: NodeId,
         #[serde(default)]
-        props: Props,
+        props: Box<Props>,
         /// Top-level prop wire names (camelCase) reset to their defaults.
         #[serde(default)]
         unset: Vec<String>,
@@ -141,6 +149,21 @@ impl<'de> Deserialize<'de> for OpBatch {
 mod tests {
     use super::*;
     use crate::protocol::style::Style;
+
+    /// Every element of a flushed batch is as wide as `Op`'s widest variant, so
+    /// a fat variant taxes ops that carry nothing (a `Remove` is four words of
+    /// payload). `Props` is kilobytes — it must stay behind a `Box`. This bound
+    /// is generous; it exists to fail loudly if a multi-kilobyte payload is ever
+    /// inlined into a variant again, not to pin an exact layout.
+    #[test]
+    fn op_stays_narrow() {
+        let size = std::mem::size_of::<Op>();
+        assert!(
+            size <= 128,
+            "Op grew to {size} bytes — box the payload of the variant that widened it \
+             (every op in a batch pays this width)"
+        );
+    }
 
     /// `OpBatch` stamps decode-fallback warnings with the op that carried
     /// them, so devtools can attribute "invalid length" to a node id even

@@ -428,7 +428,7 @@ mod tests {
             .send(vec![Op::Create {
                 id: 1,
                 kind: "text".into(),
-                props: text_props(0.0),
+                props: Box::new(text_props(0.0)),
                 text: None,
             }])
             .unwrap();

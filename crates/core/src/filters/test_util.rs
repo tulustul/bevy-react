@@ -44,7 +44,7 @@ pub(crate) fn create(id: NodeId, json: serde_json::Value) -> Op {
     Op::Create {
         id,
         kind: "node".into(),
-        props: op_props(json),
+        props: Box::new(op_props(json)),
         text: None,
     }
 }
@@ -53,7 +53,7 @@ pub(crate) fn create_kind(id: NodeId, kind: &str, json: serde_json::Value) -> Op
     Op::Create {
         id,
         kind: kind.into(),
-        props: op_props(json),
+        props: Box::new(op_props(json)),
         text: None,
     }
 }
@@ -61,7 +61,7 @@ pub(crate) fn create_kind(id: NodeId, kind: &str, json: serde_json::Value) -> Op
 pub(crate) fn update(id: NodeId, json: serde_json::Value, style_unset: &[&str]) -> Op {
     Op::Update {
         id,
-        props: op_props(json),
+        props: Box::new(op_props(json)),
         unset: vec![],
         style_unset: style_unset.iter().map(|s| s.to_string()).collect(),
     }
