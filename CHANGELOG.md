@@ -3,6 +3,59 @@
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-08-12
+
+### Added
+
+- **SVG.** Two web-faithful doors onto the same raster core. An `<image>` whose
+  `src` names an `.svg` file renders as a true vector — parsed once,
+  re-rasterized at the laid-out size × DPI, crisp at every size (layout uses the
+  file's intrinsic size, like a bitmap). And `<svg>` is a React-composed drawing
+  surface: the shape children (`<path>`, `<rect>`, `<circle>`, `<ellipse>`,
+  `<line>`, `<polyline>`, `<polygon>`, `<g>`) are real elements with props,
+  per-shape pointer events (hit-testing follows the painted geometry; event
+  coordinates arrive in viewBox user units), `{ animated }` bindings on numeric
+  attributes, and a `transition` prop for eased attribute changes. SVG `<text>`
+  inside files is available behind the off-by-default `svg-text` cargo feature.
+- **Gamepad input.** Built-in events `gamepadConnected`, `gamepadDisconnected`,
+  and `gamepadInput` (button and axis changes, with both digital and analog
+  values), a `gamepad.getAll` request returning the currently connected pads,
+  and `gamepad.rumble` / `gamepad.stopRumble` messages (durations in
+  milliseconds, motor intensities clamped to `0..=1`). Pads are identified by a
+  monotonic wire id that is never reused across reconnects.
+- **`backgroundImage` style.** Paints a texture under a node's content, over
+  `backgroundColor` and `backgroundGradient`. `src` is an asset path or
+  `{ texture }` naming a render target the app registered in `RenderTargets`;
+  `tint` is animatable, `mode` is `"stretch"` (default) or the repeat modes
+  (`"repeat"`, `"repeatX"`, `"repeatY"`), and `scale` sets the tile size in
+  logical px. Never affects layout.
+
+### Changed
+
+- **Faster op batches.** The reconciler's ops are no longer as wide as their
+  fattest variant, so a commit's cost tracks what it actually carries: mass
+  operations run 10–45% faster than 0.3.0 end-to-end (`clear` −45%,
+  `insertEvery2nd` −34%, `create` −32% at 10k rows), and the wire-decode leg
+  drops by 2–7×.
+
+### Internal
+
+No behavior change, but worth knowing when reading or patching the crate:
+
+- **Animation machinery generalized.** The per-property animation and transition
+  code is now driven by one `with_animatable_props!` table instead of parallel
+  hand-written matches, so adding an animatable property is a table entry the
+  compiler checks exhaustively on both enums. `animations.rs` and
+  `transition.rs` split into `animations/{apply,eval,props}/…` and
+  `transition/{channels,spec,scroll,shape_channel,transform3d}`.
+- **Big modules split into directory modules.** `protocol.rs` (~4,200 lines)
+  became `protocol/` — one file per concern (`op`, `props`, `style`, `merge`,
+  `units`, `visual`, `transform`, `grid`, `keywords`, `animatable`,
+  `background_image`, `outbound`) — and `devtools.rs` (~3,000 lines) became
+  `devtools/` (`panel`, `layers`, `console`, `stats`, `pick`, `settings`,
+  `js_tables`). Only the `protocol` split is visible outside the crate (see
+  above); `devtools` is private.
+
 ## [0.3.0] - 2026-07-25
 
 ### Added
