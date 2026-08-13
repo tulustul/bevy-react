@@ -47,11 +47,18 @@ export type {
   RepeatConfig,
 } from "./animated";
 
-// Layer-based filter chains (`style={{ filter: … }}`). `BevyFilters` is the
-// empty name→params registry interface the generated `bevy.ts` augments
-// (`declare module "bevy-react"`) — it must be exported here for that
+// Layer-based filter chains (`style={{ filter: … }}`) and morphs
+// (`morphFilter`). `BevyFilters` / `BevyMorphFilters` are the empty
+// name→params registry interfaces the generated `bevy.ts` augments
+// (`declare module "bevy-react"`) — they must be exported here for that
 // declaration merging to attach.
-export type { BevyFilters, FilterUse, FilterChainValue } from "./filters";
+export type {
+  BevyFilters,
+  BevyMorphFilters,
+  FilterUse,
+  FilterChainValue,
+  MorphFilterValue,
+} from "./filters";
 
 // World-anchored overlays (`<anchor entity={…} offset={…}>…</anchor>`).
 export type { AnchorScaling, BevyAnchorProps, Vec3 } from "./jsx";

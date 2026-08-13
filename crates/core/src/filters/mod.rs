@@ -18,7 +18,7 @@
 //! [`ResolvedFilterPass`]es: deserialize the raw params (strict:
 //! deny-unknown-fields), pack them into a `Vec4` uniform array with a
 //! [`ParamSlot`] layout (no-straddle rule: a slot never crosses a `Vec4`
-//! boundary), and pick the pass shader. The ten built-ins register via
+//! boundary), and pick the pass shader. The thirteen built-ins register via
 //! [`register_builtin_filters`]; custom filters are `#[react_filter]` structs
 //! registered with `add_react_filter`.
 //!
@@ -40,12 +40,15 @@
 //! File map: `wire` (the wire format + warn-don't-abort decode), `params`
 //! (packing layout, caps, param value types, interpolation), `registry` (the
 //! [`ReactFilter`] trait, resolved passes, the registry), `builtin` (the
-//! ten built-ins), `transition` (whole-value `filter` transition planning),
+//! thirteen built-ins), `morph` (the `morphFilter` style's wire type + resolver
+//! instance + runtime state), `transition` (whole-value `filter` transition
+//! planning),
 //! `resolve` (the chain resolve system). Submodules are private; everything
 //! is re-exported here, so `crate::filters::X` is the one path.
 
 mod backdrop;
 mod builtin;
+mod morph;
 mod params;
 mod registry;
 mod resolve;
@@ -60,15 +63,20 @@ pub(crate) mod test_util;
 pub use backdrop::{BackdropInput, ResolvedBackdropChain};
 pub use builtin::{
     BloomParams, BlurParams, BrightnessParams, ChromaticAberrationParams, ContrastParams,
-    GrayscaleParams, HueRotateParams, InvertParams, SaturateParams, SepiaParams,
-    register_builtin_filters,
+    CrossfadeParams, GrayscaleParams, HueRotateParams, InvertParams, LinearWipeParams,
+    PixelizeParams, SaturateParams, SepiaParams, register_builtin_filters,
+};
+pub(crate) use morph::de_morph_filter;
+pub use morph::{
+    MORPH_MAX_USER_PARAM_VECS, MorphFilter, MorphInput, MorphState, ResolvedMorphChain,
 };
 pub use params::{
     FilterColor, MAX_FILTER_OUTSET_PX, MAX_FILTER_PARAM_VECS, ParamSlot, length_logical_px,
     lerp_angle, lerp_packed_params,
 };
 pub use registry::{
-    FilterRegistration, FilterRegistry, ReactFilter, ResolvedFilterPass, resolve_single_pass,
+    FilterRegistration, FilterRegistry, ReactFilter, ReactMorphFilter, ResolvedFilterPass,
+    resolve_single_pass,
 };
 pub use resolve::{
     ChainInput, FilterInput, ResolvedChain, ResolvedFilterChain, quantize_outset, resolve_chains,

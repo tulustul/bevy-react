@@ -12,8 +12,8 @@ use super::test_util::asset_app;
 use super::{FilterColor, FilterRegistry, ParamSlot, ReactFilter, register_builtin_filters};
 use crate::animations::ValueKind;
 use crate::protocol::{units::Angle, units::Length};
-use crate::react_filter;
 use crate::ts_codegen::TsCollector;
+use crate::{react_filter, react_morph_filter};
 
 /// The full custom-filter surface in one struct: every override argument
 /// plus a param of each straddle-relevant type.
@@ -42,7 +42,64 @@ fn from<T: serde::de::DeserializeOwned>(value: serde_json::Value) -> T {
 fn macro_filter_exposes_name_time_and_outset() {
     assert_eq!(GlowParams::NAME, "testGlow");
     const { assert!(GlowParams::USES_TIME) };
+    const { assert!(!GlowParams::IS_MORPH) };
     assert_eq!(from::<GlowParams>(glow_json()).outset(), Ok(4.0));
+}
+
+/// The full custom-MORPH-filter surface: `#[react_morph_filter]` shares the
+/// packing machinery (Angle → radians here) but bakes `IS_MORPH`, the
+/// `ReactMorphFilter` marker, and fixed zero outset / no time.
+#[react_morph_filter(name = "testWipe", shader = "shaders/wipe.wgsl")]
+struct WipeParams {
+    angle: Angle,
+    softness: f32,
+}
+
+#[test]
+fn morph_macro_exposes_family_and_packs() {
+    assert_eq!(WipeParams::NAME, "testWipe");
+    const { assert!(WipeParams::IS_MORPH) };
+    const { assert!(!WipeParams::USES_TIME) };
+    // The marker trait is implemented (this is what `add_react_morph_filter`
+    // bounds on).
+    fn assert_morph<T: super::ReactMorphFilter>() {}
+    assert_morph::<WipeParams>();
+
+    let params: WipeParams = from(json!({ "angle": 180, "softness": 12.0 }));
+    assert_eq!(params.outset(), Ok(0.0));
+    let (packed, layout) = params.pack();
+    assert_eq!(packed[0].x, PI, "Angle packs radians");
+    assert_eq!(packed[0].y, 12.0);
+    assert_eq!(layout.len(), 2);
+}
+
+/// `add_react_morph_filter` registers into the shared registry with the
+/// morph bit set; the entry resolves as a single-pass morph and is REJECTED
+/// by the content-chain validator (the family split, both directions).
+#[test]
+fn add_react_morph_filter_registers_with_morph_bit() {
+    use super::resolve::ChainInput;
+    use crate::ReactAppExt;
+
+    let mut app = asset_app();
+    app.add_react_morph_filter::<WipeParams>();
+    let world = app.world();
+    let assets = world.resource::<AssetServer>();
+    let registry = world.resource::<FilterRegistry>();
+    let reg = &registry.entries["testWipe"];
+    assert!(reg.is_morph);
+    let passes =
+        (reg.resolve)(&json!({ "angle": 90, "softness": 4.0 }), assets).expect("morph resolves");
+    assert_eq!(passes.len(), 1);
+
+    // Family enforcement, all three chain surfaces.
+    let morph_ok = <super::MorphInput as ChainInput>::validate_entry("testWipe", true, &passes);
+    assert!(morph_ok.is_ok());
+    let in_filter = <super::FilterInput as ChainInput>::validate_entry("testWipe", true, &passes);
+    assert!(in_filter.unwrap_err().contains("`filter` chain"));
+    let in_backdrop =
+        <super::BackdropInput as ChainInput>::validate_entry("testWipe", true, &passes);
+    assert!(in_backdrop.unwrap_err().contains("`backdropFilter` chain"));
 }
 
 /// The macro never emits an identity — custom filters keep the trait
@@ -292,7 +349,7 @@ fn add_react_filter_on_builtin_is_a_noop() {
     let mut app = App::new();
     register_builtin_filters(&mut app);
     app.add_react_filter::<BlurParams>();
-    assert_eq!(app.world().resource::<FilterRegistry>().entries.len(), 10);
+    assert_eq!(app.world().resource::<FilterRegistry>().entries.len(), 13);
 }
 
 /// Registration bakes the TS-export slots with the event registry's exact

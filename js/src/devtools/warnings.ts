@@ -64,6 +64,12 @@ const KIND_FIELDS: Record<string, { style?: string[]; props?: string[] }> = {
   backdropFilterUnknown: { style: ["backdropFilter"] },
   // Same wire-key match as filterBinding, over the backdrop namespace.
   backdropFilterBinding: { style: ["backdropFilter"] },
+  // morphFilter: decode fallbacks (bad key/name/params), the v1 caps
+  // (single-pass, reserved param vecs), unknown filter names, and the
+  // `morphFilter.<param>` binding warnings.
+  morphFilterParams: { style: ["morphFilter"] },
+  morphFilterUnknown: { style: ["morphFilter"] },
+  morphFilterBinding: { style: ["morphFilter"] },
   scrollbar: { style: ["scrollbar"] },
   // backgroundImage: decode fallbacks (bad mode keyword, missing `src`,
   // ignored `scale`) and the apply-time "element owns its image" report.

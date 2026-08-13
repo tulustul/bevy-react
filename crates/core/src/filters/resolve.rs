@@ -36,6 +36,21 @@ pub trait ChainInput: Component {
     /// run must re-stage every frame regardless of `USES_TIME`.
     const FORCE_ALWAYS_DIRTY: bool;
     fn chain(&self) -> &FilterChain;
+    /// Per-instance validation of one entry: the registered name, its family
+    /// bit ([`crate::filters::ReactFilter::IS_MORPH`]), and its resolved
+    /// passes; `Err` warns under [`Self::KIND_PARAMS`] and skips the entry.
+    /// Every instance enforces the family split (regular chains reject morph
+    /// filters and vice versa — the two are separate registries in the
+    /// generated TypeScript too); the morph instance additionally checks its
+    /// single-pass + reserved-param-vec caps (see
+    /// `crate::filters::MorphInput`).
+    fn validate_entry(
+        _name: &str,
+        _is_morph: bool,
+        _passes: &[ResolvedFilterPass],
+    ) -> Result<(), String> {
+        Ok(())
+    }
 }
 
 impl ChainInput for FilterInput {
@@ -44,6 +59,19 @@ impl ChainInput for FilterInput {
     const FORCE_ALWAYS_DIRTY: bool = false;
     fn chain(&self) -> &FilterChain {
         &self.0
+    }
+    fn validate_entry(
+        name: &str,
+        is_morph: bool,
+        _passes: &[ResolvedFilterPass],
+    ) -> Result<(), String> {
+        if is_morph {
+            return Err(format!(
+                "morph filter {name:?} cannot be used in a `filter` chain — it is a \
+                 `morphFilter` name"
+            ));
+        }
+        Ok(())
     }
 }
 
@@ -209,6 +237,10 @@ pub fn resolve_chains<I: ChainInput, R: ResolvedChain>(
                     continue;
                 }
             };
+            if let Err(msg) = I::validate_entry(&fu.name, reg.is_morph, &resolved) {
+                crate::diag::report(I::KIND_PARAMS, &params.to_string(), &msg);
+                continue;
+            }
             // The `as u32` cast saturates (NaN → 0, inf → MAX); the add +
             // clamp keep a pathological radius from overflowing the capture
             // inflation math downstream.
@@ -410,6 +442,41 @@ mod tests {
         assert_eq!(warns.len(), 1, "{warns:?}");
         assert_eq!(warns[0].kind, "filterUnknown");
         assert_eq!(warns[0].value, "nope");
+    }
+
+    /// The family split: a MORPH filter named in a content `filter` chain
+    /// warns (`filterParams`) and is skipped — the rest of the chain still
+    /// resolves.
+    #[cfg(all(feature = "devtools", debug_assertions))]
+    #[test]
+    fn morph_filter_in_content_chain_warns_and_skips() {
+        let _lock = crate::diag::test_lock();
+        crate::diag::arm_runtime();
+        let _ = crate::diag::take_runtime_warnings();
+
+        let (mut app, ops_tx) = resolve_app();
+        ops_tx
+            .send(vec![create(
+                9,
+                json!({ "style": { "filter": [{ "name": "crossfade" }, { "name": "sepia" }] } }),
+            )])
+            .unwrap();
+        app.update();
+        let e = entity_of(&app, 9);
+        let chain = app.world().get::<ResolvedFilterChain>(e).expect("chain");
+        assert_eq!(chain.passes.len(), 1, "only sepia's pass survives");
+
+        let warns: Vec<_> = crate::diag::take_runtime_warnings()
+            .into_iter()
+            .filter(|w| w.node == Some(9))
+            .collect();
+        assert_eq!(warns.len(), 1, "{warns:?}");
+        assert_eq!(warns[0].kind, "filterParams");
+        assert!(
+            warns[0].message.contains("`morphFilter` name"),
+            "{}",
+            warns[0].message
+        );
     }
 
     /// Bad params (a non-px blur radius) warn (`filterParams`) and skip the

@@ -199,6 +199,7 @@ function LayerRow({
   const indent = 10 + Math.max(0, row.depth - 1) * 12;
   const chain = row.filters ?? [];
   const backdropChain = row.backdrop_filters ?? [];
+  const morphChain = row.morph_filters ?? [];
   return (
     <node
       style={{
@@ -283,6 +284,19 @@ function LayerRow({
           }}
         >
           {"backdrop: " + formatChain(backdropChain)}
+        </text>
+      )}
+      {morphChain.length > 0 && (
+        // The morph filter (a single entry), prefixed like the backdrop.
+        <text
+          style={{
+            color: theme.textDim,
+            fontSize: 10,
+            fontFamily: theme.mono,
+            margin: { left: 14, top: 2 },
+          }}
+        >
+          {"morph: " + formatChain(morphChain)}
         </text>
       )}
     </node>

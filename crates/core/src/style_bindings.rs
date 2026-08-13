@@ -133,6 +133,18 @@ pub(crate) fn derive_bindings(style: Option<&Style>) -> Option<AnimatedBindings>
 
     chain_bindings(style.filter.as_ref(), false, &mut out);
     chain_bindings(style.backdrop_filter.as_ref(), true, &mut out);
+    // The morph's single filter use — same wrapper recognition as the
+    // chains, keyed by name alone (a morph has no chain index).
+    if let Some(morph) = &style.morph_filter {
+        for (name, value) in &morph.filter.params {
+            if let Some(inner) = value.as_object().and_then(|m| m.get("animated")) {
+                out.insert(
+                    P::MorphParam { name: name.clone() },
+                    binding_from_wrapper(inner),
+                );
+            }
+        }
+    }
 
     (!out.is_empty()).then_some(AnimatedBindings(out))
 }
@@ -279,6 +291,10 @@ mod tests {
                 } },
             ],
             "backdropFilter": { "name": "blur", "params": { "radius": { "animated": { "id": 3 } } } },
+            "morphFilter": { "key": "a", "name": "linearWipe", "params": {
+                "angle": { "animated": { "id": 4 } },
+                "softness": 12,
+            } },
         }));
         let b = derive_bindings(Some(&s)).expect("bindings derived");
         assert_eq!(
@@ -315,6 +331,44 @@ mod tests {
             Some(&shared(3)),
             "single-object chain is index 0"
         );
+        assert_eq!(
+            b.get(P::MorphParam {
+                name: "angle".into()
+            }),
+            Some(&shared(4)),
+            "morph params derive keyed by name alone"
+        );
+        assert_eq!(
+            b.get(P::MorphParam {
+                name: "softness".into()
+            }),
+            None,
+            "static morph param not derived"
+        );
+        assert!(b.has_morph_params());
+        assert!(
+            b.parked(crate::animations::props::ChannelId::Filter),
+            "the filter binding parks the filter channel"
+        );
+        // The morph binding alone would park nothing — progress is
+        // engine-owned (check via a morph-only style).
+        let s = style(serde_json::json!({
+            "morphFilter": { "key": "a", "name": "linearWipe", "params": {
+                "angle": { "animated": { "id": 4 } },
+            } },
+        }));
+        let b = derive_bindings(Some(&s)).expect("bindings derived");
+        use crate::animations::props::ChannelId;
+        for channel in [
+            ChannelId::Transform,
+            ChannelId::Opacity,
+            ChannelId::Background,
+            ChannelId::Filter,
+            ChannelId::Backdrop,
+            ChannelId::Transform3d,
+        ] {
+            assert!(!b.parked(channel), "morph bindings park no channel");
+        }
     }
 
     /// A style with no wrappers derives nothing (no `AnimatedNode` at all).

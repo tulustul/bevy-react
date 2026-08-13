@@ -29,7 +29,7 @@ use serde::de::DeserializeOwned;
 use ts_rs::TS;
 
 use crate::event::{ReactEvent, ReactEventRegistry};
-use crate::filters::{FilterRegistry, ReactFilter};
+use crate::filters::{FilterRegistry, ReactFilter, ReactMorphFilter};
 use crate::registry::{NamedEntry, register_entry};
 use crate::request::{ReactRequest, ReactRequestRegistry, RequestEvent};
 use crate::ts_codegen::TsCollector;
@@ -199,10 +199,12 @@ pub trait ReactAppExt {
     where
         E: ReactEvent;
 
-    /// Register a custom filter type (usually a
-    /// [`#[react_filter]`](crate::react_filter) struct) so the `filter` style
-    /// chain can resolve it by `T::NAME` — and so the exporter can mirror its
-    /// params type into the generated TypeScript.
+    /// Register a custom **regular** filter type (usually a
+    /// [`#[react_filter]`](crate::react_filter) struct) so the `filter` /
+    /// `backdropFilter` style chains can resolve it by `T::NAME` — and so the
+    /// exporter can mirror its params type into the generated TypeScript
+    /// (`BevyFilters`). Two-input morph filters are a separate family — see
+    /// [`add_react_morph_filter`](Self::add_react_morph_filter).
     ///
     /// The built-in filters (`blur`, `brightness`, …) are registered
     /// automatically by [`ReactUiPlugin`](crate::ReactUiPlugin); call this
@@ -221,6 +223,18 @@ pub trait ReactAppExt {
     where
         T: ReactFilter + DeserializeOwned + TS;
 
+    /// Register a custom two-input **morph** filter type (usually a
+    /// [`#[react_morph_filter]`](crate::react_morph_filter) struct) so the
+    /// `morphFilter` style can resolve it by `T::NAME` — and so it lands in
+    /// the generated `BevyMorphFilters` interface. Morph filters and regular
+    /// filters are separate families: a morph name in a `filter` /
+    /// `backdropFilter` chain (and vice versa) warns and is skipped at
+    /// resolve time. Same single-registration-site and shadowing rules as
+    /// [`add_react_filter`](Self::add_react_filter).
+    fn add_react_morph_filter<T>(&mut self) -> &mut Self
+    where
+        T: ReactMorphFilter + DeserializeOwned + TS;
+
     /// Write a self-contained TypeScript module (conventionally `src/bevy.ts`)
     /// mirroring every registered React binding to `path`.
     ///
@@ -229,8 +243,9 @@ pub trait ReactAppExt {
     /// `#[react_request]` / `#[react_event]` structs and the filter params types
     /// via `ts-rs`), the `ReactMessages`/`ReactRequests`/`ReactEvents` name→type
     /// maps, a `declare module "bevy-react"` block augmenting the `BevyFilters`
-    /// interface with every registered filter (built-ins included, so the
-    /// `filter` style field types each name's params), typed `emit`/`request`/
+    /// and `BevyMorphFilters` interfaces with every registered filter of the
+    /// matching family (built-ins included, so the `filter`/`backdropFilter`
+    /// and `morphFilter` style fields type each name's params), typed `emit`/`request`/
     /// `on` wrappers, and a structured `bevy` proxy whose nested methods come
     /// from dotted request names (`"board.get"` → `bevy.board.get()`).
     /// App code imports that typed surface from `./bevy` instead of the untyped
@@ -319,6 +334,18 @@ impl ReactAppExt for App {
     where
         T: ReactFilter + DeserializeOwned + TS,
     {
+        self.world_mut()
+            .get_resource_or_init::<FilterRegistry>()
+            .register::<T>();
+        self
+    }
+
+    fn add_react_morph_filter<T>(&mut self) -> &mut Self
+    where
+        T: ReactMorphFilter + DeserializeOwned + TS,
+    {
+        // One registry serves both families; the entry's `is_morph` bit
+        // (from `T::IS_MORPH`) is what separates them at resolve/codegen.
         self.world_mut()
             .get_resource_or_init::<FilterRegistry>()
             .register::<T>();

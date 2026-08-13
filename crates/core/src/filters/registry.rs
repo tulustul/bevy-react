@@ -29,6 +29,15 @@ pub trait ReactFilter: Send + Sync + Sized + 'static {
     /// with static params). None of the built-ins are.
     const USES_TIME: bool = false;
 
+    /// Whether this is a two-input **morph** filter (a `morphFilter` name).
+    /// The two families are separate: morph filters cannot appear in
+    /// `filter`/`backdropFilter` chains and regular filters cannot be
+    /// `morphFilter` names — enforced at resolve time per chain surface, and
+    /// mirrored in the generated TypeScript (`BevyFilters` vs
+    /// `BevyMorphFilters`). Set by `#[react_morph_filter]`; regular filters
+    /// keep the default.
+    const IS_MORPH: bool = false;
+
     /// The params JSON of this filter's **identity** invocation (no visual
     /// effect), if it has one — brightness/contrast/saturate `amount: 1`,
     /// grayscale/sepia/invert `amount: 0` (their identity is `0`, NOT the CSS
@@ -81,6 +90,12 @@ pub trait ReactFilter: Send + Sync + Sized + 'static {
         resolve_single_pass(self, assets)
     }
 }
+
+/// Marker for two-input morph filters (`morphFilter` names). Implemented by
+/// `#[react_morph_filter]` (and the built-in morphs); the bound on
+/// `add_react_morph_filter` gives compile-time guidance — registration truth
+/// rides [`ReactFilter::IS_MORPH`].
+pub trait ReactMorphFilter: ReactFilter {}
 
 /// The default single-pass resolve body: [`ReactFilter::pack`] + the
 /// param-vec cap check + one pass tagged `wire_index: 0`.
@@ -186,6 +201,9 @@ pub struct FilterRegistration {
     pub(crate) outset: fn(&Value) -> Result<f32, String>,
     /// Mirrors [`ReactFilter::USES_TIME`].
     pub(crate) uses_time: bool,
+    /// Mirrors [`ReactFilter::IS_MORPH`] — which family the name belongs to
+    /// (regular chains vs `morphFilter`).
+    pub(crate) is_morph: bool,
     /// Mirrors [`ReactFilter::identity_params`] — `None` means the filter has
     /// no identity and cannot pad a chain extension (see
     /// [`plan_filter_ease`](crate::filters::plan_filter_ease)).
@@ -235,6 +253,7 @@ impl FilterRegistry {
                 },
                 outset: |value| decode_params::<T>(value)?.outset(),
                 uses_time: T::USES_TIME,
+                is_morph: T::IS_MORPH,
                 identity: T::identity_params,
                 // `T` is concrete here, so its TS shape is baked into these
                 // fns (the same split as `EventRegistration`).
@@ -322,10 +341,10 @@ mod tests {
         );
     }
 
-    /// `register_builtin_filters` registers all ten names; running it again
-    /// (same types) is a no-op per `register_entry` semantics.
+    /// `register_builtin_filters` registers all thirteen names; running it
+    /// again (same types) is a no-op per `register_entry` semantics.
     #[test]
-    fn builtin_filters_register_all_ten() {
+    fn builtin_filters_register_all_thirteen() {
         let mut app = App::new();
         register_builtin_filters(&mut app);
         let registry = app.world().resource::<FilterRegistry>();
@@ -339,16 +358,28 @@ mod tests {
                 "brightness",
                 "chromaticAberration",
                 "contrast",
+                "crossfade",
                 "grayscale",
                 "hueRotate",
                 "invert",
+                "linearWipe",
+                "pixelize",
                 "saturate",
                 "sepia",
             ]
         );
         assert!(registry.entries.values().all(|r| !r.uses_time));
+        // The morph family is exactly the three morph built-ins.
+        let mut morphs: Vec<_> = registry
+            .entries
+            .iter()
+            .filter(|(_, r)| r.is_morph)
+            .map(|(name, _)| *name)
+            .collect();
+        morphs.sort_unstable();
+        assert_eq!(morphs, ["crossfade", "linearWipe", "pixelize"]);
         register_builtin_filters(&mut app);
-        assert_eq!(app.world().resource::<FilterRegistry>().entries.len(), 10);
+        assert_eq!(app.world().resource::<FilterRegistry>().entries.len(), 13);
     }
 
     /// Every built-in entry carries working TS-export slots — `ts_name` names

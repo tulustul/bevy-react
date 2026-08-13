@@ -1,23 +1,32 @@
-//! App-authored custom filters for the "Custom filters" demo — the full
-//! `#[react_filter]` pipeline exercised from an app crate: macro → registration
-//! → codegen (`bevy.ts` types the names + params) → app WGSL that
-//! `#import bevy_react::filter` for the binding contract.
+//! App-authored custom filters — the full `#[react_filter]` /
+//! `#[react_morph_filter]` pipeline exercised from an app crate: macro →
+//! registration → codegen (`bevy.ts` types the names + params) → app WGSL
+//! that `#import bevy_react::filter` for the binding contract.
 //!
-//! Three filters, one per interesting shape:
+//! Two families (separate registries in the generated typing, enforced at
+//! resolve time — a morph name in a `filter` chain warns and is skipped,
+//! and vice versa):
 //!
-//!   * `ripple`   — time-driven UV distortion (`time = true`: the layer
-//!     re-renders every frame with **zero re-captures**).
-//!   * `glitch`   — time-driven slice offsets + RGB split, procedurally seeded.
-//!   * `dissolve` — params-only alpha threshold; repaints only when `progress`
-//!     changes.
+//!   * The "Custom filters" demo trio (`#[react_filter]` +
+//!     `add_react_filter`), one per interesting shape: `ripple` —
+//!     time-driven UV distortion (`time = true`: the layer re-renders every
+//!     frame with **zero re-captures**); `glitch` — time-driven slice
+//!     offsets + RGB split, procedurally seeded; `dissolve` — params-only
+//!     alpha threshold; repaints only when `progress` changes.
+//!   * The gl-transitions morph pack (`#[react_morph_filter]` +
+//!     `add_react_morph_filter`; the "Morph filter" demo's card grid):
+//!     single-pass ports of <https://gl-transitions.com/gallery>
+//!     transitions, `morphFilter`-only.
 //!
-//! Shaders live in `examples/assets/shaders/{ripple,glitch,dissolve}.wgsl`
-//! (plain asset paths — the demos app points `AssetPlugin` at
-//! `examples/assets`). Each shader's header comments its `params[i]` index map
-//! (declaration-order packing) and its premultiplied-alpha reasoning.
+//! Shaders live in `examples/assets/shaders/` (plain asset paths — the demos
+//! app points `AssetPlugin` at `examples/assets`; the morph pack under
+//! `morphs/`). Each shader's header comments its `params[i]` index
+//! map (declaration-order packing) and its premultiplied-alpha reasoning.
 
 use bevy::prelude::*;
-use bevy_react::{ReactAppExt, react_filter};
+use bevy_react::filters::FilterColor;
+use bevy_react::protocol::units::{Angle, Length};
+use bevy_react::{ReactAppExt, react_filter, react_morph_filter};
 
 /// Radial ripple emanating from the layer's center, driven by `uniforms.time`.
 ///
@@ -81,13 +90,327 @@ struct Dissolve {
     progress: f32,
 }
 
-/// Register the three custom filters. Called from **both** paths — the live
-/// app (`build_app`, after `ReactUiPlugin` so a custom name could never be
+// ---------------------------------------------------------------------------
+// gl-transitions morph pack: ports of https://gl-transitions.com/gallery
+// transitions, all single-pass (= morph-capable) with user params within the
+// 6-vec4 morph cap. Shaders live in
+// `examples/assets/shaders/morphs/*.wgsl`; each header carries the
+// upstream URL, author, license, packing map, and premultiplied-alpha notes.
+// Every shader opens with the endpoint guards from the prelude's identity
+// contract (progress <= 0 → exact "from", >= 1 → exact "to").
+// ---------------------------------------------------------------------------
+
+fn srgb(r: f32, g: f32, b: f32) -> FilterColor {
+    let lin = bevy::color::LinearRgba::from(bevy::color::Srgba::new(r, g, b, 1.0));
+    FilterColor([lin.red, lin.green, lin.blue, lin.alpha])
+}
+
+fn black() -> FilterColor {
+    FilterColor([0.0, 0.0, 0.0, 1.0])
+}
+
+/// Vertical blinds: a soft left-to-right sweep sliced into repeating blinds.
+#[react_morph_filter(shader = "shaders/morphs/windowslice.wgsl")]
+struct Windowslice {
+    /// Number of blinds.
+    #[serde(default = "default_ten")]
+    count: f32,
+    /// Soft lead of the sweep, as a fraction of the width.
+    #[serde(default = "default_half")]
+    smoothness: f32,
+}
+
+/// Radial sweep wipe: the edge sweeps a full turn around the center.
+#[react_morph_filter(shader = "shaders/morphs/radial.wgsl")]
+struct Radial {
+    /// Angular width of the soft edge (upstream: 1 radian).
+    #[serde(default = "default_radial_smoothness")]
+    smoothness: Angle,
+}
+
+/// Growing polka dots radiating from `center`.
+#[react_morph_filter(shader = "shaders/morphs/polka_dots_curtain.wgsl")]
+struct PolkaDotsCurtain {
+    /// Dot-grid frequency (cells across the box).
+    #[serde(default = "default_twenty")]
+    dots: f32,
+    /// Radiation origin, in uv space (0..1 per axis).
+    #[serde(default)]
+    center: Vec2,
+}
+
+/// A screen-circular crop shrinks the old image away, then grows the new one
+/// back, passing through a full-`color` frame at the midpoint.
+#[react_morph_filter(shader = "shaders/morphs/circle_crop.wgsl")]
+struct CircleCrop {
+    /// Backdrop color outside the circle (upstream `bgcolor`, opaque black
+    /// there). Defaults to TRANSPARENT — correct for UI over arbitrary
+    /// backdrops; pass "black" for the upstream look.
+    #[serde(default)]
+    color: FilterColor,
+}
+
+/// A soft band opens from the centerline outward (or closes inward with
+/// `close`), splitting horizontally or vertically. Merges the upstream
+/// HorizontalOpen / HorizontalClose / VerticalOpen family into one filter.
+#[react_morph_filter(shader = "shaders/morphs/curtain_open.wgsl")]
+struct CurtainOpen {
+    /// 0 = horizontal split (band grows along y), 1 = vertical.
+    #[serde(default)]
+    vertical: f32,
+    /// 0 = open (reveal outward), 1 = close (cover inward).
+    #[serde(default)]
+    close: f32,
+}
+
+/// fbm-noise burn wipe with a glowing rim at the front.
+#[react_morph_filter(shader = "shaders/morphs/burn.wgsl", name = "burn0")]
+struct Burn {
+    /// Rim glow color (upstream `burnColor`), as a CSS color.
+    #[serde(default = "default_burn_color")]
+    color: FilterColor,
+}
+
+fn default_ten() -> f32 {
+    10.0
+}
+
+fn default_twenty() -> f32 {
+    20.0
+}
+
+fn default_half() -> f32 {
+    0.5
+}
+
+fn default_radial_smoothness() -> Angle {
+    Angle::from_radians(1.0)
+}
+
+fn default_burn_color() -> FilterColor {
+    srgb(1.0, 0.5, 0.0)
+}
+
+/// Tile grid card-flip on a staggered diagonal wave.
+#[react_morph_filter(shader = "shaders/morphs/tiles_wave.wgsl")]
+struct TilesWave {
+    /// Tile count per axis (upstream ivec2 `tileCount`).
+    #[serde(default = "default_eight_by_eight")]
+    tiles: Vec2,
+    /// 1 = fold along x (upstream bool `flipX`).
+    #[serde(default = "default_one")]
+    flipx: f32,
+    /// 1 = fold along y (upstream bool `flipY`).
+    #[serde(default)]
+    flipy: f32,
+}
+
+/// Per-cell randomized card flips behind fading grid dividers.
+#[react_morph_filter(shader = "shaders/morphs/grid_flip.wgsl")]
+struct GridFlip {
+    /// Cells per axis (upstream ivec2).
+    #[serde(default = "default_four_by_four")]
+    size: Vec2,
+    /// Divider fade-in/out fraction of the timeline.
+    #[serde(default = "default_pause")]
+    pause: f32,
+    /// Divider half-width in px (upstream: a fraction of the cell size).
+    #[serde(default = "default_divider")]
+    divider: Length,
+    /// Divider/backdrop color (upstream `bgcolor`), as a CSS color.
+    #[serde(default = "black")]
+    color: FilterColor,
+    /// Per-cell flip-time jitter.
+    #[serde(default = "default_randomness")]
+    randomness: f32,
+}
+
+/// Door halves slide outward with perspective; the new image zooms up from
+/// the depths over a faint floor reflection.
+#[react_morph_filter(shader = "shaders/morphs/doorway.wgsl")]
+struct Doorway {
+    /// Floor-reflection strength.
+    #[serde(default = "default_two_fifths")]
+    reflection: f32,
+    /// Door foreshortening.
+    #[serde(default = "default_two_fifths")]
+    perspective: f32,
+    /// Zoom start of the incoming image.
+    #[serde(default = "default_three")]
+    depth: f32,
+}
+
+/// Page flip around the vertical center spine.
+#[react_morph_filter(shader = "shaders/morphs/book_flip.wgsl")]
+struct BookFlip {}
+
+/// Rotating kaleidoscope folding through wedge reflections, undistorted at
+/// both ends.
+#[react_morph_filter(shader = "shaders/morphs/power_kaleido.wgsl")]
+struct PowerKaleido {
+    /// Wedge offset scale (upstream `dist = scale / 10`).
+    #[serde(default = "default_two")]
+    scale: f32,
+    /// Zoom into the kaleido plane.
+    #[serde(default = "default_kaleido_z")]
+    z: f32,
+    /// Rotation speed (radians of spin per unit progress).
+    #[serde(default = "default_five")]
+    speed: f32,
+}
+
+fn default_one() -> f32 {
+    1.0
+}
+
+fn default_two() -> f32 {
+    2.0
+}
+
+fn default_three() -> f32 {
+    3.0
+}
+
+fn default_five() -> f32 {
+    5.0
+}
+
+fn default_two_fifths() -> f32 {
+    0.4
+}
+
+fn default_kaleido_z() -> f32 {
+    1.5
+}
+
+fn default_pause() -> f32 {
+    0.1
+}
+
+fn default_randomness() -> f32 {
+    0.1
+}
+
+fn default_divider() -> Length {
+    Length::Px(2.0)
+}
+
+fn default_eight_by_eight() -> Vec2 {
+    Vec2::splat(8.0)
+}
+
+fn default_four_by_four() -> Vec2 {
+    Vec2::splat(4.0)
+}
+
+/// VHS/datamosh glitch: hash-driven bar/slit tears, RGB splits, scanlines,
+/// and strobes peaking mid-transition. The pattern re-rolls 30 times over
+/// the morph (frame-quantized progress — no wall-clock time).
+#[react_morph_filter(shader = "shaders/morphs/strip_datamosh_glitch.wgsl")]
+struct StripDatamoshGlitch {
+    /// Overall glitch intensity.
+    #[serde(default = "default_one")]
+    strength: f32,
+    /// Horizontal bar density (upstream `horizontalBars`).
+    #[serde(default = "default_bars")]
+    bars: f32,
+    /// Vertical slit density (upstream `verticalSlits`).
+    #[serde(default = "default_slits")]
+    slits: f32,
+    /// Per-row x-tear amplitude, as a fraction of the width.
+    #[serde(default = "default_tear")]
+    tear: f32,
+    /// RGB split offset in px (upstream: a uv fraction).
+    #[serde(default = "default_chroma")]
+    chroma: Length,
+    /// Smear-layer strength.
+    #[serde(default = "default_residue")]
+    residue: f32,
+    /// Cell-noise amount (upstream `noiseAmount`).
+    #[serde(default = "default_noise")]
+    noise: f32,
+    /// Scanline dimming (upstream `scanAmount`).
+    #[serde(default = "default_scan")]
+    scan: f32,
+    /// Strobe strength (upstream `flashAmount`).
+    #[serde(default = "default_flash")]
+    flash: f32,
+}
+
+/// Analog film burn: light flares + a soft radial ring blur over the
+/// crossfade, peaking mid-transition. COST: the blur loop takes ~100 texture
+/// samples per pixel on every in-flight frame (the upstream's faithful
+/// 50-iteration ring) — fine for brief morphs, not a filter to idle on.
+#[react_morph_filter(shader = "shaders/morphs/film_burn.wgsl")]
+struct FilmBurn {
+    /// Flare pattern seed (upstream `Seed`).
+    #[serde(default = "default_seed")]
+    seed: f32,
+}
+
+/// Page curl around a moving diagonal cylinder, with a grayscale backside
+/// and cast shadows (the classic HP/webvfx page-curl, BSD-3 — the shader
+/// header retains the license block).
+#[react_morph_filter(shader = "shaders/morphs/inverted_page_curl.wgsl")]
+struct InvertedPageCurl {}
+
+fn default_bars() -> f32 {
+    42.0
+}
+
+fn default_slits() -> f32 {
+    18.0
+}
+
+fn default_tear() -> f32 {
+    0.18
+}
+
+fn default_chroma() -> Length {
+    Length::Px(6.0)
+}
+
+fn default_residue() -> f32 {
+    0.62
+}
+
+fn default_noise() -> f32 {
+    0.16
+}
+
+fn default_scan() -> f32 {
+    0.13
+}
+
+fn default_flash() -> f32 {
+    0.2
+}
+
+fn default_seed() -> f32 {
+    2.31
+}
+
+/// Register the custom filters. Called from **both** paths — the live app
+/// (`build_app`, after `ReactUiPlugin` so a custom name could never be
 /// clobbered by the plugin's built-in registration) and the
 /// `--export-bindings` exporter (`register_react_bindings`), so the generated
 /// TypeScript always matches what the runtime resolves.
 pub fn register_bindings(app: &mut App) {
     app.add_react_filter::<Ripple>()
         .add_react_filter::<Glitch>()
-        .add_react_filter::<Dissolve>();
+        .add_react_filter::<Dissolve>()
+        .add_react_morph_filter::<Windowslice>()
+        .add_react_morph_filter::<Radial>()
+        .add_react_morph_filter::<PolkaDotsCurtain>()
+        .add_react_morph_filter::<CircleCrop>()
+        .add_react_morph_filter::<CurtainOpen>()
+        .add_react_morph_filter::<Burn>()
+        .add_react_morph_filter::<TilesWave>()
+        .add_react_morph_filter::<GridFlip>()
+        .add_react_morph_filter::<Doorway>()
+        .add_react_morph_filter::<BookFlip>()
+        .add_react_morph_filter::<PowerKaleido>()
+        .add_react_morph_filter::<StripDatamoshGlitch>()
+        .add_react_morph_filter::<FilmBurn>()
+        .add_react_morph_filter::<InvertedPageCurl>();
 }

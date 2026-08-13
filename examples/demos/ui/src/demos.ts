@@ -23,6 +23,7 @@ import { ButtonDemo } from "./demos/elements/ButtonDemo";
 import { TextDemo } from "./demos/elements/TextDemo";
 import { ImageDemo } from "./demos/elements/ImageDemo";
 import { TransitionDemo } from "./demos/animations/TransitionDemo";
+import { MorphFilterDemo } from "./demos/styling/morphFilterDemo";
 import { AnimatedValuesDemo } from "./demos/animations/animatedValues";
 import { InterpolateDemo } from "./demos/animations/InterpolateDemo";
 import { UnitsDemo } from "./demos/styling/UnitsDemo";
@@ -102,6 +103,7 @@ export const DEMOS: DemoItem[] = [
         scene: "SpaceCubes",
         component: BackdropFilterDemo,
       },
+      { label: "Morph filter", component: MorphFilterDemo },
       { label: "Custom filters", component: CustomFiltersDemo },
       { label: "Gradients", component: GradientsDemo },
       { label: "Background Image", component: BackgroundImageDemo },

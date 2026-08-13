@@ -119,6 +119,9 @@ export interface DevtoolsLayerRow {
   /** The resolved `backdropFilter` chain, same shape/liveness as `filters` —
    *  rendered as a second chain line. */
   backdrop_filters?: DevtoolsFilterEntry[];
+  /** The resolved `morphFilter` (at most one entry), same shape/liveness as
+   *  `filters` — rendered as a third chain line prefixed "morph:". */
+  morph_filters?: DevtoolsFilterEntry[];
 }
 
 /** Bevy→JS `devtools.layers`: the current layer set (base + promoted), sorted

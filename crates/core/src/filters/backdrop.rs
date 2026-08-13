@@ -34,6 +34,19 @@ impl ChainInput for BackdropInput {
     fn chain(&self) -> &FilterChain {
         &self.0
     }
+    fn validate_entry(
+        name: &str,
+        is_morph: bool,
+        _passes: &[super::ResolvedFilterPass],
+    ) -> Result<(), String> {
+        if is_morph {
+            return Err(format!(
+                "morph filter {name:?} cannot be used in a `backdropFilter` chain — it is a \
+                 `morphFilter` name"
+            ));
+        }
+        Ok(())
+    }
 }
 
 /// A node's fully resolved `backdropFilter` chain — a newtype over
@@ -66,6 +79,44 @@ mod tests {
     };
     use super::*;
     use crate::layer::{LayerContentDirt, PromotedLayer};
+
+    /// The family split: a MORPH filter named in a `backdropFilter` chain
+    /// warns (`backdropFilterParams`) and is skipped — with no other entry,
+    /// no chain attaches (the node stays promoted).
+    #[cfg(all(feature = "devtools", debug_assertions))]
+    #[test]
+    fn morph_filter_in_backdrop_chain_warns_and_skips() {
+        let _lock = crate::diag::test_lock();
+        crate::diag::arm_runtime();
+        let _ = crate::diag::take_runtime_warnings();
+
+        let (mut app, ops_tx) = resolve_app();
+        ops_tx
+            .send(vec![create(
+                11,
+                json!({ "style": { "backdropFilter": { "name": "crossfade" } } }),
+            )])
+            .unwrap();
+        app.update();
+        let e = entity_of(&app, 11);
+        assert!(app.world().get::<PromotedLayer>(e).is_some(), "promoted");
+        assert!(
+            app.world().get::<ResolvedBackdropChain>(e).is_none(),
+            "morph entry skipped, no chain"
+        );
+
+        let warns: Vec<_> = crate::diag::take_runtime_warnings()
+            .into_iter()
+            .filter(|w| w.node == Some(11))
+            .collect();
+        assert_eq!(warns.len(), 1, "{warns:?}");
+        assert_eq!(warns[0].kind, "backdropFilterParams");
+        assert!(
+            warns[0].message.contains("`morphFilter` name"),
+            "{}",
+            warns[0].message
+        );
+    }
 
     /// A `backdropFilter` create resolves into a [`ResolvedBackdropChain`] on
     /// the promoted root — and the chain is `always_dirty` even for a filter

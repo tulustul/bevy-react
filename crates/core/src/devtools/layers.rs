@@ -55,6 +55,10 @@ pub(super) struct DevtoolsLayerRow {
     /// The layer's resolved `backdropFilter` chain, same shape and liveness
     /// as [`Self::filters`] — the panel renders it as a second chain line.
     backdrop_filters: Vec<DevtoolsFilterEntry>,
+    /// The layer's resolved `morphFilter` (at most one entry — morphs are
+    /// single filter uses), same shape and liveness as [`Self::filters`] —
+    /// a third chain line, prefixed "morph:" by the panel.
+    morph_filters: Vec<DevtoolsFilterEntry>,
 }
 
 /// One wire filter in a layer's resolved chain: the wire name plus each
@@ -110,6 +114,9 @@ fn reason_labels(reasons: crate::layer::PromotionReasons) -> Vec<String> {
     }
     if reasons.0 & crate::layer::PromotionReasons::BACKDROP != 0 {
         out.push("backdrop".to_string());
+    }
+    if reasons.0 & crate::layer::PromotionReasons::MORPH != 0 {
+        out.push("morph".to_string());
     }
     if reasons.0 & crate::layer::PromotionReasons::FORCED != 0 {
         out.push("cache".to_string());
@@ -225,6 +232,8 @@ pub(super) fn emit_layers(
         Option<&crate::filters::FilterInput>,
         Option<&crate::filters::ResolvedBackdropChain>,
         Option<&crate::filters::BackdropInput>,
+        Option<&crate::filters::ResolvedMorphChain>,
+        Option<&crate::filters::MorphInput>,
     )>,
     cameras: Query<&Camera, With<IsDefaultUiCamera>>,
     windows: Query<&Window>,
@@ -270,6 +279,7 @@ pub(super) fn emit_layers(
         repaints: 0,
         filters: Vec::new(),
         backdrop_filters: Vec::new(),
+        morph_filters: Vec::new(),
     });
     for meta in registry.layers.values() {
         if let Some(panel) = panel_entity
@@ -289,15 +299,18 @@ pub(super) fn emit_layers(
         // The resolved chain + wire mirror live on the layer entity — read
         // them directly rather than mirroring them into `LayerMeta` (which
         // would duplicate live state the filter systems already maintain).
-        let (filters, backdrop_filters) = chains
+        let (filters, backdrop_filters, morph_filters) = chains
             .get(meta.entity)
-            .map(|(chain, input, bchain, binput)| {
+            .map(|(chain, input, bchain, binput, mchain, minput)| {
                 (
                     chain
                         .map(|c| filter_entries(c, input.map(|i| &i.0)))
                         .unwrap_or_default(),
                     bchain
                         .map(|c| filter_entries(&c.0, binput.map(|i| &i.0)))
+                        .unwrap_or_default(),
+                    mchain
+                        .map(|c| filter_entries(&c.0, minput.map(|i| &i.chain)))
                         .unwrap_or_default(),
                 )
             })
@@ -321,6 +334,7 @@ pub(super) fn emit_layers(
             repaints: meta.repaints,
             filters,
             backdrop_filters,
+            morph_filters,
         });
     }
     // Deterministic order for the diff AND the panel's back-to-front paint:
@@ -354,6 +368,7 @@ mod tests {
         assert_eq!(labels(PromotionReasons::FILTER), ["filter"]);
         assert_eq!(labels(PromotionReasons::TRANSFORM3D), ["transform3d"]);
         assert_eq!(labels(PromotionReasons::BACKDROP), ["backdrop"]);
+        assert_eq!(labels(PromotionReasons::MORPH), ["morph"]);
         assert_eq!(labels(PromotionReasons::FORCED), ["cache"]);
         assert_eq!(
             labels(
@@ -361,9 +376,17 @@ mod tests {
                     | PromotionReasons::FILTER
                     | PromotionReasons::TRANSFORM3D
                     | PromotionReasons::BACKDROP
+                    | PromotionReasons::MORPH
                     | PromotionReasons::FORCED
             ),
-            ["opacity", "filter", "transform3d", "backdrop", "cache"]
+            [
+                "opacity",
+                "filter",
+                "transform3d",
+                "backdrop",
+                "morph",
+                "cache"
+            ]
         );
     }
 

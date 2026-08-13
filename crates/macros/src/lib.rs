@@ -175,8 +175,10 @@ pub fn react_event(attr: TokenStream, item: TokenStream) -> TokenStream {
     .into()
 }
 
-/// Turn a named-field struct into a typed **custom filter** for the
-/// layer-based `filter` style chain.
+/// Turn a named-field struct into a typed custom **regular filter** for the
+/// layer-based `filter`/`backdropFilter` style chains. (Two-input morph
+/// filters for the `morphFilter` style are a separate family — see
+/// [`macro@react_morph_filter`].)
 ///
 /// Derives `serde::Deserialize` — adding `#[serde(deny_unknown_fields)]`, so
 /// unknown param keys reject like the built-ins; per-field `#[serde(default)]`
@@ -184,6 +186,11 @@ pub fn react_event(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// `bevy_react::filters::ReactFilter`. Built-in filters stay hand-written
 /// (they share canonical shader layouts); this macro is for custom filters,
 /// which pack against their own shader.
+///
+/// Give every field a `#[serde(default…)]`: the JS side types all params as
+/// individually optional, so an omitted param must decode — a field without
+/// a default rejects the whole filter use with a devtools warning whenever
+/// it is omitted.
 ///
 /// Arguments:
 ///
@@ -263,11 +270,90 @@ pub fn react_filter(attr: TokenStream, item: TokenStream) -> TokenStream {
         }
     });
     parse_macro_input!(attr with arg_parser);
+    expand_react_filter(
+        "react_filter",
+        name_override,
+        shader,
+        outset,
+        time,
+        false,
+        item,
+    )
+}
 
+/// Turn a named-field struct into a typed custom **morph filter** — a
+/// two-input transition for the `morphFilter` style (blending the frozen old
+/// appearance into the live content on a `key` change).
+///
+/// Same expansion as [`macro@react_filter`] (strict `serde::Deserialize` +
+/// `ts_rs::TS`, contiguous field-declaration-order packing, the same param
+/// type table, the same give-every-field-a-`#[serde(default…)]` guidance —
+/// JS types all params as optional), plus `IS_MORPH = true` and the
+/// `ReactMorphFilter` marker —
+/// register with `add_react_morph_filter`, and the name lands in the
+/// generated `BevyMorphFilters` interface. The two families are separate: a
+/// morph name inside `filter`/`backdropFilter` chains (and a regular filter
+/// name in `morphFilter`) warns and is skipped at resolve time.
+///
+/// Arguments (only these two — a morph re-renders while its blend is in
+/// flight and never inflates the capture rect, so `outset`/`time` do not
+/// apply):
+///
+/// - `name = "..."` (optional) — the wire name; defaults to the struct ident
+///   with its first letter lowercased.
+/// - `shader = "path/to.wgsl"` (required) — the single blend pass. It must
+///   resolve to exactly ONE pass with user params within the morph cap of 6
+///   vec4s (`params[6..8]` are engine-reserved), and follow the MORPH
+///   CONTRACT in `crates/core/src/layer/filter_prelude.wgsl` — sample via
+///   `morph_sample_from()`/`morph_sample_to()`/`morph_progress()` and output
+///   exactly the live sample at progress 1.0 (the identity contract).
+#[proc_macro_attribute]
+pub fn react_morph_filter(attr: TokenStream, item: TokenStream) -> TokenStream {
+    let mut name_override: Option<String> = None;
+    let mut shader: Option<LitStr> = None;
+    let arg_parser = syn::meta::parser(|meta| {
+        if try_parse_name_arg(&meta, &mut name_override)? {
+            Ok(())
+        } else if meta.path.is_ident("shader") {
+            shader = Some(meta.value()?.parse::<LitStr>()?);
+            Ok(())
+        } else {
+            Err(meta.error(
+                "unsupported `react_morph_filter` argument; expected `name = \"...\"` or \
+                 `shader = \"...\"` (morph passes re-run while the blend is in flight — \
+                 `outset`/`time` do not apply)",
+            ))
+        }
+    });
+    parse_macro_input!(attr with arg_parser);
+    expand_react_filter(
+        "react_morph_filter",
+        name_override,
+        shader,
+        0.0,
+        false,
+        true,
+        item,
+    )
+}
+
+/// The shared `#[react_filter]`/`#[react_morph_filter]` expansion:
+/// everything after argument parsing. `macro_name` personalizes the error
+/// messages; `is_morph` bakes `IS_MORPH` and adds the `ReactMorphFilter`
+/// marker impl.
+fn expand_react_filter(
+    macro_name: &str,
+    name_override: Option<String>,
+    shader: Option<LitStr>,
+    outset: f32,
+    time: bool,
+    is_morph: bool,
+    item: TokenStream,
+) -> TokenStream {
     let Some(shader) = shader else {
         return syn::Error::new(
             proc_macro2::Span::call_site(),
-            "`react_filter` requires a `shader = \"path/to.wgsl\"` argument",
+            format!("`{macro_name}` requires a `shader = \"path/to.wgsl\"` argument"),
         )
         .to_compile_error()
         .into();
@@ -277,14 +363,14 @@ pub fn react_filter(attr: TokenStream, item: TokenStream) -> TokenStream {
     let name = name_override.unwrap_or_else(|| lower_first(&input.ident.to_string()));
 
     let syn::Data::Struct(data) = &mut input.data else {
-        return syn::Error::new_spanned(&input.ident, "`react_filter` requires a struct")
+        return syn::Error::new_spanned(&input.ident, format!("`{macro_name}` requires a struct"))
             .to_compile_error()
             .into();
     };
     let syn::Fields::Named(fields) = &mut data.fields else {
         return syn::Error::new_spanned(
             &input.ident,
-            "`react_filter` requires named fields (each field becomes a shader param)",
+            format!("`{macro_name}` requires named fields (each field becomes a shader param)"),
         )
         .to_compile_error()
         .into();
@@ -312,7 +398,7 @@ pub fn react_filter(attr: TokenStream, item: TokenStream) -> TokenStream {
                 syn::Error::new_spanned(
                     &field.ty,
                     format!(
-                        "`react_filter` cannot pack field `{field_name}`: supported param types \
+                        "`{macro_name}` cannot pack field `{field_name}`: supported param types \
                          are f32, Vec2, Vec3, Vec4, [f32; 2..=4], Angle, Length, and FilterColor"
                     ),
                 )
@@ -422,6 +508,13 @@ pub fn react_filter(attr: TokenStream, item: TokenStream) -> TokenStream {
         }
     });
 
+    let morph_marker = is_morph.then(|| {
+        quote! {
+            impl #impl_generics ::bevy_react::filters::ReactMorphFilter
+                for #ident #ty_generics #where_clause {}
+        }
+    });
+
     quote! {
         #[derive(::serde::Deserialize, ::ts_rs::TS)]
         #[serde(deny_unknown_fields)]
@@ -430,6 +523,7 @@ pub fn react_filter(attr: TokenStream, item: TokenStream) -> TokenStream {
         impl #impl_generics ::bevy_react::filters::ReactFilter for #ident #ty_generics #where_clause {
             const NAME: &'static str = #name;
             const USES_TIME: bool = #time;
+            const IS_MORPH: bool = #is_morph;
 
             fn shader(
                 assets: &::bevy::asset::AssetServer,
@@ -461,6 +555,8 @@ pub fn react_filter(attr: TokenStream, item: TokenStream) -> TokenStream {
 
             #resolve_override
         }
+
+        #morph_marker
     }
     .into()
 }

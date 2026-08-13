@@ -6,7 +6,7 @@
 import type { Key, ReactNode, Ref } from "react";
 import type { Animatable } from "./animated";
 import type { BevyCanvasElement, CanvasPainter, DrawCmd } from "./canvas";
-import type { FilterChainValue } from "./filters";
+import type { FilterChainValue, MorphFilterValue } from "./filters";
 
 /** Attributes React manages itself (not real host props — React strips `key`
  *  before props reach the reconciler). Shared by every host element so keyed
@@ -234,6 +234,12 @@ export interface BevyTransition {
    * orthographic; unsetting the whole `transform3d` style demotes and snaps —
    * keep an identity `{}` in the base style when removal should ease. */
   transform3d?: BevyTransitionSpec;
+  /** Times the `morphFilter` progress (the engine-owned 0→1 blend from the
+   * frozen old appearance to the live content on a `key` change). Unlike every
+   * other channel it has a BUILT-IN default (300ms ease-in-out) — a key change
+   * animates even with no `transition` at all; this entry (or `all`) overrides
+   * the timing. */
+  morphFilter?: BevyTransitionSpec;
 }
 
 /** The built-in system cursor keywords (winit's `SystemCursorIcon`, camelCase or CSS
@@ -451,6 +457,23 @@ export interface BevyStyle {
    *  identity entry (e.g. `{ name: "blur", params: { radius: 0 } }`) when
    *  removal should transition smoothly. */
   backdropFilter?: FilterChainValue;
+  /** View-transition-style morph: `{ key, name, params }`. When `key` changes,
+   *  the node's previous rendered appearance is frozen as a snapshot and the
+   *  named two-input morph filter (its own registry, separate from `filter` —
+   *  built-ins `crossfade`, `linearWipe`, `pixelize`; customs via
+   *  `#[react_morph_filter]`; a regular filter name here warns and snaps)
+   *  blends frozen → live content, driven by an engine-owned
+   *  progress with a built-in 300ms ease (override via
+   *  `transition: { morphFilter }`). React can swap the content freely in the
+   *  same commit — the old pixels are already frozen. The frozen image is
+   *  anchored to the node's layout rect (it scrolls and moves with the node);
+   *  if the swap changes the node's size, the old appearance stretches onto
+   *  the new box — handle size changes gracefully in app code. Presence
+   *  promotes the node to a composited layer; first mount never animates; a
+   *  mid-flight key change freezes the in-flight blend and restarts (always
+   *  smooth). A morph filter must resolve to a single pass (a multi-pass
+   *  resolve is rejected with a devtools warning). */
+  morphFilter?: MorphFilterValue;
   /** Background gradient(s): one gradient or a layered list. Painted *over*
    *  `backgroundColor` (like CSS `background-image`): an opaque gradient hides
    *  it, so the color is a fallback; transparent stops let it show through. */

@@ -82,6 +82,12 @@ impl PromotionReasons {
     /// frame *behind* the node; the layer exists so the composite pass has a
     /// stacking position to draw the filtered backdrop quad at.
     pub const BACKDROP: u32 = 1 << 3;
+    /// `morphFilter` present in the base style or any variant — same
+    /// presence-union, value-blind rules as [`Self::FILTER`], same skipped
+    /// gates. The layer must exist (and its capture must be cached) *before*
+    /// the first key change, so the old appearance is there to freeze — the
+    /// same eager-promotion reasoning as a hover-only filter.
+    pub const MORPH: u32 = 1 << 5;
 
     pub fn is_empty(self) -> bool {
         self.0 == 0
@@ -324,6 +330,14 @@ pub fn promotion_reasons(
     if backdrop && !ineligible_element {
         reasons |= PromotionReasons::BACKDROP;
     }
+    // `morphFilter` presence — same presence-union, value-blind rules as
+    // FILTER (the decode already degraded malformed values to `None`). The
+    // layer promotes eagerly so a cached capture exists to freeze on the
+    // first key change.
+    let morph = props.all_styles().any(|s| s.morph_filter.is_some());
+    if morph && !ineligible_element {
+        reasons |= PromotionReasons::MORPH;
+    }
     PromotionReasons(reasons)
 }
 
@@ -427,6 +441,8 @@ pub fn evaluate_layer_promotions(
                 LayerCaptureRect,
                 crate::filters::ResolvedFilterChain,
                 crate::filters::ResolvedBackdropChain,
+                crate::filters::ResolvedMorphChain,
+                crate::filters::MorphState,
                 transform3d::LayerTransform3d,
                 transform3d::LayerTransform3dMatrix,
             )>();
@@ -1074,6 +1090,41 @@ mod tests {
         }
         assert!(!promoted(&backdrop, 0, true));
 
+        // `morphFilter` presence promotes — same rules as FILTER: even a
+        // leaf, value-blind, variant presence unions, and element
+        // eligibility still applies. (A malformed value already degraded to
+        // `None` at decode, so presence == a well-formed morph.)
+        let morph = props(serde_json::json!({
+            "style": { "morphFilter": { "key": "a", "name": "crossfade" } }
+        }));
+        assert_eq!(
+            promotion_reasons(&morph, 0, false).0,
+            PromotionReasons::MORPH
+        );
+        // Morph + content filter are independent bits.
+        let morph_and_filter = props(serde_json::json!({
+            "style": {
+                "morphFilter": { "key": "a", "name": "crossfade" },
+                "filter": { "name": "sepia" }
+            }
+        }));
+        assert_eq!(
+            promotion_reasons(&morph_and_filter, 0, false).0,
+            PromotionReasons::MORPH | PromotionReasons::FILTER
+        );
+        for variant in ["hoverStyle", "pressStyle", "focusStyle"] {
+            let variant_morph = props(serde_json::json!({
+                "style": { "width": 10 },
+                (variant): { "morphFilter": { "key": "a", "name": "crossfade" } },
+            }));
+            assert_eq!(
+                promotion_reasons(&variant_morph, 0, false).0,
+                PromotionReasons::MORPH,
+                "{variant}-only morphFilter promotes eagerly"
+            );
+        }
+        assert!(!promoted(&morph, 0, true));
+
         // Absent → no bit; unset (style without the field) demotes.
         let plain = props(serde_json::json!({ "style": { "width": 10 } }));
         assert!(!promoted(&plain, 1, false));
@@ -1336,6 +1387,53 @@ mod tests {
 
         ops_tx
             .send(vec![update(1, serde_json::json!({}), &["backdropFilter"])])
+            .unwrap();
+        app.update();
+        assert!(app.world().get::<PromotedLayer>(e).is_none(), "demoted");
+        assert!(app.world().resource::<LayersRegistry>().layers.is_empty());
+    }
+
+    /// The MORPH lifecycle mirrors FILTER: a `morphFilter` create promotes a
+    /// childless node with the MORPH reason (neutral group alpha, registry
+    /// entry) — eagerly, so a cached capture exists to freeze on the first
+    /// key change — and `styleUnset` demotes and empties the registry.
+    #[test]
+    fn morph_promotion_lifecycle() {
+        let (mut app, ops_tx) = layer_app();
+        ops_tx
+            .send(vec![create(
+                1,
+                serde_json::json!({ "style": {
+                    "morphFilter": { "key": "a", "name": "crossfade" }
+                } }),
+            )])
+            .unwrap();
+        app.update();
+        let e = entity_of(&app, 1);
+        let promoted = app.world().get::<PromotedLayer>(e).expect("promoted");
+        assert_eq!(promoted.reasons.0, PromotionReasons::MORPH);
+        assert_eq!(
+            app.world().get::<LayerGroupAlpha>(e),
+            Some(&LayerGroupAlpha(1.0))
+        );
+        let registry = app.world().resource::<LayersRegistry>();
+        assert_eq!(registry.layers.len(), 1);
+        assert_eq!(registry.layers[&1].reasons.0, PromotionReasons::MORPH);
+        // A key-only change keeps the node promoted (presence is unchanged).
+        ops_tx
+            .send(vec![update(
+                1,
+                serde_json::json!({ "style": {
+                    "morphFilter": { "key": "b", "name": "crossfade" }
+                } }),
+                &[],
+            )])
+            .unwrap();
+        app.update();
+        assert!(app.world().get::<PromotedLayer>(e).is_some());
+
+        ops_tx
+            .send(vec![update(1, serde_json::json!({}), &["morphFilter"])])
             .unwrap();
         app.update();
         assert!(app.world().get::<PromotedLayer>(e).is_none(), "demoted");
@@ -1747,6 +1845,46 @@ mod tests {
         assert_eq!(rect.min, base.min - Vec2::splat(48.0));
         assert_eq!(rect.size, base.size + UVec2::splat(96));
         assert_eq!(rect.outset, 48);
+    }
+
+    /// An ACTIVE morph never alters the capture rect: the frozen snapshot is
+    /// layout-anchored (stretched onto the current rect at blend time), so
+    /// the rect is the node's own box mid-flight, and a pure translation
+    /// (scroll) mid-morph stays a capture-cache hit.
+    #[test]
+    fn active_morph_keeps_layout_rect() {
+        let (mut world, mut schedule) = geometry_world();
+        // Layout: 80×40 with min (20, 10) → center (60, 30).
+        let root = spawn_layer_root(&mut world, 1, Vec2::new(80.0, 40.0), Vec2::new(60.0, 30.0));
+        world.entity_mut(root).insert(crate::filters::MorphState {
+            active: true,
+            progress: 0.3,
+            freeze_seq: 1,
+        });
+        schedule.run(&mut world);
+        let rect = *world.get::<LayerCaptureRect>(root).expect("rect");
+        assert_eq!(rect.min, Vec2::new(20.0, 10.0), "rect is the node's box");
+        assert_eq!(rect.size, UVec2::new(80, 40));
+
+        // Steady state mid-morph: no re-capture.
+        schedule.run(&mut world);
+        assert!(
+            !world.resource::<LayerRepaintState>().dirty.contains(&root),
+            "an active morph must not re-capture every frame"
+        );
+
+        // A translation mid-morph (scroll) keeps the size and the
+        // root-relative content geometry — still a cache hit.
+        world.entity_mut(root).insert(UiGlobalTransform::from(
+            bevy::math::Affine2::from_translation(Vec2::new(60.0, 130.0)),
+        ));
+        schedule.run(&mut world);
+        let rect = *world.get::<LayerCaptureRect>(root).expect("rect");
+        assert_eq!(rect.min, Vec2::new(20.0, 110.0), "rect follows layout");
+        assert!(
+            !world.resource::<LayerRepaintState>().dirty.contains(&root),
+            "a scrolled mid-morph layer must stay a capture-cache hit"
+        );
     }
 
     /// An outset change WITHIN one 16px quantize step keeps the rect — and

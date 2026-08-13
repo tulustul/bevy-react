@@ -128,6 +128,22 @@ pub struct TransitionTargets {
     /// The resolved backdrop chain the second filter-channel instance writes
     /// into (projected to the inner chain via `Mut::map_unchanged`).
     resolved_backdrop: Option<&'static mut crate::filters::ResolvedBackdropChain>,
+    /// The morph channel's target (the `key` + filter use) — same live-read
+    /// rule as [`Self::filter_input`]: a morph-only delta re-stamps this
+    /// component, never [`TransitionInput`].
+    morph_input: Option<&'static crate::filters::MorphInput>,
+    /// The resolved morph chain — read-only presence gate: a retarget with
+    /// no resolved single-pass chain degrades to a snap (the channel never
+    /// writes it; progress lives on [`Self::morph_state`]).
+    resolved_morph: Option<&'static crate::filters::ResolvedMorphChain>,
+    /// The morph runtime the channel writes (freeze sequencing + progress),
+    /// read by render extraction. Inserted by this system on first
+    /// activation.
+    morph_state: Option<&'static mut crate::filters::MorphState>,
+    /// The layer's on-screen capture rect (last frame's — geometry sync runs
+    /// later in PostUpdate): what the morph freezes, and the mount gate (no
+    /// rect = nothing on screen = snap).
+    capture_rect: Option<&'static crate::layer::LayerCaptureRect>,
     /// The composite-time 3D transform params on a promoted root; the eased
     /// value lands here and `sync_transform3d_matrices` (PostUpdate) turns
     /// the change into the matrix + composite-only dirt — no dirt push here.
@@ -205,6 +221,9 @@ pub fn drive_transitions(
             state
                 .transform3d
                 .init(&input.transform3d.clone().unwrap_or_default());
+            // Morph: adopt the current key so a freshly mounted morph node
+            // never animates in (the first REAL key change retargets).
+            state.morph.key = targets.morph_input.map(|m| m.key.clone());
             state.initialized = true;
         }
 
@@ -423,6 +442,60 @@ pub fn drive_transitions(
             )
         {
             dirt.composite_only.push(entity);
+        }
+
+        // Morph: retarget on a key change (freeze what's on screen, restart
+        // progress), then ease the engine-owned progress 0→1 onto
+        // `MorphState`. The spec falls back to the built-in default — the
+        // one channel that animates without being asked. Never parked:
+        // progress is engine-owned (morph *param* bindings ride the
+        // animation side and touch the resolved chain, not this state). The
+        // freeze pushes capture dirt: the swapped content must re-capture
+        // this frame, with the old pixels stolen render-side first.
+        {
+            use channels::MorphAction;
+            let morph_spec = input
+                .spec
+                .for_morph_filter()
+                .unwrap_or_else(|| spec::morph_default());
+            match state.morph.drive(
+                targets.morph_input,
+                targets.resolved_morph.is_some(),
+                targets.capture_rect,
+                morph_spec,
+                dt,
+            ) {
+                MorphAction::Freeze(new) => {
+                    match &mut targets.morph_state {
+                        Some(s) if **s != new => **s = new,
+                        Some(_) => {}
+                        None => {
+                            commands.entity(entity).insert(new);
+                        }
+                    }
+                    dirt.nodes.push(entity);
+                }
+                MorphAction::Progress(p) => {
+                    if let Some(s) = &mut targets.morph_state
+                        && s.progress != p
+                    {
+                        s.progress = p;
+                        // Composite-only: the blend re-runs render-side, but
+                        // an ENCLOSING cached layer bakes this layer's quad —
+                        // it must re-capture while the blend animates (the
+                        // same per-frame dirt a filter-param ease pushes).
+                        dirt.composite_only.push(entity);
+                    }
+                }
+                MorphAction::Deactivate => {
+                    if let Some(s) = &mut targets.morph_state
+                        && s.active
+                    {
+                        s.active = false;
+                    }
+                }
+                MorphAction::None => {}
+            }
         }
 
         // SVG shape attrs: ease the numeric attrs toward the values the op

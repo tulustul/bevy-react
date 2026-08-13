@@ -3,6 +3,27 @@
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **`pixelize` built-in morph filter.** A port of gl-transitions' `pixelize`
+  (mosaic out, mosaic in) alongside `crossfade` and `linearWipe`; params
+  `squaresMin` and `steps`.
+- **gl-transitions demo pack.** Fourteen [gl-transitions](https://gl-transitions.com/gallery)
+  ports as app-side `#[react_filter]` morphs in the demos example —
+  `windowslice`, `radial`, `polkaDotsCurtain`, `circleCrop`, `curtainOpen`
+  (the Horizontal/Vertical Open/Close family merged behind `vertical`/`close`
+  params), `burn0`, `tilesWave`, `gridFlip`, `doorway`, `bookFlip`,
+  `powerKaleido`, `stripDatamoshGlitch`, `filmBurn`, and `invertedPageCurl` —
+  showcased as a card grid in the "Morph filter" demo.
+- **Explicit-LOD morph samplers.** `morph_sample_from_lod` /
+  `morph_sample_to_lod` in the `bevy_react::filter` shader prelude, for morph
+  shaders that sample behind data-dependent control flow.
+- **Example shader validation.** A repo test naga-validates every filter-pass
+  WGSL under `examples/assets/shaders/`, so app-side shader errors surface in
+  `cargo test` instead of only as a gated (invisible) layer at runtime.
+
 ## [0.4.0] - 2026-08-12
 
 ### Added

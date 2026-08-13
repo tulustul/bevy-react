@@ -89,13 +89,15 @@ pub mod svg;
 
 pub use anchor::{Anchor, AnchorScaling, Anchored};
 pub use animations::ReactUiAnimationsPlugin;
-pub use bevy_react_macros::{react_event, react_filter, react_message, react_request};
+pub use bevy_react_macros::{
+    react_event, react_filter, react_message, react_morph_filter, react_request,
+};
 pub use canvas::CanvasSurface;
 #[cfg(feature = "devtools")]
 #[cfg_attr(docsrs, doc(cfg(feature = "devtools")))]
 pub use devtools::DevtoolsConfig;
 pub use event::{ReactEvent, ReactEvents};
-pub use filters::ReactFilter;
+pub use filters::{ReactFilter, ReactMorphFilter};
 pub use message::{ReactAppExt, ReactMessage, ReactPayload};
 pub use plugin::{Fonts, PointerCapture, PointerCaptureSet, ReactUiPlugin};
 pub use portal::{

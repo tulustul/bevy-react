@@ -194,6 +194,17 @@ pub struct Style {
     /// identity entry left in the base chain (same snap rule as `filter`).
     #[serde(default)]
     pub backdrop_filter: Option<crate::filters::FilterChain>,
+    /// View-transition-style morph: `{ key, name, params }`. When `key`
+    /// changes, the node's previous rendered appearance is frozen as a
+    /// snapshot and the named two-input filter (same registry as
+    /// [`filter`](Self::filter)) blends frozen → live content, driven by an
+    /// engine-owned `progress` eased by `transition: { morphFilter }` (a
+    /// built-in default duration applies when no spec is given — the one
+    /// channel that animates without being asked). Presence force-promotes
+    /// the node to a composited layer (a cached capture must exist to
+    /// freeze); unsetting demotes and snaps. See [`crate::filters`] (morph).
+    #[serde(default, deserialize_with = "crate::filters::de_morph_filter")]
+    pub morph_filter: Option<crate::filters::MorphFilter>,
     /// Background gradient(s); one gradient or a layered list. bevy paints it
     /// *over* `backgroundColor` (CSS `background-image` semantics): an opaque
     /// gradient hides the color (fallback); transparent stops reveal it.
@@ -406,6 +417,14 @@ pub mod style_groups {
     /// it inside `apply_style_masked` (the end-of-apply layer content-dirty
     /// tap still fires from this bit).
     pub const BG_IMAGE: u32 = 1 << 22;
+    /// The wire `morphFilter` value → `MorphInput` (the morph resolver's and
+    /// the morph transition channel's target; see `crate::filters` morph).
+    /// Composite-side only, like [`Self::BACKDROP`]: a morph delta re-stages
+    /// the blend pass and never dirties the capture itself — the key-change
+    /// re-capture is pushed precisely by the transition channel. The
+    /// `apply_transition` stamp site fires on `TRANSITION | MORPH` so a
+    /// morph-only delta still reaches the transition engine.
+    pub const MORPH: u32 = 1 << 23;
 }
 
 /// The single source of truth for [`Style`]'s field list. Invokes the callback
@@ -477,6 +496,7 @@ macro_rules! with_style_fields {
             (box_shadow, "boxShadow", (BOX_SHADOW), overlay),
             (filter, "filter", (FILTER | LAYER), overlay),
             (backdrop_filter, "backdropFilter", (BACKDROP | LAYER), overlay),
+            (morph_filter, "morphFilter", (MORPH | LAYER), overlay),
             (background_gradient, "backgroundGradient", (BG_GRADIENT), overlay),
             (border_gradient, "borderGradient", (BORDER_GRADIENT), overlay),
             (background_image, "backgroundImage", (BG_IMAGE), overlay),
@@ -763,6 +783,52 @@ mod tests {
                 .as_ref()
                 .is_some_and(|s| s.backdrop_filter.is_none())
         );
+    }
+
+    /// A `morphFilter` delta dirties MORPH (the `MorphInput` re-stamp — which
+    /// also routes to `apply_transition`) and LAYER (the promotion trigger) —
+    /// never FILTER/BACKDROP/TRANSITION. `styleUnset` re-fires the same
+    /// groups; a malformed value degrades to `None` without aborting the
+    /// containing `Style`.
+    #[test]
+    fn morph_filter_delta_dirties_morph_and_layer() {
+        let mut cached = Props::default();
+        let (dirty, _) = cached.merge_delta(
+            props(serde_json::json!({
+                "style": { "morphFilter": { "key": "a", "name": "crossfade" } }
+            })),
+            &[],
+            &[],
+        );
+        assert!(dirty.style.intersects(style_groups::MORPH));
+        assert!(dirty.style.intersects(style_groups::LAYER));
+        assert!(!dirty.style.intersects(style_groups::FILTER));
+        assert!(!dirty.style.intersects(style_groups::BACKDROP));
+        assert!(!dirty.style.intersects(style_groups::TRANSITION));
+        let morph = cached
+            .style
+            .as_ref()
+            .and_then(|s| s.morph_filter.as_ref())
+            .expect("morph retained");
+        assert_eq!(morph.key, serde_json::json!("a"));
+        assert_eq!(morph.filter.name, "crossfade");
+
+        let (dirty, _) = cached.merge_delta(Props::default(), &[], &["morphFilter".into()]);
+        assert!(dirty.style.intersects(style_groups::MORPH));
+        assert!(dirty.style.intersects(style_groups::LAYER));
+        assert!(
+            cached
+                .style
+                .as_ref()
+                .is_some_and(|s| s.morph_filter.is_none())
+        );
+
+        // Malformed (missing key) degrades to None; the sibling field lives.
+        let s: Style =
+            serde_json::from_str(r#"{ "morphFilter": { "name": "crossfade" }, "opacity": 0.5 }"#)
+                .expect("a bad morphFilter must not abort the style");
+        assert!(s.morph_filter.is_none());
+        assert_eq!(s.opacity.static_val(), Some(0.5));
     }
 
     /// Compile-time completeness guard: a `Style` struct literal built from the

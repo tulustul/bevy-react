@@ -210,6 +210,9 @@ pub(crate) fn register_layer_shader_assets(app: &mut App) {
     embedded_asset!(app, "filters/builtin/blur.wgsl");
     embedded_asset!(app, "filters/builtin/bloom.wgsl");
     embedded_asset!(app, "filters/builtin/chromatic_aberration.wgsl");
+    embedded_asset!(app, "filters/builtin/crossfade.wgsl");
+    embedded_asset!(app, "filters/builtin/linear_wipe.wgsl");
+    embedded_asset!(app, "filters/builtin/pixelize.wgsl");
 }
 
 impl Plugin for ReactUiPlugin {
@@ -250,6 +253,7 @@ impl Plugin for ReactUiPlugin {
                     .init_gpu_resource::<lr::mips::LayerMipMeta>()
                     .init_gpu_resource::<SpecializedRenderPipelines<lr::backdrop::BackdropBlitPipeline>>()
                     .init_gpu_resource::<lr::backdrop::BackdropMeta>()
+                    .init_gpu_resource::<lr::morph::MorphMeta>()
                     .add_render_command::<TransparentUi, lr::DrawLayerComposite>()
                     .add_systems(
                         RenderStartup,
@@ -309,6 +313,16 @@ impl Plugin for ReactUiPlugin {
                                 .in_set(RenderSystems::PhaseSort)
                                 .before(sort_phase_system::<TransparentUi>),
                             lr::prepare_layer_textures.in_set(RenderSystems::PrepareResources),
+                            // Morph staging: the blend pass over the frozen
+                            // snapshot + live capture. Before the filter
+                            // staging — a regular chain on a morphing layer
+                            // sources the blend and its validity prediction
+                            // reads `MorphSlot::output_valid`.
+                            lr::morph::prepare_layer_morphs
+                                .in_set(RenderSystems::PrepareBindGroups)
+                                .after(lr::prepare_layer_textures)
+                                .before(lr::prepare_layer_filters)
+                                .before(lr::prepare_layer_composites),
                             // Filter staging: allocates/specializes everything
                             // a filter pass needs; `ui_layer_capture_pass`
                             // replays the staged runs after each layer's
@@ -720,14 +734,16 @@ impl Plugin for ReactUiPlugin {
                 .before(collect_hover_events)
                 .before(crate::reconcile::collect_pointer_events),
         );
-        // Resolve each promoted root's wire `filter` and `backdropFilter`
-        // chains into packed render passes — the two instances of
-        // `crate::filters::resolve_chains`. After the interaction restyle —
-        // the last input writer this frame (and, transitively, after the
-        // promotion evaluator, so `Added<PromotedLayer>` is visible) — and
-        // before the transition/animation appliers so filter-param writes
-        // land on an already-resolved chain. Its own `add_systems` call — the
-        // Update tuple above is at the arity cap.
+        // Resolve each promoted root's wire `filter`, `backdropFilter`, and
+        // `morphFilter` chains into packed render passes — the three
+        // instances of `crate::filters::resolve_chains`. After the
+        // interaction restyle — the last input writer this frame (and,
+        // transitively, after the promotion evaluator, so
+        // `Added<PromotedLayer>` is visible) — and before the
+        // transition/animation appliers so filter-param writes land on an
+        // already-resolved chain (the morph channel additionally reads its
+        // resolved chain for retarget gating). Its own `add_systems` call —
+        // the Update tuple above is at the arity cap.
         app.add_systems(
             Update,
             (
@@ -738,6 +754,10 @@ impl Plugin for ReactUiPlugin {
                 crate::filters::resolve_chains::<
                     crate::filters::BackdropInput,
                     crate::filters::ResolvedBackdropChain,
+                >,
+                crate::filters::resolve_chains::<
+                    crate::filters::MorphInput,
+                    crate::filters::ResolvedMorphChain,
                 >,
             )
                 .after(apply_interaction_styles)

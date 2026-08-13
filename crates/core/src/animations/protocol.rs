@@ -202,6 +202,17 @@ pub enum AnimatableProperty {
         name: String,
     },
 
+    /// One named parameter of the node's resolved `morphFilter` — the wire
+    /// key is `morphFilter.<param>` (a morph is a single filter use, no
+    /// index). Identical units and bind-time validation as
+    /// [`Self::FilterParam`] (warn kind `morphFilterBinding`), against the
+    /// resolved morph chain. Unlike the filter/backdrop params it parks NO
+    /// transition channel: the morph channel eases the engine-owned
+    /// *progress*, never the params, so the two writers cannot collide.
+    MorphParam {
+        name: String,
+    },
+
     /// One numeric attribute of an SVG shape entity (`<circle>`/`<rect>`/…),
     /// addressed by its **wire** name — the camelCase key in the folded
     /// `shape` object (`"cx"`, `"r"`, `"strokeWidth"`, …; the full set is
@@ -265,7 +276,9 @@ impl AnimatableProperty {
                     // authoritative kind from the resolved chain's `ParamSlot`
                     // layout (`crate::filters`). A documented fallback, not a
                     // semantic: the slot decides scalar-vs-color, not this arm.
-                    Self::FilterParam { .. } | Self::BackdropParam { .. } => ValueKind::Scalar,
+                    Self::FilterParam { .. }
+                    | Self::BackdropParam { .. }
+                    | Self::MorphParam { .. } => ValueKind::Scalar,
                     // Genuinely scalar (unlike the chain params' documented fallback
                     // above): shape attrs are raw user-space numbers — no logical→
                     // physical px rewrite applies (the viewBox scales them at
@@ -345,6 +358,13 @@ impl AnimatedBindings {
     /// applier's backdrop stage and the transition engine's `skip_backdrop`.
     pub fn has_backdrop_params(&self) -> bool {
         self.has_stage(crate::animations::props::PropStage::Backdrop)
+    }
+
+    /// The morph analog of [`Self::has_filter_params`] — gates the applier's
+    /// morph stage only (morph param bindings park no transition channel:
+    /// the morph channel owns progress, not params).
+    pub fn has_morph_params(&self) -> bool {
+        self.has_stage(crate::animations::props::PropStage::Morph)
     }
 
     /// Whether any SVG shape-attr binding ([`AnimatableProperty::ShapeAttr`])

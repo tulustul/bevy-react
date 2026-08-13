@@ -701,12 +701,37 @@ pub fn apply_style_masked(
         }
     }
 
+    // And for `morphFilter` → the morph resolver. The single `FilterUse`
+    // wraps into a 1-entry chain so the shared resolver applies; the `key`
+    // rides alongside for the morph transition channel's retarget detection
+    // (the resolver ignores it). Unset removes the runtime `MorphState` too:
+    // it is meaningless without the input, and with no `transition` style the
+    // unset also tears down `TransitionState` — the channel that would
+    // otherwise deactivate it — so a lingering active state would union the
+    // capture rect forever.
+    if dirty.intersects(g::MORPH) {
+        match s.and_then(|s| s.morph_filter.as_ref()) {
+            Some(morph) => {
+                ec.insert(crate::filters::MorphInput {
+                    chain: crate::filters::FilterChain(vec![morph.filter.clone()]),
+                    key: morph.key.clone(),
+                });
+            }
+            None => {
+                ec.remove::<(crate::filters::MorphInput, crate::filters::MorphState)>();
+            }
+        }
+    }
+
     // Stamp the transition engine's input from this (possibly hover/press-merged)
     // style. `drive_transitions` eases the snap values written above to their new
     // targets; see [`crate::transition`]. Skipping when no transitioned channel
     // was touched is safe: `drive_transitions` polls every `TransitionState` (no
     // `Changed` filter), so it never needs a fresh insert to keep easing.
-    if dirty.intersects(g::TRANSITION) {
+    // MORPH is included because the morph channel lives on `TransitionState`
+    // and must exist (with its built-in default timing) even when the style
+    // has no `transition` at all — a morph delta alone stamps it.
+    if dirty.intersects(g::TRANSITION | g::MORPH) {
         crate::transition::apply_transition(ec, style);
     }
 
@@ -715,17 +740,20 @@ pub fn apply_style_masked(
     // `crate::layer::LayerContentDirt`). Deliberately conservative: style
     // groups can't distinguish a composite-only opacity delta here; the fast
     // fade paths (animations/transitions) carry precise carve-outs instead.
-    // The FILTER/BACKDROP/LAYER/TRANSFORM3D groups are the exception and are
-    // masked out: their outputs are composite/promotion-side (a filter
-    // applies to the captured texture; the capture holds unfiltered content;
-    // a backdrop filters pixels *behind* the node, never the capture; the 3D
-    // matrix reshapes the quad), so a delta touching only them never dirties
-    // a capture — the chain resolvers and `sync_transform3d_matrices` push
-    // precise `composite_only` dirt themselves. Promotion flips still dirty
-    // correctly: a promote is caught by the first-frame geometry hash, and a
-    // demote by `reapply_opacity_outputs`' restyle (whose dirty groups
-    // intersect the unmasked set) — the hash alone would miss a leaf demote.
-    if dirty.intersects(!(g::FILTER | g::LAYER | g::TRANSFORM3D | g::BACKDROP)) {
+    // The FILTER/BACKDROP/MORPH/LAYER/TRANSFORM3D groups are the exception
+    // and are masked out: their outputs are composite/promotion-side (a
+    // filter applies to the captured texture; the capture holds unfiltered
+    // content; a backdrop filters pixels *behind* the node, never the
+    // capture; a morph blends the capture against a frozen snapshot — the
+    // key-change re-capture is pushed precisely by the morph transition
+    // channel; the 3D matrix reshapes the quad), so a delta touching only
+    // them never dirties a capture — the chain resolvers and
+    // `sync_transform3d_matrices` push precise `composite_only` dirt
+    // themselves. Promotion flips still dirty correctly: a promote is caught
+    // by the first-frame geometry hash, and a demote by
+    // `reapply_opacity_outputs`' restyle (whose dirty groups intersect the
+    // unmasked set) — the hash alone would miss a leaf demote.
+    if dirty.intersects(!(g::FILTER | g::LAYER | g::TRANSFORM3D | g::BACKDROP | g::MORPH)) {
         crate::layer::mark_content_dirty(ec);
     }
 }

@@ -1,16 +1,22 @@
-//! The ten built-in filters, one file per shader family: [`color_matrix`]
+//! The thirteen built-in filters, one file per shader family: [`color_matrix`]
 //! (the seven color ops sharing one pass shader and packing — six declared by
 //! the `color_matrix_filters!` macro plus the hand-written `hueRotate`),
 //! [`blur`] (the two-pass separable Gaussian), [`bloom`] (bright-pass → blur
-//! → combine, reusing blur's shader for its middle passes), and
-//! [`chromatic_aberration`] (single-pass directional RGB split). This module
-//! owns their registration; cross-family tests (the shorthand-default and
-//! identity tables, WGSL validation) live here too.
+//! → combine, reusing blur's shader for its middle passes),
+//! [`chromatic_aberration`] (single-pass directional RGB split), [`morph`]
+//! (`crossfade` and `linearWipe`), and [`pixelize`] (the mosaic, a
+//! gl-transitions port). The last three form the built-in **morph family**
+//! (`IS_MORPH`, `morphFilter`-only — separate from the regular
+//! `filter`/`backdropFilter` family). This module owns their registration;
+//! cross-family tests (the shorthand-default and identity tables, WGSL
+//! validation) live here too.
 
 mod bloom;
 mod blur;
 mod chromatic_aberration;
 mod color_matrix;
+mod morph;
+mod pixelize;
 
 use bevy::prelude::*;
 
@@ -21,11 +27,13 @@ pub use color_matrix::{
     BrightnessParams, ContrastParams, GrayscaleParams, HueRotateParams, InvertParams,
     SaturateParams, SepiaParams,
 };
+pub use morph::{CrossfadeParams, LinearWipeParams};
+pub use pixelize::PixelizeParams;
 
 use super::registry::FilterRegistry;
 
 impl FilterRegistry {
-    /// Register the ten built-in filters into this registry. Two callers:
+    /// Register the thirteen built-in filters into this registry. Two callers:
     /// [`register_builtin_filters`] (the runtime path, via
     /// `ReactUiPlugin::build`) and the TypeScript exporter
     /// (`crate::ts_codegen`), which seeds a throwaway registry with them so
@@ -42,10 +50,13 @@ impl FilterRegistry {
         self.register::<SepiaParams>();
         self.register::<InvertParams>();
         self.register::<HueRotateParams>();
+        self.register::<CrossfadeParams>();
+        self.register::<LinearWipeParams>();
+        self.register::<PixelizeParams>();
     }
 }
 
-/// Register the ten built-in filters. Called by `ReactUiPlugin::build`.
+/// Register the thirteen built-in filters. Called by `ReactUiPlugin::build`.
 /// Deliberately `AssetServer`-free: shader loads happen lazily inside each
 /// entry's `resolve`.
 pub fn register_builtin_filters(app: &mut App) {
@@ -233,6 +244,21 @@ mod tests {
         validate(
             "chromatic_aberration.wgsl",
             &splice(&prelude_body, include_str!("chromatic_aberration.wgsl")),
+            &["vertex", "fragment"],
+        );
+        validate(
+            "crossfade.wgsl",
+            &splice(&prelude_body, include_str!("crossfade.wgsl")),
+            &["vertex", "fragment"],
+        );
+        validate(
+            "linear_wipe.wgsl",
+            &splice(&prelude_body, include_str!("linear_wipe.wgsl")),
+            &["vertex", "fragment"],
+        );
+        validate(
+            "pixelize.wgsl",
+            &splice(&prelude_body, include_str!("pixelize.wgsl")),
             &["vertex", "fragment"],
         );
 

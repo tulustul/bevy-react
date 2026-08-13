@@ -5,6 +5,7 @@ use bevy::shader::Shader;
 
 use super::backdrop::{BackdropInput, ResolvedBackdropChain};
 use super::builtin::register_builtin_filters;
+use super::morph::{MorphInput, ResolvedMorphChain};
 use super::registry::FilterRegistry;
 use super::resolve::{FilterInput, ResolvedFilterChain, resolve_chains};
 use crate::bridge::JsBridge;
@@ -123,8 +124,8 @@ fn op_app(manual_time: bool) -> (App, crossbeam_channel::Sender<Vec<Op>>) {
 }
 
 /// The smallest app that runs `apply_js_ops` → `evaluate_layer_promotions`
-/// → [`resolve_chains`] (both instances) in order: `layer.rs`'s op harness
-/// plus the `Shader` asset machinery of [`asset_app`] (real embedded
+/// → [`resolve_chains`] (all three instances) in order: `layer.rs`'s op
+/// harness plus the `Shader` asset machinery of [`asset_app`] (real embedded
 /// handles) and the built-in filter registry.
 pub(crate) fn resolve_app() -> (App, crossbeam_channel::Sender<Vec<Op>>) {
     let (mut app, ops_tx) = op_app(false);
@@ -136,6 +137,7 @@ pub(crate) fn resolve_app() -> (App, crossbeam_channel::Sender<Vec<Op>>) {
             (
                 resolve_chains::<FilterInput, ResolvedFilterChain>,
                 resolve_chains::<BackdropInput, ResolvedBackdropChain>,
+                resolve_chains::<MorphInput, ResolvedMorphChain>,
             )
                 .after(crate::layer::evaluate_layer_promotions),
         ),
@@ -160,6 +162,7 @@ pub(crate) fn ease_app() -> (App, crossbeam_channel::Sender<Vec<Op>>) {
             (
                 resolve_chains::<FilterInput, ResolvedFilterChain>,
                 resolve_chains::<BackdropInput, ResolvedBackdropChain>,
+                resolve_chains::<MorphInput, ResolvedMorphChain>,
             )
                 .in_set(ResolveSet)
                 .after(crate::reconcile::apply_interaction_styles),

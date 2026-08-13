@@ -52,6 +52,7 @@
 pub mod backdrop;
 pub mod clip;
 pub mod mips;
+pub mod morph;
 pub mod store;
 pub mod transform3d;
 
@@ -239,6 +240,21 @@ pub struct ExtractedLayer {
     /// animated frame. Trilinear sampling itself engages only when
     /// [`Self::transform3d`] is `Some` AND the chain is valid.
     pub wants_mips: bool,
+    /// The layer's in-flight morph, if any (an active
+    /// [`crate::filters::MorphState`] + a resolved single-pass morph chain).
+    /// Drives the freeze/steal in `prepare_layer_textures` and the blend
+    /// pass ([`morph::prepare_layer_morphs`]); `None` clears the slot's
+    /// morph state. The blend feeds the regular [`Self::chain`] (its pass 0
+    /// re-sources) or the composite directly (morph-only layers, gated).
+    pub morph: Option<morph::ExtractedMorph>,
+    /// The IDLE morph's pass shader (a resolved single-pass morph chain with
+    /// no active morph): [`morph::prepare_layer_morphs`] pre-specializes the
+    /// blend pipeline from it, so the async compile happens while the morph
+    /// is idle instead of on the first key change — where the not-yet-ready
+    /// pipeline would gate the composite and blink the subtree out for a few
+    /// frames. `None` while a morph is in flight ([`Self::morph`] carries
+    /// the shader then).
+    pub morph_warm: Option<Handle<Shader>>,
 }
 
 /// Per-frame extraction output. `layers` is index-aligned with
@@ -280,6 +296,8 @@ pub fn extract_ui_layers(
             Option<&crate::layer::transform3d::LayerTransform3dMatrix>,
             &PromotedLayer,
             Option<&ComputedNode>,
+            Option<&crate::filters::MorphState>,
+            Option<&crate::filters::ResolvedMorphChain>,
         )>,
     >,
     membership: Extract<Res<LayerMembership>>,
@@ -313,6 +331,8 @@ pub fn extract_ui_layers(
         transform3d,
         promoted,
         computed,
+        morph_state,
+        morph_chain,
     ) in layers.iter()
     {
         let Some(camera_main) = target_camera.get() else {
@@ -394,6 +414,31 @@ pub fn extract_ui_layers(
         let backdrop_chain = extract_chain(backdrop.map(|b| &b.0));
         let backdrop_quad_entity =
             (backdrop_chain.is_some()).then(|| commands.spawn(TemporaryRenderEntity).id());
+        // An in-flight morph: active state + a recorded freeze rect + a
+        // resolved single-pass chain (the resolver's cap guarantees one pass;
+        // guard anyway — no morph must ever read as a partial one).
+        let morph = morph_state.and_then(|state| {
+            if !state.active {
+                return None;
+            }
+            let chain = &morph_chain?.0;
+            let pass = extract_chain(Some(chain))
+                .and_then(|mut c| (c.passes.len() == 1).then(|| c.passes.remove(0)))?;
+            Some(morph::ExtractedMorph {
+                freeze_seq: state.freeze_seq,
+                progress: state.progress,
+                version: chain.version,
+                pass,
+            })
+        });
+        // Idle morph: carry the resolved pass shader so the blend pipeline
+        // pre-compiles before the first key change (no first-morph gate
+        // blink).
+        let morph_warm = match &morph {
+            Some(_) => None,
+            None => morph_chain
+                .and_then(|c| (c.0.passes.len() == 1).then(|| c.0.passes[0].shader.clone())),
+        };
 
         layer_index.insert(root, extracted.layers.len());
         extracted.layers.push(ExtractedLayer {
@@ -416,6 +461,8 @@ pub fn extract_ui_layers(
             // untransformed layer (CPU clip path), and picking stays inert.
             transform3d: transform3d.filter(|m| !m.identity).map(|m| m.model),
             wants_mips,
+            morph,
+            morph_warm,
         });
     }
 
@@ -546,6 +593,7 @@ pub fn redistribute_ui_layers(
             stolen.push((idx, key, item));
         }
     }
+    propagate_quad_sort_keys(&mut quad_sort_keys, &extracted.enclosing);
     for (idx, _key, item) in stolen {
         // A cached layer's items are simply dropped: the persistent texture
         // already holds their pixels, so nothing re-draws them (and stock
@@ -702,6 +750,7 @@ pub fn prepare_layer_composites(
     mut uniforms_meta: ResMut<transform3d::CompositeUniformsMeta>,
     filter_meta: Res<LayerFilterMeta>,
     backdrop_meta: Res<backdrop::BackdropMeta>,
+    morph_meta: Res<morph::MorphMeta>,
     mut phases: ResMut<ViewSortedRenderPhases<TransparentUi>>,
 ) {
     meta.vertices.clear();
@@ -834,6 +883,29 @@ pub fn prepare_layer_composites(
                 let (_, bind_group) = filter.composite_bind_group.as_ref().expect("just set");
                 bind_group.clone()
             }
+        } else if layer.morph.is_some() {
+            // Morph-only layer: the quad samples the blend, gated with the
+            // content-filter discipline (never a mid-blend flash of raw
+            // content). Bilinear only in v1 — the blend carries no mips, so
+            // a 3D-transformed morphing quad minifies without them.
+            let Some(morph_slot) = slot.morph.as_mut() else {
+                gated.push(idx);
+                continue;
+            };
+            let Some(bind_group) = morph::morph_gate(
+                idx,
+                layer.main_entity,
+                morph_slot,
+                &morph_meta,
+                &pipeline_cache,
+                &render_device,
+                &pipeline.atlas_layout,
+                &pipeline.sampler,
+            ) else {
+                gated.push(idx);
+                continue;
+            };
+            bind_group
         } else if layer.transform3d.is_some()
             && slot.mips_valid
             && let Some(chain) = &slot.mips
@@ -1426,6 +1498,28 @@ fn walk_enclosing(start: usize, enclosing: &[Option<usize>], mut visit: impl FnM
     }
 }
 
+/// A layer whose every visible descendant lives in NESTED layers steals no
+/// items of its own (a bare wrapper around promoted children queues no
+/// vertices), so its composite-quad position must come from its inner
+/// layers' quads: propagate each recorded key up the enclosing chain,
+/// keeping the minimum — the position where the subtree's first pixel would
+/// have drawn. Stopping at an ancestor that already holds a `<=` key is
+/// safe: that key's own propagation covers the rest of the chain.
+fn propagate_quad_sort_keys(keys: &mut [Option<FloatOrd>], enclosing: &[Option<usize>]) {
+    for idx in 0..keys.len() {
+        let Some(key) = keys[idx] else {
+            continue;
+        };
+        walk_enclosing(idx, enclosing, |outer| match keys[outer] {
+            Some(existing) if existing <= key => false,
+            _ => {
+                keys[outer] = Some(key);
+                true
+            }
+        });
+    }
+}
+
 /// Ping-pong source for pass `i`: `None` = the layer's capture texture
 /// (pass 0), otherwise the index of the previous pass's target.
 pub const fn filter_source_index(pass: usize) -> Option<usize> {
@@ -1532,13 +1626,17 @@ pub fn prepare_layer_filters(
         let Some(filter) = slot.filter.as_mut() else {
             continue;
         };
+        // An in-flight morph re-blends every frame (progress moves), and the
+        // regular chain sources the blend — so it must re-run every frame
+        // too, regardless of its own version bookkeeping.
         if !needs_filter_run(
             layer.needs_capture,
             chain.version,
             filter.params_version,
             chain.always_dirty,
             filter.output_valid,
-        ) {
+        ) && layer.morph.is_none()
+        {
             continue;
         }
         // The staged run supersedes whatever the output textures hold; phase 3
@@ -1603,12 +1701,21 @@ pub fn prepare_layer_filters(
         let Some(filter) = slot.filter.as_ref() else {
             continue;
         };
+        // A morphing layer's chain filters the BLEND (the morph pass's
+        // output — "morph first, then filters"), both as pass-0 source and
+        // as the binding-3 `capture_texture`: the blend IS the effective
+        // capture of a morphing layer, so combine-style passes (bloom) stay
+        // correct mid-morph.
+        let effective_capture = slot
+            .morph
+            .as_ref()
+            .map_or(&slot.texture.default_view, |m| &m.blend.default_view);
         let passes = staged_passes
             .into_iter()
             .enumerate()
             .map(|(i, pass)| {
                 let source = match filter_source_index(i) {
-                    None => &slot.texture.default_view,
+                    None => effective_capture,
                     Some(ping) => &filter.textures[ping].default_view,
                 };
                 let bind_group = render_device.create_bind_group(
@@ -1618,7 +1725,7 @@ pub fn prepare_layer_filters(
                         source,
                         &pipeline.sampler,
                         uniform_binding.clone(),
-                        &slot.texture.default_view,
+                        effective_capture,
                     )),
                 );
                 LayerFilterPass {
@@ -1652,8 +1759,13 @@ pub fn prepare_layer_filters(
             .passes
             .iter()
             .all(|pass| pipeline_cache.get_render_pipeline(pass.pipeline).is_some());
+        // A morphing layer's chain sources the blend, so its output is only
+        // as valid as the morph pass that writes it (`prepare_layer_morphs`
+        // runs before this system and decided already).
+        let morph_ok = slot.morph.as_ref().is_none_or(|m| m.output_valid);
         if ready
             && slot.content_valid
+            && morph_ok
             && let Some(filter) = slot.filter.as_mut()
         {
             filter.output_valid = true;
@@ -1677,6 +1789,7 @@ pub fn ui_layer_capture_pass(
     filter_meta: Res<LayerFilterMeta>,
     mip_meta: Res<mips::LayerMipMeta>,
     backdrop_meta: Res<backdrop::BackdropMeta>,
+    morph_meta: Res<morph::MorphMeta>,
     blit_pipeline: Option<Res<backdrop::BackdropBlitPipeline>>,
     pipeline_cache: Res<PipelineCache>,
     mut ctx: RenderContext,
@@ -1737,6 +1850,10 @@ pub fn ui_layer_capture_pass(
                 bevy::log::error!("layer capture pass failed: {err:?}");
             }
         }
+
+        // Morph replay — capture + snapshot → blend. Before the filter
+        // replay: a regular chain on a morphing layer sources the blend.
+        morph::run_morph_passes(idx, &morph_meta, &pipeline_cache, &mut ctx);
 
         // Filter replay — also when the capture above was skipped as cached:
         // a staged run over a clean capture is a params-only change (slider
@@ -1924,6 +2041,35 @@ mod tests {
         assert_eq!(filter_output_index(1), 0);
         assert_eq!(filter_output_index(2), 1);
         assert_eq!(filter_output_index(3), 0);
+    }
+
+    /// An enclosing layer with no directly-stolen items (all visible content
+    /// in nested layers) inherits its quad position from its inner layers'
+    /// keys — minimum wins, whole chains fill in, unrelated roots stay
+    /// `None` (no phantom quads for truly empty layers).
+    #[test]
+    fn quad_sort_keys_propagate_to_bare_enclosing_layers() {
+        let key = |v: f32| Some(FloatOrd(v));
+
+        // wrapper(0) ← card(1) ← tile(2); wrapper is a bare node: only the
+        // innermost layers stole items.
+        let enclosing = [None, Some(0), Some(1)];
+        let mut keys = [None, key(5.0), key(7.0)];
+        propagate_quad_sort_keys(&mut keys, &enclosing);
+        assert_eq!(keys, [key(5.0), key(5.0), key(7.0)]);
+
+        // Minimum wins over an existing larger key; an existing smaller key
+        // is kept.
+        let enclosing = [None, Some(0), Some(0)];
+        let mut keys = [key(9.0), key(3.0), key(12.0)];
+        propagate_quad_sort_keys(&mut keys, &enclosing);
+        assert_eq!(keys, [key(3.0), key(3.0), key(12.0)]);
+
+        // A fully empty chain stays empty — no quads invented.
+        let enclosing = [None, Some(0)];
+        let mut keys: [Option<FloatOrd>; 2] = [None, None];
+        propagate_quad_sort_keys(&mut keys, &enclosing);
+        assert_eq!(keys, [None, None]);
     }
 
     /// The shared enclosing-chain walk: visits ancestors bottom-up

@@ -145,6 +145,8 @@ pub(crate) enum PropStage {
     Filter,
     /// Stage 4 — `backdropFilter[<i>].<param>`, writes the backdrop chain.
     Backdrop,
+    /// Stage 4 — `morphFilter.<param>`, writes the resolved morph chain.
+    Morph,
     /// Stage 5 — an SVG shape attr, writes `SvgShape.attrs` seed slots.
     Shape,
 }
@@ -216,6 +218,10 @@ impl super::protocol::AnimatableProperty {
                     $($prop => park_of!($park),)*
                     P::FilterParam { .. } => Some(ChannelId::Filter),
                     P::BackdropParam { .. } => Some(ChannelId::Backdrop),
+                    // Morph param bindings park NOTHING: the morph transition
+                    // channel eases the engine-owned progress, never the
+                    // params — no writer conflict to arbitrate.
+                    P::MorphParam { .. } => None,
                     // Shape parking is the shape channel's own coarse
                     // mechanism (`crate::transition`'s shape channel), not a
                     // `ChannelId`.
@@ -237,6 +243,7 @@ impl super::protocol::AnimatableProperty {
                     $($prop => PropStage::$stage,)*
                     P::FilterParam { .. } => PropStage::Filter,
                     P::BackdropParam { .. } => PropStage::Backdrop,
+                    P::MorphParam { .. } => PropStage::Morph,
                     P::ShapeAttr { .. } => PropStage::Shape,
                 }
             };
@@ -271,7 +278,10 @@ mod tests {
             ($(($prop:tt, $kind:ident, $acc:tt, $write:tt, $stage:ident, $park:ident),)*) => {
                 match p {
                     $($prop => {})*
-                    P::FilterParam { .. } | P::BackdropParam { .. } | P::ShapeAttr { .. } => {}
+                    P::FilterParam { .. }
+                    | P::BackdropParam { .. }
+                    | P::MorphParam { .. }
+                    | P::ShapeAttr { .. } => {}
                 }
             };
         }

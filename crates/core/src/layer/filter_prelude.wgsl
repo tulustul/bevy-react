@@ -101,3 +101,60 @@ fn unpremultiply(c: vec4<f32>) -> vec4<f32> {
 fn premultiply(c: vec4<f32>) -> vec4<f32> {
     return vec4<f32>(c.rgb * c.a, c.a);
 }
+
+// MORPH CONTRACT (the `morphFilter` style — a two-input blend from the frozen
+// old appearance to the live content on a `key` change):
+//
+// On a morph pass the engine RESERVES the last two param vec4s — user params
+// may occupy at most `params[0..6]` (enforced at resolve):
+//   params[6]                              reserved-unused spare
+//   params[7].x = progress                 the eased blend factor, 0..1
+// and rebinds the group for the blend:
+//   binding 0 (source_texture)  = the LIVE capture — the "to" image
+//   binding 3 (capture_texture) = the FROZEN snapshot — the "from" image
+// The snapshot is layout-anchored: the plain 0..1 UV lookup stretches it
+// onto the current capture rect, so both images track the node wherever
+// layout (or scrolling) puts it; a size change across the swap stretches
+// the old appearance.
+// Both are premultiplied like any capture; blend them premultiplied directly
+// (a lerp of premultiplied colors is the linear-interpolation-safe crossfade).
+//
+// IDENTITY CONTRACT: at `morph_progress() == 1.0` the output MUST equal
+// `textureSample(source_texture, source_sampler, uv)` exactly — the engine
+// renders one final frame at exactly 1.0 before dropping the pass, and any
+// deviation flashes on that frame.
+//
+// Use the helpers below instead of raw indices; a morph shader used in a
+// plain `filter` chain degrades gracefully: progress reads zero there and
+// binding 3 is the unfiltered capture — so at progress 0 the pass passes
+// its input through.
+
+// The engine-eased morph progress, clamped to 0..1.
+fn morph_progress() -> f32 {
+    return clamp(uniforms.params[7].x, 0.0, 1.0);
+}
+
+// Sample the frozen "from" image at this pass UV — a plain 1:1 lookup: the
+// snapshot is layout-anchored, stretched onto the current capture rect.
+fn morph_sample_from(uv: vec2<f32>) -> vec4<f32> {
+    return textureSample(capture_texture, source_sampler, uv);
+}
+
+// Sample the live "to" image (the pass source) — plain 1:1 lookup, named for
+// symmetry in morph shaders.
+fn morph_sample_to(uv: vec2<f32>) -> vec4<f32> {
+    return textureSample(source_texture, source_sampler, uv);
+}
+
+// Explicit-LOD variants of the two morph samplers, for shaders whose control
+// flow branches on data before sampling (`textureSample` requires uniform
+// control flow; `textureSampleLevel` does not). LOD 0 is exact here — filter
+// passes are 1:1 same-size lookups, so the implicit-grad and explicit-LOD
+// forms sample identically.
+fn morph_sample_from_lod(uv: vec2<f32>) -> vec4<f32> {
+    return textureSampleLevel(capture_texture, source_sampler, uv, 0.0);
+}
+
+fn morph_sample_to_lod(uv: vec2<f32>) -> vec4<f32> {
+    return textureSampleLevel(source_texture, source_sampler, uv, 0.0);
+}

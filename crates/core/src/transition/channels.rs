@@ -59,6 +59,7 @@ pub struct TransitionState {
     pub(super) max_height: ProgressChannel<Length>,
     pub(super) filter: FilterChannel,
     pub(super) backdrop_filter: FilterChannel,
+    pub(super) morph: MorphChannel,
     pub(super) transform3d: transform3d::Transform3dChannels,
     /// SVG shape-attr easing (spec + targets both ride `SvgShape.attrs` —
     /// shapes have no style). Self-seeding per attr, so it doesn't
@@ -221,6 +222,108 @@ impl FilterChannel {
             }
         }
         wrote
+    }
+}
+
+/// The `morphFilter` progress channel: retargets on a `key` change and eases
+/// an engine-owned progress 0→1. The freeze itself (stealing the layer's
+/// on-screen capture as the "from" texture) happens render-side; this channel
+/// only sequences it — bumping `MorphState::freeze_seq`, recording the
+/// on-screen rect, and driving `MorphState::progress`, all applied by the
+/// caller from the returned [`MorphAction`] (the channel stays ECS-free for
+/// testability, like the other channels).
+///
+/// Unlike every other channel it never snaps for lack of a spec — the caller
+/// passes `spec::morph_default()` when the style names none. It *does* snap
+/// (adopt the key without animating) when there is nothing to blend: no
+/// on-screen rect yet (first layout — the mount rule) or no resolved chain
+/// (unknown/invalid morph filter — the degrade rule).
+#[derive(Default)]
+pub(super) struct MorphChannel {
+    /// The last key seen (retarget detection), like [`FilterChannel::wire`].
+    /// `None` until seeded / while the style has no morph.
+    pub(super) key: Option<serde_json::Value>,
+    /// The active progress runner (0→1); `None` when idle.
+    pub(super) runner: Option<Runner>,
+    /// Mirrors [`MorphState::freeze_seq`]; owned here so a retarget can bump
+    /// it even when the state component doesn't exist yet.
+    pub(super) seq: u64,
+    /// The settle frame rendered at exactly `1.0`; deactivation happens on
+    /// the NEXT drive — by the morph-shader identity contract that frame is
+    /// pixel-equal to no pass, so dropping the pass can never flash.
+    pub(super) settling: bool,
+}
+
+/// What [`MorphChannel::drive`] asks the caller to do this frame.
+pub(super) enum MorphAction {
+    /// Idle — nothing to write.
+    None,
+    /// A retarget: write this state (insert the component if absent) and
+    /// push capture dirt — the swapped content must re-capture this frame.
+    Freeze(crate::filters::MorphState),
+    /// Mid-flight: write the new progress onto the existing state.
+    Progress(f32),
+    /// The morph ended (settled, unset, or degraded): clear `active` on the
+    /// existing state, if any.
+    Deactivate,
+}
+
+impl MorphChannel {
+    pub(super) fn drive(
+        &mut self,
+        input: Option<&crate::filters::MorphInput>,
+        has_chain: bool,
+        rect: Option<&crate::layer::LayerCaptureRect>,
+        spec: &ChannelTransition,
+        dt: f32,
+    ) -> MorphAction {
+        let key_now = input.map(|m| &m.key);
+        let retargeted = match key_now {
+            Some(key) => self.key.as_ref() != Some(key),
+            None => self.key.is_some(),
+        };
+        if retargeted {
+            self.key = key_now.cloned();
+            self.settling = false;
+            return match (key_now, rect, has_chain) {
+                // A real morph: freeze what's on screen and arm the runner.
+                // The rect (last frame's — `sync_layer_geometry` runs later,
+                // in PostUpdate) is only a "something is on screen" gate:
+                // the frozen snapshot is layout-anchored, stretched onto the
+                // capture rect wherever it is each frame.
+                (Some(_), Some(_), true) => {
+                    self.seq = self.seq.wrapping_add(1);
+                    self.runner = Some(build_runner(&spec.to_driver(1.0), 0.0));
+                    MorphAction::Freeze(crate::filters::MorphState {
+                        active: true,
+                        progress: 0.0,
+                        freeze_seq: self.seq,
+                    })
+                }
+                // Mount (nothing on screen yet), unset, or an unresolved
+                // morph filter: adopt the key without animating.
+                _ => {
+                    self.runner = None;
+                    MorphAction::Deactivate
+                }
+            };
+        }
+        if let Some(runner) = self.runner.as_mut() {
+            let (p, done) = runner.step(dt);
+            // Clamp: a spring spec may overshoot, and progress is a texture
+            // blend factor — out-of-range values sample garbage.
+            let p = if done { 1.0 } else { p.clamp(0.0, 1.0) };
+            if done {
+                self.runner = None;
+                self.settling = true;
+            }
+            return MorphAction::Progress(p);
+        }
+        if self.settling {
+            self.settling = false;
+            return MorphAction::Deactivate;
+        }
+        MorphAction::None
     }
 }
 

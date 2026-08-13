@@ -11,12 +11,43 @@ use super::super::protocol::{AnimatableProperty, AnimatedBindings, Binding, Valu
 use super::super::{SharedValues, eval_color, eval_scalar};
 use super::warn::warn_if;
 
-/// Stage 4's body: validate (when `validate`) and apply every
-/// [`AnimatableProperty::FilterParam`] (or, with `backdrop`,
-/// [`AnimatableProperty::BackdropParam`]) binding of one node against the
-/// matching resolved chain. See the call site for the unit/routing/dirt
-/// contract — identical for both channels; only the addressed chain, the
-/// wire-key prefix, and the warn kind differ.
+/// Which resolved chain a stage-4 apply targets. Picks the matched
+/// [`AnimatableProperty`] variant, the wire-key shape, and the warn kind;
+/// everything else (units, routing, dirt) is identical across the three.
+#[derive(Clone, Copy, PartialEq)]
+pub(super) enum ChainDomain {
+    /// `filter[<i>].<param>` → [`crate::filters::ResolvedFilterChain`].
+    Filter,
+    /// `backdropFilter[<i>].<param>` →
+    /// [`crate::filters::ResolvedBackdropChain`]'s inner chain.
+    Backdrop,
+    /// `morphFilter.<param>` → [`crate::filters::ResolvedMorphChain`]'s
+    /// inner chain (a single entry — the wire key carries no index).
+    Morph,
+}
+
+impl ChainDomain {
+    fn names(self) -> (&'static str, &'static str) {
+        match self {
+            Self::Filter => ("filter", "filterBinding"),
+            Self::Backdrop => ("backdropFilter", "backdropFilterBinding"),
+            Self::Morph => ("morphFilter", "morphFilterBinding"),
+        }
+    }
+    /// The binding's wire key (`filter[0].radius` / `morphFilter.softness`).
+    fn key(self, index: u8, name: &str) -> String {
+        let (prefix, _) = self.names();
+        match self {
+            Self::Morph => format!("{prefix}.{name}"),
+            _ => format!("{prefix}[{index}].{name}"),
+        }
+    }
+}
+
+/// Stage 4's body: validate (when `validate`) and apply every binding of one
+/// node's `domain` against the matching resolved chain. See the call site
+/// for the unit/routing/dirt contract — identical for all three domains;
+/// only the addressed chain, the wire-key shape, and the warn kind differ.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn apply_filter_params(
     entity: Entity,
@@ -26,40 +57,37 @@ pub(super) fn apply_filter_params(
     rnode: Option<&crate::bridge::RNode>,
     validate: bool,
     dirt: &mut crate::layer::LayerContentDirt,
-    backdrop: bool,
+    domain: ChainDomain,
 ) {
-    let (prefix, kind, style_field) = if backdrop {
-        ("backdropFilter", "backdropFilterBinding", "backdropFilter")
-    } else {
-        ("filter", "filterBinding", "filter")
-    };
-    // The channel's bound params: `FilterParam` rows for the content chain,
-    // `BackdropParam` rows for the backdrop one.
-    fn channel_param(property: &AnimatableProperty, backdrop: bool) -> Option<(u8, &String)> {
-        match (property, backdrop) {
-            (AnimatableProperty::FilterParam { index, name }, false)
-            | (AnimatableProperty::BackdropParam { index, name }, true) => Some((*index, name)),
+    let (prefix, kind) = domain.names();
+    // The domain's bound params. A morph is a single wire entry, so its
+    // bindings address wire index 0 implicitly.
+    fn channel_param(property: &AnimatableProperty, domain: ChainDomain) -> Option<(u8, &String)> {
+        match (property, domain) {
+            (AnimatableProperty::FilterParam { index, name }, ChainDomain::Filter)
+            | (AnimatableProperty::BackdropParam { index, name }, ChainDomain::Backdrop) => {
+                Some((*index, name))
+            }
+            (AnimatableProperty::MorphParam { name }, ChainDomain::Morph) => Some((0, name)),
             _ => None,
         }
     }
     // Attribute validation warnings to the node's devtools inspector.
     let _diag = rnode.map(|r| crate::diag::node_scope(r.0));
-    // Lazy on purpose — see `warn::warn_if`; `kind` picks the channel's
+    // Lazy on purpose — see `warn::warn_if`; `kind` picks the domain's
     // devtools warn kind.
     let warn = |validate: bool, make: &dyn Fn() -> (String, String)| warn_if(validate, kind, make);
 
     let Some(chain) = chain else {
         for (property, _) in bindings.iter() {
-            if let Some((index, name)) = channel_param(property, backdrop) {
+            if let Some((index, name)) = channel_param(property, domain) {
                 warn(validate, &|| {
-                    (
-                        format!("{prefix}[{index}].{name}"),
-                        format!(
-                            "binding {prefix}[{index}].{name}: the node has no resolved \
-                             {prefix} chain to drive (no valid `{style_field}` style) — \
-                             binding ignored"
-                        ),
-                    )
+                    let key = domain.key(index, name);
+                    let msg = format!(
+                        "binding {key}: the node has no resolved {prefix} chain to drive \
+                         (no valid `{prefix}` style) — binding ignored"
+                    );
+                    (key, msg)
                 });
             }
         }
@@ -73,7 +101,7 @@ pub(super) fn apply_filter_params(
     {
         let chain: &crate::filters::ResolvedFilterChain = chain;
         for (property, binding) in bindings.iter() {
-            let Some((index, name)) = channel_param(property, backdrop) else {
+            let Some((index, name)) = channel_param(property, domain) else {
                 continue;
             };
             // The slot metadata from the first matching pass — passes sharing
@@ -86,15 +114,14 @@ pub(super) fn apply_filter_params(
             let Some(slot) = slot else {
                 if chain.passes.iter().any(|p| p.wire_index == index) {
                     warn(validate, &|| {
-                        let key = format!("{prefix}[{index}].{name}");
-                        let msg = format!(
-                            "{key}: chain entry {index} has no param {name:?} — binding ignored"
-                        );
+                        let key = domain.key(index, name);
+                        let msg =
+                            format!("{key}: the {prefix} has no param {name:?} — binding ignored");
                         (key, msg)
                     });
                 } else {
                     warn(validate, &|| {
-                        let key = format!("{prefix}[{index}].{name}");
+                        let key = domain.key(index, name);
                         let msg = format!(
                             "{key}: the resolved {prefix} chain has no entry at index {index} — \
                              binding ignored"
@@ -118,7 +145,7 @@ pub(super) fn apply_filter_params(
                         // (every stage skips it).
                         if !matches!(binding, Binding::InterpolateColor { .. }) {
                             warn(validate, &|| {
-                                let key = format!("{prefix}[{index}].{name}");
+                                let key = domain.key(index, name);
                                 let msg = format!(
                                     "{key}: param {name:?} is a color — bind an \
                                      interpolateColor, not a scalar value"
@@ -134,7 +161,7 @@ pub(super) fn apply_filter_params(
                     // are not addressable per-param in v1 — a scalar splat
                     // would be wrong for them.
                     warn(validate, &|| {
-                        let key = format!("{prefix}[{index}].{name}");
+                        let key = domain.key(index, name);
                         let msg = format!(
                             "{key}: param {name:?} spans {} components — multi-component \
                              params are not animatable per-param",
@@ -155,7 +182,7 @@ pub(super) fn apply_filter_params(
                     None => {
                         if matches!(binding, Binding::InterpolateColor { .. }) {
                             warn(validate, &|| {
-                                let key = format!("{prefix}[{index}].{name}");
+                                let key = domain.key(index, name);
                                 let msg = format!(
                                     "{key}: param {name:?} is a scalar — an \
                                      interpolateColor binding cannot drive it"

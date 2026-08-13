@@ -350,6 +350,101 @@ for complete examples, including time-driven (`time = true`) and bleed-outset
 
 ![Custom WGSL filters running on live UI: a ripple distortion, a glitch effect, and an animated dissolve driven by a shared value.](https://raw.githubusercontent.com/tulustul/bevy-react/main/screenshots/customFilters.gif)
 
+### Morph transitions
+
+`morphFilter: { key, name, params }` gives an element view-transition
+semantics: when `key` changes, its previous rendered appearance is frozen and
+a two-input filter blends it into the live content, driven by an engine-owned
+progress. Nothing else to wire up — a 300ms ease applies by default, and
+`transition: { morphFilter }` overrides the timing. First mount never
+animates, and a mid-flight key change freezes the in-flight blend and
+restarts, so interruptions stay smooth. Built-in morphs: `crossfade`,
+`linearWipe`, `pixelize`.
+
+```tsx
+<node
+  style={{
+    morphFilter: { key: page, name: "pixelize" },
+    transition: { morphFilter: { duration: 500 } },
+  }}
+  onClick={next}
+>
+  {content[page]}
+</node>
+```
+
+![The three built-in morphs looping on live UI cards: a crossfade between artworks, a linearWipe sweeping across a logo card, and a pixelize swap on a stats panel.](https://raw.githubusercontent.com/tulustul/bevy-react/main/screenshots/morphs-builtin.webp)
+
+### Custom morph filters
+
+Morph filters are their own family, separate from regular `filter` chains: a
+custom one is a Rust params struct plus a single-pass WGSL shader, registered
+with `#[react_morph_filter]` + `add_react_morph_filter::<T>()`. It lands in
+the generated `BevyMorphFilters` typing, so `params` is fully typed in TSX —
+the same codegen flow as custom filters.
+
+```rust
+use bevy_react::{ReactAppExt, react_morph_filter};
+
+// Fields pack into the shader's `uniforms.params` in declaration order.
+#[react_morph_filter(shader = "shaders/morphs/windowslice.wgsl")]
+struct Windowslice {
+    count: f32,      // number of blinds
+    smoothness: f32, // soft lead of the sweep
+}
+
+app.add_react_morph_filter::<Windowslice>();
+```
+
+The shader is a **two-input blend**: the prelude hands it the frozen old
+appearance (`morph_sample_from`), the live content (`morph_sample_to`), and
+the engine-owned eased progress (`morph_progress()`). The one rule is the
+**identity contract**: return exactly the "from" sample at progress 0 and
+exactly the "to" sample at progress 1, so the morph starts and settles
+invisibly.
+
+```wgsl
+#import bevy_react::filter::{
+    FullscreenVertexOutput,
+    morph_progress,
+    morph_sample_from,
+    morph_sample_to,
+    uniforms,
+}
+
+@fragment
+fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
+    let progress = morph_progress(); // engine-owned, eased 0 → 1
+    if progress <= 0.0 { return morph_sample_from(in.uv); } // identity
+    if progress >= 1.0 { return morph_sample_to(in.uv); }   // contract
+
+    // Vertical blinds: a soft sweep sliced into `count` repeating blinds.
+    let count = uniforms.params[0].x;
+    let smoothness = max(uniforms.params[0].y, 1e-4);
+    let edge = smoothstep(-smoothness, 0.0, in.uv.x - progress * (1.0 + smoothness));
+    let s = step(edge, fract(count * in.uv.x));
+    return mix(morph_sample_from(in.uv), morph_sample_to(in.uv), s);
+}
+```
+
+```tsx
+<node
+  style={{
+    morphFilter: { key, name: "windowslice", params: { count: 14 } },
+  }}
+/>
+```
+
+As with custom filters, register in both the running app and the
+`--export-bindings` path, then regenerate `bevy.ts`. The demos app ships a
+whole pack of [gl-transitions](https://gl-transitions.com/gallery) ports
+(page curl, book flip, doorway, kaleidoscope, film burn, datamosh glitch, …)
+under
+[`examples/assets/shaders/morphs/`](https://github.com/tulustul/bevy-react/tree/main/examples/assets/shaders/morphs),
+showcased in the "Morph filter" demo — any of them is a `morphFilter` name.
+
+![The demo's gl-transitions morph pack animating on live UI cards: windowslice, radial, polka-dots curtain, circle crop, curtain, burn, tiles wave, grid flip, doorway, book flip, kaleidoscope, datamosh glitch, film burn, and an inverted page curl.](https://raw.githubusercontent.com/tulustul/bevy-react/main/screenshots/morphs-custom.webp)
+
 ### Fonts
 
 Register a font on the host, then select it by name in any `<text>` style.

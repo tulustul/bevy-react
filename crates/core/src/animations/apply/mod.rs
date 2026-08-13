@@ -49,6 +49,9 @@ pub(super) struct AnimTargets {
     /// The backdrop analog: `backdropFilter[<i>].<param>` bindings write into
     /// this chain (projected to the shared inner type at the call site).
     resolved_backdrop: Option<&'static mut crate::filters::ResolvedBackdropChain>,
+    /// The morph analog: `morphFilter.<param>` bindings write into the
+    /// resolved morph's single pass (projected like the backdrop).
+    resolved_morph: Option<&'static mut crate::filters::ResolvedMorphChain>,
     /// Reconciler identity, for attributing `filterBinding` validation
     /// warnings to the node's devtools inspector.
     rnode: Option<&'static crate::bridge::RNode>,
@@ -122,7 +125,7 @@ pub(super) fn apply_animated_nodes(
     // re-resolves — never per frame: stage 4's own version bump (an actively
     // animating valid binding) is stamped back after the apply so it never
     // reads as a re-resolve.
-    mut validated: Local<ValidationMemory<(Option<u32>, Option<u32>)>>,
+    mut validated: Local<ValidationMemory<(Option<u32>, Option<u32>, Option<u32>)>>,
     // The shape-attr analog (stage 5): entities whose `ShapeAttr` bindings
     // were validated since they last restamped (`Ref` change tick) — the
     // once-per-restamp warn gate; no version pair needed (no chain here).
@@ -397,24 +400,26 @@ fn stage_filter_params(
     anim_changed: bool,
     b: &AnimatedBindings,
     values: &SharedValues,
-    validated: &mut ValidationMemory<(Option<u32>, Option<u32>)>,
+    validated: &mut ValidationMemory<(Option<u32>, Option<u32>, Option<u32>)>,
     filter_bound: &mut Vec<Entity>,
     dirt: &mut crate::layer::LayerContentDirt,
     t: &mut AnimTargetsItem,
 ) {
     let has_filter = b.has_filter_params();
     let has_backdrop = b.has_backdrop_params();
-    if !(has_filter || has_backdrop) {
+    let has_morph = b.has_morph_params();
+    if !(has_filter || has_backdrop || has_morph) {
         return;
     }
     filter_bound.push(entity);
     // Bind-time validation gate: warn when the bindings restamped
     // (`Ref` change tick — `apply_animated` re-inserts on prop
-    // updates) or either chain re-resolved/appeared/vanished. One
-    // shared gate for both channels: the version pair is the key.
+    // updates) or any chain re-resolved/appeared/vanished. One
+    // shared gate for the three domains: the version triple is the key.
     let pre = (
         t.resolved_filter.as_ref().map(|c| c.version),
         t.resolved_backdrop.as_ref().map(|c| c.0.version),
+        t.resolved_morph.as_ref().map(|c| c.0.version),
     );
     let validate = anim_changed || validated.should_validate(entity, &pre);
     if has_filter {
@@ -426,7 +431,7 @@ fn stage_filter_params(
             t.rnode,
             validate,
             dirt,
-            false,
+            filter_params::ChainDomain::Filter,
         );
     }
     if has_backdrop {
@@ -442,7 +447,23 @@ fn stage_filter_params(
             t.rnode,
             validate,
             dirt,
-            true,
+            filter_params::ChainDomain::Backdrop,
+        );
+    }
+    if has_morph {
+        let mut morph = t
+            .resolved_morph
+            .as_mut()
+            .map(|m| m.reborrow().map_unchanged(|b| &mut b.0));
+        apply_filter_params(
+            entity,
+            b,
+            values,
+            morph.as_mut(),
+            t.rnode,
+            validate,
+            dirt,
+            filter_params::ChainDomain::Morph,
         );
     }
     // Stamp the POST-write versions: the applies above bump `version`
@@ -455,6 +476,7 @@ fn stage_filter_params(
     let post = (
         t.resolved_filter.as_ref().map(|c| c.version),
         t.resolved_backdrop.as_ref().map(|c| c.0.version),
+        t.resolved_morph.as_ref().map(|c| c.0.version),
     );
     validated.stamp(entity, validate, &pre, post);
 }

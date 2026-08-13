@@ -72,6 +72,13 @@ pub struct LayerSlot {
     /// had a `backdropFilter` chain last frame. Same clear-on-absence rule
     /// as [`Self::filter`], for the same version-restart reason.
     pub backdrop: Option<super::backdrop::BackdropSlot>,
+    /// Morph state (the frozen snapshot + the blend target), present iff a
+    /// morph is in flight. Unlike [`Self::filter`]/[`Self::backdrop`] it is
+    /// PRESERVED across slot reallocs — the frozen pixels must survive the
+    /// union-rect resize of the freeze frame (see
+    /// [`super::morph::freeze_morph_snapshot`]); cleared when the extracted
+    /// morph disappears.
+    pub morph: Option<super::morph::MorphSlot>,
     pub last_seen: u64,
 }
 
@@ -171,6 +178,10 @@ pub fn prepare_layer_textures(
                 layer.wants_mips,
             )
         });
+        // Morph freeze first: a new `freeze_seq` steals the pixels currently
+        // on screen (the capture, or an interrupted morph's blend) BEFORE
+        // the realloc below would drop them.
+        super::morph::freeze_morph_snapshot(slot, layer, wanted, &render_device);
         if slot.size != wanted
             || slot.format != layer.target_format
             || slot.mips.is_some() != layer.wants_mips
@@ -179,14 +190,21 @@ pub fn prepare_layer_textures(
             // bind group dies with the slot — as does the filter state
             // (`filter: None`), which re-allocates at the new size just
             // below. Extraction already flagged `needs_capture` (its
-            // `cached_ok` mirrors this key).
+            // `cached_ok` mirrors this key). The morph state is the one
+            // survivor: its frozen snapshot must outlive the union-rect
+            // resize (the blend re-allocates below).
+            let morph = slot.morph.take();
             *slot = alloc_layer_slot(
                 &render_device,
                 wanted,
                 layer.target_format,
                 layer.wants_mips,
             );
+            slot.morph = morph;
         }
+        // Post-realloc morph maintenance: clear an ended morph, track the
+        // capture size with the blend target.
+        super::morph::maintain_morph_blend(slot, layer, wanted, &render_device);
         if layer.chain.is_some() {
             // Ping-pong textures ride the capture's size + format; a realloc
             // above reset `filter` to `None`, so this re-allocates them too
@@ -313,6 +331,7 @@ fn alloc_layer_slot(
         content_valid: false,
         filter: None,
         backdrop: None,
+        morph: None,
         last_seen: 0,
     }
 }

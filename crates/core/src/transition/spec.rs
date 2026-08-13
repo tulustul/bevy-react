@@ -62,6 +62,13 @@ pub struct Transition {
     /// like `filter`'s ease-to-empty — keep an identity `{}` in the base
     /// style when removal should ease.
     pub transform3d: Option<ChannelTransition>,
+    /// Times the `morphFilter` progress (the engine-owned 0→1 blend from the
+    /// frozen old appearance to the live content on a `key` change — see
+    /// `crate::filters` morph). Unlike every other channel it has a built-in
+    /// default ([`morph_default`]: 300ms ease-in-out), so a key change
+    /// animates even with no `transition` style at all; this entry (or
+    /// `all`) overrides the timing.
+    pub morph_filter: Option<ChannelTransition>,
 }
 
 /// One row per spec channel of [`Transition`]: `(accessor, field, doc
@@ -80,6 +87,7 @@ macro_rules! transition_channels {
             (for_filter, filter, "the filter chain"),
             (for_backdrop_filter, backdrop_filter, "the backdrop-filter chain"),
             (for_transform3d, transform3d, "the transform3d channels"),
+            (for_morph_filter, morph_filter, "the morph progress"),
         }
     };
 }
@@ -145,6 +153,24 @@ fn default_mass() -> f32 {
     1.0
 }
 
+/// The built-in `morphFilter` timing used when neither
+/// `transition.morphFilter` nor `transition.all` names one: 300ms
+/// ease-in-out. The morph is the one channel that animates without being
+/// asked — a key change with no spec at all still eases (snapping would make
+/// the feature a no-op, since the blend is only ever visible mid-progress).
+pub(super) fn morph_default() -> &'static ChannelTransition {
+    static DEFAULT: std::sync::LazyLock<ChannelTransition> =
+        std::sync::LazyLock::new(|| ChannelTransition {
+            duration: None, // `to_driver` defaults to 0.3s
+            easing: Easing::EaseInOut,
+            delay: WireTime::default(),
+            stiffness: None,
+            damping: None,
+            mass: 1.0,
+        });
+    &DEFAULT
+}
+
 impl ChannelTransition {
     /// Build the [`Driver`] that eases the value to `to` from its live reading.
     /// A spring if `stiffness`/`damping` are present, else a (optionally delayed)
@@ -205,9 +231,17 @@ pub struct TransitionInput {
 }
 
 impl TransitionInput {
-    /// Build the input from a resolved style, or `None` if it has no `transition`.
+    /// Build the input from a resolved style, or `None` if it has no
+    /// `transition` — except that a `morphFilter` alone also produces an
+    /// input (with an empty spec): the morph channel has built-in default
+    /// timing ([`morph_default`]) and must be driven even when the style
+    /// never mentions `transition`.
     pub(super) fn from_style(style: &Style) -> Option<Self> {
-        let spec = style.transition.clone()?;
+        let spec = match style.transition.clone() {
+            Some(spec) => spec,
+            None if style.morph_filter.is_some() => Transition::default(),
+            None => return None,
+        };
         let t = style.transform.clone().unwrap_or_default();
         // `static_val` throughout: an `{ animated }` channel has no static
         // target to ease toward — it reads as unset here, and the per-channel
