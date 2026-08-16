@@ -16,6 +16,9 @@ type ExplanationState = {
   pageDefault: ExplanationData | null;
   /** The clicked card, if any; wins over `pageDefault`. */
   selected: { key: ExplanationKey; data: ExplanationData } | null;
+  /** Panel collapsed to a small corner button; sticky across demo switches. */
+  collapsed: boolean;
+  setCollapsed: (collapsed: boolean) => void;
   /** Atomically swap the page default and drop any selection. `null` opts
    * the page out of the panel entirely (it renders nothing). */
   setPage: (pageDefault: ExplanationData | null) => void;
@@ -29,6 +32,8 @@ const createExplanationStore = () =>
   create<ExplanationState>((set) => ({
     pageDefault: null,
     selected: null,
+    collapsed: false,
+    setCollapsed: (collapsed) => set({ collapsed }),
     setPage: (pageDefault) => set({ pageDefault, selected: null }),
     select: (key, data) =>
       set((s) =>

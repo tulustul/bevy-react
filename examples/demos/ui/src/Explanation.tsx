@@ -6,7 +6,8 @@ import { useExplanationStore } from "./explanationStore";
 const WIDTH = 350;
 
 export function Explanation() {
-  const { pageDefault, selected, deselect } = useExplanationStore();
+  const { pageDefault, selected, deselect, collapsed, setCollapsed } =
+    useExplanationStore();
   const shown = selected?.data ?? pageDefault;
 
   // Nothing before the first page registers, and nothing on pages that
@@ -16,11 +17,22 @@ export function Explanation() {
     return null;
   }
 
+  if (collapsed) {
+    return (
+      <Button style={expandButtonStyle} onClick={() => setCollapsed(false)}>
+        ?
+      </Button>
+    );
+  }
+
   return (
     <node style={asideStyle}>
-      <node style={{ justifyContent: "spaceBetween" }}>
+      <node style={{ justifyContent: "spaceBetween", alignItems: "center" }}>
         {selected && <Button onClick={() => deselect()}>Back</Button>}
         <text>{shown.title}</text>
+        <Button style={hideButtonStyle} onClick={() => setCollapsed(true)}>
+          ×
+        </Button>
       </node>
       {shown.description && (
         <text style={descriptionStyle}>{shown.description}</text>
@@ -77,6 +89,20 @@ const asideStyle: BevyStyle = {
   border: { left: 2, bottom: 2 },
   borderRadius: { left: 15 },
   borderGradient: Gradients.primary,
+};
+
+const hideButtonStyle: BevyStyle = {
+  padding: { top: 2, right: 9, bottom: 2, left: 9 },
+};
+
+const expandButtonStyle: BevyStyle = {
+  positionType: "absolute",
+  top: 10,
+  right: 10,
+  width: 32,
+  height: 32,
+  padding: 0,
+  borderRadius: 16,
 };
 
 const descriptionStyle: BevyStyle = {

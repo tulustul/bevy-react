@@ -23,10 +23,11 @@ const PAGE_MORPHS: MorphUse[] = [
 
 export function App() {
   const { selectedDemo, setSelectedDemo } = useDemosStore();
-  // Pages can opt out of the explanation panel (`useDemoPage(null)`); the
-  // content area only reserves the panel's width while one is showing.
+  // Pages can opt out of the explanation panel (`useDemoPage(null)`), and the
+  // user can collapse it; the content area only reserves the panel's width
+  // while it is actually showing.
   const hasPanel = useExplanationStore(
-    (s) => (s.selected?.data ?? s.pageDefault) !== null,
+    (s) => (s.selected?.data ?? s.pageDefault) !== null && !s.collapsed,
   );
 
   // Re-rolled exactly when the demo changes — same commit as the morph key
