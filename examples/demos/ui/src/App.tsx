@@ -6,6 +6,7 @@ import { DEMOS, findDemoByLabel } from "./demos";
 import { Navigation } from "./Navigation";
 import { Explanation } from "./Explanation";
 import { useDemosStore } from "./demosStore";
+import { useExplanationStore } from "./explanationStore";
 import type { MorphUse } from "./demos/styling/morphFilterDemo/params";
 
 // The page-transition morphs: each demo switch picks one at random.
@@ -22,6 +23,11 @@ const PAGE_MORPHS: MorphUse[] = [
 
 export function App() {
   const { selectedDemo, setSelectedDemo } = useDemosStore();
+  // Pages can opt out of the explanation panel (`useDemoPage(null)`); the
+  // content area only reserves the panel's width while one is showing.
+  const hasPanel = useExplanationStore(
+    (s) => (s.selected?.data ?? s.pageDefault) !== null,
+  );
 
   // Re-rolled exactly when the demo changes — same commit as the morph key
   // change, so the freeze blends with the freshly picked filter.
@@ -49,6 +55,7 @@ export function App() {
       <node
         style={{
           ...contentStyle,
+          padding: { right: hasPanel ? 300 : 0 },
           morphFilter: { key: selectedDemo.label, ...pageMorph },
           transition: {
             morphFilter: { duration: 300, easing: "linear" },
@@ -81,7 +88,6 @@ const contentStyle: BevyStyle = {
   overflowX: "scroll",
   scrollbar: Scrollbar,
   transition: { scroll: { duration: 200, easing: "easeOut" } },
-  padding: { right: 300 },
 };
 
 const contentInnerStyle: BevyStyle = {

@@ -1,11 +1,15 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type PropsWithChildren } from "react";
+import {
+  interpolate,
+  useSharedValue,
+  withDelay,
+  withRepeat,
+  withTiming,
+} from "bevy-react";
 import { BevyStyle } from "bevy-react/jsx";
-import { bevy } from "@/bevy";
-import { Button } from "@/components";
-import { Colors, FontSizes, Gradients } from "@/theme";
-import { useDemoPage, type ExplanationData } from "@/explanationStore";
-
-type Mode = "monitor" | "flat";
+import { Typewriter } from "@/components";
+import { Colors, FontSizes } from "@/theme";
+import { useDemoPage } from "@/explanationStore";
 
 type Feature = { title: string; body: string };
 
@@ -28,121 +32,260 @@ const FEATURES: Feature[] = [
   },
 ];
 
-const PAGE: ExplanationData = {
-  title: "bevy-react",
-  description:
-    "A gallery of bevy-react demos: React components rendered as native bevy_ui, grouped by area — elements, layout, styling, communication, animations and events. Pick a demo in the side panel; this panel shows the page's explanation, and clicking a titled card focuses its details. The landing page itself renders inside a <surface> on the CRT monitor's screen texture — switch to flat to render it as plain UI.",
-};
+// Per-card pastel accent (diverse hues, low saturation): a soft top-edge
+// highlight + tinted title over the shared flat dark card body.
+const CARD_ACCENTS = [
+  Colors.sky100,
+  Colors.red200,
+  Colors.teal100,
+  Colors.purple100,
+];
+
+// The hero title cycles through a few tag words, each dusting into the next
+// (color included — the old hue blows away with the old word), and settles
+// on the library name in the brand primary. Swap any wording here — every
+// entry must fit the fixed 460px morph rect at MetalMania 56.
+const TITLE_SEQUENCE = [
+  { text: "Fast", color: Colors.sky100 },
+  { text: "Reactive", color: Colors.red200 },
+  { text: "Hot reloaded", color: Colors.amber100 },
+  { text: "bevy-react", color: Colors.primary100 },
+];
+const TITLE_FIRST_HOLD_MS = 900;
+const TITLE_STEP_MS = 1500;
+const TITLE_MORPH_MS = 2000;
+/** When the title's last morph has settled — the rest of the page (tagline
+ * typewriter, intro, card entrances) starts only after this. */
+const HERO_DONE_MS =
+  TITLE_FIRST_HOLD_MS +
+  TITLE_STEP_MS * (TITLE_SEQUENCE.length - 2) +
+  TITLE_MORPH_MS;
+/** When the last card's entrance has finished — the closing "browse" line
+ * reveals after this (0.5s stagger from `FeatureCard`, 0.5s fade + rise). */
+const CARDS_DONE_MS = HERO_DONE_MS + 400 + (FEATURES.length - 1) * 500 + 500;
 
 export function Home() {
-  useDemoPage(PAGE);
-  const [mode, setMode] = useState<Mode>("monitor");
+  // The landing page opts out of the explanation panel — the content area
+  // then uses the full width (App.tsx drops the reserved panel padding).
+  useDemoPage(null);
 
-  useEffect(() => {
-    bevy.selectScene(mode === "monitor" ? "Surface" : null);
-  }, [mode]);
-
-  return (
-    <node style={containerStyle}>
-      {mode === "monitor" ? (
-        <surface name="monitor" style={screenRoot}>
-          <Landing mode={mode} onMode={setMode} />
-        </surface>
-      ) : (
-        <Landing mode={mode} onMode={setMode} />
-      )}
-    </node>
-  );
-}
-
-type Props = {
-  mode: Mode;
-  onMode: (mode: Mode) => void;
-};
-
-function Landing({ mode, onMode }: Props) {
   return (
     <node style={pageStyle}>
-      <node style={heroStyle}>
-        <image src="bevy-react-logo.png" style={{ width: 150 }} />
-        <text style={titleStyle}>bevy-react</text>
-        <text style={taglineStyle}>
-          Build bevy_ui interfaces with React — no web view, no DOM.
+      <Hero />
+      <Reveal delay={HERO_DONE_MS + 200}>
+        <text style={introStyle}>
+          You write components in React/TSX and they render to native Bevy UI
+          through a React Native-style bridge. State and interactions flow both
+          ways, and edits hot-reload live while keeping component state.
         </text>
-      </node>
-
-      <text style={introStyle}>
-        You write components in React/TSX and they render to native Bevy UI
-        through a React Native-style bridge. State and interactions flow both
-        ways, and edits hot-reload live while keeping component state.
-      </text>
-
+      </Reveal>
       <node style={cardsRowStyle}>
-        {FEATURES.map((feature) => (
-          <node key={feature.title} style={cardStyle}>
-            <text style={cardTitleStyle}>{feature.title}</text>
-            <text style={cardBodyStyle}>{feature.body}</text>
-          </node>
+        {FEATURES.map((feature, index) => (
+          <FeatureCard key={feature.title} feature={feature} index={index} />
         ))}
       </node>
-
-      <text style={browseStyle}>Browse the demos in the side panel</text>
-
-      <Button
-        style={surfaceSwith}
-        labelStyle={surfaceLabelSwith}
-        onClick={() => onMode(mode === "flat" ? "monitor" : "flat")}
-      >
-        {mode === "flat" ? "Switch to CRT monitor" : "Switch to flat"}
-      </Button>
+      <Reveal delay={CARDS_DONE_MS}>
+        <text style={browseStyle}>Browse the demos in the side panel</text>
+      </Reveal>
     </node>
   );
 }
 
-const containerStyle: BevyStyle = {
-  flexDirection: "column",
-  alignItems: "center",
-  gap: 16,
-};
+// Fade + rise entrance on inline animated bindings, holding invisible until
+// `delay` — sequences the plain-text lines into the page's opening.
+function Reveal({ delay, children }: PropsWithChildren<{ delay: number }>) {
+  const v = useSharedValue(0);
 
-const screenRoot: BevyStyle = {
-  width: "100%",
-  height: "100%",
-  flexDirection: "column",
-  alignItems: "center",
-  justifyContent: "center",
-  backgroundColor: Colors.surface100,
-  backgroundGradient: Gradients.navBackdrop,
-};
+  useEffect(() => {
+    v.value = withDelay(
+      delay,
+      withTiming(1, { duration: 600, easing: "easeOut" }),
+    );
+  }, [v, delay]);
+
+  return (
+    <node
+      style={{
+        flexDirection: "column",
+        alignItems: "center",
+        opacity: { animated: v },
+        transform: {
+          translateY: { animated: interpolate(v, [0, 1], [16, 0]) },
+        },
+      }}
+    >
+      {children}
+    </node>
+  );
+}
+
+// The hero title mounts on the first tag (a morph's first mount never
+// animates), then dusts through TITLE_SEQUENCE step by step until it lands
+// on "bevy-react". The wrapper is FIXED-SIZE so every step's frozen snapshot
+// and live capture share one rect — a morph snapshot is layout-anchored, and
+// a size change across a swap would stretch the old pixels. A breathing
+// bloom chain composes on top of the morph (morph blends first, the chain
+// sources the blend).
+function Hero() {
+  const [step, setStep] = useState(0);
+  const bob = useSharedValue(0);
+  const glow = useSharedValue(0);
+  const title = TITLE_SEQUENCE[step];
+
+  useEffect(() => {
+    bob.value = withRepeat(
+      withTiming(1, { duration: 2400, easing: "easeInOut" }),
+      { reverse: true },
+    );
+    glow.value = withRepeat(
+      withTiming(1, { duration: 2600, easing: "easeInOut" }),
+      { reverse: true },
+    );
+  }, [bob, glow]);
+
+  useEffect(() => {
+    if (step >= TITLE_SEQUENCE.length - 1) return;
+    const id = setTimeout(
+      () => setStep(step + 1),
+      step === 0 ? TITLE_FIRST_HOLD_MS : TITLE_STEP_MS,
+    );
+    return () => clearTimeout(id);
+  }, [step]);
+
+  return (
+    <node style={heroStyle}>
+      <image
+        src="bevy-react-logo.png"
+        style={{
+          width: 150,
+          transform: {
+            translateY: { animated: interpolate(bob, [0, 1], [-6, 6]) },
+          },
+        }}
+      />
+      <node
+        style={{
+          width: 460,
+          height: 72,
+          alignItems: "center",
+          justifyContent: "center",
+          morphFilter: {
+            key: title.text,
+            name: "dustify",
+            params: {
+              direction: 0,
+              softness: 100,
+              turbulence: 0.5,
+              wind: -180,
+              drift: 60,
+              grain: 6,
+              raggedness: 0.6,
+              evolution: 1,
+            },
+          },
+          transition: {
+            morphFilter: { duration: TITLE_MORPH_MS, easing: "linear" },
+          },
+          filter: [
+            {
+              name: "bloom",
+              params: {
+                radius: 2,
+                threshold: 0.1,
+                intensity: { animated: interpolate(glow, [0, 1], [0.25, 0.6]) },
+              },
+            },
+          ],
+        }}
+      >
+        <text style={{ ...titleStyle, color: title.color }}>{title.text}</text>
+      </node>
+      <Typewriter
+        text="Build bevy_ui interfaces with React — no web view, no DOM."
+        style={taglineStyle}
+        startDelay={HERO_DONE_MS}
+      />
+    </node>
+  );
+}
+
+// Frosted card over the aurora: backdropFilter blurs the live 3D frame
+// behind the node. Cards wait for the hero title to finish its tag
+// sequence, then enter one by one (0.5s apart) with a simple staggered
+// fade + rise on inline animated bindings (base style only). Hover tilts
+// via transform3d on the wrapper; gradient/shadow hover swaps snap by
+// design (no transition channel).
+function FeatureCard({ feature, index }: { feature: Feature; index: number }) {
+  const enter = useSharedValue(0);
+  const accent = CARD_ACCENTS[index % CARD_ACCENTS.length];
+
+  useEffect(() => {
+    enter.value = withDelay(
+      HERO_DONE_MS + 400 + index * 500,
+      withTiming(1, { duration: 500, easing: "easeOut" }),
+    );
+  }, [enter, index]);
+
+  return (
+    <node
+      style={{
+        opacity: { animated: enter },
+        transform: {
+          translateY: { animated: interpolate(enter, [0, 1], [24, 0]) },
+        },
+      }}
+    >
+      <node
+        style={{
+          transform3d: { perspective: 700 },
+          transition: { transform3d: { duration: 500, easing: "easeInOut" } },
+          padding: 10,
+        }}
+        hoverStyle={cardHoverStyle}
+      >
+        <node style={{ ...cardStyle }}>
+          <text style={{ ...cardTitleStyle, color: accent }}>
+            {feature.title}
+          </text>
+          <text style={cardBodyStyle}>{feature.body}</text>
+        </node>
+      </node>
+    </node>
+  );
+}
 
 const pageStyle: BevyStyle = {
   flexDirection: "column",
   alignItems: "center",
-  gap: 20,
+  gap: 24,
   padding: 32,
-  maxWidth: 720,
+  maxWidth: 760,
+  backdropFilter: { name: "blur", params: { radius: 20 } },
+  backgroundColor: "rgba(0,0,0,0.3)",
+  borderRadius: 20,
 };
 
 const heroStyle: BevyStyle = {
   flexDirection: "column",
   alignItems: "center",
-  gap: 6,
+  gap: 8,
 };
 
 const titleStyle: BevyStyle = {
   color: Colors.primary100,
-  fontSize: FontSizes.xxl,
-  fontWeight: "bold",
+  fontFamily: "MetalMania",
+  fontSize: 56,
+  textShadow: { color: "black", offsetY: 2 },
 };
 
 const taglineStyle: BevyStyle = {
   color: Colors.textColor100,
   fontSize: FontSizes.base,
-  maxWidth: 520,
+  fontWeight: "bold",
 };
 
 const introStyle: BevyStyle = {
-  color: Colors.textColor200,
+  color: Colors.textColor100,
   fontSize: FontSizes.sm,
   maxWidth: 600,
   textAlign: "center",
@@ -152,25 +295,22 @@ const cardsRowStyle: BevyStyle = {
   flexDirection: "row",
   flexWrap: "wrap",
   justifyContent: "center",
-  gap: 14,
 };
 
 const cardStyle: BevyStyle = {
   flexDirection: "column",
   gap: 6,
-  width: 320,
+  width: 300,
   padding: 16,
-  backgroundColor: Colors.surface200,
-  backgroundGradient: Gradients.card,
+  backgroundColor: "rgba(26, 27, 38, 0.85)",
   borderRadius: 14,
-  border: 2,
-  borderColor: Colors.primary100,
-  borderGradient: Gradients.accentBorder,
-  boxShadow: { blurRadius: 12, spreadRadius: 4, color: Colors.shadow100 },
+};
+
+const cardHoverStyle: BevyStyle = {
+  transform3d: { rotateX: 8, rotateY: 20, perspective: 700 },
 };
 
 const cardTitleStyle: BevyStyle = {
-  color: Colors.primary100,
   fontSize: FontSizes.base,
   fontWeight: "bold",
 };
@@ -184,12 +324,4 @@ const browseStyle: BevyStyle = {
   color: Colors.textColor100,
   fontSize: FontSizes.base,
   fontWeight: "bold",
-};
-
-const surfaceSwith: BevyStyle = {
-  padding: 20,
-};
-
-const surfaceLabelSwith: BevyStyle = {
-  fontSize: FontSizes.xl,
 };

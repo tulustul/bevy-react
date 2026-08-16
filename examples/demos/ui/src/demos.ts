@@ -60,7 +60,7 @@ export type DemoItem = BaseDemoItem &
   );
 
 export const DEMOS: DemoItem[] = [
-  { label: "Home", scene: "Surface", component: Home },
+  { label: "Home", component: Home },
   {
     label: "Elements",
     expandedByDefault: true,

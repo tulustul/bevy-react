@@ -16,8 +16,9 @@ type ExplanationState = {
   pageDefault: ExplanationData | null;
   /** The clicked card, if any; wins over `pageDefault`. */
   selected: { key: ExplanationKey; data: ExplanationData } | null;
-  /** Atomically swap the page default and drop any selection. */
-  setPage: (pageDefault: ExplanationData) => void;
+  /** Atomically swap the page default and drop any selection. `null` opts
+   * the page out of the panel entirely (it renders nothing). */
+  setPage: (pageDefault: ExplanationData | null) => void;
   /** Toggle: selecting the already-selected key deselects. */
   select: (key: ExplanationKey, data: ExplanationData) => void;
   /** With a key, deselect only if that key is still the selection. */
@@ -51,11 +52,12 @@ export const useExplanationStore = (g.__explanationStore ??=
 
 /**
  * Register the page's default explanation (shown whenever no card is
- * selected). Pass a module-level const so the effect doesn't churn — after a
- * hot-reload re-exec the const is a fresh object, which re-registers edited
- * text even when React preserves the page's hook state.
+ * selected), or `null` to opt the page out of the panel. Pass a module-level
+ * const so the effect doesn't churn — after a hot-reload re-exec the const
+ * is a fresh object, which re-registers edited text even when React
+ * preserves the page's hook state.
  */
-export function useDemoPage(info: ExplanationData) {
+export function useDemoPage(info: ExplanationData | null) {
   const setPage = useExplanationStore((s) => s.setPage);
   useEffect(() => {
     setPage(info);

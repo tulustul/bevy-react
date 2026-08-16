@@ -9,18 +9,11 @@ export function Explanation() {
   const { pageDefault, selected, deselect } = useExplanationStore();
   const shown = selected?.data ?? pageDefault;
 
-  // Transient guard for the frames before the first page registers.
+  // Nothing before the first page registers, and nothing on pages that
+  // opted out with `useDemoPage(null)` — no spacer either, so full-width
+  // content underneath stays hoverable.
   if (shown === null) {
-    return (
-      <node
-        style={{
-          width: WIDTH,
-          minWidth: WIDTH,
-          positionType: "absolute",
-          right: 0,
-        }}
-      />
-    );
+    return null;
   }
 
   return (
