@@ -3,26 +3,33 @@
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.5.0] - 2026-08-16
 
 ### Added
 
-- **`pixelize` built-in morph filter.** A port of gl-transitions' `pixelize`
-  (mosaic out, mosaic in) alongside `crossfade` and `linearWipe`; params
-  `squaresMin` and `steps`.
-- **gl-transitions demo pack.** Fourteen [gl-transitions](https://gl-transitions.com/gallery)
-  ports as app-side `#[react_filter]` morphs in the demos example —
-  `windowslice`, `radial`, `polkaDotsCurtain`, `circleCrop`, `curtainOpen`
-  (the Horizontal/Vertical Open/Close family merged behind `vertical`/`close`
-  params), `burn0`, `tilesWave`, `gridFlip`, `doorway`, `bookFlip`,
-  `powerKaleido`, `stripDatamoshGlitch`, `filmBurn`, and `invertedPageCurl` —
-  showcased as a card grid in the "Morph filter" demo.
-- **Explicit-LOD morph samplers.** `morph_sample_from_lod` /
-  `morph_sample_to_lod` in the `bevy_react::filter` shader prelude, for morph
-  shaders that sample behind data-dependent control flow.
-- **Example shader validation.** A repo test naga-validates every filter-pass
-  WGSL under `examples/assets/shaders/`, so app-side shader errors surface in
-  `cargo test` instead of only as a gated (invisible) layer at runtime.
+- **`morphFilter` — view-transition morphs.** Set
+  `morphFilter: { key, name, params }` on a node and, whenever `key` changes,
+  its previous rendered appearance is frozen and blended into the live content
+  by the named two-input filter — a GPU view transition for content swaps.
+  Progress is engine-driven with built-in default timing (300ms ease-in-out;
+  override with `transition: { morphFilter }`), a mid-flight key change
+  restarts smoothly from the in-flight blend, and a regular `filter` chain
+  composes on top. Built-in morphs: `crossfade` (noise-staggered dissolve),
+  `linearWipe` (`angle`, `softness`), and `pixelize` (a port of
+  gl-transitions' mosaic out / mosaic in; `squaresMin`, `steps`). Custom
+  morphs are a `#[react_morph_filter]` struct plus a WGSL shader, registered
+  with `app.add_react_morph_filter::<T>()` and typed end-to-end through the
+  generated `BevyMorphFilters` interface.
+- **Text-effect built-in filters.** Three new entries in the `filter` chain
+  family: `gradientMap` recolors the subtree by luminance through a multi-stop
+  linear gradient (`stops` with per-stop `color`/`position`, `angle`,
+  `amount`), anchored to the node's border box even when chained after
+  outset-growing passes; `outline` dilates the alpha silhouette into a colored
+  ring painted under the content (`width`, `color`, `softness` — softness
+  alone doubles as a glow); `shadow` is a CSS-style drop shadow — the
+  silhouette tinted `color`, shifted by `offsetX`/`offsetY`, Gaussian-blurred
+  by `spread`, composited under the content.
+- new demos homepage
 
 ## [0.4.0] - 2026-08-12
 
@@ -164,6 +171,8 @@ No behavior change, but worth knowing when reading or patching the crate:
 
 Last release before this changelog was introduced.
 
+[0.5.0]: https://github.com/tulustul/bevy-react/compare/v0.4.0...v0.5.0
+[0.4.0]: https://github.com/tulustul/bevy-react/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/tulustul/bevy-react/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/tulustul/bevy-react/compare/v0.1.2...v0.2.0
 [0.1.2]: https://github.com/tulustul/bevy-react/releases/tag/v0.1.2
