@@ -341,10 +341,10 @@ mod tests {
         );
     }
 
-    /// `register_builtin_filters` registers all thirteen names; running it
+    /// `register_builtin_filters` registers all sixteen names; running it
     /// again (same types) is a no-op per `register_entry` semantics.
     #[test]
-    fn builtin_filters_register_all_thirteen() {
+    fn builtin_filters_register_all_sixteen() {
         let mut app = App::new();
         register_builtin_filters(&mut app);
         let registry = app.world().resource::<FilterRegistry>();
@@ -359,13 +359,16 @@ mod tests {
                 "chromaticAberration",
                 "contrast",
                 "crossfade",
+                "gradientMap",
                 "grayscale",
                 "hueRotate",
                 "invert",
                 "linearWipe",
+                "outline",
                 "pixelize",
                 "saturate",
                 "sepia",
+                "shadow",
             ]
         );
         assert!(registry.entries.values().all(|r| !r.uses_time));
@@ -379,7 +382,7 @@ mod tests {
         morphs.sort_unstable();
         assert_eq!(morphs, ["crossfade", "linearWipe", "pixelize"]);
         register_builtin_filters(&mut app);
-        assert_eq!(app.world().resource::<FilterRegistry>().entries.len(), 13);
+        assert_eq!(app.world().resource::<FilterRegistry>().entries.len(), 16);
     }
 
     /// Every built-in entry carries working TS-export slots — `ts_name` names
@@ -501,6 +504,15 @@ mod tests {
             "embedded://bevy_react/filters/builtin/chromatic_aberration.wgsl"
         );
 
+        assert_eq!(
+            &path_of(&shader_of("gradientMap")),
+            "embedded://bevy_react/filters/builtin/gradient_map.wgsl"
+        );
+        assert_eq!(
+            &path_of(&shader_of("outline")),
+            "embedded://bevy_react/filters/builtin/outline.wgsl"
+        );
+
         // Bloom deliberately mixes shaders across its passes, so it can't go
         // through `shader_of`.
         let passes =
@@ -509,6 +521,19 @@ mod tests {
         assert_eq!(
             &path_of(&passes[0].shader),
             "embedded://bevy_react/filters/builtin/bloom.wgsl"
+        );
+        assert_eq!(passes[3].shader, passes[0].shader);
+        assert_eq!(passes[1].shader, blur, "middle passes reuse blur's shader");
+        assert_eq!(passes[2].shader, blur);
+
+        // Shadow mirrors bloom's structure: prep/combine on its own shader,
+        // blur's shader in the middle.
+        let passes =
+            (registry.entries["shadow"].resolve)(&json!({}), assets).expect("shadow resolves");
+        assert_eq!(passes.len(), 4);
+        assert_eq!(
+            &path_of(&passes[0].shader),
+            "embedded://bevy_react/filters/builtin/shadow.wgsl"
         );
         assert_eq!(passes[3].shader, passes[0].shader);
         assert_eq!(passes[1].shader, blur, "middle passes reuse blur's shader");

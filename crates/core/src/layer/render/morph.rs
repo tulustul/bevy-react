@@ -319,7 +319,9 @@ pub fn prepare_layer_morphs(
             pad_a: 0.0,
             resolution,
             texel_size: Vec2::ONE / resolution,
-            pad_b: Vec2::ZERO,
+            // The blend target is capture-sized, so it carries the same
+            // inflation as the content chain.
+            content_inset: Vec2::splat(layer.outset as f32),
             params: morph_engine_params(&extracted_morph.pass.params, extracted_morph.progress),
         });
         staged.push((idx, id, offset));

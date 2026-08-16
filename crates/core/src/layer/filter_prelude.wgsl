@@ -50,12 +50,12 @@
 // anywhere in this file (naga_oil rejects them at pipeline build:
 // "identifiers must not require substitution").
 //
-//   time:       offset   0, size 4   (f32)
-//   pad_a:      offset   4, size 4   (f32; aligns `resolution` to 8)
-//   resolution: offset   8, size 8   (vec2<f32>)
-//   texel_size: offset  16, size 8   (vec2<f32>)
-//   pad_b:      offset  24, size 8   (vec2<f32>; aligns `params` to 16)
-//   params:     offset  32, size 128 (array<vec4<f32>, 8>, stride 16)
+//   time:          offset   0, size 4   (f32)
+//   pad_a:         offset   4, size 4   (f32; aligns `resolution` to 8)
+//   resolution:    offset   8, size 8   (vec2<f32>)
+//   texel_size:    offset  16, size 8   (vec2<f32>)
+//   content_inset: offset  24, size 8   (vec2<f32>; also aligns `params` to 16)
+//   params:        offset  32, size 128 (array<vec4<f32>, 8>, stride 16)
 //   total size: 160 bytes
 struct FilterUniforms {
     // Seconds since startup, for `USES_TIME` filters.
@@ -65,7 +65,11 @@ struct FilterUniforms {
     resolution: vec2<f32>,
     // 1.0 / resolution: one texel step in UV.
     texel_size: vec2<f32>,
-    pad_b: vec2<f32>,
+    // The capture outset baked into this pass's target: physical px of margin
+    // on EVERY side between the target edge and the node's border box.
+    // x = horizontal, y = vertical (equal today; vec2 for layout + future
+    // asymmetry). Zero when the chain has no outset.
+    content_inset: vec2<f32>,
     // The packed filter params (`ReactFilter::pack` in `filters.rs`); `Length`
     // slots arrive rewritten to physical px.
     params: array<vec4<f32>, 8>,
@@ -100,6 +104,25 @@ fn unpremultiply(c: vec4<f32>) -> vec4<f32> {
 // Straight -> premultiplied alpha.
 fn premultiply(c: vec4<f32>) -> vec4<f32> {
     return vec4<f32>(c.rgb * c.a, c.a);
+}
+
+// The node's content rect (border box) inside the pass target, physical px,
+// y down. When a chain declares an outset (blur, outline, ...) the capture is
+// inflated by `content_inset` on every side; these helpers let a shader
+// anchor geometry to the NODE rect regardless (e.g. gradientMap's gradient
+// line).
+fn content_rect_min() -> vec2<f32> {
+    return uniforms.content_inset;
+}
+
+fn content_rect_size() -> vec2<f32> {
+    return max(uniforms.resolution - 2.0 * uniforms.content_inset, vec2<f32>(1.0));
+}
+
+// Map a pass UV (0..1 over the inflated target) to 0..1 over the node rect.
+// Values outside 0..1 are the outset ring.
+fn content_uv(uv: vec2<f32>) -> vec2<f32> {
+    return (uv * uniforms.resolution - content_rect_min()) / content_rect_size();
 }
 
 // MORPH CONTRACT (the `morphFilter` style — a two-input blend from the frozen

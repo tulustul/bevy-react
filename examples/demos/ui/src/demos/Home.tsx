@@ -42,14 +42,22 @@ const CARD_ACCENTS = [
 ];
 
 // The hero title cycles through a few tag words, each dusting into the next
-// (color included — the old hue blows away with the old word), and settles
-// on the library name in the brand primary. Swap any wording here — every
-// entry must fit the fixed 460px morph rect at MetalMania 56.
+// (gradient included — the old hues blow away with the old word), and
+// settles on the library name in the brand primary. Each step recolors the
+// glyphs with its own top-to-bottom gradientMap sweep (light at the top,
+// deep at the bottom). Swap any wording here — every entry must fit the
+// fixed 460px morph rect at MetalMania 56.
 const TITLE_SEQUENCE = [
-  { text: "Fast", color: Colors.sky100 },
-  { text: "Reactive", color: Colors.red200 },
-  { text: "Hot reloaded", color: Colors.amber100 },
-  { text: "bevy-react", color: Colors.primary100 },
+  { text: "Fast", stops: ["#c8ecff", Colors.sky100, "#3a78d6"] },
+  { text: "Reactive", stops: ["#ffc9d4", Colors.red200, Colors.red300] },
+  {
+    text: "Hot reloaded",
+    stops: ["#b7ccff", Colors.primary100, Colors.purple100],
+  },
+  {
+    text: "bevy-react",
+    stops: [Colors.amber100, Colors.orange100],
+  },
 ];
 const TITLE_FIRST_HOLD_MS = 900;
 const TITLE_STEP_MS = 1500;
@@ -121,11 +129,13 @@ function Reveal({ delay, children }: PropsWithChildren<{ delay: number }>) {
 
 // The hero title mounts on the first tag (a morph's first mount never
 // animates), then dusts through TITLE_SEQUENCE step by step until it lands
-// on "bevy-react". The wrapper is FIXED-SIZE so every step's frozen snapshot
-// and live capture share one rect — a morph snapshot is layout-anchored, and
-// a size change across a swap would stretch the old pixels. A breathing
-// bloom chain composes on top of the morph (morph blends first, the chain
-// sources the blend).
+// on "bevy-react". The morph rect is FIXED-SIZE so every step's frozen
+// snapshot and live capture share one rect — a morph snapshot is
+// layout-anchored, and a size change across a swap would stretch the old
+// pixels. The glyphs are recolored by a per-step gradientMap on a NESTED
+// layer (not chained after shadow: shadow's combine, like bloom's, layers
+// the original capture back over the blurred shadow, which would discard a
+// same-chain recolor); the outer node owns the morph + drop shadow.
 function Hero() {
   const [step, setStep] = useState(0);
   const bob = useSharedValue(0);
@@ -165,10 +175,6 @@ function Hero() {
       />
       <node
         style={{
-          width: 460,
-          height: 72,
-          alignItems: "center",
-          justifyContent: "center",
           morphFilter: {
             key: title.text,
             name: "dustify",
@@ -186,19 +192,33 @@ function Hero() {
           transition: {
             morphFilter: { duration: TITLE_MORPH_MS, easing: "linear" },
           },
-          filter: [
-            {
-              name: "bloom",
-              params: {
-                radius: 2,
-                threshold: 0.1,
-                intensity: { animated: interpolate(glow, [0, 1], [0.25, 0.6]) },
-              },
+          filter: {
+            name: "shadow",
+            params: {
+              color: "rgba(0,0,0,0.5)",
+              offsetX: 4,
+              spread: 0,
             },
-          ],
+          },
         }}
       >
-        <text style={{ ...titleStyle, color: title.color }}>{title.text}</text>
+        <node
+          style={{
+            width: 460,
+            height: 72,
+            alignItems: "center",
+            justifyContent: "center",
+            filter: {
+              name: "gradientMap",
+              params: {
+                angle: 180,
+                stops: title.stops.map((color) => ({ color })),
+              },
+            },
+          }}
+        >
+          <text style={titleStyle}>{title.text}</text>
+        </node>
       </node>
       <Typewriter
         text="Build bevy_ui interfaces with React — no web view, no DOM."
@@ -275,7 +295,7 @@ const titleStyle: BevyStyle = {
   color: Colors.primary100,
   fontFamily: "MetalMania",
   fontSize: 56,
-  textShadow: { color: "black", offsetY: 2 },
+  // textShadow: { color: "black", offsetY: 2 },
 };
 
 const taglineStyle: BevyStyle = {

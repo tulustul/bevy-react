@@ -13,7 +13,7 @@ rendered subtree. A value is one { name, params } object or an ordered array —
 an array is a pass chain, run in order. A non-empty chain promotes the subtree
 to a composited layer: it is captured once, and dragging a param re-runs only
 the filter passes. Built-ins: blur, grayscale, sepia, invert, hueRotate,
-bloom, chromaticAberration. transition: { filter } eases params, but easing to
+bloom, chromaticAberration, gradientMap, outline, shadow. transition: { filter } eases params, but easing to
 an empty chain snaps (the layer demotes) — keep an identity entry, e.g.
 { name: "blur", params: { radius: 0 } }, when removal should fade.
 An { animated } wrapper on a param drives it from the animation engine.`,
@@ -38,6 +38,13 @@ export function FilterDemo() {
       <DemoRow>
         <BloomDemo />
         <ChromaticAberrationDemo />
+      </DemoRow>
+
+      <DemoRow>
+        <GradientTextDemo />
+        <OutlineTextDemo />
+        <DropShadowDemo />
+        <GradientOutlineDemo />
       </DemoRow>
     </>
   );
@@ -363,6 +370,247 @@ function HueDemo() {
   );
 }
 
+// Gradient text: bevy paints glyphs in one flat color, so the gradient is a
+// recolor filter over the wrapping node's capture (<text> itself can't
+// promote to a layer).
+function GradientTextDemo() {
+  const [angle, setAngle] = useState(120);
+  const [amount, setAmount] = useState(1);
+
+  return (
+    <Example
+      title="Gradient text"
+      description="gradientMap recolors the subtree's pixels with a multi-stop
+linear gradient, keeping alpha — put it on a node wrapping a <text> for
+gradient type. angle matches backgroundGradient (degrees, 0 = to top); stops
+take optional 0–1 positions and auto-distribute like CSS. amount mixes the
+original color toward the gradient (identity is 0, so it fades in
+transitions)."
+      tsx={`<node style={{ filter: {
+  name: "gradientMap",
+  params: {
+    angle: 120,
+    stops: [
+      { color: "#38bdf8" },
+      { color: "#a78bfa",
+        position: 0.6 },
+      { color: "#f472b6" },
+    ],
+  },
+} }}>
+  <text>Gradient</text>
+</node>`}
+    >
+      <node style={controlColumn}>
+        <node
+          style={{
+            filter: {
+              name: "gradientMap",
+              params: {
+                angle,
+                amount,
+                stops: [
+                  { color: "#38bdf8" },
+                  { color: "#a78bfa", position: 0.6 },
+                  { color: "#f472b6" },
+                ],
+              },
+            },
+          }}
+        >
+          <text style={effectText}>Gradient</text>
+        </node>
+        <Slider
+          value={angle}
+          min={0}
+          max={360}
+          onChange={setAngle}
+          label={`angle ${angle.toFixed(0)}°`}
+        />
+        <Slider
+          value={amount}
+          min={0}
+          max={1}
+          onChange={setAmount}
+          label={`amount ${amount.toFixed(2)}`}
+        />
+      </node>
+    </Example>
+  );
+}
+
+function OutlineTextDemo() {
+  const [width, setWidth] = useState(2);
+  const [softness, setSoftness] = useState(0);
+  const [accent, setAccent] = useState(true);
+
+  return (
+    <Example
+      title="Outlined text"
+      description="outline dilates the subtree's alpha silhouette into a
+colored ring painted under the content — text outlines, sticker-style icon
+rings. width is the crisp ring in px; softness feathers its outer edge and
+doubles as a glow. Identity is width 0 + softness 0. Practical text outlines
+are 1–6px; the ring bleeds past the border box like blur."
+      tsx={`<node style={{ filter: {
+  name: "outline",
+  params: {
+    width: 2,
+    color: "#7aa2f7",
+    softness: 0,
+  },
+} }}>
+  <text>Outlined</text>
+</node>`}
+    >
+      <node style={controlColumn}>
+        <node
+          style={{
+            filter: {
+              name: "outline",
+              params: {
+                width,
+                softness,
+                color: accent ? Colors.red300 : "#000000",
+              },
+            },
+          }}
+        >
+          <text style={effectText}>Outlined</text>
+        </node>
+        <Slider
+          value={width}
+          min={0}
+          max={8}
+          onChange={setWidth}
+          label={`width ${width.toFixed(1)}px`}
+        />
+        <Slider
+          value={softness}
+          min={0}
+          max={8}
+          onChange={setSoftness}
+          label={`softness ${softness.toFixed(1)}px`}
+        />
+        <Checkbox label="accent color" enabled={accent} onChange={setAccent} />
+      </node>
+    </Example>
+  );
+}
+
+function DropShadowDemo() {
+  const [offsetX, setOffsetX] = useState(0);
+  const [offsetY, setOffsetY] = useState(6);
+  const [spread, setSpread] = useState(6);
+
+  return (
+    <Example
+      title="Drop shadow"
+      description="shadow is a CSS-drop-shadow: the subtree's alpha
+silhouette, tinted color, shifted by offsetX/offsetY (positive = right/down,
+negative allowed), Gaussian-blurred by spread, layered under the content — it
+follows the glyphs' shape, unlike boxShadow's rectangle. Same pass structure
+as bloom (the middle passes literally run blur's shader). Identity is a
+transparent color, so the shadow fades in transitions."
+      tsx={`<node style={{ filter: {
+  name: "shadow",
+  params: {
+    color: "#000000aa",
+    offsetX: 0,
+    offsetY: 6,
+    spread: 6,
+  },
+} }}>
+  <text>Shadow</text>
+</node>`}
+    >
+      <node style={controlColumn}>
+        <node
+          style={{
+            filter: {
+              name: "shadow",
+              params: { color: "#000000aa", offsetX, offsetY, spread },
+            },
+          }}
+        >
+          <text style={effectText}>Shadow</text>
+        </node>
+        <Slider
+          value={offsetX}
+          min={-12}
+          max={12}
+          onChange={setOffsetX}
+          label={`offsetX ${offsetX.toFixed(0)}px`}
+        />
+        <Slider
+          value={offsetY}
+          min={-12}
+          max={12}
+          onChange={setOffsetY}
+          label={`offsetY ${offsetY.toFixed(0)}px`}
+        />
+        <Slider
+          value={spread}
+          min={0}
+          max={12}
+          onChange={setSpread}
+          label={`spread ${spread.toFixed(1)}px`}
+        />
+      </node>
+    </Example>
+  );
+}
+
+// The chain card: outline's outset inflates the capture, and the gradient
+// must NOT stretch over that ring — gradientMap anchors its line to the node
+// rect via the pass uniforms' content inset.
+function GradientOutlineDemo() {
+  const [width, setWidth] = useState(3);
+
+  return (
+    <Example
+      title="Gradient + outline"
+      description="The two compose as a chain: gradientMap recolors the
+glyphs, then outline rings the recolored result. The gradient stays locked to
+the text's box even as the outline's width grows the captured area — filter
+shaders see the node rect through the pass uniforms."
+      tsx={`<node style={{ filter: [
+  { name: "gradientMap" },
+  { name: "outline",
+    params: { width: 3 } },
+] }}>
+  <text>Sticker</text>
+</node>`}
+    >
+      <node style={controlColumn}>
+        <node
+          style={{
+            filter: [
+              {
+                name: "gradientMap",
+                params: {
+                  angle: 160,
+                  stops: [{ color: "#caf9afff" }, { color: "#c72e00ff" }],
+                },
+              },
+              { name: "outline", params: { width, color: "#0051ffff" } },
+            ],
+          }}
+        >
+          <text style={effectText}>Sticker</text>
+        </node>
+        <Slider
+          value={width}
+          min={0}
+          max={8}
+          onChange={setWidth}
+          label={`outline ${width.toFixed(1)}px`}
+        />
+      </node>
+    </Example>
+  );
+}
+
 function Parrot({ style }: { style?: BevyStyle }) {
   return (
     <image
@@ -391,6 +639,14 @@ const neonText: BevyStyle = {
   color: Colors.red100,
   fontSize: FontSizes.xl,
   fontWeight: "bold",
+};
+
+// Big flat-white type for the text-effect cards — the filters supply the
+// color.
+const effectText: BevyStyle = {
+  color: Colors.textColor100,
+  fontSize: FontSizes.xl,
+  fontWeight: "black",
 };
 
 const productCard: BevyStyle = {

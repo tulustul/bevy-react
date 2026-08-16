@@ -63,8 +63,9 @@ pub(crate) mod test_util;
 pub use backdrop::{BackdropInput, ResolvedBackdropChain};
 pub use builtin::{
     BloomParams, BlurParams, BrightnessParams, ChromaticAberrationParams, ContrastParams,
-    CrossfadeParams, GrayscaleParams, HueRotateParams, InvertParams, LinearWipeParams,
-    PixelizeParams, SaturateParams, SepiaParams, register_builtin_filters,
+    CrossfadeParams, GradientMapParams, GradientMapStop, GrayscaleParams, HueRotateParams,
+    InvertParams, LinearWipeParams, MAX_GRADIENT_STOPS, OutlineParams, PixelizeParams,
+    SaturateParams, SepiaParams, ShadowParams, register_builtin_filters,
 };
 pub(crate) use morph::de_morph_filter;
 pub use morph::{

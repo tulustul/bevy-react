@@ -1342,12 +1342,12 @@ pub type DrawLayerComposite = (
 
 /// The Rust mirror of the prelude's `FilterUniforms`
 /// (`layer/filter_prelude.wgsl`) — one entry per staged filter pass in
-/// [`LayerFilterMeta::uniforms`]. The explicit `pad` fields reproduce the
+/// [`LayerFilterMeta::uniforms`]. The explicit `pad_a` field reproduces the
 /// WGSL uniform-address-space layout byte for byte (160 bytes total; asserted
 /// by `filter_uniforms_match_the_documented_wgsl_layout`). The digit-free
-/// `pad_a`/`pad_b` names are load-bearing on the WGSL side: naga's namer
-/// appends `_` to identifiers ending in a digit, which naga_oil rejects in
-/// composable modules — and the mirror matches field for field.
+/// `pad_a` name is load-bearing on the WGSL side: naga's namer appends `_` to
+/// identifiers ending in a digit, which naga_oil rejects in composable
+/// modules — and the mirror matches field for field.
 #[derive(Clone, Copy, ShaderType)]
 pub struct FilterUniforms {
     /// Seconds since startup (render-world `Time`), for `USES_TIME` filters.
@@ -1357,7 +1357,11 @@ pub struct FilterUniforms {
     pub resolution: Vec2,
     /// `1.0 / resolution`: one texel step in UV.
     pub texel_size: Vec2,
-    pub pad_b: Vec2,
+    /// The capture outset baked into the pass target: physical px of margin
+    /// on every side between the target edge and the node's border box
+    /// ([`ExtractedLayer::outset`], splatted). Lets a shader anchor geometry
+    /// to the node rect (prelude `content_uv`) inside the inflated capture.
+    pub content_inset: Vec2,
     /// The packed filter params ([`ExtractedFilterPass::params`]).
     pub params: [Vec4; MAX_FILTER_PARAM_VECS],
 }
@@ -1672,7 +1676,7 @@ pub fn prepare_layer_filters(
                 pad_a: 0.0,
                 resolution,
                 texel_size,
-                pad_b: Vec2::ZERO,
+                content_inset: Vec2::splat(layer.outset as f32),
                 params: pass.params,
             });
             passes.push(StagedPass {
@@ -1945,7 +1949,8 @@ mod tests {
 
     /// The Rust mirror must reproduce the prelude's documented 160-byte
     /// uniform layout exactly (`layer/filter_prelude.wgsl`): time@0,
-    /// resolution@8, texel_size@16, params@32 (stride 16), total 160.
+    /// resolution@8, texel_size@16, content_inset@24, params@32 (stride 16),
+    /// total 160.
     #[test]
     fn filter_uniforms_match_the_documented_wgsl_layout() {
         assert_eq!(FilterUniforms::min_size().get(), 160);
@@ -1958,7 +1963,7 @@ mod tests {
             pad_a: 0.0,
             resolution: Vec2::new(320.0, 240.0),
             texel_size: Vec2::new(0.5, 0.25),
-            pad_b: Vec2::ZERO,
+            content_inset: Vec2::new(9.0, 9.5),
             params,
         };
         let mut buffer = UniformBuffer::new(Vec::<u8>::new());
@@ -1971,6 +1976,8 @@ mod tests {
         assert_eq!(f32_at(&bytes, 12), 240.0); // resolution.y
         assert_eq!(f32_at(&bytes, 16), 0.5); // texel_size.x
         assert_eq!(f32_at(&bytes, 20), 0.25); // texel_size.y
+        assert_eq!(f32_at(&bytes, 24), 9.0); // content_inset.x
+        assert_eq!(f32_at(&bytes, 28), 9.5); // content_inset.y
         assert_eq!(f32_at(&bytes, 32), 1.0); // params[0].x
         assert_eq!(f32_at(&bytes, 44), 4.0); // params[0].w
         assert_eq!(f32_at(&bytes, 32 + 7 * 16), 5.0); // params[7].x

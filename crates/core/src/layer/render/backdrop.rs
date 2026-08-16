@@ -338,7 +338,10 @@ pub fn prepare_layer_backdrops(
                     pad_a: 0.0,
                     resolution,
                     texel_size,
-                    pad_b: Vec2::ZERO,
+                    // The backdrop snapshot covers the layer's inflated
+                    // capture rect, so the node rect sits `outset` px in —
+                    // same as the content chain.
+                    content_inset: Vec2::splat(layer.outset as f32),
                     params: pass.params,
                 });
                 (id, offset)

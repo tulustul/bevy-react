@@ -1,22 +1,27 @@
-//! The thirteen built-in filters, one file per shader family: [`color_matrix`]
+//! The sixteen built-in filters, one file per shader family: [`color_matrix`]
 //! (the seven color ops sharing one pass shader and packing — six declared by
 //! the `color_matrix_filters!` macro plus the hand-written `hueRotate`),
 //! [`blur`] (the two-pass separable Gaussian), [`bloom`] (bright-pass → blur
 //! → combine, reusing blur's shader for its middle passes),
-//! [`chromatic_aberration`] (single-pass directional RGB split), [`morph`]
-//! (`crossfade` and `linearWipe`), and [`pixelize`] (the mosaic, a
-//! gl-transitions port). The last three form the built-in **morph family**
-//! (`IS_MORPH`, `morphFilter`-only — separate from the regular
-//! `filter`/`backdropFilter` family). This module owns their registration;
-//! cross-family tests (the shorthand-default and identity tables, WGSL
-//! validation) live here too.
+//! [`chromatic_aberration`] (single-pass directional RGB split),
+//! [`gradient_map`] (multi-stop linear-gradient recolor), [`outline`]
+//! (alpha-dilation ring under the content), [`shadow`] (offset + blurred
+//! drop shadow, bloom's pass structure), [`morph`] (`crossfade` and
+//! `linearWipe`), and [`pixelize`] (the mosaic, a gl-transitions port). The
+//! last three form the built-in **morph family** (`IS_MORPH`,
+//! `morphFilter`-only — separate from the regular `filter`/`backdropFilter`
+//! family). This module owns their registration; cross-family tests (the
+//! shorthand-default and identity tables, WGSL validation) live here too.
 
 mod bloom;
 mod blur;
 mod chromatic_aberration;
 mod color_matrix;
+mod gradient_map;
 mod morph;
+mod outline;
 mod pixelize;
+mod shadow;
 
 use bevy::prelude::*;
 
@@ -27,13 +32,16 @@ pub use color_matrix::{
     BrightnessParams, ContrastParams, GrayscaleParams, HueRotateParams, InvertParams,
     SaturateParams, SepiaParams,
 };
+pub use gradient_map::{GradientMapParams, GradientMapStop, MAX_GRADIENT_STOPS};
 pub use morph::{CrossfadeParams, LinearWipeParams};
+pub use outline::OutlineParams;
 pub use pixelize::PixelizeParams;
+pub use shadow::ShadowParams;
 
 use super::registry::FilterRegistry;
 
 impl FilterRegistry {
-    /// Register the thirteen built-in filters into this registry. Two callers:
+    /// Register the sixteen built-in filters into this registry. Two callers:
     /// [`register_builtin_filters`] (the runtime path, via
     /// `ReactUiPlugin::build`) and the TypeScript exporter
     /// (`crate::ts_codegen`), which seeds a throwaway registry with them so
@@ -50,13 +58,16 @@ impl FilterRegistry {
         self.register::<SepiaParams>();
         self.register::<InvertParams>();
         self.register::<HueRotateParams>();
+        self.register::<GradientMapParams>();
+        self.register::<OutlineParams>();
+        self.register::<ShadowParams>();
         self.register::<CrossfadeParams>();
         self.register::<LinearWipeParams>();
         self.register::<PixelizeParams>();
     }
 }
 
-/// Register the thirteen built-in filters. Called by `ReactUiPlugin::build`.
+/// Register the sixteen built-in filters. Called by `ReactUiPlugin::build`.
 /// Deliberately `AssetServer`-free: shader loads happen lazily inside each
 /// entry's `resolve`.
 pub fn register_builtin_filters(app: &mut App) {
@@ -101,6 +112,20 @@ mod tests {
         let ca = params::<ChromaticAberrationParams>(json!({}));
         assert_eq!(ca.offset, Length::Px(4.0));
         assert_eq!(ca.angle.radians(), 0.0);
+        // A bare `{name:"gradientMap"}` is a visible two-stop sweep.
+        let gm = params::<GradientMapParams>(json!({}));
+        assert_eq!(gm.stops.len(), 2);
+        assert_eq!(gm.amount, 1.0);
+        assert_eq!(gm.angle.radians(), 0.0);
+        // A bare `{name:"outline"}` is a crisp 2px black outline.
+        let o = params::<OutlineParams>(json!({}));
+        assert_eq!(o.width, Length::Px(2.0));
+        assert_eq!(o.softness, Length::Px(0.0));
+        // A bare `{name:"shadow"}` is a soft black shadow below.
+        let s = params::<ShadowParams>(json!({}));
+        assert_eq!(s.offset_y, Length::Px(4.0));
+        assert_eq!(s.spread, Length::Px(6.0));
+        assert_eq!(s.color.0, [0.0, 0.0, 0.0, 0.6]);
     }
 
     /// Unknown param keys are rejected (deny-unknown-fields), both at the
@@ -145,6 +170,17 @@ mod tests {
         assert_eq!(
             (r.entries["chromaticAberration"].identity)().unwrap()["offset"],
             json!(0.0)
+        );
+        assert_eq!(
+            (r.entries["gradientMap"].identity)().unwrap()["amount"],
+            json!(0.0)
+        );
+        let outline_identity = (r.entries["outline"].identity)().unwrap();
+        assert_eq!(outline_identity["width"], json!(0.0));
+        assert_eq!(outline_identity["softness"], json!(0.0));
+        assert_eq!(
+            (r.entries["shadow"].identity)().unwrap()["color"],
+            json!("transparent")
         );
 
         let app = asset_app();
@@ -244,6 +280,21 @@ mod tests {
         validate(
             "chromatic_aberration.wgsl",
             &splice(&prelude_body, include_str!("chromatic_aberration.wgsl")),
+            &["vertex", "fragment"],
+        );
+        validate(
+            "gradient_map.wgsl",
+            &splice(&prelude_body, include_str!("gradient_map.wgsl")),
+            &["vertex", "fragment"],
+        );
+        validate(
+            "outline.wgsl",
+            &splice(&prelude_body, include_str!("outline.wgsl")),
+            &["vertex", "fragment"],
+        );
+        validate(
+            "shadow.wgsl",
+            &splice(&prelude_body, include_str!("shadow.wgsl")),
             &["vertex", "fragment"],
         );
         validate(

@@ -61,6 +61,14 @@ function Title() {
           },
         },
         transition: { morphFilter: { duration: 2000, easing: "linear" } },
+        filter: [
+          {
+            name: "gradientMap",
+            params: {
+              stops: [{ color: "#caf9afff" }, { color: "#c72e00ff" }],
+            },
+          },
+        ],
         width: "100%",
       }}
     >

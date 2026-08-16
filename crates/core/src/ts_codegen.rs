@@ -645,11 +645,14 @@ mod tests {
          \x20   chromaticAberration: ChromaticAberrationParams;\n\
          \x20   contrast: ContrastParams;\n\
          \x20   glow: GlowParams;\n\
+         \x20   gradientMap: GradientMapParams;\n\
          \x20   grayscale: GrayscaleParams;\n\
          \x20   hueRotate: HueRotateParams;\n\
          \x20   invert: InvertParams;\n\
+         \x20   outline: OutlineParams;\n\
          \x20   saturate: SaturateParams;\n\
          \x20   sepia: SepiaParams;\n\
+         \x20   shadow: ShadowParams;\n\
          \x20 }\n\
          \x20 interface BevyMorphFilters {\n\
          \x20   crossfade: CrossfadeParams;\n\

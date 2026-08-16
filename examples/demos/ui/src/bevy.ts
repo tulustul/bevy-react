@@ -195,6 +195,8 @@ export type Glitch = {
  * Overall strength, 0 (clean) ..= 1 (heavily corrupted).
  */
 intensity: number, };
+export type GradientMapParams = { angle: number | string, stops: Array<GradientMapStop>, amount: number, };
+export type GradientMapStop = { color: string, position?: number, };
 export type GrayscaleParams = { amount: number, };
 export type GridFlip = { 
 /**
@@ -246,6 +248,7 @@ repeat: boolean, ctrlKey: boolean, shiftKey: boolean, altKey: boolean,
  */
 metaKey: boolean, };
 export type LinearWipeParams = { angle: number | string, softness: number | string, };
+export type OutlineParams = { width: number | string, color: string, softness: number | string, };
 export type PixelizeParams = { 
 /**
  * Cells across x/y at the mosaic's coarsest (upstream `squaresMin`).
@@ -304,6 +307,7 @@ export type SepiaParams = { amount: number, };
 export type SetCount = number;
 export type SetCrt = boolean;
 export type SetFollowMode = boolean;
+export type ShadowParams = { color: string, offsetX: number | string, offsetY: number | string, spread: number | string, };
 export type StripDatamoshGlitch = { 
 /**
  * Overall glitch intensity.
@@ -411,12 +415,15 @@ declare module "bevy-react" {
     contrast: ContrastParams;
     dissolve: Dissolve;
     glitch: Glitch;
+    gradientMap: GradientMapParams;
     grayscale: GrayscaleParams;
     hueRotate: HueRotateParams;
     invert: InvertParams;
+    outline: OutlineParams;
     ripple: Ripple;
     saturate: SaturateParams;
     sepia: SepiaParams;
+    shadow: ShadowParams;
   }
   interface BevyMorphFilters {
     bookFlip: BookFlip;

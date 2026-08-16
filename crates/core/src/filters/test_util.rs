@@ -30,7 +30,7 @@ pub(crate) fn params<T: serde::de::DeserializeOwned>(value: serde_json::Value) -
     serde_json::from_value(value).expect("params decode")
 }
 
-/// A standalone registry seeded with the eight built-ins.
+/// A standalone registry seeded with all the built-ins.
 pub(crate) fn builtin_registry() -> FilterRegistry {
     let mut r = FilterRegistry::default();
     r.register_builtins();

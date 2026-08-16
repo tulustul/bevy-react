@@ -210,6 +210,9 @@ pub(crate) fn register_layer_shader_assets(app: &mut App) {
     embedded_asset!(app, "filters/builtin/blur.wgsl");
     embedded_asset!(app, "filters/builtin/bloom.wgsl");
     embedded_asset!(app, "filters/builtin/chromatic_aberration.wgsl");
+    embedded_asset!(app, "filters/builtin/gradient_map.wgsl");
+    embedded_asset!(app, "filters/builtin/outline.wgsl");
+    embedded_asset!(app, "filters/builtin/shadow.wgsl");
     embedded_asset!(app, "filters/builtin/crossfade.wgsl");
     embedded_asset!(app, "filters/builtin/linear_wipe.wgsl");
     embedded_asset!(app, "filters/builtin/pixelize.wgsl");
