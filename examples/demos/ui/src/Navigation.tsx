@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { BevyStyle } from "bevy-react/jsx";
 import { Colors, FontSizes, Gradients, Scrollbar } from "@/theme";
 import { DEMOS, type DemoItem } from "./demos";
@@ -10,7 +10,7 @@ export function Navigation() {
   return (
     <node style={navStyle}>
       <image src="bevy-react-logo.png" style={{ width: 150 }} />
-      <text style={titleStyle}>bevy-react</text>
+      <Title />
       <node style={itemsStyle} scrollStep={40}>
         {DEMOS.map((demo, index) => (
           <Item
@@ -21,6 +21,50 @@ export function Navigation() {
           />
         ))}
       </node>
+    </node>
+  );
+}
+
+const title = "bevy-react";
+const titleDelay = 7000;
+
+// The library title dusts away from time to time and blows back in. The
+// text stays mounted (opacity toggle) so the wrapper keeps its layout size —
+// a morph snapshot is layout-anchored, and a collapsing wrapper would
+// stretch the frozen image; the key flip freezes the old appearance and
+// dustify blends it with the (now invisible / visible) live content.
+function Title() {
+  const [text, setText] = useState(title);
+
+  useEffect(() => {
+    const delay = titleDelay + Math.random() * titleDelay;
+    const id = setTimeout(
+      () => setText(text === title ? "Demos" : title),
+      delay,
+    );
+    return () => clearTimeout(id);
+  }, [text]);
+
+  return (
+    <node
+      style={{
+        morphFilter: {
+          key: text,
+          name: "dustify",
+          params: {
+            direction: 0,
+            softness: 180,
+            turbulence: 0.6,
+            wind: 0,
+            drift: 30,
+            grain: 4,
+          },
+        },
+        transition: { morphFilter: { duration: 2000, easing: "linear" } },
+        width: "100%",
+      }}
+    >
+      <text style={{ ...titleStyle }}>{text}</text>
     </node>
   );
 }
@@ -182,10 +226,13 @@ const itemsStyle: BevyStyle = {
 };
 
 const titleStyle: BevyStyle = {
+  fontFamily: "MetalMania",
   color: Colors.primary100,
-  fontSize: FontSizes.xl,
+  fontSize: 40,
   fontWeight: "bold",
   margin: { top: 0, right: 0, bottom: 12, left: 0 },
+  width: "100%",
+  textAlign: "center",
 };
 
 const navButtonStyle: BevyStyle = {

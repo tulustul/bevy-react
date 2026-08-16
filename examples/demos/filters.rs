@@ -390,6 +390,69 @@ fn default_seed() -> f32 {
     2.31
 }
 
+/// Dust transition: a ragged dissolve front sweeps across the content; at
+/// the front the old image shatters into wind-borne dust grains that swirl
+/// away and fade, while the new image condenses out of incoming dust and
+/// settles into place.
+#[react_morph_filter(shader = "shaders/morphs/dustify.wgsl")]
+struct Dustify {
+    /// Sweep direction of the dissolve front, clockwise from +X in screen
+    /// space (y down): 0 = left-to-right, 90 = top-to-bottom. Wire numbers
+    /// are degrees (same convention as the built-in `linearWipe`).
+    #[serde(default)]
+    direction: Angle,
+    /// Width of the transition band, in px — how long a stretch of content
+    /// is airborne at once. 0 degrades to a hard granular edge (no flight).
+    #[serde(default = "default_dustify_softness")]
+    softness: Length,
+    /// 0..=1: turbulent swirl of the dust in flight (perpendicular sway +
+    /// speed wobble). 0 flies every grain straight downwind.
+    #[serde(default = "default_dustify_turbulence")]
+    turbulence: f32,
+    /// Direction the dust flies, RELATIVE to `direction` (degrees on the
+    /// wire; 0 = downwind with the sweep — the default; 90 blows sideways).
+    #[serde(default)]
+    wind: Angle,
+    /// How far a grain travels before it has fully faded, in px.
+    #[serde(default = "default_dustify_drift")]
+    drift: Length,
+    /// Dust particle size in px — the cell size the content shatters into.
+    /// Small = fine sand, large = chunky flakes.
+    #[serde(default = "default_dustify_grain")]
+    grain: Length,
+    /// Strength of the fbm noise warping the dissolve front: 0 keeps the
+    /// front a clean straight sweep line, ~1 a gently ragged contour, and
+    /// larger values tear it into deep noise islands.
+    #[serde(default = "default_dustify_raggedness")]
+    raggedness: f32,
+    /// How much the front's noise pattern churns as the transition
+    /// progresses: 0 = a static ragged contour that just sweeps with
+    /// `direction`; ~1 scrolls the noise by one feature length over the
+    /// whole morph, boiling the front as it advances.
+    #[serde(default)]
+    evolution: f32,
+}
+
+fn default_dustify_softness() -> Length {
+    Length::Px(90.0)
+}
+
+fn default_dustify_turbulence() -> f32 {
+    0.6
+}
+
+fn default_dustify_drift() -> Length {
+    Length::Px(120.0)
+}
+
+fn default_dustify_grain() -> Length {
+    Length::Px(7.0)
+}
+
+fn default_dustify_raggedness() -> f32 {
+    0.6
+}
+
 /// Register the custom filters. Called from **both** paths — the live app
 /// (`build_app`, after `ReactUiPlugin` so a custom name could never be
 /// clobbered by the plugin's built-in registration) and the
@@ -412,5 +475,6 @@ pub fn register_bindings(app: &mut App) {
         .add_react_morph_filter::<PowerKaleido>()
         .add_react_morph_filter::<StripDatamoshGlitch>()
         .add_react_morph_filter::<FilmBurn>()
-        .add_react_morph_filter::<InvertedPageCurl>();
+        .add_react_morph_filter::<InvertedPageCurl>()
+        .add_react_morph_filter::<Dustify>();
 }

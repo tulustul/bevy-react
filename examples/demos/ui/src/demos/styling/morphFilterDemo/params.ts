@@ -208,4 +208,43 @@ export const CUSTOM_MORPHS: FilterEntry[] = [
     controls: [],
     use: () => ({ name: "invertedPageCurl" }),
   },
+  {
+    label: "dustify",
+    duration: 2000,
+    easing: "linear",
+    // `wind` is relative to `direction` (0 = downwind with the sweep);
+    // softness min 10 sidesteps the degenerate hard-edge (no flight) case.
+    controls: [
+      slider("direction", 0, 360, 0),
+      slider("softness", 10, 500, 160),
+      slider("turbulence", 0, 1, 0.5, 2),
+      slider("wind", -180, 180, -180),
+      slider("drift", 0, 300, 60),
+      slider("grain", 2, 24, 7),
+      slider("raggedness", 0, 5, 0.6, 2),
+      slider("evolution", 0, 5, 1, 2),
+    ],
+    use: ([
+      direction,
+      softness,
+      turbulence,
+      wind,
+      drift,
+      grain,
+      raggedness,
+      evolution,
+    ]) => ({
+      name: "dustify",
+      params: {
+        direction,
+        softness,
+        turbulence,
+        wind,
+        drift,
+        grain,
+        raggedness,
+        evolution,
+      },
+    }),
+  },
 ];

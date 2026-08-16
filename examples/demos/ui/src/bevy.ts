@@ -68,6 +68,50 @@ perspective: number,
  * Zoom start of the incoming image.
  */
 depth: number, };
+export type Dustify = { 
+/**
+ * Sweep direction of the dissolve front, clockwise from +X in screen
+ * space (y down): 0 = left-to-right, 90 = top-to-bottom. Wire numbers
+ * are degrees (same convention as the built-in `linearWipe`).
+ */
+direction: number | string, 
+/**
+ * Width of the transition band, in px — how long a stretch of content
+ * is airborne at once. 0 degrades to a hard granular edge (no flight).
+ */
+softness: number | string, 
+/**
+ * 0..=1: turbulent swirl of the dust in flight (perpendicular sway +
+ * speed wobble). 0 flies every grain straight downwind.
+ */
+turbulence: number, 
+/**
+ * Direction the dust flies, RELATIVE to `direction` (degrees on the
+ * wire; 0 = downwind with the sweep — the default; 90 blows sideways).
+ */
+wind: number | string, 
+/**
+ * How far a grain travels before it has fully faded, in px.
+ */
+drift: number | string, 
+/**
+ * Dust particle size in px — the cell size the content shatters into.
+ * Small = fine sand, large = chunky flakes.
+ */
+grain: number | string, 
+/**
+ * Strength of the fbm noise warping the dissolve front: 0 keeps the
+ * front a clean straight sweep line, ~1 a gently ragged contour, and
+ * larger values tear it into deep noise islands.
+ */
+raggedness: number, 
+/**
+ * How much the front's noise pattern churns as the transition
+ * progresses: 0 = a static ragged contour that just sweeps with
+ * `direction`; ~1 scrolls the noise by one feature length over the
+ * whole morph, boiling the front as it advances.
+ */
+evolution: number, };
 export type FilmBurn = { 
 /**
  * Flare pattern seed (upstream `Seed`).
@@ -365,6 +409,7 @@ declare module "bevy-react" {
     crossfade: CrossfadeParams;
     curtainOpen: CurtainOpen;
     doorway: Doorway;
+    dustify: Dustify;
     filmBurn: FilmBurn;
     gridFlip: GridFlip;
     invertedPageCurl: InvertedPageCurl;

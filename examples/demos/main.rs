@@ -184,6 +184,7 @@ fn build_app(window: Window, hot_reload: bool) -> App {
             "Noto Sans Mono",
             "fonts/NotoSansMono-VariableFont_wdth,wght.ttf",
         )
+        .font("MetalMania", "fonts/MetalMania-Regular.ttf")
         .cursor("hand", "cursor-hand.png", (0, 0));
 
     // On web, make the canvas track its parent (`<body>`, full-height via index.html)
