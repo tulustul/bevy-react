@@ -38,7 +38,23 @@ export type CircleCrop = {
  */
 color: string, };
 export type ContrastParams = { amount: number, };
-export type CrossfadeParams = Record<string, never>;
+export type CrossfadeParams = { 
+/**
+ * 0..1 stagger amount; 0 is the plain uniform crossfade.
+ */
+spread: number, 
+/**
+ * Noise feature size in logical px.
+ */
+scale: number | string, 
+/**
+ * 0..1 local fade window (fraction of the progress range).
+ */
+softness: number, 
+/**
+ * Re-rolls the noise pattern (domain offset).
+ */
+seed: number, };
 export type CubeInfo = { entity: bigint, label: string, };
 export type CubesSpawned = { cubes: Array<CubeInfo>, };
 export type CurtainOpen = { 

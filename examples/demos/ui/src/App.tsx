@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { BevyStyle } from "bevy-react/jsx";
 import { bevy } from "@/bevy";
 import { Scrollbar } from "@/theme";
@@ -19,6 +19,7 @@ const PAGE_MORPHS: MorphUse[] = [
   { name: "bookFlip" },
   { name: "pixelize", params: { squaresMin: [50, 50] } },
   { name: "windowslice", params: { count: 30 } },
+  { name: "crossfade", params: { scale: 100 } },
 ];
 
 export function App() {
@@ -31,12 +32,16 @@ export function App() {
   );
 
   // Re-rolled exactly when the demo changes — same commit as the morph key
-  // change, so the freeze blends with the freshly picked filter.
-  const pageMorph = useMemo(
-    () => PAGE_MORPHS[Math.floor(Math.random() * PAGE_MORPHS.length)],
+  // change, so the freeze blends with the freshly picked filter. Each pick is
+  // drawn from a shrinking pool (refilled from PAGE_MORPHS once empty), so
+  // the filters cycle through the whole list before any repeats.
+  const morphPool = useRef<MorphUse[]>([]);
+  const pageMorph = useMemo(() => {
+    if (morphPool.current.length === 0) morphPool.current = [...PAGE_MORPHS];
+    const i = Math.floor(Math.random() * morphPool.current.length);
+    return morphPool.current.splice(i, 1)[0];
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the demo IS the re-roll trigger
-    [selectedDemo],
-  );
+  }, [selectedDemo]);
 
   useEffect(() => {
     bevy.selectScene(selectedDemo.scene ?? null);

@@ -6,7 +6,8 @@
 //! and progress-1 identity contracts). Single-pass by construction (the morph
 //! resolver rejects multi-pass entries), zero outset (neither paints outside
 //! the box), premultiplied-direct blending (a lerp of premultiplied colors is
-//! the linear-interpolation-safe crossfade).
+//! the linear-interpolation-safe crossfade). Crossfade staggers the blend
+//! per-pixel with a noise field (`spread: 0` restores the uniform fade).
 
 use std::sync::Arc;
 
@@ -22,11 +23,89 @@ use crate::filters::registry::{
 };
 use crate::protocol::{units::Angle, units::Length};
 
-/// `crossfade`: the plain morph — `mix(from, to, progress)`. No params; the
-/// engine-owned progress is the whole effect.
-#[derive(Debug, Clone, Copy, PartialEq, Default, Deserialize, ts_rs::TS)]
+fn default_spread() -> f32 {
+    0.6
+}
+
+fn default_scale() -> Length {
+    Length::Px(56.0)
+}
+
+fn default_crossfade_softness() -> f32 {
+    0.5
+}
+
+/// `crossfade`: a noise-staggered two-input blend. A smooth fbm value-noise
+/// field gives each pixel a stagger offset (`n * spread`) so blob-shaped
+/// regions cross-dissolve earlier than others; each pixel then fades linearly
+/// over a `softness`-wide window of the progress range. `spread: 0` is the
+/// plain uniform `mix(from, to, progress)` (bit-exact — the shader fast-paths
+/// it), and noise is ON by default.
+///
+/// A single pass, packed as `params[0] = (spread, scale_logical_px, softness,
+/// seed)`; `resolve` prepends the `Length` px validation for `scale` before
+/// delegating to [`resolve_single_pass`] (the default would skip it).
+#[derive(Debug, Clone, Copy, PartialEq, Deserialize, ts_rs::TS)]
 #[serde(deny_unknown_fields)]
-pub struct CrossfadeParams {}
+pub struct CrossfadeParams {
+    /// 0..1 stagger amount; 0 is the plain uniform crossfade.
+    #[serde(default = "default_spread")]
+    pub spread: f32,
+    /// Noise feature size in logical px.
+    #[serde(default = "default_scale")]
+    #[ts(type = "number | string")]
+    pub scale: Length,
+    /// 0..1 local fade window (fraction of the progress range).
+    #[serde(default = "default_crossfade_softness")]
+    pub softness: f32,
+    /// Re-rolls the noise pattern (domain offset).
+    #[serde(default)]
+    pub seed: f32,
+}
+
+impl Default for CrossfadeParams {
+    fn default() -> Self {
+        Self {
+            spread: default_spread(),
+            scale: default_scale(),
+            softness: default_crossfade_softness(),
+            seed: 0.0,
+        }
+    }
+}
+
+fn crossfade_layout() -> Arc<[ParamSlot]> {
+    static_layout![
+        ParamSlot {
+            name: "spread",
+            kind: ValueKind::Scalar,
+            vec: 0,
+            comp: 0,
+            len: 1,
+        },
+        ParamSlot {
+            name: "scale",
+            kind: ValueKind::Length,
+            vec: 0,
+            comp: 1,
+            len: 1,
+        },
+        ParamSlot {
+            name: "softness",
+            kind: ValueKind::Scalar,
+            vec: 0,
+            comp: 2,
+            len: 1,
+        },
+        ParamSlot {
+            name: "seed",
+            kind: ValueKind::Scalar,
+            vec: 0,
+            comp: 3,
+            len: 1,
+        },
+    ]
+}
 
 impl ReactFilter for CrossfadeParams {
     const NAME: &'static str = "crossfade";
@@ -41,8 +120,22 @@ impl ReactFilter for CrossfadeParams {
     }
 
     fn pack(&self) -> (Vec<Vec4>, Arc<[ParamSlot]>) {
-        // No params at all — an empty pack and an empty slot layout.
-        (Vec::new(), Vec::new().into())
+        (
+            vec![Vec4::new(
+                self.spread,
+                // Infallible here; a non-px scale was rejected by `resolve`
+                // before this can matter.
+                length_logical_px(Self::NAME, "scale", self.scale).unwrap_or(0.0),
+                self.softness,
+                self.seed,
+            )],
+            crossfade_layout(),
+        )
+    }
+
+    fn resolve(&self, assets: &AssetServer) -> Result<Vec<ResolvedFilterPass>, String> {
+        length_logical_px(Self::NAME, "scale", self.scale)?;
+        resolve_single_pass(self, assets)
     }
 }
 
@@ -157,7 +250,10 @@ mod tests {
             .resolve(assets)
             .expect("crossfade resolves");
         assert_eq!(passes.len(), 1);
-        assert!(passes[0].params.is_empty());
+        // The documented defaults: (spread, scale_px, softness, seed).
+        assert_eq!(passes[0].params[0], Vec4::new(0.6, 56.0, 0.5, 0.0));
+        assert!(passes[0].params.len() <= crate::filters::MORPH_MAX_USER_PARAM_VECS);
+        assert_eq!(passes[0].layout[1].kind, ValueKind::Length);
         assert_eq!(params::<CrossfadeParams>(json!({})).outset(), Ok(0.0));
 
         let passes = params::<LinearWipeParams>(json!({ "angle": 90, "softness": 12 }))
@@ -175,8 +271,8 @@ mod tests {
         );
     }
 
-    /// A non-px softness rejects through the registry's baked resolve (the
-    /// override — the default body skips `Length` validation).
+    /// Non-px `Length` params reject through the registry's baked resolve
+    /// (the overrides — the default body skips `Length` validation).
     #[test]
     fn non_px_softness_rejects_from_registry() {
         let app = asset_app();
@@ -188,16 +284,36 @@ mod tests {
             err.contains("px") && err.contains("%"),
             "names the unit: {err}"
         );
+        let err = (registry.entries["crossfade"].resolve)(&json!({ "scale": "50%" }), assets)
+            .expect_err("percent scale must reject");
+        assert!(
+            err.contains("px") && err.contains("%"),
+            "names the unit: {err}"
+        );
         assert!(
             (registry.entries["crossfade"].resolve)(&json!({}), assets).is_ok(),
-            "crossfade takes no params"
+            "paramless crossfade resolves on defaults"
         );
+    }
+
+    /// Crossfade packs the documented layout:
+    /// `params[0] = (spread, scale_logical_px, softness, seed)`.
+    #[test]
+    fn crossfade_packs_documented_layout() {
+        let (vecs, layout) = params::<CrossfadeParams>(json!({
+            "spread": 0.25, "scale": 32, "softness": 0.1, "seed": 4
+        }))
+        .pack();
+        assert_eq!(vecs, vec![Vec4::new(0.25, 32.0, 0.1, 4.0)]);
+        let names: Vec<_> = layout.iter().map(|s| s.name).collect();
+        assert_eq!(names, ["spread", "scale", "softness", "seed"]);
     }
 
     /// `deny_unknown_fields` on both param structs.
     #[test]
     fn unknown_morph_builtin_params_reject() {
         assert!(serde_json::from_value::<CrossfadeParams>(json!({ "speed": 1 })).is_err());
+        assert!(serde_json::from_value::<CrossfadeParams>(json!({ "spread": 0.3 })).is_ok());
         assert!(serde_json::from_value::<LinearWipeParams>(json!({ "angel": 90 })).is_err());
     }
 }

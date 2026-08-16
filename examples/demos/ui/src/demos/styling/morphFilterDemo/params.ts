@@ -53,10 +53,20 @@ const checkbox = (label: string, initial = 0): ParamControl => ({
 export const BUILTIN_TRANSITIONS: FilterEntry[] = [
   {
     label: "crossfade",
-    duration: 500,
-    easing: "easeInOut",
-    controls: [],
-    use: () => ({ name: "crossfade" }),
+    duration: 300,
+    easing: "linear",
+    // `spread` staggers the per-region timing (0 = uniform crossfade),
+    // `scale` is the noise feature size in logical px.
+    controls: [
+      slider("spread", 0, 1, 0.6, 0.4),
+      slider("scale", 8, 200, 40),
+      slider("softness", 0, 1, 1, 2),
+      slider("seed", 0, 10, 0),
+    ],
+    use: ([spread, scale, softness, seed]) => ({
+      name: "crossfade",
+      params: { spread, scale, softness, seed },
+    }),
   },
   {
     label: "linearWipe",

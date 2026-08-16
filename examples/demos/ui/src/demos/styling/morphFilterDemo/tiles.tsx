@@ -105,7 +105,7 @@ export function MorphTile({
         <Slider
           value={duration}
           min={200}
-          max={30000}
+          max={4000}
           onChange={setDuration}
           label={`duration ${Math.round(duration)} ms`}
         />
