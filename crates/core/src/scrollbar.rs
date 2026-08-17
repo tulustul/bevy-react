@@ -705,10 +705,19 @@ pub fn position_scrollbars(
                 config.0.vertical_side(),
                 config.0.horizontal_side(),
             );
-            node.left = Val::Px(pos.x);
-            node.top = Val::Px(pos.y);
-            node.width = Val::Px(dims.x);
-            node.height = Val::Px(dims.y);
+            let (left, top) = (Val::Px(pos.x), Val::Px(pos.y));
+            let (width, height) = (Val::Px(dims.x), Val::Px(dims.y));
+            // Field-level guard so a static visible scrollbar doesn't tick
+            // `Changed<Node>` (a bevy_ui relayout) every frame — same
+            // discipline as the border/border_radius guard in
+            // `style_scrollbar_states`.
+            if node.left != left || node.top != top || node.width != width || node.height != height
+            {
+                node.left = left;
+                node.top = top;
+                node.width = width;
+                node.height = height;
+            }
         };
 
         if let Some(axis) = entry.vertical {
@@ -1173,5 +1182,93 @@ mod tests {
         world.insert_resource(PointerCapture::default());
         world.run_system_once(bridge_scrollbar_capture).unwrap();
         assert!(!world.resource::<PointerCapture>().over_ui);
+    }
+
+    /// A static visible scrollbar must not tick `Changed<Node>` (a bevy_ui
+    /// relayout) after its first placement — the field-level guard in
+    /// `position_scrollbars` settles once the container geometry is stable.
+    #[test]
+    fn position_scrollbars_settles_node_changes() {
+        use bevy::ecs::schedule::Schedule;
+        use bevy::math::Affine2;
+
+        #[derive(Resource, Default)]
+        struct NodeDirty(usize);
+
+        let mut world = World::new();
+        world.init_resource::<NodeDirty>();
+
+        // Hand-authored geometry: a 200x200 parent holding a 100x100 scroll
+        // container whose content overflows vertically (range > 0, so the
+        // vertical track is visible and positioned).
+        let parent = world
+            .spawn((
+                ComputedNode {
+                    size: Vec2::new(200.0, 200.0),
+                    inverse_scale_factor: 1.0,
+                    ..default()
+                },
+                UiGlobalTransform::from(Affine2::from_translation(Vec2::new(100.0, 100.0))),
+            ))
+            .id();
+        let container = world
+            .spawn((
+                ScrollbarConfig(ScrollbarSpec::Default),
+                ComputedNode {
+                    size: Vec2::new(100.0, 100.0),
+                    content_size: Vec2::new(100.0, 300.0),
+                    inverse_scale_factor: 1.0,
+                    ..default()
+                },
+                UiGlobalTransform::from(Affine2::from_translation(Vec2::new(50.0, 50.0))),
+                ChildOf(parent),
+            ))
+            .id();
+        let track = world
+            .spawn((
+                Node::default(),
+                Visibility::default(),
+                Scrollbar::new(container, ControlOrientation::Vertical, 20.0),
+                ChildOf(parent),
+            ))
+            .id();
+        let thumb = world.spawn_empty().id();
+        let mut tracks = ScrollbarTracks::default();
+        tracks.0.insert(
+            container,
+            ContainerTracks {
+                vertical: Some(AxisEntities { track, thumb }),
+                horizontal: None,
+                spec: ScrollbarSpec::Default,
+            },
+        );
+        world.insert_resource(tracks);
+
+        let mut apply = Schedule::default();
+        apply.add_systems(position_scrollbars);
+        // A separate detect schedule so `Changed<Node>` spans exactly one
+        // apply run.
+        let mut detect = Schedule::default();
+        detect.add_systems(
+            |q: Query<(), (Changed<Node>, With<Scrollbar>)>, mut dirty: ResMut<NodeDirty>| {
+                dirty.0 += q.iter().count();
+            },
+        );
+
+        apply.run(&mut world);
+        detect.run(&mut world);
+        assert!(
+            world.resource::<NodeDirty>().0 > 0,
+            "the first placement must write the track's Node"
+        );
+
+        world.resource_mut::<NodeDirty>().0 = 0;
+        apply.run(&mut world);
+        detect.run(&mut world);
+        assert_eq!(
+            world.resource::<NodeDirty>().0,
+            0,
+            "a static visible scrollbar must not tick Changed<Node> (relayout) again"
+        );
     }
 }
