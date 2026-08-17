@@ -66,7 +66,7 @@ use bevy::ecs::system::SystemParamItem;
 use bevy::ecs::system::lifetimeless::SRes;
 use bevy::math::{FloatOrd, Mat4, UVec4};
 use bevy::mesh::VertexBufferLayout;
-use bevy::platform::collections::HashMap;
+use bevy::platform::collections::{HashMap, HashSet};
 use bevy::prelude::*;
 use bevy::render::Extract;
 use bevy::render::camera::CameraMainPassTextureFormats;
@@ -767,6 +767,9 @@ pub fn prepare_layer_composites(
     // The quads were injected with `index = layer index`; find each again in
     // its (post-sort) phase to write the batch range.
     let mut ranges: Vec<Option<Range<u32>>> = vec![None; extracted.layers.len()];
+    // Membership set for the post-sort batch-range pass at the bottom: the
+    // render entities of every quad that actually staged vertices this frame.
+    let mut drawable: HashSet<Entity> = HashSet::default();
     // Filtered layers whose output isn't ready this frame: their quads stay
     // batch-less, so any enclosing capture rendered without them must not be
     // served from cache — see the invalidation loop after this one.
@@ -982,6 +985,7 @@ pub fn prepare_layer_composites(
             });
         }
         ranges[idx] = Some(start..start + 6);
+        drawable.insert(layer.quad_entity);
         let atlas_index = meta.atlas_bind_groups.len();
         meta.atlas_bind_groups.push(bind_group);
         let (open_min, open_max) = transform3d::open_clip();
@@ -1064,6 +1068,7 @@ pub fn prepare_layer_composites(
             });
         }
         backdrop_ranges[idx] = Some(start..start + 6);
+        drawable.insert(backdrop_quad_entity);
         let atlas_index = meta.atlas_bind_groups.len();
         meta.atlas_bind_groups.push(bind_group);
         // The UNCLIPPED border box (the same shrink `backdrop_quad` applies)
@@ -1129,17 +1134,7 @@ pub fn prepare_layer_composites(
     // quad is exactly `0..1`; its vertex range rides `LayerCompositeBatch`.
     for phase in phases.values_mut() {
         for item in phase.items.values_mut() {
-            let drawable = extracted
-                .layers
-                .iter()
-                .position(|l| l.quad_entity == item.entity())
-                .is_some_and(|idx| ranges[idx].is_some())
-                || extracted
-                    .layers
-                    .iter()
-                    .position(|l| l.backdrop_quad_entity == Some(item.entity()))
-                    .is_some_and(|idx| backdrop_ranges[idx].is_some());
-            if drawable {
+            if drawable.contains(&item.entity()) {
                 item.batch_range = 0..1;
             }
         }
