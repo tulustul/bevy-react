@@ -63,9 +63,6 @@ export function App() {
           ...contentStyle,
           padding: { right: hasPanel ? 300 : 0 },
           morphFilter: { key: selectedDemo.label, ...pageMorph },
-          transition: {
-            morphFilter: { duration: 300, easing: "linear" },
-          },
         }}
         scrollStep={100}
       >
@@ -93,7 +90,10 @@ const contentStyle: BevyStyle = {
   overflowY: "scroll",
   overflowX: "scroll",
   scrollbar: Scrollbar,
-  transition: { scroll: { duration: 200, easing: "easeOut" } },
+  transition: {
+    scroll: { duration: 200, easing: "easeOut" },
+    morphFilter: { duration: 300, easing: "linear" },
+  },
 };
 
 const contentInnerStyle: BevyStyle = {

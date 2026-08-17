@@ -216,18 +216,24 @@ pub struct LayerContentDirt {
     pub composite_only: Vec<Entity>,
 }
 
-/// Per-layer repaint decisions, rebuilt from scratch every frame by
-/// [`resolve_layer_repaints`] — nothing persists to be cleared, so render
-/// extraction (which runs at the sync point after the whole main frame)
-/// always reads the same frame's state.
+/// Per-layer repaint decisions. `dirty` is rebuilt from scratch every frame by
+/// [`resolve_layer_repaints`] — so render extraction (which runs at the sync
+/// point after the whole main frame) always reads the same frame's state.
+/// `hashes` persists across frames (compared-and-updated in place by
+/// [`sync_layer_geometry`] on rebuild frames, untouched on gated-out idle
+/// frames); `geo_dirty` is the one-frame handoff between the two systems.
 #[derive(Resource, Debug, Default)]
 pub struct LayerRepaintState {
     /// Layer roots whose capture must re-render this frame.
     pub dirty: HashSet<Entity>,
-    /// This frame's per-root subtree geometry hash, staged by
-    /// [`sync_layer_geometry`] and compared/swapped by the resolver.
-    pub geo_hashes: HashMap<Entity, u64>,
-    prev_hashes: HashMap<Entity, u64>,
+    /// Roots whose root-relative content-geometry hash changed on this frame's
+    /// rebuild — or had no previous hash (the first frame after promotion).
+    /// Staged by [`sync_layer_geometry`], drained by [`resolve_layer_repaints`].
+    pub geo_dirty: HashSet<Entity>,
+    /// Persistent per-root subtree geometry hash. Pruned alongside membership
+    /// (demote/despawn) and on deactivation (zero content size), so
+    /// reactivation re-captures.
+    pub hashes: HashMap<Entity, u64>,
 }
 
 /// Tap helper for `EntityCommands` call sites (style apply, op arms): queue a
@@ -465,6 +471,75 @@ pub fn evaluate_layer_promotions(
     }
 }
 
+/// Rebuild-trigger signals for [`sync_layer_geometry`]: when ALL are quiet, the
+/// frame is geometry-idle and sync early-outs, PRESERVING membership + hashes —
+/// [`clip::sync_layer_clips`] and [`resolve_layer_repaints`] require a
+/// populated membership every frame. Stale entries for despawned entities are
+/// filtered by every reader, and a reparent ticks `Changed<Children>`.
+///
+/// The scrollbar exclusion: `bevy_ui_widgets`' `update_scrollbar_thumb`
+/// (`.after(ui_layout_system)`, both inside `UiSystems::Layout`) and
+/// `ui_layout_system` each compare-guard their thumb writes but against
+/// DIFFERENT values, so a thumb's `ComputedNode`/`UiGlobalTransform` can
+/// ping-pong `Changed` every frame a scrollbar exists — which would hold this
+/// gate open forever. Excluding the widget entities loses nothing: any real
+/// thumb/track motion is accompanied by non-scrollbar member changes (a scroll
+/// translates the content subtree).
+#[derive(bevy::ecs::system::SystemParam)]
+#[allow(clippy::type_complexity)]
+pub struct LayerGeometryGate<'w, 's> {
+    changed_geometry: Query<
+        'w,
+        's,
+        (),
+        (
+            Or<(
+                Changed<ComputedNode>,
+                Changed<UiGlobalTransform>,
+                Changed<Children>,
+            )>,
+            Without<bevy::ui_widgets::Scrollbar>,
+            Without<bevy::ui_widgets::ScrollbarThumb>,
+        ),
+    >,
+    removed_children: RemovedComponents<'w, 's, Children>,
+    added_roots: Query<'w, 's, (), Added<PromotedLayer>>,
+    removed_roots: RemovedComponents<'w, 's, PromotedLayer>,
+    // The resolved chains feed the capture rect's outset (and the size folded
+    // into the geometry hash) without any geometry/promotion tick.
+    changed_chains: Query<
+        'w,
+        's,
+        (),
+        Or<(
+            Changed<crate::filters::ResolvedFilterChain>,
+            Changed<crate::filters::ResolvedBackdropChain>,
+        )>,
+    >,
+    removed_filter_chains: RemovedComponents<'w, 's, crate::filters::ResolvedFilterChain>,
+    removed_backdrop_chains: RemovedComponents<'w, 's, crate::filters::ResolvedBackdropChain>,
+}
+
+impl LayerGeometryGate<'_, '_> {
+    /// True when any signal fired this frame. Consumes the removal readers
+    /// either way, so a removal observed on a rebuild frame doesn't hold the
+    /// gate open a second frame.
+    fn take_signal(&mut self) -> bool {
+        let hot = !self.changed_geometry.is_empty()
+            || !self.added_roots.is_empty()
+            || !self.changed_chains.is_empty()
+            || self.removed_children.read().next().is_some()
+            || self.removed_roots.read().next().is_some()
+            || self.removed_filter_chains.read().next().is_some()
+            || self.removed_backdrop_chains.read().next().is_some();
+        self.removed_children.clear();
+        self.removed_roots.clear();
+        self.removed_filter_chains.clear();
+        self.removed_backdrop_chains.clear();
+        hot
+    }
+}
+
 /// Recomputes each promoted layer's capture rect (inflated by the node's
 /// quantized filter outset — blur reads/writes beyond the border box, and the
 /// composite quad, texture allocation, and synthetic-view ortho all derive
@@ -474,16 +549,20 @@ pub fn evaluate_layer_promotions(
 /// enclosing layer's capture — v1 clips there, losing part of the bleed.
 /// Runs in `PostUpdate` after `bevy_ui` layout so `ComputedNode` /
 /// `UiGlobalTransform` are this frame's values.
+///
+/// Gated by [`LayerGeometryGate`]: a geometry-idle frame returns before
+/// touching any `ResMut` (so `Res::is_changed()` stays a truthful idle probe),
+/// leaving membership + hashes exactly as the previous rebuild left them.
 #[allow(clippy::too_many_arguments, clippy::type_complexity)]
 pub fn sync_layer_geometry(
     mut commands: Commands,
+    mut gate: LayerGeometryGate,
     roots: Query<
         (
             Entity,
             &ComputedNode,
             &UiGlobalTransform,
             &crate::bridge::RNode,
-            &LayerGroupAlpha,
             Option<&crate::filters::ResolvedFilterChain>,
             Option<&crate::filters::FilterInput>,
             Option<&crate::filters::ResolvedBackdropChain>,
@@ -504,11 +583,13 @@ pub fn sync_layer_geometry(
     // dedups on its own; the console does not).
     mut warned_bleeds: Local<HashMap<Entity, (LayerCaptureRect, LayerCaptureRect)>>,
 ) {
+    if !gate.take_signal() {
+        // Geometry-idle: membership + hashes persist for this frame's readers
+        // (the clip sync and the repaint resolver run on the preserved maps).
+        return;
+    }
     membership.node_to_layer.clear();
     membership.enclosing.clear();
-    // Post-swap leftovers from last frame's resolver; this frame's hashes are
-    // staged fresh below.
-    repaints.geo_hashes.clear();
     // This frame's rects by root, for the bleed pass below (`enclosing` roots
     // may be visited in any order, so containment is checked in a second pass
     // once every rect is known).
@@ -517,7 +598,7 @@ pub fn sync_layer_geometry(
     // first wire filter name — the warning `value` the devtools inspector
     // matches against the retained `filter` style row).
     let mut bleed_candidates: Vec<(Entity, NodeId, u32, String)> = Vec::new();
-    for (root, computed, transform, rnode, alpha, chain, filter_input, backdrop_chain) in &roots {
+    for (root, computed, transform, rnode, chain, filter_input, backdrop_chain) in &roots {
         let row = registry.layers.get_mut(&rnode.0);
         if let Some(row) = &row {
             debug_assert_eq!(row.entity, root);
@@ -526,7 +607,9 @@ pub fn sync_layer_geometry(
         if size.x <= 0.5 || size.y <= 0.5 {
             // Zero-sized / not laid out yet: inactive this frame. The gate
             // reads the CONTENT size (pre-inflation) on purpose — a filter
-            // outset alone must not activate an empty node.
+            // outset alone must not activate an empty node. Drop the
+            // persistent hash so a reactivation at the old size re-captures.
+            repaints.hashes.remove(&root);
             if let Some(row) = row {
                 row.capture_rect = None;
             }
@@ -542,6 +625,7 @@ pub fn sync_layer_geometry(
             outset: 0,
         };
         if rect.size.x == 0 || rect.size.y == 0 {
+            repaints.hashes.remove(&root);
             if let Some(row) = row {
                 row.capture_rect = None;
             }
@@ -579,19 +663,20 @@ pub fn sync_layer_geometry(
         if existing_rects.get(root) != Ok(&rect) {
             commands.entity(root).insert(rect);
         }
-        // Mirror live geometry + alpha into the observability registry (the
-        // registry keeps integer px for display — round the anchor; the rect
-        // includes the filter-outset margin, i.e. the real capture, and the
-        // min is signed so a partially-offscreen or outset-inflated layer
-        // displays truthfully). Depth (1 = top-level) is refreshed below once
-        // `enclosing` is known.
+        // Mirror live geometry into the observability registry (the registry
+        // keeps integer px for display — round the anchor; the rect includes
+        // the filter-outset margin, i.e. the real capture, and the min is
+        // signed so a partially-offscreen or outset-inflated layer displays
+        // truthfully). Depth (1 = top-level) is refreshed below once
+        // `enclosing` is known. The `group_alpha` mirror lives in
+        // `resolve_layer_repaints` (which runs every frame) so an animated
+        // fade doesn't have to hold this system's gate open.
         if let Some(row) = row {
             let display_min = IVec2::new(rect.min.x.round() as i32, rect.min.y.round() as i32);
             row.capture_rect = Some(IRect::from_corners(
                 display_min,
                 display_min + rect.size.as_ivec2(),
             ));
-            row.group_alpha = alpha.0;
         }
         // Everything under `root` (itself included) belongs to its nearest
         // enclosing-or-self layer. Starting each DFS at a root and letting
@@ -618,7 +703,12 @@ pub fn sync_layer_geometry(
             &mut hash,
             &mut membership.node_to_layer,
         );
-        repaints.geo_hashes.insert(root, hash);
+        // Compare-and-update in place; an absent previous hash (the first
+        // frame after promotion) counts as changed.
+        if repaints.hashes.get(&root) != Some(&hash) {
+            repaints.hashes.insert(root, hash);
+            repaints.geo_dirty.insert(root);
+        }
         // The quad target: nearest strictly-enclosing promoted ancestor. Depth
         // = number of promoted ancestors + 1.
         let mut enclosing = None;
@@ -650,6 +740,9 @@ pub fn sync_layer_geometry(
     // a root that stays promoted (e.g. via opacity) while its filter is
     // unset must drop its entry, or re-adding the identical filter with
     // unchanged geometry would be wrongly suppressed.
+    // Demoted/despawned roots must not keep a hash — a re-promotion (or a new
+    // layer reusing the entity id) has to hit the absent-hash first-frame rule.
+    repaints.hashes.retain(|e, _| root_markers.contains(*e));
     let candidate_roots: HashSet<Entity> = bleed_candidates.iter().map(|(r, ..)| *r).collect();
     warned_bleeds.retain(|e, _| candidate_roots.contains(e));
     for (root, node, outset, value) in bleed_candidates {
@@ -815,11 +908,13 @@ pub fn watch_layer_image_assets(
 }
 
 /// Turn this frame's dirt into per-layer repaint decisions. Runs in
-/// `PostUpdate` after [`sync_layer_geometry`] (membership + geometry hashes
-/// are this frame's) and after `bevy_ui`'s text systems (`Changed<TextLayoutInfo>`
-/// must see this frame's reshapes). Render extraction reads the result at the
-/// sync point; the state is rebuilt from scratch next frame, so nothing needs
+/// `PostUpdate` after [`sync_layer_geometry`] (membership + geometry dirt are
+/// this frame's — or the preserved previous rebuild's, on a gated-out idle
+/// frame) and after `bevy_ui`'s text systems (`Changed<TextLayoutInfo>` must
+/// see this frame's reshapes). Render extraction reads the result at the sync
+/// point; `dirty` is rebuilt from scratch every frame, so nothing needs
 /// clearing across frames.
+#[allow(clippy::too_many_arguments)]
 pub fn resolve_layer_repaints(
     mut dirt: ResMut<LayerContentDirt>,
     mut state: ResMut<LayerRepaintState>,
@@ -828,6 +923,7 @@ pub fn resolve_layer_repaints(
     bridge: Option<Res<crate::bridge::JsBridge>>,
     reshaped: Query<Entity, Changed<bevy::text::TextLayoutInfo>>,
     focus: Query<&crate::bridge::FocusState>,
+    alphas: Query<&LayerGroupAlpha>,
 ) {
     let state = &mut *state;
     state.dirty.clear();
@@ -866,14 +962,11 @@ pub fn resolve_layer_repaints(
             }
         }
     }
-    // 5. Geometry: any change in a layer's root-relative content geometry —
-    //    including the first frame after promotion (no previous hash).
-    for (&root, hash) in &state.geo_hashes {
-        if state.prev_hashes.get(&root) != Some(hash) {
-            state.dirty.insert(root);
-        }
-    }
-    std::mem::swap(&mut state.prev_hashes, &mut state.geo_hashes);
+    // 5. Geometry: roots whose root-relative content geometry changed on this
+    //    frame's rebuild — including the first frame after promotion (no
+    //    previous hash) — staged by `sync_layer_geometry`. Empty on
+    //    geometry-idle (gated-out) frames.
+    state.dirty.extend(state.geo_dirty.drain());
     // 6. `cache: "never"` — the layer's pixels are written outside the dirt
     //    tracking's sight (live portal targets, app-owned textures), so it
     //    re-captures unconditionally. Seeded before the outward propagation:
@@ -894,12 +987,19 @@ pub fn resolve_layer_repaints(
             layer = outer;
         }
     }
-    // 8. Observability: per-layer cache stats for devtools.
+    // 8. Observability: per-layer cache stats + the live group-alpha mirror
+    //    for devtools. The alpha mirror lives here (not in the geometry sync)
+    //    because this system runs every frame after every Update-schedule
+    //    alpha writer — an animated fade stays fresh without holding the
+    //    geometry sync's gate open.
     for meta in registry.layers.values_mut() {
         let dirty = state.dirty.contains(&meta.entity);
         meta.cached = !dirty;
         if dirty {
             meta.repaints += 1;
+        }
+        if let Ok(alpha) = alphas.get(meta.entity) {
+            meta.group_alpha = alpha.0;
         }
     }
 }
@@ -1487,8 +1587,10 @@ mod tests {
 
     /// [`resolve_layer_repaints`] unit-tested over a hand-built membership:
     /// content dirt resolves to the owning layer, composite-only dirt to the
-    /// enclosing layer only, geometry-hash changes (and first frames) dirty,
-    /// and dirt propagates out through nested layers.
+    /// enclosing layer only, staged geometry dirt (`geo_dirty` — what
+    /// `sync_layer_geometry` publishes on a hash change or first sight)
+    /// dirties, and dirt propagates out through nested layers. Idle frames
+    /// stage nothing and resolve clean.
     #[test]
     fn repaint_resolution_and_propagation() {
         let mut world = World::new();
@@ -1516,11 +1618,11 @@ mod tests {
             world.resource::<LayerRepaintState>().dirty.clone()
         };
 
-        // Seed both layers' hashes (first sight = dirty).
+        // First sight: sync stages both roots as geo-dirty (absent hash).
         {
             let mut state = world.resource_mut::<LayerRepaintState>();
-            state.geo_hashes.insert(outer, 1);
-            state.geo_hashes.insert(inner, 2);
+            state.geo_dirty.insert(outer);
+            state.geo_dirty.insert(inner);
         }
         let dirty = run(&mut world);
         assert!(
@@ -1528,35 +1630,20 @@ mod tests {
             "{dirty:?}"
         );
 
-        // Steady state: same hashes, no dirt → clean.
-        {
-            let mut state = world.resource_mut::<LayerRepaintState>();
-            state.geo_hashes.insert(outer, 1);
-            state.geo_hashes.insert(inner, 2);
-        }
+        // Steady state: nothing staged, no dirt → clean.
         assert!(run(&mut world).is_empty());
 
         // Content dirt on an inner member → inner dirty AND propagates to outer.
-        {
-            let mut state = world.resource_mut::<LayerRepaintState>();
-            state.geo_hashes.insert(outer, 1);
-            state.geo_hashes.insert(inner, 2);
-            world.resource_mut::<LayerContentDirt>().nodes.push(member);
-        }
+        world.resource_mut::<LayerContentDirt>().nodes.push(member);
         let dirty = run(&mut world);
         assert!(dirty.contains(&inner) && dirty.contains(&outer));
 
         // Composite-only dirt on the inner ROOT → outer only (its own capture
         // is untouched; its quad is the outer's content).
-        {
-            let mut state = world.resource_mut::<LayerRepaintState>();
-            state.geo_hashes.insert(outer, 1);
-            state.geo_hashes.insert(inner, 2);
-            world
-                .resource_mut::<LayerContentDirt>()
-                .composite_only
-                .push(inner);
-        }
+        world
+            .resource_mut::<LayerContentDirt>()
+            .composite_only
+            .push(inner);
         let dirty = run(&mut world);
         assert!(
             dirty.contains(&outer) && !dirty.contains(&inner),
@@ -1564,36 +1651,26 @@ mod tests {
         );
 
         // Composite-only dirt on a TOP-LEVEL root → nothing to re-capture.
-        {
-            let mut state = world.resource_mut::<LayerRepaintState>();
-            state.geo_hashes.insert(outer, 1);
-            state.geo_hashes.insert(inner, 2);
-            world
-                .resource_mut::<LayerContentDirt>()
-                .composite_only
-                .push(outer);
-        }
+        world
+            .resource_mut::<LayerContentDirt>()
+            .composite_only
+            .push(outer);
         assert!(run(&mut world).is_empty());
 
-        // A geometry-hash change dirties that layer (and propagates outward).
-        {
-            let mut state = world.resource_mut::<LayerRepaintState>();
-            state.geo_hashes.insert(outer, 1);
-            state.geo_hashes.insert(inner, 3);
-        }
+        // A geometry change staged on the inner root dirties it (and
+        // propagates outward).
+        world
+            .resource_mut::<LayerRepaintState>()
+            .geo_dirty
+            .insert(inner);
         let dirty = run(&mut world);
         assert!(dirty.contains(&inner) && dirty.contains(&outer));
 
         // Content dirt on an outer-owned member → outer only.
-        {
-            let mut state = world.resource_mut::<LayerRepaintState>();
-            state.geo_hashes.insert(outer, 1);
-            state.geo_hashes.insert(inner, 3);
-            world
-                .resource_mut::<LayerContentDirt>()
-                .nodes
-                .push(outer_member);
-        }
+        world
+            .resource_mut::<LayerContentDirt>()
+            .nodes
+            .push(outer_member);
         let dirty = run(&mut world);
         assert!(dirty.contains(&outer) && !dirty.contains(&inner));
     }
@@ -1946,6 +2023,223 @@ mod tests {
         assert!(
             world.get::<LayerCaptureRect>(e).is_none(),
             "zero content size stays inactive"
+        );
+    }
+
+    /// Probe schedule for the gate tests: records whether `sync_layer_geometry`
+    /// actually rebuilt this frame. Valid because sync early-outs BEFORE any
+    /// `ResMut` deref, so `Res<LayerMembership>::is_changed()` only ticks on a
+    /// real rebuild.
+    fn gate_probe() -> Schedule {
+        let mut detect = Schedule::default();
+        detect.add_systems(
+            |membership: Res<LayerMembership>, mut ran: ResMut<SyncRan>| {
+                ran.0 = membership.is_changed();
+            },
+        );
+        detect
+    }
+
+    #[derive(Resource, Default)]
+    struct SyncRan(bool);
+
+    /// A geometry-idle frame must skip the rebuild entirely — while PRESERVING
+    /// membership, which the resolver (and the clip sync) keep consuming: a
+    /// content-dirt push on an idle frame still resolves through the preserved
+    /// maps.
+    #[test]
+    fn idle_frame_skips_geometry_rebuild() {
+        let (mut world, mut schedule) = geometry_world();
+        world.init_resource::<SyncRan>();
+        let mut detect = gate_probe();
+        let root = spawn_layer_root(&mut world, 1, Vec2::new(100.0, 60.0), Vec2::new(50.0, 30.0));
+        let member = world
+            .spawn((
+                ComputedNode {
+                    size: Vec2::new(20.0, 10.0),
+                    ..Default::default()
+                },
+                UiGlobalTransform::from(bevy::math::Affine2::from_translation(Vec2::new(
+                    10.0, 10.0,
+                ))),
+                ChildOf(root),
+            ))
+            .id();
+
+        // Frame 1: spawns tick everything → rebuild, first-sight dirty.
+        schedule.run(&mut world);
+        detect.run(&mut world);
+        assert!(world.resource::<SyncRan>().0, "first frame rebuilds");
+        assert!(
+            world
+                .resource::<LayerRepaintState>()
+                .dirty
+                .contains(&root),
+            "first sight is dirty"
+        );
+
+        // Frame 2: nothing changed → the gate closes; membership persists.
+        schedule.run(&mut world);
+        detect.run(&mut world);
+        assert!(
+            !world.resource::<SyncRan>().0,
+            "a geometry-idle frame must skip the rebuild"
+        );
+        assert!(world.resource::<LayerRepaintState>().dirty.is_empty());
+        assert_eq!(
+            world
+                .resource::<LayerMembership>()
+                .node_to_layer
+                .get(&member),
+            Some(&root),
+            "membership must be preserved on gated-out frames"
+        );
+
+        // Frame 3: content dirt alone is not a gate signal — but it must still
+        // resolve through the preserved membership.
+        world.resource_mut::<LayerContentDirt>().nodes.push(member);
+        schedule.run(&mut world);
+        detect.run(&mut world);
+        assert!(!world.resource::<SyncRan>().0, "content dirt doesn't rebuild");
+        assert!(
+            world
+                .resource::<LayerRepaintState>()
+                .dirty
+                .contains(&root),
+            "content dirt resolves via the preserved membership"
+        );
+    }
+
+    /// After settling, a member moving relative to its root (a real geometry
+    /// change) must reopen the gate and dirty the layer.
+    #[test]
+    fn geometry_change_after_settle_still_dirties() {
+        let (mut world, mut schedule) = geometry_world();
+        world.init_resource::<SyncRan>();
+        let mut detect = gate_probe();
+        let root = spawn_layer_root(&mut world, 1, Vec2::new(100.0, 60.0), Vec2::new(50.0, 30.0));
+        let member = world
+            .spawn((
+                ComputedNode {
+                    size: Vec2::new(20.0, 10.0),
+                    ..Default::default()
+                },
+                UiGlobalTransform::from(bevy::math::Affine2::from_translation(Vec2::new(
+                    10.0, 10.0,
+                ))),
+                ChildOf(root),
+            ))
+            .id();
+        // Settle: probe every frame (a probe system's FIRST run reads
+        // `is_changed` as true unconditionally, so it must burn frame 1).
+        schedule.run(&mut world);
+        detect.run(&mut world);
+        schedule.run(&mut world);
+        detect.run(&mut world);
+        assert!(!world.resource::<SyncRan>().0, "settled");
+
+        world.entity_mut(member).insert(UiGlobalTransform::from(
+            bevy::math::Affine2::from_translation(Vec2::new(30.0, 10.0)),
+        ));
+        schedule.run(&mut world);
+        detect.run(&mut world);
+        assert!(world.resource::<SyncRan>().0, "a member move rebuilds");
+        assert!(
+            world
+                .resource::<LayerRepaintState>()
+                .dirty
+                .contains(&root),
+            "a relative member move dirties the layer"
+        );
+    }
+
+    /// A promotion flip after settle rebuilds: demotion prunes membership and
+    /// the persistent hash; re-promotion hits the absent-hash first-frame rule
+    /// and re-captures.
+    #[test]
+    fn promotion_flip_after_settle_rebuilds() {
+        let (mut world, mut schedule) = geometry_world();
+        world.init_resource::<SyncRan>();
+        let mut detect = gate_probe();
+        let root = spawn_layer_root(&mut world, 1, Vec2::new(100.0, 60.0), Vec2::new(50.0, 30.0));
+        // Settle: probe every frame (a probe system's FIRST run reads
+        // `is_changed` as true unconditionally, so it must burn frame 1).
+        schedule.run(&mut world);
+        detect.run(&mut world);
+        schedule.run(&mut world);
+        detect.run(&mut world);
+        assert!(!world.resource::<SyncRan>().0, "settled");
+
+        world.entity_mut(root).remove::<PromotedLayer>();
+        schedule.run(&mut world);
+        detect.run(&mut world);
+        assert!(world.resource::<SyncRan>().0, "a demotion rebuilds");
+        assert!(
+            !world
+                .resource::<LayerMembership>()
+                .node_to_layer
+                .contains_key(&root),
+            "a demoted root leaves membership"
+        );
+        assert!(
+            !world
+                .resource::<LayerRepaintState>()
+                .hashes
+                .contains_key(&root),
+            "a demoted root's persistent hash is pruned"
+        );
+
+        world.entity_mut(root).insert(PromotedLayer {
+            reasons: PromotionReasons(PromotionReasons::FILTER),
+        });
+        schedule.run(&mut world);
+        detect.run(&mut world);
+        assert!(world.resource::<SyncRan>().0, "a re-promotion rebuilds");
+        assert_eq!(
+            world.resource::<LayerMembership>().node_to_layer.get(&root),
+            Some(&root),
+            "membership is restored"
+        );
+        assert!(
+            world
+                .resource::<LayerRepaintState>()
+                .dirty
+                .contains(&root),
+            "an absent hash (first frame after promotion) is dirty"
+        );
+    }
+
+    /// A resolved-chain change ALONE (no geometry / promotion tick — the
+    /// animated-blur / retuned-filter path) must reopen the gate: the outset
+    /// feeds the capture rect and the folded size.
+    #[test]
+    fn filter_chain_change_after_settle_rebuilds() {
+        let (mut world, mut schedule) = geometry_world();
+        world.init_resource::<SyncRan>();
+        let mut detect = gate_probe();
+        let root = spawn_layer_root(&mut world, 1, Vec2::new(100.0, 60.0), Vec2::new(50.0, 30.0));
+        filter_outset(&mut world, root, 12); // quantized 16
+        // Settle: probe every frame (a probe system's FIRST run reads
+        // `is_changed` as true unconditionally, so it must burn frame 1).
+        schedule.run(&mut world);
+        detect.run(&mut world);
+        schedule.run(&mut world);
+        detect.run(&mut world);
+        assert!(!world.resource::<SyncRan>().0, "settled");
+
+        filter_outset(&mut world, root, 18); // quantized 32 — crosses a step
+        schedule.run(&mut world);
+        detect.run(&mut world);
+        assert!(
+            world.resource::<SyncRan>().0,
+            "a chain change alone must reopen the gate"
+        );
+        assert!(
+            world
+                .resource::<LayerRepaintState>()
+                .dirty
+                .contains(&root),
+            "the crossed outset step re-captures"
         );
     }
 
