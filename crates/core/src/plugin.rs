@@ -566,8 +566,16 @@ impl Plugin for ReactUiPlugin {
                 // re-render's snap never wins.
                 crate::transition::drive_transitions.after(apply_interaction_styles),
                 // World-anchored overlays reposition after the op drain so they
-                // override this frame's static `left`/`top`.
-                crate::anchor::position_anchored_nodes.after(apply_js_ops),
+                // override this frame's static style, and after the animation
+                // applier + transition driver: all three write `UiTransform`
+                // (anchor owns `translation`), and without explicit edges the
+                // winner is nondeterministic — the same ping-pong hazard as
+                // `sync_shape_interactions` below. Anchor lands last so the
+                // projected position deterministically wins.
+                crate::anchor::position_anchored_nodes
+                    .after(apply_js_ops)
+                    .after(AnimationSet::Apply)
+                    .after(crate::transition::drive_transitions),
                 // Repaint `<canvas>` textures after their surfaces/sizes update,
                 // and report layout resizes to JS (the surface just cleared — so
                 // the app / the runtime's declarative replay redraws). Both read

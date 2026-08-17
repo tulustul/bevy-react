@@ -8,7 +8,7 @@
 //! synthetic-pointer picking (clicks ride the normal `Interaction` path).
 
 use bevy::prelude::*;
-use bevy::ui::{IsDefaultUiCamera, UiGlobalTransform, UiTransform};
+use bevy::ui::{IsDefaultUiCamera, UiGlobalTransform, UiTransform, Val2};
 use serde::Deserialize;
 
 /// The wire form of an `<anchor>`'s `anchor` prop: the Bevy entity to follow
@@ -114,17 +114,26 @@ pub struct Anchored {
 
 /// Reposition every [`Anchored`] node each frame: project its target's world
 /// position through the UI camera and write the result into the node's
-/// `left`/`top`, centered on the anchor point. Hides the overlay until it has been
-/// laid out (so it never flashes uncentered on spawn), and when the target has
-/// despawned or its anchor point is behind the camera / off-screen.
+/// `UiTransform.translation`, centered on the anchor point. The node's layout
+/// position is a one-time seed (`position_type: Absolute`, `left`/`top` `0`) —
+/// movement rides the transform, which is **not** a layout input, so a moving
+/// anchor (every frame, while the camera orbits) never re-runs taffy. The
+/// trade-off: anchored nodes **own** `translation` — a style/animated
+/// `translate` on an `<anchor>` is overwritten each frame (`scale` composes
+/// with distance scaling as before; `rotation` is untouched). Hides the overlay
+/// until it has been laid out (so it never flashes uncentered on spawn), and
+/// when the target has despawned or its anchor point is behind the camera /
+/// off-screen.
 ///
 /// Each anchored node is also reparented under the shared [`AnchorLayer`] so it lives
-/// in its own hierarchy: an off-screen anchor's large `left`/`top` then never inflates
-/// the scrollable `content_size` of whatever app container it was declared in. The
+/// in its own hierarchy and never contributes to the flex layout or scrollable
+/// `content_size` of whatever app container it was declared in (it sits at the
+/// layer's origin; the transform translation doesn't feed `content_size`). The
 /// reparent self-heals if a React reorder ever moves the node back.
 ///
 /// Registered in `Update` ordered after the op drain so it overrides this frame's
-/// static style. A no-op when no anchored nodes exist.
+/// static style, and after the animation/transition drivers so its `translation`
+/// write deterministically wins over theirs. A no-op when no anchored nodes exist.
 #[allow(clippy::type_complexity)]
 pub fn position_anchored_nodes(
     mut commands: Commands,
@@ -178,9 +187,21 @@ pub fn position_anchored_nodes(
             commands.entity(entity).insert(ChildOf(layer_entity));
         }
 
-        // Always absolute, so a hidden overlay never takes flex-flow space in its
-        // parent (e.g. while it waits to be positioned below).
-        node.position_type = PositionType::Absolute;
+        // Seed the layout position once (self-heals after a re-render's
+        // wholesale `Node` re-stamp): always absolute — so a hidden overlay
+        // never takes flex-flow space — anchored at the layer's origin. The
+        // node MOVES via `UiTransform.translation` below, never `left`/`top`,
+        // which are taffy inputs and would force a full relayout every frame
+        // the camera orbits. Guarded so a settled overlay doesn't tick
+        // `Changed<Node>` (a relayout) every frame.
+        if node.position_type != PositionType::Absolute
+            || node.left != Val::Px(0.0)
+            || node.top != Val::Px(0.0)
+        {
+            node.position_type = PositionType::Absolute;
+            node.left = Val::Px(0.0);
+            node.top = Val::Px(0.0);
+        }
 
         // Center the overlay on the anchor using its own laid-out size. On the frame
         // it spawns, `bevy_ui` layout hasn't produced a size yet (it runs later, in
@@ -219,15 +240,19 @@ pub fn position_anchored_nodes(
             transform.scale = Vec2::splat(scale);
         }
 
-        // `world_to_viewport` is in logical pixels, but `bevy_ui` positions an
-        // absolute node relative to its parent's box — so subtract the anchor layer's
-        // top-left (computed once above). Also center this node on the anchor using its
-        // own size.
+        // `world_to_viewport` is in logical pixels, but the node is laid out at
+        // the anchor layer's origin (`left`/`top` 0 above) — so subtract the
+        // layer's top-left (computed once above). Also center this node on the
+        // anchor using its own size. Applied as a transform translation
+        // (logical px, resolved physical exactly like `left`/`top` would be),
+        // compare-guarded so a static camera + target settles.
         let half = computed.size() * computed.inverse_scale_factor() / 2.0;
         let local = viewport - parent_top_left - half;
 
-        node.left = Val::Px(local.x);
-        node.top = Val::Px(local.y);
+        let translation = Val2::px(local.x, local.y);
+        if transform.translation != translation {
+            transform.translation = translation;
+        }
         set_visibility(&mut visibility, Visibility::Inherited);
     }
 }
@@ -372,6 +397,143 @@ mod tests {
             world.entity(badge).get::<ChildOf>().map(|c| c.parent()),
             Some(layer),
             "an anchored node must be reparented under the anchor layer"
+        );
+    }
+
+    /// An anchored overlay moves via `UiTransform.translation` — never
+    /// `Node.left/top`, which are taffy inputs. A moving target (the every-frame
+    /// case while the camera orbits) must not tick `Changed<Node>` (a relayout)
+    /// after the one-time seed, and a static frame must tick neither.
+    #[test]
+    fn anchored_move_never_ticks_node() {
+        use super::{AnchorLayer, Anchored, position_anchored_nodes};
+        use bevy::camera::{ComputedCameraValues, RenderTargetInfo};
+        use bevy::ecs::schedule::Schedule;
+        use bevy::prelude::*;
+        use bevy::ui::{ComputedNode, IsDefaultUiCamera, UiGlobalTransform, UiTransform, Val2};
+
+        #[derive(Resource, Default)]
+        struct Probe {
+            node: usize,
+            transform: usize,
+        }
+
+        // A camera whose projection + target info are hand-built so
+        // `world_to_viewport` works headless; the expected positions below are
+        // computed with the very same method the system uses.
+        let camera = Camera {
+            computed: ComputedCameraValues {
+                clip_from_view: Mat4::perspective_infinite_reverse_rh(
+                    std::f32::consts::FRAC_PI_4,
+                    1.0,
+                    0.1,
+                ),
+                target_info: Some(RenderTargetInfo {
+                    physical_size: UVec2::new(1000, 1000),
+                    scale_factor: 1.0,
+                }),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let cam_tf = GlobalTransform::default(); // at origin, looking -Z
+        let half = Vec2::new(10.0, 5.0); // badge is 20x10 at scale factor 1
+        let expected = |world_pos: Vec3| {
+            let viewport = camera
+                .world_to_viewport(&cam_tf, world_pos)
+                .expect("test points are in front of the camera");
+            Val2::px(viewport.x - half.x, viewport.y - half.y)
+        };
+
+        let mut world = World::new();
+        world.init_resource::<Probe>();
+        world.spawn((camera.clone(), cam_tf, IsDefaultUiCamera));
+        let layer = world
+            .spawn((
+                AnchorLayer,
+                ComputedNode::default(),
+                UiGlobalTransform::default(),
+            ))
+            .id();
+        let pos_a = Vec3::new(0.0, 0.0, -10.0);
+        let target = world.spawn(GlobalTransform::from_translation(pos_a)).id();
+        let badge = world
+            .spawn((
+                Node::default(),
+                ComputedNode {
+                    size: Vec2::new(20.0, 10.0),
+                    inverse_scale_factor: 1.0,
+                    ..Default::default()
+                },
+                UiGlobalTransform::default(),
+                Anchored {
+                    target,
+                    offset: Vec3::ZERO,
+                    scale: None,
+                },
+                ChildOf(layer),
+            ))
+            .id();
+
+        let mut apply = Schedule::default();
+        apply.add_systems(position_anchored_nodes);
+        // A separate detect schedule so each `Changed` filter spans exactly one
+        // apply run.
+        let mut detect = Schedule::default();
+        detect.add_systems(
+            |nodes: Query<(), (Changed<Node>, With<Anchored>)>,
+             transforms: Query<(), (Changed<UiTransform>, With<Anchored>)>,
+             mut probe: ResMut<Probe>| {
+                probe.node += nodes.iter().count();
+                probe.transform += transforms.iter().count();
+            },
+        );
+
+        // Frame 1: the seed writes Node (absolute at the layer origin) and the
+        // first translation. Burn the spawn's Changed ticks with it.
+        apply.run(&mut world);
+        detect.run(&mut world);
+        assert_eq!(
+            world.entity(badge).get::<UiTransform>().unwrap().translation,
+            expected(pos_a),
+            "the projected position lands in the transform translation"
+        );
+        assert_eq!(
+            world.entity(badge).get::<Visibility>(),
+            Some(&Visibility::Inherited),
+            "an on-screen anchor is visible"
+        );
+
+        // Frame 2: the target moves (simulated orbit). The overlay must follow
+        // via the transform alone — no Node tick, no relayout.
+        *world.resource_mut::<Probe>() = Probe::default();
+        let pos_b = Vec3::new(2.0, 1.0, -10.0);
+        world
+            .entity_mut(target)
+            .insert(GlobalTransform::from_translation(pos_b));
+        apply.run(&mut world);
+        detect.run(&mut world);
+        let probe = world.resource::<Probe>();
+        assert_eq!(
+            (probe.node, probe.transform),
+            (0, 1),
+            "a moving anchor must ride the transform, never Node (a relayout)"
+        );
+        assert_eq!(
+            world.entity(badge).get::<UiTransform>().unwrap().translation,
+            expected(pos_b),
+            "the overlay follows the moved target"
+        );
+
+        // Frame 3: everything static — fully settled, neither component ticks.
+        *world.resource_mut::<Probe>() = Probe::default();
+        apply.run(&mut world);
+        detect.run(&mut world);
+        let probe = world.resource::<Probe>();
+        assert_eq!(
+            (probe.node, probe.transform),
+            (0, 0),
+            "a static anchor must tick neither Node nor UiTransform"
         );
     }
 }
