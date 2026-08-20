@@ -81,7 +81,7 @@ use bevy::render::sync_world::{MainEntity, RenderEntity, TemporaryRenderEntity};
 use bevy::render::view::{ExtractedView, RetainedViewEntity, ViewUniform};
 use bevy::shader::Shader;
 use bevy::shader::ShaderCacheError;
-use bevy::ui::{ComputedNode, ComputedUiTargetCamera};
+use bevy::ui::{ComputedNode, ComputedStackIndex, ComputedUiTargetCamera};
 use bevy::ui_render::{SetUiViewBindGroup, TransparentUi, stack_z_offsets};
 
 use super::{LayerCaptureRect, LayerGroupAlpha, LayerMembership, PromotedLayer};
@@ -255,6 +255,14 @@ pub struct ExtractedLayer {
     /// frames. `None` while a morph is in flight ([`Self::morph`] carries
     /// the shader then).
     pub morph_warm: Option<Handle<Shader>>,
+    /// Composite-quad sort key to fall back on when the subtree stole no
+    /// phase items. Carried only while a morph is in flight: an empty morph
+    /// carrier (content mounted/unmounted around the blend) must still draw
+    /// its blend quad, at the layer root's own stacking position — the key a
+    /// background quad of the root would have produced
+    /// (`stack_z_offsets::BACKGROUND_COLOR` is 0.0). `None` everywhere else:
+    /// idle empty layers draw no quad.
+    pub fallback_sort_key: Option<FloatOrd>,
 }
 
 /// Per-frame extraction output. `layers` is index-aligned with
@@ -296,6 +304,7 @@ pub fn extract_ui_layers(
             Option<&crate::layer::transform3d::LayerTransform3dMatrix>,
             &PromotedLayer,
             Option<&ComputedNode>,
+            Option<&ComputedStackIndex>,
             Option<&crate::filters::MorphState>,
             Option<&crate::filters::ResolvedMorphChain>,
         )>,
@@ -331,6 +340,7 @@ pub fn extract_ui_layers(
         transform3d,
         promoted,
         computed,
+        stack_index,
         morph_state,
         morph_chain,
     ) in layers.iter()
@@ -461,6 +471,10 @@ pub fn extract_ui_layers(
             // untransformed layer (CPU clip path), and picking stays inert.
             transform3d: transform3d.filter(|m| !m.identity).map(|m| m.model),
             wants_mips,
+            fallback_sort_key: morph
+                .as_ref()
+                .and(stack_index)
+                .map(|s| FloatOrd(s.0 as f32 + stack_z_offsets::BACKGROUND_COLOR)),
             morph,
             morph_warm,
         });
@@ -593,6 +607,10 @@ pub fn redistribute_ui_layers(
             stolen.push((idx, key, item));
         }
     }
+    fill_fallback_sort_keys(
+        &mut quad_sort_keys,
+        extracted.layers.iter().map(|l| l.fallback_sort_key),
+    );
     propagate_quad_sort_keys(&mut quad_sort_keys, &extracted.enclosing);
     for (idx, _key, item) in stolen {
         // A cached layer's items are simply dropped: the persistent texture
@@ -1497,6 +1515,23 @@ fn walk_enclosing(start: usize, enclosing: &[Option<usize>], mut visit: impl FnM
     }
 }
 
+/// A MORPHING layer whose subtree stole no items (an empty carrier mid-blend)
+/// still needs its composite quad on screen — fill the missing key from the
+/// extract-time fallback ([`ExtractedLayer::fallback_sort_key`], the layer
+/// root's own stacking position). Runs before propagation so an enclosing
+/// layer inherits the filled key like any stolen one. A stolen key always
+/// wins; non-morphing empty layers have no fallback and stay `None`.
+fn fill_fallback_sort_keys(
+    keys: &mut [Option<FloatOrd>],
+    fallbacks: impl IntoIterator<Item = Option<FloatOrd>>,
+) {
+    for (key, fallback) in keys.iter_mut().zip(fallbacks) {
+        if key.is_none() {
+            *key = fallback;
+        }
+    }
+}
+
 /// A layer whose every visible descendant lives in NESTED layers steals no
 /// items of its own (a bare wrapper around promoted children queues no
 /// vertices), so its composite-quad position must come from its inner
@@ -1824,10 +1859,12 @@ pub fn ui_layer_capture_pass(
         // Capture. Skipped when cached (`!needs_capture`): the persistent
         // texture already holds the pixels — and skipping keeps the
         // `LoadOp::Clear` from wiping them.
+        // An EMPTY phase still captures: the clear-only pass leaves a valid
+        // transparent texture — the correct content of a subtree that paints
+        // nothing (an empty morph carrier freezes from / blends to it).
         if layer.needs_capture
             && let Some(texture) = atlases.textures.get(idx)
             && let Some(phase) = phases.get(&layer.retained)
-            && !phase.items.is_empty()
         {
             let mut pass = ctx.begin_tracked_render_pass(RenderPassDescriptor {
                 label: Some("ui_layer_capture"),
@@ -2072,6 +2109,29 @@ mod tests {
         let mut keys: [Option<FloatOrd>; 2] = [None, None];
         propagate_quad_sort_keys(&mut keys, &enclosing);
         assert_eq!(keys, [None, None]);
+    }
+
+    /// A morphing layer with no stolen items (empty carrier mid-blend) takes
+    /// its extract-time fallback key; stolen keys always win; layers without
+    /// a fallback (idle/non-morph) stay `None`. Filled keys propagate to
+    /// enclosing layers like stolen ones.
+    #[test]
+    fn fallback_sort_keys_fill_morphing_empty_layers() {
+        let key = |v: f32| Some(FloatOrd(v));
+
+        // Stolen key wins over fallback; fallback fills a keyless morpher;
+        // no fallback stays None.
+        let mut keys = [key(5.0), None, None];
+        fill_fallback_sort_keys(&mut keys, [key(1.0), key(4.0), None]);
+        assert_eq!(keys, [key(5.0), key(4.0), None]);
+
+        // Fill-then-propagate: an empty morphing layer nested in a bare
+        // enclosing layer hands its filled key outward.
+        let enclosing = [None, Some(0)];
+        let mut keys = [None, None];
+        fill_fallback_sort_keys(&mut keys, [None, key(6.0)]);
+        propagate_quad_sort_keys(&mut keys, &enclosing);
+        assert_eq!(keys, [key(6.0), key(6.0)]);
     }
 
     /// The shared enclosing-chain walk: visits ancestors bottom-up

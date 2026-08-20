@@ -472,7 +472,12 @@ export interface BevyStyle {
    *  promotes the node to a composited layer; first mount never animates; a
    *  mid-flight key change freezes the in-flight blend and restarts (always
    *  smooth). A morph filter must resolve to a single pass (a multi-pass
-   *  resolve is rejected with a devtools warning). */
+   *  resolve is rejected with a devtools warning). Enter/exit idiom: an
+   *  EMPTY carrier (a mounted node that paints nothing) is a valid
+   *  transparent capture — toggle the content in the same commit as the key
+   *  flip and the morph blends from/to nothing, no placeholder background
+   *  needed (the carrier must have rendered ≥1 frame before the first
+   *  flip; a same-commit mount+flip adopts the key silently). */
   morphFilter?: MorphFilterValue;
   /** Background gradient(s): one gradient or a layered list. Painted *over*
    *  `backgroundColor` (like CSS `background-image`): an opaque gradient hides

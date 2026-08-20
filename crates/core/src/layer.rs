@@ -2071,10 +2071,7 @@ mod tests {
         detect.run(&mut world);
         assert!(world.resource::<SyncRan>().0, "first frame rebuilds");
         assert!(
-            world
-                .resource::<LayerRepaintState>()
-                .dirty
-                .contains(&root),
+            world.resource::<LayerRepaintState>().dirty.contains(&root),
             "first sight is dirty"
         );
 
@@ -2100,12 +2097,12 @@ mod tests {
         world.resource_mut::<LayerContentDirt>().nodes.push(member);
         schedule.run(&mut world);
         detect.run(&mut world);
-        assert!(!world.resource::<SyncRan>().0, "content dirt doesn't rebuild");
         assert!(
-            world
-                .resource::<LayerRepaintState>()
-                .dirty
-                .contains(&root),
+            !world.resource::<SyncRan>().0,
+            "content dirt doesn't rebuild"
+        );
+        assert!(
+            world.resource::<LayerRepaintState>().dirty.contains(&root),
             "content dirt resolves via the preserved membership"
         );
     }
@@ -2145,10 +2142,7 @@ mod tests {
         detect.run(&mut world);
         assert!(world.resource::<SyncRan>().0, "a member move rebuilds");
         assert!(
-            world
-                .resource::<LayerRepaintState>()
-                .dirty
-                .contains(&root),
+            world.resource::<LayerRepaintState>().dirty.contains(&root),
             "a relative member move dirties the layer"
         );
     }
@@ -2201,10 +2195,7 @@ mod tests {
             "membership is restored"
         );
         assert!(
-            world
-                .resource::<LayerRepaintState>()
-                .dirty
-                .contains(&root),
+            world.resource::<LayerRepaintState>().dirty.contains(&root),
             "an absent hash (first frame after promotion) is dirty"
         );
     }
@@ -2235,10 +2226,7 @@ mod tests {
             "a chain change alone must reopen the gate"
         );
         assert!(
-            world
-                .resource::<LayerRepaintState>()
-                .dirty
-                .contains(&root),
+            world.resource::<LayerRepaintState>().dirty.contains(&root),
             "the crossed outset step re-captures"
         );
     }

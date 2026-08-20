@@ -14,7 +14,7 @@ const period = () => 2000 + Math.random() * 4000;
  * Returns a reset function: a manual swap calls it so the pending timer
  * restarts with a fresh full period instead of firing right after the
  * click. No-op while autoplay is off. */
-function useAutoplay(enabled: boolean, swap: () => void) {
+export function useAutoplay(enabled: boolean, swap: () => void) {
   const swapRef = useRef(swap);
   swapRef.current = swap;
   const restartRef = useRef<(() => void) | null>(null);

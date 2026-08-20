@@ -249,12 +249,17 @@ pub fn prepare_layer_textures(
             // (the exact failure mode of capturing during app startup).
             // Conservative by construction: a pipeline that compiles between
             // here and the capture pass costs one redundant re-capture.
+            // An EMPTY phase is vacuously complete — the capture pass still
+            // runs its clear, so the texture faithfully holds the subtree's
+            // content: nothing, i.e. transparent. "Valid" therefore means
+            // "capture reflects the subtree", NOT "capture has pixels" — an
+            // empty morph carrier's transparent capture is stealable (freeze)
+            // and blendable (morph-to-empty) like any other.
             slot.content_valid = phases.get(&layer.retained).is_some_and(|phase| {
-                !phase.items.is_empty()
-                    && phase
-                        .items
-                        .values()
-                        .all(|i| pipeline_cache.get_render_pipeline(i.pipeline).is_some())
+                phase
+                    .items
+                    .values()
+                    .all(|i| pipeline_cache.get_render_pipeline(i.pipeline).is_some())
             });
             // The capture rewrites level 0 this frame — its mip chain (if
             // any) goes stale until `prepare_layer_mips` restages it.

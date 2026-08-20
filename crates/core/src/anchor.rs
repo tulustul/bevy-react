@@ -494,7 +494,11 @@ mod tests {
         apply.run(&mut world);
         detect.run(&mut world);
         assert_eq!(
-            world.entity(badge).get::<UiTransform>().unwrap().translation,
+            world
+                .entity(badge)
+                .get::<UiTransform>()
+                .unwrap()
+                .translation,
             expected(pos_a),
             "the projected position lands in the transform translation"
         );
@@ -520,7 +524,11 @@ mod tests {
             "a moving anchor must ride the transform, never Node (a relayout)"
         );
         assert_eq!(
-            world.entity(badge).get::<UiTransform>().unwrap().translation,
+            world
+                .entity(badge)
+                .get::<UiTransform>()
+                .unwrap()
+                .translation,
             expected(pos_b),
             "the overlay follows the moved target"
         );
