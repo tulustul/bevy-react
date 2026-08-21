@@ -17,6 +17,7 @@ mod apply;
 mod create;
 mod editable;
 mod events;
+mod hover;
 mod image;
 mod interaction;
 mod pointer;
@@ -38,8 +39,13 @@ pub use editable::{
 };
 pub(crate) use events::climb;
 pub use events::{collect_canvas_resize_events, collect_scroll_events, collect_ui_events};
+pub use hover::collect_hover_events;
 pub use interaction::apply_interaction_styles;
-pub use pointer::{collect_hover_events, collect_pointer_events};
+pub(crate) use pointer::ActiveDrag;
+pub use pointer::collect_pointer_events;
+// Only tests construct drag sources from outside `reconcile` (seeding drags).
+#[cfg(test)]
+pub(crate) use pointer::DragSource;
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) use stats::mark_frame_start;
 pub use stats::{FlushFlags, FlushStamps, FrameStamp, OpApplyStats, UiAssets};

@@ -59,6 +59,7 @@ mod request;
 mod scroll;
 mod scrollbar;
 mod style_bindings;
+mod touch_scroll;
 mod transition;
 mod ts_codegen;
 mod ui_map;

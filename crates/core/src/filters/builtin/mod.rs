@@ -86,11 +86,13 @@ mod tests {
     use crate::filters::test_util::{asset_app, builtin_registry, params};
     use crate::protocol::units::Length;
 
-    /// `{}` params take each filter's CSS-shorthand default: 1.0 for the six
-    /// amount ops (identity for brightness/contrast/saturate, full effect for
-    /// grayscale/sepia/invert), 0 for blur radius and hue angle.
+    /// `{}` params take each filter's shorthand default — the convention is a
+    /// *visible* effect, not necessarily CSS's or the identity: 1.0 for the
+    /// six amount ops (identity for brightness/contrast/saturate, full effect
+    /// for grayscale/sepia/invert), 20px for blur radius (CSS's shorthand is
+    /// 0 — the one deliberate divergence), 0 for hue angle.
     #[test]
-    fn empty_params_default_to_css_shorthand_values() {
+    fn empty_params_take_visible_shorthand_defaults() {
         assert_eq!(params::<BrightnessParams>(json!({})).amount, 1.0);
         assert_eq!(params::<ContrastParams>(json!({})).amount, 1.0);
         assert_eq!(params::<SaturateParams>(json!({})).amount, 1.0);
@@ -101,7 +103,8 @@ mod tests {
         let g = params::<GrayscaleParams>(json!({}));
         assert_eq!(g.amount, 1.0);
         assert_eq!(g.pack().0[0].w, 1.0);
-        assert_eq!(params::<BlurParams>(json!({})).radius, Length::Px(0.0));
+        // A bare `{name:"blur"}` is a visible 20px blur (not CSS's 0).
+        assert_eq!(params::<BlurParams>(json!({})).radius, Length::Px(20.0));
         assert_eq!(params::<HueRotateParams>(json!({})).angle.radians(), 0.0);
         // A bare `{name:"bloom"}` is a visible glow.
         let b = params::<BloomParams>(json!({}));

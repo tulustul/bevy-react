@@ -39,9 +39,10 @@ export interface BevyMorphFilters {}
 /** One filter invocation in a chain: a registered filter name (e.g. `"blur"`,
  *  `"hueRotate"`) plus its parameters, typed per name via [`BevyFilters`].
  *  Every param is individually optional: an omitted param takes the filter's
- *  Rust-side default (the CSS-shorthand default for built-ins —
- *  `{ name: "grayscale" }` is *full* grayscale, like CSS `grayscale()` — and
- *  the field's `#[serde(default)]` for customs).
+ *  Rust-side default (for built-ins the shorthand-default convention: a
+ *  *visible* effect — `{ name: "grayscale" }` is *full* grayscale like CSS
+ *  `grayscale()`, and a bare `blur` is a visible 20px blur unlike CSS's 0 —
+ *  and the field's `#[serde(default)]` for customs).
  *
  *  Every param position is [`Animatable`]: `params: { radius: { animated:
  *  sv } }` binds it to a shared value (chain position = binding address, so

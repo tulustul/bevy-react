@@ -813,4 +813,29 @@ mod tests {
         );
         assert!(chain.version > v0, "resolver + binding both bumped");
     }
+
+    /// A seedless `{ animated }` radius resolves at the registry default —
+    /// for blur that is 20px, so the capture outset is 60 (3 × 20), not 0:
+    /// the blur no longer clips before the driver's first write (the seed's
+    /// remaining job is *controlling* the outset and the mount-frame value).
+    #[test]
+    fn seedless_animated_blur_outset_uses_registry_default() {
+        let (mut app, ops_tx, _anim_tx) = anim_app();
+        ops_tx
+            .send(vec![create(
+                1,
+                json!({
+                    "style": { "filter": { "name": "blur",
+                        "params": { "radius": { "animated": { "id": 1 } } } } },
+                }),
+            )])
+            .unwrap();
+        app.update();
+        let e = entity_of(&app, 1);
+        let chain = app.world().get::<ResolvedFilterChain>(e).unwrap();
+        assert_eq!(
+            chain.outset_px, 60,
+            "no seed → the 20px registry default sizes the outset (3 × 20)"
+        );
+    }
 }

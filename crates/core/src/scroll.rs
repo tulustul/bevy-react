@@ -22,8 +22,49 @@ use crate::transition::ScrollTransitionState;
 const LINE_HEIGHT: f32 = 20.0;
 
 /// Whether a node opts into scrolling on either axis.
-fn is_scroll_container(node: &Node) -> bool {
+pub(crate) fn is_scroll_container(node: &Node) -> bool {
     node.overflow.x == OverflowAxis::Scroll || node.overflow.y == OverflowAxis::Scroll
+}
+
+/// The scrollable range in logical px per axis (`0` = "no scroll"). Bevy clamps
+/// the offset it *applies* for rendering but never writes that back to
+/// `ScrollPosition`, so every scroll writer clamps against this itself.
+/// `ComputedNode` sizes are physical; the component is logical — hence
+/// `inverse_scale_factor`. Mirrors `ui_layout_system`'s own formula.
+pub(crate) fn scroll_range(computed: &ComputedNode) -> Vec2 {
+    (computed.content_size - computed.size + computed.scrollbar_size).max(Vec2::ZERO)
+        * computed.inverse_scale_factor
+}
+
+/// The offset a scroll writer moves from: the eased target when a scroll
+/// transition owns the offset (so successive ticks accumulate toward a farther
+/// target instead of re-basing mid-ease), else the live position.
+pub(crate) fn scroll_base(pos: &ScrollPosition, state: Option<&ScrollTransitionState>) -> Vec2 {
+    state.map_or(pos.0, |s| s.target)
+}
+
+/// Write `next` to the eased target when a transition owns the offset
+/// (`drive_scroll_transition` then moves `ScrollPosition`), else to the live
+/// offset directly. `!=`-guarded on both paths so re-writing an unchanged value
+/// stays change-tick quiet (`settle_controlled_scroll`'s read-back dedup
+/// relies on that).
+pub(crate) fn write_scroll(
+    pos: &mut ScrollPosition,
+    state: Option<Mut<ScrollTransitionState>>,
+    next: Vec2,
+) {
+    match state {
+        Some(mut state) => {
+            if state.target != next {
+                state.target = next;
+            }
+        }
+        None => {
+            if pos.0 != next {
+                pos.0 = next;
+            }
+        }
+    }
 }
 
 /// Move the `ScrollPosition` of the scroll container under the cursor by the
@@ -112,15 +153,8 @@ pub fn apply_scroll(
         };
         // Clamp to the scrollable range so the offset can't accumulate past the
         // ends (otherwise you'd have to "unscroll" the slack before it moves).
-        // Bevy clamps the offset it *applies* for rendering but never writes that
-        // back to this component, so we must clamp it ourselves. `ComputedNode`
-        // sizes are physical; the component is logical, so convert with
-        // `inverse_scale_factor`. Mirrors `ui_layout_system`'s own formula.
-        let max = (computed.content_size - computed.size + computed.scrollbar_size).max(Vec2::ZERO)
-            * computed.inverse_scale_factor;
-        // Move from the eased target if a scroll transition owns the offset (so
-        // ticks accumulate toward a farther target), else from the live position.
-        let base = scroll_state.as_ref().map_or(pos.0, |s| s.target);
+        let max = scroll_range(computed);
+        let base = scroll_base(&pos, scroll_state.as_deref());
         // Only the axes with actual scroll range (`max > 0`) consume the wheel;
         // a container whose content fits has nothing to move.
         let mut next = base;
@@ -134,13 +168,8 @@ pub fn apply_scroll(
             consumed = true;
         }
         if consumed {
-            // With a transition, set the eased target (`drive_scroll_transition`
-            // moves `ScrollPosition`); otherwise move the offset directly.
-            match scroll_state {
-                Some(mut state) => state.target = next,
-                None => pos.0 = next,
-            }
-            // The wheel actually moved this container — claim the wheel channel
+            write_scroll(&mut pos, scroll_state, next);
+            // The wheel consumed an in-range axis — claim the wheel channel
             // so world wheel-consumers that honor `PointerCapture` (the orbit
             // camera's wheel-zoom, etc.) ignore the same wheel this frame. Not
             // a hover claim: `over_ui` stays as `collect_pointer_events` set it.
@@ -185,22 +214,8 @@ pub fn settle_controlled_scroll(
     )>,
 ) {
     for (entity, request, computed, mut pos, scroll_state) in &mut pending {
-        // Same range formula as `apply_scroll` / `update_controlled_scroll`.
-        let max = (computed.content_size - computed.size + computed.scrollbar_size).max(Vec2::ZERO)
-            * computed.inverse_scale_factor;
-        let clamped = request.0.clamp(Vec2::ZERO, max);
-        match scroll_state {
-            Some(mut state) => {
-                if state.target != clamped {
-                    state.target = clamped;
-                }
-            }
-            None => {
-                if pos.0 != clamped {
-                    pos.0 = clamped;
-                }
-            }
-        }
+        let clamped = request.0.clamp(Vec2::ZERO, scroll_range(computed));
+        write_scroll(&mut pos, scroll_state, clamped);
         commands.entity(entity).remove::<PendingControlledScroll>();
     }
 }
@@ -286,6 +301,25 @@ pub fn collect_wheel_events(
 mod tests {
     use super::*;
     use bevy::ecs::system::RunSystemOnce;
+
+    #[test]
+    fn scroll_range_is_zero_when_content_fits() {
+        let fits = ComputedNode {
+            size: Vec2::new(100.0, 100.0),
+            content_size: Vec2::new(100.0, 100.0),
+            inverse_scale_factor: 1.0,
+            ..default()
+        };
+        assert_eq!(scroll_range(&fits), Vec2::ZERO);
+
+        let overflowing = ComputedNode {
+            size: Vec2::new(100.0, 100.0),
+            content_size: Vec2::new(100.0, 300.0),
+            inverse_scale_factor: 1.0,
+            ..default()
+        };
+        assert_eq!(scroll_range(&overflowing), Vec2::new(0.0, 200.0));
+    }
 
     /// Drive `apply_scroll` against a 200×100 scroll container centered at (300, 200)
     /// holding `content_h`px of content (so the scroll range is `[0, content_h - 100]`

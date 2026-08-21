@@ -171,8 +171,10 @@ pub struct Style {
     /// Layer-based, subtree-wide `filter` chain (see [`crate::filters`]): one
     /// `{ name, params }` object (a 1-element chain) or an ordered array of
     /// them (chain order = pass order). Omitted params take the filter's
-    /// CSS-shorthand default (a bare `grayscale` is *full* grayscale, while
-    /// `brightness`/`contrast`/`saturate` default to identity). `params`
+    /// shorthand default — a *visible* effect, not necessarily the identity
+    /// (a bare `grayscale` is *full* grayscale, a bare `blur` is a visible
+    /// 20px blur unlike CSS's 0, while `brightness`/`contrast`/`saturate`
+    /// default to identity). `params`
     /// stays an untyped map at decode; it is validated later against the
     /// registered filters
     /// ([`FilterRegistry`](crate::filters::FilterRegistry)). A non-empty

@@ -428,6 +428,8 @@ impl Plugin for ReactUiPlugin {
         .init_resource::<ReactRequestRegistry>()
         .init_resource::<ReactEventRegistry>()
         .init_resource::<PointerCapture>()
+        .init_resource::<crate::reconcile::ActiveDrag>()
+        .init_resource::<crate::touch_scroll::TouchScrollState>()
         .init_resource::<OpApplyStats>()
         // Unconditional so wasm compiles; it just stays `None` there.
         .init_resource::<crate::reconcile::FrameStamp>()
@@ -529,6 +531,14 @@ impl Plugin for ReactUiPlugin {
                 // tuple is at Bevy's arity limit.)
                 (
                     crate::scroll::apply_scroll
+                        .in_set(PointerCaptureSet)
+                        .after(collect_pointer_events),
+                    // Touch-drag scrolling; after `collect_pointer_events` both
+                    // for the capture-claim ordering and as a data edge: it
+                    // reads the just-assigned `ActiveDrag` so the one touch
+                    // bound to a handler-node drag is excluded from claiming
+                    // (per-touch — other fingers still claim freely).
+                    crate::touch_scroll::apply_touch_scroll
                         .in_set(PointerCaptureSet)
                         .after(collect_pointer_events),
                     crate::scroll::collect_wheel_events

@@ -13,20 +13,32 @@ use crate::filters::params::{ParamSlot, length_logical_px, static_layout};
 use crate::filters::registry::{ReactFilter, ResolvedFilterPass};
 use crate::protocol::units::Length;
 
-/// `blur`: separable Gaussian blur. `radius` defaults to `0` — CSS `blur()`
-/// with the value omitted means `0` (identity).
+/// `blur`: separable Gaussian blur. `radius` defaults to `20px` when omitted
+/// (the transition identity stays `0` — see [`ReactFilter::identity_params`]).
 ///
 /// Resolves to **two** passes, horizontal then vertical, each packed as
 /// `params[0] = (radius_logical_px, dir.x, dir.y, 0)` with dir `(1,0)` then
 /// `(0,1)`. Only the radius is a named (layout-exposed) param — the direction
 /// components are pass-internal.
-#[derive(Debug, Clone, Copy, PartialEq, Default, Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, Copy, PartialEq, Deserialize, ts_rs::TS)]
 #[serde(deny_unknown_fields)]
 pub struct BlurParams {
     // Mirrors `#[react_filter]`'s override for a `Length` field.
-    #[serde(default)]
+    #[serde(default = "default_blur_radius")]
     #[ts(type = "number | string")]
     pub radius: Length,
+}
+
+fn default_blur_radius() -> Length {
+    Length::Px(20.0)
+}
+
+impl Default for BlurParams {
+    fn default() -> Self {
+        Self {
+            radius: default_blur_radius(),
+        }
+    }
 }
 
 fn blur_layout() -> Arc<[ParamSlot]> {
@@ -115,7 +127,8 @@ mod tests {
             params::<BlurParams>(json!({ "radius": 4 })).outset(),
             Ok(12.0)
         );
-        assert_eq!(params::<BlurParams>(json!({})).outset(), Ok(0.0));
+        // An omitted radius takes the 20px default → 60px outset.
+        assert_eq!(params::<BlurParams>(json!({})).outset(), Ok(60.0));
     }
 
     /// A non-px blur radius (`"50%"`, `"1vw"`, ...) rejects from both baked

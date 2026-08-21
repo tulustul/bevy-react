@@ -3,6 +3,48 @@
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Touch-drag scrolling.** A finger pressed on an `overflow: scroll`
+  container drags its content 1:1 — the mobile counterpart of the wheel path,
+  with the same topmost-first geometry walk, per-axis range rules (only an
+  axis that opted into scrolling _and_ has actual range claims; unclaimable
+  containers stay transparent to the world), and eased-target handoff. The
+  gesture owns its touch for the whole lifetime (`PointerCapture::dragging`),
+  and once it scrolls past the ~8px tap slop it consumes that touch's
+  `onClick` (web semantics: scrolling cancels the tap; a sub-slop tap still
+  clicks, and `pointerUp` always fires). Ownership is per-pointer: the one
+  touch driving a handler-node drag (e.g. a slider) is never claimed, while
+  other fingers scroll freely and concurrently — including during a mouse
+  drag, and across several containers at once. Scrollbar tracks and thumbs
+  are opaque to claiming: a touch on them belongs to the scrollbar widget
+  (whose thumb is touch-draggable), never to the content scroll beneath.
+- **Touch support for `onPointer*` drags.** A touch press over a handler node
+  now begins a drag exactly like a primary-button press — `pointerDown`,
+  `pointerMove` while the finger moves (reported with the touch position as
+  the absolute coordinates), and `pointerUp` on lift (a canceled touch counts
+  as a lift, reporting the finger's last position). The drag binds only to a
+  pressed node the touch is actually inside, so a second finger elsewhere —
+  or a press attributed from an idle mouse cursor on hybrid devices — never
+  starts a phantom drag. Sliders and other drag controls work on
+  touchscreens, and a touch drag claims `PointerCapture::dragging` the same
+  way a mouse drag does. Discrete `onClick` already worked on touch via
+  `bevy_picking`.
+
+### Changed
+
+- **Bare `{ name: "blur" }` is now a visible 20px blur.** The omitted-param
+  default was CSS-faithful `radius: 0` (an invisible identity); it now
+  follows the shorthand-default convention every other visual built-in uses
+  (bloom, outline, shadow, …): a bare filter shows the effect. The transition
+  identity stays `radius: 0` (chain padding/easing is unchanged), and a
+  seedless `{ animated }` radius now resolves its capture outset at 60px
+  instead of 0 — the blur no longer clips before the first driven write, but
+  it also renders a visible 20px blur on its mount frame, so seed the wrapper
+  when that matters.
+
 ## [0.5.0] - 2026-08-16
 
 ### Added

@@ -257,28 +257,15 @@ pub(super) fn update_controlled_scroll(
     }
     if let Ok((mut pos, computed, scroll_state)) = scroll_query.get_mut(e) {
         // Base on the eased target if a transition owns the offset, else the live one.
-        let mut requested = scroll_state.as_ref().map_or(pos.0, |s| s.target);
+        let mut requested = crate::scroll::scroll_base(&pos, scroll_state.as_deref());
         if let Some(x) = scroll_left {
             requested.x = x;
         }
         if let Some(y) = scroll_top {
             requested.y = y;
         }
-        // Same range as the wheel handler (`scroll::apply_scroll`): `ComputedNode`
-        // sizes are physical, the component is logical, so scale with `inverse_scale_factor`.
-        let max = (computed.content_size - computed.size + computed.scrollbar_size).max(Vec2::ZERO)
-            * computed.inverse_scale_factor;
-        let clamped = requested.clamp(Vec2::ZERO, max);
-        match scroll_state {
-            // Eased: set the target; `drive_scroll_transition` moves `ScrollPosition`.
-            Some(mut state) => state.target = clamped,
-            // Snap: write the offset directly, only when it diverges.
-            None => {
-                if pos.0 != clamped {
-                    pos.0 = clamped;
-                }
-            }
-        }
+        let clamped = requested.clamp(Vec2::ZERO, crate::scroll::scroll_range(computed));
+        crate::scroll::write_scroll(&mut pos, scroll_state, clamped);
         if requested != clamped {
             // Out of the STALE range — the same commit may have grown the
             // content; redo the clamp after layout (see the doc above).

@@ -33,9 +33,11 @@ use crate::svg::ShapeAttrs;
 /// carrying the optional **`seed`** — the static value the resolver should
 /// decode in the wrapper's place. The seed exists because resolve-time
 /// derivations (a blur's capture outset) read only static params: an animated
-/// radius with no seed resolves at the registry default (outset 0 → the blur
-/// clips), so `{ animated: sv, seed: 10 }` sizes the outset for the animation's
-/// range while the binding drives the on-screen value every frame.
+/// radius with no seed resolves at the registry default (blur: 20px → a 60px
+/// outset, and a visible 20px blur on the mount frame until the driver's
+/// first write), so `{ animated: sv, seed: 10 }` sizes the outset for the
+/// animation's range — and pins the mount-frame value — while the binding
+/// drives the on-screen value every frame.
 pub(crate) fn animated_param_seed(value: &serde_json::Value) -> Option<Option<&serde_json::Value>> {
     let map = value.as_object()?;
     map.contains_key("animated").then(|| map.get("seed"))

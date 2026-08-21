@@ -600,13 +600,6 @@ pub fn sync_scrollbars(
     });
 }
 
-/// The logical scroll range per axis (0 means "no scroll"), mirroring
-/// `crate::scroll::apply_scroll`'s formula.
-fn scroll_max(computed: &ComputedNode) -> Vec2 {
-    (computed.content_size - computed.size + computed.scrollbar_size).max(Vec2::ZERO)
-        * computed.inverse_scale_factor
-}
-
 /// The track's `(left/top, width/height)` in the parent's local (logical) space,
 /// for a container whose top-left sits at `rel` (logical, relative to the parent's
 /// top-left) with logical `size`. `thickness` is the bar's cross-axis size.
@@ -674,7 +667,7 @@ pub fn position_scrollbars(
         let rel = (container_tl - parent_tl) * inv;
         let size = computed.size * inv;
         let thickness = config.0.thickness();
-        let max = scroll_max(computed);
+        let max = crate::scroll::scroll_range(computed);
 
         let mut apply = |axis: AxisEntities, orientation: ControlOrientation, has_range: bool| {
             let Ok((mut node, mut visibility, track_child_of)) = q_tracks.get_mut(axis.track)
@@ -998,25 +991,6 @@ mod tests {
         assert_eq!(spec.position(), ScrollbarPosition::Gutter);
         assert_eq!(spec.vertical_side(), HorizontalEdge::Right);
         assert_eq!(spec.horizontal_side(), VerticalEdge::Bottom);
-    }
-
-    #[test]
-    fn scroll_max_is_zero_when_content_fits() {
-        let fits = ComputedNode {
-            size: Vec2::new(100.0, 100.0),
-            content_size: Vec2::new(100.0, 100.0),
-            inverse_scale_factor: 1.0,
-            ..default()
-        };
-        assert_eq!(scroll_max(&fits), Vec2::ZERO);
-
-        let overflowing = ComputedNode {
-            size: Vec2::new(100.0, 100.0),
-            content_size: Vec2::new(100.0, 300.0),
-            inverse_scale_factor: 1.0,
-            ..default()
-        };
-        assert_eq!(scroll_max(&overflowing), Vec2::new(0.0, 200.0));
     }
 
     #[test]

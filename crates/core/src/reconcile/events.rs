@@ -21,9 +21,14 @@ use crate::surface::SurfaceVirtualPointer;
 /// are the `onPointer*` events' job (which carry the button). The surface
 /// virtual pointer is excluded: its clicks are
 /// [`collect_surface_clicks`](crate::reconcile::collect_surface_clicks)' job.
+/// A touch whose scroll gesture moved past the tap slop is excluded too (web
+/// semantics: scrolling cancels the tap — `pointerUp` still fires).
 pub fn collect_ui_events(
     bridge: Res<JsBridge>,
     surface_pointer: Option<Res<SurfaceVirtualPointer>>,
+    // `Option` so the many headless tests that never touch scrolling don't
+    // have to init it; production always has it (`ReactUiPlugin`).
+    touch_scroll: Option<Res<crate::touch_scroll::TouchScrollState>>,
     mut clicks: MessageReader<Pointer<Click>>,
     // Only `Interaction`-bearing nodes own a click (a `<button>` gets one via
     // `Button`; a `<text>` child does not) — the same attribution rule as the
@@ -46,6 +51,19 @@ pub fn collect_ui_events(
         if surface_pointer
             .as_ref()
             .is_some_and(|p| ev.pointer_id == p.id)
+        {
+            continue;
+        }
+        // A scrolled touch consumed its tap: bevy_picking emits `Click` on
+        // entity identity alone (no movement threshold), so a 200px scroll
+        // gesture would otherwise "click" the row it started on. Suppression
+        // is readable here in either Update order relative to
+        // `apply_touch_scroll` — the slop latches on move frames and the
+        // claim survives the release frame (see `TouchScrollState`). A touch
+        // bound to a handler drag (`ActiveDrag`) past slop still clicks —
+        // pre-existing behavior, out of scope here.
+        if let PointerId::Touch(id) = ev.pointer_id
+            && touch_scroll.as_ref().is_some_and(|s| s.is_suppressed(id))
         {
             continue;
         }
@@ -221,6 +239,7 @@ pub(crate) fn climb(
 mod tests {
     use super::*;
     use crate::protocol::op::Op;
+    use crate::reconcile::collect_surface_clicks;
 
     /// [`collect_scroll_events`] reports a `"scroll"` for a `ScrollListener` node
     /// whose offset diverges from the recorded one, ignores non-listener nodes, and
@@ -294,5 +313,265 @@ mod tests {
             out_rx.try_recv().is_err(),
             "a write-back equal to the recorded value must not echo back to React"
         );
+    }
+
+    /// A synthetic picking `Pointer<Click>` location: the render target is
+    /// irrelevant to the collectors, so a default image handle stands in.
+    fn click_location() -> bevy::picking::pointer::Location {
+        bevy::picking::pointer::Location {
+            target: bevy::camera::NormalizedRenderTarget::Image(
+                Handle::<bevy::image::Image>::default().into(),
+            ),
+            position: Vec2::ZERO,
+        }
+    }
+
+    /// A minimal app wired for the picking-based click collectors: a `JsBridge`
+    /// (with its outbound receiver kept alive) + `Pointer<Click>` messages.
+    fn click_app() -> (App, tokio::sync::mpsc::UnboundedReceiver<Outbound>) {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins);
+        let (out_tx, out_rx) = tokio::sync::mpsc::unbounded_channel::<Outbound>();
+        let (_ops_tx, ops_rx) = crossbeam_channel::unbounded::<Vec<Op>>();
+        std::mem::forget(_ops_tx); // Keep the ops channel open for the app's lifetime.
+        let root = app.world_mut().spawn_empty().id();
+        app.insert_resource(JsBridge::new(ops_rx, out_tx, root));
+        app.add_message::<Pointer<Click>>();
+        (app, out_rx)
+    }
+
+    fn drain_clicks(out_rx: &mut tokio::sync::mpsc::UnboundedReceiver<Outbound>) -> Vec<UiEvent> {
+        std::iter::from_fn(|| out_rx.try_recv().ok())
+            .map(|o| match o {
+                Outbound::UiEvent { event } => event,
+                other => panic!("expected a UiEvent, got {other:?}"),
+            })
+            .collect()
+    }
+
+    /// [`collect_ui_events`] rides `Pointer<Click>`: only the primary button
+    /// clicks (right/middle are the `onPointer*` events' job), a click on a
+    /// node's leaf (label) climbs to the `Interaction`-bearing owner, and the
+    /// multi-pick fan-out (leaf + owner both hovered) dedupes to ONE event.
+    #[test]
+    fn picking_click_fires_once_primary_only() {
+        let (mut app, mut out_rx) = click_app();
+        app.add_systems(Update, collect_ui_events);
+
+        let owner = app.world_mut().spawn((RNode(1), Interaction::None)).id();
+        let leaf = app.world_mut().spawn(ChildOf(owner)).id();
+
+        let click = |entity, button| {
+            Pointer::new(
+                PointerId::Mouse,
+                click_location(),
+                Click {
+                    button,
+                    hit: bevy::picking::backend::HitData::new(Entity::PLACEHOLDER, 0.0, None, None),
+                    duration: std::time::Duration::ZERO,
+                    count: 1,
+                },
+                entity,
+            )
+        };
+        // A right click must be ignored entirely…
+        app.world_mut()
+            .write_message(click(leaf, PointerButton::Secondary));
+        // …while a primary gesture fans out to every hovered entity (leaf +
+        // owner) and must dedupe to one click.
+        app.world_mut()
+            .write_message(click(leaf, PointerButton::Primary));
+        app.world_mut()
+            .write_message(click(owner, PointerButton::Primary));
+        app.update();
+
+        let events = drain_clicks(&mut out_rx);
+        assert_eq!(
+            events.len(),
+            1,
+            "secondary filtered out; leaf + owner primary picks dedupe to one click"
+        );
+        assert_eq!(events[0].id, 1);
+        assert_eq!(events[0].kind, "click");
+        assert_eq!(
+            events[0].button, None,
+            "clicks carry no button (primary implied)"
+        );
+    }
+
+    /// Clicks do NOT bubble: when nested `Interaction` owners are all under the
+    /// cursor (pass-through hit stack), only the topmost owner — the resolving
+    /// hit with the smallest `HitData.depth`, not the first message (hover-map
+    /// order is arbitrary) — gets the click.
+    #[test]
+    fn nested_onclick_owners_click_topmost_only() {
+        let (mut app, mut out_rx) = click_app();
+        app.add_systems(Update, collect_ui_events);
+
+        let outer = app.world_mut().spawn((RNode(1), Interaction::None)).id();
+        let inner = app
+            .world_mut()
+            .spawn((RNode(2), Interaction::None, ChildOf(outer)))
+            .id();
+        let leaf = app.world_mut().spawn(ChildOf(inner)).id();
+
+        let click = |entity, depth| {
+            Pointer::new(
+                PointerId::Mouse,
+                click_location(),
+                Click {
+                    button: PointerButton::Primary,
+                    hit: bevy::picking::backend::HitData::new(
+                        Entity::PLACEHOLDER,
+                        depth,
+                        None,
+                        None,
+                    ),
+                    duration: std::time::Duration::ZERO,
+                    count: 1,
+                },
+                entity,
+            )
+        };
+        // Adversarial order: the DEEPEST hit arrives first (the hover map is a
+        // HashMap — message order carries no meaning). Depths mirror the
+        // bevy_ui backend: topmost 0.0, +0.00001 per node beneath.
+        app.world_mut().write_message(click(outer, 0.00002));
+        app.world_mut().write_message(click(leaf, 0.0));
+        app.world_mut().write_message(click(inner, 0.00001));
+        app.update();
+
+        let events = drain_clicks(&mut out_rx);
+        assert_eq!(
+            events.len(),
+            1,
+            "a click over nested owners must fire only the topmost owner"
+        );
+        assert_eq!(events[0].id, 2, "the inner (topmost) node owns the click");
+    }
+
+    /// [`collect_surface_clicks`] applies the same no-bubbling rule: nested
+    /// surface owners under one virtual-pointer gesture click only the topmost.
+    #[test]
+    fn surface_nested_onclick_owners_click_topmost_only() {
+        let (mut app, mut out_rx) = click_app();
+        app.add_systems(Startup, crate::surface::init_surface_pointer);
+        app.add_systems(Update, collect_surface_clicks);
+        app.update(); // Run Startup so the pointer resource exists.
+
+        let outer = app.world_mut().spawn((RNode(1), Interaction::None)).id();
+        let inner = app
+            .world_mut()
+            .spawn((RNode(2), Interaction::None, ChildOf(outer)))
+            .id();
+
+        let surface_id = app.world().resource::<SurfaceVirtualPointer>().id;
+        let click = |entity, depth| {
+            Pointer::new(
+                surface_id,
+                click_location(),
+                Click {
+                    button: PointerButton::Primary,
+                    hit: bevy::picking::backend::HitData::new(
+                        Entity::PLACEHOLDER,
+                        depth,
+                        None,
+                        None,
+                    ),
+                    duration: std::time::Duration::ZERO,
+                    count: 1,
+                },
+                entity,
+            )
+        };
+        // Deepest-first again: selection must ride depth, not arrival order.
+        app.world_mut().write_message(click(outer, 0.00001));
+        app.world_mut().write_message(click(inner, 0.0));
+        app.update();
+
+        let events = drain_clicks(&mut out_rx);
+        assert_eq!(
+            events.len(),
+            1,
+            "a surface click over nested owners must fire only the topmost owner"
+        );
+        assert_eq!(events[0].id, 2, "the inner (topmost) node owns the click");
+    }
+
+    /// No-regression pin for handler fallthrough: a click picked on a
+    /// handler-less shape (no `Interaction`) climbs the `ChildOf` chain to
+    /// the `<svg>` root's own `Interaction` — the root still owns the click.
+    #[test]
+    fn handlerless_shape_click_falls_to_svg_root() {
+        let (mut app, mut out_rx) = click_app();
+        app.add_systems(Update, collect_ui_events);
+
+        let root = app.world_mut().spawn((RNode(1), Interaction::None)).id();
+        let shape = app
+            .world_mut()
+            .spawn((
+                RNode(2),
+                crate::svg::SvgShape {
+                    kind: crate::svg::ShapeKind::Circle,
+                    attrs: crate::svg::ShapeAttrs::default(),
+                },
+                ChildOf(root),
+            ))
+            .id();
+
+        app.world_mut().write_message(Pointer::new(
+            PointerId::Mouse,
+            click_location(),
+            Click {
+                button: PointerButton::Primary,
+                hit: bevy::picking::backend::HitData::new(Entity::PLACEHOLDER, 0.0, None, None),
+                duration: std::time::Duration::ZERO,
+                count: 1,
+            },
+            shape,
+        ));
+        app.update();
+
+        let events = drain_clicks(&mut out_rx);
+        assert_eq!(events.len(), 1, "the click resolves to exactly one owner");
+        assert_eq!(
+            events[0].id, 1,
+            "a handler-less shape's click belongs to the <svg> root"
+        );
+    }
+
+    /// The surface virtual pointer's clicks belong to `collect_surface_clicks`
+    /// alone: [`collect_ui_events`] must skip them (no double-fire), and the
+    /// surface collector reports exactly one click.
+    #[test]
+    fn surface_pointer_clicks_are_not_main_clicks() {
+        let (mut app, mut out_rx) = click_app();
+        app.add_systems(Startup, crate::surface::init_surface_pointer);
+        app.add_systems(Update, (collect_ui_events, collect_surface_clicks));
+        app.update(); // Run Startup so the pointer resource exists.
+
+        let owner = app.world_mut().spawn((RNode(7), Interaction::None)).id();
+        let surface_id = app.world().resource::<SurfaceVirtualPointer>().id;
+        app.world_mut().write_message(Pointer::new(
+            surface_id,
+            click_location(),
+            Click {
+                button: PointerButton::Primary,
+                hit: bevy::picking::backend::HitData::new(Entity::PLACEHOLDER, 0.0, None, None),
+                duration: std::time::Duration::ZERO,
+                count: 1,
+            },
+            owner,
+        ));
+        app.update();
+
+        let events = drain_clicks(&mut out_rx);
+        assert_eq!(
+            events.len(),
+            1,
+            "exactly one click: surface-collected, not double-fired by collect_ui_events"
+        );
+        assert_eq!(events[0].id, 7);
+        assert_eq!(events[0].button, None, "clicks carry no button");
     }
 }

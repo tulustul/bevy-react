@@ -40,8 +40,9 @@ pub trait ReactFilter: Send + Sync + Sized + 'static {
 
     /// The params JSON of this filter's **identity** invocation (no visual
     /// effect), if it has one — brightness/contrast/saturate `amount: 1`,
-    /// grayscale/sepia/invert `amount: 0` (their identity is `0`, NOT the CSS
-    /// shorthand default of `1`), blur `radius: 0`, hueRotate `angle: 0`.
+    /// grayscale/sepia/invert `amount: 0` (their identity is `0`, NOT the
+    /// shorthand default of `1`), blur `radius: 0` (its identity — NOT its
+    /// 20px omitted-param default), hueRotate `angle: 0`.
     ///
     /// Consumed by the transition engine's filter channel: when a chain
     /// gains/loses trailing entries, the shorter side is padded with identity

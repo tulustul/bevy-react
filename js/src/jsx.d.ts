@@ -441,8 +441,10 @@ export interface BevyStyle {
   boxShadow?: BoxShadow | BoxShadow[];
   /** CSS-like `filter` chain: one `{ name, params }` entry (e.g.
    *  `{ name: "blur", params: { radius: 4 } }`) or an ordered array of them —
-   *  chain order is pass order. Omitted params take the filter's CSS-shorthand
-   *  default (`{ name: "grayscale" }` is full grayscale). Subtree semantics,
+   *  chain order is pass order. Omitted params take the filter's shorthand
+   *  default: a *visible* effect, not necessarily the identity
+   *  (`{ name: "grayscale" }` is full grayscale; a bare `blur` is a visible
+   *  20px blur, unlike CSS's 0). Subtree semantics,
    *  like CSS: the node is promoted to a composited layer and the filter
    *  applies to its whole captured subtree (images, text, buttons, nested
    *  nodes) as one image. */
