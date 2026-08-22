@@ -43,7 +43,7 @@ cargo run -p bevy-react --example layers-stress --release
 
 ### 6. Update the CHANGELOG.md file
 
-### 7. Commit the version bump with message `bump <version>`
+### 7. Commit and push the version bump with message `bump <version>`
 
 ### 8. Dry-run both publishes
 
