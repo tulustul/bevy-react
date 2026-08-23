@@ -103,7 +103,7 @@ pub struct RenderTarget {
 }
 
 impl RenderTarget {
-    /// The [`bevy::render::camera::RenderTarget`] to set on a camera's `target`
+    /// The [`bevy::camera::RenderTarget`] to set on a camera's `target`
     /// so it renders into this texture.
     pub fn camera_target(&self) -> BevyRenderTarget {
         BevyRenderTarget::Image(ImageRenderTarget {

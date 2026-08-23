@@ -68,7 +68,7 @@ pub fn react_message(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// awaits a typed reply).
 ///
 /// Derives `serde::Deserialize` + `ts_rs::TS` and implements
-/// [`bevy_react::ReactRequest`], so the type can be registered with
+/// `bevy_react::ReactRequest`, so the type can be registered with
 /// `App::add_react_request_handler` and answered from a React `request(name, value)`
 /// call. Observe `On<Request<T>>` and reply with `req.respond(value)`.
 ///
@@ -138,7 +138,7 @@ pub fn react_request(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// Turn a struct into a typed React **event** payload (a Bevy → React broadcast).
 ///
 /// Derives `serde::Serialize` + `ts_rs::TS` and implements
-/// [`bevy_react::ReactEvent`]. Send it from a system with the `ReactEvents` param;
+/// `bevy_react::ReactEvent`. Send it from a system with the `ReactEvents` param;
 /// React listens with `bevy.on(name, cb)`. Register the type with
 /// `App::add_react_event::<E>()` so it appears in the generated typings.
 ///

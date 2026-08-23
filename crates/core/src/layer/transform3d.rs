@@ -1,6 +1,7 @@
 //! The composite-time 3D transform on a promoted layer (`transform3d` style).
 //!
-//! The style's presence promotes the subtree ([`PromotionReasons::TRANSFORM3D`]);
+//! The style's presence promotes the subtree
+//! ([`PromotionReasons::TRANSFORM3D`](super::PromotionReasons::TRANSFORM3D));
 //! this module owns what happens after: the raw wire params live in
 //! [`LayerTransform3d`] (written by the style applier, overwritten per-frame by
 //! the transition/animation drivers), and [`sync_transform3d_matrices`] derives

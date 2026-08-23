@@ -82,7 +82,7 @@ impl Default for CompositeUniformsMeta {
 }
 
 /// Binds the composite-uniform bind group at the quad's dynamic offset
-/// (staged by `prepare_layer_composites` on [`LayerCompositeBatch`]).
+/// (staged by `prepare_layer_composites` on [`super::LayerCompositeBatch`]).
 pub struct SetCompositeUniforms<const I: usize>;
 impl<P: PhaseItem, const I: usize> RenderCommand<P> for SetCompositeUniforms<I> {
     type Param = SRes<CompositeUniformsMeta>;

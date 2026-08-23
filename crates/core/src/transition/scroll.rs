@@ -9,7 +9,8 @@ use super::spec::ChannelTransition;
 use crate::protocol::style::Style;
 
 /// The scroll-easing **spec** input: the `transition.scroll` timing, reinserted
-/// fresh on every render (like [`TransitionInput`]) so a changed spec takes effect.
+/// fresh on every render (like [`TransitionInput`](super::TransitionInput))
+/// so a changed spec takes effect.
 /// Present only while `transition.scroll` (or `all`) is set. The *target* it eases
 /// toward is NOT here — scroll's target is a controlled `Props` value, fed into
 /// [`ScrollTransitionState`] by the scroll write path / wheel handler.
@@ -17,10 +18,10 @@ use crate::protocol::style::Style;
 pub struct ScrollTransitionInput(pub ChannelTransition);
 
 /// The scroll-easing **runtime state**: the target offset plus a per-axis eased
-/// [`Channel`]. Persists across re-renders ([`insert_if_new`]). `target` is written
-/// by the feeders ([`crate::reconcile::update_controlled_scroll`] and
+/// [`Channel`]. Persists across re-renders (`insert_if_new`). `target` is written
+/// by the feeders (`crate::reconcile`'s `update_controlled_scroll` and
 /// `crate::scroll::apply_scroll`); [`drive_scroll_transition`] eases `ScrollPosition`
-/// toward it. Mirrors the [`TransitionState`] half of the split.
+/// toward it. Mirrors the [`TransitionState`](super::TransitionState) half of the split.
 #[derive(Component, Default)]
 pub struct ScrollTransitionState {
     /// The offset to ease toward (already clamped to the scroll range by the feeder).
@@ -64,7 +65,8 @@ pub fn apply_scroll_transition(ec: &mut EntityCommands, style: &Option<Style>) {
 }
 
 /// Ease each `ScrollTransitionState` node's `ScrollPosition` toward its `target`
-/// using the same per-channel [`Runner`] as [`drive_transitions`]. Writes only on a
+/// using the same per-channel [`Runner`](crate::animations::Runner) as
+/// [`drive_transitions`](super::drive_transitions). Writes only on a
 /// frame the eased value actually moved, so a settled offset doesn't spam
 /// `Changed<ScrollPosition>` (and thus `onScroll`). The target is pre-clamped by the
 /// feeders; Bevy clamps the *rendered* offset regardless.

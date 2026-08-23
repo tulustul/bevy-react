@@ -42,7 +42,7 @@ use super::transform3d::LayerTransform3dMatrix;
 use super::{LayerMembership, PromotedLayer};
 
 /// The transform3d virtual pointer's fixed id (see
-/// [`crate::surface::SURFACE_POINTER_UUID`] for the pattern).
+/// `crate::surface`'s `SURFACE_POINTER_UUID` for the pattern).
 pub const TRANSFORM3D_POINTER_UUID: uuid::Uuid = uuid::Uuid::from_u128(0x7D3D_D001);
 
 /// The mouse buttons forwarded to the virtual pointer — the same set the

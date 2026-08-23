@@ -19,8 +19,8 @@
 //!    node is the precedent). At this point in the camera schedule the main
 //!    texture holds the tonemapped 3D frame with no UI — exactly the v1
 //!    backdrop.
-//! 3. [`stage_backdrop_composite`] (called from `prepare_layer_composites`)
-//!    stamps a [`LayerCompositeBatch`] onto the layer's backdrop quad
+//! 3. [`super::prepare_layer_composites`] stamps a
+//!    [`super::LayerCompositeBatch`] onto the layer's backdrop quad
 //!    (injected by `redistribute_ui_layers` one epsilon *below* the content
 //!    quad): the un-inflated border box (frost never paints in the outset
 //!    ring) sampling the chain's output, multiplied by the group alpha.

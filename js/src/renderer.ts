@@ -74,13 +74,30 @@ function packForWire(
 let currentUpdatePriority: number = NoEventPriority;
 
 // React 19 expects a host transition context object (used for form/transition
-// features we don't use); a plain context satisfies it.
-const HostTransitionContext = createContext<unknown>(null);
+// features we don't use); a plain context satisfies it at runtime. The cast is
+// needed because the typings' `ReactContext` names React-internal fields
+// (`_currentValue` etc.) that `createContext`'s public type doesn't expose.
+const HostTransitionContext = createContext<null>(
+  null,
+) as unknown as Reconciler.ReactContext<null>;
 
 // Most host-config callbacks are intentionally trivial for a UI-only renderer.
-// TODO(review): `hostConfig: any` drops type-checking on the most protocol-critical
-// object. Type it as react-reconciler's `HostConfig<...>` so signature drift is caught.
-const hostConfig: any = {
+const hostConfig: Reconciler.HostConfig<
+  string, // Type
+  Record<string, unknown>, // Props
+  Container,
+  Instance,
+  TextInstance,
+  never, // SuspenseInstance
+  never, // HydratableInstance
+  never, // FormInstance
+  Instance, // PublicInstance
+  HostContext,
+  never, // ChildSet (mutation mode)
+  number, // TimeoutHandle
+  -1, // NoTimeout
+  null // TransitionStatus
+> = {
   supportsMutation: true,
   supportsPersistence: false,
   supportsHydration: false,

@@ -1,7 +1,8 @@
 //! Derive a node's [`AnimatedBindings`] from its merged style.
 //!
 //! Animated bindings are written **inline in `style`** behind the explicit
-//! `{ animated: … }` wrapper ([`Animatable`]): `opacity: { animated: sv }`,
+//! `{ animated: … }` wrapper ([`Animatable`](crate::protocol::animatable::Animatable)):
+//! `opacity: { animated: sv }`,
 //! `filter: { name, params: { radius: { animated: sv } } }`. The style crosses
 //! the wire opaque (like every other style value) and this module — bridge
 //! machinery, reaching into `crate::animations` per the module-dependency

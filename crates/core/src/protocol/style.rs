@@ -409,7 +409,7 @@ pub mod style_groups {
     /// The wire `backdropFilter` chain → `BackdropInput` (the backdrop chain
     /// resolver's *and* the backdrop transition channel's target; see
     /// `crate::filters::backdrop`). Composite-side only, like
-    /// [`Self::TRANSFORM3D`]: a backdrop delta re-stages the snapshot filter
+    /// [`TRANSFORM3D`]: a backdrop delta re-stages the snapshot filter
     /// run and reshapes nothing in the subtree — never content dirt.
     pub const BACKDROP: u32 = 1 << 21;
     /// `ImageNode` from `background_image` (plus the `opacity` fold into its
@@ -421,7 +421,7 @@ pub mod style_groups {
     pub const BG_IMAGE: u32 = 1 << 22;
     /// The wire `morphFilter` value → `MorphInput` (the morph resolver's and
     /// the morph transition channel's target; see `crate::filters` morph).
-    /// Composite-side only, like [`Self::BACKDROP`]: a morph delta re-stages
+    /// Composite-side only, like [`BACKDROP`]: a morph delta re-stages
     /// the blend pass and never dirties the capture itself — the key-change
     /// re-capture is pushed precisely by the transition channel. The
     /// `apply_transition` stamp site fires on `TRANSITION | MORPH` so a

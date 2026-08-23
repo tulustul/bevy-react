@@ -1,5 +1,5 @@
 //! The transition **spec**: the wire-facing [`Transition`] declaration, its
-//! per-channel resolution ([`transition_channels!`]), the per-channel timing
+//! per-channel resolution (`transition_channels!`), the per-channel timing
 //! ([`ChannelTransition`]), and the per-render target input
 //! ([`TransitionInput`]).
 
@@ -204,7 +204,8 @@ impl ChannelTransition {
 
 /// The resolved per-channel target for a transitioning entity, plus the spec.
 /// Written by [`crate::ui_map::apply_style`] from the *merged* style and read each
-/// frame by [`drive_transitions`]. Never written by the engine — keeping it free
+/// frame by [`drive_transitions`](super::drive_transitions). Never written by
+/// the engine — keeping it free
 /// of the live components it animates avoids a target-chases-animation feedback
 /// loop. `None` on a channel means "unspecified" (its identity default is used).
 #[derive(Component, Debug, Clone, Default)]

@@ -5,7 +5,7 @@
 //! value and hand-wire `onPointerDown`/`onPointerUp` to drivers. A `transition`
 //! instead lets a plain style change — a re-render, or a `hoverStyle`/`pressStyle`
 //! kicking in — *ease* to its new value. It reuses the animations crate's driver
-//! runtime ([`Runner`]) rather than a parallel engine.
+//! runtime ([`Runner`](crate::animations::Runner)) rather than a parallel engine.
 //!
 //! ## How it fits the style pipeline
 //!
@@ -19,7 +19,8 @@
 //! animates.
 //!
 //! [`drive_transitions`] then runs after `apply_interaction_styles`: it advances a
-//! per-entity [`TransitionState`] (one [`Runner`] per channel) toward the input's
+//! per-entity [`TransitionState`] (one [`Runner`](crate::animations::Runner)
+//! per channel) toward the input's
 //! target and writes the interpolated value onto `UiTransform`/`BackgroundColor`/
 //! alpha — *last* in the frame, so a coincident re-render's snap value never wins.
 //!

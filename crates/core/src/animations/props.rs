@@ -73,7 +73,7 @@
 /// Invoke `$cb!` with every static property row (see the module doc for the
 /// column contract). The callback receives the full row list in one call:
 ///
-/// ```ignore
+/// ```text
 /// macro_rules! my_consumer {
 ///     ($(($prop:tt, $kind:ident, $acc:tt, $write:tt, $stage:ident, $park:ident),)*) => { … };
 /// }

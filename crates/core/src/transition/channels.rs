@@ -13,7 +13,8 @@ use super::{shape_channel, transform3d};
 
 /// The transition engine's plain scalar/length channels — one row per
 /// [`TransitionState`] channel whose target rides a same-named
-/// [`TransitionInput`] field: `(channel, (identity default), group)`.
+/// [`TransitionInput`](super::TransitionInput) field:
+/// `(channel, (identity default), group)`.
 /// Consumed by the mount-seed block (every row seeds `state.<channel>` from
 /// `input.<channel>` at its identity default) and by the size drive block
 /// (`size` rows, which also name the written `Node` field). The
@@ -40,7 +41,8 @@ pub(super) use with_input_channels;
 
 /// Per-entity transition runtime: one [`Runner`]-backed channel per animatable
 /// property. Persists across re-renders (the engine owns it); created lazily by
-/// [`apply_transition`]. `#[require(UiTransform)]` so the drive query always
+/// [`apply_transition`](super::apply_transition). `#[require(UiTransform)]`
+/// so the drive query always
 /// matches even for an opacity/color-only transition.
 #[derive(Component, Default)]
 #[require(UiTransform)]
@@ -135,7 +137,8 @@ impl FilterChannel {
     /// Three writers touch [`crate::filters::ResolvedFilterChain`]; precedence
     /// runs resolver → transition → bindings. On the retarget frame
     /// [`crate::filters::resolve_chains`] (ordered before
-    /// [`drive_transitions`]) *snaps* the component to the new target; this
+    /// [`drive_transitions`](super::drive_transitions)) *snaps* the component
+    /// to the new target; this
     /// method *eases* over that snap — starting from the state-owned
     /// `current`, the last value this channel wrote, never the
     /// already-snapped component; and per-param animation bindings
@@ -145,8 +148,9 @@ impl FilterChannel {
     /// whole channel).
     ///
     /// The target rides the wire-chain component (`FilterInput` /
-    /// `BackdropInput` — the caller projects to the inner [`FilterChain`]),
-    /// NOT [`TransitionInput`] — a chain-only delta dirties the
+    /// `BackdropInput` — the caller projects to the inner
+    /// [`FilterChain`](crate::filters::FilterChain)),
+    /// NOT [`TransitionInput`](super::TransitionInput) — a chain-only delta dirties the
     /// FILTER/BACKDROP|LAYER groups, never TRANSITION, so a target stamped
     /// into the input would go stale; the chain component is re-stamped by
     /// that same delta. Both channel instances (filter, backdropFilter) run
@@ -245,7 +249,8 @@ pub(super) struct MorphChannel {
     pub(super) key: Option<serde_json::Value>,
     /// The active progress runner (0→1); `None` when idle.
     pub(super) runner: Option<Runner>,
-    /// Mirrors [`MorphState::freeze_seq`]; owned here so a retarget can bump
+    /// Mirrors [`MorphState::freeze_seq`](crate::filters::MorphState::freeze_seq);
+    /// owned here so a retarget can bump
     /// it even when the state component doesn't exist yet.
     pub(super) seq: u64,
     /// The settle frame rendered at exactly `1.0`; deactivation happens on

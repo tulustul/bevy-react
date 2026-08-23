@@ -7,7 +7,8 @@
 //!
 //! - **native** ([`native`]): an embedded V8 isolate (deno_core) on a dedicated
 //!   thread, fed from the filesystem, with mtime-based hot reload.
-//! - **web** ([`web`]): the browser's own JS engine. The page loads the bundle;
+//! - **web** (`web`, wasm builds only): the browser's own JS engine. The page
+//!   loads the bundle;
 //!   wasm-bindgen exposes the ops; a per-frame system drains Bevy→JS events.
 //!
 //! Both expose a single [`spawn`] that wires the host into the `App` and returns

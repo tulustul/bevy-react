@@ -15,12 +15,14 @@ use super::background_image::BackgroundImageMode;
 use super::decode_warn;
 use super::style::LayerCache;
 
-/// Declares one `deserialize_with` fn per keyword-valued [`Style`] field,
+/// Declares one `deserialize_with` fn per keyword-valued
+/// [`Style`](super::style::Style) field,
 /// decoding the wire keyword straight into the `bevy_ui`/`bevy_text` enum it
 /// drives. An unrecognized keyword warns (naming the field and value) and falls
 /// back to the enum's bevy default — a typo must not abort the commit batch. A
 /// JSON `null` decodes to `None` (matching the former `Option<String>` fields);
-/// any other non-string value keeps hard-erroring, like [`Length`].
+/// any other non-string value keeps hard-erroring, like
+/// [`Length`](super::units::Length).
 macro_rules! keyword_fields {
     ( $(
         $(#[$meta:meta])*

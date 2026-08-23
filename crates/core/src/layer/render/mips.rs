@@ -3,8 +3,8 @@
 //! A transformed composite quad minifies its capture (tilt compresses many
 //! texels per pixel); bilinear-only sampling shimmers. Layers with the
 //! `TRANSFORM3D` promotion reason therefore allocate their sampled texture
-//! with a full mip chain ([`super::alloc_layer_slot`] /
-//! [`super::alloc_filter_slot`], keyed on the *reason* so identity↔non-identity
+//! with a full mip chain (`store::alloc_layer_slot` /
+//! `store::alloc_filter_slot`, keyed on the *reason* so identity↔non-identity
 //! value changes never realloc), and this module rebuilds the chain exactly
 //! when level 0 is rewritten — a cached capture keeps its mips for free.
 //!

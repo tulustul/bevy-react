@@ -178,7 +178,8 @@ pub(crate) fn st(v: f32) -> Option<Animatable<f32>> {
 /// [`NUMERIC_ATTRS`] wire names (shapes have no `style`, so the spec rides
 /// the shape object itself — no `all` fallback, no non-numeric channels).
 /// Entries are stored positionally in [`NUMERIC_ATTRS`] order; reuse of
-/// [`ChannelTransition`] (the style-transition timing type) is verbatim —
+/// [`ChannelTransition`](crate::transition::ChannelTransition) (the
+/// style-transition timing type) is verbatim —
 /// same wire shape (`duration`/`easing`/`delay`/springs), same driver.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct ShapeTransitionSpec {
@@ -203,7 +204,8 @@ impl ShapeTransitionSpec {
 }
 
 /// `deserialize_with` for [`ShapeAttrs::transition`]: an object keyed by
-/// numeric attr wire names, each value a [`ChannelTransition`]. Unknown /
+/// numeric attr wire names, each value a
+/// [`ChannelTransition`](crate::transition::ChannelTransition). Unknown /
 /// non-numeric keys (nothing else is easeable) and malformed spec values
 /// warn (`"shapeTransition"`) and drop **that key**; a non-object value
 /// warns and drops the whole field. Decodes through [`serde_json::Value`]

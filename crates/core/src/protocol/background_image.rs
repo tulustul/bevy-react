@@ -211,9 +211,12 @@ impl BackgroundImageMode {
 ///
 /// The wrapper's optional **`seed`** (`{ animated: sv, seed: 10 }`) is the
 /// static value a consumer may decode in the wrapper's place. Style read
-/// sites ([`AnimatableField::static_val`]/[`static_ref`](AnimatableField::static_ref))
+/// sites ([`AnimatableField::static_val`](super::animatable::AnimatableField::static_val)/
+/// [`static_ref`](super::animatable::AnimatableField::static_ref))
 /// deliberately ignore it — the driver owns the on-screen value — but SVG
-/// shape attrs render it ([`AnimatableField::static_or_seed`]) until a driver
+/// shape attrs render it
+/// ([`AnimatableField::static_or_seed`](super::animatable::AnimatableField::static_or_seed))
+/// until a driver
 /// writes, mirroring the filter-param resolver's seed semantics
 /// (`crate::style_bindings::animated_param_seed`; filter/backdrop chain
 /// params never decode through this type — their param maps stay raw).

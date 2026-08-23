@@ -426,7 +426,8 @@ pub fn apply_style_promoted(ec: &mut EntityCommands, style: &Option<Style>, prom
     apply_style_masked(ec, style, StyleDirty::ALL, promoted);
 }
 
-/// [`apply_style`] restricted to the dirty [`style_groups`]: each derived
+/// [`apply_style`] restricted to the dirty
+/// [`style_groups`](crate::protocol::style::style_groups): each derived
 /// component is only rebuilt/inserted/removed when one of the style fields its
 /// group reads was touched (see the field table in [`crate::protocol`]). A
 /// delta `Op::Update` passes the mask its merge computed; every other caller
