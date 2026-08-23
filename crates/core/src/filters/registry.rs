@@ -342,10 +342,10 @@ mod tests {
         );
     }
 
-    /// `register_builtin_filters` registers all sixteen names; running it
+    /// `register_builtin_filters` registers all seventeen names; running it
     /// again (same types) is a no-op per `register_entry` semantics.
     #[test]
-    fn builtin_filters_register_all_sixteen() {
+    fn builtin_filters_register_all_seventeen() {
         let mut app = App::new();
         register_builtin_filters(&mut app);
         let registry = app.world().resource::<FilterRegistry>();
@@ -366,6 +366,7 @@ mod tests {
                 "invert",
                 "linearWipe",
                 "outline",
+                "pinch",
                 "pixelize",
                 "saturate",
                 "sepia",
@@ -383,7 +384,7 @@ mod tests {
         morphs.sort_unstable();
         assert_eq!(morphs, ["crossfade", "linearWipe", "pixelize"]);
         register_builtin_filters(&mut app);
-        assert_eq!(app.world().resource::<FilterRegistry>().entries.len(), 16);
+        assert_eq!(app.world().resource::<FilterRegistry>().entries.len(), 17);
     }
 
     /// Every built-in entry carries working TS-export slots — `ts_name` names
@@ -512,6 +513,10 @@ mod tests {
         assert_eq!(
             &path_of(&shader_of("outline")),
             "embedded://bevy_react/filters/builtin/outline.wgsl"
+        );
+        assert_eq!(
+            &path_of(&shader_of("pinch")),
+            "embedded://bevy_react/filters/builtin/pinch.wgsl"
         );
 
         // Bloom deliberately mixes shaders across its passes, so it can't go

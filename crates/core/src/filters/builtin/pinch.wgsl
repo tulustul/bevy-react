@@ -1,5 +1,5 @@
-// Custom filter `pinch` (see `examples/demos/filters.rs`): a cursor-anchored
-// radial pinch/bulge. Positive `strength` squeezes content toward the center
+// The `pinch` built-in (see `pinch.rs`): a cursor-anchored radial
+// pinch/bulge. Positive `strength` squeezes content toward the center
 // point (edges pull in transparency from the outset ring — the silhouette
 // visibly contracts); negative `strength` magnifies away from it (node
 // content spills into the ring — the silhouette bulges out). All params are

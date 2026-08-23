@@ -634,7 +634,7 @@ mod tests {
     }
 
     /// The `declare module "bevy-react"` block listing every filter split by
-    /// family: the ten regular built-ins and any customs merged and sorted by
+    /// family: the regular built-ins and any customs merged and sorted by
     /// wire name in `BevyFilters`, the morph family (the three built-in
     /// morphs plus custom morphs) in `BevyMorphFilters`.
     const BEVY_FILTERS_WITH_GLOW: &str = "declare module \"bevy-react\" {\n\
@@ -650,6 +650,7 @@ mod tests {
          \x20   hueRotate: HueRotateParams;\n\
          \x20   invert: InvertParams;\n\
          \x20   outline: OutlineParams;\n\
+         \x20   pinch: PinchParams;\n\
          \x20   saturate: SaturateParams;\n\
          \x20   sepia: SepiaParams;\n\
          \x20   shadow: ShadowParams;\n\
@@ -862,6 +863,7 @@ mod tests {
             ("grayscale", "GrayscaleParams"),
             ("hueRotate", "HueRotateParams"),
             ("invert", "InvertParams"),
+            ("pinch", "PinchParams"),
             ("pixelize", "PixelizeParams"),
             ("saturate", "SaturateParams"),
             ("sepia", "SepiaParams"),

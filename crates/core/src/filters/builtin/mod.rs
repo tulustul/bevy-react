@@ -1,4 +1,4 @@
-//! The sixteen built-in filters, one file per shader family: [`color_matrix`]
+//! The seventeen built-in filters, one file per shader family: [`color_matrix`]
 //! (the seven color ops sharing one pass shader and packing — six declared by
 //! the `color_matrix_filters!` macro plus the hand-written `hueRotate`),
 //! [`blur`] (the two-pass separable Gaussian), [`bloom`] (bright-pass → blur
@@ -6,7 +6,8 @@
 //! [`chromatic_aberration`] (single-pass directional RGB split),
 //! [`gradient_map`] (multi-stop linear-gradient recolor), [`outline`]
 //! (alpha-dilation ring under the content), [`shadow`] (offset + blurred
-//! drop shadow, bloom's pass structure), [`morph`] (`crossfade` and
+//! drop shadow, bloom's pass structure), [`pinch`] (cursor-anchored radial
+//! pinch/bulge, all-normalized params), [`morph`] (`crossfade` and
 //! `linearWipe`), and [`pixelize`] (the mosaic, a gl-transitions port). The
 //! last three form the built-in **morph family** (`IS_MORPH`,
 //! `morphFilter`-only — separate from the regular `filter`/`backdropFilter`
@@ -20,6 +21,7 @@ mod color_matrix;
 mod gradient_map;
 mod morph;
 mod outline;
+mod pinch;
 mod pixelize;
 mod shadow;
 
@@ -35,13 +37,14 @@ pub use color_matrix::{
 pub use gradient_map::{GradientMapParams, GradientMapStop, MAX_GRADIENT_STOPS};
 pub use morph::{CrossfadeParams, LinearWipeParams};
 pub use outline::OutlineParams;
+pub use pinch::PinchParams;
 pub use pixelize::PixelizeParams;
 pub use shadow::ShadowParams;
 
 use super::registry::FilterRegistry;
 
 impl FilterRegistry {
-    /// Register the sixteen built-in filters into this registry. Two callers:
+    /// Register the seventeen built-in filters into this registry. Two callers:
     /// [`register_builtin_filters`] (the runtime path, via
     /// `ReactUiPlugin::build`) and the TypeScript exporter
     /// (`crate::ts_codegen`), which seeds a throwaway registry with them so
@@ -60,6 +63,7 @@ impl FilterRegistry {
         self.register::<HueRotateParams>();
         self.register::<GradientMapParams>();
         self.register::<OutlineParams>();
+        self.register::<PinchParams>();
         self.register::<ShadowParams>();
         self.register::<CrossfadeParams>();
         self.register::<LinearWipeParams>();
@@ -67,7 +71,7 @@ impl FilterRegistry {
     }
 }
 
-/// Register the sixteen built-in filters. Called by `ReactUiPlugin::build`.
+/// Register the seventeen built-in filters. Called by `ReactUiPlugin::build`.
 /// Deliberately `AssetServer`-free: shader loads happen lazily inside each
 /// entry's `resolve`.
 pub fn register_builtin_filters(app: &mut App) {
@@ -124,6 +128,11 @@ mod tests {
         let o = params::<OutlineParams>(json!({}));
         assert_eq!(o.width, Length::Px(2.0));
         assert_eq!(o.softness, Length::Px(0.0));
+        // A bare `{name:"pinch"}` is a visible squeeze at the center.
+        let p = params::<PinchParams>(json!({}));
+        assert_eq!((p.x, p.y), (0.5, 0.5));
+        assert_eq!(p.strength, 0.5);
+        assert_eq!(p.radius, 0.8);
         // A bare `{name:"shadow"}` is a soft black shadow below.
         let s = params::<ShadowParams>(json!({}));
         assert_eq!(s.offset_y, Length::Px(4.0));
@@ -184,6 +193,10 @@ mod tests {
         assert_eq!(
             (r.entries["shadow"].identity)().unwrap()["color"],
             json!("transparent")
+        );
+        assert_eq!(
+            (r.entries["pinch"].identity)().unwrap()["strength"],
+            json!(0.0)
         );
 
         let app = asset_app();
@@ -298,6 +311,11 @@ mod tests {
         validate(
             "shadow.wgsl",
             &splice(&prelude_body, include_str!("shadow.wgsl")),
+            &["vertex", "fragment"],
+        );
+        validate(
+            "pinch.wgsl",
+            &splice(&prelude_body, include_str!("pinch.wgsl")),
             &["vertex", "fragment"],
         );
         validate(

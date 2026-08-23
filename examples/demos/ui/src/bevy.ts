@@ -250,7 +250,7 @@ repeat: boolean, ctrlKey: boolean, shiftKey: boolean, altKey: boolean,
 metaKey: boolean, };
 export type LinearWipeParams = { angle: number | string, softness: number | string, };
 export type OutlineParams = { width: number | string, color: string, softness: number | string, };
-export type Pinch = { 
+export type PinchParams = { 
 /**
  * Pinch center, 0..1 across the node rect (0 = left edge).
  */
@@ -439,7 +439,7 @@ declare module "bevy-react" {
     hueRotate: HueRotateParams;
     invert: InvertParams;
     outline: OutlineParams;
-    pinch: Pinch;
+    pinch: PinchParams;
     ripple: Ripple;
     saturate: SaturateParams;
     sepia: SepiaParams;

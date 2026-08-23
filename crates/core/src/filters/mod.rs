@@ -63,6 +63,7 @@ pub(crate) mod test_util;
 pub use backdrop::{BackdropInput, ResolvedBackdropChain};
 pub use builtin::{
     BloomParams, BlurParams, BrightnessParams, ChromaticAberrationParams, ContrastParams,
+    PinchParams,
     CrossfadeParams, GradientMapParams, GradientMapStop, GrayscaleParams, HueRotateParams,
     InvertParams, LinearWipeParams, MAX_GRADIENT_STOPS, OutlineParams, PixelizeParams,
     SaturateParams, SepiaParams, ShadowParams, register_builtin_filters,
