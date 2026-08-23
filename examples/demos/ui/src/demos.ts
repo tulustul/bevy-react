@@ -45,6 +45,7 @@ import { OpacityDemo } from "./demos/styling/OpacityDemo";
 import { ZIndexDemo } from "./demos/styling/ZIndexDemo";
 import { FocusPolicyDemo } from "./demos/styling/FocusPolicyDemo";
 import { CursorDemo } from "./demos/styling/CursorDemo";
+import { LayersDemo } from "./demos/LayersDemo";
 
 type BaseDemoItem = { label: string; scene?: SceneId };
 export type DemoItem = BaseDemoItem &
@@ -150,6 +151,7 @@ export const DEMOS: DemoItem[] = [
       { label: "Window", component: WindowDemo },
     ],
   },
+  { label: "Layers", scene: "CrowdedCubes", component: LayersDemo },
 ];
 
 /** Find the first selectable demo (a leaf with a `component`) by its nav label. */
