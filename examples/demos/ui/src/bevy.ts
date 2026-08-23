@@ -319,6 +319,7 @@ frequency: number,
 speed: number, };
 export type SaturateParams = { amount: number, };
 export type SceneId = "Ambient" | "Cubes" | "BouncingBall" | "CrowdedCubes" | "SpaceCubes" | "Surface";
+export type SelectCube = number | null;
 export type SelectDemo = { label: string, };
 export type SelectScene = SceneId | null;
 export type SepiaParams = { amount: number, };
@@ -393,6 +394,7 @@ export interface ReactMessages {
   "basicDemo.setCount": SetCount;
   "clipboard.copy": CopyToClipboard;
   "crowdedCubes.followRandom": FollowRandom;
+  "crowdedCubes.select": SelectCube;
   "crowdedCubes.setFollowMode": SetFollowMode;
   "gamepad.rumble": GamepadRumble;
   "gamepad.stopRumble": GamepadStopRumble;
@@ -512,6 +514,7 @@ export const bevy = {
   },
   crowdedCubes: {
     followRandom(value: FollowRandom): void { emit("crowdedCubes.followRandom", value); },
+    select(value: SelectCube): void { emit("crowdedCubes.select", value); },
     setFollowMode(value: SetFollowMode): void { emit("crowdedCubes.setFollowMode", value); },
   },
   gamepad: {

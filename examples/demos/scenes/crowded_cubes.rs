@@ -38,6 +38,7 @@ impl Plugin for CrowdedCubesScenePlugin {
         register_bindings(app);
         app.init_resource::<FollowTarget>()
             .init_resource::<Cubes>()
+            .init_resource::<SelectedCube>()
             .add_systems(Startup, setup_cube_assets)
             .add_systems(OnEnter(Scene::CrowdedCubes), spawn_cubes)
             .add_systems(
@@ -54,6 +55,8 @@ pub fn register_bindings(app: &mut App) {
     // React -> Bevy controls for the follow portal.
     app.add_react_handler(on_follow_random);
     app.add_react_handler(on_set_follow_mode);
+    // React -> Bevy: badge click selects a cube (emissive highlight).
+    app.add_react_handler(on_select_cube);
 }
 
 /// React asks the follow portal to track a different (pseudo-random) cube.
@@ -65,9 +68,22 @@ struct FollowRandom;
 #[react_message(name = "crowdedCubes.setFollowMode")]
 struct SetFollowMode(bool);
 
+/// React selected (or cleared) a cube from its anchored badge: the entity as
+/// bits, `null` to clear. The selected cube swaps to its emissive material.
+/// The bits cross as an `f64` like `Anchor.entity` does — serde_v8 can't
+/// decode a JS `BigInt` into an integer field, and `Entity::to_bits()` values
+/// are lossless in an `f64` for realistic generations (well under 2^53).
+#[react_message(name = "crowdedCubes.select")]
+struct SelectCube(Option<f64>);
+
 /// The cube the follow portal currently tracks.
 #[derive(Resource, Default)]
 struct FollowTarget(Option<Entity>);
+
+/// The cube currently highlighted from a badge click, wearing its emissive
+/// palette variant until deselected.
+#[derive(Resource, Default)]
+struct SelectedCube(Option<Entity>);
 
 /// Every wandering cube, in spawn order — the pool `followRandom` picks from.
 #[derive(Resource, Default)]
@@ -95,6 +111,37 @@ fn on_follow_random(
     let idx = (hash01(*nth) * cubes.0.len() as f32) as usize % cubes.0.len();
     follow.0 = Some(cubes.0[idx]);
     targets.invalidate(FOLLOW); // re-render the (possibly frozen) snapshot
+}
+
+/// Swap the selected cube onto its emissive palette variant and restore the
+/// previously selected one to the shared base material. A cube's palette index
+/// is its position in the [`Cubes`] spawn-order pool (`i % palette.len()`, the
+/// same indexing `spawn_cubes` uses); despawned/unknown entities are ignored.
+fn on_select_cube(
+    ev: On<SelectCube>,
+    assets: Res<CubeAssets>,
+    cubes: Res<Cubes>,
+    mut selected: ResMut<SelectedCube>,
+    mut cube_materials: Query<&mut MeshMaterial3d<StandardMaterial>>,
+) {
+    let mut wear = |entity: Entity, set: &Vec<Handle<StandardMaterial>>| {
+        if let Some(i) = cubes.0.iter().position(|&e| e == entity)
+            && let Ok(mut material) = cube_materials.get_mut(entity)
+        {
+            material.0 = set[i % set.len()].clone();
+        }
+    };
+    if let Some(prev) = selected.0.take() {
+        wear(prev, &assets.materials);
+    }
+    let next = ev
+        .event()
+        .0
+        .and_then(|bits| Entity::try_from_bits(bits as u64));
+    if let Some(entity) = next {
+        wear(entity, &assets.emissive);
+        selected.0 = Some(entity);
+    }
 }
 
 /// Switch the follow portal between live and snapshot rendering.
@@ -134,6 +181,10 @@ struct Wander {
 struct CubeAssets {
     mesh: Handle<Mesh>,
     materials: Vec<Handle<StandardMaterial>>,
+    /// Emissive variants of `materials` (parallel), worn by the selected cube.
+    /// Separate handles because the base materials are shared across cubes —
+    /// mutating one in place would light up every cube of that color.
+    emissive: Vec<Handle<StandardMaterial>>,
     /// The raw palette colors (parallel to `materials`), reused for the flat 2D
     /// minimap sprite markers so a marker matches its cube.
     colors: Vec<Color>,
@@ -172,6 +223,16 @@ fn setup_cube_assets(
                 })
             })
             .collect(),
+        emissive: palette
+            .iter()
+            .map(|&c| {
+                materials.add(StandardMaterial {
+                    base_color: c,
+                    emissive: c.to_linear() * 4.0,
+                    ..default()
+                })
+            })
+            .collect(),
         colors: palette.to_vec(),
         ground: meshes.add(
             Plane3d::default()
@@ -193,8 +254,11 @@ fn spawn_cubes(
     mut images: ResMut<Assets<Image>>,
     mut follow: ResMut<FollowTarget>,
     mut cube_pool: ResMut<Cubes>,
+    mut selected: ResMut<SelectedCube>,
     events: ReactEvents,
 ) {
+    // Fresh cubes, fresh (empty) selection — the old entities are gone.
+    selected.0 = None;
     commands.spawn((
         Mesh3d(assets.ground.clone()),
         MeshMaterial3d(assets.ground_material.clone()),

@@ -139,11 +139,10 @@ mod tests {
     fn pinch_resolves_to_one_pass() {
         let app = asset_app();
         let assets = app.world().resource::<AssetServer>();
-        let passes = params::<PinchParams>(
-            json!({ "x": 0.25, "y": 0.75, "strength": -0.5, "radius": 1.0 }),
-        )
-        .resolve(assets)
-        .expect("pinch resolves");
+        let passes =
+            params::<PinchParams>(json!({ "x": 0.25, "y": 0.75, "strength": -0.5, "radius": 1.0 }))
+                .resolve(assets)
+                .expect("pinch resolves");
         assert_eq!(passes.len(), 1);
         assert_eq!(passes[0].params[0], Vec4::new(0.25, 0.75, -0.5, 1.0));
         assert_eq!(passes[0].wire_index, 0);

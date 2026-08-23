@@ -25,7 +25,7 @@ export type PinchableProps = {
 // Pressed-state magnitudes at `pinch: 1` (the custom `pinch` filter takes
 // normalized params — see `examples/demos/filters.rs`).
 const PRESS_STRENGTH = 0.25;
-const PRESS_RADIUS = 0.5;
+const PRESS_RADIUS = 0.6;
 
 /** Presses its child through the `pinch` filter: pointer-down eases the
  *  squeeze in at the cursor, release springs back with a bulge wobble.
