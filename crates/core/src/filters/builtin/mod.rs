@@ -119,6 +119,7 @@ mod tests {
         let ca = params::<ChromaticAberrationParams>(json!({}));
         assert_eq!(ca.offset, Length::Px(4.0));
         assert_eq!(ca.angle.radians(), 0.0);
+        assert_eq!(ca.rotation, 0.0);
         // A bare `{name:"gradientMap"}` is a visible two-stop sweep.
         let gm = params::<GradientMapParams>(json!({}));
         assert_eq!(gm.stops.len(), 2);

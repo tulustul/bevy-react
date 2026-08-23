@@ -17,16 +17,25 @@ fn default_offset() -> Length {
     Length::Px(4.0)
 }
 
+/// Extra logical px the swirled fringes may poke past the node's box when
+/// `rotation != 0`. A constant: the rotational reach scales with node size
+/// (~ `2·corner_distance·sin(rotation/2)`), which resolve time can't see —
+/// larger swirls on large nodes clip at a straight layer edge.
+const ROTATION_OUTSET: f32 = 16.0;
+
 /// `chromaticAberration`: directional color fringing — the R channel's image
 /// shifts `offset` px along `angle` (degrees, clockwise from +X in screen
 /// space; bare number = degrees, `"0.25turn"` etc. accepted), B the same
-/// distance opposite, G stays put. The split is uniform across the layer.
+/// distance opposite, G stays put. The split is uniform across the layer;
+/// a non-zero `rotation` adds a tangential swirl on top (R rotates by
+/// `+rotation` around the node's center, B by `-rotation`), growing toward
+/// the edges while the center stays clean.
 /// `{ name: "chromaticAberration" }` with no params is visible fringing
 /// (shorthand-default convention); the true identity is `offset: 0`.
 ///
 /// A single pass, packed as `params[0] = (offset_logical_px, angle_radians,
-/// 0, 0)`; `resolve` only prepends the `Length` px validation before
-/// delegating to the canonical [`resolve_single_pass`] body.
+/// rotation_degrees, 0)`; `resolve` only prepends the `Length` px validation
+/// before delegating to the canonical [`resolve_single_pass`] body.
 #[derive(Debug, Clone, Copy, PartialEq, Deserialize, ts_rs::TS)]
 #[serde(deny_unknown_fields)]
 pub struct ChromaticAberrationParams {
@@ -38,6 +47,12 @@ pub struct ChromaticAberrationParams {
     #[serde(default)]
     #[ts(type = "number | string")]
     pub angle: Angle,
+    /// Tangential swirl: the R image rotates by `+rotation` degrees
+    /// (clockwise, y-down) around the node's center, B by `-rotation`.
+    /// Plain number in degrees — a scalar magnitude, so transitions unwind
+    /// linearly (no shortest-arc wrap). 0 = purely directional split.
+    #[serde(default)]
+    pub rotation: f32,
 }
 
 impl Default for ChromaticAberrationParams {
@@ -45,6 +60,7 @@ impl Default for ChromaticAberrationParams {
         Self {
             offset: default_offset(),
             angle: Angle::default(),
+            rotation: 0.0,
         }
     }
 }
@@ -65,6 +81,16 @@ fn chromatic_aberration_layout() -> Arc<[ParamSlot]> {
             comp: 1,
             len: 1,
         },
+        // Scalar, not Angle: the slot carries DEGREES (the shader converts) —
+        // animated bindings write Scalar slots through unchanged, and the
+        // magnitude must lerp linearly, never shortest-arc.
+        ParamSlot {
+            name: "rotation",
+            kind: ValueKind::Scalar,
+            vec: 0,
+            comp: 2,
+            len: 1,
+        },
     ]
 }
 
@@ -80,9 +106,16 @@ impl ReactFilter for ChromaticAberrationParams {
     }
 
     /// Fringes reach at most `offset` px past the silhouette (the shifted
-    /// channels' translation distance).
+    /// channels' translation distance), plus a constant swirl ring when
+    /// `rotation` is non-zero (see [`ROTATION_OUTSET`]).
     fn outset(&self) -> Result<f32, String> {
-        length_logical_px(Self::NAME, "offset", self.offset)
+        let offset = length_logical_px(Self::NAME, "offset", self.offset)?;
+        let swirl = if self.rotation != 0.0 {
+            ROTATION_OUTSET
+        } else {
+            0.0
+        };
+        Ok(offset + swirl)
     }
 
     fn pack(&self) -> (Vec<Vec4>, Arc<[ParamSlot]>) {
@@ -93,7 +126,7 @@ impl ReactFilter for ChromaticAberrationParams {
             vec![Vec4::new(
                 length_logical_px(Self::NAME, "offset", self.offset).unwrap_or(0.0),
                 self.angle.radians(),
-                0.0,
+                self.rotation,
                 0.0,
             )],
             chromatic_aberration_layout(),
@@ -118,26 +151,34 @@ mod tests {
 
     /// One pass: offset (logical px) at `params[0].x`, angle packed as
     /// radians at `params[0].y` (CSS angle decode: bare number = degrees),
-    /// with Length + Angle slots for the physical rewrite and shortest-arc
-    /// lerp.
+    /// rotation packed as DEGREES at `params[0].z` (a Scalar slot — animated
+    /// bindings write it through unchanged; the shader converts), with
+    /// Length + Angle slots for the physical rewrite and shortest-arc lerp.
     #[test]
     fn chromatic_aberration_resolves_to_one_pass() {
         let app = asset_app();
         let assets = app.world().resource::<AssetServer>();
-        let passes = params::<ChromaticAberrationParams>(json!({ "offset": 6, "angle": 90 }))
-            .resolve(assets)
-            .expect("chromaticAberration resolves");
+        let passes = params::<ChromaticAberrationParams>(
+            json!({ "offset": 6, "angle": 90, "rotation": 15 }),
+        )
+        .resolve(assets)
+        .expect("chromaticAberration resolves");
         assert_eq!(passes.len(), 1);
         assert_eq!(passes[0].params[0].x, 6.0);
         assert!((passes[0].params[0].y - PI / 2.0).abs() < 1e-5);
+        assert_eq!(passes[0].params[0].z, 15.0);
         assert_eq!(passes[0].wire_index, 0);
         assert_eq!(passes[0].layout[0].kind, ValueKind::Length);
         assert_eq!(passes[0].layout[0].name, "offset");
         assert_eq!(passes[0].layout[1].kind, ValueKind::Angle);
         assert_eq!(passes[0].layout[1].name, "angle");
+        assert_eq!(passes[0].layout[2].kind, ValueKind::Scalar);
+        assert_eq!(passes[0].layout[2].name, "rotation");
     }
 
-    /// Fringes bleed exactly 1x the offset; the default offset is 4px.
+    /// Fringes bleed exactly 1x the offset; the default offset is 4px. A
+    /// non-zero rotation adds the constant swirl ring; rotation 0 (or absent)
+    /// adds nothing — today's exact outsets and cache behavior.
     #[test]
     fn chromatic_aberration_outset_is_the_offset() {
         assert_eq!(
@@ -148,6 +189,14 @@ mod tests {
             params::<ChromaticAberrationParams>(json!({})).outset(),
             Ok(4.0)
         );
+        assert_eq!(
+            params::<ChromaticAberrationParams>(json!({ "offset": 6, "rotation": 10 })).outset(),
+            Ok(6.0 + ROTATION_OUTSET)
+        );
+        assert_eq!(
+            params::<ChromaticAberrationParams>(json!({ "offset": 6, "rotation": 0 })).outset(),
+            Ok(6.0)
+        );
     }
 
     /// Empty params take the shorthand defaults: visible fringing along +X.
@@ -157,6 +206,7 @@ mod tests {
         assert_eq!(p, ChromaticAberrationParams::default());
         assert_eq!(p.offset, Length::Px(4.0));
         assert_eq!(p.angle.radians(), 0.0);
+        assert_eq!(p.rotation, 0.0);
     }
 
     /// A non-px offset rejects from both baked registry fns, naming the

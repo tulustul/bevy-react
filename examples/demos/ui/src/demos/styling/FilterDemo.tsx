@@ -452,12 +452,19 @@ function ChromaticAberrationDemo() {
             <InlineCode>chromaticAberration</InlineCode> is a directional RGB
             split: the red channel shifts <InlineCode>offset</InlineCode> px
             along <InlineCode>angle</InlineCode> (degrees, clockwise from +X),
-            blue the same distance opposite, green stays put. Identity is offset
-            0, so it transitions and animates like blur's radius.
+            blue the same distance opposite, green stays put. A non-zero{" "}
+            <InlineCode>rotation</InlineCode> adds a tangential swirl — red
+            spins by +rotation degrees around the center, blue by −rotation, so
+            the fringing grows toward the edges. Identity is offset 0, so it
+            transitions and animates like blur's radius.
           </P>
           <Code lang="tsx">{`filter: {
   name: "chromaticAberration",
-  params: { offset: 4, angle: 0 },
+  params: {
+    offset: 4,
+    angle: 0,
+    rotation: 0,
+  },
 }`}</Code>
         </>
       }
@@ -467,13 +474,17 @@ function ChromaticAberrationDemo() {
 }
 
 function ChromaticAberrationCard() {
-  const [offset, setOffset] = useState(4);
+  const [offset, setOffset] = useState(2);
   const [angle, setAngle] = useState(0);
+  const [rotation, setRotation] = useState(1.5);
   return (
     <node style={controlColumn}>
       <TestBanner
         style={{
-          filter: { name: "chromaticAberration", params: { offset, angle } },
+          filter: {
+            name: "chromaticAberration",
+            params: { offset, angle, rotation },
+          },
         }}
       />
       <Slider
@@ -489,6 +500,13 @@ function ChromaticAberrationCard() {
         max={360}
         onChange={setAngle}
         label={`angle ${angle.toFixed(0)}°`}
+      />
+      <Slider
+        value={rotation}
+        min={0}
+        max={10}
+        onChange={setRotation}
+        label={`rotation ${rotation.toFixed(1)}°`}
       />
     </node>
   );
