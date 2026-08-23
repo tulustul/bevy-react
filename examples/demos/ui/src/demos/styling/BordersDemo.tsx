@@ -1,16 +1,36 @@
 import { useState } from "react";
 import { DemoRow, Example, Slider } from "@/components";
+import { Code, InlineCode, P } from "@/components/docs";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
 import { Colors } from "@/theme";
 import { box, controlColumn } from "./shared";
 
 const PAGE: ExplanationData = {
   title: "Borders",
-  description: `border sets the edge width (it participates in layout),
-borderColor paints it, and borderRadius rounds the corners. Each accepts a
-single value or a per-side { top, right, bottom, left } object. outline draws
-an extra ring outside the box — width, offset, color — and is ignored by
-layout.`,
+  info: (
+    <>
+      <P>
+        <InlineCode>border</InlineCode> sets the edge width — and it
+        participates in layout, so a thicker border takes real space.{" "}
+        <InlineCode>borderColor</InlineCode> paints it, and{" "}
+        <InlineCode>borderRadius</InlineCode> rounds the corners.
+      </P>
+      <Code lang="tsx">{`<node
+  style={{
+    border: 2,
+    borderColor: "#7aa2f7",
+    borderRadius: { top: 0, right: 10, bottom: 20, left: 60 },
+  }}
+/>`}</Code>
+      <P>
+        Each of the three accepts a single value or a per-side{" "}
+        <InlineCode>{"{ top, right, bottom, left }"}</InlineCode> object.{" "}
+        <InlineCode>outline</InlineCode> draws an extra ring outside the box —{" "}
+        <InlineCode>width</InlineCode>, <InlineCode>offset</InlineCode>,{" "}
+        <InlineCode>color</InlineCode> — and is ignored by layout.
+      </P>
+    </>
+  ),
 };
 
 export function BordersDemo() {
@@ -30,53 +50,78 @@ export function BordersDemo() {
 }
 
 function BorderRadiusDemo() {
-  const [r, setR] = useState(16);
   return (
     <Example
       title="borderRadius"
-      description="borderRadius rounds the corners. Drag from square to pill."
-      tsx={`<node style={{ borderRadius: 16 }} />`}
-    >
-      <node style={controlColumn}>
-        <node style={{ ...box, borderRadius: r }} />
-        <Slider
-          value={r}
-          min={0}
-          max={36}
-          onChange={setR}
-          label={`borderRadius ${r.toFixed(0)}`}
-        />
-      </node>
-    </Example>
+      info={
+        <>
+          <P>
+            <InlineCode>borderRadius</InlineCode> rounds the corners. Drag the
+            slider from a square corner all the way to a pill.
+          </P>
+          <Code lang="tsx">{`<node style={{ borderRadius: 16 }} />`}</Code>
+        </>
+      }
+      demo={BorderRadiusCard}
+    />
+  );
+}
+
+function BorderRadiusCard() {
+  const [r, setR] = useState(16);
+  return (
+    <node style={controlColumn}>
+      <node style={{ ...box, borderRadius: r }} />
+      <Slider
+        value={r}
+        min={0}
+        max={36}
+        onChange={setR}
+        label={`borderRadius ${r.toFixed(0)}`}
+      />
+    </node>
   );
 }
 
 function BorderWidthDemo() {
-  const [w, setW] = useState(2);
   return (
     <Example
       title="border"
-      description="border adds an edge, painted by borderColor."
-      tsx={`border: 2, borderColor: "#7aa2f7"`}
-    >
-      <node style={controlColumn}>
-        <node
-          style={{
-            ...box,
-            backgroundColor: Colors.surface200,
-            border: w,
-            borderColor: Colors.primary100,
-          }}
-        />
-        <Slider
-          value={w}
-          min={0}
-          max={12}
-          onChange={setW}
-          label={`border ${w.toFixed(0)}`}
-        />
-      </node>
-    </Example>
+      info={
+        <>
+          <P>
+            <InlineCode>border</InlineCode> adds an edge of the given width,
+            painted by <InlineCode>borderColor</InlineCode>. The width is part
+            of layout, so growing it shrinks the content box.
+          </P>
+          <Code lang="tsx">{`<node style={{ border: 2, borderColor: "#7aa2f7" }} />`}</Code>
+        </>
+      }
+      demo={BorderWidthCard}
+    />
+  );
+}
+
+function BorderWidthCard() {
+  const [w, setW] = useState(2);
+  return (
+    <node style={controlColumn}>
+      <node
+        style={{
+          ...box,
+          backgroundColor: Colors.surface200,
+          border: w,
+          borderColor: Colors.primary100,
+        }}
+      />
+      <Slider
+        value={w}
+        min={0}
+        max={12}
+        onChange={setW}
+        label={`border ${w.toFixed(0)}`}
+      />
+    </node>
   );
 }
 
@@ -84,71 +129,101 @@ function PerSideDemo() {
   return (
     <Example
       title="Per-side values"
-      description="Each border attribute also takes a per-side object"
-      tsx={`borderRadius:
-  { top, right, bottom, left }
-borderColor:
-  { top, right, bottom, left }
-border:
-  { top, right, bottom, left }`}
-    >
-      <node style={controlColumn}>
-        <node
-          style={{
-            ...box,
-            backgroundColor: Colors.surface200,
-            borderRadius: {
-              top: 0,
-              right: 10,
-              bottom: 20,
-              left: 60,
-            },
-            border: {
-              top: 3,
-              right: 6,
-              bottom: 9,
-              left: 12,
-            },
-            borderColor: {
-              top: Colors.primary100,
-              right: Colors.amber100,
-              bottom: Colors.red100,
-              left: Colors.green100,
-            },
-          }}
-        />
-      </node>
-    </Example>
+      info={
+        <>
+          <P>
+            Every border attribute also takes a per-side{" "}
+            <InlineCode>{"{ top, right, bottom, left }"}</InlineCode> object, so
+            each edge can have its own width, color, and corner radius.
+          </P>
+          <Code lang="tsx">{`<node
+  style={{
+    borderRadius: { top: 0, right: 10, bottom: 20, left: 60 },
+    border: { top: 3, right: 6, bottom: 9, left: 12 },
+    borderColor: {
+      top: "#7aa2f7",
+      right: "#f9e2af",
+      bottom: "#f7768e",
+      left: "#9ece6a",
+    },
+  }}
+/>`}</Code>
+        </>
+      }
+      demo={PerSideCard}
+    />
+  );
+}
+
+function PerSideCard() {
+  return (
+    <node style={controlColumn}>
+      <node
+        style={{
+          ...box,
+          backgroundColor: Colors.surface200,
+          borderRadius: {
+            top: 0,
+            right: 10,
+            bottom: 20,
+            left: 60,
+          },
+          border: {
+            top: 3,
+            right: 6,
+            bottom: 9,
+            left: 12,
+          },
+          borderColor: {
+            top: Colors.primary100,
+            right: Colors.amber100,
+            bottom: Colors.red100,
+            left: Colors.green100,
+          },
+        }}
+      />
+    </node>
   );
 }
 
 function OutlineDemo() {
-  const [offset, setOffset] = useState(4);
   return (
     <Example
       title="outline"
-      description="outline draws a ring outside the box, ignored by layout."
-      tsx={`outline: {
-  width: 3,
-  offset: 4,
-  color: "#f9e2af",
-}`}
-    >
-      <node style={controlColumn}>
-        <node
-          style={{
-            ...box,
-            outline: { width: 3, offset, color: Colors.amber100 },
-          }}
-        />
-        <Slider
-          value={offset}
-          min={0}
-          max={16}
-          onChange={setOffset}
-          label={`outline offset ${offset.toFixed(0)}`}
-        />
-      </node>
-    </Example>
+      info={
+        <>
+          <P>
+            <InlineCode>outline</InlineCode> draws a ring outside the box — it
+            is ignored by layout, so changing its width or offset never moves
+            anything. Drag the offset to float the ring away from the edge.
+          </P>
+          <Code lang="tsx">{`<node
+  style={{ outline: { width: 3, offset: 4, color: "#f9e2af" } }}
+/>`}</Code>
+        </>
+      }
+      demo={OutlineCard}
+    />
+  );
+}
+
+function OutlineCard() {
+  const [offset, setOffset] = useState(4);
+  return (
+    <node style={controlColumn}>
+      <node
+        style={{
+          ...box,
+          outline: { width: 3, offset, color: Colors.amber100 },
+        }}
+      />
+      <Slider
+        value={offset}
+        min={0}
+        max={16}
+        onChange={setOffset}
+        label={`outline offset ${offset.toFixed(0)}`}
+      />
+    </node>
   );
 }

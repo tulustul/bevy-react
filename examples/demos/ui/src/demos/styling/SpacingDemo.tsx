@@ -1,17 +1,33 @@
 import { useState } from "react";
 import { BevyStyle } from "bevy-react/jsx";
 import { DemoRow, Example, Slider } from "@/components";
+import { Code, InlineCode, P } from "@/components/docs";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
 import { Colors } from "@/theme";
 import { controlColumn } from "./shared";
 
 const PAGE: ExplanationData = {
   title: "Spacing",
-  description: `padding insets a node's content from its own edges, margin
-pushes the node away from its siblings, and gap spaces flex/grid children
-(rowGap/columnGap split it per axis). All accept bare px numbers, unit
-strings, and — for padding and margin — per-side
-{ top, right, bottom, left } objects.`,
+  info: (
+    <>
+      <P>
+        Three props cover spacing: <InlineCode>padding</InlineCode> insets a
+        node's content from its own edges, <InlineCode>margin</InlineCode>{" "}
+        pushes the node away from its siblings, and <InlineCode>gap</InlineCode>{" "}
+        spaces flex/grid children (<InlineCode>rowGap</InlineCode> /{" "}
+        <InlineCode>columnGap</InlineCode> split it per axis).
+      </P>
+      <Code lang="tsx">{`<node style={{ padding: 16, gap: 12 }}>
+  <node style={{ margin: { left: 24 } }} />
+</node>`}</Code>
+      <P>
+        All of them accept bare px numbers and unit strings;{" "}
+        <InlineCode>padding</InlineCode> and <InlineCode>margin</InlineCode>{" "}
+        additionally take per-side{" "}
+        <InlineCode>{"{ top, right, bottom, left }"}</InlineCode> objects.
+      </P>
+    </>
+  ),
 };
 
 export function SpacingDemo() {
@@ -26,82 +42,120 @@ export function SpacingDemo() {
 }
 
 function PaddingDemo() {
-  const [p, setP] = useState(16);
   return (
     <Example
       title="padding"
-      description="padding insets content from the node's own edges."
-      tsx={`<node style={{ padding: 16 }} />`}
-    >
-      <node style={controlColumn}>
-        <node style={{ ...wrap, padding: p }}>
-          <node style={inner} />
-        </node>
-        <Slider
-          value={p}
-          min={0}
-          max={40}
-          onChange={setP}
-          label={`padding ${p.toFixed(0)}`}
-        />
+      info={
+        <>
+          <P>
+            <InlineCode>padding</InlineCode> insets content from the node's own
+            edges — drag the slider and watch the outer box grow around the
+            fixed-size inner one.
+          </P>
+          <Code lang="tsx">{`<node style={{ padding: 16 }} />`}</Code>
+        </>
+      }
+      demo={PaddingCard}
+    />
+  );
+}
+
+function PaddingCard() {
+  const [p, setP] = useState(16);
+  return (
+    <node style={controlColumn}>
+      <node style={{ ...wrap, padding: p }}>
+        <node style={inner} />
       </node>
-    </Example>
+      <Slider
+        value={p}
+        min={0}
+        max={40}
+        onChange={setP}
+        label={`padding ${p.toFixed(0)}`}
+      />
+    </node>
   );
 }
 
 function GapDemo() {
-  const [g, setG] = useState(12);
   return (
     <Example
       title="gap"
-      description="gap spaces flex/grid children; rowGap/columnGap split it."
-      tsx={`<node style={{ gap: 16 }} />`}
-    >
-      <node style={controlColumn}>
-        <node style={{ ...wrap, flexDirection: "row", gap: g }}>
-          <node style={inner} />
-          <node style={{ ...inner, backgroundColor: Colors.purple100 }} />
-          <node style={{ ...inner, backgroundColor: Colors.yellow100 }} />
-        </node>
-        <Slider
-          value={g}
-          min={0}
-          max={32}
-          onChange={setG}
-          label={`gap ${g.toFixed(0)}`}
-        />
+      info={
+        <>
+          <P>
+            <InlineCode>gap</InlineCode> spaces flex/grid children without
+            touching the outer edges; <InlineCode>rowGap</InlineCode> /{" "}
+            <InlineCode>columnGap</InlineCode> split it per axis.
+          </P>
+          <Code lang="tsx">{`<node style={{ flexDirection: "row", gap: 16 }} />`}</Code>
+        </>
+      }
+      demo={GapCard}
+    />
+  );
+}
+
+function GapCard() {
+  const [g, setG] = useState(12);
+  return (
+    <node style={controlColumn}>
+      <node style={{ ...wrap, flexDirection: "row", gap: g }}>
+        <node style={inner} />
+        <node style={{ ...inner, backgroundColor: Colors.purple100 }} />
+        <node style={{ ...inner, backgroundColor: Colors.yellow100 }} />
       </node>
-    </Example>
+      <Slider
+        value={g}
+        min={0}
+        max={32}
+        onChange={setG}
+        label={`gap ${g.toFixed(0)}`}
+      />
+    </node>
   );
 }
 
 function MarginDemo() {
-  const [m, setM] = useState(24);
   return (
     <Example
       title="margin"
-      description="margin pushes a node away from its siblings."
-      tsx={`margin: { left: 24 }`}
-    >
-      <node style={controlColumn}>
-        <node style={{ ...wrap, flexDirection: "row" }}>
-          <node
-            style={{
-              ...inner,
-              backgroundColor: Colors.green100,
-              margin: { left: m },
-            }}
-          />
-        </node>
-        <Slider
-          value={m}
-          min={0}
-          max={48}
-          onChange={setM}
-          label={`margin.left ${m.toFixed(0)}`}
+      info={
+        <>
+          <P>
+            <InlineCode>margin</InlineCode> pushes a node away from its siblings
+            — here a per-side object pushes only from the left.
+          </P>
+          <Code lang="tsx">{`<node style={{ margin: { left: 24 } }} />`}</Code>
+        </>
+      }
+      demo={MarginCard}
+    />
+  );
+}
+
+function MarginCard() {
+  const [m, setM] = useState(24);
+  return (
+    <node style={controlColumn}>
+      <node style={{ ...wrap, flexDirection: "row" }}>
+        <node
+          style={{
+            ...inner,
+            backgroundColor: Colors.green100,
+            margin: { left: m },
+          }}
         />
       </node>
-    </Example>
+      <Slider
+        value={m}
+        min={0}
+        max={48}
+        onChange={setM}
+        label={`margin.left ${m.toFixed(0)}`}
+      />
+    </node>
   );
 }
 

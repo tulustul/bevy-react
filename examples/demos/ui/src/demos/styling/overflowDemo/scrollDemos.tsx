@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { BevyStyle, ScrollbarStyle } from "bevy-react/jsx";
 import { Button, Example } from "@/components";
+import { Code, InlineCode, P } from "@/components/docs";
 import { Colors, FontSizes } from "@/theme";
 import { caption, controlColumn } from "../shared";
 
@@ -8,14 +9,85 @@ export function WheelScrollDemo() {
   return (
     <Example
       title="overflowY: scroll"
-      description="overflowY: scroll clips a tall child and adds a wheel scrollbar. Hover the list and scroll."
-      tsx={`<node style={{
-  height: 180,
-  overflowY: "scroll",
-  scrollbarWidth: 8,
-}}>`}
-    >
-      <node style={listStyle}>
+      info={
+        <>
+          <P>
+            <InlineCode>overflowY: "scroll"</InlineCode> clips a tall child and
+            makes the node a wheel-scrollable container. Hover the list and
+            scroll — no extra props needed.
+          </P>
+          <Code lang="tsx">{`<node style={{ height: 180, overflowY: "scroll", scrollbarWidth: 8 }}>
+  {items.map((item) => (
+    <node key={item}>
+      <text>{item}</text>
+    </node>
+  ))}
+</node>`}</Code>
+        </>
+      }
+      demo={WheelScrollCard}
+    />
+  );
+}
+
+function WheelScrollCard() {
+  return (
+    <node style={listStyle}>
+      {ITEMS.map((item) => (
+        <node key={item} style={rowStyle}>
+          <text style={{ color: Colors.textColor100, fontSize: FontSizes.sm }}>
+            {item}
+          </text>
+        </node>
+      ))}
+    </node>
+  );
+}
+
+// A controlled scroll container: `scrollTop` is React state, kept in sync from the
+// wheel via `onScroll` and jumped programmatically by the buttons. The readout
+// proves the round trip (Bevy to React on wheel, React to Bevy on a button press).
+export function ControlledScrollDemo() {
+  return (
+    <Example
+      title="Controlled scrollTop"
+      info={
+        <>
+          <P>
+            A controlled scroll container: <InlineCode>scrollTop</InlineCode> is
+            React state. <InlineCode>onScroll</InlineCode> syncs it from the
+            wheel; the buttons jump the offset by writing{" "}
+            <InlineCode>scrollTop</InlineCode> back. The readout shows the live
+            value.
+          </P>
+          <Code lang="tsx">{`const [scrollTop, setScrollTop] = useState(0);
+
+<node
+  style={{ overflowY: "scroll" }}
+  scrollTop={scrollTop}
+  onScroll={(e) => setScrollTop(e.scrollTop)}
+>
+  …
+</node>
+
+<Button onClick={() => setScrollTop(0)}>Top</Button>
+<Button onClick={() => setScrollTop(10_000)}>Bottom</Button>`}</Code>
+        </>
+      }
+      demo={ControlledScrollCard}
+    />
+  );
+}
+
+function ControlledScrollCard() {
+  const [scrollTop, setScrollTop] = useState(0);
+  return (
+    <node style={controlColumn}>
+      <node
+        style={listStyle}
+        scrollTop={scrollTop}
+        onScroll={(e) => setScrollTop(e.scrollTop)}
+      >
         {ITEMS.map((item) => (
           <node key={item} style={rowStyle}>
             <text
@@ -26,51 +98,12 @@ export function WheelScrollDemo() {
           </node>
         ))}
       </node>
-    </Example>
-  );
-}
-
-// A controlled scroll container: `scrollTop` is React state, kept in sync from the
-// wheel via `onScroll` and jumped programmatically by the buttons. The readout
-// proves the round trip (Bevy → React on wheel, React → Bevy on a button press).
-export function ControlledScrollDemo() {
-  const [scrollTop, setScrollTop] = useState(0);
-  return (
-    <Example
-      title="Controlled scrollTop"
-      description="A controlled scroll container: scrollTop is React state. onScroll syncs it from the wheel; the buttons jump the offset by writing scrollTop back. The readout shows the live value."
-      tsx={`const [scrollTop, setScrollTop] =
-  useState(0);
-<node
-  style={{ overflowY: "scroll" }}
-  scrollTop={scrollTop}
-  onScroll={(e) =>
-    setScrollTop(e.scrollTop)}
->`}
-    >
-      <node style={controlColumn}>
-        <node
-          style={listStyle}
-          scrollTop={scrollTop}
-          onScroll={(e) => setScrollTop(e.scrollTop)}
-        >
-          {ITEMS.map((item) => (
-            <node key={item} style={rowStyle}>
-              <text
-                style={{ color: Colors.textColor100, fontSize: FontSizes.sm }}
-              >
-                {item}
-              </text>
-            </node>
-          ))}
-        </node>
-        <node style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-          <Button onClick={() => setScrollTop(0)}>Top</Button>
-          <Button onClick={() => setScrollTop(10_000)}>Bottom</Button>
-          <text style={caption}>{`scrollTop: ${Math.round(scrollTop)}`}</text>
-        </node>
+      <node style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+        <Button onClick={() => setScrollTop(0)}>Top</Button>
+        <Button onClick={() => setScrollTop(10_000)}>Bottom</Button>
+        <text style={caption}>{`scrollTop: ${Math.round(scrollTop)}`}</text>
       </node>
-    </Example>
+    </node>
   );
 }
 
@@ -81,40 +114,49 @@ export function SmoothScrollDemo() {
   return (
     <Example
       title="Smooth scroll"
-      description="A scroll transition eases the offset instead of snapping: each wheel notch glides to its target (scrollStep sets the per-line distance). Compare with the plain wheel list, which jumps."
-      tsx={`<node
+      info={
+        <>
+          <P>
+            A <InlineCode>scroll</InlineCode> transition eases the offset
+            instead of snapping: each wheel notch glides to its target (
+            <InlineCode>scrollStep</InlineCode> sets the per-line distance).
+            Compare with the plain wheel list, which jumps.
+          </P>
+          <Code lang="tsx">{`<node
   style={{
     overflowY: "scroll",
-    transition: {
-      scroll: {
-        duration: 200,
-        easing: "easeOut",
-      },
-    },
+    transition: { scroll: { duration: 200, easing: "easeOut" } },
   }}
   scrollStep={50}
->`}
-    >
-      <node style={controlColumn}>
-        <node
-          style={{
-            ...listStyle,
-            transition: { scroll: { duration: 200, easing: "easeOut" } },
-          }}
-          scrollStep={50}
-        >
-          {ITEMS.map((item) => (
-            <node key={item} style={rowStyle}>
-              <text
-                style={{ color: Colors.textColor100, fontSize: FontSizes.sm }}
-              >
-                {item}
-              </text>
-            </node>
-          ))}
-        </node>
+>`}</Code>
+        </>
+      }
+      demo={SmoothScrollCard}
+    />
+  );
+}
+
+function SmoothScrollCard() {
+  return (
+    <node style={controlColumn}>
+      <node
+        style={{
+          ...listStyle,
+          transition: { scroll: { duration: 200, easing: "easeOut" } },
+        }}
+        scrollStep={50}
+      >
+        {ITEMS.map((item) => (
+          <node key={item} style={rowStyle}>
+            <text
+              style={{ color: Colors.textColor100, fontSize: FontSizes.sm }}
+            >
+              {item}
+            </text>
+          </node>
+        ))}
       </node>
-    </Example>
+    </node>
   );
 }
 
@@ -125,91 +167,141 @@ export function ScrollbarDefaultDemo() {
   return (
     <Example
       title='scrollbar: "default"'
-      description="style.scrollbar adds a visible, draggable scrollbar; 'default' is the built-in bar. Drag the thumb or click the track to page."
-      tsx={`<node style={{
-  overflowY: "scroll",
-  scrollbar: "default",
-}}>`}
-    >
-      <ScrollList scrollbar="default" />
-    </Example>
+      info={
+        <>
+          <P>
+            <InlineCode>style.scrollbar</InlineCode> adds a visible, draggable
+            scrollbar; <InlineCode>"default"</InlineCode> is the built-in bar.
+            Drag the thumb or click the track to page.
+          </P>
+          <Code lang="tsx">{`<node style={{ overflowY: "scroll", scrollbar: "default" }}>`}</Code>
+        </>
+      }
+      demo={ScrollbarDefaultCard}
+    />
   );
+}
+
+function ScrollbarDefaultCard() {
+  return <ScrollList scrollbar="default" />;
 }
 
 export function ScrollbarStyledDemo() {
   return (
     <Example
       title="Styled scrollbar"
-      description="A fully styled bar: track and thumb take node-like styles (color, radius), and thickness sets its width. By default the bar reserves a gutter, so the content shrinks to make room."
-      tsx={`scrollbar: {
-  track: {
-    backgroundColor: "#00000088",
-    borderRadius: 8,
-  },
-  thumb: {
-    backgroundColor: "#7aa2f7",
-    borderRadius: 8,
-  },
+      info={
+        <>
+          <P>
+            A fully styled bar: <InlineCode>track</InlineCode> and{" "}
+            <InlineCode>thumb</InlineCode> take node-like styles (color,
+            radius), and <InlineCode>thickness</InlineCode> sets its width. By
+            default the bar reserves a gutter, so the content shrinks to make
+            room.
+          </P>
+          <Code lang="tsx">{`scrollbar: {
+  track: { backgroundColor: "#00000088", borderRadius: 8 },
+  thumb: { backgroundColor: "#7aa2f7", borderRadius: 8 },
   thickness: 20,
-}`}
-    >
-      <ScrollList scrollbar={customBar} />
-    </Example>
+}`}</Code>
+        </>
+      }
+      demo={ScrollbarStyledCard}
+    />
   );
+}
+
+function ScrollbarStyledCard() {
+  return <ScrollList scrollbar={customBar} />;
 }
 
 export function ScrollbarFloatDemo() {
   return (
     <Example
       title='position: "float"'
-      description='position: "float" overlays the bar on the content instead of reserving a gutter — the list keeps its full width and the bar rides on top. The default is "gutter".'
-      tsx={`scrollbar: {
-  // ...track, thumb, thickness
+      info={
+        <>
+          <P>
+            <InlineCode>position: "float"</InlineCode> overlays the bar on the
+            content instead of reserving a gutter — the list keeps its full
+            width and the bar rides on top. The default is{" "}
+            <InlineCode>"gutter"</InlineCode>.
+          </P>
+          <Code lang="tsx">{`scrollbar: {
+  track: { backgroundColor: "#00000088", borderRadius: 8 },
+  thumb: { backgroundColor: "#7aa2f7", borderRadius: 8 },
+  thickness: 20,
   position: "float",
-}`}
-    >
-      <ScrollList scrollbar={floatBar} />
-    </Example>
+}`}</Code>
+        </>
+      }
+      demo={ScrollbarFloatCard}
+    />
   );
+}
+
+function ScrollbarFloatCard() {
+  return <ScrollList scrollbar={floatBar} />;
 }
 
 export function ScrollbarLeftDemo() {
   return (
     <Example
       title='verticalSide: "left"'
-      description='verticalSide picks the edge the vertical bar sits on: "left" moves it across from the default "right".'
-      tsx={`scrollbar: {
-  // ...track, thumb, thickness
+      info={
+        <>
+          <P>
+            <InlineCode>verticalSide</InlineCode> picks the edge the vertical
+            bar sits on: <InlineCode>"left"</InlineCode> moves it across from
+            the default <InlineCode>"right"</InlineCode>.
+          </P>
+          <Code lang="tsx">{`scrollbar: {
+  track: { backgroundColor: "#00000088", borderRadius: 8 },
+  thumb: { backgroundColor: "#7aa2f7", borderRadius: 8 },
+  thickness: 20,
   verticalSide: "left",
-}`}
-    >
-      <ScrollList scrollbar={leftBar} />
-    </Example>
+}`}</Code>
+        </>
+      }
+      demo={ScrollbarLeftCard}
+    />
   );
+}
+
+function ScrollbarLeftCard() {
+  return <ScrollList scrollbar={leftBar} />;
 }
 
 export function ScrollbarStatesDemo() {
   return (
     <Example
       title="Thumb hover & pressed"
-      description="hover and pressed styles nest inside thumb: this one brightens on hover and turns blue while dragging (pressed wins over hover)."
-      tsx={`scrollbar: {
+      info={
+        <>
+          <P>
+            <InlineCode>hover</InlineCode> and <InlineCode>pressed</InlineCode>{" "}
+            styles nest inside <InlineCode>thumb</InlineCode>: this one
+            brightens on hover and turns blue while dragging (pressed wins over
+            hover).
+          </P>
+          <Code lang="tsx">{`scrollbar: {
   thumb: {
     backgroundColor: "#313244",
     borderRadius: 8,
-    hover: {
-      backgroundColor: "#a6adc8",
-    },
-    pressed: {
-      backgroundColor: "#7aa2f7",
-    },
+    hover: { backgroundColor: "#a6adc8" },
+    pressed: { backgroundColor: "#7aa2f7" },
   },
   thickness: 10,
-}`}
-    >
-      <ScrollList scrollbar={statesBar} />
-    </Example>
+}`}</Code>
+        </>
+      }
+      demo={ScrollbarStatesCard}
+    />
   );
+}
+
+function ScrollbarStatesCard() {
+  return <ScrollList scrollbar={statesBar} />;
 }
 
 function ScrollList({
@@ -236,28 +328,40 @@ export function HorizontalScrollbarDemo() {
   return (
     <Example
       title="Horizontal scrollbar"
-      description="A horizontal scrollbar: overflowX: scroll on a fixed-width row whose tiles refuse to shrink, so the row overflows. The bar sits on the bottom edge by default; horizontalSide: 'top' (with position: 'float') moves it above the content. Drag the thumb or click the track to page."
-      tsx={`<node style={{
-  overflowX: "scroll",
-  scrollbar: {
-    thumb: {
-      backgroundColor: "#7aa2f7",
-      borderRadius: 8,
+      info={
+        <>
+          <P>
+            A horizontal scrollbar: <InlineCode>overflowX: "scroll"</InlineCode>{" "}
+            on a fixed-width row whose tiles refuse to shrink, so the row
+            overflows. The bar sits on the bottom edge by default;{" "}
+            <InlineCode>horizontalSide: "top"</InlineCode> (with{" "}
+            <InlineCode>position: "float"</InlineCode>) moves it above the
+            content. Drag the thumb or click the track to page.
+          </P>
+          <Code lang="tsx">{`<node
+  style={{
+    width: 360,
+    overflowX: "scroll",
+    scrollbar: {
+      thumb: { backgroundColor: "#7aa2f7", borderRadius: 8 },
+      thickness: 10,
+      horizontalSide: "bottom", // or "top"
     },
-    thickness: 10,
-    // or "top"
-    horizontalSide: "bottom",
-  },
-}}>`}
-    >
-      <node style={{ flexDirection: "column", gap: 16 }}>
-        <HScrollList label='horizontalSide: "bottom"' scrollbar={hBottomBar} />
-        <HScrollList
-          label='horizontalSide: "top" (float)'
-          scrollbar={hTopBar}
-        />
-      </node>
-    </Example>
+  }}
+>`}</Code>
+        </>
+      }
+      demo={HorizontalScrollbarCard}
+    />
+  );
+}
+
+function HorizontalScrollbarCard() {
+  return (
+    <node style={{ flexDirection: "column", gap: 16 }}>
+      <HScrollList label='horizontalSide: "bottom"' scrollbar={hBottomBar} />
+      <HScrollList label='horizontalSide: "top" (float)' scrollbar={hTopBar} />
+    </node>
   );
 }
 

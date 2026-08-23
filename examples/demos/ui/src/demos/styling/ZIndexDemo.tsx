@@ -1,17 +1,31 @@
 import { useState } from "react";
 import { BevyStyle } from "bevy-react/jsx";
 import { DemoRow, Example, Radio, RadioOption } from "@/components";
+import { B, Code, InlineCode, P } from "@/components/docs";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
 import { Colors, FontSizes } from "@/theme";
 import { caption, controlColumn } from "./shared";
 
 const PAGE: ExplanationData = {
   title: "zIndex",
-  description: `zIndex reorders a node among its SIBLINGS — it is local to
-the parent's stacking context, so a nested node can never out-stack an
-unrelated subtree with it. globalZIndex lifts the node into the UI's
-top-level stack instead, the tool for popovers and overlays that must render
-in front of everything.`,
+  info: (
+    <>
+      <P>
+        <InlineCode>zIndex</InlineCode> reorders a node among its{" "}
+        <B>siblings</B> — it is local to the parent's stacking context, so a
+        nested node can never out-stack an unrelated subtree with it.
+      </P>
+      <Code lang="tsx">{`<node style={{ zIndex: 2 }} />
+
+// escape the local stacking context entirely:
+<node style={{ globalZIndex: 99 }} />`}</Code>
+      <P>
+        <InlineCode>globalZIndex</InlineCode> instead lifts the node into the
+        UI's top-level stack — the tool for popovers and overlays that must
+        render in front of everything.
+      </P>
+    </>
+  ),
 };
 
 export function ZIndexDemo() {
@@ -33,37 +47,51 @@ const FRONT_OPTIONS: RadioOption<Front>[] = [
 ];
 
 function LocalZIndexDemo() {
-  const [front, setFront] = useState<Front>("red");
   return (
     <Example
       title="zIndex"
-      description="zIndex reorders a node among its SIBLINGS. Both chips share one parent, so it decides which is painted on top."
-      tsx={`<node style={{ zIndex: 2 }} />`}
-    >
-      <node style={controlColumn}>
-        <node style={overlapStage}>
-          <node
-            style={{
-              ...chip,
-              left: 18,
-              top: 14,
-              backgroundColor: Colors.primary100,
-              zIndex: front === "blue" ? 2 : 1,
-            }}
-          />
-          <node
-            style={{
-              ...chip,
-              left: 50,
-              top: 30,
-              backgroundColor: Colors.red100,
-              zIndex: front === "red" ? 2 : 1,
-            }}
-          />
-        </node>
-        <Radio options={FRONT_OPTIONS} value={front} onChange={setFront} />
+      info={
+        <>
+          <P>
+            <InlineCode>zIndex</InlineCode> reorders a node among its{" "}
+            <B>siblings</B>. Both chips share one parent, so it decides which is
+            painted on top.
+          </P>
+          <Code lang="tsx">{`<node style={{ zIndex: front === "blue" ? 2 : 1 }} />
+<node style={{ zIndex: front === "red" ? 2 : 1 }} />`}</Code>
+        </>
+      }
+      demo={LocalZIndexCard}
+    />
+  );
+}
+
+function LocalZIndexCard() {
+  const [front, setFront] = useState<Front>("red");
+  return (
+    <node style={controlColumn}>
+      <node style={overlapStage}>
+        <node
+          style={{
+            ...chip,
+            left: 18,
+            top: 14,
+            backgroundColor: Colors.primary100,
+            zIndex: front === "blue" ? 2 : 1,
+          }}
+        />
+        <node
+          style={{
+            ...chip,
+            left: 50,
+            top: 30,
+            backgroundColor: Colors.red100,
+            zIndex: front === "red" ? 2 : 1,
+          }}
+        />
       </node>
-    </Example>
+      <Radio options={FRONT_OPTIONS} value={front} onChange={setFront} />
+    </node>
   );
 }
 
@@ -83,6 +111,29 @@ const HINTS: Record<Mode, string> = {
 };
 
 function GlobalZIndexDemo() {
+  return (
+    <Example
+      title="globalZIndex"
+      info={
+        <>
+          <P>
+            A popover nested in the back card overhangs the front card.{" "}
+            <InlineCode>zIndex</InlineCode> only sorts it within its own card,
+            so it stays buried — <InlineCode>globalZIndex</InlineCode> lifts it
+            into the UI's top-level stack and out in front.
+          </P>
+          <Code lang="tsx">{`<node style={{ /* back card */ }}>
+  <node style={{ globalZIndex: 99 }}>popover</node>
+</node>
+<node style={{ /* front card, painted second */ }} />`}</Code>
+        </>
+      }
+      demo={GlobalZIndexCard}
+    />
+  );
+}
+
+function GlobalZIndexCard() {
   const [mode, setMode] = useState<Mode>("globalZIndex");
   const popoverZ: BevyStyle =
     mode === "zIndex"
@@ -91,29 +142,23 @@ function GlobalZIndexDemo() {
         ? { globalZIndex: 99 }
         : {};
   return (
-    <Example
-      title="globalZIndex"
-      description="A popover nested in the back card overhangs the front card. zIndex only sorts it within its own card, so it stays buried — globalZIndex lifts it into the UI's top-level stack and out in front."
-      tsx={`<node style={{ globalZIndex: 99 }} />`}
-    >
-      <node style={controlColumn}>
-        <node style={cardRow}>
-          {/* Back card (painted first) — owns the overhanging popover. */}
-          <node style={{ ...card, backgroundColor: Colors.primary100 }}>
-            <text style={cardLabel}>back</text>
-            <node style={{ ...popover, ...popoverZ }}>
-              <text style={popoverLabel}>popover</text>
-            </node>
-          </node>
-          {/* Front card (painted second) — covers anything below it in the stack. */}
-          <node style={{ ...card, backgroundColor: Colors.red100 }}>
-            <text style={cardLabel}>front</text>
+    <node style={controlColumn}>
+      <node style={cardRow}>
+        {/* Back card (painted first) — owns the overhanging popover. */}
+        <node style={{ ...card, backgroundColor: Colors.primary100 }}>
+          <text style={cardLabel}>back</text>
+          <node style={{ ...popover, ...popoverZ }}>
+            <text style={popoverLabel}>popover</text>
           </node>
         </node>
-        <Radio options={MODE_OPTIONS} value={mode} onChange={setMode} />
-        <text style={caption}>{HINTS[mode]}</text>
+        {/* Front card (painted second) — covers anything below it in the stack. */}
+        <node style={{ ...card, backgroundColor: Colors.red100 }}>
+          <text style={cardLabel}>front</text>
+        </node>
       </node>
-    </Example>
+      <Radio options={MODE_OPTIONS} value={mode} onChange={setMode} />
+      <text style={caption}>{HINTS[mode]}</text>
+    </node>
   );
 }
 

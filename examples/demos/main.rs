@@ -24,6 +24,7 @@
 //! the files under `ui/src/`.
 
 mod camera;
+mod clipboard;
 mod filters;
 mod scene;
 mod scenes;
@@ -238,8 +239,10 @@ fn build_app(window: Window, hot_reload: bool) -> App {
     app.add_systems(Startup, register_host_textures);
 
     // Each scene's plugin registers its own bindings in `build`; only the global
-    // scene-selection + debug-navigation handlers are left to register here.
+    // scene-selection + debug-navigation + clipboard handlers are left to
+    // register here.
     scene::register_bindings(&mut app);
+    clipboard::register_bindings(&mut app);
     // Custom filters must register AFTER `ReactUiPlugin` (added above): the
     // plugin's `build` registers the built-in filters and would replace an
     // earlier same-name custom (see `add_react_filter`'s ordering doc).
@@ -266,6 +269,7 @@ fn register_react_bindings(app: &mut App) {
     scene::register_bindings(app);
     screenshot::register_bindings(app);
     filters::register_bindings(app);
+    clipboard::register_bindings(app);
     // `scenes::ambient` is intentionally absent: it registers no bindings.
     scenes::cubes::register_bindings(app);
     scenes::bouncing_ball::register_bindings(app);

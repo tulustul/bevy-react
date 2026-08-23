@@ -7,9 +7,10 @@ import {
   withTiming,
 } from "bevy-react";
 import { BevyStyle } from "bevy-react/jsx";
-import { Typewriter } from "@/components";
-import { Colors, FontSizes } from "@/theme";
+import { Button, Typewriter } from "@/components";
+import { Colors, FontSizes, Gradients } from "@/theme";
 import { useDemoPage } from "@/explanationStore";
+import { navigateToDemo } from "@/demoNavigation";
 
 type Feature = { title: string; body: string };
 
@@ -87,6 +88,12 @@ export function Home() {
           ways, and edits hot-reload live while keeping component state.
         </text>
       </Reveal>
+      <Reveal delay={HERO_DONE_MS + 400}>
+        <node style={ctaRowStyle}>
+          <NavButton label="Getting started" primary />
+          <NavButton label="How it works?" />
+        </node>
+      </Reveal>
       <node style={cardsRowStyle}>
         {FEATURES.map((feature, index) => (
           <FeatureCard key={feature.title} feature={feature} index={index} />
@@ -96,6 +103,18 @@ export function Home() {
         <text style={browseStyle}>Browse the demos in the side panel</text>
       </Reveal>
     </node>
+  );
+}
+
+// A hero CTA that jumps to one of the documentation pages by nav label.
+function NavButton({ label, primary }: { label: string; primary?: boolean }) {
+  return (
+    <Button
+      style={primary ? { backgroundGradient: Gradients.primary } : undefined}
+      onClick={() => navigateToDemo(label)}
+    >
+      {label}
+    </Button>
   );
 }
 
@@ -309,6 +328,11 @@ const introStyle: BevyStyle = {
   fontSize: FontSizes.sm,
   maxWidth: 600,
   textAlign: "center",
+};
+
+const ctaRowStyle: BevyStyle = {
+  flexDirection: "row",
+  gap: 12,
 };
 
 const cardsRowStyle: BevyStyle = {

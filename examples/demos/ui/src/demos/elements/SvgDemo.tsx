@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { useSharedValue, withRepeat, withTiming } from "bevy-react";
 import { BevyStyle } from "bevy-react/jsx";
 import { DemoRow, Example } from "@/components";
+import { Code, InlineCode, Li, P, Ul } from "@/components/docs";
 import { Colors } from "@/theme";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
 
@@ -14,8 +15,37 @@ import { useDemoPage, type ExplanationData } from "@/explanationStore";
 
 const PAGE: ExplanationData = {
   title: "<svg>",
-  description:
-    "The <svg> host element draws vector graphics from JSX shape children: path, rect, circle, ellipse, line, polyline, polygon, and g. Geometry lives in viewBox user units, so a whole drawing scales with the element's laid-out size while staying pixel-crisp. Shapes take the same pointer handlers as nodes — hit-testing follows the painted geometry, and events report user-space coordinates — and numeric attributes animate like style fields, via { animated } bindings or a transition prop. (Rendering an .svg file is the <image> element's job.)",
+  info: (
+    <>
+      <P>
+        <InlineCode>{"<svg>"}</InlineCode> draws vector graphics from JSX shape
+        children — the 8 intrinsics: <InlineCode>path</InlineCode>,{" "}
+        <InlineCode>rect</InlineCode>, <InlineCode>circle</InlineCode>,{" "}
+        <InlineCode>ellipse</InlineCode>, <InlineCode>line</InlineCode>,{" "}
+        <InlineCode>polyline</InlineCode>, <InlineCode>polygon</InlineCode>, and{" "}
+        <InlineCode>g</InlineCode>. Geometry lives in{" "}
+        <InlineCode>viewBox</InlineCode> user units, so a whole drawing scales
+        with the element's laid-out size while staying pixel-crisp.
+      </P>
+      <Code lang="tsx">{`<svg viewBox="0 0 40 40" style={{ width: 56 }}>
+  <circle cx={20} cy={20} r={13} fill="#7dcfff" />
+</svg>`}</Code>
+      <Ul>
+        <Li>
+          Shapes take the same pointer handlers as nodes; hit-testing follows
+          the painted geometry, and events report user-space coordinates.
+        </Li>
+        <Li>
+          Numeric attributes animate like style fields — {"{ animated }"}{" "}
+          bindings or a transition prop on the shape.
+        </Li>
+        <Li>
+          Rendering an .svg FILE is the {"<image>"} element's job; this element
+          is for building drawings in JSX.
+        </Li>
+      </Ul>
+    </>
+  ),
 };
 
 export function SvgDemo() {
@@ -98,79 +128,98 @@ function PrimitivesDemo() {
   return (
     <Example
       title="Shape primitives"
-      description="All eight shape intrinsics, one per cell: filled rect, circle, ellipse and polygon (a star from a flat points list), stroked line and polyline, a path from an SVG d string (the heart), and g — a group whose translate/rotate transform moves its two rects together. Each cell is its own <svg> with a 40 by 40 viewBox."
-      tsx={PRIMS_TSX}
-    >
-      <node style={gridStyle}>
-        <node style={gridRowStyle}>
-          <Prim label="rect">
+      info={
+        <>
+          <P>
+            All eight shape intrinsics, one per cell: filled{" "}
+            <InlineCode>rect</InlineCode>, <InlineCode>circle</InlineCode>,{" "}
+            <InlineCode>ellipse</InlineCode> and{" "}
+            <InlineCode>polygon</InlineCode> (a star from a flat points list),
+            stroked <InlineCode>line</InlineCode> and{" "}
+            <InlineCode>polyline</InlineCode>, a <InlineCode>path</InlineCode>{" "}
+            from an SVG d string (the heart), and <InlineCode>g</InlineCode> — a
+            group whose translate/rotate transform moves its two rects together.
+            Each cell is its own {"<svg>"} with a 40×40 viewBox.
+          </P>
+          <Code lang="tsx">{PRIMS_TSX}</Code>
+        </>
+      }
+      demo={PrimitivesCard}
+    />
+  );
+}
+
+function PrimitivesCard() {
+  return (
+    <node style={gridStyle}>
+      <node style={gridRowStyle}>
+        <Prim label="rect">
+          <rect
+            x={6}
+            y={10}
+            width={28}
+            height={20}
+            rx={4}
+            fill={Colors.primary100}
+          />
+        </Prim>
+        <Prim label="circle">
+          <circle cx={20} cy={20} r={13} fill={Colors.sky100} />
+        </Prim>
+        <Prim label="ellipse">
+          <ellipse cx={20} cy={20} rx={15} ry={9} fill={Colors.teal100} />
+        </Prim>
+        <Prim label="line">
+          <line
+            x1={6}
+            y1={30}
+            x2={34}
+            y2={10}
+            stroke={Colors.amber100}
+            strokeWidth={3}
+            strokeLinecap="round"
+          />
+        </Prim>
+      </node>
+      <node style={gridRowStyle}>
+        <Prim label="polyline">
+          <polyline
+            points={[6, 28, 16, 12, 24, 22, 34, 8]}
+            fill="none"
+            stroke={Colors.green100}
+            strokeWidth={3}
+            strokeLinejoin="round"
+            strokeLinecap="round"
+          />
+        </Prim>
+        <Prim label="polygon">
+          <polygon points={STAR_POINTS} fill={Colors.purple100} />
+        </Prim>
+        <Prim label="path">
+          <path d={HEART_D} fill={Colors.red100} />
+        </Prim>
+        <Prim label="g">
+          <g transform="translate(20 22) rotate(-14)">
             <rect
-              x={6}
-              y={10}
-              width={28}
-              height={20}
-              rx={4}
+              x={-13}
+              y={-9}
+              width={12}
+              height={18}
+              rx={3}
+              fill={Colors.orange100}
+            />
+            <rect
+              x={1}
+              y={-9}
+              width={12}
+              height={18}
+              rx={3}
               fill={Colors.primary100}
             />
-          </Prim>
-          <Prim label="circle">
-            <circle cx={20} cy={20} r={13} fill={Colors.sky100} />
-          </Prim>
-          <Prim label="ellipse">
-            <ellipse cx={20} cy={20} rx={15} ry={9} fill={Colors.teal100} />
-          </Prim>
-          <Prim label="line">
-            <line
-              x1={6}
-              y1={30}
-              x2={34}
-              y2={10}
-              stroke={Colors.amber100}
-              strokeWidth={3}
-              strokeLinecap="round"
-            />
-          </Prim>
-        </node>
-        <node style={gridRowStyle}>
-          <Prim label="polyline">
-            <polyline
-              points={[6, 28, 16, 12, 24, 22, 34, 8]}
-              fill="none"
-              stroke={Colors.green100}
-              strokeWidth={3}
-              strokeLinejoin="round"
-              strokeLinecap="round"
-            />
-          </Prim>
-          <Prim label="polygon">
-            <polygon points={STAR_POINTS} fill={Colors.purple100} />
-          </Prim>
-          <Prim label="path">
-            <path d={HEART_D} fill={Colors.red100} />
-          </Prim>
-          <Prim label="g">
-            <g transform="translate(20 22) rotate(-14)">
-              <rect
-                x={-13}
-                y={-9}
-                width={12}
-                height={18}
-                rx={3}
-                fill={Colors.orange100}
-              />
-              <rect
-                x={1}
-                y={-9}
-                width={12}
-                height={18}
-                rx={3}
-                fill={Colors.primary100}
-              />
-            </g>
-          </Prim>
-        </node>
+          </g>
+        </Prim>
       </node>
-    </Example>
+    </node>
   );
 }
 
@@ -242,66 +291,84 @@ function ShapesChartDemo() {
   return (
     <Example
       title="JSX shapes"
-      description="A bar chart drawn with SVG shape children: rounded <rect> bars inside a translated <g>, a <path> area fill, and a <polyline> trend with <circle> markers. Geometry is in viewBox user units, so the whole drawing scales with the element."
-      tsx={CHART_TSX}
-    >
-      <node style={rowStyle}>
-        <svg viewBox="0 0 220 130" style={{ width: 264, height: 156 }}>
-          <g transform="translate(28 14)">
-            {[0, 33, 66].map((y) => (
-              <line
-                key={y}
-                x1={0}
-                y1={y}
-                x2={180}
-                y2={y}
-                stroke={Colors.surface400}
-                strokeWidth={1}
-              />
-            ))}
+      info={
+        <>
+          <P>
+            A bar chart drawn with SVG shape children: rounded{" "}
+            <InlineCode>{"<rect>"}</InlineCode> bars inside a translated{" "}
+            <InlineCode>{"<g>"}</InlineCode>, a{" "}
+            <InlineCode>{"<path>"}</InlineCode> area fill, and a{" "}
+            <InlineCode>{"<polyline>"}</InlineCode> trend with{" "}
+            <InlineCode>{"<circle>"}</InlineCode> markers — plain React
+            <InlineCode>.map</InlineCode> over the data. Geometry is in viewBox
+            user units, so the whole drawing scales with the element.
+          </P>
+          <Code lang="tsx">{CHART_TSX}</Code>
+        </>
+      }
+      demo={ShapesChartCard}
+    />
+  );
+}
+
+function ShapesChartCard() {
+  return (
+    <node style={rowStyle}>
+      <svg viewBox="0 0 220 130" style={{ width: 264, height: 156 }}>
+        <g transform="translate(28 14)">
+          {[0, 33, 66].map((y) => (
             <line
+              key={y}
               x1={0}
-              y1={100}
+              y1={y}
               x2={180}
-              y2={100}
-              stroke={Colors.surface500}
+              y2={y}
+              stroke={Colors.surface400}
+              strokeWidth={1}
+            />
+          ))}
+          <line
+            x1={0}
+            y1={100}
+            x2={180}
+            y2={100}
+            stroke={Colors.surface500}
+            strokeWidth={1.5}
+          />
+          <path d={AREA_D} fill={Colors.primary100 + "1a"} />
+          {BARS.map(({ v, fill }, i) => (
+            <rect
+              key={i}
+              x={i * 36}
+              y={100 - v}
+              width={24}
+              height={v}
+              rx={4}
+              fill={fill}
+            />
+          ))}
+          <polyline
+            points={TREND}
+            fill="none"
+            stroke={Colors.amber100}
+            strokeWidth={2}
+            strokeLinejoin="round"
+            strokeLinecap="round"
+          />
+          {BARS.map(({ v }, i) => (
+            <circle
+              key={i}
+              cx={i * 36 + 12}
+              cy={100 - v - 8}
+              r={3.5}
+              fill={Colors.amber100}
+              stroke={Colors.surface200}
               strokeWidth={1.5}
             />
-            <path d={AREA_D} fill={Colors.primary100 + "1a"} />
-            {BARS.map(({ v, fill }, i) => (
-              <rect
-                key={i}
-                x={i * 36}
-                y={100 - v}
-                width={24}
-                height={v}
-                rx={4}
-                fill={fill}
-              />
-            ))}
-            <polyline
-              points={TREND}
-              fill="none"
-              stroke={Colors.amber100}
-              strokeWidth={2}
-              strokeLinejoin="round"
-              strokeLinecap="round"
-            />
-            {BARS.map(({ v }, i) => (
-              <circle
-                key={i}
-                cx={i * 36 + 12}
-                cy={100 - v - 8}
-                r={3.5}
-                fill={Colors.amber100}
-                stroke={Colors.surface200}
-                strokeWidth={1.5}
-              />
-            ))}
-          </g>
-        </svg>
-      </node>
-    </Example>
+          ))}
+        </g>
+      </svg>
+    </node>
   );
 }
 
@@ -344,50 +411,68 @@ const [at, setAt] = useState("");
 <text>{\`clicks: \${n}\`}</text>`;
 
 function InteractiveShapesDemo() {
+  return (
+    <Example
+      title="Interactive shapes"
+      info={
+        <>
+          <P>
+            Shape children take the same pointer handlers as nodes:{" "}
+            <InlineCode>onClick</InlineCode>,{" "}
+            <InlineCode>onPointerEnter/Leave</InlineCode>,{" "}
+            <InlineCode>onPointerDown</InlineCode>. Hit-testing follows the
+            painted geometry — the circle claims only its disc, not its bounding
+            box — and pointer events report x/y in the drawing's user-space
+            units. Press the pad to read the viewBox coordinates under the
+            cursor.
+          </P>
+          <Code lang="tsx">{INTERACTIVE_TSX}</Code>
+        </>
+      }
+      demo={InteractiveShapesCard}
+    />
+  );
+}
+
+function InteractiveShapesCard() {
   const [clicks, setClicks] = useState(0);
   const [hovered, setHovered] = useState(false);
   const [downAt, setDownAt] = useState<string | null>(null);
   return (
-    <Example
-      title="Interactive shapes"
-      description="Shape children take the same pointer handlers as nodes: onClick, onPointerEnter/Leave, onPointerDown. Hit-testing follows the painted geometry (the circle claims only its disc, not its bounding box), and pointer events report x/y in the drawing's user-space units — press the pad to read the viewBox coordinates under the cursor."
-      tsx={INTERACTIVE_TSX}
-    >
-      <node style={interactiveStyle}>
-        <svg viewBox="0 0 200 120" style={{ width: 240, height: 144 }}>
-          <rect
-            x={2}
-            y={2}
-            width={196}
-            height={116}
-            rx={10}
-            fill={Colors.surface300}
-            stroke={Colors.surface500}
-            strokeWidth={1.5}
-            onPointerDown={(e) =>
-              setDownAt(`${Math.round(e.x)}, ${Math.round(e.y)}`)
-            }
-          />
-          <circle
-            cx={100}
-            cy={60}
-            r={34}
-            fill={hovered ? Colors.amber100 : Colors.primary100}
-            stroke={Colors.surface200}
-            strokeWidth={2}
-            onClick={() => setClicks((c) => c + 1)}
-            onPointerEnter={() => setHovered(true)}
-            onPointerLeave={() => setHovered(false)}
-          />
-        </svg>
-        <text style={captionStyle}>{`clicks: ${clicks}`}</text>
-        <text style={captionStyle}>
-          {downAt === null
-            ? "press the pad to read coords"
-            : `pad pressed at ${downAt}`}
-        </text>
-      </node>
-    </Example>
+    <node style={interactiveStyle}>
+      <svg viewBox="0 0 200 120" style={{ width: 240, height: 144 }}>
+        <rect
+          x={2}
+          y={2}
+          width={196}
+          height={116}
+          rx={10}
+          fill={Colors.surface300}
+          stroke={Colors.surface500}
+          strokeWidth={1.5}
+          onPointerDown={(e) =>
+            setDownAt(`${Math.round(e.x)}, ${Math.round(e.y)}`)
+          }
+        />
+        <circle
+          cx={100}
+          cy={60}
+          r={34}
+          fill={hovered ? Colors.amber100 : Colors.primary100}
+          stroke={Colors.surface200}
+          strokeWidth={2}
+          onClick={() => setClicks((c) => c + 1)}
+          onPointerEnter={() => setHovered(true)}
+          onPointerLeave={() => setHovered(false)}
+        />
+      </svg>
+      <text style={captionStyle}>{`clicks: ${clicks}`}</text>
+      <text style={captionStyle}>
+        {downAt === null
+          ? "press the pad to read coords"
+          : `pad pressed at ${downAt}`}
+      </text>
+    </node>
   );
 }
 
@@ -422,6 +507,30 @@ useEffect(() => {
 />`;
 
 function SharedValueShapesDemo() {
+  return (
+    <Example
+      title="Animated: shared values"
+      info={
+        <>
+          <P>
+            A numeric shape attribute takes an {"{ animated }"} binding, exactly
+            like a style field. A shared value (
+            <InlineCode>withRepeat</InlineCode> +{" "}
+            <InlineCode>withTiming</InlineCode>, ping-pong) drives the circle's{" "}
+            <InlineCode>r</InlineCode> per frame in user-space units, with{" "}
+            <InlineCode>seed</InlineCode> as the static value until the driver's
+            first write reaches Bevy — the React tree never re-renders while the
+            animation runs.
+          </P>
+          <Code lang="tsx">{SHARED_VALUE_TSX}</Code>
+        </>
+      }
+      demo={SharedValueShapesCard}
+    />
+  );
+}
+
+function SharedValueShapesCard() {
   const pulse = useSharedValue(PULSE_MIN);
 
   useEffect(() => {
@@ -432,24 +541,18 @@ function SharedValueShapesDemo() {
   }, [pulse]);
 
   return (
-    <Example
-      title="Animated: shared values"
-      description="A numeric shape attribute takes an { animated } binding, exactly like a style field. A shared value (withRepeat + withTiming, ping-pong) drives the circle's r per frame in user-space units, with seed as the static value until the driver's first write reaches Bevy — the React tree never re-renders while the animation runs."
-      tsx={SHARED_VALUE_TSX}
-    >
-      <node style={interactiveStyle}>
-        <svg viewBox="0 0 120 120" style={{ width: 144, height: 144 }}>
-          <circle
-            cx={60}
-            cy={60}
-            r={{ animated: pulse, seed: PULSE_MIN }}
-            fill={Colors.amber100 + "cc"}
-            stroke={Colors.amber100}
-            strokeWidth={2}
-          />
-        </svg>
-      </node>
-    </Example>
+    <node style={interactiveStyle}>
+      <svg viewBox="0 0 120 120" style={{ width: 144, height: 144 }}>
+        <circle
+          cx={60}
+          cy={60}
+          r={{ animated: pulse, seed: PULSE_MIN }}
+          fill={Colors.amber100 + "cc"}
+          stroke={Colors.amber100}
+          strokeWidth={2}
+        />
+      </svg>
+    </node>
   );
 }
 
@@ -488,6 +591,28 @@ useEffect(() => {
 />`;
 
 function TransitionShapesDemo() {
+  return (
+    <Example
+      title="Animated: transitions"
+      info={
+        <>
+          <P>
+            A <InlineCode>transition</InlineCode> prop on a shape eases static
+            attr changes: every second the dataset retargets{" "}
+            <InlineCode>y</InlineCode>/<InlineCode>height</InlineCode> and a
+            spring carries each bar to its new geometry. Transitions and{" "}
+            {"{ animated }"} bindings live on separate shapes — any binding on a
+            shape parks that shape's attr transitions.
+          </P>
+          <Code lang="tsx">{TRANSITION_TSX}</Code>
+        </>
+      }
+      demo={TransitionShapesCard}
+    />
+  );
+}
+
+function TransitionShapesCard() {
   const [alt, setAlt] = useState(false);
 
   // Retarget the bar dataset every second; each flip re-renders new
@@ -500,39 +625,33 @@ function TransitionShapesDemo() {
   const values = alt ? BARS_B : BARS_A;
 
   return (
-    <Example
-      title="Animated: transitions"
-      description="A transition prop on a shape eases static attr changes: every second the dataset retargets y/height and a spring carries each bar to its new geometry. Transitions and { animated } bindings live on separate shapes — any binding on a shape parks that shape's attr transitions."
-      tsx={TRANSITION_TSX}
-    >
-      <node style={interactiveStyle}>
-        <svg viewBox="0 0 130 120" style={{ width: 156, height: 144 }}>
-          <line
-            x1={8}
-            y1={100}
-            x2={122}
-            y2={100}
-            stroke={Colors.surface500}
-            strokeWidth={1.5}
+    <node style={interactiveStyle}>
+      <svg viewBox="0 0 130 120" style={{ width: 156, height: 144 }}>
+        <line
+          x1={8}
+          y1={100}
+          x2={122}
+          y2={100}
+          stroke={Colors.surface500}
+          strokeWidth={1.5}
+        />
+        {values.map((v, i) => (
+          <rect
+            key={i}
+            x={8 + i * 36}
+            y={100 - v}
+            width={24}
+            height={v}
+            rx={4}
+            fill={BAR_FILLS[i]}
+            transition={{
+              y: { stiffness: 160, damping: 13 },
+              height: { stiffness: 160, damping: 13 },
+            }}
           />
-          {values.map((v, i) => (
-            <rect
-              key={i}
-              x={8 + i * 36}
-              y={100 - v}
-              width={24}
-              height={v}
-              rx={4}
-              fill={BAR_FILLS[i]}
-              transition={{
-                y: { stiffness: 160, damping: 13 },
-                height: { stiffness: 160, damping: 13 },
-              }}
-            />
-          ))}
-        </svg>
-      </node>
-    </Example>
+        ))}
+      </svg>
+    </node>
   );
 }
 

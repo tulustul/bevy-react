@@ -1,34 +1,54 @@
 import { useState } from "react";
 import { BevyStyle } from "bevy-react/jsx";
 import { Checkbox, Example } from "@/components";
+import { B, Code, InlineCode, P } from "@/components/docs";
 import { Colors, FontSizes } from "@/theme";
 import { caption, controlColumn } from "./shared";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
 
 const PAGE: ExplanationData = {
   title: "focusPolicy",
-  description: `focusPolicy decides whether a node captures pointer
-interaction or lets it fall through. A front box overlaps a clickable back
-box: by default a node PASSES pointer interaction through, so overlap clicks
-fall through the front box to the back box (the front box still reacts to its
-own clicks too). Set focusPolicy: "block" and the front box CAPTURES the
-click, so the back box no longer receives it.`,
-  tsx: `<node style={{
-  focusPolicy:
-    pass ? "pass" : "block",
-}} />`,
+  info: (
+    <>
+      <P>
+        <InlineCode>focusPolicy</InlineCode> decides whether a node captures
+        pointer interaction or lets it fall through. By default a node{" "}
+        <B>passes</B>: clicks on it also reach whatever is painted below, while
+        the node still reacts to its own clicks too. Set{" "}
+        <InlineCode>focusPolicy: "block"</InlineCode> and the node{" "}
+        <B>captures</B> the click, so nothing underneath receives it.
+      </P>
+      <Code lang="tsx">{`<node style={{ focusPolicy: pass ? "pass" : "block" }} />`}</Code>
+    </>
+  ),
 };
 
 export function FocusPolicyDemo() {
   useDemoPage(PAGE);
   return (
-    <Example>
-      <FocusPolicyControl />
-    </Example>
+    <Example
+      title="Pass vs block"
+      info={
+        <>
+          <P>
+            A front box overlaps a clickable back box. With the default{" "}
+            <InlineCode>"pass"</InlineCode>, overlap clicks fall through the
+            front box to the back box (both counters advance); with{" "}
+            <InlineCode>"block"</InlineCode> the front box captures the click
+            and the back box no longer receives it.
+          </P>
+          <Code lang="tsx">{`<node
+  style={{ focusPolicy: pass ? "pass" : "block" }}
+  onClick={() => setFrontHits((n) => n + 1)}
+/>`}</Code>
+        </>
+      }
+      demo={FocusPolicyCard}
+    />
   );
 }
 
-function FocusPolicyControl() {
+function FocusPolicyCard() {
   const [pass, setPass] = useState(true);
   const [backHits, setBackHits] = useState(0);
   const [frontHits, setFrontHits] = useState(0);

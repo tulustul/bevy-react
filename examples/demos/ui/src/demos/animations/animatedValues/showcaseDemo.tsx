@@ -11,18 +11,35 @@ import {
 } from "bevy-react";
 import { BevyStyle } from "bevy-react/jsx";
 import { Example } from "@/components";
+import { Code, InlineCode, P } from "@/components/docs";
 import { Colors, FontSizes } from "@/theme";
 
 type Mode = "linear" | "easeInOut" | "spring";
 
-const TYPESCRIPT = `withRepeat(withSequence(
-  withDelay(280, withTiming(110)),
-  withDelay(280, withTiming(-110)),
-));
-style={{ transform: {
-  translateX: { animated: x },
-  scale: { animated: pulse },
-} }}`;
+const SHOWCASE_TSX = `// horizontal bounce: pause, slide right, pause, slide left —
+// forever, staggered per square
+x.value = withDelay(
+  index * 80,
+  withRepeat(
+    withSequence(
+      withDelay(280, move(110)),
+      withDelay(280, move(-110)),
+    ),
+  ),
+);
+
+// an independent ping-pong pulse feeds scale and hue
+<node
+  style={{
+    transform: {
+      translateX: { animated: x },
+      scale: { animated: interpolate(pulse, [0, 1], [0.9, 1.1]) },
+    },
+    backgroundColor: {
+      animated: interpolateColor(pulse, [0, 1], [cool, warm]),
+    },
+  }}
+/>`;
 
 const COUNT = 4;
 const AMP = 110; // horizontal travel, ± from center (px)
@@ -50,14 +67,36 @@ const WARM = [
 ];
 
 export function ShowcaseDemo() {
-  const [mode, setMode] = useState<Mode>("easeInOut");
-
   return (
     <Example
       title="Bouncing Squares"
-      description="Everything composed at once: staggered squares run withRepeat(withSequence(withDelay(...))) for the horizontal bounce, while an independent withRepeat ping-pong pulse feeds interpolate (scale) and interpolateColor (hue). Switch the easing live: withTiming for linear/easeInOut, withSpring for spring — a mode change glides back to the loop start before re-arming so the repeat stays seamless."
-      tsx={TYPESCRIPT}
-    >
+      info={
+        <>
+          <P>
+            Everything composed at once: staggered squares run{" "}
+            <InlineCode>withRepeat(withSequence(withDelay(...)))</InlineCode>{" "}
+            for the horizontal bounce, while an independent{" "}
+            <InlineCode>withRepeat</InlineCode> ping-pong pulse feeds{" "}
+            <InlineCode>interpolate</InlineCode> (scale) and{" "}
+            <InlineCode>interpolateColor</InlineCode> (hue). Switch the easing
+            live: <InlineCode>withTiming</InlineCode> for linear/easeInOut,{" "}
+            <InlineCode>withSpring</InlineCode> for spring — a mode change
+            glides back to the loop start before re-arming so the repeat stays
+            seamless.
+          </P>
+          <Code lang="tsx">{SHOWCASE_TSX}</Code>
+        </>
+      }
+      demo={ShowcaseCard}
+    />
+  );
+}
+
+function ShowcaseCard() {
+  const [mode, setMode] = useState<Mode>("easeInOut");
+
+  return (
+    <>
       <node style={lanesStyle}>
         {Array.from({ length: COUNT }, (_, i) => (
           <BouncingSquare key={i} index={i} mode={mode} />
@@ -74,7 +113,7 @@ export function ShowcaseDemo() {
           />
         ))}
       </node>
-    </Example>
+    </>
   );
 }
 

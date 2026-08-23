@@ -4,9 +4,10 @@ import { bevy } from "@/bevy";
 import { Scrollbar } from "@/theme";
 import { DEMOS, findDemoByLabel } from "./demos";
 import { Navigation } from "./Navigation";
-import { Explanation } from "./Explanation";
+import { HeaderCard } from "./HeaderCard";
+import { ExampleModal } from "./ExampleModal";
 import { useDemosStore } from "./demosStore";
-import { useExplanationStore } from "./explanationStore";
+import { setNavigate } from "./demoNavigation";
 import type { MorphUse } from "./demos/styling/morphFilterDemo/params";
 
 // The page-transition morphs: each demo switch picks one at random.
@@ -24,12 +25,6 @@ const PAGE_MORPHS: MorphUse[] = [
 
 export function App() {
   const { selectedDemo, setSelectedDemo } = useDemosStore();
-  // Pages can opt out of the explanation panel (`useDemoPage(null)`), and the
-  // user can collapse it; the content area only reserves the panel's width
-  // while it is actually showing.
-  const hasPanel = useExplanationStore(
-    (s) => (s.selected?.data ?? s.pageDefault) !== null && !s.collapsed,
-  );
 
   // Re-rolled exactly when the demo changes — same commit as the morph key
   // change, so the freeze blends with the freshly picked filter. Each pick is
@@ -48,10 +43,12 @@ export function App() {
   }, [selectedDemo]);
 
   useEffect(() => {
-    return bevy.on("debug.selectDemo", ({ label }) => {
+    const byLabel = (label: string) => {
       const demo = findDemoByLabel(DEMOS, label);
       if (demo) setSelectedDemo(demo);
-    });
+    };
+    setNavigate(byLabel);
+    return bevy.on("debug.selectDemo", ({ label }) => byLabel(label));
   }, [setSelectedDemo]);
 
   return (
@@ -61,17 +58,17 @@ export function App() {
       <node
         style={{
           ...contentStyle,
-          padding: { right: hasPanel ? 300 : 0 },
           morphFilter: { key: selectedDemo.label, ...pageMorph },
         }}
         scrollStep={100}
       >
         <node style={contentInnerStyle}>
+          <HeaderCard />
           {selectedDemo.component && <selectedDemo.component />}
         </node>
       </node>
 
-      <Explanation />
+      <ExampleModal />
     </node>
   );
 }

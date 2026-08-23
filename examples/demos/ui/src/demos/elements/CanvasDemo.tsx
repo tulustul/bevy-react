@@ -6,6 +6,7 @@ import type {
 } from "bevy-react";
 import { BevyStyle } from "bevy-react/jsx";
 import { Button, DemoRow, Example } from "@/components";
+import { B, Code, InlineCode, P } from "@/components/docs";
 import { Colors } from "@/theme";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
 
@@ -18,8 +19,32 @@ import { useDemoPage, type ExplanationData } from "@/explanationStore";
 
 const PAGE: ExplanationData = {
   title: "<canvas>",
-  description:
-    "The <canvas> host element is a web-faithful retained pixel surface: paint accumulates in a persistent texture, and styles plus the current path survive across batches. Two write paths: the declarative draw prop (the surface clears and the callback replays whenever it changes) and the imperative ref handle (getContext() — commands batch on a microtask and flush outside React commits, so drawing costs no re-render). A layout resize clears the surface (HTML width/height-set semantics), updates the handle's width/height, and fires onResize; a stored declarative painter replays automatically.",
+  info: (
+    <>
+      <P>
+        <InlineCode>{"<canvas>"}</InlineCode> is a web-faithful retained pixel
+        surface: paint <B>accumulates</B> in a persistent texture, and styles
+        plus the current path survive across batches — the familiar HTML canvas
+        2D command set (paths, béziers, fills, strokes).
+      </P>
+      <P>There are two ways to draw:</P>
+      <Code lang="tsx">{`// Declarative: clears + replays whenever \`draw\` changes.
+<canvas draw={(ctx) => { … }} />
+
+// Imperative: a ref handle, off the React render path.
+const ctx = canvasRef.current.getContext();
+ctx.lineTo(x, y);
+ctx.stroke();`}</Code>
+      <P>
+        Imperative commands batch on a microtask and flush outside React
+        commits, so doodling costs no re-renders. A layout resize clears the
+        surface (HTML width/height-set semantics), updates the handle's{" "}
+        <InlineCode>width</InlineCode>/<InlineCode>height</InlineCode>, and
+        fires <InlineCode>onResize</InlineCode>; a stored declarative painter
+        replays automatically.
+      </P>
+    </>
+  ),
 };
 
 const W = 460;
@@ -65,6 +90,35 @@ export function CanvasDemo() {
 }
 
 function GraphDemo() {
+  return (
+    <Example
+      title="Declarative draw"
+      info={
+        <>
+          <P>
+            A declarative vector drawing: the <InlineCode>draw</InlineCode> prop
+            clears the surface and replays the callback whenever it changes —
+            here axes, gridlines, a smooth Bézier curve, an area fill and
+            markers. The data reshuffles every few seconds (and on click),
+            tweening to new positions through React state; each frame re-renders
+            React, which repaints the texture Bevy-side.
+          </P>
+          <Code lang="tsx">{`<canvas
+  draw={(ctx) => {
+    ctx.strokeStyle = "#7aa2f7";
+    ctx.bezierCurveTo(/* … */);
+    ctx.stroke();
+  }}
+  onClick={shuffle}
+/>`}</Code>
+        </>
+      }
+      demo={GraphCard}
+    />
+  );
+}
+
+function GraphCard() {
   const [values, setValues] = useState<number[]>(() => randomData(POINTS));
   // Latest displayed values, so a tween always starts from where we are now
   // (a mid-flight reshuffle retargets smoothly).
@@ -157,24 +211,45 @@ function GraphDemo() {
     }
   };
 
-  return (
-    <Example
-      title="Declarative draw"
-      description="A declarative vector drawing: the draw prop clears and replays whenever it changes. The data reshuffles every few seconds — and on click — tweening to new positions through React state."
-      tsx={`<canvas
-  draw={(ctx) => {
-    ctx.strokeStyle = "#7aa2f7";
-    ctx.bezierCurveTo(/* ... */);
-    ctx.stroke();
-  }}
-/>`}
-    >
-      <canvas style={canvasStyle} draw={draw} onClick={shuffle} />
-    </Example>
-  );
+  return <canvas style={canvasStyle} draw={draw} onClick={shuffle} />;
 }
 
 function PaintDemo() {
+  return (
+    <Example
+      title="Retained surface"
+      info={
+        <>
+          <P>
+            A retained drawing surface driven imperatively through a ref handle:
+            each pointer event strokes one short segment, the surface keeps
+            everything already painted, and <B>no React re-render</B> happens
+            while doodling. The surface clears on resize, and{" "}
+            <InlineCode>onResize</InlineCode> repaints the background.
+          </P>
+          <Code lang="tsx">{`const ref = useRef<BevyCanvasElement>(null);
+
+<canvas
+  ref={ref}
+  onResize={() => paintBackground(ref.current!)}
+  onPointerDown={begin}
+  onPointerMove={(e) => {
+    const el = ref.current!;
+    const ctx = el.getContext();
+    ctx.beginPath();
+    ctx.moveTo(last.x, last.y);
+    ctx.lineTo(e.x * el.width, e.y * el.height);
+    ctx.stroke(); // accumulates — nothing else is repainted
+  }}
+/>`}</Code>
+        </>
+      }
+      demo={PaintCard}
+    />
+  );
+}
+
+function PaintCard() {
   const ref = useRef<BevyCanvasElement>(null);
   // The in-flight stroke's last point (drawing happens between pointer events,
   // entirely outside React state — no re-renders while doodling).
@@ -234,45 +309,18 @@ function PaintDemo() {
   }, [paintBackground]);
 
   return (
-    <Example
-      title="Retained surface"
-      description="A retained drawing surface, driven imperatively through a ref handle. Drag to doodle — strokes accumulate with no React renders; the surface clears on resize and onResize repaints the background."
-      tsx={`const ref =
-  useRef<BevyCanvasElement>(null);
-
-<canvas
-  ref={ref}
-  onResize={() =>
-    paintBackground(ref.current!)}
-  onPointerDown={begin}
-  onPointerMove={(e) => {
-    const ctx =
-      ref.current!.getContext();
-    ctx.beginPath();
-    ctx.moveTo(last.x, last.y);
-    ctx.lineTo(
-      e.x * ref.current!.width,
-      e.y * ref.current!.height,
-    );
-    // accumulates — nothing else
-    // is repainted
-    ctx.stroke();
-  }}
-/>`}
-    >
-      <node style={columnStyle}>
-        <text>Use mouse to draw on the canvas</text>
-        <canvas
-          ref={ref}
-          style={canvasStyle}
-          onResize={() => ref.current && paintBackground(ref.current)}
-          onPointerDown={begin}
-          onPointerMove={drawFromMouse}
-          onPointerUp={() => (last.current = null)}
-        />
-        <Button onClick={clear}>Clear</Button>
-      </node>
-    </Example>
+    <node style={columnStyle}>
+      <text>Use mouse to draw on the canvas</text>
+      <canvas
+        ref={ref}
+        style={canvasStyle}
+        onResize={() => ref.current && paintBackground(ref.current)}
+        onPointerDown={begin}
+        onPointerMove={drawFromMouse}
+        onPointerUp={() => (last.current = null)}
+      />
+      <Button onClick={clear}>Clear</Button>
+    </node>
   );
 }
 

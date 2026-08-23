@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { BevyStyle } from "bevy-react/jsx";
 import { Button, Example } from "@/components";
+import { Code, InlineCode, P } from "@/components/docs";
 import { Colors } from "@/theme";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
 
@@ -11,14 +12,7 @@ import { useDemoPage, type ExplanationData } from "@/explanationStore";
 // modals, toasts, and other overlays. The `name` labels the root in the
 // devtools root selector (F12).
 
-const TYPESCRIPT = `const [open, setOpen] =
-  useState(false);
-
-<Button onClick={() => setOpen(true)}>
-  Open modal
-</Button>;
-
-{open && (
+const ROOT_TSX = `{open && (
   <root
     name="modal"
     style={{
@@ -29,28 +23,61 @@ const TYPESCRIPT = `const [open, setOpen] =
   >
     <node style={dialogStyle}>
       <text>Detached modal</text>
-      <Button
-        onClick={() => setOpen(false)}
-      >
-        Close
-      </Button>
+      <Button onClick={() => setOpen(false)}>Close</Button>
     </node>
   </root>
 )}`;
 
 const PAGE: ExplanationData = {
   title: "<root>",
-  description:
-    "A <root> is a detached, screen-space top-level tree — the on-screen twin of <surface>. Wherever it sits in your component tree, its children render as a window-filling layer floating above the whole app (top of the global stack by default) — the natural home for modals, toasts, and other overlays. Since it fills the window, backdrop styling goes straight on it. Its name labels the root in the devtools root selector (F12): open the modal and a root named 'modal' appears there.",
-  tsx: TYPESCRIPT,
+  info: (
+    <>
+      <P>
+        <InlineCode>{"<root>"}</InlineCode> is a detached, screen-space
+        top-level tree — the on-screen twin of{" "}
+        <InlineCode>{"<surface>"}</InlineCode>. Wherever it sits in your
+        component tree, its children render as a window-filling layer floating
+        above the whole app (top of the global stack by default) — the natural
+        home for modals, toasts, and other overlays.
+      </P>
+      <Code lang="tsx">{ROOT_TSX}</Code>
+      <P>
+        Since the root fills the window, backdrop styling (dim, centering) goes
+        straight on it. Its <InlineCode>name</InlineCode> labels the root in the
+        devtools root selector (F12): open the modal below and a root named
+        "modal" appears there.
+      </P>
+    </>
+  ),
 };
 
 export function RootDemo() {
   useDemoPage(PAGE);
+  return (
+    <Example
+      title="Detached modal"
+      info={
+        <>
+          <P>
+            The dialog is declared inside this small card, but renders
+            window-filling and above everything — the left nav, the cards, all
+            of it. Mounting and unmounting the{" "}
+            <InlineCode>{"<root>"}</InlineCode> with plain conditional rendering
+            is the whole open/close mechanism.
+          </P>
+          <Code lang="tsx">{ROOT_TSX}</Code>
+        </>
+      }
+      demo={DetachedModalCard}
+    />
+  );
+}
+
+function DetachedModalCard() {
   const [open, setOpen] = useState(false);
 
   return (
-    <Example>
+    <>
       <text style={hintStyle}>
         The dialog is declared right here, inside this small card.
       </text>
@@ -70,7 +97,7 @@ export function RootDemo() {
           </node>
         </root>
       )}
-    </Example>
+    </>
   );
 }
 

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { interpolate, interpolateColor, useSharedValue } from "bevy-react";
 import { BevyStyle } from "bevy-react/jsx";
 import { DemoRow, Example, Slider } from "@/components";
+import { Code, InlineCode, P } from "@/components/docs";
 import { column } from "./shared";
 import { Colors } from "@/theme";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
@@ -12,21 +13,31 @@ import { useDemoPage, type ExplanationData } from "@/explanationStore";
 
 const PAGE: ExplanationData = {
   title: "Interpolation",
-  description: `interpolate and interpolateColor map a shared value through a
-piecewise-linear curve onto any continuous style binding, evaluated each frame
-on the Bevy side. The input/output arrays can hold any number of matching
-stops, and the value clamps outside the input range. Here the sliders set the
-shared value directly — no driver — but the same bindings ride withTiming,
-withSpring, or any other driver unchanged. Click a card for details.`,
-  tsx: `style={{
-  transform: { scale: { animated:
-    interpolate(t, [0, 1], [0.6, 1.4]),
-  } },
-  backgroundColor: { animated:
-    interpolateColor(t, [0, 1],
-      ["#7aa2f7", "#f7768e"]),
+  info: (
+    <>
+      <P>
+        <InlineCode>interpolate</InlineCode> and{" "}
+        <InlineCode>interpolateColor</InlineCode> map a shared value through a
+        piecewise-linear curve onto any continuous style binding, evaluated each
+        frame on the Bevy side. The input/output arrays can hold any number of
+        matching stops, and the value clamps outside the input range.
+      </P>
+      <Code lang="tsx">{`style={{
+  transform: {
+    scale: { animated: interpolate(t, [0, 1], [0.6, 1.4]) },
   },
-}}`,
+  backgroundColor: {
+    animated: interpolateColor(t, [0, 1], ["#7aa2f7", "#f7768e"]),
+  },
+}}`}</Code>
+      <P>
+        Here the sliders set the shared value directly — no driver — but the
+        same bindings ride <InlineCode>withTiming</InlineCode>,{" "}
+        <InlineCode>withSpring</InlineCode>, or any other driver unchanged.
+        Click a card for details.
+      </P>
+    </>
+  ),
 };
 
 export function InterpolateDemo() {
@@ -40,17 +51,44 @@ export function InterpolateDemo() {
   );
 }
 
-const SCALE_COLOR_TSX = `style={{
-  transform: { scale: { animated:
-    interpolate(t, [0, 1], [0.6, 1.4]),
-  } },
-  backgroundColor: { animated:
-    interpolateColor(t, [0, 1],
-      ["#7aa2f7", "#f7768e"]),
-  },
-}}`;
+const SCALE_COLOR_TSX = `const t = useSharedValue(0);
+
+<node
+  style={{
+    transform: {
+      scale: { animated: interpolate(t, [0, 1], [0.6, 1.4]) },
+    },
+    backgroundColor: {
+      animated: interpolateColor(t, [0, 1], ["#7aa2f7", "#f7768e"]),
+    },
+  }}
+/>;
+
+// the slider writes the value directly — no driver
+t.value = n;`;
 
 function ScaleColorDemo() {
+  return (
+    <Example
+      title="Scale & color"
+      info={
+        <>
+          <P>
+            One shared value, many outputs: the slider sets the value directly
+            (no driver), and <InlineCode>interpolate</InlineCode> /{" "}
+            <InlineCode>interpolateColor</InlineCode> map it onto scale and
+            background color each frame on the Bevy side. Drag 0 to 1 and watch
+            both bindings follow.
+          </P>
+          <Code lang="tsx">{SCALE_COLOR_TSX}</Code>
+        </>
+      }
+      demo={ScaleColorCard}
+    />
+  );
+}
+
+function ScaleColorCard() {
   const t = useSharedValue(0);
   const [v, setV] = useState(0);
 
@@ -60,38 +98,32 @@ function ScaleColorDemo() {
   };
 
   return (
-    <Example
-      title="Scale & color"
-      description="One shared value, many outputs: the slider sets the value directly (no driver), and interpolate / interpolateColor map it onto scale and background color each frame on the Bevy side. Drag 0 to 1 and watch both bindings follow."
-      tsx={SCALE_COLOR_TSX}
-    >
-      <node style={column}>
-        <node style={scaleStage}>
-          <node
-            style={{
-              ...scaleSquare,
-              transform: {
-                scale: { animated: interpolate(t, [0, 1], [0.6, 1.4]) },
-              },
-              backgroundColor: {
-                animated: interpolateColor(
-                  t,
-                  [0, 1],
-                  [Colors.primary100, Colors.red100],
-                ),
-              },
-            }}
-          />
-        </node>
-        <Slider
-          value={v}
-          min={0}
-          max={1}
-          onChange={onChange}
-          label={`t ${v.toFixed(2)}`}
+    <node style={column}>
+      <node style={scaleStage}>
+        <node
+          style={{
+            ...scaleSquare,
+            transform: {
+              scale: { animated: interpolate(t, [0, 1], [0.6, 1.4]) },
+            },
+            backgroundColor: {
+              animated: interpolateColor(
+                t,
+                [0, 1],
+                [Colors.primary100, Colors.red100],
+              ),
+            },
+          }}
         />
       </node>
-    </Example>
+      <Slider
+        value={v}
+        min={0}
+        max={1}
+        onChange={onChange}
+        label={`t ${v.toFixed(2)}`}
+      />
+    </node>
   );
 }
 
@@ -111,18 +143,41 @@ const scaleSquare: BevyStyle = {
   backgroundColor: Colors.primary100,
 };
 
-const MULTI_STOP_TSX = `style={{ transform: {
-  translateX: { animated:
-    interpolate(t, [0, 1], [-84, 84]),
+const MULTI_STOP_TSX = `style={{
+  transform: {
+    translateX: { animated: interpolate(t, [0, 1], [-84, 84]) },
+    translateY: {
+      animated: interpolate(
+        t,
+        [0, 0.25, 0.5, 0.75, 1],
+        [34, -34, 34, -34, 34],
+      ),
+    },
   },
-  translateY: { animated:
-    interpolate(t,
-      [0, 0.25, 0.5, 0.75, 1],
-      [34, -34, 34, -34, 34]),
-  },
-} }}`;
+}}`;
 
 function MultiStopDemo() {
+  return (
+    <Example
+      title="Multi-stop ranges"
+      info={
+        <>
+          <P>
+            The input/output arrays take any number of matching stops, and each
+            segment interpolates linearly between its pair. Here{" "}
+            <InlineCode>translateX</InlineCode> maps the value across the stage
+            in one straight segment while <InlineCode>translateY</InlineCode>{" "}
+            zigzags through five stops — one value, a piecewise path.
+          </P>
+          <Code lang="tsx">{MULTI_STOP_TSX}</Code>
+        </>
+      }
+      demo={MultiStopCard}
+    />
+  );
+}
+
+function MultiStopCard() {
   const t = useSharedValue(0);
   const [v, setV] = useState(0);
 
@@ -132,38 +187,32 @@ function MultiStopDemo() {
   };
 
   return (
-    <Example
-      title="Multi-stop ranges"
-      description="The input/output arrays take any number of matching stops, and each segment interpolates linearly between its pair. Here translateX maps the value across the stage in one straight segment while translateY zigzags through five stops — one value, a piecewise path."
-      tsx={MULTI_STOP_TSX}
-    >
-      <node style={column}>
-        <node style={zigStage}>
-          <node
-            style={{
-              ...zigDot,
-              transform: {
-                translateX: { animated: interpolate(t, [0, 1], [-84, 84]) },
-                translateY: {
-                  animated: interpolate(
-                    t,
-                    [0, 0.25, 0.5, 0.75, 1],
-                    [34, -34, 34, -34, 34],
-                  ),
-                },
+    <node style={column}>
+      <node style={zigStage}>
+        <node
+          style={{
+            ...zigDot,
+            transform: {
+              translateX: { animated: interpolate(t, [0, 1], [-84, 84]) },
+              translateY: {
+                animated: interpolate(
+                  t,
+                  [0, 0.25, 0.5, 0.75, 1],
+                  [34, -34, 34, -34, 34],
+                ),
               },
-            }}
-          />
-        </node>
-        <Slider
-          value={v}
-          min={0}
-          max={1}
-          onChange={onChange}
-          label={`t ${v.toFixed(2)}`}
+            },
+          }}
         />
       </node>
-    </Example>
+      <Slider
+        value={v}
+        min={0}
+        max={1}
+        onChange={onChange}
+        label={`t ${v.toFixed(2)}`}
+      />
+    </node>
   );
 }
 
@@ -191,15 +240,32 @@ const BAR_COLORS = [
   Colors.red100,
 ];
 
-const CLAMPED_TSX = `// bar i only moves inside
-// its own window of t
-height: { animated:
-  interpolate(t,
-    [i * 0.16, i * 0.16 + 0.36],
-    [10, 68]),
+const CLAMPED_TSX = `// bar i only moves inside its own window of t
+height: {
+  animated: interpolate(t, [i * 0.16, i * 0.16 + 0.36], [10, 68]),
 }`;
 
 function ClampedWindowsDemo() {
+  return (
+    <Example
+      title="Clamped windows"
+      info={
+        <>
+          <P>
+            <InlineCode>interpolate</InlineCode> clamps outside its input range,
+            so each bar maps only its own slice of the same shared value and
+            sits pinned at an endpoint the rest of the time. Drag slowly: one
+            value in, a staggered cascade out.
+          </P>
+          <Code lang="tsx">{CLAMPED_TSX}</Code>
+        </>
+      }
+      demo={ClampedWindowsCard}
+    />
+  );
+}
+
+function ClampedWindowsCard() {
   const t = useSharedValue(0);
   const [v, setV] = useState(0);
 
@@ -209,39 +275,29 @@ function ClampedWindowsDemo() {
   };
 
   return (
-    <Example
-      title="Clamped windows"
-      description="interpolate clamps outside its input range, so each bar maps only its own slice of the same shared value and sits pinned at an endpoint the rest of the time. Drag slowly: one value in, a staggered cascade out."
-      tsx={CLAMPED_TSX}
-    >
-      <node style={column}>
-        <node style={barsStage}>
-          {BAR_COLORS.map((color, i) => (
-            <node
-              key={i}
-              style={{
-                ...bar,
-                backgroundColor: color,
-                height: {
-                  animated: interpolate(
-                    t,
-                    [i * 0.16, i * 0.16 + 0.36],
-                    [10, 68],
-                  ),
-                },
-              }}
-            />
-          ))}
-        </node>
-        <Slider
-          value={v}
-          min={0}
-          max={1}
-          onChange={onChange}
-          label={`t ${v.toFixed(2)}`}
-        />
+    <node style={column}>
+      <node style={barsStage}>
+        {BAR_COLORS.map((color, i) => (
+          <node
+            key={i}
+            style={{
+              ...bar,
+              backgroundColor: color,
+              height: {
+                animated: interpolate(t, [i * 0.16, i * 0.16 + 0.36], [10, 68]),
+              },
+            }}
+          />
+        ))}
       </node>
-    </Example>
+      <Slider
+        value={v}
+        min={0}
+        max={1}
+        onChange={onChange}
+        label={`t ${v.toFixed(2)}`}
+      />
+    </node>
   );
 }
 

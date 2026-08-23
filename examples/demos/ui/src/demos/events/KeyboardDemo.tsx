@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { bevy, type KeyboardEventData } from "@/bevy";
 import { Example } from "@/components";
+import { Code, InlineCode, P } from "@/components/docs";
 import { Colors, FontSizes } from "@/theme";
 import { TextMono } from "@/components/TextMono";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
@@ -8,17 +9,16 @@ import { useDemoPage, type ExplanationData } from "@/explanationStore";
 const TYPESCRIPT = `import { bevy } from "@/bevy";
 
 useEffect(() => {
-  const offDown = bevy.on(
-    "keyDown",
-    (e) => {
-      if (e.key === "Escape") close();
-    },
-  );
-  const offUp = bevy.on(
-    "keyUp",
-    (e) => { /* ... */ },
-  );
-  return () => { offDown(); offUp(); };
+  const offDown = bevy.on("keyDown", (e) => {
+    if (e.key === "Escape") close();
+  });
+  const offUp = bevy.on("keyUp", (e) => {
+    /* ... */
+  });
+  return () => {
+    offDown();
+    offUp();
+  };
 }, []);`;
 
 function modifierLabel(e: KeyboardEventData | null): string {
@@ -36,13 +36,50 @@ function modifierLabel(e: KeyboardEventData | null): string {
 
 const PAGE: ExplanationData = {
   title: "Keyboard",
-  description:
-    'Bevy -> React: window-global keystrokes. Focus the app window and press any key — no node needs focus. Built into the core plugin as the typed bevy.on("keyDown") / bevy.on("keyUp") events, carrying key, code, repeat and the modifier flags.',
-  tsx: TYPESCRIPT,
+  info: (
+    <>
+      <P>
+        Bevy to React: window-global keystrokes. The typed{" "}
+        <InlineCode>bevy.on("keyDown")</InlineCode> /{" "}
+        <InlineCode>bevy.on("keyUp")</InlineCode> events are built into the core
+        plugin — no app-side Rust or registration needed. Each event carries{" "}
+        <InlineCode>key</InlineCode>, <InlineCode>code</InlineCode>,{" "}
+        <InlineCode>repeat</InlineCode> and the modifier flags.
+      </P>
+      <Code lang="tsx">{TYPESCRIPT}</Code>
+      <P>Focus the app window and press any key — no node needs focus.</P>
+    </>
+  ),
 };
 
 export function KeyboardDemo() {
   useDemoPage(PAGE);
+  return <KeyboardExample />;
+}
+
+function KeyboardExample() {
+  return (
+    <Example
+      title="Keyboard events"
+      info={
+        <>
+          <P>
+            One <InlineCode>keyDown</InlineCode> /{" "}
+            <InlineCode>keyUp</InlineCode> subscription pair: presses add to the
+            held-keys line (OS auto-repeat is filtered out via{" "}
+            <InlineCode>e.repeat</InlineCode>), releases remove them, and the
+            last event's modifier flags render below. Focus the app window and
+            press any key — no node needs focus.
+          </P>
+          <Code lang="tsx">{TYPESCRIPT}</Code>
+        </>
+      }
+      demo={KeyboardCard}
+    />
+  );
+}
+
+function KeyboardCard() {
   const [lastEvent, setLastEvent] = useState<KeyboardEventData | null>(null);
   const [held, setHeld] = useState<string[]>([]);
 
@@ -64,7 +101,7 @@ export function KeyboardDemo() {
   }, []);
 
   return (
-    <Example title="Keyboard events">
+    <>
       <text style={{ fontSize: FontSizes.sm, color: Colors.textColor100 }}>
         Press the keys to test the events
       </text>
@@ -87,6 +124,6 @@ export function KeyboardDemo() {
       >
         {`modifiers: ${modifierLabel(lastEvent) || "-"}`}
       </TextMono>
-    </Example>
+    </>
   );
 }

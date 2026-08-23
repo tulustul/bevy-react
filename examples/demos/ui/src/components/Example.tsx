@@ -1,4 +1,10 @@
-import { PropsWithChildren, useEffect, useRef } from "react";
+import {
+  ComponentType,
+  PropsWithChildren,
+  ReactNode,
+  useEffect,
+  useRef,
+} from "react";
 import { BevyStyle } from "bevy-react/jsx";
 import { Colors, Filters, Gradients } from "@/theme";
 import { useExplanationStore } from "@/explanationStore";
@@ -6,6 +12,14 @@ import { useExplanationStore } from "@/explanationStore";
 export type ExampleProps = PropsWithChildren & {
   style?: BevyStyle;
   title?: string;
+  /** Rich docs content (`components/docs` kit) shown in the example modal. */
+  info?: ReactNode;
+  /** The live demo as a **component owning its own state**. The card renders
+   * one instance; opening the modal mounts a second, fully isolated one.
+   * Inline `children` can't do that (they close over the page's state), so
+   * children-only examples get no live instance in the modal. */
+  demo?: ComponentType;
+  /** Legacy string content — still rendered until pages migrate to `info`. */
   description?: string;
   tsx?: string;
   rust?: string;
@@ -15,6 +29,8 @@ export function Example({
   children,
   style,
   title,
+  info,
+  demo,
   description,
   tsx,
   rust,
@@ -27,8 +43,8 @@ export function Example({
   );
   const select = useExplanationStore((s) => s.select);
 
-  // A selected card unmounting (in-page conditional rendering) falls back to
-  // the page default; page switches are already covered by setPage.
+  // A selected card unmounting (in-page conditional rendering) closes the
+  // modal; page switches are already covered by setPage.
   useEffect(() => {
     return () => useExplanationStore.getState().deselect(key);
   }, [key]);
@@ -39,16 +55,30 @@ export function Example({
       hoverStyle={selectable && !isSelected ? hoverStyle : undefined}
       onClick={
         selectable
-          ? () => select(key, { title: title!, description, rust, tsx })
+          ? () =>
+              select(key, {
+                title: title!,
+                info,
+                description,
+                rust,
+                tsx,
+                demo,
+                cache: style?.cache,
+              })
           : undefined
       }
     >
       {title !== undefined && (
         <text style={{ textAlign: "center" }}>{title}</text>
       )}
+      {demo !== undefined && <Demo demo={demo} />}
       {children}
     </node>
   );
+}
+
+function Demo({ demo: D }: { demo: ComponentType }) {
+  return <D />;
 }
 
 const cardStyle: BevyStyle = {

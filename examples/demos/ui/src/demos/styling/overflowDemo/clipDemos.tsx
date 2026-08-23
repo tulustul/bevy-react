@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { BevyStyle } from "bevy-react/jsx";
 import { Example, Radio, RadioOption } from "@/components";
+import { Code, InlineCode, P } from "@/components/docs";
 import { Colors, FontSizes } from "@/theme";
 import { caption, controlColumn } from "../shared";
 
@@ -14,38 +15,58 @@ const OPTIONS: RadioOption<OverflowValue>[] = [
 ];
 
 export function OverflowModesDemo() {
-  const [value, setValue] = useState<OverflowValue>("clip");
   return (
     <Example
       title="overflowX / overflowY"
-      description="overflowX/overflowY decide what happens to a child that is bigger than its box: visible spills out, clip/hidden cut it off, scroll clips it and adds a wheel scrollbar."
-      tsx={`overflowX: value,
-// visible | clip | hidden | scroll
-overflowY: value,
-scrollbarWidth:
-  value === "scroll" ? 8 : 0,`}
-    >
-      <node style={controlColumn}>
-        <node
-          style={{
-            ...boxStyle,
-            overflowX: value,
-            overflowY: value,
-            scrollbarWidth: value === "scroll" ? 8 : 0,
-          }}
-        >
-          <node style={oversizedStyle}>
-            <text
-              style={{ color: Colors.textColor100, fontSize: FontSizes.sm }}
-            >
-              This block is wider and taller than its 220×140 box. Switch the
-              overflow value to watch it spill out, get clipped, or scroll.
-            </text>
-          </node>
+      info={
+        <>
+          <P>
+            <InlineCode>overflowX</InlineCode>/
+            <InlineCode>overflowY</InlineCode> decide what happens to a child
+            that is bigger than its box: <InlineCode>visible</InlineCode> spills
+            out, <InlineCode>clip</InlineCode> and{" "}
+            <InlineCode>hidden</InlineCode> cut it off, and{" "}
+            <InlineCode>scroll</InlineCode> clips it and adds a wheel scrollbar.
+          </P>
+          <Code lang="tsx">{`const [value, setValue] = useState<OverflowValue>("clip");
+
+<node
+  style={{
+    overflowX: value, // "visible" | "clip" | "hidden" | "scroll"
+    overflowY: value,
+    scrollbarWidth: value === "scroll" ? 8 : 0,
+  }}
+>
+  <node style={oversized} />
+</node>`}</Code>
+        </>
+      }
+      demo={OverflowModesCard}
+    />
+  );
+}
+
+function OverflowModesCard() {
+  const [value, setValue] = useState<OverflowValue>("clip");
+  return (
+    <node style={controlColumn}>
+      <node
+        style={{
+          ...boxStyle,
+          overflowX: value,
+          overflowY: value,
+          scrollbarWidth: value === "scroll" ? 8 : 0,
+        }}
+      >
+        <node style={oversizedStyle}>
+          <text style={{ color: Colors.textColor100, fontSize: FontSizes.sm }}>
+            This block is wider and taller than its 220×140 box. Switch the
+            overflow value to watch it spill out, get clipped, or scroll.
+          </text>
         </node>
-        <Radio value={value} options={OPTIONS} onChange={setValue} />
       </node>
-    </Example>
+      <Radio value={value} options={OPTIONS} onChange={setValue} />
+    </node>
   );
 }
 
@@ -58,20 +79,41 @@ export function ClipVsHiddenDemo() {
   return (
     <Example
       title="clip vs hidden"
-      description="clip and hidden clip the same pixels — the difference is layout. As a flex item, a clip box keeps its content width as a minimum (so it overflows the row), while a hidden box may shrink to 0 and let the row compress it. Both boxes hold the same 220px-wide child and sit in the same 300px row next to a fixed sibling."
-      tsx={`// flex row, width 300
+      info={
+        <>
+          <P>
+            <InlineCode>clip</InlineCode> and <InlineCode>hidden</InlineCode>{" "}
+            clip the same pixels — the difference is layout. As a flex item, a
+            clip box keeps its content width as a minimum (so it overflows the
+            row), while a hidden box may shrink to 0 and let the row compress
+            it. Both boxes hold the same 220px-wide child and sit in the same
+            300px row next to a fixed sibling.
+          </P>
+          <Code lang="tsx">{`// The same 300px flex row, twice — only the subject's
+// overflow value differs.
 
-// stays 220 wide, overflows
+// Keeps its 220px content as a flex minimum, overflows the row:
 <node style={{ overflowX: "clip" }}>
+  <node style={{ width: 220 }} />
+</node>
 
-// shrinks, content clipped
-<node style={{ overflowX: "hidden" }}>`}
-    >
-      <node style={{ flexDirection: "column", gap: 16 }}>
-        <SqueezeRow mode="clip" />
-        <SqueezeRow mode="hidden" />
-      </node>
-    </Example>
+// May shrink to 0 — flexbox compresses it, content is clipped:
+<node style={{ overflowX: "hidden" }}>
+  <node style={{ width: 220 }} />
+</node>`}</Code>
+        </>
+      }
+      demo={ClipVsHiddenCard}
+    />
+  );
+}
+
+function ClipVsHiddenCard() {
+  return (
+    <node style={{ flexDirection: "column", gap: 16 }}>
+      <SqueezeRow mode="clip" />
+      <SqueezeRow mode="hidden" />
+    </node>
   );
 }
 

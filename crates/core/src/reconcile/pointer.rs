@@ -4,7 +4,7 @@
 //! [`super::hover`]; discrete clicks in [`super::events`].
 
 use bevy::prelude::*;
-use bevy::ui::{ComputedNode, RelativeCursorPosition, UiGlobalTransform};
+use bevy::ui::{ComputedNode, ComputedStackIndex, RelativeCursorPosition, UiGlobalTransform};
 
 use super::events::normalized_01;
 use crate::bridge::{JsBridge, PointerHandlers, RNode};
@@ -123,6 +123,9 @@ pub fn collect_pointer_events(
         // `Node`, so every production handler node carries them).
         &ComputedNode,
         &UiGlobalTransform,
+        // Stack position, so overlapping candidates resolve topmost-first
+        // (query iteration order is arbitrary and must never decide).
+        Option<&ComputedStackIndex>,
     )>,
     interactions: Query<&Interaction>,
     mut capture: ResMut<crate::PointerCapture>,
@@ -148,12 +151,24 @@ pub fn collect_pointer_events(
     let cursor_abs = windows.iter().next().and_then(|w| w.cursor_position());
 
     // Begin a drag on the frame any button goes down over a handler node.
+    // A pass-through stack can mark SEVERAL overlapping handler nodes
+    // `Pressed` at once (e.g. a drawing canvas inside a draggable dialog);
+    // the TOPMOST candidate owns the gesture — the same rule click ownership
+    // already follows.
     if drag.binding.is_none() {
-        'begin: for (mb, dom) in POINTER_BUTTONS {
+        for (mb, dom) in POINTER_BUTTONS {
             if !buttons.just_pressed(mb) {
                 continue;
             }
-            for (entity, rnode, interaction, rel, handlers, user, _, _) in &nodes {
+            let mut topmost: Option<(
+                u32,
+                Entity,
+                &RNode,
+                &RelativeCursorPosition,
+                &PointerHandlers,
+                Option<&SvgUserPos>,
+            )> = None;
+            for (entity, rnode, interaction, rel, handlers, user, _, _, stack) in &nodes {
                 let over = if mb == MouseButton::Left {
                     // `ui_focus_system` attributes left presses for us (it
                     // honors `FocusPolicy` blocking).
@@ -165,19 +180,26 @@ pub fn collect_pointer_events(
                     // behind by a left-drag that exited the node.
                     *interaction != Interaction::None && rel.cursor_over()
                 };
-                if over {
-                    let pos = event_pos(user, Some(rel)).unwrap_or(drag.last_pos);
-                    let abs = cursor_abs.unwrap_or(drag.last_abs);
-                    let source = DragSource::Mouse {
-                        button: mb,
-                        dom_button: dom,
-                    };
-                    drag.begin(entity, source, pos, abs);
-                    if handlers.down {
-                        emit(rnode, "pointerDown", pos, abs, dom);
-                    }
-                    break 'begin;
+                if !over {
+                    continue;
                 }
+                let z = stack.map_or(0, |s| s.0);
+                if topmost.as_ref().is_none_or(|&(best_z, ..)| z > best_z) {
+                    topmost = Some((z, entity, rnode, rel, handlers, user));
+                }
+            }
+            if let Some((_, entity, rnode, rel, handlers, user)) = topmost {
+                let pos = event_pos(user, Some(rel)).unwrap_or(drag.last_pos);
+                let abs = cursor_abs.unwrap_or(drag.last_abs);
+                let source = DragSource::Mouse {
+                    button: mb,
+                    dom_button: dom,
+                };
+                drag.begin(entity, source, pos, abs);
+                if handlers.down {
+                    emit(rnode, "pointerDown", pos, abs, dom);
+                }
+                break;
             }
         }
     }
@@ -203,12 +225,29 @@ pub fn collect_pointer_events(
             // `ComputedNode`/`UiGlobalTransform` are physical; touch positions
             // are logical top-left — same conversion as the scroll paths.
             let point = touch.position() * scale;
-            for (entity, rnode, interaction, rel, handlers, user, computed, transform) in &nodes {
+            let mut topmost: Option<(
+                u32,
+                Entity,
+                &RNode,
+                &RelativeCursorPosition,
+                &PointerHandlers,
+                Option<&SvgUserPos>,
+            )> = None;
+            for (entity, rnode, interaction, rel, handlers, user, computed, transform, stack) in
+                &nodes
+            {
                 if *interaction != Interaction::Pressed
                     || !computed.contains_point(*transform, point)
                 {
                     continue;
                 }
+                // Overlapping hits resolve topmost-first, like the mouse path.
+                let z = stack.map_or(0, |s| s.0);
+                if topmost.as_ref().is_none_or(|&(best_z, ..)| z > best_z) {
+                    topmost = Some((z, entity, rnode, rel, handlers, user));
+                }
+            }
+            if let Some((_, entity, rnode, rel, handlers, user)) = topmost {
                 let pos = event_pos(user, Some(rel)).unwrap_or(drag.last_pos);
                 let abs = touch.position();
                 drag.begin(entity, DragSource::Touch { id: touch.id() }, pos, abs);
@@ -233,7 +272,7 @@ pub fn collect_pointer_events(
     };
     if held
         && let Some((entity, source)) = drag.binding
-        && let Ok((_, rnode, _, rel, handlers, user, _, _)) = nodes.get(entity)
+        && let Ok((_, rnode, _, rel, handlers, user, _, _, _)) = nodes.get(entity)
     {
         let pos = event_pos(user, Some(rel)).unwrap_or(drag.last_pos);
         let abs = match source {
@@ -263,7 +302,7 @@ pub fn collect_pointer_events(
     };
     if released
         && let Some((entity, source)) = drag.end()
-        && let Ok((_, rnode, _, rel, handlers, user, _, _)) = nodes.get(entity)
+        && let Ok((_, rnode, _, rel, handlers, user, _, _, _)) = nodes.get(entity)
     {
         let pos = event_pos(user, Some(rel)).unwrap_or(drag.last_pos);
         let abs = match source {

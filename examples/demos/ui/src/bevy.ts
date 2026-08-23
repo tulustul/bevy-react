@@ -38,6 +38,7 @@ export type CircleCrop = {
  */
 color: string, };
 export type ContrastParams = { amount: number, };
+export type CopyToClipboard = { text: string, };
 export type CrossfadeParams = { 
 /**
  * 0..1 stagger amount; 0 is the plain uniform crossfade.
@@ -373,6 +374,7 @@ smoothness: number, };
 /** Every `emit` name and the payload type it carries. */
 export interface ReactMessages {
   "basicDemo.setCount": SetCount;
+  "clipboard.copy": CopyToClipboard;
   "crowdedCubes.followRandom": FollowRandom;
   "crowdedCubes.setFollowMode": SetFollowMode;
   "gamepad.rumble": GamepadRumble;
@@ -486,6 +488,9 @@ export const bevy = {
   removeEventListener,
   basicDemo: {
     setCount(value: SetCount): void { emit("basicDemo.setCount", value); },
+  },
+  clipboard: {
+    copy(value: CopyToClipboard): void { emit("clipboard.copy", value); },
   },
   crowdedCubes: {
     followRandom(value: FollowRandom): void { emit("crowdedCubes.followRandom", value); },

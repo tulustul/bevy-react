@@ -1,71 +1,38 @@
 import { useState } from "react";
 import { BevyStyle } from "bevy-react/jsx";
 import { Button, DemoRow, Example, Slider } from "@/components";
+import { Code, InlineCode, Li, P, Ul } from "@/components/docs";
 import { Colors, Gradients } from "@/theme";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
 
-// Demos of the `<image>` host element, one Example per feature:
-//   1. an asset loaded by `src`, with `tint`, `flipX`, and `flipY`;
-//   2. 9-slice scaling — a single `modal.png` frame whose ornate corners stay
-//      crisp while the edges stretch, resized live by width/height sliders;
-//   3. `sourceRect` — crop a sub-rectangle of the texture (here one quadrant of
-//      the 400×220 logo);
-//   4. `atlas` — treat the logo as a 2×2 sprite-sheet grid and select a cell by
-//      `index` (the sprite-animation primitive), cycled by a button;
-//   5. an `.svg` src — extension-detected, parsed once into an SvgDocument
-//      asset, and re-rasterized at the laid-out size (times DPI), so one file
-//      stays crisp at every size (and the viewBox is the intrinsic size).
-
 const PAGE: ExplanationData = {
   title: "<image>",
-  description:
-    'The <image> host element draws a texture asset loaded by src. tint multiplies the texture color; flipX/flipY mirror it per axis. imageMode { type: "sliced" } enables 9-slice scaling, so a frame resizes without distorting its corners. sourceRect crops a sub-rectangle of the texture, and atlas treats the texture as a uniform sprite-sheet grid whose cell is selected by index — the sprite-animation primitive (the atlas layout asset is built once and reused). An .svg src renders as a vector instead: the document parses once into an SvgDocument asset and re-rasterizes at the laid-out size (times DPI), pixel-crisp at every size, with the file\'s viewBox as the intrinsic size when no width/height is set.',
+  info: (
+    <>
+      <P>
+        <InlineCode>{"<image>"}</InlineCode> draws a texture asset loaded by{" "}
+        <InlineCode>src</InlineCode> (a path under your asset folder). With no
+        explicit size it lays out at the texture's intrinsic size.
+      </P>
+      <Code lang="tsx">{`<image src="bevy-react-logo.png" style={{ width: 120 }} />`}</Code>
+      <Ul>
+        <Li>tint multiplies the texture color; flipX / flipY mirror it.</Li>
+        <Li>
+          imageMode {'{ type: "sliced" }'} enables 9-slice scaling — frames
+          resize without distorting their corners.
+        </Li>
+        <Li>
+          sourceRect crops a sub-rectangle; atlas treats the texture as a
+          sprite-sheet grid selected by index — the sprite-animation primitive.
+        </Li>
+        <Li>
+          An .svg src renders as a vector: parsed once, re-rasterized at the
+          laid-out size × DPI, crisp at every size.
+        </Li>
+      </Ul>
+    </>
+  ),
 };
-
-const FLIP_TSX = `<image
-  src="bevy-react-logo.png"
-  tint="#7aa2f7"
-  flipX
-  flipY
-/>`;
-
-const SLICE_TSX = `<image
-  src="modal.png"
-  imageMode={{
-    type: "sliced",
-    border: 120,
-    maxCornerScale: 0.7,
-  }}
-  style={{ width, height }}
-/>`;
-
-const RECT_TSX = `<image
-  src="bevy-react-logo.png"
-  sourceRect={{
-    x: 0,
-    y: 0,
-    width: 200,
-    height: 110,
-  }}
-/>`;
-
-const ATLAS_TSX = `<image
-  src="bevy-react-logo.png"
-  atlas={{
-    tileWidth: 200,
-    tileHeight: 110,
-    columns: 2,
-    rows: 2,
-    index,
-  }}
-/>`;
-
-const SVG_TSX = `<image
-  src="gear.svg"
-  style={{
-    width: 160,
-  }}
-/>`;
 
 export function ImageDemo() {
   useDemoPage(PAGE);
@@ -89,15 +56,36 @@ export function ImageDemo() {
 }
 
 function FlipDemo() {
+  return (
+    <Example
+      title="tint & flips"
+      info={
+        <>
+          <P>
+            <InlineCode>tint</InlineCode> multiplies the texture's color (white
+            = unchanged), and <InlineCode>flipX</InlineCode> /{" "}
+            <InlineCode>flipY</InlineCode> mirror it per axis — all plain props,
+            cheap to toggle from state.
+          </P>
+          <Code lang="tsx">{`<image
+  src="bevy-react-logo.png"
+  tint="#7aa2f7"
+  flipX
+  flipY
+/>`}</Code>
+        </>
+      }
+      demo={FlipCard}
+    />
+  );
+}
+
+function FlipCard() {
   const [flipX, setFlipX] = useState(false);
   const [flipY, setFlipY] = useState(false);
 
   return (
-    <Example
-      title="tint & flips"
-      description="An image asset loaded by src, with an optional tint and per-axis flips."
-      tsx={FLIP_TSX}
-    >
+    <>
       <node style={{ flexDirection: "row", gap: 24, alignItems: "center" }}>
         <image
           src="bevy-react-logo.png"
@@ -122,115 +110,173 @@ function FlipDemo() {
           flipY: {flipY ? "on" : "off"}
         </Button>
       </node>
-    </Example>
+    </>
   );
 }
 
 function SlicedDemo() {
+  return (
+    <Example
+      title="9-slice"
+      info={
+        <>
+          <P>
+            9-slice scaling resizes a frame without distorting its corners:{" "}
+            <InlineCode>border</InlineCode> marks the corner region in texture
+            pixels, and only the edges and center stretch. Drag the sliders —
+            the ornate corners stay crisp at any size.
+          </P>
+          <Code lang="tsx">{`<image
+  src="modal.png"
+  imageMode={{ type: "sliced", border: 120, maxCornerScale: 0.7 }}
+  style={{ width, height }}
+/>`}</Code>
+        </>
+      }
+      demo={SlicedCard}
+    />
+  );
+}
+
+function SlicedCard() {
   const [width, setWidth] = useState(280);
   const [height, setHeight] = useState(160);
 
   return (
-    <Example
-      title="9-slice"
-      description="9-slice scaling resizes a frame without distorting its corners. Drag the sliders: the corners stay crisp while the edges stretch."
-      tsx={SLICE_TSX}
-    >
-      <node style={{ flexDirection: "column", alignItems: "center", gap: 12 }}>
-        <node style={frameBox}>
-          <image
-            src="modal.png"
-            style={{ width, height }}
-            imageMode={{ type: "sliced", border: 120, maxCornerScale: 0.7 }}
-          />
-        </node>
-
-        <Slider
-          value={width}
-          min={80}
-          max={360}
-          onChange={(v) => setWidth(Math.round(v))}
-          label={`width ${Math.round(width)}`}
-        />
-        <Slider
-          value={height}
-          min={80}
-          max={240}
-          onChange={(v) => setHeight(Math.round(v))}
-          label={`height ${Math.round(height)}`}
+    <node style={{ flexDirection: "column", alignItems: "center", gap: 12 }}>
+      <node style={frameBox}>
+        <image
+          src="modal.png"
+          style={{ width, height }}
+          imageMode={{ type: "sliced", border: 120, maxCornerScale: 0.7 }}
         />
       </node>
-    </Example>
+
+      <Slider
+        value={width}
+        min={80}
+        max={360}
+        onChange={(v) => setWidth(Math.round(v))}
+        label={`width ${Math.round(width)}`}
+      />
+      <Slider
+        value={height}
+        min={80}
+        max={240}
+        onChange={(v) => setHeight(Math.round(v))}
+        label={`height ${Math.round(height)}`}
+      />
+    </node>
   );
 }
 
 function SourceRectDemo() {
+  return (
+    <Example
+      title="sourceRect"
+      info={
+        <>
+          <P>
+            <InlineCode>sourceRect</InlineCode> crops a sub-rectangle of the
+            texture — only that region is drawn. Drag to pan a 200×110 window
+            across the 400×220 logo.
+          </P>
+          <Code lang="tsx">{`<image
+  src="bevy-react-logo.png"
+  sourceRect={{ x: 0, y: 0, width: 200, height: 110 }}
+/>`}</Code>
+        </>
+      }
+      demo={SourceRectCard}
+    />
+  );
+}
+
+function SourceRectCard() {
   const [x, setX] = useState(0);
   const [y, setY] = useState(0);
 
   return (
-    <Example
-      title="sourceRect"
-      description="sourceRect crops a sub-rectangle of the texture. Drag to pan the 200×110 window across the 400×220 logo — only that region is drawn."
-      tsx={RECT_TSX}
-    >
-      <node style={{ flexDirection: "column", alignItems: "center", gap: 12 }}>
-        <node style={cellBox}>
-          <image
-            src="bevy-react-logo.png"
-            style={{ width: 200, height: 110 }}
-            sourceRect={{ x, y, width: 200, height: 110 }}
-          />
-        </node>
-
-        <Slider
-          value={x}
-          min={0}
-          max={200}
-          onChange={(v) => setX(Math.round(v))}
-          label={`x ${Math.round(x)}`}
-        />
-        <Slider
-          value={y}
-          min={0}
-          max={110}
-          onChange={(v) => setY(Math.round(v))}
-          label={`y ${Math.round(y)}`}
+    <node style={{ flexDirection: "column", alignItems: "center", gap: 12 }}>
+      <node style={cellBox}>
+        <image
+          src="bevy-react-logo.png"
+          style={{ width: 200, height: 110 }}
+          sourceRect={{ x, y, width: 200, height: 110 }}
         />
       </node>
-    </Example>
+
+      <Slider
+        value={x}
+        min={0}
+        max={200}
+        onChange={(v) => setX(Math.round(v))}
+        label={`x ${Math.round(x)}`}
+      />
+      <Slider
+        value={y}
+        min={0}
+        max={110}
+        onChange={(v) => setY(Math.round(v))}
+        label={`y ${Math.round(y)}`}
+      />
+    </node>
   );
 }
 
 function AtlasDemo() {
-  const [index, setIndex] = useState(0);
-
   return (
     <Example
       title="atlas"
-      description="atlas treats src as a uniform sprite-sheet grid; index selects a cell (here a 2×2 grid over the logo). Step the index to flip frames — the layout asset is built once and reused."
-      tsx={ATLAS_TSX}
-    >
-      <node style={{ flexDirection: "column", alignItems: "center", gap: 12 }}>
-        <node style={cellBox}>
-          <image
-            src="bevy-react-logo.png"
-            style={{ width: 200, height: 110 }}
-            atlas={{
-              tileWidth: 200,
-              tileHeight: 110,
-              columns: 2,
-              rows: 2,
-              index,
-            }}
-          />
-        </node>
+      info={
+        <>
+          <P>
+            <InlineCode>atlas</InlineCode> treats <InlineCode>src</InlineCode>{" "}
+            as a uniform sprite-sheet grid; <InlineCode>index</InlineCode>{" "}
+            selects a cell (here a 2×2 grid over the logo). Step the index from
+            state — or a timer — to flip frames; the atlas layout asset is built
+            once and reused.
+          </P>
+          <Code lang="tsx">{`<image
+  src="bevy-react-logo.png"
+  atlas={{
+    tileWidth: 200,
+    tileHeight: 110,
+    columns: 2,
+    rows: 2,
+    index,
+  }}
+/>`}</Code>
+        </>
+      }
+      demo={AtlasCard}
+    />
+  );
+}
 
-        <Button onClick={() => setIndex((i) => (i + 1) % 4)}>
-          cell {index} of 4 — next
-        </Button>
+function AtlasCard() {
+  const [index, setIndex] = useState(0);
+
+  return (
+    <node style={{ flexDirection: "column", alignItems: "center", gap: 12 }}>
+      <node style={cellBox}>
+        <image
+          src="bevy-react-logo.png"
+          style={{ width: 200, height: 110 }}
+          atlas={{
+            tileWidth: 200,
+            tileHeight: 110,
+            columns: 2,
+            rows: 2,
+            index,
+          }}
+        />
       </node>
-    </Example>
+
+      <Button onClick={() => setIndex((i) => (i + 1) % 4)}>
+        cell {index} of 4 — next
+      </Button>
+    </node>
   );
 }
 
@@ -242,22 +288,40 @@ function SvgDemo() {
   return (
     <Example
       title="Svg image"
-      description="The same gear.svg laid out at three sizes. Each re-rasterizes at its own laid-out size, so all three are equally crisp — the large one is not a scaled-up small one."
-      tsx={SVG_TSX}
-    >
-      <node style={svgRowStyle}>
-        <node style={svgItemStyle}>
-          <image src="gear.svg" />
-          <text style={svgCaptionStyle}>Intrinsic size</text>
-        </node>
-        {SIZES.map((size) => (
-          <node key={size} style={svgItemStyle}>
-            <image src="gear.svg" style={{ width: size }} />
-            <text style={svgCaptionStyle}>{size}px</text>
-          </node>
-        ))}
+      info={
+        <>
+          <P>
+            An <InlineCode>.svg</InlineCode> src is detected by extension and
+            rendered as a vector: the document parses once, and each node
+            re-rasterizes it at its own laid-out size (× DPI). The same{" "}
+            <InlineCode>gear.svg</InlineCode> at three sizes is equally crisp —
+            the large one is not a scaled-up small one. With no width/height,
+            the file's viewBox is the intrinsic size. For building vector
+            graphics from JSX shapes, see the <InlineCode>{"<svg>"}</InlineCode>{" "}
+            page.
+          </P>
+          <Code lang="tsx">{`<image src="gear.svg" style={{ width: 160 }} />`}</Code>
+        </>
+      }
+      demo={SvgFileCard}
+    />
+  );
+}
+
+function SvgFileCard() {
+  return (
+    <node style={svgRowStyle}>
+      <node style={svgItemStyle}>
+        <image src="gear.svg" />
+        <text style={svgCaptionStyle}>Intrinsic size</text>
       </node>
-    </Example>
+      {SIZES.map((size) => (
+        <node key={size} style={svgItemStyle}>
+          <image src="gear.svg" style={{ width: size }} />
+          <text style={svgCaptionStyle}>{size}px</text>
+        </node>
+      ))}
+    </node>
   );
 }
 

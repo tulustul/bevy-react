@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { BevyStyle, Gradient } from "bevy-react/jsx";
 import { DemoRow, Example, Radio, RadioOption, Slider } from "@/components";
+import { Code, InlineCode, P } from "@/components/docs";
 import { Colors, FontSizes, Gradients } from "@/theme";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
 
@@ -9,8 +10,33 @@ import { useDemoPage, type ExplanationData } from "@/explanationStore";
 
 const PAGE: ExplanationData = {
   title: "Grid",
-  description:
-    'display: "grid" opts a <node> into CSS-grid layout. Track lists (gridTemplateColumns, gridTemplateRows, gridAutoRows) accept the full CSS syntax: repeat(n, …), fr units, and fixed sizes. Children place themselves with gridColumn/gridRow, including "span n" and explicit line placement; gap spaces the tracks.',
+  info: (
+    <>
+      <P>
+        <InlineCode>display: "grid"</InlineCode> opts a{" "}
+        <InlineCode>{"<node>"}</InlineCode> into CSS-grid layout. Track lists (
+        <InlineCode>gridTemplateColumns</InlineCode>,{" "}
+        <InlineCode>gridTemplateRows</InlineCode>,{" "}
+        <InlineCode>gridAutoRows</InlineCode>) accept the full CSS syntax:{" "}
+        <InlineCode>repeat(n, …)</InlineCode>, fr units, and fixed sizes.
+      </P>
+      <Code lang="tsx">{`<node
+  style={{
+    display: "grid",
+    gridTemplateColumns: "repeat(3, 1fr)",
+    gap: 8,
+  }}
+>
+  {cells}
+</node>`}</Code>
+      <P>
+        Children place themselves with <InlineCode>gridColumn</InlineCode>/
+        <InlineCode>gridRow</InlineCode>, including{" "}
+        <InlineCode>"span n"</InlineCode> and explicit line placement;{" "}
+        <InlineCode>gap</InlineCode> spaces the tracks.
+      </P>
+    </>
+  ),
 };
 
 const CELLS = Gradients.spectrum;
@@ -67,34 +93,49 @@ export function GridDemo() {
 }
 
 function GridPlaygroundDemo() {
-  const [cols, setCols] = useState(3);
-  const [gap, setGap] = useState(8);
   return (
     <Example
       title="repeat & fr"
-      description="repeat(n, 1fr) makes n equal, flexible columns. Try the count and gap."
-      tsx={`<node style={{
-  display: "grid",
-  gridTemplateColumns: "repeat(3, 1fr)",
-  gap: 8,
-}}>`}
-    >
-      <node style={controlColumn}>
-        <node
-          style={{ ...frame, gridTemplateColumns: `repeat(${cols}, 1fr)`, gap }}
-        >
-          <Cells count={cols * 2} />
-        </node>
-        <Radio options={COLS_OPTIONS} value={cols} onChange={setCols} />
-        <Slider
-          value={gap}
-          min={0}
-          max={20}
-          onChange={setGap}
-          label={`gap ${gap.toFixed(0)}`}
-        />
+      info={
+        <>
+          <P>
+            <InlineCode>repeat(n, 1fr)</InlineCode> makes n equal, flexible
+            columns — the cells re-flow instantly as the track list or gap
+            changes from state.
+          </P>
+          <Code lang="tsx">{`<node
+  style={{
+    display: "grid",
+    gridTemplateColumns: \`repeat(\${cols}, 1fr)\`,
+    gap,
+  }}
+>`}</Code>
+        </>
+      }
+      demo={GridPlaygroundCard}
+    />
+  );
+}
+
+function GridPlaygroundCard() {
+  const [cols, setCols] = useState(3);
+  const [gap, setGap] = useState(8);
+  return (
+    <node style={controlColumn}>
+      <node
+        style={{ ...frame, gridTemplateColumns: `repeat(${cols}, 1fr)`, gap }}
+      >
+        <Cells count={cols * 2} />
       </node>
-    </Example>
+      <Radio options={COLS_OPTIONS} value={cols} onChange={setCols} />
+      <Slider
+        value={gap}
+        min={0}
+        max={20}
+        onChange={setGap}
+        label={`gap ${gap.toFixed(0)}`}
+      />
+    </node>
   );
 }
 
@@ -102,13 +143,26 @@ function MixedTracksDemo() {
   return (
     <Example
       title="Mixed tracks"
-      description="Mixed tracks: a fixed sidebar and a flexible body column."
-      tsx={`gridTemplateColumns: "80px 1fr"`}
-    >
-      <node style={{ ...frame, gridTemplateColumns: "80px 1fr" }}>
-        <Cells count={4} />
-      </node>
-    </Example>
+      info={
+        <>
+          <P>
+            Track lists mix freely: a fixed 80px sidebar column next to a
+            flexible <InlineCode>1fr</InlineCode> body column — the classic app
+            shell in one line.
+          </P>
+          <Code lang="tsx">{`<node style={{ display: "grid", gridTemplateColumns: "80px 1fr" }}>`}</Code>
+        </>
+      }
+      demo={MixedTracksCard}
+    />
+  );
+}
+
+function MixedTracksCard() {
+  return (
+    <node style={{ ...frame, gridTemplateColumns: "80px 1fr" }}>
+      <Cells count={4} />
+    </node>
   );
 }
 
@@ -116,22 +170,36 @@ function ColumnSpanDemo() {
   return (
     <Example
       title="gridColumn span"
-      description="gridColumn: span 2 makes a cell straddle two columns."
-      tsx={`<node style={{ gridColumn: "span 2" }}>`}
-    >
-      <node style={{ ...frame, gridTemplateColumns: "repeat(3, 1fr)" }}>
-        <node
-          style={{
-            ...cell,
-            gridColumn: "span 2",
-            backgroundGradient: CELLS[0],
-          }}
-        >
-          <text style={cellText}>span 2</text>
-        </node>
-        <Cells count={4} from={1} />
+      info={
+        <>
+          <P>
+            <InlineCode>gridColumn: "span 2"</InlineCode> makes a cell straddle
+            two columns; the remaining cells auto-place around it.
+          </P>
+          <Code lang="tsx">{`<node style={{ gridColumn: "span 2" }}>
+  <text>span 2</text>
+</node>`}</Code>
+        </>
+      }
+      demo={ColumnSpanCard}
+    />
+  );
+}
+
+function ColumnSpanCard() {
+  return (
+    <node style={{ ...frame, gridTemplateColumns: "repeat(3, 1fr)" }}>
+      <node
+        style={{
+          ...cell,
+          gridColumn: "span 2",
+          backgroundGradient: CELLS[0],
+        }}
+      >
+        <text style={cellText}>span 2</text>
       </node>
-    </Example>
+      <Cells count={4} from={1} />
+    </node>
   );
 }
 
@@ -139,25 +207,38 @@ function RowSpanDemo() {
   return (
     <Example
       title="gridRow span"
-      description="gridRow: span 2 with explicit rows builds a feature cell."
-      tsx={`gridTemplateRows: "repeat(2, 48px)"
-gridRow: "span 2"`}
+      info={
+        <>
+          <P>
+            <InlineCode>gridRow: "span 2"</InlineCode> with explicit row tracks
+            builds a feature cell that stands two rows tall.
+          </P>
+          <Code lang="tsx">{`<node style={{ gridTemplateRows: "repeat(2, 48px)" }}>
+  <node style={{ gridRow: "span 2" }} />
+</node>`}</Code>
+        </>
+      }
+      demo={RowSpanCard}
+    />
+  );
+}
+
+function RowSpanCard() {
+  return (
+    <node
+      style={{
+        ...frame,
+        gridTemplateColumns: "repeat(3, 1fr)",
+        gridTemplateRows: "repeat(2, 48px)",
+      }}
     >
       <node
-        style={{
-          ...frame,
-          gridTemplateColumns: "repeat(3, 1fr)",
-          gridTemplateRows: "repeat(2, 48px)",
-        }}
+        style={{ ...cell, gridRow: "span 2", backgroundGradient: CELLS[0] }}
       >
-        <node
-          style={{ ...cell, gridRow: "span 2", backgroundGradient: CELLS[0] }}
-        >
-          <text style={cellText}>tall</text>
-        </node>
-        <Cells count={4} from={1} />
+        <text style={cellText}>tall</text>
       </node>
-    </Example>
+      <Cells count={4} from={1} />
+    </node>
   );
 }
 

@@ -17,6 +17,7 @@
     "bevy-react": "*",
     "react": "19.2.7",
     "react-reconciler": "0.33.0",
+    "refractor": "^5.0.0",
     "zustand": "5.0.2"
   },
   "devDependencies": {

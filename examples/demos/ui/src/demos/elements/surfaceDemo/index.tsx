@@ -1,4 +1,5 @@
 import { BevyStyle } from "bevy-react/jsx";
+import { B, CodeTabs, InlineCode, P } from "@/components/docs";
 import { Colors } from "@/theme";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
 import { MonitorApp } from "./MonitorApp";
@@ -11,8 +12,41 @@ import { MonitorApp } from "./MonitorApp";
 
 const PAGE: ExplanationData = {
   title: "<surface>",
-  description:
-    'The <surface> host element is the inverse of <portal>: its subtree renders into an offscreen texture that the Bevy app drapes over a 3D mesh — here the screen of a monitor model (scenes/monitor.rs). The name identifies the surface to the Rust side. Because the screen mesh is tagged SurfacePointer, the UI on it is a real, clickable in-world app: a tiny "OS" with a menu bar, taskbar, code viewer, dialogs, and a reboot power-cycle, all driven by React.',
+  startCollapsed: true,
+  info: (
+    <>
+      <P>
+        <InlineCode>{"<surface>"}</InlineCode> is the inverse of{" "}
+        <InlineCode>{"<portal>"}</InlineCode>: instead of showing a Bevy texture
+        in the UI, its subtree renders <B>into</B> an offscreen texture that the
+        Bevy app puts on anything — here, the screen of a 3D monitor model. The{" "}
+        <InlineCode>name</InlineCode> ties the element to a surface the Rust
+        side registered.
+      </P>
+      <CodeTabs
+        tsx={`<surface name="monitor" style={{ width: "100%", height: "100%" }}>
+  <MonitorApp />
+</surface>`}
+        rust={`// Register the texture the React subtree renders into…
+surfaces.create(&mut images, "monitor", SurfaceSpec {
+    size: SCREEN_PX,
+    clear_color: Color::srgb(0.02, 0.02, 0.05),
+    ..default()
+});
+
+// …and put it on a mesh's material. Tagging the mesh
+// SurfacePointer maps 3D clicks back onto the UI.
+commands.entity(screen).insert(SurfacePointer::new("monitor"));`}
+      />
+      <P>
+        Because the screen mesh is tagged{" "}
+        <InlineCode>SurfacePointer</InlineCode>, the UI on it is a real,
+        clickable in-world app: this page's monitor runs a tiny "OS" with a menu
+        bar, taskbar, code viewer, dialogs and a reboot power-cycle, all plain
+        React. Click the screen in the 3D scene to use it.
+      </P>
+    </>
+  ),
 };
 
 export function SurfaceDemo() {

@@ -1,28 +1,42 @@
 import { useState } from "react";
 import { BevyStyle } from "bevy-react/jsx";
 import { Example } from "@/components";
+import { Code, InlineCode, Li, P, Ul } from "@/components/docs";
 import { Colors, FontSizes } from "@/theme";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
 
-const TYPESCRIPT = `<editableText
-  value={first}
-  onChange={setFirst}
-  onFocus={() =>
-    setFocused("First name")}
-  onBlur={() => setFocused(null)}
-  onSelect={(s) => setSel(s)}
-  autofocus
-  style={inputStyle}
-  focusStyle={{
-    borderColor: Colors.primary200,
-  }}
-/>`;
-
 const PAGE: ExplanationData = {
   title: "<editableText>",
-  description:
-    "Focusable text inputs: a controlled value (value + onChange) plus a Bevy-side focusStyle overlaid while the field has focus — applied with no onFocus/onBlur round-trip or React focus state. The element reports focus and selection via onFocus/onBlur/onSelect (onBlur for the old field fires after onFocus for the new one). maxLength caps input, autofocus grabs focus on mount, and IME and clipboard (Ctrl+C/V/X) work out of the box.",
-  tsx: TYPESCRIPT,
+  info: (
+    <>
+      <P>
+        <InlineCode>{"<editableText>"}</InlineCode> is a focusable text input
+        with the controlled-component contract you know from React:{" "}
+        <InlineCode>value</InlineCode> + <InlineCode>onChange</InlineCode>.
+        Editing, caret, selection, IME composition, and clipboard (Ctrl+C/V/X)
+        are all handled engine-side.
+      </P>
+      <Code lang="tsx">{`<editableText
+  value={name}
+  onChange={setName}
+  autofocus
+  maxLength={40}
+  style={inputStyle}
+  focusStyle={{ borderColor: "#89b4fa" }}
+/>`}</Code>
+      <Ul>
+        <Li>
+          focusStyle overlays while the field has focus — applied on the Bevy
+          side, no onFocus/onBlur round-trip or React focus state needed.
+        </Li>
+        <Li>
+          onFocus / onBlur / onSelect report focus and selection; onBlur for the
+          old field fires AFTER onFocus for the new one.
+        </Li>
+        <Li>maxLength caps input; autofocus grabs focus on mount.</Li>
+      </Ul>
+    </>
+  ),
 };
 
 type Selection = {
@@ -34,6 +48,41 @@ type Selection = {
 
 export function EditableTextDemo() {
   useDemoPage(PAGE);
+  return (
+    <Example
+      title="Name form"
+      info={
+        <>
+          <P>
+            Two controlled fields feeding one greeting, with a status box
+            mirroring what the element reports: which field is focused, the
+            caret or selection range, and whether an IME composition is in
+            flight. Note the blur guard — because{" "}
+            <InlineCode>onBlur</InlineCode> for the old field arrives after{" "}
+            <InlineCode>onFocus</InlineCode> for the new one, clear the focused
+            label only if it still names the field losing focus.
+          </P>
+          <Code lang="tsx">{`const blur = (label: string) =>
+  setFocused((f) => (f === label ? null : f));
+
+<editableText
+  value={first}
+  onChange={setFirst}
+  onFocus={() => setFocused("First name")}
+  onBlur={() => blur("First name")}
+  onSelect={(s) => setSel(s)}
+  autofocus
+  style={inputStyle}
+  focusStyle={{ borderColor: "#89b4fa" }}
+/>`}</Code>
+        </>
+      }
+      demo={NameFormCard}
+    />
+  );
+}
+
+function NameFormCard() {
   const [first, setFirst] = useState("");
   const [last, setLast] = useState("");
   const [focused, setFocused] = useState<string | null>(null);
@@ -58,7 +107,7 @@ export function EditableTextDemo() {
     });
 
   return (
-    <Example>
+    <>
       <text>What's your first name?</text>
       <editableText
         value={first}
@@ -101,7 +150,7 @@ export function EditableTextDemo() {
           {sel?.composing ? " · composing" : ""}
         </text>
       </node>
-    </Example>
+    </>
   );
 }
 

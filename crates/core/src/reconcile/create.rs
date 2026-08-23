@@ -178,6 +178,12 @@ pub(super) fn apply_create(
                 // Focusable via click (the widget's picking observers)
                 // and Tab navigation.
                 TabIndex(0),
+                // Click OWNERSHIP (separate from focus): the input must be a
+                // click owner so a press inside it resolves to the input, not
+                // to an `onClick` ancestor behind it (e.g. a selectable card
+                // wrapping a form) — `collect_ui_events` only considers
+                // `Interaction`-bearing nodes, topmost wins.
+                Interaction::default(),
                 // Announce as a text field to assistive tech; the live
                 // value is kept in sync by `sync_editable_a11y`.
                 AccessibilityNode(editable_a11y_node(&props)),

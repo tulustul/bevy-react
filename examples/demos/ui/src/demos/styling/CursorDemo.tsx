@@ -1,17 +1,28 @@
 import { BevyStyle } from "bevy-react/jsx";
 import { DemoRow, Example } from "@/components";
+import { Code, CodeTabs, InlineCode, P } from "@/components/docs";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
 import { Colors, FontSizes } from "@/theme";
 import { caption } from "./shared";
 
 const PAGE: ExplanationData = {
   title: "cursor",
-  description: `The cursor style prop sets the OS mouse cursor while the
-pointer is over a node (CSS cursor). The topmost node under the pointer with
-a cursor set wins, so a child without one inherits its nearest cursor-bearing
-ancestor. Custom image cursors are registered upfront on the Rust side
-(ReactUiPlugin::cursor with an image path and a hotspot), then selected by
-name from React like any keyword.`,
+  info: (
+    <>
+      <P>
+        The <InlineCode>cursor</InlineCode> style prop sets the OS mouse cursor
+        while the pointer is over a node (CSS <InlineCode>cursor</InlineCode>).
+        The topmost node under the pointer with a cursor set wins, so a child
+        without one inherits its nearest cursor-bearing ancestor.
+      </P>
+      <Code lang="tsx">{`<node style={{ cursor: "pointer" }} />`}</Code>
+      <P>
+        Custom image cursors are registered upfront on the Rust side (
+        <InlineCode>ReactUiPlugin::cursor</InlineCode> with an image path and a
+        hotspot), then selected by name from React like any keyword.
+      </P>
+    </>
+  ),
 };
 
 export function CursorDemo() {
@@ -28,9 +39,6 @@ export function CursorDemo() {
   );
 }
 
-// The `cursor` style prop sets the OS mouse cursor while the pointer is over a
-// node (CSS `cursor`). The topmost node under the pointer with a `cursor` set
-// wins, so a child without one inherits its nearest cursor-bearing ancestor.
 const CURSORS = [
   "default",
   "pointer",
@@ -60,9 +68,24 @@ function CursorKeywordsDemo() {
   return (
     <Example
       title="cursor"
-      description="The cursor style prop sets the OS mouse cursor while the pointer is over a node (CSS cursor). Hover each swatch to feel it change."
-      tsx={`<node style={{ cursor: "pointer" }} />`}
-    >
+      info={
+        <>
+          <P>
+            One swatch per cursor keyword — hover each to feel the OS cursor
+            change. A child without a <InlineCode>cursor</InlineCode> inherits
+            its nearest cursor-bearing ancestor.
+          </P>
+          <Code lang="tsx">{`<node style={{ cursor: "pointer" }} />`}</Code>
+        </>
+      }
+      demo={CursorKeywordsCard}
+    />
+  );
+}
+
+function CursorKeywordsCard() {
+  return (
+    <>
       <node style={grid}>
         {CURSORS.map((cursor) => (
           <node key={cursor} style={{ ...swatch, cursor }}>
@@ -73,37 +96,42 @@ function CursorKeywordsDemo() {
       <text style={caption}>
         A child without a cursor inherits its nearest cursor-bearing ancestor.
       </text>
-    </Example>
+    </>
   );
 }
-
-// A custom image cursor is loaded upfront on the Rust side (like a font family),
-// then selected by name from React with `cursor: "<name>"`.
-const CUSTOM_RUST = `ReactUiPlugin::new(bundle)
-    .cursor(
-        // selected from React with
-        // cursor: "hand"
-        "hand",
-        // path relative to asset root
-        "cursor-hand.png",
-        // hotspot pixel in the image
-        (0, 0),
-    );`;
-
-const CUSTOM_TS = `<node style={{ cursor: "hand" }}>`;
 
 function CustomCursorDemo() {
   return (
     <Example
       title="Custom cursor"
-      description="Custom image cursors: register a PNG by name on the Rust side (ReactUiPlugin::cursor), then reference it like any keyword. Hover the swatch."
-      rust={CUSTOM_RUST}
-      tsx={CUSTOM_TS}
-    >
-      <node style={{ ...swatch, width: 200, cursor: "hand" }}>
-        <text style={label}>cursor: "hand" (custom PNG)</text>
-      </node>
-    </Example>
+      info={
+        <>
+          <P>
+            A custom image cursor is loaded upfront on the Rust side (like a
+            font family): register a PNG by name with{" "}
+            <InlineCode>ReactUiPlugin::cursor</InlineCode>, then reference it
+            from React like any keyword. Hover the swatch.
+          </P>
+          <CodeTabs
+            tsx={`<node style={{ cursor: "hand" }} />`}
+            rust={`let react_plugin = ReactUiPlugin::new(bundle)
+    // name selected from React with cursor: "hand",
+    // image path relative to the asset root,
+    // hotspot pixel in the image
+    .cursor("hand", "cursor-hand.png", (0, 0));`}
+          />
+        </>
+      }
+      demo={CustomCursorCard}
+    />
+  );
+}
+
+function CustomCursorCard() {
+  return (
+    <node style={{ ...swatch, width: 200, cursor: "hand" }}>
+      <text style={label}>cursor: "hand" (custom PNG)</text>
+    </node>
   );
 }
 

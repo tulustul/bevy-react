@@ -1,32 +1,62 @@
 import { useEffect, useState } from "react";
 import { bevy, type WindowSize } from "@/bevy";
 import { Example } from "@/components";
+import { Code, InlineCode, P } from "@/components/docs";
 import { Colors, FontSizes } from "@/theme";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
+
+const RESIZE_TYPESCRIPT = `const [size, setSize] = useState<WindowSize | null>(null);
+
+useEffect(() => {
+  // Current value on mount, via the request channel.
+  void bevy.window.size().then(setSize);
+  // Live updates from the built-in resize event.
+  return bevy.on("resize", setSize);
+}, []);`;
+
+const PAGE: ExplanationData = {
+  title: "Window",
+  info: (
+    <>
+      <P>
+        Built into the core plugin, no registration needed:{" "}
+        <InlineCode>bevy.on("resize")</InlineCode> streams the UI viewport's
+        logical size, and the <InlineCode>bevy.window.size()</InlineCode>{" "}
+        request pulls it on demand — here once on mount, to seed the value
+        before the first resize.
+      </P>
+      <Code lang="tsx">{RESIZE_TYPESCRIPT}</Code>
+      <P>Resize the app window to see it update.</P>
+    </>
+  ),
+};
 
 export function WindowDemo() {
   useDemoPage(PAGE);
   return <WindowSizeExample />;
 }
 
-const RESIZE_TYPESCRIPT = `const [size, setSize] =
-  useState<WindowSize | null>(null);
-
-useEffect(() => {
-  // current value on mount
-  void bevy.window.size().then(setSize);
-  // live updates
-  return bevy.on("resize", setSize);
-}, []);`;
-
-const PAGE: ExplanationData = {
-  title: "Window",
-  description:
-    'Built into the core plugin, no registration needed: bevy.on("resize") streams the UI viewport\'s logical size, and the bevy.window.size() request pulls it on demand (here: once on mount). Resize the app window to see it update.',
-  tsx: RESIZE_TYPESCRIPT,
-};
-
 function WindowSizeExample() {
+  return (
+    <Example
+      title="Window"
+      info={
+        <>
+          <P>
+            The live viewport size: seeded once on mount by the{" "}
+            <InlineCode>bevy.window.size()</InlineCode> request, then kept fresh
+            by the built-in <InlineCode>resize</InlineCode> event. Resize the
+            app window to see it change.
+          </P>
+          <Code lang="tsx">{RESIZE_TYPESCRIPT}</Code>
+        </>
+      }
+      demo={WindowSizeCard}
+    />
+  );
+}
+
+function WindowSizeCard() {
   const [size, setSize] = useState<WindowSize | null>(null);
 
   useEffect(() => {
@@ -35,13 +65,9 @@ function WindowSizeExample() {
   }, []);
 
   return (
-    <Example
-      title="Window"
-      description="The live viewport size: seeded once on mount by the bevy.window.size() request, then kept fresh by the built-in resize event. Resize the app window to see it change."
-      tsx={RESIZE_TYPESCRIPT}
-    >
+    <>
       <text style={{ fontSize: FontSizes.sm, color: Colors.textColor100 }}>
-        Resize the window the read the resolution
+        Resize the window to read the resolution
       </text>
       <text
         style={{
@@ -53,6 +79,6 @@ function WindowSizeExample() {
       >
         {size ? `${Math.round(size.width)} x ${Math.round(size.height)}` : "-"}
       </text>
-    </Example>
+    </>
   );
 }

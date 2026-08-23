@@ -8,7 +8,7 @@ import { TILE, TileContent, VARIANT_COUNT, nextVariant } from "./variants";
 const period = () => 2000 + Math.random() * 4000;
 
 /** While enabled, fires `swap` on a self-rescheduling timer with a random
- * 4-10s period (re-rolled each cycle) and a random initial delay, so the
+ * 2-6s period (re-rolled each cycle) and a random initial delay, so the
  * tiles stay desynchronized and only a handful morph at once.
  *
  * Returns a reset function: a manual swap calls it so the pending timer
