@@ -250,6 +250,23 @@ repeat: boolean, ctrlKey: boolean, shiftKey: boolean, altKey: boolean,
 metaKey: boolean, };
 export type LinearWipeParams = { angle: number | string, softness: number | string, };
 export type OutlineParams = { width: number | string, color: string, softness: number | string, };
+export type Pinch = { 
+/**
+ * Pinch center, 0..1 across the node rect (0 = left edge).
+ */
+x: number, 
+/**
+ * Pinch center, 0..1 across the node rect (0 = top edge).
+ */
+y: number, 
+/**
+ * -1 (full bulge) ..= 1 (full pinch); 0 is identity.
+ */
+strength: number, 
+/**
+ * Effect radius as a fraction of the node's larger dimension.
+ */
+radius: number, };
 export type PixelizeParams = { 
 /**
  * Cells across x/y at the mosaic's coarsest (upstream `squaresMin`).
@@ -422,6 +439,7 @@ declare module "bevy-react" {
     hueRotate: HueRotateParams;
     invert: InvertParams;
     outline: OutlineParams;
+    pinch: Pinch;
     ripple: Ripple;
     saturate: SaturateParams;
     sepia: SepiaParams;

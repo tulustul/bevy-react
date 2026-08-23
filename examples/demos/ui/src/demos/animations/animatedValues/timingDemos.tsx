@@ -8,7 +8,7 @@ import {
   interpolateColor,
 } from "bevy-react";
 import { BevyStyle } from "bevy-react/jsx";
-import { Example, Slider } from "@/components";
+import { Button, Example, Slider } from "@/components";
 import { Code, InlineCode, P } from "@/components/docs";
 import { column, playButton, playLabel } from "../shared";
 import { Colors, FontSizes } from "@/theme";
@@ -138,13 +138,14 @@ function EasingCard() {
         onChange={setDuration}
         label={`duration ${duration.toFixed(0)}ms`}
       />
-      <button
+      <Button
+        unstyled
         style={playButton}
-        pressStyle={{ transform: { scale: 0.92 } }}
+        labelStyle={playLabel}
         onClick={() => setPlay((n) => n + 1)}
       >
-        <text style={playLabel}>Race</text>
-      </button>
+        Race
+      </Button>
     </node>
   );
 }

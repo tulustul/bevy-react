@@ -21,6 +21,9 @@ export const Colors = {
   surface700: "#676792ff",
 
   green100: "#9ece6a",
+  green200: "#79a84e",
+  green300: "#5c8438",
+  green400: "#405f25ff",
   red100: "#f7768e",
   red200: "#ff8fa3",
   red300: "#d65a72",
@@ -71,6 +74,10 @@ export const Gradients = {
   // neutral surface lifts — unselected pills, generic buttons, code toggle
   surface: linear(180, Colors.surface600, Colors.surface400),
   surfaceHover: linear(180, Colors.surface600, Colors.surface700),
+  // affirmative accent — modal "Close", confirm-style buttons; hover keeps
+  // the top-down direction and just lifts the shade a step
+  success: linear(180, Colors.green200, Colors.green400),
+  successHover: linear(180, Colors.green100, Colors.green400),
   // card / panel depth; hover lifts one surface step, selected adds a primary
   // tint on top of the lift so it reads clearly stronger than hover
   card: cardBase,

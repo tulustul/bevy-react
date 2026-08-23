@@ -9,7 +9,7 @@ import {
   withTiming,
 } from "bevy-react";
 import { BevyStyle } from "bevy-react/jsx";
-import { Example, Slider } from "@/components";
+import { Button, Example, Slider } from "@/components";
 import { Code, InlineCode, P } from "@/components/docs";
 import { column, playButton, playLabel } from "../shared";
 import { Colors, FontSizes, Gradients } from "@/theme";
@@ -80,13 +80,14 @@ function SpringCard() {
         onChange={setDamping}
         label={`damping ${damping.toFixed(0)}`}
       />
-      <button
+      <Button
+        unstyled
         style={playButton}
-        pressStyle={{ transform: { scale: 0.92 } }}
+        labelStyle={playLabel}
         onClick={bounce}
       >
-        <text style={playLabel}>Bounce</text>
-      </button>
+        Bounce
+      </Button>
     </node>
   );
 }
@@ -169,13 +170,14 @@ function SequenceCard() {
           }}
         />
       </node>
-      <button
+      <Button
+        unstyled
         style={running ? { ...playButton, opacity: 0.4 } : playButton}
-        pressStyle={{ transform: { scale: 0.92 } }}
+        labelStyle={playLabel}
         onClick={running ? undefined : run}
       >
-        <text style={playLabel}>{running ? "Playing…" : "Play"}</text>
-      </button>
+        {running ? "Playing…" : "Play"}
+      </Button>
     </node>
   );
 }
@@ -255,20 +257,22 @@ function SpinCard() {
         </node>
       </node>
       <node style={{ flexDirection: "row", gap: 10 }}>
-        <button
+        <Button
+          unstyled
           style={playButton}
-          pressStyle={{ transform: { scale: 0.92 } }}
+          labelStyle={playLabel}
           onClick={start}
         >
-          <text style={playLabel}>{spinning ? "Restart" : "Start"}</text>
-        </button>
-        <button
+          {spinning ? "Restart" : "Start"}
+        </Button>
+        <Button
+          unstyled
           style={{ ...playButton, backgroundColor: Colors.red100 }}
-          pressStyle={{ transform: { scale: 0.92 } }}
+          labelStyle={playLabel}
           onClick={stop}
         >
-          <text style={playLabel}>Stop</text>
-        </button>
+          Stop
+        </Button>
       </node>
     </node>
   );

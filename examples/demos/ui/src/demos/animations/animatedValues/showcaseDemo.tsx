@@ -10,7 +10,7 @@ import {
   withTiming,
 } from "bevy-react";
 import { BevyStyle } from "bevy-react/jsx";
-import { Example } from "@/components";
+import { Button, Example } from "@/components";
 import { Code, InlineCode, P } from "@/components/docs";
 import { Colors, FontSizes } from "@/theme";
 
@@ -197,7 +197,8 @@ function ModeButton({
   onPress: () => void;
 }) {
   return (
-    <button
+    <Button
+      unstyled
       onClick={onPress}
       style={{
         ...modeButtonStyle,
@@ -206,16 +207,13 @@ function ModeButton({
       hoverStyle={{
         backgroundColor: selected ? Colors.primary100 : Colors.surface500,
       }}
+      labelStyle={{
+        color: selected ? Colors.textColor400 : Colors.textColor100,
+        fontSize: FontSizes.sm,
+      }}
     >
-      <text
-        style={{
-          color: selected ? Colors.textColor400 : Colors.textColor100,
-          fontSize: FontSizes.sm,
-        }}
-      >
-        {label}
-      </text>
-    </button>
+      {label}
+    </Button>
   );
 }
 

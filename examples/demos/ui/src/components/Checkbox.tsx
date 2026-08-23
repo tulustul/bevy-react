@@ -1,19 +1,33 @@
 import { BevyStyle } from "bevy-react/jsx";
 import { Colors, FontSizes, Gradients } from "@/theme";
+import { Button } from "./Button";
 
 export type CheckboxProps = {
   label: string;
   enabled?: boolean;
+  /** Pinch-on-press intensity, forwarded to `Pinchable` (0 disables). */
+  pinch?: number;
   onChange: (enabled: boolean) => void;
 };
 
-export function Checkbox({ label, enabled, onChange }: CheckboxProps) {
+export function Checkbox({
+  label,
+  enabled,
+  pinch = 1,
+  onChange,
+}: CheckboxProps) {
   function _onChange() {
     onChange(!enabled);
   }
 
   return (
-    <button style={wrapper} hoverStyle={wrapperHovered} onClick={_onChange}>
+    <Button
+      unstyled
+      pinch={pinch}
+      style={wrapper}
+      hoverStyle={wrapperHovered}
+      onClick={_onChange}
+    >
       <node style={box}>
         <node
           style={{
@@ -30,7 +44,7 @@ export function Checkbox({ label, enabled, onChange }: CheckboxProps) {
         />
       </node>
       <text style={checkboxLabel}>{label}</text>
-    </button>
+    </Button>
   );
 }
 

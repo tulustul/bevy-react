@@ -101,6 +101,7 @@ function CubeCounterCard() {
       <node style={{ flexDirection: "row", gap: 12 }}>
         <Button
           onClick={() => setCount((c) => Math.min(MAX, c + 1))}
+          pinch={2}
           style={{
             ...buttonStyle,
             backgroundColor: Colors.primary100,
@@ -120,6 +121,7 @@ function CubeCounterCard() {
         </Button>
         <Button
           onClick={() => setCount((c) => Math.max(0, c - 1))}
+          pinch={2}
           style={{
             ...buttonStyle,
             backgroundColor: Colors.red100,

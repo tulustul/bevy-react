@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { BevyStyle } from "bevy-react/jsx";
 import { Colors, FontSizes, Gradients, Scrollbar } from "@/theme";
+import { Button } from "@/components";
 import { DEMOS, type DemoItem } from "./demos";
 import { useDemosStore } from "./demosStore";
 
@@ -163,7 +164,8 @@ function ItemButton({
   onPress,
 }: ItemButtonProps) {
   return (
-    <button
+    <Button
+      unstyled
       onClick={onPress}
       style={{
         ...navButtonStyle,
@@ -204,7 +206,7 @@ function ItemButton({
           </text>
         )}
       </node>
-    </button>
+    </Button>
   );
 }
 

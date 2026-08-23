@@ -1,6 +1,7 @@
 import { ReactNode, useEffect, useState } from "react";
 import { BevyStyle } from "bevy-react/jsx";
 import { Colors, FontSizes } from "@/theme";
+import { Button } from "@/components";
 
 /** Wraps a floating menu so it fades + slides in on open. Mounts in the closed
  *  state, then flips to open on the next frame so the transition interpolates;
@@ -65,14 +66,16 @@ export function MenuList({ items }: { items: MenuItem[] }) {
           return <node key={`sep-${i}`} style={separator} />;
         }
         return (
-          <button
+          <Button
             key={item.label}
+            unstyled
             style={row}
             hoverStyle={rowHover}
+            labelStyle={label}
             onClick={item.onClick}
           >
-            <text style={label}>{item.label}</text>
-          </button>
+            {item.label}
+          </Button>
         );
       })}
     </node>

@@ -1,13 +1,23 @@
 import { BevyStyle } from "bevy-react/jsx";
 import { PropsWithChildren } from "react";
 import { Colors, FontSizes, Gradients } from "@/theme";
+import { Pinchable } from "./Pinchable";
 
 export type ButtonProps = PropsWithChildren & {
   style?: BevyStyle;
   hoverStyle?: BevyStyle;
   pressStyle?: BevyStyle;
   labelStyle?: BevyStyle;
-  onClick: () => void;
+  /** Skip the shared button look (base style, hover gradient, label styling)
+   *  — the caller's style/hoverStyle/labelStyle stand alone. The pinch still
+   *  applies. For tracks, menu rows, and other button-shaped things that are
+   *  not "a button that looks like the gallery's buttons". */
+  unstyled?: boolean;
+  /** Pinch-on-press intensity, forwarded to `Pinchable` (0 disables).
+   *  Note: Pinchable owns the button's `filter` — a `filter` passed via
+   *  `style` is replaced unless `pinch` is 0. */
+  pinch?: number;
+  onClick?: () => void;
 };
 
 export function Button({
@@ -16,19 +26,41 @@ export function Button({
   hoverStyle,
   pressStyle,
   labelStyle,
+  unstyled = false,
+  pinch = 1,
   children,
 }: ButtonProps) {
+  // String/number children get the label treatment; element children (switch
+  // knobs, nav rows, …) render as-is.
+  const isTextChild =
+    typeof children === "string" || typeof children === "number";
   return (
-    <button
-      onClick={onClick}
-      style={{ ...buttonStyle, ...(style ?? {}) }}
-      hoverStyle={{ ...buttonHoverStyle, ...(hoverStyle ?? {}) }}
-      pressStyle={{ ...buttonPressStyle, ...(pressStyle ?? {}) }}
-    >
-      <text style={{ ...buttonLabelStyle, ...(labelStyle ?? {}) }}>
-        {children}
-      </text>
-    </button>
+    <Pinchable pinch={pinch}>
+      <button
+        onClick={onClick}
+        style={unstyled ? (style ?? {}) : { ...buttonStyle, ...(style ?? {}) }}
+        hoverStyle={
+          unstyled
+            ? (hoverStyle ?? {})
+            : { ...buttonHoverStyle, ...(hoverStyle ?? {}) }
+        }
+        pressStyle={pressStyle ?? {}}
+      >
+        {isTextChild ? (
+          <text
+            style={
+              unstyled
+                ? (labelStyle ?? {})
+                : { ...buttonLabelStyle, ...(labelStyle ?? {}) }
+            }
+          >
+            {children}
+          </text>
+        ) : (
+          children
+        )}
+      </button>
+    </Pinchable>
   );
 }
 
@@ -48,10 +80,6 @@ const buttonStyle: BevyStyle = {
 
 const buttonHoverStyle: BevyStyle = {
   backgroundGradient: Gradients.surfaceHover,
-};
-
-const buttonPressStyle: BevyStyle = {
-  transform: { scale: 0.9 },
 };
 
 const buttonLabelStyle: BevyStyle = {

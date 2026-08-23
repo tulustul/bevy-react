@@ -63,6 +63,7 @@ export function CustomFiltersDemo() {
 
       <DemoRow>
         <BurnDemo />
+        <PinchDemo />
         <CyberpunkDemo />
       </DemoRow>
     </>
@@ -342,6 +343,110 @@ function BurnCard() {
         />
         <text style={cardTitle}>Burning!!!</text>
       </node>
+    </node>
+  );
+}
+
+function PinchDemo() {
+  return (
+    <Example
+      title="Pinch"
+      info={
+        <>
+          <P>
+            <InlineCode>pinch</InlineCode> radially squeezes the content toward
+            a point (or bulges it away at negative strength). Every param is
+            normalized — <InlineCode>x</InlineCode>/<InlineCode>y</InlineCode>{" "}
+            are 0..1 across the node, <InlineCode>radius</InlineCode> a fraction
+            of its larger dimension — exactly what pointer events deliver, so
+            the effect anchors to the cursor with zero px math. The gallery's{" "}
+            <InlineCode>{"<Pinchable>"}</InlineCode> wrapper presses every
+            button and nav item through it: strength animates in on pointer-down
+            and springs back (with a bulge wobble) on release, pinched at the
+            click point — and the pinch follows the cursor while you drag
+            pressed. A bulge displacing past the 16px outset clips at the layer
+            edge — findable at the slider extremes.
+          </P>
+          <CodeTabs
+            tsx={`<node
+  style={{
+    filter: {
+      name: "pinch",
+      params: {
+        x, y,          // 0..1
+        strength,      // -1..1
+        radius,        // × size
+      },
+    },
+  }}
+>
+  …
+</node>`}
+            rust={`#[react_filter(
+    shader = "shaders/pinch.wgsl",
+    outset = 16.0,
+)]
+struct Pinch {
+    x: f32,
+    y: f32,
+    strength: f32,
+    radius: f32,
+}`}
+          />
+        </>
+      }
+      demo={PinchCard}
+    />
+  );
+}
+
+function PinchCard() {
+  const [x, setX] = useState(0.5);
+  const [y, setY] = useState(0.5);
+  const [strength, setStrength] = useState(0.5);
+  const [radius, setRadius] = useState(0.8);
+  return (
+    <node style={controlColumn}>
+      <node
+        style={{
+          ...card,
+          filter: { name: "pinch", params: { x, y, strength, radius } },
+        }}
+      >
+        <image
+          src="images/parrot.png"
+          style={{ width: 130, borderRadius: 8 }}
+        />
+        <text style={cardTitle}>Squeezed!</text>
+      </node>
+      <Slider
+        value={x}
+        min={0}
+        max={1}
+        onChange={setX}
+        label={`x ${x.toFixed(2)}`}
+      />
+      <Slider
+        value={y}
+        min={0}
+        max={1}
+        onChange={setY}
+        label={`y ${y.toFixed(2)}`}
+      />
+      <Slider
+        value={strength}
+        min={-1}
+        max={1}
+        onChange={setStrength}
+        label={`strength ${strength.toFixed(2)}`}
+      />
+      <Slider
+        value={radius}
+        min={0}
+        max={1}
+        onChange={setRadius}
+        label={`radius ${radius.toFixed(2)}`}
+      />
     </node>
   );
 }

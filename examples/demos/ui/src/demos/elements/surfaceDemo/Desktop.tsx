@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { BevyStyle } from "bevy-react/jsx";
+import { Button } from "@/components";
 import { Colors, FontSizes } from "@/theme";
 import { MenuBar, MenuId } from "./MenuBar";
 import { Taskbar } from "./Taskbar";
@@ -79,7 +80,9 @@ export function Desktop({ crt, setCrt, onReboot }: Props) {
         />
       </node>
 
-      {openMenu !== null ? <button style={backdrop} onClick={close} /> : null}
+      {openMenu !== null ? (
+        <Button unstyled pinch={0} style={backdrop} onClick={close} />
+      ) : null}
 
       {aboutOpen ? <AboutDialog onClose={() => setAboutOpen(false)} /> : null}
     </node>

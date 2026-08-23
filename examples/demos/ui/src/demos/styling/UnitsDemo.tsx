@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { BevyStyle } from "bevy-react/jsx";
-import { DemoRow, Example, TextMono } from "@/components";
+import { Button, DemoRow, Example, TextMono } from "@/components";
 import { Code, InlineCode, Li, P, Ul } from "@/components/docs";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
 import { Colors } from "@/theme";
@@ -242,7 +242,7 @@ type TimeBoxProps = {
 function TimeBox({ label, duration, on, onToggle }: TimeBoxProps) {
   return (
     <node style={{ flexDirection: "column", alignItems: "center", gap: 10 }}>
-      <button onClick={onToggle} style={timeTrack}>
+      <Button unstyled pinch={0} onClick={onToggle} style={timeTrack}>
         <node
           style={{
             ...box,
@@ -253,7 +253,7 @@ function TimeBox({ label, duration, on, onToggle }: TimeBoxProps) {
             transition: { transform: { duration, easing: "easeOut" } },
           }}
         />
-      </button>
+      </Button>
       <TextMono style={caption}>{label}</TextMono>
     </node>
   );

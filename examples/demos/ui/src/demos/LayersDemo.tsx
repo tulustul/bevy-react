@@ -13,9 +13,6 @@ import { caption, column, controlColumn, row } from "./styling/shared";
 
 const PAGE: ExplanationData = {
   title: "Layers",
-  // Scene-backed pages start collapsed so the live cards are visible on
-  // arrival — the stale-cache freeze has to be *watched*, not read about.
-  startCollapsed: true,
   info: (
     <>
       <H2>One subtree, one texture</H2>

@@ -11,10 +11,8 @@ const MODAL_W = 560;
 const MARGIN = 8;
 /** Keep at least the title bar reachable when dragging toward the bottom. */
 const TITLE_REACH = 48;
-/** Carrier padding around the panel so its boxShadow ring lands inside the
- * morph layer's capture rect (a crossfade adds no outset of its own — an
- * unpadded carrier would clip the shadow at the layer edge). */
-const SHADOW_PAD = 40;
+/** Open/close/swap blend length. */
+const CLOSE_BLEND_MS = 250;
 
 /**
  * The floating example dialog: clicking an `<Example>` card opens it with the
@@ -93,20 +91,22 @@ export function ExampleModal() {
       <node
         style={{
           ...carrierStyle,
-          left: p.left - SHADOW_PAD,
-          top: p.top - SHADOW_PAD,
           morphFilter: { key: open ? `s${seq}` : "closed", name: "crossfade" },
         }}
       >
         {selected && (
           <node
-            style={panelStyle}
+            style={{ ...panelStyle, left: p.left, top: p.top }}
             onPointerDown={onPointerDown}
             onPointerMove={onPointerMove}
           >
             <node style={titleBarStyle}>
               <text style={titleStyle}>{selected.title}</text>
-              <Button style={closeXStyle} onClick={() => deselect()}>
+              <Button
+                style={closeXStyle}
+                labelStyle={{ fontSize: FontSizes.lg }}
+                onClick={() => deselect()}
+              >
                 ×
               </Button>
             </node>
@@ -122,7 +122,9 @@ export function ExampleModal() {
                 </node>
               )}
               <Button
-                style={{ alignSelf: "center", margin: { top: 4 } }}
+                style={closeButtonStyle}
+                hoverStyle={{ backgroundGradient: Gradients.successHover }}
+                labelStyle={{ color: "white" }}
                 onClick={() => deselect()}
               >
                 Close
@@ -150,18 +152,25 @@ const backdropStyle: BevyStyle = {
   zIndex: -1,
 };
 
-// The always-mounted morph carrier: absolutely positioned, paints nothing of
-// its own — the panel (its only child) mounts/unmounts in the same commit as
-// the morph key flip, so the blend runs from/to a valid empty capture.
+// The always-mounted morph carrier: pinned to the FULL page (a bare node —
+// pointer events pass through to the page beneath). The constant viewport
+// rect is what keeps the layout-anchored morph continuous: swapping examples
+// changes the panel's height and closing unmounts it entirely, but the
+// capture rect never moves, so the crossfade never stretches the frozen
+// image. (The trade: dragging the panel is content movement inside the
+// capture — a re-capture per drag frame instead of a composite-time move.)
 const carrierStyle: BevyStyle = {
   positionType: "absolute",
+  top: 0,
+  left: 0,
+  right: 0,
+  bottom: 0,
   zIndex: 300,
-  flexDirection: "column",
-  padding: SHADOW_PAD,
-  transition: { morphFilter: { duration: 250 } },
+  transition: { morphFilter: { duration: CLOSE_BLEND_MS } },
 };
 
 const panelStyle: BevyStyle = {
+  positionType: "absolute",
   width: MODAL_W,
   flexDirection: "column",
   alignItems: "stretch",
@@ -187,8 +196,20 @@ const titleStyle: BevyStyle = {
   color: Colors.textColor100,
 };
 
+// A circle: fixed square box (padding off), radius = half. The base style's
+// centering places the × glyph.
 const closeXStyle: BevyStyle = {
-  padding: { top: 2, right: 9, bottom: 2, left: 9 },
+  width: 28,
+  height: 28,
+  padding: 0,
+  borderRadius: 14,
+};
+
+const closeButtonStyle: BevyStyle = {
+  alignSelf: "center",
+  margin: { top: 4 },
+  backgroundColor: Colors.green200,
+  backgroundGradient: Gradients.success,
 };
 
 const bodyStyle: BevyStyle = {

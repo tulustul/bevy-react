@@ -17,8 +17,6 @@ export const playButton: BevyStyle = {
   borderRadius: 8,
   backgroundColor: Colors.primary100,
   backgroundGradient: Gradients.primary,
-  transform: { scale: 1 },
-  transition: { transform: { duration: 100, easing: "easeOut" } },
 };
 
 export const playLabel: BevyStyle = {

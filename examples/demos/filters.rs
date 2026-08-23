@@ -7,12 +7,13 @@
 //! resolve time — a morph name in a `filter` chain warns and is skipped,
 //! and vice versa):
 //!
-//!   * The "Custom filters" demo trio (`#[react_filter]` +
+//!   * The "Custom filters" demo set (`#[react_filter]` +
 //!     `add_react_filter`), one per interesting shape: `ripple` —
 //!     time-driven UV distortion (`time = true`: the layer re-renders every
 //!     frame with **zero re-captures**); `glitch` — time-driven slice
 //!     offsets + RGB split, procedurally seeded; `dissolve` — params-only
-//!     alpha threshold; repaints only when `progress` changes.
+//!     alpha threshold; repaints only when `progress` changes; `pinch` —
+//!     event-anchored, all-normalized params (the gallery's press effect).
 //!   * The gl-transitions morph pack (`#[react_morph_filter]` +
 //!     `add_react_morph_filter`; the "Morph filter" demo's card grid):
 //!     single-pass ports of <https://gl-transitions.com/gallery>
@@ -88,6 +89,47 @@ struct Dissolve {
     /// 0 = intact, 1 = fully dissolved.
     #[serde(default)]
     progress: f32,
+}
+
+/// Cursor-anchored pinch/bulge: radially squeezes the content toward a point
+/// (`strength` > 0) or magnifies it away (`strength` < 0). Every param is
+/// normalized — `x`/`y` are 0..1 across the node rect (what pointer events
+/// deliver), `radius` is a fraction of the node's larger dimension,
+/// `strength` is -1..=1 (clamped in the shader) — so the effect self-scales
+/// to any node with no px math in app code. Not time-driven: repaints only
+/// on a params change. The gallery's `Pinchable` wrapper (buttons + nav
+/// items) presses through this: strength animated per click, anchored at
+/// the cursor.
+///
+/// Packing: `params[0].x` x, `params[0].y` y, `params[0].z` strength,
+/// `params[0].w` radius. `outset` gives the bulge (and the spring's
+/// overshoot) room to poke past the node's box — like `ripple`, it is a
+/// macro-literal constant, so a bulge displacing further than 16px
+/// (roughly `0.26 * |strength| * radius * node_size`) clips at a straight
+/// layer edge; sized generously for `Pinchable`, exceedable in the demo's
+/// slider extremes.
+#[react_filter(shader = "shaders/pinch.wgsl", outset = 16.0)]
+struct Pinch {
+    /// Pinch center, 0..1 across the node rect (0 = left edge).
+    #[serde(default = "default_pinch_center")]
+    x: f32,
+    /// Pinch center, 0..1 across the node rect (0 = top edge).
+    #[serde(default = "default_pinch_center")]
+    y: f32,
+    /// -1 (full bulge) ..= 1 (full pinch); 0 is identity.
+    #[serde(default)]
+    strength: f32,
+    /// Effect radius as a fraction of the node's larger dimension.
+    #[serde(default = "default_pinch_radius")]
+    radius: f32,
+}
+
+fn default_pinch_center() -> f32 {
+    0.5
+}
+
+fn default_pinch_radius() -> f32 {
+    0.8
 }
 
 // ---------------------------------------------------------------------------
@@ -462,6 +504,7 @@ pub fn register_bindings(app: &mut App) {
     app.add_react_filter::<Ripple>()
         .add_react_filter::<Glitch>()
         .add_react_filter::<Dissolve>()
+        .add_react_filter::<Pinch>()
         .add_react_morph_filter::<Windowslice>()
         .add_react_morph_filter::<Radial>()
         .add_react_morph_filter::<PolkaDotsCurtain>()

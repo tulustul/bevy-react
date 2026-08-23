@@ -1,5 +1,5 @@
 import { BevyStyle } from "bevy-react/jsx";
-import { TextMono } from "@/components";
+import { Button, TextMono } from "@/components";
 import { Colors, FontSizes } from "@/theme";
 import { MenuItem, MenuList, Popup } from "./menu";
 
@@ -61,13 +61,15 @@ export function MenuBar({
       <node style={menuRow}>
         {menus.map((menu) => (
           <node key={menu.id} style={menuAnchor}>
-            <button
+            <Button
+              unstyled
               style={open === menu.id ? menuLabelActive : menuLabel}
               hoverStyle={menuLabelHover}
+              labelStyle={menuLabelText}
               onClick={() => onToggle(menu.id)}
             >
-              <text style={menuLabelText}>{menu.label}</text>
-            </button>
+              {menu.label}
+            </Button>
             {open === menu.id ? (
               <Popup style={dropdown} from="top">
                 <MenuList items={menu.items} />

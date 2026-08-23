@@ -1,5 +1,6 @@
 import { BevyStyle } from "bevy-react/jsx";
 import { Colors, FontSizes, Gradients } from "@/theme";
+import { Button } from "./Button";
 
 export type RadioValue = string | number;
 
@@ -11,6 +12,8 @@ export type RadioOption<T extends RadioValue = RadioValue> = {
 export type RadioProps<T extends RadioValue = RadioValue> = {
   value: T;
   options: RadioOption<T>[];
+  /** Pinch-on-press intensity, forwarded to `Pinchable` (0 disables). */
+  pinch?: number;
   onChange: (value: T) => void;
 };
 
@@ -19,6 +22,7 @@ export type RadioProps<T extends RadioValue = RadioValue> = {
 export function Radio<T extends RadioValue>({
   options,
   value,
+  pinch = 1,
   onChange,
 }: RadioProps<T>) {
   return (
@@ -28,6 +32,7 @@ export function Radio<T extends RadioValue>({
           key={String(option.value)}
           option={option}
           selected={option.value === value}
+          pinch={pinch}
           onClick={() => {
             if (option.value !== value) onChange(option.value);
           }}
@@ -40,12 +45,16 @@ export function Radio<T extends RadioValue>({
 type OptionProps = {
   option: RadioOption;
   selected: boolean;
+  pinch: number;
   onClick: () => void;
 };
 
-function Option({ option, selected, onClick }: OptionProps) {
+// The pinch replaces the old pressStyle scale squish (like Button).
+function Option({ option, selected, pinch, onClick }: OptionProps) {
   return (
-    <button
+    <Button
+      unstyled
+      pinch={pinch}
       onClick={onClick}
       style={{
         ...pillStyle,
@@ -57,18 +66,14 @@ function Option({ option, selected, onClick }: OptionProps) {
           ? Gradients.primaryHover
           : Gradients.surfaceHover,
       }}
-      pressStyle={{ transform: { scale: 0.95 } }}
+      labelStyle={{
+        ...pillLabel,
+        color: selected ? Colors.textColor400 : Colors.textColor100,
+        fontWeight: selected ? "bold" : "medium",
+      }}
     >
-      <text
-        style={{
-          ...pillLabel,
-          color: selected ? Colors.textColor400 : Colors.textColor100,
-          fontWeight: selected ? "bold" : "medium",
-        }}
-      >
-        {option.label}
-      </text>
-    </button>
+      {option.label}
+    </Button>
   );
 }
 

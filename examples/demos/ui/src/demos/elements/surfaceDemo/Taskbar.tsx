@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { BevyStyle } from "bevy-react/jsx";
-import { TextMono } from "@/components";
+import { Button, TextMono } from "@/components";
 import { Colors, FontSizes } from "@/theme";
 import { MenuList, Popup } from "./menu";
 
@@ -40,13 +40,15 @@ export function Taskbar({
             />
           </Popup>
         ) : null}
-        <button
+        <Button
+          unstyled
           style={startOpen ? startButtonActive : startButton}
           hoverStyle={startButtonHover}
+          labelStyle={startText}
           onClick={onStart}
         >
-          <text style={startText}>bevy-react</text>
-        </button>
+          bevy-react
+        </Button>
       </node>
 
       <Clock />
