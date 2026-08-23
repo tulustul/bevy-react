@@ -229,7 +229,10 @@ function BothChainsCard() {
               name: "ripple",
               params: { amplitude: 2, frequency: 30, speed: 2 },
             },
-            { name: "chromaticAberration" },
+            {
+              name: "chromaticAberration",
+              params: { rotation: 1 },
+            },
           ],
         }}
       >

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { BevyStyle } from "bevy-react/jsx";
 import { Colors, FontSizes, Gradients, Scrollbar } from "@/theme";
-import { Button } from "@/components";
+import { Button, Pinchable } from "@/components";
 import { DEMOS, type DemoItem } from "./demos";
 import { useDemosStore } from "./demosStore";
 
@@ -29,52 +29,59 @@ export function Navigation() {
 const title = "bevy-react";
 const titleDelay = 7000;
 
-// The library title dusts away from time to time and blows back in. The
+// The library title dusts away from time to time — or on click — and blows
+// back in. The
 // text stays mounted (opacity toggle) so the wrapper keeps its layout size —
 // a morph snapshot is layout-anchored, and a collapsing wrapper would
 // stretch the frozen image; the key flip freezes the old appearance and
 // dustify blends it with the (now invisible / visible) live content.
 function Title() {
   const [text, setText] = useState(title);
+  const toggle = () => setText(text === title ? "Demos" : title);
 
+  // The ambient flip; a click-triggered toggle re-arms it (effect deps on
+  // `text`), so the next automatic morph is always a full delay away.
   useEffect(() => {
     const delay = titleDelay + Math.random() * titleDelay;
-    const id = setTimeout(
-      () => setText(text === title ? "Demos" : title),
-      delay,
-    );
+    const id = setTimeout(toggle, delay);
     return () => clearTimeout(id);
   }, [text]);
 
   return (
-    <node
-      style={{
-        morphFilter: {
-          key: text,
-          name: "dustify",
+    <Pinchable
+      pinch={0.8}
+      filters={[
+        {
+          name: "gradientMap",
           params: {
-            direction: 0,
-            softness: 180,
-            turbulence: 0.6,
-            wind: 0,
-            drift: 30,
-            grain: 4,
+            stops: [{ color: "#caf9afff" }, { color: "#c72e00ff" }],
           },
         },
-        transition: { morphFilter: { duration: 2000, easing: "linear" } },
-        filter: [
-          {
-            name: "gradientMap",
+      ]}
+    >
+      <node
+        onClick={toggle}
+        style={{
+          cursor: "pointer",
+          morphFilter: {
+            key: text,
+            name: "dustify",
             params: {
-              stops: [{ color: "#caf9afff" }, { color: "#c72e00ff" }],
+              direction: 0,
+              softness: 180,
+              turbulence: 0.6,
+              wind: 0,
+              drift: 30,
+              grain: 4,
             },
           },
-        ],
-        width: "100%",
-      }}
-    >
-      <text style={{ ...titleStyle }}>{text}</text>
-    </node>
+          transition: { morphFilter: { duration: 2000, easing: "linear" } },
+          width: "100%",
+        }}
+      >
+        <text style={{ ...titleStyle }}>{text}</text>
+      </node>
+    </Pinchable>
   );
 }
 

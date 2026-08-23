@@ -1,6 +1,12 @@
 import { BevyStyle, PointerEventData } from "bevy-react/jsx";
 import { cloneElement, ReactElement, useRef, useState } from "react";
-import { useSharedValue, withSpring, withTiming } from "bevy-react";
+import {
+  BevyFilters,
+  FilterUse,
+  useSharedValue,
+  withSpring,
+  withTiming,
+} from "bevy-react";
 
 type PinchableChildProps = {
   style?: BevyStyle;
@@ -20,6 +26,7 @@ export type PinchableProps = {
    *  filter into its base style (replacing any `filter` the child styles
    *  itself with) and chains onto its pointer handlers. */
   children: ReactElement<PinchableChildProps>;
+  filters?: FilterUse[];
 };
 
 // Pressed-state magnitudes at `pinch: 1` (the custom `pinch` filter takes
@@ -35,7 +42,7 @@ const PRESS_RADIUS = 0.6;
  *  anchor x/y are plain statics swapped per-press. The identity chain
  *  (strength 0) stays mounted so the child is a stable cached layer — no
  *  promote/demote churn, and unsetting the chain mid-spring would snap. */
-export function Pinchable({ pinch = 1, children }: PinchableProps) {
+export function Pinchable({ pinch = 1, children, filters }: PinchableProps) {
   const strength = useSharedValue(0);
   const [center, setCenter] = useState({ x: 0.5, y: 0.5 });
   const pressed = useRef(false);
@@ -80,15 +87,18 @@ export function Pinchable({ pinch = 1, children }: PinchableProps) {
   return cloneElement(children, {
     style: {
       ...(props.style ?? {}),
-      filter: {
-        name: "pinch",
-        params: {
-          x: center.x,
-          y: center.y,
-          strength: { animated: strength, seed: 0 },
-          radius: PRESS_RADIUS * pinch,
+      filter: [
+        {
+          name: "pinch",
+          params: {
+            x: center.x,
+            y: center.y,
+            strength: { animated: strength, seed: 0 },
+            radius: PRESS_RADIUS * pinch,
+          },
         },
-      },
+        ...(filters ?? []),
+      ],
     },
     onPointerDown: chain(props.onPointerDown, press),
     onPointerMove: chain(props.onPointerMove, move),
