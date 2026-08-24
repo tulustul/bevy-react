@@ -9,7 +9,8 @@
 //!     backdrop-filter demo's scene).
 //!   * Cubes         — React `bevy.basicDemo.setCount(n)` → that many spinning cubes.
 //!   * Bouncing ball — a ball pushes `bevyEventsDemo.ballBounced` toasts and answers
-//!     `bevy.pollingDemo.getBall()` polls (one scene, both bridge directions).
+//!     `bevy.pollingDemo.getBall()` polls (one scene, both bridge directions);
+//!     each hit also paints an expanding ripple on the wall.
 //!   * Crowded cubes — UI badges anchored to ~100 wandering 3D cubes on a plane.
 //!
 //! Pure-UI demos (Animations, Events, …) declare no scene and select `null`,
