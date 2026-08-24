@@ -16,17 +16,25 @@
 //! decode; they are recognized here (chain position = wire index) and stripped
 //! before typed param resolution (`crate::filters::resolve`) — the binding
 //! then drives the packed slot per frame, validated against the resolved
-//! chain like any other param binding.
+//! chain like any other param binding. Gradient leaves are the other dynamic
+//! walk ([`gradient_bindings`]): each `{ animated }` wrapper in a
+//! `backgroundGradient`/`borderGradient` list derives a binding addressed by
+//! (surface, gradient index, [`GradientLeaf`](crate::animations::protocol::GradientLeaf)).
 //!
 //! [`AnimatedNode`]: crate::animations::AnimatedNode
 
 use std::collections::BTreeMap;
 
 use crate::animations::protocol::{
-    AnimatableProperty as P, AnimatedBindings, Binding, Transform3dField as F,
+    AnimatableProperty as P, AnimatedBindings, Binding, GradientLeaf, Transform3dField as F,
 };
 use crate::filters::FilterChain;
-use crate::protocol::{animatable::binding_from_wrapper, props::Props, style::Style};
+use crate::protocol::visual::{GradientList, GradientSpec, GradientStop, RadialShapeSpec};
+use crate::protocol::{
+    animatable::{AnimatableField, binding_from_wrapper},
+    props::Props,
+    style::Style,
+};
 use crate::svg::ShapeAttrs;
 
 /// Classify a raw filter-param value for the chain resolver: `None` = a plain
@@ -69,6 +77,115 @@ fn chain_bindings(chain: Option<&FilterChain>, backdrop: bool, out: &mut BTreeMa
                 }
             };
             out.insert(property, binding_from_wrapper(inner));
+        }
+    }
+}
+
+/// The property for one gradient leaf, on the surface the walk is on.
+fn gradient_prop(border: bool, index: u8, leaf: GradientLeaf) -> P {
+    if border {
+        P::BorderGradientParam { index, leaf }
+    } else {
+        P::BackgroundGradientParam { index, leaf }
+    }
+}
+
+/// The shared linear/radial stop walk (conic stops walk inline — their
+/// `angle` field takes `position`'s leaf, and the stop type differs).
+fn stop_bindings(stops: &[GradientStop], border: bool, gi: u8, out: &mut BTreeMap<P, Binding>) {
+    for (si, stop) in stops.iter().enumerate() {
+        let Ok(si) = u8::try_from(si) else { break };
+        if let Some(b) = stop.color.binding() {
+            out.insert(
+                gradient_prop(border, gi, GradientLeaf::StopColor(si)),
+                b.clone(),
+            );
+        }
+        if let Some(b) = AnimatableField::binding(&stop.position) {
+            out.insert(
+                gradient_prop(border, gi, GradientLeaf::StopPosition(si)),
+                b.clone(),
+            );
+        }
+        if let Some(b) = AnimatableField::binding(&stop.hint) {
+            out.insert(
+                gradient_prop(border, gi, GradientLeaf::StopHint(si)),
+                b.clone(),
+            );
+        }
+    }
+}
+
+/// Walk one gradient list's leaves for `{ animated }` wrappers — the gradient
+/// analog of [`chain_bindings`]: every animatable leaf (angle/start, stop
+/// color/position/hint, radial shape radii) carrying a wrapper derives a
+/// binding addressed by (surface, gradient index, leaf). A conic stop's
+/// `angle` reuses [`GradientLeaf::StopPosition`] — it IS the stop's position,
+/// angular.
+fn gradient_bindings(list: Option<&GradientList>, border: bool, out: &mut BTreeMap<P, Binding>) {
+    let Some(list) = list else { return };
+    let specs: &[GradientSpec] = match list {
+        GradientList::One(one) => std::slice::from_ref(one),
+        GradientList::Many(many) => many,
+    };
+    for (gi, spec) in specs.iter().enumerate() {
+        // Cap the gradient index at the u8 address space (chain precedent).
+        let Ok(gi) = u8::try_from(gi) else { break };
+        match spec {
+            GradientSpec::Linear(l) => {
+                if let Some(b) = AnimatableField::binding(&l.angle) {
+                    out.insert(gradient_prop(border, gi, GradientLeaf::Angle), b.clone());
+                }
+                stop_bindings(&l.stops, border, gi, out);
+            }
+            GradientSpec::Radial(r) => {
+                match &r.shape {
+                    Some(RadialShapeSpec::Circle { circle }) => {
+                        if let Some(b) = circle.binding() {
+                            out.insert(gradient_prop(border, gi, GradientLeaf::ShapeX), b.clone());
+                        }
+                    }
+                    Some(RadialShapeSpec::Ellipse { ellipse }) => {
+                        for (radius, leaf) in [
+                            (&ellipse[0], GradientLeaf::ShapeX),
+                            (&ellipse[1], GradientLeaf::ShapeY),
+                        ] {
+                            if let Some(b) = radius.binding() {
+                                out.insert(gradient_prop(border, gi, leaf), b.clone());
+                            }
+                        }
+                    }
+                    Some(RadialShapeSpec::Keyword(_)) | None => {}
+                }
+                stop_bindings(&r.stops, border, gi, out);
+            }
+            GradientSpec::Conic(c) => {
+                if let Some(b) = AnimatableField::binding(&c.start) {
+                    out.insert(gradient_prop(border, gi, GradientLeaf::Angle), b.clone());
+                }
+                for (si, stop) in c.stops.iter().enumerate() {
+                    let Ok(si) = u8::try_from(si) else { break };
+                    if let Some(b) = stop.color.binding() {
+                        out.insert(
+                            gradient_prop(border, gi, GradientLeaf::StopColor(si)),
+                            b.clone(),
+                        );
+                    }
+                    // The conic stop's angle IS its (angular) position.
+                    if let Some(b) = AnimatableField::binding(&stop.angle) {
+                        out.insert(
+                            gradient_prop(border, gi, GradientLeaf::StopPosition(si)),
+                            b.clone(),
+                        );
+                    }
+                    if let Some(b) = AnimatableField::binding(&stop.hint) {
+                        out.insert(
+                            gradient_prop(border, gi, GradientLeaf::StopHint(si)),
+                            b.clone(),
+                        );
+                    }
+                }
+            }
         }
     }
 }
@@ -149,6 +266,9 @@ pub(crate) fn derive_bindings(style: Option<&Style>) -> Option<AnimatedBindings>
         }
     }
 
+    gradient_bindings(style.background_gradient.as_ref(), false, &mut out);
+    gradient_bindings(style.border_gradient.as_ref(), true, &mut out);
+
     (!out.is_empty()).then_some(AnimatedBindings(out))
 }
 
@@ -207,6 +327,43 @@ pub(crate) fn warn_variant_bindings(props: &Props) {
                 format!("{name}: animated bindings are only supported in the base style; ignoring");
             tracing::warn!(target: "bevy_react", "{msg}");
             crate::diag::report("styleBinding", name, &msg);
+        }
+    }
+}
+
+/// A `transition: { backgroundGradient/borderGradient }` spec on a surface
+/// that also carries `{ animated }` gradient bindings is inert — the bindings
+/// park that surface's channel ("bindings win", see
+/// [`AnimatedBindings::parked`]) — so warn naming the surface, mirrored to
+/// devtools (`gradientTransition`, the same kind the structural-mismatch snap
+/// reports). `bindings` is the map the caller already derived for the
+/// [`AnimatedNode`](crate::animations::AnimatedNode) stamp — passed in, not
+/// re-derived. Call under a `diag::node_scope`, beside
+/// [`warn_variant_bindings`].
+pub(crate) fn warn_gradient_transition_mix(props: &Props, bindings: Option<&AnimatedBindings>) {
+    let Some(t) = props.style.as_ref().and_then(|s| s.transition.as_ref()) else {
+        return;
+    };
+    let Some(b) = bindings else { return };
+    use crate::animations::props::ChannelId;
+    for (spec, parked, name) in [
+        (
+            t.background_gradient.is_some(),
+            b.parked(ChannelId::BackgroundGradient),
+            "backgroundGradient",
+        ),
+        (
+            t.border_gradient.is_some(),
+            b.parked(ChannelId::BorderGradient),
+            "borderGradient",
+        ),
+    ] {
+        if spec && parked {
+            let msg = format!(
+                "transition.{name} is inert while {name} carries {{ animated }} bindings (bindings win)"
+            );
+            tracing::warn!(target: "bevy_react", "{msg}");
+            crate::diag::report("gradientTransition", name, &msg);
         }
     }
 }
@@ -528,6 +685,171 @@ mod tests {
         for p in all {
             assert!(b.contains(p.clone()), "static row {p:?} did not derive");
         }
+    }
+
+    /// Gradient leaves derive dynamic-domain bindings addressed by
+    /// (surface, gradient index, leaf), and any one parks that surface's
+    /// channel coarsely — the other surface stays unparked.
+    #[test]
+    fn derives_gradient_leaf_bindings() {
+        let s = style(serde_json::json!({
+            "backgroundGradient": {
+                "type": "linear",
+                "angle": { "animated": { "id": 1 } },
+                "stops": [
+                    { "color": { "animated": { "type": "interpolateColor", "id": 2,
+                        "input": [0,1], "output": [[0,0,0,1],[1,1,1,1]] } } },
+                    { "color": "#fff", "position": { "animated": { "id": 3 }, "seed": "10px" },
+                      "hint": { "animated": { "id": 4 } } },
+                ],
+            },
+            "borderGradient": [{ "type": "radial",
+                "shape": { "circle": { "circle": { "animated": { "id": 5 } } } },
+                "stops": [{ "color": "#000" }] }],
+        }));
+        let b = derive_bindings(Some(&s)).expect("derived");
+        use crate::animations::protocol::GradientLeaf as L;
+        assert!(b.contains(P::BackgroundGradientParam {
+            index: 0,
+            leaf: L::Angle
+        }));
+        assert!(b.contains(P::BackgroundGradientParam {
+            index: 0,
+            leaf: L::StopColor(0)
+        }));
+        assert!(b.contains(P::BackgroundGradientParam {
+            index: 0,
+            leaf: L::StopPosition(1)
+        }));
+        assert!(b.contains(P::BackgroundGradientParam {
+            index: 0,
+            leaf: L::StopHint(1)
+        }));
+        assert!(b.contains(P::BorderGradientParam {
+            index: 0,
+            leaf: L::ShapeX
+        }));
+        use crate::animations::props::ChannelId;
+        assert!(b.parked(ChannelId::BackgroundGradient));
+        assert!(b.parked(ChannelId::BorderGradient));
+        // A style with only a static gradient parks nothing / derives nothing.
+        let s = style(serde_json::json!({ "backgroundGradient": {
+            "type": "linear", "stops": [{ "color": "#fff" }] } }));
+        assert!(derive_bindings(Some(&s)).is_none());
+    }
+
+    /// Conic `start` shares the `Angle` leaf; a conic stop's `angle` reuses
+    /// `StopPosition` (it IS the stop's position, angular); an `Ellipse` shape
+    /// derives both radii; and `has_gradient_params()` tracks exactly the
+    /// gradient domain (false for a filter-only binding style).
+    #[test]
+    fn derives_conic_and_ellipse_gradient_leaves() {
+        use crate::animations::protocol::GradientLeaf as L;
+        let s = style(serde_json::json!({
+            "backgroundGradient": { "type": "conic",
+                "start": { "animated": { "id": 1 } },
+                "stops": [
+                    { "color": "#fff" },
+                    { "color": "#000", "angle": { "animated": { "id": 2 } } },
+                ],
+            },
+            "borderGradient": { "type": "radial",
+                "shape": { "ellipse": { "ellipse": [
+                    { "animated": { "id": 3 } },
+                    { "animated": { "id": 4 } },
+                ] } },
+                "stops": [{ "color": "#000" }] },
+        }));
+        let b = derive_bindings(Some(&s)).expect("derived");
+        assert!(b.contains(P::BackgroundGradientParam {
+            index: 0,
+            leaf: L::Angle
+        }));
+        assert!(
+            b.contains(P::BackgroundGradientParam {
+                index: 0,
+                leaf: L::StopPosition(1)
+            }),
+            "a conic stop angle is its (angular) position"
+        );
+        assert!(b.contains(P::BorderGradientParam {
+            index: 0,
+            leaf: L::ShapeX
+        }));
+        assert!(b.contains(P::BorderGradientParam {
+            index: 0,
+            leaf: L::ShapeY
+        }));
+        assert!(b.has_gradient_params(), "the gate sees gradient bindings");
+
+        let filter_only = derive_bindings(Some(&style(serde_json::json!({
+            "filter": { "name": "blur", "params": { "radius": { "animated": { "id": 9 } } } },
+        }))))
+        .expect("derived");
+        assert!(
+            !filter_only.has_gradient_params(),
+            "no cross-talk with the filter domain"
+        );
+    }
+
+    /// A gradient binding makes the surface's transition spec inert (the
+    /// binding wins) — declaring both warns, naming the surface. Spec and
+    /// binding on *different* surfaces stay silent, as does a binding with
+    /// no transition spec at all.
+    #[cfg(all(feature = "devtools", debug_assertions))]
+    #[test]
+    fn warns_on_gradient_binding_plus_transition_mix() {
+        let _lock = crate::diag::test_lock();
+        crate::diag::arm_runtime();
+        // Flush anything a parallel (pre-lock) test left behind.
+        let _ = crate::diag::take_runtime_warnings();
+
+        let props = |v: serde_json::Value| -> crate::protocol::props::Props {
+            serde_json::from_value(v).unwrap()
+        };
+        let check = |p: &crate::protocol::props::Props| {
+            warn_gradient_transition_mix(p, derive_props_bindings(p).as_ref());
+            crate::diag::take_runtime_warnings()
+        };
+        let animated_bg = serde_json::json!({
+            "type": "linear",
+            "angle": { "animated": { "id": 1 } },
+            "stops": [{ "color": "#fff" }],
+        });
+
+        // Spec + binding on the SAME surface → exactly one warning naming it.
+        let mixed = props(serde_json::json!({ "style": {
+            "backgroundGradient": animated_bg,
+            "transition": { "backgroundGradient": { "duration": 300 } },
+        } }));
+        let warns = check(&mixed);
+        assert_eq!(warns.len(), 1, "exactly one warning, got {warns:?}");
+        assert_eq!(warns[0].kind, "gradientTransition");
+        assert!(
+            warns[0].message.contains("backgroundGradient"),
+            "message names the surface: {:?}",
+            warns[0].message
+        );
+
+        // Spec on the OTHER surface (borderGradient) than the binding
+        // (background) → silent, the two never cross.
+        let cross = props(serde_json::json!({ "style": {
+            "backgroundGradient": animated_bg,
+            "transition": { "borderGradient": { "duration": 300 } },
+        } }));
+        assert!(
+            check(&cross).is_empty(),
+            "spec and binding on different surfaces must not warn"
+        );
+
+        // Binding with no transition spec at all → silent.
+        let binding_only = props(serde_json::json!({ "style": {
+            "backgroundGradient": animated_bg,
+        } }));
+        assert!(
+            check(&binding_only).is_empty(),
+            "a binding without a transition spec must not warn"
+        );
     }
 
     /// The wrapper decode is junk-tolerant (a live `SharedValue` handle

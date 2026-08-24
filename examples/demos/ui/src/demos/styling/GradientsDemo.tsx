@@ -1,8 +1,10 @@
+import { useEffect, useState } from "react";
+import { useSharedValue, withRepeat, withTiming } from "bevy-react";
 import { BevyStyle } from "bevy-react/jsx";
-import { DemoRow, Example } from "@/components";
-import { Code, InlineCode, P } from "@/components/docs";
+import { Button, DemoRow, Example } from "@/components";
+import { B, Code, InlineCode, P } from "@/components/docs";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
-import { box, stage } from "./shared";
+import { box, controlColumn, stage } from "./shared";
 
 const PAGE: ExplanationData = {
   title: "Gradients",
@@ -38,6 +40,10 @@ export function GradientsDemo() {
       </DemoRow>
       <DemoRow>
         <LayeredGradientsDemo />
+      </DemoRow>
+      <DemoRow>
+        <GradientTransitionDemo />
+        <AnimatedGradientDemo />
       </DemoRow>
     </>
   );
@@ -241,3 +247,153 @@ const hovered: BevyStyle["backgroundGradient"] = {
   type: "conic",
   stops: [{ color: "#9ece6a" }, { color: "#7aa2f7" }, { color: "#9ece6a" }],
 };
+
+const TRANSITION_TSX = `<node
+  style={{
+    backgroundGradient: on
+      ? {
+          type: "linear",
+          angle: 200,
+          stops: [
+            { color: "#9ece6a" },
+            { color: "#e0af68" },
+          ],
+        }
+      : {
+          type: "linear",
+          angle: 20,
+          stops: [
+            { color: "#f7768e" },
+            { color: "#7aa2f7" },
+          ],
+        },
+    transition: {
+      backgroundGradient: {
+        duration: 400,
+        easing: "easeInOut",
+      },
+    },
+  }}
+/>`;
+
+function GradientTransitionDemo() {
+  return (
+    <Example
+      title="Gradient transition"
+      info={
+        <>
+          <P>
+            <InlineCode>transition.backgroundGradient</InlineCode> eases a
+            gradient change — colors and angles interpolate instead of snapping.
+            It needs a <B>strict structural match</B>: same kind, stop count,
+            color space, position and shape. Mismatched structures snap (with a
+            devtools warning), and setting or unsetting the gradient snaps too —
+            fade in or out via transparent stops instead.
+          </P>
+          <Code lang="tsx">{TRANSITION_TSX}</Code>
+        </>
+      }
+      demo={GradientTransitionCard}
+    />
+  );
+}
+
+const coolGradient: BevyStyle["backgroundGradient"] = {
+  type: "linear",
+  angle: 20,
+  stops: [{ color: "#f7768e" }, { color: "#7aa2f7" }],
+};
+
+const warmGradient: BevyStyle["backgroundGradient"] = {
+  type: "linear",
+  angle: 200,
+  stops: [{ color: "#9ece6a" }, { color: "#e0af68" }],
+};
+
+function GradientTransitionCard() {
+  const [on, setOn] = useState(false);
+  return (
+    <node style={controlColumn}>
+      <node style={stage}>
+        <node
+          style={{
+            ...box,
+            width: 120,
+            height: 90,
+            backgroundGradient: on ? warmGradient : coolGradient,
+            transition: {
+              backgroundGradient: { duration: 400, easing: "easeInOut" },
+            },
+          }}
+        />
+      </node>
+      <Button onClick={() => setOn((v) => !v)}>Flip gradient</Button>
+    </node>
+  );
+}
+
+const ANIMATED_TSX = `const angle = useSharedValue(0);
+angle.value = withRepeat(
+  withTiming(360, {
+    duration: 4000,
+    easing: "linear",
+  }),
+); // no count — loops forever
+
+backgroundGradient: {
+  type: "linear",
+  angle: {
+    animated: angle,
+    seed: 0, // degrees
+  },
+  stops: [
+    { color: "#bb9af7" },
+    { color: "#7dcfff" },
+  ],
+}`;
+
+function AnimatedGradientDemo() {
+  return (
+    <Example
+      title="Animated gradient"
+      info={
+        <>
+          <P>
+            Gradient leaves accept inline {"{ animated }"} bindings: a shared
+            value drives the field per frame, Bevy-side, in wire units — degrees
+            for this <InlineCode>angle</InlineCode>. A binding on a gradient
+            parks that surface's transition channel, so the driver and the ease
+            never fight over the same field.
+          </P>
+          <Code lang="tsx">{ANIMATED_TSX}</Code>
+        </>
+      }
+      demo={AnimatedGradientCard}
+    />
+  );
+}
+
+function AnimatedGradientCard() {
+  const angle = useSharedValue(0);
+  useEffect(() => {
+    angle.value = withRepeat(
+      withTiming(360, { duration: 1000, easing: "linear" }),
+    );
+  }, [angle]);
+  return (
+    <node style={stage}>
+      <node
+        style={{
+          ...box,
+          width: 120,
+          height: 90,
+          backgroundGradient: {
+            type: "linear",
+            angle: { animated: angle, seed: 0 },
+            stops: [{ color: "#bb9af7" }, { color: "#7dcfff" }],
+          },
+        }}
+      />
+    </node>
+  );
+}

@@ -70,6 +70,15 @@ const KIND_FIELDS: Record<string, { style?: string[]; props?: string[] }> = {
   morphFilterParams: { style: ["morphFilter"] },
   morphFilterUnknown: { style: ["morphFilter"] },
   morphFilterBinding: { style: ["morphFilter"] },
+  // Whole-value gradient transitions: a retarget whose gradient structures
+  // can't be paired (kind/stop count/colorSpace/position/shape) snaps
+  // instead of easing; the warning value names the surface.
+  gradientTransition: { style: ["backgroundGradient", "borderGradient"] },
+  // Gradient-leaf animation bindings: the warning value is the wire-ish
+  // address (`backgroundGradient[0].stops[1].color`); the binding lives
+  // inline in the gradient entry (`{ animated }` wrapper), so the surface's
+  // own row is flagged.
+  gradientBinding: { style: ["backgroundGradient", "borderGradient"] },
   scrollbar: { style: ["scrollbar"] },
   // backgroundImage: decode fallbacks (bad mode keyword, missing `src`,
   // ignored `scale`) and the apply-time "element owns its image" report.

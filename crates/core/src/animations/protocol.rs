@@ -213,6 +213,25 @@ pub enum AnimatableProperty {
         name: String,
     },
 
+    /// One animatable leaf of a `backgroundGradient` entry — the dynamic
+    /// gradient domain (like [`Self::FilterParam`]: derived from `{ animated }`
+    /// wrappers, no property-table row). `index` addresses the gradient in the
+    /// (possibly single-entry) list. Values arrive in wire units: DEGREES for
+    /// [`GradientLeaf::Angle`] (linear angle / conic start), logical px for
+    /// positions and shape radii, raw `0..1` for hints, rgba via
+    /// `interpolateColor` for stop colors. Any gradient binding parks that
+    /// surface's whole transition channel (coarse — the channel eases a
+    /// complete list).
+    BackgroundGradientParam {
+        index: u8,
+        leaf: GradientLeaf,
+    },
+    /// The `borderGradient` twin of [`Self::BackgroundGradientParam`].
+    BorderGradientParam {
+        index: u8,
+        leaf: GradientLeaf,
+    },
+
     /// One numeric attribute of an SVG shape entity (`<circle>`/`<rect>`/…),
     /// addressed by its **wire** name — the camelCase key in the folded
     /// `shape` object (`"cx"`, `"r"`, `"strokeWidth"`, …; the full set is
@@ -257,6 +276,21 @@ pub enum Transform3dField {
     OriginY,
 }
 
+/// The addressable leaves of one gradient entry. Stop leaves carry the stop
+/// index. `Angle` is the linear `angle` OR the conic `start` (a gradient has
+/// at most one); a conic stop's `angle` reuses `StopPosition` (it IS the
+/// stop's position, angular); `ShapeX`/`ShapeY` are the radial `circle`
+/// (X only) / `ellipse` radii.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum GradientLeaf {
+    Angle,
+    StopColor(u8),
+    StopPosition(u8),
+    StopHint(u8),
+    ShapeX,
+    ShapeY,
+}
+
 impl AnimatableProperty {
     /// The kind of value this property animates — picks scalar-vs-color resolution
     /// in the apply layer. `Rotate` is an `Angle`: the bound value is degrees
@@ -279,6 +313,12 @@ impl AnimatableProperty {
                     Self::FilterParam { .. }
                     | Self::BackdropParam { .. }
                     | Self::MorphParam { .. } => ValueKind::Scalar,
+                    // Same documented fallback as the chain params above — the
+                    // gradient applier reads each leaf's own kind (color slot,
+                    // px length, degrees, raw hint) from the [`GradientLeaf`],
+                    // not this arm.
+                    Self::BackgroundGradientParam { .. }
+                    | Self::BorderGradientParam { .. } => ValueKind::Scalar,
                     // Genuinely scalar (unlike the chain params' documented fallback
                     // above): shape attrs are raw user-space numbers — no logical→
                     // physical px rewrite applies (the viewBox scales them at
@@ -365,6 +405,12 @@ impl AnimatedBindings {
     /// the morph channel owns progress, not params).
     pub fn has_morph_params(&self) -> bool {
         self.has_stage(crate::animations::props::PropStage::Morph)
+    }
+
+    /// Whether any gradient-leaf binding is bound — gates the applier's
+    /// gradient stage (the per-surface transition parks ride `park()`).
+    pub fn has_gradient_params(&self) -> bool {
+        self.has_stage(crate::animations::props::PropStage::Gradient)
     }
 
     /// Whether any SVG shape-attr binding ([`AnimatableProperty::ShapeAttr`])

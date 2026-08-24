@@ -62,12 +62,13 @@ fn progress_channel_ease_settles_exactly_and_snaps_without_spec() {
 }
 
 #[test]
-fn channel_resolution_falls_back_to_all() {
+fn channel_resolution_is_explicit_only() {
     let t: Transition = parse(serde_json::json!({
-        "all": { "duration": 100 },
+        "transform": { "duration": 100 },
+        "backgroundColor": { "duration": 100 },
         "opacity": { "duration": 200 },
     }));
-    // `opacity` has its own entry; `transform`/`background` fall back to `all`.
+    // Every channel reads its own entry — there is no fallback key.
     // The wire numbers are milliseconds → seconds (200ms → 0.2s, 100ms → 0.1s).
     let secs = |c: &ChannelTransition| c.duration.map(WireTime::seconds);
     assert!(t.for_opacity().is_some());
@@ -75,24 +76,24 @@ fn channel_resolution_falls_back_to_all() {
     assert_eq!(secs(t.for_transform().unwrap()), Some(0.1));
     assert_eq!(secs(t.for_background().unwrap()), Some(0.1));
 
-    // No `all`: an unspecified channel has no transition.
+    // An unspecified channel has no transition.
     let t: Transition = parse(serde_json::json!({ "opacity": { "duration": 50 } }));
     assert!(t.for_transform().is_none());
     assert!(t.for_opacity().is_some());
 }
 
-/// The filter channel resolves like its siblings: explicit entry first,
-/// else `all`, else none.
+/// The filter channel resolves like its siblings: its own explicit entry,
+/// else none.
 #[test]
-fn filter_channel_falls_back_to_all() {
+fn filter_channel_resolves_explicit_only() {
     let secs = |c: &ChannelTransition| c.duration.map(WireTime::seconds);
     let t: Transition = parse(serde_json::json!({
-        "all": { "duration": 100 },
+        "opacity": { "duration": 100 },
         "filter": { "duration": 400 },
     }));
     assert_eq!(secs(t.for_filter().unwrap()), Some(0.4));
 
-    let t: Transition = parse(serde_json::json!({ "all": { "duration": 100 } }));
+    let t: Transition = parse(serde_json::json!({ "filter": { "duration": 100 } }));
     assert_eq!(secs(t.for_filter().unwrap()), Some(0.1));
 
     let t: Transition = parse(serde_json::json!({ "opacity": { "duration": 50 } }));
@@ -296,7 +297,7 @@ fn system_eases_transform3d() {
         (t.rotate_y.static_val().unwrap().radians() - std::f32::consts::FRAC_PI_2).abs() < 1e-3
     );
 
-    // No spec → snap. (Fresh entity, `all`-less spec without transform3d.)
+    // No spec → snap. (Fresh entity, spec without a transform3d entry.)
     let e2 = world
         .spawn((
             TransitionInput {
@@ -313,7 +314,7 @@ fn system_eases_transform3d() {
         ))
         .id();
     schedule.run(&mut world);
-    // Without a transform3d (or `all`) spec the drive block never runs —
+    // Without a transform3d spec the drive block never runs —
     // the static style applier owns the component (stays at `base` here,
     // since this harness has no style apply).
     let t2 = world

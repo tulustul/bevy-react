@@ -11,7 +11,7 @@ use crate::protocol::style::Style;
 /// The scroll-easing **spec** input: the `transition.scroll` timing, reinserted
 /// fresh on every render (like [`TransitionInput`](super::TransitionInput))
 /// so a changed spec takes effect.
-/// Present only while `transition.scroll` (or `all`) is set. The *target* it eases
+/// Present only while `transition.scroll` is set. The *target* it eases
 /// toward is NOT here — scroll's target is a controlled `Props` value, fed into
 /// [`ScrollTransitionState`] by the scroll write path / wheel handler.
 #[derive(Component, Debug, Clone)]

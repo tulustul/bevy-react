@@ -177,8 +177,10 @@ function ItemButton({
       style={{
         ...navButtonStyle,
         padding: isChild ? 6 : 12,
-        backgroundColor: isActive ? Colors.primary100 : Colors.surface300,
         backgroundGradient: isActive ? Gradients.primary : Gradients.surface,
+        transition: {
+          backgroundGradient: { duration: 200 },
+        },
       }}
       hoverStyle={{
         backgroundGradient: isActive

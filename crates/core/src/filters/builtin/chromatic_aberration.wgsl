@@ -14,8 +14,8 @@
 // `Length` slot before upload); the angle is radians, measured clockwise
 // from +X in screen space (y down) — 0 shifts R rightward, 90deg downward.
 // The rotation arrives in DEGREES (a Scalar slot, not Angle: animated
-// bindings write Scalar slots through unchanged, and the magnitude must lerp
-// linearly, never shortest-arc) — this shader converts with `radians()`.
+// bindings write Scalar slots through unchanged, where an Angle slot would
+// convert them to radians) — this shader converts with `radians()`.
 //
 // Per the contract in `filter_prelude.wgsl` this is resampling and therefore
 // operates on PREMULTIPLIED color directly — no unpremultiply around the

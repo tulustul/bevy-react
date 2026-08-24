@@ -14,6 +14,7 @@ use bevy::ui::UiTransform;
 
 use super::protocol::{AnimatableProperty, AnimatedBindings};
 mod filter_params;
+mod gradient;
 mod node_colors;
 mod shape;
 #[cfg(test)]
@@ -64,6 +65,12 @@ pub(super) struct AnimTargets {
     /// Present only on JSX `<svg>` shape children (Node-less entities);
     /// `<g>` groups qualify too (their `opacity` is bindable).
     shape: Option<&'static mut crate::svg::SvgShape>,
+    /// The gradient engines' input stamp (the resolver's UNfolded lists +
+    /// the static fold opacity) — stage 6's rebuild base.
+    gradient_input: Option<&'static crate::ui_map::GradientTargets>,
+    /// The folded surface components stage 6 compare-writes.
+    bg_gradient: Option<&'static mut bevy::ui::BackgroundGradient>,
+    border_gradient: Option<&'static mut bevy::ui::BorderGradient>,
 }
 
 /// Bind-time validation memory for a warn-once stage: which entities'
@@ -113,7 +120,8 @@ impl<S: PartialEq> ValidationMemory<S> {
 /// (1b), the opacity pre-resolve (stage 3's value, computed early so stage 2
 /// can bake it — see the comment at the call), node fields + colors (2),
 /// opacity's final alpha (3), filter/backdrop params (4), shape attrs (5),
-/// then the validation-memory prune.
+/// gradient leaves (6 — after the opacity pre-resolve so the driven alpha
+/// folds in), then the validation-memory prunes.
 #[allow(clippy::type_complexity)]
 pub(super) fn apply_animated_nodes(
     mut commands: Commands,
@@ -130,10 +138,15 @@ pub(super) fn apply_animated_nodes(
     // were validated since they last restamped (`Ref` change tick) — the
     // once-per-restamp warn gate; no version pair needed (no chain here).
     mut shape_validated: Local<ValidationMemory<()>>,
+    // The gradient-leaf analog (stage 6): same degenerate `S = ()` gate —
+    // the stamp is rebuilt from every gradient style change, which also
+    // restamps the bindings, so no state pair is needed.
+    mut gradient_validated: Local<ValidationMemory<()>>,
     mut query: Query<(Entity, Ref<AnimatedNode>, AnimTargets)>,
 ) {
     let mut filter_bound: Vec<Entity> = Vec::new();
     let mut shape_bound: Vec<Entity> = Vec::new();
+    let mut gradient_bound: Vec<Entity> = Vec::new();
     for (entity, anim, mut t) in &mut query {
         let b = &anim.0;
         let promoted = t.promoted.is_some();
@@ -181,9 +194,22 @@ pub(super) fn apply_animated_nodes(
             &mut shape_bound,
             &mut t,
         );
+        stage_gradient_params(
+            entity,
+            anim.is_changed(),
+            b,
+            &values,
+            opacity_alpha,
+            promoted,
+            &mut gradient_validated,
+            &mut gradient_bound,
+            &mut dirt,
+            &mut t,
+        );
     }
     validated.prune(&filter_bound);
     shape_validated.prune(&shape_bound);
+    gradient_validated.prune(&gradient_bound);
 }
 
 /// Classify a real `UiTransform` write for the layer cache: a promoted
@@ -505,4 +531,47 @@ fn stage_shape_attrs(
     let validate = anim_changed || shape_validated.should_validate(entity, &());
     shape::apply_shape_attrs(b, values, t.shape.as_mut(), t.rnode, validate);
     shape_validated.stamp(entity, validate, &(), ());
+}
+
+/// Stage 6 — gradient-leaf bindings (`backgroundGradient[<i>]` /
+/// `borderGradient[<i>]` leaves): rebuild each bound surface's folded
+/// component from the `GradientTargets` stamp with the driven leaves
+/// overwritten, fold opacity (the driven alpha when unpromoted, else the
+/// stamp's static fold), and compare-write — content dirt on a real change
+/// (gradients are captured pixels). See `gradient` for the unit contract
+/// and the defensive validation (`gradientBinding`, warn once per
+/// restamp). While any gradient binding exists that surface's whole-value
+/// transition channel is parked (`ChannelId::{Background,Border}Gradient`).
+#[allow(clippy::too_many_arguments)]
+fn stage_gradient_params(
+    entity: Entity,
+    anim_changed: bool,
+    b: &AnimatedBindings,
+    values: &SharedValues,
+    opacity_alpha: Option<f32>,
+    promoted: bool,
+    gradient_validated: &mut ValidationMemory<()>,
+    gradient_bound: &mut Vec<Entity>,
+    dirt: &mut crate::layer::LayerContentDirt,
+    t: &mut AnimTargetsItem,
+) {
+    if !b.has_gradient_params() {
+        return;
+    }
+    gradient_bound.push(entity);
+    let validate = anim_changed || gradient_validated.should_validate(entity, &());
+    gradient::apply_gradient_params(
+        entity,
+        b,
+        values,
+        t.gradient_input,
+        t.bg_gradient.as_mut(),
+        t.border_gradient.as_mut(),
+        opacity_alpha,
+        promoted,
+        t.rnode,
+        validate,
+        dirt,
+    );
+    gradient_validated.stamp(entity, validate, &(), ());
 }

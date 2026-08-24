@@ -10,9 +10,11 @@
 //! turns a missing row into a compile error instead of a silently inert
 //! binding.
 //!
-//! The three **dynamic domains** — [`FilterParam`], [`BackdropParam`],
-//! [`ShapeAttr`] — are runtime-string-keyed and walk-derived (chains in
-//! `crate::style_bindings::chain_bindings`, shape attrs from
+//! The **dynamic domains** — [`FilterParam`], [`BackdropParam`],
+//! [`MorphParam`], [`BackgroundGradientParam`], [`BorderGradientParam`],
+//! [`ShapeAttr`] — are runtime-keyed and walk-derived (chains in
+//! `crate::style_bindings::chain_bindings`, gradient leaves in
+//! `crate::style_bindings::gradient_bindings`, shape attrs from
 //! `crate::svg::NUMERIC_ATTRS`, the one wire-name table), so they have no
 //! rows; every generated consumer handles them in explicit arms the callback
 //! writes itself.
@@ -67,6 +69,9 @@
 //! [`ValueKind`]: super::protocol::ValueKind
 //! [`FilterParam`]: super::protocol::AnimatableProperty::FilterParam
 //! [`BackdropParam`]: super::protocol::AnimatableProperty::BackdropParam
+//! [`MorphParam`]: super::protocol::AnimatableProperty::MorphParam
+//! [`BackgroundGradientParam`]: super::protocol::AnimatableProperty::BackgroundGradientParam
+//! [`BorderGradientParam`]: super::protocol::AnimatableProperty::BorderGradientParam
 //! [`ShapeAttr`]: super::protocol::AnimatableProperty::ShapeAttr
 //! [`Style`]: crate::protocol::style::Style
 
@@ -149,6 +154,8 @@ pub(crate) enum PropStage {
     Morph,
     /// Stage 5 — an SVG shape attr, writes `SvgShape.attrs` seed slots.
     Shape,
+    /// Stage 6 — a gradient leaf, rebuilds the folded gradient component.
+    Gradient,
 }
 
 /// The transition channels an imperative `{ animated }` binding can park —
@@ -160,9 +167,10 @@ pub(crate) enum PropStage {
 /// [`Background`](Self::Background)) park only when their exact property is
 /// bound; *coarse* channels ([`Transform`](Self::Transform),
 /// [`Filter`](Self::Filter), [`Backdrop`](Self::Backdrop),
-/// [`Transform3d`](Self::Transform3d)) park on ANY binding in their group,
+/// [`Transform3d`](Self::Transform3d), the gradient pair) park on ANY
+/// binding in their group,
 /// because their drive rebuilds/eases a whole value with no per-member seam
-/// to merge an imperative writer into. While parked, these six channels
+/// to merge an imperative writer into. While parked, these channels
 /// **RETAIN** their state (`current` keeps the last eased value; unparking
 /// retargets from there like any other target change — the bound property's
 /// live value re-enters through the next drive's compare). The SVG **shape
@@ -175,7 +183,7 @@ pub(crate) enum PropStage {
 /// are the writers these parks yield to (`crate::animations`' apply module,
 /// filter-params and shape stages).
 ///
-/// Identifies the six parkable channels of `drive_transitions`; the shape
+/// Identifies the eight parkable channels of `drive_transitions`; the shape
 /// park is deliberately not a variant here (it is keyed per-entity by the
 /// dynamic `ShapeAttr` domain, not a static property row).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -196,6 +204,15 @@ pub(crate) enum ChannelId {
     /// The `transform3d` channel group — parked by ANY field binding
     /// (coarse: the apply stage rebuilds the full params struct).
     Transform3d,
+    /// The whole-value `backgroundGradient` channel — parked by ANY gradient
+    /// leaf binding on that surface (coarse, like [`Self::Filter`]: the
+    /// channel eases a complete gradient list, no per-leaf seam). Produced by
+    /// `BackgroundGradientParam` bindings, derived in
+    /// `crate::style_bindings::gradient_bindings`.
+    BackgroundGradient,
+    /// The `borderGradient` twin of [`Self::BackgroundGradient`],
+    /// independent of it.
+    BorderGradient,
 }
 
 impl super::protocol::AnimatableProperty {
@@ -222,6 +239,10 @@ impl super::protocol::AnimatableProperty {
                     // channel eases the engine-owned progress, never the
                     // params — no writer conflict to arbitrate.
                     P::MorphParam { .. } => None,
+                    // Coarse per-surface parks, like `Filter`: the gradient
+                    // channel eases a complete list, no per-leaf seam.
+                    P::BackgroundGradientParam { .. } => Some(ChannelId::BackgroundGradient),
+                    P::BorderGradientParam { .. } => Some(ChannelId::BorderGradient),
                     // Shape parking is the shape channel's own coarse
                     // mechanism (`crate::transition`'s shape channel), not a
                     // `ChannelId`.
@@ -244,6 +265,9 @@ impl super::protocol::AnimatableProperty {
                     P::FilterParam { .. } => PropStage::Filter,
                     P::BackdropParam { .. } => PropStage::Backdrop,
                     P::MorphParam { .. } => PropStage::Morph,
+                    P::BackgroundGradientParam { .. } | P::BorderGradientParam { .. } => {
+                        PropStage::Gradient
+                    }
                     P::ShapeAttr { .. } => PropStage::Shape,
                 }
             };
@@ -281,6 +305,8 @@ mod tests {
                     P::FilterParam { .. }
                     | P::BackdropParam { .. }
                     | P::MorphParam { .. }
+                    | P::BackgroundGradientParam { .. }
+                    | P::BorderGradientParam { .. }
                     | P::ShapeAttr { .. } => {}
                 }
             };

@@ -27,9 +27,9 @@
 //! [`ResolvedFilterChain`] component — resolving each entry against the
 //! registry (invalid entries skip with a `filterParams` warning), rewriting
 //! `Length` slots to physical px, stamping [`ResolvedFilterPass::wire_index`],
-//! and summing the chain outset. The interpolation primitives
-//! ([`lerp_packed_params`], [`lerp_angle`]) blend packed param arrays
-//! layout-aware for the easing paths. Exactly three systems write
+//! and summing the chain outset. The interpolation primitive
+//! ([`lerp_packed_params`]) blends packed param arrays layout-aware for the
+//! easing paths. Exactly three systems write
 //! [`ResolvedFilterChain`] and bump its `version` counter: the resolver's
 //! snap, the transition filter channel's whole-value ease (`transition.rs`,
 //! planned by [`plan_filter_ease`] with identity-padding for chain
@@ -73,7 +73,7 @@ pub use morph::{
 };
 pub use params::{
     FilterColor, MAX_FILTER_OUTSET_PX, MAX_FILTER_PARAM_VECS, ParamSlot, length_logical_px,
-    lerp_angle, lerp_packed_params,
+    lerp_packed_params,
 };
 pub use registry::{
     FilterRegistration, FilterRegistry, ReactFilter, ReactMorphFilter, ResolvedFilterPass,

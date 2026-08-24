@@ -313,23 +313,33 @@ function SizeCard() {
 function DelayDemo() {
   return (
     <Example
-      title="Delay & all"
+      title="Delay"
       info={
         <>
           <P>
-            <InlineCode>all</InlineCode> is the fallback channel for any field
-            without its own entry — here it eases{" "}
+            Each channel names its own timing —{" "}
             <InlineCode>transform</InlineCode> and{" "}
-            <InlineCode>backgroundColor</InlineCode> together — and{" "}
+            <InlineCode>backgroundColor</InlineCode> here share one — and{" "}
             <InlineCode>delay</InlineCode> holds each dot back a little longer,
             turning one state flip into a stagger.
           </P>
-          <Code lang="tsx">{`<node
+          <Code lang="tsx">{`const spec = {
+  duration: 300,
+  easing: "easeOut",
+  delay: i * 120,
+};
+
+<node
   style={{
-    transform: { translateY: up ? -18 : 18 },
-    backgroundColor: up ? "#bb9af7" : "#7aa2f7",
+    transform: {
+      translateY: up ? -18 : 18,
+    },
+    backgroundColor: up
+      ? "#bb9af7"
+      : "#7aa2f7",
     transition: {
-      all: { duration: 300, easing: "easeOut", delay: i * 120 },
+      transform: spec,
+      backgroundColor: spec,
     },
   }}
 />`}</Code>
@@ -346,19 +356,24 @@ function DelayCard() {
   return (
     <node style={column}>
       <node style={waveRow}>
-        {[0, 1, 2, 3].map((i) => (
-          <node
-            key={i}
-            style={{
-              ...waveDot,
-              backgroundColor: up ? Colors.purple100 : Colors.primary100,
-              transform: { translateY: up ? -18 : 18 },
-              transition: {
-                all: { duration: 300, easing: "easeOut", delay: i * 120 },
-              },
-            }}
-          />
-        ))}
+        {[0, 1, 2, 3].map((i) => {
+          const spec = {
+            duration: 300,
+            easing: "easeOut",
+            delay: i * 120,
+          } as const;
+          return (
+            <node
+              key={i}
+              style={{
+                ...waveDot,
+                backgroundColor: up ? Colors.purple100 : Colors.primary100,
+                transform: { translateY: up ? -18 : 18 },
+                transition: { transform: spec, backgroundColor: spec },
+              }}
+            />
+          );
+        })}
       </node>
       <Button
         unstyled

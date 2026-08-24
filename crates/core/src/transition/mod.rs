@@ -30,12 +30,15 @@
 use crate::animations::{AnimatedNode, build_ui_transform};
 use bevy::ecs::query::QueryData;
 use bevy::prelude::*;
-use bevy::ui::UiTransform;
+use bevy::ui::{BackgroundGradient, BorderGradient, UiTransform};
 
 use crate::protocol::{style::Style, units::Length};
 use crate::ui_map::length_to_val;
 
 mod channels;
+mod gradient_channel;
+#[cfg(test)]
+mod gradient_tests;
 mod scroll;
 mod shape_channel;
 mod spec;
@@ -154,6 +157,17 @@ pub struct TransitionTargets {
     /// nothing rides [`TransitionInput`]). Snapped to the target by the op
     /// merge (`apply_js_ops`), ordered before this system.
     shape: Option<&'static mut crate::svg::SvgShape>,
+    /// The gradient channels' target: the resolver's UNfolded stamp
+    /// (live-read like [`Self::filter_input`] — a gradient-only delta
+    /// re-stamps this, never [`TransitionInput`]).
+    gradient_input: Option<&'static crate::ui_map::GradientTargets>,
+    /// The folded per-surface components the gradient channels ease
+    /// (snapped to the target by `apply_style`, which runs before this
+    /// system).
+    bg_gradient: Option<&'static mut BackgroundGradient>,
+    border_gradient: Option<&'static mut BorderGradient>,
+    /// Reconciler identity for gradient warn attribution.
+    rnode: Option<&'static crate::bridge::RNode>,
 }
 
 /// Advance every transitioning entity toward its [`TransitionInput`] target and
@@ -222,6 +236,14 @@ pub fn drive_transitions(
             state
                 .transform3d
                 .init(&input.transform3d.clone().unwrap_or_default());
+            // Gradients: adopt the resolver's unfolded stamp so a freshly
+            // mounted gradient snaps instead of easing in from nothing.
+            state
+                .background_gradient
+                .seed(targets.gradient_input.and_then(|g| g.background.as_ref()));
+            state
+                .border_gradient
+                .seed(targets.gradient_input.and_then(|g| g.border.as_ref()));
             // Morph: adopt the current key so a freshly mounted morph node
             // never animates in (the first REAL key change retargets).
             state.morph.key = targets.morph_input.map(|m| m.key.clone());
@@ -248,6 +270,8 @@ pub fn drive_transitions(
         let skip_filter = parked(ChannelId::Filter);
         let skip_backdrop = parked(ChannelId::Backdrop);
         let skip_transform3d = parked(ChannelId::Transform3d);
+        let skip_bg_gradient = parked(ChannelId::BackgroundGradient);
+        let skip_border_gradient = parked(ChannelId::BorderGradient);
 
         // Transform: only when a transform transition is declared; otherwise the
         // static `UiTransform` from `apply_style` stands untouched. Only specified
@@ -443,6 +467,55 @@ pub fn drive_transitions(
             )
         {
             dirt.composite_only.push(entity);
+        }
+
+        // Gradients: ease each surface's folded component toward the
+        // resolver's UNfolded stamp — one `drive_onto` per surface (see it
+        // for the retarget/snap/warn policy and the fold-at-write rules).
+        // Retarget detection runs on the unfolded stamp (it only changes on
+        // style deltas); the eased opacity is baked only off a promoted
+        // root (the group alpha owns the fold there), else the stamp's
+        // static fold applies — so settle equals `apply_style`'s own folded
+        // build bit-exactly. A write is content dirt: gradient pixels live
+        // in the capture.
+        {
+            let rnode = targets.rnode.map(|r| r.0);
+            let eased_alpha = alpha.filter(|_| !promoted);
+            let static_fold = targets.gradient_input.and_then(|g| g.opacity);
+            if !skip_bg_gradient
+                && state.background_gradient.drive_onto(
+                    targets.gradient_input.and_then(|g| g.background.as_ref()),
+                    targets
+                        .bg_gradient
+                        .as_mut()
+                        .map(|m| m.reborrow().map_unchanged(|b| &mut b.0)),
+                    "backgroundGradient",
+                    rnode,
+                    input.spec.resolve(ChannelId::BackgroundGradient),
+                    eased_alpha,
+                    static_fold,
+                    dt,
+                )
+            {
+                dirt.nodes.push(entity);
+            }
+            if !skip_border_gradient
+                && state.border_gradient.drive_onto(
+                    targets.gradient_input.and_then(|g| g.border.as_ref()),
+                    targets
+                        .border_gradient
+                        .as_mut()
+                        .map(|m| m.reborrow().map_unchanged(|b| &mut b.0)),
+                    "borderGradient",
+                    rnode,
+                    input.spec.resolve(ChannelId::BorderGradient),
+                    eased_alpha,
+                    static_fold,
+                    dt,
+                )
+            {
+                dirt.nodes.push(entity);
+            }
         }
 
         // Morph: retarget on a key change (freeze what's on screen, restart

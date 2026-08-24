@@ -72,30 +72,46 @@ export type GradientPosition =
   | "bottomLeft"
   | "bottomRight";
 
-/** Size/shape of a radial gradient (default `"closestCorner"`). */
+/** Size/shape of a radial gradient (default `"closestCorner"`). The explicit
+ *  radii are animatable (a bound radius animates in logical px; base-style
+ *  only). */
 export type RadialShape =
   | "closestSide"
   | "farthestSide"
   | "closestCorner"
   | "farthestCorner"
-  | { circle: Length }
-  | { ellipse: [Length, Length] };
+  | { circle: Animatable<Length> }
+  | { ellipse: [Animatable<Length>, Animatable<Length>] };
 
 /** A linear/radial color stop. `position` places it along the gradient line
  *  (absent → auto-spaced); `hint` is the `0..1` interpolation midpoint to the
- *  next stop (default `0.5`). */
-export type GradientStop = { color: Color; position?: Length; hint?: number };
+ *  next stop (default `0.5`). All three leaves are animatable — `color` via an
+ *  `interpolateColor` binding, `position` in logical px, `hint` raw `0..1`
+ *  (base-style only). */
+export type GradientStop = {
+  color: Animatable<Color>;
+  position?: Animatable<Length>;
+  hint?: Animatable<number>;
+};
 
 /** A conic color stop. `angle` is an [`Angle`] (bare number = degrees; absent →
- *  auto-spaced). */
-export type AngularStop = { color: Color; angle?: Angle; hint?: number };
+ *  auto-spaced). All three leaves are animatable — `color` via an
+ *  `interpolateColor` binding, `angle` in degrees, `hint` raw `0..1`
+ *  (base-style only). */
+export type AngularStop = {
+  color: Animatable<Color>;
+  angle?: Animatable<Angle>;
+  hint?: Animatable<number>;
+};
 
 /** One gradient. `angle`/`start` are [`Angle`]s (bare number = degrees; `0` = to
- *  top, clockwise). */
+ *  top, clockwise). Every numeric/color leaf accepts an `{ animated }` binding
+ *  (degrees / px / raw `0..1` wire units; a binding parks that surface's
+ *  `transition` channel). */
 export type Gradient =
   | {
       type: "linear";
-      angle?: Angle;
+      angle?: Animatable<Angle>;
       stops: GradientStop[];
       colorSpace?: ColorSpace;
     }
@@ -108,7 +124,7 @@ export type Gradient =
     }
   | {
       type: "conic";
-      start?: Angle;
+      start?: Animatable<Angle>;
       position?: GradientPosition;
       stops: AngularStop[];
       colorSpace?: ColorSpace;
@@ -199,13 +215,22 @@ export type BevyTransitionSpec = {
   mass?: number;
 };
 
-/** Per-channel transition timing. `transform` covers all transform channels;
- *  `all` is the fallback for any channel without its own entry. */
+/** Per-channel transition timing. Every channel is explicit — there is no
+ *  fallback key; `transform` covers all transform channels together. */
 export interface BevyTransition {
-  all?: BevyTransitionSpec;
   transform?: BevyTransitionSpec;
   opacity?: BevyTransitionSpec;
   backgroundColor?: BevyTransitionSpec;
+  /** Eases `backgroundGradient` between style states, whole-value. Structures
+   * must match STRICTLY (same kind, stop count, colorSpace, position, shape
+   * variant) — any mismatch snaps immediately with a devtools warning. Setting
+   * or unsetting the gradient always snaps: fade via a transparent-stops
+   * gradient in the base style instead. Stop colors ease in sRGB (the
+   * backgroundColor space); angles ease numerically (350 to 10 goes the long
+   * way, like CSS). */
+  backgroundGradient?: BevyTransitionSpec;
+  /** The `borderGradient` twin of `backgroundGradient`, independent of it. */
+  borderGradient?: BevyTransitionSpec;
   /** Covers the size channels (`width`/`height`/`maxWidth`/`maxHeight`). These are
    * layout properties, so easing one re-flows surrounding content — a real
    * accordion. Needs an explicit pixel target (e.g. `maxHeight: open ? 300 : 0`);
@@ -237,8 +262,8 @@ export interface BevyTransition {
   /** Times the `morphFilter` progress (the engine-owned 0→1 blend from the
    * frozen old appearance to the live content on a `key` change). Unlike every
    * other channel it has a BUILT-IN default (300ms ease-in-out) — a key change
-   * animates even with no `transition` at all; this entry (or `all`) overrides
-   * the timing. */
+   * animates even with no `transition` at all; this entry overrides the
+   * timing. */
   morphFilter?: BevyTransitionSpec;
 }
 
@@ -483,10 +508,14 @@ export interface BevyStyle {
   morphFilter?: MorphFilterValue;
   /** Background gradient(s): one gradient or a layered list. Painted *over*
    *  `backgroundColor` (like CSS `background-image`): an opaque gradient hides
-   *  it, so the color is a fallback; transparent stops let it show through. */
+   *  it, so the color is a fallback; transparent stops let it show through.
+   *  Transitionable via `transition.backgroundGradient` (strict structural
+   *  match; mismatch/appear/unset snap). */
   backgroundGradient?: Gradient | Gradient[];
   /** Border gradient(s): one gradient or a layered list. Painted *over*
-   *  `borderColor` (needs a `border` width to be visible). */
+   *  `borderColor` (needs a `border` width to be visible). Transitionable via
+   *  `transition.borderGradient` (strict structural match;
+   *  mismatch/appear/unset snap). */
   borderGradient?: Gradient | Gradient[];
   /** Background image: painted *over* `backgroundColor` AND
    *  `backgroundGradient`, under the node's content (bevy's fixed paint

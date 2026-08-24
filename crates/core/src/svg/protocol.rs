@@ -176,7 +176,7 @@ pub(crate) fn st(v: f32) -> Option<Animatable<f32>> {
 
 /// The shape `transition` spec: per-attr easing timing, keyed by the
 /// [`NUMERIC_ATTRS`] wire names (shapes have no `style`, so the spec rides
-/// the shape object itself — no `all` fallback, no non-numeric channels).
+/// the shape object itself — explicit entries only, no non-numeric channels).
 /// Entries are stored positionally in [`NUMERIC_ATTRS`] order; reuse of
 /// [`ChannelTransition`](crate::transition::ChannelTransition) (the
 /// style-transition timing type) is verbatim —

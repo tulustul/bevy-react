@@ -843,3 +843,363 @@ fn filter_param_validation_warns_once_and_stays_inert() {
     );
     assert_eq!(mine[0].value, "filter[0].nope");
 }
+
+// -- gradient-leaf bindings (stage 6) ------------------------------------
+
+/// A bound linear `angle` (degrees on the wire) drives the folded
+/// `BackgroundGradient` component per frame through the real pipeline:
+/// the component's angle follows in RADIANS while the static stops keep
+/// their style values, each change frame is content dirt, and a settled
+/// value writes nothing (compare-before-write).
+#[test]
+fn gradient_angle_binding_drives_per_frame() {
+    use crate::filters::test_util::{create, drain_dirt, entity_of, tick};
+    use bevy::ui::{BackgroundGradient, Gradient, Val};
+    use serde_json::json;
+
+    let (mut app, ops_tx, anim_tx) = crate::filters::test_util::anim_app();
+    anim_tx
+        .send(crate::animations::AnimationCommand::Set {
+            id: 1,
+            value: 90.0, // degrees on the wire
+        })
+        .unwrap();
+    ops_tx
+        .send(vec![create(
+            1,
+            json!({ "style": { "backgroundGradient": {
+                "type": "linear",
+                "angle": { "animated": { "id": 1 }, "seed": 0 },
+                "stops": [
+                    { "color": "#ff0000", "position": 0 },
+                    { "color": "#0000ff", "position": "100%" },
+                ],
+            } } }),
+        )])
+        .unwrap();
+    app.update();
+    let e = entity_of(&app, 1);
+    {
+        let bg = &app.world().get::<BackgroundGradient>(e).unwrap().0;
+        let Gradient::Linear(l) = &bg[0] else {
+            panic!("expected linear, got {:?}", bg[0]);
+        };
+        assert!(
+            (l.angle - std::f32::consts::FRAC_PI_2).abs() < 1e-5,
+            "90° on the wire → π/2 stored, got {}",
+            l.angle
+        );
+        // Static stops keep their style values (no opacity styled → no fold).
+        let s0 = l.stops[0].color.to_srgba();
+        assert!(s0.red > 0.99 && s0.blue < 0.01 && (s0.alpha - 1.0).abs() < 1e-5);
+        assert_eq!(l.stops[0].point, Val::Px(0.0));
+        assert_eq!(l.stops[1].point, Val::Percent(100.0));
+    }
+
+    // A value change: the component follows, and the change is content dirt.
+    drain_dirt(&mut app);
+    anim_tx
+        .send(crate::animations::AnimationCommand::Set { id: 1, value: 45.0 })
+        .unwrap();
+    tick(&mut app, 0.016);
+    {
+        let bg = &app.world().get::<BackgroundGradient>(e).unwrap().0;
+        let Gradient::Linear(l) = &bg[0] else {
+            panic!("expected linear");
+        };
+        assert!((l.angle - std::f32::consts::FRAC_PI_4).abs() < 1e-5);
+    }
+    let dirt = app.world().resource::<crate::layer::LayerContentDirt>();
+    assert!(dirt.nodes.contains(&e), "gradient write is content dirt");
+
+    // Settled: a tick with an unchanged value writes nothing.
+    drain_dirt(&mut app);
+    let before = app
+        .world()
+        .entity(e)
+        .get_ref::<BackgroundGradient>()
+        .unwrap()
+        .last_changed();
+    tick(&mut app, 0.016);
+    assert_eq!(
+        app.world()
+            .entity(e)
+            .get_ref::<BackgroundGradient>()
+            .unwrap()
+            .last_changed(),
+        before,
+        "a settled binding must not re-mark the component changed"
+    );
+    let dirt = app.world().resource::<crate::layer::LayerContentDirt>();
+    assert!(!dirt.nodes.contains(&e), "settled: no dirt");
+    assert!(!dirt.composite_only.contains(&e), "settled: no dirt");
+}
+
+/// A bound stop color (`interpolateColor`) on a node with a static
+/// `opacity: 0.5` (childless — unpromoted): the written stop alpha is the
+/// binding's alpha × the style opacity (the stamp's static fold).
+#[test]
+fn gradient_stop_color_binding_folds_opacity() {
+    use crate::filters::test_util::{create, entity_of};
+    use bevy::ui::{BackgroundGradient, Gradient};
+    use serde_json::json;
+
+    let (mut app, ops_tx, anim_tx) = crate::filters::test_util::anim_app();
+    anim_tx
+        .send(crate::animations::AnimationCommand::Set { id: 1, value: 1.0 })
+        .unwrap();
+    ops_tx
+        .send(vec![create(
+            1,
+            json!({ "style": {
+                "opacity": 0.5,
+                "backgroundGradient": {
+                    "type": "linear",
+                    "stops": [
+                        { "color": { "animated": { "type": "interpolateColor", "id": 1,
+                            "input": [0, 1],
+                            "output": [[1, 0, 0, 1], [0, 0, 1, 1]] },
+                            "seed": "#ffffff" },
+                          "position": 0 },
+                        { "color": "#000000", "position": "100%" },
+                    ],
+                },
+            } }),
+        )])
+        .unwrap();
+    app.update();
+    let e = entity_of(&app, 1);
+    let bg = &app.world().get::<BackgroundGradient>(e).unwrap().0;
+    let Gradient::Linear(l) = &bg[0] else {
+        panic!("expected linear, got {:?}", bg[0]);
+    };
+    let s0 = l.stops[0].color.to_srgba();
+    assert!(
+        s0.blue > 0.99 && s0.red < 0.01,
+        "the binding resolved to blue: {s0:?}"
+    );
+    assert!(
+        (s0.alpha - 0.5).abs() < 1e-5,
+        "binding alpha 1.0 × opacity 0.5 = 0.5, got {}",
+        s0.alpha
+    );
+    // The static stop is folded too (the stamp's static fold).
+    let s1 = l.stops[1].color.to_srgba();
+    assert!((s1.alpha - 0.5).abs() < 1e-5, "static stop folds: {s1:?}");
+}
+
+/// Any gradient binding parks that surface's transition channel: a style
+/// retarget of the static stops with `transition: { backgroundGradient }`
+/// must NOT ease — the component reflects the new statics + the driven
+/// angle the same frame, with no intermediate colors on later ticks.
+#[test]
+fn gradient_binding_parks_transition_channel() {
+    use crate::filters::test_util::{create, entity_of, tick, update};
+    use bevy::ui::{BackgroundGradient, Gradient};
+    use serde_json::json;
+
+    let gradient = |color: &str| {
+        json!({
+            "type": "linear",
+            "angle": { "animated": { "id": 1 }, "seed": 0 },
+            "stops": [
+                { "color": color, "position": 0 },
+                { "color": color, "position": "100%" },
+            ],
+        })
+    };
+    let (mut app, ops_tx, anim_tx) = crate::filters::test_util::anim_app();
+    anim_tx
+        .send(crate::animations::AnimationCommand::Set { id: 1, value: 90.0 })
+        .unwrap();
+    ops_tx
+        .send(vec![create(
+            1,
+            json!({ "style": {
+                "backgroundGradient": gradient("#ff0000"),
+                "transition": { "backgroundGradient": { "duration": 1000, "easing": "linear" } },
+            } }),
+        )])
+        .unwrap();
+    app.update();
+    let e = entity_of(&app, 1);
+
+    // Retarget the statics to blue: must land the same frame, un-eased,
+    // with the driven angle re-asserted on top.
+    ops_tx
+        .send(vec![update(
+            1,
+            json!({ "style": { "backgroundGradient": gradient("#0000ff") } }),
+            &[],
+        )])
+        .unwrap();
+    let assert_blue_driven = |app: &bevy::app::App, when: &str| {
+        let bg = &app.world().get::<BackgroundGradient>(e).unwrap().0;
+        let Gradient::Linear(l) = &bg[0] else {
+            panic!("expected linear, got {:?}", bg[0]);
+        };
+        for s in &l.stops {
+            let c = s.color.to_srgba();
+            assert!(
+                c.blue > 0.99 && c.red < 0.01 && (c.alpha - 1.0).abs() < 1e-5,
+                "{when}: parked channel must not ease — expected exact blue, got {c:?}"
+            );
+        }
+        assert!(
+            (l.angle - std::f32::consts::FRAC_PI_2).abs() < 1e-5,
+            "{when}: the driven angle re-asserts over the snap, got {}",
+            l.angle
+        );
+    };
+    tick(&mut app, 0.1);
+    assert_blue_driven(&app, "retarget frame");
+    // Later ticks (mid-"ease" window): still exact — nothing is animating.
+    tick(&mut app, 0.3);
+    assert_blue_driven(&app, "later tick");
+}
+
+/// The defensive validation paths (unreachable through the op path, where
+/// bindings and stamp derive from the same merged style): an index beyond
+/// the stamped list, a stop index beyond the stops, a leaf-kind miss
+/// (ShapeX on a linear), and a bound surface with no stamp at all each
+/// warn (`gradientBinding`, attributed) exactly once per restamp — never
+/// per frame — and stay inert.
+#[cfg(all(feature = "devtools", debug_assertions))]
+#[test]
+fn gradient_binding_out_of_range_warns_once() {
+    use super::super::protocol::GradientLeaf;
+    use bevy::ui::{BackgroundGradient, ColorStop, Gradient, LinearGradient, Val};
+
+    let _lock = crate::diag::test_lock();
+    crate::diag::arm_runtime();
+    let _ = crate::diag::take_runtime_warnings();
+
+    let mut world = World::new();
+    world.init_resource::<crate::layer::LayerContentDirt>();
+    let mut values = SharedValues::default();
+    values.set(1, 5.0);
+    world.insert_resource(values);
+
+    let list = vec![Gradient::Linear(LinearGradient {
+        color_space: default(),
+        angle: 0.0,
+        stops: vec![
+            ColorStop {
+                color: Color::WHITE,
+                point: Val::Px(0.0),
+                hint: 0.5,
+            },
+            ColorStop {
+                color: Color::BLACK,
+                point: Val::Px(100.0),
+                hint: 0.5,
+            },
+        ],
+    })];
+    let bindings = AnimatedBindings(
+        [
+            // Index beyond the 1-entry stamped list.
+            (
+                AnimatableProperty::BackgroundGradientParam {
+                    index: 3,
+                    leaf: GradientLeaf::Angle,
+                },
+                Binding::Shared { id: 1 },
+            ),
+            // Stop index beyond the 2 stops.
+            (
+                AnimatableProperty::BackgroundGradientParam {
+                    index: 0,
+                    leaf: GradientLeaf::StopColor(9),
+                },
+                Binding::InterpolateColor {
+                    id: 1,
+                    input: vec![0.0, 1.0],
+                    output: vec![[1.0, 0.0, 0.0, 1.0], [0.0, 0.0, 1.0, 1.0]],
+                },
+            ),
+            // Leaf-kind miss: a shape radius on a linear gradient.
+            (
+                AnimatableProperty::BackgroundGradientParam {
+                    index: 0,
+                    leaf: GradientLeaf::ShapeX,
+                },
+                Binding::Shared { id: 1 },
+            ),
+            // A bound surface with no stamp (no borderGradient style).
+            (
+                AnimatableProperty::BorderGradientParam {
+                    index: 0,
+                    leaf: GradientLeaf::Angle,
+                },
+                Binding::Shared { id: 1 },
+            ),
+        ]
+        .into_iter()
+        .collect(),
+    );
+    let e = world
+        .spawn((
+            AnimatedNode(bindings),
+            UiTransform::default(),
+            crate::bridge::RNode(7),
+            crate::ui_map::GradientTargets {
+                background: Some(list.clone()),
+                border: None,
+                opacity: None,
+            },
+            BackgroundGradient(list.clone()),
+        ))
+        .id();
+
+    let mut schedule = Schedule::default();
+    schedule.add_systems(apply_animated_nodes);
+    schedule.run(&mut world);
+
+    let warns = crate::diag::take_runtime_warnings();
+    let mine: Vec<_> = warns.iter().filter(|w| w.node == Some(7)).collect();
+    assert_eq!(mine.len(), 4, "{warns:?}");
+    assert!(mine.iter().all(|w| w.kind == "gradientBinding"));
+    let values: Vec<_> = mine.iter().map(|w| w.value.as_str()).collect();
+    assert!(
+        values.contains(&"backgroundGradient[3].angle"),
+        "{values:?}"
+    );
+    assert!(
+        values.contains(&"backgroundGradient[0].stops[9].color"),
+        "{values:?}"
+    );
+    assert!(
+        values.contains(&"backgroundGradient[0].shape.x"),
+        "{values:?}"
+    );
+    assert!(values.contains(&"borderGradient[0].angle"), "{values:?}");
+
+    // All bindings inert: component untouched, no dirt.
+    assert_eq!(
+        world.entity(e).get::<BackgroundGradient>().unwrap().0,
+        list,
+        "invalid bindings never write"
+    );
+    let dirt = world.resource::<crate::layer::LayerContentDirt>();
+    assert!(dirt.nodes.is_empty() && dirt.composite_only.is_empty());
+
+    // Steady state: no re-warn.
+    schedule.run(&mut world);
+    assert!(
+        crate::diag::take_runtime_warnings()
+            .iter()
+            .all(|w| w.node != Some(7)),
+        "validation warnings must not repeat per frame"
+    );
+
+    // A restamp re-validates.
+    let restamped = world.entity(e).get::<AnimatedNode>().unwrap().0.clone();
+    world.entity_mut(e).insert(AnimatedNode(restamped));
+    schedule.run(&mut world);
+    let refires = crate::diag::take_runtime_warnings()
+        .iter()
+        .filter(|w| w.node == Some(7))
+        .count();
+    assert_eq!(refires, 4, "a bindings restamp re-validates");
+}

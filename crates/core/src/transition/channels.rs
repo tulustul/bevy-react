@@ -9,7 +9,7 @@ use crate::animations::{Lerp, Runner, build_runner};
 use crate::protocol::units::Length;
 
 use super::spec::ChannelTransition;
-use super::{shape_channel, transform3d};
+use super::{gradient_channel, shape_channel, transform3d};
 
 /// The transition engine's plain scalar/length channels — one row per
 /// [`TransitionState`] channel whose target rides a same-named
@@ -61,6 +61,11 @@ pub struct TransitionState {
     pub(super) max_height: ProgressChannel<Length>,
     pub(super) filter: FilterChannel,
     pub(super) backdrop_filter: FilterChannel,
+    /// Whole-value gradient easing per surface (see
+    /// [`gradient_channel::GradientChannel`]) — targets ride the
+    /// [`GradientTargets`](crate::ui_map::GradientTargets) stamp.
+    pub(super) background_gradient: gradient_channel::GradientChannel,
+    pub(super) border_gradient: gradient_channel::GradientChannel,
     pub(super) morph: MorphChannel,
     pub(super) transform3d: transform3d::Transform3dChannels,
     /// SVG shape-attr easing (spec + targets both ride `SvgShape.attrs` —

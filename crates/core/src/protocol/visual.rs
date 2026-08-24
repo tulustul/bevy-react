@@ -6,6 +6,7 @@ use std::fmt;
 use serde::Deserialize;
 use serde::de::{self, Deserializer, MapAccess, Visitor};
 
+use super::animatable::Animatable;
 use super::decode_warn;
 use super::units::{Angle, Length};
 
@@ -84,27 +85,28 @@ pub struct TextShadowSpec {
 /// A single color stop for a linear/radial gradient. `position` is where the
 /// color sits along the gradient line (a [`Length`]); absent → auto-spaced.
 /// `hint` is the `0.0..=1.0` interpolation midpoint between this stop and the
-/// next (default `0.5`).
-#[derive(Debug, Clone, Deserialize)]
+/// next (default `0.5`). Every leaf accepts an `{ animated }` wrapper.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GradientStop {
-    pub color: String,
+    pub color: Animatable<String>,
     #[serde(default)]
-    pub position: Option<Length>,
+    pub position: Option<Animatable<Length>>,
     #[serde(default)]
-    pub hint: Option<f32>,
+    pub hint: Option<Animatable<f32>>,
 }
 
 /// A single color stop for a conic gradient. `angle` is the stop's angle in
-/// **degrees** (absent → auto-spaced); `hint` as in [`GradientStop`].
-#[derive(Debug, Clone, Deserialize)]
+/// **degrees** (absent → auto-spaced); `hint` as in [`GradientStop`]. Every
+/// leaf accepts an `{ animated }` wrapper.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AngularStop {
-    pub color: String,
+    pub color: Animatable<String>,
     #[serde(default)]
-    pub angle: Option<Angle>,
+    pub angle: Option<Animatable<Angle>>,
     #[serde(default)]
-    pub hint: Option<f32>,
+    pub hint: Option<Animatable<f32>>,
 }
 
 /// Radial/conic gradient center, given as a named anchor (`"center"`, `"top"`,
@@ -116,31 +118,35 @@ pub type GradientPosition = String;
 /// `"hsvLong"`).
 pub type ColorSpace = String;
 
-/// The size/shape of a radial gradient. Either a keyword
-/// (`"closestSide" | "farthestSide" | "closestCorner" | "farthestCorner"`,
-/// default `"closestCorner"`) or an explicit `{ circle }` / `{ ellipse }`.
-#[derive(Debug, Clone, Deserialize)]
+/// The size/shape of a radial gradient. Externally tagged on the wire:
+/// `{ keyword: "closestSide" | "farthestSide" | "closestCorner" |
+/// "farthestCorner" }` (default `closestCorner`), `{ circle: { circle:
+/// <Length> } }`, or `{ ellipse: { ellipse: [<Length>, <Length>] } }` —
+/// pinned by `radial_shape_wire_forms_preserved`. NOTE: `jsx.d.ts`'s
+/// `RadialShape` declares flat forms that have never decoded (tracked in
+/// `TODO`). The circle/ellipse radii accept `{ animated }` wrappers.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum RadialShapeSpec {
     Keyword(String),
-    Circle { circle: Length },
-    Ellipse { ellipse: [Length; 2] },
+    Circle { circle: Animatable<Length> },
+    Ellipse { ellipse: [Animatable<Length>; 2] },
 }
 
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LinearGradientSpec {
     /// Gradient line angle (number = degrees, or a unit string; `0` = to top,
-    /// increasing clockwise).
+    /// increasing clockwise). Accepts an `{ animated }` wrapper.
     #[serde(default)]
-    pub angle: Option<Angle>,
+    pub angle: Option<Animatable<Angle>>,
     #[serde(default)]
     pub stops: Vec<GradientStop>,
     #[serde(default)]
     pub color_space: Option<ColorSpace>,
 }
 
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RadialGradientSpec {
     #[serde(default)]
@@ -153,12 +159,13 @@ pub struct RadialGradientSpec {
     pub color_space: Option<ColorSpace>,
 }
 
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ConicGradientSpec {
-    /// Start angle (number = degrees, or a unit string).
+    /// Start angle (number = degrees, or a unit string). Accepts an
+    /// `{ animated }` wrapper.
     #[serde(default)]
-    pub start: Option<Angle>,
+    pub start: Option<Animatable<Angle>>,
     #[serde(default)]
     pub position: Option<GradientPosition>,
     #[serde(default)]
@@ -168,7 +175,7 @@ pub struct ConicGradientSpec {
 }
 
 /// One gradient, discriminated by its `type` field on the wire.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum GradientSpec {
     Linear(LinearGradientSpec),
@@ -177,7 +184,7 @@ pub enum GradientSpec {
 }
 
 /// A `backgroundGradient`/`borderGradient` value: one gradient or a layered list.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(untagged)]
 pub enum GradientList {
     One(GradientSpec),
@@ -253,6 +260,76 @@ impl<'de> Deserialize<'de> for BorderColorSpec {
 mod tests {
     use crate::protocol::animatable::AnimatableField;
     use crate::protocol::style::Style;
+
+    /// Gradient leaves accept `{ animated }` wrappers; static forms decode as
+    /// before; the wire types compare (PartialEq — required by the transition
+    /// channel's retarget detection).
+    #[test]
+    fn gradient_leaves_decode_animatable_and_compare() {
+        use super::GradientSpec;
+        use crate::protocol::animatable::Animatable;
+        let g: GradientSpec = serde_json::from_value(serde_json::json!({
+            "type": "linear",
+            "angle": { "animated": { "id": 1 }, "seed": 45 },
+            "stops": [
+                { "color": { "animated": { "type": "interpolateColor", "id": 2,
+                    "input": [0, 1], "output": [[0,0,0,1],[1,1,1,1]] } },
+                  "position": { "animated": { "id": 3 }, "seed": "20px" } },
+                { "color": "#ff0000", "hint": 0.25 },
+            ],
+        }))
+        .unwrap();
+        let GradientSpec::Linear(l) = &g else {
+            panic!()
+        };
+        assert!(l.angle.binding().is_some());
+        assert!(matches!(&l.stops[0].color, Animatable::Animated { .. }));
+        assert_eq!(l.stops[1].color, Animatable::Static("#ff0000".to_string()));
+        assert_eq!(g.clone(), g, "PartialEq derived");
+    }
+
+    /// Pins the [`super::RadialShapeSpec`] wire forms of the externally-tagged
+    /// derive (`{ keyword }` / `{ circle: { circle } }` /
+    /// `{ ellipse: { ellipse } }`; the flat forms are rejected) — behavior
+    /// that predates the `Animatable` leaves and must survive them.
+    #[test]
+    fn radial_shape_wire_forms_preserved() {
+        use super::RadialShapeSpec;
+        use crate::protocol::animatable::Animatable;
+        use crate::protocol::units::Length;
+
+        let k: RadialShapeSpec =
+            serde_json::from_value(serde_json::json!({ "keyword": "closestSide" })).unwrap();
+        assert!(matches!(k, RadialShapeSpec::Keyword(ref s) if s == "closestSide"));
+
+        let c: RadialShapeSpec =
+            serde_json::from_value(serde_json::json!({ "circle": { "circle": 40 } })).unwrap();
+        let RadialShapeSpec::Circle { circle } = c else {
+            panic!("expected Circle, got {c:?}");
+        };
+        assert_eq!(circle, Animatable::Static(Length::Px(40.0)));
+
+        let e: RadialShapeSpec =
+            serde_json::from_value(serde_json::json!({ "ellipse": { "ellipse": [10, "50%"] } }))
+                .unwrap();
+        let RadialShapeSpec::Ellipse { ellipse } = e else {
+            panic!("expected Ellipse, got {e:?}");
+        };
+        assert_eq!(ellipse[0], Animatable::Static(Length::Px(10.0)));
+        assert_eq!(ellipse[1], Animatable::Static(Length::Percent(50.0)));
+
+        // The flat forms have never decoded — keep rejecting them.
+        for v in [
+            serde_json::json!("closestSide"),
+            serde_json::json!({ "circle": 40 }),
+            serde_json::json!({ "ellipse": [10, 20] }),
+        ] {
+            assert!(
+                serde_json::from_value::<RadialShapeSpec>(v.clone()).is_err(),
+                "{v} unexpectedly decoded"
+            );
+        }
+    }
 
     /// `borderColor` decodes from a scalar (uniform, back-compat) or a per-side
     /// object; omitted sides stay `None`, and an unknown side key is rejected.

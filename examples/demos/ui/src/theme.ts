@@ -72,8 +72,13 @@ export const Gradients = {
     Colors.sky100,
   ),
   // neutral surface lifts — unselected pills, generic buttons, code toggle
-  surface: linear(180, Colors.surface600, Colors.surface400),
-  surfaceHover: linear(180, Colors.surface600, Colors.surface700),
+  surface: linear(180, Colors.surface600, Colors.surface400, Colors.surface400),
+  surfaceHover: linear(
+    180,
+    Colors.surface600,
+    Colors.surface700,
+    Colors.surface700,
+  ),
   // affirmative accent — modal "Close", confirm-style buttons; hover keeps
   // the top-down direction and just lifts the shade a step
   success: linear(180, Colors.green200, Colors.green400),

@@ -17,13 +17,14 @@ use bevy::ui::widget::NodeImageMode;
 use crate::cursor::NodeCursor;
 use crate::plugin::Fonts;
 use crate::protocol::{
-    animatable::AnimatableField, background_image::AtlasSpec, background_image::ImageMode,
-    background_image::ImageModeSpec, background_image::SliceBorder, background_image::SliceScale,
-    background_image::SliceSpec, props::Props, style::Style, style::StyleDirty, units::Angle,
-    units::FontSize, units::Length, units::Rect, visual::AngularStop, visual::BoxShadowList,
-    visual::BoxShadowSpec, visual::ConicGradientSpec, visual::GradientList, visual::GradientSpec,
-    visual::GradientStop, visual::LetterSpacingSpec, visual::LineHeightSpec,
-    visual::LinearGradientSpec, visual::RadialGradientSpec, visual::RadialShapeSpec,
+    animatable::Animatable, animatable::AnimatableField, background_image::AtlasSpec,
+    background_image::ImageMode, background_image::ImageModeSpec, background_image::SliceBorder,
+    background_image::SliceScale, background_image::SliceSpec, props::Props, style::Style,
+    style::StyleDirty, units::Angle, units::FontSize, units::Length, units::Rect,
+    visual::AngularStop, visual::BoxShadowList, visual::BoxShadowSpec, visual::ConicGradientSpec,
+    visual::GradientList, visual::GradientSpec, visual::GradientStop, visual::LetterSpacingSpec,
+    visual::LineHeightSpec, visual::LinearGradientSpec, visual::RadialGradientSpec,
+    visual::RadialShapeSpec,
 };
 use crate::scrollbar::{ScrollbarConfig, ScrollbarPosition};
 
@@ -135,12 +136,15 @@ fn parse_position(s: Option<&str>) -> UiPosition {
 /// Map a radial gradient's shape spec to bevy's [`RadialGradientShape`]
 /// (default `ClosestCorner`).
 fn parse_radial_shape(shape: Option<&RadialShapeSpec>) -> RadialGradientShape {
+    // Static-or-seed for a bare (non-`Option`) animated radius; a seedless
+    // bound radius falls back to the leaf's identity default (0px).
+    fn radius(a: &Animatable<Length>) -> Val {
+        length_to_val(a.value().or_else(|| a.seed()).copied().unwrap_or_default())
+    }
     match shape {
-        Some(RadialShapeSpec::Circle { circle }) => {
-            RadialGradientShape::Circle(length_to_val(*circle))
-        }
+        Some(RadialShapeSpec::Circle { circle }) => RadialGradientShape::Circle(radius(circle)),
         Some(RadialShapeSpec::Ellipse { ellipse }) => {
-            RadialGradientShape::Ellipse(length_to_val(ellipse[0]), length_to_val(ellipse[1]))
+            RadialGradientShape::Ellipse(radius(&ellipse[0]), radius(&ellipse[1]))
         }
         Some(RadialShapeSpec::Keyword(k)) => match k.as_str() {
             "closestSide" => RadialGradientShape::ClosestSide,
@@ -152,28 +156,45 @@ fn parse_radial_shape(shape: Option<&RadialShapeSpec>) -> RadialGradientShape {
     }
 }
 
+/// Static-or-seed read of an animated stop color (`String` isn't `Copy`, so
+/// the [`AnimatableField`] copy helpers don't apply): a bound color renders
+/// its seed until a driver writes; a seedless bound color is transparent.
+fn stop_color(color: &Animatable<String>) -> Color {
+    match color {
+        Animatable::Static(s) => parse_color(s),
+        a => a.seed().map(|s| parse_color(s)).unwrap_or(Color::NONE),
+    }
+}
+
 /// Build a positional [`ColorStop`] (linear/radial), folding `opacity` into the
 /// color like the solid background path. An absent `position` is auto-spaced.
 fn color_stop(stop: &GradientStop, opacity: Option<f32>) -> ColorStop {
     ColorStop {
-        color: apply_opacity(parse_color(&stop.color), opacity),
-        point: stop.position.map(length_to_val).unwrap_or(Val::Auto),
-        hint: stop.hint.unwrap_or(0.5),
+        color: apply_opacity(stop_color(&stop.color), opacity),
+        point: stop
+            .position
+            .static_or_seed()
+            .map(length_to_val)
+            .unwrap_or(Val::Auto),
+        hint: stop.hint.static_or_seed().unwrap_or(0.5),
     }
 }
 
 /// Build an [`AngularColorStop`] (conic). The wire [`Angle`] is already radians.
 fn angular_stop(stop: &AngularStop, opacity: Option<f32>) -> AngularColorStop {
     AngularColorStop {
-        color: apply_opacity(parse_color(&stop.color), opacity),
-        angle: stop.angle.map(Angle::radians),
-        hint: stop.hint.unwrap_or(0.5),
+        color: apply_opacity(stop_color(&stop.color), opacity),
+        angle: stop.angle.static_or_seed().map(Angle::radians),
+        hint: stop.hint.static_or_seed().unwrap_or(0.5),
     }
 }
 
 fn build_linear(spec: &LinearGradientSpec, opacity: Option<f32>) -> Gradient {
     LinearGradient::new(
-        spec.angle.map(Angle::radians).unwrap_or(0.0),
+        spec.angle
+            .static_or_seed()
+            .map(Angle::radians)
+            .unwrap_or(0.0),
         spec.stops.iter().map(|s| color_stop(s, opacity)).collect(),
     )
     .in_color_space(parse_color_space(spec.color_space.as_deref()))
@@ -198,7 +219,12 @@ fn build_conic(spec: &ConicGradientSpec, opacity: Option<f32>) -> Gradient {
             .map(|s| angular_stop(s, opacity))
             .collect(),
     )
-    .with_start(spec.start.map(Angle::radians).unwrap_or(0.0))
+    .with_start(
+        spec.start
+            .static_or_seed()
+            .map(Angle::radians)
+            .unwrap_or(0.0),
+    )
     .in_color_space(parse_color_space(spec.color_space.as_deref()))
     .into()
 }
@@ -218,6 +244,53 @@ pub fn build_gradients(list: &GradientList, opacity: Option<f32>) -> Vec<Gradien
         GradientList::One(g) => vec![build_gradient(g, opacity)],
         GradientList::Many(gs) => gs.iter().map(|g| build_gradient(g, opacity)).collect(),
     }
+}
+
+/// The transition/binding engines' gradient input: the resolver's UNfolded
+/// output per surface (`build_gradients(_, None)`) plus the fold opacity
+/// `apply_style_masked` used (None on a promoted root — the group alpha owns
+/// it there). Stamped by the gradient dirty groups; both engines fold at
+/// write time so their settle equals the resolver's own folded component
+/// bit-exactly.
+#[derive(Component, Debug, Clone, Default, PartialEq)]
+pub struct GradientTargets {
+    pub background: Option<Vec<Gradient>>,
+    pub border: Option<Vec<Gradient>>,
+    pub opacity: Option<f32>,
+}
+
+/// Fold an opacity into every stop color of an unfolded gradient list —
+/// the write-time half of the split builder (must match `build_gradients`'
+/// own fold exactly: [`apply_opacity`] per stop). Consumed by the gradient
+/// transition channels at write time; the split-builder contract test pins
+/// it to `build_gradients`' own fold.
+pub fn fold_gradients(list: &[Gradient], opacity: Option<f32>) -> Vec<Gradient> {
+    let Some(o) = opacity else {
+        return list.to_vec();
+    };
+    list.iter()
+        .map(|g| {
+            let mut g = g.clone();
+            match &mut g {
+                Gradient::Linear(l) => {
+                    for s in &mut l.stops {
+                        s.color = apply_opacity(s.color, Some(o));
+                    }
+                }
+                Gradient::Radial(r) => {
+                    for s in &mut r.stops {
+                        s.color = apply_opacity(s.color, Some(o));
+                    }
+                }
+                Gradient::Conic(c) => {
+                    for s in &mut c.stops {
+                        s.color = apply_opacity(s.color, Some(o));
+                    }
+                }
+            }
+            g
+        })
+        .collect()
 }
 
 /// Convert one [`BoxShadowSpec`] into a `bevy_ui::ShadowStyle`.
@@ -585,6 +658,34 @@ pub fn apply_style_masked(
                 ec.remove::<BorderGradient>();
             }
         }
+    }
+    // Stamp the gradient engines' input: unfolded builds + the fold opacity.
+    // Queued set-if-neq (the group-alpha pattern above) so a settled restyle
+    // doesn't trip change detection; removed when neither surface has a gradient.
+    if dirty.intersects(g::BG_GRADIENT | g::BORDER_GRADIENT) {
+        let targets = GradientTargets {
+            background: s
+                .and_then(|s| s.background_gradient.as_ref())
+                .map(|g| build_gradients(g, None)),
+            border: s
+                .and_then(|s| s.border_gradient.as_ref())
+                .map(|g| build_gradients(g, None)),
+            opacity,
+        };
+        ec.queue(move |mut entity: EntityWorldMut| {
+            if targets.background.is_none() && targets.border.is_none() {
+                entity.remove::<GradientTargets>();
+            } else {
+                match entity.get_mut::<GradientTargets>() {
+                    Some(mut current) => {
+                        current.set_if_neq(targets);
+                    }
+                    None => {
+                        entity.insert(targets);
+                    }
+                }
+            }
+        });
     }
     // A `<text>` root's drop shadow (block-level). No-op on non-text nodes (no
     // `Text` to shadow); removed when the style drops it on a re-render/hover-out.
@@ -1470,6 +1571,144 @@ mod tests {
         assert_eq!(lin.stops[0].point, Val::Px(0.0));
         assert_eq!(lin.stops[1].point, Val::Percent(100.0));
         assert_eq!(lin.stops[0].color.to_srgba(), Srgba::hex("ff0000").unwrap());
+    }
+
+    /// A gradient style stamps [`GradientTargets`]: the UNfolded resolved
+    /// gradients per surface plus the fold opacity `apply_style` would use.
+    /// Unsetting both surfaces removes it; a promoted root stamps
+    /// `opacity: None` (the group alpha owns the fold there).
+    #[test]
+    fn gradient_style_stamps_unfolded_targets() {
+        use crate::filters::test_util::{create, ease_app, entity_of, update};
+        use crate::protocol::op::Op;
+
+        let (mut app, ops_tx) = ease_app();
+        let gradient_json = serde_json::json!({
+            "type": "linear",
+            "stops": [
+                { "color": "#ff0000", "position": 0 },
+                { "color": "#0000ff", "position": "100%" },
+            ],
+        });
+        ops_tx
+            .send(vec![
+                // Node 1: gradient + opacity, childless — NOT promoted, folds.
+                create(
+                    1,
+                    serde_json::json!({ "style": {
+                        "opacity": 0.5,
+                        "backgroundGradient": gradient_json,
+                    } }),
+                ),
+                // Node 2: same style but with a child — promoted, fold suppressed.
+                create(
+                    2,
+                    serde_json::json!({ "style": {
+                        "opacity": 0.5,
+                        "backgroundGradient": gradient_json,
+                    } }),
+                ),
+                create(3, serde_json::json!({})),
+                Op::Append {
+                    parent: 2,
+                    child: 3,
+                },
+            ])
+            .unwrap();
+        app.update();
+
+        let e = entity_of(&app, 1);
+        let targets = app
+            .world()
+            .get::<GradientTargets>(e)
+            .expect("gradient style stamps GradientTargets");
+        assert_eq!(targets.border, None);
+        assert_eq!(targets.opacity, Some(0.5), "unpromoted: fold opacity kept");
+        let unfolded = targets.background.as_ref().expect("background stamped");
+        assert_eq!(unfolded.len(), 1);
+        let Gradient::Linear(lin) = &unfolded[0] else {
+            panic!("expected a linear gradient, got {:?}", unfolded[0]);
+        };
+        // Unfolded: full-alpha stop colors, exactly `build_gradients(_, None)`.
+        assert_eq!(
+            lin.stops[0].color.to_srgba(),
+            Srgba::new(1.0, 0.0, 0.0, 1.0)
+        );
+        assert_eq!(
+            lin.stops[1].color.to_srgba(),
+            Srgba::new(0.0, 0.0, 1.0, 1.0)
+        );
+        // The applied component is still the folded snap (unchanged behavior).
+        let bg = app
+            .world()
+            .get::<BackgroundGradient>(e)
+            .expect("component still applied");
+        let Gradient::Linear(folded) = &bg.0[0] else {
+            panic!("expected a linear gradient, got {:?}", bg.0[0]);
+        };
+        assert_eq!(
+            folded.stops[0].color.to_srgba(),
+            Srgba::new(1.0, 0.0, 0.0, 0.5)
+        );
+        // The write-time fold of the stamp equals the resolver's own folded
+        // component bit-exactly — the split-builder contract.
+        assert_eq!(fold_gradients(unfolded, Some(0.5)), bg.0);
+        assert_eq!(fold_gradients(unfolded, None), *unfolded, "None = no fold");
+
+        // A promoted root stamps `opacity: None` — the group alpha owns it —
+        // and its applied component is unfolded too.
+        let promoted = entity_of(&app, 2);
+        assert!(
+            app.world()
+                .get::<crate::layer::PromotedLayer>(promoted)
+                .is_some(),
+            "promoted via opacity + child"
+        );
+        let targets = app
+            .world()
+            .get::<GradientTargets>(promoted)
+            .expect("promoted node stamped too");
+        assert_eq!(targets.opacity, None, "promoted: group alpha owns the fold");
+        assert!(targets.background.is_some());
+        let bg = app
+            .world()
+            .get::<BackgroundGradient>(promoted)
+            .expect("component applied on the promoted root");
+        let Gradient::Linear(l) = &bg.0[0] else {
+            panic!("expected a linear gradient, got {:?}", bg.0[0]);
+        };
+        assert_eq!(
+            l.stops[0].color.to_srgba().alpha,
+            1.0,
+            "promoted: fold suppressed in the applied component too"
+        );
+
+        // The opacity row's dirty groups include the gradient groups, so an
+        // opacity-only delta re-stamps.
+        ops_tx
+            .send(vec![update(
+                1,
+                serde_json::json!({ "style": { "opacity": 0.8 } }),
+                &[],
+            )])
+            .unwrap();
+        app.update();
+        let targets = app.world().get::<GradientTargets>(e).unwrap();
+        assert_eq!(targets.opacity, Some(0.8), "opacity delta re-stamps");
+
+        // Unsetting the last gradient surface removes the stamp.
+        ops_tx
+            .send(vec![update(
+                1,
+                serde_json::json!({ "style": {} }),
+                &["backgroundGradient"],
+            )])
+            .unwrap();
+        app.update();
+        assert!(
+            app.world().get::<GradientTargets>(e).is_none(),
+            "no gradient surface left: stamp removed"
+        );
     }
 
     #[test]

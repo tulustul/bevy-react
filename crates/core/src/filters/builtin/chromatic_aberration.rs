@@ -50,7 +50,7 @@ pub struct ChromaticAberrationParams {
     /// Tangential swirl: the R image rotates by `+rotation` degrees
     /// (clockwise, y-down) around the node's center, B by `-rotation`.
     /// Plain number in degrees — a scalar magnitude, so transitions unwind
-    /// linearly (no shortest-arc wrap). 0 = purely directional split.
+    /// linearly through every turn. 0 = purely directional split.
     #[serde(default)]
     pub rotation: f32,
 }
@@ -82,8 +82,8 @@ fn chromatic_aberration_layout() -> Arc<[ParamSlot]> {
             len: 1,
         },
         // Scalar, not Angle: the slot carries DEGREES (the shader converts) —
-        // animated bindings write Scalar slots through unchanged, and the
-        // magnitude must lerp linearly, never shortest-arc.
+        // animated bindings write Scalar slots through unchanged, where an
+        // Angle slot would convert them to radians.
         ParamSlot {
             name: "rotation",
             kind: ValueKind::Scalar,
@@ -153,7 +153,7 @@ mod tests {
     /// radians at `params[0].y` (CSS angle decode: bare number = degrees),
     /// rotation packed as DEGREES at `params[0].z` (a Scalar slot — animated
     /// bindings write it through unchanged; the shader converts), with
-    /// Length + Angle slots for the physical rewrite and shortest-arc lerp.
+    /// Length + Angle slots for the physical rewrite and radian packing.
     #[test]
     fn chromatic_aberration_resolves_to_one_pass() {
         let app = asset_app();

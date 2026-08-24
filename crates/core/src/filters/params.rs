@@ -2,8 +2,8 @@
 //! packed `Vec4` uniform array ([`ParamSlot`]), the caps guarding the packing
 //! and the chain outset, the param value types with wire-level decode rules
 //! ([`FilterColor`], [`length_logical_px`]), and the layout-aware
-//! interpolation primitives ([`lerp_packed_params`], [`lerp_angle`]) the
-//! easing paths blend packed arrays with.
+//! interpolation primitive ([`lerp_packed_params`]) the easing paths blend
+//! packed arrays with.
 
 use bevy::math::Vec4;
 use serde::{Deserialize, Deserializer};
@@ -148,41 +148,6 @@ impl ::ts_rs::TS for FilterColor {
     }
 }
 
-/// Shortest-arc interpolation between two angles in **radians**, for packed
-/// [`ValueKind::Angle`] filter params.
-///
-/// Filter-owned on purpose (not a [`crate::animations::Lerp`] impl): the
-/// style `rotate` transition deliberately animates its angle as a bare scalar
-/// (720° → 0° unwinds through two full turns), so shortest-arc must not leak
-/// into the general lerp primitives. Packed angle params feed periodic shader
-/// math (hue rotation), where only the angle mod 2π matters and the short way
-/// around the circle is the right path.
-///
-/// `t == 0.0` returns `a` and `t == 1.0` returns `b` **bit-exactly** (the
-/// `t == 1.0` branch is load-bearing: the wrapped formula would land on `b`'s
-/// angle only mod 2π). In between the result is `a + wrap(b - a) * t`, with
-/// `wrap` folding the difference into `(-π, π]` — so for `t ∈ (0, 1)` the
-/// result lands within π of `a`, is NOT normalized to any canonical range,
-/// and is consumed directly as radians. Exactly-opposite angles take the
-/// positive (counter-clockwise) arc. `t` outside `0..=1` extrapolates along
-/// the same arc.
-pub fn lerp_angle(a: f32, b: f32, t: f32) -> f32 {
-    use std::f32::consts::{PI, TAU};
-    if t == 0.0 {
-        return a;
-    }
-    if t == 1.0 {
-        return b;
-    }
-    // `rem_euclid` puts the difference in `[0, TAU)`; folding the upper half
-    // down yields the signed shortest arc in `(-PI, PI]`.
-    let mut delta = (b - a).rem_euclid(TAU);
-    if delta > PI {
-        delta -= TAU;
-    }
-    a + delta * t
-}
-
 /// Interpolate two packed param arrays of the **same layout**, slot-by-slot:
 /// the layout (not the raw components) decides how each param blends.
 ///
@@ -194,7 +159,8 @@ pub fn lerp_angle(a: f32, b: f32, t: f32) -> f32 {
 ///   GPU values it doesn't consume. (The style layer's `[f32; 4]`
 ///   [`crate::animations::Lerp`] doc says sRGB component-wise — that applies
 ///   to *style* colors, which live in sRGB; do not conflate the two spaces.)
-/// - [`ValueKind::Angle`] slots take the shortest arc via [`lerp_angle`].
+/// - [`ValueKind::Angle`] slots lerp numerically like every other slot (CSS
+///   behavior — a deliberate >180° sweep animates as authored).
 ///
 /// Components no slot covers (no-straddle padding — zero by the packing
 /// contract) copy from `b`, so padding is stable rather than blended; the
@@ -228,10 +194,7 @@ pub fn lerp_packed_params(a: &[Vec4], b: &[Vec4], t: f32, layout: &[ParamSlot]) 
             continue;
         };
         for comp in slot.comp..(slot.comp + slot.len).min(4) {
-            out[slot.vec][comp] = match slot.kind {
-                ValueKind::Angle => lerp_angle(av[comp], bv[comp], t),
-                _ => av[comp] + (bv[comp] - av[comp]) * t,
-            };
+            out[slot.vec][comp] = av[comp] + (bv[comp] - av[comp]) * t;
         }
     }
     out
@@ -239,110 +202,39 @@ pub fn lerp_packed_params(a: &[Vec4], b: &[Vec4], t: f32, layout: &[ParamSlot]) 
 
 #[cfg(test)]
 mod tests {
-    use std::f32::consts::PI;
-
     use serde_json::json;
 
     use super::*;
 
-    /// When the endpoints are within half a circle of each other, the
-    /// shortest arc IS the straight line — plain lerp, ascending or
-    /// descending.
+    /// Angle slots lerp NUMERICALLY (CSS behavior): 170° → -170° travels the
+    /// long way through 0, not 20° through the ±π seam. A deliberate
+    /// 350°→10° sweep animates as authored.
     #[test]
-    fn lerp_angle_within_half_circle_matches_plain_lerp() {
-        let (a, b) = (0.2f32, 1.7f32); // 1.5 rad apart, well under PI
-        for t in [0.25f32, 0.5, 0.75] {
-            let plain = a + (b - a) * t;
-            assert!(
-                (lerp_angle(a, b, t) - plain).abs() < 1e-6,
-                "t={t}: {} vs {plain}",
-                lerp_angle(a, b, t)
-            );
-        }
-        // Descending across zero (not the seam): still plain.
-        assert!((lerp_angle(1.0, -1.0, 0.5)).abs() < 1e-6);
-    }
-
-    /// 170° to -170° is 20° of travel through the ±π seam — the midpoint is
-    /// ±180°, NOT 0° (the long way's midpoint).
-    #[test]
-    fn lerp_angle_crosses_seam_the_short_way() {
+    fn angle_slots_lerp_numerically() {
         let a = 170f32.to_radians();
         let b = (-170f32).to_radians();
-        let mid = lerp_angle(a, b, 0.5);
-        assert!((mid.abs() - PI).abs() < 1e-5, "mid = {mid}");
-        // A quarter of the way is 175°, still on `a`'s side of the seam.
-        assert!((lerp_angle(a, b, 0.25) - 175f32.to_radians()).abs() < 1e-5);
-        // And the seam-free direction check: it never goes near 0.
-        assert!(mid.abs() > 3.0);
-    }
-
-    /// `t == 0` / `t == 1` return the endpoints bit-exactly, including
-    /// across the seam where the wrapped formula alone would only land on
-    /// `b`'s angle mod 2π.
-    #[test]
-    fn lerp_angle_endpoints_exact() {
-        let a = 0.1f32 + 0.7f32; // awkward: not exactly 0.8
-        let b = -3.041_7f32;
-        assert_eq!(lerp_angle(a, b, 0.0), a);
-        assert_eq!(lerp_angle(a, b, 1.0), b);
-        let (sa, sb) = (170f32.to_radians(), (-170f32).to_radians());
-        assert_eq!(lerp_angle(sa, sb, 0.0), sa);
-        assert_eq!(lerp_angle(sa, sb, 1.0), sb);
-    }
-
-    /// Reversing the endpoints mirrors the path: `lerp_angle(a, b, t)` and
-    /// `lerp_angle(b, a, 1 - t)` are the same angle mod 2π (the raw values
-    /// may differ by a turn — the seam midpoint lands on +π one way and -π
-    /// the other).
-    #[test]
-    fn lerp_angle_symmetric_in_its_arguments() {
-        use std::f32::consts::TAU;
-        let cases = [
-            (0.4f32, 2.9f32),
-            (170f32.to_radians(), (-170f32).to_radians()),
-            (-0.3f32, 0.9f32),
-        ];
-        for (a, b) in cases {
-            for t in [0.25f32, 0.5, 0.75] {
-                let fwd = lerp_angle(a, b, t);
-                let rev = lerp_angle(b, a, 1.0 - t);
-                let diff = (fwd - rev).rem_euclid(TAU);
-                let dist = diff.min(TAU - diff);
-                assert!(dist < 1e-5, "a={a} b={b} t={t}: {fwd} vs {rev}");
-            }
-        }
-    }
-
-    /// A two-slot layout (scalar + angle in one vec4) blends each slot per
-    /// its kind: the scalar takes the straight line, the angle the shortest
-    /// arc through the seam.
-    #[test]
-    fn lerp_packed_params_lerps_each_slot_by_kind() {
-        let layout = [
-            ParamSlot {
-                name: "amount",
-                kind: ValueKind::Scalar,
-                vec: 0,
-                comp: 0,
-                len: 1,
-            },
-            ParamSlot {
-                name: "angle",
-                kind: ValueKind::Angle,
-                vec: 0,
-                comp: 1,
-                len: 1,
-            },
-        ];
-        let a = [Vec4::new(0.0, 170f32.to_radians(), 0.0, 0.0)];
-        let b = [Vec4::new(10.0, (-170f32).to_radians(), 0.0, 0.0)];
-        let out = lerp_packed_params(&a, &b, 0.5, &layout);
-        assert_eq!(out.len(), 1);
-        assert_eq!(out[0].x, 5.0);
-        // Through the seam (±π), not through 0 as a raw component lerp
-        // would give.
-        assert!((out[0].y.abs() - PI).abs() < 1e-5, "angle = {}", out[0].y);
+        let layout = [ParamSlot {
+            name: "angle",
+            kind: ValueKind::Angle,
+            vec: 0,
+            comp: 0,
+            len: 1,
+        }];
+        let mid = lerp_packed_params(&[Vec4::splat(a)], &[Vec4::splat(b)], 0.5, &layout);
+        assert!(
+            mid[0].x.abs() < 1e-5,
+            "midpoint is 0° (long way), got {}",
+            mid[0].x
+        );
+        // Endpoints stay bit-exact.
+        assert_eq!(
+            lerp_packed_params(&[Vec4::splat(a)], &[Vec4::splat(b)], 0.0, &layout)[0].x,
+            a
+        );
+        assert_eq!(
+            lerp_packed_params(&[Vec4::splat(a)], &[Vec4::splat(b)], 1.0, &layout)[0].x,
+            b
+        );
     }
 
     /// A color slot interpolates in the packed — LINEAR — space: the

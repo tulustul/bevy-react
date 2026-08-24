@@ -15,14 +15,12 @@ use crate::ui_map::parse_color;
 use super::color_to_rgba;
 
 /// CSS-like per-channel transition timing, set on [`Style::transition`]. Each
-/// field, if present, makes that channel ease on change; `all` is the fallback for
-/// channels without an explicit entry. `transform` covers all six transform
-/// channels together.
+/// field, if present, makes that channel ease on change; a channel without an
+/// entry snaps (there is no fallback key). `transform` covers all six
+/// transform channels together.
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Transition {
-    /// Fallback applied to any channel without its own entry.
-    pub all: Option<ChannelTransition>,
     /// Applies to every transform channel (translate/scale/rotate).
     pub transform: Option<ChannelTransition>,
     pub opacity: Option<ChannelTransition>,
@@ -66,14 +64,25 @@ pub struct Transition {
     /// frozen old appearance to the live content on a `key` change — see
     /// `crate::filters` morph). Unlike every other channel it has a built-in
     /// default ([`morph_default`]: 300ms ease-in-out), so a key change
-    /// animates even with no `transition` style at all; this entry (or
-    /// `all`) overrides the timing.
+    /// animates even with no `transition` style at all; this entry overrides
+    /// the timing.
     pub morph_filter: Option<ChannelTransition>,
+    /// Eases the resolved `backgroundGradient` between style states,
+    /// whole-value: gradients whose structures strictly match (same kind,
+    /// stop count, `colorSpace`, position, radial shape variant) interpolate
+    /// stop-wise; a structural mismatch SNAPS to the target with a
+    /// `gradientTransition` warning. Appear (no gradient → gradient) and
+    /// unset snap silently — to fade a gradient in or out, keep the surface
+    /// mounted and ease its stops through transparent colors instead.
+    pub background_gradient: Option<ChannelTransition>,
+    /// The `borderGradient` twin of [`Self::background_gradient`] — an
+    /// independent channel with the same strict-match-else-snap+warn rules.
+    pub border_gradient: Option<ChannelTransition>,
 }
 
 /// One row per spec channel of [`Transition`]: `(accessor, field, doc
-/// phrase)`. Generates the `for_*` accessors — one explicit-else-`all`
-/// resolution rule for every channel, instead of eight hand-kept copies.
+/// phrase)`. Generates the `for_*` accessors — one explicit-only lookup for
+/// every channel, instead of a hand-kept copy per channel.
 /// (The [`Transition`] struct fields stay hand-written: their docs carry the
 /// wire contract.)
 macro_rules! transition_channels {
@@ -88,6 +97,8 @@ macro_rules! transition_channels {
             (for_backdrop_filter, backdrop_filter, "the backdrop-filter chain"),
             (for_transform3d, transform3d, "the transform3d channels"),
             (for_morph_filter, morph_filter, "the morph progress"),
+            (for_background_gradient, background_gradient, "the background gradient"),
+            (for_border_gradient, border_gradient, "the border gradient"),
         }
     };
 }
@@ -96,9 +107,9 @@ macro_rules! spec_accessors {
     ($(($accessor:ident, $field:ident, $doc:literal),)*) => {
         impl Transition {
             $(
-                #[doc = concat!("The transition for ", $doc, " (explicit, else `all`).")]
+                #[doc = concat!("The transition for ", $doc, " (explicit only).")]
                 pub fn $accessor(&self) -> Option<&ChannelTransition> {
-                    self.$field.as_ref().or(self.all.as_ref())
+                    self.$field.as_ref()
                 }
             )*
         }
@@ -124,6 +135,8 @@ impl Transition {
             C::Filter => self.for_filter(),
             C::Backdrop => self.for_backdrop_filter(),
             C::Transform3d => self.for_transform3d(),
+            C::BackgroundGradient => self.for_background_gradient(),
+            C::BorderGradient => self.for_border_gradient(),
         }
     }
 }
@@ -153,11 +166,11 @@ fn default_mass() -> f32 {
     1.0
 }
 
-/// The built-in `morphFilter` timing used when neither
-/// `transition.morphFilter` nor `transition.all` names one: 300ms
-/// ease-in-out. The morph is the one channel that animates without being
-/// asked — a key change with no spec at all still eases (snapping would make
-/// the feature a no-op, since the blend is only ever visible mid-progress).
+/// The built-in `morphFilter` timing used when `transition.morphFilter`
+/// names none: 300ms ease-in-out. The morph is the one channel that animates
+/// without being asked — a key change with no spec at all still eases
+/// (snapping would make the feature a no-op, since the blend is only ever
+/// visible mid-progress).
 pub(super) fn morph_default() -> &'static ChannelTransition {
     static DEFAULT: std::sync::LazyLock<ChannelTransition> =
         std::sync::LazyLock::new(|| ChannelTransition {

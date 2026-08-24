@@ -25,10 +25,13 @@ use crate::transition::ScrollTransitionState;
 /// animations plugin drives the listed props each frame (no-op if animations
 /// are disabled — nothing reads the component). Also warns (once per apply,
 /// devtools-mirrored) about wrappers in hover/press/focus variants, which are
-/// ignored by design.
+/// ignored by design, and about a gradient `transition` spec made inert by
+/// gradient bindings on the same surface (bindings park the channel).
 pub(super) fn apply_animated(ec: &mut EntityCommands, props: &Props) {
     crate::style_bindings::warn_variant_bindings(props);
-    match crate::style_bindings::derive_props_bindings(props) {
+    let bindings = crate::style_bindings::derive_props_bindings(props);
+    crate::style_bindings::warn_gradient_transition_mix(props, bindings.as_ref());
+    match bindings {
         Some(bindings) => {
             ec.insert(AnimatedNode(bindings));
         }

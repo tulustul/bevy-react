@@ -34,7 +34,7 @@ export type ChromaticAberrationParams = { offset: number | string, angle: number
  * Tangential swirl: the R image rotates by `+rotation` degrees
  * (clockwise, y-down) around the node's center, B by `-rotation`.
  * Plain number in degrees — a scalar magnitude, so transitions unwind
- * linearly (no shortest-arc wrap). 0 = purely directional split.
+ * linearly through every turn. 0 = purely directional split.
  */
 rotation: number, };
 export type CircleCrop = { 

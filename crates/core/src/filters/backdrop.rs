@@ -365,7 +365,10 @@ mod tests {
                 json!({ "style": {
                     "filter": { "name": "grayscale", "params": { "amount": 0.0 } },
                     "backdropFilter": { "name": "sepia", "params": { "amount": 0.0 } },
-                    "transition": { "all": { "duration": 1000, "easing": "linear" } },
+                    "transition": {
+                        "filter": { "duration": 1000, "easing": "linear" },
+                        "backdropFilter": { "duration": 1000, "easing": "linear" },
+                    },
                 } }),
             )])
             .unwrap();

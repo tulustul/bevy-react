@@ -8,8 +8,9 @@
 /// `scrollbar.rs`, `animations/protocol.rs`, `svg/protocol.rs`) and the
 /// `diag::report` sites
 /// (`ui_map.rs`, `cursor.rs`, `filters.rs`, `layer.rs`,
-/// `animations/apply/{filter_params,shape,warn}.rs`, `svg/image.rs`,
-/// `reconcile/svg_ops.rs`, `reconcile/stamps.rs`); extend
+/// `animations/apply/{filter_params,gradient,shape,warn}.rs`, `svg/image.rs`,
+/// `reconcile/svg_ops.rs`, `reconcile/stamps.rs`,
+/// `transition/gradient_channel.rs`); extend
 /// BOTH this list and the table when
 /// adding one. (`length`/`angle`/`time` are deliberately table-less —
 /// they're the broad-scan kinds.)
@@ -49,6 +50,8 @@ fn js_warning_kind_table_covers_known_kinds() {
         "morphFilterParams",
         "morphFilterUnknown",
         "morphFilterBinding",
+        "gradientTransition",
+        "gradientBinding",
         "scrollbar",
         "styleBinding",
         "backgroundImage",

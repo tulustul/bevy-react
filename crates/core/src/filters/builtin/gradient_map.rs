@@ -478,7 +478,7 @@ mod tests {
         let mid = lerp_packed_params(&a, &b, 0.5, &layout_a);
         // Slot 2: a padded blue (repeat-last) fading toward the added green.
         assert_eq!(mid[2], Vec4::new(0.0, 0.5, 0.5, 1.0));
-        // Angle slot takes the arc from 0 toward pi/2.
+        // Angle slot lerps numerically from 0 toward pi/2.
         assert!((mid[7].z - PI / 4.0).abs() < 1e-5);
     }
 
