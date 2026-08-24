@@ -2,6 +2,7 @@ import { BevyStyle } from "bevy-react/jsx";
 import { PropsWithChildren } from "react";
 import { Colors, FontSizes, Gradients } from "@/theme";
 import { Pinchable } from "./Pinchable";
+import type { PinchParams } from "@/bevy";
 
 export type ButtonProps = PropsWithChildren & {
   style?: BevyStyle;
@@ -13,10 +14,10 @@ export type ButtonProps = PropsWithChildren & {
    *  applies. For tracks, menu rows, and other button-shaped things that are
    *  not "a button that looks like the gallery's buttons". */
   unstyled?: boolean;
-  /** Pinch-on-press intensity, forwarded to `Pinchable` (0 disables).
-   *  Note: Pinchable owns the button's `filter` — a `filter` passed via
-   *  `style` is replaced unless `pinch` is 0. */
-  pinch?: number;
+  /** Pinch-on-press overrides, forwarded to `Pinchable` as its `params`
+   *  (`{ strength: 0 }` disables). Note: Pinchable owns the button's
+   *  `filter` — a `filter` passed via `style` is replaced unless disabled. */
+  pinch?: Partial<PinchParams>;
   onClick?: () => void;
 };
 
@@ -27,7 +28,7 @@ export function Button({
   pressStyle,
   labelStyle,
   unstyled = false,
-  pinch = 1,
+  pinch,
   children,
 }: ButtonProps) {
   // String/number children get the label treatment; element children (switch
@@ -35,7 +36,7 @@ export function Button({
   const isTextChild =
     typeof children === "string" || typeof children === "number";
   return (
-    <Pinchable pinch={pinch}>
+    <Pinchable params={pinch}>
       <button
         onClick={onClick}
         style={unstyled ? (style ?? {}) : { ...buttonStyle, ...(style ?? {}) }}

@@ -273,7 +273,42 @@ strength: number,
 /**
  * Effect radius as a fraction of the node's larger dimension.
  */
-radius: number, };
+radius: number, 
+/**
+ * Diffuse shading intensity: 0 (unlit, the default), 1 nominal; larger
+ * values overdrive, like `brightness`.
+ */
+light: number, 
+/**
+ * Direction the light comes FROM: degrees clockwise from +X in screen
+ * space (bare number = degrees, `"0.25turn"` etc. accepted). Default
+ * -135 = top-left.
+ */
+lightAngle: number | string, 
+/**
+ * Specular (white) highlight intensity: 0 (off, the default), 1
+ * nominal; larger values overdrive.
+ */
+gloss: number, 
+/**
+ * Size of the specular highlight, 0 (a pinpoint) ..= 1 (a broad sheen);
+ * default 0.3. Mapped log-wise onto a Blinn-Phong exponent in the shader
+ * (128 at 0, ~32 at 0.3, 1 at 1).
+ */
+glossSize: number, 
+/**
+ * How the effect meets its rim, 0..=1: 0 is a linear onset (a visible
+ * crease, like a pressed coin edge), 0.5 (the default) the classic `u^2`
+ * smoothstep-like fade, 1 an imperceptible `u^4` fade-in.
+ */
+outerSoftness: number, 
+/**
+ * How the effect peaks at its center, 0..=1: 0 is a cone tip (a pointed
+ * pit/peak the lighting shows as a point), 0.5 (the default) a rounded
+ * bowl, 1 a broad flat floor. Independent of `outerSoftness`: the
+ * profile is `1 - (1 - u^a)^b` with `a`/`b` from the two knobs.
+ */
+innerSoftness: number, };
 export type PixelizeParams = { 
 /**
  * Cells across x/y at the mosaic's coarsest (upstream `squaresMin`).

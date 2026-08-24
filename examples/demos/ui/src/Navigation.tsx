@@ -49,7 +49,7 @@ function Title() {
 
   return (
     <Pinchable
-      pinch={0.8}
+      params={{ strength: 0.28, radius: 0.48 }}
       filters={[
         {
           name: "gradientMap",

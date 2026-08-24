@@ -1,6 +1,7 @@
 import { BevyStyle, PointerEventData } from "bevy-react/jsx";
 import { cloneElement, ReactElement, useRef, useState } from "react";
 import { FilterUse, useSharedValue, withSpring, withTiming } from "bevy-react";
+import type { PinchParams } from "@/bevy";
 
 type PinchableChildProps = {
   style?: BevyStyle;
@@ -11,11 +12,12 @@ type PinchableChildProps = {
 };
 
 export type PinchableProps = {
-  /** Intensity multiplier for the pinch-on-press effect: scales the pressed
-   *  strength and radius together. 1 = default feel, 0 renders the child
-   *  untouched (no filter, no handlers — the child stops being a composited
-   *  layer). */
-  pinch?: number;
+  /** Overrides for the press pinch's filter params, merged over
+   *  `DEFAULT_PARAMS`. `strength` is the pressed-state magnitude (animated in
+   *  on press, sprung back to 0 on release) — `strength: 0` renders the child
+   *  untouched (no filter, no handlers — it stops being a composited layer).
+   *  `x`/`y` pin the anchor instead of following the cursor. */
+  params?: Partial<PinchParams>;
   /** A single element that takes node props. Pinchable injects the `pinch`
    *  filter into its base style (replacing any `filter` the child styles
    *  itself with) and chains onto its pointer handlers. */
@@ -23,10 +25,18 @@ export type PinchableProps = {
   filters?: FilterUse[];
 };
 
-// Pressed-state magnitudes at `pinch: 1` (the custom `pinch` filter takes
-// normalized params — see `examples/demos/filters.rs`).
-const PRESS_STRENGTH = 0.25;
-const PRESS_RADIUS = 0.6;
+/** The press feel: pressed-state magnitudes for the built-in `pinch` filter
+ *  (normalized params — see `crates/core/src/filters/builtin/pinch.rs`). */
+export const DEFAULT_PARAMS: Omit<PinchParams, "x" | "y"> = {
+  strength: 0.35,
+  radius: 0.4,
+  light: 0.6,
+  lightAngle: 270,
+  gloss: 0.15,
+  glossSize: 0.0,
+  outerSoftness: 0.3,
+  innerSoftness: 0.3,
+};
 
 /** Presses its child through the `pinch` filter: pointer-down eases the
  *  squeeze in at the cursor, release springs back with a bulge wobble.
@@ -36,19 +46,29 @@ const PRESS_RADIUS = 0.6;
  *  anchor x/y are plain statics swapped per-press. The identity chain
  *  (strength 0) stays mounted so the child is a stable cached layer — no
  *  promote/demote churn, and unsetting the chain mid-spring would snap. */
-export function Pinchable({ pinch = 1, children, filters }: PinchableProps) {
+export function Pinchable({ params, children, filters }: PinchableProps) {
   const strength = useSharedValue(0);
   const [center, setCenter] = useState({ x: 0.5, y: 0.5 });
   const pressed = useRef(false);
 
-  if (pinch === 0) {
+  const {
+    strength: pressStrength,
+    x,
+    y,
+    ...rest
+  } = {
+    ...DEFAULT_PARAMS,
+    ...(params ?? {}),
+  };
+
+  if (pressStrength === 0) {
     return children;
   }
 
   const press = (e: PointerEventData) => {
     pressed.current = true;
     setCenter({ x: e.x, y: e.y });
-    strength.value = withTiming(PRESS_STRENGTH * pinch, {
+    strength.value = withTiming(pressStrength, {
       duration: 100,
       easing: "easeOut",
     });
@@ -85,10 +105,10 @@ export function Pinchable({ pinch = 1, children, filters }: PinchableProps) {
         {
           name: "pinch",
           params: {
-            x: center.x,
-            y: center.y,
+            ...rest,
+            x: x ?? center.x,
+            y: y ?? center.y,
             strength: { animated: strength, seed: 0 },
-            radius: PRESS_RADIUS * pinch,
           },
         },
         ...(filters ?? []),

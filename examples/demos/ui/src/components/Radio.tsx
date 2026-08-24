@@ -1,4 +1,5 @@
 import { BevyStyle } from "bevy-react/jsx";
+import type { PinchParams } from "@/bevy";
 import { Colors, FontSizes, Gradients } from "@/theme";
 import { Button } from "./Button";
 
@@ -12,8 +13,9 @@ export type RadioOption<T extends RadioValue = RadioValue> = {
 export type RadioProps<T extends RadioValue = RadioValue> = {
   value: T;
   options: RadioOption<T>[];
-  /** Pinch-on-press intensity, forwarded to `Pinchable` (0 disables). */
-  pinch?: number;
+  /** Pinch-on-press overrides, forwarded to `Button` (`{ strength: 0 }`
+   *  disables). */
+  pinch?: Partial<PinchParams>;
   onChange: (value: T) => void;
 };
 
@@ -22,7 +24,7 @@ export type RadioProps<T extends RadioValue = RadioValue> = {
 export function Radio<T extends RadioValue>({
   options,
   value,
-  pinch = 1,
+  pinch,
   onChange,
 }: RadioProps<T>) {
   return (
@@ -45,7 +47,7 @@ export function Radio<T extends RadioValue>({
 type OptionProps = {
   option: RadioOption;
   selected: boolean;
-  pinch: number;
+  pinch?: Partial<PinchParams>;
   onClick: () => void;
 };
 

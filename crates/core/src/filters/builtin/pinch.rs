@@ -11,6 +11,7 @@ use serde_json::Value;
 use crate::animations::ValueKind;
 use crate::filters::params::{ParamSlot, static_layout};
 use crate::filters::registry::ReactFilter;
+use crate::protocol::units::Angle;
 
 fn default_center() -> f32 {
     0.5
@@ -22,6 +23,23 @@ fn default_strength() -> f32 {
 
 fn default_radius() -> f32 {
     0.8
+}
+
+/// Top-left, the usual UI light convention (clockwise from +X, y-down:
+/// -90 is straight up, so -135 is up-and-left).
+fn default_light_angle() -> Angle {
+    Angle::from_radians((-135f32).to_radians())
+}
+
+/// A tight-ish button highlight (a Blinn-Phong exponent of ~32).
+fn default_gloss_size() -> f32 {
+    0.3
+}
+
+/// Rim/center softness 0.5 each is the classic-feeling falloff (a `u^2` onset
+/// into a rounded bowl, within a hair of smoothstep).
+fn default_softness() -> f32 {
+    0.5
 }
 
 /// Extra logical px the bulge (or a press-spring overshoot) may poke past the
@@ -40,9 +58,19 @@ const PINCH_OUTSET: f32 = 16.0;
 /// center squeeze (shorthand-default convention); the true identity is
 /// `strength: 0`.
 ///
-/// A single pass, packed as `params[0] = (x, y, strength, radius)`.
+/// The optional lighting treats the pinch as a lit height field: the
+/// displacement curve doubles as a surface, shaded Lambert + Blinn-Phong
+/// from a 2D light direction at a fixed elevation. A dimple (pinch) and a
+/// dome (bulge) light oppositely by construction, and `strength: 0` is a
+/// flat surface — the light params shade nothing, so the identity contract
+/// holds regardless of them. `light`/`gloss` default to 0: an unlit pinch
+/// renders exactly as before they existed.
+///
+/// A single pass, packed as `params[0] = (x, y, strength, radius)`,
+/// `params[1] = (light, lightAngle_radians, gloss, glossSize)` and
+/// `params[2] = (outerSoftness, innerSoftness, 0, 0)`.
 #[derive(Debug, Clone, Copy, PartialEq, Deserialize, ts_rs::TS)]
-#[serde(deny_unknown_fields)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct PinchParams {
     /// Pinch center, 0..1 across the node rect (0 = left edge).
     #[serde(default = "default_center")]
@@ -56,6 +84,37 @@ pub struct PinchParams {
     /// Effect radius as a fraction of the node's larger dimension.
     #[serde(default = "default_radius")]
     pub radius: f32,
+    /// Diffuse shading intensity: 0 (unlit, the default), 1 nominal; larger
+    /// values overdrive, like `brightness`.
+    #[serde(default)]
+    pub light: f32,
+    /// Direction the light comes FROM: degrees clockwise from +X in screen
+    /// space (bare number = degrees, `"0.25turn"` etc. accepted). Default
+    /// -135 = top-left.
+    // Mirrors `#[react_filter]`'s override for an `Angle` field.
+    #[serde(default = "default_light_angle")]
+    #[ts(type = "number | string")]
+    pub light_angle: Angle,
+    /// Specular (white) highlight intensity: 0 (off, the default), 1
+    /// nominal; larger values overdrive.
+    #[serde(default)]
+    pub gloss: f32,
+    /// Size of the specular highlight, 0 (a pinpoint) ..= 1 (a broad sheen);
+    /// default 0.3. Mapped log-wise onto a Blinn-Phong exponent in the shader
+    /// (128 at 0, ~32 at 0.3, 1 at 1).
+    #[serde(default = "default_gloss_size")]
+    pub gloss_size: f32,
+    /// How the effect meets its rim, 0..=1: 0 is a linear onset (a visible
+    /// crease, like a pressed coin edge), 0.5 (the default) the classic `u^2`
+    /// smoothstep-like fade, 1 an imperceptible `u^4` fade-in.
+    #[serde(default = "default_softness")]
+    pub outer_softness: f32,
+    /// How the effect peaks at its center, 0..=1: 0 is a cone tip (a pointed
+    /// pit/peak the lighting shows as a point), 0.5 (the default) a rounded
+    /// bowl, 1 a broad flat floor. Independent of `outerSoftness`: the
+    /// profile is `1 - (1 - u^a)^b` with `a`/`b` from the two knobs.
+    #[serde(default = "default_softness")]
+    pub inner_softness: f32,
 }
 
 impl Default for PinchParams {
@@ -65,6 +124,12 @@ impl Default for PinchParams {
             y: default_center(),
             strength: default_strength(),
             radius: default_radius(),
+            light: 0.0,
+            light_angle: default_light_angle(),
+            gloss: 0.0,
+            gloss_size: default_gloss_size(),
+            outer_softness: default_softness(),
+            inner_softness: default_softness(),
         }
     }
 }
@@ -99,6 +164,48 @@ fn pinch_layout() -> Arc<[ParamSlot]> {
             comp: 3,
             len: 1,
         },
+        ParamSlot {
+            name: "light",
+            kind: ValueKind::Scalar,
+            vec: 1,
+            comp: 0,
+            len: 1,
+        },
+        ParamSlot {
+            name: "lightAngle",
+            kind: ValueKind::Angle,
+            vec: 1,
+            comp: 1,
+            len: 1,
+        },
+        ParamSlot {
+            name: "gloss",
+            kind: ValueKind::Scalar,
+            vec: 1,
+            comp: 2,
+            len: 1,
+        },
+        ParamSlot {
+            name: "glossSize",
+            kind: ValueKind::Scalar,
+            vec: 1,
+            comp: 3,
+            len: 1,
+        },
+        ParamSlot {
+            name: "outerSoftness",
+            kind: ValueKind::Scalar,
+            vec: 2,
+            comp: 0,
+            len: 1,
+        },
+        ParamSlot {
+            name: "innerSoftness",
+            kind: ValueKind::Scalar,
+            vec: 2,
+            comp: 1,
+            len: 1,
+        },
     ]
 }
 
@@ -119,7 +226,16 @@ impl ReactFilter for PinchParams {
 
     fn pack(&self) -> (Vec<Vec4>, Arc<[ParamSlot]>) {
         (
-            vec![Vec4::new(self.x, self.y, self.strength, self.radius)],
+            vec![
+                Vec4::new(self.x, self.y, self.strength, self.radius),
+                Vec4::new(
+                    self.light,
+                    self.light_angle.radians(),
+                    self.gloss,
+                    self.gloss_size,
+                ),
+                Vec4::new(self.outer_softness, self.inner_softness, 0.0, 0.0),
+            ],
             pinch_layout(),
         )
     }
@@ -132,28 +248,64 @@ mod tests {
     use super::*;
     use crate::filters::test_util::{asset_app, params};
 
-    /// One pass: `params[0] = (x, y, strength, radius)`, four scalar slots
-    /// (per-param transitions and `{ animated }` bindings address them by
-    /// name).
+    /// One pass: `params[0] = (x, y, strength, radius)`,
+    /// `params[1] = (light, lightAngle_radians, gloss, glossSize)` and
+    /// `params[2] = (outerSoftness, innerSoftness, 0, 0)` — ten slots, all
+    /// scalar except `lightAngle`
+    /// (an Angle slot: degrees on the wire, radians in the uniform).
+    /// Per-param transitions and `{ animated }` bindings address them by name.
     #[test]
     fn pinch_resolves_to_one_pass() {
         let app = asset_app();
         let assets = app.world().resource::<AssetServer>();
-        let passes =
-            params::<PinchParams>(json!({ "x": 0.25, "y": 0.75, "strength": -0.5, "radius": 1.0 }))
-                .resolve(assets)
-                .expect("pinch resolves");
+        let passes = params::<PinchParams>(json!({
+            "x": 0.25, "y": 0.75, "strength": -0.5, "radius": 1.0,
+            "light": 0.6, "lightAngle": 90, "gloss": 0.4, "glossSize": 0.8,
+            "outerSoftness": 0.7, "innerSoftness": 0.2,
+        }))
+        .resolve(assets)
+        .expect("pinch resolves");
         assert_eq!(passes.len(), 1);
         assert_eq!(passes[0].params[0], Vec4::new(0.25, 0.75, -0.5, 1.0));
+        assert_eq!(
+            passes[0].params[1],
+            Vec4::new(0.6, std::f32::consts::FRAC_PI_2, 0.4, 0.8)
+        );
+        assert_eq!(passes[0].params[2], Vec4::new(0.7, 0.2, 0.0, 0.0));
         assert_eq!(passes[0].wire_index, 0);
         let names: Vec<_> = passes[0].layout.iter().map(|s| s.name).collect();
-        assert_eq!(names, ["x", "y", "strength", "radius"]);
-        assert!(
-            passes[0]
-                .layout
-                .iter()
-                .all(|s| s.kind == ValueKind::Scalar && s.len == 1)
+        assert_eq!(
+            names,
+            [
+                "x",
+                "y",
+                "strength",
+                "radius",
+                "light",
+                "lightAngle",
+                "gloss",
+                "glossSize",
+                "outerSoftness",
+                "innerSoftness"
+            ]
         );
+        for slot in passes[0].layout.iter() {
+            let expected = if slot.name == "lightAngle" {
+                ValueKind::Angle
+            } else {
+                ValueKind::Scalar
+            };
+            assert_eq!(slot.kind, expected, "{}", slot.name);
+            assert_eq!(slot.len, 1, "{}", slot.name);
+        }
+    }
+
+    /// `lightAngle` takes the CSS angle decode like every other Angle param:
+    /// `"0.25turn"` is a quarter turn, not a rejected string.
+    #[test]
+    fn pinch_light_angle_accepts_css_units() {
+        let turn = params::<PinchParams>(json!({ "lightAngle": "0.25turn" }));
+        assert!((turn.light_angle.radians() - std::f32::consts::FRAC_PI_2).abs() < 1e-6);
     }
 
     /// The outset is a params-independent constant (normalized params carry
@@ -168,14 +320,27 @@ mod tests {
     }
 
     /// Empty params take the shorthand defaults: a visible squeeze at the
-    /// node's center.
+    /// node's center, UNLIT — `light`/`gloss` default to 0 so a pre-lighting
+    /// `{ name: "pinch" }` renders pixel-identically; the light direction
+    /// defaults to top-left.
     #[test]
-    fn pinch_empty_params_default_to_visible_squeeze() {
+    fn pinch_empty_params_default_to_visible_unlit_squeeze() {
         let p = params::<PinchParams>(json!({}));
         assert_eq!(p, PinchParams::default());
         assert_eq!((p.x, p.y), (0.5, 0.5));
         assert_eq!(p.strength, 0.5);
         assert_eq!(p.radius, 0.8);
+        assert_eq!(p.light, 0.0);
+        assert_eq!(p.gloss, 0.0);
+        assert_eq!(p.gloss_size, 0.3);
+        assert!((p.light_angle.radians() - (-135f32).to_radians()).abs() < 1e-6);
+        // Rim/center softness at 0.5 each: the classic-feeling falloff.
+        assert_eq!((p.outer_softness, p.inner_softness), (0.5, 0.5));
+        let (packed, _) = p.pack();
+        assert_eq!(packed.len(), 3);
+        assert_eq!(packed[1].x, 0.0);
+        assert_eq!(packed[1].z, 0.0);
+        assert_eq!(packed[2], Vec4::new(0.5, 0.5, 0.0, 0.0));
     }
 
     /// `deny_unknown_fields`: a typoed param rejects instead of silently

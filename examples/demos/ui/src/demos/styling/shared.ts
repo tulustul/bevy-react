@@ -44,3 +44,18 @@ export const controlColumn: BevyStyle = {
   alignItems: "center",
   gap: 16,
 };
+
+export const productCard: BevyStyle = {
+  flexDirection: "column",
+  alignItems: "center",
+  gap: 8,
+  padding: 14,
+  borderRadius: 12,
+  backgroundColor: Colors.surface300,
+};
+
+export const cardTitle: BevyStyle = {
+  color: Colors.textColor100,
+  fontSize: FontSizes.base,
+  fontWeight: "bold",
+};

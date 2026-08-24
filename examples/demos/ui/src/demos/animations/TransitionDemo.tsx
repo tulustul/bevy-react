@@ -94,7 +94,7 @@ function HoverPressCard() {
   return (
     <Button
       unstyled
-      pinch={0}
+      pinch={{ strength: 0 }}
       style={{
         ...pillStyle,
         backgroundColor: Colors.primary100,
@@ -159,7 +159,7 @@ function ToggleSwitchCard() {
     <node style={switchRow}>
       <Button
         unstyled
-        pinch={0}
+        pinch={{ strength: 0 }}
         onClick={() => setOn((v) => !v)}
         style={{
           ...switchTrack,

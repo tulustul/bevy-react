@@ -242,7 +242,12 @@ type TimeBoxProps = {
 function TimeBox({ label, duration, on, onToggle }: TimeBoxProps) {
   return (
     <node style={{ flexDirection: "column", alignItems: "center", gap: 10 }}>
-      <Button unstyled pinch={0} onClick={onToggle} style={timeTrack}>
+      <Button
+        unstyled
+        pinch={{ strength: 0 }}
+        onClick={onToggle}
+        style={timeTrack}
+      >
         <node
           style={{
             ...box,
