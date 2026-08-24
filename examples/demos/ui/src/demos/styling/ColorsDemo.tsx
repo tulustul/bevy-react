@@ -117,7 +117,7 @@ function ColorFormatsCard() {
 function BackgroundColorDemo() {
   return (
     <Example
-      title="backgroundColor"
+      title="Background color"
       info={
         <>
           <P>
@@ -186,7 +186,7 @@ const BORDER_OPTIONS: RadioOption<string>[] = [
 function BorderColorDemo() {
   return (
     <Example
-      title="borderColor"
+      title="Border color"
       info={
         <>
           <P>
@@ -229,7 +229,7 @@ const TEXT_OPTIONS: RadioOption<string>[] = [
 function TextColorDemo() {
   return (
     <Example
-      title="color"
+      title="Text color"
       info={
         <>
           <P>

@@ -279,7 +279,7 @@ function DissolveCard() {
 function BurnDemo() {
   return (
     <Example
-      title="Filter animation"
+      title="Animated parameters"
       info={
         <>
           <P>
@@ -349,7 +349,7 @@ function BurnCard() {
 function CyberpunkDemo() {
   return (
     <Example
-      title="Cyberpunk2077 style"
+      title="Cyberpunk 2077 style"
       style={{ cache: "never" }}
       info={
         <>

@@ -509,7 +509,7 @@ useEffect(() => {
 function SharedValueShapesDemo() {
   return (
     <Example
-      title="Animated: shared values"
+      title="Shared value animations"
       info={
         <>
           <P>
@@ -593,7 +593,7 @@ useEffect(() => {
 function TransitionShapesDemo() {
   return (
     <Example
-      title="Animated: transitions"
+      title="Shape transitions"
       info={
         <>
           <P>

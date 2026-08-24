@@ -47,7 +47,7 @@ export function OpacityDemo() {
 function BasicOpacityDemo() {
   return (
     <Example
-      title="opacity"
+      title="Node opacity"
       info={
         <>
           <P>
@@ -81,7 +81,7 @@ function BasicOpacityCard() {
 function GroupAlphaDemo() {
   return (
     <Example
-      title="groupAlpha"
+      title="Group alpha"
       info={
         <>
           <P>
@@ -132,7 +132,7 @@ function GroupAlphaCard() {
 function DisplayNoneDemo() {
   return (
     <Example
-      title="display: none"
+      title="Hiding nodes"
       info={
         <>
           <P>

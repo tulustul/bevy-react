@@ -44,7 +44,7 @@ export function SpacingDemo() {
 function PaddingDemo() {
   return (
     <Example
-      title="padding"
+      title="Padding"
       info={
         <>
           <P>
@@ -81,7 +81,7 @@ function PaddingCard() {
 function GapDemo() {
   return (
     <Example
-      title="gap"
+      title="Gaps"
       info={
         <>
           <P>
@@ -120,7 +120,7 @@ function GapCard() {
 function MarginDemo() {
   return (
     <Example
-      title="margin"
+      title="Margins"
       info={
         <>
           <P>

@@ -12,7 +12,7 @@ import { Colors } from "@/theme";
 import { box, controlColumn, stage } from "./shared";
 
 const PAGE: ExplanationData = {
-  title: "Background image",
+  title: "Background images",
   info: (
     <>
       <P>
@@ -61,7 +61,7 @@ export function BackgroundImageDemo() {
 function StretchDemo() {
   return (
     <Example
-      title="stretch (default)"
+      title="Stretch (default)"
       info={
         <>
           <P>
@@ -104,7 +104,7 @@ function StretchCard() {
 function RepeatDemo() {
   return (
     <Example
-      title="repeat + scale"
+      title="Repeat and scale"
       info={
         <>
           <P>
@@ -161,7 +161,7 @@ function RepeatCard() {
 function TintHoverDemo() {
   return (
     <Example
-      title="tint (animated) + hoverStyle"
+      title="Animated tint and hover"
       info={
         <>
           <P>
@@ -238,7 +238,7 @@ function TintHoverCard() {
 function HostTextureDemo() {
   return (
     <Example
-      title="src: { texture }"
+      title="Texture sources"
       info={
         <>
           <P>

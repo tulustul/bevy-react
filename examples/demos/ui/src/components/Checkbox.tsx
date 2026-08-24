@@ -1,5 +1,4 @@
 import { BevyStyle } from "bevy-react/jsx";
-import type { PinchParams } from "@/bevy";
 import { Colors, FontSizes, Gradients } from "@/theme";
 import { Button } from "./Button";
 

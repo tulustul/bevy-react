@@ -6,7 +6,7 @@ import { SpringDemo, SequenceDemo, SpinDemo } from "./driverDemos";
 import { ShowcaseDemo } from "./showcaseDemo";
 
 const PAGE: ExplanationData = {
-  title: "Animated Values",
+  title: "Animated values",
   info: (
     <>
       <P>

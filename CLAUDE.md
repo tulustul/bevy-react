@@ -142,7 +142,7 @@ npm run build -w demos   # build the bundle first (shoot mode disables hot reloa
 cargo run -p bevy-react --example demos -- --shoot "<portal>" out.png [settle_secs]
 ```
 
-- The first arg is the demo's **left-nav label** (e.g. `"<portal>"`, `"<canvas>"`, `"World Anchors"`). The tool navigates the React gallery to it, waits `settle_secs` (default `3`) for the demo + its 3D scene to settle, captures, and exits on its own.
+- The first arg is the demo's **left-nav label** (e.g. `"<portal>"`, `"<canvas>"`, `"Backdrop filters"`). The tool navigates the React gallery to it, waits `settle_secs` (default `3`) for the demo + its 3D scene to settle, captures, and exits on its own.
 - It renders the whole app (3D scene + React UI) into an **offscreen `Image`** — the main `IsDefaultUiCamera` camera is re-pointed at it — and captures with Bevy's in-process `Screenshot::image(...)` + `save_to_disk`, so the result is independent of window focus/occlusion/surface (output is 1280×832). Still needs an X11 display present.
 - Implementation: `examples/demos/screenshot.rs` (the `Shoot` state machine + camera redirect). Navigation rides a `debug.selectDemo` `#[react_event]` that `examples/demos/ui/src/App.tsx` subscribes to (`findDemoByLabel`); the `--shoot` flag is parsed and wired in `examples/demos/main.rs`. After changing the event type, regenerate `bevy.ts` like any other binding.
 

@@ -16,7 +16,7 @@
 //!     the gallery's press effect, started here and was promoted to a
 //!     built-in — `crates/core/src/filters/builtin/pinch.rs`.)
 //!   * The gl-transitions morph pack (`#[react_morph_filter]` +
-//!     `add_react_morph_filter`; the "Morph filter" demo's card grid):
+//!     `add_react_morph_filter`; the "Morph filters" demo's card grid):
 //!     single-pass ports of <https://gl-transitions.com/gallery>
 //!     transitions, `morphFilter`-only.
 //!

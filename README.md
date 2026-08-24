@@ -441,7 +441,7 @@ whole pack of [gl-transitions](https://gl-transitions.com/gallery) ports
 (page curl, book flip, doorway, kaleidoscope, film burn, datamosh glitch, …)
 under
 [`examples/assets/shaders/morphs/`](https://github.com/tulustul/bevy-react/tree/main/examples/assets/shaders/morphs),
-showcased in the "Morph filter" demo — any of them is a `morphFilter` name.
+showcased in the "Morph filters" demo — any of them is a `morphFilter` name.
 
 ![The demo's gl-transitions morph pack animating on live UI cards: windowslice, radial, polka-dots curtain, circle crop, curtain, burn, tiles wave, grid flip, doorway, book flip, kaleidoscope, datamosh glitch, film burn, and an inverted page curl.](https://raw.githubusercontent.com/tulustul/bevy-react/main/screenshots/morphs-custom.webp)
 

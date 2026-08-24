@@ -70,7 +70,7 @@ t.value = n;`;
 function ScaleColorDemo() {
   return (
     <Example
-      title="Scale & color"
+      title="Scale and color"
       info={
         <>
           <P>

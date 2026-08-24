@@ -7,7 +7,7 @@ import { Colors, FontSizes } from "@/theme";
 import { caption, controlColumn } from "./shared";
 
 const PAGE: ExplanationData = {
-  title: "zIndex",
+  title: "Z-index",
   info: (
     <>
       <P>
@@ -49,7 +49,7 @@ const FRONT_OPTIONS: RadioOption<Front>[] = [
 function LocalZIndexDemo() {
   return (
     <Example
-      title="zIndex"
+      title="Local stacking order"
       info={
         <>
           <P>
@@ -113,7 +113,7 @@ const HINTS: Record<Mode, string> = {
 function GlobalZIndexDemo() {
   return (
     <Example
-      title="globalZIndex"
+      title="Global stacking order"
       info={
         <>
           <P>

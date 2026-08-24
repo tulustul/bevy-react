@@ -25,7 +25,7 @@ x.value = withSpring(90, { stiffness: 120, damping: 12 });
 export function SpringDemo() {
   return (
     <Example
-      title="Spring"
+      title="Springs"
       info={
         <>
           <P>
@@ -125,7 +125,7 @@ const SEQUENCE_TSX = `x.value = withSequence(
 export function SequenceDemo() {
   return (
     <Example
-      title="Sequence"
+      title="Sequences"
       info={
         <>
           <P>
@@ -211,7 +211,7 @@ cancelAnimation(rot); // freeze wherever it is`;
 export function SpinDemo() {
   return (
     <Example
-      title="Spin"
+      title="Spinning"
       info={
         <>
           <P>

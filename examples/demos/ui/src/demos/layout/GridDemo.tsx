@@ -95,7 +95,7 @@ export function GridDemo() {
 function GridPlaygroundDemo() {
   return (
     <Example
-      title="repeat & fr"
+      title="Repeat and fractions"
       info={
         <>
           <P>
@@ -169,7 +169,7 @@ function MixedTracksCard() {
 function ColumnSpanDemo() {
   return (
     <Example
-      title="gridColumn span"
+      title="Column spans"
       info={
         <>
           <P>
@@ -206,7 +206,7 @@ function ColumnSpanCard() {
 function RowSpanDemo() {
   return (
     <Example
-      title="gridRow span"
+      title="Row spans"
       info={
         <>
           <P>

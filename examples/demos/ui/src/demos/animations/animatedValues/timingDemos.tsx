@@ -29,7 +29,7 @@ opacity.value = withRepeat(
 export function FadeDemo() {
   return (
     <Example
-      title="Fade"
+      title="Fades"
       info={
         <>
           <P>
@@ -239,7 +239,7 @@ t.value = withRepeat(withTiming(1, { duration: 900 }), {
 export function LayoutColorDemo() {
   return (
     <Example
-      title="Layout & Color"
+      title="Layout and color"
       info={
         <>
           <P>

@@ -13,7 +13,7 @@ import { MorphTile } from "./tiles";
 // into the live content — React swaps the content freely in the same commit.
 
 const PAGE: ExplanationData = {
-  title: "Morph Filter",
+  title: "Morph filters",
   info: (
     <>
       <P>
@@ -200,7 +200,7 @@ function BuiltinMorphsCard() {
 function CarrierDemo() {
   return (
     <Example
-      title="Enter & exit (empty carrier)"
+      title="Enter and exit (empty carrier)"
       info={
         <>
           <P>

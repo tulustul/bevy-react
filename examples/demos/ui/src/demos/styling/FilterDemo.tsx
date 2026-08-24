@@ -216,7 +216,7 @@ function InvertCard() {
 function HueDemo() {
   return (
     <Example
-      title="Hue"
+      title="Hue rotation"
       info={
         <>
           <P>
@@ -254,7 +254,7 @@ function HueCard() {
 function SubtreeFilterDemo() {
   return (
     <Example
-      title="Subtree filter"
+      title="Subtree filters"
       info={
         <>
           <P>
@@ -669,7 +669,7 @@ function OutlineTextCard() {
 function DropShadowDemo() {
   return (
     <Example
-      title="Drop shadow"
+      title="Drop shadows"
       info={
         <>
           <P>
@@ -744,7 +744,7 @@ function DropShadowCard() {
 function GradientOutlineDemo() {
   return (
     <Example
-      title="Gradient + outline"
+      title="Gradient and outline"
       info={
         <>
           <P>

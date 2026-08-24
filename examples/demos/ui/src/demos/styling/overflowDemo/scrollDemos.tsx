@@ -8,7 +8,7 @@ import { caption, controlColumn } from "../shared";
 export function WheelScrollDemo() {
   return (
     <Example
-      title="overflowY: scroll"
+      title="Scrollports"
       info={
         <>
           <P>
@@ -50,7 +50,7 @@ function WheelScrollCard() {
 export function ControlledScrollDemo() {
   return (
     <Example
-      title="Controlled scrollTop"
+      title="Controlled scroll position"
       info={
         <>
           <P>
@@ -113,7 +113,7 @@ function ControlledScrollCard() {
 export function SmoothScrollDemo() {
   return (
     <Example
-      title="Smooth scroll"
+      title="Smooth scrolling"
       info={
         <>
           <P>
@@ -166,7 +166,7 @@ function SmoothScrollCard() {
 export function ScrollbarDefaultDemo() {
   return (
     <Example
-      title='scrollbar: "default"'
+      title="Default scrollbars"
       info={
         <>
           <P>
@@ -189,7 +189,7 @@ function ScrollbarDefaultCard() {
 export function ScrollbarStyledDemo() {
   return (
     <Example
-      title="Styled scrollbar"
+      title="Styled scrollbars"
       info={
         <>
           <P>
@@ -218,7 +218,7 @@ function ScrollbarStyledCard() {
 export function ScrollbarFloatDemo() {
   return (
     <Example
-      title='position: "float"'
+      title="Floating scrollbars"
       info={
         <>
           <P>
@@ -247,7 +247,7 @@ function ScrollbarFloatCard() {
 export function ScrollbarLeftDemo() {
   return (
     <Example
-      title='verticalSide: "left"'
+      title="Left-side scrollbars"
       info={
         <>
           <P>
@@ -275,7 +275,7 @@ function ScrollbarLeftCard() {
 export function ScrollbarStatesDemo() {
   return (
     <Example
-      title="Thumb hover & pressed"
+      title="Thumb hover and press"
       info={
         <>
           <P>
@@ -327,7 +327,7 @@ function ScrollList({
 export function HorizontalScrollbarDemo() {
   return (
     <Example
-      title="Horizontal scrollbar"
+      title="Horizontal scrollbars"
       info={
         <>
           <P>

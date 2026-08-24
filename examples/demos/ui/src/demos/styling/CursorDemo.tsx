@@ -6,7 +6,7 @@ import { Colors, FontSizes } from "@/theme";
 import { caption } from "./shared";
 
 const PAGE: ExplanationData = {
-  title: "cursor",
+  title: "Cursors",
   info: (
     <>
       <P>
@@ -67,7 +67,7 @@ const CURSORS = [
 function CursorKeywordsDemo() {
   return (
     <Example
-      title="cursor"
+      title="Built-in cursors"
       info={
         <>
           <P>
@@ -103,7 +103,7 @@ function CursorKeywordsCard() {
 function CustomCursorDemo() {
   return (
     <Example
-      title="Custom cursor"
+      title="Custom cursors"
       info={
         <>
           <P>

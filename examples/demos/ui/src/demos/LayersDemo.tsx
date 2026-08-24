@@ -27,7 +27,7 @@ const PAGE: ExplanationData = {
         promoted and a live <InlineCode>repaints</InlineCode> counter.
       </P>
 
-      <H2>What promotes</H2>
+      <H2>What gets promoted</H2>
       <Code lang="tsx">{`// each of these promotes the subtree:
 <node style={{ opacity: 0.5 }}>…</node>
 <node
@@ -132,7 +132,7 @@ export function LayersDemo() {
 function PromotionDemo() {
   return (
     <Example
-      title="What promotes"
+      title="What gets promoted"
       info={
         <>
           <P>

@@ -55,7 +55,7 @@ export function RootDemo() {
   useDemoPage(PAGE);
   return (
     <Example
-      title="Detached modal"
+      title="Detached modals"
       info={
         <>
           <P>

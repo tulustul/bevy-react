@@ -37,7 +37,7 @@ export function NodeDemo() {
   useDemoPage(PAGE);
   return (
     <Example
-      title="Boxes & gap"
+      title="Boxes and gaps"
       info={
         <>
           <P>

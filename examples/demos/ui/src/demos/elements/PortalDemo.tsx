@@ -61,7 +61,7 @@ export function PortalDemo() {
 function FollowCamDemo() {
   return (
     <Example
-      title="Follow cam"
+      title="Follow camera"
       style={{ cache: "never" }}
       info={
         <>

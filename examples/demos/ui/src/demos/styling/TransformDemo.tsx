@@ -7,7 +7,7 @@ import { Colors } from "@/theme";
 import { box, controlColumn } from "./shared";
 
 const PAGE: ExplanationData = {
-  title: "transform",
+  title: "Transforms",
   info: (
     <>
       <P>
@@ -52,7 +52,7 @@ export function TransformDemo() {
 function TranslateDemo() {
   return (
     <Example
-      title="translate"
+      title="Translation"
       info={
         <>
           <P>
@@ -97,7 +97,7 @@ function TranslateCard() {
 function PercentTranslateDemo() {
   return (
     <Example
-      title="Percent translate"
+      title="Percentage translation"
       info={
         <>
           <P>
@@ -143,7 +143,7 @@ function PercentTranslateCard() {
 function ScaleDemo() {
   return (
     <Example
-      title="scale"
+      title="Scaling"
       info={
         <>
           <P>
@@ -185,7 +185,7 @@ function ScaleCard() {
 function RotateDemo() {
   return (
     <Example
-      title="rotate"
+      title="Rotation"
       info={
         <>
           <P>

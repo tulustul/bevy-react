@@ -52,7 +52,7 @@ export function GradientsDemo() {
 function BackgroundGradientDemo() {
   return (
     <Example
-      title="backgroundGradient"
+      title="Background gradients"
       info={
         <>
           <P>
@@ -120,7 +120,7 @@ function BackgroundGradientCard() {
 function BorderGradientDemo() {
   return (
     <Example
-      title="borderGradient"
+      title="Border gradients"
       info={
         <>
           <P>
@@ -279,7 +279,7 @@ const TRANSITION_TSX = `<node
 function GradientTransitionDemo() {
   return (
     <Example
-      title="Gradient transition"
+      title="Gradient transitions"
       info={
         <>
           <P>
@@ -355,7 +355,7 @@ backgroundGradient: {
 function AnimatedGradientDemo() {
   return (
     <Example
-      title="Animated gradient"
+      title="Animated gradients"
       info={
         <>
           <P>

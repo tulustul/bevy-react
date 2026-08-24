@@ -92,7 +92,7 @@ export function CanvasDemo() {
 function GraphDemo() {
   return (
     <Example
-      title="Declarative draw"
+      title="Declarative drawing"
       info={
         <>
           <P>

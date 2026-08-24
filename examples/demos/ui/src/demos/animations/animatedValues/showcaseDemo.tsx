@@ -69,7 +69,7 @@ const WARM = [
 export function ShowcaseDemo() {
   return (
     <Example
-      title="Bouncing Squares"
+      title="Bouncing squares"
       info={
         <>
           <P>

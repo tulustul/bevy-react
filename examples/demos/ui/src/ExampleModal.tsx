@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { BevyStyle, PointerEventData } from "bevy-react/jsx";
 import { bevy } from "@/bevy";
-import { Button } from "@/components";
+import { Button, HeaderText } from "@/components";
 import { InfoBody } from "@/components/docs";
 import { Colors, FontSizes, Gradients, Scrollbar } from "@/theme";
 import { useExplanationStore } from "./explanationStore";
@@ -101,7 +101,7 @@ export function ExampleModal() {
             onPointerMove={onPointerMove}
           >
             <node style={titleBarStyle}>
-              <text style={titleStyle}>{selected.title}</text>
+              <HeaderText style={titleStyle}>{selected.title}</HeaderText>
               <Button
                 style={closeXStyle}
                 labelStyle={{ fontSize: FontSizes.lg }}
@@ -191,7 +191,7 @@ const titleBarStyle: BevyStyle = {
 };
 
 const titleStyle: BevyStyle = {
-  fontSize: FontSizes.base,
+  fontSize: FontSizes.xl,
   fontWeight: "semibold",
   color: Colors.textColor100,
 };

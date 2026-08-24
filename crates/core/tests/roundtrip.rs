@@ -167,7 +167,7 @@ fn bridge_round_trip() {
     };
 
     // Phase 0: the gallery starts on another demo, so navigate the left-nav to the
-    // counter demo — expand the "Communication" submenu, then select "Bevy <- React"
+    // counter demo — expand the "Communication" submenu, then select "React to Bevy"
     // (the `bevy.basicDemo.setCount` counter) — before asserting the round trip.
     let comm = drain_until_button(
         &ops_rx,
@@ -182,13 +182,13 @@ fn bridge_round_trip() {
 
     let basic = drain_until_button(
         &ops_rx,
-        "Bevy <- React",
+        "React to Bevy",
         Duration::from_secs(10),
         &mut buttons,
         &mut parent_of,
         &mut text_of,
     )
-    .expect("no 'Bevy <- React' nav button after expanding 'Communication'");
+    .expect("no 'React to Bevy' nav button after expanding 'Communication'");
     click(basic);
 
     // Phase 1: the counter renders an increment button labelled `+` and the count
@@ -323,7 +323,7 @@ fn animation_callback_round_trip() {
             .expect("JS thread gone before click");
     };
 
-    // Navigate the left-nav: expand "Animations", select "Animated Values"
+    // Navigate the left-nav: expand "Animations", select "Animated values"
     // (the Sequence card lives there).
     let animations = drain_until_button(
         &ops_rx,
@@ -338,13 +338,13 @@ fn animation_callback_round_trip() {
 
     let animated_values = drain_until_button(
         &ops_rx,
-        "Animated Values",
+        "Animated values",
         Duration::from_secs(10),
         &mut buttons,
         &mut parent_of,
         &mut text_of,
     )
-    .expect("no 'Animated Values' nav button after expanding 'Animations'");
+    .expect("no 'Animated values' nav button after expanding 'Animations'");
     click(animated_values);
 
     let play = drain_until_button(

@@ -233,7 +233,7 @@ fn build_app(window: Window, hot_reload: bool) -> App {
     // auto-enables it in dev builds. Whether the panel is open persists in
     // `.bevy-react-devtools.json`, so it reopens where you left it.
 
-    // A one-time host-generated texture the Background Image demo displays
+    // A one-time host-generated texture the Background images demo displays
     // via `src: { texture: "checker" }` (the static-texture path — live
     // rendering belongs to `<portal>`).
     app.add_systems(Startup, register_host_textures);

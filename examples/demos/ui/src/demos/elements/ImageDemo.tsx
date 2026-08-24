@@ -58,7 +58,7 @@ export function ImageDemo() {
 function FlipDemo() {
   return (
     <Example
-      title="tint & flips"
+      title="Tint and flips"
       info={
         <>
           <P>
@@ -117,7 +117,7 @@ function FlipCard() {
 function SlicedDemo() {
   return (
     <Example
-      title="9-slice"
+      title="9-slice scaling"
       info={
         <>
           <P>
@@ -173,7 +173,7 @@ function SlicedCard() {
 function SourceRectDemo() {
   return (
     <Example
-      title="sourceRect"
+      title="Source rectangles"
       info={
         <>
           <P>
@@ -227,7 +227,7 @@ function SourceRectCard() {
 function AtlasDemo() {
   return (
     <Example
-      title="atlas"
+      title="Texture atlases"
       info={
         <>
           <P>
@@ -287,7 +287,7 @@ const SIZES = [64, 160];
 function SvgDemo() {
   return (
     <Example
-      title="Svg image"
+      title="SVG images"
       info={
         <>
           <P>

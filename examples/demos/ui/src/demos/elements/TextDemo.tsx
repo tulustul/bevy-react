@@ -68,7 +68,7 @@ export function TextDemo() {
 function FontSizeDemo() {
   return (
     <Example
-      title="fontSize & fontWeight"
+      title="Size and weight"
       info={
         <>
           <P>
@@ -110,7 +110,7 @@ function FontSizeCard() {
 function FontFamilyDemo() {
   return (
     <Example
-      title="fontFamily & spans"
+      title="Fonts and spans"
       info={
         <>
           <P>
@@ -238,7 +238,7 @@ function TypographyCard() {
 function LineBreakDemo() {
   return (
     <Example
-      title="lineBreak"
+      title="Line breaking"
       info={
         <>
           <P>

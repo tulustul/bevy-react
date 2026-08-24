@@ -7,7 +7,7 @@ import { caption, controlColumn } from "./shared";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
 
 const PAGE: ExplanationData = {
-  title: "focusPolicy",
+  title: "Focus policy",
   info: (
     <>
       <P>

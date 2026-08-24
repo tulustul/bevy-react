@@ -39,7 +39,7 @@ export function WindowDemo() {
 function WindowSizeExample() {
   return (
     <Example
-      title="Window"
+      title="Window events"
       info={
         <>
           <P>

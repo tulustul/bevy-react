@@ -17,7 +17,7 @@ const OPTIONS: RadioOption<OverflowValue>[] = [
 export function OverflowModesDemo() {
   return (
     <Example
-      title="overflowX / overflowY"
+      title="Clipping axes"
       info={
         <>
           <P>
@@ -78,7 +78,7 @@ function OverflowModesCard() {
 export function ClipVsHiddenDemo() {
   return (
     <Example
-      title="clip vs hidden"
+      title="Clip vs hidden"
       info={
         <>
           <P>

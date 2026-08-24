@@ -98,7 +98,7 @@ function Swatches({ count = 4 }: { count?: number }) {
 function FlexPlaygroundDemo() {
   return (
     <Example
-      title="Flex playground"
+      title="Flexbox playground"
       info={
         <>
           <P>
@@ -153,7 +153,7 @@ function FlexPlaygroundCard() {
 function FlexWrapDemo() {
   return (
     <Example
-      title="flexWrap"
+      title="Wrapping"
       info={
         <>
           <P>
@@ -190,7 +190,7 @@ function FlexWrapCard() {
 function FlexGrowDemo() {
   return (
     <Example
-      title="flexGrow"
+      title="Growing to fill"
       info={
         <>
           <P>

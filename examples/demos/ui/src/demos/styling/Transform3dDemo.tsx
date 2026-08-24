@@ -13,7 +13,7 @@ import { controlColumn } from "./shared";
 import { TestBanner } from "@/components/TestBanner";
 
 const PAGE: ExplanationData = {
-  title: "transform3d",
+  title: "3D transforms",
   info: (
     <>
       <P>
@@ -188,7 +188,7 @@ function OrthographicCard() {
 function OriginDemo() {
   return (
     <Example
-      title="Origin"
+      title="Transform origin"
       info={
         <>
           <P>
@@ -248,7 +248,7 @@ function OriginCard() {
 function FlipCardDemo() {
   return (
     <Example
-      title="Flip card"
+      title="Flip cards"
       info={
         <>
           <P>

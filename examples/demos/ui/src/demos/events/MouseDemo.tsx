@@ -87,7 +87,7 @@ const onPointerMove = (e: PointerEventData) => {
 function DragDemo() {
   return (
     <Example
-      title="Drag"
+      title="Dragging"
       info={
         <>
           <P>
@@ -199,7 +199,7 @@ function DragCard() {
 function HoverDemo() {
   return (
     <Example
-      title="Hover"
+      title="Hovering"
       info={
         <>
           <P>
@@ -263,7 +263,7 @@ const WHEEL_TSX = `const onWheel = (e: WheelEventData) => {
 function WheelDemo() {
   return (
     <Example
-      title="Wheel"
+      title="Wheel scrolling"
       info={
         <>
           <P>

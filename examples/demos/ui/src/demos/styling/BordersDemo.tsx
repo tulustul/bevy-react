@@ -52,7 +52,7 @@ export function BordersDemo() {
 function BorderRadiusDemo() {
   return (
     <Example
-      title="borderRadius"
+      title="Rounded corners"
       info={
         <>
           <P>
@@ -86,7 +86,7 @@ function BorderRadiusCard() {
 function BorderWidthDemo() {
   return (
     <Example
-      title="border"
+      title="Border width and color"
       info={
         <>
           <P>
@@ -189,7 +189,7 @@ function PerSideCard() {
 function OutlineDemo() {
   return (
     <Example
-      title="outline"
+      title="Outlines"
       info={
         <>
           <P>

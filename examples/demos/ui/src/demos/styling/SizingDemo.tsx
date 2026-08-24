@@ -42,7 +42,7 @@ export function SizingDemo() {
 function WidthDemo() {
   return (
     <Example
-      title="width"
+      title="Width and height"
       info={
         <>
           <P>
@@ -79,7 +79,7 @@ function WidthCard() {
 function AspectRatioDemo() {
   return (
     <Example
-      title="aspectRatio"
+      title="Aspect ratios"
       info={
         <>
           <P>
@@ -121,7 +121,7 @@ function AspectRatioCard() {
 function MaxWidthDemo() {
   return (
     <Example
-      title="maxWidth"
+      title="Minimum and maximum sizes"
       info={
         <>
           <P>

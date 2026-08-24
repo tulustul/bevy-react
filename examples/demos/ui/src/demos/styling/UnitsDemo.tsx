@@ -97,7 +97,7 @@ const FONT_SIZES = ["14px", "1.5rem", "2vw"];
 function FontSizeDemo() {
   return (
     <Example
-      title="fontSize"
+      title="Font sizes"
       info={
         <>
           <P>
@@ -194,7 +194,7 @@ function AngleCard() {
 function TimeDemo() {
   return (
     <Example
-      title="Time"
+      title="Durations"
       info={
         <>
           <P>

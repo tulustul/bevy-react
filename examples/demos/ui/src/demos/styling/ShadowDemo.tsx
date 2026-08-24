@@ -7,7 +7,7 @@ import { Colors } from "@/theme";
 import { box, controlColumn } from "./shared";
 
 const PAGE: ExplanationData = {
-  title: "boxShadow",
+  title: "Shadows",
   info: (
     <>
       <P>
@@ -85,7 +85,7 @@ function StackedShadowsCard() {
 function BlurDemo() {
   return (
     <Example
-      title="blurRadius / spreadRadius"
+      title="Blur and spread"
       info={
         <>
           <P>
@@ -139,7 +139,7 @@ function BlurCard() {
 function OffsetDemo() {
   return (
     <Example
-      title="xOffset / yOffset"
+      title="Offsets"
       info={
         <>
           <P>

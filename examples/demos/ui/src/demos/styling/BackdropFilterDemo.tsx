@@ -6,7 +6,7 @@ import { controlColumn } from "./shared";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
 
 const PAGE: ExplanationData = {
-  title: "backdropFilter",
+  title: "Backdrop filters",
   info: (
     <>
       <P>
@@ -78,7 +78,7 @@ const glass = {
 function GlassCardDemo() {
   return (
     <Example
-      title="Blur"
+      title="Blurred backdrop"
       info={
         <>
           <P>
@@ -139,7 +139,7 @@ function GlassCard() {
 function HueDemo() {
   return (
     <Example
-      title="Hue"
+      title="Hue rotation"
       info={
         <>
           <P>
@@ -186,7 +186,7 @@ function HueCard() {
 function BothChainsDemo() {
   return (
     <Example
-      title="filter + backdropFilter"
+      title="Filter and backdrop filter"
       info={
         <>
           <P>
@@ -253,7 +253,7 @@ function BothChainsCard() {
 function CustomFilterDemo() {
   return (
     <Example
-      title="Custom filters"
+      title="Custom backdrop filters"
       info={
         <>
           <P>

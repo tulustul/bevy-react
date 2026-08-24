@@ -13,7 +13,7 @@ import { useDemoPage, type ExplanationData } from "@/explanationStore";
 // values or event wiring.
 
 const PAGE: ExplanationData = {
-  title: "Style Transitions",
+  title: "Style transitions",
   info: (
     <>
       <P>
@@ -63,7 +63,7 @@ export function TransitionDemo() {
 function HoverPressDemo() {
   return (
     <Example
-      title="Hover & press"
+      title="Hover and press"
       info={
         <>
           <P>
@@ -119,7 +119,7 @@ function HoverPressCard() {
 function ToggleSwitchDemo() {
   return (
     <Example
-      title="Toggle switch"
+      title="Toggle switches"
       info={
         <>
           <P>
@@ -258,7 +258,7 @@ function TimingVsSpringCard() {
 function SizeDemo() {
   return (
     <Example
-      title="Size"
+      title="Size transitions"
       info={
         <>
           <P>
@@ -313,7 +313,7 @@ function SizeCard() {
 function DelayDemo() {
   return (
     <Example
-      title="Delay"
+      title="Delays"
       info={
         <>
           <P>
