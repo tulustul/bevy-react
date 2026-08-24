@@ -6,7 +6,7 @@ use bevy::picking::pointer::PointerId;
 use bevy::prelude::*;
 use bevy::ui::{ComputedNode, UiGlobalTransform};
 
-use crate::bridge::{JsBridge, RNode};
+use crate::bridge::{JsBridge, ReactNode};
 use crate::event::ReactEvents;
 use crate::plugin::PointerCapture;
 use crate::protocol::NodeId;
@@ -63,7 +63,7 @@ pub(super) fn on_highlight_message(
 /// (exiting pick mode). Uses the picking `HoverMap` — the established pattern
 /// for UI hit-tests here (window-cursor `UiStack` walks can't see everything
 /// picking can) — and resolves hits the way surface picking does: climb from the
-/// topmost (min-depth) hit to the nearest `RNode` owner. Anything under the
+/// topmost (min-depth) hit to the nearest `ReactNode` owner. Anything under the
 /// panel's own `<root>` (reported by the JS panel as
 /// [`DevtoolsState::panel_root`]) is rejected so the panel can never pick
 /// itself; app `<root>` overlays are ordinary pick targets. Only the mouse
@@ -79,7 +79,7 @@ pub(super) fn drive_pick_mode(
     mouse: Res<ButtonInput<MouseButton>>,
     capture: Option<ResMut<PointerCapture>>,
     bridge: Option<Res<JsBridge>>,
-    rnodes: Query<&RNode>,
+    rnodes: Query<&ReactNode>,
     child_of: Query<&ChildOf>,
     events: ReactEvents,
 ) {
@@ -110,7 +110,7 @@ pub(super) fn drive_pick_mode(
             // demos always have a 3D scene behind the UI). The scales aren't
             // comparable, and a mesh often wins a raw `min_by(depth)`, which
             // made picking look dead over the whole viewport. So: keep only
-            // hits that resolve to a reconciled UI node (climb to an `RNode`
+            // hits that resolve to a reconciled UI node (climb to an `ReactNode`
             // owner — this drops mesh hits but keeps panel nodes, so you still
             // can't pick app nodes THROUGH the panel), take the frontmost of
             // those, THEN apply the panel self-rejection.
@@ -321,7 +321,7 @@ mod tests {
     }
 
     /// A mesh-picking hit (ray distance, numerically "closer") must not shadow
-    /// UI hits: the frontmost hit that resolves to an `RNode` wins. Regression:
+    /// UI hits: the frontmost hit that resolves to an `ReactNode` wins. Regression:
     /// a raw `min_by(depth)` over the mixed hover map let 3D scene meshes win
     /// everywhere, making pick mode look dead.
     #[test]
@@ -329,8 +329,8 @@ mod tests {
         use bevy::ecs::system::RunSystemOnce;
 
         let (mut world, _rx) = pick_world(false);
-        let mesh = world.spawn_empty().id(); // no RNode — a scene mesh
-        let node = world.spawn(RNode(7)).id();
+        let mesh = world.spawn_empty().id(); // no ReactNode — a scene mesh
+        let node = world.spawn(ReactNode(7)).id();
         let leaf = world.spawn(ChildOf(node)).id(); // e.g. its text run
         set_mouse_hits(&mut world, &[(mesh, 0.5), (leaf, 30.0)]);
 
@@ -338,7 +338,7 @@ mod tests {
         assert_eq!(
             world.resource::<DevtoolsState>().pick_hover,
             Some(7),
-            "the frontmost RNode-resolving hit must win; mesh hits are ignored"
+            "the frontmost ReactNode-resolving hit must win; mesh hits are ignored"
         );
     }
 
@@ -349,9 +349,9 @@ mod tests {
         use bevy::ecs::system::RunSystemOnce;
 
         let (mut world, _rx) = pick_world(false);
-        let panel_root = world.spawn((RRoot, RNode(100))).id();
-        let panel_button = world.spawn((RNode(101), ChildOf(panel_root))).id();
-        let app_node = world.spawn(RNode(7)).id();
+        let panel_root = world.spawn((RRoot, ReactNode(100))).id();
+        let panel_button = world.spawn((ReactNode(101), ChildOf(panel_root))).id();
+        let app_node = world.spawn(ReactNode(7)).id();
         report_panel_root(&mut world, 100, panel_root);
         set_mouse_hits(&mut world, &[(panel_button, 1.0), (app_node, 5.0)]);
 
@@ -371,9 +371,9 @@ mod tests {
         use bevy::ecs::system::RunSystemOnce;
 
         let (mut world, _rx) = pick_world(false);
-        let panel_root = world.spawn((RRoot, RNode(100))).id();
-        let app_root = world.spawn((RRoot, RNode(50))).id();
-        let overlay_node = world.spawn((RNode(7), ChildOf(app_root))).id();
+        let panel_root = world.spawn((RRoot, ReactNode(100))).id();
+        let app_root = world.spawn((RRoot, ReactNode(50))).id();
+        let overlay_node = world.spawn((ReactNode(7), ChildOf(app_root))).id();
         report_panel_root(&mut world, 100, panel_root);
         set_mouse_hits(&mut world, &[(overlay_node, 5.0)]);
 
@@ -386,15 +386,15 @@ mod tests {
     }
 
     /// The panel behind an app node doesn't block it: rejection applies only
-    /// when the frontmost RNode-resolving hit is the panel's.
+    /// when the frontmost ReactNode-resolving hit is the panel's.
     #[test]
     fn pick_prefers_frontmost_app_hit_over_panel_behind() {
         use bevy::ecs::system::RunSystemOnce;
 
         let (mut world, _rx) = pick_world(false);
-        let panel_root = world.spawn((RRoot, RNode(100))).id();
-        let panel_button = world.spawn((RNode(101), ChildOf(panel_root))).id();
-        let app_node = world.spawn(RNode(7)).id();
+        let panel_root = world.spawn((RRoot, ReactNode(100))).id();
+        let panel_button = world.spawn((ReactNode(101), ChildOf(panel_root))).id();
+        let app_node = world.spawn(ReactNode(7)).id();
         report_panel_root(&mut world, 100, panel_root);
         set_mouse_hits(&mut world, &[(panel_button, 5.0), (app_node, 1.0)]);
 
@@ -413,7 +413,7 @@ mod tests {
         use bevy::ecs::system::RunSystemOnce;
 
         let (mut world, mut rx) = pick_world(true);
-        let app_node = world.spawn(RNode(7)).id();
+        let app_node = world.spawn(ReactNode(7)).id();
         set_mouse_hits(&mut world, &[(app_node, 5.0)]);
 
         world.run_system_once(drive_pick_mode).unwrap();

@@ -149,7 +149,7 @@ pub fn sync_transform3d_matrices(
             &UiGlobalTransform,
             &LayerTransform3d,
             Option<&LayerTransform3dMatrix>,
-            &crate::bridge::RNode,
+            &crate::bridge::ReactNode,
         ),
         With<PromotedLayer>,
     >,
@@ -340,7 +340,7 @@ mod tests {
                         super::super::PromotionReasons::TRANSFORM3D,
                     ),
                 },
-                crate::bridge::RNode(7),
+                crate::bridge::ReactNode(7),
             ))
             .id();
 

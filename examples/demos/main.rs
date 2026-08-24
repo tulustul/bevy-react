@@ -46,6 +46,7 @@ use scenes::bouncing_ball::BouncingBallScenePlugin;
 use scenes::crowded_cubes::CrowdedCubesScenePlugin;
 use scenes::cubes::CubesScenePlugin;
 use scenes::monitor::MonitorScenePlugin;
+use scenes::named_pins::NamedPinsScenePlugin;
 use scenes::space_cubes::SpaceCubesScenePlugin;
 
 /// Web entry. `wasm-bindgen --target web` wires this as the module's start, so the
@@ -229,6 +230,7 @@ fn build_app(window: Window, hot_reload: bool) -> App {
             CrowdedCubesScenePlugin,
             MonitorScenePlugin,
             SpaceCubesScenePlugin,
+            NamedPinsScenePlugin,
         ));
     // The devtools inspector (F12) needs no registration: `ReactUiPlugin`
     // auto-enables it in dev builds. Whether the panel is open persists in
@@ -271,7 +273,8 @@ fn register_react_bindings(app: &mut App) {
     screenshot::register_bindings(app);
     filters::register_bindings(app);
     clipboard::register_bindings(app);
-    // `scenes::ambient` is intentionally absent: it registers no bindings.
+    // `scenes::ambient` and `scenes::named_pins` are intentionally absent: they
+    // register no bindings (named_pins reaches React entities via `ReactNodes`).
     scenes::cubes::register_bindings(app);
     scenes::bouncing_ball::register_bindings(app);
     scenes::crowded_cubes::register_bindings(app);

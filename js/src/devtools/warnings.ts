@@ -94,6 +94,8 @@ const KIND_FIELDS: Record<string, { style?: string[]; props?: string[] }> = {
   // (path d, points, paints, keyword enums, transform all live inside it) and
   // the <svg> root's `viewBox` string.
   viewBox: { props: ["viewBox"] },
+  // `ReactNodes::get` hit 2+ nodes sharing the name (the first one is flagged).
+  nameAmbiguous: { props: ["name"] },
   shapePath: { props: ["shape"] },
   shapePoints: { props: ["shape"] },
   shapePaint: { props: ["shape"] },

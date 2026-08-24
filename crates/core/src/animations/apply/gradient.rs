@@ -64,7 +64,7 @@ pub(super) fn apply_gradient_params(
     border: Option<&mut Mut<bevy::ui::BorderGradient>>,
     opacity_alpha: Option<f32>,
     promoted: bool,
-    rnode: Option<&crate::bridge::RNode>,
+    rnode: Option<&crate::bridge::ReactNode>,
     validate: bool,
     dirt: &mut crate::layer::LayerContentDirt,
 ) {

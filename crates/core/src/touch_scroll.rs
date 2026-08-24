@@ -591,7 +591,7 @@ mod tests {
     }
 
     /// [`touch_app`] extended for click suppression: the container carries an
-    /// `RNode`/`ClickOwner` (a clickable row), a `JsBridge` catches outbound
+    /// `ReactNode`/`ClickOwner` (a clickable row), a `JsBridge` catches outbound
     /// events, and `collect_ui_events` runs **before** `apply_touch_scroll` —
     /// the harder of the two unordered production schedules, proving the
     /// suppression flag is readable from the previous frames' state alone.
@@ -616,7 +616,7 @@ mod tests {
         );
         app.world_mut()
             .entity_mut(container)
-            .insert((crate::bridge::RNode(9), crate::bridge::ClickOwner));
+            .insert((crate::bridge::ReactNode(9), crate::bridge::ClickOwner));
         (app, container, out_rx)
     }
 

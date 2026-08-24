@@ -18,7 +18,7 @@ use super::stamps::{
     register_editable_handlers, stamp_common, warn_span_ignored,
 };
 use super::stats::UiAssets;
-use crate::bridge::{CanvasSizeTracker, JsBridge, RNode, SpanKind};
+use crate::bridge::{CanvasSizeTracker, JsBridge, ReactNode, SpanKind};
 use crate::canvas::{CanvasSurface, blank_canvas_image};
 use crate::plugin::Fonts;
 use crate::portal::{RPortal, blank_portal_image};
@@ -58,7 +58,7 @@ pub(super) fn apply_create(
         // pointer handlers, animation bindings, anchor — and layer-eligible
         // (a `filter`/`transform3d`/… promotes it like any element).
         "text" => {
-            let mut ec = commands.spawn(RNode(id));
+            let mut ec = commands.spawn(ReactNode(id));
             apply_style(&mut ec, &props.style);
             ec.insert(Text::new(text.clone().unwrap_or_default()));
             apply_text_style(&mut ec, &props.style, fonts);
@@ -74,7 +74,8 @@ pub(super) fn apply_create(
         // the silence is visible in devtools.
         "textSpan" => {
             warn_span_ignored(&props);
-            let mut ec = commands.spawn((RNode(id), TextSpan(text.clone().unwrap_or_default())));
+            let mut ec =
+                commands.spawn((ReactNode(id), TextSpan(text.clone().unwrap_or_default())));
             apply_text_style(&mut ec, &props.style, fonts);
             ec.id()
         }
@@ -85,7 +86,7 @@ pub(super) fn apply_create(
             let handle = images.add(blank_canvas_image());
             let mut node_img = ImageNode::new(handle);
             node_img.image_mode = NodeImageMode::Stretch;
-            let mut ec = commands.spawn(RNode(id));
+            let mut ec = commands.spawn(ReactNode(id));
             apply_style(&mut ec, &props.style);
             ec.insert((
                 node_img,
@@ -103,7 +104,7 @@ pub(super) fn apply_create(
             let handle = images.add(blank_portal_image());
             let mut node_img = ImageNode::new(handle);
             node_img.image_mode = NodeImageMode::Stretch;
-            let mut ec = commands.spawn(RNode(id));
+            let mut ec = commands.spawn(ReactNode(id));
             apply_style(&mut ec, &props.style);
             ec.insert((node_img, RPortal(props.target.clone().unwrap_or_default())));
             stamp_common(&mut ec, &props);
@@ -123,7 +124,7 @@ pub(super) fn apply_create(
         // not the legacy `Interaction` focus path.
         "surface" => {
             let style = overlay_style(&surface_root_base(), &props.style);
-            let mut ec = commands.spawn(RNode(id));
+            let mut ec = commands.spawn(ReactNode(id));
             apply_style(&mut ec, &style);
             ec.insert(RSurface(props.target.clone().unwrap_or_default()));
             apply_anchor(&mut ec, &props);
@@ -143,7 +144,7 @@ pub(super) fn apply_create(
         // picking; its children are ordinary pickable nodes.
         "root" => {
             let style = overlay_style(&root_base(), &props.style);
-            let mut ec = commands.spawn(RNode(id));
+            let mut ec = commands.spawn(ReactNode(id));
             apply_style(&mut ec, &style);
             ec.insert((crate::bridge::RRoot, Pickable::IGNORE));
             apply_anchor(&mut ec, &props);
@@ -154,7 +155,7 @@ pub(super) fn apply_create(
         // drives keyboard/focus/cursor/selection/clipboard; we just
         // spawn the widget and observe `TextEditChange` for `onChange`.
         "editableText" => {
-            let mut ec = commands.spawn(RNode(id));
+            let mut ec = commands.spawn(ReactNode(id));
             apply_style(&mut ec, &props.style);
             let mut editable = EditableText::new(props.value.as_deref().unwrap_or_default());
             editable.max_characters = props.max_length;
@@ -298,6 +299,13 @@ pub(super) fn apply_create(
         }
     }
     bridge.nodes.insert(id, entity);
+    // `name` → Bevy `Name` + the by-name index (see `crate::names`).
+    crate::names::apply_name(
+        &mut commands.entity(entity),
+        &mut bridge.names,
+        None,
+        props.name.as_deref(),
+    );
     // `cache: "always"`, a `filter`/`backdropFilter` chain, a `morphFilter`,
     // or a `transform3d` — base or variant-carried (the promotion union is
     // presence-based, so a hover-only filter promotes eagerly at
@@ -336,7 +344,7 @@ fn spawn_element(
     layouts: &mut Assets<TextureAtlasLayout>,
     atlas_cache: &mut AtlasLayoutCache,
 ) -> Entity {
-    let mut ec = commands.spawn(RNode(id));
+    let mut ec = commands.spawn(ReactNode(id));
     apply_style(&mut ec, &props.style);
     match kind {
         // `Button` requires `Interaction`, which is added automatically.

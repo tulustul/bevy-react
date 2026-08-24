@@ -715,7 +715,7 @@ fn filter_param_validation_warns_once_and_stays_inert() {
         .spawn((
             AnimatedNode(bindings.clone()),
             UiTransform::default(),
-            crate::bridge::RNode(9),
+            crate::bridge::ReactNode(9),
             chain(
                 vec![pass(
                     0,
@@ -779,7 +779,7 @@ fn filter_param_validation_warns_once_and_stays_inert() {
         .spawn((
             AnimatedNode(bindings),
             UiTransform::default(),
-            crate::bridge::RNode(10),
+            crate::bridge::ReactNode(10),
         ))
         .id();
     schedule.run(&mut world);
@@ -809,7 +809,7 @@ fn filter_param_validation_warns_once_and_stays_inert() {
         .spawn((
             AnimatedNode(mixed),
             UiTransform::default(),
-            crate::bridge::RNode(11),
+            crate::bridge::ReactNode(11),
             chain(
                 vec![pass(
                     0,
@@ -1142,7 +1142,7 @@ fn gradient_binding_out_of_range_warns_once() {
         .spawn((
             AnimatedNode(bindings),
             UiTransform::default(),
-            crate::bridge::RNode(7),
+            crate::bridge::ReactNode(7),
             crate::ui_map::GradientTargets {
                 background: Some(list.clone()),
                 border: None,

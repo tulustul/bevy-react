@@ -28,10 +28,41 @@ pub type OutboundSender = tokio::sync::mpsc::UnboundedSender<Outbound>;
 #[cfg(target_arch = "wasm32")]
 pub type OutboundSender = crossbeam_channel::Sender<Outbound>;
 
-/// Component stamped on every entity the reconciler creates, recording the JS
-/// node id so interaction events can be reported back with the right identity.
+/// Marks an entity the React reconciler created (every host element: nodes,
+/// text roots and spans, SVG shapes, portals, surfaces, roots), carrying its
+/// reconciler node id — the id a JS `ref` resolves to (`{ id, type }`).
+///
+/// This is the app-side filter for reaching React-created entities from Bevy:
+/// `Query<(Entity, &Name), With<ReactNode>>` finds nodes by their `name` prop
+/// (see [`ReactNodes`](crate::ReactNodes) for the hash lookup), and
+/// `Added<ReactNode>` / `RemovedComponents<ReactNode>` are the mount/unmount
+/// signals. Order such systems `.after(ReactApplySet)` to see the current
+/// frame's ops.
+///
+/// # What the app may touch
+///
+/// The bridge re-applies the props it owns on every delta, so writes to
+/// **bridge-owned components** are clobbered on the next re-render (only the
+/// dirty style groups are rewritten, so a stray write may even survive for a
+/// while — don't rely on it). Read them freely; own everything else:
+///
+/// - Bridge-owned: `Node`, `BackgroundColor`, `BorderColor`, `BorderRadius`,
+///   `Outline`, `BoxShadow`, `ZIndex`/`GlobalZIndex`, `Visibility`,
+///   `UiTransform`, `ImageNode`, `Text`/`TextSpan`/`TextFont`/`TextColor`/
+///   `TextLayout`, `ScrollPosition`, `Interaction`/`FocusPolicy`, `Name`,
+///   `Children`/`ChildOf`, plus this crate's own markers.
+/// - Yours: any component the bridge never inserts (`MaterialNode<M>`,
+///   `TabIndex`, `Pickable`, audio, your own markers and data).
+///
+/// Child entities you spawn under a React node die with it (`despawn` is
+/// recursive) but are **orphaned** whenever the bridge rebuilds that node's
+/// child list (a sibling mounting, unmounting, or reordering): the sync
+/// replaces `Children` from the React tree, dropping their `ChildOf` — an
+/// orphaned `Node` then renders as a root UI node. Parent Bevy children under a
+/// node whose React children are static, or keep them world-space and follow
+/// the node's layout instead.
 #[derive(Component, Debug, Clone, Copy)]
-pub struct RNode(pub NodeId);
+pub struct ReactNode(pub NodeId);
 
 /// Marks a `<root>` host element: the screen-space twin of `<surface>` — a
 /// detached top-level UI tree rendered on the default UI camera, used for
@@ -156,6 +187,10 @@ pub struct JsBridge {
     pub outbound_tx: OutboundSender,
     /// Maps reconciler node ids to their spawned entities.
     pub nodes: HashMap<NodeId, Entity>,
+    /// The `name` prop → entities index behind [`crate::ReactNodes`]. Kept in
+    /// step with the `Name` components by the op-apply path (create/update/
+    /// remove/reset); see [`crate::names`].
+    pub names: crate::names::NameIndex,
     /// The last applied props per node (event-like fields stripped — see
     /// [`crate::protocol::props::Props::split_events`]). Every [`crate::protocol::op::Op::Update`]
     /// merges its delta into this retained state, so the apply path always works
@@ -282,6 +317,7 @@ impl JsBridge {
             ops_rx,
             outbound_tx,
             nodes,
+            names: Default::default(),
             props_cache: HashMap::new(),
             layer_dirty: HashSet::new(),
             promoted_layers: HashSet::new(),
@@ -481,8 +517,13 @@ impl JsBridge {
     /// (handled by `forget_subtree`/`detach`) nor the surface parentage maps `surface_parent`/
     /// `child_surfaces` (handled by `attach_surface`/`detach_surface`/`surfaces_under`).
     fn forget_node_data(&mut self, id: NodeId) {
-        self.nodes.remove(&id);
-        self.props_cache.remove(&id);
+        let entity = self.nodes.remove(&id);
+        let props = self.props_cache.remove(&id);
+        // Drop the node from the by-name index (its `Name` dies with the entity).
+        if let (Some(entity), Some(name)) = (entity, props.as_ref().and_then(|p| p.name.as_deref()))
+        {
+            self.names.remove(name, entity);
+        }
         self.layer_dirty.remove(&id);
         self.promoted_layers.remove(&id);
         self.text_styles.remove(&id);

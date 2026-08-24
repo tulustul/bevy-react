@@ -57,7 +57,7 @@ pub(super) fn apply_shape_attrs(
     bindings: &AnimatedBindings,
     values: &SharedValues,
     shape: Option<&mut Mut<SvgShape>>,
-    rnode: Option<&crate::bridge::RNode>,
+    rnode: Option<&crate::bridge::ReactNode>,
     validate: bool,
 ) {
     // Attribute validation warnings to the node's devtools inspector.
@@ -435,7 +435,7 @@ mod tests {
             .spawn((
                 AnimatedNode(bindings.clone()),
                 UiTransform::default(),
-                crate::bridge::RNode(5),
+                crate::bridge::ReactNode(5),
                 SvgShape {
                     kind: ShapeKind::Circle,
                     attrs,
@@ -475,7 +475,7 @@ mod tests {
         world.spawn((
             AnimatedNode(bindings),
             UiTransform::default(),
-            crate::bridge::RNode(6),
+            crate::bridge::ReactNode(6),
         ));
         schedule.run(&mut world);
         let shapeless = crate::diag::take_runtime_warnings()

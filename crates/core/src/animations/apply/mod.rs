@@ -55,7 +55,7 @@ pub(super) struct AnimTargets {
     resolved_morph: Option<&'static mut crate::filters::ResolvedMorphChain>,
     /// Reconciler identity, for attributing `filterBinding` validation
     /// warnings to the node's devtools inspector.
-    rnode: Option<&'static crate::bridge::RNode>,
+    rnode: Option<&'static crate::bridge::ReactNode>,
     /// The composite-time 3D transform params (`transform3d.<field>` bindings
     /// overwrite single fields; `sync_transform3d_matrices` derives the
     /// matrix + composite-only dirt from the change — no dirt push here).

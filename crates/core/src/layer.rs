@@ -611,7 +611,7 @@ pub fn sync_layer_geometry(
             Entity,
             &ComputedNode,
             &UiGlobalTransform,
-            &crate::bridge::RNode,
+            &crate::bridge::ReactNode,
             Option<&crate::filters::ResolvedFilterChain>,
             Option<&crate::filters::FilterInput>,
             Option<&crate::filters::ResolvedBackdropChain>,
@@ -1887,7 +1887,7 @@ mod tests {
                     ..Default::default()
                 },
                 UiGlobalTransform::from(bevy::math::Affine2::from_translation(center)),
-                crate::bridge::RNode(id),
+                crate::bridge::ReactNode(id),
                 LayerGroupAlpha(1.0),
                 PromotedLayer {
                     reasons: PromotionReasons(PromotionReasons::FILTER),

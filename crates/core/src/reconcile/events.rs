@@ -10,7 +10,7 @@ use bevy::text::EditableText;
 use bevy::ui::RelativeCursorPosition;
 use bevy::ui::{ComputedNode, ScrollPosition, UiGlobalTransform};
 
-use crate::bridge::{CanvasSizeTracker, ClickOwner, JsBridge, RNode, ScrollListener};
+use crate::bridge::{CanvasSizeTracker, ClickOwner, JsBridge, ReactNode, ScrollListener};
 use crate::canvas::{CanvasSurface, clamp_physical_size};
 use crate::protocol::{NodeId, outbound::Outbound, outbound::UiEvent};
 use crate::surface::SurfaceVirtualPointer;
@@ -41,7 +41,7 @@ pub fn collect_ui_events(
     mut clicks: MessageReader<Pointer<Click>>,
     // Click ownership (see [`ClickOwners`]) — same attribution rule as
     // `collect_surface_clicks`.
-    targets: Query<&RNode, ClickOwners>,
+    targets: Query<&ReactNode, ClickOwners>,
     child_of: Query<&ChildOf>,
 ) {
     // One gesture fans out to every entity in the pointer's hover map (a
@@ -107,7 +107,7 @@ pub fn collect_ui_events(
 #[allow(clippy::type_complexity)]
 pub fn collect_scroll_events(
     mut bridge: ResMut<JsBridge>,
-    query: Query<(&ScrollPosition, &RNode), (With<ScrollListener>, Changed<ScrollPosition>)>,
+    query: Query<(&ScrollPosition, &ReactNode), (With<ScrollListener>, Changed<ScrollPosition>)>,
 ) {
     for (scroll, rnode) in &query {
         let id = rnode.0;
@@ -142,7 +142,7 @@ pub fn collect_scroll_events(
 pub fn collect_canvas_resize_events(
     bridge: Res<JsBridge>,
     mut query: Query<
-        (&RNode, &ComputedNode, &mut CanvasSizeTracker),
+        (&ReactNode, &ComputedNode, &mut CanvasSizeTracker),
         (With<CanvasSurface>, Changed<ComputedNode>),
     >,
 ) {
@@ -265,11 +265,11 @@ mod tests {
 
         world.spawn((
             ScrollPosition(Vec2::new(0.0, 50.0)),
-            RNode(1),
+            ReactNode(1),
             ScrollListener,
         ));
         // No marker → must be ignored even though its ScrollPosition is "changed".
-        world.spawn((ScrollPosition(Vec2::new(0.0, 70.0)), RNode(2)));
+        world.spawn((ScrollPosition(Vec2::new(0.0, 70.0)), ReactNode(2)));
 
         world.run_system_once(collect_scroll_events).unwrap();
 
@@ -312,7 +312,7 @@ mod tests {
             .insert(1, Vec2::new(0.0, 50.0));
         world.spawn((
             ScrollPosition(Vec2::new(0.0, 50.0)),
-            RNode(1),
+            ReactNode(1),
             ScrollListener,
         ));
 
@@ -367,7 +367,7 @@ mod tests {
         let (mut app, mut out_rx) = click_app();
         app.add_systems(Update, collect_ui_events);
 
-        let owner = app.world_mut().spawn((RNode(1), ClickOwner)).id();
+        let owner = app.world_mut().spawn((ReactNode(1), ClickOwner)).id();
         let leaf = app.world_mut().spawn(ChildOf(owner)).id();
 
         let click = |entity, button| {
@@ -417,10 +417,10 @@ mod tests {
         let (mut app, mut out_rx) = click_app();
         app.add_systems(Update, collect_ui_events);
 
-        let outer = app.world_mut().spawn((RNode(1), ClickOwner)).id();
+        let outer = app.world_mut().spawn((ReactNode(1), ClickOwner)).id();
         let inner = app
             .world_mut()
-            .spawn((RNode(2), ClickOwner, ChildOf(outer)))
+            .spawn((ReactNode(2), ClickOwner, ChildOf(outer)))
             .id();
         let leaf = app.world_mut().spawn(ChildOf(inner)).id();
 
@@ -468,10 +468,10 @@ mod tests {
         app.add_systems(Update, collect_surface_clicks);
         app.update(); // Run Startup so the pointer resource exists.
 
-        let outer = app.world_mut().spawn((RNode(1), ClickOwner)).id();
+        let outer = app.world_mut().spawn((ReactNode(1), ClickOwner)).id();
         let inner = app
             .world_mut()
-            .spawn((RNode(2), ClickOwner, ChildOf(outer)))
+            .spawn((ReactNode(2), ClickOwner, ChildOf(outer)))
             .id();
 
         let surface_id = app.world().resource::<SurfaceVirtualPointer>().id;
@@ -517,11 +517,11 @@ mod tests {
         let (mut app, mut out_rx) = click_app();
         app.add_systems(Update, collect_ui_events);
 
-        let owner = app.world_mut().spawn((RNode(1), ClickOwner)).id();
+        let owner = app.world_mut().spawn((ReactNode(1), ClickOwner)).id();
         // The label: interactive for styling, but not a click owner.
         let label = app
             .world_mut()
-            .spawn((RNode(2), Interaction::None, ChildOf(owner)))
+            .spawn((ReactNode(2), Interaction::None, ChildOf(owner)))
             .id();
 
         let click = |entity, depth| {
@@ -563,11 +563,11 @@ mod tests {
         let (mut app, mut out_rx) = click_app();
         app.add_systems(Update, collect_ui_events);
 
-        let root = app.world_mut().spawn((RNode(1), ClickOwner)).id();
+        let root = app.world_mut().spawn((ReactNode(1), ClickOwner)).id();
         let shape = app
             .world_mut()
             .spawn((
-                RNode(2),
+                ReactNode(2),
                 crate::svg::SvgShape {
                     kind: crate::svg::ShapeKind::Circle,
                     attrs: crate::svg::ShapeAttrs::default(),
@@ -607,7 +607,7 @@ mod tests {
         app.add_systems(Update, (collect_ui_events, collect_surface_clicks));
         app.update(); // Run Startup so the pointer resource exists.
 
-        let owner = app.world_mut().spawn((RNode(7), ClickOwner)).id();
+        let owner = app.world_mut().spawn((ReactNode(7), ClickOwner)).id();
         let surface_id = app.world().resource::<SurfaceVirtualPointer>().id;
         app.world_mut().write_message(Pointer::new(
             surface_id,

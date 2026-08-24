@@ -1,6 +1,6 @@
 // The code samples shown in the monitor "OS" source viewer.
 
-export const TSX = `<surface name="monitor">
+export const TSX = `<surface target="monitor">
   <MonitorApp />
 </surface>`;
 

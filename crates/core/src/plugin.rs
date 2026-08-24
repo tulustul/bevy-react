@@ -70,6 +70,14 @@ impl PointerCapture {
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct PointerCaptureSet;
 
+/// System set (in `Update`) in which the reconciler's ops for this frame are
+/// applied: entities spawned/despawned, the hierarchy synced, `Name`s and the
+/// [`ReactNodes`](crate::ReactNodes) index updated. Order app systems that
+/// read React-created entities `.after(ReactApplySet)` so they see this
+/// frame's mounts (`Added<ReactNode>`) rather than lagging a frame.
+#[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct ReactApplySet;
+
 /// Adds a React-driven `bevy_ui` layer to a Bevy `App`.
 ///
 /// Point it at a built JS bundle (see the `bevy-react` npm package). The plugin
@@ -514,7 +522,7 @@ impl Plugin for ReactUiPlugin {
         .add_systems(
             Update,
             (
-                apply_js_ops,
+                apply_js_ops.in_set(ReactApplySet),
                 collect_ui_events,
                 // Forward window-global keystrokes to React as built-in named
                 // events (`onKeyDown`/`onKeyUp`). Node-independent: reads Bevy's

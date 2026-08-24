@@ -13,7 +13,7 @@ use bevy::prelude::*;
 use bevy::ui::{ComputedNode, UiGlobalTransform};
 
 use super::events::{climb, dom_button, send_ui_event, surface_relative};
-use crate::bridge::{JsBridge, PointerHandlers, RNode, StyleVariants};
+use crate::bridge::{JsBridge, PointerHandlers, ReactNode, StyleVariants};
 use crate::protocol::style::Style;
 use crate::surface::SurfaceVirtualPointer;
 use crate::ui_map::{apply_style, overlay_style};
@@ -33,7 +33,7 @@ pub fn collect_surface_clicks(
     // matching `collect_ui_events`' attribution exactly (NOT `Interaction`:
     // hover/press styling must never steal a click from an ancestor with a
     // real handler).
-    targets: Query<&RNode, super::events::ClickOwners>,
+    targets: Query<&ReactNode, super::events::ClickOwners>,
     child_of: Query<&ChildOf>,
 ) {
     let Some(pointer) = pointer else { return };
@@ -78,7 +78,12 @@ pub fn collect_surface_pointer_events(
     mut presses: MessageReader<Pointer<Press>>,
     mut releases: MessageReader<Pointer<Release>>,
     mut drags: MessageReader<Pointer<Drag>>,
-    nodes: Query<(&RNode, &PointerHandlers, &ComputedNode, &UiGlobalTransform)>,
+    nodes: Query<(
+        &ReactNode,
+        &PointerHandlers,
+        &ComputedNode,
+        &UiGlobalTransform,
+    )>,
     child_of: Query<&ChildOf>,
 ) {
     let Some(pointer) = pointer else { return };
@@ -164,7 +169,12 @@ pub fn collect_surface_hover_events(
     pointer: Option<Res<SurfaceVirtualPointer>>,
     mut enters: MessageReader<Pointer<Enter>>,
     mut leaves: MessageReader<Pointer<Leave>>,
-    nodes: Query<(&RNode, &PointerHandlers, &ComputedNode, &UiGlobalTransform)>,
+    nodes: Query<(
+        &ReactNode,
+        &PointerHandlers,
+        &ComputedNode,
+        &UiGlobalTransform,
+    )>,
 ) {
     let Some(pointer) = pointer else { return };
     let emit = |entity: Entity, want: fn(&PointerHandlers) -> bool, kind: &str, at: Vec2| {
@@ -218,7 +228,7 @@ pub fn apply_surface_interaction_styles(
     mut releases: MessageReader<Pointer<Release>>,
     variants: Query<&StyleVariants>,
     child_of: Query<&ChildOf>,
-    rnodes: Query<&RNode>,
+    rnodes: Query<&ReactNode>,
     assets: Res<AssetServer>,
     // `Option`: headless test harnesses build partial apps without the bridge.
     bridge: Option<Res<crate::bridge::JsBridge>>,

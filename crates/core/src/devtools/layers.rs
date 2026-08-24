@@ -4,7 +4,7 @@
 use bevy::prelude::*;
 use bevy::ui::{ComputedNode, IsDefaultUiCamera};
 
-use crate::bridge::{JsBridge, RNode};
+use crate::bridge::{JsBridge, ReactNode};
 use crate::event::ReactEvents;
 use crate::protocol::NodeId;
 use crate::reconcile::climb;
@@ -39,7 +39,7 @@ pub(super) struct DevtoolsLayerRow {
     reasons: Vec<String>,
     /// Nesting depth: 0 = base, 1 = top-level layer, 2 = layer in a layer, …
     depth: u32,
-    /// Reconciled nodes ([`RNode`]) in the layer's capture subtree; 0 for the
+    /// Reconciled nodes ([`ReactNode`]) in the layer's capture subtree; 0 for the
     /// base layer and for inactive layers (membership skips them).
     node_count: u32,
     /// Window-space logical rect; `None` while the layer is inactive
@@ -224,7 +224,7 @@ pub(super) fn emit_layers(
     registry: Res<crate::layer::LayersRegistry>,
     membership: Res<crate::layer::LayerMembership>,
     bridge: Option<Res<JsBridge>>,
-    rnodes: Query<(), With<RNode>>,
+    rnodes: Query<(), With<ReactNode>>,
     child_of: Query<&ChildOf>,
     computed: Query<&ComputedNode>,
     chains: Query<(
@@ -408,7 +408,7 @@ mod tests {
             resolution: WindowResolution::new(800, 600),
             ..Default::default()
         });
-        let entity = app.world_mut().spawn(RNode(7)).id();
+        let entity = app.world_mut().spawn(ReactNode(7)).id();
         app.world_mut()
             .resource_mut::<LayersRegistry>()
             .layers
@@ -613,7 +613,7 @@ mod tests {
         let entity = app
             .world_mut()
             .spawn((
-                RNode(7),
+                ReactNode(7),
                 ResolvedFilterChain {
                     passes: vec![
                         blur_pass((1.0, 0.0)),

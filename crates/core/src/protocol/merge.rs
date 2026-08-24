@@ -151,6 +151,7 @@ impl Props {
             source_rect => image,
             atlas => image,
             visual_box => image,
+            name => name,
             target => target,
             aria_label => aria_label,
             max_length => , // create-time only, cached for completeness
@@ -266,6 +267,10 @@ impl Props {
                     self.visual_box = None;
                     dirty.image = true;
                 }
+                "name" => {
+                    self.name = None;
+                    dirty.name = true;
+                }
                 "target" => {
                     self.target = None;
                     dirty.target = true;
@@ -362,6 +367,31 @@ mod tests {
         // `width` is a transitioned channel, so the transition group re-arms.
         assert!(dirty.style.intersects(style_groups::TRANSITION));
         assert!(ev.value.is_none() && ev.draw.is_none());
+    }
+
+    /// The `name` prop (→ Bevy `Name`) is retained like any string prop: a
+    /// delta sets it and flags `dirty.name`; `"name"` in `unset` clears it
+    /// (flagging again) so the apply path removes the component.
+    #[test]
+    fn merge_delta_name_sets_and_unsets() {
+        let mut cached = props(serde_json::json!({ "name": "hud" }));
+        assert_eq!(cached.name.as_deref(), Some("hud"));
+
+        let (dirty, _) = cached.merge_delta(props(serde_json::json!({ "name": "hud2" })), &[], &[]);
+        assert_eq!(cached.name.as_deref(), Some("hud2"));
+        assert!(dirty.name);
+
+        let (dirty, _) = cached.merge_delta(props(serde_json::json!({ "src": "a.png" })), &[], &[]);
+        assert_eq!(
+            cached.name.as_deref(),
+            Some("hud2"),
+            "untouched name preserved"
+        );
+        assert!(!dirty.name);
+
+        let (dirty, _) = cached.merge_delta(Props::default(), &["name".to_string()], &[]);
+        assert_eq!(cached.name, None);
+        assert!(dirty.name);
     }
 
     /// `unset` resets props (bools to false, options to None); `style_unset`

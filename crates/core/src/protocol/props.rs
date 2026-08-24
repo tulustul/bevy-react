@@ -134,6 +134,14 @@ pub struct Props {
     #[serde(default)]
     pub on_resize: bool,
 
+    // --- identity ---
+    /// The element's `name` prop: stamped on the entity as a Bevy `Name` and
+    /// indexed by name (see [`crate::ReactNodes`]) so app systems can find
+    /// React-created entities. Dynamic — a delta replaces the component,
+    /// `unset` (or an empty string) removes it. Bridge-owned on React nodes.
+    #[serde(default)]
+    pub name: Option<String>,
+
     // --- `portal` element attribute ---
     /// The render-target name a `portal` element displays. The reconciler stamps
     /// a `crate::portal::RPortal` carrying it; the binding system points the
@@ -221,6 +229,8 @@ pub struct PropsDirty {
     /// Any `image` attribute (`src`/`tint`/`flipX`/`flipY`/`imageMode`/
     /// `sourceRect`/`atlas`/`visualBox`) changed.
     pub image: bool,
+    /// `name` (the entity's Bevy `Name`) set or unset.
+    pub name: bool,
     /// `target` (portal/surface binding) changed.
     pub target: bool,
     /// `shape` (an SVG shape child's folded attrs) changed.

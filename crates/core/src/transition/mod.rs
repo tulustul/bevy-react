@@ -167,7 +167,7 @@ pub struct TransitionTargets {
     bg_gradient: Option<&'static mut BackgroundGradient>,
     border_gradient: Option<&'static mut BorderGradient>,
     /// Reconciler identity for gradient warn attribution.
-    rnode: Option<&'static crate::bridge::RNode>,
+    rnode: Option<&'static crate::bridge::ReactNode>,
 }
 
 /// Advance every transitioning entity toward its [`TransitionInput`] target and

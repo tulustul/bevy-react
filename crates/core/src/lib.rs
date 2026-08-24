@@ -55,6 +55,7 @@ mod gamepad;
 mod host;
 mod keyboard;
 mod message;
+mod names;
 mod pick_clip;
 mod plugin;
 mod reconcile;
@@ -97,6 +98,7 @@ pub use animations::ReactUiAnimationsPlugin;
 pub use bevy_react_macros::{
     react_event, react_filter, react_message, react_morph_filter, react_request,
 };
+pub use bridge::ReactNode;
 pub use canvas::CanvasSurface;
 #[cfg(feature = "devtools")]
 #[cfg_attr(docsrs, doc(cfg(feature = "devtools")))]
@@ -104,7 +106,8 @@ pub use devtools::DevtoolsConfig;
 pub use event::{ReactEvent, ReactEvents};
 pub use filters::{ReactFilter, ReactMorphFilter};
 pub use message::{ReactAppExt, ReactMessage, ReactPayload};
-pub use plugin::{Fonts, PointerCapture, PointerCaptureSet, ReactUiPlugin};
+pub use names::ReactNodes;
+pub use plugin::{Fonts, PointerCapture, PointerCaptureSet, ReactApplySet, ReactUiPlugin};
 pub use portal::{
     PortalCamera, RenderMode, RenderTarget, RenderTargetSpec, RenderTargets, Resolution,
 };

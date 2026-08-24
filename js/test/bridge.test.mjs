@@ -123,11 +123,6 @@ test("handlers diff by presence, not identity", () => {
   assert.deepEqual(lost.props, {});
 });
 
-test("wire-name mapping for unset (name → target)", () => {
-  const op = buildUpdateOp(1, { name: "panel" }, {});
-  assert.deepEqual(op.unset, ["target"]);
-});
-
 // A stable SharedValue handle, as `useSharedValue` returns it: reference-held
 // across renders, with a live accessor next to the id.
 const sharedValue = (id) => ({
@@ -434,4 +429,29 @@ test("removing every shape attr unsets the shape object", () => {
   );
   assert.deepEqual(op.unset, ["shape"]);
   assert.deepEqual(op.props, {});
+});
+
+test("name: crosses under its own wire field, set/rename/unset", () => {
+  // Mount-time delta from unnamed → named.
+  assert.deepEqual(buildUpdateOp(1, {}, { name: "hud" }).props, {
+    name: "hud",
+  });
+  // Rename.
+  assert.deepEqual(buildUpdateOp(1, { name: "hud" }, { name: "hud2" }).props, {
+    name: "hud2",
+  });
+  // Same name: no op.
+  assert.equal(buildUpdateOp(1, { name: "hud" }, { name: "hud" }), null);
+  // Dropped: rides `unset` under the same wire name (no `target` alias —
+  // `<surface>` binds its texture with `target` like `<portal>` does).
+  assert.deepEqual(buildUpdateOp(1, { name: "hud" }, {}).unset, ["name"]);
+});
+
+test("surface/portal target: passes through by name", () => {
+  assert.deepEqual(buildUpdateOp(1, {}, { target: "monitor" }).props, {
+    target: "monitor",
+  });
+  assert.deepEqual(buildUpdateOp(1, { target: "monitor" }, {}).unset, [
+    "target",
+  ]);
 });

@@ -9,7 +9,7 @@ use bevy::prelude::*;
 use bevy::ui::widget::NodeImageMode;
 
 use super::stamps::{apply_animated, apply_pointer_handlers, stamp_common};
-use crate::bridge::RNode;
+use crate::bridge::ReactNode;
 use crate::canvas::blank_canvas_image;
 use crate::protocol::{NodeId, props::Props};
 use crate::svg::{ShapeKind, SvgShape, SvgSurface, SvgUserPos};
@@ -28,7 +28,7 @@ pub(super) fn create_svg_root(
     let handle = images.add(blank_canvas_image());
     let mut node_img = ImageNode::new(handle);
     node_img.image_mode = NodeImageMode::Stretch;
-    let mut ec = commands.spawn(RNode(id));
+    let mut ec = commands.spawn(ReactNode(id));
     apply_style(&mut ec, &props.style);
     ec.insert((node_img, SvgSurface::jsx(props.view_box)));
     stamp_common(&mut ec, props);
@@ -50,7 +50,7 @@ pub(super) fn create_shape(
     props: &Props,
 ) -> Entity {
     let attrs = props.shape.clone().unwrap_or_default();
-    let mut ec = commands.spawn((RNode(id), SvgShape { kind, attrs }));
+    let mut ec = commands.spawn((ReactNode(id), SvgShape { kind, attrs }));
     apply_shape_pointer(&mut ec, props);
     apply_animated(&mut ec, props);
     // A `transition` inside the attrs stamps the transition components (the

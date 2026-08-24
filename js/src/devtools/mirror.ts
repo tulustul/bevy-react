@@ -296,13 +296,13 @@ export const mirror = {
 
   /** Every selectable tree root: the main window tree plus each detached
    *  `<root>` element (in creation order — Map iteration preserves insertion).
-   *  A root's label is its `name` prop (crossing the wire as `target`, like
-   *  `<surface>`); unnamed roots are numbered from #2 (main is #1). */
+   *  A root's label is its `name` prop; unnamed roots are numbered from #2
+   *  (main is #1). */
   roots(): { id: number; label: string }[] {
     const out = [{ id: 0, label: "main" }];
     for (const node of nodes.values()) {
       if (node.kind !== "root") continue;
-      const name = node.props.target;
+      const name = node.props.name;
       out.push({
         id: node.id,
         label: typeof name === "string" ? name : `root#${out.length + 1}`,

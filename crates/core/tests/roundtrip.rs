@@ -613,7 +613,8 @@ fn root_demo_modal_round_trip() {
     click(open);
 
     // The modal must mount as a `<root>` create op carrying the demo's `name`
-    // prop on the `target` wire field.
+    // prop (its own wire field — it becomes the entity's Bevy `Name` and the
+    // devtools root-selector label).
     let mut root_id: Option<u32> = None;
     let deadline = Instant::now() + Duration::from_secs(10);
     while Instant::now() < deadline {
@@ -629,9 +630,9 @@ fn root_demo_modal_round_trip() {
                     && kind == "root"
                 {
                     assert_eq!(
-                        props.target.as_deref(),
+                        props.name.as_deref(),
                         Some("modal"),
-                        "the <root>'s `name` prop must cross as wire `target`"
+                        "the <root>'s `name` prop must cross as wire `name`"
                     );
                     root_id = Some(*id);
                 }
@@ -997,4 +998,105 @@ fn svg_shape_click_round_trip() {
         }
     }
     panic!("no shape update after pointerEnter — hover handler never fired");
+}
+
+/// The "Named nodes" demo renders its cards as `<node name="pin">`: the `name`
+/// prop must cross the bridge under its own wire field (not the old
+/// `target` alias) on the create ops, one per card.
+#[test]
+fn named_nodes_round_trip() {
+    let bundle = example_bundle();
+    if !bundle.exists() {
+        eprintln!(
+            "skipping named_nodes_round_trip: bundle not built at {}\n  run: npm install && npm run build -w demos",
+            bundle.display()
+        );
+        return;
+    }
+
+    let (ops_tx, ops_rx) = crossbeam_channel::unbounded::<Vec<Op>>();
+    let (flush_stamps_tx, _flush_stamps_rx) = crossbeam_channel::unbounded();
+    let (flush_devtools_tx, _flush_devtools_rx) = crossbeam_channel::unbounded();
+    let (emit_tx, _emit_rx) = crossbeam_channel::unbounded::<ReactMessage>();
+    let (request_tx, _request_rx) = crossbeam_channel::unbounded::<RawRequest>();
+    let (anim_tx, _anim_rx) = crossbeam_channel::unbounded::<AnimationCommand>();
+    let (outbound_tx, outbound_rx) = tokio::sync::mpsc::unbounded_channel::<Outbound>();
+    let (_reload_tx, reload_rx) = tokio::sync::mpsc::unbounded_channel::<()>();
+
+    let vendor = bundle.with_file_name("vendor.js");
+    spawn_js_thread(
+        vendor,
+        bundle,
+        ops_tx,
+        flush_stamps_tx,
+        flush_devtools_tx,
+        emit_tx,
+        request_tx,
+        anim_tx,
+        outbound_rx,
+        reload_rx,
+    );
+
+    let mut buttons: HashSet<u32> = HashSet::new();
+    let mut parent_of: HashMap<u32, u32> = HashMap::new();
+    let mut text_of: HashMap<u32, String> = HashMap::new();
+    let click = |id: u32| {
+        outbound_tx
+            .send(Outbound::UiEvent {
+                event: UiEvent {
+                    id,
+                    kind: "click".into(),
+                    ..Default::default()
+                },
+            })
+            .expect("JS thread gone before click");
+    };
+
+    let comm = drain_until_button(
+        &ops_rx,
+        "Communication",
+        Duration::from_secs(15),
+        &mut buttons,
+        &mut parent_of,
+        &mut text_of,
+    )
+    .expect("no 'Communication' nav button in initial render");
+    click(comm);
+    let named = drain_until_button(
+        &ops_rx,
+        "Named nodes",
+        Duration::from_secs(10),
+        &mut buttons,
+        &mut parent_of,
+        &mut text_of,
+    )
+    .expect("no 'Named nodes' nav button after expanding 'Communication'");
+    click(named);
+
+    // The page mounts six cards, each a create op carrying `name: "pin"`.
+    let mut pins = 0usize;
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while pins < 6 && Instant::now() < deadline {
+        match ops_rx.recv_timeout(Duration::from_millis(100)) {
+            Ok(batch) => {
+                for op in &batch {
+                    if let Op::Create { props, .. } = op
+                        && props.name.as_deref() == Some("pin")
+                    {
+                        pins += 1;
+                    }
+                    if let Op::Create { props, .. } = op {
+                        assert_ne!(
+                            props.target.as_deref(),
+                            Some("pin"),
+                            "`name` must not alias to the `target` wire field"
+                        );
+                    }
+                }
+            }
+            Err(RecvTimeoutError::Timeout) => {}
+            Err(RecvTimeoutError::Disconnected) => panic!("JS thread died during render"),
+        }
+    }
+    assert_eq!(pins, 6, "six `<node name=\"pin\">` create ops expected");
 }

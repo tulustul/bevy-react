@@ -19,7 +19,7 @@ use super::stamps::{
     queue_pending_selection, register_editable_handlers, update_controlled_scroll,
 };
 use super::stats::UiAssets;
-use crate::bridge::{JsBridge, RNode, SpanKind, StyleVariants};
+use crate::bridge::{JsBridge, ReactNode, SpanKind, StyleVariants};
 use crate::canvas::CanvasSurface;
 use crate::plugin::Fonts;
 use crate::portal::RPortal;
@@ -38,7 +38,7 @@ pub(super) fn apply_update(
     fonts: &Fonts,
     ui_assets: &mut UiAssets,
     children: &Query<&Children>,
-    rnodes: &Query<&RNode>,
+    rnodes: &Query<&ReactNode>,
     buttons: &Query<(), With<Button>>,
     editables: &mut Query<&mut EditableText>,
     scroll_query: &mut Query<(
@@ -76,8 +76,18 @@ pub(super) fn apply_update(
         warn!("delta update for uncached node {id}; merging onto defaults");
         Box::default()
     });
+    // The pre-merge name, so a `name` change can leave its old index bucket.
+    let old_name = dirty_name(&props, &unset).then(|| cached.name.clone());
     let (dirty, ev) = cached.merge_delta(props, &unset, &style_unset);
     let props = cached;
+    if let Some(old_name) = old_name {
+        crate::names::apply_name(
+            &mut commands.entity(e),
+            &mut bridge.names,
+            old_name.as_deref(),
+            props.name.as_deref(),
+        );
+    }
     use crate::protocol::style::style_groups as g;
     // A delta touching a promotion trigger (`opacity`/`groupAlpha`/
     // `filter`, all in the LAYER group — an `{ animated }` opacity is
@@ -234,7 +244,7 @@ pub(super) fn apply_update(
         }
     } else if bridge.surfaces.contains(&id) {
         // A `<surface>` re-render: re-apply the (full-size-defaulted)
-        // style and rebind its name. It shares the `target` wire field
+        // style and rebind its `target`. It shares the `target` wire field
         // with `<portal>`, so it must branch before the general path
         // below (which would wrongly stamp an `RPortal`).
         let mut ec = commands.entity(e);
@@ -450,6 +460,11 @@ pub(crate) fn reapply_opacity_outputs(
         // warning would only repeat the create/update one — skip it.
         rebuild_image(&mut ec, props, assets, ui_assets, promoted, false);
     }
+}
+
+/// Whether an update delta touches the `name` prop (set, or listed in `unset`).
+fn dirty_name(delta: &Props, unset: &[String]) -> bool {
+    delta.name.is_some() || unset.iter().any(|u| u == "name")
 }
 
 #[cfg(test)]

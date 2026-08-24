@@ -15,6 +15,15 @@ import type { FilterChainValue, MorphFilterValue } from "./filters";
  *  typed on `BevyCanvasProps`). */
 export interface BevyAttributes {
   key?: Key | null | undefined;
+  /** Names the element's Bevy entity: the value lands on it as a Bevy `Name`
+   *  component and in the `ReactNodes` index, so app systems can find
+   *  React-created entities (`Query<(Entity, &Name), With<ReactNode>>` or
+   *  `ReactNodes::get("hud")`) and attach their own components, read layout,
+   *  or watch mount/unmount. Not unique — a list can name every card `"card"`
+   *  (`ReactNodes::all`). Dynamic: a change renames, removing it (or `""`)
+   *  drops the `Name`. Bridge-owned: Rust code must not set `Name` on React
+   *  nodes itself. */
+  name?: string;
 }
 
 /** A length: a bare number is logical pixels; a string carries a unit
@@ -881,9 +890,8 @@ export interface BevyPortalProps extends BevyAttributes {
  *  `style.globalZIndex` to change either. The root node itself never blocks or
  *  hovers picking — its children are ordinary interactive nodes. */
 export interface BevyRootProps extends BevyAttributes {
-  /** Labels this root in the devtools root selector (unnamed roots are
-   *  auto-numbered; the default window tree is `"main"`). Shares the `target`
-   *  wire field with `<surface>`'s `name`. */
+  /** Also labels this root in the devtools root selector (unnamed roots are
+   *  auto-numbered; the default window tree is `"main"`). */
   name?: string;
   style?: BevyStyle;
   children?: ReactNode;
@@ -902,10 +910,11 @@ export interface BevyRootProps extends BevyAttributes {
  *  on the Bevy side to make the subtree clickable in 3D — `onClick`/`onPointer*`
  *  and hover/press styles then fire from in-world pointer hits. */
 export interface BevySurfaceProps extends BevyAttributes {
-  /** The surface name the Bevy app registered (`Surfaces::create`). The subtree
-   *  renders into that surface's texture; an unregistered name renders nowhere
-   *  until it appears. */
-  name: string;
+  /** The surface the Bevy app registered (`Surfaces::create`), by name. The
+   *  subtree renders into that surface's texture; an unregistered target
+   *  renders nowhere until it appears. (`name` is the element's own identity,
+   *  like on every element — the two are independent.) */
+  target: string;
   style?: BevyStyle;
   /** Style overlaid on `style` while a child is hovered (in-world). */
   hoverStyle?: BevyStyle;

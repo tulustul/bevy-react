@@ -272,9 +272,10 @@ function Row({
 
 function rowLabel(node: MirrorNode): string {
   if (node.kind === "#text") return `"${truncate(node.text ?? "", 28)}"`;
-  // A `<root>` shows its devtools name (crosses the wire as `target`).
-  if (node.kind === "root" && typeof node.props.target === "string") {
-    return `<root "${node.props.target}">`;
+  // A named element shows its `name` (a `<root>`'s doubles as its devtools
+  // root-selector label).
+  if (typeof node.props.name === "string" && node.props.name !== "") {
+    return `<${node.kind} "${truncate(node.props.name, 24)}">`;
   }
   return `<${node.kind}>`;
 }

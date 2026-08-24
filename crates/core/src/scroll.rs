@@ -11,7 +11,7 @@ use bevy::prelude::*;
 use bevy::ui::{ComputedNode, ScrollPosition, UiGlobalTransform, UiStack};
 use bevy::window::PrimaryWindow;
 
-use crate::bridge::{JsBridge, RNode, ScrollStep, WheelListener};
+use crate::bridge::{JsBridge, ReactNode, ScrollStep, WheelListener};
 use crate::plugin::PointerCapture;
 use crate::protocol::{outbound::Outbound, outbound::UiEvent};
 use crate::transition::ScrollTransitionState;
@@ -239,7 +239,7 @@ pub fn collect_wheel_events(
     windows: Query<&Window, With<PrimaryWindow>>,
     ui_stack: Res<UiStack>,
     bridge: Res<JsBridge>,
-    listeners: Query<(&ComputedNode, &UiGlobalTransform, &RNode), With<WheelListener>>,
+    listeners: Query<(&ComputedNode, &UiGlobalTransform, &ReactNode), With<WheelListener>>,
     mut capture: ResMut<PointerCapture>,
 ) {
     if accumulated.delta == Vec2::ZERO {
@@ -714,7 +714,7 @@ mod tests {
 
         let node = world
             .spawn((
-                RNode(7),
+                ReactNode(7),
                 ComputedNode {
                     size: Vec2::new(200.0, 100.0),
                     inverse_scale_factor: 1.0,

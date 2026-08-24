@@ -5,7 +5,7 @@
 
 use bevy::prelude::*;
 
-use crate::bridge::{FocusState, RNode, StyleVariants};
+use crate::bridge::{FocusState, ReactNode, StyleVariants};
 use crate::ui_map::overlay_style;
 
 /// Re-apply the merged style for any element with [`StyleVariants`] whose
@@ -33,7 +33,7 @@ pub fn apply_interaction_styles(
             Changed<StyleVariants>,
         )>,
     >,
-    rnodes: Query<&RNode>,
+    rnodes: Query<&ReactNode>,
     texts: Query<(), With<Text>>,
     assets: Res<AssetServer>,
     // `Option`: headless test harnesses build partial apps without the bridge

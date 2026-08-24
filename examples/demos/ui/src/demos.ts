@@ -6,6 +6,7 @@ import { HowItWorks } from "./demos/HowItWorks";
 import { ReactToBevyDemo } from "./demos/communication/ReactToBevyDemo";
 import { BevyToReactDemo } from "./demos/communication/BevyToReactDemo";
 import { BidirectionCommunicationDemo } from "./demos/communication/BidirectionCommunicationDemo";
+import { NamedNodesDemo } from "./demos/communication/NamedNodesDemo";
 import { AnchorDemo } from "./demos/AnchorDemo";
 import { MouseDemo } from "./demos/events/MouseDemo";
 import { GamepadDemo } from "./demos/events/gamepadDemo";
@@ -132,6 +133,7 @@ export const DEMOS: DemoItem[] = [
         scene: "BouncingBall",
         component: BidirectionCommunicationDemo,
       },
+      { label: "Named nodes", scene: "NamedNodes", component: NamedNodesDemo },
     ],
   },
   {

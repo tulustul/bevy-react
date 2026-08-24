@@ -54,7 +54,7 @@ pub(super) fn apply_filter_params(
     bindings: &AnimatedBindings,
     values: &SharedValues,
     chain: Option<&mut Mut<crate::filters::ResolvedFilterChain>>,
-    rnode: Option<&crate::bridge::RNode>,
+    rnode: Option<&crate::bridge::ReactNode>,
     validate: bool,
     dirt: &mut crate::layer::LayerContentDirt,
     domain: ChainDomain,

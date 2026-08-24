@@ -8,7 +8,7 @@ use bevy::ui::RelativeCursorPosition;
 
 use super::events::send_ui_event;
 use super::pointer::event_pos;
-use crate::bridge::{HoverState, JsBridge, PointerHandlers, RNode};
+use crate::bridge::{HoverState, JsBridge, PointerHandlers, ReactNode};
 use crate::svg::SvgUserPos;
 
 /// Emit `pointerEnter` / `pointerLeave` for main-window nodes that declared those
@@ -27,7 +27,7 @@ pub fn collect_hover_events(
             &Interaction,
             &mut HoverState,
             &PointerHandlers,
-            &RNode,
+            &ReactNode,
             Option<&RelativeCursorPosition>,
             // SVG shapes report x/y in user units instead (see [`event_pos`]).
             Option<&SvgUserPos>,
@@ -101,7 +101,7 @@ mod tests {
                     leave: true,
                     ..default()
                 },
-                RNode(1),
+                ReactNode(1),
             ))
             .id();
 
@@ -143,7 +143,7 @@ mod tests {
                     enter: true,
                     ..default()
                 },
-                RNode(1),
+                ReactNode(1),
                 RelativeCursorPosition {
                     cursor_over: true,
                     normalized: Some(Vec2::ZERO),

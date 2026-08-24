@@ -140,8 +140,10 @@ export interface SerializedProps extends Partial<
   // `canvas` element: the recorded vector display list, rasterized on the Bevy
   // side (clear + replay on the retained surface).
   draw?: DrawCmd[];
+  // Any element: its Bevy `Name` (see `BevyAttributes.name`).
+  name?: string;
   // `portal` element: the render-target name to display. Also carries a
-  // `surface` element's `name` (the offscreen surface its subtree renders into).
+  // `surface` element's `target` (the offscreen surface its subtree renders into).
   target?: string;
   // `editableText` element attributes
   value?: string;
@@ -521,7 +523,10 @@ const OBJECT_PROP_KEYS = new Set([
 
 // Text + `image` + `editableText` + `svg` element attributes that pass through
 // by name (the wire name for each is the React prop name, `viewBox` included).
+// `name` is the universal identity prop (→ a Bevy `Name` on the entity);
+// `target` binds a `<portal>`/`<surface>` to a named render target.
 const PASSTHROUGH_PROP_KEYS = new Set([
+  "name",
   "color",
   "fontSize",
   "src",
@@ -552,13 +557,6 @@ const PASSTHROUGH_PROP_KEYS = new Set([
 // arm in the `unset` loop). Keep in sync with protocol.rs's plain-`bool`
 // passthrough fields.
 const BOOL_PROP_KEYS = new Set(["flipX", "flipY", "multiline", "autofocus"]);
-
-// Props whose wire name differs from the React prop name. A `<surface>`'s
-// `name` rides the same wire field as a `<portal>`'s `target` (both bind the
-// element to a named render target); they never coexist.
-const WIRE_NAME: Record<string, string> = {
-  name: "target",
-};
 
 // "Act now" props: present = do something once (push a controlled value, draw a
 // display list), absent = no action. Removing one from the props is a no-op —
@@ -606,10 +604,6 @@ function serializePropInto(
   }
   if (PASSTHROUGH_PROP_KEYS.has(key)) {
     rec[key] = value;
-    return true;
-  }
-  if (key === "name") {
-    out.target = value as string;
     return true;
   }
   return false;
@@ -779,14 +773,13 @@ export function buildUpdateOp(
         if (isObj(a) && valuesEqual(a, b)) return;
         serializePropInto((acc.props ??= {}), key, b);
       } else if (isObj(a)) {
-        (acc.unset ??= []).push(WIRE_NAME[key] ?? key);
+        (acc.unset ??= []).push(key);
       }
       return;
     }
     if (BOOL_PROP_KEYS.has(key) && b === false) {
       // A `false` in the delta would be a silent no-op on the Rust side
       // (`merge_bool!` only acts on `true`); turning a flag off rides `unset`.
-      // None of these keys is wire-renamed.
       if (a === true) (acc.unset ??= []).push(key);
       return;
     }
@@ -794,7 +787,7 @@ export function buildUpdateOp(
       // Dropping an event-like prop is a no-op (nothing retained to reset).
       if (EVENT_PROP_KEYS.has(key)) return;
       if (serializePropInto({}, key, a)) {
-        (acc.unset ??= []).push(WIRE_NAME[key] ?? key);
+        (acc.unset ??= []).push(key);
       }
       return;
     }

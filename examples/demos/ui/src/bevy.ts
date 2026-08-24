@@ -360,7 +360,7 @@ frequency: number,
  */
 speed: number, };
 export type SaturateParams = { amount: number, };
-export type SceneId = "Ambient" | "Cubes" | "BouncingBall" | "CrowdedCubes" | "SpaceCubes" | "Surface";
+export type SceneId = "Ambient" | "Cubes" | "BouncingBall" | "CrowdedCubes" | "SpaceCubes" | "Surface" | "NamedNodes";
 export type SelectCube = number | null;
 export type SelectDemo = { label: string, };
 export type SelectScene = SceneId | null;

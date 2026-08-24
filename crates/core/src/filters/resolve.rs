@@ -166,7 +166,7 @@ pub fn resolve_chains<I: ChainInput, R: ResolvedChain>(
     mut dirt: ResMut<LayerContentDirt>,
     mut roots: Query<(
         Entity,
-        &crate::bridge::RNode,
+        &crate::bridge::ReactNode,
         Ref<I>,
         Ref<PromotedLayer>,
         Option<&mut R>,

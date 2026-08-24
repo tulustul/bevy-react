@@ -540,7 +540,7 @@ commands.entity(screen_mesh).insert(SurfacePointer::new("monitor"));
 
 ```tsx
 // React: render a subtree into the named surface's texture.
-<surface name="monitor" style={{ width: "100%", height: "100%" }}>
+<surface target="monitor" style={{ width: "100%", height: "100%" }}>
   <MonitorApp />
 </surface>
 ```
@@ -558,6 +558,33 @@ Pin UI to a 3D entity so it tracks the entity on screen as the camera moves.
 ```
 
 ![Dozens of colored cubes in a 3D scene, each with a numbered React badge anchored above it that tracks its cube as the camera moves.](https://raw.githubusercontent.com/tulustul/bevy-react/main/screenshots/anchored-nodes.png)
+
+### Named nodes: reach React entities from Bevy
+
+Give any element a `name` and its entity carries a Bevy `Name`. Rust code can then
+find it — by hash lookup or plain query — and do whatever it wants: attach its own
+components, read layout or `Interaction`, spawn 3D things that follow it. Names are
+not unique (`all` is the group form), and `Added`/`RemovedComponents<ReactNode>` are
+the mount/unmount signals.
+
+```tsx
+<node name="pin" style={card}>
+  <text>#1</text>
+</node>
+```
+
+```rust
+// Bevy: one 3D pin under every node named "pin", after this frame's React ops.
+fn sync_pins(nodes: ReactNodes, cards: Query<(&ComputedNode, &UiGlobalTransform)>) {
+    for &card in nodes.all("pin") {
+        let Ok((size, transform)) = cards.get(card) else { continue };
+        // project the card's center onto the ground and move its pin there
+    }
+}
+app.add_systems(Update, sync_pins.after(ReactApplySet));
+```
+
+![Six draggable React cards over a 3D scene, each with a tube pinned to it and a glowing ball hanging below.](https://raw.githubusercontent.com/tulustul/bevy-react/main/screenshots/named-nodes.png)
 
 ### Talking to Bevy
 

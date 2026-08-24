@@ -234,7 +234,7 @@ mod tests {
     ) -> Entity {
         let e = spawn_node(world, size, center, overflow);
         world.entity_mut(e).insert((
-            crate::bridge::RNode(id),
+            crate::bridge::ReactNode(id),
             LayerGroupAlpha(1.0),
             PromotedLayer {
                 reasons: PromotionReasons(PromotionReasons::FILTER),

@@ -130,7 +130,7 @@ pub fn drive_cursor_icon(
     custom_cursors: Res<CustomCursors>,
     node_cursors: Query<&NodeCursor>,
     child_of: Query<&ChildOf>,
-    rnodes: Query<&crate::bridge::RNode>,
+    rnodes: Query<&crate::bridge::ReactNode>,
 ) {
     let Ok((window_entity, window, current)) = windows.single() else {
         return;

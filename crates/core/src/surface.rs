@@ -9,7 +9,7 @@
 //! The consuming app owns the **surface registry** ([`Surfaces`]): it
 //! [`create`](Surfaces::create)s a named surface at a fixed pixel resolution and
 //! gets back a [`Handle<Image>`] to use as a material texture. React references the
-//! same name with `<surface name={…}>…</surface>`; the bevy-react reconciler spawns
+//! same name with `<surface target={…}>…</surface>`; the bevy-react reconciler spawns
 //! that subtree as a **detached UI root** carrying [`RSurface`], and
 //! [`bind_surfaces`] spawns a dedicated 2D UI camera that draws the subtree into the
 //! registered image (via [`UiTargetCamera`]). An unregistered name renders nowhere
@@ -168,7 +168,7 @@ impl Surfaces {
     }
 }
 
-/// Marks a reconciler node as a `<surface name=…>` detached UI root. The
+/// Marks a reconciler node as a `<surface target=…>` detached UI root. The
 /// bevy-react reconciler inserts it (and keeps the node out of the on-screen
 /// layout); [`bind_surfaces`] points its [`UiTargetCamera`] at the surface's
 /// offscreen UI camera.

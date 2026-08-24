@@ -12,7 +12,7 @@ use bevy::ui::{ComputedNode, ScrollPosition};
 
 use super::stats::{FlushMeta, OpApplyStats, UiAssets};
 use super::{create, update};
-use crate::bridge::{JsBridge, RNode, SpanKind};
+use crate::bridge::{JsBridge, ReactNode, SpanKind};
 use crate::canvas::CanvasSurface;
 use crate::plugin::Fonts;
 use crate::protocol::{NodeId, ROOT_ID, op::Op};
@@ -34,7 +34,7 @@ pub fn apply_js_ops(
     // 16-param limit.
     mut ui_assets: UiAssets,
     children: Query<&Children>,
-    rnodes: Query<&RNode>,
+    rnodes: Query<&ReactNode>,
     // On re-render the entity's kind isn't on the op, so we detect a `<button>` by
     // its marker to keep re-asserting its `FocusPolicy::Block` default (see
     // `stamps::apply_button_focus_default`) that the per-commit `apply_style`
@@ -159,6 +159,7 @@ pub fn apply_js_ops(
                     }
                 }
                 bridge.nodes.retain(|&id, _| id == ROOT_ID);
+                bridge.names.clear();
                 bridge.props_cache.clear();
                 bridge.text_styles.clear();
                 bridge.spans.clear();
@@ -206,14 +207,14 @@ pub fn apply_js_ops(
             }
             Op::CreateText { id, text } => {
                 let entity = commands
-                    .spawn((Text::new(text), TextColor(Color::WHITE), RNode(id)))
+                    .spawn((Text::new(text), TextColor(Color::WHITE), ReactNode(id)))
                     .id();
                 bridge.nodes.insert(id, entity);
             }
             Op::CreateTextSpan { id, text } => {
                 // A bare-string run inside a `<text>`. Style is inherited from its
                 // parent on append (see below); until then it keeps span defaults.
-                let entity = commands.spawn((TextSpan(text), RNode(id))).id();
+                let entity = commands.spawn((TextSpan(text), ReactNode(id))).id();
                 bridge.nodes.insert(id, entity);
                 bridge.spans.insert(id, SpanKind::RawInherited);
             }
@@ -836,7 +837,11 @@ mod tests {
         .unwrap();
         app.update();
 
-        let survivors = app.world_mut().query::<&RNode>().iter(app.world()).count();
+        let survivors = app
+            .world_mut()
+            .query::<&ReactNode>()
+            .iter(app.world())
+            .count();
         assert_eq!(
             survivors, 0,
             "the same-batch child must be despawned with its removed parent, not \
@@ -988,7 +993,7 @@ mod tests {
         // The anchor layer is a child of the root; an overlay (a reconciler node) has
         // been reparented under it, exactly as `position_anchored_nodes` would do.
         let layer = app.world_mut().spawn((AnchorLayer, ChildOf(root))).id();
-        let overlay = app.world_mut().spawn((RNode(99), ChildOf(layer))).id();
+        let overlay = app.world_mut().spawn((ReactNode(99), ChildOf(layer))).id();
 
         tx.send(vec![Op::Reset]).unwrap();
         app.update();
@@ -1048,7 +1053,7 @@ mod tests {
     /// surface is a detached root (no `ChildOf`), so neither React's op nor Bevy's
     /// recursive despawn of the ancestor reaches it — `apply_js_ops` must find it via the
     /// tracked React parentage. Regression: navigating away from the Home demo left its
-    /// `<surface name="monitor">` rendering into the shared monitor texture under the
+    /// `<surface target="monitor">` rendering into the shared monitor texture under the
     /// `<surface>` demo. This reproduces the exact op stream React emits (verified: only
     /// the wrapper gets a `Remove`, never the nested surface).
     #[test]

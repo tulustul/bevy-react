@@ -46,7 +46,7 @@ impl MaterialExtension for CrtExtension {
 const UI_UV: UvChannel = UvChannel::Uv1;
 
 /// The surface name this scene registers. React renders into it with
-/// `<surface name="monitor">`.
+/// `<surface target="monitor">`.
 const MONITOR: &str = "monitor";
 
 /// The glTF node name of the screen mesh inside `monitor.glb` (the body node is

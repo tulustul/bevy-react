@@ -8,7 +8,7 @@ use bevy::input_focus::{FocusGained, FocusLost};
 use bevy::prelude::*;
 use bevy::text::{EditableText, FontCx, LayoutCx, TextEditChange};
 
-use crate::bridge::{FocusState, JsBridge, RNode};
+use crate::bridge::{FocusState, JsBridge, ReactNode};
 use crate::protocol::{NodeId, outbound::Outbound, outbound::UiEvent};
 
 /// Report `editableText` edits back to JS. Bevy triggers [`TextEditChange`] after
@@ -20,7 +20,7 @@ use crate::protocol::{NodeId, outbound::Outbound, outbound::UiEvent};
 pub fn on_text_edit_change(
     change: On<TextEditChange>,
     mut bridge: ResMut<JsBridge>,
-    editables: Query<(&EditableText, &RNode)>,
+    editables: Query<(&EditableText, &ReactNode)>,
 ) {
     let Ok((editable, rnode)) = editables.get(change.event_target()) else {
         return;
@@ -82,7 +82,7 @@ pub fn on_text_edit_change(
 pub fn on_focus_gained(
     ev: On<FocusGained>,
     bridge: ResMut<JsBridge>,
-    editables: Query<&RNode, With<EditableText>>,
+    editables: Query<&ReactNode, With<EditableText>>,
     mut focus_states: Query<&mut FocusState>,
 ) {
     set_focus_state(&mut focus_states, ev.entity, true);
@@ -93,7 +93,7 @@ pub fn on_focus_gained(
 pub fn on_focus_lost(
     ev: On<FocusLost>,
     bridge: ResMut<JsBridge>,
-    editables: Query<&RNode, With<EditableText>>,
+    editables: Query<&ReactNode, With<EditableText>>,
     mut focus_states: Query<&mut FocusState>,
 ) {
     set_focus_state(&mut focus_states, ev.entity, false);
@@ -112,7 +112,7 @@ fn set_focus_state(focus_states: &mut Query<&mut FocusState>, entity: Entity, fo
 
 fn emit_focus_event(
     bridge: &JsBridge,
-    editables: &Query<&RNode, With<EditableText>>,
+    editables: &Query<&ReactNode, With<EditableText>>,
     entity: Entity,
     kind: &str,
 ) {

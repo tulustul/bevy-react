@@ -24,7 +24,7 @@ const PAGE: ExplanationData = {
         side registered.
       </P>
       <CodeTabs
-        tsx={`<surface name="monitor" style={{ width: "100%", height: "100%" }}>
+        tsx={`<surface target="monitor" style={{ width: "100%", height: "100%" }}>
   <MonitorApp />
 </surface>`}
         rust={`// Register the texture the React subtree renders into…
@@ -52,7 +52,7 @@ commands.entity(screen).insert(SurfacePointer::new("monitor"));`}
 export function SurfaceDemo() {
   useDemoPage(PAGE);
   return (
-    <surface name="monitor" style={screenRoot}>
+    <surface target="monitor" style={screenRoot}>
       <MonitorApp />
     </surface>
   );

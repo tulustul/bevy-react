@@ -22,6 +22,7 @@ pub enum Scene {
     CrowdedCubes,
     SpaceCubes,
     Surface,
+    NamedNodes,
 }
 
 /// The wire form of [`Scene`] — what React sends with `emit("selectScene", id)`.
@@ -36,6 +37,7 @@ pub enum SceneId {
     CrowdedCubes,
     SpaceCubes,
     Surface,
+    NamedNodes,
 }
 
 /// React picks the active scene from the left-nav: `emit("selectScene", id)`. A
@@ -59,6 +61,7 @@ fn apply_select_scene(on: On<SelectScene>, mut next: ResMut<NextState<Scene>>) {
         Some(SceneId::CrowdedCubes) => Scene::CrowdedCubes,
         Some(SceneId::SpaceCubes) => Scene::SpaceCubes,
         Some(SceneId::Surface) => Scene::Surface,
+        Some(SceneId::NamedNodes) => Scene::NamedNodes,
         None => Scene::Ambient,
     });
 }

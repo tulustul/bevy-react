@@ -7,7 +7,7 @@ use bevy::prelude::*;
 use bevy::ui::{ComputedNode, ComputedStackIndex, RelativeCursorPosition, UiGlobalTransform};
 
 use super::events::normalized_01;
-use crate::bridge::{JsBridge, PointerHandlers, RNode};
+use crate::bridge::{JsBridge, PointerHandlers, ReactNode};
 use crate::protocol::{outbound::Outbound, outbound::UiEvent};
 use crate::svg::SvgUserPos;
 
@@ -113,7 +113,7 @@ pub fn collect_pointer_events(
     windows: Query<&Window>,
     nodes: Query<(
         Entity,
-        &RNode,
+        &ReactNode,
         &Interaction,
         &RelativeCursorPosition,
         &PointerHandlers,
@@ -131,7 +131,7 @@ pub fn collect_pointer_events(
     mut capture: ResMut<crate::PointerCapture>,
     mut drag: ResMut<ActiveDrag>,
 ) {
-    let emit = |rnode: &RNode, kind: &str, pos: Vec2, abs: Vec2, button: u8| {
+    let emit = |rnode: &ReactNode, kind: &str, pos: Vec2, abs: Vec2, button: u8| {
         let _ = bridge.outbound_tx.send(Outbound::UiEvent {
             event: UiEvent {
                 id: rnode.0,
@@ -163,7 +163,7 @@ pub fn collect_pointer_events(
             let mut topmost: Option<(
                 u32,
                 Entity,
-                &RNode,
+                &ReactNode,
                 &RelativeCursorPosition,
                 &PointerHandlers,
                 Option<&SvgUserPos>,
@@ -228,7 +228,7 @@ pub fn collect_pointer_events(
             let mut topmost: Option<(
                 u32,
                 Entity,
-                &RNode,
+                &ReactNode,
                 &RelativeCursorPosition,
                 &PointerHandlers,
                 Option<&SvgUserPos>,
@@ -382,7 +382,7 @@ mod tests {
         let node = app
             .world_mut()
             .spawn((
-                RNode(1),
+                ReactNode(1),
                 Interaction::Pressed,
                 RelativeCursorPosition {
                     cursor_over: true,
@@ -472,7 +472,7 @@ mod tests {
         let node = app
             .world_mut()
             .spawn((
-                RNode(1),
+                ReactNode(1),
                 Interaction::None,
                 RelativeCursorPosition {
                     cursor_over: false,
@@ -587,7 +587,7 @@ mod tests {
 
         // A 200×200 node centered at (100, 100): rect spans x/y 0..200.
         app.world_mut().spawn((
-            RNode(1),
+            ReactNode(1),
             Interaction::Pressed,
             RelativeCursorPosition {
                 cursor_over: true,
@@ -674,7 +674,7 @@ mod tests {
         // Phantom shape: the node is `Pressed` (as the idle mouse cursor's
         // attribution would leave it) but the touch lands far outside it.
         app.world_mut().spawn((
-            RNode(1),
+            ReactNode(1),
             Interaction::Pressed,
             RelativeCursorPosition {
                 cursor_over: true,
@@ -733,7 +733,7 @@ mod tests {
         let win = app.world_mut().spawn(window).id();
 
         app.world_mut().spawn((
-            RNode(1),
+            ReactNode(1),
             Interaction::Pressed,
             RelativeCursorPosition {
                 cursor_over: true,
@@ -829,7 +829,7 @@ mod tests {
         let node = app
             .world_mut()
             .spawn((
-                RNode(1),
+                ReactNode(1),
                 Interaction::Pressed,
                 RelativeCursorPosition {
                     cursor_over: true,

@@ -138,13 +138,17 @@ fn orbit_camera(
         capture.is_captured(),
     );
 
-    if *grabbed {
+    // Two scenes hold the camera still: the `<surface>` monitor (auto-orbit off,
+    // mouse rotation kept, so the in-world screen stays readable) and the named
+    // nodes scene, which is a fixed, 2D-like view — its pins hang off UI cards
+    // and must not swing with the camera, so rotation is off entirely (zoom
+    // stays). Everywhere else auto-orbit resumes from wherever the user left it.
+    let rotatable = *state.get() != Scene::NamedNodes;
+    let auto_orbit = !matches!(state.get(), Scene::Surface | Scene::NamedNodes);
+    if *grabbed && rotatable {
         rig.yaw += motion.delta.x * MOUSE_SENS;
         rig.pitch = (rig.pitch + motion.delta.y * MOUSE_SENS).clamp(-1.4, 1.4);
-    } else if *state.get() != Scene::Surface {
-        // Auto-orbit resumes from wherever the user left it — except the `<surface>`
-        // monitor scene, which holds still unless the user drags (auto-orbit off,
-        // mouse rotation kept), so the in-world screen stays readable.
+    } else if auto_orbit && !*grabbed {
         rig.yaw += ORBIT_SPEED * time.delta_secs();
     }
 
@@ -234,6 +238,15 @@ fn reframe_camera(
             rig.yaw = std::f32::consts::FRAC_PI_2;
             rig.pitch = 0.15;
             rig.radius = 7.5;
+        }
+        // Pins hang off UI cards: a fixed, 2D-like view (rotation is disabled
+        // for this scene in `orbit_camera`). Look steeply down from a canonical
+        // yaw so every screen point projects onto nearby ground and the view is
+        // the same on every visit.
+        Scene::NamedNodes => {
+            rig.yaw = std::f32::consts::FRAC_PI_2;
+            rig.pitch = 1.0;
+            rig.radius = 16.0;
         }
         _ => rig.radius = DEFAULT_RADIUS,
     }
