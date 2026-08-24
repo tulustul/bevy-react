@@ -513,8 +513,8 @@ function ChromaticAberrationCard() {
 }
 
 // Gradient text: bevy paints glyphs in one flat color, so the gradient is a
-// recolor filter over the wrapping node's capture (<text> itself can't
-// promote to a layer).
+// recolor filter over the captured glyphs (directly on the <text>, or on a
+// wrapping node when the effect should cover more than the text).
 function PinchDemo() {
   return (
     <Example
@@ -614,14 +614,14 @@ function GradientTextDemo() {
         <>
           <P>
             <InlineCode>gradientMap</InlineCode> recolors the subtree's pixels
-            with a multi-stop linear gradient, keeping alpha — put it on a node
-            wrapping a <InlineCode>{"<text>"}</InlineCode> for gradient type.{" "}
+            with a multi-stop linear gradient, keeping alpha — put it straight
+            on a <InlineCode>{"<text>"}</InlineCode> for gradient type.{" "}
             <InlineCode>angle</InlineCode> matches backgroundGradient; stops
             take optional 0–1 positions and auto-distribute like CSS.{" "}
             <InlineCode>amount</InlineCode> mixes the original color toward the
             gradient (identity is 0, so it fades in transitions).
           </P>
-          <Code lang="tsx">{`<node
+          <Code lang="tsx">{`<text
   style={{
     filter: {
       name: "gradientMap",
@@ -636,8 +636,8 @@ function GradientTextDemo() {
     },
   }}
 >
-  <text>Gradient</text>
-</node>`}</Code>
+  Gradient
+</text>`}</Code>
         </>
       }
       demo={GradientTextCard}

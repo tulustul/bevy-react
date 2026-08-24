@@ -12,7 +12,7 @@ const MARGIN = 8;
 /** Keep at least the title bar reachable when dragging toward the bottom. */
 const TITLE_REACH = 48;
 /** Open/close/swap blend length. */
-const CLOSE_BLEND_MS = 250;
+const CLOSE_BLEND_MS = 450;
 
 /**
  * The floating example dialog: clicking an `<Example>` card opens it with the

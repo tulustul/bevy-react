@@ -1,12 +1,6 @@
 import { BevyStyle, PointerEventData } from "bevy-react/jsx";
 import { cloneElement, ReactElement, useRef, useState } from "react";
-import {
-  BevyFilters,
-  FilterUse,
-  useSharedValue,
-  withSpring,
-  withTiming,
-} from "bevy-react";
+import { FilterUse, useSharedValue, withSpring, withTiming } from "bevy-react";
 
 type PinchableChildProps = {
   style?: BevyStyle;

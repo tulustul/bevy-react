@@ -90,6 +90,23 @@ const KIND_FIELDS: Record<string, { style?: string[]; props?: string[] }> = {
   shapePaint: { props: ["shape"] },
   shapeEnum: { props: ["shape"] },
   shapeTransform: { props: ["shape"] },
+  // Nested <text> spans are Node-less runs: layer-family styles can never
+  // promote them (no layout box — the enclosing <text> is the filterable
+  // surface), and pointer handlers on them never fire. The warning value
+  // names the offending field/prop, so the match flags the exact row.
+  spanLayerStyle: {
+    style: ["filter", "backdropFilter", "morphFilter", "transform3d", "cache"],
+  },
+  spanHandlers: {
+    props: [
+      "onClick",
+      "onPointerDown",
+      "onPointerMove",
+      "onPointerUp",
+      "onPointerEnter",
+      "onPointerLeave",
+    ],
+  },
   // Shape `transition` timing (rides the folded shape object): an unknown /
   // non-numeric attr key or a malformed per-attr spec warns and drops the key.
   shapeTransition: { props: ["shape"] },

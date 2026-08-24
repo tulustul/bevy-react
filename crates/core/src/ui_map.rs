@@ -1060,6 +1060,19 @@ pub fn resolved_text_style(
     style: &Option<Style>,
     fonts: &Fonts,
 ) -> (TextColor, TextFont, LineHeight, LetterSpacing) {
+    resolved_text_style_promoted(style, fonts, false)
+}
+
+/// [`resolved_text_style`] for a text root whose layer-promotion state is
+/// known: when `promoted`, the `opacity` fold into the glyph color is
+/// suppressed — the value drives the layer's composite-time group alpha
+/// instead (the text analogue of [`apply_style_promoted`]'s fold rule; without
+/// this, a promoted `<text>` would fade twice).
+pub fn resolved_text_style_promoted(
+    style: &Option<Style>,
+    fonts: &Fonts,
+    promoted: bool,
+) -> (TextColor, TextFont, LineHeight, LetterSpacing) {
     let mut color = TextColor(Color::WHITE);
     let mut font = TextFont::default();
     let mut line = LineHeight::default();
@@ -1073,7 +1086,7 @@ pub fn resolved_text_style(
         if let Some(c) = s.color.static_ref() {
             color = TextColor(parse_color(c));
         }
-        if s.opacity.is_some() {
+        if s.opacity.is_some() && !promoted {
             color = TextColor(apply_opacity(color.0, s.opacity.static_val()));
         }
         if let Some(size) = s.font_size {

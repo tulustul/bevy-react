@@ -6,8 +6,9 @@ import {
   useRef,
 } from "react";
 import { BevyStyle } from "bevy-react/jsx";
-import { Colors, Filters, Gradients } from "@/theme";
+import { Colors, Filters, FontSizes, Gradients } from "@/theme";
 import { useExplanationStore } from "@/explanationStore";
+import { HeaderText } from "./HeaderText";
 
 export type ExampleProps = PropsWithChildren & {
   style?: BevyStyle;
@@ -69,7 +70,9 @@ export function Example({
       }
     >
       {title !== undefined && (
-        <text style={{ textAlign: "center" }}>{title}</text>
+        <HeaderText style={{ textAlign: "center", fontSize: FontSizes.xl }}>
+          {title}
+        </HeaderText>
       )}
       {demo !== undefined && <Demo demo={demo} />}
       {children}

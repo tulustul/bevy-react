@@ -12,8 +12,8 @@ use bevy::ui::{ComputedNode, ScrollPosition};
 use crate::anchor::{AnchorScaling, Anchored};
 use crate::animations::AnimatedNode;
 use crate::bridge::{
-    FocusState, HoverState, JsBridge, PointerHandlers, ScrollListener, ScrollStep, StyleVariants,
-    WheelListener,
+    ClickOwner, FocusState, HoverState, JsBridge, PointerHandlers, ScrollListener, ScrollStep,
+    StyleVariants, WheelListener,
 };
 use crate::protocol::{NodeId, props::Props, style::Style};
 use crate::transition::ScrollTransitionState;
@@ -99,15 +99,18 @@ pub(super) fn apply_style_variants(ec: &mut EntityCommands, props: &Props) {
 /// element also gets a [`RelativeCursorPosition`] (so we can read the cursor's
 /// normalized position within it).
 ///
-/// Both `onClick` and the `onPointer*` handlers need an `Interaction`: it is the
-/// click-*ownership* marker
+/// Both `onClick` and the `onPointer*` handlers need an `Interaction` (the
+/// drag begin/over test in
+/// [`collect_pointer_events`](crate::reconcile::collect_pointer_events), the
+/// hover/press-style + [`crate::PointerCapture`] source) **and** a
+/// [`ClickOwner`] — the click-*ownership* marker
 /// ([`collect_ui_events`](crate::reconcile::collect_ui_events) climbs a picked
-/// leaf to the nearest `Interaction`-bearing node), the drag begin/over test in
-/// [`collect_pointer_events`](crate::reconcile::collect_pointer_events), and
-/// the hover/press-style + [`crate::PointerCapture`]
-/// source. Without it a plain `<node onClick>` — no hover/press style, not a
-/// `<button>` — would never be reported as clicked. `insert_if_new` leaves an
-/// existing `Interaction` (a `button`'s, or a hover/press variant's) untouched.
+/// leaf to the nearest owner). The two are separate on purpose: hover/press
+/// styling also inserts an `Interaction`, and a style-only interactive element
+/// must never steal a click from an ancestor with a real handler. Without the
+/// pair a plain `<node onClick>` — no hover/press style, not a `<button>` —
+/// would never be reported as clicked. `insert_if_new` leaves an existing
+/// `Interaction` (a `button`'s, or a hover/press variant's) untouched.
 pub(super) fn apply_pointer_handlers(ec: &mut EntityCommands, props: &Props) {
     let any_pointer = props.on_pointer_down
         || props.on_pointer_move
@@ -138,6 +141,69 @@ pub(super) fn apply_pointer_handlers(ec: &mut EntityCommands, props: &Props) {
     }
     if props.on_click || any_pointer {
         ec.insert_if_new(Interaction::default());
+        ec.insert_if_new(ClickOwner);
+    } else {
+        // Safe to remove unconditionally: `<button>`/`editableText` own clicks
+        // by element type in the collectors, not through this marker.
+        ec.remove::<ClickOwner>();
+    }
+}
+
+/// A nested `<text>` span is a Node-less text run: it has no layout box, so
+/// the layer-family styles (`filter`/`backdropFilter`/`morphFilter`/
+/// `transform3d`/`cache`) can never promote it — its glyphs render under the
+/// enclosing `<text>` block, which is where those styles belong — and it is
+/// never a pointer target of its own, so click/pointer handlers on it never
+/// fire. Both are structurally silent no-ops; mirror them into devtools (the
+/// [`warn_shape_scroll`](super::svg_ops::warn_shape_scroll) pattern) so the
+/// surprise is at least visible. Call under the op's `diag::node_scope`.
+pub(super) fn warn_span_ignored(props: &Props) {
+    for (present, name) in [
+        (props.all_styles().any(|s| s.filter.is_some()), "filter"),
+        (
+            props.all_styles().any(|s| s.backdrop_filter.is_some()),
+            "backdropFilter",
+        ),
+        (
+            props.all_styles().any(|s| s.morph_filter.is_some()),
+            "morphFilter",
+        ),
+        (
+            props.all_styles().any(|s| s.transform3d.is_some()),
+            "transform3d",
+        ),
+        (props.all_styles().any(|s| s.cache.is_some()), "cache"),
+    ] {
+        if present {
+            crate::diag::report(
+                "spanLayerStyle",
+                name,
+                &format!(
+                    "`{name}` on a nested <text> span is ignored — a span has no \
+                     layout box to capture; put it on the enclosing <text> (or a \
+                     wrapping <node>)"
+                ),
+            );
+        }
+    }
+    for (present, name) in [
+        (props.on_click, "onClick"),
+        (props.on_pointer_down, "onPointerDown"),
+        (props.on_pointer_move, "onPointerMove"),
+        (props.on_pointer_up, "onPointerUp"),
+        (props.on_pointer_enter, "onPointerEnter"),
+        (props.on_pointer_leave, "onPointerLeave"),
+    ] {
+        if present {
+            crate::diag::report(
+                "spanHandlers",
+                name,
+                &format!(
+                    "`{name}` on a nested <text> span never fires — handlers \
+                     belong on the enclosing <text>"
+                ),
+            );
+        }
     }
 }
 
@@ -377,6 +443,122 @@ mod tests {
         assert!(
             app.world().entity(inert).get::<Interaction>().is_none(),
             "a node with no handlers/hover/press must not gain an Interaction"
+        );
+    }
+
+    /// `ClickOwner` tracks handler presence, independent of `Interaction`: a
+    /// hover-styled node without handlers is interactive for styling but not
+    /// a click owner; toggling `onClick` off drops ownership while the
+    /// hover `Interaction` survives.
+    #[test]
+    fn click_owner_tracks_handlers_not_styling() {
+        use crate::bridge::ClickOwner;
+        let (mut app, ops_tx) = op_app();
+        ops_tx
+            .send(vec![
+                // 1: hover-styled only — interactive, but NOT a click owner.
+                Op::Create {
+                    id: 1,
+                    kind: "node".into(),
+                    props: serde_json::from_value(
+                        serde_json::json!({ "hoverStyle": { "opacity": 0.5 } }),
+                    )
+                    .unwrap(),
+                    text: None,
+                },
+                // 2: onClick + hover style — both.
+                Op::Create {
+                    id: 2,
+                    kind: "node".into(),
+                    props: serde_json::from_value(
+                        serde_json::json!({ "onClick": true, "hoverStyle": { "opacity": 0.5 } }),
+                    )
+                    .unwrap(),
+                    text: None,
+                },
+            ])
+            .unwrap();
+        app.update();
+
+        let nodes = app.world().resource::<JsBridge>().nodes.clone();
+        let (styled, clickable) = (nodes[&1], nodes[&2]);
+        assert!(
+            app.world().entity(styled).get::<Interaction>().is_some(),
+            "hover styling makes the node interactive"
+        );
+        assert!(
+            app.world().entity(styled).get::<ClickOwner>().is_none(),
+            "…but never a click owner"
+        );
+        assert!(app.world().entity(clickable).get::<ClickOwner>().is_some());
+
+        // Toggling the handler off drops ownership but keeps the hover
+        // `Interaction` (the style variant still needs it).
+        ops_tx
+            .send(vec![update_delta(2, Props::default(), &["onClick"], &[])])
+            .unwrap();
+        app.update();
+        let entity = app.world().entity(clickable);
+        assert!(
+            entity.get::<ClickOwner>().is_none(),
+            "unsetting the last handler drops click ownership"
+        );
+        assert!(
+            entity.get::<Interaction>().is_some(),
+            "the hover-style Interaction survives"
+        );
+    }
+
+    /// A `<text>` root is fully interactive: create stamps the hover/press
+    /// variants + handler markers (`stamp_common`), and a delta refreshes
+    /// them — same contract as a `<node>`.
+    #[test]
+    fn text_root_stamps_interactivity() {
+        use crate::bridge::ClickOwner;
+        let (mut app, ops_tx) = op_app();
+        ops_tx
+            .send(vec![Op::Create {
+                id: 1,
+                kind: "text".into(),
+                props: serde_json::from_value(serde_json::json!({
+                    "onClick": true,
+                    "hoverStyle": { "color": "blue" },
+                }))
+                .unwrap(),
+                text: Some("label".into()),
+            }])
+            .unwrap();
+        app.update();
+
+        let e = app.world().resource::<JsBridge>().nodes[&1];
+        let entity = app.world().entity(e);
+        assert!(
+            entity.get::<StyleVariants>().is_some(),
+            "a <text> hoverStyle stamps StyleVariants"
+        );
+        assert!(entity.get::<Interaction>().is_some());
+        assert!(
+            entity.get::<ClickOwner>().is_some(),
+            "onClick makes the <text> a click owner"
+        );
+
+        // A delta adding a pointer handler lands too (the text update branch
+        // mirrors the general arm).
+        ops_tx
+            .send(vec![update_delta(
+                1,
+                serde_json::from_value(serde_json::json!({ "onPointerDown": true })).unwrap(),
+                &[],
+                &[],
+            )])
+            .unwrap();
+        app.update();
+        assert!(
+            app.world()
+                .entity(e)
+                .get::<PointerHandlers>()
+                .is_some_and(|h| h.down),
+            "a handler delta must reach a <text> root"
         );
     }
 

@@ -271,10 +271,13 @@ pub fn mark_content_dirty(ec: &mut EntityCommands) {
 ///   per-node fold — promoting it would be pure cost);
 /// - `groupAlpha != false` (the opt-out, read from the base style only —
 ///   the field is `no_overlay`);
-/// - the element kind is eligible (`ineligible_element = false`). v1
-///   ineligible: `<text>` (its fold already cascades to spans via
-///   resolved-style inheritance — group semantics without a layer) and
-///   detached roots (`<surface>`/`<root>` — separate render paths).
+/// - the element kind is eligible (`ineligible_element = false`). Ineligible:
+///   Node-less bridge entities (`<text>` spans, SVG shape children — no
+///   layout box to capture; their pixels belong to the enclosing block/root)
+///   and detached roots (`<surface>`/`<root>` — separate render paths). A
+///   top-level `<text>` is an ordinary Node-bearing element and promotes
+///   like any other (its glyph phase items key on the block entity, so the
+///   capture steal covers them).
 pub fn promotion_reasons(
     props: &Props,
     child_count: usize,
@@ -358,6 +361,7 @@ pub fn evaluate_layer_promotions(
     mut bridge: ResMut<crate::bridge::JsBridge>,
     mut registry: ResMut<LayersRegistry>,
     assets: Res<AssetServer>,
+    fonts: Res<crate::plugin::Fonts>,
     mut ui_assets: crate::reconcile::UiAssets,
     mut style_variants: Query<&mut crate::bridge::StyleVariants>,
 ) {
@@ -379,10 +383,12 @@ pub fn evaluate_layer_promotions(
             Some(props) => promotion_reasons(
                 props,
                 bridge.children_of(id).count(),
-                // Text elements (fold cascades to spans already) and detached
-                // roots (`<surface>`/`<root>` — own render paths) are
-                // ineligible in v1.
-                bridge.text_styles.contains_key(&id) || bridge.is_detached_root(id),
+                // Node-less bridge entities (`<text>` spans, SVG shape
+                // children — no box to capture) and detached roots
+                // (`<surface>`/`<root>` — own render paths) are ineligible.
+                bridge.spans.contains_key(&id)
+                    || bridge.shapes.contains(&id)
+                    || bridge.is_detached_root(id),
             ),
             None => PromotionReasons::default(),
         };
@@ -423,19 +429,24 @@ pub fn evaluate_layer_promotions(
             row.reasons = reasons;
             row.group_alpha = alpha;
             row.cache_policy = cache_policy;
-            if !was_promoted && let Some(props) = bridge.props_cache.get(&id) {
-                // Promote flip: colors were folded while unpromoted — bake
-                // the unfolded values + group alpha now, in one shot.
-                crate::reconcile::reapply_opacity_outputs(
-                    &mut commands,
-                    entity,
-                    props,
-                    true,
-                    bridge.foreign_images.contains(&id),
-                    &assets,
-                    &mut ui_assets,
-                    &mut style_variants,
-                );
+            if !was_promoted {
+                if let Some(props) = bridge.props_cache.get(&id) {
+                    // Promote flip: colors were folded while unpromoted — bake
+                    // the unfolded values + group alpha now, in one shot.
+                    crate::reconcile::reapply_opacity_outputs(
+                        &mut commands,
+                        entity,
+                        props,
+                        true,
+                        bridge.foreign_images.contains(&id),
+                        &assets,
+                        &mut ui_assets,
+                        &mut style_variants,
+                    );
+                }
+                if style_variants.get(entity).is_err() {
+                    reapply_text_fold(&mut commands, &mut bridge, &fonts, id, entity, true);
+                }
             }
         } else if was_promoted {
             // The resolved chains are promotion-scoped state; `FilterInput`/
@@ -467,6 +478,44 @@ pub fn evaluate_layer_promotions(
                     &mut style_variants,
                 );
             }
+            if style_variants.get(entity).is_err() {
+                reapply_text_fold(&mut commands, &mut bridge, &fonts, id, entity, false);
+            }
+        }
+    }
+}
+
+/// The `<text>` analogue of
+/// [`reapply_opacity_outputs`](crate::reconcile::reapply_opacity_outputs), run
+/// on a promotion flip of a variant-less text root: a text root's glyph fold
+/// lives in `resolved_text_style` (not `apply_style_masked`), so re-derive it
+/// with the new promotion state — promoted → fold suppressed (the layer's
+/// group alpha owns the fade), demoted → fold resumes — and re-propagate to
+/// any bare-string children that inherit it. Variant-bearing text re-merges
+/// through `apply_interaction_styles` instead (its `StyleVariants` change tick
+/// was poked by the caller), which does the same re-derive from the merged
+/// style. No-op for non-text nodes.
+fn reapply_text_fold(
+    commands: &mut Commands,
+    bridge: &mut crate::bridge::JsBridge,
+    fonts: &crate::plugin::Fonts,
+    id: NodeId,
+    entity: Entity,
+    promoted: bool,
+) {
+    if !bridge.text_styles.contains_key(&id) {
+        return;
+    }
+    let style = bridge.props_cache.get(&id).and_then(|p| p.style.clone());
+    let resolved = crate::ui_map::resolved_text_style_promoted(&style, fonts, promoted);
+    bridge.text_styles.insert(id, resolved.clone());
+    commands.entity(entity).insert(resolved.clone());
+    let kids: Vec<NodeId> = bridge.children_of(id).collect();
+    for kid in kids {
+        if bridge.spans.get(&kid) == Some(&crate::bridge::SpanKind::RawInherited)
+            && let Some(&kid_entity) = bridge.nodes.get(&kid)
+        {
+            commands.entity(kid_entity).insert(resolved.clone());
         }
     }
 }
@@ -1049,7 +1098,8 @@ mod tests {
             "style": { "opacity": { "animated": { "id": 1 } } },
         }));
         assert!(promoted(&animated, 1, false));
-        // Ineligible element kinds (text / detached roots) never promote.
+        // Ineligible element kinds (Node-less spans/shapes, detached roots)
+        // never promote.
         assert!(!promoted(&base, 1, true));
 
         // `cache: "always"` forces promotion — no opacity, no children, and

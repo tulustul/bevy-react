@@ -757,11 +757,15 @@ export interface BevyAnchorProps extends BevyNodeProps {
 
 /** Props for the `text` element (maps to `bevy_ui::Text` / `TextSpan`). Style
  *  its `color`/`fontSize`/`fontWeight`/`textAlign`/`lineHeight`/`letterSpacing`/
- *  `textShadow`/`lineBreak` via `style`; nest `<text>` to restyle a run. */
-export interface BevyTextProps extends BevyAttributes {
-  style?: BevyStyle;
-  children?: ReactNode;
-}
+ *  `textShadow`/`lineBreak` via `style`; nest `<text>` to restyle a run.
+ *
+ *  A top-level `<text>` has full `<node>` parity: hover/press styles, click/
+ *  pointer handlers, and the layer-family styles (`filter`/`backdropFilter`/
+ *  `morphFilter`/`transform3d`/`opacity`/`cache`) all work directly on it —
+ *  no wrapper `<node>` needed. On a *nested* `<text>` (a span — no layout box
+ *  of its own) those extras are structural no-ops; the runtime flags them in
+ *  the devtools inspector. */
+export type BevyTextProps = BevyNodeProps;
 
 /** Props for the `canvas` element: an arbitrary anti-aliased vector drawing
  *  surface with web-faithful retained pixels (maps to a `bevy_ui::ImageNode`

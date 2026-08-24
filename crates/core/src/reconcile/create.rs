@@ -15,7 +15,7 @@ use bevy::ui::widget::NodeImageMode;
 use super::stamps::{
     apply_anchor, apply_button_focus_default, apply_scroll_listener, apply_scroll_step,
     apply_style_variants, apply_wheel_listener, create_controlled_scroll, queue_pending_selection,
-    register_editable_handlers, stamp_common,
+    register_editable_handlers, stamp_common, warn_span_ignored,
 };
 use super::stats::UiAssets;
 use crate::bridge::{CanvasSizeTracker, JsBridge, RNode, SpanKind};
@@ -52,8 +52,11 @@ pub(super) fn apply_create(
     // child" (spawn dispatch, `bridge.shapes`, the background-image no-op).
     let shape_kind = crate::svg::ShapeKind::from_kind(&kind);
     let entity = match kind.as_str() {
-        // A `<text>` root: a UI node carrying the text block + style.
-        // A single-string child rides inline as `text` (no child span).
+        // A `<text>` root: a UI node carrying the text block + style. A
+        // single-string child rides inline as `text` (no child span). Fully
+        // interactive like a `<node>` (`stamp_common`): hover/press variants,
+        // pointer handlers, animation bindings, anchor — and layer-eligible
+        // (a `filter`/`transform3d`/… promotes it like any element).
         "text" => {
             let mut ec = commands.spawn(RNode(id));
             apply_style(&mut ec, &props.style);
@@ -62,12 +65,15 @@ pub(super) fn apply_create(
             if let Some(layout) = text_layout(&props.style) {
                 ec.insert(layout);
             }
-            apply_anchor(&mut ec, &props);
+            stamp_common(&mut ec, &props);
             ec.id()
         }
         // A nested `<text>`: a styled span (no layout box of its own).
-        // A single-string child rides inline as `text`.
+        // A single-string child rides inline as `text`. Layer-family styles
+        // and pointer handlers are structural no-ops on a span — warned so
+        // the silence is visible in devtools.
         "textSpan" => {
+            warn_span_ignored(&props);
             let mut ec = commands.spawn((RNode(id), TextSpan(text.clone().unwrap_or_default())));
             apply_text_style(&mut ec, &props.style, fonts);
             ec.id()
@@ -178,11 +184,12 @@ pub(super) fn apply_create(
                 // Focusable via click (the widget's picking observers)
                 // and Tab navigation.
                 TabIndex(0),
-                // Click OWNERSHIP (separate from focus): the input must be a
-                // click owner so a press inside it resolves to the input, not
-                // to an `onClick` ancestor behind it (e.g. a selectable card
-                // wrapping a form) — `collect_ui_events` only considers
-                // `Interaction`-bearing nodes, topmost wins.
+                // The input is a click owner BY TYPE — `collect_ui_events`
+                // matches `EditableText` directly — so a press inside it
+                // resolves to the input, not to an `onClick` ancestor behind
+                // it (e.g. a selectable card wrapping a form). The
+                // `Interaction` here serves hover/press styling and the
+                // pointer-capture claim.
                 Interaction::default(),
                 // Announce as a text field to assistive tech; the live
                 // value is kept in sync by `sync_editable_a11y`.
@@ -291,8 +298,8 @@ pub(super) fn apply_create(
         }
     }
     bridge.nodes.insert(id, entity);
-    // `cache: "always"`, a `filter`/`backdropFilter` chain, or a
-    // `morphFilter` — base or variant-carried (the promotion union is
+    // `cache: "always"`, a `filter`/`backdropFilter` chain, a `morphFilter`,
+    // or a `transform3d` — base or variant-carried (the promotion union is
     // presence-based, so a hover-only filter promotes eagerly at
     // creation) — promote even a childless node, so no later child op
     // would ever queue the evaluation — do it here. (Opacity-driven
@@ -301,9 +308,12 @@ pub(super) fn apply_create(
     // conservative "evaluate me" hint, the evaluator is authoritative,
     // and a spurious evaluation is cheap.
     if props.style.as_ref().is_some_and(|s| s.cache.is_some())
-        || props
-            .all_styles()
-            .any(|s| s.filter.is_some() || s.backdrop_filter.is_some() || s.morph_filter.is_some())
+        || props.all_styles().any(|s| {
+            s.filter.is_some()
+                || s.backdrop_filter.is_some()
+                || s.morph_filter.is_some()
+                || s.transform3d.is_some()
+        })
     {
         bridge.layer_dirty.insert(id);
     }
@@ -431,6 +441,60 @@ mod tests {
     use super::super::test_util::{children_of, create_node, ent, ordering_app, update_delta};
     use super::*;
     use crate::protocol::{ROOT_ID, op::Op};
+
+    /// Layer-family styles and pointer handlers on a nested `<text>` span are
+    /// structural no-ops (a span has no layout box; its glyphs belong to the
+    /// parent block) — both must warn into the devtools diag sink instead of
+    /// failing silently. The sink is process-global: serialize via the test
+    /// lock and filter drained entries by our node id.
+    #[cfg(all(feature = "devtools", debug_assertions))]
+    #[test]
+    fn span_layer_styles_and_handlers_warn() {
+        let _lock = crate::diag::test_lock();
+        crate::diag::arm_runtime();
+        let _ = crate::diag::take_runtime_warnings();
+
+        let (mut app, tx, _root) = ordering_app();
+        tx.send(vec![
+            Op::Create {
+                id: 1,
+                kind: "text".into(),
+                props: Box::default(),
+                text: None,
+            },
+            Op::Create {
+                id: 2,
+                kind: "textSpan".into(),
+                props: serde_json::from_value(serde_json::json!({
+                    "style": { "filter": { "name": "blur" } },
+                    "onClick": true,
+                }))
+                .unwrap(),
+                text: Some("run".into()),
+            },
+            Op::Append {
+                parent: 1,
+                child: 2,
+            },
+        ])
+        .unwrap();
+        app.update();
+
+        let mine: Vec<_> = crate::diag::take_runtime_warnings()
+            .into_iter()
+            .filter(|w| w.node == Some(2))
+            .collect();
+        assert!(
+            mine.iter()
+                .any(|w| w.kind == "spanLayerStyle" && w.value == "filter"),
+            "a filter on a span must warn spanLayerStyle; got {mine:?}"
+        );
+        assert!(
+            mine.iter()
+                .any(|w| w.kind == "spanHandlers" && w.value == "onClick"),
+            "an onClick on a span must warn spanHandlers; got {mine:?}"
+        );
+    }
 
     /// A `<portal>` mounts to an `ImageNode` carrying an `RPortal` with its target
     /// name; an update rebinds the name.

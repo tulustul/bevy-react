@@ -687,10 +687,12 @@ mod tests {
         );
     }
 
-    /// Op-driven negative: a `<text>` element created WITH a filter style is
-    /// seeded/evaluated but ineligible — never promoted, never resolved.
+    /// Op-driven positive: a `<text>` element created WITH a filter style
+    /// promotes and resolves like any other Node-bearing element (the v1
+    /// text carve-out is gone — glyph phase items key on the block entity,
+    /// so the capture steal covers them).
     #[test]
-    fn filtered_text_element_stays_unpromoted_and_unresolved() {
+    fn filtered_text_element_promotes_and_resolves() {
         let (mut app, ops_tx) = resolve_app();
         ops_tx
             .send(vec![create_kind(
@@ -701,8 +703,162 @@ mod tests {
             .unwrap();
         app.update();
         let e = entity_of(&app, 1);
-        assert!(app.world().get::<PromotedLayer>(e).is_none(), "ineligible");
+        assert!(
+            app.world().get::<PromotedLayer>(e).is_some(),
+            "a filtered <text> promotes"
+        );
+        assert!(
+            app.world().get::<ResolvedFilterChain>(e).is_some(),
+            "and its chain resolves"
+        );
+    }
+
+    /// Op-driven negative: a nested `<text>` span is Node-less (no box to
+    /// capture — its glyphs belong to the parent block), so a filter on it
+    /// never promotes. The enclosing `<text>` is the filterable surface.
+    #[test]
+    fn filtered_text_span_stays_unpromoted() {
+        let (mut app, ops_tx) = resolve_app();
+        ops_tx
+            .send(vec![
+                create_kind(1, "text", json!({})),
+                create_kind(
+                    2,
+                    "textSpan",
+                    json!({ "style": { "filter": { "name": "grayscale" } } }),
+                ),
+                Op::Append {
+                    parent: 1,
+                    child: 2,
+                },
+            ])
+            .unwrap();
+        app.update();
+        let e = entity_of(&app, 2);
+        assert!(
+            app.world().get::<PromotedLayer>(e).is_none(),
+            "a span never promotes"
+        );
         assert!(app.world().get::<ResolvedFilterChain>(e).is_none());
+    }
+
+    /// A promoted `<text>` folds opacity exactly once: the glyph-color fold
+    /// is suppressed (the layer's group alpha owns the fade), and demotion
+    /// resumes it. Regression for the double-multiply a promoted text would
+    /// otherwise get (fold × group alpha).
+    #[test]
+    fn promoted_text_opacity_folds_once() {
+        use bevy::text::TextColor;
+        let (mut app, ops_tx) = resolve_app();
+        ops_tx
+            .send(vec![create_kind(
+                1,
+                "text",
+                json!({ "style": {
+                    "color": "#ffffff", "opacity": 0.5,
+                    "filter": { "name": "grayscale" }
+                } }),
+            )])
+            .unwrap();
+        app.update();
+        let e = entity_of(&app, 1);
+        assert!(app.world().get::<PromotedLayer>(e).is_some());
+        assert_eq!(
+            app.world().get::<TextColor>(e).unwrap().0.alpha(),
+            1.0,
+            "promoted: the glyph fold is suppressed — group alpha owns the fade"
+        );
+        assert_eq!(
+            app.world()
+                .get::<crate::layer::LayerGroupAlpha>(e)
+                .unwrap()
+                .0,
+            0.5,
+            "the opacity value drives the composite-time group alpha"
+        );
+
+        // Unsetting the filter demotes (childless text: no OPACITY reason)
+        // and the per-glyph fold resumes.
+        ops_tx
+            .send(vec![update(1, json!({}), &["filter"])])
+            .unwrap();
+        app.update();
+        assert!(app.world().get::<PromotedLayer>(e).is_none(), "demoted");
+        assert_eq!(
+            app.world().get::<TextColor>(e).unwrap().0.alpha(),
+            0.5,
+            "demoted: the glyph fold resumes"
+        );
+    }
+
+    /// `opacity` on `<text>` mirrors the `<node>` rule literally: any bridge
+    /// child (a bare-string run included) makes it a group → promotes; a
+    /// childless text keeps the cheap glyph fold. The promoted root's
+    /// unfolded style re-propagates to inheriting bare-string spans.
+    #[test]
+    fn text_opacity_promotes_with_children_only() {
+        use bevy::text::TextColor;
+        let (mut app, ops_tx) = resolve_app();
+        ops_tx
+            .send(vec![
+                // 1: childless — stays folded, never promotes.
+                create_kind(1, "text", json!({ "style": { "opacity": 0.5 } })),
+                // 2: one bare-string run → a group, promotes.
+                create_kind(2, "text", json!({ "style": { "opacity": 0.5 } })),
+                Op::CreateTextSpan {
+                    id: 3,
+                    text: "run".into(),
+                },
+                Op::Append {
+                    parent: 2,
+                    child: 3,
+                },
+            ])
+            .unwrap();
+        app.update();
+        let leaf = entity_of(&app, 1);
+        assert!(
+            app.world().get::<PromotedLayer>(leaf).is_none(),
+            "childless text keeps the fold (leaf group alpha is identical)"
+        );
+        let group = entity_of(&app, 2);
+        assert!(
+            app.world().get::<PromotedLayer>(group).is_some(),
+            "text with a child promotes on opacity, like a <node>"
+        );
+        assert_eq!(
+            app.world().get::<TextColor>(group).unwrap().0.alpha(),
+            1.0,
+            "the promoted root's fold is suppressed"
+        );
+        let span = entity_of(&app, 3);
+        assert_eq!(
+            app.world().get::<TextColor>(span).unwrap().0.alpha(),
+            1.0,
+            "the inheriting bare-string span picks up the unfolded style"
+        );
+    }
+
+    /// Regression: a childless element created with ONLY a `transform3d`
+    /// must seed its own promotion evaluation — the `Op::Append` seeds mark
+    /// the parent, so a leaf with no later child op would otherwise never be
+    /// evaluated (the create-time `layer_dirty` union used to miss
+    /// `transform3d`).
+    #[test]
+    fn transform3d_leaf_create_promotes() {
+        let (mut app, ops_tx) = resolve_app();
+        ops_tx
+            .send(vec![create(
+                1,
+                json!({ "style": { "transform3d": { "rotateY": 30 } } }),
+            )])
+            .unwrap();
+        app.update();
+        let e = entity_of(&app, 1);
+        assert!(
+            app.world().get::<PromotedLayer>(e).is_some(),
+            "a transform3d-only leaf must promote from its create op alone"
+        );
     }
 
     // -- per-param filter bindings (full pipeline) ---------------------------

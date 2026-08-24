@@ -29,9 +29,11 @@ pub fn collect_surface_clicks(
     bridge: Res<JsBridge>,
     pointer: Option<Res<SurfaceVirtualPointer>>,
     mut clicks: MessageReader<Pointer<Click>>,
-    // Only `Interaction`-bearing nodes own a click (a `<button>` gets one via `Button`;
-    // a `<text>` child does not) — matching the legacy `collect_ui_events` attribution.
-    targets: Query<&RNode, With<Interaction>>,
+    // Click ownership (see [`ClickOwners`](super::events::ClickOwners)) —
+    // matching `collect_ui_events`' attribution exactly (NOT `Interaction`:
+    // hover/press styling must never steal a click from an ancestor with a
+    // real handler).
+    targets: Query<&RNode, super::events::ClickOwners>,
     child_of: Query<&ChildOf>,
 ) {
     let Some(pointer) = pointer else { return };

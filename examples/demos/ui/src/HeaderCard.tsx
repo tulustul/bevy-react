@@ -4,6 +4,7 @@ import { InfoBody } from "@/components/docs";
 import { Colors, Filters, FontSizes, Gradients } from "@/theme";
 import { ExplanationData, useExplanationStore } from "./explanationStore";
 import { useWindowSize } from "./useWindowSize";
+import { HeaderText } from "./components";
 
 /**
  * The per-page documentation card at the top of the content flow — replaces
@@ -38,7 +39,7 @@ function Card({ page, width }: { page: ExplanationData; width: number }) {
   return (
     <node style={{ ...cardStyle, width }}>
       <node style={titleRowStyle}>
-        <text style={titleStyle}>{page.title}</text>
+        <HeaderText style={titleStyle}>{page.title}</HeaderText>
         <node
           style={toggleStyle}
           hoverStyle={toggleHoverStyle}
@@ -81,7 +82,7 @@ const titleRowStyle: BevyStyle = {
 };
 
 const titleStyle: BevyStyle = {
-  fontSize: FontSizes.xl,
+  fontSize: FontSizes.xxl,
   fontWeight: "semibold",
   color: Colors.textColor100,
 };

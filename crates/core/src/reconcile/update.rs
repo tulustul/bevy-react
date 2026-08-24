@@ -25,7 +25,7 @@ use crate::plugin::Fonts;
 use crate::portal::RPortal;
 use crate::protocol::{NodeId, props::Props};
 use crate::transition::{ScrollTransitionState, apply_scroll_transition};
-use crate::ui_map::{apply_style_masked, overlay_style, resolved_text_style, text_layout};
+use crate::ui_map::{apply_style_masked, overlay_style, resolved_text_style_promoted, text_layout};
 
 /// Apply one `Op::Update`: merge the delta into the retained props and
 /// re-apply only what it dirtied. Extracted from the `apply_js_ops` match;
@@ -92,12 +92,22 @@ pub(super) fn apply_update(
         bridge.layer_dirty.insert(id);
     }
     if bridge.text_styles.contains_key(&id) {
+        let is_root = text_roots.contains(e);
+        if !is_root {
+            // A nested span: layer-family styles and pointer handlers are
+            // structural no-ops (no layout box, glyphs belong to the parent
+            // block) — warn so the silence is visible in devtools.
+            super::stamps::warn_span_ignored(&props);
+        }
+        // A promoted text root suppresses the glyph opacity fold — the
+        // layer's group alpha owns the fade (see `resolved_text_style_promoted`).
+        let promoted = is_root && bridge.promoted_layers.contains(&id);
         // A `<text>` element: refresh its resolved style — but only
         // when a text-style field actually changed (resolution does
         // color parsing + a font lookup, and the raw-span
         // re-propagation below is O(children)).
         let resolved = dirty.style.intersects(g::TEXT).then(|| {
-            let style = resolved_text_style(&props.style, fonts);
+            let style = resolved_text_style_promoted(&props.style, fonts, promoted);
             bridge.text_styles.insert(id, style.clone());
             style
         });
@@ -110,15 +120,13 @@ pub(super) fn apply_update(
         // otherwise a `transform`/`transition` on a `<text>` would only
         // apply on mount and never animate. Spans have no `Node` and are
         // skipped so they never gain a layout box.
-        if text_roots.contains(e) {
-            // Text elements are never layer-promoted (see
-            // `crate::layer::promotion_reasons`).
-            apply_style_masked(&mut ec, &props.style, dirty.style, false);
+        if is_root {
+            apply_style_masked(&mut ec, &props.style, dirty.style, promoted);
             crate::background_image::apply_background_image(
                 &mut ec,
                 &props.style,
                 dirty.style,
-                false,
+                promoted,
                 assets,
             );
         }
@@ -131,6 +139,42 @@ pub(super) fn apply_update(
         }
         if dirty.anchor {
             apply_anchor(&mut ec, &props);
+        }
+        // Interactivity parity with the general arm (a `<text>` root is
+        // fully interactive since its create path stamps `stamp_common`):
+        // variants, handlers, listeners, and animation bindings all
+        // refresh on re-render, not just at mount.
+        if is_root {
+            if dirty.any_style_variant() {
+                apply_style_variants(&mut ec, &props);
+            }
+            if dirty.pointer {
+                apply_pointer_handlers(&mut ec, &props);
+            }
+            if dirty.scroll_listener {
+                apply_scroll_listener(&mut ec, &props);
+            }
+            if dirty.wheel {
+                apply_wheel_listener(&mut ec, &props);
+            }
+            if dirty.scroll_step {
+                apply_scroll_step(&mut ec, &props);
+            }
+            if dirty.style.intersects(g::SCROLL_TRANSITION) {
+                apply_scroll_transition(&mut ec, &props.style);
+            }
+            if dirty.style.any() {
+                apply_animated(&mut ec, &props);
+            }
+            update_controlled_scroll(
+                bridge,
+                &mut ec,
+                scroll_query,
+                e,
+                id,
+                ev.scroll_left,
+                ev.scroll_top,
+            );
         }
         // Re-propagate the resolved style to any bare-string children
         // that inherit it (after the last `ec` use — the loop needs
@@ -379,8 +423,10 @@ pub(crate) fn reapply_opacity_outputs(
     } else {
         let mut ec = commands.entity(entity);
         // Every group `opacity` feeds, minus TRANSITION (transition *state*
-        // persists across flips; only baked outputs re-derive) and TEXT
-        // (text elements never promote).
+        // persists across flips; only baked outputs re-derive). TEXT is
+        // absent because `apply_style_masked` doesn't own the glyph fold —
+        // a text root's re-derive is `crate::layer`'s `reapply_text_fold`,
+        // run by the evaluator alongside this.
         let mask = crate::protocol::style::StyleDirty(
             g::BACKGROUND | g::BG_GRADIENT | g::BORDER_GRADIENT | g::TEXT_SHADOW | g::LAYER,
         );

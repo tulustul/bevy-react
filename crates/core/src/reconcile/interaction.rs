@@ -34,10 +34,15 @@ pub fn apply_interaction_styles(
         )>,
     >,
     rnodes: Query<&RNode>,
+    texts: Query<(), With<Text>>,
     assets: Res<AssetServer>,
-    // `Option`: headless test harnesses build partial apps without the bridge.
+    // `Option`: headless test harnesses build partial apps without the bridge
+    // (and some without the fonts resource).
     bridge: Option<Res<crate::bridge::JsBridge>>,
+    fonts: Option<Res<crate::plugin::Fonts>>,
 ) {
+    let default_fonts = crate::plugin::Fonts::default();
+    let fonts = fonts.as_deref().unwrap_or(&default_fonts);
     for (entity, interaction, focus, variants, promoted) in &query {
         let mut style = match interaction {
             Some(Interaction::Pressed) => overlay_style(
@@ -78,6 +83,30 @@ pub fn apply_interaction_styles(
                 &assets,
             );
         }
+        // A `<text>` root's glyph appearance (`TextColor`/`TextFont`/…)
+        // resolves through `resolved_text_style`, not `apply_style_masked` —
+        // re-derive it from the merged style so hover/press/focus color and
+        // font changes actually land, with the opacity fold suppressed on a
+        // promoted root (its group alpha owns the fade). Bare-string children
+        // inherit the merged result like they do on a re-render.
+        if texts.contains(entity) {
+            let resolved =
+                crate::ui_map::resolved_text_style_promoted(&style, fonts, promoted.is_some());
+            ec.insert(resolved.clone());
+            if let Some(layout) = crate::ui_map::text_layout(&style) {
+                ec.insert(layout);
+            }
+            if let (Some(bridge), Some(rnode)) = (bridge.as_ref(), rnode) {
+                let kids: Vec<_> = bridge.children_of(rnode.0).collect();
+                for kid in kids {
+                    if bridge.spans.get(&kid) == Some(&crate::bridge::SpanKind::RawInherited)
+                        && let Some(&kid_entity) = bridge.nodes.get(&kid)
+                    {
+                        commands.entity(kid_entity).insert(resolved.clone());
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -88,6 +117,76 @@ mod tests {
     use crate::bridge::JsBridge;
     use crate::protocol::op::Op;
     use bevy::ui::widget::ImageNode;
+
+    /// A `<text>` hover variant recolors the glyphs Bevy-side: hover-in
+    /// applies the merged `color`, hover-out restores the base — on the root
+    /// AND its inheriting bare-string span (which carries its own copy of
+    /// the resolved components).
+    #[test]
+    fn text_hover_variant_recolors_glyphs() {
+        use crate::protocol::op::Op;
+        let (mut app, ops_tx) = op_app();
+        app.add_systems(
+            Update,
+            apply_interaction_styles.after(crate::reconcile::apply_js_ops),
+        );
+        ops_tx
+            .send(vec![
+                Op::Create {
+                    id: 1,
+                    kind: "text".into(),
+                    props: serde_json::from_value(serde_json::json!({
+                        "style": { "color": "red" },
+                        "hoverStyle": { "color": "blue" },
+                    }))
+                    .unwrap(),
+                    text: None,
+                },
+                Op::CreateTextSpan {
+                    id: 2,
+                    text: "run".into(),
+                },
+                Op::Append {
+                    parent: 1,
+                    child: 2,
+                },
+            ])
+            .unwrap();
+        app.update();
+        let bridge = app.world().resource::<JsBridge>();
+        let (root, span) = (bridge.nodes[&1], bridge.nodes[&2]);
+        let color = |app: &App, e: Entity| {
+            app.world()
+                .entity(e)
+                .get::<bevy::text::TextColor>()
+                .unwrap()
+                .0
+        };
+        assert_eq!(color(&app, root), crate::ui_map::parse_color("red"));
+
+        app.world_mut()
+            .entity_mut(root)
+            .insert(Interaction::Hovered);
+        app.update();
+        assert_eq!(
+            color(&app, root),
+            crate::ui_map::parse_color("blue"),
+            "hover-in recolors the glyphs"
+        );
+        assert_eq!(
+            color(&app, span),
+            crate::ui_map::parse_color("blue"),
+            "…and the inheriting bare-string span"
+        );
+
+        app.world_mut().entity_mut(root).insert(Interaction::None);
+        app.update();
+        assert_eq!(
+            color(&app, root),
+            crate::ui_map::parse_color("red"),
+            "hover-out restores the base color"
+        );
+    }
 
     /// A hover variant swaps the whole `backgroundImage` Bevy-side (new
     /// texture handle on hover-in); hover-out with a spec-less base removes

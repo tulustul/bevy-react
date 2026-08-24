@@ -6,13 +6,22 @@ use bevy::picking::events::{Click, Pointer};
 use bevy::picking::pointer::{PointerButton, PointerId};
 use bevy::platform::collections::HashMap;
 use bevy::prelude::*;
+use bevy::text::EditableText;
 use bevy::ui::RelativeCursorPosition;
 use bevy::ui::{ComputedNode, ScrollPosition, UiGlobalTransform};
 
-use crate::bridge::{CanvasSizeTracker, JsBridge, RNode, ScrollListener};
+use crate::bridge::{CanvasSizeTracker, ClickOwner, JsBridge, RNode, ScrollListener};
 use crate::canvas::{CanvasSurface, clamp_physical_size};
 use crate::protocol::{NodeId, outbound::Outbound, outbound::UiEvent};
 use crate::surface::SurfaceVirtualPointer;
+
+/// Query filter matching every click-owning element: one with a declared
+/// click/pointer handler ([`ClickOwner`], stamped by `apply_pointer_handlers`),
+/// a native `<button>`, or an `editableText` input. Deliberately NOT
+/// `Interaction` — hover/press styling inserts one too, and a style-only
+/// interactive leaf (a hover-styled `<text>` label) must never steal the
+/// click from the ancestor that declared the handler.
+pub(super) type ClickOwners = Or<(With<ClickOwner>, With<Button>, With<EditableText>)>;
 
 /// Report clicks on reconciler-owned nodes to the JS thread. Rides bevy_picking's
 /// `Pointer<Click>`, which fires on *release over the same node the press landed
@@ -30,10 +39,9 @@ pub fn collect_ui_events(
     // have to init it; production always has it (`ReactUiPlugin`).
     touch_scroll: Option<Res<crate::touch_scroll::TouchScrollState>>,
     mut clicks: MessageReader<Pointer<Click>>,
-    // Only `Interaction`-bearing nodes own a click (a `<button>` gets one via
-    // `Button`; a `<text>` child does not) — the same attribution rule as the
-    // legacy `ui_focus_system` path and `collect_surface_clicks`.
-    targets: Query<&RNode, With<Interaction>>,
+    // Click ownership (see [`ClickOwners`]) — same attribution rule as
+    // `collect_surface_clicks`.
+    targets: Query<&RNode, ClickOwners>,
     child_of: Query<&ChildOf>,
 ) {
     // One gesture fans out to every entity in the pointer's hover map (a
@@ -67,8 +75,9 @@ pub fn collect_ui_events(
         {
             continue;
         }
-        // Resolve the picked leaf (often a text span) to the nearest interactive
-        // ancestor, so a click on a button's label still fires the button.
+        // Resolve the picked leaf (often a text span) to the nearest
+        // click-owning ancestor, so a click on a button's label still fires
+        // the button.
         if let Some(target) = climb(ev.entity, &child_of, |e| targets.contains(e)) {
             let candidate = (ev.hit.depth, target);
             topmost
@@ -220,8 +229,8 @@ pub(super) fn surface_relative(
 /// Walk up the `ChildOf` chain from `entity` (inclusive) to the nearest entity that
 /// satisfies `is_target`. Surface picking hits the topmost leaf node (e.g. a `<text>`
 /// inside a `<button>`); this resolves it to the node that actually owns the
-/// interaction — mirroring how the legacy focus system attributes to the nearest
-/// `Interaction` node. Stops at the (detached) surface root when nothing matches.
+/// interaction — the nearest click owner (`ClickOwner`/`Button`/`EditableText`).
+/// Stops at the (detached) surface root when nothing matches.
 pub(crate) fn climb(
     mut entity: Entity,
     child_of: &Query<&ChildOf>,
@@ -358,7 +367,7 @@ mod tests {
         let (mut app, mut out_rx) = click_app();
         app.add_systems(Update, collect_ui_events);
 
-        let owner = app.world_mut().spawn((RNode(1), Interaction::None)).id();
+        let owner = app.world_mut().spawn((RNode(1), ClickOwner)).id();
         let leaf = app.world_mut().spawn(ChildOf(owner)).id();
 
         let click = |entity, button| {
@@ -408,10 +417,10 @@ mod tests {
         let (mut app, mut out_rx) = click_app();
         app.add_systems(Update, collect_ui_events);
 
-        let outer = app.world_mut().spawn((RNode(1), Interaction::None)).id();
+        let outer = app.world_mut().spawn((RNode(1), ClickOwner)).id();
         let inner = app
             .world_mut()
-            .spawn((RNode(2), Interaction::None, ChildOf(outer)))
+            .spawn((RNode(2), ClickOwner, ChildOf(outer)))
             .id();
         let leaf = app.world_mut().spawn(ChildOf(inner)).id();
 
@@ -459,10 +468,10 @@ mod tests {
         app.add_systems(Update, collect_surface_clicks);
         app.update(); // Run Startup so the pointer resource exists.
 
-        let outer = app.world_mut().spawn((RNode(1), Interaction::None)).id();
+        let outer = app.world_mut().spawn((RNode(1), ClickOwner)).id();
         let inner = app
             .world_mut()
-            .spawn((RNode(2), Interaction::None, ChildOf(outer)))
+            .spawn((RNode(2), ClickOwner, ChildOf(outer)))
             .id();
 
         let surface_id = app.world().resource::<SurfaceVirtualPointer>().id;
@@ -498,15 +507,63 @@ mod tests {
         assert_eq!(events[0].id, 2, "the inner (topmost) node owns the click");
     }
 
+    /// Hover/press styling alone must NOT own a click: a hover-styled `<text>`
+    /// label inside a click-owning ancestor carries an `Interaction` (for the
+    /// Bevy-side restyle) but no handler — the click still belongs to the
+    /// ancestor. Regression for the old `Interaction`-as-ownership overload,
+    /// which made such a label swallow its button's `onClick`.
+    #[test]
+    fn hover_styled_label_does_not_steal_click() {
+        let (mut app, mut out_rx) = click_app();
+        app.add_systems(Update, collect_ui_events);
+
+        let owner = app.world_mut().spawn((RNode(1), ClickOwner)).id();
+        // The label: interactive for styling, but not a click owner.
+        let label = app
+            .world_mut()
+            .spawn((RNode(2), Interaction::None, ChildOf(owner)))
+            .id();
+
+        let click = |entity, depth| {
+            Pointer::new(
+                PointerId::Mouse,
+                click_location(),
+                Click {
+                    button: PointerButton::Primary,
+                    hit: bevy::picking::backend::HitData::new(
+                        Entity::PLACEHOLDER,
+                        depth,
+                        None,
+                        None,
+                    ),
+                    duration: std::time::Duration::ZERO,
+                    count: 1,
+                },
+                entity,
+            )
+        };
+        // The label is the topmost hit; the owner sits just beneath.
+        app.world_mut().write_message(click(label, 0.0));
+        app.world_mut().write_message(click(owner, 0.00001));
+        app.update();
+
+        let events = drain_clicks(&mut out_rx);
+        assert_eq!(events.len(), 1, "exactly one owner resolves");
+        assert_eq!(
+            events[0].id, 1,
+            "the hover-styled label must climb to the click-owning ancestor"
+        );
+    }
+
     /// No-regression pin for handler fallthrough: a click picked on a
-    /// handler-less shape (no `Interaction`) climbs the `ChildOf` chain to
-    /// the `<svg>` root's own `Interaction` — the root still owns the click.
+    /// handler-less shape (no `ClickOwner`) climbs the `ChildOf` chain to
+    /// the `<svg>` root's own ownership marker — the root still owns the click.
     #[test]
     fn handlerless_shape_click_falls_to_svg_root() {
         let (mut app, mut out_rx) = click_app();
         app.add_systems(Update, collect_ui_events);
 
-        let root = app.world_mut().spawn((RNode(1), Interaction::None)).id();
+        let root = app.world_mut().spawn((RNode(1), ClickOwner)).id();
         let shape = app
             .world_mut()
             .spawn((
@@ -550,7 +607,7 @@ mod tests {
         app.add_systems(Update, (collect_ui_events, collect_surface_clicks));
         app.update(); // Run Startup so the pointer resource exists.
 
-        let owner = app.world_mut().spawn((RNode(7), Interaction::None)).id();
+        let owner = app.world_mut().spawn((RNode(7), ClickOwner)).id();
         let surface_id = app.world().resource::<SurfaceVirtualPointer>().id;
         app.world_mut().write_message(Pointer::new(
             surface_id,

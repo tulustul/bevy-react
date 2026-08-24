@@ -9,7 +9,7 @@
 /// `diag::report` sites
 /// (`ui_map.rs`, `cursor.rs`, `filters.rs`, `layer.rs`,
 /// `animations/apply/{filter_params,shape,warn}.rs`, `svg/image.rs`,
-/// `reconcile/svg_ops.rs`); extend
+/// `reconcile/svg_ops.rs`, `reconcile/stamps.rs`); extend
 /// BOTH this list and the table when
 /// adding one. (`length`/`angle`/`time` are deliberately table-less —
 /// they're the broad-scan kinds.)
@@ -62,6 +62,8 @@ fn js_warning_kind_table_covers_known_kinds() {
         "shapeTransform",
         "shapeTransition",
         "shapeBinding",
+        "spanLayerStyle",
+        "spanHandlers",
         "color",
         "fontFamily",
         "cursor",

@@ -73,6 +73,19 @@ pub struct PointerHandlers {
     pub leave: bool,
 }
 
+/// Marks an element that **owns** clicks: the click collectors
+/// ([`collect_ui_events`](crate::reconcile::collect_ui_events) /
+/// `collect_surface_clicks`) climb a picked leaf to the nearest click owner,
+/// and only owners are reported to JS. Stamped by `apply_pointer_handlers`
+/// when `onClick` or any `onPointer*` handler is declared; native `<button>`s
+/// and `editableText` inputs own clicks by element type (the collectors match
+/// them directly). Deliberately **not** `Interaction`: hover/press styling
+/// inserts an `Interaction` too, and a style-only interactive element (a
+/// hover-styled `<text>` label inside a `<button>`) must never steal the
+/// click from the ancestor that declared the handler.
+#[derive(Component, Debug, Clone, Copy, Default)]
+pub struct ClickOwner;
+
 /// Whether a node with an `onPointerEnter`/`onPointerLeave` handler currently has
 /// the pointer inside it (its `Interaction` is not `None`). Kept so the hover
 /// system can emit `pointerEnter`/`pointerLeave` only on the boundary crossing —
