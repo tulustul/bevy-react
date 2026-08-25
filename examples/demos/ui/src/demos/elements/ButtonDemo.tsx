@@ -1,13 +1,15 @@
 import { useState } from "react";
 import { BevyStyle } from "bevy-react/jsx";
-import { Example } from "@/components";
+import { Button, DemoRow, Example } from "@/components";
 import { B, Code, InlineCode, P } from "@/components/docs";
 import { Colors, FontSizes } from "@/theme";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
 
-// A pure-UI demo of the `<button>` host element: a clickable container that
-// reacts to hover and press via `hoverStyle` / `pressStyle`, driving a React
-// state counter on `onClick`. No 3D scene: the viewport stays empty.
+// A pure-UI demo of the `<button>` host element, shown twice: once basic — the
+// host element with hand-written hover/press overlays — and once through the
+// gallery's shared `Button` component (`components/Button.tsx`), which layers
+// the house look, filters and press feedback over the same element. Both count
+// clicks in React state. No 3D scene: the viewport stays empty.
 
 const PAGE: ExplanationData = {
   title: "<button>",
@@ -36,6 +38,15 @@ const PAGE: ExplanationData = {
         <InlineCode>{"<node>"}</InlineCode> passes interaction through. Set{" "}
         <InlineCode>focusPolicy</InlineCode> on either to override.
       </P>
+      <P>
+        The host element is deliberately bare. Apps wrap it once with their own
+        look — the gallery's <InlineCode>Button</InlineCode> component is
+        exactly that: a fairly complex combination of filters, gradients,
+        transitions and press feedback over a plain{" "}
+        <InlineCode>{"<button>"}</InlineCode>. Its source (
+        <InlineCode>components/Button.tsx</InlineCode>) is a good reference for
+        building your own.
+      </P>
     </>
   ),
 };
@@ -43,19 +54,30 @@ const PAGE: ExplanationData = {
 export function ButtonDemo() {
   useDemoPage(PAGE);
   return (
+    <DemoRow>
+      <BasicButtonExample />
+      <RichButtonExample />
+    </DemoRow>
+  );
+}
+
+function BasicButtonExample() {
+  return (
     <Example
-      title="Click counter"
+      title="Basic button"
       info={
         <>
           <P>
-            The classic counter: <InlineCode>onClick</InlineCode> bumps React
-            state, and the hover/press overlays give the button its feedback for
-            free.
+            The host element as-is: <InlineCode>onClick</InlineCode> bumps React
+            state, and the <InlineCode>hoverStyle</InlineCode> /{" "}
+            <InlineCode>pressStyle</InlineCode> overlays give the button its
+            feedback for free.
           </P>
           <Code lang="tsx">{`const [count, setCount] = useState(0);
 
 <button
   onClick={() => setCount((c) => c + 1)}
+  style={{ borderRadius: 8, /* … */ }}
   hoverStyle={{ backgroundColor: "#89b4fa" }}
   pressStyle={{ backgroundColor: "#5a7fd6" }}
 >
@@ -63,34 +85,86 @@ export function ButtonDemo() {
 </button>`}</Code>
         </>
       }
-      demo={CounterCard}
+      demo={BasicButtonCard}
     />
   );
 }
 
-function CounterCard() {
+function BasicButtonCard() {
   const [count, setCount] = useState(0);
   return (
     <>
-      <text style={countStyle}>
-        Clicks: <text style={countValueStyle}>{count}</text>
-      </text>
-
+      <ClickCount count={count} />
       <button
         onClick={() => setCount((c) => c + 1)}
-        style={clickButtonStyle}
+        style={basicButtonStyle}
         hoverStyle={{ backgroundColor: Colors.primary200 }}
         pressStyle={{ backgroundColor: Colors.primary300 }}
       >
-        <text style={clickLabelStyle}>Click me</text>
+        <text style={basicLabelStyle}>Click me</text>
       </button>
     </>
+  );
+}
+
+function RichButtonExample() {
+  return (
+    <Example
+      title="Rich button"
+      info={
+        <>
+          <P>
+            The same counter through the gallery's shared{" "}
+            <InlineCode>Button</InlineCode> component. It is a complex
+            combination of filters, gradients, transitions and press feedback
+            layered over the plain element — too much to fit in a snippet, so
+            look at <InlineCode>components/Button.tsx</InlineCode> in the demos
+            source for reference.
+          </P>
+          <Code lang="tsx">{`import { Button } from "@/components";
+
+const [count, setCount] = useState(0);
+
+<Button
+  onClick={() => setCount((c) => c + 1)}
+>
+  Click me
+</Button>`}</Code>
+        </>
+      }
+      demo={RichButtonCard}
+    />
+  );
+}
+
+function RichButtonCard() {
+  const [count, setCount] = useState(0);
+  return (
+    <>
+      <ClickCount count={count} />
+      <Button
+        onClick={() => setCount((c) => c + 1)}
+        style={richButtonStyle}
+        labelStyle={{ fontSize: FontSizes.base }}
+      >
+        Click me
+      </Button>
+    </>
+  );
+}
+
+function ClickCount({ count }: { count: number }) {
+  return (
+    <text style={countStyle}>
+      Clicks: <text style={countValueStyle}>{count}</text>
+    </text>
   );
 }
 
 const countStyle: BevyStyle = {
   color: Colors.textColor100,
   fontSize: FontSizes.lg,
+  textAlign: "center",
 };
 
 // Spans take element defaults for unset fields — restate the size.
@@ -99,9 +173,9 @@ const countValueStyle: BevyStyle = {
   fontSize: FontSizes.lg,
 };
 
-const clickButtonStyle: BevyStyle = {
+const basicButtonStyle: BevyStyle = {
   width: 160,
-  height: 56,
+  height: 40,
   justifyContent: "center",
   alignItems: "center",
   borderRadius: 8,
@@ -109,8 +183,14 @@ const clickButtonStyle: BevyStyle = {
   cursor: "pointer",
 };
 
-const clickLabelStyle: BevyStyle = {
+const basicLabelStyle: BevyStyle = {
   color: Colors.textColor400,
   fontSize: FontSizes.base,
   fontWeight: "bold",
+};
+
+// Same footprint as the basic one so the two cards read as a pair.
+const richButtonStyle: BevyStyle = {
+  width: 160,
+  height: 40,
 };

@@ -64,14 +64,20 @@ const cardLift = linear(
 
 export const Gradients = {
   // accent — active nav item, radio "selected", progress fill, primary buttons
-  primary: linear(135, Colors.primary300, Colors.primary100, Colors.primary200),
+  primary: linear(180, Colors.primary200, Colors.primary100, Colors.primary300),
   primaryHover: linear(
-    135,
+    180,
     Colors.primary100,
     Colors.primary200,
     Colors.sky100,
   ),
   // neutral surface lifts — unselected pills, generic buttons, code toggle
+  transparent: linear(
+    180,
+    Colors.transparent,
+    Colors.transparent,
+    Colors.transparent,
+  ),
   surface: linear(180, Colors.surface600, Colors.surface400, Colors.surface400),
   surfaceHover: linear(
     180,

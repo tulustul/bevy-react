@@ -49,6 +49,7 @@ function Title() {
 
   return (
     <Pinchable
+      style={{ width: "100%" }}
       params={{ strength: 0.28, radius: 0.48 }}
       filters={[
         {
@@ -172,15 +173,11 @@ function ItemButton({
 }: ItemButtonProps) {
   return (
     <Button
-      unstyled
       onClick={onPress}
       style={{
         ...navButtonStyle,
         padding: isChild ? 6 : 12,
         backgroundGradient: isActive ? Gradients.primary : Gradients.surface,
-        transition: {
-          backgroundGradient: { duration: 200 },
-        },
       }}
       hoverStyle={{
         backgroundGradient: isActive

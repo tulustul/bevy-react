@@ -480,3 +480,44 @@ fn gradient_fold_tracks_eased_opacity() {
     let dirt = app.world().resource::<LayerContentDirt>();
     assert!(!dirt.nodes.contains(&e), "settled: no dirt");
 }
+
+/// The hover-restyle path (`apply_interaction_styles`, not an op) retargets
+/// the gradient channel exactly like an op-driven delta: a `hoverStyle`
+/// gradient with a base `transition: { backgroundGradient }` eases on
+/// `Interaction::Hovered` instead of snapping.
+#[test]
+fn hover_restyle_eases_background_gradient() {
+    use bevy::ui::Interaction;
+    let (mut app, ops_tx) = ease_app();
+    ops_tx
+        .send(vec![create(
+            1,
+            json!({
+                "style": {
+                    "backgroundGradient": gradient_json("#ff0000"),
+                    "transition": { "backgroundGradient": { "duration": 1000, "easing": "linear" } },
+                },
+                "hoverStyle": { "backgroundGradient": gradient_json("#0000ff") },
+            }),
+        )])
+        .unwrap();
+    app.update();
+    let e = entity_of(&app, 1);
+    drain_dirt(&mut app);
+
+    app.world_mut().entity_mut(e).insert(Interaction::Hovered);
+    tick(&mut app, 0.5);
+    for rgba in linear_stop_rgba(&app.world().get::<BackgroundGradient>(e).unwrap().0) {
+        assert!(
+            rgba[0] > 0.0 && rgba[0] < 1.0 && rgba[2] > 0.0 && rgba[2] < 1.0,
+            "mid-ease stop strictly between red and blue: {rgba:?}"
+        );
+    }
+    let expected = expect_gradients(gradient_json("#0000ff"), None);
+    tick(&mut app, 0.6);
+    assert_eq!(
+        app.world().get::<BackgroundGradient>(e).unwrap().0,
+        expected,
+        "settles on the hover gradient"
+    );
+}

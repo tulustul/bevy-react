@@ -122,14 +122,17 @@ export function ExampleModal() {
                 </node>
               )}
             </node>
-            <Button
-              style={closeButtonStyle}
-              hoverStyle={{ backgroundGradient: Gradients.successHover }}
-              labelStyle={{ color: "white" }}
-              onClick={() => deselect()}
-            >
-              Close
-            </Button>
+
+            <node style={{ justifyContent: "center" }}>
+              <Button
+                style={closeButtonStyle}
+                hoverStyle={{ backgroundGradient: Gradients.successHover }}
+                labelStyle={{ color: "white" }}
+                onClick={() => deselect()}
+              >
+                Close
+              </Button>
+            </node>
           </node>
         )}
       </node>
@@ -206,7 +209,6 @@ const closeXStyle: BevyStyle = {
 };
 
 const closeButtonStyle: BevyStyle = {
-  alignSelf: "center",
   margin: { top: 15, bottom: 12 },
   padding: { top: 7, right: 40, bottom: 7, left: 40 },
   backgroundColor: Colors.green200,

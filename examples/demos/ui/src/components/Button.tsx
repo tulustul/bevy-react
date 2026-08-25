@@ -1,7 +1,7 @@
 import { BevyStyle } from "bevy-react/jsx";
 import { PropsWithChildren } from "react";
 import { Colors, FontSizes, Gradients } from "@/theme";
-import { Pinchable } from "./Pinchable";
+import { isPinchEnabled, Pinchable } from "./Pinchable";
 import type { PinchParams } from "@/bevy";
 
 export type ButtonProps = PropsWithChildren & {
@@ -15,8 +15,11 @@ export type ButtonProps = PropsWithChildren & {
    *  not "a button that looks like the gallery's buttons". */
   unstyled?: boolean;
   /** Pinch-on-press overrides, forwarded to `Pinchable` as its `params`
-   *  (`{ strength: 0 }` disables). Note: Pinchable owns the button's
-   *  `filter` — a `filter` passed via `style` is replaced unless disabled. */
+   *  (`{ strength: 0 }` disables). The pinch lives on Pinchable's own press
+   *  surface around the `<button>`, so the button's `style` (its `filter`,
+   *  `transition`, …) is untouched — except `focusPolicy`, which moves to the
+   *  press surface: the inner `<button>` must pass interaction through for
+   *  the surface to see the press. */
   pinch?: Partial<PinchParams>;
   onClick?: () => void;
 };
@@ -35,17 +38,29 @@ export function Button({
   // knobs, nav rows, …) render as-is.
   const isTextChild =
     typeof children === "string" || typeof children === "number";
+  // With a pinch, the press surface wrapping the button is the blocking
+  // element (it takes the caller's `focusPolicy`, default block) and the
+  // `<button>` itself passes — pointer presses are attributed top-down and
+  // stop at the first blocking node, so a blocking button would starve the
+  // surface behind it. Without a pinch there is no wrapper: the button keeps
+  // its own policy.
+  const pinched = isPinchEnabled(pinch);
+  const baseStyle = unstyled
+    ? (style ?? {})
+    : { ...buttonStyle, ...(style ?? {}) };
   return (
-    <Pinchable params={pinch}>
+    <Pinchable params={pinch} focusPolicy={style?.focusPolicy ?? "block"}>
       <button
         onClick={onClick}
-        style={unstyled ? (style ?? {}) : { ...buttonStyle, ...(style ?? {}) }}
+        style={{ ...baseStyle, ...(pinched ? { focusPolicy: "pass" } : {}) }}
         hoverStyle={
           unstyled
             ? (hoverStyle ?? {})
             : { ...buttonHoverStyle, ...(hoverStyle ?? {}) }
         }
-        pressStyle={pressStyle ?? {}}
+        pressStyle={{
+          ...(pressStyle ?? {}),
+        }}
       >
         {isTextChild ? (
           <text
@@ -70,11 +85,9 @@ const buttonStyle: BevyStyle = {
   alignItems: "center",
   padding: { top: 8, right: 12, bottom: 8, left: 12 },
   borderRadius: 8,
-  backgroundColor: Colors.surface400,
   backgroundGradient: Gradients.surface,
   transition: {
-    backgroundColor: { duration: 150 },
-    transform: { duration: 150 },
+    backgroundGradient: { duration: 250 },
   },
   cursor: "pointer",
 };

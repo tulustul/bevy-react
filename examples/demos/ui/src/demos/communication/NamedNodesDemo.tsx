@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { BevyStyle, PointerEventData } from "bevy-react/jsx";
-import { Button, Example, Pinchable, Radio } from "@/components";
+import { Button, Example } from "@/components";
 import { CodeTabs, InlineCode, P } from "@/components/docs";
 import { Colors, FontSizes } from "@/theme";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
@@ -86,7 +86,6 @@ const PAGE: ExplanationData = {
   ),
 };
 
-type Layout = "flex" | "grid";
 type Offset = { x: number; y: number };
 
 const CARD_IDS = [1, 2, 3, 4, 5, 6];
