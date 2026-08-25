@@ -57,7 +57,6 @@ fn resolve_cursor(name: &str, custom: &CustomCursors) -> CursorIcon {
         CursorIcon::from(icon)
     } else {
         let msg = format!("unknown cursor {name:?}");
-        warn!(target: "bevy_react", "{msg}");
         crate::diag::report("cursor", name, &msg);
         CursorIcon::from(SystemCursorIcon::Default)
     }

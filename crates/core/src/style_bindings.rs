@@ -325,7 +325,6 @@ pub(crate) fn warn_variant_bindings(props: &Props) {
         if derive_bindings(style).is_some() {
             let msg =
                 format!("{name}: animated bindings are only supported in the base style; ignoring");
-            tracing::warn!(target: "bevy_react", "{msg}");
             crate::diag::report("styleBinding", name, &msg);
         }
     }
@@ -362,7 +361,6 @@ pub(crate) fn warn_gradient_transition_mix(props: &Props, bindings: Option<&Anim
             let msg = format!(
                 "transition.{name} is inert while {name} carries {{ animated }} bindings (bindings win)"
             );
-            tracing::warn!(target: "bevy_react", "{msg}");
             crate::diag::report("gradientTransition", name, &msg);
         }
     }

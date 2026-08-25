@@ -39,12 +39,11 @@ pub type NodeId = u32;
 
 pub const ROOT_ID: NodeId = 0;
 
-/// Emit a decode-fallback warning: the log line every malformed wire value
-/// already produced, plus (in dev builds with devtools) a structured
-/// [`crate::diag`] entry so the inspector can flag the offending row. `kind`
+/// Emit a decode-fallback warning: the terminal `warn!` (deduped per distinct
+/// message — [`crate::diag::log_warn`]) plus, in dev builds with devtools, a
+/// structured [`crate::diag`] entry so the inspector can flag the row. `kind`
 /// names the value's domain (`"length"`, `"rect"`, a keyword field's kind, …);
 /// `value` is the raw offending wire string.
 pub(crate) fn decode_warn(kind: &'static str, value: &str, message: &str) {
-    tracing::warn!(target: "bevy_react", "{message}");
     crate::diag::decode_report(kind, value, message);
 }

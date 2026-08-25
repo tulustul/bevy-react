@@ -189,7 +189,6 @@ pub(crate) fn warn_ignored(element: &'static str, props: &Props) {
         "backgroundImage is ignored on `{element}` — the element owns its ImageNode; \
          use the element's own props instead"
     );
-    warn!("{msg}");
     crate::diag::report("backgroundImage", value, &msg);
 }
 

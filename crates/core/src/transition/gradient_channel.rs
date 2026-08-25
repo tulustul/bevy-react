@@ -119,7 +119,6 @@ impl GradientChannel {
                         "{surface}: gradient structures don't match \
                          (kind/stop count/colorSpace/position/shape) — snapping"
                     );
-                    tracing::warn!(target: "bevy_react", "{msg}");
                     crate::diag::report("gradientTransition", surface, &msg);
                     self.channel.init(target.clone());
                 }

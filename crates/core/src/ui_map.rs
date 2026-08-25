@@ -30,14 +30,13 @@ use crate::scrollbar::{ScrollbarConfig, ScrollbarPosition};
 
 /// Parse a CSS color string into a `Color`: hex, named colors, `transparent`, or
 /// `rgb()/hsl()/hwb()/oklab()/oklch()` functional notation (see
-/// [`crate::canvas::parse_css_color`]). On an unrecognized value it `warn!`s
+/// [`crate::canvas::parse_css_color`]). On an unrecognized value it warns
 /// and falls back to a loud magenta so the typo is visible rather than silent.
 pub fn parse_color(input: &str) -> Color {
     match crate::canvas::parse_css_color(input) {
         Some(c) => Color::from(c),
         None => {
             let msg = format!("unrecognized color {input:?}");
-            warn!("{msg}");
             crate::diag::report("color", input, &msg);
             Color::srgb(1.0, 0.0, 1.0)
         }
@@ -1095,7 +1094,6 @@ fn line_height(spec: &LineHeightSpec) -> LineHeight {
                 }
             }
             let msg = format!("invalid lineHeight {s:?}");
-            warn!("{msg}");
             crate::diag::report("lineHeight", s, &msg);
             LineHeight::default()
         }
@@ -1126,7 +1124,6 @@ fn letter_spacing(spec: &LetterSpacingSpec) -> LetterSpacing {
                 return LetterSpacing::Px(v); // bare numeric string → logical pixels
             }
             let msg = format!("invalid letterSpacing {s:?}");
-            warn!("{msg}");
             crate::diag::report("letterSpacing", s, &msg);
             LetterSpacing::default()
         }
@@ -1201,7 +1198,6 @@ pub fn resolved_text_style_promoted(
                 Some(h) => font.font = FontSource::Handle(h.clone()),
                 None => {
                     let msg = format!("unknown fontFamily {family:?}");
-                    warn!("{msg}");
                     crate::diag::report("fontFamily", family, &msg);
                 }
             }

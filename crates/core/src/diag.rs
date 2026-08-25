@@ -1,7 +1,12 @@
 //! Devtools diagnostics: collects "invalid value" warnings (a bad color name, a
 //! malformed length, an unknown keyword) so the devtools inspector can flag the
-//! offending style/prop rows per node — the structured twin of the `warn!`s the
-//! same sites already emit to the log.
+//! offending style/prop rows per node — and is the ONE place those sites log
+//! from: [`report`]/[`decode_report`] emit the terminal `warn!` themselves (via
+//! [`log_warn`], once per distinct message per process — a per-frame re-parse
+//! of the same bad value must not spam the log), so a fallback site calls
+//! `diag::report` and nothing else. Every devtools console entry from Rust
+//! therefore has a terminal twin in EVERY build; only the devtools mirror
+//! (sinks + console ring) is dev-only.
 //!
 //! Two sinks, matching where the two classes of fallback fire:
 //!
@@ -23,8 +28,9 @@
 //!   each frame ([`take_runtime_warnings`]), dedups, and ships each new entry
 //!   to JS as a `devtools.warning` event.
 //!
-//! Everything compiles to inline no-op stubs unless the `devtools` feature is
-//! on AND `debug_assertions` hold, so release builds pay nothing.
+//! Everything but the terminal `warn!` compiles to inline no-op stubs unless
+//! the `devtools` feature is on AND `debug_assertions` hold, so release builds
+//! pay only the log line (and only when a warning actually fires).
 
 use serde::Serialize;
 
@@ -93,6 +99,7 @@ mod imp {
     }
 
     pub fn decode_report(kind: &'static str, value: &str, message: &str) {
+        super::log_warn(kind, value, message);
         // Mirror into the devtools console ring, independent of DECODE_CAP —
         // the ring self-bounds and the console wants every occurrence (the
         // `devtools.warning` inspector-flag path keeps its own dedup).
@@ -143,6 +150,7 @@ mod imp {
     }
 
     pub fn report(kind: &'static str, value: &str, message: &str) {
+        super::log_warn(kind, value, message);
         if !ARMED.load(Ordering::Relaxed) {
             return;
         }
@@ -188,7 +196,9 @@ mod imp {
         0
     }
     #[inline(always)]
-    pub fn decode_report(_kind: &'static str, _value: &str, _message: &str) {}
+    pub fn decode_report(kind: &'static str, value: &str, message: &str) {
+        super::log_warn(kind, value, message);
+    }
     #[inline(always)]
     pub fn decode_attribute_since(_mark: usize, _node: Option<NodeId>) {}
     #[inline(always)]
@@ -205,7 +215,9 @@ mod imp {
         NodeScope
     }
     #[inline(always)]
-    pub fn report(_kind: &'static str, _value: &str, _message: &str) {}
+    pub fn report(kind: &'static str, value: &str, message: &str) {
+        super::log_warn(kind, value, message);
+    }
     #[inline(always)]
     pub fn take_runtime_warnings() -> Vec<RuntimeWarning> {
         Vec::new()
@@ -213,6 +225,41 @@ mod imp {
 }
 
 pub use imp::*;
+
+/// The terminal twin of a devtools warning: `warn!` (target `bevy_react`) the
+/// message — **once per distinct `(kind, value, message)` per process**. The
+/// sinks and the console ring take every occurrence (the inspector wants the
+/// current state), but several report sites fire per frame or per call (a
+/// `transform3d` origin fallback re-resolves every frame; `ReactNodes::get`
+/// on an ambiguous name reports per lookup; a hover restyle re-parses the
+/// same bad color on every flip), and a terminal has no dedup of its own.
+/// Node identity is deliberately not part of the key: the same typo on three
+/// nodes is one log line (devtools flags each row). Returns whether the line
+/// was emitted, for tests. Available in every build — see the module docs.
+pub(crate) fn log_warn(kind: &str, value: &str, message: &str) -> bool {
+    use std::collections::HashSet;
+    use std::hash::{DefaultHasher, Hash, Hasher};
+    use std::sync::{LazyLock, Mutex};
+
+    /// Bound on distinct warnings remembered; a pathological app that exceeds
+    /// it starts over (worst case: repeats, never silence).
+    const SEEN_CAP: usize = 4096;
+    static SEEN: LazyLock<Mutex<HashSet<u64>>> = LazyLock::new(Default::default);
+
+    let mut hasher = DefaultHasher::new();
+    (kind, value, message).hash(&mut hasher);
+    let key = hasher.finish();
+    let mut seen = SEEN.lock().unwrap_or_else(|e| e.into_inner());
+    if seen.len() >= SEEN_CAP {
+        seen.clear();
+    }
+    if !seen.insert(key) {
+        return false;
+    }
+    drop(seen);
+    tracing::warn!(target: "bevy_react", "{message}");
+    true
+}
 
 /// Serializes tests that touch the process-global runtime sink — a parallel
 /// test (or a devtools test app, whose `emit_runtime_warnings` drains every
@@ -265,5 +312,37 @@ mod tests {
             .map(|w| w.node)
             .collect();
         assert_eq!(nodes, vec![Some(1), Some(2), Some(1), None]);
+    }
+}
+
+#[cfg(test)]
+mod log_warn_tests {
+    /// One terminal line per distinct warning; a different value/kind/message
+    /// is a new line. Markers are unique to this test — the set is
+    /// process-global.
+    #[test]
+    fn log_warn_dedups_per_distinct_warning() {
+        assert!(super::log_warn("color", "lw-t1-redd", "unrecognized color"));
+        assert!(!super::log_warn(
+            "color",
+            "lw-t1-redd",
+            "unrecognized color"
+        ));
+        assert!(!super::log_warn(
+            "color",
+            "lw-t1-redd",
+            "unrecognized color"
+        ));
+        assert!(super::log_warn(
+            "color",
+            "lw-t1-bluee",
+            "unrecognized color"
+        ));
+        assert!(super::log_warn(
+            "length",
+            "lw-t1-redd",
+            "unrecognized color"
+        ));
+        assert!(super::log_warn("color", "lw-t1-redd", "other message"));
     }
 }
