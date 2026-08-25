@@ -6,7 +6,7 @@ use crate::animations::{AnimatedBindings, Driver, Easing, Lerp};
 use crate::protocol::{animatable::AnimatableField, units::Time as WireTime};
 use std::time::Duration;
 
-fn timing(duration: f32, easing: Easing) -> ChannelTransition {
+pub(super) fn timing(duration: f32, easing: Easing) -> ChannelTransition {
     ChannelTransition {
         duration: Some(WireTime::from_secs(duration)),
         easing,
@@ -98,6 +98,21 @@ fn filter_channel_resolves_explicit_only() {
 
     let t: Transition = parse(serde_json::json!({ "opacity": { "duration": 50 } }));
     assert!(t.for_filter().is_none());
+}
+
+/// The layout channel resolves like its siblings: explicit entry or none.
+/// It rides the same `ChannelTransition` spec (timing/spring/delay).
+#[test]
+fn layout_channel_resolves_explicit_only() {
+    let secs = |c: &ChannelTransition| c.duration.map(WireTime::seconds);
+    let t: Transition = parse(serde_json::json!({
+        "layout": { "duration": 250, "easing": "easeOut" },
+    }));
+    assert_eq!(secs(t.for_layout().unwrap()), Some(0.25));
+    assert_eq!(t.for_layout().unwrap().easing, Easing::EaseOut);
+
+    let t: Transition = parse(serde_json::json!({ "size": { "duration": 50 } }));
+    assert!(t.for_layout().is_none(), "size is not layout");
 }
 
 #[test]

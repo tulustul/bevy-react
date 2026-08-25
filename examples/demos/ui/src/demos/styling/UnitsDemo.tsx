@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { BevyStyle } from "bevy-react/jsx";
-import { Button, DemoRow, Example, TextMono } from "@/components";
+import { DemoRow, Example, TextMono } from "@/components";
 import { Code, InlineCode, Li, P, Ul } from "@/components/docs";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
 import { Colors } from "@/theme";

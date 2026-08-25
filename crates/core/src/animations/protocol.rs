@@ -386,6 +386,13 @@ impl AnimatedBindings {
         self.has_stage(crate::animations::props::PropStage::Transform)
     }
 
+    /// Whether any `Node` layout-field binding (width/height/left/top/…) is
+    /// bound — in the transition engine the layout channel treats such a
+    /// node as owning its own rect and adopts each frame instead of chasing.
+    pub fn has_node_props(&self) -> bool {
+        self.has_stage(crate::animations::props::PropStage::Node)
+    }
+
     /// Whether any per-param filter binding ([`AnimatableProperty::FilterParam`])
     /// is bound — gates the applier's filter stage and, in the transition
     /// engine, `skip_filter` (any filter binding parks the *whole* whole-value

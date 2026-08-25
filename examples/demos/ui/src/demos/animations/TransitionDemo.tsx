@@ -56,6 +56,9 @@ export function TransitionDemo() {
         <SizeDemo />
         <DelayDemo />
       </DemoRow>
+      <DemoRow>
+        <LayoutDemo />
+      </DemoRow>
     </>
   );
 }
@@ -362,6 +365,146 @@ function DelayCard() {
     </node>
   );
 }
+
+function LayoutDemo() {
+  return (
+    <Example
+      title="Layout transitions"
+      info={
+        <>
+          <P>
+            <InlineCode>{"transition: { layout }"}</InlineCode> eases a node to
+            wherever layout puts it next — whatever moved it: a reorder, a
+            sibling growing, a parent resize (FLIP). The real layout snaps; the
+            box glides from its old rect to the new one, children riding along,
+            and clicks land on the visual.
+          </P>
+          <Code lang="tsx">{`<node
+  key={id}
+  style={{
+    width: wide ? 120 : 40,
+    transition: {
+      layout: { duration: 400 },
+    },
+  }}
+/>`}</Code>
+          <P>
+            A size change eases the node's <B>own box</B> only — its children
+            stay crisp — but whatever is laid out <B>around</B> it snaps. So the
+            container's height goes through the real-layout{" "}
+            <InlineCode>{"transition: { size }"}</InlineCode> instead (explicit
+            heights), re-flowing the buttons live, while the boxes glide between
+            grid cells and the row on their own channel.
+          </P>
+        </>
+      }
+      demo={LayoutCard}
+    />
+  );
+}
+
+const LAYOUT_IDS = [0, 1, 2, 3, 4, 5];
+// Explicit container heights: the `size` channel eases real layout, so the
+// buttons below (and the card) re-flow live — `auto` heights would snap.
+const ROW_HEIGHT = 56; // 8 + 40 + 8
+const GRID_HEIGHT = 152; // 8 + 3 × 40 + 2 × 8 + 8
+
+function LayoutCard() {
+  const [order, setOrder] = useState(LAYOUT_IDS);
+  const [wide, setWide] = useState(false);
+  const [grid, setGrid] = useState(true);
+
+  function shuffle() {
+    const next = [...order];
+    for (let i = next.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [next[i], next[j]] = [next[j], next[i]];
+    }
+    setOrder(next);
+  }
+
+  return (
+    <node style={column}>
+      <node
+        style={{
+          ...(grid ? layoutGrid : layoutRow),
+          height: grid ? GRID_HEIGHT : ROW_HEIGHT,
+        }}
+      >
+        {order.map((id) => (
+          <node
+            key={id}
+            style={{
+              ...layoutBox,
+              backgroundColor: LAYOUT_COLORS[id],
+              width: id === 2 && wide ? 120 : 40,
+            }}
+          >
+            <text style={layoutLabel}>{String(id)}</text>
+          </node>
+        ))}
+      </node>
+      <node style={{ flexDirection: "row", gap: 8 }}>
+        <Button onClick={shuffle}>Shuffle</Button>
+        <Button onClick={() => setWide((v) => !v)}>
+          {wide ? "Shrink 2" : "Widen 2"}
+        </Button>
+        <Button onClick={() => setGrid((v) => !v)}>
+          {grid ? "Flex" : "Grid"}
+        </Button>
+      </node>
+    </node>
+  );
+}
+
+const LAYOUT_COLORS = [
+  Colors.primary100,
+  Colors.green100,
+  Colors.yellow100,
+  Colors.red100,
+  Colors.primary300,
+  Colors.textColor200,
+];
+
+// The container eases its HEIGHT through the real-layout `size` channel,
+// not `layout`: FLIP would only fake its own box while the buttons below
+// and the card snap to the final layout (overlap mid-flight). Children sit
+// at the top so their local rects hold still while the height eases —
+// their own `layout` channel then glides them between grid cells and the
+// row without re-arming every frame.
+const layoutRow: BevyStyle = {
+  flexDirection: "row",
+  alignItems: "flexStart",
+  gap: 8,
+  width: 300,
+  padding: 8,
+  borderRadius: 8,
+  backgroundColor: Colors.surface100,
+  transition: { size: { duration: 400, easing: "easeInOut" } },
+};
+
+// The same boxes re-flowed by a different layout algorithm — every box
+// glides to its grid cell (and back), the container growing around them.
+const layoutGrid: BevyStyle = {
+  ...layoutRow,
+  display: "grid",
+  gridTemplateColumns: "repeat(2, 1fr)",
+  justifyItems: "center",
+};
+
+const layoutBox: BevyStyle = {
+  height: 40,
+  borderRadius: 8,
+  alignItems: "center",
+  justifyContent: "center",
+  transition: { layout: { duration: 400, easing: "easeInOut" } },
+};
+
+const layoutLabel: BevyStyle = {
+  color: Colors.surface100,
+  fontSize: FontSizes.sm,
+  fontWeight: "bold",
+};
 
 const pillStyle: BevyStyle = {
   width: 160,

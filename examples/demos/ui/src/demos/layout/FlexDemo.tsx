@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { BevyStyle } from "bevy-react/jsx";
-import { DemoRow, Example, Radio, RadioOption } from "@/components";
+import { Checkbox, DemoRow, Example, Radio, RadioOption } from "@/components";
 import { Code, InlineCode, P } from "@/components/docs";
 import { Colors, Gradients } from "@/theme";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
@@ -85,11 +85,25 @@ export function FlexDemo() {
   );
 }
 
-function Swatches({ count = 4 }: { count?: number }) {
+// `animate` toggles `transition: { layout }`: with it, every rearrangement
+// eases the swatches to their new slots instead of snapping.
+function Swatches({
+  count = 4,
+  animate = true,
+}: {
+  count?: number;
+  animate?: boolean;
+}) {
   return (
     <>
       {SWATCHES.slice(0, count).map((g, i) => (
-        <node key={i} style={{ ...swatch, backgroundGradient: g }} />
+        <node
+          key={i}
+          style={{
+            ...(animate ? animatedSwatch : swatch),
+            backgroundGradient: g,
+          }}
+        />
       ))}
     </>
   );
@@ -112,6 +126,12 @@ function FlexPlaygroundDemo() {
           <Code lang="tsx">{`<node style={{ flexDirection, justifyContent, alignItems }}>
   {swatches}
 </node>`}</Code>
+          <P>
+            The swatches carry{" "}
+            <InlineCode>{"transition: { layout }"}</InlineCode>, so each
+            rearrangement eases them to their new slots (FLIP) — untick the box
+            to see the snap.
+          </P>
         </>
       }
       demo={FlexPlaygroundCard}
@@ -124,14 +144,21 @@ function FlexPlaygroundCard() {
   const [justifyContent, setJustifyContent] =
     useState<JustifyContent>("center");
   const [alignItems, setAlignItems] = useState<AlignItems>("center");
+  const [animate, setAnimate] = useState(true);
 
   return (
     <node style={{ flexDirection: "column", gap: 12, alignItems: "center" }}>
       <node
         style={{ ...playground, flexDirection, justifyContent, alignItems }}
       >
-        <Swatches />
+        <Swatches animate={animate} />
       </node>
+
+      <Checkbox
+        label="Animate layout changes"
+        enabled={animate}
+        onChange={setAnimate}
+      />
 
       <Radio
         options={DIRECTION_OPTIONS}
@@ -180,7 +207,7 @@ function FlexWrapCard() {
         <node
           key={i}
           style={{
-            ...swatch,
+            ...animatedSwatch,
             backgroundGradient: SWATCHES[i % SWATCHES.length],
           }}
         />
@@ -215,9 +242,9 @@ function FlexGrowDemo() {
 function FlexGrowCard() {
   return (
     <node style={{ ...frame, width: 260, gap: 8 }}>
-      <node style={{ ...swatch, backgroundGradient: SWATCHES[0] }} />
+      <node style={{ ...animatedSwatch, backgroundGradient: SWATCHES[0] }} />
       <node style={{ ...grow, backgroundGradient: SWATCHES[1] }} />
-      <node style={{ ...swatch, backgroundGradient: SWATCHES[2] }} />
+      <node style={{ ...animatedSwatch, backgroundGradient: SWATCHES[2] }} />
     </node>
   );
 }
@@ -242,6 +269,14 @@ const swatch: BevyStyle = {
   minWidth: 40,
   minHeight: 40,
   borderRadius: 8,
+};
+
+// The page's swatches ease to their new slots (FLIP); the playground's
+// checkbox swaps back to the plain `swatch`. The Wrapping and Growing
+// cards are static, so there it only ever shows on a window resize.
+const animatedSwatch: BevyStyle = {
+  ...swatch,
+  transition: { layout: { duration: 350, easing: "easeInOut" } },
 };
 
 const grow: BevyStyle = {

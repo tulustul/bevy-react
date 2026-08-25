@@ -7,10 +7,9 @@ import {
   withTiming,
 } from "bevy-react";
 import { BevyStyle } from "bevy-react/jsx";
-import { Button, Typewriter } from "@/components";
-import { Colors, FontSizes, Gradients } from "@/theme";
+import { Typewriter } from "@/components";
+import { Colors, FontSizes } from "@/theme";
 import { useDemoPage } from "@/explanationStore";
-import { navigateToDemo } from "@/demoNavigation";
 
 type Feature = { title: string; body: string };
 
@@ -309,12 +308,6 @@ const introStyle: BevyStyle = {
   fontSize: FontSizes.sm,
   maxWidth: 600,
   textAlign: "center",
-};
-
-const ctaRowStyle: BevyStyle = {
-  flexDirection: "row",
-  gap: 12,
-  padding: 10,
 };
 
 const cardsRowStyle: BevyStyle = {

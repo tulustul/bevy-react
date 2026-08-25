@@ -125,7 +125,8 @@ pub struct LayerGroupAlpha(pub f32);
 /// plus outset) keys texture allocation.
 #[derive(Component, Debug, Clone, Copy, PartialEq)]
 pub struct LayerCaptureRect {
-    /// Top-left of the capture window (border box minus the outset margin),
+    /// Top-left of the capture window (the border box's screen-space AABB
+    /// under the root's own linear part, minus the outset margin),
     /// fractional physical px (may be negative for a partially-offscreen
     /// layer — capture is layer-local).
     pub min: Vec2,
@@ -650,11 +651,22 @@ pub fn sync_layer_geometry(
         }
         // Fractional anchor + whole-texel size (see `LayerCaptureRect`): the
         // anchor tracks the node exactly so translation never re-captures;
-        // only a size change reallocs.
-        let min = transform.translation - size * 0.5;
+        // only a size change reallocs. The window is the border box's
+        // screen-space AABB under the root's own linear part (a user
+        // `transform.scale`, or a layout transition's FLIP scale): the
+        // members are extracted with that full affine, so an unscaled
+        // window would crop a magnified capture. Identity → the plain box.
+        let m = transform.matrix2;
+        let half = size * 0.5;
+        let extent = Vec2::new(
+            m.x_axis.x.abs() * half.x + m.y_axis.x.abs() * half.y,
+            m.x_axis.y.abs() * half.x + m.y_axis.y.abs() * half.y,
+        );
+        let min = transform.translation - extent;
+        let window = extent * 2.0;
         let mut rect = LayerCaptureRect {
             min,
-            size: UVec2::new(size.x.ceil() as u32, size.y.ceil() as u32),
+            size: UVec2::new(window.x.ceil() as u32, window.y.ceil() as u32),
             outset: 0,
         };
         if rect.size.x == 0 || rect.size.y == 0 {
@@ -1825,6 +1837,25 @@ mod tests {
                     ..Default::default()
                 },
             ));
+    }
+
+    /// A root drawn with a linear part (user `transform.scale`, or a layout
+    /// transition's FLIP scale in its global) captures into the border box's
+    /// screen-space AABB, not the unscaled layout box — the members are
+    /// extracted with that full affine, so the plain box would crop them.
+    #[test]
+    fn scaled_root_window_is_the_transformed_aabb() {
+        let (mut world, mut schedule) = geometry_world();
+        let size = Vec2::new(100.0, 60.0);
+        let center = Vec2::new(200.0, 100.0);
+        let scaled = spawn_layer_root(&mut world, 1, size, center);
+        world.entity_mut(scaled).insert(UiGlobalTransform::from(
+            bevy::math::Affine2::from_scale_angle_translation(Vec2::new(2.0, 0.5), 0.0, center),
+        ));
+        schedule.run(&mut world);
+        let rect = *world.get::<LayerCaptureRect>(scaled).expect("rect");
+        assert_eq!(rect.min, Vec2::new(100.0, 85.0));
+        assert_eq!(rect.size, UVec2::new(200, 30));
     }
 
     /// A filtered root's capture rect grows by the QUANTIZED outset on every

@@ -39,6 +39,9 @@ mod channels;
 mod gradient_channel;
 #[cfg(test)]
 mod gradient_tests;
+pub mod layout;
+#[cfg(test)]
+mod layout_tests;
 mod scroll;
 mod shape_channel;
 mod spec;

@@ -72,7 +72,35 @@ pub struct TransitionState {
     /// shapes have no style). Self-seeding per attr, so it doesn't
     /// participate in the `initialized` block.
     pub(super) shape: shape_channel::ShapeChannel,
+    /// The laid-out-rect channel (see [`super::layout`]) — driven in
+    /// `PostUpdate` by `drive_layout_transitions`, not by `drive_transitions`;
+    /// self-seeding (mount rule), so it doesn't participate in `initialized`.
+    pub(super) layout: super::layout::LayoutChannel,
     pub(super) initialized: bool,
+}
+
+impl TransitionState {
+    /// Whether the node's own `size` channel is easing a `Node` dimension
+    /// right now — while it is, the layout channel adopts each frame's rect
+    /// silently (the one cause of a rect change the engine can attribute).
+    pub(super) fn size_in_flight(&self) -> bool {
+        // Generated from the channel table's `size` rows — the same rows the
+        // size drive block writes — so a new size channel can't be missed.
+        macro_rules! size_row {
+            ($self:ident, $ch:ident, size) => {
+                $self.$ch.runner.is_some()
+            };
+            ($self:ident, $ch:ident, $other:ident) => {
+                false
+            };
+        }
+        macro_rules! any_size_row {
+            ($(($ch:ident, $d:tt, $group:ident),)*) => {
+                false $(|| size_row!(self, $ch, $group))*
+            };
+        }
+        with_input_channels!(any_size_row)
+    }
 }
 
 /// The whole-value `filter` channel: eases a promoted root's

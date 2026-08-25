@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { BevyStyle } from "bevy-react/jsx";
-import { Button } from "@/components";
 import { Colors, FontSizes } from "@/theme";
 import { MenuBar, MenuId } from "./MenuBar";
 import { Taskbar } from "./Taskbar";

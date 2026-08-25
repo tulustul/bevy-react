@@ -78,6 +78,14 @@ pub struct Transition {
     /// The `borderGradient` twin of [`Self::background_gradient`] — an
     /// independent channel with the same strict-match-else-snap rules.
     pub border_gradient: Option<ChannelTransition>,
+    /// Eases the node's *laid-out rect* (position + size together) whenever
+    /// `bevy_ui`'s layout moves or resizes it — cause-blind: a sibling
+    /// insert/remove/reorder, a parent resize, a re-wrap, a window resize
+    /// all count. FLIP-style: the real layout snaps, and a post-layout
+    /// translate + scale (composed into `UiGlobalTransform` after
+    /// `UiSystems::Layout`, children riding along) decays to identity — no
+    /// relayout, no layer, picking follows. See [`crate::transition::layout`].
+    pub layout: Option<ChannelTransition>,
 }
 
 /// One row per spec channel of [`Transition`]: `(accessor, field, doc
@@ -99,6 +107,7 @@ macro_rules! transition_channels {
             (for_morph_filter, morph_filter, "the morph progress"),
             (for_background_gradient, background_gradient, "the background gradient"),
             (for_border_gradient, border_gradient, "the border gradient"),
+            (for_layout, layout, "the laid-out rect"),
         }
     };
 }

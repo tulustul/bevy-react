@@ -1,5 +1,5 @@
 import { BevyStyle } from "bevy-react/jsx";
-import { Button, TextMono } from "@/components";
+import { TextMono } from "@/components";
 import { Colors, FontSizes } from "@/theme";
 import { MenuItem, MenuList, Popup } from "./menu";
 

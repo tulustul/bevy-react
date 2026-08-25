@@ -799,6 +799,15 @@ impl Plugin for ReactUiPlugin {
         app.add_systems(
             PostUpdate,
             (
+                // `transition: { layout }`: measure this frame's pristine
+                // rects, ease, and compose the FLIP delta into the animating
+                // subtrees' `UiGlobalTransform`s — after layout wrote them,
+                // before anything reads them (PostLayout clipping, the layer
+                // geometry sync below, extraction, next frame's picking).
+                crate::transition::layout::drive_layout_transitions
+                    .after(bevy::ui::UiSystems::Layout)
+                    .before(bevy::ui::UiSystems::PostLayout)
+                    .before(crate::layer::sync_layer_geometry),
                 crate::layer::sync_layer_geometry.after(bevy::ui::UiSystems::Layout),
                 // Membership + geometry hashes are this frame's, and bevy_ui's
                 // text systems (PostLayout) have re-shaped — turn the frame's

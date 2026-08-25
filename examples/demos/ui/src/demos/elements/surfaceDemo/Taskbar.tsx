@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { BevyStyle } from "bevy-react/jsx";
-import { Button, TextMono } from "@/components";
+import { TextMono } from "@/components";
 import { Colors, FontSizes } from "@/theme";
 import { MenuList, Popup } from "./menu";
 

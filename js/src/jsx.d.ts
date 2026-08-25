@@ -274,6 +274,21 @@ export interface BevyTransition {
    * animates even with no `transition` at all; this entry overrides the
    * timing. */
   morphFilter?: BevyTransitionSpec;
+  /** Eases the node's LAID-OUT rect (position + size together) whenever layout
+   * moves or resizes it, whatever the cause — a sibling insert/remove/reorder,
+   * a parent resize, a re-wrap, a window resize (FLIP). The real layout still
+   * snaps (no relayout, no layer); the node glides from its old rect, children
+   * ride the translation (not the scale), picking follows. A size change scales
+   * only the node's OWN paint — children stay crisp at their final offsets —
+   * but nothing laid out AROUND the node eases (siblings snap to the final
+   * layout): a container whose size must re-flow its surroundings wants the
+   * real-layout `size` channel instead, with `layout` on its children. The
+   * first layout adopts silently (no enter animation;
+   * unmount can't animate) and `display: none` → shown grows in place. The
+   * node's own `size` channel or a `{ animated }` binding on a layout field
+   * owns its rect (the layout channel adopts, they compose); a rect moved every
+   * frame by anything else (an ancestor's `size` ease) lags, then catches up. */
+  layout?: BevyTransitionSpec;
 }
 
 /** The built-in system cursor keywords (winit's `SystemCursorIcon`, camelCase or CSS
