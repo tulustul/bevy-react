@@ -42,7 +42,6 @@ fn js_warning_kind_table_covers_known_kinds() {
         "borderColor",
         "filterParams",
         "filterUnknown",
-        "filterBleed",
         "filterBinding",
         "backdropFilterParams",
         "backdropFilterUnknown",

@@ -166,8 +166,6 @@ pub struct TransitionTargets {
     /// system).
     bg_gradient: Option<&'static mut BackgroundGradient>,
     border_gradient: Option<&'static mut BorderGradient>,
-    /// Reconciler identity for gradient warn attribution.
-    rnode: Option<&'static crate::bridge::ReactNode>,
 }
 
 /// Advance every transitioning entity toward its [`TransitionInput`] target and
@@ -471,7 +469,7 @@ pub fn drive_transitions(
 
         // Gradients: ease each surface's folded component toward the
         // resolver's UNfolded stamp — one `drive_onto` per surface (see it
-        // for the retarget/snap/warn policy and the fold-at-write rules).
+        // for the retarget/snap policy and the fold-at-write rules).
         // Retarget detection runs on the unfolded stamp (it only changes on
         // style deltas); the eased opacity is baked only off a promoted
         // root (the group alpha owns the fold there), else the stamp's
@@ -479,7 +477,6 @@ pub fn drive_transitions(
         // build bit-exactly. A write is content dirt: gradient pixels live
         // in the capture.
         {
-            let rnode = targets.rnode.map(|r| r.0);
             let eased_alpha = alpha.filter(|_| !promoted);
             let static_fold = targets.gradient_input.and_then(|g| g.opacity);
             if !skip_bg_gradient
@@ -489,8 +486,6 @@ pub fn drive_transitions(
                         .bg_gradient
                         .as_mut()
                         .map(|m| m.reborrow().map_unchanged(|b| &mut b.0)),
-                    "backgroundGradient",
-                    rnode,
                     input.spec.resolve(ChannelId::BackgroundGradient),
                     eased_alpha,
                     static_fold,
@@ -506,8 +501,6 @@ pub fn drive_transitions(
                         .border_gradient
                         .as_mut()
                         .map(|m| m.reborrow().map_unchanged(|b| &mut b.0)),
-                    "borderGradient",
-                    rnode,
                     input.spec.resolve(ChannelId::BorderGradient),
                     eased_alpha,
                     static_fold,

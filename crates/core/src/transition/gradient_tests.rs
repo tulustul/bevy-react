@@ -176,9 +176,9 @@ fn gradient_transition_mid_ease_retarget_starts_from_current() {
 
 /// The agreed mismatch policy: a retarget whose gradient structures can't be
 /// paired (here 2 stops → 3 stops) SNAPS to the target the same frame — no
-/// intermediate — and reports a `gradientTransition` warning.
+/// intermediate — and does so silently (no `gradientTransition` warning).
 #[test]
-fn gradient_transition_structural_mismatch_snaps_and_warns() {
+fn gradient_transition_structural_mismatch_snaps_silently() {
     let _guard = crate::diag::test_lock();
     crate::diag::arm_runtime();
     let _ = crate::diag::take_runtime_warnings(); // drain leftovers
@@ -222,10 +222,8 @@ fn gradient_transition_structural_mismatch_snaps_and_warns() {
     {
         let warnings = crate::diag::take_runtime_warnings();
         assert!(
-            warnings.iter().any(|w| w.kind == "gradientTransition"
-                && w.value == "backgroundGradient"
-                && w.node == Some(1)),
-            "expected a gradientTransition warning for backgroundGradient, got {warnings:?}"
+            !warnings.iter().any(|w| w.kind == "gradientTransition"),
+            "a structural mismatch must snap without warning, got {warnings:?}"
         );
     }
 }

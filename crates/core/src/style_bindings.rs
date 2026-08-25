@@ -334,8 +334,7 @@ pub(crate) fn warn_variant_bindings(props: &Props) {
 /// that also carries `{ animated }` gradient bindings is inert — the bindings
 /// park that surface's channel ("bindings win", see
 /// [`AnimatedBindings::parked`]) — so warn naming the surface, mirrored to
-/// devtools (`gradientTransition`, the same kind the structural-mismatch snap
-/// reports). `bindings` is the map the caller already derived for the
+/// devtools (`gradientTransition`). `bindings` is the map the caller already derived for the
 /// [`AnimatedNode`](crate::animations::AnimatedNode) stamp — passed in, not
 /// re-derived. Call under a `diag::node_scope`, beside
 /// [`warn_variant_bindings`].

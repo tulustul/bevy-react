@@ -55,7 +55,6 @@ const KIND_FIELDS: Record<string, { style?: string[]; props?: string[] }> = {
   borderColor: { style: ["borderColor"] },
   filterParams: { style: ["filter"] },
   filterUnknown: { style: ["filter"] },
-  filterBleed: { style: ["filter"] },
   // Per-param filter animation bindings: the warning value is the wire key
   // (`filter[0].radius`); the binding lives inline in the chain entry's
   // params (`{ animated }` wrapper), so the chain's own row is flagged.

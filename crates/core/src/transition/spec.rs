@@ -70,13 +70,13 @@ pub struct Transition {
     /// Eases the resolved `backgroundGradient` between style states,
     /// whole-value: gradients whose structures strictly match (same kind,
     /// stop count, `colorSpace`, position, radial shape variant) interpolate
-    /// stop-wise; a structural mismatch SNAPS to the target with a
-    /// `gradientTransition` warning. Appear (no gradient → gradient) and
-    /// unset snap silently — to fade a gradient in or out, keep the surface
+    /// stop-wise; a structural mismatch SNAPS to the target silently, as do
+    /// appear (no gradient → gradient) and
+    /// unset — to fade a gradient in or out, keep the surface
     /// mounted and ease its stops through transparent colors instead.
     pub background_gradient: Option<ChannelTransition>,
     /// The `borderGradient` twin of [`Self::background_gradient`] — an
-    /// independent channel with the same strict-match-else-snap+warn rules.
+    /// independent channel with the same strict-match-else-snap rules.
     pub border_gradient: Option<ChannelTransition>,
 }
 

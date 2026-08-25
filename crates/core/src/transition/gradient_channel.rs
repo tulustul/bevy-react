@@ -3,8 +3,8 @@
 //! `GradientTargets` stamp). Policy (user-decided): structures must match —
 //! same kind, same stop count, equal categorical fields (`color_space`,
 //! `position`, radial shape variant/keyword), equal list length — else the
-//! retarget SNAPS immediately with a `gradientTransition` warning (deliberate
-//! deviation from the filter channel's 0.5 discrete swap). Within a match:
+//! retarget SNAPS immediately, silently (deliberate deviation from the
+//! filter channel's 0.5 discrete swap). Within a match:
 //! stop colors lerp sRGB component-wise straight-alpha (the `backgroundColor`
 //! space — knowingly different from the gradient's own OkLab stop rendering),
 //! angles lerp numerically (CSS long-way), `Val` positions lerp same-unit and
@@ -80,12 +80,10 @@ impl GradientChannel {
 
     /// Advance toward the stamped unfolded target. Returns the UNfolded
     /// current to write (caller folds + compare-writes), or `None` when idle
-    /// (`apply_style` owns the component then). `surface` + `rnode`
-    /// attribute the mismatch warning.
+    /// (`apply_style` owns the component then).
     ///
     /// Retarget policy (see the module doc): a structure-matched pair eases;
-    /// a mismatch SNAPS with a `gradientTransition` warning; appear/unset
-    /// snap silently. The alignable check compares the channel's own
+    /// a mismatch, appear, and unset all snap silently. The alignable check compares the channel's own
     /// `current` against the new target — equivalent to comparing old wire
     /// vs new wire structurally, because every sample/settle/init clones the
     /// last target's structure (a mid-ease current is a lerp INTO that
@@ -93,8 +91,6 @@ impl GradientChannel {
     fn drive(
         &mut self,
         input: Option<&Vec<Gradient>>,
-        surface: &'static str,
-        rnode: Option<crate::diag::NodeId>,
         spec: Option<&super::spec::ChannelTransition>,
         dt: f32,
     ) -> Option<Vec<Gradient>> {
@@ -111,17 +107,9 @@ impl GradientChannel {
                 {
                     self.channel.arm(target.clone(), spec);
                 }
-                (Some(_), Some(target)) if had => {
-                    // Structural mismatch: snap + warn (the agreed policy —
-                    // no 0.5 discrete swap). Appear/unset snap silently below.
-                    let _scope = rnode.map(crate::diag::node_scope);
-                    let msg = format!(
-                        "{surface}: gradient structures don't match \
-                         (kind/stop count/colorSpace/position/shape) — snapping"
-                    );
-                    crate::diag::report("gradientTransition", surface, &msg);
-                    self.channel.init(target.clone());
-                }
+                // Structural mismatch, appear, and unset all snap (the agreed
+                // policy — no 0.5 discrete swap, no warning: nothing is
+                // clipped or lost, the target simply shows at once).
                 _ => {
                     self.channel.init(input.cloned().unwrap_or_default());
                 }
@@ -150,19 +138,16 @@ impl GradientChannel {
     ///
     /// A vanished component under a live ease (an unset removed it this
     /// frame) drops the ease via [`Self::reset`].
-    #[allow(clippy::too_many_arguments)] // one seam for two surfaces; splitting loses the pairing
     pub(super) fn drive_onto(
         &mut self,
         input: Option<&Vec<Gradient>>,
         component: Option<bevy::ecs::change_detection::Mut<Vec<Gradient>>>,
-        surface: &'static str,
-        rnode: Option<crate::diag::NodeId>,
         spec: Option<&super::spec::ChannelTransition>,
         eased_alpha: Option<f32>,
         static_fold: Option<f32>,
         dt: f32,
     ) -> bool {
-        let driven = self.drive(input, surface, rnode, spec, dt);
+        let driven = self.drive(input, spec, dt);
         let Some(mut component) = component else {
             if driven.is_some() {
                 self.reset();

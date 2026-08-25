@@ -113,7 +113,7 @@ pub struct LayerGroupAlpha(pub f32);
 /// beyond the border box; see [`crate::filters::quantize_outset`]). Recomputed
 /// every frame after layout by [`sync_layer_geometry`]; consumed by
 /// extraction. v1 clips the capture to this box (web opacity does not clip —
-/// known divergence, diag-warned).
+/// known divergence).
 ///
 /// The anchor (`min`) is **fractional** and follows the node exactly, so a
 /// translation — even subpixel — shifts the capture window and the composite
@@ -593,9 +593,7 @@ impl LayerGeometryGate<'_, '_> {
 /// quantized filter outset — blur reads/writes beyond the border box, and the
 /// composite quad, texture allocation, and synthetic-view ortho all derive
 /// from this rect), the subtree membership map, and each layer's
-/// content-geometry hash (see [`fold_member_geometry`]). Also warns
-/// (`filterBleed`) when a nested filtered layer's inflated rect escapes its
-/// enclosing layer's capture — v1 clips there, losing part of the bleed.
+/// content-geometry hash (see [`fold_member_geometry`]).
 /// Runs in `PostUpdate` after `bevy_ui` layout so `ComputedNode` /
 /// `UiGlobalTransform` are this frame's values.
 ///
@@ -613,7 +611,6 @@ pub fn sync_layer_geometry(
             &UiGlobalTransform,
             &crate::bridge::ReactNode,
             Option<&crate::filters::ResolvedFilterChain>,
-            Option<&crate::filters::FilterInput>,
             Option<&crate::filters::ResolvedBackdropChain>,
         ),
         With<PromotedLayer>,
@@ -626,11 +623,6 @@ pub fn sync_layer_geometry(
     mut membership: ResMut<LayerMembership>,
     mut registry: ResMut<LayersRegistry>,
     mut repaints: ResMut<LayerRepaintState>,
-    // Bleed-warn dedup: inner root → the (inner, outer) rect pair last warned
-    // about. `diag::report` mirrors every call into the console ring, so a
-    // per-frame re-report would spam it (the devtools `warning` event path
-    // dedups on its own; the console does not).
-    mut warned_bleeds: Local<HashMap<Entity, (LayerCaptureRect, LayerCaptureRect)>>,
 ) {
     if !gate.take_signal() {
         // Geometry-idle: membership + hashes persist for this frame's readers
@@ -639,15 +631,7 @@ pub fn sync_layer_geometry(
     }
     membership.node_to_layer.clear();
     membership.enclosing.clear();
-    // This frame's rects by root, for the bleed pass below (`enclosing` roots
-    // may be visited in any order, so containment is checked in a second pass
-    // once every rect is known).
-    let mut frame_rects: HashMap<Entity, LayerCaptureRect> = HashMap::default();
-    // Filtered roots with a non-zero outset: (root, node id, quantized outset,
-    // first wire filter name — the warning `value` the devtools inspector
-    // matches against the retained `filter` style row).
-    let mut bleed_candidates: Vec<(Entity, NodeId, u32, String)> = Vec::new();
-    for (root, computed, transform, rnode, chain, filter_input, backdrop_chain) in &roots {
+    for (root, computed, transform, rnode, chain, backdrop_chain) in &roots {
         let row = registry.layers.get_mut(&rnode.0);
         if let Some(row) = &row {
             debug_assert_eq!(row.entity, root);
@@ -698,17 +682,6 @@ pub fn sync_layer_geometry(
             rect.size += UVec2::splat(2 * outset);
             rect.outset = outset;
         }
-        // Bleed candidacy stays keyed to the CONTENT chain only: a backdrop
-        // never bleeds into an enclosing capture (its snapshot is sampled
-        // from the frame, edge-clamped; the quad is clamped to the border
-        // box), so a backdrop-only outset must not warn.
-        if content_outset > 0 {
-            let value = filter_input
-                .and_then(|i| i.0.0.first())
-                .map_or_else(|| "filter".to_owned(), |u| u.name.clone());
-            bleed_candidates.push((root, rnode.0, content_outset, value));
-        }
-        frame_rects.insert(root, rect);
         if existing_rects.get(root) != Ok(&rect) {
             commands.entity(root).insert(rect);
         }
@@ -777,71 +750,9 @@ pub fn sync_layer_geometry(
             row.depth = depth;
         }
     }
-    // Bleed check: v1 composites a nested layer's quad inside the ENCLOSING
-    // layer's capture, which clips at its rect — a filtered layer whose
-    // inflated rect escapes it loses part of its bleed (web filters don't
-    // clip; known divergence, hence the warn). Top-level layers composite to
-    // the screen and are exempt. (Distinct from ancestor *overflow* clipping,
-    // which is composite-time — see [`clip`] — and clips bleed correctly:
-    // this is the capture TEXTURE's own bounds, the ortho window.) Deduped per root on the (inner, outer) rect
-    // pair so a steady bleed reports once and any geometry change re-reports.
-    // Bound the dedup map to this frame's candidates — not all active roots:
-    // a root that stays promoted (e.g. via opacity) while its filter is
-    // unset must drop its entry, or re-adding the identical filter with
-    // unchanged geometry would be wrongly suppressed.
     // Demoted/despawned roots must not keep a hash — a re-promotion (or a new
     // layer reusing the entity id) has to hit the absent-hash first-frame rule.
     repaints.hashes.retain(|e, _| root_markers.contains(*e));
-    let candidate_roots: HashSet<Entity> = bleed_candidates.iter().map(|(r, ..)| *r).collect();
-    warned_bleeds.retain(|e, _| candidate_roots.contains(e));
-    for (root, node, outset, value) in bleed_candidates {
-        let outer = match membership.enclosing.get(&root) {
-            Some(&Some(outer)) => outer,
-            _ => {
-                warned_bleeds.remove(&root);
-                continue;
-            }
-        };
-        let (Some(&inner_rect), Some(&outer_rect)) =
-            (frame_rects.get(&root), frame_rects.get(&outer))
-        else {
-            warned_bleeds.remove(&root);
-            continue;
-        };
-        let inner_max = inner_rect.min + inner_rect.size.as_vec2();
-        let outer_max = outer_rect.min + outer_rect.size.as_vec2();
-        let mut sides: Vec<&str> = Vec::new();
-        if inner_rect.min.x < outer_rect.min.x {
-            sides.push("left");
-        }
-        if inner_rect.min.y < outer_rect.min.y {
-            sides.push("top");
-        }
-        if inner_max.x > outer_max.x {
-            sides.push("right");
-        }
-        if inner_max.y > outer_max.y {
-            sides.push("bottom");
-        }
-        if sides.is_empty() {
-            warned_bleeds.remove(&root);
-            continue;
-        }
-        let pair = (inner_rect, outer_rect);
-        if warned_bleeds.get(&root) == Some(&pair) {
-            continue;
-        }
-        warned_bleeds.insert(root, pair);
-        let _scope = crate::diag::node_scope(node);
-        crate::diag::report(
-            "filterBleed",
-            &value,
-            &format!(
-                "filter outset ({outset}px) bleeds past the enclosing promoted layer's capture on the {} side and is clipped there — leave ≥{outset}px between this node and that ancestor's edge, or avoid nesting it under a promoted layer",
-                sides.join("/")
-            ),
-        );
-    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -2278,64 +2189,6 @@ mod tests {
         assert!(
             world.resource::<LayerRepaintState>().dirty.contains(&root),
             "the crossed outset step re-captures"
-        );
-    }
-
-    /// A nested filtered layer whose INFLATED rect escapes the enclosing
-    /// layer's rect warns (`filterBleed`, attributed to the node, naming the
-    /// clipped sides); a fully-contained bleed does not, and a steady bleed
-    /// re-reports only when the rect pair changes.
-    #[cfg(all(feature = "devtools", debug_assertions))]
-    #[test]
-    fn nested_filter_bleed_warns_when_clipped() {
-        let _lock = crate::diag::test_lock();
-        crate::diag::arm_runtime();
-        let _ = crate::diag::take_runtime_warnings();
-
-        let (mut world, mut schedule) = geometry_world();
-        // Outer layer: 200×200 at (0,0)-(200,200).
-        let outer = spawn_layer_root(&mut world, 1, Vec2::splat(200.0), Vec2::splat(100.0));
-        // Inner filtered layer: 100×100 centered → un-inflated (50,50)-(150,150).
-        let inner = spawn_layer_root(&mut world, 2, Vec2::splat(100.0), Vec2::splat(100.0));
-        world.entity_mut(inner).insert((
-            ChildOf(outer),
-            crate::filters::FilterInput(crate::filters::FilterChain(vec![
-                crate::filters::FilterUse {
-                    name: "blur".into(),
-                    params: Default::default(),
-                },
-            ])),
-        ));
-        // Contained: quantize(12)=16 → (34,34)-(166,166) fits inside.
-        filter_outset(&mut world, inner, 12);
-        schedule.run(&mut world);
-        let bleeds = |warns: Vec<crate::diag::RuntimeWarning>| -> Vec<_> {
-            warns
-                .into_iter()
-                .filter(|w| w.kind == "filterBleed")
-                .collect()
-        };
-        assert!(
-            bleeds(crate::diag::take_runtime_warnings()).is_empty(),
-            "contained bleed does not warn"
-        );
-
-        // Escaped: quantize(60)=64 → (-14,-14)-(214,214), clipped on all sides.
-        filter_outset(&mut world, inner, 60);
-        schedule.run(&mut world);
-        let warns = bleeds(crate::diag::take_runtime_warnings());
-        assert_eq!(warns.len(), 1, "{warns:?}");
-        assert_eq!(warns[0].node, Some(2));
-        assert_eq!(warns[0].value, "blur");
-        for side in ["left", "top", "right", "bottom"] {
-            assert!(warns[0].message.contains(side), "{}", warns[0].message);
-        }
-
-        // Steady state (same rect pair): no re-report.
-        schedule.run(&mut world);
-        assert!(
-            bleeds(crate::diag::take_runtime_warnings()).is_empty(),
-            "unchanged bleed is not re-reported"
         );
     }
 
