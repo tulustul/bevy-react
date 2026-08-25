@@ -115,7 +115,7 @@ function CubeCounterCard() {
             backgroundColor: Colors.primary300,
             backgroundGradient: undefined,
           }}
-          labelStyle={{ fontSize: FontSizes.xxxl }}
+          labelStyle={{ fontSize: FontSizes.xxxl, color: Colors.textColor100 }}
         >
           +
         </Button>
@@ -135,7 +135,7 @@ function CubeCounterCard() {
             backgroundColor: Colors.red300,
             backgroundGradient: undefined,
           }}
-          labelStyle={{ fontSize: FontSizes.xxxl }}
+          labelStyle={{ fontSize: FontSizes.xxxl, color: Colors.textColor100 }}
         >
           -
         </Button>

@@ -10,9 +10,9 @@ import {
   withTiming,
 } from "bevy-react";
 import { BevyStyle } from "bevy-react/jsx";
-import { Button, Example } from "@/components";
+import { Example, Radio, RadioOption } from "@/components";
 import { Code, InlineCode, P } from "@/components/docs";
-import { Colors, FontSizes } from "@/theme";
+import { Colors } from "@/theme";
 
 type Mode = "linear" | "easeInOut" | "spring";
 
@@ -66,6 +66,11 @@ const WARM = [
   Colors.sky100,
 ];
 
+const MODES: Mode[] = ["linear", "easeInOut", "spring"];
+const MODE_OPTIONS: RadioOption<Mode>[] = MODES.map((v) => {
+  return { label: v, value: v } satisfies RadioOption;
+});
+
 export function ShowcaseDemo() {
   return (
     <Example
@@ -103,16 +108,7 @@ function ShowcaseCard() {
         ))}
       </node>
 
-      <node style={rowStyle}>
-        {(["linear", "easeInOut", "spring"] as const).map((m) => (
-          <ModeButton
-            key={m}
-            label={m}
-            selected={m === mode}
-            onPress={() => setMode(m)}
-          />
-        ))}
-      </node>
+      <Radio options={MODE_OPTIONS} value={mode} onChange={setMode} />
     </>
   );
 }
@@ -187,36 +183,6 @@ function BouncingSquare({ index, mode }: { index: number; mode: Mode }) {
   );
 }
 
-function ModeButton({
-  label,
-  selected,
-  onPress,
-}: {
-  label: string;
-  selected: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <Button
-      unstyled
-      onClick={onPress}
-      style={{
-        ...modeButtonStyle,
-        backgroundColor: selected ? Colors.primary100 : Colors.surface300,
-      }}
-      hoverStyle={{
-        backgroundColor: selected ? Colors.primary100 : Colors.surface500,
-      }}
-      labelStyle={{
-        color: selected ? Colors.textColor400 : Colors.textColor100,
-        fontSize: FontSizes.sm,
-      }}
-    >
-      {label}
-    </Button>
-  );
-}
-
 const lanesStyle: BevyStyle = {
   flexDirection: "column",
   alignItems: "center",
@@ -235,18 +201,4 @@ const squareStyle: BevyStyle = {
   height: SQUARE,
   borderRadius: 10,
   backgroundColor: Colors.primary100,
-};
-
-const rowStyle: BevyStyle = {
-  flexDirection: "row",
-  gap: 10,
-  justifyContent: "center",
-};
-
-const modeButtonStyle: BevyStyle = {
-  padding: { top: 8, right: 14, bottom: 8, left: 14 },
-  borderRadius: 8,
-  backgroundColor: Colors.surface300,
-  justifyContent: "center",
-  alignItems: "center",
 };

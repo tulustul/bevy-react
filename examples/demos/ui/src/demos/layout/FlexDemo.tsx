@@ -46,6 +46,7 @@ const DIRECTION_OPTIONS: RadioOption<FlexDirection>[] = [
   { label: "row", value: "row" },
   { label: "rowReverse", value: "rowReverse" },
   { label: "column", value: "column" },
+  { label: "columnReverse", value: "columnReverse" },
 ];
 
 // `start`/`end` are physical (writing-direction relative); `flexStart`/`flexEnd`
@@ -53,15 +54,16 @@ const DIRECTION_OPTIONS: RadioOption<FlexDirection>[] = [
 // `start` (visually left) part ways from `flexStart` (the reversed flow start).
 const JUSTIFY_OPTIONS: RadioOption<JustifyContent>[] = [
   { label: "center", value: "center" },
-  { label: "start", value: "start" },
   { label: "flexStart", value: "flexStart" },
   { label: "flexEnd", value: "flexEnd" },
   { label: "spaceBetween", value: "spaceBetween" },
+  { label: "spaceEvenly", value: "spaceEvenly" },
+  { label: "spaceAround", value: "spaceAround" },
 ];
 
 const ALIGN_OPTIONS: RadioOption<AlignItems>[] = [
+  { label: "baseline", value: "baseline" },
   { label: "center", value: "center" },
-  { label: "start", value: "start" },
   { label: "flexStart", value: "flexStart" },
   { label: "flexEnd", value: "flexEnd" },
   { label: "stretch", value: "stretch" },
@@ -221,8 +223,8 @@ function FlexGrowCard() {
 }
 
 const playground: BevyStyle = {
-  width: 320,
-  height: 160,
+  width: 350,
+  height: 350,
   gap: 10,
   padding: 12,
   backgroundColor: Colors.surface100,
@@ -237,8 +239,8 @@ const frame: BevyStyle = {
 };
 
 const swatch: BevyStyle = {
-  width: 40,
-  height: 40,
+  minWidth: 40,
+  minHeight: 40,
   borderRadius: 8,
 };
 

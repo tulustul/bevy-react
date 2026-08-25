@@ -104,10 +104,10 @@ function FlipCard() {
 
       <node style={{ flexDirection: "row", gap: 12 }}>
         <Button onClick={() => setFlipX((f) => !f)}>
-          flipX: {flipX ? "on" : "off"}
+          {`flipX: ${flipX ? "on" : "off"}`}
         </Button>
         <Button onClick={() => setFlipY((f) => !f)}>
-          flipY: {flipY ? "on" : "off"}
+          {`flipY: ${flipY ? "on" : "off"}`}
         </Button>
       </node>
     </>
@@ -274,7 +274,7 @@ function AtlasCard() {
       </node>
 
       <Button onClick={() => setIndex((i) => (i + 1) % 4)}>
-        cell {index} of 4 — next
+        {`cell ${index} of 4 — next`}
       </Button>
     </node>
   );

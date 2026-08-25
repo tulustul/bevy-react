@@ -134,7 +134,7 @@ function PercentTranslateCard() {
         />
       </node>
       <Button onClick={() => setOn((v) => !v)}>
-        translateX {on ? '"50%"' : '"0%"'}
+        {`translateX ${on ? '"50%"' : '"0%"'}`}
       </Button>
     </node>
   );

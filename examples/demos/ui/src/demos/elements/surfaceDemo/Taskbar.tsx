@@ -40,15 +40,13 @@ export function Taskbar({
             />
           </Popup>
         ) : null}
-        <Button
-          unstyled
+        <button
           style={startOpen ? startButtonActive : startButton}
           hoverStyle={startButtonHover}
-          labelStyle={startText}
           onClick={onStart}
         >
-          bevy-react
-        </Button>
+          <text style={startText}>bevy-react</text>
+        </button>
       </node>
 
       <Clock />

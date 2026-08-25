@@ -10,7 +10,7 @@ import {
 import { BevyStyle } from "bevy-react/jsx";
 import { Button, Example, Slider } from "@/components";
 import { Code, InlineCode, P } from "@/components/docs";
-import { column, playButton, playLabel } from "../shared";
+import { column } from "../shared";
 import { Colors, FontSizes } from "@/theme";
 
 // The withTiming-driven cards: an endless opacity ping-pong, the four easing
@@ -138,14 +138,7 @@ function EasingCard() {
         onChange={setDuration}
         label={`duration ${duration.toFixed(0)}ms`}
       />
-      <Button
-        unstyled
-        style={playButton}
-        labelStyle={playLabel}
-        onClick={() => setPlay((n) => n + 1)}
-      >
-        Race
-      </Button>
+      <Button onClick={() => setPlay((n) => n + 1)}>Race</Button>
     </node>
   );
 }

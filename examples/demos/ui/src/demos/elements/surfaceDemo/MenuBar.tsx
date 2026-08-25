@@ -61,15 +61,13 @@ export function MenuBar({
       <node style={menuRow}>
         {menus.map((menu) => (
           <node key={menu.id} style={menuAnchor}>
-            <Button
-              unstyled
+            <button
               style={open === menu.id ? menuLabelActive : menuLabel}
               hoverStyle={menuLabelHover}
-              labelStyle={menuLabelText}
               onClick={() => onToggle(menu.id)}
             >
-              {menu.label}
-            </Button>
+              <text style={menuLabelText}>{menu.label}</text>
+            </button>
             {open === menu.id ? (
               <Popup style={dropdown} from="top">
                 <MenuList items={menu.items} />

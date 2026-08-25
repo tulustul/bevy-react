@@ -55,12 +55,10 @@ type OptionProps = {
 function Option({ option, selected, pinch, onClick }: OptionProps) {
   return (
     <Button
-      unstyled
       pinch={pinch}
       onClick={onClick}
       style={{
         ...pillStyle,
-        backgroundColor: selected ? ACCENT : SURFACE,
         backgroundGradient: selected ? Gradients.primary : Gradients.surface,
       }}
       hoverStyle={{
@@ -79,9 +77,6 @@ function Option({ option, selected, pinch, onClick }: OptionProps) {
   );
 }
 
-const ACCENT = Colors.primary100;
-const SURFACE = Colors.surface300;
-
 const groupStyle: BevyStyle = {
   flexDirection: "row",
   flexWrap: "wrap",
@@ -90,15 +85,11 @@ const groupStyle: BevyStyle = {
 };
 
 const pillStyle: BevyStyle = {
+  minWidth: 50,
   justifyContent: "center",
   alignItems: "center",
   padding: { top: 6, right: 14, bottom: 6, left: 14 },
   borderRadius: 8,
-  transform: { scale: 1 },
-  transition: {
-    backgroundColor: { duration: 150 },
-    transform: { duration: 120, easing: "easeOut" },
-  },
   cursor: "pointer",
 };
 

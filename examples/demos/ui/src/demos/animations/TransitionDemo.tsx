@@ -3,7 +3,7 @@ import { BevyStyle } from "bevy-react/jsx";
 
 import { Button, DemoRow, Example } from "@/components";
 import { B, Code, InlineCode, P } from "@/components/docs";
-import { column, playButton, playLabel } from "./shared";
+import { column } from "./shared";
 import { Colors, FontSizes } from "@/theme";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
 
@@ -92,9 +92,7 @@ function HoverPressDemo() {
 
 function HoverPressCard() {
   return (
-    <Button
-      unstyled
-      pinch={{ strength: 0 }}
+    <button
       style={{
         ...pillStyle,
         backgroundColor: Colors.primary100,
@@ -109,10 +107,9 @@ function HoverPressCard() {
         transform: { scale: 0.92 },
         backgroundColor: Colors.primary300,
       }}
-      labelStyle={labelStyle}
     >
-      Press me
-    </Button>
+      <text style={labelStyle}>Press me</text>
+    </button>
   );
 }
 
@@ -157,9 +154,7 @@ function ToggleSwitchCard() {
 
   return (
     <node style={switchRow}>
-      <Button
-        unstyled
-        pinch={{ strength: 0 }}
+      <button
         onClick={() => setOn((v) => !v)}
         style={{
           ...switchTrack,
@@ -174,7 +169,7 @@ function ToggleSwitchCard() {
             transition: { transform: { stiffness: 180, damping: 14 } },
           }}
         />
-      </Button>
+      </button>
       <text style={switchLabel}>{on ? "ON" : "OFF"}</text>
     </node>
   );
@@ -243,14 +238,7 @@ function TimingVsSpringCard() {
           />
         </node>
       </node>
-      <Button
-        unstyled
-        style={playButton}
-        labelStyle={playLabel}
-        onClick={() => setOn((v) => !v)}
-      >
-        Toggle
-      </Button>
+      <Button onClick={() => setOn((v) => !v)}>Toggle</Button>
     </node>
   );
 }
@@ -288,12 +276,7 @@ function SizeCard() {
 
   return (
     <node style={accordionColumn}>
-      <Button
-        unstyled
-        style={accordionHeader}
-        labelStyle={accordionHeaderText}
-        onClick={() => setOpen((v) => !v)}
-      >
+      <Button onClick={() => setOpen((v) => !v)}>
         {open ? "Hide details -" : "Show details +"}
       </Button>
       <node style={{ ...accordionBody, maxHeight: open ? 96 : 0 }}>
@@ -375,14 +358,7 @@ function DelayCard() {
           );
         })}
       </node>
-      <Button
-        unstyled
-        style={playButton}
-        labelStyle={playLabel}
-        onClick={() => setUp((v) => !v)}
-      >
-        Wave
-      </Button>
+      <Button onClick={() => setUp((v) => !v)}>Wave</Button>
     </node>
   );
 }
@@ -469,22 +445,6 @@ const accordionColumn: BevyStyle = {
   flexDirection: "column",
   gap: 10,
   width: 216,
-};
-
-const accordionHeader: BevyStyle = {
-  justifyContent: "center",
-  alignItems: "center",
-  padding: { top: 8, right: 12, bottom: 8, left: 12 },
-  borderRadius: 8,
-  backgroundColor: Colors.surface300,
-  transform: { scale: 1 },
-  transition: { transform: { duration: 100, easing: "easeOut" } },
-};
-
-const accordionHeaderText: BevyStyle = {
-  color: Colors.textColor100,
-  fontSize: FontSizes.sm,
-  fontWeight: "bold",
 };
 
 const accordionBody: BevyStyle = {

@@ -45,6 +45,9 @@ function Title() {
     const delay = titleDelay + Math.random() * titleDelay;
     const id = setTimeout(toggle, delay);
     return () => clearTimeout(id);
+    // Deliberately keyed on `text` only: `toggle` is recreated every render,
+    // and listing it would re-arm the timer on unrelated re-renders.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [text]);
 
   return (

@@ -242,12 +242,7 @@ type TimeBoxProps = {
 function TimeBox({ label, duration, on, onToggle }: TimeBoxProps) {
   return (
     <node style={{ flexDirection: "column", alignItems: "center", gap: 10 }}>
-      <Button
-        unstyled
-        pinch={{ strength: 0 }}
-        onClick={onToggle}
-        style={timeTrack}
-      >
+      <button onClick={onToggle} style={timeTrack}>
         <node
           style={{
             ...box,
@@ -258,7 +253,7 @@ function TimeBox({ label, duration, on, onToggle }: TimeBoxProps) {
             transition: { transform: { duration, easing: "easeOut" } },
           }}
         />
-      </Button>
+      </button>
       <TextMono style={caption}>{label}</TextMono>
     </node>
   );

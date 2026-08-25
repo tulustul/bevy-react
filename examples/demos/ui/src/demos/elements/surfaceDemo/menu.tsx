@@ -66,16 +66,14 @@ export function MenuList({ items }: { items: MenuItem[] }) {
           return <node key={`sep-${i}`} style={separator} />;
         }
         return (
-          <Button
+          <button
             key={item.label}
-            unstyled
             style={row}
             hoverStyle={rowHover}
-            labelStyle={label}
             onClick={item.onClick}
           >
-            {item.label}
-          </Button>
+            <text style={label}>{item.label}</text>
+          </button>
         );
       })}
     </node>

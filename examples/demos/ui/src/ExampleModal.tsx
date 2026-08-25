@@ -202,6 +202,7 @@ const titleStyle: BevyStyle = {
 // A circle: fixed square box (padding off), radius = half. The base style's
 // centering places the × glyph.
 const closeXStyle: BevyStyle = {
+  minWidth: 28,
   width: 28,
   height: 28,
   padding: 0,

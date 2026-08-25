@@ -1,7 +1,7 @@
 export const Colors = {
   primary100: "#7aa2f7",
   primary200: "#89b4fa",
-  primary300: "#5a7fd6",
+  primary300: "#5071c0",
   primary400: "#2b4685",
   primary500: "#213563",
   primary600: "#111b33",
@@ -72,12 +72,7 @@ export const Gradients = {
     Colors.sky100,
   ),
   // neutral surface lifts — unselected pills, generic buttons, code toggle
-  transparent: linear(
-    180,
-    Colors.transparent,
-    Colors.transparent,
-    Colors.transparent,
-  ),
+  transparent: linear(180, Colors.transparent),
   surface: linear(180, Colors.surface600, Colors.surface400, Colors.surface400),
   surfaceHover: linear(
     180,

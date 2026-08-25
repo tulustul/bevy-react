@@ -80,9 +80,7 @@ export function Desktop({ crt, setCrt, onReboot }: Props) {
         />
       </node>
 
-      {openMenu !== null ? (
-        <Button unstyled style={backdrop} onClick={close} />
-      ) : null}
+      {openMenu !== null ? <button style={backdrop} onClick={close} /> : null}
 
       {aboutOpen ? <AboutDialog onClose={() => setAboutOpen(false)} /> : null}
     </node>

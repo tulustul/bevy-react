@@ -9,11 +9,6 @@ export type ButtonProps = PropsWithChildren & {
   hoverStyle?: BevyStyle;
   pressStyle?: BevyStyle;
   labelStyle?: BevyStyle;
-  /** Skip the shared button look (base style, hover gradient, label styling)
-   *  — the caller's style/hoverStyle/labelStyle stand alone. The pinch still
-   *  applies. For tracks, menu rows, and other button-shaped things that are
-   *  not "a button that looks like the gallery's buttons". */
-  unstyled?: boolean;
   /** Pinch-on-press overrides, forwarded to `Pinchable` as its `params`
    *  (`{ strength: 0 }` disables). The pinch lives on Pinchable's own press
    *  surface around the `<button>`, so the button's `style` (its `filter`,
@@ -30,7 +25,6 @@ export function Button({
   hoverStyle,
   pressStyle,
   labelStyle,
-  unstyled = false,
   pinch,
   children,
 }: ButtonProps) {
@@ -45,31 +39,19 @@ export function Button({
   // surface behind it. Without a pinch there is no wrapper: the button keeps
   // its own policy.
   const pinched = isPinchEnabled(pinch);
-  const baseStyle = unstyled
-    ? (style ?? {})
-    : { ...buttonStyle, ...(style ?? {}) };
+  const baseStyle = { ...buttonStyle, ...(style ?? {}) };
   return (
     <Pinchable params={pinch} focusPolicy={style?.focusPolicy ?? "block"}>
       <button
         onClick={onClick}
         style={{ ...baseStyle, ...(pinched ? { focusPolicy: "pass" } : {}) }}
-        hoverStyle={
-          unstyled
-            ? (hoverStyle ?? {})
-            : { ...buttonHoverStyle, ...(hoverStyle ?? {}) }
-        }
+        hoverStyle={{ ...buttonHoverStyle, ...(hoverStyle ?? {}) }}
         pressStyle={{
           ...(pressStyle ?? {}),
         }}
       >
         {isTextChild ? (
-          <text
-            style={
-              unstyled
-                ? (labelStyle ?? {})
-                : { ...buttonLabelStyle, ...(labelStyle ?? {}) }
-            }
-          >
+          <text style={{ ...buttonLabelStyle, ...(labelStyle ?? {}) }}>
             {children}
           </text>
         ) : (
@@ -85,19 +67,20 @@ const buttonStyle: BevyStyle = {
   alignItems: "center",
   padding: { top: 8, right: 12, bottom: 8, left: 12 },
   borderRadius: 8,
-  backgroundGradient: Gradients.surface,
+  backgroundGradient: Gradients.primary,
   transition: {
     backgroundGradient: { duration: 250 },
   },
   cursor: "pointer",
+  minWidth: 100,
 };
 
 const buttonHoverStyle: BevyStyle = {
-  backgroundGradient: Gradients.surfaceHover,
+  backgroundGradient: Gradients.primaryHover,
 };
 
 const buttonLabelStyle: BevyStyle = {
-  color: Colors.textColor100,
+  color: Colors.surface100,
   fontSize: FontSizes.sm,
   fontWeight: "bold",
 };

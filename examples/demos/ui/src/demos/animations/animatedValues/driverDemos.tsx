@@ -11,7 +11,7 @@ import {
 import { BevyStyle } from "bevy-react/jsx";
 import { Button, Example, Slider } from "@/components";
 import { Code, InlineCode, P } from "@/components/docs";
-import { column, playButton, playLabel } from "../shared";
+import { column } from "../shared";
 import { Colors, FontSizes, Gradients } from "@/theme";
 
 // The remaining driver cards: a tunable damped spring, a composed sequence
@@ -80,14 +80,7 @@ function SpringCard() {
         onChange={setDamping}
         label={`damping ${damping.toFixed(0)}`}
       />
-      <Button
-        unstyled
-        style={playButton}
-        labelStyle={playLabel}
-        onClick={bounce}
-      >
-        Bounce
-      </Button>
+      <Button onClick={bounce}>Bounce</Button>
     </node>
   );
 }
@@ -170,12 +163,7 @@ function SequenceCard() {
           }}
         />
       </node>
-      <Button
-        unstyled
-        style={running ? { ...playButton, opacity: 0.4 } : playButton}
-        labelStyle={playLabel}
-        onClick={running ? undefined : run}
-      >
+      <Button onClick={running ? undefined : run}>
         {running ? "Playing…" : "Play"}
       </Button>
     </node>
@@ -257,22 +245,8 @@ function SpinCard() {
         </node>
       </node>
       <node style={{ flexDirection: "row", gap: 10 }}>
-        <Button
-          unstyled
-          style={playButton}
-          labelStyle={playLabel}
-          onClick={start}
-        >
-          {spinning ? "Restart" : "Start"}
-        </Button>
-        <Button
-          unstyled
-          style={{ ...playButton, backgroundColor: Colors.red100 }}
-          labelStyle={playLabel}
-          onClick={stop}
-        >
-          Stop
-        </Button>
+        <Button onClick={start}>{spinning ? "Restart" : "Start"}</Button>
+        <Button onClick={stop}>Stop</Button>
       </node>
     </node>
   );

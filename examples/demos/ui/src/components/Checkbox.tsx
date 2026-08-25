@@ -15,7 +15,6 @@ export function Checkbox({ label, enabled, onChange }: CheckboxProps) {
 
   return (
     <Button
-      unstyled
       pinch={{
         light: 0.1,
         gloss: 0.05,
@@ -50,11 +49,8 @@ const wrapper: BevyStyle = {
   gap: 8,
   padding: { top: 8, right: 12, bottom: 8, left: 12 },
   borderRadius: 8,
-  backgroundColor: Colors.transparent,
+  backgroundGradient: Gradients.transparent,
   cursor: "pointer",
-  transition: {
-    backgroundColor: { duration: 150 },
-  },
 };
 
 const wrapperHovered: BevyStyle = {
