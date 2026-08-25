@@ -1,9 +1,17 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { BevyStyle } from "bevy-react/jsx";
 import { Checkbox, DemoRow, Example, Radio, RadioOption } from "@/components";
 import { Code, InlineCode, P } from "@/components/docs";
 import { Colors, Gradients } from "@/theme";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
+import {
+  AlignIcon,
+  DirectionIcon,
+  JustifyIcon,
+  type AlignItems,
+  type FlexDirection,
+  type JustifyContent,
+} from "./flexIcons";
 
 // `<node>` is a flexbox container by default. These snippets show the main flex
 // knobs; see Layout → Grid for `display: "grid"`.
@@ -38,36 +46,62 @@ const PAGE: ExplanationData = {
 
 const SWATCHES = Gradients.spectrum;
 
-type FlexDirection = Required<BevyStyle>["flexDirection"];
-type JustifyContent = Required<BevyStyle>["justifyContent"];
-type AlignItems = Required<BevyStyle>["alignItems"];
-
-const DIRECTION_OPTIONS: RadioOption<FlexDirection>[] = [
-  { label: "row", value: "row" },
-  { label: "rowReverse", value: "rowReverse" },
-  { label: "column", value: "column" },
-  { label: "columnReverse", value: "columnReverse" },
+// The knob types come from the icon module: the subsets of bevy's unions the
+// playground offers (it skips the physical `start`/`end`, which the info
+// panel explains instead).
+const DIRECTIONS: FlexDirection[] = [
+  "row",
+  "rowReverse",
+  "column",
+  "columnReverse",
 ];
 
 // `start`/`end` are physical (writing-direction relative); `flexStart`/`flexEnd`
 // follow `flexDirection`. They diverge under `rowReverse` — pick it above to see
 // `start` (visually left) part ways from `flexStart` (the reversed flow start).
-const JUSTIFY_OPTIONS: RadioOption<JustifyContent>[] = [
-  { label: "center", value: "center" },
-  { label: "flexStart", value: "flexStart" },
-  { label: "flexEnd", value: "flexEnd" },
-  { label: "spaceBetween", value: "spaceBetween" },
-  { label: "spaceEvenly", value: "spaceEvenly" },
-  { label: "spaceAround", value: "spaceAround" },
+const JUSTIFIES: JustifyContent[] = [
+  "center",
+  "flexStart",
+  "flexEnd",
+  "spaceBetween",
+  "spaceEvenly",
+  "spaceAround",
 ];
 
-const ALIGN_OPTIONS: RadioOption<AlignItems>[] = [
-  { label: "baseline", value: "baseline" },
-  { label: "center", value: "center" },
-  { label: "flexStart", value: "flexStart" },
-  { label: "flexEnd", value: "flexEnd" },
-  { label: "stretch", value: "stretch" },
+const ALIGNS: AlignItems[] = [
+  "baseline",
+  "center",
+  "flexStart",
+  "flexEnd",
+  "stretch",
 ];
+
+// The pills are icon-only: each label is a render function so the glyph can
+// tint with the pill's selection, and the justify/align glyphs rotate with the
+// active direction (their axis depends on it), hence the rebuild per direction.
+function useFlexOptions(direction: FlexDirection) {
+  return useMemo(() => {
+    const directions: RadioOption<FlexDirection>[] = DIRECTIONS.map((d) => ({
+      value: d,
+      label: ({ selected }) => (
+        <DirectionIcon selected={selected} direction={d} />
+      ),
+    }));
+    const justifies: RadioOption<JustifyContent>[] = JUSTIFIES.map((j) => ({
+      value: j,
+      label: ({ selected }) => (
+        <JustifyIcon value={j} selected={selected} direction={direction} />
+      ),
+    }));
+    const aligns: RadioOption<AlignItems>[] = ALIGNS.map((a) => ({
+      value: a,
+      label: ({ selected }) => (
+        <AlignIcon value={a} selected={selected} direction={direction} />
+      ),
+    }));
+    return { directions, justifies, aligns };
+  }, [direction]);
+}
 
 export function FlexDemo() {
   useDemoPage(PAGE);
@@ -145,6 +179,7 @@ function FlexPlaygroundCard() {
     useState<JustifyContent>("center");
   const [alignItems, setAlignItems] = useState<AlignItems>("center");
   const [animate, setAnimate] = useState(true);
+  const options = useFlexOptions(flexDirection);
 
   return (
     <node style={{ flexDirection: "column", gap: 12, alignItems: "center" }}>
@@ -154,26 +189,43 @@ function FlexPlaygroundCard() {
         <Swatches animate={animate} />
       </node>
 
-      <Checkbox
-        label="Animate layout changes"
-        enabled={animate}
-        onChange={setAnimate}
-      />
-
       <Radio
-        options={DIRECTION_OPTIONS}
+        pinch={{ radius: 0.7 }}
+        options={options.directions}
         value={flexDirection}
         onChange={setFlexDirection}
       />
       <Radio
-        options={JUSTIFY_OPTIONS}
+        pinch={{ radius: 0.7 }}
+        options={options.justifies}
         value={justifyContent}
         onChange={setJustifyContent}
       />
       <Radio
-        options={ALIGN_OPTIONS}
+        pinch={{ radius: 0.7 }}
+        options={options.aligns}
         value={alignItems}
         onChange={setAlignItems}
+      />
+
+      <node
+        style={{
+          flexDirection: "column",
+          gap: 10,
+          padding: 12,
+          backgroundColor: Colors.surface100,
+          borderRadius: 12,
+        }}
+      >
+        <InlineCode>{`flexDirection: ${flexDirection}`}</InlineCode>
+        <InlineCode>{`justifyContent: ${justifyContent}`}</InlineCode>
+        <InlineCode>{`alignItems: ${alignItems}`}</InlineCode>
+      </node>
+
+      <Checkbox
+        label="Animate layout changes"
+        enabled={animate}
+        onChange={setAnimate}
       />
     </node>
   );

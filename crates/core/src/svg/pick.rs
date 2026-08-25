@@ -14,6 +14,10 @@
 //! the svg node's own hit — above its node, below anything already above the
 //! node. No shape under the cursor → no message: the hit falls through to
 //! the svg node itself (web `visiblePainted` empty-region semantics).
+//! The shape hit never blocks the hits beneath it: shapes are spawned with a
+//! pass-through `Pickable` (`reconcile::svg_ops::create_shape`), so the svg
+//! node and its ancestors stay in the hover map — bevy's hover map treats an
+//! entity without one as blocking (pinned in `hover_tests`).
 //!
 //! Because the refinement keys off the hit entry's own pointer id and
 //! resolves its [`PointerLocation`] (via the same physical-viewport math as
@@ -36,6 +40,8 @@ use super::paint::view_box_transform;
 use super::walk::{ShapeQuery, walk_shapes};
 use super::{SvgShape, SvgSurface, ViewBox};
 
+#[cfg(test)]
+mod hover_tests;
 #[cfg(test)]
 mod tests;
 

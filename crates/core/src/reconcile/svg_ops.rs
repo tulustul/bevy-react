@@ -5,6 +5,7 @@
 //! machinery itself lives in [`crate::svg`].
 
 use bevy::image::Image;
+use bevy::picking::Pickable;
 use bevy::prelude::*;
 use bevy::ui::widget::NodeImageMode;
 
@@ -50,7 +51,22 @@ pub(super) fn create_shape(
     props: &Props,
 ) -> Entity {
     let attrs = props.shape.clone().unwrap_or_default();
-    let mut ec = commands.spawn((ReactNode(id), SvgShape { kind, attrs }));
+    // Pass-through for picking: the refined shape hit
+    // (`crate::svg::pick::refine_svg_pointer_hits`) puts the shape at the top
+    // of the pointer's hit stack, and bevy's hover map treats an entity
+    // WITHOUT a `Pickable` as blocking — which would hide the `<svg>` root and
+    // every ancestor (a `<button>`, its press surface) from hover, press, and
+    // `Pointer<Click>`. Shapes have no `focusPolicy`; like a pass node they
+    // never block what is beneath them (the collectors' topmost-wins rule
+    // still lets a handler-bearing shape own its own click).
+    let mut ec = commands.spawn((
+        ReactNode(id),
+        SvgShape { kind, attrs },
+        Pickable {
+            should_block_lower: false,
+            is_hoverable: true,
+        },
+    ));
     apply_shape_pointer(&mut ec, props);
     apply_animated(&mut ec, props);
     // A `transition` inside the attrs stamps the transition components (the

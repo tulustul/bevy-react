@@ -49,10 +49,11 @@ pub type OutboundSender = crossbeam_channel::Sender<Outbound>;
 /// - Bridge-owned: `Node`, `BackgroundColor`, `BorderColor`, `BorderRadius`,
 ///   `Outline`, `BoxShadow`, `ZIndex`/`GlobalZIndex`, `Visibility`,
 ///   `UiTransform`, `ImageNode`, `Text`/`TextSpan`/`TextFont`/`TextColor`/
-///   `TextLayout`, `ScrollPosition`, `Interaction`/`FocusPolicy`, `Name`,
+///   `TextLayout`, `ScrollPosition`, `Interaction`/`FocusPolicy`/`Pickable`
+///   (the `focusPolicy` mirror; SVG shapes get a pass-through one), `Name`,
 ///   `Children`/`ChildOf`, plus this crate's own markers.
 /// - Yours: any component the bridge never inserts (`MaterialNode<M>`,
-///   `TabIndex`, `Pickable`, audio, your own markers and data).
+///   `TabIndex`, audio, your own markers and data).
 ///
 /// Child entities you spawn under a React node die with it (`despawn` is
 /// recursive) but are **orphaned** whenever the bridge rebuilds that node's
