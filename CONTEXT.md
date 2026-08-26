@@ -50,4 +50,9 @@ Domain glossary for `bevy-react`. Use these terms as written; the code, the
   against the live layout (translate-only), size in measured px through real
   layout (the `Node` fields ease from the seed's size to the natural one,
   then the authored value is restored), styles per channel. The seed frame
-  shows the seed rect through the FLIP scale — never an empty frame.
+  shows the seed rect through the FLIP scale (corner radii compensated on
+  `ComputedNode` for that frame, so a seeded circle reads as a circle) —
+  never an empty frame. The
+  take-off point is **root-space anchored**: the seed rect is re-expressed in
+  the parent's frame every flight frame, so a parent the size flight
+  re-flows (a centered container) doesn't move it.

@@ -474,6 +474,17 @@ impl<T: Clone + PartialEq, I: Interp<T>> EasedChannel<T, I> {
         self.runner = Some(build_runner(&spec.to_driver(1.0), 0.0));
     }
 
+    /// Move a running ease's start: the interp re-arms from `start` toward
+    /// the unchanged target with progress untouched — for a caller whose
+    /// start is expressed in a frame that moved under it (the layout
+    /// channel's shared seed, re-derived from the parent's frame each
+    /// flight frame). Idle when nothing is running.
+    pub(super) fn rebase(&mut self, start: T) {
+        if self.runner.is_some() {
+            self.interp.arm(&start, &self.target);
+        }
+    }
+
     /// Advance an armed ease by `dt`, updating the current reading. Returns
     /// whether this frame completed the ease; `None` when idle.
     pub(super) fn tick(&mut self, dt: f32) -> Option<bool> {

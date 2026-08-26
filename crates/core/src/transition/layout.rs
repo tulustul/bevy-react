@@ -43,6 +43,7 @@ use bevy::ui::ui_surface::UiSurface;
 use bevy::ui::{ComputedNode, UiGlobalTransform};
 
 use super::channels::ProgressChannel;
+use super::shared::SharedRect;
 use super::spec::ChannelTransition;
 use super::{TransitionInput, TransitionState};
 use crate::animations::AnimatedNode;
@@ -84,12 +85,15 @@ enum SharedMode {
     #[default]
     Off,
     /// The seed frame: the full seed rect is shown (position AND size, the
-    /// latter through the FLIP scale) — the frame before real layout can
-    /// have the seed size.
+    /// latter through the FLIP scale, with the resolved corner radii
+    /// divided out by it — `compensate_seed_frame_radius`) — the frame
+    /// before real layout can have the seed size.
     SeedFrame,
     /// In flight: position eases toward a target that MOVES with the live
-    /// layout (the size flight re-flows it every frame), size is whatever
-    /// layout measured — translate-only, no scale.
+    /// layout (the size flight re-flows it every frame) from a start that
+    /// is re-derived from the live parent frame ([`LayoutChannel::rebase_shared`]
+    /// — the seed is a root-space rect), size is whatever layout measured —
+    /// translate-only, no scale.
     TranslateOnly,
 }
 
@@ -128,6 +132,25 @@ impl LayoutChannel {
     /// rect meanwhile — that is NOT an adopt).
     pub fn shared_active(&self) -> bool {
         self.shared != SharedMode::Off
+    }
+
+    /// Whether the next [`Self::drive`] is the seed frame: the one frame
+    /// shown through the FLIP scale (see [`SharedMode::SeedFrame`]).
+    pub fn on_seed_frame(&self) -> bool {
+        self.shared == SharedMode::SeedFrame
+    }
+
+    /// Re-express a running shared flight's take-off point. The seed is a
+    /// ROOT-space rect, and the parent frame it was converted through moves
+    /// mid-flight whenever the size flight re-flows the parent (a centered
+    /// container's edge follows the hero's width), so the layout drive
+    /// re-derives `seed` from THIS frame's parent frame before each step:
+    /// the ease then samples seed → target in root space and the take-off
+    /// point stays put on screen. Idle outside shared mode.
+    pub fn rebase_shared(&mut self, seed: LayoutRect) {
+        if self.shared != SharedMode::Off {
+            self.channel.rebase(seed);
+        }
     }
 
     /// The shared-flight step: move the target with the live layout (no
@@ -251,6 +274,56 @@ impl LayoutDelta {
     }
 }
 
+/// An outgoing node's root-space rect expressed in the incoming node's
+/// parent layout space: the offset from the node's pristine center (`own`)
+/// through the parent's inverse frame, added to the node's `measured` rect;
+/// the size through the parent's scale. `None` when the parent frame is
+/// singular (a `transform: { scale: 0 }` ancestor — nothing to show anyway).
+fn seed_in_parent_space(
+    rect: SharedRect,
+    own: Affine2,
+    parent: Affine2,
+    measured: LayoutRect,
+) -> Option<LayoutRect> {
+    if parent.matrix2.determinant().abs() <= f32::EPSILON {
+        return None;
+    }
+    let offset = parent.inverse().matrix2 * (rect.center - own.translation);
+    let parent_scale = Vec2::new(
+        parent.matrix2.x_axis.length(),
+        parent.matrix2.y_axis.length(),
+    );
+    Some([
+        measured[0] + offset.x,
+        measured[1] + offset.y,
+        rect.size.x / parent_scale.x,
+        rect.size.y / parent_scale.y,
+    ])
+}
+
+/// The seed frame shows the natural box through the FLIP `scale`, and the
+/// corner radii bevy resolved at the natural size would shrink with it (a
+/// 36px circle seed on a 72px thumb, shown as a 200px hero at 0.36, would
+/// read as 13px). Divide the resolved radii out by the scale for this one
+/// frame — bevy rewrites `ComputedNode.border_radius` from `Node` every
+/// frame, unconditionally, so nothing lingers. Anisotropic scales use the
+/// mean (a per-corner radius has one value); the clamp mirrors bevy's
+/// (half the shorter side).
+fn compensate_seed_frame_radius(computed: &mut Mut<ComputedNode>, scale: Vec2) {
+    let s = 0.5 * (scale.x + scale.y);
+    if s <= f32::EPSILON || (s - 1.0).abs() < 1e-6 {
+        return;
+    }
+    let max = 0.5 * computed.size.min_element();
+    let fix = |r: f32| (r / s).clamp(0.0, max);
+    // No change mark, as in bevy's own write.
+    let radius = &mut computed.bypass_change_detection().border_radius;
+    radius.top_left = fix(radius.top_left);
+    radius.top_right = fix(radius.top_right);
+    radius.bottom_right = fix(radius.bottom_right);
+    radius.bottom_left = fix(radius.bottom_left);
+}
+
 /// The per-node query of [`drive_layout_transitions`]: the transitioning
 /// entity, its input + state, its animation bindings (the adopt gate), and
 /// its `ComputedNode` (the scale factor a shared size flight writes logical
@@ -260,7 +333,7 @@ type LayoutNodeQuery = (
     &'static TransitionInput,
     &'static mut TransitionState,
     Option<&'static AnimatedNode>,
-    Option<&'static ComputedNode>,
+    Option<&'static mut ComputedNode>,
 );
 
 /// Measure, ease, and compose every `transition: { layout }` node's delta
@@ -288,7 +361,7 @@ pub fn drive_layout_transitions(
     // A singular frame (a `transform: { scale: 0 }` ancestor) has no local
     // frame to recover; its subtree is invisible anyway.
     let inverse = |a: Affine2| (a.matrix2.determinant().abs() > f32::EPSILON).then(|| a.inverse());
-    for (entity, input, mut state, anim, computed) in &mut states {
+    for (entity, input, mut state, anim, mut computed) in &mut states {
         // A shared flight drives the rect with the `sharedElement` spec
         // captured at the seed (a variant swap can't drop it mid-flight),
         // even without a `layout` entry; once it settles the regular rule
@@ -307,6 +380,7 @@ pub fn drive_layout_transitions(
             if state.layout.seeded {
                 state.layout.reset();
             }
+            state.shared.origin = None;
             continue;
         };
         // Rounded, exactly as bevy's walk consumed it (`use_rounding` is on
@@ -322,48 +396,49 @@ pub fn drive_layout_transitions(
             size.x,
             size.y,
         ];
-        // A shared-element seed (parked by `drive_transitions` this frame):
-        // convert the outgoing node's root-space rect into this node's
-        // parent layout space — the offset from this node's pristine center
-        // through the parent's inverse frame, the size through its scale —
-        // seed the channel, and arm the measured-px size flight from the
-        // seed's size to the natural one just measured.
-        if let Some(rect) = state.shared.rect.take()
-            && let Some(shared) = shared_spec
-            && let Ok(own) = globals.get(entity).map(|g| **g)
-        {
+        // The outgoing node's root-space rect in this node's parent layout
+        // space, off THIS frame's pristine globals (see `seed_in_parent_space`).
+        let in_parent_space = |rect: SharedRect| {
+            let own = globals.get(entity).map(|g| **g).ok()?;
             let parent = parents
                 .get(entity)
                 .ok()
                 .and_then(|c| globals.get(c.parent()).ok())
                 .map(|g| **g)
                 .unwrap_or(Affine2::IDENTITY);
-            if let Some(parent_inverse) = inverse(parent) {
-                let offset = parent_inverse.matrix2 * (rect.center - own.translation);
-                let parent_scale = Vec2::new(
-                    parent.matrix2.x_axis.length(),
-                    parent.matrix2.y_axis.length(),
+            seed_in_parent_space(rect, own, parent, measured)
+        };
+        // A shared-element seed (parked by `drive_transitions` this frame):
+        // seed the channel from the converted rect, keep the root-space
+        // rect for the flight, and arm the measured-px size flight from the
+        // seed's size to the natural one just measured.
+        if let Some(rect) = state.shared.rect.take()
+            && let Some(shared) = shared_spec
+            && let Some(seed) = in_parent_space(rect)
+        {
+            state.layout.seed_shared(seed, measured, shared);
+            state.shared.origin = state.layout.shared_active().then_some(rect);
+            // A `{ animated }` binding on a `Node` field owns the size
+            // (bindings win, as everywhere): no size flight then.
+            if !anim.is_some_and(|a| a.0.has_node_props()) {
+                let inverse_scale_factor = computed
+                    .as_deref()
+                    .map(|c| c.inverse_scale_factor)
+                    .unwrap_or(1.0);
+                state.arm_shared_size(
+                    [seed[2], seed[3]],
+                    [measured[2], measured[3]],
+                    inverse_scale_factor,
+                    shared,
                 );
-                let seed = [
-                    measured[0] + offset.x,
-                    measured[1] + offset.y,
-                    rect.size.x / parent_scale.x,
-                    rect.size.y / parent_scale.y,
-                ];
-                state.layout.seed_shared(seed, measured, shared);
-                // A `{ animated }` binding on a `Node` field owns the size
-                // (bindings win, as everywhere): no size flight then.
-                if !anim.is_some_and(|a| a.0.has_node_props()) {
-                    let inverse_scale_factor =
-                        computed.map(|c| c.inverse_scale_factor).unwrap_or(1.0);
-                    state.arm_shared_size(
-                        [seed[2], seed[3]],
-                        [measured[2], measured[3]],
-                        inverse_scale_factor,
-                        shared,
-                    );
-                }
             }
+        } else if let Some(rect) = state.shared.origin
+            && let Some(seed) = in_parent_space(rect)
+        {
+            // In flight: the parent frame may have moved since the seed was
+            // converted (the size flight re-flows a centered parent) — the
+            // take-off point is root-space, re-express it before the step.
+            state.layout.rebase_shared(seed);
         }
         // The node's OWN layout writers are the one cause the engine can
         // attribute: its `size` channel, or a `{ animated }` binding on a
@@ -373,8 +448,16 @@ pub fn drive_layout_transitions(
         // own (the channel goes translate-only instead).
         let adopt = (state.size_in_flight() && !state.layout.shared_active())
             || anim.is_some_and(|a| a.0.has_node_props());
+        let seed_frame = state.layout.on_seed_frame();
         if let Some(shown) = state.layout.drive(measured, spec, adopt, dt) {
-            deltas.insert(entity, LayoutDelta::between(shown, measured));
+            let delta = LayoutDelta::between(shown, measured);
+            if seed_frame && let Some(computed) = computed.as_mut() {
+                compensate_seed_frame_radius(computed, delta.scale);
+            }
+            deltas.insert(entity, delta);
+        }
+        if !state.layout.shared_active() {
+            state.shared.origin = None;
         }
     }
     if deltas.is_empty() {

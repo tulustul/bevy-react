@@ -44,6 +44,12 @@ pub(super) struct SharedFlight {
     /// channel to consume in `PostUpdate`, after the node's first layout has
     /// measured its natural rect.
     pub rect: Option<SharedRect>,
+    /// The seed rect the layout channel is flying from, kept in ROOT space
+    /// for as long as the flight runs: the layout drive re-expresses it in
+    /// the parent's frame every frame (`LayoutChannel::rebase_shared`), so
+    /// a parent re-flowed mid-flight — a centered container following the
+    /// size flight — never drags the take-off point along.
+    pub origin: Option<SharedRect>,
     /// The measured-px size flight, armed by the layout drive: which `Node`
     /// dimensions the size channels are easing in px right now.
     pub size: Option<SharedSizeFlight>,
@@ -260,6 +266,7 @@ impl TransitionState {
             seed_frame: true,
             armed: 0,
             rect: Some(seed.rect),
+            origin: None,
             size: None,
         };
     }

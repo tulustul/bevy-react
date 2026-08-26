@@ -182,7 +182,7 @@ function ToggleSwitchCard() {
 function RadiusDemo() {
   return (
     <Example
-      title="Corner radius"
+      title="Border radius"
       info={
         <>
           <P>

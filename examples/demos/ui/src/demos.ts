@@ -26,7 +26,7 @@ import { ButtonDemo } from "./demos/elements/ButtonDemo";
 import { TextDemo } from "./demos/elements/TextDemo";
 import { ImageDemo } from "./demos/elements/ImageDemo";
 import { TransitionDemo } from "./demos/animations/TransitionDemo";
-import { SharedElementsDemo } from "./demos/animations/SharedElementsDemo";
+import { SharedElementsDemo } from "./demos/animations/sharedElements";
 import { MorphFilterDemo } from "./demos/styling/morphFilterDemo";
 import { AnimatedValuesDemo } from "./demos/animations/animatedValues";
 import { InterpolateDemo } from "./demos/animations/InterpolateDemo";

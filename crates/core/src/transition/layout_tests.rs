@@ -810,3 +810,142 @@ fn shared_flight_survives_losing_its_spec_mid_flight() {
         "still flying from the cached spec: {x}"
     );
 }
+
+/// The seed is anchored in ROOT space. A parent re-flowed by the size
+/// flight — here a centered row `[hero][sibling]` whose width follows the
+/// hero's — must not drag the take-off point along: the hero (natural
+/// 200×50, seeded 100×50 at `(100, 25)`) eases from the seed toward the
+/// live natural center in root space, instead of jumping by the parent's
+/// shift on the frame after the seed frame.
+#[test]
+fn shared_seed_stays_anchored_when_the_parent_reflows_around_the_size_flight() {
+    let mut app = shared_app();
+    let root = app
+        .world_mut()
+        .spawn(Node {
+            justify_content: JustifyContent::Center,
+            ..root_row()
+        })
+        .id();
+    let parent = app
+        .world_mut()
+        .spawn((
+            Node {
+                flex_direction: FlexDirection::Row,
+                ..Default::default()
+            },
+            ChildOf(root),
+        ))
+        .id();
+    let hero = app
+        .world_mut()
+        .spawn((
+            Node {
+                width: Val::Px(200.0),
+                height: Val::Px(50.0),
+                ..Default::default()
+            },
+            ChildOf(parent),
+            shared_spec(1.0),
+            TransitionState::default(),
+            seed(Vec2::new(100.0, 25.0), Vec2::new(100.0, 50.0)),
+        ))
+        .id();
+    app.world_mut().spawn((
+        Node {
+            width: Val::Px(100.0),
+            height: Val::Px(50.0),
+            ..Default::default()
+        },
+        ChildOf(parent),
+    ));
+    step(&mut app, 0.0);
+    assert_eq!(
+        global(&app, hero).translation,
+        Vec2::new(100.0, 25.0),
+        "frame 0: seed center"
+    );
+
+    // Frame 1: the width flight has shrunk the hero, the centered parent
+    // has shifted right by ~50px — the hero must still be (almost) at the
+    // seed, not 50px to the right of it.
+    step(&mut app, 0.016);
+    let x = x_of(&app, hero);
+    assert!(
+        (x - 100.0).abs() < 8.0,
+        "frame 1: the take-off point must not move with the re-flowed parent, got x = {x}"
+    );
+
+    // Halfway: the natural center is 450 whatever the hero's width (the row
+    // is centered and the hero leads it), so a root-space ease reads 275.
+    step(&mut app, 0.484);
+    let x = x_of(&app, hero);
+    assert!(
+        (x - 275.0).abs() < 1.0,
+        "halfway: root-space ease seed→live target, got x = {x}"
+    );
+}
+
+/// On the seed frame the node is shown through the FLIP scale, so a corner
+/// radius resolved at the natural size would shrink with the box: a 36px
+/// (circle) seed on a 72×72 thumb, shown as a 200×200 hero at scale 0.36,
+/// must still READ as 36px on screen — `ComputedNode.border_radius` is
+/// compensated for that one frame (bevy rewrites it from `Node` next frame).
+#[test]
+fn shared_seed_frame_shows_the_seed_corner_radius_through_the_flip_scale() {
+    use crate::protocol::units::Rect;
+    let px = |v: f32| Rect {
+        top: Length::Px(v),
+        right: Length::Px(v),
+        bottom: Length::Px(v),
+        left: Length::Px(v),
+    };
+    let mut app = shared_app();
+    let root = app.world_mut().spawn(root_row()).id();
+    let mut input = shared_spec(1.0);
+    input.width = Some(Length::Px(200.0));
+    input.height = Some(Length::Px(200.0));
+    input.border_radius = Some(px(16.0));
+    let mut seed_state = TransitionState::at_identity();
+    seed_state.border_radius.init(px(36.0));
+    let hero = app
+        .world_mut()
+        .spawn((
+            Node {
+                width: Val::Px(200.0),
+                height: Val::Px(200.0),
+                border_radius: BorderRadius::all(Val::Px(16.0)),
+                ..Default::default()
+            },
+            ChildOf(root),
+            input,
+            TransitionState::default(),
+            SharedSeed {
+                state: Box::new(seed_state),
+                rect: SharedRect {
+                    center: Vec2::new(300.0, 50.0),
+                    size: Vec2::new(72.0, 72.0),
+                },
+            },
+        ))
+        .id();
+    step(&mut app, 0.0);
+    let g = global(&app, hero);
+    let scale = g.matrix2.x_axis.x;
+    assert!(
+        (scale - 0.36).abs() < 1e-3,
+        "seed frame FLIP scale, got {scale}"
+    );
+    let shown = app
+        .world()
+        .entity(hero)
+        .get::<ComputedNode>()
+        .unwrap()
+        .border_radius
+        .top_left
+        * scale;
+    assert!(
+        (shown - 36.0).abs() < 1.0,
+        "seed frame: the seed radius as shown through the FLIP scale, got {shown}px"
+    );
+}
