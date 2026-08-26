@@ -9,3 +9,4 @@ export * from "./TextMono";
 export * from "./Typewriter";
 export * from "./DemoRow";
 export * from "./HeaderText";
+export * from "./Icons";

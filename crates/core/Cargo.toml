@@ -27,6 +27,9 @@ path = "src/lib.rs"
 [[example]]
 name = "demos"
 path = "../../examples/demos/main.rs"
+# The example carries unit tests (`--shoot` arg parsing, camera grab rules);
+# examples are compile-only by default, so opt them into `cargo test`.
+test = true
 
 # The benchmark / stress-test runner (see `examples/stress/`), declared explicitly
 # for the same reason as `demos` (it lives at the repo root).

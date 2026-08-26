@@ -18,6 +18,8 @@ use bevy_react::js_thread::spawn_js_thread;
 use bevy_react::protocol::{op::Op, outbound::Outbound, outbound::UiEvent};
 use bevy_react::{RawRequest, ReactMessage};
 
+mod common;
+
 fn example_bundle() -> PathBuf {
     // CARGO_MANIFEST_DIR is crates/core; the example bundle is at the repo root.
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../examples/demos/ui/dist/app.js")
@@ -139,9 +141,10 @@ fn demo_switch_anchored_survives() {
     let (flush_stamps_tx, _flush_stamps_rx) = crossbeam_channel::unbounded();
     let (flush_devtools_tx, _flush_devtools_rx) = crossbeam_channel::unbounded();
     let (emit_tx, _emit_rx) = crossbeam_channel::unbounded::<ReactMessage>();
-    let (request_tx, _request_rx) = crossbeam_channel::unbounded::<RawRequest>();
+    let (request_tx, request_rx) = crossbeam_channel::unbounded::<RawRequest>();
     let (anim_tx, _anim_rx) = crossbeam_channel::unbounded();
     let (outbound_tx, outbound_rx) = tokio::sync::mpsc::unbounded_channel::<Outbound>();
+    common::answer_window_size(request_rx, outbound_tx.clone());
     let (_reload_tx, reload_rx) = tokio::sync::mpsc::unbounded_channel::<()>();
 
     let vendor = bundle.with_file_name("vendor.js");

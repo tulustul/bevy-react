@@ -1,8 +1,10 @@
 //! Headless-friendly screenshot automation for the demos app.
 //!
-//! `cargo run -p bevy-react --example demos -- --shoot "<portal>" out.png [secs]`
+//! `cargo run -p bevy-react --example demos -- --shoot "<portal>" out.png [secs] [--size WxH]`
 //! navigates the React gallery to a demo by its nav label, lets it settle, then
-//! captures the rendered frame to a PNG and exits.
+//! captures the rendered frame to a PNG and exits. `--size` (default 1280x832) sets
+//! the logical resolution of both the window and the capture — phone-sized shots
+//! (`--size 390x844`) are how the responsive shell is verified without a device.
 //!
 //! Capture renders the whole app (3D scene + React UI) into an **offscreen image**
 //! and screenshots that image — not the OS screen or the window swapchain. That
@@ -24,10 +26,6 @@ use bevy::render::view::screenshot::{Screenshot, ScreenshotCaptured, save_to_dis
 use bevy::ui::IsDefaultUiCamera;
 use bevy_react::{ReactAppExt, ReactEvents, react_event};
 
-/// Offscreen capture resolution (physical pixels).
-const SHOT_W: u32 = 1280;
-const SHOT_H: u32 = 832;
-
 /// Bevy → React: navigate the gallery to the demo whose nav label is `label`
 /// (e.g. `"<portal>"`). The `App` looks it up in its demo tree and selects it.
 /// (`#[react_event]` derives `Serialize`/`TS` itself.)
@@ -42,6 +40,9 @@ pub fn register_bindings(app: &mut App) {
     app.add_react_event::<SelectDemo>();
 }
 
+/// The `--size` default: the desktop shell at the size every existing shot used.
+pub const DEFAULT_SIZE: (u32, u32) = (1280, 832);
+
 /// Parsed `--shoot` arguments.
 pub struct ShootConfig {
     /// The target demo's nav label (e.g. `"<portal>"`).
@@ -50,6 +51,8 @@ pub struct ShootConfig {
     pub out: PathBuf,
     /// Seconds to let the demo (and its 3D scene) settle before capturing.
     pub settle_secs: f32,
+    /// Logical resolution of the window and the offscreen capture (`--size WxH`).
+    pub size: (u32, u32),
 }
 
 /// Drives one screenshot run: nav → settle → capture → exit.
@@ -58,6 +61,8 @@ struct Shoot {
     label: String,
     out: PathBuf,
     settle: Timer,
+    /// Capture resolution in pixels (the window is sized to match, at scale 1).
+    size: (u32, u32),
     /// The offscreen target the app renders into (set in `PostStartup`).
     image: Option<Handle<Image>>,
     /// The capture has been requested (waiting on the async readback).
@@ -73,6 +78,7 @@ pub fn add_screenshot_mode(app: &mut App, config: ShootConfig) {
         label: config.label,
         out: config.out,
         settle: Timer::from_seconds(config.settle_secs, TimerMode::Once),
+        size: config.size,
         image: None,
         shot: false,
         captured: false,
@@ -90,9 +96,10 @@ fn redirect_ui_camera_to_image(
     mut shoot: ResMut<Shoot>,
     camera: Single<Entity, With<IsDefaultUiCamera>>,
 ) {
+    let (width, height) = shoot.size;
     let handle = images.add(Image::new_target_texture(
-        SHOT_W,
-        SHOT_H,
+        width,
+        height,
         TextureFormat::Rgba8UnormSrgb,
         None,
     ));

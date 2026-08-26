@@ -8,8 +8,9 @@ import {
 } from "bevy-react";
 import { BevyStyle } from "bevy-react/jsx";
 import { Typewriter } from "@/components";
-import { Colors, FontSizes } from "@/theme";
+import { Colors, Filters, FontSizes } from "@/theme";
 import { useDemoPage } from "@/explanationStore";
+import { useLayout } from "@/layoutMode";
 
 type Feature = { title: string; body: string };
 
@@ -76,12 +77,17 @@ export function Home() {
   // The landing page opts out of the explanation panel — the content area
   // then uses the full width (App.tsx drops the reserved panel padding).
   useDemoPage(null);
+  const layout = useLayout();
+  const compact = layout.mode === "compact";
+  // Explicit px clamps (not `width:"100%"` + `maxWidth`, see `layoutMode`).
+  const pageWidth = Math.min(PAGE_MAX_WIDTH, layout.contentWidth);
+  const innerWidth = pageWidth - 2 * PAGE_PADDING;
 
   return (
-    <node style={pageStyle}>
-      <Hero />
+    <node style={{ ...pageStyle, maxWidth: pageWidth }}>
+      <Hero compact={compact} width={Math.min(HERO_WIDTH, innerWidth)} />
       <Reveal delay={HERO_DONE_MS + 200}>
-        <text style={introStyle}>
+        <text style={{ ...introStyle, maxWidth: Math.min(600, innerWidth) }}>
           You write components in React/TSX and they render to native Bevy UI
           through a React Native-style bridge. State and interactions flow both
           ways, and edits hot-reload live while keeping component state.
@@ -89,7 +95,13 @@ export function Home() {
       </Reveal>
       <node style={cardsRowStyle}>
         {FEATURES.map((feature, index) => (
-          <FeatureCard key={feature.title} feature={feature} index={index} />
+          <FeatureCard
+            key={feature.title}
+            feature={feature}
+            index={index}
+            // Phones: one full-width card per row.
+            slotWidth={compact ? innerWidth : undefined}
+          />
         ))}
       </node>
       <Reveal delay={CARDS_DONE_MS}>
@@ -129,14 +141,15 @@ function Reveal({ delay, children }: PropsWithChildren<{ delay: number }>) {
 
 // The hero title mounts on the first tag (a morph's first mount never
 // animates), then dusts through TITLE_SEQUENCE step by step until it lands
-// on "bevy-react". The morph rect is FIXED-SIZE so every step's frozen
+// on "bevy-react". The morph rect is FIXED-SIZE (per viewport width: it only
+// changes with the window, never with a step) so every step's frozen
 // snapshot and live capture share one rect — a morph snapshot is
 // layout-anchored, and a size change across a swap would stretch the old
 // pixels. The glyphs are recolored by a per-step gradientMap on a NESTED
 // layer (not chained after shadow: shadow's combine, like bloom's, layers
 // the original capture back over the blurred shadow, which would discard a
 // same-chain recolor); the outer node owns the morph + drop shadow.
-function Hero() {
+function Hero({ compact, width }: { compact: boolean; width: number }) {
   const [step, setStep] = useState(0);
   const bob = useSharedValue(0);
   const glow = useSharedValue(0);
@@ -204,7 +217,7 @@ function Hero() {
       >
         <node
           style={{
-            width: 460,
+            width,
             height: 72,
             alignItems: "center",
             justifyContent: "center",
@@ -217,7 +230,9 @@ function Hero() {
             },
           }}
         >
-          <text style={titleStyle}>{title.text}</text>
+          <text style={{ ...titleStyle, fontSize: compact ? 36 : 56 }}>
+            {title.text}
+          </text>
         </node>
       </node>
       <Typewriter
@@ -235,7 +250,19 @@ function Hero() {
 // fade + rise on inline animated bindings (base style only). Hover tilts
 // via transform3d on the wrapper; gradient/shadow hover swaps snap by
 // design (no transition channel).
-function FeatureCard({ feature, index }: { feature: Feature; index: number }) {
+function FeatureCard({
+  feature,
+  index,
+  slotWidth,
+}: {
+  feature: Feature;
+  index: number;
+  /** Row slot to fill (the card takes its own wrapper padding out); default
+   * `CARD_WIDTH`. */
+  slotWidth?: number;
+}) {
+  const width =
+    slotWidth === undefined ? CARD_WIDTH : slotWidth - 2 * CARD_WRAP_PADDING;
   const enter = useSharedValue(0);
   const accent = CARD_ACCENTS[index % CARD_ACCENTS.length];
 
@@ -259,11 +286,11 @@ function FeatureCard({ feature, index }: { feature: Feature; index: number }) {
         style={{
           transform3d: { perspective: 700 },
           transition: { transform3d: { duration: 500, easing: "easeInOut" } },
-          padding: 10,
+          padding: CARD_WRAP_PADDING,
         }}
         hoverStyle={cardHoverStyle}
       >
-        <node style={{ ...cardStyle }}>
+        <node style={{ ...cardStyle, width }}>
           <text style={{ ...cardTitleStyle, color: accent }}>
             {feature.title}
           </text>
@@ -274,13 +301,20 @@ function FeatureCard({ feature, index }: { feature: Feature; index: number }) {
   );
 }
 
+const PAGE_MAX_WIDTH = 760;
+const PAGE_PADDING = 32;
+/** The hero title's morph rect width (see `Hero`), clamped to the page. */
+const HERO_WIDTH = 460;
+const CARD_WIDTH = 300;
+/** The tilt wrapper's padding around each feature card. */
+const CARD_WRAP_PADDING = 10;
+
 const pageStyle: BevyStyle = {
   flexDirection: "column",
   alignItems: "center",
   gap: 24,
-  padding: 32,
-  maxWidth: 760,
-  backdropFilter: { name: "blur", params: { radius: 20 } },
+  padding: PAGE_PADDING,
+  backdropFilter: Filters.backdrop,
   backgroundColor: "rgba(0,0,0,0.3)",
   borderRadius: 20,
 };
@@ -294,7 +328,6 @@ const heroStyle: BevyStyle = {
 const titleStyle: BevyStyle = {
   color: Colors.primary100,
   fontFamily: "MetalMania",
-  fontSize: 56,
 };
 
 const taglineStyle: BevyStyle = {
@@ -306,7 +339,6 @@ const taglineStyle: BevyStyle = {
 const introStyle: BevyStyle = {
   color: Colors.textColor100,
   fontSize: FontSizes.sm,
-  maxWidth: 600,
   textAlign: "center",
 };
 
@@ -319,7 +351,6 @@ const cardsRowStyle: BevyStyle = {
 const cardStyle: BevyStyle = {
   flexDirection: "column",
   gap: 6,
-  width: 300,
   padding: 16,
   backgroundColor: "rgba(26, 27, 38, 0.85)",
   borderRadius: 14,

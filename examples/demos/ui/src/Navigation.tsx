@@ -1,26 +1,75 @@
-import { useEffect, useState } from "react";
-import { BevyStyle } from "bevy-react/jsx";
+import { memo, useEffect, useRef, useState } from "react";
+import { BevyStyle, BevyTransition } from "bevy-react/jsx";
 import { Colors, FontSizes, Gradients, Scrollbar } from "@/theme";
-import { Button, Pinchable } from "@/components";
+import { Button, CloseIcon, IconButton, Pinchable } from "@/components";
+import { NAV_WIDTH } from "./layoutMode";
 import { DEMOS, type DemoItem } from "./demos";
 import { useDemosStore } from "./demosStore";
 
-export function Navigation() {
+type NavigationProps = {
+  /** Compact shell: the nav is an overlay drawer driven by `open`. */
+  compact: boolean;
+  open: boolean;
+  onClose: () => void;
+};
+
+/**
+ * The gallery nav. Regular shell: the left column, sliding in once at
+ * startup. Compact shell: the same column as an overlay drawer — off-screen
+ * until the top bar's menu button opens it, closed by the × button, the
+ * scrim (in `App`), or selecting a page (the page switches at once and the
+ * drawer slides out over it).
+ */
+export const Navigation = memo(function Navigation({
+  compact,
+  open,
+  onClose,
+}: NavigationProps) {
   const { selectedDemo, setSelectedDemo } = useDemosStore();
   const entered = useSlideIn();
+  const shown = compact ? open : entered;
+
+  // A breakpoint crossing (desktop resize, phone rotation) swaps the nav
+  // between the row flow and the overlay: the commit that swaps must SNAP
+  // the transform — easing it would leave an empty nav-wide strip (→ regular)
+  // or a slide-out over already full-width content (→ compact).
+  const prevCompact = useRef(compact);
+  const crossing = prevCompact.current !== compact;
+  useEffect(() => {
+    prevCompact.current = compact;
+  }, [compact]);
+
+  const select = (demo: DemoItem) => {
+    setSelectedDemo(demo);
+    if (compact) onClose();
+  };
+
+  // `opacity` only in regular mode: its presence promotes the subtree to a
+  // layer, and a closed (off-screen) drawer would keep re-capturing on every
+  // Title morph / hover for nothing.
+  const transition: BevyTransition = crossing
+    ? {}
+    : compact
+      ? { transform: { duration: DRAWER_MS, easing: "easeOut" } }
+      : {
+          opacity: { duration: 800, easing: "easeOut" },
+          transform: { duration: 800, easing: "easeOut" },
+        };
 
   return (
     <node
       style={{
         ...navStyle,
-        opacity: entered ? 1 : 0,
-        transform: { translateX: entered ? 0 : -NAV_SLIDE_PX },
-        transition: {
-          opacity: { duration: 800, easing: "easeOut" },
-          transform: { duration: 800, easing: "easeOut" },
-        },
+        ...(compact ? drawerStyle : { opacity: entered ? 1 : 0 }),
+        transform: { translateX: shown ? 0 : -NAV_SLIDE_PX },
+        transition,
       }}
     >
+      {compact && (
+        <IconButton size={32} style={closeStyle} onClick={onClose}>
+          <CloseIcon size={20} />
+        </IconButton>
+      )}
       <image src="bevy-react-logo.png" style={{ width: 150 }} />
       <Title />
       <node style={itemsStyle} scrollStep={40}>
@@ -29,13 +78,13 @@ export function Navigation() {
             key={index}
             item={demo}
             selectedItem={selectedDemo}
-            onSelected={setSelectedDemo}
+            onSelected={select}
           />
         ))}
       </node>
     </node>
   );
-}
+});
 
 // The sidebar's startup entrance: the first commit must reach Bevy *before*
 // the settled style, or the transition arms on a node it has never seen and
@@ -52,7 +101,9 @@ function useSlideIn() {
 
 // How far left the sidebar starts — its own width plus enough slack to carry
 // the drop shadow off-screen with it.
-const NAV_SLIDE_PX = 260;
+const NAV_SLIDE_PX = NAV_WIDTH + 40;
+// Drawer open/close slide (compact shell); the 800ms is the desktop entrance.
+const DRAWER_MS = 250;
 
 const title = "bevy-react";
 const titleDelay = 7000;
@@ -250,7 +301,7 @@ function ItemButton({
 const navStyle: BevyStyle = {
   flexDirection: "column",
   alignItems: "center",
-  width: 220,
+  width: NAV_WIDTH,
   height: "100%",
   gap: 8,
   padding: 10,
@@ -258,6 +309,20 @@ const navStyle: BevyStyle = {
   backgroundGradient: Gradients.navBackdrop,
   zIndex: 100,
   boxShadow: { blurRadius: 15, spreadRadius: 0, color: Colors.shadow100 },
+};
+
+// Compact: out of the row flow, pinned to the left edge over the content.
+const drawerStyle: BevyStyle = {
+  positionType: "absolute",
+  top: 0,
+  bottom: 0,
+  left: 0,
+};
+
+const closeStyle: BevyStyle = {
+  positionType: "absolute",
+  top: 6,
+  right: 6,
 };
 
 const itemsStyle: BevyStyle = {

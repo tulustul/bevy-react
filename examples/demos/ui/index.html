@@ -9,12 +9,19 @@
       body {
         margin: 0;
         height: 100%;
+        /* Phones: follow the browser chrome as the URL bar collapses
+           (dvh), and keep pull-to-refresh / rubber-banding off the page. */
+        height: 100dvh;
         background: #14151a;
         overflow: hidden;
+        overscroll-behavior: none;
       }
       canvas {
         display: block;
         outline: none;
+        /* The app owns every gesture: without this a phone browser turns
+           touch drags into page scroll/pinch-zoom and double-taps into zoom. */
+        touch-action: none;
       }
     </style>
   </head>

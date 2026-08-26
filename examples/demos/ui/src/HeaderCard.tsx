@@ -3,7 +3,7 @@ import { BevyStyle } from "bevy-react/jsx";
 import { InfoBody } from "@/components/docs";
 import { Colors, Filters, FontSizes, Gradients } from "@/theme";
 import { ExplanationData, useExplanationStore } from "./explanationStore";
-import { useWindowSize } from "./useWindowSize";
+import { clampContentWidth, useLayout } from "./layoutMode";
 import { HeaderText } from "./components";
 
 /**
@@ -15,7 +15,7 @@ import { HeaderText } from "./components";
  */
 export function HeaderCard() {
   const page = useExplanationStore((s) => s.pageDefault);
-  const win = useWindowSize();
+  const layout = useLayout();
   if (page === null) return null;
 
   // The responsive width is computed in JS, NOT with `width:"100%"` +
@@ -24,9 +24,9 @@ export function HeaderCard() {
   // the card (or its wrapper — moving the clamp up just moves the stale
   // height up) then under-reserves and the page content overlaps it. See the
   // TODO "wrapped text under-measures" bug; an explicit pixel width sidesteps
-  // the whole class.
-  const avail = win ? win.width - NAV_WIDTH - CONTENT_PADDING_X : MAX_WIDTH;
-  const width = Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, avail));
+  // the whole class. (`layout.contentWidth` already subtracts the nav column
+  // — 0 in the compact shell, where the drawer overlays — and the padding.)
+  const width = clampContentWidth(layout, MIN_WIDTH, MAX_WIDTH);
 
   // Keyed by title so the collapsed state resets to the page's own default on
   // every page switch (while surviving hot reloads, which keep the title).
@@ -56,11 +56,8 @@ function Card({ page, width }: { page: ExplanationData; width: number }) {
 }
 
 const MAX_WIDTH = 780;
-const MIN_WIDTH = 320;
-/** Keep in sync with `Navigation.tsx`'s nav column width. */
-const NAV_WIDTH = 220;
-/** Keep in sync with `App.tsx` `contentInnerStyle` horizontal padding. */
-const CONTENT_PADDING_X = 48;
+/** Safety floor only — bites below ~330px viewports (360 is the supported min). */
+const MIN_WIDTH = 280;
 
 const cardStyle: BevyStyle = {
   flexDirection: "column",

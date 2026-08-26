@@ -5,8 +5,9 @@ import { Button, HeaderText } from "@/components";
 import { InfoBody } from "@/components/docs";
 import { Colors, FontSizes, Gradients, Scrollbar } from "@/theme";
 import { useExplanationStore } from "./explanationStore";
-import { useWindowSize } from "./useWindowSize";
+import { useLayout } from "./layoutMode";
 
+/** Regular-shell panel width; the compact shell uses the full width minus margins. */
 const MODAL_W = 560;
 const MARGIN = 8;
 /** Keep at least the title bar reachable when dragging toward the bottom. */
@@ -32,7 +33,8 @@ export function ExampleModal() {
   const deselect = useExplanationStore((s) => s.deselect);
   const open = selected !== null;
 
-  const win = useWindowSize();
+  const { win, mode } = useLayout();
+  const modalW = mode === "compact" ? win.width - 2 * MARGIN : MODAL_W;
   // null = "not dragged yet": follow the centered default position.
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
   const lastClient = useRef({ x: 0, y: 0 });
@@ -52,21 +54,27 @@ export function ExampleModal() {
     });
   }, [open, deselect]);
 
-  const clampPos = (p: { left: number; top: number }) => {
-    if (!win) return p;
-    return {
-      left: clamp(
-        p.left,
-        MARGIN,
-        Math.max(MARGIN, win.width - MODAL_W - MARGIN),
-      ),
-      top: clamp(p.top, MARGIN, Math.max(MARGIN, win.height - TITLE_REACH)),
-    };
-  };
+  const clampPos = (p: { left: number; top: number }) => ({
+    left: clamp(p.left, MARGIN, Math.max(MARGIN, win.width - modalW - MARGIN)),
+    top: clamp(p.top, MARGIN, Math.max(MARGIN, win.height - TITLE_REACH)),
+  });
 
-  const defaultPos = win
-    ? clampPos({ left: (win.width - MODAL_W) / 2, top: win.height * 0.1 })
-    : { left: 240, top: 80 };
+  const defaultPos = clampPos({
+    left: (win.width - modalW) / 2,
+    top: win.height * 0.1,
+  });
+
+  // A dragged position is clamped at drag time only; a resize or breakpoint
+  // crossing (the width changes with the mode) could otherwise leave the
+  // panel — its own only drag surface — entirely off-screen.
+  useEffect(() => {
+    setPos((prev) => {
+      if (!prev) return prev;
+      const next = clampPos(prev);
+      return next.left === prev.left && next.top === prev.top ? prev : next;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- clampPos closes over exactly these
+  }, [win.width, win.height, modalW]);
   const p = pos ?? defaultPos;
 
   const onPointerDown = (e: PointerEventData) => {
@@ -96,7 +104,7 @@ export function ExampleModal() {
       >
         {selected && (
           <node
-            style={{ ...panelStyle, left: p.left, top: p.top }}
+            style={{ ...panelStyle, width: modalW, left: p.left, top: p.top }}
             onPointerDown={onPointerDown}
             onPointerMove={onPointerMove}
           >
@@ -174,7 +182,6 @@ const carrierStyle: BevyStyle = {
 
 const panelStyle: BevyStyle = {
   positionType: "absolute",
-  width: MODAL_W,
   flexDirection: "column",
   alignItems: "stretch",
   backgroundColor: Colors.surface200,

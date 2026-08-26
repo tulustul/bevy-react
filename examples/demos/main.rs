@@ -62,7 +62,6 @@ fn main() {
 fn main() {
     use bevy::window::WindowResolution;
     use bevy_react::ReactAppExt;
-    use screenshot::ShootConfig;
 
     // `cargo run -p bevy-react --example demos -- --export-bindings <path>` writes the TypeScript
     // bindings instead of running the app, keeping `ui/src/bevy.ts` in sync
@@ -81,24 +80,12 @@ fn main() {
         return;
     }
 
-    // `--shoot <demo-label> <out.png> [settle-secs]` navigates the gallery to a
-    // demo, lets it settle, captures the Bevy framebuffer to a PNG, and exits (see
-    // `screenshot`). A fixed window size + no hot reload keep the shot deterministic.
-    let shoot_args: Vec<String> = std::env::args().skip(1).collect();
-    let shoot = (shoot_args.first().map(String::as_str) == Some("--shoot")).then(|| ShootConfig {
-        label: shoot_args
-            .get(1)
-            .expect("--shoot requires a <demo-label>")
-            .clone(),
-        out: shoot_args
-            .get(2)
-            .expect("--shoot requires an <out.png> path")
-            .into(),
-        settle_secs: shoot_args
-            .get(3)
-            .and_then(|s| s.parse().ok())
-            .unwrap_or(3.0),
-    });
+    // `--shoot <demo-label> <out.png> [settle-secs] [--size WxH]` navigates the
+    // gallery to a demo, lets it settle, captures the Bevy framebuffer to a PNG, and
+    // exits (see `screenshot`). A fixed window size + no hot reload keep the shot
+    // deterministic; `--size` (default 1280x832) picks the logical resolution — the
+    // way to look at the app at phone sizes without a phone.
+    let shoot = parse_shoot_args(std::env::args().skip(1));
 
     let Some(cfg) = shoot else {
         run();
@@ -106,10 +93,61 @@ fn main() {
     };
 
     let mut window = window();
-    window.resolution = WindowResolution::new(1280, 832);
+    window.resolution = WindowResolution::new(cfg.size.0, cfg.size.1);
     let mut app = build_app(window, /* hot_reload */ false);
     screenshot::add_screenshot_mode(&mut app, cfg);
     app.run();
+}
+
+/// Parse `--shoot <label> <out.png> [settle-secs] [--size WxH]`; `None` when the
+/// first argument isn't `--shoot`. `--size` may sit anywhere after `--shoot`.
+/// Anything unrecognized panics rather than being absorbed: a mistyped
+/// `--size=…` silently producing a desktop-sized shot would defeat the point.
+#[cfg(not(target_arch = "wasm32"))]
+fn parse_shoot_args(mut args: impl Iterator<Item = String>) -> Option<screenshot::ShootConfig> {
+    if args.next().as_deref() != Some("--shoot") {
+        return None;
+    }
+    let mut positional: Vec<String> = Vec::new();
+    let mut size = screenshot::DEFAULT_SIZE;
+    while let Some(arg) = args.next() {
+        if arg == "--size" {
+            let spec = args.next().expect("--size requires a WxH value");
+            size = parse_size(&spec)
+                .unwrap_or_else(|| panic!("--size expects WxH (e.g. 390x844), got {spec:?}"));
+        } else if arg.starts_with("--") {
+            panic!("unknown --shoot option {arg:?} (expected `--size WxH`)");
+        } else {
+            positional.push(arg);
+        }
+    }
+    let mut positional = positional.into_iter();
+    let label = positional.next().expect("--shoot requires a <demo-label>");
+    let out = positional
+        .next()
+        .expect("--shoot requires an <out.png> path")
+        .into();
+    let settle_secs = positional.next().map_or(3.0, |s| {
+        s.parse()
+            .unwrap_or_else(|_| panic!("--shoot settle-secs must be a number, got {s:?}"))
+    });
+    if let Some(extra) = positional.next() {
+        panic!("unexpected --shoot argument {extra:?}");
+    }
+    Some(screenshot::ShootConfig {
+        label,
+        out,
+        settle_secs,
+        size,
+    })
+}
+
+/// `"390x844"` → `(390, 844)`; `None` on anything else (zero sizes included).
+#[cfg(not(target_arch = "wasm32"))]
+fn parse_size(spec: &str) -> Option<(u32, u32)> {
+    let (w, h) = spec.split_once(['x', 'X'])?;
+    let (w, h) = (w.trim().parse::<u32>().ok()?, h.trim().parse::<u32>().ok()?);
+    (w > 0 && h > 0).then_some((w, h))
 }
 
 /// Generate a small plaid texture CPU-side and register it as `"checker"` in
@@ -279,4 +317,71 @@ fn register_react_bindings(app: &mut App) {
     scenes::bouncing_ball::register_bindings(app);
     scenes::crowded_cubes::register_bindings(app);
     scenes::monitor::register_bindings(app);
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod tests {
+    use super::*;
+
+    fn args(list: &[&str]) -> impl Iterator<Item = String> {
+        list.iter()
+            .map(|s| s.to_string())
+            .collect::<Vec<_>>()
+            .into_iter()
+    }
+
+    #[test]
+    fn shoot_defaults_to_desktop_size() {
+        let cfg = parse_shoot_args(args(&["--shoot", "Layers", "out.png"])).unwrap();
+        assert_eq!(cfg.label, "Layers");
+        assert_eq!(cfg.out, PathBuf::from("out.png"));
+        assert_eq!(cfg.settle_secs, 3.0);
+        assert_eq!(cfg.size, screenshot::DEFAULT_SIZE);
+    }
+
+    #[test]
+    #[should_panic(expected = "unknown --shoot option")]
+    fn shoot_rejects_unknown_flags() {
+        parse_shoot_args(args(&["--shoot", "Home", "o.png", "--size=390x844"]));
+    }
+
+    #[test]
+    #[should_panic(expected = "settle-secs must be a number")]
+    fn shoot_rejects_bad_settle() {
+        parse_shoot_args(args(&["--shoot", "Home", "o.png", "soon"]));
+    }
+
+    #[test]
+    #[should_panic(expected = "unexpected --shoot argument")]
+    fn shoot_rejects_extra_positionals() {
+        parse_shoot_args(args(&["--shoot", "Home", "o.png", "2", "extra"]));
+    }
+
+    #[test]
+    fn shoot_size_flag_anywhere_after_shoot() {
+        let cfg = parse_shoot_args(args(&[
+            "--shoot", "--size", "390x844", "Home", "o.png", "1.5",
+        ]))
+        .unwrap();
+        assert_eq!(cfg.size, (390, 844));
+        assert_eq!(cfg.settle_secs, 1.5);
+        let cfg =
+            parse_shoot_args(args(&["--shoot", "Home", "o.png", "--size", "844X390"])).unwrap();
+        assert_eq!(cfg.size, (844, 390));
+        assert_eq!(cfg.settle_secs, 3.0);
+    }
+
+    #[test]
+    fn not_a_shoot_invocation() {
+        assert!(parse_shoot_args(args(&[])).is_none());
+        assert!(parse_shoot_args(args(&["--export-bindings", "x.ts"])).is_none());
+    }
+
+    #[test]
+    fn size_spec_parsing() {
+        assert_eq!(parse_size("360x640"), Some((360, 640)));
+        assert_eq!(parse_size("0x640"), None);
+        assert_eq!(parse_size("360"), None);
+        assert_eq!(parse_size("ax640"), None);
+    }
 }

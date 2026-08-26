@@ -18,6 +18,8 @@ use bevy_react::js_thread::spawn_js_thread;
 use bevy_react::protocol::{op::Op, outbound::Outbound, outbound::UiEvent};
 use bevy_react::{RawRequest, ReactMessage};
 
+mod common;
+
 fn example_bundle() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../examples/demos/ui/dist/app.js")
 }
@@ -92,10 +94,11 @@ fn devtools_panel_round_trip() {
     // the panel's own commits).
     let (flush_devtools_tx, flush_devtools_rx) = crossbeam_channel::unbounded();
     let (emit_tx, emit_rx) = crossbeam_channel::unbounded::<ReactMessage>();
-    let (request_tx, _request_rx) = crossbeam_channel::unbounded::<RawRequest>();
+    let (request_tx, request_rx) = crossbeam_channel::unbounded::<RawRequest>();
     // Held for the duration so animation commands go nowhere harmlessly.
     let (anim_tx, _anim_rx) = crossbeam_channel::unbounded();
     let (outbound_tx, outbound_rx) = tokio::sync::mpsc::unbounded_channel::<Outbound>();
+    common::answer_window_size(request_rx, outbound_tx.clone());
     // Held for the duration: dropping the reload sender would look like shutdown.
     let (_reload_tx, reload_rx) = tokio::sync::mpsc::unbounded_channel::<()>();
 
