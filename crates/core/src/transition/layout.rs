@@ -39,8 +39,8 @@
 use bevy::ecs::entity::EntityHashMap;
 use bevy::math::Affine2;
 use bevy::prelude::*;
-use bevy::ui::UiGlobalTransform;
 use bevy::ui::ui_surface::UiSurface;
+use bevy::ui::{ComputedNode, UiGlobalTransform};
 
 use super::channels::ProgressChannel;
 use super::spec::ChannelTransition;
@@ -75,9 +75,92 @@ pub struct LayoutChannel {
     /// runner in one `Update` call, so the settle frame's rect step arrives
     /// with `adopt == false` — this grace flag adopts it too.
     adopt_tail: bool,
+    shared: SharedMode,
+}
+
+/// The layout channel's shared-element mode (see [`LayoutChannel::seed_shared`]).
+#[derive(Default, Clone, Copy, PartialEq, Eq)]
+enum SharedMode {
+    #[default]
+    Off,
+    /// The seed frame: the full seed rect is shown (position AND size, the
+    /// latter through the FLIP scale) — the frame before real layout can
+    /// have the seed size.
+    SeedFrame,
+    /// In flight: position eases toward a target that MOVES with the live
+    /// layout (the size flight re-flows it every frame), size is whatever
+    /// layout measured — translate-only, no scale.
+    TranslateOnly,
 }
 
 impl LayoutChannel {
+    /// A shared-element first sight: instead of adopting, show `seed` (the
+    /// outgoing node's rect in this node's parent space) and ease to the
+    /// natural `measured` rect. The seed frame renders the seed rect
+    /// outright via the FLIP scale — there is never an empty frame; from the
+    /// next frame the flight is translate-only, the size being real
+    /// layout's (the size flight eases it in px). A seed within
+    /// [`LAYOUT_SNAP_EPSILON`] of the natural rect adopts silently (a
+    /// reload re-pairs every node with its old self).
+    pub fn seed_shared(
+        &mut self,
+        seed: LayoutRect,
+        measured: LayoutRect,
+        spec: &ChannelTransition,
+    ) {
+        self.seeded = true;
+        self.adopt_tail = false;
+        let within_epsilon = (0..4).all(|i| (seed[i] - measured[i]).abs() < LAYOUT_SNAP_EPSILON);
+        // The to-zero rule of `drive`: a 0×0 natural rect (an image whose
+        // texture isn't resident yet) has no pixels to fly to.
+        let to_zero = measured[2] <= 0.0 || measured[3] <= 0.0;
+        if within_epsilon || to_zero {
+            self.channel.init(measured);
+            self.shared = SharedMode::Off;
+            return;
+        }
+        self.channel.init(seed);
+        self.channel.arm(measured, spec);
+        self.shared = SharedMode::SeedFrame;
+    }
+
+    /// Whether a shared flight is in progress (the size channel may own the
+    /// rect meanwhile — that is NOT an adopt).
+    pub fn shared_active(&self) -> bool {
+        self.shared != SharedMode::Off
+    }
+
+    /// The shared-flight step: move the target with the live layout (no
+    /// restart — the lerp samples seed → target, so a moving target is
+    /// followed seamlessly), tick, and show the eased position with the
+    /// seed size on the seed frame or layout's size afterwards. Settling
+    /// (or a snap) leaves shared mode.
+    fn drive_shared(&mut self, measured: LayoutRect, dt: f32) -> Option<LayoutRect> {
+        if measured != self.channel.target {
+            self.channel.target = measured;
+        }
+        let seed_frame = self.shared == SharedMode::SeedFrame;
+        self.shared = SharedMode::TranslateOnly;
+        match self.channel.tick(dt) {
+            Some(false) => {}
+            _ => {
+                // Settled. The size flight settles a frame later (its
+                // runners tick in Update, after this frame's arm): the
+                // grace flag adopts that last step instead of re-arming a
+                // `layout` ease for it.
+                self.shared = SharedMode::Off;
+                self.adopt_tail = true;
+                return None;
+            }
+        }
+        let c = self.channel.current;
+        Some(if seed_frame {
+            c
+        } else {
+            [c[0], c[1], measured[2], measured[3]]
+        })
+    }
+
     /// Advance toward `measured` (this frame's pristine layout rect). Returns
     /// the rect to *show* this frame, or `None` when there is nothing to apply
     /// (settled, or a snap). Rules, in order:
@@ -97,6 +180,9 @@ impl LayoutChannel {
         adopt: bool,
         dt: f32,
     ) -> Option<LayoutRect> {
+        if self.shared != SharedMode::Off {
+            return self.drive_shared(measured, dt);
+        }
         if !self.seeded || adopt || self.adopt_tail {
             self.channel.init(measured);
             self.seeded = true;
@@ -165,6 +251,18 @@ impl LayoutDelta {
     }
 }
 
+/// The per-node query of [`drive_layout_transitions`]: the transitioning
+/// entity, its input + state, its animation bindings (the adopt gate), and
+/// its `ComputedNode` (the scale factor a shared size flight writes logical
+/// px through).
+type LayoutNodeQuery = (
+    Entity,
+    &'static TransitionInput,
+    &'static mut TransitionState,
+    Option<&'static AnimatedNode>,
+    Option<&'static ComputedNode>,
+);
+
 /// Measure, ease, and compose every `transition: { layout }` node's delta
 /// into its subtree's `UiGlobalTransform`s. Runs after `UiSystems::Layout`
 /// (this frame's pristine rects + globals) and before `PostLayout` / the
@@ -180,20 +278,29 @@ impl LayoutDelta {
 pub fn drive_layout_transitions(
     time: Res<Time>,
     mut ui_surface: ResMut<UiSurface>,
-    mut states: Query<(
-        Entity,
-        &TransitionInput,
-        &mut TransitionState,
-        Option<&AnimatedNode>,
-    )>,
+    mut states: Query<LayoutNodeQuery>,
     parents: Query<&ChildOf>,
     children: Query<&Children>,
     mut globals: Query<&mut UiGlobalTransform>,
 ) {
     let dt = time.delta_secs();
     let mut deltas: EntityHashMap<LayoutDelta> = EntityHashMap::default();
-    for (entity, input, mut state, anim) in &mut states {
-        let Some(spec) = input.spec.for_layout() else {
+    // A singular frame (a `transform: { scale: 0 }` ancestor) has no local
+    // frame to recover; its subtree is invisible anyway.
+    let inverse = |a: Affine2| (a.matrix2.determinant().abs() > f32::EPSILON).then(|| a.inverse());
+    for (entity, input, mut state, anim, computed) in &mut states {
+        // A shared flight drives the rect with the `sharedElement` spec
+        // captured at the seed (a variant swap can't drop it mid-flight),
+        // even without a `layout` entry; once it settles the regular rule
+        // stands.
+        let shared_spec = state.shared.spec.clone();
+        let shared_spec = shared_spec.as_ref();
+        let spec = input.spec.for_layout().or_else(|| {
+            (state.shared.rect.is_some() || state.layout.shared_active())
+                .then_some(shared_spec)
+                .flatten()
+        });
+        let Some(spec) = spec else {
             // Unset (mid-flight or not): forget everything, bevy's own value
             // stands. `seeded` is the one-and-only armed flag (a runner
             // exists only after seeding).
@@ -215,11 +322,57 @@ pub fn drive_layout_transitions(
             size.x,
             size.y,
         ];
+        // A shared-element seed (parked by `drive_transitions` this frame):
+        // convert the outgoing node's root-space rect into this node's
+        // parent layout space — the offset from this node's pristine center
+        // through the parent's inverse frame, the size through its scale —
+        // seed the channel, and arm the measured-px size flight from the
+        // seed's size to the natural one just measured.
+        if let Some(rect) = state.shared.rect.take()
+            && let Some(shared) = shared_spec
+            && let Ok(own) = globals.get(entity).map(|g| **g)
+        {
+            let parent = parents
+                .get(entity)
+                .ok()
+                .and_then(|c| globals.get(c.parent()).ok())
+                .map(|g| **g)
+                .unwrap_or(Affine2::IDENTITY);
+            if let Some(parent_inverse) = inverse(parent) {
+                let offset = parent_inverse.matrix2 * (rect.center - own.translation);
+                let parent_scale = Vec2::new(
+                    parent.matrix2.x_axis.length(),
+                    parent.matrix2.y_axis.length(),
+                );
+                let seed = [
+                    measured[0] + offset.x,
+                    measured[1] + offset.y,
+                    rect.size.x / parent_scale.x,
+                    rect.size.y / parent_scale.y,
+                ];
+                state.layout.seed_shared(seed, measured, shared);
+                // A `{ animated }` binding on a `Node` field owns the size
+                // (bindings win, as everywhere): no size flight then.
+                if !anim.is_some_and(|a| a.0.has_node_props()) {
+                    let inverse_scale_factor =
+                        computed.map(|c| c.inverse_scale_factor).unwrap_or(1.0);
+                    state.arm_shared_size(
+                        [seed[2], seed[3]],
+                        [measured[2], measured[3]],
+                        inverse_scale_factor,
+                        shared,
+                    );
+                }
+            }
+        }
         // The node's OWN layout writers are the one cause the engine can
         // attribute: its `size` channel, or a `{ animated }` binding on a
         // `Node` field (width/height/left/top/…). Either owns the rect
-        // frame-by-frame, so the layout channel adopts instead of chasing.
-        let adopt = state.size_in_flight() || anim.is_some_and(|a| a.0.has_node_props());
+        // frame-by-frame, so the layout channel adopts instead of chasing —
+        // except during a shared flight, whose size ease is the flight's
+        // own (the channel goes translate-only instead).
+        let adopt = (state.size_in_flight() && !state.layout.shared_active())
+            || anim.is_some_and(|a| a.0.has_node_props());
         if let Some(shown) = state.layout.drive(measured, spec, adopt, dt) {
             deltas.insert(entity, LayoutDelta::between(shown, measured));
         }
@@ -237,10 +390,6 @@ pub fn drive_layout_transitions(
         .copied()
         .filter(|&e| !has_animating_ancestor(e))
         .collect();
-
-    // A singular frame (a `transform: { scale: 0 }` ancestor) has no local
-    // frame to recover; its subtree is invisible anyway.
-    let inverse = |a: Affine2| (a.matrix2.determinant().abs() > f32::EPSILON).then(|| a.inverse());
 
     // (entity, parent pristine global INVERSE, parent composed global)
     let mut stack: Vec<(Entity, Affine2, Affine2)> = Vec::new();

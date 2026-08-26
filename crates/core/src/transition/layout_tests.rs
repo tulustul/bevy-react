@@ -165,7 +165,7 @@ fn layout_channel_reset_reseeds() {
 // --- System tests: real bevy_ui layout, observed through `UiGlobalTransform` ---
 
 use super::layout::drive_layout_transitions;
-use bevy::math::Affine2;
+use bevy::math::{Affine2, Mat2};
 use bevy::ui::ui_surface::UiSurface;
 use bevy::ui::{ComputedNode, UiGlobalTransform};
 use std::time::Duration;
@@ -594,5 +594,219 @@ fn children_ride_translation_but_not_scale() {
         gc.translation.x,
         gb.translation.x - 75.0,
         "C at its final offset"
+    );
+}
+
+// --- Shared-element flights: seeded first sight, observed through real layout ---
+
+use super::shared::{SharedRect, SharedSeed};
+
+/// [`layout_app`] plus `drive_transitions` in `Update` (the seed consumer
+/// and the size channels' writer).
+fn shared_app() -> App {
+    let mut app = layout_app();
+    app.init_resource::<crate::layer::LayerContentDirt>();
+    app.add_systems(Update, drive_transitions);
+    app
+}
+
+fn shared_spec(secs: f32) -> TransitionInput {
+    TransitionInput {
+        spec: Transition {
+            shared_element: Some(timing(secs, Easing::Linear)),
+            ..Default::default()
+        },
+        width: Some(Length::Px(200.0)),
+        height: Some(Length::Px(50.0)),
+        ..Default::default()
+    }
+}
+
+fn seed(center: Vec2, size: Vec2) -> SharedSeed {
+    SharedSeed {
+        state: Box::new(TransitionState::default()),
+        rect: SharedRect { center, size },
+    }
+}
+
+fn node_size(app: &App, e: Entity) -> (Val, Val) {
+    let n = app.world().entity(e).get::<Node>().unwrap();
+    (n.width, n.height)
+}
+
+/// A seeded incoming node (natural rect: 200×50 at the row's start, center
+/// `(100, 25)`; seed: 100×50 centered at `(300, 50)`) shows the SEED rect on
+/// its first frame — the position by translation, the size by the FLIP
+/// scale (no empty frame) — then flies: the size through real layout in px
+/// (the `Node` fields ease from the seed's measured size to the natural
+/// one), the position translate-only against the moving layout, and settle
+/// restores the authored `Node` values with no further writes.
+#[test]
+fn shared_seed_shows_seed_rect_on_frame_zero_then_flies_through_real_layout() {
+    let mut app = shared_app();
+    let root = app.world_mut().spawn(root_row()).id();
+    let b = app
+        .world_mut()
+        .spawn((
+            Node {
+                width: Val::Px(200.0),
+                height: Val::Px(50.0),
+                ..Default::default()
+            },
+            ChildOf(root),
+            shared_spec(1.0),
+            TransitionState::default(),
+            seed(Vec2::new(300.0, 50.0), Vec2::new(100.0, 50.0)),
+        ))
+        .id();
+    step(&mut app, 0.0);
+    let g = global(&app, b);
+    assert_eq!(
+        g.translation,
+        Vec2::new(300.0, 50.0),
+        "frame 0: seed center"
+    );
+    assert!(
+        (g.matrix2.x_axis.x - 0.5).abs() < 1e-6 && (g.matrix2.y_axis.y - 1.0).abs() < 1e-6,
+        "frame 0: seed size via FLIP scale, got {:?}",
+        g.matrix2
+    );
+    assert!(
+        app.world().entity(b).get::<SharedSeed>().is_none(),
+        "seed consumed"
+    );
+
+    step(&mut app, 0.5);
+    assert_eq!(
+        node_size(&app, b),
+        (Val::Px(150.0), Val::Px(50.0)),
+        "halfway: width flies in px through real layout"
+    );
+    let g = global(&app, b);
+    // Laid out at 150 wide → natural center x = 75; halfway between the
+    // seed (300) and that moving target.
+    assert!(
+        (g.translation.x - 187.5).abs() < 1e-3 && (g.translation.y - 37.5).abs() < 1e-3,
+        "halfway: translate-only against the live layout, got {:?}",
+        g.translation
+    );
+    assert_eq!(
+        g.matrix2,
+        Mat2::IDENTITY,
+        "no scale once real layout owns the size"
+    );
+
+    step(&mut app, 1.0);
+    assert_eq!(
+        node_size(&app, b),
+        (Val::Px(200.0), Val::Px(50.0)),
+        "settle restores the authored size"
+    );
+    assert_eq!(global(&app, b).translation, Vec2::new(100.0, 25.0));
+    step(&mut app, 0.016);
+    assert!(
+        !app.world().resource::<Written>().0.contains(&b),
+        "settled: no global-transform writes"
+    );
+    assert_eq!(node_size(&app, b), (Val::Px(200.0), Val::Px(50.0)));
+}
+
+/// A seed rect within the snap epsilon of the natural rect (a reload
+/// re-pairs every node with its old self) is a no-op: nothing arms.
+#[test]
+fn shared_seed_within_epsilon_is_a_silent_adopt() {
+    let mut app = shared_app();
+    let root = app.world_mut().spawn(root_row()).id();
+    let b = app
+        .world_mut()
+        .spawn((
+            Node {
+                width: Val::Px(200.0),
+                height: Val::Px(50.0),
+                ..Default::default()
+            },
+            ChildOf(root),
+            shared_spec(1.0),
+            TransitionState::default(),
+            seed(Vec2::new(100.2, 25.0), Vec2::new(200.0, 50.0)),
+        ))
+        .id();
+    step(&mut app, 0.0);
+    assert_eq!(
+        global(&app, b),
+        Affine2::from_translation(Vec2::new(100.0, 25.0))
+    );
+    step(&mut app, 0.5);
+    assert!(!app.world().resource::<Written>().0.contains(&b));
+    assert_eq!(node_size(&app, b), (Val::Px(200.0), Val::Px(50.0)));
+}
+
+/// A seed against a 0×0 natural rect (an image whose texture isn't resident
+/// on its mount frame) adopts silently — no singular scale, no size flight.
+#[test]
+fn shared_seed_against_zero_natural_rect_adopts() {
+    let mut ch = LayoutChannel::default();
+    let spec = timing(1.0, Easing::Linear);
+    ch.seed_shared([300.0, 50.0, 100.0, 50.0], [100.0, 25.0, 0.0, 0.0], &spec);
+    assert!(!ch.shared_active());
+    assert_eq!(ch.drive([100.0, 25.0, 0.0, 0.0], &spec, false, 0.016), None);
+    let mut state = TransitionState::default();
+    state.arm_shared_size([100.0, 50.0], [0.0, 0.0], 1.0, &spec);
+    assert!(!state.size_in_flight(), "no size flight toward 0px");
+}
+
+/// Leaving shared mode arms the adopt grace frame: the size flight settles
+/// one frame later, and that last rect step must not re-arm a `layout` ease.
+#[test]
+fn shared_flight_exit_swallows_the_size_settle_step() {
+    let mut ch = LayoutChannel::default();
+    let spec = timing(1.0, Easing::Linear);
+    ch.seed_shared(R0, R1, &spec);
+    assert!(ch.drive(R1, &spec, false, 0.5).is_some());
+    assert_eq!(ch.drive(R1, &spec, false, 1.0), None, "settled");
+    assert!(!ch.shared_active());
+    let settle_step = [R1[0] + 5.0, R1[1], R1[2] + 10.0, R1[3]];
+    assert_eq!(
+        ch.drive(settle_step, &spec, false, 0.016),
+        None,
+        "grace frame adopts"
+    );
+    assert!(!ch.in_flight());
+}
+
+/// The flight's timing is captured at the seed: a variant swap that replaces
+/// the `transition` object mid-flight (dropping `sharedElement`) neither
+/// snaps the rect nor resets the channel.
+#[test]
+fn shared_flight_survives_losing_its_spec_mid_flight() {
+    let mut app = shared_app();
+    let root = app.world_mut().spawn(root_row()).id();
+    let b = app
+        .world_mut()
+        .spawn((
+            Node {
+                width: Val::Px(200.0),
+                height: Val::Px(50.0),
+                ..Default::default()
+            },
+            ChildOf(root),
+            shared_spec(1.0),
+            TransitionState::default(),
+            seed(Vec2::new(300.0, 50.0), Vec2::new(200.0, 50.0)),
+        ))
+        .id();
+    step(&mut app, 0.0);
+    assert_eq!(global(&app, b).translation, Vec2::new(300.0, 50.0));
+    // A variant swap: the input's transition no longer names sharedElement.
+    app.world_mut()
+        .entity_mut(b)
+        .get_mut::<TransitionInput>()
+        .unwrap()
+        .spec = Transition::default();
+    step(&mut app, 0.5);
+    let x = global(&app, b).translation.x;
+    assert!(
+        (x - 200.0).abs() < 1e-3,
+        "still flying from the cached spec: {x}"
     );
 }

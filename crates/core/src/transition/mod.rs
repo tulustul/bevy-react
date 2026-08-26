@@ -44,6 +44,7 @@ pub mod layout;
 mod layout_tests;
 mod scroll;
 mod shape_channel;
+pub mod shared;
 mod spec;
 #[cfg(test)]
 mod tests;
@@ -169,6 +170,10 @@ pub struct TransitionTargets {
     /// system).
     bg_gradient: Option<&'static mut BackgroundGradient>,
     border_gradient: Option<&'static mut BorderGradient>,
+    /// The shared-element seed a paired mount carries (see [`shared`]):
+    /// consumed on the first drive — every value channel starts at the
+    /// outgoing node's reading — and removed.
+    shared_seed: Option<&'static shared::SharedSeed>,
 }
 
 /// Advance every transitioning entity toward its [`TransitionInput`] target and
@@ -249,7 +254,30 @@ pub fn drive_transitions(
             // never animates in (the first REAL key change retargets).
             state.morph.key = targets.morph_input.map(|m| m.key.clone());
             state.initialized = true;
+            // A shared-element mount: overlay the outgoing node's readings
+            // on the value channels (the blocks below then retarget from
+            // there with the `sharedElement` spec), park the rect for the
+            // layout drive, and drop the seed.
+            if let Some(seed) = targets.shared_seed {
+                if let Some(spec) = input.spec.for_shared_element() {
+                    state.seed_from(seed, spec.clone());
+                }
+                commands.entity(entity).remove::<shared::SharedSeed>();
+            }
         }
+        // A shared flight in progress (see [`shared`]): the seeded channels'
+        // blocks run even without a spec of their own (`shared_spec` gates
+        // them), and on the seed frame they ARM with the `sharedElement`
+        // spec as fallback (`arm_spec`) — one timing for the whole flight.
+        // Later retargets arm with each channel's own spec only, so an
+        // unrelated hover mid-flight behaves as it always does.
+        let shared_spec = state
+            .shared
+            .active
+            .then(|| state.shared.spec.clone())
+            .flatten();
+        let shared_spec = shared_spec.as_ref();
+        let seed_frame = state.shared.seed_frame;
 
         // Imperative bindings win: skip any channel an `{ animated }` wrapper
         // drives. Which bindings park which channel is the property table's
@@ -278,8 +306,8 @@ pub fn drive_transitions(
         // static `UiTransform` from `apply_style` stands untouched. Only specified
         // channels are written (passing `None` keeps `build_ui_transform`'s scale
         // precedence intact).
-        if input.spec.for_transform().is_some() && !skip_transform {
-            let s = input.spec.for_transform();
+        if or_shared(input.spec.for_transform(), shared_spec).is_some() && !skip_transform {
+            let s = arm_spec(seed_frame, input.spec.for_transform(), shared_spec);
             let tx = input
                 .translate_x
                 .map(|t| length_to_val(state.translate_x.drive(t, s, dt)));
@@ -314,14 +342,16 @@ pub fn drive_transitions(
         // demoted/never-promoted entity has no component — nothing to drive.
         // Mid-ease unset removes the component with the promotion (snap
         // semantics, like filter's ease-to-empty).
-        if input.spec.for_transform3d().is_some()
+        if or_shared(input.spec.for_transform3d(), shared_spec).is_some()
             && !skip_transform3d
             && let Some(target) = &input.transform3d
             && let Some(t3d) = &mut targets.transform3d
         {
-            let new = state
-                .transform3d
-                .drive(target, input.spec.for_transform3d(), dt);
+            let new = state.transform3d.drive(
+                target,
+                arm_spec(seed_frame, input.spec.for_transform3d(), shared_spec),
+                dt,
+            );
             // Compare-before-write: a settled ease must not re-trigger the
             // matrix sync's change detection every frame.
             if t3d.0 != new {
@@ -334,7 +364,11 @@ pub fn drive_transitions(
         // otherwise the two writes would ping-pong the alpha channel every frame
         // and the compare-before-write guards would never settle.
         let alpha = if !skip_opacity && let Some(target) = input.opacity {
-            Some(state.opacity.drive(target, input.spec.for_opacity(), dt))
+            Some(state.opacity.drive(
+                target,
+                arm_spec(seed_frame, input.spec.for_opacity(), shared_spec),
+                dt,
+            ))
         } else {
             None
         };
@@ -345,7 +379,17 @@ pub fn drive_transitions(
         // continuous.
         let promoted = targets.promoted.is_some();
         if !skip_bg && let Some(target) = input.background_color {
-            let mut rgba = state.color.drive(target, input.spec.for_background(), dt);
+            // A seeded flight from a node with no background: fade in from
+            // the target's own hue, not from transparent black.
+            if state.shared.active && state.color.runner.is_none() && state.color.current[3] == 0.0
+            {
+                state.color.init([target[0], target[1], target[2], 0.0]);
+            }
+            let mut rgba = state.color.drive(
+                target,
+                arm_spec(seed_frame, input.spec.for_background(), shared_spec),
+                dt,
+            );
             if let Some(a) = alpha
                 && !promoted
             {
@@ -410,20 +454,46 @@ pub fn drive_transitions(
         // re-render that reset `Node` to its static style is corrected here.
         // The animations engine never writes `Node`, so no precedence check is
         // needed.
+        if state.shared.size.is_some()
+            && let Some(node) = targets.node.as_mut()
+        {
+            // The shared flight's measured-px size ease (armed by the layout
+            // drive) owns the flying dimensions until it settles them back
+            // on their authored values; the regular walk below keeps the
+            // other size channels on their targets meanwhile.
+            state.drive_shared_size(node, input, dt);
+        }
+        let flying = state.shared.size.unwrap_or_default();
         if input.spec.for_size().is_some()
             && let Some(node) = targets.node.as_mut()
         {
             let s = input.spec.for_size();
             // One drive per `size` row of the channel table: ease toward the
-            // input target and compare-write the same-named `Node` field.
-            macro_rules! size_rule {
-                ($ch:ident, $d:tt, size) => {
+            // input target and compare-write the same-named `Node` field —
+            // except an axis the shared size flight is flying right now.
+            macro_rules! size_drive {
+                ($ch:ident) => {
                     if let Some(t) = input.$ch {
                         let v = length_to_val(state.$ch.drive(t, s, dt));
                         if node.$ch != v {
                             node.$ch = v;
                         }
                     }
+                };
+            }
+            macro_rules! size_rule {
+                (width, $d:tt, size) => {
+                    if !flying.width {
+                        size_drive!(width);
+                    }
+                };
+                (height, $d:tt, size) => {
+                    if !flying.height {
+                        size_drive!(height);
+                    }
+                };
+                ($ch:ident, $d:tt, size) => {
+                    size_drive!($ch);
                 };
                 ($ch:ident, $d:tt, $other:ident) => {};
             }
@@ -442,7 +512,11 @@ pub fn drive_transitions(
             && state.filter.drive(
                 targets.filter_input.map(|f| &f.0),
                 targets.resolved_filter.as_mut().map(Mut::reborrow),
-                input.spec.resolve(ChannelId::Filter),
+                arm_spec(
+                    seed_frame,
+                    input.spec.resolve(ChannelId::Filter),
+                    shared_spec,
+                ),
                 filter_registry.as_deref(),
                 assets.as_deref(),
                 dt,
@@ -461,7 +535,11 @@ pub fn drive_transitions(
                     .resolved_backdrop
                     .as_mut()
                     .map(|m| m.reborrow().map_unchanged(|b| &mut b.0)),
-                input.spec.resolve(ChannelId::Backdrop),
+                arm_spec(
+                    seed_frame,
+                    input.spec.resolve(ChannelId::Backdrop),
+                    shared_spec,
+                ),
                 filter_registry.as_deref(),
                 assets.as_deref(),
                 dt,
@@ -489,7 +567,11 @@ pub fn drive_transitions(
                         .bg_gradient
                         .as_mut()
                         .map(|m| m.reborrow().map_unchanged(|b| &mut b.0)),
-                    input.spec.resolve(ChannelId::BackgroundGradient),
+                    arm_spec(
+                        seed_frame,
+                        input.spec.resolve(ChannelId::BackgroundGradient),
+                        shared_spec,
+                    ),
                     eased_alpha,
                     static_fold,
                     dt,
@@ -504,7 +586,11 @@ pub fn drive_transitions(
                         .border_gradient
                         .as_mut()
                         .map(|m| m.reborrow().map_unchanged(|b| &mut b.0)),
-                    input.spec.resolve(ChannelId::BorderGradient),
+                    arm_spec(
+                        seed_frame,
+                        input.spec.resolve(ChannelId::BorderGradient),
+                        shared_spec,
+                    ),
                     eased_alpha,
                     static_fold,
                     dt,
@@ -582,12 +668,47 @@ pub fn drive_transitions(
                 state.shape.drive(shape, dt);
             }
         }
+
+        // Shared flight bookkeeping: the seed frame records which channels
+        // it armed; afterwards the flight ends once none of them (nor the
+        // rect/size flights) is still easing.
+        if state.shared.seed_frame {
+            state.shared.armed = state.running_mask();
+            state.shared.seed_frame = false;
+        } else if state.shared.active && !state.seeded_still_running() {
+            state.shared.active = false;
+        }
     }
 }
 
-fn color_to_rgba(color: Color) -> [f32; 4] {
+pub(super) fn color_to_rgba(color: Color) -> [f32; 4] {
     let s = color.to_srgba();
     [s.red, s.green, s.blue, s.alpha]
+}
+
+/// A channel's own spec, else the shared-flight fallback (see
+/// [`shared`]): during a seeded flight every channel eases with the
+/// `sharedElement` spec unless it names its own.
+/// The spec a channel ARMS with: on the seed frame of a shared flight the
+/// `sharedElement` spec stands in for a missing own spec; afterwards only
+/// the channel's own spec counts (a spec-less retarget snaps, as always).
+fn arm_spec<'a>(
+    seed_frame: bool,
+    own: Option<&'a ChannelTransition>,
+    shared: Option<&'a ChannelTransition>,
+) -> Option<&'a ChannelTransition> {
+    if seed_frame {
+        or_shared(own, shared)
+    } else {
+        own
+    }
+}
+
+fn or_shared<'a>(
+    own: Option<&'a ChannelTransition>,
+    shared: Option<&'a ChannelTransition>,
+) -> Option<&'a ChannelTransition> {
+    own.or(shared)
 }
 
 fn rgba_to_color(rgba: [f32; 4]) -> Color {

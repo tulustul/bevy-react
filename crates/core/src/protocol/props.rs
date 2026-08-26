@@ -141,6 +141,15 @@ pub struct Props {
     /// `unset` (or an empty string) removes it. Bridge-owned on React nodes.
     #[serde(default)]
     pub name: Option<String>,
+    /// The element's shared-element tag (the `shared_tags` module): when a
+    /// commit unmounts a tagged node and mounts another with the same tag
+    /// (same element type, same UI root), the incoming node starts its
+    /// `transition: { sharedElement }` flight from where the outgoing one
+    /// visually was. Indexed like `name` (mount order); an empty string
+    /// means untagged. Pairing is Rust-side, so the prop crosses as a plain
+    /// cached string.
+    #[serde(default)]
+    pub shared_tag: Option<String>,
 
     // --- `portal` element attribute ---
     /// The render-target name a `portal` element displays. The reconciler stamps
@@ -231,6 +240,8 @@ pub struct PropsDirty {
     pub image: bool,
     /// `name` (the entity's Bevy `Name`) set or unset.
     pub name: bool,
+    /// `sharedTag` (the shared-element identity) set or unset.
+    pub shared_tag: bool,
     /// `target` (portal/surface binding) changed.
     pub target: bool,
     /// `shape` (an SVG shape child's folded attrs) changed.

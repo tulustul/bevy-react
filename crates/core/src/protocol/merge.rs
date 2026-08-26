@@ -152,6 +152,7 @@ impl Props {
             atlas => image,
             visual_box => image,
             name => name,
+            shared_tag => shared_tag,
             target => target,
             aria_label => aria_label,
             max_length => , // create-time only, cached for completeness
@@ -270,6 +271,10 @@ impl Props {
                 "name" => {
                     self.name = None;
                     dirty.name = true;
+                }
+                "sharedTag" => {
+                    self.shared_tag = None;
+                    dirty.shared_tag = true;
                 }
                 "target" => {
                     self.target = None;
@@ -392,6 +397,31 @@ mod tests {
         let (dirty, _) = cached.merge_delta(Props::default(), &["name".to_string()], &[]);
         assert_eq!(cached.name, None);
         assert!(dirty.name);
+    }
+
+    /// The `sharedTag` prop (shared-element identity) is retained like `name`:
+    /// a delta sets it and flags `dirty.shared_tag`; `"sharedTag"` in `unset`
+    /// clears it (flagging again) so the apply path drops the index entry.
+    #[test]
+    fn merge_delta_shared_tag_sets_and_unsets() {
+        let mut cached = props(serde_json::json!({ "sharedTag": "hero-1" }));
+        assert_eq!(cached.shared_tag.as_deref(), Some("hero-1"));
+
+        let (dirty, _) = cached.merge_delta(
+            props(serde_json::json!({ "sharedTag": "hero-2" })),
+            &[],
+            &[],
+        );
+        assert_eq!(cached.shared_tag.as_deref(), Some("hero-2"));
+        assert!(dirty.shared_tag);
+
+        let (dirty, _) = cached.merge_delta(props(serde_json::json!({ "src": "a.png" })), &[], &[]);
+        assert_eq!(cached.shared_tag.as_deref(), Some("hero-2"));
+        assert!(!dirty.shared_tag);
+
+        let (dirty, _) = cached.merge_delta(Props::default(), &["sharedTag".to_string()], &[]);
+        assert_eq!(cached.shared_tag, None);
+        assert!(dirty.shared_tag);
     }
 
     /// `unset` resets props (bools to false, options to None); `style_unset`

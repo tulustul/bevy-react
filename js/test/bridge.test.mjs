@@ -93,6 +93,16 @@ test("no Bevy-visible change returns null", () => {
   );
 });
 
+test("sharedTag crosses as a plain prop and unsets", () => {
+  assert.deepEqual(buildUpdateOp(1, { sharedTag: "a" }, { sharedTag: "b" }), {
+    op: "update",
+    id: 1,
+    props: { sharedTag: "b" },
+  });
+  const gone = buildUpdateOp(1, { sharedTag: "a" }, {});
+  assert.ok(gone.unset.includes("sharedTag"));
+});
+
 test("style diffs field-by-field", () => {
   const op = buildUpdateOp(
     1,

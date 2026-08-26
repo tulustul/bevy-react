@@ -24,6 +24,23 @@ export interface BevyAttributes {
    *  drops the `Name`. Bridge-owned: Rust code must not set `Name` on React
    *  nodes itself. */
   name?: string;
+  /** Shared-element identity. When one commit unmounts a node with this tag
+   *  and mounts another with the same tag — a different parent, a different
+   *  screen; React has no reparenting, so a "move" is always unmount + mount —
+   *  the incoming node starts where the outgoing one visually was: its
+   *  position and size (the rect it showed, mid-flight included), its
+   *  background color, opacity, transforms, filters and gradients, and eases
+   *  to its own layout and style with `transition: { sharedElement }` on the
+   *  incoming node (required — a tag without it pairs but snaps). Pairing
+   *  rules: same tag, same element type, same UI root (a `<surface>`/`<root>`
+   *  is its own), same commit; the first mounted matching outgoing node seeds
+   *  every incoming node with the tag, silently. Unique tags per screen
+   *  (`hero-${id}`) are the intent. Size flies in measured px through real
+   *  layout (the parent re-flows each frame; children stay crisp); position by
+   *  translation; the outgoing node unmounts instantly; the flight is clipped
+   *  by the new parent's overflow like any layout transition. A `""` is
+   *  untagged. */
+  sharedTag?: string;
 }
 
 /** A length: a bare number is logical pixels; a string carries a unit
@@ -289,6 +306,14 @@ export interface BevyTransition {
    * owns its rect (the layout channel adopts, they compose); a rect moved every
    * frame by anything else (an ancestor's `size` ease) lags, then catches up. */
   layout?: BevyTransitionSpec;
+  /** Times a shared-element flight (see the `sharedTag` prop): when this node
+   * mounts as the incoming half of a tag pair, every channel seeded from the
+   * outgoing node — its rect (position via translation, size in measured px
+   * through real layout), background color, opacity, transforms, filters,
+   * gradients — eases with THIS one spec, overriding the per-channel specs
+   * for the flight only (ordinary later changes use their own). Required for
+   * the flight; explicit-only like every channel (no built-in default). */
+  sharedElement?: BevyTransitionSpec;
 }
 
 /** The built-in system cursor keywords (winit's `SystemCursorIcon`, camelCase or CSS

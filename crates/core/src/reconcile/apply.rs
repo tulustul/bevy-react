@@ -122,6 +122,21 @@ pub fn apply_js_ops(
     // of the rest.
     let mut dirty: HashSet<NodeId> = HashSet::new();
 
+    // Shared-element pairing (see `crate::shared_tags`): plan against the
+    // pre-batch shadow tree, then snapshot every outgoing node BEFORE any
+    // op's commands (its despawn is queued below, deferred like every
+    // command) — the seeds are stamped after the loop, once the incoming
+    // entities exist.
+    let shared_pairs = crate::shared_tags::plan_pairs(&bridge, &ops);
+    for pair in &shared_pairs {
+        if let Some(&outgoing) = bridge.nodes.get(&pair.outgoing) {
+            let incoming = pair.incoming;
+            commands.queue(move |world: &mut World| {
+                crate::transition::shared::snapshot_into_pending(world, outgoing, incoming)
+            });
+        }
+    }
+
     for op in ops {
         match op {
             Op::Reset => {
@@ -160,6 +175,8 @@ pub fn apply_js_ops(
                 }
                 bridge.nodes.retain(|&id, _| id == ROOT_ID);
                 bridge.names.clear();
+                bridge.shared_tags.clear();
+                commands.queue(crate::transition::shared::clear_pending);
                 bridge.props_cache.clear();
                 bridge.text_styles.clear();
                 bridge.spans.clear();
@@ -383,6 +400,19 @@ pub fn apply_js_ops(
                     });
                 }
             }
+        }
+    }
+    for pair in shared_pairs {
+        let id = pair.incoming;
+        match bridge.nodes.get(&id) {
+            Some(&incoming) => commands.queue(move |world: &mut World| {
+                crate::transition::shared::stamp_pending(world, id, incoming)
+            }),
+            // The incoming node died within this same batch: nothing to
+            // stamp, so the parked seed must not linger.
+            None => commands.queue(move |world: &mut World| {
+                crate::transition::shared::discard_pending(world, id)
+            }),
         }
     }
 

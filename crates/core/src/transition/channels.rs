@@ -76,6 +76,8 @@ pub struct TransitionState {
     /// `PostUpdate` by `drive_layout_transitions`, not by `drive_transitions`;
     /// self-seeding (mount rule), so it doesn't participate in `initialized`.
     pub(super) layout: super::layout::LayoutChannel,
+    /// Shared-element flight bookkeeping (see [`super::shared`]).
+    pub(super) shared: super::shared::SharedFlight,
     pub(super) initialized: bool,
 }
 
@@ -162,6 +164,15 @@ impl Interp<Vec<crate::filters::ResolvedFilterPass>> for FilterEaseInterp {
 }
 
 impl FilterChannel {
+    /// Rest at `other`'s reading (its wire chain + last-written passes),
+    /// runner and plan dropped — the shared-element seed: the next drive's
+    /// wire comparison then retargets from these passes.
+    pub(super) fn seed_from(&mut self, other: &Self) {
+        self.wire = other.wire.clone();
+        self.channel.interp.plan = None;
+        self.channel.init(other.channel.current.clone());
+    }
+
     /// Advance the filter chain toward the wire target in `input`, writing the
     /// eased packed params into `resolved`. Returns `true` when it wrote —
     /// the caller pushes composite-only dirt (filter output never dirties the

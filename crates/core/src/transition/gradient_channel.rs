@@ -57,6 +57,17 @@ impl GradientChannel {
         self.channel.init(input.cloned().unwrap_or_default());
     }
 
+    pub(super) fn in_flight(&self) -> bool {
+        self.channel.runner.is_some()
+    }
+
+    /// Rest at `other`'s reading (wire + last write), runner dropped — the
+    /// shared-element seed; the next stamp retargets from it.
+    pub(super) fn seed_from(&mut self, other: &Self) {
+        self.wire = other.wire.clone();
+        self.channel.init(other.channel.current.clone());
+    }
+
     /// Forget everything — wire AND reading (the component vanished
     /// mid-ease: an unset removed it while a target still stands). Clearing
     /// the wire makes the next stamp a fresh appear (silent snap), which

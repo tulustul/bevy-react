@@ -218,6 +218,39 @@ spring config.
 </button>
 ```
 
+### Shared elements
+
+Give two nodes that swap in one commit the same `sharedTag` — a thumbnail in a
+grid and the hero of the detail screen that replaces it — and the incoming node
+starts where the outgoing one visually was (position, size, background color,
+opacity, transforms, filters, gradients) and eases to its own layout and style.
+React has no reparenting, so a "move" between parents is always an unmount plus
+a mount: the tag is the identity, and the commit itself is the trigger — no
+hooks, no measuring, no start call.
+
+```tsx
+// grid
+<image src={item.thumb} sharedTag={`hero-${item.id}`} style={{ width: 72, height: 72 }} />
+
+// detail, mounted in the commit that unmounts the grid
+<image
+  src={item.full}
+  sharedTag={`hero-${item.id}`}
+  style={{
+    width: 200,
+    height: 200,
+    transition: { sharedElement: { duration: 450, easing: "easeInOut" } },
+  }}
+/>
+```
+
+`transition: { sharedElement }` on the incoming node is the one timing for every
+seeded channel (required — a tag without it pairs but snaps). Pairs need the same
+tag, element type and UI root; the first mounted match seeds every incoming node
+with the tag. Size flies in measured pixels through real layout (children stay
+crisp, the parent re-flows), position by translation; the outgoing node unmounts
+instantly. Demo: "Shared elements".
+
 ### Animations
 
 For richer motion, use Reanimated-style shared values driven on the Bevy side (no

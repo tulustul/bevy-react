@@ -26,6 +26,7 @@ import { ButtonDemo } from "./demos/elements/ButtonDemo";
 import { TextDemo } from "./demos/elements/TextDemo";
 import { ImageDemo } from "./demos/elements/ImageDemo";
 import { TransitionDemo } from "./demos/animations/TransitionDemo";
+import { SharedElementsDemo } from "./demos/animations/SharedElementsDemo";
 import { MorphFilterDemo } from "./demos/styling/morphFilterDemo";
 import { AnimatedValuesDemo } from "./demos/animations/animatedValues";
 import { InterpolateDemo } from "./demos/animations/InterpolateDemo";
@@ -142,6 +143,7 @@ export const DEMOS: DemoItem[] = [
       { label: "Style transitions", component: TransitionDemo },
       { label: "Animated values", component: AnimatedValuesDemo },
       { label: "Interpolation", component: InterpolateDemo },
+      { label: "Shared elements", component: SharedElementsDemo },
     ],
   },
   {

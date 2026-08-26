@@ -42,6 +42,43 @@ pub(super) struct Transform3dChannels {
 }
 
 impl Transform3dChannels {
+    pub(super) fn in_flight(&self) -> bool {
+        [
+            &self.perspective,
+            &self.translate_x,
+            &self.translate_y,
+            &self.translate_z,
+            &self.rotate_x,
+            &self.rotate_y,
+            &self.rotate_z,
+            &self.scale,
+            &self.scale_x,
+            &self.scale_y,
+        ]
+        .iter()
+        .any(|c| c.runner.is_some())
+            || self.origin_x.runner.is_some()
+            || self.origin_y.runner.is_some()
+    }
+
+    /// Rest every field at `other`'s current reading, runners dropped — the
+    /// shared-element seed.
+    pub(super) fn seed_from(&mut self, other: &Self) {
+        self.perspective.init(other.perspective.current);
+        self.had_perspective = other.had_perspective;
+        self.translate_x.init(other.translate_x.current);
+        self.translate_y.init(other.translate_y.current);
+        self.translate_z.init(other.translate_z.current);
+        self.rotate_x.init(other.rotate_x.current);
+        self.rotate_y.init(other.rotate_y.current);
+        self.rotate_z.init(other.rotate_z.current);
+        self.scale.init(other.scale.current);
+        self.scale_x.init(other.scale_x.current);
+        self.scale_y.init(other.scale_y.current);
+        self.origin_x.init(other.origin_x.current);
+        self.origin_y.init(other.origin_y.current);
+    }
+
     /// Seed the resting state from the mount-time params so a fresh element
     /// snaps to its initial transform instead of easing in from identity.
     /// The per-field seeds generate from the property table's t3d rows

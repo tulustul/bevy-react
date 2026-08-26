@@ -63,6 +63,7 @@ mod registry;
 mod request;
 mod scroll;
 mod scrollbar;
+mod shared_tags;
 mod style_bindings;
 mod touch_scroll;
 mod transition;

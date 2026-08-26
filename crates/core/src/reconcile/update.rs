@@ -78,6 +78,7 @@ pub(super) fn apply_update(
     });
     // The pre-merge name, so a `name` change can leave its old index bucket.
     let old_name = dirty_name(&props, &unset).then(|| cached.name.clone());
+    let old_tag = dirty_shared_tag(&props, &unset).then(|| cached.shared_tag.clone());
     let (dirty, ev) = cached.merge_delta(props, &unset, &style_unset);
     let props = cached;
     if let Some(old_name) = old_name {
@@ -87,6 +88,11 @@ pub(super) fn apply_update(
             old_name.as_deref(),
             props.name.as_deref(),
         );
+    }
+    if let Some(old_tag) = old_tag {
+        bridge
+            .shared_tags
+            .apply(id, old_tag.as_deref(), props.shared_tag.as_deref());
     }
     use crate::protocol::style::style_groups as g;
     // A delta touching a promotion trigger (`opacity`/`groupAlpha`/
@@ -465,6 +471,10 @@ pub(crate) fn reapply_opacity_outputs(
 /// Whether an update delta touches the `name` prop (set, or listed in `unset`).
 fn dirty_name(delta: &Props, unset: &[String]) -> bool {
     delta.name.is_some() || unset.iter().any(|u| u == "name")
+}
+
+fn dirty_shared_tag(delta: &Props, unset: &[String]) -> bool {
+    delta.shared_tag.is_some() || unset.iter().any(|u| u == "sharedTag")
 }
 
 #[cfg(test)]

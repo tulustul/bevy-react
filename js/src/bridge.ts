@@ -527,6 +527,7 @@ const OBJECT_PROP_KEYS = new Set([
 // `target` binds a `<portal>`/`<surface>` to a named render target.
 const PASSTHROUGH_PROP_KEYS = new Set([
   "name",
+  "sharedTag",
   "color",
   "fontSize",
   "src",

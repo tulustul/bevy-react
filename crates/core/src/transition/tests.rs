@@ -61,6 +61,22 @@ fn progress_channel_ease_settles_exactly_and_snaps_without_spec() {
     assert_eq!(v, Length::Percent(50.0), "cross-unit lerp snaps");
 }
 
+/// `transition: { sharedElement }` is a spec channel like every other:
+/// explicit-only, the same `ChannelTransition` struct, read via its own
+/// accessor.
+#[test]
+fn shared_element_channel_is_explicit_only() {
+    let t: Transition = parse(serde_json::json!({
+        "sharedElement": { "duration": 400, "easing": "easeOut" },
+    }));
+    let spec = t.for_shared_element().expect("sharedElement spec");
+    assert_eq!(spec.duration.map(WireTime::seconds), Some(0.4));
+    assert_eq!(spec.easing, Easing::EaseOut);
+    assert!(t.for_layout().is_none(), "no fallback into other channels");
+    let none: Transition = parse(serde_json::json!({ "layout": { "duration": 100 } }));
+    assert!(none.for_shared_element().is_none());
+}
+
 #[test]
 fn channel_resolution_is_explicit_only() {
     let t: Transition = parse(serde_json::json!({

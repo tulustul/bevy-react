@@ -306,6 +306,11 @@ pub(super) fn apply_create(
         None,
         props.name.as_deref(),
     );
+    // Every node's kind + the `sharedTag` index (see `crate::shared_tags`).
+    bridge.shared_tags.note_kind(id, &kind);
+    bridge
+        .shared_tags
+        .apply(id, None, props.shared_tag.as_deref());
     // `cache: "always"`, a `filter`/`backdropFilter` chain, a `morphFilter`,
     // or a `transform3d` — base or variant-carried (the promotion union is
     // presence-based, so a hover-only filter promotes eagerly at

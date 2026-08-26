@@ -86,6 +86,15 @@ pub struct Transition {
     /// `UiSystems::Layout`, children riding along) decays to identity — no
     /// relayout, no layer, picking follows. See [`crate::transition::layout`].
     pub layout: Option<ChannelTransition>,
+    /// Times a **shared-element flight** (the `shared_tags` module): when
+    /// this node mounts as the incoming half of a `sharedTag` pair, every
+    /// channel seeded from the outgoing node — its laid-out rect (position
+    /// via the layout channel, size in measured px through real layout),
+    /// colors, opacity, transforms, filters, gradients — eases with THIS
+    /// spec, overriding the per-channel specs for the flight only. Required:
+    /// a tagged node without it pairs but snaps (explicit-only, like every
+    /// channel).
+    pub shared_element: Option<ChannelTransition>,
 }
 
 /// One row per spec channel of [`Transition`]: `(accessor, field, doc
@@ -108,6 +117,7 @@ macro_rules! transition_channels {
             (for_background_gradient, background_gradient, "the background gradient"),
             (for_border_gradient, border_gradient, "the border gradient"),
             (for_layout, layout, "the laid-out rect"),
+            (for_shared_element, shared_element, "a shared-element flight"),
         }
     };
 }

@@ -192,6 +192,9 @@ pub struct JsBridge {
     /// step with the `Name` components by the op-apply path (create/update/
     /// remove/reset); see [`crate::names`].
     pub names: crate::names::NameIndex,
+    /// The `sharedTag` index (+ every node's element kind) behind the
+    /// shared-element pairing pre-pass; see `crate::shared_tags`.
+    pub shared_tags: crate::shared_tags::SharedTags,
     /// The last applied props per node (event-like fields stripped — see
     /// [`crate::protocol::props::Props::split_events`]). Every [`crate::protocol::op::Op::Update`]
     /// merges its delta into this retained state, so the apply path always works
@@ -319,6 +322,7 @@ impl JsBridge {
             outbound_tx,
             nodes,
             names: Default::default(),
+            shared_tags: crate::shared_tags::SharedTags::default(),
             props_cache: HashMap::new(),
             layer_dirty: HashSet::new(),
             promoted_layers: HashSet::new(),
@@ -525,6 +529,8 @@ impl JsBridge {
         {
             self.names.remove(name, entity);
         }
+        self.shared_tags
+            .forget(id, props.as_ref().and_then(|p| p.shared_tag.as_deref()));
         self.layer_dirty.remove(&id);
         self.promoted_layers.remove(&id);
         self.text_styles.remove(&id);
