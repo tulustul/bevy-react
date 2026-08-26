@@ -92,10 +92,18 @@ function FontSizeDemo() {
 function FontSizeCard() {
   const [size, setSize] = useState(28);
   return (
-    <node style={{ flexDirection: "column", alignItems: "center", gap: 16 }}>
+    <node
+      style={{
+        flexDirection: "column",
+        alignItems: "center",
+        gap: 16,
+        width: "100%",
+      }}
+    >
       <text style={{ fontSize: size, fontWeight: "thin" }}>thin</text>
       <text style={{ fontSize: size, fontWeight: "normal" }}>normal</text>
       <text style={{ fontSize: size, fontWeight: "bold" }}>bold</text>
+
       <Slider
         value={size}
         min={10}
@@ -201,8 +209,9 @@ function TypographyCard() {
   const [lineHeight, setLineHeight] = useState(1.4);
   const [letterSpacing, setLetterSpacing] = useState(1.5);
   const [shadow, setShadow] = useState(true);
+
   return (
-    <node style={{ flexDirection: "column", gap: 16, width: 380 }}>
+    <node style={{ flexDirection: "column", gap: 16, maxWidth: 380 }}>
       <text
         style={{
           fontSize: FontSizes.base,

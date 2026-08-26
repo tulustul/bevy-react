@@ -97,6 +97,7 @@ const groupStyle: BevyStyle = {
   flexDirection: "row",
   flexWrap: "wrap",
   alignItems: "center",
+  justifyContent: "center",
   gap: 6,
 };
 

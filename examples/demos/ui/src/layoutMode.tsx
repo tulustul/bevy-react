@@ -45,7 +45,7 @@ export type Layout = {
 };
 
 const CONTENT_PADDING: Record<LayoutMode, number> = {
-  compact: 16,
+  compact: 5,
   regular: 24,
 };
 

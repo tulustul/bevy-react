@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { BevyStyle, PointerEventData } from "bevy-react/jsx";
 import { bevy } from "@/bevy";
-import { Button, HeaderText } from "@/components";
+import { Button, HeaderText, SecondaryButton } from "@/components";
 import { InfoBody } from "@/components/docs";
 import { Colors, FontSizes, Gradients, Scrollbar } from "@/theme";
 import { useExplanationStore } from "./explanationStore";
@@ -9,7 +9,6 @@ import { useLayout } from "./layoutMode";
 
 /** Regular-shell panel width; the compact shell uses the full width minus margins. */
 const MODAL_W = 560;
-const MARGIN = 8;
 /** Keep at least the title bar reachable when dragging toward the bottom. */
 const TITLE_REACH = 48;
 /** Open/close/swap blend length. */
@@ -34,7 +33,7 @@ export function ExampleModal() {
   const open = selected !== null;
 
   const { win, mode } = useLayout();
-  const modalW = mode === "compact" ? win.width - 2 * MARGIN : MODAL_W;
+  const modalW = mode === "compact" ? win.width - 2 : MODAL_W;
   // null = "not dragged yet": follow the centered default position.
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
   const lastClient = useRef({ x: 0, y: 0 });
@@ -55,8 +54,8 @@ export function ExampleModal() {
   }, [open, deselect]);
 
   const clampPos = (p: { left: number; top: number }) => ({
-    left: clamp(p.left, MARGIN, Math.max(MARGIN, win.width - modalW - MARGIN)),
-    top: clamp(p.top, MARGIN, Math.max(MARGIN, win.height - TITLE_REACH)),
+    left: clamp(p.left, 0, Math.max(0, win.width - modalW)),
+    top: clamp(p.top, 0, Math.max(0, win.height - TITLE_REACH)),
   });
 
   const defaultPos = clampPos({
@@ -110,13 +109,14 @@ export function ExampleModal() {
           >
             <node style={titleBarStyle}>
               <HeaderText style={titleStyle}>{selected.title}</HeaderText>
-              <Button
+              <SecondaryButton
+                pinch={{ radius: 0.7 }}
                 style={closeXStyle}
                 labelStyle={{ fontSize: FontSizes.lg }}
                 onClick={() => deselect()}
               >
                 ×
-              </Button>
+              </SecondaryButton>
             </node>
             <node style={bodyStyle} scrollStep={60}>
               <InfoBody data={selected} />

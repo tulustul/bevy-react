@@ -3,6 +3,7 @@ export * from "./ProgressBar";
 export * from "./Slider";
 export * from "./Example";
 export * from "./Button";
+export * from "./SecondaryButton";
 export * from "./Pinchable";
 export * from "./Radio";
 export * from "./TextMono";

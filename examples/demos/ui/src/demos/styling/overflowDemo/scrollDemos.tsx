@@ -358,7 +358,7 @@ export function HorizontalScrollbarDemo() {
 
 function HorizontalScrollbarCard() {
   return (
-    <node style={{ flexDirection: "column", gap: 16 }}>
+    <node style={{ flexDirection: "column", gap: 16, width: "100%" }}>
       <HScrollList label='horizontalSide: "bottom"' scrollbar={hBottomBar} />
       <HScrollList label='horizontalSide: "top" (float)' scrollbar={hTopBar} />
     </node>
@@ -373,7 +373,7 @@ function HScrollList({
   scrollbar: ScrollbarStyle;
 }) {
   return (
-    <node style={{ flexDirection: "column", gap: 6 }}>
+    <node style={{ flexDirection: "column", gap: 6, width: "100%" }}>
       <text style={caption}>{label}</text>
       <node style={{ ...hScrollRow, scrollbar }}>
         {HTILES.map((n) => (
@@ -469,6 +469,7 @@ const hScrollRow: BevyStyle = {
   flexDirection: "row",
   gap: 8,
   width: 360,
+  maxWidth: "100%",
   padding: 8,
   overflowX: "scroll",
   backgroundColor: Colors.surface100,

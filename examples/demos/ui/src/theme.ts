@@ -159,3 +159,7 @@ export const Filters = {
     },
   ] satisfies FilterChainValue,
 };
+
+export const Responsiveness = {
+  desktop: 720,
+};

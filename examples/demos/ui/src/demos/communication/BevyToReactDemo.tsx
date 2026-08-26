@@ -90,7 +90,6 @@ function BounceCard() {
 
   return (
     <node style={{ flexDirection: "column", alignItems: "center" }}>
-      <text style={{ fontSize: FontSizes.lg }}>Bounces</text>
       <text
         style={{
           fontSize: FontSizes.xxxl,

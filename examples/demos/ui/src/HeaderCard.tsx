@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { BevyStyle } from "bevy-react/jsx";
 import { InfoBody } from "@/components/docs";
-import { Colors, Filters, FontSizes, Gradients } from "@/theme";
+import { Colors, Filters, FontSizes, Gradients, Responsiveness } from "@/theme";
 import { ExplanationData, useExplanationStore } from "./explanationStore";
 import { clampContentWidth, useLayout } from "./layoutMode";
 import { HeaderText } from "./components";
+import { useWindowSize } from "./useWindowSize";
 
 /**
  * The per-page documentation card at the top of the content flow — replaces
@@ -36,8 +37,19 @@ export function HeaderCard() {
 function Card({ page, width }: { page: ExplanationData; width: number }) {
   const [collapsed, setCollapsed] = useState(page.startCollapsed ?? false);
 
+  const window = useWindowSize();
+
   return (
-    <node style={{ ...cardStyle, width }}>
+    <node
+      style={{
+        ...cardStyle,
+        ...(window.width < Responsiveness.desktop && { padding: 10 }),
+        ...(window.width >= Responsiveness.desktop && {
+          backdropFilter: Filters.backdrop,
+        }),
+        width,
+      }}
+    >
       <node style={titleRowStyle}>
         <HeaderText style={titleStyle}>{page.title}</HeaderText>
         <node
@@ -64,7 +76,6 @@ const cardStyle: BevyStyle = {
   alignItems: "stretch",
   gap: 10,
   padding: 20,
-  backdropFilter: Filters.backdrop,
   backgroundGradient: Gradients.card,
   borderRadius: 16,
   border: 2,
@@ -74,7 +85,7 @@ const cardStyle: BevyStyle = {
 
 const titleRowStyle: BevyStyle = {
   flexDirection: "row",
-  alignItems: "center",
+  alignItems: "flexStart",
   justifyContent: "spaceBetween",
 };
 
@@ -97,4 +108,5 @@ const toggleHoverStyle: BevyStyle = {
 const toggleTextStyle: BevyStyle = {
   fontSize: FontSizes.xs,
   color: Colors.textColor200,
+  lineBreak: "noWrap",
 };

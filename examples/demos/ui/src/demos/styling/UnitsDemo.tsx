@@ -74,7 +74,7 @@ function LengthDemo() {
 
 function LengthCard() {
   return (
-    <node style={{ flexDirection: "column", gap: 10, width: 360 }}>
+    <node style={{ flexDirection: "column", gap: 10, width: "100%" }}>
       {LENGTHS.map((w) => (
         <node key={w} style={{ flexDirection: "column", gap: 4 }}>
           <TextMono style={caption}>{w}</TextMono>
@@ -167,7 +167,7 @@ transform: { rotate: "50grad" }`}</Code>
 
 function AngleCard() {
   return (
-    <node style={{ ...row, gap: 24 }}>
+    <node style={{ ...row, gap: 15 }}>
       {ANGLES.map((angle) => (
         <node
           key={angle}
@@ -177,8 +177,8 @@ function AngleCard() {
             <node
               style={{
                 ...box,
-                width: 48,
-                height: 48,
+                width: 40,
+                height: 40,
                 backgroundColor: Colors.purple100,
                 transform: { rotate: angle },
               }}
@@ -246,10 +246,10 @@ function TimeBox({ label, duration, on, onToggle }: TimeBoxProps) {
         <node
           style={{
             ...box,
-            width: 44,
-            height: 44,
+            width: 40,
+            height: 40,
             backgroundColor: Colors.green100,
-            transform: { translateX: on ? 96 : 0 },
+            transform: { translateX: on ? 70 : 0 },
             transition: { transform: { duration, easing: "easeOut" } },
           }}
         />
@@ -260,7 +260,7 @@ function TimeBox({ label, duration, on, onToggle }: TimeBoxProps) {
 }
 
 const timeTrack: BevyStyle = {
-  width: 160,
+  width: 130,
   height: 64,
   borderRadius: 12,
   padding: 10,

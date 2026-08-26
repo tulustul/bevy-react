@@ -182,7 +182,14 @@ function FlexPlaygroundCard() {
   const options = useFlexOptions(flexDirection);
 
   return (
-    <node style={{ flexDirection: "column", gap: 12, alignItems: "center" }}>
+    <node
+      style={{
+        flexDirection: "column",
+        gap: 12,
+        alignItems: "center",
+        width: "100%",
+      }}
+    >
       <node
         style={{ ...playground, flexDirection, justifyContent, alignItems }}
       >
@@ -303,6 +310,7 @@ function FlexGrowCard() {
 
 const playground: BevyStyle = {
   width: 350,
+  maxWidth: "100%",
   height: 350,
   gap: 10,
   padding: 12,

@@ -5,7 +5,7 @@ import { Code, InlineCode, P, Ul, Li } from "@/components/docs";
 import { Colors, FontSizes } from "@/theme";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
 
-const STAGE_W = 380;
+const STAGE_W = 240;
 const STAGE_H = 240;
 const BOX = 100;
 

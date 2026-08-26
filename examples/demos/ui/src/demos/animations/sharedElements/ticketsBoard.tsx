@@ -3,7 +3,8 @@ import { BevyStyle } from "bevy-react/jsx";
 
 import { Example } from "@/components";
 import { Code, InlineCode, P } from "@/components/docs";
-import { Colors, FontSizes } from "@/theme";
+import { Colors, FontSizes, Responsiveness } from "@/theme";
+import { useWindowSize } from "@/useWindowSize";
 
 export function MoveBetweenCards() {
   return (
@@ -44,12 +45,21 @@ function TicketsBoard() {
   const [done, setDone] = useState<string[]>(["Delta"]);
   const todo = KANBAN_IDS.filter((id) => !done.includes(id));
 
+  const window = useWindowSize();
+
   function move(id: string) {
     setDone((d) => (d.includes(id) ? d.filter((x) => x !== id) : [...d, id]));
   }
 
   const column = (side: "todo" | "done", ids: string[]) => (
-    <node style={kanbanColumn}>
+    <node
+      style={{
+        ...kanbanColumn,
+        ...(window.width < Responsiveness.desktop && {
+          width: 140,
+        }),
+      }}
+    >
       <text style={kanbanTitle}>{side === "todo" ? "To do" : "Done"}</text>
       {ids.map((id) => (
         <button

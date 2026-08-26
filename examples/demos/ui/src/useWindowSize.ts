@@ -9,8 +9,9 @@ export const FALLBACK_WINDOW: WindowSize = { width: 1280, height: 832 };
  * built-in `resize` event. `null` until the first response lands. Same-value
  * updates are dropped (the first `resize` after mount repeats the request's
  * answer, and a drag-resize streams one event per frame). */
-export function useWindowSize(): WindowSize | null {
-  const [size, setSize] = useState<WindowSize | null>(null);
+export function useWindowSize(): WindowSize {
+  const [size, setSize] = useState<WindowSize>({ width: 0, height: 0 });
+
   useEffect(() => {
     const update = (next: WindowSize) =>
       setSize((prev) =>

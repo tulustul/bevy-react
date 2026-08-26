@@ -349,7 +349,7 @@ function BurnCard() {
 function CyberpunkDemo() {
   return (
     <Example
-      title="Cyberpunk 2077 style"
+      title="Cyberpunk 2077"
       style={{ cache: "never" }}
       info={
         <>
@@ -389,6 +389,7 @@ function CyberpunkCard() {
       style={{
         flexDirection: "column",
         cache: "never",
+        padding: { bottom: 50 },
         transform3d: {
           rotateY: -30,
           rotateX: 10,

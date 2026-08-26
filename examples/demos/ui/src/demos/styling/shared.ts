@@ -28,8 +28,8 @@ export const column: BevyStyle = {
 export const stage: BevyStyle = {
   alignItems: "center",
   justifyContent: "center",
-  gap: 12,
-  padding: 14,
+  gap: 5,
+  padding: 10,
   backgroundColor: Colors.surface100,
   borderRadius: 12,
 };
@@ -43,6 +43,7 @@ export const controlColumn: BevyStyle = {
   flexDirection: "column",
   alignItems: "center",
   gap: 16,
+  width: "100%",
 };
 
 export const productCard: BevyStyle = {

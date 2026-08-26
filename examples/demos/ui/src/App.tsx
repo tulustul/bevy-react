@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BevyStyle } from "bevy-react/jsx";
 import { bevy } from "@/bevy";
-import { Scrollbar } from "@/theme";
+import { Responsiveness, Scrollbar } from "@/theme";
 import { DEMOS, findDemoByLabel } from "./demos";
 import { Navigation } from "./Navigation";
 import { HeaderCard } from "./HeaderCard";
@@ -43,6 +43,8 @@ function Shell() {
   const { selectedDemo, setSelectedDemo } = useDemosStore();
   const { mode, contentPadding } = useLayout();
   const compact = mode === "compact";
+
+  const window = useWindowSize();
 
   // Compact-only: the nav drawer's open state. Crossing the breakpoint (a
   // desktop resize) resets it — the regular shell has no drawer.
@@ -93,7 +95,13 @@ function Shell() {
         }}
         scrollStep={100}
       >
-        <node style={{ ...contentInnerStyle, padding: contentPadding }}>
+        <node
+          style={{
+            ...contentInnerStyle,
+            ...(window.width < Responsiveness.desktop &&
+              contentInnerMobileStyle),
+          }}
+        >
           <HeaderCard />
           {selectedDemo.component && <selectedDemo.component />}
         </node>
@@ -151,4 +159,10 @@ const contentInnerStyle: BevyStyle = {
   alignItems: "center",
   gap: 20,
   minWidth: "100%",
+  padding: 24,
+};
+
+const contentInnerMobileStyle: BevyStyle = {
+  padding: 5,
+  gap: 10,
 };

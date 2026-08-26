@@ -139,7 +139,8 @@ const grid: BevyStyle = {
   flexDirection: "row",
   flexWrap: "wrap",
   gap: 10,
-  width: 420,
+  width: "100%",
+  maxWidth: 420,
   justifyContent: "center",
 };
 

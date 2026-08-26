@@ -6,9 +6,12 @@ import {
   useRef,
 } from "react";
 import { BevyStyle } from "bevy-react/jsx";
-import { Colors, Filters, FontSizes, Gradients } from "@/theme";
+import { Colors, Filters, FontSizes, Gradients, Responsiveness } from "@/theme";
 import { useExplanationStore } from "@/explanationStore";
+import { Button } from "./Button";
 import { HeaderText } from "./HeaderText";
+import { SecondaryButton } from "./SecondaryButton";
+import { useWindowSize } from "@/useWindowSize";
 
 export type ExampleProps = PropsWithChildren & {
   style?: BevyStyle;
@@ -38,11 +41,9 @@ export function Example({
 }: ExampleProps) {
   // Stable per-instance identity for the selection (survives hot reload).
   const key = useRef({}).current;
-  const selectable = title !== undefined;
-  const isSelected = useExplanationStore(
-    (s) => selectable && s.selected?.key === key,
-  );
   const select = useExplanationStore((s) => s.select);
+
+  const window = useWindowSize();
 
   // A selected card unmounting (in-page conditional rendering) closes the
   // modal; page switches are already covered by setPage.
@@ -52,13 +53,29 @@ export function Example({
 
   return (
     <node
-      style={{ ...cardStyle, ...(isSelected ? selectedStyle : null), ...style }}
-      hoverStyle={selectable && !isSelected ? hoverStyle : undefined}
-      onClick={
-        selectable
-          ? () =>
+      style={{
+        ...cardStyle,
+        ...style,
+        ...(window.width < Responsiveness.desktop && {
+          width: "100%",
+        }),
+        ...(window.width >= Responsiveness.desktop && {
+          backdropFilter: Filters.backdrop,
+        }),
+      }}
+    >
+      {title !== undefined && (
+        // The card itself is inert: the docs modal is opened from the corner
+        // button only, so clicks anywhere else land on the live demo inside.
+        <node style={titleRowStyle}>
+          <HeaderText style={{ fontSize: FontSizes.xl }}>{title}</HeaderText>
+          <SecondaryButton
+            pinch={{ radius: 0.6 }}
+            style={detailsButtonStyle}
+            labelStyle={detailsLabelStyle}
+            onClick={() =>
               select(key, {
-                title: title!,
+                title,
                 info,
                 description,
                 rust,
@@ -66,13 +83,11 @@ export function Example({
                 demo,
                 cache: style?.cache,
               })
-          : undefined
-      }
-    >
-      {title !== undefined && (
-        <HeaderText style={{ textAlign: "center", fontSize: FontSizes.xl }}>
-          {title}
-        </HeaderText>
+            }
+          >
+            Details
+          </SecondaryButton>
+        </node>
       )}
       {demo !== undefined && <Demo demo={demo} />}
       {children}
@@ -85,31 +100,35 @@ function Demo({ demo: D }: { demo: ComponentType }) {
 }
 
 const cardStyle: BevyStyle = {
-  alignItems: "stretch",
+  alignItems: "center",
   justifyContent: "flexStart",
   flexDirection: "column",
   minWidth: 150,
+  maxWidth: "95vw",
   padding: 10,
   gap: 8,
-  backdropFilter: Filters.backdrop,
   backgroundGradient: Gradients.card,
   borderRadius: 16,
   border: 2,
   borderGradient: Gradients.accentBorderDim,
   boxShadow: { blurRadius: 15, spreadRadius: 5, color: Colors.shadow100 },
-  cursor: "pointer",
 };
 
-// Hover feedback for a selectable, not-yet-selected card: one surface step
-// lighter and a brighter accent border. The selected state goes further —
-// a primary-tinted background and the full-strength border.
-const hoverStyle: BevyStyle = {
-  backgroundGradient: Gradients.cardHover,
-  borderGradient: Gradients.accentBorderHover,
+const titleRowStyle: BevyStyle = {
+  flexDirection: "row",
+  alignItems: "flexStart",
+  justifyContent: "spaceBetween",
+  gap: 35,
+  width: "100%",
 };
 
-const selectedStyle: BevyStyle = {
-  backgroundGradient: Gradients.cardSelected,
-  borderGradient: Gradients.accentBorder,
-  boxShadow: { blurRadius: 20, spreadRadius: 6, color: Colors.primaryOverlay },
+const detailsButtonStyle: BevyStyle = {
+  minWidth: 0,
+  padding: { top: 4, right: 10, bottom: 4, left: 10 },
+  borderRadius: 6,
+  flexShrink: 0,
+};
+
+const detailsLabelStyle: BevyStyle = {
+  fontSize: FontSizes.xs,
 };

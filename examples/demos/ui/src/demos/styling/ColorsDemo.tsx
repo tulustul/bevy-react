@@ -2,8 +2,9 @@ import { useState } from "react";
 import { DemoRow, Example, Radio, RadioOption, Slider } from "@/components";
 import { Code, InlineCode, P } from "@/components/docs";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
-import { Colors, FontSizes } from "@/theme";
+import { Colors, FontSizes, Responsiveness } from "@/theme";
 import { box, controlColumn } from "./shared";
+import { useWindowSize } from "@/useWindowSize";
 
 const PAGE: ExplanationData = {
   title: "Colors",
@@ -79,12 +80,17 @@ function ColorFormatsDemo() {
 }
 
 function ColorFormatsCard() {
+  const window = useWindowSize();
+
   return (
     <node
       style={{
         gap: 10,
         display: "grid",
         gridTemplateColumns: "repeat(3, 1fr)",
+        ...(window.width < Responsiveness.desktop && {
+          gridTemplateColumns: "repeat(2, 1fr)",
+        }),
       }}
     >
       {COLOR_FORMATS.map((color) => (
@@ -151,6 +157,7 @@ function BackgroundColorCard() {
           {color}
         </text>
       </node>
+
       <Slider
         value={r}
         min={0}

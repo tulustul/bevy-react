@@ -212,7 +212,6 @@ const controls: BevyStyle = {
 // region over the bare scene. Cards wrap along its top; the rest is room to
 // drag them around in.
 const areaBase: BevyStyle = {
-  height: 460,
   padding: 10,
   gap: 12,
   justifyContent: "center",

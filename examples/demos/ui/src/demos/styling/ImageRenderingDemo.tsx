@@ -31,13 +31,13 @@ const PICS: Record<
     src: "images/parrot.png",
     width: 486,
     height: 526,
-    sizes: [300, 160, 64],
+    sizes: [160, 64],
   },
   pattern: {
     src: "images/test-pattern.png",
     width: 512,
     height: 512,
-    sizes: [300, 160, 64],
+    sizes: [160, 64],
   },
   pixelArt: {
     src: "images/sprite-12px.png",

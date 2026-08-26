@@ -9,6 +9,7 @@ import { Button, DemoRow, Example } from "@/components";
 import { B, Code, InlineCode, P } from "@/components/docs";
 import { Colors } from "@/theme";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
+import { useWindowSize } from "@/useWindowSize";
 
 // A pure-UI demo of the `<canvas>` host element: an anti-aliased vector line
 // chart drawn entirely with HTML-canvas-style commands (axes, gridlines, a
@@ -127,6 +128,8 @@ function GraphCard() {
   const frameRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const animateRef = useRef<(target: number[]) => void>(() => {});
 
+  const window = useWindowSize();
+
   // One animation loop for the component's lifetime: an auto-shuffle every
   // PERIOD_MS, each tweening to its new data over DURATION_MS.
   useEffect(() => {
@@ -166,9 +169,11 @@ function GraphCard() {
   const shuffle = useCallback(() => animateRef.current(randomData(POINTS)), []);
 
   const draw = (ctx: CanvasContext) => {
+    const w = Math.min(window.width - 40, W);
+
     // Background panel.
     ctx.fillStyle = Colors.surface100;
-    ctx.rect(0, 0, W, H);
+    ctx.rect(0, 0, w, H);
     ctx.fill();
 
     // Horizontal gridlines.
@@ -178,13 +183,13 @@ function GraphCard() {
       const y = PAD + ((H - 2 * PAD) * i) / 4;
       ctx.beginPath();
       ctx.moveTo(PAD, y);
-      ctx.lineTo(W - PAD, y);
+      ctx.lineTo(w - PAD, y);
       ctx.stroke();
     }
 
     // Map data to canvas points.
     const pts: Pt[] = values.map((v, i) => ({
-      x: PAD + ((W - 2 * PAD) * i) / (values.length - 1),
+      x: PAD + ((w - 2 * PAD) * i) / (values.length - 1),
       y: H - PAD - v * (H - 2 * PAD),
     }));
 
@@ -255,6 +260,8 @@ function PaintCard() {
   // entirely outside React state — no re-renders while doodling).
   const last = useRef<Pt | null>(null);
   const strokeCount = useRef(0);
+
+  const window = useWindowSize();
 
   const paintBackground = useCallback((el: BevyCanvasElement) => {
     const ctx = el.getContext();
@@ -355,11 +362,13 @@ const columnStyle: BevyStyle = {
   flexDirection: "column",
   alignItems: "center",
   gap: 12,
+  width: "100%",
 };
 
 const canvasStyle: BevyStyle = {
   width: W,
   height: H,
+  maxWidth: "100%",
   borderRadius: 12,
   border: 1,
   borderColor: Colors.surface400,
