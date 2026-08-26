@@ -458,7 +458,10 @@ pub fn node_from_style(style: &Option<Style>) -> Node {
         node.grid_column = v;
     }
 
-    if let Some(r) = s.border_radius {
+    // `static_val`: an `{ animated }` radius reads as unset here (identity
+    // corners) and the animation apply stage re-asserts it each frame — the
+    // `width` precedent.
+    if let Some(r) = s.border_radius.static_val() {
         node.border_radius = rect_to_border_radius(r);
     }
 

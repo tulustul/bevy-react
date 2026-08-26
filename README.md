@@ -207,10 +207,12 @@ spring config.
   onClick={() => setOn((v) => !v)}
   style={{
     backgroundColor: on ? "#a6e3a1" : "#45475a",
+    borderRadius: on ? 24 : 6,
     transform: { translateX: on ? 36 : -36 },
     transition: {
       transform: { stiffness: 180, damping: 14 }, // spring
       backgroundColor: { duration: 200 }, // timing (ms)
+      borderRadius: { duration: 200 }, // per corner
     },
   }}
 >

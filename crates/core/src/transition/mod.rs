@@ -33,7 +33,7 @@ use bevy::prelude::*;
 use bevy::ui::{BackgroundGradient, BorderGradient, UiTransform};
 
 use crate::protocol::{style::Style, units::Length};
-use crate::ui_map::length_to_val;
+use crate::ui_map::{length_to_val, rect_to_border_radius};
 
 mod channels;
 mod gradient_channel;
@@ -296,6 +296,7 @@ pub fn drive_transitions(
         let skip_transform = parked(ChannelId::Transform);
         let skip_opacity = parked(ChannelId::Opacity);
         let skip_bg = parked(ChannelId::Background);
+        let skip_radius = parked(ChannelId::BorderRadius);
         let skip_filter = parked(ChannelId::Filter);
         let skip_backdrop = parked(ChannelId::Backdrop);
         let skip_transform3d = parked(ChannelId::Transform3d);
@@ -503,6 +504,29 @@ pub fn drive_transitions(
                 };
             }
             with_input_channels!(size_walk);
+        }
+
+        // Corner radii (layout, like size: the radius lives on `Node`, so an
+        // eased frame is a relayout — compare-before-write keeps a settled
+        // radius silent). Eased per corner; an unset target is square corners,
+        // what `node_from_style` wrote. Content dirt is required: the radius
+        // is not in the layer geometry hash (`fold_member_geometry` folds
+        // translation/matrix/size only), so a cached enclosing layer would
+        // otherwise never re-capture the changing corners.
+        if or_shared(input.spec.for_border_radius(), shared_spec).is_some()
+            && !skip_radius
+            && let Some(node) = targets.node.as_mut()
+        {
+            let target = input.border_radius.unwrap_or_default();
+            let r = rect_to_border_radius(state.border_radius.drive(
+                target,
+                arm_spec(seed_frame, input.spec.for_border_radius(), shared_spec),
+                dt,
+            ));
+            if node.border_radius != r {
+                node.border_radius = r;
+                dirt.nodes.push(entity);
+            }
         }
 
         // Filter: ease the promoted root's resolved chain between wire

@@ -50,6 +50,7 @@ export function TransitionDemo() {
       <DemoRow>
         <HoverPressDemo />
         <ToggleSwitchDemo />
+        <RadiusDemo />
       </DemoRow>
       <DemoRow>
         <TimingVsSpringDemo />
@@ -174,6 +175,62 @@ function ToggleSwitchCard() {
         />
       </button>
       <text style={switchLabel}>{on ? "ON" : "OFF"}</text>
+    </node>
+  );
+}
+
+function RadiusDemo() {
+  return (
+    <Example
+      title="Corner radius"
+      info={
+        <>
+          <P>
+            <InlineCode>{"transition: { borderRadius }"}</InlineCode> eases the
+            corner radii per corner instead of snapping them: a click that turns
+            a square into a circle, or a hover that rounds a button. Keep both
+            states in the same unit; a corner that changes unit snaps on its
+            own.
+          </P>
+          <Code lang="tsx">{`<button
+  onClick={() => setRound((v) => !v)}
+  style={{
+    borderRadius: round ? 48 : 8,
+    transition: {
+      borderRadius: {
+        duration: 350,
+        easing: "easeInOut",
+      },
+    },
+  }}
+/>
+
+<button
+  style={{
+    borderRadius: 4,
+    transition: {
+      borderRadius: { duration: 200 },
+    },
+  }}
+  hoverStyle={{ borderRadius: 24 }}
+/>`}</Code>
+        </>
+      }
+      demo={RadiusCard}
+    />
+  );
+}
+
+function RadiusCard() {
+  return (
+    <node style={radiusRow}>
+      <button
+        style={radiusPill}
+        hoverStyle={{ borderRadius: 25 }}
+        pressStyle={{ borderRadius: 50 }}
+      >
+        <text style={labelStyle}>Hover or click me</text>
+      </button>
     </node>
   );
 }
@@ -518,6 +575,7 @@ const labelStyle: BevyStyle = {
   color: Colors.textColor400,
   fontSize: FontSizes.base,
   fontWeight: "bold",
+  textAlign: "center",
 };
 
 const switchRow: BevyStyle = {
@@ -626,4 +684,23 @@ const waveDot: BevyStyle = {
   width: 26,
   height: 26,
   borderRadius: 8,
+};
+
+const radiusRow: BevyStyle = {
+  flexDirection: "row",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: 20,
+  height: 96,
+};
+
+// Hover rounds the corners, press squares them — both eased.
+const radiusPill: BevyStyle = {
+  width: 100,
+  height: 100,
+  justifyContent: "center",
+  alignItems: "center",
+  borderRadius: 4,
+  backgroundColor: Colors.primary100,
+  transition: { borderRadius: { duration: 300, easing: "easeOut" } },
 };

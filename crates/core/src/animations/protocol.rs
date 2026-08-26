@@ -171,6 +171,11 @@ pub enum AnimatableProperty {
     // not here: they're relative weights, not magnitudes — animating them has no
     // intuitive visual meaning, unlike a size or `aspectRatio`.)
     AspectRatio,
+    /// Drives `Node.border_radius` — all four corners uniformly, in px (the
+    /// `borderColor` precedent: one binding on the whole field, no per-corner
+    /// wrappers). A `Node` write like the lengths above (relayout on change),
+    /// but it never moves the node's rect.
+    BorderRadius,
 
     /// One named parameter of the node's resolved `filter` chain — the wire
     /// key is `filter[<index>].<param>` (e.g. `filter[0].radius`). `index`
@@ -390,7 +395,12 @@ impl AnimatedBindings {
     /// bound — in the transition engine the layout channel treats such a
     /// node as owning its own rect and adopts each frame instead of chasing.
     pub fn has_node_props(&self) -> bool {
-        self.has_stage(crate::animations::props::PropStage::Node)
+        // `BorderRadius` is `Node`-staged (it writes `Node`) but never moves
+        // the rect — a bound radius must not make the layout channel adopt.
+        self.0.keys().any(|p| {
+            p.stage() == crate::animations::props::PropStage::Node
+                && *p != AnimatableProperty::BorderRadius
+        })
     }
 
     /// Whether any per-param filter binding ([`AnimatableProperty::FilterParam`])

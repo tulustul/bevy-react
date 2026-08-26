@@ -177,7 +177,8 @@ fn write_node_value<N: std::ops::DerefMut<Target = Node>>(
     // a settled binding never forces a relayout. The dispatch is generated from
     // the property table's write-rule column (`props`): `(node <field>)` is the
     // plain compare-write, `(node_gap_both)` writes both gap axes, `(node_aspect)`
-    // the `Option<f32>` aspect ratio; `(color _)`/`(none)` rows never land here
+    // the `Option<f32>` aspect ratio, `(node_radius_all)` every corner of the
+    // border radius; `(color _)`/`(none)` rows never land here
     // and fall through to the `false` tail.
     macro_rules! rule {
         ($prop:tt, (node $field:ident)) => {
@@ -207,6 +208,16 @@ fn write_node_value<N: std::ops::DerefMut<Target = Node>>(
             if property == &$prop {
                 if node.aspect_ratio != Some(v) {
                     node.aspect_ratio = Some(v);
+                    return true;
+                }
+                return false;
+            }
+        };
+        ($prop:tt, (node_radius_all)) => {
+            if property == &$prop {
+                let r = BorderRadius::all(val);
+                if node.border_radius != r {
+                    node.border_radius = r;
                     return true;
                 }
                 return false;

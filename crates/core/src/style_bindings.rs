@@ -520,6 +520,7 @@ mod tests {
             ChannelId::Transform,
             ChannelId::Opacity,
             ChannelId::Background,
+            ChannelId::BorderRadius,
             ChannelId::Filter,
             ChannelId::Backdrop,
             ChannelId::Transform3d,
@@ -635,6 +636,7 @@ mod tests {
             "gap": { "animated": { "id": 13 } },
             "rowGap": { "animated": { "id": 14 } },
             "columnGap": { "animated": { "id": 15 } },
+            "borderRadius": { "animated": { "id": 41 } },
             "opacity": { "animated": { "id": 16 } },
             "backgroundColor": { "animated": { "type": "interpolateColor", "id": 17,
                 "input": [0, 1], "output": [[0, 0, 0, 1], [1, 1, 1, 1]] } },
@@ -673,6 +675,18 @@ mod tests {
         // Every static row derives from the maximal style — the permanent
         // completeness pin (chains covered by their own arms above).
         let b = derive_bindings(Some(&style(maximal))).expect("maximal style derives");
+        assert!(
+            b.parked(crate::animations::props::ChannelId::BorderRadius),
+            "the borderRadius binding parks its transition channel"
+        );
+        assert!(
+            !derive_bindings(Some(&style(serde_json::json!({
+                "borderRadius": { "animated": { "id": 41 } },
+            }))))
+            .expect("derives")
+            .has_node_props(),
+            "a radius binding never owns the rect (layout channel keeps chasing)"
+        );
         macro_rules! rows {
             ($(($prop:tt, $kind:ident, $acc:tt, $write:tt, $stage:ident, $park:ident),)*) => {
                 vec![$($prop),*]

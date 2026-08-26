@@ -219,6 +219,64 @@ fn apply_drives_node_length_and_border_color() {
     );
 }
 
+/// A `borderRadius` binding writes every corner of `Node.border_radius`
+/// uniformly in px (the `borderColor` precedent) and re-asserts after a
+/// static reset; a settled binding never touches `Node` again.
+#[test]
+fn apply_drives_border_radius_uniformly() {
+    let mut world = World::new();
+    world.init_resource::<crate::layer::LayerContentDirt>();
+    let mut values = SharedValues::default();
+    values.set(10, 24.0);
+    world.insert_resource(values);
+
+    let bindings = style_bindings(serde_json::json!({
+        "borderRadius": { "animated": { "id": 10 } },
+    }));
+    let e = world
+        .spawn((
+            AnimatedNode(bindings),
+            UiTransform::default(),
+            Node::default(),
+        ))
+        .id();
+
+    let mut schedule = Schedule::default();
+    schedule.add_systems(apply_animated_nodes);
+    schedule.run(&mut world);
+    let radius = BorderRadius::all(Val::Px(24.0));
+    assert_eq!(world.entity(e).get::<Node>().unwrap().border_radius, radius);
+    assert!(
+        world
+            .resource::<crate::layer::LayerContentDirt>()
+            .nodes
+            .contains(&e),
+        "a radius write pushes content dirt"
+    );
+
+    // A re-render resets the static radius; the still-active binding re-applies.
+    world.entity_mut(e).get_mut::<Node>().unwrap().border_radius = BorderRadius::default();
+    schedule.run(&mut world);
+    assert_eq!(
+        world.entity(e).get::<Node>().unwrap().border_radius,
+        radius,
+        "binding re-applies after a re-render reset"
+    );
+
+    // Settled: the compare-before-write leaves `Node` untouched.
+    world
+        .resource_mut::<crate::layer::LayerContentDirt>()
+        .nodes
+        .clear();
+    let before = world.entity(e).get_ref::<Node>().unwrap().last_changed();
+    schedule.run(&mut world);
+    assert_eq!(
+        world.entity(e).get_ref::<Node>().unwrap().last_changed(),
+        before,
+        "a settled radius binding never marks Node changed"
+    );
+}
+
 /// [I1] A `backdropFilter[<i>].<param>` binding on a Node-carrying entity
 /// belongs to stage 4 (resolved-chain writes) — stage 2 skips it
 /// explicitly (table stage `Backdrop`): it never writes `Node`, never

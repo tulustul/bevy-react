@@ -8,7 +8,7 @@ use serde::Deserialize;
 
 use crate::animations::{Driver, Easing};
 use crate::protocol::{
-    animatable::AnimatableField, style::Style, units::Length, units::Time as WireTime,
+    animatable::AnimatableField, style::Style, units::Length, units::Rect, units::Time as WireTime,
 };
 use crate::ui_map::parse_color;
 
@@ -29,6 +29,14 @@ pub struct Transition {
     /// *layout* properties — easing one re-flows the surrounding content (a real
     /// accordion), unlike the post-layout `transform`.
     pub size: Option<ChannelTransition>,
+    /// Eases the corner radii (`borderRadius`) per corner between style
+    /// states — every wire form (uniform, shorthand, per-corner object), so
+    /// uniform→per-corner eases too. Same-unit corners interpolate; a corner
+    /// that changes unit (or hits `auto`) snaps on its own. Unsetting the
+    /// field eases to square corners. The radius lives on `Node`, so like
+    /// `size` every eased frame is a relayout (a settled radius writes
+    /// nothing). A `{ animated }` binding on `borderRadius` parks it.
+    pub border_radius: Option<ChannelTransition>,
     /// Eases the scroll offset (`ScrollPosition`) of an `overflow: scroll` node
     /// toward its target on change — the target being a controlled `scrollTop`/
     /// `scrollLeft`, a `scrollTo`-style jump, or accumulated wheel input. Covers
@@ -109,6 +117,7 @@ macro_rules! transition_channels {
             (for_opacity, opacity, "opacity"),
             (for_background, background_color, "background color"),
             (for_size, size, "the size channels"),
+            (for_border_radius, border_radius, "the corner radii"),
             (for_scroll, scroll, "the scroll offset"),
             (for_filter, filter, "the filter chain"),
             (for_backdrop_filter, backdrop_filter, "the backdrop-filter chain"),
@@ -151,6 +160,7 @@ impl Transition {
             C::Transform => self.for_transform(),
             C::Opacity => self.for_opacity(),
             C::Background => self.for_background(),
+            C::BorderRadius => self.for_border_radius(),
             C::Filter => self.for_filter(),
             C::Backdrop => self.for_backdrop_filter(),
             C::Transform3d => self.for_transform3d(),
@@ -258,6 +268,9 @@ pub struct TransitionInput {
     pub height: Option<Length>,
     pub max_width: Option<Length>,
     pub max_height: Option<Length>,
+    /// Target corner radii, written onto `Node.border_radius`. `None` →
+    /// unset (square corners, what `node_from_style` writes).
+    pub border_radius: Option<Rect>,
     /// Target `transform3d` params, eased field-wise onto the layer's
     /// [`LayerTransform3d`](crate::layer::transform3d::LayerTransform3d).
     pub transform3d: Option<crate::protocol::transform::Transform3d>,
@@ -299,6 +312,7 @@ impl TransitionInput {
             height: style.height.static_val(),
             max_width: style.max_width.static_val(),
             max_height: style.max_height.static_val(),
+            border_radius: style.border_radius.static_val(),
             transform3d: style.transform3d.clone(),
         })
     }

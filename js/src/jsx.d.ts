@@ -262,6 +262,13 @@ export interface BevyTransition {
    * accordion. Needs an explicit pixel target (e.g. `maxHeight: open ? 300 : 0`);
    * `auto`/unknown heights snap. Pair with `overflowY: "clip"`. */
   size?: BevyTransitionSpec;
+  /** Eases `borderRadius` per corner between style states — every wire form
+   * (uniform, shorthand, per-corner object), so uniform-to-per-corner eases too.
+   * Same-unit corners interpolate; a corner that changes unit (or hits `auto`)
+   * snaps on its own. Unsetting the field eases to square corners. The radius
+   * is a layout property (it lives on the node), so like `size` every eased
+   * frame is a relayout. An `{ animated }` binding on `borderRadius` parks it. */
+  borderRadius?: BevyTransitionSpec;
   /** Eases the scroll offset (`ScrollPosition`) of an `overflow: scroll` node
    * toward its target — a controlled `scrollTop`/`scrollLeft` change or accumulated
    * wheel input — instead of snapping (smooth scroll). Covers both axes. Direct
@@ -508,7 +515,10 @@ export interface BevyStyle {
   borderColor?:
     | Animatable<Color>
     | { top?: Color; right?: Color; bottom?: Color; left?: Color };
-  borderRadius?: Rect;
+  /** Corner radii. Animatable as a whole: a bound value drives all four corners
+   *  in px (no per-corner wrappers); `transition: { borderRadius }` eases
+   *  static changes per corner. */
+  borderRadius?: Animatable<Rect>;
   outline?: { width?: Length; offset?: Length; color?: Color };
   /** One drop shadow, or an array of shadows stacked back-to-front (first
    *  paints on top), like CSS `box-shadow: a, b, …`. */

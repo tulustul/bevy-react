@@ -48,7 +48,8 @@
 //! - **write-rule** — how the apply engine lands a resolved value:
 //!   `(node <field>)` a `Val::Px` compare-before-write on that `Node` field,
 //!   `(node_gap_both)` both gap axes, `(node_aspect)` the `Option<f32>`
-//!   aspect ratio, `(color <target>)` the stage-2 color routing target
+//!   aspect ratio, `(node_radius_all)` all four `border_radius` corners
+//!   uniformly, `(color <target>)` the stage-2 color routing target
 //!   (`bg` / `border` / `text` / `image_tint`), `(none)` for properties the
 //!   node-value writer never handles (transform, transform3d, opacity).
 //! - **stage** — which apply stage owns the property: `Transform` (stage 1,
@@ -58,8 +59,9 @@
 //!   consumers can splice them into an enum path directly.
 //! - **park** — which transition channel a binding on this property parks
 //!   (imperative bindings win over eased transitions): `Transform` /
-//!   `Opacity` / `Background` / `Transform3d`, or `None` for properties with
-//!   no competing transition channel. Variant-name idents, like **stage**.
+//!   `Opacity` / `Background` / `BorderRadius` / `Transform3d`, or `None`
+//!   for properties with no competing transition channel. Variant-name
+//!   idents, like **stage**.
 //!
 //! Rows are ordered by the enum's `Ord` (declaration order) — pinned by a
 //! test below, so table iteration order and `BTreeMap` iteration order agree
@@ -113,6 +115,7 @@ macro_rules! with_animatable_props {
             ((P::RowGap), Length, (base row_gap), (node row_gap), Node, None),
             ((P::ColumnGap), Length, (base column_gap), (node column_gap), Node, None),
             ((P::AspectRatio), Scalar, (base aspect_ratio), (node_aspect), Node, None),
+            ((P::BorderRadius), Length, (base border_radius), (node_radius_all), Node, BorderRadius),
             ((P::Transform3d(F::Perspective)), Length, (t3d perspective num 0.0), (none), Transform3d, Transform3d),
             ((P::Transform3d(F::TranslateX)), Length, (t3d translate_x num 0.0), (none), Transform3d, Transform3d),
             ((P::Transform3d(F::TranslateY)), Length, (t3d translate_y num 0.0), (none), Transform3d, Transform3d),
@@ -164,8 +167,8 @@ pub(crate) enum PropStage {
 ///
 /// **The authoritative park-semantics reference.** Two granularities:
 /// *fine-grained* channels ([`Opacity`](Self::Opacity),
-/// [`Background`](Self::Background)) park only when their exact property is
-/// bound; *coarse* channels ([`Transform`](Self::Transform),
+/// [`Background`](Self::Background), [`BorderRadius`](Self::BorderRadius))
+/// park only when their exact property is bound; *coarse* channels ([`Transform`](Self::Transform),
 /// [`Filter`](Self::Filter), [`Backdrop`](Self::Backdrop),
 /// [`Transform3d`](Self::Transform3d), the gradient pair) park on ANY
 /// binding in their group,
@@ -183,7 +186,7 @@ pub(crate) enum PropStage {
 /// are the writers these parks yield to (`crate::animations`' apply module,
 /// filter-params and shape stages).
 ///
-/// Identifies the eight parkable channels of `drive_transitions`; the shape
+/// Identifies the nine parkable channels of `drive_transitions`; the shape
 /// park is deliberately not a variant here (it is keyed per-entity by the
 /// dynamic `ShapeAttr` domain, not a static property row).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -195,6 +198,9 @@ pub(crate) enum ChannelId {
     /// The background-color channel — parked by a `backgroundColor` binding
     /// (fine-grained).
     Background,
+    /// The corner-radius channel — parked by a `borderRadius` binding
+    /// (fine-grained: the binding IS the whole field).
+    BorderRadius,
     /// The whole-value `filter` channel — parked by ANY `filter[<i>].<param>`
     /// binding (coarse: the channel eases a complete pass list, there is no
     /// per-param seam to merge an imperative writer into).
@@ -317,7 +323,7 @@ mod tests {
     /// Row order IS enum `Ord` order (strictly ascending) — so consumers that
     /// iterate the table and consumers that iterate the `BTreeMap` bindings
     /// agree on sequence, by test instead of tribal knowledge. Also pins the
-    /// static row count at 38 (26 fieldless + 12 `Transform3d` fields).
+    /// static row count at 39 (27 fieldless + 12 `Transform3d` fields).
     #[test]
     fn table_rows_are_in_enum_order() {
         macro_rules! rows {
@@ -326,7 +332,7 @@ mod tests {
             };
         }
         let rows: Vec<P> = with_animatable_props!(rows);
-        assert_eq!(rows.len(), 38, "static row count");
+        assert_eq!(rows.len(), 39, "static row count");
         for w in rows.windows(2) {
             assert!(
                 w[0] < w[1],

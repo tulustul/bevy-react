@@ -161,9 +161,13 @@ pub struct Style {
     #[serde(default)]
     pub border_color: Option<Animatable<BorderColorSpec>>,
     /// Corner radii; same forms as the other rect fields (corners are
-    /// top-left, top-right, bottom-right, bottom-left).
+    /// top-left, top-right, bottom-right, bottom-left). Animatable as a
+    /// whole: an `{ animated }` wrapper on the field drives all four corners
+    /// with one px value (the `borderColor` precedent — no per-corner
+    /// wrappers); `transition: { borderRadius }` eases static changes
+    /// per corner.
     #[serde(default)]
-    pub border_radius: Option<Rect>,
+    pub border_radius: Option<Animatable<Rect>>,
     #[serde(default)]
     pub outline: Option<OutlineSpec>,
     #[serde(default)]
@@ -377,7 +381,8 @@ pub mod style_groups {
     pub const FILTER: u32 = 1 << 12;
     /// `TransitionInput` (`TransitionInput::from_style` reads `transition` plus
     /// every transitioned channel: `transform`, `opacity`, `background_color`,
-    /// `width`, `height`, `max_width`, `max_height`). The filter channel's
+    /// `width`, `height`, `max_width`, `max_height`, `border_radius`). The
+    /// filter channel's
     /// timing rides the spec here; its *target* is `FilterInput` (FILTER).
     pub const TRANSITION: u32 = 1 << 13;
     /// `ScrollTransitionInput` (reads `transition`).
@@ -493,7 +498,7 @@ macro_rules! with_style_fields {
             (grid_column, "gridColumn", (LAYOUT), overlay),
             (background_color, "backgroundColor", (BACKGROUND | TRANSITION), overlay),
             (border_color, "borderColor", (BORDER_COLOR), overlay),
-            (border_radius, "borderRadius", (LAYOUT), overlay),
+            (border_radius, "borderRadius", (LAYOUT | TRANSITION), overlay),
             (outline, "outline", (OUTLINE), overlay),
             (box_shadow, "boxShadow", (BOX_SHADOW), overlay),
             (filter, "filter", (FILTER | LAYER), overlay),
@@ -657,6 +662,42 @@ mod tests {
         let style = cached.style.as_ref().expect("style retained");
         assert_eq!(style.group_alpha, Some(false));
         assert_eq!(style.opacity.static_val(), Some(0.5));
+    }
+
+    /// A `borderRadius` delta marks TRANSITION (its channel target rides
+    /// `TransitionInput`) alongside LAYOUT, and the field takes an
+    /// `{ animated }` wrapper whose seed decodes as a `Rect`.
+    #[test]
+    fn border_radius_dirties_transition_and_decodes_binding() {
+        let uniform8: Rect = serde_json::from_value(serde_json::json!(8)).expect("rect decodes");
+        let mut cached = Props::default();
+        let (dirty, _) = cached.merge_delta(
+            props(serde_json::json!({ "style": { "borderRadius": 8 } })),
+            &[],
+            &[],
+        );
+        assert!(dirty.style.intersects(style_groups::TRANSITION));
+        assert!(dirty.style.intersects(style_groups::LAYOUT));
+        let style = cached.style.as_ref().expect("style retained");
+        assert_eq!(style.border_radius.static_val(), Some(uniform8));
+
+        let s: Style = serde_json::from_value(serde_json::json!({
+            "borderRadius": { "animated": { "id": 3 }, "seed": 8 }
+        }))
+        .expect("style decodes");
+        assert!(
+            s.border_radius.binding().is_some(),
+            "wrapper derives a binding"
+        );
+        assert_eq!(
+            s.border_radius.static_val(),
+            None,
+            "animated reads as unset"
+        );
+        assert_eq!(
+            s.border_radius.as_ref().and_then(|a| a.seed()),
+            Some(&uniform8)
+        );
     }
 
     /// `cache` decodes its keywords (unknown → warn + default) and a delta

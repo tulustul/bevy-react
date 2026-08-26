@@ -6,7 +6,7 @@
 use bevy::prelude::*;
 
 use crate::animations::{Lerp, Runner, build_runner};
-use crate::protocol::units::Length;
+use crate::protocol::units::{Length, Rect};
 
 use super::spec::ChannelTransition;
 use super::{gradient_channel, shape_channel, transform3d};
@@ -17,7 +17,10 @@ use super::{gradient_channel, shape_channel, transform3d};
 /// `(channel, (identity default), group)`.
 /// Consumed by the mount-seed block (every row seeds `state.<channel>` from
 /// `input.<channel>` at its identity default) and by the size drive block
-/// (`size` rows, which also name the written `Node` field). The
+/// (`size` rows, which also name the written `Node` field); the `radius`
+/// row (`border_radius`, a whole [`Rect`] eased per corner) has its own
+/// drive block. Every non-`size` row is also a shared-element seed channel
+/// (`super::shared::copy_value_channels`). The
 /// color/filter/backdrop/transform3d/scroll/shape channels have their own
 /// target shapes and stay explicit.
 macro_rules! with_input_channels {
@@ -34,6 +37,7 @@ macro_rules! with_input_channels {
             (height, (Length::Auto), size),
             (max_width, (Length::Auto), size),
             (max_height, (Length::Auto), size),
+            (border_radius, (crate::protocol::units::Rect::default()), radius),
         }
     };
 }
@@ -59,6 +63,8 @@ pub struct TransitionState {
     pub(super) height: ProgressChannel<Length>,
     pub(super) max_width: ProgressChannel<Length>,
     pub(super) max_height: ProgressChannel<Length>,
+    /// Corner radii, eased per corner (`Rect`'s [`Lerp`]).
+    pub(super) border_radius: ProgressChannel<Rect>,
     pub(super) filter: FilterChannel,
     pub(super) backdrop_filter: FilterChannel,
     /// Whole-value gradient easing per surface (see
@@ -532,6 +538,19 @@ impl Lerp for Length {
             (VMin(x), VMin(y)) => VMin(lerp(x, y)),
             (VMax(x), VMax(y)) => VMax(lerp(x, y)),
             _ => other,
+        }
+    }
+}
+
+/// Per-leaf [`Length`] lerp: each side/corner eases on its own, so a corner
+/// changing unit snaps alone while the others keep easing.
+impl Lerp for Rect {
+    fn lerp(self, other: Self, t: f32) -> Self {
+        Rect {
+            top: self.top.lerp(other.top, t),
+            right: self.right.lerp(other.right, t),
+            bottom: self.bottom.lerp(other.bottom, t),
+            left: self.left.lerp(other.left, t),
         }
     }
 }
