@@ -7,9 +7,20 @@ import { useDemosStore } from "./demosStore";
 
 export function Navigation() {
   const { selectedDemo, setSelectedDemo } = useDemosStore();
+  const entered = useSlideIn();
 
   return (
-    <node style={navStyle}>
+    <node
+      style={{
+        ...navStyle,
+        opacity: entered ? 1 : 0,
+        transform: { translateX: entered ? 0 : -NAV_SLIDE_PX },
+        transition: {
+          opacity: { duration: 800, easing: "easeOut" },
+          transform: { duration: 800, easing: "easeOut" },
+        },
+      }}
+    >
       <image src="bevy-react-logo.png" style={{ width: 150 }} />
       <Title />
       <node style={itemsStyle} scrollStep={40}>
@@ -25,6 +36,23 @@ export function Navigation() {
     </node>
   );
 }
+
+// The sidebar's startup entrance: the first commit must reach Bevy *before*
+// the settled style, or the transition arms on a node it has never seen and
+// snaps. React's passive effects can land in the same Bevy frame as the mount
+// (the JS thread runs ahead of the app thread), so the flip waits a beat.
+function useSlideIn() {
+  const [entered, setEntered] = useState(false);
+  useEffect(() => {
+    const id = setTimeout(() => setEntered(true), 50);
+    return () => clearTimeout(id);
+  }, []);
+  return entered;
+}
+
+// How far left the sidebar starts — its own width plus enough slack to carry
+// the drop shadow off-screen with it.
+const NAV_SLIDE_PX = 260;
 
 const title = "bevy-react";
 const titleDelay = 7000;

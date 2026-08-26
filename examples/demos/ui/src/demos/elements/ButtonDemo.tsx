@@ -175,7 +175,7 @@ const countValueStyle: BevyStyle = {
 
 const basicButtonStyle: BevyStyle = {
   width: 160,
-  height: 40,
+  height: 30,
   justifyContent: "center",
   alignItems: "center",
   borderRadius: 8,
@@ -189,8 +189,7 @@ const basicLabelStyle: BevyStyle = {
   fontWeight: "bold",
 };
 
-// Same footprint as the basic one so the two cards read as a pair.
 const richButtonStyle: BevyStyle = {
   width: 160,
-  height: 40,
+  height: 30,
 };
