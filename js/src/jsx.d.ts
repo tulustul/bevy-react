@@ -585,6 +585,22 @@ export interface BevyStyle {
    *  warning — on `<image>`/`<canvas>`/`<portal>` (their `ImageNode` belongs
    *  to the element) and `<surface>`. */
   backgroundImage?: BackgroundImage;
+  /** How this node's raster source (`<image src>` or `backgroundImage`) is
+   * resampled when drawn at a size other than its own. `"auto"` (default)
+   * is passive: the engine default, level-0 bilinear today. `"bilinear"`
+   * samples level 0 only; `"trilinear"` generates a mip pyramid for the
+   * image and samples across levels — the fix for a large image drawn small
+   * (aliasing / shimmer while it scales); `"nearest"` is nearest-neighbor
+   * (pixel art). Per node, not inherited, not animatable. Each explicit mode
+   * is honored through a derived copy of the asset per `(source, mode)` —
+   * the source asset is never modified, two nodes with different modes on
+   * one file both render as asked, and the copy is shared and dropped with
+   * its last user. A live texture (`{ texture }` render target, `<portal>`,
+   * canvas, svg) can't be copied: every explicit mode is ignored there with
+   * a warning, as is `"trilinear"` on a non-RGBA8 format. Composited layers
+   * are unaffected (a `transform3d` layer always samples its capture
+   * trilinear). Silent on a node with no raster source. */
+  imageRendering?: "auto" | "bilinear" | "trilinear" | "nearest";
   zIndex?: number;
   /** Lifts the node (and its subtree) into the UI's global stacking order,
    *  escaping the parent stacking context — so a deeply-nested overlay can paint

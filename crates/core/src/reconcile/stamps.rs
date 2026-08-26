@@ -404,7 +404,7 @@ pub(super) fn queue_pending_selection(
 
 #[cfg(test)]
 mod tests {
-    use super::super::test_util::{op_app, update_delta};
+    use super::super::test_util::{ent, op_app, update_delta};
     use super::*;
     use crate::protocol::op::Op;
 
@@ -595,6 +595,54 @@ mod tests {
         );
         let handlers = entity.get::<PointerHandlers>().expect("PointerHandlers");
         assert!(handlers.enter && handlers.leave);
+    }
+
+    /// `imageRendering` stamps `ImageRenderingMode` for an explicit mode only:
+    /// `"auto"` is passive (no component, like absent), a delta flips it, and
+    /// `styleUnset` removes it.
+    #[test]
+    fn image_rendering_mode_is_stamped_for_explicit_modes_only() {
+        use crate::image_rendering::{ImageRendering, ImageRenderingMode};
+        let (mut app, ops_tx) = op_app();
+        let styled = |mode: &str| -> Box<Props> {
+            Box::new(
+                serde_json::from_value(serde_json::json!({ "style": { "imageRendering": mode } }))
+                    .unwrap(),
+            )
+        };
+        let create = |id: NodeId, props: Box<Props>| Op::Create {
+            id,
+            kind: "image".into(),
+            props,
+            text: None,
+        };
+        ops_tx
+            .send(vec![
+                create(1, styled("trilinear")),
+                create(2, styled("auto")),
+                create(3, Box::default()),
+            ])
+            .unwrap();
+        app.update();
+        let mode = |app: &App, id: NodeId| -> Option<ImageRendering> {
+            app.world()
+                .entity(ent(app, id))
+                .get::<ImageRenderingMode>()
+                .map(|m| m.0)
+        };
+        assert_eq!(mode(&app, 1), Some(ImageRendering::Trilinear));
+        assert_eq!(mode(&app, 2), None, "auto is passive");
+        assert_eq!(mode(&app, 3), None);
+
+        ops_tx
+            .send(vec![
+                update_delta(1, Props::default(), &[], &["imageRendering"]),
+                update_delta(3, *styled("nearest"), &[], &[]),
+            ])
+            .unwrap();
+        app.update();
+        assert_eq!(mode(&app, 1), None, "styleUnset removes the mode");
+        assert_eq!(mode(&app, 3), Some(ImageRendering::Nearest));
     }
 
     /// `FocusPolicy` defaults differ by element kind: a `<button>` captures the

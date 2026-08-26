@@ -54,6 +54,7 @@ fn js_warning_kind_table_covers_known_kinds() {
         "scrollbar",
         "styleBinding",
         "backgroundImage",
+        "imageRendering",
         "nameAmbiguous",
         "svgImageAttrs",
         "svgShapeScroll",

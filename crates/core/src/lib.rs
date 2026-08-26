@@ -88,6 +88,7 @@ pub mod filters;
 pub mod animations;
 pub mod background_image;
 pub mod canvas;
+pub mod image_rendering;
 pub mod layer;
 pub mod portal;
 pub mod surface;

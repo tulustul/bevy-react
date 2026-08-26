@@ -708,6 +708,20 @@ impl Plugin for ReactUiPlugin {
             ),
         );
 
+        // `imageRendering` (see `crate::image_rendering`): binds each explicit
+        // mode to the asset that renders it (variant repoint). After every
+        // `ImageNode` handle writer — the op drain, the interaction restyle,
+        // and the background-texture rebind — so a freshly-styled node binds
+        // the same frame.
+        app.insert_resource(crate::image_rendering::ImageVariants::from_app(app));
+        app.add_systems(
+            Update,
+            crate::image_rendering::bind_image_rendering
+                .after(apply_js_ops)
+                .after(apply_interaction_styles)
+                .after(crate::background_image::bind_background_textures),
+        );
+
         // Layer promotion (see `crate::layer`). Main-world state registers
         // unconditionally so headless wiring tests build; the render half is
         // gated above with the rest of the render-only setup. A separate

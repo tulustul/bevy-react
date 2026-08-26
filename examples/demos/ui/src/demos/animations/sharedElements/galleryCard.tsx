@@ -269,6 +269,7 @@ const thumb: BevyStyle = {
   height: 72,
   borderRadius: 36,
   transition: flight,
+  imageRendering: "trilinear",
 };
 
 const detail: BevyStyle = {
@@ -288,6 +289,7 @@ const hero: BevyStyle = {
   height: 200,
   borderRadius: 16,
   transition: flight,
+  imageRendering: "trilinear",
 };
 
 // The exiting detail's stand-in for the hero: keeps the caption and Back

@@ -17,6 +17,8 @@ use super::grid::{de_grid_auto_tracks, de_grid_placement, de_grid_template};
 use super::keywords::*;
 use super::transform::{Transform, Transform3d};
 use super::units::{FontSize, Length, Rect};
+use crate::image_rendering::ImageRendering;
+
 use super::visual::{
     BorderColorSpec, BoxShadowList, GradientList, LetterSpacingSpec, LineHeightSpec, OutlineSpec,
     TextShadowSpec,
@@ -229,6 +231,15 @@ pub struct Style {
     /// (their `ImageNode` belongs to the element) and `surface`.
     #[serde(default, deserialize_with = "de_background_image")]
     pub background_image: Option<BackgroundImageSpec>,
+    /// How this node's raster source (`<image src>` / `backgroundImage`) is
+    /// resampled: `"auto"` (passive — the engine default, level-0 bilinear
+    /// today), `"bilinear"` (level 0 only), `"trilinear"` (a generated mip
+    /// pyramid, the fix for large images drawn small), `"nearest"` (pixel
+    /// art). Per node, not inherited; honored through a derived variant asset
+    /// per `(source, mode)` — see [`crate::image_rendering`]. Silent on a node
+    /// with no raster source.
+    #[serde(default, deserialize_with = "de_image_rendering")]
+    pub image_rendering: Option<ImageRendering>,
     #[serde(default)]
     pub z_index: Option<i32>,
     /// Global stacking order: lifts the node (and its subtree) into the UI's
@@ -432,6 +443,10 @@ pub mod style_groups {
     /// `apply_transition` stamp site fires on `TRANSITION | MORPH` so a
     /// morph-only delta still reaches the transition engine.
     pub const MORPH: u32 = 1 << 23;
+    /// `ImageRenderingMode` (reads `image_rendering`) — the per-node sampling
+    /// mode `crate::image_rendering` binds onto the entity's `ImageNode`
+    /// (variant-asset repoint). Content dirt: a mode flip repaints the node.
+    pub const IMAGE_RENDERING: u32 = 1 << 24;
 }
 
 /// The single source of truth for [`Style`]'s field list. Invokes the callback
@@ -507,6 +522,7 @@ macro_rules! with_style_fields {
             (background_gradient, "backgroundGradient", (BG_GRADIENT), overlay),
             (border_gradient, "borderGradient", (BORDER_GRADIENT), overlay),
             (background_image, "backgroundImage", (BG_IMAGE), overlay),
+            (image_rendering, "imageRendering", (IMAGE_RENDERING), overlay),
             (z_index, "zIndex", (Z_INDEX), overlay),
             (global_z_index, "globalZIndex", (GLOBAL_Z_INDEX), overlay),
             (focus_policy, "focusPolicy", (FOCUS_POLICY), no_overlay),
@@ -697,6 +713,40 @@ mod tests {
         assert_eq!(
             s.border_radius.as_ref().and_then(|a| a.seed()),
             Some(&uniform8)
+        );
+    }
+
+    /// `imageRendering` decodes its keywords (unknown → warn + `auto`) and a
+    /// delta touching it marks the IMAGE_RENDERING group.
+    #[test]
+    fn image_rendering_keyword_decodes_and_dirties_group() {
+        use crate::image_rendering::ImageRendering;
+        for (wire, want) in [
+            ("auto", ImageRendering::Auto),
+            ("bilinear", ImageRendering::Bilinear),
+            ("trilinear", ImageRendering::Trilinear),
+            ("nearest", ImageRendering::Nearest),
+            // Unrecognized (incl. the CSS words we deliberately don't alias).
+            ("pixelated", ImageRendering::Auto),
+        ] {
+            let s: Style = serde_json::from_str(&format!(r#"{{ "imageRendering": "{wire}" }}"#))
+                .expect("style decodes");
+            assert_eq!(s.image_rendering, Some(want), "{wire}");
+        }
+        let s: Style = serde_json::from_str("{}").expect("style decodes");
+        assert_eq!(s.image_rendering, None);
+
+        let mut cached = Props::default();
+        let (dirty, _) = cached.merge_delta(
+            props(serde_json::json!({ "style": { "imageRendering": "trilinear" } })),
+            &[],
+            &[],
+        );
+        assert!(dirty.style.intersects(style_groups::IMAGE_RENDERING));
+        assert!(!dirty.style.intersects(style_groups::BG_IMAGE));
+        assert_eq!(
+            cached.style.as_ref().and_then(|s| s.image_rendering),
+            Some(ImageRendering::Trilinear)
         );
     }
 

@@ -82,6 +82,9 @@ const KIND_FIELDS: Record<string, { style?: string[]; props?: string[] }> = {
   // backgroundImage: decode fallbacks (bad mode keyword, missing `src`,
   // ignored `scale`) and the apply-time "element owns its image" report.
   backgroundImage: { style: ["backgroundImage"] },
+  // imageRendering: a refused mode (live texture / no CPU data / an
+  // unsupported format for `trilinear`) — the node keeps its source.
+  imageRendering: { style: ["imageRendering"] },
   // svg-mode <image>: `atlas`/`sourceRect` are ignored (the document rasters
   // whole at laid-out size — no source texture to grid or crop).
   svgImageAttrs: { props: ["atlas", "sourceRect"] },

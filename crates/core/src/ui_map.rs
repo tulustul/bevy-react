@@ -721,6 +721,20 @@ pub fn apply_style_masked(
             }
         }
     }
+    // `imageRendering`: an explicit mode stamps the marker the binding systems
+    // (`crate::image_rendering`) pair with the entity's `ImageNode`; `auto`
+    // is passive, so it reads as absent.
+    if dirty.intersects(g::IMAGE_RENDERING) {
+        use crate::image_rendering::{ImageRendering, ImageRenderingMode};
+        match s.and_then(|s| s.image_rendering) {
+            Some(mode) if mode != ImageRendering::Auto => {
+                ec.insert(ImageRenderingMode(mode));
+            }
+            _ => {
+                ec.remove::<ImageRenderingMode>();
+            }
+        }
+    }
     if dirty.intersects(g::CURSOR) {
         match s.and_then(|s| s.cursor.as_ref()) {
             Some(c) => {

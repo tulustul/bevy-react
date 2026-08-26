@@ -14,6 +14,7 @@ use serde::de::{self, Deserializer, Visitor};
 use super::background_image::BackgroundImageMode;
 use super::decode_warn;
 use super::style::LayerCache;
+use crate::image_rendering::ImageRendering;
 
 /// Declares one `deserialize_with` fn per keyword-valued
 /// [`Style`](super::style::Style) field,
@@ -146,6 +147,12 @@ keyword_fields! {
     fn de_bg_image_mode("backgroundImage") -> BackgroundImageMode {
         "stretch" => Stretch, "repeat" => Repeat,
         "repeatX" => RepeatX, "repeatY" => RepeatY,
+    }
+    // GPU sampling vocabulary on purpose (no CSS `smooth`/`pixelated`
+    // aliases); unknown → `auto`, which never touches the asset.
+    fn de_image_rendering("imageRendering") -> ImageRendering {
+        "auto" => Auto, "bilinear" => Bilinear,
+        "trilinear" => Trilinear, "nearest" => Nearest,
     }
 }
 

@@ -42,6 +42,7 @@ import { FilterDemo } from "./demos/styling/FilterDemo";
 import { BackdropFilterDemo } from "./demos/styling/BackdropFilterDemo";
 import { CustomFiltersDemo } from "./demos/styling/CustomFiltersDemo";
 import { BackgroundImageDemo } from "./demos/styling/BackgroundImageDemo";
+import { ImageRenderingDemo } from "./demos/styling/ImageRenderingDemo";
 import { GradientsDemo } from "./demos/styling/GradientsDemo";
 import { OpacityDemo } from "./demos/styling/OpacityDemo";
 import { ZIndexDemo } from "./demos/styling/ZIndexDemo";
@@ -114,6 +115,7 @@ export const DEMOS: DemoItem[] = [
       { label: "Custom filters", component: CustomFiltersDemo },
       { label: "Gradients", component: GradientsDemo },
       { label: "Background images", component: BackgroundImageDemo },
+      { label: "Image rendering", component: ImageRenderingDemo },
       { label: "Opacity", component: OpacityDemo },
       { label: "Z-index", component: ZIndexDemo },
       { label: "Focus policy", component: FocusPolicyDemo },

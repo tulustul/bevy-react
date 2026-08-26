@@ -56,3 +56,22 @@ Domain glossary for `bevy-react`. Use these terms as written; the code, the
   take-off point is **root-space anchored**: the seed rect is re-expressed in
   the parent's frame every flight frame, so a parent the size flight
   re-flows (a centered container) doesn't move it.
+
+## Image rendering
+
+- **Image rendering mode** — the `imageRendering` style keyword
+  (`auto | bilinear | trilinear | nearest`): how a node's **raster source**
+  (`<image src>`, `backgroundImage`) is resampled when drawn at a size other
+  than its own. Per node, never inherited; a keyword, never animated.
+- **Passive `auto`** — the default mode never touches an asset; it renders as
+  the engine default (level-0 bilinear today). Only an explicit mode binds.
+- **Variant asset** — the derived copy of a source asset for one
+  `(source, mode)` pair (ADR-0003): sampler set per mode, a generated mip
+  pyramid for `trilinear`. Shared by every node asking for that pair,
+  refcounted, dropped with its last user, rebuilt in place on source reload.
+  Made only when the source doesn't already **satisfy** the mode.
+- **Live texture** — a raster source written on the GPU or re-rastered per
+  frame, or bound by another system (a `{ texture }`/`<portal>` render
+  target, a canvas, an svg): can't be copied or written (a write re-uploads
+  over the GPU target), so every explicit mode is refused there with a
+  warning and the node keeps its source.
