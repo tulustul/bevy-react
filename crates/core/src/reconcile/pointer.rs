@@ -60,7 +60,8 @@ impl DragSource {
 /// [`ActiveDrag::end`]), so no per-field reset can be forgotten on either
 /// edge. `last_pos` is the node-relative `0..1` position; `last_abs` is the
 /// absolute window position (logical px). A `Resource` so the touch-scroll
-/// claim (`crate::touch_scroll`) can exclude the drag-owning touch.
+/// path (`crate::touch_scroll`) can see which touch the drag owns — that touch
+/// is *contested* there, and a pan along a scrollable axis steals it.
 #[derive(Resource, Default)]
 pub(crate) struct ActiveDrag {
     binding: Option<(Entity, DragSource)>,
@@ -130,6 +131,9 @@ pub fn collect_pointer_events(
     interactions: Query<&Interaction>,
     mut capture: ResMut<crate::PointerCapture>,
     mut drag: ResMut<ActiveDrag>,
+    // Written by `apply_touch_scroll` (ordered after, same set): a steal
+    // recorded in frame N ends the drag here in frame N+1.
+    touch_scroll: Res<crate::touch_scroll::TouchScrollState>,
 ) {
     let emit = |rnode: &ReactNode, kind: &str, pos: Vec2, abs: Vec2, button: u8| {
         let _ = bridge.outbound_tx.send(Outbound::UiEvent {
@@ -264,9 +268,14 @@ pub fn collect_pointer_events(
     // an actual displacement emits: a stationary held pointer stays silent
     // (DOM `pointermove` semantics) instead of flooding the bridge with one
     // identical event per frame. Touch drags read the touch's own position —
-    // the window has no cursor on a touchscreen.
+    // the window has no cursor on a touchscreen. A touch the scroll
+    // arbitration stole is no longer held by the drag (it ends below).
+    let stolen = match drag.binding {
+        Some((_, DragSource::Touch { id })) => touch_scroll.stole_drag(id),
+        _ => false,
+    };
     let held = match drag.binding {
-        Some((_, DragSource::Touch { id })) => touches.get_pressed(id).is_some(),
+        Some((_, DragSource::Touch { id })) => touches.get_pressed(id).is_some() && !stolen,
         Some((_, DragSource::Mouse { button, .. })) => buttons.pressed(button),
         None => false,
     };
@@ -292,14 +301,18 @@ pub fn collect_pointer_events(
     }
 
     // End the drag when the initiating pointer is released (a canceled touch
-    // counts — the finger is gone either way).
-    let released = match drag.binding {
-        Some((_, DragSource::Touch { id })) => {
-            touches.just_released(id) || touches.just_canceled(id)
-        }
-        Some((_, DragSource::Mouse { button, .. })) => buttons.just_released(button),
-        None => false,
-    };
+    // counts — the finger is gone either way), or when the touch-scroll
+    // arbitration stole the touch: then the element gets `pointerLeave` (the
+    // DOM `pointercancel` analog — the finger went to the scroll, there is no
+    // `pointerUp`), and the finger's later release is nobody's drag.
+    let released = stolen
+        || match drag.binding {
+            Some((_, DragSource::Touch { id })) => {
+                touches.just_released(id) || touches.just_canceled(id)
+            }
+            Some((_, DragSource::Mouse { button, .. })) => buttons.just_released(button),
+            None => false,
+        };
     if released
         && let Some((entity, source)) = drag.end()
         && let Ok((_, rnode, _, rel, handlers, user, _, _, _)) = nodes.get(entity)
@@ -310,13 +323,19 @@ pub fn collect_pointer_events(
             // *canceled* touch has no `get_released` entry (cancels live in a
             // separate map with no position getter), so the fallback is the
             // finger's last known position — not wherever an idle mouse rests.
+            // (A stolen touch is still pressed — read it where it is.)
             DragSource::Touch { id } => touches
                 .get_released(id)
+                .or_else(|| touches.get_pressed(id))
                 .map(|t| t.position())
                 .unwrap_or(drag.last_abs),
             DragSource::Mouse { .. } => cursor_abs.unwrap_or(drag.last_abs),
         };
-        if handlers.up {
+        if stolen {
+            if handlers.leave {
+                emit(rnode, "pointerLeave", pos, abs, source.dom_button());
+            }
+        } else if handlers.up {
             emit(rnode, "pointerUp", pos, abs, source.dom_button());
         }
     }
@@ -373,6 +392,7 @@ mod tests {
         app.init_resource::<bevy::input::touch::Touches>();
         app.init_resource::<crate::PointerCapture>();
         app.init_resource::<ActiveDrag>();
+        app.init_resource::<crate::touch_scroll::TouchScrollState>();
         app.add_systems(Update, collect_pointer_events);
 
         let mut window = Window::default();
@@ -460,6 +480,7 @@ mod tests {
         app.init_resource::<Touches>();
         app.init_resource::<crate::PointerCapture>();
         app.init_resource::<ActiveDrag>();
+        app.init_resource::<crate::touch_scroll::TouchScrollState>();
         app.add_message::<TouchInput>();
         app.add_systems(
             Update,
@@ -565,6 +586,98 @@ mod tests {
         assert!(!dragging(&app));
     }
 
+    /// The touch-scroll arbitration (`apply_touch_scroll`) steals a
+    /// touch-sourced drag once the finger pans along a scrollable axis: the
+    /// drag then ends on the next frame with `pointerLeave` (the DOM
+    /// `pointercancel` analog — the finger is the scroll's now; no `pointerUp`,
+    /// no further moves), `PointerCapture::dragging` drops, and the finger's
+    /// eventual release is silent.
+    #[test]
+    fn stolen_touch_drag_ends_with_pointer_leave() {
+        use bevy::input::touch::{TouchInput, TouchPhase, Touches, touch_screen_input_system};
+
+        let (mut app, mut out_rx) = click_app();
+        app.init_resource::<ButtonInput<MouseButton>>();
+        app.init_resource::<Touches>();
+        app.init_resource::<crate::PointerCapture>();
+        app.init_resource::<ActiveDrag>();
+        app.init_resource::<crate::touch_scroll::TouchScrollState>();
+        app.add_message::<TouchInput>();
+        app.add_systems(
+            Update,
+            (touch_screen_input_system, collect_pointer_events).chain(),
+        );
+        let win = app.world_mut().spawn(Window::default()).id();
+        let node = app
+            .world_mut()
+            .spawn((
+                ReactNode(1),
+                Interaction::Pressed,
+                RelativeCursorPosition {
+                    cursor_over: true,
+                    normalized: Some(Vec2::ZERO),
+                },
+                PointerHandlers {
+                    down: true,
+                    moved: true,
+                    up: true,
+                    leave: true,
+                    ..default()
+                },
+                ComputedNode {
+                    size: Vec2::new(200.0, 200.0),
+                    inverse_scale_factor: 1.0,
+                    ..default()
+                },
+                UiGlobalTransform::from_translation(Vec2::new(100.0, 100.0)),
+            ))
+            .id();
+        let touch = |phase, y: f32| TouchInput {
+            phase,
+            position: Vec2::new(100.0, y),
+            window: win,
+            force: None,
+            id: 7,
+        };
+        let kinds = |rx: &mut tokio::sync::mpsc::UnboundedReceiver<Outbound>| {
+            drain_clicks(rx)
+                .into_iter()
+                .map(|e| e.kind)
+                .collect::<Vec<_>>()
+        };
+        let dragging = |app: &App| app.world().resource::<crate::PointerCapture>().dragging;
+
+        app.world_mut()
+            .write_message(touch(TouchPhase::Started, 100.0));
+        app.update();
+        assert_eq!(kinds(&mut out_rx), ["pointerDown"]);
+        assert!(dragging(&app));
+
+        // The scroll path takes the finger (what `apply_touch_scroll` records
+        // once the pan crosses the slop along a scrollable axis).
+        app.world_mut()
+            .resource_mut::<crate::touch_scroll::TouchScrollState>()
+            .steal_for_test(7);
+        app.world_mut()
+            .write_message(touch(TouchPhase::Moved, 60.0));
+        app.world_mut()
+            .get_mut::<RelativeCursorPosition>(node)
+            .unwrap()
+            .normalized = Some(Vec2::new(0.0, -0.2));
+        app.update();
+        assert_eq!(kinds(&mut out_rx), ["pointerLeave"]);
+        assert!(!dragging(&app), "a stolen drag no longer owns the pointer");
+
+        // Later finger travel and the release are the scroll's business.
+        app.world_mut()
+            .write_message(touch(TouchPhase::Moved, 40.0));
+        app.update();
+        app.world_mut()
+            .write_message(touch(TouchPhase::Ended, 40.0));
+        app.update();
+        assert_eq!(kinds(&mut out_rx), Vec::<String>::new());
+    }
+
     /// With several fingers landing in the same frame, only the touch that is
     /// geometrically over the `Pressed` node binds the drag —
     /// `Touches::iter_just_pressed` yields in arbitrary `HashMap` order, so
@@ -578,6 +691,7 @@ mod tests {
         app.init_resource::<Touches>();
         app.init_resource::<crate::PointerCapture>();
         app.init_resource::<ActiveDrag>();
+        app.init_resource::<crate::touch_scroll::TouchScrollState>();
         app.add_message::<TouchInput>();
         app.add_systems(
             Update,
@@ -664,6 +778,7 @@ mod tests {
         app.init_resource::<Touches>();
         app.init_resource::<crate::PointerCapture>();
         app.init_resource::<ActiveDrag>();
+        app.init_resource::<crate::touch_scroll::TouchScrollState>();
         app.add_message::<TouchInput>();
         app.add_systems(
             Update,
@@ -720,6 +835,7 @@ mod tests {
         app.init_resource::<Touches>();
         app.init_resource::<crate::PointerCapture>();
         app.init_resource::<ActiveDrag>();
+        app.init_resource::<crate::touch_scroll::TouchScrollState>();
         app.add_message::<TouchInput>();
         app.add_systems(
             Update,
@@ -794,6 +910,7 @@ mod tests {
         app.init_resource::<bevy::input::touch::Touches>();
         app.init_resource::<crate::PointerCapture>();
         app.init_resource::<ActiveDrag>();
+        app.init_resource::<crate::touch_scroll::TouchScrollState>();
         app.add_systems(Update, collect_pointer_events);
 
         app.world_mut()
@@ -820,6 +937,7 @@ mod tests {
         app.init_resource::<bevy::input::touch::Touches>();
         app.init_resource::<crate::PointerCapture>();
         app.init_resource::<ActiveDrag>();
+        app.init_resource::<crate::touch_scroll::TouchScrollState>();
         app.add_systems(Update, collect_pointer_events);
 
         let mut window = Window::default();

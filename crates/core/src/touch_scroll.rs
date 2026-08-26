@@ -36,18 +36,46 @@ impl TouchScrollState {
     pub(crate) fn is_suppressed(&self, id: u64) -> bool {
         self.claims.iter().any(|c| c.id == id && c.moved_past_slop)
     }
+
+    /// Whether touch `id`'s scroll gesture stole the touch from the
+    /// handler-node drag it began on (see `apply_touch_scroll`'s arbitration).
+    /// Read by `collect_pointer_events` (the frame after the steal) to end that
+    /// drag with `pointerLeave`.
+    pub(crate) fn stole_drag(&self, id: u64) -> bool {
+        self.claims.iter().any(|c| c.id == id && c.stole_drag)
+    }
+
+    /// Record a stolen gesture for touch `id` without running the arbitration
+    /// (the pointer tests exercise the drag side in isolation).
+    #[cfg(test)]
+    pub(crate) fn steal_for_test(&mut self, id: u64) {
+        self.claims.push(TouchClaim {
+            id,
+            container: Entity::PLACEHOLDER,
+            last_pos: Vec2::ZERO,
+            press_pos: Vec2::ZERO,
+            moved_past_slop: true,
+            contested: false,
+            stole_drag: true,
+        });
+    }
 }
 
 /// One touch's scroll gesture: the claiming touch id, its container, the
 /// finger's last logical position (the delta source), and the slop tracking
 /// for click suppression (`press_pos` = where the finger landed;
 /// `moved_past_slop` latches once it leaves the [`TOUCH_SLOP`] radius).
+/// `contested` marks a touch that also began a handler-node drag
+/// ([`ActiveDrag`]) — undecided until the slop; `stole_drag` records that the
+/// arbitration went the scroll's way (a contested claim that yields is dropped).
 struct TouchClaim {
     id: u64,
     container: Entity,
     last_pos: Vec2,
     press_pos: Vec2,
     moved_past_slop: bool,
+    contested: bool,
+    stole_drag: bool,
 }
 
 /// Touch-drag scrolling for `overflow: scroll` nodes — the mobile counterpart
@@ -60,12 +88,21 @@ struct TouchClaim {
 /// finger leaves its bounds — DOM touch-scroll semantics); unclaimable
 /// containers are transparent so the touch falls through to the world, and
 /// scrollbar parts are opaque (the widget's own observers drive them).
-/// Ownership is **per-pointer**: the one touch bound to a handler-node drag
-/// ([`ActiveDrag`], assigned by `collect_pointer_events` earlier in the set)
-/// is never claimed — dragging a slider inside a panel must not also scroll
-/// the panel — while any *other* finger claims freely, including during a
-/// mouse drag, and every claimed finger scrolls its own container
-/// concurrently (two fingers on one container simply sum their deltas).
+/// Ownership is **per-pointer**: every finger claims its own container and
+/// scrolls it concurrently (two fingers on one container simply sum their
+/// deltas), including during a mouse drag.
+///
+/// A touch that landed on a handler node — the one bound to the handler-node
+/// drag ([`ActiveDrag`], assigned by `collect_pointer_events` earlier in the
+/// set) — is **contested**, and arbitrated the way browsers arbitrate
+/// `touch-action: auto`: the element keeps the finger inside the tap slop;
+/// once the finger pans past it, the pan's dominant axis decides. If the
+/// claimed container can scroll along that axis the scroll **steals** the
+/// touch (`stole_drag` — `collect_pointer_events` ends the drag with
+/// `pointerLeave`, the `pointercancel` analog, next frame; the content catches
+/// up from the press point) — a button in a list never blocks the list's
+/// scrolling. Otherwise the drag keeps the finger for good and the claim is
+/// dropped — a horizontal slider inside a vertical list keeps working.
 ///
 /// A claimed gesture that moves past [`TOUCH_SLOP`] also consumes its tap:
 /// `collect_ui_events` drops that touch's `Pointer<Click>` (web semantics —
@@ -110,11 +147,11 @@ pub fn apply_touch_scroll(
     // gesture never blocks this touch from claiming.
     if let Ok(window) = windows.single() {
         for touch in touches.iter_just_pressed() {
-            if state.claims.iter().any(|c| c.id == touch.id())
-                || active_drag.touch_id() == Some(touch.id())
-            {
+            if state.claims.iter().any(|c| c.id == touch.id()) {
                 continue;
             }
+            // Bound to a handler-node drag this frame → contested (see above).
+            let contested = active_drag.touch_id() == Some(touch.id());
             // `ComputedNode`/`UiGlobalTransform` are physical; touch positions
             // are logical top-left — same conversion as the wheel path's cursor.
             let point = touch.position() * window.scale_factor();
@@ -158,22 +195,51 @@ pub fn apply_touch_scroll(
                     last_pos: touch.position(),
                     press_pos: touch.position(),
                     moved_past_slop: false,
+                    contested,
+                    stole_drag: false,
                 });
                 break;
             }
         }
     }
 
-    // Drag: move each claimed container by its finger's delta.
+    // Drag: move each claimed container by its finger's delta. A contested
+    // claim first has to win the finger (or is dropped — `yielded`).
+    let mut yielded: Vec<u64> = Vec::new();
     for claim in &mut state.claims {
         // A released-but-retained claim (see the retain above) moves nothing
         // and no longer owns the pointer.
         let Some(touch) = touches.get_pressed(claim.id) else {
             continue;
         };
+        let travel = touch.position() - claim.press_pos;
+        if claim.contested {
+            // Inside the slop the element keeps the finger: nothing scrolls,
+            // nothing is decided (a slider's first pixels are the slider's).
+            if travel.length() <= TOUCH_SLOP {
+                continue;
+            }
+            let Ok((computed, _, node, _, _)) = scrollables.get(claim.container) else {
+                yielded.push(claim.id);
+                continue;
+            };
+            let range = scroll_range(computed);
+            let (axis, overflow) = if travel.x.abs() > travel.y.abs() {
+                (range.x, node.overflow.x)
+            } else {
+                (range.y, node.overflow.y)
+            };
+            if overflow == OverflowAxis::Scroll && axis > 0.0 {
+                claim.contested = false;
+                claim.stole_drag = true;
+            } else {
+                yielded.push(claim.id);
+                continue;
+            }
+        }
         // Latch the slop before the container lookup: the gesture keeps
         // suppressing its tap even if the container despawned mid-gesture.
-        if !claim.moved_past_slop && (touch.position() - claim.press_pos).length() > TOUCH_SLOP {
+        if !claim.moved_past_slop && travel.length() > TOUCH_SLOP {
             claim.moved_past_slop = true;
         }
         let Ok((computed, _, node, mut pos, scroll_state)) = scrollables.get_mut(claim.container)
@@ -195,6 +261,11 @@ pub fn apply_touch_scroll(
         write_scroll(&mut pos, scroll_state, next);
         // Own the pointer for the gesture's whole lifetime, moving or resting.
         capture.dragging = true;
+    }
+    // A contested claim that lost stays lost: the drag owns the finger until
+    // it lifts, and this path's click suppression never applies to it.
+    if !yielded.is_empty() {
+        state.claims.retain(|c| !yielded.contains(&c.id));
     }
 }
 
@@ -307,11 +378,15 @@ mod tests {
         assert!(!dragging(&app), "lifting the finger releases the claim");
     }
 
-    /// The touch bound to a handler-node drag ([`ActiveDrag`], assigned by
-    /// `collect_pointer_events`, which runs earlier in the set) must not also
-    /// scroll — dragging a slider inside a panel keeps the panel still.
+    /// A touch that landed on a handler node (bound to an [`ActiveDrag`] by
+    /// `collect_pointer_events`) is CONTESTED — web semantics: the element
+    /// keeps the finger until it pans past the tap slop along an axis the
+    /// container can scroll; then the scroll steals it (`stole_drag`), the
+    /// content catches up 1:1 from the press point, and the tap's click is
+    /// suppressed. Inside the slop nothing scrolls — a slider's first pixels
+    /// of travel are the slider's.
     #[test]
-    fn touch_owned_by_ui_drag_does_not_scroll() {
+    fn contested_touch_panning_along_scroll_axis_steals_the_drag() {
         use crate::reconcile::DragSource;
         use bevy::input::touch::TouchPhase;
 
@@ -322,16 +397,78 @@ mod tests {
             Vec2::ZERO,
             Vec2::ZERO,
         );
-        send_touch(&mut app, 7, TouchPhase::Started, Vec2::new(300.0, 200.0));
-        send_touch(&mut app, 7, TouchPhase::Moved, Vec2::new(300.0, 150.0));
-        assert_eq!(
+        let pos = |app: &App| {
             app.world()
                 .entity(container)
                 .get::<ScrollPosition>()
                 .unwrap()
-                .0,
-            Vec2::ZERO
+                .0
+        };
+        let stole = |app: &App| app.world().resource::<TouchScrollState>().stole_drag(7);
+
+        send_touch(&mut app, 7, TouchPhase::Started, Vec2::new(300.0, 200.0));
+        assert_eq!(pos(&app), Vec2::ZERO);
+        assert!(!stole(&app), "a press alone decides nothing");
+
+        send_touch(&mut app, 7, TouchPhase::Moved, Vec2::new(300.0, 195.0));
+        assert_eq!(
+            pos(&app),
+            Vec2::ZERO,
+            "inside the tap slop the element keeps the finger"
         );
+        assert!(!stole(&app));
+
+        // Past the slop, vertical, on a y-scroller: the scroll wins.
+        send_touch(&mut app, 7, TouchPhase::Moved, Vec2::new(300.0, 150.0));
+        assert_eq!(
+            pos(&app),
+            Vec2::new(0.0, 50.0),
+            "content catches up from the press point"
+        );
+        assert!(stole(&app));
+        assert!(
+            app.world().resource::<TouchScrollState>().is_suppressed(7),
+            "a stolen gesture is a scroll: its tap click is consumed"
+        );
+    }
+
+    /// The other arbitration outcome: a contested finger panning ACROSS the
+    /// only scrollable axis (horizontal on a y-scroller — a slider inside a
+    /// list) yields to the drag for the touch's whole lifetime: nothing
+    /// scrolls, then or later, and the click is not suppressed by this path.
+    #[test]
+    fn contested_touch_panning_across_scroll_axis_yields_to_the_drag() {
+        use crate::reconcile::DragSource;
+        use bevy::input::touch::TouchPhase;
+
+        let (mut app, container) = touch_app();
+        app.world_mut().resource_mut::<ActiveDrag>().begin(
+            container,
+            DragSource::Touch { id: 7 },
+            Vec2::ZERO,
+            Vec2::ZERO,
+        );
+        let pos = |app: &App| {
+            app.world()
+                .entity(container)
+                .get::<ScrollPosition>()
+                .unwrap()
+                .0
+        };
+
+        send_touch(&mut app, 7, TouchPhase::Started, Vec2::new(300.0, 200.0));
+        send_touch(&mut app, 7, TouchPhase::Moved, Vec2::new(350.0, 200.0));
+        assert_eq!(
+            pos(&app),
+            Vec2::ZERO,
+            "a horizontal pan cannot scroll a y-only container"
+        );
+        assert!(!app.world().resource::<TouchScrollState>().stole_drag(7));
+
+        // The decision is final: a later vertical leg still belongs to the drag.
+        send_touch(&mut app, 7, TouchPhase::Moved, Vec2::new(350.0, 150.0));
+        assert_eq!(pos(&app), Vec2::ZERO, "the drag keeps the finger for good");
+        assert!(!app.world().resource::<TouchScrollState>().is_suppressed(7));
     }
 
     /// Ownership is per-pointer: while one finger drags a handler node

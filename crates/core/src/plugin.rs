@@ -545,8 +545,9 @@ impl Plugin for ReactUiPlugin {
                     // Touch-drag scrolling; after `collect_pointer_events` both
                     // for the capture-claim ordering and as a data edge: it
                     // reads the just-assigned `ActiveDrag` so the one touch
-                    // bound to a handler-node drag is excluded from claiming
-                    // (per-touch — other fingers still claim freely).
+                    // bound to a handler-node drag is claimed as *contested*
+                    // (arbitrated at the slop by pan axis; a steal is read
+                    // back by `collect_pointer_events` next frame).
                     crate::touch_scroll::apply_touch_scroll
                         .in_set(PointerCaptureSet)
                         .after(collect_pointer_events),
