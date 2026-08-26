@@ -601,6 +601,19 @@ export interface BevyStyle {
    * are unaffected (a `transform3d` layer always samples its capture
    * trilinear). Silent on a node with no raster source. */
   imageRendering?: "auto" | "bilinear" | "trilinear" | "nearest";
+  /** Whether layout rounds this node's rect to whole physical pixels (bevy's
+   * `LayoutConfig::use_rounding`). Unset = inherit from the nearest ancestor
+   * that sets it; the root default is `true`. It inherits downward only and
+   * restarts at every detached root (`<surface>`, `<root>`), so set it on the
+   * PARENT that lays out the animated node and its neighbours. `false` lays
+   * that subtree out at fractional pixels — the fix for the 1px hops of any
+   * real-layout size animation (`transition: { size }`, a shared-element size
+   * flight, a bound width/height): the animated box AND everything
+   * re-flowing around it glide instead of stepping. The price, at rest,
+   * wherever content lands on a half pixel: anti-aliased soft edges, slightly
+   * blurred text, hairline seams between adjacent boxes. Not a hover/press
+   * variant field. */
+  layoutRounding?: boolean;
   zIndex?: number;
   /** Lifts the node (and its subtree) into the UI's global stacking order,
    *  escaping the parent stacking context — so a deeply-nested overlay can paint

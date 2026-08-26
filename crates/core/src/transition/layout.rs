@@ -28,9 +28,11 @@
 //! ## What "the rect" is
 //!
 //! The node's **local layout rect** in its parent's layout space, physical
-//! px — taffy's `location` + `size` straight from [`UiSurface`], **rounded**
-//! exactly as bevy's walk consumed them (so the change frame reproduces the
-//! previously displayed rect bit-exact, not an unrounded neighbour of it):
+//! px — taffy's `location` + `size` straight from [`UiSurface`], rounded or
+//! not **exactly as bevy's walk consumed them** (the node's effective
+//! `LayoutConfig`: its own, else the nearest ancestor's, else rounded — so
+//! the change frame reproduces the previously displayed rect bit-exact, not
+//! a rounded/unrounded neighbour of it):
 //! no parent scroll, no `UiTransform` (ours or the user's). That is the only
 //! definition under which nesting composes (a child inside an animating
 //! parent animates only its *own* local delta) and scrolling never reads as
@@ -40,7 +42,7 @@ use bevy::ecs::entity::EntityHashMap;
 use bevy::math::Affine2;
 use bevy::prelude::*;
 use bevy::ui::ui_surface::UiSurface;
-use bevy::ui::{ComputedNode, UiGlobalTransform};
+use bevy::ui::{ComputedNode, LayoutConfig, UiGlobalTransform};
 
 use super::channels::ProgressChannel;
 use super::shared::SharedRect;
@@ -355,6 +357,7 @@ pub fn drive_layout_transitions(
     parents: Query<&ChildOf>,
     children: Query<&Children>,
     mut globals: Query<&mut UiGlobalTransform>,
+    layout_configs: Query<&LayoutConfig>,
 ) {
     let dt = time.delta_secs();
     let mut deltas: EntityHashMap<LayoutDelta> = EntityHashMap::default();
@@ -383,10 +386,20 @@ pub fn drive_layout_transitions(
             state.shared.origin = None;
             continue;
         };
-        // Rounded, exactly as bevy's walk consumed it (`use_rounding` is on
-        // by default): the change frame then shows the previously DISPLAYED
-        // rect, not an unrounded neighbour of it (a ≤1px shimmer otherwise).
-        let Ok((layout, _unrounded)) = ui_surface.get_layout(entity, true) else {
+        // Rounded or not exactly as bevy's walk consumed it — the node's
+        // effective `LayoutConfig` (its own, else the nearest ancestor's,
+        // else bevy's default of rounding): the change frame then shows the
+        // previously DISPLAYED rect, not a rounded/unrounded neighbour of it
+        // (a ≤1px shimmer otherwise, and a ≤0.5px composition error on a
+        // `layoutRounding: false` subtree).
+        // Free when no node sets `layoutRounding` (bevy's walk then rounds
+        // everything): the ancestor walk only runs once a config exists.
+        let use_rounding = layout_configs.is_empty()
+            || std::iter::once(entity)
+                .chain(parents.iter_ancestors(entity))
+                .find_map(|e| layout_configs.get(e).ok())
+                .is_none_or(|c| c.use_rounding);
+        let Ok((layout, _unrounded)) = ui_surface.get_layout(entity, use_rounding) else {
             continue;
         };
         let size = Vec2::new(layout.size.width, layout.size.height);

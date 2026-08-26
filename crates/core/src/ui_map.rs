@@ -735,6 +735,21 @@ pub fn apply_style_masked(
             }
         }
     }
+    // `layoutRounding`: bevy's per-subtree pixel-rounding switch. An explicit
+    // value (either way) is an override stamped as `LayoutConfig`; absent
+    // removes it so the node inherits the nearest ancestor's setting. A
+    // component write only — bevy picks the rounded/unrounded layout at read
+    // time, no relayout.
+    if dirty.intersects(g::LAYOUT_ROUNDING) {
+        match s.and_then(|s| s.layout_rounding) {
+            Some(use_rounding) => {
+                ec.insert(bevy::ui::LayoutConfig { use_rounding });
+            }
+            None => {
+                ec.remove::<bevy::ui::LayoutConfig>();
+            }
+        }
+    }
     if dirty.intersects(g::CURSOR) {
         match s.and_then(|s| s.cursor.as_ref()) {
             Some(c) => {

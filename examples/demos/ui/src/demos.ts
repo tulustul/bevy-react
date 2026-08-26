@@ -35,6 +35,7 @@ import { ColorsDemo } from "./demos/styling/ColorsDemo";
 import { BordersDemo } from "./demos/styling/BordersDemo";
 import { SpacingDemo } from "./demos/styling/SpacingDemo";
 import { SizingDemo } from "./demos/styling/SizingDemo";
+import { LayoutRoundingDemo } from "./demos/styling/LayoutRoundingDemo";
 import { TransformDemo } from "./demos/styling/TransformDemo";
 import { Transform3dDemo } from "./demos/styling/Transform3dDemo";
 import { ShadowDemo } from "./demos/styling/ShadowDemo";
@@ -101,6 +102,7 @@ export const DEMOS: DemoItem[] = [
       { label: "Borders", component: BordersDemo },
       { label: "Spacing", component: SpacingDemo },
       { label: "Sizing", component: SizingDemo },
+      { label: "Layout rounding", component: LayoutRoundingDemo },
       { label: "Overflow", component: OverflowDemo },
       { label: "Transforms", component: TransformDemo },
       { label: "3D transforms", component: Transform3dDemo },

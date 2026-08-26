@@ -20,9 +20,19 @@ Domain glossary for `bevy-react`. Use these terms as written; the code, the
   `UiGlobalTransform` (ADR-0001). Children ride the translation but not the
   scale: a size change eases the node's own box, its content stays crisp.
 - **Laid-out rect** — a node's local layout rect in its parent's layout
-  space (taffy `location + size`, physical px, rounded as bevy displays it):
+  space (taffy `location + size`, physical px, rounded or not exactly as
+  bevy displays it — the node's effective `LayoutConfig`):
   excludes parent scroll and every `UiTransform`. The layout transition's
   measurement.
+- **Layout rounding** — bevy snapping every laid-out rect to whole physical
+  pixels, per node and inherited (`LayoutConfig::use_rounding`), exposed as
+  the `layoutRounding` style (unset inherits — downward only, restarting at
+  each detached root — so it goes on the parent that lays out the animated
+  node and its neighbours; root default on). Any size
+  animated through real layout steps under rounding and its neighbours hop;
+  an unrounded subtree glides, and pays with soft edges and blurred text
+  wherever content rests on a half pixel. The layout channel measures with
+  the node's effective setting.
 - **Mount rule** — a channel's first sight of a value adopts it silently
   (no enter animation); only a later change animates.
 

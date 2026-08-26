@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { interpolate, useSharedValue, withTiming } from "bevy-react";
+import { useSharedValue, withTiming } from "bevy-react";
 import { BevyStyle } from "bevy-react/jsx";
 
 import { Button, Example } from "@/components";
-import { InlineCode, P } from "@/components/docs";
+import { Code, InlineCode, P } from "@/components/docs";
 import { Colors, FontSizes } from "@/theme";
 
 export function Gallery() {
@@ -24,6 +24,27 @@ export function Gallery() {
             instead: the outgoing screen lingers, absolutely positioned, with
             its shared node swapped for a same-size placeholder (the unmount
             still pairs), and unmounts once its exit animation completes.
+          </P>
+          <Code lang="tsx">{`// the outgoing screen lingers, absolute,
+// its shared node a placeholder
+{exiting ? (
+  <node style={heroBox} />
+) : (
+  <image
+    sharedTag={\`hero-\${id}\`}
+    style={hero}
+  />
+)}
+<node
+  style={{
+    ...chrome,
+    opacity: { animated: presence },
+  }}
+/>`}</Code>
+          <P>
+            The stage sets <InlineCode>layoutRounding: false</InlineCode>: the
+            hero's size flies through real layout, and with pixel rounding on,
+            its box and the caption below would grow in whole pixel hops.
           </P>
           <P>
             The outgoing node unmounts instantly and the flight lives inside the
@@ -130,6 +151,7 @@ function GridScreen({
                 src={i.src}
                 sharedTag={`hero-${i.id}`}
                 style={shared && flying ? { ...thumb, ...aloft } : thumb}
+                hoverStyle={{ transform: { scale: 1.1 } }}
               />
             )}
           </button>
@@ -172,8 +194,8 @@ function DetailScreen({
   );
 }
 
-const FADE_MS = 500;
-const FLIGHT_MS = 1450;
+const FADE_MS = 450;
+const FLIGHT_MS = 450;
 
 /// Whether a screen's shared node is still in flight: true for the flight's
 /// duration after an entering mount. The flyer gets [`aloft`] meanwhile, so
@@ -205,7 +227,7 @@ function usePresence(
     if (exiting) {
       presence.value = withTiming(0, {
         duration: FADE_MS,
-        easing: "easeIn",
+        easing: "easeInOut",
         onComplete: () => exited.current(),
       });
     } else if (enter) {
@@ -214,7 +236,7 @@ function usePresence(
   }, [presence, enter, exiting]);
   return {
     opacity: { animated: presence },
-    transform: { scale: { animated: interpolate(presence, [0, 1], [0.8, 1]) } },
+    transform: { scale: { animated: presence } },
   };
 }
 
@@ -229,6 +251,10 @@ const aloft: BevyStyle = {
   globalZIndex: 1,
 };
 
+// The stage lays both screens out unrounded (inherited): the hero's size
+// flies through real layout, and with pixel rounding on, its box and
+// everything re-flowing around it would hop in whole pixels (see the
+// "Layout rounding" page).
 const stage: BevyStyle = {
   width: 320,
   height: 300,
@@ -236,6 +262,7 @@ const stage: BevyStyle = {
   alignItems: "center",
   borderRadius: 8,
   backgroundColor: Colors.surface100,
+  layoutRounding: false,
 };
 
 // An exiting screen leaves the flow: it covers the stage and centers its own
@@ -253,22 +280,26 @@ const overlay: BevyStyle = {
 
 const grid: BevyStyle = {
   flexDirection: "row",
+  justifyContent: "center",
   gap: 16,
+  padding: 10,
+  focusPolicy: "block",
 };
 
 // Sized explicitly so the button keeps its slot once its image has flown.
 const thumbButton: BevyStyle = {
   width: 72,
-  height: 72,
-  padding: 0,
+  height: 92,
   borderRadius: "50%",
+  padding: { top: 10, right: 0, bottom: 10, left: 0 },
 };
 
 const thumb: BevyStyle = {
   width: 72,
   height: 72,
   borderRadius: 36,
-  transition: flight,
+  transform: { scale: 1 },
+  transition: { ...flight, transform: { duration: 200 } },
   imageRendering: "trilinear",
 };
 

@@ -47,7 +47,7 @@ pub type OutboundSender = crossbeam_channel::Sender<Outbound>;
 /// while — don't rely on it). Read them freely; own everything else:
 ///
 /// - Bridge-owned: `Node`, `BackgroundColor`, `BorderColor`, `BorderRadius`,
-///   `Outline`, `BoxShadow`, `ZIndex`/`GlobalZIndex`, `Visibility`,
+///   `Outline`, `BoxShadow`, `ZIndex`/`GlobalZIndex`, `LayoutConfig`, `Visibility`,
 ///   `UiTransform`, `ImageNode`, `Text`/`TextSpan`/`TextFont`/`TextColor`/
 ///   `TextLayout`, `ScrollPosition`, `Interaction`/`FocusPolicy`/`Pickable`
 ///   (the `focusPolicy` mirror; SVG shapes get a pass-through one), `Name`,

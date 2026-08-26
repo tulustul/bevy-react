@@ -455,6 +455,72 @@ mod tests {
     use super::*;
     use crate::protocol::{ROOT_ID, op::Op};
 
+    /// `layoutRounding` stamps bevy's `LayoutConfig` on the entity (`false`
+    /// = fractional-px layout for the subtree) and unsetting it removes the
+    /// component again, so the node inherits its ancestor's rounding.
+    #[test]
+    fn layout_rounding_stamps_and_removes_layout_config() {
+        use bevy::ui::LayoutConfig;
+        let (mut app, tx, _root) = ordering_app();
+        tx.send(vec![
+            Op::Create {
+                id: 1,
+                kind: "node".into(),
+                props: serde_json::from_value(serde_json::json!({
+                    "style": { "layoutRounding": false },
+                }))
+                .unwrap(),
+                text: None,
+            },
+            Op::Append {
+                parent: ROOT_ID,
+                child: 1,
+            },
+        ])
+        .unwrap();
+        app.update();
+        let e = ent(&app, 1);
+        assert_eq!(
+            app.world()
+                .entity(e)
+                .get::<LayoutConfig>()
+                .map(|c| c.use_rounding),
+            Some(false),
+            "layoutRounding: false stamps LayoutConfig {{ use_rounding: false }}"
+        );
+
+        tx.send(vec![update_delta(
+            1,
+            serde_json::from_value(serde_json::json!({ "style": { "layoutRounding": true } }))
+                .unwrap(),
+            &[],
+            &[],
+        )])
+        .unwrap();
+        app.update();
+        assert_eq!(
+            app.world()
+                .entity(e)
+                .get::<LayoutConfig>()
+                .map(|c| c.use_rounding),
+            Some(true),
+            "an explicit true is an override too (a child of an unrounded subtree)"
+        );
+
+        tx.send(vec![update_delta(
+            1,
+            serde_json::from_value(serde_json::json!({ "style": {} })).unwrap(),
+            &[],
+            &["layoutRounding"],
+        )])
+        .unwrap();
+        app.update();
+        assert!(
+            app.world().entity(e).get::<LayoutConfig>().is_none(),
+            "unset removes the component: back to inheriting"
+        );
+    }
+
     /// Layer-family styles and pointer handlers on a nested `<text>` span are
     /// structural no-ops (a span has no layout box; its glyphs belong to the
     /// parent block) — both must warn into the devtools diag sink instead of
