@@ -1,6 +1,8 @@
 // The Nodes tree: an explorer over the op mirror. Rows expand/
 // collapse, click selects (driving the inspector + the on-screen highlight),
-// and hovering a row highlights its node in the running UI.
+// and hovering a row highlights its node in the running UI. Each row leads with
+// the React component that emitted the node, where the dev build could
+// attribute it (`owners.ts`).
 
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { sendHighlight } from "./api";
@@ -141,6 +143,7 @@ function TreeRows({
   overrides,
   baseline,
   toggle,
+  parentOwner,
 }: {
   id: number;
   depth: number;
@@ -150,6 +153,8 @@ function TreeRows({
   overrides: ReadonlyMap<number, boolean>;
   baseline: Baseline;
   toggle: (id: number, expand: boolean) => void;
+  /** The owner of the row above, for the boundary rule (see `Row`). */
+  parentOwner?: string;
 }) {
   const node = mirror.get(id);
   if (!node) return null;
@@ -170,6 +175,7 @@ function TreeRows({
         caret={hasChildren ? (expanded ? "-" : "+") : " "}
         hint={foreignRoot ? "detached" : undefined}
         selected={selected === id}
+        parentOwner={parentOwner}
         onCaret={hasChildren ? () => toggle(id, !expanded) : undefined}
         onSelect={() => onSelect(id)}
       />
@@ -185,6 +191,7 @@ function TreeRows({
             overrides={overrides}
             baseline={baseline}
             toggle={toggle}
+            parentOwner={node.owner}
           />
         ))}
     </node>
@@ -199,6 +206,7 @@ function Row({
   selected,
   onCaret,
   onSelect,
+  parentOwner,
 }: {
   node: MirrorNode;
   depth: number;
@@ -207,7 +215,14 @@ function Row({
   selected: boolean;
   onCaret?: () => void;
   onSelect: () => void;
+  parentOwner?: string;
 }) {
+  // Attribution BOUNDARIES only: a component's whole subtree shares one owner,
+  // so naming it on every row would drown the tree — the name instead marks
+  // where a component's output begins. "Unattributed" is a value like any
+  // other, so a node React could not attribute under one it could shows `<?>`
+  // once and its descendants stay blank.
+  const showOwner = node.owner !== parentOwner;
   return (
     <node
       style={{
@@ -229,6 +244,19 @@ function Row({
       >
         <text style={{ color: theme.textDim, fontSize: 10 }}>{caret}</text>
       </button>
+      {showOwner && (
+        <text
+          style={{
+            color: theme.component,
+            fontSize: 11,
+            fontFamily: theme.mono,
+            margin: { right: 6 },
+            lineBreak: "noWrap",
+          }}
+        >
+          {node.owner ? `<${node.owner}>` : "<?>"}
+        </text>
+      )}
       {/* `noWrap`: long labels overflow into the ScrollArea's horizontal
           scroll range instead of wrapping the row. */}
       <text

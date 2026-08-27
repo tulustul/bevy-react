@@ -24,7 +24,7 @@ import {
   serializeProps,
   SHAPE_KINDS,
 } from "./bridge";
-import { installDevtools } from "./devtools";
+import { installDevtools, noteOwner } from "./devtools";
 import { setupRefreshRuntime } from "./hmr";
 
 // `process.env.NODE_ENV` is replaced at build time by esbuild's `define`; the
@@ -159,8 +159,13 @@ const hostConfig: Reconciler.HostConfig<
     props: Record<string, unknown>,
     _root: Container,
     hostContext: HostContext,
+    // This element's fiber. Only the devtools read it — for the component that
+    // emitted the node (`devtools/owners.ts`); nothing about it crosses the
+    // bridge, and the production build stubs the call out.
+    internalHandle: unknown,
   ): Instance {
     const id = allocId();
+    if (DEV) noteOwner(id, internalHandle);
     // A nested `<text>` is a styled span; a top-level one is a text block root.
     const kind = type === "text" && hostContext.inText ? "textSpan" : type;
     // An `<anchor>`'s / SVG shape's flat props cross as one folded object.
@@ -193,8 +198,10 @@ const hostConfig: Reconciler.HostConfig<
     text: string,
     _root: Container,
     hostContext: HostContext,
+    internalHandle: unknown,
   ): TextInstance {
     const id = allocId();
+    if (DEV) noteOwner(id, internalHandle);
     // A bare string inside a `<text>` is an inheriting run; elsewhere it's a
     // standalone (default-styled) text node.
     push(

@@ -99,7 +99,8 @@ const devtoolsStubPlugin = {
       return { path: args.path, namespace: "devtools-stub" };
     });
     build.onLoad({ filter: /.*/, namespace: "devtools-stub" }, () => ({
-      contents: "module.exports = { installDevtools: () => {} };",
+      contents:
+        "module.exports = { installDevtools: () => {}, noteOwner: () => {} };",
       loader: "js",
     }));
   },

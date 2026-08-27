@@ -21,6 +21,8 @@ export const theme = {
   danger: "#f28b82",
   /** Warnings (invalid property values Bevy fell back on). */
   warn: "#fdd663",
+  /** Component attribution in the tree (the component that emitted a node). */
+  component: "#c58af9",
   /** Success / ok badges. */
   ok: "#81c995",
   /** Monospace family for node kinds, values, and the log. */

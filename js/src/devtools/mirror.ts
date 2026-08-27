@@ -17,6 +17,7 @@
 // Refresh; a cold reload's `reset` op clears it along with the Bevy tree.
 
 import type { DecodeWarning, Op } from "../bridge";
+import { clearOwners, takeOwner } from "./owners";
 import { matchWarning } from "./warnings";
 
 /** Event-like fields that act once and are never part of retained state —
@@ -45,6 +46,9 @@ export interface MirrorNode {
   parent: number | null;
   /** Created by the devtools panel's own container (excluded from app views). */
   devtools: boolean;
+  /** The React component whose JSX emitted this node, when the dev build could
+   *  attribute it (see `owners.ts`); absent when it could not. */
+  owner?: string;
   /** Invalid-value flags by inspector row key (`style:width` / `prop:tint`) →
    *  the Rust warn message. Set from Rust-reported warnings (decode-time via
    *  the flush tap, apply-time via `devtools.warning`); an entry clears when
@@ -59,7 +63,7 @@ const subscribers = new Set<() => void>();
 let notifyQueued = false;
 
 function makeNode(id: number, kind: string, devtools: boolean): MirrorNode {
-  return {
+  const node: MirrorNode = {
     id,
     kind,
     props: {},
@@ -68,6 +72,11 @@ function makeNode(id: number, kind: string, devtools: boolean): MirrorNode {
     parent: null,
     devtools,
   };
+  // Recorded by the renderer when the node was created — this commit, since
+  // every commit flushes. Taking it here ties the name's lifetime to the node.
+  const owner = takeOwner(id);
+  if (owner) node.owner = owner;
+  return node;
 }
 
 function ensureRoot(): MirrorNode {
@@ -132,6 +141,7 @@ function applyOp(op: Op, devtools: boolean): void {
   switch (op.op) {
     case "reset": {
       nodes.clear();
+      clearOwners();
       ensureRoot();
       break;
     }

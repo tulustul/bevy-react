@@ -15,6 +15,11 @@ import { DevtoolsHost } from "./DevtoolsHost";
 import { mirror } from "./mirror";
 import { recorder } from "./recorder";
 
+// The renderer's other devtools entry point: per-node component attribution
+// (see `owners.ts`). Re-exported here so the renderer keeps ONE devtools
+// import — the module production builds replace with a stub.
+export { noteOwner } from "./owners";
+
 let installed = false;
 
 /** Mount the devtools panel into its own React container (injected by the
