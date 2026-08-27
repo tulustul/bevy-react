@@ -12,11 +12,19 @@ const MODAL_W = 560;
 const TITLE_REACH = 48;
 /** Open/close/swap blend length. */
 const CLOSE_BLEND_MS = 450;
+/**
+ * How long the carrier renders empty before its first key flip. A morph blends
+ * from the layer's PREVIOUS capture, so the carrier must have rendered at least
+ * one frame empty — a same-commit mount+flip adopts the key silently and snaps.
+ */
+const ARM_DELAY_MS = 50;
 
 /**
  * The floating example dialog: clicking an `<Example>` card opens it with the
- * example's docs and a second live instance of the demo. Always mounted — the
- * outer node is an empty morph carrier (nothing painted while closed), so
+ * example's docs and a second live instance of the demo. The outer node is an
+ * empty morph carrier: it is mounted only while the modal is on screen, but
+ * its lifetime brackets the blend on both ends (mounted empty a beat before
+ * the content appears, kept alive for the whole close blend), so
  * opening/closing blends from/to empty pixels and switching examples
  * crossfades in place. Drag anywhere on the panel to move it (inner controls
  * win their own pointer events — events resolve to the topmost handler);
@@ -45,6 +53,24 @@ export function ExampleModal() {
   useEffect(() => {
     if (open && !wasOpen.current) setPos(null);
     wasOpen.current = open;
+  }, [open]);
+
+  // Carrier lifetime, morph-safe on both ends: `mounted` is the node itself,
+  // `armed` is "the key may show content". Opening mounts the carrier empty
+  // (key "closed"), then arms it one beat later so the content blends in from
+  // empty pixels; closing disarms in the same commit that drops the content
+  // and keeps the carrier mounted until the blend has finished.
+  const [mounted, setMounted] = useState(false);
+  const [armed, setArmed] = useState(false);
+  useEffect(() => {
+    if (open) {
+      setMounted(true);
+      const t = setTimeout(() => setArmed(true), ARM_DELAY_MS);
+      return () => clearTimeout(t);
+    }
+    setArmed(false);
+    const t = setTimeout(() => setMounted(false), CLOSE_BLEND_MS);
+    return () => clearTimeout(t);
   }, [open]);
 
   useEffect(() => {
@@ -96,53 +122,58 @@ export function ExampleModal() {
           empty space close the modal, while cards, nav and the panel — all
           higher in the stack — keep owning their own clicks (topmost-wins). */}
       {open && <node style={backdropStyle} onClick={() => deselect()} />}
-      <node
-        style={{
-          ...carrierStyle,
-          morphFilter: { key: open ? `s${seq}` : "closed", name: "crossfade" },
-        }}
-      >
-        {selected && (
-          <node
-            style={{ ...panelStyle, width: modalW, left: p.left, top: p.top }}
-            onPointerDown={onPointerDown}
-            onPointerMove={onPointerMove}
-          >
-            <CardHeader
-              title={selected.title}
-              style={titleBarStyle}
-              action={
-                <CircularButton size={28} onClick={() => deselect()}>
-                  <CloseIcon size={16} />
-                </CircularButton>
-              }
-            />
-            <node style={bodyStyle} scrollStep={60}>
-              {selected.info}
-              {selected.demo !== undefined && (
-                // The demo wrap mirrors the card's `cache` style: a live-content
-                // demo (portal) must force every-frame capture dirt through the
-                // modal's own morph layer or it renders frozen in here.
-                <node style={{ ...demoWrapStyle, cache: selected.cache }}>
-                  <text style={demoCaptionStyle}>Live example</text>
-                  <selected.demo />
-                </node>
-              )}
-            </node>
+      {mounted && (
+        <node
+          style={{
+            ...carrierStyle,
+            morphFilter: {
+              key: armed ? `s${seq}` : "closed",
+              name: "crossfade",
+            },
+          }}
+        >
+          {armed && selected && (
+            <node
+              style={{ ...panelStyle, width: modalW, left: p.left, top: p.top }}
+              onPointerDown={onPointerDown}
+              onPointerMove={onPointerMove}
+            >
+              <CardHeader
+                title={selected.title}
+                style={titleBarStyle}
+                action={
+                  <CircularButton size={28} onClick={() => deselect()}>
+                    <CloseIcon size={16} />
+                  </CircularButton>
+                }
+              />
+              <node style={bodyStyle} scrollStep={60}>
+                {selected.info}
+                {selected.demo !== undefined && (
+                  // The demo wrap mirrors the card's `cache` style: a live-content
+                  // demo (portal) must force every-frame capture dirt through the
+                  // modal's own morph layer or it renders frozen in here.
+                  <node style={{ ...demoWrapStyle, cache: selected.cache }}>
+                    <text style={demoCaptionStyle}>Live example</text>
+                    <selected.demo />
+                  </node>
+                )}
+              </node>
 
-            <node style={{ justifyContent: "center" }}>
-              <Button
-                style={closeButtonStyle}
-                hoverStyle={{ backgroundGradient: Gradients.successHover }}
-                labelStyle={{ color: "white" }}
-                onClick={() => deselect()}
-              >
-                Close
-              </Button>
+              <node style={{ justifyContent: "center" }}>
+                <Button
+                  style={closeButtonStyle}
+                  hoverStyle={{ backgroundGradient: Gradients.successHover }}
+                  labelStyle={{ color: "white" }}
+                  onClick={() => deselect()}
+                >
+                  Close
+                </Button>
+              </node>
             </node>
-          </node>
-        )}
-      </node>
+          )}
+        </node>
+      )}
     </>
   );
 }
@@ -162,7 +193,7 @@ const backdropStyle: BevyStyle = {
   zIndex: -1,
 };
 
-// The always-mounted morph carrier: pinned to the FULL page (a bare node —
+// The morph carrier: pinned to the FULL page (a bare node —
 // pointer events pass through to the page beneath). The constant viewport
 // rect is what keeps the layout-anchored morph continuous: swapping examples
 // changes the panel's height and closing unmounts it entirely, but the
