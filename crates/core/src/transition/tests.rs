@@ -961,3 +961,174 @@ fn system_eases_border_radius_and_dirties_content() {
     let dirt = std::mem::take(&mut world.resource_mut::<LayerContentDirt>().nodes);
     assert!(!dirt.contains(&e), "a settled radius pushes no dirt");
 }
+
+/// A commit that drops a channel's `transition` entry must not strand that
+/// channel's reading. The gated blocks (`transform` here) only advance while
+/// their spec is present, so the spec-less commit's static value has to be
+/// synced into the channel — otherwise the next change, compared against a
+/// stale target, finds nothing to do and snaps.
+///
+/// Regression: the demos gallery's compact nav drawer. Crossing the responsive
+/// breakpoint commits `transition: {}` (deliberately snapping the nav across
+/// the row-flow/overlay swap) together with the off-screen `translateX`; the
+/// drawer's FIRST open after that snapped open, and only later ones slid.
+#[test]
+fn a_spec_less_commit_keeps_the_transform_reading_current() {
+    use crate::protocol::op::Op;
+    use crate::reconcile::test_util::op_app_manual_time;
+
+    let (mut app, tx) = op_app_manual_time();
+    app.init_resource::<crate::layer::LayerContentDirt>();
+    app.add_systems(
+        Update,
+        crate::transition::drive_transitions.after(crate::reconcile::apply_js_ops),
+    );
+    let update = |style: serde_json::Value| Op::Update {
+        id: 1,
+        props: serde_json::from_value(serde_json::json!({ "style": style })).unwrap(),
+        unset: vec![],
+        style_unset: vec![],
+    };
+    let slide = serde_json::json!({ "transform": { "duration": 250, "easing": "linear" } });
+
+    // Mount on screen, with a slide spec.
+    tx.send(vec![
+        Op::Create {
+            id: 1,
+            kind: "node".into(),
+            props: serde_json::from_value(serde_json::json!({ "style": {
+                "transform": { "translateX": 0 },
+                "transition": slide,
+            }}))
+            .unwrap(),
+            text: None,
+        },
+        Op::Append {
+            parent: 0,
+            child: 1,
+        },
+    ])
+    .unwrap();
+    app.update();
+
+    let read = |app: &App| {
+        app.world()
+            .entity(crate::reconcile::test_util::ent(app, 1))
+            .get::<UiTransform>()
+            .unwrap()
+            .translation
+            .x
+    };
+    let step = |app: &mut App, ms: u64| {
+        app.world_mut()
+            .resource_mut::<Time>()
+            .advance_by(Duration::from_millis(ms));
+        app.update();
+    };
+    assert_eq!(read(&app), Val::Px(0.0), "mount seeds the resting value");
+
+    // The breakpoint crossing: off screen, spec dropped for this one commit —
+    // the move must SNAP.
+    tx.send(vec![update(serde_json::json!({
+        "transform": { "translateX": -260 },
+        "transition": {},
+    }))])
+    .unwrap();
+    step(&mut app, 16);
+    assert_eq!(read(&app), Val::Px(-260.0), "a spec-less change snaps");
+    step(&mut app, 16);
+    assert_eq!(read(&app), Val::Px(-260.0), "and stays put");
+
+    // Open the drawer: the spec is back, so this one eases from off screen.
+    tx.send(vec![update(serde_json::json!({
+        "transform": { "translateX": 0 },
+        "transition": slide,
+    }))])
+    .unwrap();
+    step(&mut app, 125);
+    let Val::Px(x) = read(&app) else {
+        panic!("expected px, got {:?}", read(&app))
+    };
+    assert!(
+        (x + 130.0).abs() < 1.0,
+        "halfway through the 250ms slide expected ~-130, got {x}"
+    );
+    step(&mut app, 125);
+    assert_eq!(read(&app), Val::Px(0.0), "and lands on the target");
+}
+
+/// The `size` twin of [`a_spec_less_commit_keeps_the_transform_reading_current`]:
+/// the size channels are gated on their spec the same way, so a spec-less
+/// resize has to be synced into them or the next eased resize snaps.
+#[test]
+fn a_spec_less_commit_keeps_the_size_reading_current() {
+    use crate::protocol::op::Op;
+    use crate::reconcile::test_util::op_app_manual_time;
+
+    let (mut app, tx) = op_app_manual_time();
+    app.init_resource::<crate::layer::LayerContentDirt>();
+    app.add_systems(
+        Update,
+        crate::transition::drive_transitions.after(crate::reconcile::apply_js_ops),
+    );
+    let grow = serde_json::json!({ "size": { "duration": 200, "easing": "linear" } });
+    tx.send(vec![
+        Op::Create {
+            id: 1,
+            kind: "node".into(),
+            props: serde_json::from_value(
+                serde_json::json!({ "style": { "width": 100, "transition": grow } }),
+            )
+            .unwrap(),
+            text: None,
+        },
+        Op::Append {
+            parent: 0,
+            child: 1,
+        },
+    ])
+    .unwrap();
+    app.update();
+
+    let width = |app: &App| {
+        app.world()
+            .entity(crate::reconcile::test_util::ent(app, 1))
+            .get::<Node>()
+            .unwrap()
+            .width
+    };
+    let send = |style: serde_json::Value| Op::Update {
+        id: 1,
+        props: serde_json::from_value(serde_json::json!({ "style": style })).unwrap(),
+        unset: vec![],
+        style_unset: vec![],
+    };
+
+    // Spec-less resize: snaps, and the channel must follow it.
+    tx.send(vec![send(
+        serde_json::json!({ "width": 300, "transition": {} }),
+    )])
+    .unwrap();
+    app.world_mut()
+        .resource_mut::<Time>()
+        .advance_by(Duration::from_millis(16));
+    app.update();
+    assert_eq!(width(&app), Val::Px(300.0), "a spec-less resize snaps");
+
+    // Back with a spec: eases from 300, not from the pre-crossing 100.
+    tx.send(vec![send(
+        serde_json::json!({ "width": 100, "transition": grow }),
+    )])
+    .unwrap();
+    app.world_mut()
+        .resource_mut::<Time>()
+        .advance_by(Duration::from_millis(100));
+    app.update();
+    let Val::Px(w) = width(&app) else {
+        panic!("expected px, got {:?}", width(&app))
+    };
+    assert!(
+        (w - 200.0).abs() < 2.0,
+        "halfway through the 200ms ease expected ~200, got {w}"
+    );
+}

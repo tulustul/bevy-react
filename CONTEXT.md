@@ -13,6 +13,10 @@ Domain glossary for `bevy-react`. Use these terms as written; the code, the
 - **State-owned-current** — the channel remembers the value _it_ last wrote
   and eases from that, never from the live component (which another writer
   snapped on the change frame). Every whole-value channel works this way.
+  A channel only advances while its own spec is present, so a commit that
+  drops the entry re-seeds the reading from the static style instead of
+  leaving it frozen — otherwise the next retarget compares against a stale
+  target, finds nothing to do, and snaps.
 - **Layout transition** — the `layout` channel: a FLIP-style ease of a node's
   **laid-out rect** (position + size together) whenever layout moves or
   resizes it, cause-blind. The real layout snaps; a post-layout translate +

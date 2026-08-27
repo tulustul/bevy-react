@@ -305,10 +305,45 @@ pub fn drive_transitions(
         let skip_bg_gradient = parked(ChannelId::BackgroundGradient);
         let skip_border_gradient = parked(ChannelId::BorderGradient);
 
+        // Re-seed an *undriven* channel group from the static style. A channel
+        // only advances while its own spec is present, so a style state that
+        // drops the entry leaves `current`/`target` frozen at the reading from
+        // before — and the next retarget, comparing against that stale target,
+        // finds nothing to do and silently snaps. (The demos shell hits this:
+        // crossing the responsive breakpoint commits `transition: {}` to snap
+        // the nav across the swap, and the drawer's first open after it never
+        // eased.) Nothing is written here — `apply_style` already put the
+        // static value on the component; only the readings catch up. The
+        // channels that always drive (opacity, background color) pass their
+        // `Option<spec>` straight to `drive`, which snaps on `None`, so they
+        // stay in sync on their own.
+        macro_rules! sync_row {
+            (transform, $ch:ident, $d:tt, transform) => {
+                state.$ch.init(input.$ch.unwrap_or($d));
+            };
+            (size, $ch:ident, $d:tt, size) => {
+                state.$ch.init(input.$ch.unwrap_or($d));
+            };
+            (radius, $ch:ident, $d:tt, radius) => {
+                state.$ch.init(input.$ch.unwrap_or($d));
+            };
+            ($want:ident, $ch:ident, $d:tt, $group:ident) => {};
+        }
+        macro_rules! sync_transform_rows {
+            ($(($ch:ident, $d:tt, $group:ident),)*) => { $(sync_row!(transform, $ch, $d, $group);)* };
+        }
+        macro_rules! sync_size_rows {
+            ($(($ch:ident, $d:tt, $group:ident),)*) => { $(sync_row!(size, $ch, $d, $group);)* };
+        }
+        macro_rules! sync_radius_rows {
+            ($(($ch:ident, $d:tt, $group:ident),)*) => { $(sync_row!(radius, $ch, $d, $group);)* };
+        }
+
         // Transform: only when a transform transition is declared; otherwise the
-        // static `UiTransform` from `apply_style` stands untouched. Only specified
-        // channels are written (passing `None` keeps `build_ui_transform`'s scale
-        // precedence intact).
+        // static `UiTransform` from `apply_style` stands untouched (the `else`
+        // branch still re-seeds the channels — see `sync_row`). Only
+        // specified channels are written (passing `None` keeps
+        // `build_ui_transform`'s scale precedence intact).
         if or_shared(input.spec.for_transform(), shared_spec).is_some() && !skip_transform {
             let s = arm_spec(seed_frame, input.spec.for_transform(), shared_spec);
             let tx = input
@@ -337,6 +372,8 @@ pub fn drive_transitions(
                 );
                 *targets.transform = new;
             }
+        } else if !skip_transform {
+            with_input_channels!(sync_transform_rows);
         }
 
         // transform3d: eased field-wise onto the layer's params component;
@@ -360,6 +397,10 @@ pub fn drive_transitions(
             if t3d.0 != new {
                 t3d.0 = new;
             }
+        } else if !skip_transform3d {
+            state
+                .transform3d
+                .init(&input.transform3d.clone().unwrap_or_default());
         }
 
         // Opacity owns the final alpha across background/text/image. Resolved
@@ -506,6 +547,10 @@ pub fn drive_transitions(
                 };
             }
             with_input_channels!(size_walk);
+        } else if state.shared.size.is_none() {
+            // Not while a shared-element flight owns width/height: it drives
+            // the very same channels (`drive_shared_size`).
+            with_input_channels!(sync_size_rows);
         }
 
         // Corner radii (layout, like size: the radius lives on `Node`, so an
@@ -529,6 +574,8 @@ pub fn drive_transitions(
                 node.border_radius = r;
                 dirt.nodes.push(entity);
             }
+        } else if !skip_radius {
+            with_input_channels!(sync_radius_rows);
         }
 
         // Filter: ease the promoted root's resolved chain between wire
