@@ -65,7 +65,7 @@ export function Button({
 const buttonStyle: BevyStyle = {
   justifyContent: "center",
   alignItems: "center",
-  padding: { top: 8, right: 12, bottom: 8, left: 12 },
+  padding: { horizontal: 12, vertical: 8 },
   borderRadius: 8,
   backgroundGradient: Gradients.primary,
   transition: {

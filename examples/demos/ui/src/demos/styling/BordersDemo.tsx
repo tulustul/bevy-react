@@ -24,7 +24,11 @@ const PAGE: ExplanationData = {
 />`}</Code>
       <Paragraph>
         Each of the three accepts a single value or a per-side{" "}
-        <InlineCode>{"{ top, right, bottom, left }"}</InlineCode> object.{" "}
+        <InlineCode>{"{ top, right, bottom, left }"}</InlineCode> object;{" "}
+        <InlineCode>border</InlineCode> and{" "}
+        <InlineCode>borderRadius</InlineCode> also take an axis pair{" "}
+        <InlineCode>{"{ horizontal, vertical }"}</InlineCode> (
+        <InlineCode>borderColor</InlineCode> is per-side only).{" "}
         <InlineCode>outline</InlineCode> draws an extra ring outside the box —{" "}
         <InlineCode>width</InlineCode>, <InlineCode>offset</InlineCode>,{" "}
         <InlineCode>color</InlineCode> — and is ignored by layout.
@@ -121,7 +125,11 @@ function PerSideDemo() {
           <Paragraph>
             Every border attribute also takes a per-side{" "}
             <InlineCode>{"{ top, right, bottom, left }"}</InlineCode> object, so
-            each edge can have its own width, color, and corner radius.
+            each edge can have its own width, color, and corner radius. On{" "}
+            <InlineCode>borderRadius</InlineCode> those keys name the four
+            corners, so the axis pair{" "}
+            <InlineCode>{"{ horizontal }"}</InlineCode> is the top-right and
+            bottom-left pair.
           </Paragraph>
           <Code lang="tsx">{`<node
   style={{

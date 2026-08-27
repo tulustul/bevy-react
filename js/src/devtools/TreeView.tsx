@@ -90,7 +90,7 @@ export function TreeView({
           flexWrap: "wrap",
           alignItems: "center",
           gap: 4,
-          padding: { left: 6, right: 6, top: 4, bottom: 4 },
+          padding: { horizontal: 6, vertical: 4 },
           border: { bottom: 1 },
           borderColor: theme.border,
         }}
@@ -112,9 +112,7 @@ export function TreeView({
           No app nodes yet.
         </text>
       ) : (
-        <node
-          style={{ flexDirection: "column", padding: { top: 4, bottom: 4 } }}
-        >
+        <node style={{ flexDirection: "column", padding: { vertical: 4 } }}>
           {topLevel.map((id) => (
             <TreeRows
               key={id}

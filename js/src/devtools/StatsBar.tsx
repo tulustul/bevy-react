@@ -20,7 +20,7 @@ export function StatsBar() {
         flexDirection: "row",
         flexWrap: "wrap",
         gap: 8,
-        padding: { left: 8, right: 8, top: 4, bottom: 4 },
+        padding: { horizontal: 8, vertical: 4 },
         backgroundColor: theme.bgAlt,
         border: { top: 1 },
         borderColor: theme.border,

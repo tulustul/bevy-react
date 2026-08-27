@@ -73,7 +73,7 @@ const panelBody: BevyStyle = {
   flexDirection: "column",
   alignItems: "center",
   gap: 12,
-  padding: { top: 24, bottom: 24, left: 24, right: 24 },
+  padding: 24,
 };
 
 const brand: BevyStyle = {

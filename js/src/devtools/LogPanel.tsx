@@ -80,7 +80,7 @@ function Controls({
         flexWrap: "wrap",
         alignItems: "center",
         gap: 4,
-        padding: { left: 6, right: 6, top: 4, bottom: 4 },
+        padding: { horizontal: 6, vertical: 4 },
         border: { bottom: 1 },
         borderColor: theme.border,
       }}
@@ -125,7 +125,7 @@ function LogRow({
           flexDirection: "row",
           alignItems: "center",
           gap: 6,
-          padding: { left: 6, right: 6, top: 1, bottom: 1 },
+          padding: { horizontal: 6, vertical: 1 },
         }}
         hoverStyle={{ backgroundColor: theme.bgAlt }}
         onClick={onToggle}

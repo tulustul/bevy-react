@@ -47,7 +47,7 @@ const titleStyle: BevyStyle = {
 };
 
 const btnStyle: BevyStyle = {
-  padding: { top: 10, bottom: 10, left: 18, right: 18 },
+  padding: { horizontal: 18, vertical: 10 },
   borderRadius: 8,
   backgroundColor: "#313244",
   justifyContent: "center",

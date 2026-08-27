@@ -11,7 +11,7 @@
     "bevy:generate": "cargo run --manifest-path ../../../crates/core/Cargo.toml --example minimal -- --export-bindings src/bevy.ts"
   },
   "dependencies": {
-    "bevy-react": "^0.1.0",
+    "bevy-react": "*",
     "react": "19.2.7",
     "react-reconciler": "0.33.0"
   },

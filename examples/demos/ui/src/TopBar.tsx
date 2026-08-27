@@ -18,7 +18,7 @@ export function TopBar({ onMenu }: { onMenu: () => void }) {
       <CircularButton size={MENU_SIZE} onClick={onMenu}>
         <MenuIcon size={20} />
       </CircularButton>
-      <Title fontSize={26} style={{ flexGrow: 1, width: "auto" }} />
+      <Title style={{ flexGrow: 1, width: "auto" }} />
       <node style={{ width: MENU_SIZE, flexShrink: 0 }} />
     </node>
   );

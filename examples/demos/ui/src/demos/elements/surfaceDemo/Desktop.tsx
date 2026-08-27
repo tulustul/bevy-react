@@ -107,7 +107,7 @@ const statusBar: BevyStyle = {
   flexDirection: "row",
   alignItems: "center",
   justifyContent: "spaceBetween",
-  padding: { top: 6, bottom: 6, left: 16, right: 16 },
+  padding: { horizontal: 16, vertical: 6 },
   backgroundColor: Colors.surface100,
   borderColor: Colors.surface400,
   border: { top: 2, right: 0, bottom: 0, left: 0 },

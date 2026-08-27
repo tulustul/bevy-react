@@ -485,7 +485,7 @@ export function IconButton({
     <button
       style={{
         height: 20,
-        padding: { left: 6, right: 6 },
+        padding: { horizontal: 6 },
         alignItems: "center",
         justifyContent: "center",
         borderRadius: 4,
@@ -550,7 +550,7 @@ function TabButton({
   return (
     <button
       style={{
-        padding: { left: 12, right: 12, top: 5, bottom: 5 },
+        padding: { horizontal: 12, vertical: 5 },
         border: { bottom: 2 },
         borderColor: active ? theme.accent : "transparent",
       }}
@@ -660,7 +660,7 @@ export function Chip({
   return (
     <button
       style={{
-        padding: { left: 6, right: 6, top: 1, bottom: 1 },
+        padding: { horizontal: 6, vertical: 1 },
         borderRadius: 8,
         backgroundColor: active ? theme.bgActive : "transparent",
         border: 1,

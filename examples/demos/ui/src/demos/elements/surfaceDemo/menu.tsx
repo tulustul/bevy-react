@@ -82,7 +82,7 @@ export function MenuList({ items }: { items: MenuItem[] }) {
 const list: BevyStyle = {
   flexDirection: "column",
   minWidth: 200,
-  padding: { top: 6, bottom: 6, left: 6, right: 6 },
+  padding: 6,
   backgroundColor: Colors.surface300,
   borderColor: Colors.surface500,
   border: 2,
@@ -109,6 +109,6 @@ const label: BevyStyle = {
 
 const separator: BevyStyle = {
   height: 2,
-  margin: { top: 4, bottom: 4, left: 6, right: 6 },
+  margin: { horizontal: 6, vertical: 4 },
   backgroundColor: Colors.surface500,
 };

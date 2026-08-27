@@ -299,7 +299,9 @@ impl<'de> Deserialize<'de> for FontSize {
 }
 
 /// Four sides (or corners), each a [`Length`]. Accepts a number, a CSS shorthand
-/// string, or a `{ top, right, bottom, left }` object on the wire.
+/// string, a `{ top, right, bottom, left }` object, or an axis pair
+/// `{ horizontal, vertical }` (`horizontal` sets left + right, `vertical` sets
+/// top + bottom) on the wire.
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct Rect {
     pub top: Length,
@@ -351,7 +353,10 @@ impl<'de> Deserialize<'de> for Rect {
         impl<'de> Visitor<'de> for RectVisitor {
             type Value = Rect;
             fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
-                f.write_str("a number, a CSS shorthand string, or a {top,right,bottom,left} object")
+                f.write_str(
+                    "a number, a CSS shorthand string, a {top,right,bottom,left} object, \
+                     or a {horizontal,vertical} axis pair",
+                )
             }
             fn visit_f64<E: de::Error>(self, v: f64) -> Result<Rect, E> {
                 Ok(Rect::uniform(Length::Px(v as f32)))
@@ -380,24 +385,51 @@ impl<'de> Deserialize<'de> for Rect {
                 }))
             }
             fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Rect, A::Error> {
-                let mut rect = Rect::default();
+                // Two passes: the axis keys are only a base, so an explicit side
+                // wins over them whatever order the wire object lists them in.
+                let (mut horizontal, mut vertical) = (None, None);
+                let (mut top, mut right, mut bottom, mut left) = (None, None, None, None);
                 while let Some(key) = map.next_key::<String>()? {
                     let v = map.next_value::<Length>()?;
                     match key.as_str() {
-                        "top" => rect.top = v,
-                        "right" => rect.right = v,
-                        "bottom" => rect.bottom = v,
-                        "left" => rect.left = v,
+                        "top" => top = Some(v),
+                        "right" => right = Some(v),
+                        "bottom" => bottom = Some(v),
+                        "left" => left = Some(v),
+                        "horizontal" => horizontal = Some(v),
+                        "vertical" => vertical = Some(v),
                         // An unknown side key must not throw (that aborts the whole
                         // commit batch) — `v` is already consumed, so warn and skip.
                         _ => decode_warn(
                             "rect",
                             &key,
                             &format!(
-                                "unknown rect side {key:?}; ignoring (expected top/right/bottom/left)"
+                                "unknown rect side {key:?}; ignoring (expected \
+                                 top/right/bottom/left or horizontal/vertical)"
                             ),
                         ),
                     }
+                }
+                let mut rect = Rect::default();
+                if let Some(v) = vertical {
+                    rect.top = v;
+                    rect.bottom = v;
+                }
+                if let Some(h) = horizontal {
+                    rect.right = h;
+                    rect.left = h;
+                }
+                if let Some(v) = top {
+                    rect.top = v;
+                }
+                if let Some(v) = right {
+                    rect.right = v;
+                }
+                if let Some(v) = bottom {
+                    rect.bottom = v;
+                }
+                if let Some(v) = left {
+                    rect.left = v;
                 }
                 Ok(rect)
             }
@@ -484,5 +516,64 @@ mod tests {
         let s: Style = serde_json::from_str(r#"{ "padding": "1px 2px 3px 4px 5px" }"#)
             .expect("bad value-count must not abort");
         assert_eq!(s.padding, Some(Rect::default()));
+    }
+
+    /// The axis form: `horizontal` sets left + right, `vertical` sets top +
+    /// bottom. An omitted axis leaves those sides at the rect default, and an
+    /// explicit side always wins over an axis — whatever order the wire object
+    /// lists the keys in.
+    #[test]
+    fn rect_axis_pair() {
+        // `from_str` (not `from_value`) so the wire key order reaches the visitor
+        // as written — `serde_json::Map` sorts its keys.
+        let rect = |v: &str| {
+            let s: Style = serde_json::from_str(&format!(r#"{{ "padding": {v} }}"#))
+                .expect("axis rect must decode");
+            s.padding.expect("padding present")
+        };
+
+        assert_eq!(
+            rect(r#"{ "horizontal": 8, "vertical": 4 }"#),
+            Rect {
+                top: Length::Px(4.0),
+                bottom: Length::Px(4.0),
+                right: Length::Px(8.0),
+                left: Length::Px(8.0),
+            }
+        );
+
+        // A partial axis pair leaves the other axis at the default (`Px(0)`).
+        assert_eq!(
+            rect(r#"{ "horizontal": 8 }"#),
+            Rect {
+                top: Length::default(),
+                bottom: Length::default(),
+                right: Length::Px(8.0),
+                left: Length::Px(8.0),
+            }
+        );
+
+        // Axis values go through `Length` like sides do — unit strings included.
+        assert_eq!(
+            rect(r#"{ "horizontal": "50%", "vertical": "auto" }"#),
+            Rect {
+                top: Length::Auto,
+                bottom: Length::Auto,
+                right: Length::Percent(50.0),
+                left: Length::Percent(50.0),
+            }
+        );
+
+        // Mixing the two forms is undocumented (and TS lets it through — a union's
+        // excess-property check allows any key known to any arm), so it needs a
+        // defined result rather than an error: sides win, order-independently.
+        let mixed = Rect {
+            top: Length::default(),
+            bottom: Length::default(),
+            right: Length::Px(8.0),
+            left: Length::Px(0.0),
+        };
+        assert_eq!(rect(r#"{ "horizontal": 8, "left": 0 }"#), mixed);
+        assert_eq!(rect(r#"{ "left": 0, "horizontal": 8 }"#), mixed);
     }
 }

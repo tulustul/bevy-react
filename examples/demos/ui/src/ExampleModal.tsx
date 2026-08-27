@@ -230,7 +230,7 @@ const titleBarStyle: BevyStyle = {
 
 const closeButtonStyle: BevyStyle = {
   margin: { top: 15, bottom: 12 },
-  padding: { top: 7, right: 40, bottom: 7, left: 40 },
+  padding: { horizontal: 40, vertical: 7 },
   backgroundColor: Colors.green200,
   backgroundGradient: Gradients.success,
 };

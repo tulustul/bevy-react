@@ -309,7 +309,7 @@ function ReasonPill({ label }: { label: string }) {
   return (
     <node
       style={{
-        padding: { left: 5, right: 5, top: 0, bottom: 0 },
+        padding: { horizontal: 5, vertical: 0 },
         borderRadius: 7,
         border: 1,
         borderColor: theme.border,

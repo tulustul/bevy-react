@@ -73,7 +73,7 @@ function Demo({ demo: D }: { demo: ComponentType }) {
 
 const detailsButtonStyle: BevyStyle = {
   minWidth: 0,
-  padding: { top: 4, right: 10, bottom: 4, left: 10 },
+  padding: { horizontal: 10, vertical: 4 },
   borderRadius: 6,
   flexShrink: 0,
 };

@@ -16,7 +16,7 @@ export type FieldCategory =
   | "number" // plain numbers (flexGrow, zIndex, opacity…)
   | "length" // number or unit string (px number, "50%", "auto"…)
   | "color" // CSS color string
-  | "rect" // number, shorthand string, or per-side object
+  | "rect" // number, shorthand string, per-side object, or axis pair
   | "boolean"
   | "string"
   | "json"; // structured objects (transform, gradients, transitions…)
@@ -184,7 +184,7 @@ export function checkCategory(
         t === "string" ||
         (t === "object" && value !== null)
         ? null
-        : "expected a number, shorthand string, or per-side object";
+        : "expected a number, shorthand string, or side/axis object";
     case "json":
       return null;
   }

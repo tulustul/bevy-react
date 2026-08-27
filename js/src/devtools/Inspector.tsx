@@ -285,7 +285,7 @@ function EditRow({
               backgroundColor: theme.bgActive,
               border: 1,
               borderColor: state.error ? theme.danger : theme.accent,
-              padding: { left: 3, right: 3 },
+              padding: { horizontal: 3 },
             }}
           />
         ) : (
@@ -407,7 +407,7 @@ function AddStyleRow({
           backgroundColor: theme.bgActive,
           border: 1,
           borderColor: state.error ? theme.danger : theme.accent,
-          padding: { left: 3, right: 3 },
+          padding: { horizontal: 3 },
         }}
       />
       {state.error && (

@@ -1577,6 +1577,28 @@ mod tests {
         assert_eq!(margin.left, Val::Px(2.0));
     }
 
+    /// The axis pair reaches `Val` like any other rect form. On `borderRadius`
+    /// the sides name corners, so `horizontal` is the top-right + bottom-left
+    /// pair (`rect_to_border_radius`'s top/right/bottom/left → TL/TR/BR/BL).
+    #[test]
+    fn rect_axis_pair_maps_to_val() {
+        let s = style(serde_json::json!({
+            "padding": { "horizontal": 16, "vertical": "50%" },
+            "borderRadius": { "horizontal": 4 },
+        }));
+        let pad = rect_to_uirect(s.padding.unwrap());
+        assert_eq!(pad.left, Val::Px(16.0));
+        assert_eq!(pad.right, Val::Px(16.0));
+        assert_eq!(pad.top, Val::Percent(50.0));
+        assert_eq!(pad.bottom, Val::Percent(50.0));
+
+        let radius = rect_to_border_radius(s.border_radius.static_val().unwrap());
+        assert_eq!(radius.top_right, Val::Px(4.0));
+        assert_eq!(radius.bottom_left, Val::Px(4.0));
+        assert_eq!(radius.top_left, Val::Px(0.0));
+        assert_eq!(radius.bottom_right, Val::Px(0.0));
+    }
+
     #[test]
     fn linear_gradient_maps_angle_and_stops() {
         let s = style(serde_json::json!({

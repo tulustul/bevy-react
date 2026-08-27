@@ -44,7 +44,8 @@ pub enum LayerCache {
 /// Length-valued fields accept a bare number (logical pixels) or a unit string
 /// (`"50%"`, `"100vw"`, `"auto"`, `"10px"`). Rect-valued fields
 /// (`margin`/`padding`/`border`/`borderRadius`) accept a number (uniform), a CSS
-/// shorthand string (`"8px 16px"`), or a `{ top, right, bottom, left }` object.
+/// shorthand string (`"8px 16px"`), a `{ top, right, bottom, left }` object, or
+/// an axis pair `{ horizontal, vertical }` (an explicit side wins over an axis).
 /// Keyword-valued fields (`display`, `align*`, `flex*`, …) decode straight into
 /// the `bevy_ui`/`bevy_text` enum they drive (see the `keyword_fields!`
 /// deserializers below); an unrecognized keyword warns and falls back to the

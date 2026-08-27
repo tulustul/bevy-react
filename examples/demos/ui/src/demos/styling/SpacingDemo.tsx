@@ -24,7 +24,10 @@ const PAGE: ExplanationData = {
         All of them accept bare px numbers and unit strings;{" "}
         <InlineCode>padding</InlineCode> and <InlineCode>margin</InlineCode>{" "}
         additionally take per-side{" "}
-        <InlineCode>{"{ top, right, bottom, left }"}</InlineCode> objects.
+        <InlineCode>{"{ top, right, bottom, left }"}</InlineCode> objects, or an
+        axis pair <InlineCode>{"{ horizontal, vertical }"}</InlineCode> —{" "}
+        <InlineCode>horizontal</InlineCode> sets left and right,{" "}
+        <InlineCode>vertical</InlineCode> sets top and bottom.
       </Paragraph>
     </>
   ),
@@ -35,6 +38,7 @@ export function SpacingDemo() {
   return (
     <DemoRow>
       <PaddingDemo />
+      <AxisPaddingDemo />
       <GapDemo />
       <MarginDemo />
     </DemoRow>
@@ -68,6 +72,59 @@ function PaddingCard() {
         <node style={inner} />
       </Stage>
       <Slider value={p} min={0} max={40} onChange={setP} name="padding" />
+    </ControlColumn>
+  );
+}
+
+function AxisPaddingDemo() {
+  return (
+    <Example
+      title="Axis pairs"
+      info={
+        <>
+          <Paragraph>
+            An axis pair sets both sides at once —{" "}
+            <InlineCode>horizontal</InlineCode> is left and right,{" "}
+            <InlineCode>vertical</InlineCode> is top and bottom. Drag the two
+            sliders to inset the box per axis.
+          </Paragraph>
+          <Code lang="tsx">{`<node
+  style={{
+    padding: {
+      horizontal: 24,
+      vertical: 8,
+    },
+  }}
+/>`}</Code>
+        </>
+      }
+      demo={AxisPaddingCard}
+    />
+  );
+}
+
+function AxisPaddingCard() {
+  const [h, setH] = useState(24);
+  const [v, setV] = useState(8);
+  return (
+    <ControlColumn>
+      <Stage style={{ ...wrap, padding: { horizontal: h, vertical: v } }}>
+        <node style={{ ...inner, backgroundColor: Colors.yellow100 }} />
+      </Stage>
+      <Slider
+        value={h}
+        min={0}
+        max={48}
+        onChange={setH}
+        name="padding.horizontal"
+      />
+      <Slider
+        value={v}
+        min={0}
+        max={48}
+        onChange={setV}
+        name="padding.vertical"
+      />
     </ControlColumn>
   );
 }

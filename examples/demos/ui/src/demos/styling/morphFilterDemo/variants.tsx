@@ -75,7 +75,7 @@ function PhotoCard({ page }: { page: (typeof PHOTOS)[number] }) {
           style={{
             backgroundColor: page.accent,
             borderRadius: 999,
-            padding: { top: 2, right: 10, bottom: 2, left: 10 },
+            padding: { horizontal: 10, vertical: 2 },
           }}
         >
           <text
@@ -275,7 +275,7 @@ function StatsCard() {
           flexDirection: "row",
           alignItems: "flexEnd",
           justifyContent: "spaceBetween",
-          padding: { left: 4, right: 4 },
+          padding: { horizontal: 4 },
         }}
       >
         {bars.map((height, i) => (
@@ -297,7 +297,7 @@ function StatsCard() {
             flexGrow: 1,
             backgroundColor: Colors.primary400,
             borderRadius: 999,
-            padding: { top: 4, bottom: 4 },
+            padding: { vertical: 4 },
             justifyContent: "center",
             cursor: "pointer",
             transition: { backgroundColor: { duration: 120 } },
@@ -315,7 +315,7 @@ function StatsCard() {
             flexGrow: 1,
             backgroundColor: Colors.surface400,
             borderRadius: 999,
-            padding: { top: 4, bottom: 4 },
+            padding: { vertical: 4 },
             justifyContent: "center",
             cursor: "pointer",
             transition: { backgroundColor: { duration: 120 } },

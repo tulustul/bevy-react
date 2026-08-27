@@ -289,7 +289,7 @@ const thumbButton: BevyStyle = {
   width: 72,
   height: 92,
   borderRadius: "50%",
-  padding: { top: 10, right: 0, bottom: 10, left: 0 },
+  padding: { horizontal: 0, vertical: 10 },
 };
 
 const thumb: BevyStyle = {

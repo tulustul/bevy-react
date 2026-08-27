@@ -68,11 +68,15 @@ export type Time = number | string;
 export type FontSize = number | string;
 
 /** Four sides/corners: a number (uniform), a CSS shorthand string
- *  (`"8px"`, `"8px 16px"`, `"1px 2px 3px 4px"`), or an explicit object. */
+ *  (`"8px"`, `"8px 16px"`, `"1px 2px 3px 4px"`), an explicit per-side object, or
+ *  an axis pair — `horizontal` sets left + right, `vertical` sets top + bottom.
+ *  On `borderRadius` the sides name the four corners, so `horizontal` is the
+ *  top-right + bottom-left pair. */
 export type Rect =
   | number
   | string
-  | { top?: Length; right?: Length; bottom?: Length; left?: Length };
+  | { top?: Length; right?: Length; bottom?: Length; left?: Length }
+  | { horizontal?: Length; vertical?: Length };
 
 /** Color space a gradient interpolates in (default `"oklab"`). */
 export type ColorSpace =

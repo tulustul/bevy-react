@@ -44,7 +44,7 @@ export function HeaderCard() {
 }
 
 const toggleStyle: BevyStyle = {
-  padding: { top: 3, bottom: 3, left: 10, right: 10 },
+  padding: { horizontal: 10, vertical: 3 },
   borderRadius: 6,
   cursor: "pointer",
 };

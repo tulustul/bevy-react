@@ -191,7 +191,7 @@ const titleStyle: BevyStyle = {
 };
 
 const btnStyle: BevyStyle = {
-  padding: { top: 6, bottom: 6, left: 12, right: 12 },
+  padding: { horizontal: 12, vertical: 6 },
   borderRadius: 6,
   justifyContent: "center",
   alignItems: "center",

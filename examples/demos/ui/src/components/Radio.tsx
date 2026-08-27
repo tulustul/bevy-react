@@ -105,7 +105,7 @@ const pillStyle: BevyStyle = {
   minWidth: 50,
   justifyContent: "center",
   alignItems: "center",
-  padding: { top: 6, right: 14, bottom: 6, left: 14 },
+  padding: { horizontal: 14, vertical: 6 },
   borderRadius: 8,
   cursor: "pointer",
 };

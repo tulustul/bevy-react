@@ -47,7 +47,7 @@ const wrapper: BevyStyle = {
   flexDirection: "row",
   alignItems: "center",
   gap: 8,
-  padding: { top: 8, right: 12, bottom: 8, left: 12 },
+  padding: { horizontal: 12, vertical: 8 },
   borderRadius: 8,
   backgroundGradient: Gradients.transparent,
   cursor: "pointer",

@@ -192,25 +192,25 @@ const tabRowStyle: BevyStyle = {
 };
 
 const tabStyle: BevyStyle = {
-  padding: { top: 17, bottom: 17, left: 16, right: 16 },
+  padding: { horizontal: 16, vertical: 17 },
   borderRadius: 4,
   cursor: "pointer",
   transition: { backgroundColor: { duration: 120 } },
 };
 
 const shoulderBadgeStyle: BevyStyle = {
-  padding: { top: 4, bottom: 4, left: 8, right: 8 },
+  padding: { horizontal: 8, vertical: 4 },
   border: 2,
   borderColor: Colors.surface600,
   borderRadius: 4,
-  margin: { left: 6, right: 6 },
+  margin: { horizontal: 6 },
 };
 
 const columnsRowStyle: BevyStyle = {
   flexDirection: "row",
   gap: 22,
   justifyContent: "center",
-  margin: { top: 6, bottom: 6 },
+  margin: { vertical: 6 },
 };
 
 const columnStyle: BevyStyle = {
@@ -265,7 +265,7 @@ const footerStyle: BevyStyle = {
 };
 
 const legendBadgeStyle: BevyStyle = {
-  padding: { top: 2, bottom: 2, left: 7, right: 7 },
+  padding: { horizontal: 7, vertical: 2 },
   border: 1,
   borderColor: Colors.surface600,
   borderRadius: 3,

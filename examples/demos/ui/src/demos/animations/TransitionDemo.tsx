@@ -662,7 +662,7 @@ const accordionPanel: BevyStyle = {
 };
 
 const accordionFooter: BevyStyle = {
-  padding: { top: 6, right: 12, bottom: 6, left: 12 },
+  padding: { horizontal: 12, vertical: 6 },
   alignItems: "center",
 };
 

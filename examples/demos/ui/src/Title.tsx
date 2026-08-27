@@ -9,8 +9,6 @@ const titleDelay = 7000;
 type TitleProps = {
   /** Merged over the wrapper's own style (its place in the parent's flow). */
   style?: BevyStyle;
-  /** Wordmark size; the compact shell's top bar asks for a smaller one. */
-  fontSize?: number;
 };
 
 /**
@@ -23,7 +21,7 @@ type TitleProps = {
  * stretch the frozen image; the key flip freezes the old appearance and
  * `dustify` blends it with the (now invisible / visible) live content.
  */
-export function Title({ style, fontSize = 40 }: TitleProps) {
+export function Title({ style }: TitleProps) {
   const [text, setText] = useState(title);
   const toggle = () => setText(text === title ? "Demos" : title);
 
@@ -71,7 +69,7 @@ export function Title({ style, fontSize = 40 }: TitleProps) {
           width: "100%",
         }}
       >
-        <text style={{ ...titleStyle, fontSize }}>{text}</text>
+        <text style={{ ...titleStyle }}>{text}</text>
       </node>
     </Pinchable>
   );
@@ -79,6 +77,7 @@ export function Title({ style, fontSize = 40 }: TitleProps) {
 
 const titleStyle: BevyStyle = {
   fontFamily: "MetalMania",
+  fontSize: 40,
   color: Colors.primary100,
   fontWeight: "bold",
   width: "100%",

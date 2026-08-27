@@ -151,7 +151,7 @@ const bodyStyle: BevyStyle = {
 };
 
 const tabStyle: BevyStyle = {
-  padding: { top: 2, bottom: 2, left: 8, right: 8 },
+  padding: { vertical: 2, horizontal: 8 },
   borderRadius: 6,
   cursor: "pointer",
 };
@@ -165,7 +165,7 @@ const tabHoverStyle: BevyStyle = {
 };
 
 const copyStyle: BevyStyle = {
-  padding: { top: 3, bottom: 3, left: 10, right: 10 },
+  padding: { horizontal: 10, vertical: 3 },
   borderRadius: 6,
   cursor: "pointer",
 };

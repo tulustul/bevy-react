@@ -125,7 +125,7 @@ const startPopup: BevyStyle = {
 };
 
 const clock: BevyStyle = {
-  padding: { top: 6, bottom: 6, left: 14, right: 14 },
+  padding: { horizontal: 14, vertical: 6 },
   borderRadius: 7,
   borderColor: Colors.surface500,
   border: 2,
