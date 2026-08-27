@@ -51,28 +51,62 @@ fn accumulate(
 }
 
 /// Walk up from a text run with `label` to its enclosing `<button>`.
+///
+/// `under` scopes the search to one subtree: the climb must reach that
+/// ancestor id (the devtools `<root>`) for the button to count. Without it a
+/// label the demos gallery also uses — "Layers" is both a devtools tab and a
+/// left-nav demo — resolves to whichever match `text_of`'s (randomly ordered)
+/// iteration hands back first, which made this test ~50% flaky.
+fn find_button_under(
+    label: &str,
+    under: Option<u32>,
+    buttons: &HashSet<u32>,
+    parent_of: &HashMap<u32, u32>,
+    text_of: &HashMap<u32, String>,
+) -> Option<u32> {
+    // Sorted so a tie between two in-scope matches is at least deterministic.
+    let mut spans: Vec<u32> = text_of
+        .iter()
+        .filter(|(_, text)| text.trim() == label)
+        .map(|(span, _)| *span)
+        .collect();
+    spans.sort_unstable();
+
+    for span in spans {
+        let mut current = span;
+        let mut button = None;
+        let mut in_scope = under.is_none();
+        for _ in 0..32 {
+            let Some(&parent) = parent_of.get(&current) else {
+                break;
+            };
+            if button.is_none() && buttons.contains(&parent) {
+                button = Some(parent);
+            }
+            if Some(parent) == under {
+                in_scope = true;
+                break;
+            }
+            if button.is_some() && in_scope {
+                break;
+            }
+            current = parent;
+        }
+        if in_scope && let Some(button) = button {
+            return Some(button);
+        }
+    }
+    None
+}
+
+/// Unscoped lookup — for labels outside the devtools panel (the app's nav).
 fn find_button(
     label: &str,
     buttons: &HashSet<u32>,
     parent_of: &HashMap<u32, u32>,
     text_of: &HashMap<u32, String>,
 ) -> Option<u32> {
-    for (span, text) in text_of {
-        if text.trim() != label {
-            continue;
-        }
-        let mut current = *span;
-        for _ in 0..8 {
-            let Some(&parent) = parent_of.get(&current) else {
-                break;
-            };
-            if buttons.contains(&parent) {
-                return Some(parent);
-            }
-            current = parent;
-        }
-    }
-    None
+    find_button_under(label, None, buttons, parent_of, text_of)
 }
 
 #[test]
@@ -150,7 +184,9 @@ fn devtools_panel_round_trip() {
     let mut root_id: Option<u32> = None;
     let deadline = Instant::now() + Duration::from_secs(10);
     while Instant::now() < deadline {
-        if root_id.is_some() && find_button("x", &buttons, &parent_of, &text_of).is_some() {
+        if root_id.is_some()
+            && find_button_under("x", root_id, &buttons, &parent_of, &text_of).is_some()
+        {
             break;
         }
         if let Ok(batch) = ops_rx.recv_timeout(Duration::from_millis(200)) {
@@ -169,7 +205,7 @@ fn devtools_panel_round_trip() {
         text_of.values().any(|t| t.trim() == "devtools"),
         "panel chrome (title) did not render"
     );
-    let close = find_button("x", &buttons, &parent_of, &text_of)
+    let close = find_button_under("x", Some(root_id), &buttons, &parent_of, &text_of)
         .expect("no close (x) button in the devtools panel");
     eprintln!("OK   panel mounted: <root> id={root_id}, close button id={close}");
 
@@ -191,7 +227,7 @@ fn devtools_panel_round_trip() {
     // mount effect announces `devtools.layersOpen { on: true }` (the gate for
     // the Rust-side layer stream). A hand-built `devtools.layers` payload
     // must then render — the reason pill's text proves the panel consumed it.
-    let layers_tab = find_button("Layers", &buttons, &parent_of, &text_of)
+    let layers_tab = find_button_under("Layers", Some(root_id), &buttons, &parent_of, &text_of)
         .expect("no Layers tab button in the devtools panel");
     outbound_tx
         .send(Outbound::UiEvent {
@@ -276,7 +312,7 @@ fn devtools_panel_round_trip() {
     // Console panel (which announces `consoleOpen { on: true }`). A
     // hand-built `devtools.console` payload must render both a js and a rust
     // row, and the clear button must emit `devtools.consoleClear`.
-    let console_tab = find_button("Console", &buttons, &parent_of, &text_of)
+    let console_tab = find_button_under("Console", Some(root_id), &buttons, &parent_of, &text_of)
         .expect("no Console tab button in the devtools panel");
     outbound_tx
         .send(Outbound::UiEvent {
@@ -354,7 +390,7 @@ fn devtools_panel_round_trip() {
 
     // The clear button (unambiguous: the Bridge tab's LogPanel — the only
     // other "clear" — never mounted in this run).
-    let clear = find_button("clear", &buttons, &parent_of, &text_of)
+    let clear = find_button_under("clear", Some(root_id), &buttons, &parent_of, &text_of)
         .expect("no clear button in the Console tab");
     outbound_tx
         .send(Outbound::UiEvent {
