@@ -47,3 +47,24 @@ export function CloseIcon({
     </svg>
   );
 }
+
+/** A left-pointing chevron — the home page's "back to the wall" control. The
+ * font has no arrow glyph (it renders as tofu), so every arrow in this app is
+ * drawn. */
+export function ChevronLeftIcon({
+  size = 16,
+  color = Colors.textColor100,
+}: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" style={{ width: size, height: size }}>
+      <path
+        d="M15 5 L8 12 L15 19"
+        stroke={color}
+        strokeWidth={2.4}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        fill="none"
+      />
+    </svg>
+  );
+}

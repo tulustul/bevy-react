@@ -94,6 +94,9 @@ function Option({ option, selected, pinch, onClick }: OptionProps) {
 }
 
 const groupStyle: BevyStyle = {
+  // Never wider than the container: the wrap only engages against a
+  // constraint, and a max-content group would overflow a narrow card.
+  maxWidth: "100%",
   flexDirection: "row",
   flexWrap: "wrap",
   alignItems: "center",

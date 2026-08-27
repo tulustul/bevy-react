@@ -1,6 +1,6 @@
 import { ComponentType } from "react";
 import type { SceneId } from "@/bevy";
-import { Home } from "./demos/Home";
+import { Home } from "./demos/home";
 import { GettingStarted } from "./demos/GettingStarted";
 import { HowItWorks } from "./demos/HowItWorks";
 import { ReactToBevyDemo } from "./demos/communication/ReactToBevyDemo";
@@ -68,8 +68,8 @@ export type DemoItem = BaseDemoItem &
 
 export const DEMOS: DemoItem[] = [
   { label: "Home", component: Home },
-  { label: "Getting started", component: GettingStarted },
   { label: "How it works?", component: HowItWorks },
+  { label: "Getting started", component: GettingStarted },
   {
     label: "Elements",
     expandedByDefault: true,

@@ -1,5 +1,6 @@
 import { ComponentType, ReactNode, useEffect } from "react";
 import { create } from "zustand";
+import { hmrSingleton } from "@/hmr";
 import type { BevyStyle } from "bevy-react/jsx";
 
 export type ExplanationData = {
@@ -64,13 +65,10 @@ const createExplanationStore = () =>
       ),
   }));
 
-// Guard on globalThis so a hot-reload re-exec of app.js keeps the selection
-// instead of recreating the store with the default.
-const g = globalThis as unknown as {
-  __explanationStore?: ReturnType<typeof createExplanationStore>;
-};
-export const useExplanationStore = (g.__explanationStore ??=
-  createExplanationStore());
+export const useExplanationStore = hmrSingleton(
+  "__explanationStore",
+  createExplanationStore,
+);
 
 /**
  * Register the page's header-card content, or `null` to opt the page out of

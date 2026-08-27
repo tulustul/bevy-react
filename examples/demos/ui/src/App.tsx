@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BevyStyle } from "bevy-react/jsx";
 import { bevy } from "@/bevy";
-import { Scrollbar } from "@/theme";
+import { Responsiveness, Scrollbar } from "@/theme";
 import { DEMOS, findDemoByLabel } from "./demos";
 import { Navigation } from "./Navigation";
 import { HeaderCard } from "./HeaderCard";
@@ -29,7 +29,10 @@ const PAGE_MORPHS: MorphUse[] = [
 export function App() {
   const win = useWindowSize();
 
-  if (!win) {
+  // Gate on a real viewport, not on truthiness: `useWindowSize` starts at
+  // 0×0 rather than null, so `!win` never fired and the shell spent its first
+  // frames laid out as if it were on a phone (0 < the compact breakpoint).
+  if (win.width === 0) {
     return null;
   }
 
@@ -150,10 +153,10 @@ const contentInnerStyle: BevyStyle = {
   alignItems: "center",
   gap: 20,
   width: "100%",
-  padding: 24,
+  padding: Responsiveness.contentPadding,
 };
 
 const contentInnerMobileStyle: BevyStyle = {
-  padding: 5,
+  padding: Responsiveness.contentPaddingMobile,
   gap: 10,
 };

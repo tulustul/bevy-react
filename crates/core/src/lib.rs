@@ -109,7 +109,10 @@ pub use event::{ReactEvent, ReactEvents};
 pub use filters::{ReactFilter, ReactMorphFilter};
 pub use message::{ReactAppExt, ReactMessage, ReactPayload};
 pub use names::ReactNodes;
-pub use plugin::{Fonts, PointerCapture, PointerCaptureSet, ReactApplySet, ReactUiPlugin};
+pub use plugin::{
+    FilterSelection, Fonts, PointerCapture, PointerCaptureSet, PrecompileFilters, ReactApplySet,
+    ReactUiPlugin,
+};
 pub use portal::{
     PortalCamera, RenderMode, RenderTarget, RenderTargetSpec, RenderTargets, Resolution,
 };

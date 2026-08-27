@@ -24,7 +24,7 @@ You can play with a live demo here:
 
 https://tulustul.github.io/bevy-react/
 
-![The bevy-react demos app: a React-driven left-nav over a live 3D Bevy scene, with a world-tracking "Bounces" panel anchored above a bouncing ball.](https://raw.githubusercontent.com/tulustul/bevy-react/main/screenshots/example-app.png)
+![The bevy-react demos app: a React-driven left-nav over a live 3D Bevy scene, with a world-tracking "Bounces" panel anchored above a bouncing ball.](https://raw.githubusercontent.com/tulustul/bevy-react/main/screenshots/home.webp)
 
 ```tsx
 import { mount } from "bevy-react";
@@ -715,6 +715,29 @@ devtools code is still _compiled_ into release binaries; the panel's JS is
 stripped from production bundles either way. If a shipping build must not
 contain the code at all, disable the `devtools` default feature
 (`bevy-react = { version = "…", default-features = false }`).
+
+### Precompiling filter shaders
+
+Filter and morph shaders compile into GPU pipelines on first use — and while
+one compiles, its layer is withheld for a few frames (a dark blink the first
+time each morph runs). By default the plugin compiles every registered shader
+ahead of time, per camera target format, on the pipeline cache's background
+workers. Narrow it per partition — the crate's built-ins (both families), your
+`add_react_filter`s, your `add_react_morph_filter`s — or turn it off:
+
+```rust
+app.add_plugins(ReactUiPlugin::new("ui/dist/app.js").precompile_filters(
+    PrecompileFilters {
+        morphs: FilterSelection::Names(vec!["doorway".into(), "bookFlip".into()]),
+        ..default()
+    },
+));
+```
+
+A custom multi-pass filter whose params have no defaults warms its primary
+shader only (the extra passes are found by resolving the filter with its
+identity or empty params). A name that is unknown, or listed under the wrong
+partition, warns once at startup (`precompileFilters`) and is skipped.
 
 ## Performance
 

@@ -215,6 +215,73 @@ pub struct FilterRegistration {
     pub(crate) ts_name: fn() -> String,
     /// Collects the params type declaration (and its dependencies).
     pub(crate) ts_collect: fn(&mut TsCollector),
+    /// Registered by the crate itself (`register_builtins`) rather than the
+    /// app — the `builtins` partition of `PrecompileFilters`, whichever
+    /// family. A fact of WHO registered the entry, not of its name: an app
+    /// shadowing a built-in name with its own type lands in its own partition.
+    pub(crate) builtin: bool,
+    /// The pass shaders to precompile for this filter (see
+    /// [`FilterRegistry::warm_shaders`]): resolved from its identity params,
+    /// else from `{}`, so multi-pass built-ins (bloom, shadow) list every
+    /// pass shader; a filter whose params decode from neither falls back to
+    /// its primary [`ReactFilter::shader`] — the documented limit for a
+    /// defaults-less custom multi-pass filter (pass 0 only).
+    pub(crate) warm_shaders: fn(&AssetServer) -> Vec<Handle<Shader>>,
+}
+
+/// Which slice of the registry a [`PrecompileFilters`](crate::PrecompileFilters)
+/// field addresses.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) enum FilterPartition {
+    /// Everything the crate ships, both families.
+    Builtins,
+    /// App-registered regular filters (`add_react_filter`).
+    Filters,
+    /// App-registered morphs (`add_react_morph_filter`).
+    Morphs,
+}
+
+impl FilterPartition {
+    fn of(entry: &FilterRegistration) -> Self {
+        if entry.builtin {
+            Self::Builtins
+        } else if entry.is_morph {
+            Self::Morphs
+        } else {
+            Self::Filters
+        }
+    }
+}
+
+/// The baked body of [`FilterRegistration::warm_shaders`] for `T`.
+fn warm_shaders_of<T: ReactFilter + DeserializeOwned>(assets: &AssetServer) -> Vec<Handle<Shader>> {
+    let candidates = T::identity_params()
+        .into_iter()
+        .chain(std::iter::once(Value::Object(serde_json::Map::new())));
+    for params in candidates {
+        let Ok(filter) = T::deserialize(&params) else {
+            continue;
+        };
+        let Ok(passes) = filter.resolve(assets) else {
+            continue;
+        };
+        let mut out = Vec::new();
+        push_unique(&mut out, passes.into_iter().map(|p| p.shader));
+        if !out.is_empty() {
+            return out;
+        }
+    }
+    vec![T::shader(assets)]
+}
+
+/// Append the handles not already in `out` (a `Handle<Shader>` compares by
+/// asset id; the lists are a dozen entries, so linear is fine).
+fn push_unique(out: &mut Vec<Handle<Shader>>, more: impl IntoIterator<Item = Handle<Shader>>) {
+    for h in more {
+        if !out.contains(&h) {
+            out.push(h);
+        }
+    }
 }
 
 impl NamedEntry for FilterRegistration {
@@ -237,6 +304,56 @@ impl FilterRegistry {
     /// different type claiming an occupied name warns and replaces (see
     /// [`register_entry`]).
     pub fn register<T: ReactFilter + DeserializeOwned + TS>(&mut self) {
+        self.register_with::<T>(false);
+    }
+
+    /// [`Self::register`] for the crate's own filters: the entry lands in the
+    /// `builtins` partition (see [`FilterPartition`]).
+    pub(crate) fn register_builtin<T: ReactFilter + DeserializeOwned + TS>(&mut self) {
+        self.register_with::<T>(true);
+    }
+
+    /// Shader handles to precompile for `names` within `partition` (`None` =
+    /// every entry of it), deduped, in a deterministic order. Names that are
+    /// unknown OR belong to another partition come back in the second list
+    /// for the caller to report — they are never silently accepted from the
+    /// wrong field.
+    pub(crate) fn warm_shaders(
+        &self,
+        partition: FilterPartition,
+        names: Option<&[String]>,
+        assets: &AssetServer,
+    ) -> (Vec<Handle<Shader>>, Vec<String>) {
+        let mut handles = Vec::new();
+        let mut rejected = Vec::new();
+        match names {
+            None => {
+                let mut keys: Vec<&'static str> = self
+                    .entries
+                    .iter()
+                    .filter(|(_, e)| FilterPartition::of(e) == partition)
+                    .map(|(k, _)| *k)
+                    .collect();
+                keys.sort_unstable();
+                for key in keys {
+                    push_unique(&mut handles, (self.entries[key].warm_shaders)(assets));
+                }
+            }
+            Some(names) => {
+                for name in names {
+                    match self.entries.get(name.as_str()) {
+                        Some(e) if FilterPartition::of(e) == partition => {
+                            push_unique(&mut handles, (e.warm_shaders)(assets));
+                        }
+                        _ => rejected.push(name.clone()),
+                    }
+                }
+            }
+        }
+        (handles, rejected)
+    }
+
+    fn register_with<T: ReactFilter + DeserializeOwned + TS>(&mut self, builtin: bool) {
         register_entry(
             &mut self.entries,
             T::NAME,
@@ -260,6 +377,8 @@ impl FilterRegistry {
                 // fns (the same split as `EventRegistration`).
                 ts_name: <T as TS>::name,
                 ts_collect: |c| c.add::<T>(),
+                builtin,
+                warm_shaders: warm_shaders_of::<T>,
             },
         );
     }
@@ -544,5 +663,143 @@ mod tests {
         assert_eq!(passes[3].shader, passes[0].shader);
         assert_eq!(passes[1].shader, blur, "middle passes reuse blur's shader");
         assert_eq!(passes[2].shader, blur);
+    }
+
+    /// A custom regular filter and a custom morph for the partition tests:
+    /// `Defaulted` decodes from `{}`; `Strict` has a required param and no
+    /// identity, so its warm list can only be its primary shader.
+    #[derive(Deserialize, ts_rs::TS)]
+    #[serde(deny_unknown_fields)]
+    struct Defaulted {}
+    impl ReactFilter for Defaulted {
+        const NAME: &'static str = "defaulted";
+        fn shader(assets: &AssetServer) -> Handle<Shader> {
+            HueRotateParams::shader(assets)
+        }
+        fn pack(&self) -> (Vec<Vec4>, Arc<[ParamSlot]>) {
+            (Vec::new(), Arc::from(Vec::new()))
+        }
+    }
+    #[derive(Deserialize, ts_rs::TS)]
+    #[serde(deny_unknown_fields)]
+    struct Strict {
+        #[allow(dead_code)]
+        amount: f32,
+    }
+    impl ReactFilter for Strict {
+        const NAME: &'static str = "strict";
+        fn shader(assets: &AssetServer) -> Handle<Shader> {
+            BlurParams::shader(assets)
+        }
+        fn pack(&self) -> (Vec<Vec4>, Arc<[ParamSlot]>) {
+            (Vec::new(), Arc::from(Vec::new()))
+        }
+        fn resolve(&self, assets: &AssetServer) -> Result<Vec<ResolvedFilterPass>, String> {
+            // Two passes on two shaders — only reachable with params.
+            Ok(vec![
+                ResolvedFilterPass {
+                    shader: Self::shader(assets),
+                    params: Vec::new(),
+                    layout: Arc::from(Vec::new()),
+                    wire_index: 0,
+                },
+                ResolvedFilterPass {
+                    shader: HueRotateParams::shader(assets),
+                    params: Vec::new(),
+                    layout: Arc::from(Vec::new()),
+                    wire_index: 0,
+                },
+            ])
+        }
+    }
+    #[derive(Deserialize, ts_rs::TS)]
+    #[serde(deny_unknown_fields)]
+    struct CustomMorph {}
+    impl ReactFilter for CustomMorph {
+        const NAME: &'static str = "customMorph";
+        const IS_MORPH: bool = true;
+        fn shader(assets: &AssetServer) -> Handle<Shader> {
+            crate::filters::CrossfadeParams::shader(assets)
+        }
+        fn pack(&self) -> (Vec<Vec4>, Arc<[ParamSlot]>) {
+            (Vec::new(), Arc::from(Vec::new()))
+        }
+    }
+
+    fn partitioned_registry(app: &mut App) -> FilterRegistry {
+        register_builtin_filters(app);
+        let mut registry = app.world_mut().remove_resource::<FilterRegistry>().unwrap();
+        registry.register::<Defaulted>();
+        registry.register::<Strict>();
+        registry.register::<CustomMorph>();
+        registry
+    }
+
+    /// `warm_shaders` lists every pass shader of a built-in (bloom/shadow:
+    /// their own + blur's), deduped across the partition, and a defaults-less
+    /// custom filter falls back to its primary shader alone.
+    #[test]
+    fn warm_shaders_lists_every_pass_shader_deduped() {
+        let mut app = asset_app();
+        let registry = partitioned_registry(&mut app);
+        let assets = app.world().resource::<AssetServer>();
+        let names = |list: &[&str]| Some(list.iter().map(|s| s.to_string()).collect::<Vec<_>>());
+        let warm = |partition, list: Option<Vec<String>>| {
+            registry.warm_shaders(partition, list.as_deref(), assets)
+        };
+
+        let (bloom, rejected) = warm(FilterPartition::Builtins, names(&["bloom"]));
+        assert!(rejected.is_empty());
+        assert_eq!(bloom.len(), 2, "bloom.wgsl + blur.wgsl: {bloom:?}");
+        let (blur, _) = warm(FilterPartition::Builtins, names(&["blur"]));
+        assert_eq!(blur.len(), 1);
+        assert!(bloom.contains(&blur[0]));
+        let (shadow, _) = warm(FilterPartition::Builtins, names(&["shadow"]));
+        assert_eq!(shadow.len(), 2);
+        let (crossfade, _) = warm(FilterPartition::Builtins, names(&["crossfade"]));
+        assert_eq!(crossfade.len(), 1);
+
+        // Every built-in: the eleven embedded pass shaders, each once.
+        let (all, rejected) = warm(FilterPartition::Builtins, None);
+        assert!(rejected.is_empty());
+        assert_eq!(all.len(), 11, "{all:?}");
+        let mut paths: Vec<_> = all.iter().map(|h| h.path().unwrap().to_string()).collect();
+        paths.sort();
+        paths.dedup();
+        assert_eq!(paths.len(), 11, "distinct embedded paths");
+
+        // The defaults-less custom filter: primary shader only (its second
+        // pass is unreachable without params); the defaultable one resolves.
+        let (strict, _) = warm(FilterPartition::Filters, names(&["strict"]));
+        assert_eq!(strict, vec![Strict::shader(assets)]);
+        let (defaulted, _) = warm(FilterPartition::Filters, names(&["defaulted"]));
+        assert_eq!(defaulted, vec![Defaulted::shader(assets)]);
+    }
+
+    /// Partitions are by registrar and family: built-ins (both families) are
+    /// one slice, the app's filters and morphs the other two, and a name
+    /// asked for under the wrong field is rejected rather than warmed.
+    #[test]
+    fn warm_shaders_partitions_by_registrar_and_family() {
+        let mut app = asset_app();
+        let registry = partitioned_registry(&mut app);
+        let assets = app.world().resource::<AssetServer>();
+        let names = |list: &[&str]| list.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+
+        let (filters, rejected) = registry.warm_shaders(FilterPartition::Filters, None, assets);
+        assert!(rejected.is_empty());
+        assert_eq!(filters.len(), 2, "defaulted + strict: {filters:?}");
+        let (morphs, _) = registry.warm_shaders(FilterPartition::Morphs, None, assets);
+        assert_eq!(morphs, vec![CustomMorph::shader(assets)]);
+
+        let ask = names(&["bloom", "customMorph", "strict", "nope"]);
+        let (h, rejected) = registry.warm_shaders(FilterPartition::Filters, Some(&ask), assets);
+        assert_eq!(h, vec![Strict::shader(assets)]);
+        assert_eq!(rejected, names(&["bloom", "customMorph", "nope"]));
+        let (h, rejected) = registry.warm_shaders(FilterPartition::Morphs, Some(&ask), assets);
+        assert_eq!(h, vec![CustomMorph::shader(assets)]);
+        assert_eq!(rejected, names(&["bloom", "strict", "nope"]));
+        let (_, rejected) = registry.warm_shaders(FilterPartition::Builtins, Some(&ask), assets);
+        assert_eq!(rejected, names(&["customMorph", "strict", "nope"]));
     }
 }

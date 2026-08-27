@@ -7,6 +7,10 @@ import { Title } from "./Title";
  *  centres against the bar itself, not against the space the button leaves. */
 const MENU_SIZE = 34;
 
+/** The bar's height — what a page has to take off the window to know the
+ * content area it is left with. */
+export const TOP_BAR_HEIGHT = 48;
+
 /**
  * The compact shell's fixed top bar: a menu button (opens the nav drawer)
  * and the library wordmark. Regular mode has no bar — the nav column carries
@@ -29,7 +33,7 @@ const barStyle: BevyStyle = {
   alignItems: "center",
   gap: 12,
   width: "100%",
-  height: 48,
+  height: TOP_BAR_HEIGHT,
   flexShrink: 0,
   padding: { left: 8, right: 12 },
   backgroundColor: Colors.surface100,

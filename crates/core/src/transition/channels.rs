@@ -109,7 +109,39 @@ impl TransitionState {
         }
         with_input_channels!(any_size_row)
     }
+
+    /// The size channels' current readings, as px where they are px — the
+    /// yardstick the layout channel judges a rect step by while one is in
+    /// flight ([`super::layout::LayoutChannel::note_own_size`]). Generated
+    /// from the same `size` rows; a non-px reading (`auto`, a percentage) is
+    /// `None` and the channel falls back to the measured size step.
+    pub(super) fn size_currents_px(&self) -> [Option<f32>; SIZE_ROWS] {
+        macro_rules! size_row {
+            ($self:ident, $out:ident, $n:ident, $ch:ident, size) => {
+                $out[$n] = match $self.$ch.current {
+                    Length::Px(v) => Some(v),
+                    _ => None,
+                };
+                $n += 1;
+            };
+            ($self:ident, $out:ident, $n:ident, $ch:ident, $other:ident) => {};
+        }
+        macro_rules! all_size_rows {
+            ($(($ch:ident, $d:tt, $group:ident),)*) => {{
+                let mut out = [None; SIZE_ROWS];
+                let mut n = 0;
+                $(size_row!(self, out, n, $ch, $group);)*
+                debug_assert_eq!(n, SIZE_ROWS, "SIZE_ROWS must match the table's size rows");
+                out
+            }};
+        }
+        with_input_channels!(all_size_rows)
+    }
 }
+
+/// How many `size` rows the channel table has (`width`, `height`,
+/// `max_width`, `max_height`) — the width of [`TransitionState::size_currents_px`].
+pub(super) const SIZE_ROWS: usize = 4;
 
 /// The whole-value `filter` channel: eases a promoted root's
 /// [`crate::filters::ResolvedFilterChain`] packed params between wire targets

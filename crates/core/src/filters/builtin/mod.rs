@@ -51,23 +51,23 @@ impl FilterRegistry {
     /// built-ins are always exported even though the bare exporter `App`
     /// (`register_bindings` only) never adds the plugin.
     pub(crate) fn register_builtins(&mut self) {
-        self.register::<BloomParams>();
-        self.register::<BlurParams>();
-        self.register::<ChromaticAberrationParams>();
-        self.register::<BrightnessParams>();
-        self.register::<ContrastParams>();
-        self.register::<SaturateParams>();
-        self.register::<GrayscaleParams>();
-        self.register::<SepiaParams>();
-        self.register::<InvertParams>();
-        self.register::<HueRotateParams>();
-        self.register::<GradientMapParams>();
-        self.register::<OutlineParams>();
-        self.register::<PinchParams>();
-        self.register::<ShadowParams>();
-        self.register::<CrossfadeParams>();
-        self.register::<LinearWipeParams>();
-        self.register::<PixelizeParams>();
+        self.register_builtin::<BloomParams>();
+        self.register_builtin::<BlurParams>();
+        self.register_builtin::<ChromaticAberrationParams>();
+        self.register_builtin::<BrightnessParams>();
+        self.register_builtin::<ContrastParams>();
+        self.register_builtin::<SaturateParams>();
+        self.register_builtin::<GrayscaleParams>();
+        self.register_builtin::<SepiaParams>();
+        self.register_builtin::<InvertParams>();
+        self.register_builtin::<HueRotateParams>();
+        self.register_builtin::<GradientMapParams>();
+        self.register_builtin::<OutlineParams>();
+        self.register_builtin::<PinchParams>();
+        self.register_builtin::<ShadowParams>();
+        self.register_builtin::<CrossfadeParams>();
+        self.register_builtin::<LinearWipeParams>();
+        self.register_builtin::<PixelizeParams>();
     }
 }
 

@@ -151,6 +151,9 @@ const KIND_FIELDS: Record<string, { style?: string[]; props?: string[] }> = {
   cursor: { style: ["cursor"] },
   lineHeight: { style: ["lineHeight"] },
   letterSpacing: { style: ["letterSpacing"] },
+  // A startup warn (`ReactUiPlugin::precompile_filters` names): no node, no
+  // candidate fields.
+  precompileFilters: {},
 };
 
 /** The style variant props are opaque style objects under `props`; a bad value

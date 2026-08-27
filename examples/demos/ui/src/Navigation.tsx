@@ -1,6 +1,12 @@
 import { memo, useEffect, useRef, useState } from "react";
 import { BevyStyle, BevyTransition } from "bevy-react/jsx";
-import { Colors, FontSizes, Gradients, Scrollbar } from "@/theme";
+import {
+  Colors,
+  FontSizes,
+  Gradients,
+  Responsiveness,
+  Scrollbar,
+} from "@/theme";
 import { Button, CircularButton, CloseIcon } from "@/components";
 import { Title } from "./Title";
 import { DEMOS, type DemoItem } from "./demos";
@@ -102,7 +108,7 @@ function useSlideIn() {
 
 // How far left the sidebar starts — its own width plus enough slack to carry
 // the drop shadow off-screen with it.
-const NAV_WIDTH = 220;
+const NAV_WIDTH = Responsiveness.navWidth;
 const NAV_SLIDE_PX = NAV_WIDTH + 40;
 // Drawer open/close slide (compact shell); the 800ms is the desktop entrance.
 const DRAWER_MS = 250;

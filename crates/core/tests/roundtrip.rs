@@ -360,6 +360,11 @@ fn animation_callback_round_trip() {
         &mut text_of,
     )
     .expect("no 'Play' button in the Sequence demo");
+    // Everything queued so far is another page's business — the home wall's
+    // tile entrances carry completion callbacks of their own (tokened
+    // `Animate`s from before the navigation), and the first tokened command
+    // after the click must be Play's.
+    while anim_rx.try_recv().is_ok() {}
     click(play);
 
     // The click handler assigns the sequence driver with a completion callback —

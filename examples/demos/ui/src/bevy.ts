@@ -256,6 +256,11 @@ repeat: boolean, ctrlKey: boolean, shiftKey: boolean, altKey: boolean,
  */
 metaKey: boolean, };
 export type LinearWipeParams = { angle: number | string, softness: number | string, };
+export type NebulaBurst = { 
+/**
+ * Where on the color wheel the shockwave lands, 0..1.
+ */
+hue: number, };
 export type OutlineParams = { width: number | string, color: string, softness: number | string, };
 export type PinchParams = { 
 /**
@@ -440,6 +445,7 @@ export interface ReactMessages {
   "crowdedCubes.setFollowMode": SetFollowMode;
   "gamepad.rumble": GamepadRumble;
   "gamepad.stopRumble": GamepadStopRumble;
+  "nebula.burst": NebulaBurst;
   selectScene: SelectScene;
   "surfaceDemo.setCrt": SetCrt;
 }
@@ -563,6 +569,9 @@ export const bevy = {
     getAll(): Promise<Array<GamepadConnectedData>> { return request("gamepad.getAll", null); },
     rumble(value: GamepadRumble): void { emit("gamepad.rumble", value); },
     stopRumble(value: GamepadStopRumble): void { emit("gamepad.stopRumble", value); },
+  },
+  nebula: {
+    burst(value: NebulaBurst): void { emit("nebula.burst", value); },
   },
   pollingDemo: {
     getBall(): Promise<BallState> { return request("pollingDemo.getBall", null); },

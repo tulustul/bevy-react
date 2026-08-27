@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { hmrSingleton } from "@/hmr";
 import {
   Bold,
   InlineCode,
@@ -88,11 +89,7 @@ const createOptionsStore = () =>
     setShowParams: (showParams) => set({ showParams }),
   }));
 
-// Guard on globalThis so a hot-reload re-exec of app.js keeps the options.
-const g = globalThis as unknown as {
-  __morphOptionsStore?: ReturnType<typeof createOptionsStore>;
-};
-const useMorphOptions = (g.__morphOptionsStore ??= createOptionsStore());
+const useMorphOptions = hmrSingleton("__morphOptionsStore", createOptionsStore);
 
 export function MorphFilterDemo() {
   useDemoPage(PAGE);

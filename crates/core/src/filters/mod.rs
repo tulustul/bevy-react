@@ -53,6 +53,7 @@ mod params;
 mod registry;
 mod resolve;
 mod transition;
+mod warm;
 mod wire;
 
 #[cfg(test)]
@@ -83,4 +84,6 @@ pub use resolve::{
     ChainInput, FilterInput, ResolvedChain, ResolvedFilterChain, quantize_outset, resolve_chains,
 };
 pub(crate) use transition::{FilterEase, plan_filter_ease};
+pub use warm::WarmShaderList;
+pub(crate) use warm::build_warm_shader_list;
 pub use wire::{FilterChain, FilterUse, MAX_CHAIN_LEN};

@@ -55,6 +55,7 @@ pub mod mips;
 pub mod morph;
 pub mod store;
 pub mod transform3d;
+pub mod warm;
 
 pub use store::*;
 

@@ -1,7 +1,7 @@
 //! Tests for the `layout` transition channel: the rect-easing rules
 //! ([`LayoutChannel`]) and the post-layout composition system
 //! ([`drive_layout_transitions`]) observed through `UiGlobalTransform`.
-use super::layout::{LayoutChannel, LayoutDelta, LayoutRect};
+use super::layout::{LayoutChannel, LayoutDelta, LayoutRect, RectWriter};
 use super::tests::timing;
 use super::*;
 use crate::animations::Easing;
@@ -15,13 +15,15 @@ pub(super) const R1: LayoutRect = [50.0, 50.0, 100.0, 100.0];
 fn layout_channel_seeds_silently_then_eases_and_settles() {
     let mut ch = LayoutChannel::default();
     let spec = timing(1.0, Easing::Linear);
-    assert_eq!(ch.drive(R0, &spec, false, 0.016), None);
+    assert_eq!(ch.drive(R0, R0, &spec, RectWriter::None, 0.016), None);
     // The frame of the change reads the OLD rect (progress 0).
-    assert_eq!(ch.drive(R1, &spec, false, 0.0), Some(R0));
-    let mid = ch.drive(R1, &spec, false, 0.5).expect("mid-flight");
+    assert_eq!(ch.drive(R1, R1, &spec, RectWriter::None, 0.0), Some(R0));
+    let mid = ch
+        .drive(R1, R1, &spec, RectWriter::None, 0.5)
+        .expect("mid-flight");
     assert!((mid[0] - 100.0).abs() < 1e-3, "halfway: {mid:?}");
     assert_eq!(
-        ch.drive(R1, &spec, false, 10.0),
+        ch.drive(R1, R1, &spec, RectWriter::None, 10.0),
         None,
         "settled = no reading"
     );
@@ -33,12 +35,12 @@ fn layout_channel_seeds_silently_then_eases_and_settles() {
 fn layout_channel_retargets_from_current() {
     let mut ch = LayoutChannel::default();
     let spec = timing(1.0, Easing::Linear);
-    ch.drive(R0, &spec, false, 0.0);
-    ch.drive(R1, &spec, false, 0.0);
-    let mid = ch.drive(R1, &spec, false, 0.5).unwrap();
-    let back = ch.drive(R0, &spec, false, 0.0).unwrap();
+    ch.drive(R0, R0, &spec, RectWriter::None, 0.0);
+    ch.drive(R1, R1, &spec, RectWriter::None, 0.0);
+    let mid = ch.drive(R1, R1, &spec, RectWriter::None, 0.5).unwrap();
+    let back = ch.drive(R0, R0, &spec, RectWriter::None, 0.0).unwrap();
     assert_eq!(back, mid, "retarget frame holds the current reading");
-    let later = ch.drive(R0, &spec, false, 0.5).unwrap();
+    let later = ch.drive(R0, R0, &spec, RectWriter::None, 0.5).unwrap();
     assert!(
         later[0] > mid[0] && later[0] < R0[0],
         "heading back: {later:?}"
@@ -50,13 +52,16 @@ fn layout_channel_retargets_from_current() {
 fn layout_channel_snaps_below_half_pixel() {
     let mut ch = LayoutChannel::default();
     let spec = timing(1.0, Easing::Linear);
-    ch.drive(R0, &spec, false, 0.0);
+    ch.drive(R0, R0, &spec, RectWriter::None, 0.0);
     let nudged = [150.4, 50.0, 100.0, 100.3];
-    assert_eq!(ch.drive(nudged, &spec, false, 0.0), None);
+    assert_eq!(ch.drive(nudged, nudged, &spec, RectWriter::None, 0.0), None);
     assert!(!ch.in_flight());
     // Exactly-at-threshold moves DO animate.
     let moved = [150.4, 50.5, 100.0, 100.3];
-    assert!(ch.drive(moved, &spec, false, 0.0).is_some());
+    assert!(
+        ch.drive(moved, moved, &spec, RectWriter::None, 0.0)
+            .is_some()
+    );
 }
 
 /// Zero-size endpoints: to-0 has no pixels to animate (snap); from-0 grows
@@ -65,37 +70,149 @@ fn layout_channel_snaps_below_half_pixel() {
 fn layout_channel_zero_size_rules() {
     let mut ch = LayoutChannel::default();
     let spec = timing(1.0, Easing::Linear);
-    ch.drive(R0, &spec, false, 0.0);
+    ch.drive(R0, R0, &spec, RectWriter::None, 0.0);
     let hidden = [0.0, 0.0, 0.0, 0.0];
-    assert_eq!(ch.drive(hidden, &spec, false, 0.0), None, "to-0 snaps");
+    assert_eq!(
+        ch.drive(hidden, hidden, &spec, RectWriter::None, 0.0),
+        None,
+        "to-0 snaps"
+    );
     assert!(!ch.in_flight());
     // Shown again elsewhere: grows from a point at the new center.
-    let first = ch.drive(R1, &spec, false, 0.0).expect("from-0 eases");
+    let first = ch
+        .drive(R1, R1, &spec, RectWriter::None, 0.0)
+        .expect("from-0 eases");
     assert_eq!(first, [R1[0], R1[1], 0.0, 0.0]);
-    let mid = ch.drive(R1, &spec, false, 0.5).unwrap();
+    let mid = ch.drive(R1, R1, &spec, RectWriter::None, 0.5).unwrap();
     assert!(
         (mid[0] - R1[0]).abs() < 1e-3 && (mid[2] - 50.0).abs() < 1e-3,
         "{mid:?}"
     );
 }
 
-/// While the node's own `size` channel is writing its `Node` each frame
-/// (`adopt`), the layout channel adopts every rect silently — no retarget.
+/// While the node's own `size` channel writes its `Node` each frame
+/// (`RectWriter::SizeChannel`), rect steps the size step explains — a centred
+/// node's centre following its own growth — adopt silently, grace frame
+/// included; a `{ animated }` binding adopts everything, and cancels a
+/// running ease (the binding owns the rect now).
 #[test]
-fn layout_channel_adopts_when_size_channel_owns_the_rect() {
+fn layout_channel_adopts_size_explained_steps_under_a_size_flight() {
     let mut ch = LayoutChannel::default();
     let spec = timing(1.0, Easing::Linear);
-    ch.drive(R0, &spec, false, 0.0);
-    assert_eq!(ch.drive(R1, &spec, true, 0.0), None);
+    ch.drive(R0, R0, &spec, RectWriter::None, 0.0);
+    let grown = [R0[0] + 5.0, R0[1], R0[2] + 10.0, R0[3]];
+    assert_eq!(
+        ch.drive(grown, grown, &spec, RectWriter::SizeChannel, 0.016),
+        None
+    );
     assert!(!ch.in_flight());
-    // The frame after an adopt is a grace frame (the writer's settle step).
-    assert_eq!(ch.drive(R0, &spec, false, 0.0), None);
+    // The frame after (the writer's settle step) is judged the same way.
+    let settled = [grown[0] + 5.0, grown[1], grown[2] + 10.0, grown[3]];
+    assert_eq!(
+        ch.drive(settled, settled, &spec, RectWriter::None, 0.016),
+        None,
+        "grace frame adopts an explained step"
+    );
     assert!(!ch.in_flight());
-    // A mid-flight adopt cancels the ease.
-    ch.drive(R1, &spec, false, 0.0);
+    // A binding: blind adopt, mid-flight too.
+    ch.drive(R1, R1, &spec, RectWriter::None, 0.0);
     assert!(ch.in_flight());
-    assert_eq!(ch.drive(R1, &spec, true, 0.0), None);
+    assert_eq!(ch.drive(R1, R1, &spec, RectWriter::Binding, 0.0), None);
     assert!(!ch.in_flight());
+}
+
+/// A jump the size step cannot explain — a flex-direction swap landing while
+/// the bars' own sizes ease — is a real move: it eases translate-only from
+/// the last reading, the size shown being layout's, and the target follows
+/// the live rect without restarting until the ease lands.
+#[test]
+fn layout_channel_eases_an_unexplained_jump_under_a_size_flight_translate_only() {
+    let mut ch = LayoutChannel::default();
+    let spec = timing(1.0, Easing::Linear);
+    ch.drive(R0, R0, &spec, RectWriter::None, 0.0);
+    // 100px of x for a 2px size step.
+    let jumped = [R1[0], R1[1], R1[2] + 2.0, R1[3]];
+    let shown = ch
+        .drive(jumped, jumped, &spec, RectWriter::SizeChannel, 0.0)
+        .expect("eases");
+    assert_eq!(
+        shown,
+        [R0[0], R0[1], jumped[2], jumped[3]],
+        "old position, live size"
+    );
+    assert!(ch.in_flight());
+    // Mid-flight the live rect keeps re-flowing with the size: the target
+    // moves, the ease does not restart (halfway from R0 to the NEW target).
+    let moved = [jumped[0] + 4.0, jumped[1], jumped[2] + 2.0, jumped[3]];
+    let mid = ch
+        .drive(moved, moved, &spec, RectWriter::SizeChannel, 0.5)
+        .expect("still easing");
+    assert!(
+        (mid[0] - (R0[0] + 0.5 * (moved[0] - R0[0]))).abs() < 1e-3,
+        "{mid:?}"
+    );
+    assert_eq!([mid[2], mid[3]], [moved[2], moved[3]], "size is layout's");
+    assert_eq!(
+        ch.drive(moved, moved, &spec, RectWriter::SizeChannel, 0.6),
+        None,
+        "landed on the target"
+    );
+    assert!(!ch.in_flight());
+    // Back to adopting the size flight's own re-flow.
+    let stepped = [moved[0] + 1.0, moved[1], moved[2] + 2.0, moved[3]];
+    assert_eq!(
+        ch.drive(stepped, stepped, &spec, RectWriter::SizeChannel, 0.016),
+        None
+    );
+}
+
+/// The yardstick is the size CHANNEL's own step, not the measured one: a
+/// flex squeeze snaps the measured size to its final value on the change
+/// frame (a 160px "step"), which would explain any move — the channel's own
+/// 2px step does not, and the move eases.
+#[test]
+fn layout_channel_judges_by_the_size_channels_own_step_not_the_squeezed_measure() {
+    let mut ch = LayoutChannel::default();
+    let spec = timing(1.0, Easing::Linear);
+    ch.note_own_size([Some(100.0), Some(100.0), None, None]);
+    ch.drive(R0, R0, &spec, RectWriter::None, 0.0);
+    // Measured: 100px of x, height squeezed 100 → 40; own step: 2px.
+    let squeezed = [R1[0], R1[1], R1[2], 40.0];
+    ch.note_own_size([Some(102.0), Some(98.0), None, None]);
+    let shown = ch
+        .drive(squeezed, squeezed, &spec, RectWriter::SizeChannel, 0.0)
+        .expect("eases: the squeeze is not the channel's doing");
+    assert_eq!(shown, [R0[0], R0[1], squeezed[2], squeezed[3]]);
+    // The same measure with no px readings to judge by falls back to the
+    // measured step, which explains it.
+    let mut ch = LayoutChannel::default();
+    ch.drive(R0, R0, &spec, RectWriter::None, 0.0);
+    ch.note_own_size([None; 4]);
+    assert_eq!(
+        ch.drive(squeezed, squeezed, &spec, RectWriter::SizeChannel, 0.0),
+        None
+    );
+}
+
+/// A size flight starting under a running `layout` ease does not cancel it:
+/// the ease carries on translate-only, following the live rect.
+#[test]
+fn layout_channel_keeps_easing_when_a_size_flight_starts_mid_flight() {
+    let mut ch = LayoutChannel::default();
+    let spec = timing(1.0, Easing::Linear);
+    ch.drive(R0, R0, &spec, RectWriter::None, 0.0);
+    ch.drive(R1, R1, &spec, RectWriter::None, 0.0);
+    assert!(ch.in_flight());
+    let grown = [R1[0] + 5.0, R1[1], R1[2] + 10.0, R1[3]];
+    let mid = ch
+        .drive(grown, grown, &spec, RectWriter::SizeChannel, 0.5)
+        .expect("still easing");
+    assert!(ch.in_flight());
+    assert!(
+        (mid[0] - (R0[0] + 0.5 * (grown[0] - R0[0]))).abs() < 1e-3,
+        "{mid:?}"
+    );
+    assert_eq!([mid[2], mid[3]], [grown[2], grown[3]]);
 }
 
 /// A sub-epsilon retarget MID-FLIGHT must not cancel the ease: the target
@@ -105,38 +222,48 @@ fn layout_channel_adopts_when_size_channel_owns_the_rect() {
 fn layout_channel_sub_epsilon_retarget_mid_flight_keeps_easing() {
     let mut ch = LayoutChannel::default();
     let spec = timing(1.0, Easing::Linear);
-    ch.drive(R0, &spec, false, 0.0);
-    ch.drive(R1, &spec, false, 0.0);
+    ch.drive(R0, R0, &spec, RectWriter::None, 0.0);
+    ch.drive(R1, R1, &spec, RectWriter::None, 0.0);
     let nudged = [R1[0] + 0.2, R1[1], R1[2], R1[3]];
-    let mid = ch.drive(nudged, &spec, false, 0.5).expect("still easing");
+    let mid = ch
+        .drive(nudged, nudged, &spec, RectWriter::None, 0.5)
+        .expect("still easing");
     assert!(ch.in_flight());
     assert!(
         (mid[0] - 100.1).abs() < 1e-3,
         "halfway to the nudged target: {mid:?}"
     );
-    assert_eq!(ch.drive(nudged, &spec, false, 10.0), None);
+    assert_eq!(
+        ch.drive(nudged, nudged, &spec, RectWriter::None, 10.0),
+        None
+    );
 }
 
 /// The `size` channel's settle frame: `drive_transitions` (Update) writes the
 /// final `Node` value and clears its runner in the same call, so by
-/// PostUpdate `adopt` is already false while the rect still steps by the
-/// last size increment. The frame after an adopt adopts once more (a grace
-/// frame) instead of arming a full-duration ease for that tail.
+/// PostUpdate no writer is reported while the rect still steps by the last
+/// size increment. The frame after a size frame is judged by the size rule
+/// once more (a grace frame) instead of arming a full-duration ease for
+/// that tail.
 #[test]
 fn layout_channel_adopt_tail_swallows_the_settle_step() {
     let mut ch = LayoutChannel::default();
     let spec = timing(1.0, Easing::Linear);
-    ch.drive(R0, &spec, false, 0.0);
-    assert_eq!(ch.drive(R1, &spec, true, 0.016), None);
-    let settled = [R1[0] + 5.5, R1[1], R1[2] + 11.0, R1[3]];
+    ch.drive(R0, R0, &spec, RectWriter::None, 0.0);
+    let grown = [R0[0] + 5.0, R0[1], R0[2] + 10.0, R0[3]];
     assert_eq!(
-        ch.drive(settled, &spec, false, 0.016),
+        ch.drive(grown, grown, &spec, RectWriter::SizeChannel, 0.016),
+        None
+    );
+    let settled = [grown[0] + 5.5, grown[1], grown[2] + 11.0, grown[3]];
+    assert_eq!(
+        ch.drive(settled, settled, &spec, RectWriter::None, 0.016),
         None,
         "grace frame adopts"
     );
     assert!(!ch.in_flight());
     // A change on the NEXT frame animates again.
-    assert!(ch.drive(R0, &spec, false, 0.0).is_some());
+    assert!(ch.drive(R0, R0, &spec, RectWriter::None, 0.0).is_some());
 }
 
 /// The from-zero first sample is a point; the derived delta still has a
@@ -154,12 +281,12 @@ fn from_zero_delta_is_never_singular() {
 fn layout_channel_reset_reseeds() {
     let mut ch = LayoutChannel::default();
     let spec = timing(1.0, Easing::Linear);
-    ch.drive(R0, &spec, false, 0.0);
-    ch.drive(R1, &spec, false, 0.0);
+    ch.drive(R0, R0, &spec, RectWriter::None, 0.0);
+    ch.drive(R1, R1, &spec, RectWriter::None, 0.0);
     assert!(ch.in_flight());
     ch.reset();
     assert!(!ch.in_flight());
-    assert_eq!(ch.drive(R0, &spec, false, 0.0), None);
+    assert_eq!(ch.drive(R0, R0, &spec, RectWriter::None, 0.0), None);
 }
 
 // --- System tests: real bevy_ui layout, observed through `UiGlobalTransform` ---
@@ -723,4 +850,92 @@ fn layout_channel_honors_the_nearest_layout_config_override() {
     );
     step(&mut app, 1.0);
     assert_eq!(x_of(&app, b), 25.0, "settled on bevy's value");
+}
+
+/// Real layout, `size` AND `layout` on the same nodes: two bars whose
+/// container flips row → column while their sizes swap in the same commit
+/// (the home page's layout vignette). The flip's move is not the size
+/// flight's re-flow, so it eases — on the change frame the bar sits near its
+/// OLD centre at its live, easing size (translate-only, no FLIP scale) — and
+/// everything lands on bevy's own values once both channels settle.
+#[test]
+fn direction_flip_under_a_size_flight_eases_the_move_and_lands() {
+    use bevy::math::{Mat2, Vec2};
+    let mut app = layout_app();
+    app.init_resource::<crate::layer::LayerContentDirt>();
+    app.add_systems(Update, drive_transitions);
+    let root = app.world_mut().spawn(root_row()).id();
+    // Default shrink on purpose: the 100px-tall root squeezes the column's
+    // bars straight to 50px on the change frame — a measured size step that
+    // would explain any move; the channel judges by its own ~1px step.
+    let bar = |w: f32, h: f32| Node {
+        width: Val::Px(w),
+        height: Val::Px(h),
+        ..Default::default()
+    };
+    let input = |w: f32, h: f32| TransitionInput {
+        spec: Transition {
+            size: Some(timing(1.0, Easing::Linear)),
+            layout: Some(timing(1.0, Easing::Linear)),
+            ..Default::default()
+        },
+        width: Some(Length::Px(w)),
+        height: Some(Length::Px(h)),
+        ..Default::default()
+    };
+    let spawn = |app: &mut App| {
+        app.world_mut()
+            .spawn((
+                bar(30.0, 110.0),
+                ChildOf(root),
+                input(30.0, 110.0),
+                TransitionState::default(),
+            ))
+            .id()
+    };
+    let a = spawn(&mut app);
+    let b = spawn(&mut app);
+    step(&mut app, 0.016);
+    step(&mut app, 0.016);
+    assert_eq!(global(&app, b).translation, Vec2::new(45.0, 55.0), "row");
+
+    // The flip: direction and sizes in one commit.
+    app.world_mut()
+        .entity_mut(root)
+        .get_mut::<Node>()
+        .unwrap()
+        .flex_direction = FlexDirection::Column;
+    for e in [a, b] {
+        *app.world_mut()
+            .entity_mut(e)
+            .get_mut::<TransitionInput>()
+            .unwrap() = input(110.0, 30.0);
+    }
+    step(&mut app, 0.016);
+    let g = global(&app, b);
+    // Raw, the squeezed column puts b's centre at y = 75: it shows a step
+    // from its old centre instead.
+    assert!(
+        (g.translation.y - 55.0).abs() < 4.0 && (g.translation.x - 45.0).abs() < 2.0,
+        "eased from the old centre: {:?}",
+        g.translation
+    );
+    assert!(
+        (g.matrix2.x_axis.x - 1.0).abs() < 1e-6 && (g.matrix2.y_axis.y - 1.0).abs() < 1e-6,
+        "translate-only: {:?}",
+        g.matrix2
+    );
+    assert!(
+        app.world()
+            .entity(b)
+            .get::<TransitionState>()
+            .unwrap()
+            .size_in_flight(),
+        "the size flight is the size channel's"
+    );
+
+    step(&mut app, 2.0);
+    let g = global(&app, b);
+    assert_eq!(g.translation, Vec2::new(55.0, 45.0), "column, settled");
+    assert_eq!(g.matrix2, Mat2::IDENTITY);
 }

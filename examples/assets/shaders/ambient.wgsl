@@ -1,8 +1,8 @@
 // Full-screen backdrop for the ambient scene (see
 // `examples/demos/scenes/ambient.rs`): a gentle aurora — three soft light
-// curtains waving across a starry night sky. Everything is computed here from
-// `globals.time` + the view uniform; the material has no bindings and the CPU
-// does nothing per frame.
+// curtains waving across a starry night sky. The aurora itself is computed
+// here from `globals.time` + the view uniform, so the CPU does nothing per
+// frame for it; the material's one uniform is the burst below.
 //
 //   * Curtain ribbons are fbm-warped curves across the screen; each has a
 //     bright core with haze that bleeds mostly upward (real curtains glow at
@@ -18,11 +18,20 @@
 //     auto-orbiting the otherwise unused 3D camera moves the field, stars
 //     less than curtains.
 //   * A ±1/255 animated hash dither hides banding on the dark sky gradients.
+//   * On top of all that sits the **burst**: a one-shot shockwave fired from
+//     React (`bevy.nebula.burst({ hue })`, see the home page's "Typed
+//     messages" tile). The material's single uniform carries `(hue, progress)`
+//     and the CPU only writes it while a burst is playing — `progress >= 1`
+//     means "no burst", and every term below folds to zero there.
 
 #import bevy_pbr::{
     forward_io::VertexOutput,
     mesh_view_bindings::{globals, view},
 }
+
+// `(hue, progress, 0, 0)` — see `Burst` in `examples/demos/scenes/ambient.rs`.
+// `progress` runs 0→1 over the burst and parks at 1.0 when there is none.
+@group(#{MATERIAL_BIND_GROUP}) @binding(0) var<uniform> burst: vec4<f32>;
 
 // Overall brightness of the curtains ("gentle" knob).
 const INTENSITY: f32 = 0.55;
@@ -32,6 +41,17 @@ const SWEEP_SPEED: f32 = 0.045;
 const MORPH_SPEED: f32 = 0.012;
 // How far the camera forward vector slides the sky, in pattern units.
 const PARALLAX_STRENGTH: f32 = 0.18;
+// How far the burst's shockwave ring travels (pattern units) and how wide the
+// ring is at its brightest. The ring both expands and thins as it goes.
+const BURST_REACH: f32 = 1.5;
+const BURST_RING_WIDTH: f32 = 0.20;
+// Peak brightness of the ring, and of the glow trailing behind it. The trail
+// is deliberately much weaker: this is a wave crossing the sky, not a flash.
+const BURST_RING_GAIN: f32 = 2.4;
+const BURST_TRAIL_GAIN: f32 = 0.55;
+// How fast the trailing glow decays inward from the wavefront (per pattern
+// unit). Higher = a tighter wake, more of the aurora left visible.
+const BURST_TRAIL_DECAY: f32 = 2.6;
 // Night-sky gradient endpoints (top → bottom of the screen).
 const SKY_TOP: vec3<f32> = vec3<f32>(0.008, 0.010, 0.030);
 const SKY_BOTTOM: vec3<f32> = vec3<f32>(0.030, 0.022, 0.060);
@@ -41,6 +61,13 @@ const CURTAIN_COLORS: array<vec3<f32>, 3> = array<vec3<f32>, 3>(
     vec3<f32>(0.15, 0.55, 0.85),
     vec3<f32>(0.55, 0.25, 0.85),
 );
+
+// A saturated color for a 0..1 hue, as a cheap cosine palette (Inigo Quilez).
+// Deliberately vivid: the burst is the one moment this backdrop is allowed to
+// stop being a backdrop.
+fn hue_color(h: f32) -> vec3<f32> {
+    return 0.55 + 0.45 * cos(6.28318 * (h + vec3<f32>(0.0, 0.33, 0.67)));
+}
 
 // Cheap 2D→1D hash (Dave Hoskins' hash12) — noise lattice, stars, dither.
 fn hash12(p: vec2<f32>) -> f32 {
@@ -125,6 +152,39 @@ fn fragment(in: VertexOutput) -> FragmentOutput {
         // Faint slow color breathing so the curtain never looks frozen.
         let breathe = 0.85 + 0.15 * sin(globals.time * 0.11 + fi * 2.1);
         rgb += curtains[i] * glow * streak * breathe * INTENSITY * (1.0 - 0.22 * fi);
+    }
+
+    // The burst: a shockwave ring racing outward from the middle of the sky,
+    // trailing a broad wash of the same hue. `p01 >= 1` (the parked state)
+    // makes `fade` zero, so an idle backdrop pays only this branch.
+    let p01 = burst.y;
+    if p01 < 1.0 {
+        let tint = hue_color(burst.x);
+        // Ease the radius out so the wave leaves fast and coasts to a stop —
+        // gently enough that the ring is on screen for most of the burst
+        // rather than off the edge in the first few frames.
+        let eased = 1.0 - pow(1.0 - p01, 2.2);
+        let radius = eased * BURST_REACH;
+        // Everything the burst does dies off together, quadratically.
+        let fade = (1.0 - p01) * (1.0 - p01);
+        // Distance from the burst's origin (screen center, aspect-corrected)
+        // ignores the parallax offset: the shockwave belongs to the screen,
+        // not to the sky behind it.
+        let d = length(vec2<f32>((uv.x - 0.5) * aspect, uv.y - 0.5));
+        // The ring thins as it expands, so it reads as a wave rather than a
+        // growing blob.
+        let width = BURST_RING_WIDTH * (1.0 - 0.6 * eased);
+        // Squared by multiplication, not `pow`: the base is negative for every
+        // pixel inside the ring, and WGSL's `pow` is `exp2(y * log2(x))`, which
+        // is out of domain there.
+        let front = (d - radius) / width;
+        let ring = exp(-front * front);
+        // The wake: brightest just behind the wavefront, decaying inward, and
+        // nothing at all ahead of it. Filling the whole disc instead would
+        // repaint the sky rather than cross it.
+        let inside = max(0.0, radius - d);
+        let trail = select(0.0, exp(-inside * BURST_TRAIL_DECAY), d < radius);
+        rgb += tint * (ring * BURST_RING_GAIN + trail * BURST_TRAIL_GAIN) * fade;
     }
 
     // Animated ±1/255 dither so the dark sky doesn't band.

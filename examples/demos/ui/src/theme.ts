@@ -163,4 +163,13 @@ export const Filters = {
 
 export const Responsiveness = {
   desktop: 720,
+  /** The content area's padding (`App.tsx`), per shell. */
+  contentPadding: 24,
+  contentPaddingMobile: 5,
+  /** The sidebar's width on the regular shell. Lives here rather than in
+   * `Navigation` because pages that size themselves against the content area
+   * (the home page's tile grid) need it too — and `Navigation` renders from
+   * `DEMOS`, which imports those pages, so importing it from one would close a
+   * cycle (the same hazard `demoNavigation.ts` exists to avoid). */
+  navWidth: 220,
 };

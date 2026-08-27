@@ -39,6 +39,14 @@ Domain glossary for `bevy-react`. Use these terms as written; the code, the
   the node's effective setting.
 - **Mount rule** — a channel's first sight of a value adopts it silently
   (no enter animation); only a later change animates.
+- **Rect writer** — who else writes a node's rect this frame, the layout
+  channel's ownership gate. A `Node`-field binding owns the rect outright
+  (adopt everything). The node's own `size` channel owns the size, so the
+  channel adopts only the re-flow the size channel's own per-frame step can
+  explain (never the measured size step — a flex squeeze snaps that) and
+  eases anything larger translate-only, its target following the live rect —
+  `size` and `layout` on one node compose, instead of the size flight
+  silencing the FLIP.
 
 ## Shared elements
 
@@ -61,15 +69,43 @@ Domain glossary for `bevy-react`. Use these terms as written; the code, the
   own target with the `sharedElement` spec (one spec for every seeded
   channel, overriding per-channel specs for the flight only).
 - **Shared flight** — the seeded ease in progress: position by translation
-  against the live layout (translate-only), size in measured px through real
-  layout (the `Node` fields ease from the seed's size to the natural one,
-  then the authored value is restored), styles per channel. The seed frame
-  shows the seed rect through the FLIP scale (corner radii compensated on
-  `ComputedNode` for that frame, so a seeded circle reads as a circle) —
-  never an empty frame. The
-  take-off point is **root-space anchored**: the seed rect is re-expressed in
-  the parent's frame every flight frame, so a parent the size flight
-  re-flows (a centered container) doesn't move it.
+  toward the node's **settled** rect (translate-only), size in measured px
+  through real layout (the `Node` fields ease from the seed's size to the
+  natural one, then the authored value is restored; the flight owns the
+  node's flex sizing meanwhile, or a smaller container shrinks the flown px
+  straight back), styles per channel. The seed frame shows the seed rect
+  through the FLIP scale (corner radii compensated on `ComputedNode` for that
+  frame, so a seeded circle reads as a circle) — never an empty frame.
+- **Root-space anchored** — both ends of the flight are root-space rects
+  re-expressed in the parent's frame every flight frame: the take-off point,
+  so a parent the size flight re-flows (a centered container) doesn't move
+  it, and the destination, captured on the seed frame — the one frame the
+  natural rect is measurable, before any px is written. Easing toward the
+  LIVE rect instead chases a target the flight's own size is dragging along,
+  which is quadratic in progress: the flight bows instead of travelling in a
+  straight line. The delta is therefore **root-anchored**: it composes against
+  the parent's _pristine_ frame, never its shown one, so a nested shared
+  flight (a tagged node inside a tagged node) flies its own straight line and
+  is never displaced by the ancestor's delta on top.
+- **Re-flow attribution** — how a flight tells its own motion from the
+  world's: the size flight moves the node's settled position every frame
+  (a centered node slides by half its width step), so the live rect alone
+  can't say whether a scroll landed. On the first flight frame — the sizes
+  jump from natural to ~seed, an unmistakable step — the flight fits how far
+  its settled position moves per px of its own size (and of every ancestor's
+  flying size); afterwards the deviation of the live position from that
+  prediction is **external** (a scroll, a resize, a sibling insert), and
+  both ends move by it together — the flight scroll-locks with the content,
+  still a straight line, no restart. The common case is unchanged (no
+  deviation, sub-pixel rounding residue dead-zoned), and landing is exact
+  whatever the fit read: once every flight settled the sizes are natural
+  again, so the deviation IS the true external delta. A wrong fit (an
+  external event on the fit frame, a wrap crossed mid-way, nested flights on
+  different timings) only bends the path meanwhile.
+- **Landed** — a shared flight that settled while an ancestor still animates:
+  it keeps showing its root-space destination (translate-only, gated by the
+  set of nodes that composed a delta last frame) until every ancestor is done,
+  instead of jumping onto the ancestor's still-moving frame.
 
 ## Image rendering
 

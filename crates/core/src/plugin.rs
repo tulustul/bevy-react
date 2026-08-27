@@ -99,6 +99,37 @@ pub struct ReactUiPlugin {
     custom_cursors: Vec<(String, PathBuf, (u16, u16))>,
     #[cfg(feature = "devtools")]
     devtools: crate::devtools::DevtoolsConfig,
+    precompile_filters: PrecompileFilters,
+}
+
+/// One partition's selection for [`PrecompileFilters`].
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub enum FilterSelection {
+    /// Every filter in the partition. The default.
+    #[default]
+    All,
+    /// Only these wire names. A name that is unknown, or belongs to another
+    /// partition, warns once at startup (`precompileFilters`) and is skipped.
+    Names(Vec<String>),
+    /// None of them — they compile lazily on first use, and the composite
+    /// gate withholds the layer while they do.
+    Off,
+}
+
+/// Which shaders [`ReactUiPlugin::precompile_filters`] compiles ahead of first
+/// use, per partition of the filter registry. Every field defaults to
+/// [`FilterSelection::All`].
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct PrecompileFilters {
+    /// Everything the crate ships — the built-in filters AND the built-in
+    /// morphs (`crossfade`, `linearWipe`, `pixelize`). "Built-in" is a fact of
+    /// who registered the entry, not of its name: an app shadowing a built-in
+    /// name with its own type moves it to `filters`/`morphs`.
+    pub builtins: FilterSelection,
+    /// The app's own regular filters (`add_react_filter`).
+    pub filters: FilterSelection,
+    /// The app's own morph filters (`add_react_morph_filter`).
+    pub morphs: FilterSelection,
 }
 
 impl ReactUiPlugin {
@@ -119,6 +150,7 @@ impl ReactUiPlugin {
             custom_cursors: Vec::new(),
             #[cfg(feature = "devtools")]
             devtools: Default::default(),
+            precompile_filters: Default::default(),
         }
     }
 
@@ -145,6 +177,53 @@ impl ReactUiPlugin {
     #[cfg(feature = "devtools")]
     pub fn devtools(mut self, config: crate::devtools::DevtoolsConfig) -> Self {
         self.devtools = config;
+        self
+    }
+
+    /// Choose which filter and morph shaders are compiled ahead of their first
+    /// use. Default: all of them.
+    ///
+    /// A `filter` chain or a `morphFilter` runs as GPU pipelines specialized
+    /// per shader and camera target format, compiled on first use — and while
+    /// one compiles, the layer's composite is withheld: the subtree draws
+    /// nothing for a few frames (a dark blink on the first use of each
+    /// morph). With this on, the render world queues every selected shader
+    /// (plus the composite, mip-blit and backdrop-blit pipelines every layer
+    /// needs) for each camera format the first frame it sees it — effectively
+    /// at startup — on the pipeline cache's background workers; no frame
+    /// stalls, and each pipeline is tiny. `Names` narrows a partition for an
+    /// app with a large filter library; `Off` keeps the lazy path (a morph
+    /// declared on an idle node is still warmed before its key changes).
+    ///
+    /// Partitions: `builtins` is everything the crate ships, both families;
+    /// `filters` and `morphs` are the app's own `add_react_filter` /
+    /// `add_react_morph_filter` registrations. Multi-pass shaders are found
+    /// by resolving the filter with its identity (or empty) params, so a
+    /// custom multi-pass filter whose params have no defaults warms its
+    /// primary shader only.
+    ///
+    /// ```no_run
+    /// # use bevy::prelude::*;
+    /// # use bevy_react::{FilterSelection, PrecompileFilters, ReactUiPlugin};
+    /// # let mut app = App::new();
+    /// // Only two of the app's morphs, everything else as usual.
+    /// app.add_plugins(ReactUiPlugin::new("ui/dist/app.js").precompile_filters(
+    ///     PrecompileFilters {
+    ///         morphs: FilterSelection::Names(vec!["doorway".into(), "bookFlip".into()]),
+    ///         ..default()
+    ///     },
+    /// ));
+    /// // or compile everything lazily
+    /// app.add_plugins(ReactUiPlugin::new("ui/dist/app.js").precompile_filters(
+    ///     PrecompileFilters {
+    ///         builtins: FilterSelection::Off,
+    ///         filters: FilterSelection::Off,
+    ///         morphs: FilterSelection::Off,
+    ///     },
+    /// ));
+    /// ```
+    pub fn precompile_filters(mut self, config: PrecompileFilters) -> Self {
+        self.precompile_filters = config;
         self
     }
 
@@ -277,6 +356,15 @@ impl Plugin for ReactUiPlugin {
                         ),
                     )
                     .init_resource::<lr::clip::SwappedClips>()
+                    // `precompile_filters`: the shader list crosses in extract,
+                    // the pipelines are queued per newly seen camera format
+                    // before any prepare that would specialize them lazily.
+                    .init_resource::<lr::warm::WarmShaders>()
+                    .add_systems(ExtractSchedule, lr::warm::extract_warm_shaders)
+                    .add_systems(
+                        Render,
+                        lr::warm::warm_layer_pipelines.in_set(RenderSystems::PrepareResources),
+                    )
                     .add_systems(
                         ExtractSchedule,
                         (
@@ -432,7 +520,10 @@ impl Plugin for ReactUiPlugin {
             default_font: self.default_font.clone(),
             named_fonts: self.named_fonts.clone(),
             custom_cursors: self.custom_cursors.clone(),
+            precompile_filters: self.precompile_filters.clone(),
         })
+        .init_resource::<crate::filters::WarmShaderList>()
+        .add_systems(Startup, crate::filters::build_warm_shader_list)
         .init_resource::<ReactRegistry>()
         .init_resource::<ReactRequestRegistry>()
         .init_resource::<ReactEventRegistry>()
@@ -938,12 +1029,14 @@ fn forward_animation_settled(
 #[derive(Component)]
 pub(crate) struct UiRoot;
 
-/// Plugin configuration read by the startup system.
+/// Plugin configuration read by the startup systems (`setup` and
+/// `filters::build_warm_shader_list`).
 #[derive(Resource)]
-struct ReactUiConfig {
+pub(crate) struct ReactUiConfig {
     default_font: Option<PathBuf>,
     named_fonts: Vec<(String, PathBuf)>,
     custom_cursors: Vec<(String, PathBuf, (u16, u16))>,
+    pub(crate) precompile_filters: PrecompileFilters,
 }
 
 /// Fonts loaded from the plugin config, resolved to handles at startup. The

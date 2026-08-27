@@ -311,8 +311,9 @@ fn register_react_bindings(app: &mut App) {
     screenshot::register_bindings(app);
     filters::register_bindings(app);
     clipboard::register_bindings(app);
-    // `scenes::ambient` and `scenes::named_pins` are intentionally absent: they
-    // register no bindings (named_pins reaches React entities via `ReactNodes`).
+    // `scenes::named_pins` is intentionally absent: it registers no bindings
+    // (it reaches React entities via `ReactNodes`).
+    scenes::ambient::register_bindings(app);
     scenes::cubes::register_bindings(app);
     scenes::bouncing_ball::register_bindings(app);
     scenes::crowded_cubes::register_bindings(app);
