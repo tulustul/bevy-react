@@ -1,32 +1,38 @@
 import { useState } from "react";
+import {
+  Caption,
+  InlineCode,
+  ListItem,
+  Paragraph,
+  List,
+} from "@/components/typography";
 import { BevyStyle } from "bevy-react/jsx";
-import { DemoRow, Example, TextMono } from "@/components";
-import { Code, InlineCode, Li, P, Ul } from "@/components/docs";
+import { Box, DemoRow, Example, Figure, Row, Stage } from "@/components";
+import { Code } from "@/components/docs";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
 import { Colors } from "@/theme";
-import { box, caption, row, stage } from "./shared";
 
 const PAGE: ExplanationData = {
   title: "Units",
   info: (
     <>
-      <P>
+      <Paragraph>
         Style values accept units. A bare number picks a sensible default per
         field — px for lengths and font sizes, degrees for angles, milliseconds
         for durations. Strings carry an explicit unit:
-      </P>
+      </Paragraph>
       <Code lang="tsx">{`width: 80            // px
 width: "50%"         // of the parent
 width: "10vw"        // of the viewport
 fontSize: "1.5rem"   // of Bevy's RemSize (default 20px)
 rotate: "0.25turn"   // deg / rad / turn / grad
 duration: "0.3s"     // ms / s`}</Code>
-      <Ul>
-        <Li>Lengths: px, %, vw/vh/vmin/vmax, auto.</Li>
-        <Li>fontSize adds rem.</Li>
-        <Li>Angles: deg (bare-number default), rad, turn, grad.</Li>
-        <Li>Time: ms (bare-number default), s.</Li>
-      </Ul>
+      <List>
+        <ListItem>Lengths: px, %, vw/vh/vmin/vmax, auto.</ListItem>
+        <ListItem>fontSize adds rem.</ListItem>
+        <ListItem>Angles: deg (bare-number default), rad, turn, grad.</ListItem>
+        <ListItem>Time: ms (bare-number default), s.</ListItem>
+      </List>
     </>
   ),
 };
@@ -55,13 +61,13 @@ function LengthDemo() {
       title="Lengths"
       info={
         <>
-          <P>
+          <Paragraph>
             A bare number is px; strings carry a unit.{" "}
             <InlineCode>%</InlineCode> is relative to the parent,{" "}
             <InlineCode>vw/vh/vmin/vmax</InlineCode> to the viewport, plus{" "}
             <InlineCode>auto</InlineCode>. Resize the window and the vw bar
             follows it.
-          </P>
+          </Paragraph>
           <Code lang="tsx">{`<node style={{ width: "80px" }} />
 <node style={{ width: "50%" }} />
 <node style={{ width: "10vw" }} />`}</Code>
@@ -77,7 +83,7 @@ function LengthCard() {
     <node style={{ flexDirection: "column", gap: 10, width: "100%" }}>
       {LENGTHS.map((w) => (
         <node key={w} style={{ flexDirection: "column", gap: 4 }}>
-          <TextMono style={caption}>{w}</TextMono>
+          <Caption mono>{w}</Caption>
           <node
             style={{
               width: w,
@@ -100,11 +106,11 @@ function FontSizeDemo() {
       title="Font sizes"
       info={
         <>
-          <P>
+          <Paragraph>
             Font size takes px, viewport units, or <InlineCode>rem</InlineCode>{" "}
             — relative to Bevy's <InlineCode>RemSize</InlineCode> resource
             (default 20px), the knob for app-wide text scaling.
-          </P>
+          </Paragraph>
           <Code lang="tsx">{`<text style={{ fontSize: "14px" }} />
 <text style={{ fontSize: "1.5rem" }} />
 <text style={{ fontSize: "2vw" }} />`}</Code>
@@ -124,7 +130,7 @@ function FontSizeCard() {
           style={{ flexDirection: "row", alignItems: "center", gap: 14 }}
         >
           <node style={{ width: 90 }}>
-            <TextMono style={caption}>{size}</TextMono>
+            <Caption mono>{size}</Caption>
           </node>
           <text
             style={{
@@ -149,11 +155,11 @@ function AngleDemo() {
       title="Angles"
       info={
         <>
-          <P>
+          <Paragraph>
             A bare number is degrees; strings carry{" "}
             <InlineCode>deg/rad/turn/grad</InlineCode>. These four boxes are the
             same 45° written four ways.
-          </P>
+          </Paragraph>
           <Code lang="tsx">{`transform: { rotate: "45deg" }     // = 45
 transform: { rotate: "0.785rad" }
 transform: { rotate: "0.125turn" }
@@ -167,27 +173,22 @@ transform: { rotate: "50grad" }`}</Code>
 
 function AngleCard() {
   return (
-    <node style={{ ...row, gap: 15 }}>
+    <Row style={{ gap: 15 }}>
       {ANGLES.map((angle) => (
-        <node
-          key={angle}
-          style={{ flexDirection: "column", alignItems: "center", gap: 10 }}
-        >
-          <node style={stage}>
-            <node
+        <Figure key={angle} style={{ gap: 10 }} mono caption={angle}>
+          <Stage>
+            <Box
               style={{
-                ...box,
                 width: 40,
                 height: 40,
                 backgroundColor: Colors.purple100,
                 transform: { rotate: angle },
               }}
             />
-          </node>
-          <TextMono style={caption}>{angle}</TextMono>
-        </node>
+          </Stage>
+        </Figure>
       ))}
-    </node>
+    </Row>
   );
 }
 
@@ -197,11 +198,11 @@ function TimeDemo() {
       title="Durations"
       info={
         <>
-          <P>
+          <Paragraph>
             A bare number is milliseconds; strings carry{" "}
             <InlineCode>ms/s</InlineCode>. Both boxes ease identically — click
             either to toggle.
-          </P>
+          </Paragraph>
           <Code lang="tsx">{`transition: { transform: { duration: "300ms" } }
 transition: { transform: { duration: "0.3s" } } // the same`}</Code>
         </>
@@ -215,7 +216,7 @@ function TimeCard() {
   const [on, setOn] = useState(false);
 
   return (
-    <node style={{ ...row, gap: 20 }}>
+    <Row style={{ gap: 20 }}>
       <TimeBox
         label="300ms"
         duration="300ms"
@@ -228,7 +229,7 @@ function TimeCard() {
         on={on}
         onToggle={() => setOn((v) => !v)}
       />
-    </node>
+    </Row>
   );
 }
 
@@ -243,9 +244,8 @@ function TimeBox({ label, duration, on, onToggle }: TimeBoxProps) {
   return (
     <node style={{ flexDirection: "column", alignItems: "center", gap: 10 }}>
       <button onClick={onToggle} style={timeTrack}>
-        <node
+        <Box
           style={{
-            ...box,
             width: 40,
             height: 40,
             backgroundColor: Colors.green100,
@@ -254,7 +254,7 @@ function TimeBox({ label, duration, on, onToggle }: TimeBoxProps) {
           }}
         />
       </button>
-      <TextMono style={caption}>{label}</TextMono>
+      <Caption mono>{label}</Caption>
     </node>
   );
 }

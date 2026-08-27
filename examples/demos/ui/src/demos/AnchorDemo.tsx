@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
+import { InlineCode, Paragraph } from "@/components/typography";
 import { AnchorScaling } from "bevy-react";
 import { BevyStyle } from "bevy-react/jsx";
 import { bevy } from "@/bevy";
 import type { CubeInfo } from "@/bevy";
 import { Checkbox, Example, Slider } from "@/components";
-import { Code, InlineCode, P } from "@/components/docs";
+import { Code } from "@/components/docs";
 import { Colors, FontSizes } from "@/theme";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
 
@@ -22,28 +23,28 @@ const PAGE: ExplanationData = {
   startCollapsed: true,
   info: (
     <>
-      <P>
+      <Paragraph>
         <InlineCode>{"<anchor>"}</InlineCode> pins a UI subtree to a 3D entity:
         the node tracks the entity on screen every frame, with a world-space{" "}
         <InlineCode>offset</InlineCode> and an optional{" "}
         <InlineCode>scale</InlineCode> config (min/max/factor/baseDistance) that
         shrinks or grows it with camera distance.
-      </P>
+      </Paragraph>
       <Code lang="tsx">{TYPESCRIPT}</Code>
-      <P>
+      <Paragraph>
         The entity id comes from the Bevy side — here the CrowdedCubes scene
         reports its cubes over a typed{" "}
         <InlineCode>bevy.on("crowdedCubes.spawned")</InlineCode> event, and the
         page maps each one to a badge whose accent dot matches the cube's
         palette color. Orbit the camera and watch the badges track their cubes.
-      </P>
-      <P>
+      </Paragraph>
+      <Paragraph>
         Anchored subtrees are ordinary, interactive UI: every badge here has a
         hover style and an <InlineCode>onClick</InlineCode>. Clicking one sends
         a typed <InlineCode>crowdedCubes.select</InlineCode> message back to
         Bevy, which swaps that cube onto an emissive material so it glows in its
         own color. Click the same badge again to clear the selection.
-      </P>
+      </Paragraph>
     </>
   ),
 };
@@ -95,14 +96,14 @@ export function AnchorDemo() {
         title="Distance scaling"
         info={
           <>
-            <P>
+            <Paragraph>
               The <InlineCode>scale</InlineCode> config makes badges shrink and
               grow with camera distance: <InlineCode>factor</InlineCode> sets
               how strongly distance affects size,{" "}
               <InlineCode>baseDistance</InlineCode> is where scale is exactly 1,
               and min/max clamp the result. Toggle it off and every badge
               renders at its natural size regardless of depth.
-            </P>
+            </Paragraph>
             <Code lang="tsx">{`<anchor
   entity={cube.entity}
   offset={[0, 0.8, 0]}
@@ -124,14 +125,16 @@ export function AnchorDemo() {
             <Slider
               value={scaleFactor}
               onChange={setScaleFactor}
-              label={`Scale factor ${scaleFactor.toFixed(1)}`}
+              name="Scale factor"
+              decimals={1}
               min={0}
               max={3}
             />
             <Slider
               value={baseDistance}
               onChange={setBaseDistance}
-              label={`Base distance ${baseDistance.toFixed(1)}`}
+              name="Base distance"
+              decimals={1}
               min={1}
               max={50}
             />

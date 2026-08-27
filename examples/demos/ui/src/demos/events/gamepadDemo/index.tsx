@@ -5,9 +5,10 @@
 // just skip the rumble (there is no acting pad).
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { InlineCode, ListItem, Paragraph, List } from "@/components/typography";
 import { bevy, type GamepadInputEvent } from "@/bevy";
 import { Example } from "@/components";
-import { Code, InlineCode, P, Ul, Li } from "@/components/docs";
+import { Code } from "@/components/docs";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
 import { GameMenu } from "./GameMenu";
 import { PadVisualizer } from "./PadVisualizer";
@@ -48,36 +49,36 @@ const PAGE: ExplanationData = {
   title: "Gamepad",
   info: (
     <>
-      <P>
+      <Paragraph>
         A game-like menu driven entirely by the batched{" "}
         <InlineCode>gamepadInput</InlineCode> event: LB/RB switch pages, the
         d-pad or either stick moves the focus (hold to auto-repeat), and A
         selects with a rumble on the acting pad via the{" "}
         <InlineCode>bevy.gamepad.rumble</InlineCode> message. The mouse drives
         the same menu actions, minus the rumble.
-      </P>
+      </Paragraph>
       <Code lang="tsx">{TYPESCRIPT}</Code>
-      <Ul>
-        <Li>
+      <List>
+        <ListItem>
           The gamepad events (<InlineCode>gamepadConnected</InlineCode>,{" "}
           <InlineCode>gamepadDisconnected</InlineCode>,{" "}
           <InlineCode>gamepadInput</InlineCode>) are built into the core plugin
           — no app-side Rust or registration needed.
-        </Li>
-        <Li>
+        </ListItem>
+        <ListItem>
           Sticks use Bevy's convention: up is +1 (the web Gamepad API is
           inverted).
-        </Li>
-        <Li>
+        </ListItem>
+        <ListItem>
           <InlineCode>bevy.gamepad.getAll()</InlineCode> seeds pads that
           connected before the demo mounted.
-        </Li>
-        <Li>
+        </ListItem>
+        <ListItem>
           Below the menu, every detected controller renders as a live canvas
           schematic — buttons light up, triggers fill, stick dots follow the
           axes.
-        </Li>
-      </Ul>
+        </ListItem>
+      </List>
     </>
   ),
 };
@@ -230,13 +231,13 @@ function DetectedControllersExample() {
       title="Detected controllers"
       info={
         <>
-          <P>
+          <Paragraph>
             Every detected controller renders as a live canvas schematic —
             buttons light up, triggers fill, stick dots follow the axes. The pad
             state mirrors the three built-in gamepad events, seeded by the{" "}
             <InlineCode>bevy.gamepad.getAll()</InlineCode> request for pads that
             connected before the demo mounted.
-          </P>
+          </Paragraph>
           <Code lang="tsx">{PADS_TSX}</Code>
         </>
       }

@@ -1,7 +1,8 @@
 import { useState } from "react";
+import { Bold, InlineCode, Paragraph } from "@/components/typography";
 import type { BevyStyle } from "bevy-react/jsx";
-import { Checkbox, DemoRow, Example, Radio, Slider } from "@/components";
-import { B, Code, CodeTabs, InlineCode, P } from "@/components/docs";
+import { Checkbox, DemoRow, Example, Radio, Slider, Stage } from "@/components";
+import { Code, CodeTabs } from "@/components/docs";
 import { Colors, FontSizes } from "@/theme";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
 
@@ -9,29 +10,29 @@ const PAGE: ExplanationData = {
   title: "<text>",
   info: (
     <>
-      <P>
+      <Paragraph>
         <InlineCode>{"<text>"}</InlineCode> renders a run of styled glyphs — it
         is the only way to put text on screen (there is no bare-string rendering
         outside it). Font size, weight, family, color, line height, letter
         spacing, and shadow are all regular style fields.
-      </P>
-      <P>
+      </Paragraph>
+      <Paragraph>
         Nesting one <InlineCode>{"<text>"}</InlineCode> inside another restyles
-        an <B>inline span</B> of the parent's run — that is how you color or
-        bold part of a sentence. Spans do not inherit the parent's font
+        an <Bold>inline span</Bold> of the parent's run — that is how you color
+        or bold part of a sentence. Spans do not inherit the parent's font
         settings: restate <InlineCode>fontSize</InlineCode> /{" "}
         <InlineCode>fontFamily</InlineCode> on the span if they should match.
-      </P>
+      </Paragraph>
       <Code lang="tsx">{`<text style={{ fontSize: 18 }}>
   Nested <text style={{ color: "#7aa2f7", fontSize: 18 }}>spans</text> restyle
   part of a sentence.
 </text>`}</Code>
-      <P>
+      <Paragraph>
         Alignment-class fields (<InlineCode>textAlign</InlineCode>,{" "}
         <InlineCode>lineBreak</InlineCode>, <InlineCode>textShadow</InlineCode>)
         apply on the root <InlineCode>{"<text>"}</InlineCode> only. Click any
         example below for details and its code.
-      </P>
+      </Paragraph>
     </>
   ),
 };
@@ -71,14 +72,14 @@ function FontSizeDemo() {
       title="Size and weight"
       info={
         <>
-          <P>
+          <Paragraph>
             <InlineCode>fontSize</InlineCode> takes a number of logical pixels
             (or a unit string like <InlineCode>"2vw"</InlineCode> /{" "}
             <InlineCode>"1.5rem"</InlineCode>).{" "}
             <InlineCode>fontWeight</InlineCode> picks a named weight from{" "}
             <InlineCode>thin</InlineCode> to <InlineCode>black</InlineCode> —
             with a variable font, every step renders true.
-          </P>
+          </Paragraph>
           <Code lang="tsx">{`<text style={{ fontSize: 28, fontWeight: "bold" }}>
   Big & bold
 </text>`}</Code>
@@ -109,7 +110,7 @@ function FontSizeCard() {
         min={10}
         max={48}
         onChange={setSize}
-        label={`fontSize ${size.toFixed(0)}`}
+        name="fontSize"
       />
     </node>
   );
@@ -121,13 +122,13 @@ function FontFamilyDemo() {
       title="Fonts and spans"
       info={
         <>
-          <P>
-            Fonts are registered <B>up front on the Rust side</B> and selected
-            by name from React — <InlineCode>fontFamily</InlineCode> cannot load
-            a file at runtime. Inline spans (a nested{" "}
+          <Paragraph>
+            Fonts are registered <Bold>up front on the Rust side</Bold> and
+            selected by name from React — <InlineCode>fontFamily</InlineCode>{" "}
+            cannot load a file at runtime. Inline spans (a nested{" "}
             <InlineCode>{"<text>"}</InlineCode>) recolor or re-weight part of
             one paragraph.
-          </P>
+          </Paragraph>
           <CodeTabs
             tsx={`<text style={{ fontFamily: "DancingScript" }}>
   Styled with a custom font family
@@ -182,13 +183,13 @@ function TypographyDemo() {
       title="Typography"
       info={
         <>
-          <P>
+          <Paragraph>
             <InlineCode>lineHeight</InlineCode> (a multiple of the font size, or
             px), <InlineCode>letterSpacing</InlineCode> (px), and{" "}
             <InlineCode>textShadow</InlineCode> tune how a block of text sits on
             the page. All three are plain style fields — toggle or animate them
             like any other.
-          </P>
+          </Paragraph>
           <Code lang="tsx">{`<text
   style={{
     lineHeight: 1.8,
@@ -230,14 +231,16 @@ function TypographyCard() {
         min={1}
         max={2.5}
         onChange={setLineHeight}
-        label={`lineHeight ${lineHeight.toFixed(2)}`}
+        name="lineHeight"
       />
       <Slider
         value={letterSpacing}
         min={0}
         max={8}
         onChange={setLetterSpacing}
-        label={`letterSpacing ${letterSpacing.toFixed(1)}px`}
+        name="letterSpacing"
+        decimals={1}
+        unit="px"
       />
       <Checkbox label="textShadow" enabled={shadow} onChange={setShadow} />
     </node>
@@ -250,12 +253,12 @@ function LineBreakDemo() {
       title="Line breaking"
       info={
         <>
-          <P>
+          <Paragraph>
             <InlineCode>lineBreak</InlineCode> picks the wrapping mode when text
             overflows its width: break at word boundaries (default), at any
             character, prefer words but fall back to characters, or never wrap
             at all. Root <InlineCode>{"<text>"}</InlineCode> only.
-          </P>
+          </Paragraph>
           <Code lang="tsx">{`<text style={{ width: 220, lineBreak: "anyCharacter" }}>
   Pneumonoultramicroscopicsilicovolcanoconiosis
 </text>`}</Code>
@@ -270,14 +273,7 @@ function LineBreakCard() {
   const [mode, setMode] = useState<LineBreak>("wordBoundary");
   return (
     <node style={{ flexDirection: "column", alignItems: "center", gap: 16 }}>
-      <node
-        style={{
-          width: 220,
-          padding: 12,
-          backgroundColor: Colors.surface100,
-          borderRadius: 8,
-        }}
-      >
+      <Stage style={{ width: 220 }}>
         <text
           style={{
             fontSize: FontSizes.sm,
@@ -288,7 +284,7 @@ function LineBreakCard() {
           Pneumonoultramicroscopicsilicovolcanoconiosis wraps differently per
           mode.
         </text>
-      </node>
+      </Stage>
       <Radio value={mode} options={LINE_BREAKS} onChange={setMode} />
     </node>
   );

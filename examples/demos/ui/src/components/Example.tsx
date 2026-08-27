@@ -6,14 +6,16 @@ import {
   useRef,
 } from "react";
 import { BevyStyle } from "bevy-react/jsx";
-import { Colors, Filters, FontSizes, Gradients, Responsiveness } from "@/theme";
+import { FontSizes } from "@/theme";
 import { useExplanationStore } from "@/explanationStore";
-import { Button } from "./Button";
-import { HeaderText } from "./HeaderText";
+
 import { SecondaryButton } from "./SecondaryButton";
-import { useWindowSize } from "@/useWindowSize";
+import { Card } from "./Card";
+import { CardHeader } from "./CardHeader";
 
 export type ExampleProps = PropsWithChildren & {
+  /** Applied to the card. `cache` is additionally mirrored onto the modal's
+   *  demo wrap, so a live-content example (a portal) stays live in both. */
   style?: BevyStyle;
   title?: string;
   /** Rich docs content (`components/docs` kit) shown in the example modal. */
@@ -23,27 +25,12 @@ export type ExampleProps = PropsWithChildren & {
    * Inline `children` can't do that (they close over the page's state), so
    * children-only examples get no live instance in the modal. */
   demo?: ComponentType;
-  /** Legacy string content — still rendered until pages migrate to `info`. */
-  description?: string;
-  tsx?: string;
-  rust?: string;
 };
 
-export function Example({
-  children,
-  style,
-  title,
-  info,
-  demo,
-  description,
-  tsx,
-  rust,
-}: ExampleProps) {
+export function Example({ children, style, title, info, demo }: ExampleProps) {
   // Stable per-instance identity for the selection (survives hot reload).
   const key = useRef({}).current;
   const select = useExplanationStore((s) => s.select);
-
-  const window = useWindowSize();
 
   // A selected card unmounting (in-page conditional rendering) closes the
   // modal; page switches are already covered by setPage.
@@ -52,75 +39,37 @@ export function Example({
   }, [key]);
 
   return (
-    <node
-      style={{
-        ...cardStyle,
-        ...style,
-        ...(window.width < Responsiveness.desktop && {
-          width: "100%",
-        }),
-        ...(window.width >= Responsiveness.desktop && {
-          backdropFilter: Filters.backdrop,
-        }),
-      }}
-    >
+    <Card style={style}>
       {title !== undefined && (
         // The card itself is inert: the docs modal is opened from the corner
         // button only, so clicks anywhere else land on the live demo inside.
-        <node style={titleRowStyle}>
-          <HeaderText style={{ fontSize: FontSizes.xl }}>{title}</HeaderText>
-          <SecondaryButton
-            pinch={{ radius: 0.6 }}
-            style={detailsButtonStyle}
-            labelStyle={detailsLabelStyle}
-            onClick={() =>
-              select(key, {
-                title,
-                info,
-                description,
-                rust,
-                tsx,
-                demo,
-                cache: style?.cache,
-              })
-            }
-          >
-            Details
-          </SecondaryButton>
-        </node>
+        <CardHeader
+          title={title}
+          titleStyle={{ fontSize: FontSizes.xl }}
+          style={{ gap: 35, width: "100%" }}
+          action={
+            <SecondaryButton
+              pinch={{ radius: 0.6 }}
+              style={detailsButtonStyle}
+              labelStyle={detailsLabelStyle}
+              onClick={() =>
+                select(key, { title, info, demo, cache: style?.cache })
+              }
+            >
+              Details
+            </SecondaryButton>
+          }
+        />
       )}
       {demo !== undefined && <Demo demo={demo} />}
       {children}
-    </node>
+    </Card>
   );
 }
 
 function Demo({ demo: D }: { demo: ComponentType }) {
   return <D />;
 }
-
-const cardStyle: BevyStyle = {
-  alignItems: "center",
-  justifyContent: "flexStart",
-  flexDirection: "column",
-  minWidth: 150,
-  maxWidth: "95vw",
-  padding: 10,
-  gap: 8,
-  backgroundGradient: Gradients.card,
-  borderRadius: 16,
-  border: 2,
-  borderGradient: Gradients.accentBorderDim,
-  boxShadow: { blurRadius: 15, spreadRadius: 5, color: Colors.shadow100 },
-};
-
-const titleRowStyle: BevyStyle = {
-  flexDirection: "row",
-  alignItems: "flexStart",
-  justifyContent: "spaceBetween",
-  gap: 35,
-  width: "100%",
-};
 
 const detailsButtonStyle: BevyStyle = {
   minWidth: 0,

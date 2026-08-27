@@ -1,26 +1,25 @@
 import { BevyStyle } from "bevy-react/jsx";
-import { Colors, FontSizes, Gradients } from "@/theme";
-import { IconButton, MenuIcon } from "@/components";
-import { TOP_BAR_HEIGHT } from "./layoutMode";
+import { Colors, Gradients } from "@/theme";
+import { CircularButton, MenuIcon } from "@/components";
+import { Title } from "./Title";
+
+/** Menu-button diameter; the trailing spacer matches it so the wordmark
+ *  centres against the bar itself, not against the space the button leaves. */
+const MENU_SIZE = 34;
 
 /**
  * The compact shell's fixed top bar: a menu button (opens the nav drawer)
- * and the current page's nav label. Regular mode has no bar — the nav
- * column carries the branding there.
+ * and the library wordmark. Regular mode has no bar — the nav column carries
+ * the branding there.
  */
-export function TopBar({
-  title,
-  onMenu,
-}: {
-  title: string;
-  onMenu: () => void;
-}) {
+export function TopBar({ onMenu }: { onMenu: () => void }) {
   return (
     <node style={barStyle}>
-      <IconButton onClick={onMenu}>
-        <MenuIcon />
-      </IconButton>
-      <text style={titleStyle}>{title}</text>
+      <CircularButton size={MENU_SIZE} onClick={onMenu}>
+        <MenuIcon size={20} />
+      </CircularButton>
+      <Title fontSize={26} style={{ flexGrow: 1, width: "auto" }} />
+      <node style={{ width: MENU_SIZE, flexShrink: 0 }} />
     </node>
   );
 }
@@ -30,17 +29,11 @@ const barStyle: BevyStyle = {
   alignItems: "center",
   gap: 12,
   width: "100%",
-  height: TOP_BAR_HEIGHT,
+  height: 48,
   flexShrink: 0,
   padding: { left: 8, right: 12 },
   backgroundColor: Colors.surface100,
   backgroundGradient: Gradients.navBackdrop,
   boxShadow: { blurRadius: 12, spreadRadius: 0, color: Colors.shadow100 },
   zIndex: 50,
-};
-
-const titleStyle: BevyStyle = {
-  fontSize: FontSizes.xl,
-  fontWeight: "semibold",
-  color: Colors.textColor100,
 };

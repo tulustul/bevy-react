@@ -1,26 +1,26 @@
 import { BevyStyle } from "bevy-react/jsx";
+import { Caption, InlineCode, Paragraph } from "@/components/typography";
 import { DemoRow, Example } from "@/components";
-import { Code, CodeTabs, InlineCode, P } from "@/components/docs";
+import { Code, CodeTabs } from "@/components/docs";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
 import { Colors, FontSizes } from "@/theme";
-import { caption } from "./shared";
 
 const PAGE: ExplanationData = {
   title: "Cursors",
   info: (
     <>
-      <P>
+      <Paragraph>
         The <InlineCode>cursor</InlineCode> style prop sets the OS mouse cursor
         while the pointer is over a node (CSS <InlineCode>cursor</InlineCode>).
         The topmost node under the pointer with a cursor set wins, so a child
         without one inherits its nearest cursor-bearing ancestor.
-      </P>
+      </Paragraph>
       <Code lang="tsx">{`<node style={{ cursor: "pointer" }} />`}</Code>
-      <P>
+      <Paragraph>
         Custom image cursors are registered upfront on the Rust side (
         <InlineCode>ReactUiPlugin::cursor</InlineCode> with an image path and a
         hotspot), then selected by name from React like any keyword.
-      </P>
+      </Paragraph>
     </>
   ),
 };
@@ -70,11 +70,11 @@ function CursorKeywordsDemo() {
       title="Built-in cursors"
       info={
         <>
-          <P>
+          <Paragraph>
             One swatch per cursor keyword — hover each to feel the OS cursor
             change. A child without a <InlineCode>cursor</InlineCode> inherits
             its nearest cursor-bearing ancestor.
-          </P>
+          </Paragraph>
           <Code lang="tsx">{`<node style={{ cursor: "pointer" }} />`}</Code>
         </>
       }
@@ -93,9 +93,9 @@ function CursorKeywordsCard() {
           </node>
         ))}
       </node>
-      <text style={caption}>
+      <Caption>
         A child without a cursor inherits its nearest cursor-bearing ancestor.
-      </text>
+      </Caption>
     </>
   );
 }
@@ -106,12 +106,12 @@ function CustomCursorDemo() {
       title="Custom cursors"
       info={
         <>
-          <P>
+          <Paragraph>
             A custom image cursor is loaded upfront on the Rust side (like a
             font family): register a PNG by name with{" "}
             <InlineCode>ReactUiPlugin::cursor</InlineCode>, then reference it
             from React like any keyword. Hover the swatch.
-          </P>
+          </Paragraph>
           <CodeTabs
             tsx={`<node style={{ cursor: "hand" }} />`}
             rust={`let react_plugin = ReactUiPlugin::new(bundle)

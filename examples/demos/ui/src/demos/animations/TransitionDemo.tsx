@@ -1,9 +1,14 @@
 import { useState } from "react";
+import {
+  Bold,
+  BoxLabel,
+  Caption,
+  InlineCode,
+  Paragraph,
+} from "@/components/typography";
 import { BevyStyle } from "bevy-react/jsx";
-
-import { Button, DemoRow, Example } from "@/components";
-import { B, Code, InlineCode, P } from "@/components/docs";
-import { column } from "./shared";
+import { Button, Column, DemoRow, Example, Stage } from "@/components";
+import { Code } from "@/components/docs";
 import { Colors, FontSizes } from "@/theme";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
 
@@ -16,13 +21,13 @@ const PAGE: ExplanationData = {
   title: "Style transitions",
   info: (
     <>
-      <P>
+      <Paragraph>
         CSS-like <InlineCode>transition</InlineCode>: a style change —
-        hover/press, or plain React state — <B>eases instead of snapping</B>,
-        governed by the same Bevy animation engine as the inline{" "}
-        {"{ animated }"} bindings, but fully declarative: no shared values, no
-        event wiring.
-      </P>
+        hover/press, or plain React state —{" "}
+        <Bold>eases instead of snapping</Bold>, governed by the same Bevy
+        animation engine as the inline {"{ animated }"} bindings, but fully
+        declarative: no shared values, no event wiring.
+      </Paragraph>
       <Code lang="tsx">{`<node
   style={{
     transform: { translateX: on ? 36 : 0 },
@@ -32,12 +37,12 @@ const PAGE: ExplanationData = {
     },
   }}
 />`}</Code>
-      <P>
+      <Paragraph>
         Each field gets its own config: timing (
         <InlineCode>duration</InlineCode> + <InlineCode>easing</InlineCode>) or
         spring (<InlineCode>stiffness</InlineCode> +{" "}
         <InlineCode>damping</InlineCode>).
-      </P>
+      </Paragraph>
     </>
   ),
 };
@@ -70,12 +75,12 @@ function HoverPressDemo() {
       title="Hover and press"
       info={
         <>
-          <P>
+          <Paragraph>
             A <InlineCode>transition</InlineCode> eases hover/press style
             changes instead of snapping them: the transform runs a quick{" "}
             <InlineCode>easeOut</InlineCode>, the background color a slower
             fade.
-          </P>
+          </Paragraph>
           <Code lang="tsx">{`<button
   style={{
     transform: { scale: 1 },
@@ -112,7 +117,9 @@ function HoverPressCard() {
         backgroundColor: Colors.primary300,
       }}
     >
-      <text style={labelStyle}>Press me</text>
+      <BoxLabel style={{ fontSize: FontSizes.base, textAlign: "center" }}>
+        Press me
+      </BoxLabel>
     </button>
   );
 }
@@ -123,13 +130,13 @@ function ToggleSwitchDemo() {
       title="Toggle switches"
       info={
         <>
-          <P>
+          <Paragraph>
             Transitions also ease plain React-state changes — here a toggle
             switch built from two styles: the click flips a boolean, a spring (
             <InlineCode>stiffness</InlineCode>/<InlineCode>damping</InlineCode>)
             slides the knob, and the track color fades on a timer. No animation
             code, just the two states.
-          </P>
+          </Paragraph>
           <Code lang="tsx">{`const [on, setOn] = useState(false);
 
 <button // the track
@@ -185,13 +192,13 @@ function RadiusDemo() {
       title="Border radius"
       info={
         <>
-          <P>
+          <Paragraph>
             <InlineCode>{"transition: { borderRadius }"}</InlineCode> eases the
             corner radii per corner instead of snapping them: a click that turns
             a square into a circle, or a hover that rounds a button. Keep both
             states in the same unit; a corner that changes unit snaps on its
             own.
-          </P>
+          </Paragraph>
           <Code lang="tsx">{`<button
   onClick={() => setRound((v) => !v)}
   style={{
@@ -229,7 +236,9 @@ function RadiusCard() {
         hoverStyle={{ borderRadius: 25 }}
         pressStyle={{ borderRadius: 50 }}
       >
-        <text style={labelStyle}>Hover or click me</text>
+        <BoxLabel style={{ fontSize: FontSizes.base, textAlign: "center" }}>
+          Hover or click me
+        </BoxLabel>
       </button>
     </node>
   );
@@ -241,13 +250,13 @@ function TimingVsSpringDemo() {
       title="Timing vs spring"
       info={
         <>
-          <P>
+          <Paragraph>
             The same style change under the two timing configs: the top square
             eases on a fixed-<InlineCode>duration</InlineCode> curve and stops
             dead; the bottom one rides a damped spring (
             <InlineCode>stiffness</InlineCode>/<InlineCode>damping</InlineCode>
             ), so it overshoots and settles.
-          </P>
+          </Paragraph>
           <Code lang="tsx">{`// top square: fixed-duration curve
 transition: {
   transform: { duration: 450, easing: "easeInOut" },
@@ -269,10 +278,10 @@ function TimingVsSpringCard() {
   const x = on ? 64 : -64;
 
   return (
-    <node style={column}>
+    <Column style={{ gap: 16 }}>
       <node style={vsLane}>
         <text style={vsLabel}>timing</text>
-        <node style={vsTrack}>
+        <Stage style={vsTrack}>
           <node
             style={{
               ...vsDot,
@@ -283,11 +292,11 @@ function TimingVsSpringCard() {
               },
             }}
           />
-        </node>
+        </Stage>
       </node>
       <node style={vsLane}>
         <text style={vsLabel}>spring</text>
-        <node style={vsTrack}>
+        <Stage style={vsTrack}>
           <node
             style={{
               ...vsDot,
@@ -296,10 +305,10 @@ function TimingVsSpringCard() {
               transition: { transform: { stiffness: 120, damping: 9 } },
             }}
           />
-        </node>
+        </Stage>
       </node>
       <Button onClick={() => setOn((v) => !v)}>Toggle</Button>
-    </node>
+    </Column>
   );
 }
 
@@ -309,14 +318,14 @@ function SizeDemo() {
       title="Size transitions"
       info={
         <>
-          <P>
+          <Paragraph>
             <InlineCode>{"transition: { size }"}</InlineCode> covers the layout
             size channels (width/height/maxWidth/maxHeight). Easing{" "}
             <InlineCode>maxHeight</InlineCode> between 0 and a pixel value makes
             a real accordion — the content below re-flows every frame.{" "}
             <InlineCode>auto</InlineCode> targets snap, so give both states
             explicit numbers and clip the overflow.
-          </P>
+          </Paragraph>
           <Code lang="tsx">{`<node
   style={{
     maxHeight: open ? 96 : 0,
@@ -340,15 +349,15 @@ function SizeCard() {
         {open ? "Hide details -" : "Show details +"}
       </Button>
       <node style={{ ...accordionBody, maxHeight: open ? 96 : 0 }}>
-        <node style={accordionPanel}>
-          <text style={accordionText}>Eased maxHeight re-flows layout,</text>
-          <text style={accordionText}>so this panel really opens</text>
-          <text style={accordionText}>instead of fading in place.</text>
-        </node>
+        <Stage style={accordionPanel}>
+          <Caption>Eased maxHeight re-flows layout,</Caption>
+          <Caption>so this panel really opens</Caption>
+          <Caption>instead of fading in place.</Caption>
+        </Stage>
       </node>
-      <node style={accordionFooter}>
-        <text style={accordionText}>I sit below and get pushed.</text>
-      </node>
+      <Stage style={accordionFooter}>
+        <Caption>I sit below and get pushed.</Caption>
+      </Stage>
     </node>
   );
 }
@@ -359,13 +368,13 @@ function DelayDemo() {
       title="Delays"
       info={
         <>
-          <P>
+          <Paragraph>
             Each channel names its own timing —{" "}
             <InlineCode>transform</InlineCode> and{" "}
             <InlineCode>backgroundColor</InlineCode> here share one — and{" "}
             <InlineCode>delay</InlineCode> holds each dot back a little longer,
             turning one state flip into a stagger.
-          </P>
+          </Paragraph>
           <Code lang="tsx">{`const spec = {
   duration: 300,
   easing: "easeOut",
@@ -397,7 +406,7 @@ function DelayCard() {
   const [up, setUp] = useState(false);
 
   return (
-    <node style={column}>
+    <Column style={{ gap: 16 }}>
       <node style={waveRow}>
         {[0, 1, 2, 3].map((i) => {
           const spec = {
@@ -419,7 +428,7 @@ function DelayCard() {
         })}
       </node>
       <Button onClick={() => setUp((v) => !v)}>Wave</Button>
-    </node>
+    </Column>
   );
 }
 
@@ -429,13 +438,13 @@ function LayoutDemo() {
       title="Layout transitions"
       info={
         <>
-          <P>
+          <Paragraph>
             <InlineCode>{"transition: { layout }"}</InlineCode> eases a node to
             wherever layout puts it next — whatever moved it: a reorder, a
             sibling growing, a parent resize (FLIP). The real layout snaps; the
             box glides from its old rect to the new one, children riding along,
             and clicks land on the visual.
-          </P>
+          </Paragraph>
           <Code lang="tsx">{`<node
   key={id}
   style={{
@@ -445,14 +454,14 @@ function LayoutDemo() {
     },
   }}
 />`}</Code>
-          <P>
-            A size change eases the node's <B>own box</B> only — its children
-            stay crisp — but whatever is laid out <B>around</B> it snaps. So the
-            container's height goes through the real-layout{" "}
+          <Paragraph>
+            A size change eases the node's <Bold>own box</Bold> only — its
+            children stay crisp — but whatever is laid out <Bold>around</Bold>{" "}
+            it snaps. So the container's height goes through the real-layout{" "}
             <InlineCode>{"transition: { size }"}</InlineCode> instead (explicit
             heights), re-flowing the buttons live, while the boxes glide between
             grid cells and the row on their own channel.
-          </P>
+          </Paragraph>
         </>
       }
       demo={LayoutCard}
@@ -481,7 +490,7 @@ function LayoutCard() {
   }
 
   return (
-    <node style={column}>
+    <Column style={{ gap: 16 }}>
       <node
         style={{
           ...(grid ? layoutGrid : layoutRow),
@@ -510,7 +519,7 @@ function LayoutCard() {
           {grid ? "Flex" : "Grid"}
         </Button>
       </node>
-    </node>
+    </Column>
   );
 }
 
@@ -571,13 +580,6 @@ const pillStyle: BevyStyle = {
   borderRadius: 8,
 };
 
-const labelStyle: BevyStyle = {
-  color: Colors.textColor400,
-  fontSize: FontSizes.base,
-  fontWeight: "bold",
-  textAlign: "center",
-};
-
 const switchRow: BevyStyle = {
   flexDirection: "row",
   alignItems: "center",
@@ -632,7 +634,8 @@ const vsTrack: BevyStyle = {
   alignItems: "center",
   width: 152,
   height: 30,
-  backgroundColor: Colors.surface100,
+  // a 30px track has no room for the stage inset
+  padding: 0,
   borderRadius: 6,
 };
 
@@ -656,21 +659,11 @@ const accordionBody: BevyStyle = {
 const accordionPanel: BevyStyle = {
   flexDirection: "column",
   gap: 4,
-  padding: 12,
-  borderRadius: 8,
-  backgroundColor: Colors.surface100,
 };
 
 const accordionFooter: BevyStyle = {
   padding: { top: 6, right: 12, bottom: 6, left: 12 },
-  borderRadius: 8,
-  backgroundColor: Colors.surface100,
   alignItems: "center",
-};
-
-const accordionText: BevyStyle = {
-  color: Colors.textColor200,
-  fontSize: FontSizes.xs,
 };
 
 const waveRow: BevyStyle = {

@@ -1,43 +1,52 @@
 import { useEffect, useState } from "react";
+import { InlineCode, ListItem, Paragraph, List } from "@/components/typography";
 import {
   interpolateColor,
   useSharedValue,
   withRepeat,
   withTiming,
 } from "bevy-react";
-import { DemoRow, Example, Slider } from "@/components";
-import { Code, CodeTabs, InlineCode, Li, P, Ul } from "@/components/docs";
+import {
+  Box,
+  controlColumn,
+  DemoRow,
+  Example,
+  Slider,
+  Stage,
+} from "@/components";
+import { Code, CodeTabs } from "@/components/docs";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
 import { Colors } from "@/theme";
-import { box, controlColumn, stage } from "./shared";
 
 const PAGE: ExplanationData = {
   title: "Background images",
   info: (
     <>
-      <P>
+      <Paragraph>
         <InlineCode>backgroundImage</InlineCode> paints a texture as part of a
         node's own background: over <InlineCode>backgroundColor</InlineCode> and{" "}
         <InlineCode>backgroundGradient</InlineCode>, under the content. It never
         affects layout, and the color shows through while the texture loads.
-      </P>
+      </Paragraph>
       <Code lang="tsx">{`backgroundImage: {
   src: "images/parrot.png", // or { texture: "checker" }
   mode: "repeat",
   scale: 0.25,
   tint: "#7aa2f7",
 }`}</Code>
-      <Ul>
-        <Li>
+      <List>
+        <ListItem>
           src is an asset path or {"{ texture }"} naming a static texture the
           app registered host-side (for live content use a portal element).
-        </Li>
-        <Li>Repeat modes tile at the texture's logical size times scale.</Li>
-        <Li>
+        </ListItem>
+        <ListItem>
+          Repeat modes tile at the texture's logical size times scale.
+        </ListItem>
+        <ListItem>
           tint animates via an interpolateColor binding; a hoverStyle swap
           happens Bevy-side.
-        </Li>
-      </Ul>
+        </ListItem>
+      </List>
     </>
   ),
 };
@@ -64,12 +73,12 @@ function StretchDemo() {
       title="Stretch (default)"
       info={
         <>
-          <P>
+          <Paragraph>
             The texture fills the box exactly;{" "}
             <InlineCode>borderRadius</InlineCode> clips it. The{" "}
             <InlineCode>backgroundColor</InlineCode> underneath shows while the
             asset loads.
-          </P>
+          </Paragraph>
           <Code lang="tsx">{`<node
   style={{
     width: 150,
@@ -87,17 +96,16 @@ function StretchDemo() {
 
 function StretchCard() {
   return (
-    <node style={stage}>
-      <node
+    <Stage>
+      <Box
         style={{
-          ...box,
           backgroundColor: Colors.transparent,
           width: 150,
           height: 96,
           backgroundImage: { src: "images/parrot.png" },
         }}
       />
-    </node>
+    </Stage>
   );
 }
 
@@ -107,11 +115,11 @@ function RepeatDemo() {
       title="Repeat and scale"
       info={
         <>
-          <P>
+          <Paragraph>
             Repeat modes tile the texture at its logical size times{" "}
             <InlineCode>scale</InlineCode>, DPI-corrected. Drag the slider to
             retile.
-          </P>
+          </Paragraph>
           <Code lang="tsx">{`const [scale, setScale] = useState(0.25);
 
 <node
@@ -133,7 +141,7 @@ function RepeatDemo() {
 function RepeatCard() {
   const [scale, setScale] = useState(0.25);
   return (
-    <node style={{ ...stage, ...controlColumn }}>
+    <Stage style={controlColumn}>
       <node
         style={{
           backgroundColor: Colors.transparent,
@@ -151,10 +159,10 @@ function RepeatCard() {
         value={scale}
         min={0.1}
         max={0.6}
-        label={`scale ${scale.toFixed(2)}`}
+        name="scale"
         onChange={setScale}
       />
-    </node>
+    </Stage>
   );
 }
 
@@ -164,14 +172,14 @@ function TintHoverDemo() {
       title="Animated tint and hover"
       info={
         <>
-          <P>
+          <Paragraph>
             <InlineCode>tint</InlineCode> multiplies the texture and animates
             via an <InlineCode>interpolateColor</InlineCode> binding (base style
             only) — the binding runs Bevy-side, so no React re-render happens
             per frame. Hovering swaps the whole{" "}
             <InlineCode>backgroundImage</InlineCode> to the untinted image; the
             swap happens Bevy-side too.
-          </P>
+          </Paragraph>
           <Code lang="tsx">{`const t = useSharedValue(0);
 useEffect(() => {
   t.value = withRepeat(
@@ -211,10 +219,9 @@ function TintHoverCard() {
     );
   }, [t]);
   return (
-    <node style={stage}>
-      <node
+    <Stage>
+      <Box
         style={{
-          ...box,
           backgroundColor: Colors.transparent,
           width: 120,
           height: 120,
@@ -231,7 +238,7 @@ function TintHoverCard() {
           backgroundImage: { src: "images/parrot.png" },
         }}
       />
-    </node>
+    </Stage>
   );
 }
 
@@ -241,13 +248,13 @@ function HostTextureDemo() {
       title="Texture sources"
       info={
         <>
-          <P>
+          <Paragraph>
             A static texture the host generated once and registered under a name
             (<InlineCode>RenderTargets::register</InlineCode>) — here a 64px
             plaid painted CPU-side at startup, tiled. Unknown names stay
             transparent and bind late. For live content, use a portal element
             instead.
-          </P>
+          </Paragraph>
           <CodeTabs
             tsx={`<node
   style={{
@@ -284,7 +291,7 @@ app.add_systems(Startup, register_host_textures);`}
 
 function HostTextureCard() {
   return (
-    <node style={stage}>
+    <Stage>
       <node
         style={{
           width: 190,
@@ -300,6 +307,6 @@ function HostTextureCard() {
           padding: 6,
         }}
       />
-    </node>
+    </Stage>
   );
 }

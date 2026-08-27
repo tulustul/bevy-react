@@ -1,7 +1,8 @@
 import { useState } from "react";
+import { InlineCode, Paragraph } from "@/components/typography";
 import { BevyStyle } from "bevy-react/jsx";
 import { Button, Example } from "@/components";
-import { Code, InlineCode, P } from "@/components/docs";
+import { Code } from "@/components/docs";
 import { Colors } from "@/theme";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
 
@@ -32,21 +33,21 @@ const PAGE: ExplanationData = {
   title: "<root>",
   info: (
     <>
-      <P>
+      <Paragraph>
         <InlineCode>{"<root>"}</InlineCode> is a detached, screen-space
         top-level tree — the on-screen twin of{" "}
         <InlineCode>{"<surface>"}</InlineCode>. Wherever it sits in your
         component tree, its children render as a window-filling layer floating
         above the whole app (top of the global stack by default) — the natural
         home for modals, toasts, and other overlays.
-      </P>
+      </Paragraph>
       <Code lang="tsx">{ROOT_TSX}</Code>
-      <P>
+      <Paragraph>
         Since the root fills the window, backdrop styling (dim, centering) goes
         straight on it. Its <InlineCode>name</InlineCode> labels the root in the
         devtools root selector (F12): open the modal below and a root named
         "modal" appears there.
-      </P>
+      </Paragraph>
     </>
   ),
 };
@@ -58,13 +59,13 @@ export function RootDemo() {
       title="Detached modals"
       info={
         <>
-          <P>
+          <Paragraph>
             The dialog is declared inside this small card, but renders
             window-filling and above everything — the left nav, the cards, all
             of it. Mounting and unmounting the{" "}
             <InlineCode>{"<root>"}</InlineCode> with plain conditional rendering
             is the whole open/close mechanism.
-          </P>
+          </Paragraph>
           <Code lang="tsx">{ROOT_TSX}</Code>
         </>
       }

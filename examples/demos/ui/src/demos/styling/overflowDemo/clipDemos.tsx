@@ -1,9 +1,15 @@
 import { useState } from "react";
+import { Caption, InlineCode, Paragraph } from "@/components/typography";
 import { BevyStyle } from "bevy-react/jsx";
-import { Example, Radio, RadioOption } from "@/components";
-import { Code, InlineCode, P } from "@/components/docs";
+import {
+  ControlColumn,
+  Example,
+  Radio,
+  RadioOption,
+  Stage,
+} from "@/components";
+import { Code } from "@/components/docs";
 import { Colors, FontSizes } from "@/theme";
-import { caption, controlColumn } from "../shared";
 
 type OverflowValue = "visible" | "clip" | "hidden" | "scroll";
 
@@ -20,14 +26,14 @@ export function OverflowModesDemo() {
       title="Clipping axes"
       info={
         <>
-          <P>
+          <Paragraph>
             <InlineCode>overflowX</InlineCode>/
             <InlineCode>overflowY</InlineCode> decide what happens to a child
             that is bigger than its box: <InlineCode>visible</InlineCode> spills
             out, <InlineCode>clip</InlineCode> and{" "}
             <InlineCode>hidden</InlineCode> cut it off, and{" "}
             <InlineCode>scroll</InlineCode> clips it and adds a wheel scrollbar.
-          </P>
+          </Paragraph>
           <Code lang="tsx">{`const [value, setValue] = useState<OverflowValue>("clip");
 
 <node
@@ -49,8 +55,8 @@ export function OverflowModesDemo() {
 function OverflowModesCard() {
   const [value, setValue] = useState<OverflowValue>("clip");
   return (
-    <node style={controlColumn}>
-      <node
+    <ControlColumn>
+      <Stage
         style={{
           ...boxStyle,
           overflowX: value,
@@ -64,9 +70,9 @@ function OverflowModesCard() {
             overflow value to watch it spill out, get clipped, or scroll.
           </text>
         </node>
-      </node>
+      </Stage>
       <Radio value={value} options={OPTIONS} onChange={setValue} />
-    </node>
+    </ControlColumn>
   );
 }
 
@@ -81,14 +87,14 @@ export function ClipVsHiddenDemo() {
       title="Clip vs hidden"
       info={
         <>
-          <P>
+          <Paragraph>
             <InlineCode>clip</InlineCode> and <InlineCode>hidden</InlineCode>{" "}
             clip the same pixels — the difference is layout. As a flex item, a
             clip box keeps its content width as a minimum (so it overflows the
             row), while a hidden box may shrink to 0 and let the row compress
             it. Both boxes hold the same 220px-wide child and sit in the same
             300px row next to a fixed sibling.
-          </P>
+          </Paragraph>
           <Code lang="tsx">{`// The same 300px flex row, twice — only the subject's
 // overflow value differs.
 
@@ -120,8 +126,8 @@ function ClipVsHiddenCard() {
 function SqueezeRow({ mode }: { mode: "clip" | "hidden" }) {
   return (
     <node style={{ flexDirection: "column", gap: 6 }}>
-      <text style={caption}>{`overflowX: ${mode}`}</text>
-      <node style={squeezeContainer}>
+      <Caption>{`overflowX: ${mode}`}</Caption>
+      <Stage style={squeezeContainer}>
         <node style={{ ...subjectStyle, overflowX: mode }}>
           <node style={wideChildStyle}>
             <text
@@ -136,7 +142,7 @@ function SqueezeRow({ mode }: { mode: "clip" | "hidden" }) {
             sibling
           </text>
         </node>
-      </node>
+      </Stage>
     </node>
   );
 }
@@ -144,9 +150,6 @@ function SqueezeRow({ mode }: { mode: "clip" | "hidden" }) {
 const boxStyle: BevyStyle = {
   width: 220,
   height: 140,
-  padding: 12,
-  backgroundColor: Colors.surface100,
-  borderRadius: 12,
 };
 
 const oversizedStyle: BevyStyle = {
@@ -164,10 +167,7 @@ const squeezeContainer: BevyStyle = {
   alignItems: "center",
   gap: 8,
   width: 300,
-  padding: 8,
   overflowX: "clip",
-  backgroundColor: Colors.surface100,
-  borderRadius: 10,
 };
 
 // Flexible subject: no fixed width, so flexbox sizes it — and the overflow value

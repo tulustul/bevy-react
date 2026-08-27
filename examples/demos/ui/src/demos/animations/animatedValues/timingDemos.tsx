@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { InlineCode, Paragraph } from "@/components/typography";
 import {
   EasingName,
   useSharedValue,
@@ -8,9 +9,8 @@ import {
   interpolateColor,
 } from "bevy-react";
 import { BevyStyle } from "bevy-react/jsx";
-import { Button, Example, Slider } from "@/components";
-import { Code, InlineCode, P } from "@/components/docs";
-import { column } from "../shared";
+import { Button, Column, Example, Slider, Stage } from "@/components";
+import { Code } from "@/components/docs";
 import { Colors, FontSizes } from "@/theme";
 
 // The withTiming-driven cards: an endless opacity ping-pong, the four easing
@@ -32,14 +32,14 @@ export function FadeDemo() {
       title="Fades"
       info={
         <>
-          <P>
+          <Paragraph>
             A shared value drives the style's {"{ animated }"} binding
             imperatively: <InlineCode>withTiming</InlineCode> eases opacity to
             0, and <InlineCode>withRepeat</InlineCode> with{" "}
             <InlineCode>{"{ reverse: true }"}</InlineCode> loops it forever,
             ping-ponging back to 1. The animation runs on the Bevy side — React
             renders once and never re-renders per frame.
-          </P>
+          </Paragraph>
           <Code lang="tsx">{FADE_TSX}</Code>
         </>
       }
@@ -104,14 +104,14 @@ export function EasingDemo() {
       title="Easing"
       info={
         <>
-          <P>
+          <Paragraph>
             The four <InlineCode>withTiming</InlineCode> easing curves (
             <InlineCode>linear</InlineCode>, <InlineCode>easeIn</InlineCode>,{" "}
             <InlineCode>easeOut</InlineCode>, <InlineCode>easeInOut</InlineCode>
             ) raced side by side over the same distance and duration, so their
             acceleration profiles are easy to compare. Press Race to restart the
             race; the slider changes the shared duration.
-          </P>
+          </Paragraph>
           <Code lang="tsx">{EASING_TSX}</Code>
         </>
       }
@@ -125,7 +125,7 @@ function EasingCard() {
   const [play, setPlay] = useState(0);
 
   return (
-    <node style={column}>
+    <Column style={{ gap: 16 }}>
       <node style={{ flexDirection: "column", gap: 8 }}>
         {LANES.map((lane) => (
           <Lane key={lane.name} {...lane} duration={duration} play={play} />
@@ -136,10 +136,11 @@ function EasingCard() {
         min={200}
         max={2000}
         onChange={setDuration}
-        label={`duration ${duration.toFixed(0)}ms`}
+        name="duration"
+        unit="ms"
       />
       <Button onClick={() => setPlay((n) => n + 1)}>Race</Button>
-    </node>
+    </Column>
   );
 }
 
@@ -167,7 +168,7 @@ function Lane({ name, easing, color, duration, play }: LaneProps) {
   return (
     <node style={lane}>
       <text style={laneLabel}>{name}</text>
-      <node style={track}>
+      <Stage style={track}>
         <node
           style={{
             ...dot,
@@ -175,7 +176,7 @@ function Lane({ name, easing, color, duration, play }: LaneProps) {
             transform: { translateX: { animated: x } },
           }}
         />
-      </node>
+      </Stage>
     </node>
   );
 }
@@ -198,7 +199,8 @@ const track: BevyStyle = {
   alignItems: "center",
   width: TRAVEL + DOT,
   height: DOT + 6,
-  backgroundColor: Colors.surface100,
+  // the track is only as tall as the dot
+  padding: 0,
   borderRadius: 6,
 };
 
@@ -235,7 +237,7 @@ export function LayoutColorDemo() {
       title="Layout and color"
       info={
         <>
-          <P>
+          <Paragraph>
             A single shared value (<InlineCode>withRepeat</InlineCode> +{" "}
             <InlineCode>withTiming</InlineCode>, ping-pong) drives layout —
             width/height, which re-flow the surrounding row — and borderColor
@@ -244,7 +246,7 @@ export function LayoutColorDemo() {
             value is animatable, not just transform and opacity; width/height
             write the Node only when they change, so layout isn't thrashed once
             the value settles.
-          </P>
+          </Paragraph>
           <Code lang="tsx">{LAYOUT_TSX}</Code>
         </>
       }

@@ -1,5 +1,6 @@
 import { BevyStyle } from "bevy-react/jsx";
-import { Button, TextMono } from "@/components";
+import { CardTitle, TextMono } from "@/components/typography";
+import { Button } from "@/components";
 import { Colors, FontSizes } from "@/theme";
 import { useEffect, useState } from "react";
 
@@ -17,7 +18,7 @@ export function AboutDialog({ onClose }: { onClose: () => void }) {
     <node style={{ ...scrim, transform: { scale: firstRender ? 0 : 1 } }}>
       <node style={panel}>
         <node style={titleBar}>
-          <text style={titleText}>About</text>
+          <CardTitle>About</CardTitle>
           <Button hoverStyle={closeButtonHover} onClick={onClose}>
             ×
           </Button>
@@ -64,12 +65,6 @@ const titleBar: BevyStyle = {
   padding: { top: 10, bottom: 10, left: 16, right: 10 },
   backgroundColor: Colors.primary300,
   borderRadius: { top: 10, right: 10, bottom: 0, left: 0 },
-};
-
-const titleText: BevyStyle = {
-  color: Colors.textColor100,
-  fontSize: FontSizes.base,
-  fontWeight: "bold",
 };
 
 const closeButtonHover: BevyStyle = { backgroundColor: Colors.red300 };

@@ -1,11 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { BevyStyle, PointerEventData } from "bevy-react/jsx";
 import { bevy } from "@/bevy";
-import { Button, HeaderText, SecondaryButton } from "@/components";
-import { InfoBody } from "@/components/docs";
+import { Button, CardHeader, CircularButton, CloseIcon } from "@/components";
 import { Colors, FontSizes, Gradients, Scrollbar } from "@/theme";
 import { useExplanationStore } from "./explanationStore";
-import { useLayout } from "./layoutMode";
+import { useIsMobile, useWindowSize } from "./hooks";
 
 /** Regular-shell panel width; the compact shell uses the full width minus margins. */
 const MODAL_W = 560;
@@ -32,8 +31,10 @@ export function ExampleModal() {
   const deselect = useExplanationStore((s) => s.deselect);
   const open = selected !== null;
 
-  const { win, mode } = useLayout();
-  const modalW = mode === "compact" ? win.width - 2 : MODAL_W;
+  const window = useWindowSize();
+  const isMobile = useIsMobile();
+
+  const modalW = isMobile ? window.width - 2 : MODAL_W;
   // null = "not dragged yet": follow the centered default position.
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
   const lastClient = useRef({ x: 0, y: 0 });
@@ -54,13 +55,13 @@ export function ExampleModal() {
   }, [open, deselect]);
 
   const clampPos = (p: { left: number; top: number }) => ({
-    left: clamp(p.left, 0, Math.max(0, win.width - modalW)),
-    top: clamp(p.top, 0, Math.max(0, win.height - TITLE_REACH)),
+    left: clamp(p.left, 0, Math.max(0, window.width - modalW)),
+    top: clamp(p.top, 0, Math.max(0, window.height - TITLE_REACH)),
   });
 
   const defaultPos = clampPos({
-    left: (win.width - modalW) / 2,
-    top: win.height * 0.1,
+    left: (window.width - modalW) / 2,
+    top: window.height * 0.1,
   });
 
   // A dragged position is clamped at drag time only; a resize or breakpoint
@@ -73,7 +74,7 @@ export function ExampleModal() {
       return next.left === prev.left && next.top === prev.top ? prev : next;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- clampPos closes over exactly these
-  }, [win.width, win.height, modalW]);
+  }, [window.width, window.height, modalW]);
   const p = pos ?? defaultPos;
 
   const onPointerDown = (e: PointerEventData) => {
@@ -107,19 +108,17 @@ export function ExampleModal() {
             onPointerDown={onPointerDown}
             onPointerMove={onPointerMove}
           >
-            <node style={titleBarStyle}>
-              <HeaderText style={titleStyle}>{selected.title}</HeaderText>
-              <SecondaryButton
-                pinch={{ radius: 0.7 }}
-                style={closeXStyle}
-                labelStyle={{ fontSize: FontSizes.lg }}
-                onClick={() => deselect()}
-              >
-                ×
-              </SecondaryButton>
-            </node>
+            <CardHeader
+              title={selected.title}
+              style={titleBarStyle}
+              action={
+                <CircularButton size={28} onClick={() => deselect()}>
+                  <CloseIcon size={16} />
+                </CircularButton>
+              }
+            />
             <node style={bodyStyle} scrollStep={60}>
-              <InfoBody data={selected} />
+              {selected.info}
               {selected.demo !== undefined && (
                 // The demo wrap mirrors the card's `cache` style: a live-content
                 // demo (portal) must force every-frame capture dirt through the
@@ -192,28 +191,10 @@ const panelStyle: BevyStyle = {
 };
 
 const titleBarStyle: BevyStyle = {
-  flexDirection: "row",
   alignItems: "center",
-  justifyContent: "spaceBetween",
   padding: { top: 8, bottom: 8, left: 16, right: 8 },
   border: { bottom: 1 },
   borderColor: Colors.surface400,
-};
-
-const titleStyle: BevyStyle = {
-  fontSize: FontSizes.xl,
-  fontWeight: "semibold",
-  color: Colors.textColor100,
-};
-
-// A circle: fixed square box (padding off), radius = half. The base style's
-// centering places the × glyph.
-const closeXStyle: BevyStyle = {
-  minWidth: 28,
-  width: 28,
-  height: 28,
-  padding: 0,
-  borderRadius: 14,
 };
 
 const closeButtonStyle: BevyStyle = {

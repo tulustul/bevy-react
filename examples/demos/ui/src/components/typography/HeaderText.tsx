@@ -5,6 +5,9 @@ type Props = PropsWithChildren & {
   style?: BevyStyle;
 };
 
+/** The gallery's display treatment: a warm gradient recolour with a dark
+ *  outline, over a soft drop shadow. For titles, not body text — it promotes
+ *  the node to a composited layer. */
 export function HeaderText({ children, style }: Props) {
   return (
     <node

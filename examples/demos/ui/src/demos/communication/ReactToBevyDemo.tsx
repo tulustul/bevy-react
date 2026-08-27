@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
+import { InlineCode, Paragraph } from "@/components/typography";
 import { bevy } from "@/bevy";
 import { Button, Example } from "@/components";
-import { CodeTabs, InlineCode, P } from "@/components/docs";
+import { CodeTabs } from "@/components/docs";
 import { BevyStyle } from "bevy-react/jsx";
 import { Colors, FontSizes } from "@/theme";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
@@ -38,7 +39,7 @@ const PAGE: ExplanationData = {
   startCollapsed: true,
   info: (
     <>
-      <P>
+      <Paragraph>
         React notifies Bevy with typed messages: a struct tagged{" "}
         <InlineCode>#[react_message]</InlineCode> gets a generated wrapper —
         here <InlineCode>bevy.basicDemo.setCount(n)</InlineCode> — whose payload
@@ -46,14 +47,14 @@ const PAGE: ExplanationData = {
         deserializes into <InlineCode>SetCount</InlineCode> and is triggered for
         every observer registered with{" "}
         <InlineCode>add_react_handler</InlineCode>.
-      </P>
+      </Paragraph>
       <CodeTabs tsx={MESSAGE_TSX} rust={MESSAGE_RUST} />
-      <P>
+      <Paragraph>
         Here the observer writes the count into a resource and the Cubes scene
         rebuilds to that many cubes. There is no reply on this channel — for
         React pulling data back out of Bevy, see the request/response channel on
         the Bevy {"<->"} React page.
-      </P>
+      </Paragraph>
     </>
   ),
 };
@@ -69,14 +70,14 @@ function CubeCounterExample() {
       title="Cube counter"
       info={
         <>
-          <P>
+          <Paragraph>
             The buttons drive plain React state, and a{" "}
             <InlineCode>useEffect</InlineCode> emits{" "}
             <InlineCode>bevy.basicDemo.setCount(count)</InlineCode> on every
             change. The Bevy observer clamps the value and updates the{" "}
             <InlineCode>DesiredCubes</InlineCode> resource — watch the 3D scene
             respawn the row of cubes to match.
-          </P>
+          </Paragraph>
           <CodeTabs tsx={MESSAGE_TSX} rust={MESSAGE_RUST} />
         </>
       }

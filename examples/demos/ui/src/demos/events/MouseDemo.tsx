@@ -1,7 +1,14 @@
 import { useRef, useState } from "react";
+import {
+  BoxLabel,
+  InlineCode,
+  ListItem,
+  Paragraph,
+  List,
+} from "@/components/typography";
 import { BevyStyle, PointerEventData, WheelEventData } from "bevy-react/jsx";
-import { DemoRow, Example } from "@/components";
-import { Code, InlineCode, P, Ul, Li } from "@/components/docs";
+import { DemoRow, Example, Stage } from "@/components";
+import { Code } from "@/components/docs";
 import { Colors, FontSizes } from "@/theme";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
 
@@ -18,7 +25,7 @@ const PAGE: ExplanationData = {
   title: "Mouse",
   info: (
     <>
-      <P>
+      <Paragraph>
         The raw pointer events the bridge reports:{" "}
         <InlineCode>onClick</InlineCode> (left-button only, fired on release
         over the pressed node), <InlineCode>onPointerDown</InlineCode> /{" "}
@@ -28,7 +35,7 @@ const PAGE: ExplanationData = {
         <InlineCode>onPointerEnter</InlineCode> /{" "}
         <InlineCode>onPointerLeave</InlineCode>, and{" "}
         <InlineCode>onWheel</InlineCode> for raw wheel deltas.
-      </P>
+      </Paragraph>
       <Code lang="tsx">{`<node
   onClick={(e) => select(e)}
   onPointerDown={(e) => startDrag(e.clientX, e.clientY)}
@@ -38,13 +45,15 @@ const PAGE: ExplanationData = {
   onPointerLeave={() => setHovered(false)}
   onWheel={(e) => zoomBy(e.deltaY)}
 />`}</Code>
-      <Ul>
-        <Li>
+      <List>
+        <ListItem>
           Pointer events carry both normalized x / y (clamped to the node) and
           absolute clientX / clientY window coordinates.
-        </Li>
-        <Li>No Bevy scene on this page: the 3D viewport stays empty.</Li>
-      </Ul>
+        </ListItem>
+        <ListItem>
+          No Bevy scene on this page: the 3D viewport stays empty.
+        </ListItem>
+      </List>
     </>
   ),
 };
@@ -90,14 +99,14 @@ function DragDemo() {
       title="Dragging"
       info={
         <>
-          <P>
+          <Paragraph>
             Raw pointer events the bridge reports. Grab the box and drag it
             around the stage — dragging uses the absolute{" "}
             <InlineCode>clientX</InlineCode> / <InlineCode>clientY</InlineCode>{" "}
             deltas (the normalized <InlineCode>x</InlineCode> /{" "}
             <InlineCode>y</InlineCode> are clamped to the box and can't drive
             free movement); the log shows each event with its DOM button number.
-          </P>
+          </Paragraph>
           <Code lang="tsx">{DRAG_TSX}</Code>
         </>
       }
@@ -156,7 +165,7 @@ function DragCard() {
 
   return (
     <>
-      <node style={stageStyle}>
+      <Stage style={stageStyle}>
         <node
           style={{
             ...boxStyle,
@@ -171,9 +180,11 @@ function DragCard() {
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
         >
-          <text style={boxLabelStyle}>drag</text>
+          <BoxLabel style={{ fontSize: FontSizes.sm, textAlign: "center" }}>
+            drag
+          </BoxLabel>
         </node>
-      </node>
+      </Stage>
 
       <text
         style={{
@@ -202,12 +213,12 @@ function HoverDemo() {
       title="Hovering"
       info={
         <>
-          <P>
+          <Paragraph>
             Hover boundary events: <InlineCode>onPointerEnter</InlineCode> /{" "}
             <InlineCode>onPointerLeave</InlineCode> fire once per crossing. Move
             the cursor on and off the left box to drive the right one's
             transition.
-          </P>
+          </Paragraph>
           <Code lang="tsx">{`<node
   onPointerEnter={() => setHovering(true)}
   onPointerLeave={() => setHovering(false)}
@@ -229,7 +240,9 @@ function HoverCard() {
         onPointerEnter={() => setHovering(true)}
         onPointerLeave={() => setHovering(false)}
       >
-        <text style={boxLabelStyle}>Hover me</text>
+        <BoxLabel style={{ fontSize: FontSizes.sm, textAlign: "center" }}>
+          Hover me
+        </BoxLabel>
       </node>
       <node
         style={{
@@ -241,9 +254,9 @@ function HoverCard() {
           transition: { transform: { duration: 300, easing: "easeInOut" } },
         }}
       >
-        <text style={boxLabelStyle}>
+        <BoxLabel style={{ fontSize: FontSizes.sm, textAlign: "center" }}>
           {hovering ? "hovered" : "not hovered"}
-        </text>
+        </BoxLabel>
       </node>
     </node>
   );
@@ -266,14 +279,14 @@ function WheelDemo() {
       title="Wheel scrolling"
       info={
         <>
-          <P>
+          <Paragraph>
             <InlineCode>onWheel</InlineCode> hands any node the raw wheel deltas
             — no <InlineCode>overflow: scroll</InlineCode> needed. Line-unit
             notches (a mouse wheel) and pixel-unit trackpad deltas are scaled
             differently. Scroll the wheel over the box to zoom it; handling the
             wheel also traps it from world systems, so a zoomable surface can
             coexist with an orbit camera behind the UI.
-          </P>
+          </Paragraph>
           <Code lang="tsx">{WHEEL_TSX}</Code>
         </>
       }
@@ -314,8 +327,12 @@ function WheelCard() {
         }}
         onWheel={onWheel}
       >
-        <text style={boxLabelStyle}>Scroll me</text>
-        <text style={boxLabelStyle}>{`${zoom.toFixed(2)}×`}</text>
+        <BoxLabel style={{ fontSize: FontSizes.sm, textAlign: "center" }}>
+          Scroll me
+        </BoxLabel>
+        <BoxLabel
+          style={{ fontSize: FontSizes.sm, textAlign: "center" }}
+        >{`${zoom.toFixed(2)}×`}</BoxLabel>
       </node>
     </node>
   );
@@ -325,12 +342,12 @@ const stageStyle: BevyStyle = {
   width: STAGE_W,
   height: STAGE_H,
   positionType: "relative",
-  backgroundColor: Colors.surface100,
-  borderRadius: 12,
   border: 1,
   borderColor: Colors.surface400,
   overflowX: "hidden",
   overflowY: "hidden",
+  // absolutely-positioned subjects measure from the box edge
+  padding: 0,
 };
 
 const boxStyle: BevyStyle = {
@@ -340,13 +357,6 @@ const boxStyle: BevyStyle = {
   justifyContent: "center",
   alignItems: "center",
   backgroundColor: Colors.amber100,
-};
-
-const boxLabelStyle: BevyStyle = {
-  color: Colors.textColor400,
-  fontSize: FontSizes.sm,
-  fontWeight: "bold",
-  textAlign: "center",
 };
 
 const logStyle: BevyStyle = {

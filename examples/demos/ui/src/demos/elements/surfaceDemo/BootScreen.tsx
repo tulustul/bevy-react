@@ -1,5 +1,6 @@
 import { BevyStyle } from "bevy-react/jsx";
-import { TextMono, Typewriter } from "@/components";
+import { TextMono } from "@/components/typography";
+import { Typewriter } from "@/components";
 import { Colors, FontSizes } from "@/theme";
 import type { Phase } from "./MonitorApp";
 import { useEffect, useState } from "react";

@@ -1,14 +1,13 @@
 import { memo, useEffect, useRef, useState } from "react";
 import { BevyStyle, BevyTransition } from "bevy-react/jsx";
 import { Colors, FontSizes, Gradients, Scrollbar } from "@/theme";
-import { Button, CloseIcon, IconButton, Pinchable } from "@/components";
-import { NAV_WIDTH } from "./layoutMode";
+import { Button, CircularButton, CloseIcon } from "@/components";
+import { Title } from "./Title";
 import { DEMOS, type DemoItem } from "./demos";
 import { useDemosStore } from "./demosStore";
+import { useIsMobile } from "./hooks";
 
 type NavigationProps = {
-  /** Compact shell: the nav is an overlay drawer driven by `open`. */
-  compact: boolean;
   open: boolean;
   onClose: () => void;
 };
@@ -21,35 +20,35 @@ type NavigationProps = {
  * drawer slides out over it).
  */
 export const Navigation = memo(function Navigation({
-  compact,
   open,
   onClose,
 }: NavigationProps) {
   const { selectedDemo, setSelectedDemo } = useDemosStore();
   const entered = useSlideIn();
-  const shown = compact ? open : entered;
+  const isMobile = useIsMobile();
+  const shown = isMobile ? open : entered;
 
   // A breakpoint crossing (desktop resize, phone rotation) swaps the nav
   // between the row flow and the overlay: the commit that swaps must SNAP
   // the transform — easing it would leave an empty nav-wide strip (→ regular)
-  // or a slide-out over already full-width content (→ compact).
-  const prevCompact = useRef(compact);
-  const crossing = prevCompact.current !== compact;
+  // or a slide-out over already full-width content (→ isMobile).
+  const prevIsMobile = useRef(isMobile);
+  const crossing = prevIsMobile.current !== isMobile;
   useEffect(() => {
-    prevCompact.current = compact;
-  }, [compact]);
+    prevIsMobile.current = isMobile;
+  }, [isMobile]);
 
   const select = (demo: DemoItem) => {
     setSelectedDemo(demo);
-    if (compact) onClose();
+    if (isMobile) onClose();
   };
 
   // `opacity` only in regular mode: its presence promotes the subtree to a
   // layer, and a closed (off-screen) drawer would keep re-capturing on every
-  // Title morph / hover for nothing.
+  // hover for nothing.
   const transition: BevyTransition = crossing
     ? {}
-    : compact
+    : isMobile
       ? { transform: { duration: DRAWER_MS, easing: "easeOut" } }
       : {
           opacity: { duration: 800, easing: "easeOut" },
@@ -60,18 +59,20 @@ export const Navigation = memo(function Navigation({
     <node
       style={{
         ...navStyle,
-        ...(compact ? drawerStyle : { opacity: entered ? 1 : 0 }),
+        ...(isMobile ? drawerStyle : { opacity: entered ? 1 : 0 }),
         transform: { translateX: shown ? 0 : -NAV_SLIDE_PX },
         transition,
       }}
     >
-      {compact && (
-        <IconButton size={32} style={closeStyle} onClick={onClose}>
-          <CloseIcon size={20} />
-        </IconButton>
+      {isMobile && (
+        <node style={closeStyle}>
+          <CircularButton size={32} onClick={onClose}>
+            <CloseIcon size={18} />
+          </CircularButton>
+        </node>
       )}
       <image src="bevy-react-logo.png" style={{ width: 150 }} />
-      <Title />
+      {!isMobile && <Title style={{ margin: { bottom: 12 } }} />}
       <node style={itemsStyle} scrollStep={40}>
         {DEMOS.map((demo, index) => (
           <Item
@@ -101,72 +102,10 @@ function useSlideIn() {
 
 // How far left the sidebar starts — its own width plus enough slack to carry
 // the drop shadow off-screen with it.
+const NAV_WIDTH = 220;
 const NAV_SLIDE_PX = NAV_WIDTH + 40;
 // Drawer open/close slide (compact shell); the 800ms is the desktop entrance.
 const DRAWER_MS = 250;
-
-const title = "bevy-react";
-const titleDelay = 7000;
-
-// The library title dusts away from time to time — or on click — and blows
-// back in. The
-// text stays mounted (opacity toggle) so the wrapper keeps its layout size —
-// a morph snapshot is layout-anchored, and a collapsing wrapper would
-// stretch the frozen image; the key flip freezes the old appearance and
-// dustify blends it with the (now invisible / visible) live content.
-function Title() {
-  const [text, setText] = useState(title);
-  const toggle = () => setText(text === title ? "Demos" : title);
-
-  // The ambient flip; a click-triggered toggle re-arms it (effect deps on
-  // `text`), so the next automatic morph is always a full delay away.
-  useEffect(() => {
-    const delay = titleDelay + Math.random() * titleDelay;
-    const id = setTimeout(toggle, delay);
-    return () => clearTimeout(id);
-    // Deliberately keyed on `text` only: `toggle` is recreated every render,
-    // and listing it would re-arm the timer on unrelated re-renders.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [text]);
-
-  return (
-    <Pinchable
-      style={{ width: "100%" }}
-      params={{ strength: 0.28, radius: 0.48 }}
-      filters={[
-        {
-          name: "gradientMap",
-          params: {
-            stops: [{ color: "#caf9afff" }, { color: "#c72e00ff" }],
-          },
-        },
-      ]}
-    >
-      <node
-        onClick={toggle}
-        style={{
-          cursor: "pointer",
-          morphFilter: {
-            key: text,
-            name: "dustify",
-            params: {
-              direction: 0,
-              softness: 180,
-              turbulence: 0.6,
-              wind: 0,
-              drift: 30,
-              grain: 4,
-            },
-          },
-          transition: { morphFilter: { duration: 2000, easing: "linear" } },
-          width: "100%",
-        }}
-      >
-        <text style={{ ...titleStyle }}>{text}</text>
-      </node>
-    </Pinchable>
-  );
-}
 
 type ItemProps = {
   item: DemoItem;
@@ -335,16 +274,6 @@ const itemsStyle: BevyStyle = {
   scrollbar: Scrollbar,
   transition: { scroll: { duration: 200, easing: "easeOut" } },
   padding: { right: 10 },
-};
-
-const titleStyle: BevyStyle = {
-  fontFamily: "MetalMania",
-  color: Colors.primary100,
-  fontSize: 40,
-  fontWeight: "bold",
-  margin: { top: 0, right: 0, bottom: 12, left: 0 },
-  width: "100%",
-  textAlign: "center",
 };
 
 const navButtonStyle: BevyStyle = {

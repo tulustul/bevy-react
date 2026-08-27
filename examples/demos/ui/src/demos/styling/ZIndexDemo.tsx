@@ -1,29 +1,42 @@
 import { useState } from "react";
+import {
+  Bold,
+  BoxLabel,
+  Caption,
+  InlineCode,
+  Paragraph,
+} from "@/components/typography";
 import { BevyStyle } from "bevy-react/jsx";
-import { DemoRow, Example, Radio, RadioOption } from "@/components";
-import { B, Code, InlineCode, P } from "@/components/docs";
+import {
+  ControlColumn,
+  DemoRow,
+  Example,
+  Radio,
+  RadioOption,
+  Stage,
+} from "@/components";
+import { Code } from "@/components/docs";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
-import { Colors, FontSizes } from "@/theme";
-import { caption, controlColumn } from "./shared";
+import { Colors } from "@/theme";
 
 const PAGE: ExplanationData = {
   title: "Z-index",
   info: (
     <>
-      <P>
+      <Paragraph>
         <InlineCode>zIndex</InlineCode> reorders a node among its{" "}
-        <B>siblings</B> — it is local to the parent's stacking context, so a
-        nested node can never out-stack an unrelated subtree with it.
-      </P>
+        <Bold>siblings</Bold> — it is local to the parent's stacking context, so
+        a nested node can never out-stack an unrelated subtree with it.
+      </Paragraph>
       <Code lang="tsx">{`<node style={{ zIndex: 2 }} />
 
 // escape the local stacking context entirely:
 <node style={{ globalZIndex: 99 }} />`}</Code>
-      <P>
+      <Paragraph>
         <InlineCode>globalZIndex</InlineCode> instead lifts the node into the
         UI's top-level stack — the tool for popovers and overlays that must
         render in front of everything.
-      </P>
+      </Paragraph>
     </>
   ),
 };
@@ -52,11 +65,11 @@ function LocalZIndexDemo() {
       title="Local stacking order"
       info={
         <>
-          <P>
+          <Paragraph>
             <InlineCode>zIndex</InlineCode> reorders a node among its{" "}
-            <B>siblings</B>. Both chips share one parent, so it decides which is
-            painted on top.
-          </P>
+            <Bold>siblings</Bold>. Both chips share one parent, so it decides
+            which is painted on top.
+          </Paragraph>
           <Code lang="tsx">{`<node style={{ zIndex: front === "blue" ? 2 : 1 }} />
 <node style={{ zIndex: front === "red" ? 2 : 1 }} />`}</Code>
         </>
@@ -69,8 +82,8 @@ function LocalZIndexDemo() {
 function LocalZIndexCard() {
   const [front, setFront] = useState<Front>("red");
   return (
-    <node style={controlColumn}>
-      <node style={overlapStage}>
+    <ControlColumn>
+      <Stage style={overlapStage}>
         <node
           style={{
             ...chip,
@@ -89,9 +102,9 @@ function LocalZIndexCard() {
             zIndex: front === "red" ? 2 : 1,
           }}
         />
-      </node>
+      </Stage>
       <Radio options={FRONT_OPTIONS} value={front} onChange={setFront} />
-    </node>
+    </ControlColumn>
   );
 }
 
@@ -116,12 +129,12 @@ function GlobalZIndexDemo() {
       title="Global stacking order"
       info={
         <>
-          <P>
+          <Paragraph>
             A popover nested in the back card overhangs the front card.{" "}
             <InlineCode>zIndex</InlineCode> only sorts it within its own card,
             so it stays buried — <InlineCode>globalZIndex</InlineCode> lifts it
             into the UI's top-level stack and out in front.
-          </P>
+          </Paragraph>
           <Code lang="tsx">{`<node style={{ /* back card */ }}>
   <node style={{ globalZIndex: 99 }}>popover</node>
 </node>
@@ -142,23 +155,23 @@ function GlobalZIndexCard() {
         ? { globalZIndex: 99 }
         : {};
   return (
-    <node style={controlColumn}>
-      <node style={cardRow}>
+    <ControlColumn>
+      <Stage style={cardRow}>
         {/* Back card (painted first) — owns the overhanging popover. */}
         <node style={{ ...card, backgroundColor: Colors.primary100 }}>
-          <text style={cardLabel}>back</text>
+          <BoxLabel>back</BoxLabel>
           <node style={{ ...popover, ...popoverZ }}>
-            <text style={popoverLabel}>popover</text>
+            <BoxLabel>popover</BoxLabel>
           </node>
         </node>
         {/* Front card (painted second) — covers anything below it in the stack. */}
         <node style={{ ...card, backgroundColor: Colors.red100 }}>
-          <text style={cardLabel}>front</text>
+          <BoxLabel>front</BoxLabel>
         </node>
-      </node>
+      </Stage>
       <Radio options={MODE_OPTIONS} value={mode} onChange={setMode} />
-      <text style={caption}>{HINTS[mode]}</text>
-    </node>
+      <Caption>{HINTS[mode]}</Caption>
+    </ControlColumn>
   );
 }
 
@@ -166,9 +179,6 @@ const overlapStage: BevyStyle = {
   positionType: "relative",
   width: 150,
   height: 96,
-  padding: 12,
-  backgroundColor: Colors.surface100,
-  borderRadius: 12,
 };
 
 const chip: BevyStyle = {
@@ -182,9 +192,6 @@ const cardRow: BevyStyle = {
   flexDirection: "row",
   overflowX: "visible",
   overflowY: "visible",
-  padding: 14,
-  backgroundColor: Colors.surface100,
-  borderRadius: 12,
 };
 
 const card: BevyStyle = {
@@ -197,12 +204,6 @@ const card: BevyStyle = {
   padding: 8,
 };
 
-const cardLabel: BevyStyle = {
-  color: Colors.textColor400,
-  fontSize: FontSizes.xs,
-  fontWeight: "bold",
-};
-
 const popover: BevyStyle = {
   positionType: "absolute",
   left: 70,
@@ -213,10 +214,4 @@ const popover: BevyStyle = {
   backgroundColor: Colors.amber100,
   alignItems: "center",
   justifyContent: "center",
-};
-
-const popoverLabel: BevyStyle = {
-  color: Colors.textColor400,
-  fontSize: FontSizes.xs,
-  fontWeight: "bold",
 };

@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
+import { InlineCode, Paragraph } from "@/components/typography";
 import { BevyStyle } from "bevy-react/jsx";
 import { bevy } from "@/bevy";
 import { Button, Checkbox, DemoRow, Example } from "@/components";
-import { CodeTabs, InlineCode, P } from "@/components/docs";
+import { CodeTabs } from "@/components/docs";
 import { Colors } from "@/theme";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
 
@@ -15,13 +16,13 @@ const PAGE: ExplanationData = {
   title: "<portal>",
   info: (
     <>
-      <P>
+      <Paragraph>
         <InlineCode>{"<portal>"}</InlineCode> is a UI rectangle showing an
         offscreen Bevy render target (render-to-texture): the Rust side creates
         named targets and points cameras at them, and{" "}
         <InlineCode>{'<portal target="…">'}</InlineCode> displays one like any
         other node — sized, styled and stacked by the normal layout rules.
-      </P>
+      </Paragraph>
       <CodeTabs
         tsx={`<portal target="minimap" style={{ width: 160, height: 160 }} />`}
         rust={`let minimap = render_targets.create(
@@ -36,14 +37,14 @@ commands.spawn((
     PortalCamera("minimap".into()),
 ));`}
       />
-      <P>
+      <Paragraph>
         This page's CrowdedCubes scene drives two targets: a 3D chase cam
         ("follow"), switchable between continuous rendering and a frozen
         snapshot, and a 2D minimap. One caching note: a live portal writes
         pixels outside the layer dirt tracking's sight, so a card containing one
         opts its composited layer out with{" "}
         <InlineCode>cache: "never"</InlineCode>.
-      </P>
+      </Paragraph>
     </>
   ),
 };
@@ -65,14 +66,14 @@ function FollowCamDemo() {
       style={{ cache: "never" }}
       info={
         <>
-          <P>
+          <Paragraph>
             A 3D chase camera renders the tracked cube into the "follow" target.
             The checkbox switches the target between continuous rendering and a
             frozen snapshot — a React message the Rust side maps to{" "}
             <InlineCode>RenderMode::Live</InlineCode> /{" "}
             <InlineCode>Snapshot</InlineCode>; picking another cube
             re-snapshots.
-          </P>
+          </Paragraph>
           <CodeTabs
             tsx={`<portal target="follow" style={{ width: 160, height: 160 }} />
 
@@ -135,13 +136,13 @@ function MinimapDemo() {
       style={{ cache: "never" }}
       info={
         <>
-          <P>
+          <Paragraph>
             A 2D camera on an isolated render layer draws flat markers for every
             cube into the live "minimap" target — a classic top-down map,
             rendered by Bevy and placed in the UI like any other node. Live
             pixels bypass the layer dirt tracking, hence the card's{" "}
             <InlineCode>cache: "never"</InlineCode>.
-          </P>
+          </Paragraph>
           <CodeTabs
             tsx={`<portal target="minimap" style={{ width: 160, height: 160 }} />`}
             rust={`let minimap = render_targets.create(

@@ -1,8 +1,16 @@
 import { useState } from "react";
+import { BoxLabel, InlineCode, Paragraph } from "@/components/typography";
 import { BevyStyle, Gradient } from "bevy-react/jsx";
-import { DemoRow, Example, Radio, RadioOption, Slider } from "@/components";
-import { Code, InlineCode, P } from "@/components/docs";
-import { Colors, FontSizes, Gradients } from "@/theme";
+import {
+  DemoRow,
+  Example,
+  Radio,
+  RadioOption,
+  Slider,
+  Stage,
+} from "@/components";
+import { Code } from "@/components/docs";
+import { Gradients } from "@/theme";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
 
 // `display: "grid"` opts a `<node>` into CSS-grid layout. Tracks accept the full
@@ -12,14 +20,14 @@ const PAGE: ExplanationData = {
   title: "Grid",
   info: (
     <>
-      <P>
+      <Paragraph>
         <InlineCode>display: "grid"</InlineCode> opts a{" "}
         <InlineCode>{"<node>"}</InlineCode> into CSS-grid layout. Track lists (
         <InlineCode>gridTemplateColumns</InlineCode>,{" "}
         <InlineCode>gridTemplateRows</InlineCode>,{" "}
         <InlineCode>gridAutoRows</InlineCode>) accept the full CSS syntax:{" "}
         <InlineCode>repeat(n, …)</InlineCode>, fr units, and fixed sizes.
-      </P>
+      </Paragraph>
       <Code lang="tsx">{`<node
   style={{
     display: "grid",
@@ -29,12 +37,12 @@ const PAGE: ExplanationData = {
 >
   {cells}
 </node>`}</Code>
-      <P>
+      <Paragraph>
         Children place themselves with <InlineCode>gridColumn</InlineCode>/
         <InlineCode>gridRow</InlineCode>, including{" "}
         <InlineCode>"span n"</InlineCode> and explicit line placement;{" "}
         <InlineCode>gap</InlineCode> spaces the tracks.
-      </P>
+      </Paragraph>
     </>
   ),
 };
@@ -64,7 +72,7 @@ function Cell({
 }) {
   return (
     <node style={{ ...cell, backgroundGradient: gradient }}>
-      <text style={cellText}>{label}</text>
+      <BoxLabel>{label}</BoxLabel>
     </node>
   );
 }
@@ -98,11 +106,11 @@ function GridPlaygroundDemo() {
       title="Repeat and fractions"
       info={
         <>
-          <P>
+          <Paragraph>
             <InlineCode>repeat(n, 1fr)</InlineCode> makes n equal, flexible
             columns — the cells re-flow instantly as the track list or gap
             changes from state.
-          </P>
+          </Paragraph>
           <Code lang="tsx">{`<node
   style={{
     display: "grid",
@@ -122,19 +130,13 @@ function GridPlaygroundCard() {
   const [gap, setGap] = useState(8);
   return (
     <node style={controlColumn}>
-      <node
+      <Stage
         style={{ ...frame, gridTemplateColumns: `repeat(${cols}, 1fr)`, gap }}
       >
         <Cells count={cols * 2} />
-      </node>
+      </Stage>
       <Radio options={COLS_OPTIONS} value={cols} onChange={setCols} />
-      <Slider
-        value={gap}
-        min={0}
-        max={20}
-        onChange={setGap}
-        label={`gap ${gap.toFixed(0)}`}
-      />
+      <Slider value={gap} min={0} max={20} onChange={setGap} name="gap" />
     </node>
   );
 }
@@ -145,11 +147,11 @@ function MixedTracksDemo() {
       title="Mixed tracks"
       info={
         <>
-          <P>
+          <Paragraph>
             Track lists mix freely: a fixed 80px sidebar column next to a
             flexible <InlineCode>1fr</InlineCode> body column — the classic app
             shell in one line.
-          </P>
+          </Paragraph>
           <Code lang="tsx">{`<node style={{ display: "grid", gridTemplateColumns: "80px 1fr" }}>`}</Code>
         </>
       }
@@ -160,9 +162,9 @@ function MixedTracksDemo() {
 
 function MixedTracksCard() {
   return (
-    <node style={{ ...frame, gridTemplateColumns: "80px 1fr" }}>
+    <Stage style={{ ...frame, gridTemplateColumns: "80px 1fr" }}>
       <Cells count={4} />
-    </node>
+    </Stage>
   );
 }
 
@@ -172,10 +174,10 @@ function ColumnSpanDemo() {
       title="Column spans"
       info={
         <>
-          <P>
+          <Paragraph>
             <InlineCode>gridColumn: "span 2"</InlineCode> makes a cell straddle
             two columns; the remaining cells auto-place around it.
-          </P>
+          </Paragraph>
           <Code lang="tsx">{`<node style={{ gridColumn: "span 2" }}>
   <text>span 2</text>
 </node>`}</Code>
@@ -188,7 +190,7 @@ function ColumnSpanDemo() {
 
 function ColumnSpanCard() {
   return (
-    <node style={{ ...frame, gridTemplateColumns: "repeat(3, 1fr)" }}>
+    <Stage style={{ ...frame, gridTemplateColumns: "repeat(3, 1fr)" }}>
       <node
         style={{
           ...cell,
@@ -196,10 +198,10 @@ function ColumnSpanCard() {
           backgroundGradient: CELLS[0],
         }}
       >
-        <text style={cellText}>span 2</text>
+        <BoxLabel>span 2</BoxLabel>
       </node>
       <Cells count={4} from={1} />
-    </node>
+    </Stage>
   );
 }
 
@@ -209,10 +211,10 @@ function RowSpanDemo() {
       title="Row spans"
       info={
         <>
-          <P>
+          <Paragraph>
             <InlineCode>gridRow: "span 2"</InlineCode> with explicit row tracks
             builds a feature cell that stands two rows tall.
-          </P>
+          </Paragraph>
           <Code lang="tsx">{`<node style={{ gridTemplateRows: "repeat(2, 48px)" }}>
   <node style={{ gridRow: "span 2" }} />
 </node>`}</Code>
@@ -225,7 +227,7 @@ function RowSpanDemo() {
 
 function RowSpanCard() {
   return (
-    <node
+    <Stage
       style={{
         ...frame,
         gridTemplateColumns: "repeat(3, 1fr)",
@@ -235,10 +237,10 @@ function RowSpanCard() {
       <node
         style={{ ...cell, gridRow: "span 2", backgroundGradient: CELLS[0] }}
       >
-        <text style={cellText}>tall</text>
+        <BoxLabel>tall</BoxLabel>
       </node>
       <Cells count={4} from={1} />
-    </node>
+    </Stage>
   );
 }
 
@@ -252,20 +254,11 @@ const frame: BevyStyle = {
   display: "grid",
   width: 280,
   gap: 8,
-  padding: 12,
   gridAutoRows: "48px",
-  backgroundColor: Colors.surface100,
-  borderRadius: 12,
 };
 
 const cell: BevyStyle = {
   borderRadius: 8,
   justifyContent: "center",
   alignItems: "center",
-};
-
-const cellText: BevyStyle = {
-  color: Colors.textColor400,
-  fontSize: FontSizes.xs,
-  fontWeight: "bold",
 };

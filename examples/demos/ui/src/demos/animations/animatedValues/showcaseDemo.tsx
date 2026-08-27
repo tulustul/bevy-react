@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { InlineCode, Paragraph } from "@/components/typography";
 import {
   interpolate,
   interpolateColor,
@@ -11,7 +12,7 @@ import {
 } from "bevy-react";
 import { BevyStyle } from "bevy-react/jsx";
 import { Example, Radio, RadioOption } from "@/components";
-import { Code, InlineCode, P } from "@/components/docs";
+import { Code } from "@/components/docs";
 import { Colors } from "@/theme";
 
 type Mode = "linear" | "easeInOut" | "spring";
@@ -77,7 +78,7 @@ export function ShowcaseDemo() {
       title="Bouncing squares"
       info={
         <>
-          <P>
+          <Paragraph>
             Everything composed at once: staggered squares run{" "}
             <InlineCode>withRepeat(withSequence(withDelay(...)))</InlineCode>{" "}
             for the horizontal bounce, while an independent{" "}
@@ -88,7 +89,7 @@ export function ShowcaseDemo() {
             <InlineCode>withSpring</InlineCode> for spring — a mode change
             glides back to the loop start before re-arming so the repeat stays
             seamless.
-          </P>
+          </Paragraph>
           <Code lang="tsx">{SHOWCASE_TSX}</Code>
         </>
       }

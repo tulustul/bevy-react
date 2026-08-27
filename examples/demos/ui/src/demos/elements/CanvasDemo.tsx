@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Bold, InlineCode, Paragraph } from "@/components/typography";
 import type {
   BevyCanvasElement,
   CanvasContext,
@@ -6,10 +7,10 @@ import type {
 } from "bevy-react";
 import { BevyStyle } from "bevy-react/jsx";
 import { Button, DemoRow, Example } from "@/components";
-import { B, Code, InlineCode, P } from "@/components/docs";
+import { Code } from "@/components/docs";
 import { Colors } from "@/theme";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
-import { useWindowSize } from "@/useWindowSize";
+import { useWindowSize } from "@/hooks/useWindowSize";
 
 // A pure-UI demo of the `<canvas>` host element: an anti-aliased vector line
 // chart drawn entirely with HTML-canvas-style commands (axes, gridlines, a
@@ -22,13 +23,13 @@ const PAGE: ExplanationData = {
   title: "<canvas>",
   info: (
     <>
-      <P>
+      <Paragraph>
         <InlineCode>{"<canvas>"}</InlineCode> is a web-faithful retained pixel
-        surface: paint <B>accumulates</B> in a persistent texture, and styles
-        plus the current path survive across batches — the familiar HTML canvas
-        2D command set (paths, béziers, fills, strokes).
-      </P>
-      <P>There are two ways to draw:</P>
+        surface: paint <Bold>accumulates</Bold> in a persistent texture, and
+        styles plus the current path survive across batches — the familiar HTML
+        canvas 2D command set (paths, béziers, fills, strokes).
+      </Paragraph>
+      <Paragraph>There are two ways to draw:</Paragraph>
       <Code lang="tsx">{`// Declarative: clears + replays whenever \`draw\` changes.
 <canvas draw={(ctx) => { … }} />
 
@@ -36,14 +37,14 @@ const PAGE: ExplanationData = {
 const ctx = canvasRef.current.getContext();
 ctx.lineTo(x, y);
 ctx.stroke();`}</Code>
-      <P>
+      <Paragraph>
         Imperative commands batch on a microtask and flush outside React
         commits, so doodling costs no re-renders. A layout resize clears the
         surface (HTML width/height-set semantics), updates the handle's{" "}
         <InlineCode>width</InlineCode>/<InlineCode>height</InlineCode>, and
         fires <InlineCode>onResize</InlineCode>; a stored declarative painter
         replays automatically.
-      </P>
+      </Paragraph>
     </>
   ),
 };
@@ -96,14 +97,14 @@ function GraphDemo() {
       title="Declarative drawing"
       info={
         <>
-          <P>
+          <Paragraph>
             A declarative vector drawing: the <InlineCode>draw</InlineCode> prop
             clears the surface and replays the callback whenever it changes —
             here axes, gridlines, a smooth Bézier curve, an area fill and
             markers. The data reshuffles every few seconds (and on click),
             tweening to new positions through React state; each frame re-renders
             React, which repaints the texture Bevy-side.
-          </P>
+          </Paragraph>
           <Code lang="tsx">{`<canvas
   draw={(ctx) => {
     ctx.strokeStyle = "#7aa2f7";
@@ -225,13 +226,13 @@ function PaintDemo() {
       title="Retained surface"
       info={
         <>
-          <P>
+          <Paragraph>
             A retained drawing surface driven imperatively through a ref handle:
             each pointer event strokes one short segment, the surface keeps
-            everything already painted, and <B>no React re-render</B> happens
-            while doodling. The surface clears on resize, and{" "}
+            everything already painted, and <Bold>no React re-render</Bold>{" "}
+            happens while doodling. The surface clears on resize, and{" "}
             <InlineCode>onResize</InlineCode> repaints the background.
-          </P>
+          </Paragraph>
           <Code lang="tsx">{`const ref = useRef<BevyCanvasElement>(null);
 
 <canvas
@@ -260,8 +261,6 @@ function PaintCard() {
   // entirely outside React state — no re-renders while doodling).
   const last = useRef<Pt | null>(null);
   const strokeCount = useRef(0);
-
-  const window = useWindowSize();
 
   const paintBackground = useCallback((el: BevyCanvasElement) => {
     const ctx = el.getContext();

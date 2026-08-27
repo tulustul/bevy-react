@@ -1,8 +1,15 @@
 import { useEffect, useState, type ReactNode } from "react";
+import {
+  Caption,
+  InlineCode,
+  ListItem,
+  Paragraph,
+  List,
+} from "@/components/typography";
 import { useSharedValue, withRepeat, withTiming } from "bevy-react";
 import { BevyStyle } from "bevy-react/jsx";
-import { DemoRow, Example } from "@/components";
-import { Code, InlineCode, Li, P, Ul } from "@/components/docs";
+import { DemoRow, Example, Figure } from "@/components";
+import { Code } from "@/components/docs";
 import { Colors } from "@/theme";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
 
@@ -17,7 +24,7 @@ const PAGE: ExplanationData = {
   title: "<svg>",
   info: (
     <>
-      <P>
+      <Paragraph>
         <InlineCode>{"<svg>"}</InlineCode> draws vector graphics from JSX shape
         children — the 8 intrinsics: <InlineCode>path</InlineCode>,{" "}
         <InlineCode>rect</InlineCode>, <InlineCode>circle</InlineCode>,{" "}
@@ -26,24 +33,24 @@ const PAGE: ExplanationData = {
         <InlineCode>g</InlineCode>. Geometry lives in{" "}
         <InlineCode>viewBox</InlineCode> user units, so a whole drawing scales
         with the element's laid-out size while staying pixel-crisp.
-      </P>
+      </Paragraph>
       <Code lang="tsx">{`<svg viewBox="0 0 40 40" style={{ width: 56 }}>
   <circle cx={20} cy={20} r={13} fill="#7dcfff" />
 </svg>`}</Code>
-      <Ul>
-        <Li>
+      <List>
+        <ListItem>
           Shapes take the same pointer handlers as nodes; hit-testing follows
           the painted geometry, and events report user-space coordinates.
-        </Li>
-        <Li>
+        </ListItem>
+        <ListItem>
           Numeric attributes animate like style fields — {"{ animated }"}{" "}
           bindings or a transition prop on the shape.
-        </Li>
-        <Li>
+        </ListItem>
+        <ListItem>
           Rendering an .svg FILE is the {"<image>"} element's job; this element
           is for building drawings in JSX.
-        </Li>
-      </Ul>
+        </ListItem>
+      </List>
     </>
   ),
 };
@@ -115,12 +122,11 @@ const PRIMS_TSX = `// One cell per intrinsic, each
 
 function Prim({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <node style={itemStyle}>
+    <Figure caption={label}>
       <svg viewBox="0 0 40 40" style={{ width: 56, height: 56 }}>
         {children}
       </svg>
-      <text style={captionStyle}>{label}</text>
-    </node>
+    </Figure>
   );
 }
 
@@ -130,7 +136,7 @@ function PrimitivesDemo() {
       title="Shape primitives"
       info={
         <>
-          <P>
+          <Paragraph>
             All eight shape intrinsics, one per cell: filled{" "}
             <InlineCode>rect</InlineCode>, <InlineCode>circle</InlineCode>,{" "}
             <InlineCode>ellipse</InlineCode> and{" "}
@@ -140,7 +146,7 @@ function PrimitivesDemo() {
             from an SVG d string (the heart), and <InlineCode>g</InlineCode> — a
             group whose translate/rotate transform moves its two rects together.
             Each cell is its own {"<svg>"} with a 40×40 viewBox.
-          </P>
+          </Paragraph>
           <Code lang="tsx">{PRIMS_TSX}</Code>
         </>
       }
@@ -293,7 +299,7 @@ function ShapesChartDemo() {
       title="JSX shapes"
       info={
         <>
-          <P>
+          <Paragraph>
             A bar chart drawn with SVG shape children: rounded{" "}
             <InlineCode>{"<rect>"}</InlineCode> bars inside a translated{" "}
             <InlineCode>{"<g>"}</InlineCode>, a{" "}
@@ -302,7 +308,7 @@ function ShapesChartDemo() {
             <InlineCode>{"<circle>"}</InlineCode> markers — plain React
             <InlineCode>.map</InlineCode> over the data. Geometry is in viewBox
             user units, so the whole drawing scales with the element.
-          </P>
+          </Paragraph>
           <Code lang="tsx">{CHART_TSX}</Code>
         </>
       }
@@ -416,7 +422,7 @@ function InteractiveShapesDemo() {
       title="Interactive shapes"
       info={
         <>
-          <P>
+          <Paragraph>
             Shape children take the same pointer handlers as nodes:{" "}
             <InlineCode>onClick</InlineCode>,{" "}
             <InlineCode>onPointerEnter/Leave</InlineCode>,{" "}
@@ -425,7 +431,7 @@ function InteractiveShapesDemo() {
             box — and pointer events report x/y in the drawing's user-space
             units. Press the pad to read the viewBox coordinates under the
             cursor.
-          </P>
+          </Paragraph>
           <Code lang="tsx">{INTERACTIVE_TSX}</Code>
         </>
       }
@@ -466,12 +472,12 @@ function InteractiveShapesCard() {
           onPointerLeave={() => setHovered(false)}
         />
       </svg>
-      <text style={captionStyle}>{`clicks: ${clicks}`}</text>
-      <text style={captionStyle}>
+      <Caption>{`clicks: ${clicks}`}</Caption>
+      <Caption>
         {downAt === null
           ? "press the pad to read coords"
           : `pad pressed at ${downAt}`}
-      </text>
+      </Caption>
     </node>
   );
 }
@@ -512,7 +518,7 @@ function SharedValueShapesDemo() {
       title="Shared value animations"
       info={
         <>
-          <P>
+          <Paragraph>
             A numeric shape attribute takes an {"{ animated }"} binding, exactly
             like a style field. A shared value (
             <InlineCode>withRepeat</InlineCode> +{" "}
@@ -521,7 +527,7 @@ function SharedValueShapesDemo() {
             <InlineCode>seed</InlineCode> as the static value until the driver's
             first write reaches Bevy — the React tree never re-renders while the
             animation runs.
-          </P>
+          </Paragraph>
           <Code lang="tsx">{SHARED_VALUE_TSX}</Code>
         </>
       }
@@ -596,14 +602,14 @@ function TransitionShapesDemo() {
       title="Shape transitions"
       info={
         <>
-          <P>
+          <Paragraph>
             A <InlineCode>transition</InlineCode> prop on a shape eases static
             attr changes: every second the dataset retargets{" "}
             <InlineCode>y</InlineCode>/<InlineCode>height</InlineCode> and a
             spring carries each bar to its new geometry. Transitions and{" "}
             {"{ animated }"} bindings live on separate shapes — any binding on a
             shape parks that shape's attr transitions.
-          </P>
+          </Paragraph>
           <Code lang="tsx">{TRANSITION_TSX}</Code>
         </>
       }
@@ -679,15 +685,4 @@ const rowStyle: BevyStyle = {
   justifyContent: "center",
   gap: 24,
   padding: 12,
-};
-
-const itemStyle: BevyStyle = {
-  flexDirection: "column",
-  alignItems: "center",
-  gap: 8,
-};
-
-const captionStyle: BevyStyle = {
-  fontSize: 12,
-  color: Colors.textColor200,
 };

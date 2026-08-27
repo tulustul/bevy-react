@@ -1,8 +1,16 @@
 import { useMemo, useState } from "react";
+import { InlineCode, Paragraph } from "@/components/typography";
 import { BevyStyle } from "bevy-react/jsx";
-import { Checkbox, DemoRow, Example, Radio, RadioOption } from "@/components";
-import { Code, InlineCode, P } from "@/components/docs";
-import { Colors, Gradients } from "@/theme";
+import {
+  Checkbox,
+  DemoRow,
+  Example,
+  Radio,
+  RadioOption,
+  Stage,
+} from "@/components";
+import { Code } from "@/components/docs";
+import { Gradients } from "@/theme";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
 import {
   AlignIcon,
@@ -20,18 +28,18 @@ const PAGE: ExplanationData = {
   title: "Flexbox",
   info: (
     <>
-      <P>
+      <Paragraph>
         A <InlineCode>{"<node>"}</InlineCode> is a flexbox container by default
         — no display property needed. <InlineCode>flexDirection</InlineCode>,{" "}
         <InlineCode>justifyContent</InlineCode>, and{" "}
         <InlineCode>alignItems</InlineCode> are the main knobs;{" "}
         <InlineCode>gap</InlineCode> spaces children.
-      </P>
+      </Paragraph>
       <Code lang="tsx">{`<node style={{ flexDirection: "row", justifyContent: "center", gap: 10 }}>
   <node style={{ width: 40, height: 40 }} />
   <node style={{ width: 40, height: 40 }} />
 </node>`}</Code>
-      <P>
+      <Paragraph>
         One naming subtlety: <InlineCode>"start"</InlineCode>/
         <InlineCode>"end"</InlineCode> are physical (writing-direction relative)
         while <InlineCode>"flexStart"</InlineCode>/
@@ -39,7 +47,7 @@ const PAGE: ExplanationData = {
         <InlineCode>flexDirection</InlineCode> — they diverge under{" "}
         <InlineCode>"rowReverse"</InlineCode>. For grid layout, see the Grid
         page.
-      </P>
+      </Paragraph>
     </>
   ),
 };
@@ -151,21 +159,21 @@ function FlexPlaygroundDemo() {
       title="Flexbox playground"
       info={
         <>
-          <P>
+          <Paragraph>
             Flip the three main flex knobs live and watch the swatches
             rearrange. Try <InlineCode>rowReverse</InlineCode> and compare{" "}
             <InlineCode>start</InlineCode> vs <InlineCode>flexStart</InlineCode>{" "}
             — physical vs flow-relative.
-          </P>
+          </Paragraph>
           <Code lang="tsx">{`<node style={{ flexDirection, justifyContent, alignItems }}>
   {swatches}
 </node>`}</Code>
-          <P>
+          <Paragraph>
             The swatches carry{" "}
             <InlineCode>{"transition: { layout }"}</InlineCode>, so each
             rearrangement eases them to their new slots (FLIP) — untick the box
             to see the snap.
-          </P>
+          </Paragraph>
         </>
       }
       demo={FlexPlaygroundCard}
@@ -190,11 +198,11 @@ function FlexPlaygroundCard() {
         width: "100%",
       }}
     >
-      <node
+      <Stage
         style={{ ...playground, flexDirection, justifyContent, alignItems }}
       >
         <Swatches animate={animate} />
-      </node>
+      </Stage>
 
       <Radio
         pinch={{ radius: 0.7 }}
@@ -215,19 +223,11 @@ function FlexPlaygroundCard() {
         onChange={setAlignItems}
       />
 
-      <node
-        style={{
-          flexDirection: "column",
-          gap: 10,
-          padding: 12,
-          backgroundColor: Colors.surface100,
-          borderRadius: 12,
-        }}
-      >
+      <Stage style={{ flexDirection: "column", gap: 10 }}>
         <InlineCode>{`flexDirection: ${flexDirection}`}</InlineCode>
         <InlineCode>{`justifyContent: ${justifyContent}`}</InlineCode>
         <InlineCode>{`alignItems: ${alignItems}`}</InlineCode>
-      </node>
+      </Stage>
 
       <Checkbox
         label="Animate layout changes"
@@ -244,11 +244,11 @@ function FlexWrapDemo() {
       title="Wrapping"
       info={
         <>
-          <P>
+          <Paragraph>
             <InlineCode>flexWrap: "wrap"</InlineCode> pushes overflowing
             children onto the next line instead of squeezing them — eight
             fixed-size swatches in a narrow container become a 3-row grid.
-          </P>
+          </Paragraph>
           <Code lang="tsx">{`<node style={{ width: 152, flexWrap: "wrap", gap: 8 }}>
   {swatches}
 </node>`}</Code>
@@ -261,7 +261,7 @@ function FlexWrapDemo() {
 
 function FlexWrapCard() {
   return (
-    <node style={{ ...frame, width: 152, flexWrap: "wrap", gap: 8 }}>
+    <Stage style={{ ...frame, width: 152, flexWrap: "wrap", gap: 8 }}>
       {Array.from({ length: 8 }, (_, i) => (
         <node
           key={i}
@@ -271,7 +271,7 @@ function FlexWrapCard() {
           }}
         />
       ))}
-    </node>
+    </Stage>
   );
 }
 
@@ -281,11 +281,11 @@ function FlexGrowDemo() {
       title="Growing to fill"
       info={
         <>
-          <P>
+          <Paragraph>
             <InlineCode>flexGrow: 1</InlineCode> lets a child absorb the
             remaining space — the middle swatch stretches while its fixed-size
             siblings keep their width.
-          </P>
+          </Paragraph>
           <Code lang="tsx">{`<node style={{ width: 260, gap: 8 }}>
   <node style={{ width: 40 }} />
   <node style={{ flexGrow: 1 }} />
@@ -300,11 +300,11 @@ function FlexGrowDemo() {
 
 function FlexGrowCard() {
   return (
-    <node style={{ ...frame, width: 260, gap: 8 }}>
+    <Stage style={{ ...frame, width: 260, gap: 8 }}>
       <node style={{ ...animatedSwatch, backgroundGradient: SWATCHES[0] }} />
       <node style={{ ...grow, backgroundGradient: SWATCHES[1] }} />
       <node style={{ ...animatedSwatch, backgroundGradient: SWATCHES[2] }} />
-    </node>
+    </Stage>
   );
 }
 
@@ -313,16 +313,10 @@ const playground: BevyStyle = {
   maxWidth: "100%",
   height: 350,
   gap: 10,
-  padding: 12,
-  backgroundColor: Colors.surface100,
-  borderRadius: 12,
 };
 
 const frame: BevyStyle = {
   alignItems: "center",
-  padding: 12,
-  backgroundColor: Colors.surface100,
-  borderRadius: 12,
 };
 
 const swatch: BevyStyle = {

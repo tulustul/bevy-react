@@ -1,5 +1,6 @@
 import { DemoRow } from "@/components";
-import { Code, InlineCode, Li, P, Ul } from "@/components/docs";
+import { InlineCode, ListItem, Paragraph, List } from "@/components/typography";
+import { Code } from "@/components/docs";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
 import { FadeDemo, EasingDemo, LayoutColorDemo } from "./timingDemos";
 import { SpringDemo, SequenceDemo, SpinDemo } from "./driverDemos";
@@ -9,7 +10,7 @@ const PAGE: ExplanationData = {
   title: "Animated values",
   info: (
     <>
-      <P>
+      <Paragraph>
         The imperative animation API, Reanimated-style:{" "}
         <InlineCode>useSharedValue</InlineCode> creates a value that lives on
         the Bevy side, an {"{ animated }"} wrapper written inline in a style
@@ -18,20 +19,22 @@ const PAGE: ExplanationData = {
         , <InlineCode>withSequence</InlineCode>,{" "}
         <InlineCode>withDelay</InlineCode>, <InlineCode>withRepeat</InlineCode>{" "}
         — describe how it moves.
-      </P>
+      </Paragraph>
       <Code lang="tsx">{`const x = useSharedValue(0);
 x.value = withTiming(200, { duration: 800 });
 
 <node style={{ transform: { translateX: { animated: x } } }} />`}</Code>
-      <Ul>
-        <Li>
+      <List>
+        <ListItem>
           React renders once; every frame after that is Bevy's — no per-frame
           re-renders.
-        </Li>
-        <Li>cancelAnimation freezes the value in place.</Li>
-        <Li>A trailing function on a driver is its completion callback.</Li>
-        <Li>Click a card for the details of each driver.</Li>
-      </Ul>
+        </ListItem>
+        <ListItem>cancelAnimation freezes the value in place.</ListItem>
+        <ListItem>
+          A trailing function on a driver is its completion callback.
+        </ListItem>
+        <ListItem>Click a card for the details of each driver.</ListItem>
+      </List>
     </>
   ),
 };

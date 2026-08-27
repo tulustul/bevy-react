@@ -1,5 +1,6 @@
 import { DemoRow } from "@/components";
-import { B, Code, InlineCode, P } from "@/components/docs";
+import { Bold, InlineCode, Paragraph } from "@/components/typography";
+import { Code } from "@/components/docs";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
 import { Gallery } from "./galleryCard";
 import { MoveBetweenCards } from "./ticketsBoard";
@@ -13,14 +14,14 @@ const PAGE: ExplanationData = {
   title: "Shared elements",
   info: (
     <>
-      <P>
+      <Paragraph>
         Give two nodes that swap in one commit the same{" "}
         <InlineCode>sharedTag</InlineCode> and the incoming one{" "}
-        <B>starts where the outgoing one was</B> — rect, color, opacity,
+        <Bold>starts where the outgoing one was</Bold> — rect, color, opacity,
         transforms, filters — then eases to its own layout and style. React has
         no reparenting (a "move" is an unmount plus a mount), so identity is the
         tag and the commit is the trigger: no hooks, no measuring.
-      </P>
+      </Paragraph>
       <Code lang="tsx">{`// grid
 <image sharedTag="hero-1" src={thumb} />
 
@@ -35,11 +36,11 @@ const PAGE: ExplanationData = {
     },
   }}
 />`}</Code>
-      <P>
+      <Paragraph>
         <InlineCode>{"transition: { sharedElement }"}</InlineCode> is the one
         timing for every seeded channel (required). Pairs need the same tag,
         element type and UI root; the first mounted match wins, silently.
-      </P>
+      </Paragraph>
     </>
   ),
 };

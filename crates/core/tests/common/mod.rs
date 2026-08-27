@@ -9,8 +9,7 @@ use tokio::sync::mpsc::UnboundedSender;
 pub const WINDOW: (u32, u32) = (1280, 832);
 
 /// Answer the demos shell's `window.size` bootstrap request with [`WINDOW`]:
-/// the shell renders nothing until it knows the viewport (its responsive mode
-/// derives from it — see `ui/src/App.tsx` + `layoutMode.tsx`), so a harness
+/// the shell renders nothing until it knows the viewport so a harness
 /// that dropped the request would never see the nav. Every other request is
 /// still dropped, as before. Runs until the JS thread drops its sender.
 #[allow(dead_code)] // each test binary links this module; not all call it

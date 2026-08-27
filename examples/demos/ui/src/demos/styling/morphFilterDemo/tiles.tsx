@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
-import { Checkbox, Slider } from "@/components";
+import { ParamControls, Slider, useParams } from "@/components";
 import { Colors, FontSizes } from "@/theme";
 import type { FilterEntry } from "./params";
 import { TILE, TileContent, VARIANT_COUNT, nextVariant } from "./variants";
@@ -54,9 +54,7 @@ export function MorphTile({
     Math.floor(Math.random() * VARIANT_COUNT),
   );
   const [duration, setDuration] = useState(entry.duration);
-  const [values, setValues] = useState(() =>
-    entry.controls.map((c) => c.initial),
-  );
+  const [values, controls] = useParams(entry.controls);
 
   const swap = () => setVariant((v) => nextVariant(v));
   const resetAutoplayTimer = useAutoplay(autoplay, swap);
@@ -64,9 +62,6 @@ export function MorphTile({
     swap();
     resetAutoplayTimer();
   };
-
-  const setValue = (i: number, v: number) =>
-    setValues((vals) => vals.map((old, j) => (j === i ? v : old)));
 
   return (
     <node
@@ -107,29 +102,11 @@ export function MorphTile({
           min={200}
           max={4000}
           onChange={setDuration}
-          label={`duration ${Math.round(duration)} ms`}
+          name="duration"
+          unit=" ms"
         />
       )}
-      {showParams &&
-        entry.controls.map((c, i) =>
-          c.kind === "slider" ? (
-            <Slider
-              key={c.label}
-              value={values[i]}
-              min={c.min}
-              max={c.max}
-              label={`${c.label} ${values[i].toFixed(c.decimals ?? 0)}`}
-              onChange={(v) => setValue(i, v)}
-            />
-          ) : (
-            <Checkbox
-              key={c.label}
-              label={c.label}
-              enabled={values[i] === 1}
-              onChange={(on) => setValue(i, on ? 1 : 0)}
-            />
-          ),
-        )}
+      {showParams && <ParamControls {...controls} />}
     </node>
   );
 }

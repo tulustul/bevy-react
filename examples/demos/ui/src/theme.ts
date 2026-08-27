@@ -138,6 +138,7 @@ export const Scrollbar: ScrollbarStyle = {
     pressed: { backgroundColor: Colors.surface700 },
   },
   thickness: 6,
+  position: "float",
 };
 
 export const FontSizes = {

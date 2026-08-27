@@ -1,29 +1,29 @@
 import { useState } from "react";
+import { InlineCode, Paragraph } from "@/components/typography";
 import { BevyStyle } from "bevy-react/jsx";
-import { DemoRow, Example, Slider } from "@/components";
-import { Code, InlineCode, P } from "@/components/docs";
+import { ControlColumn, DemoRow, Example, Slider, Stage } from "@/components";
+import { Code } from "@/components/docs";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
 import { Colors } from "@/theme";
-import { controlColumn } from "./shared";
 
 const PAGE: ExplanationData = {
   title: "Sizing",
   info: (
     <>
-      <P>
+      <Paragraph>
         <InlineCode>width</InlineCode> / <InlineCode>height</InlineCode> size a
         node in pixels, percentages of the parent, or viewport units;{" "}
         <InlineCode>auto</InlineCode> (the default) sizes from content and flex.
-      </P>
+      </Paragraph>
       <Code lang="tsx">{`<node style={{ width: "60%" }} />
 <node style={{ height: 50, aspectRatio: 1.6 }} />
 <node style={{ width: "100%", maxWidth: 160 }} />`}</Code>
-      <P>
+      <Paragraph>
         <InlineCode>aspectRatio</InlineCode> derives the missing dimension from
         the given one, and <InlineCode>minWidth</InlineCode> /{" "}
         <InlineCode>maxWidth</InlineCode> (plus their height twins) clamp an
         otherwise flexible size.
-      </P>
+      </Paragraph>
     </>
   ),
 };
@@ -45,11 +45,11 @@ function WidthDemo() {
       title="Width and height"
       info={
         <>
-          <P>
+          <Paragraph>
             <InlineCode>width</InlineCode> / <InlineCode>height</InlineCode>{" "}
             take pixels, percentages, or viewport units. Here the bar's width is
             a percentage of its track.
-          </P>
+          </Paragraph>
           <Code lang="tsx">{`<node style={{ width: "60%" }} />`}</Code>
         </>
       }
@@ -61,18 +61,19 @@ function WidthDemo() {
 function WidthCard() {
   const [w, setW] = useState(60);
   return (
-    <node style={controlColumn}>
-      <node style={track}>
+    <ControlColumn>
+      <Stage style={track}>
         <node style={{ ...bar, width: `${Math.round(w)}%` }} />
-      </node>
+      </Stage>
       <Slider
         value={w}
         min={10}
         max={100}
         onChange={setW}
-        label={`width ${w.toFixed(0)}%`}
+        name="width"
+        unit="%"
       />
-    </node>
+    </ControlColumn>
   );
 }
 
@@ -82,11 +83,11 @@ function AspectRatioDemo() {
       title="Aspect ratios"
       info={
         <>
-          <P>
+          <Paragraph>
             <InlineCode>aspectRatio</InlineCode> derives the missing dimension
             from the given one — the height stays fixed while the width follows
             the ratio.
-          </P>
+          </Paragraph>
           <Code lang="tsx">{`<node style={{ height: 50, aspectRatio: 1.6 }} />`}</Code>
         </>
       }
@@ -98,7 +99,7 @@ function AspectRatioDemo() {
 function AspectRatioCard() {
   const [ar, setAr] = useState(1.6);
   return (
-    <node style={controlColumn}>
+    <ControlColumn>
       <node
         style={{
           height: 50,
@@ -112,9 +113,9 @@ function AspectRatioCard() {
         min={0.5}
         max={2.5}
         onChange={setAr}
-        label={`aspectRatio ${ar.toFixed(2)}`}
+        name="aspectRatio"
       />
-    </node>
+    </ControlColumn>
   );
 }
 
@@ -124,11 +125,11 @@ function MaxWidthDemo() {
       title="Minimum and maximum sizes"
       info={
         <>
-          <P>
+          <Paragraph>
             <InlineCode>minWidth</InlineCode> /{" "}
             <InlineCode>maxWidth</InlineCode> clamp an otherwise flexible size:
             the bar asks for the full track but never grows past the cap.
-          </P>
+          </Paragraph>
           <Code lang="tsx">{`<node style={{ width: "100%", maxWidth: 160 }} />`}</Code>
         </>
       }
@@ -140,8 +141,8 @@ function MaxWidthDemo() {
 function MaxWidthCard() {
   const [max, setMax] = useState(160);
   return (
-    <node style={controlColumn}>
-      <node style={track}>
+    <ControlColumn>
+      <Stage style={track}>
         <node
           style={{
             ...bar,
@@ -150,24 +151,21 @@ function MaxWidthCard() {
             backgroundColor: Colors.yellow100,
           }}
         />
-      </node>
+      </Stage>
       <Slider
         value={max}
         min={40}
         max={240}
         onChange={setMax}
-        label={`maxWidth ${max.toFixed(0)}`}
+        name="maxWidth"
       />
-    </node>
+    </ControlColumn>
   );
 }
 
 const track: BevyStyle = {
   flexDirection: "column",
   width: 240,
-  padding: 12,
-  backgroundColor: Colors.surface100,
-  borderRadius: 12,
 };
 
 const bar: BevyStyle = {

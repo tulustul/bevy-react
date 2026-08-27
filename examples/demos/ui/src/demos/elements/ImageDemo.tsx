@@ -1,7 +1,8 @@
 import { useState } from "react";
+import { InlineCode, ListItem, Paragraph, List } from "@/components/typography";
 import { BevyStyle } from "bevy-react/jsx";
-import { Button, DemoRow, Example, Slider } from "@/components";
-import { Code, InlineCode, Li, P, Ul } from "@/components/docs";
+import { Button, DemoRow, Example, Figure, Slider } from "@/components";
+import { Code } from "@/components/docs";
 import { Colors, Gradients } from "@/theme";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
 
@@ -9,27 +10,29 @@ const PAGE: ExplanationData = {
   title: "<image>",
   info: (
     <>
-      <P>
+      <Paragraph>
         <InlineCode>{"<image>"}</InlineCode> draws a texture asset loaded by{" "}
         <InlineCode>src</InlineCode> (a path under your asset folder). With no
         explicit size it lays out at the texture's intrinsic size.
-      </P>
+      </Paragraph>
       <Code lang="tsx">{`<image src="bevy-react-logo.png" style={{ width: 120 }} />`}</Code>
-      <Ul>
-        <Li>tint multiplies the texture color; flipX / flipY mirror it.</Li>
-        <Li>
+      <List>
+        <ListItem>
+          tint multiplies the texture color; flipX / flipY mirror it.
+        </ListItem>
+        <ListItem>
           imageMode {'{ type: "sliced" }'} enables 9-slice scaling — frames
           resize without distorting their corners.
-        </Li>
-        <Li>
+        </ListItem>
+        <ListItem>
           sourceRect crops a sub-rectangle; atlas treats the texture as a
           sprite-sheet grid selected by index — the sprite-animation primitive.
-        </Li>
-        <Li>
+        </ListItem>
+        <ListItem>
           An .svg src renders as a vector: parsed once, re-rasterized at the
           laid-out size × DPI, crisp at every size.
-        </Li>
-      </Ul>
+        </ListItem>
+      </List>
     </>
   ),
 };
@@ -61,12 +64,12 @@ function FlipDemo() {
       title="Tint and flips"
       info={
         <>
-          <P>
+          <Paragraph>
             <InlineCode>tint</InlineCode> multiplies the texture's color (white
             = unchanged), and <InlineCode>flipX</InlineCode> /{" "}
             <InlineCode>flipY</InlineCode> mirror it per axis — all plain props,
             cheap to toggle from state.
-          </P>
+          </Paragraph>
           <Code lang="tsx">{`<image
   src="bevy-react-logo.png"
   tint="#7aa2f7"
@@ -120,12 +123,12 @@ function SlicedDemo() {
       title="9-slice scaling"
       info={
         <>
-          <P>
+          <Paragraph>
             9-slice scaling resizes a frame without distorting its corners:{" "}
             <InlineCode>border</InlineCode> marks the corner region in texture
             pixels, and only the edges and center stretch. Drag the sliders —
             the ornate corners stay crisp at any size.
-          </P>
+          </Paragraph>
           <Code lang="tsx">{`<image
   src="modal.png"
   imageMode={{ type: "sliced", border: 120, maxCornerScale: 0.7 }}
@@ -157,14 +160,14 @@ function SlicedCard() {
         min={80}
         max={360}
         onChange={(v) => setWidth(Math.round(v))}
-        label={`width ${Math.round(width)}`}
+        name="width"
       />
       <Slider
         value={height}
         min={80}
         max={240}
         onChange={(v) => setHeight(Math.round(v))}
-        label={`height ${Math.round(height)}`}
+        name="height"
       />
     </node>
   );
@@ -176,11 +179,11 @@ function SourceRectDemo() {
       title="Source rectangles"
       info={
         <>
-          <P>
+          <Paragraph>
             <InlineCode>sourceRect</InlineCode> crops a sub-rectangle of the
             texture — only that region is drawn. Drag to pan a 200×110 window
             across the 400×220 logo.
-          </P>
+          </Paragraph>
           <Code lang="tsx">{`<image
   src="bevy-react-logo.png"
   sourceRect={{ x: 0, y: 0, width: 200, height: 110 }}
@@ -211,14 +214,14 @@ function SourceRectCard() {
         min={0}
         max={200}
         onChange={(v) => setX(Math.round(v))}
-        label={`x ${Math.round(x)}`}
+        name="x"
       />
       <Slider
         value={y}
         min={0}
         max={110}
         onChange={(v) => setY(Math.round(v))}
-        label={`y ${Math.round(y)}`}
+        name="y"
       />
     </node>
   );
@@ -230,13 +233,13 @@ function AtlasDemo() {
       title="Texture atlases"
       info={
         <>
-          <P>
+          <Paragraph>
             <InlineCode>atlas</InlineCode> treats <InlineCode>src</InlineCode>{" "}
             as a uniform sprite-sheet grid; <InlineCode>index</InlineCode>{" "}
             selects a cell (here a 2×2 grid over the logo). Step the index from
             state — or a timer — to flip frames; the atlas layout asset is built
             once and reused.
-          </P>
+          </Paragraph>
           <Code lang="tsx">{`<image
   src="bevy-react-logo.png"
   atlas={{
@@ -290,7 +293,7 @@ function SvgDemo() {
       title="SVG images"
       info={
         <>
-          <P>
+          <Paragraph>
             An <InlineCode>.svg</InlineCode> src is detected by extension and
             rendered as a vector: the document parses once, and each node
             re-rasterizes it at its own laid-out size (× DPI). The same{" "}
@@ -299,7 +302,7 @@ function SvgDemo() {
             the file's viewBox is the intrinsic size. For building vector
             graphics from JSX shapes, see the <InlineCode>{"<svg>"}</InlineCode>{" "}
             page.
-          </P>
+          </Paragraph>
           <Code lang="tsx">{`<image src="gear.svg" style={{ width: 160 }} />`}</Code>
         </>
       }
@@ -311,15 +314,13 @@ function SvgDemo() {
 function SvgFileCard() {
   return (
     <node style={svgRowStyle}>
-      <node style={svgItemStyle}>
+      <Figure caption="Intrinsic size">
         <image src="gear.svg" />
-        <text style={svgCaptionStyle}>Intrinsic size</text>
-      </node>
+      </Figure>
       {SIZES.map((size) => (
-        <node key={size} style={svgItemStyle}>
+        <Figure key={size} caption={`${size}px`}>
           <image src="gear.svg" style={{ width: size }} />
-          <text style={svgCaptionStyle}>{size}px</text>
-        </node>
+        </Figure>
       ))}
     </node>
   );
@@ -331,17 +332,6 @@ const svgRowStyle: BevyStyle = {
   justifyContent: "center",
   gap: 24,
   padding: 12,
-};
-
-const svgItemStyle: BevyStyle = {
-  flexDirection: "column",
-  alignItems: "center",
-  gap: 8,
-};
-
-const svgCaptionStyle: BevyStyle = {
-  fontSize: 12,
-  color: Colors.textColor200,
 };
 
 const logoStyle: BevyStyle = {

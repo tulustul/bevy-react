@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
+import { InlineCode, Paragraph } from "@/components/typography";
 import { bevy } from "@/bevy";
 import type { BallState } from "@/bevy";
 import { Example } from "@/components";
-import { CodeTabs, InlineCode, P } from "@/components/docs";
+import { CodeTabs } from "@/components/docs";
 import { Colors, FontSizes } from "@/theme";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
 
@@ -62,7 +63,7 @@ const PAGE: ExplanationData = {
   startCollapsed: true,
   info: (
     <>
-      <P>
+      <Paragraph>
         The request/response channel: awaiting{" "}
         <InlineCode>bevy.pollingDemo.getBall()</InlineCode> sends a correlated
         request that a Bevy observer — declared with{" "}
@@ -70,14 +71,14 @@ const PAGE: ExplanationData = {
         <InlineCode>{"On<Request<GetBall>>"}</InlineCode> — answers with{" "}
         <InlineCode>req.respond</InlineCode>. The promise resolves with a typed{" "}
         <InlineCode>BallState</InlineCode> generated from the Rust struct.
-      </P>
+      </Paragraph>
       <CodeTabs tsx={REQUEST_TSX} rust={REQUEST_RUST} />
-      <P>
+      <Paragraph>
         An unknown name, a malformed payload, or an explicit{" "}
         <InlineCode>respond_err</InlineCode> rejects the promise — it never
         hangs. This demo polls the request every 50ms for live position/velocity
         telemetry of the bouncing ball.
-      </P>
+      </Paragraph>
     </>
   ),
 };
@@ -93,7 +94,7 @@ function BallTelemetryExample() {
       title="Ball telemetry"
       info={
         <>
-          <P>
+          <Paragraph>
             A <InlineCode>setTimeout</InlineCode> loop awaits{" "}
             <InlineCode>bevy.pollingDemo.getBall()</InlineCode> every 50ms and
             stores the reply in React state — live position/velocity read
@@ -101,7 +102,7 @@ function BallTelemetryExample() {
             despawns and Bevy rejects the in-flight request; the{" "}
             <InlineCode>catch</InlineCode> ignores it and the effect cleanup
             stops the loop.
-          </P>
+          </Paragraph>
           <CodeTabs tsx={POLL_TSX} rust={REQUEST_RUST} />
         </>
       }

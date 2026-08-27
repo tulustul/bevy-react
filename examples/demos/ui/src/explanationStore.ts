@@ -10,11 +10,6 @@ export type ExplanationData = {
   /** Render the header card collapsed to its title row until expanded — for
    * pages whose content sits behind/under the card (3D scenes, surfaces). */
   startCollapsed?: boolean;
-  /** Legacy plain-string content — rendered (highlighted) until every page
-   * migrates to `info`. */
-  description?: string;
-  tsx?: string;
-  rust?: string;
 };
 
 /** What a clicked `<Example>` contributes: its docs plus the demo

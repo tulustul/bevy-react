@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
+import { InlineCode, Paragraph, TextMono } from "@/components/typography";
 import { bevy, type KeyboardEventData } from "@/bevy";
 import { Example } from "@/components";
-import { Code, InlineCode, P } from "@/components/docs";
+import { Code } from "@/components/docs";
 import { Colors, FontSizes } from "@/theme";
-import { TextMono } from "@/components/TextMono";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
 
 const TYPESCRIPT = `import { bevy } from "@/bevy";
@@ -38,16 +38,18 @@ const PAGE: ExplanationData = {
   title: "Keyboard",
   info: (
     <>
-      <P>
+      <Paragraph>
         Bevy to React: window-global keystrokes. The typed{" "}
         <InlineCode>bevy.on("keyDown")</InlineCode> /{" "}
         <InlineCode>bevy.on("keyUp")</InlineCode> events are built into the core
         plugin — no app-side Rust or registration needed. Each event carries{" "}
         <InlineCode>key</InlineCode>, <InlineCode>code</InlineCode>,{" "}
         <InlineCode>repeat</InlineCode> and the modifier flags.
-      </P>
+      </Paragraph>
       <Code lang="tsx">{TYPESCRIPT}</Code>
-      <P>Focus the app window and press any key — no node needs focus.</P>
+      <Paragraph>
+        Focus the app window and press any key — no node needs focus.
+      </Paragraph>
     </>
   ),
 };
@@ -63,14 +65,14 @@ function KeyboardExample() {
       title="Keyboard events"
       info={
         <>
-          <P>
+          <Paragraph>
             One <InlineCode>keyDown</InlineCode> /{" "}
             <InlineCode>keyUp</InlineCode> subscription pair: presses add to the
             held-keys line (OS auto-repeat is filtered out via{" "}
             <InlineCode>e.repeat</InlineCode>), releases remove them, and the
             last event's modifier flags render below. Focus the app window and
             press any key — no node needs focus.
-          </P>
+          </Paragraph>
           <Code lang="tsx">{TYPESCRIPT}</Code>
         </>
       }

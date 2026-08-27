@@ -1,7 +1,8 @@
 import { useRef, useState } from "react";
+import { CardTitle, InlineCode, Paragraph } from "@/components/typography";
 import { BevyStyle, PointerEventData } from "bevy-react/jsx";
 import { Button, Example } from "@/components";
-import { CodeTabs, InlineCode, P } from "@/components/docs";
+import { CodeTabs } from "@/components/docs";
 import { Colors, FontSizes } from "@/theme";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
 
@@ -50,16 +51,16 @@ const PAGE: ExplanationData = {
   startCollapsed: true,
   info: (
     <>
-      <P>
+      <Paragraph>
         Any element takes a <InlineCode>name</InlineCode> prop. It lands on the
         entity as a Bevy <InlineCode>Name</InlineCode> component, so Rust code
         can find React-created entities and do whatever it wants with them:
         attach its own components, read layout or{" "}
         <InlineCode>Interaction</InlineCode>, spawn 3D things that follow them.
         Nothing else crosses the wire — no messages, no entity ids.
-      </P>
+      </Paragraph>
       <CodeTabs tsx={TSX} rust={RUST} />
-      <P>
+      <Paragraph>
         Two ways in from Bevy: the <InlineCode>ReactNodes</InlineCode> system
         param (<InlineCode>get</InlineCode>, <InlineCode>all</InlineCode>) is a
         hash lookup by name, and a plain{" "}
@@ -70,8 +71,8 @@ const PAGE: ExplanationData = {
         current frame. Names are not unique: every card here is{" "}
         <InlineCode>{'name="pin"'}</InlineCode> and Bevy keeps one pin per
         match.
-      </P>
-      <P>
+      </Paragraph>
+      <Paragraph>
         Here the scene projects each card's screen center onto the ground and
         fixes one end of a tube there; the ball on the other end is a
         spring-damper body, so it lags and swings after the card. Drag the cards
@@ -81,7 +82,7 @@ const PAGE: ExplanationData = {
         needs to know why a card moved. The bridge owns the components it writes
         (<InlineCode>Node</InlineCode>, colors, text, children); everything else
         on a named entity is yours.
-      </P>
+      </Paragraph>
     </>
   ),
 };
@@ -110,13 +111,13 @@ export function NamedNodesDemo() {
         style={{ maxWidth: 400 }}
         info={
           <>
-            <P>
+            <Paragraph>
               Each card below is <InlineCode>{'<node name="pin">'}</InlineCode>.
               The Bevy side runs <InlineCode>ReactNodes::all("pin")</InlineCode>{" "}
               every frame, spawns a pin for a card it hasn't seen, despawns the
               pin of one that is gone, and keeps the rest pinned under their
               cards — wherever layout or a drag put them.
-            </P>
+            </Paragraph>
             <CodeTabs tsx={TSX} rust={RUST} />
           </>
         }
@@ -191,7 +192,7 @@ function DraggableCard({ id, offset, onMove }: DraggableCardProps) {
       onPointerMove={moved}
       onPointerUp={up}
     >
-      <text style={cardText}>{"#" + id}</text>
+      <CardTitle>{"#" + id}</CardTitle>
     </node>
   );
 }
@@ -239,10 +240,4 @@ const card: BevyStyle = {
 const cardHover: BevyStyle = {
   backgroundColor: Colors.surface500,
   borderColor: Colors.primary100,
-};
-
-const cardText: BevyStyle = {
-  color: Colors.textColor100,
-  fontSize: FontSizes.base,
-  fontWeight: "bold",
 };

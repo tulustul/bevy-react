@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
+import { Bold, InlineCode, Paragraph } from "@/components/typography";
 import { bevy } from "@/bevy";
 import { Example } from "@/components";
-import { B, CodeTabs, InlineCode, P } from "@/components/docs";
+import { CodeTabs } from "@/components/docs";
 import { Colors, FontSizes } from "@/theme";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
 
@@ -33,21 +34,22 @@ const PAGE: ExplanationData = {
   startCollapsed: true,
   info: (
     <>
-      <P>
+      <Paragraph>
         Bevy pushes typed events to React: a struct tagged{" "}
         <InlineCode>#[react_event]</InlineCode> can be sent from any system via
         the <InlineCode>ReactEvents</InlineCode> system param, and every JS
         listener subscribed with <InlineCode>bevy.on(name, cb)</InlineCode>{" "}
         fires with the deserialized payload. The payload type is{" "}
-        <B>generated from the Rust struct</B>, so the callback is fully typed.
-      </P>
+        <Bold>generated from the Rust struct</Bold>, so the callback is fully
+        typed.
+      </Paragraph>
       <CodeTabs tsx={EVENT_TSX} rust={EVENT_RUST} />
-      <P>
+      <Paragraph>
         Here the bouncing-ball 3D scene sends{" "}
         <InlineCode>bevyEventsDemo.ballBounced</InlineCode> on each wall hit.
         This direction is fire-and-forget streaming — for React pulling data on
         demand, see the request/response channel on the Bevy {"<->"} React page.
-      </P>
+      </Paragraph>
     </>
   ),
 };
@@ -63,14 +65,14 @@ function BounceExample() {
       title="Bounce counter"
       info={
         <>
-          <P>
+          <Paragraph>
             One <InlineCode>bevy.on</InlineCode> subscription in a{" "}
             <InlineCode>useEffect</InlineCode>: each{" "}
             <InlineCode>ballBounced</InlineCode> event increments local React
             state. <InlineCode>bevy.on</InlineCode> returns the unsubscribe
             function, so returning it from the effect cleans up on unmount.
             Watch the ball in the 3D scene — every wall hit ticks the counter.
-          </P>
+          </Paragraph>
           <CodeTabs tsx={EVENT_TSX} rust={EVENT_RUST} />
         </>
       }

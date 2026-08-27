@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
+import { InlineCode, Paragraph } from "@/components/typography";
 import { bevy, type WindowSize } from "@/bevy";
 import { Example } from "@/components";
-import { Code, InlineCode, P } from "@/components/docs";
+import { Code } from "@/components/docs";
 import { Colors, FontSizes } from "@/theme";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
 
@@ -18,15 +19,15 @@ const PAGE: ExplanationData = {
   title: "Window",
   info: (
     <>
-      <P>
+      <Paragraph>
         Built into the core plugin, no registration needed:{" "}
         <InlineCode>bevy.on("resize")</InlineCode> streams the UI viewport's
         logical size, and the <InlineCode>bevy.window.size()</InlineCode>{" "}
         request pulls it on demand — here once on mount, to seed the value
         before the first resize.
-      </P>
+      </Paragraph>
       <Code lang="tsx">{RESIZE_TYPESCRIPT}</Code>
-      <P>Resize the app window to see it update.</P>
+      <Paragraph>Resize the app window to see it update.</Paragraph>
     </>
   ),
 };
@@ -42,12 +43,12 @@ function WindowSizeExample() {
       title="Window events"
       info={
         <>
-          <P>
+          <Paragraph>
             The live viewport size: seeded once on mount by the{" "}
             <InlineCode>bevy.window.size()</InlineCode> request, then kept fresh
             by the built-in <InlineCode>resize</InlineCode> event. Resize the
             app window to see it change.
-          </P>
+          </Paragraph>
           <Code lang="tsx">{RESIZE_TYPESCRIPT}</Code>
         </>
       }

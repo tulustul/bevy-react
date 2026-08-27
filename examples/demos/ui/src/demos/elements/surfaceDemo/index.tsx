@@ -1,5 +1,6 @@
 import { BevyStyle } from "bevy-react/jsx";
-import { B, CodeTabs, InlineCode, P } from "@/components/docs";
+import { Bold, InlineCode, Paragraph } from "@/components/typography";
+import { CodeTabs } from "@/components/docs";
 import { Colors } from "@/theme";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
 import { MonitorApp } from "./MonitorApp";
@@ -15,14 +16,14 @@ const PAGE: ExplanationData = {
   startCollapsed: true,
   info: (
     <>
-      <P>
+      <Paragraph>
         <InlineCode>{"<surface>"}</InlineCode> is the inverse of{" "}
         <InlineCode>{"<portal>"}</InlineCode>: instead of showing a Bevy texture
-        in the UI, its subtree renders <B>into</B> an offscreen texture that the
-        Bevy app puts on anything — here, the screen of a 3D monitor model. The{" "}
-        <InlineCode>name</InlineCode> ties the element to a surface the Rust
-        side registered.
-      </P>
+        in the UI, its subtree renders <Bold>into</Bold> an offscreen texture
+        that the Bevy app puts on anything — here, the screen of a 3D monitor
+        model. The <InlineCode>name</InlineCode> ties the element to a surface
+        the Rust side registered.
+      </Paragraph>
       <CodeTabs
         tsx={`<surface target="monitor" style={{ width: "100%", height: "100%" }}>
   <MonitorApp />
@@ -38,13 +39,13 @@ surfaces.create(&mut images, "monitor", SurfaceSpec {
 // SurfacePointer maps 3D clicks back onto the UI.
 commands.entity(screen).insert(SurfacePointer::new("monitor"));`}
       />
-      <P>
+      <Paragraph>
         Because the screen mesh is tagged{" "}
         <InlineCode>SurfacePointer</InlineCode>, the UI on it is a real,
         clickable in-world app: this page's monitor runs a tiny "OS" with a menu
         bar, taskbar, code viewer, dialogs and a reboot power-cycle, all plain
         React. Click the screen in the 3D scene to use it.
-      </P>
+      </Paragraph>
     </>
   ),
 };

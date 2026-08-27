@@ -1,30 +1,38 @@
 import { useState } from "react";
-import { Checkbox, DemoRow, Example, Slider } from "@/components";
-import { B, Code, InlineCode, P } from "@/components/docs";
+import { Bold, InlineCode, Paragraph } from "@/components/typography";
+import {
+  Box,
+  Checkbox,
+  ControlColumn,
+  DemoRow,
+  Example,
+  Row,
+  Slider,
+} from "@/components";
+import { Code } from "@/components/docs";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
 import { Colors } from "@/theme";
-import { box, controlColumn, row } from "./shared";
 import { TestBanner } from "@/components/TestBanner";
 
 const PAGE: ExplanationData = {
   title: "Opacity",
   info: (
     <>
-      <P>
+      <Paragraph>
         <InlineCode>opacity</InlineCode> fades a node and its children. On a
-        node with children it promotes the subtree to a <B>composited layer</B>{" "}
-        and fades it as one group (web semantics), so overlapping translucent
-        pieces never show through each other;{" "}
+        node with children it promotes the subtree to a{" "}
+        <Bold>composited layer</Bold> and fades it as one group (web semantics),
+        so overlapping translucent pieces never show through each other;{" "}
         <InlineCode>groupAlpha: false</InlineCode> opts out to per-node fading.
-      </P>
+      </Paragraph>
       <Code lang="tsx">{`<node style={{ opacity: 0.4 }}>…</node>
 <node style={{ opacity: 0.4, groupAlpha: false }}>…</node>
 <node style={{ display: "none" }} />`}</Code>
-      <P>
+      <Paragraph>
         <InlineCode>display: "none"</InlineCode> is the other way to make a node
         disappear — it removes the node from layout entirely instead of fading
         it.
-      </P>
+      </Paragraph>
     </>
   ),
 };
@@ -50,10 +58,10 @@ function BasicOpacityDemo() {
       title="Node opacity"
       info={
         <>
-          <P>
+          <Paragraph>
             <InlineCode>opacity</InlineCode> fades a node and its children
             together. Drag the slider to fade the box in and out.
-          </P>
+          </Paragraph>
           <Code lang="tsx">{`<node style={{ opacity: 0.4 }} />`}</Code>
         </>
       }
@@ -65,16 +73,16 @@ function BasicOpacityDemo() {
 function BasicOpacityCard() {
   const [opacity, setOpacity] = useState(0.4);
   return (
-    <node style={controlColumn}>
-      <node style={{ ...box, opacity }} />
+    <ControlColumn>
+      <Box style={{ opacity }} />
       <Slider
         value={opacity}
         min={0}
         max={1}
         onChange={setOpacity}
-        label={`opacity ${opacity.toFixed(2)}`}
+        name="opacity"
       />
-    </node>
+    </ControlColumn>
   );
 }
 
@@ -84,13 +92,13 @@ function GroupAlphaDemo() {
       title="Group alpha"
       info={
         <>
-          <P>
+          <Paragraph>
             <InlineCode>opacity</InlineCode> on a node with children promotes
             the subtree to a composited layer: the whole widget fades as one
             group, so overlapping translucent pieces never show through each
             other. <InlineCode>groupAlpha: false</InlineCode> opts out — each
             node fades on its own (watch the seams appear).
-          </P>
+          </Paragraph>
           <Code lang="tsx">{`<node style={{ opacity, groupAlpha }}>…</node>`}</Code>
         </>
       }
@@ -103,7 +111,7 @@ function GroupAlphaCard() {
   const [opacity, setOpacity] = useState(0.7);
   const [groupAlpha, setGroupAlpha] = useState(true);
   return (
-    <node style={controlColumn}>
+    <ControlColumn>
       <TestBanner
         style={{
           margin: { left: -40 },
@@ -118,14 +126,14 @@ function GroupAlphaCard() {
         min={0}
         max={1}
         onChange={setOpacity}
-        label={`opacity ${opacity.toFixed(2)}`}
+        name="opacity"
       />
       <Checkbox
         label="groupAlpha"
         enabled={groupAlpha}
         onChange={setGroupAlpha}
       />
-    </node>
+    </ControlColumn>
   );
 }
 
@@ -135,11 +143,11 @@ function DisplayNoneDemo() {
       title="Hiding nodes"
       info={
         <>
-          <P>
+          <Paragraph>
             <InlineCode>display: "none"</InlineCode> removes a node from layout
             entirely — the remaining siblings close the gap, unlike a fade to{" "}
             <InlineCode>opacity: 0</InlineCode>.
-          </P>
+          </Paragraph>
           <Code lang="tsx">{`<node style={{ display: hidden ? "none" : "flex" }} />`}</Code>
         </>
       }
@@ -151,19 +159,18 @@ function DisplayNoneDemo() {
 function DisplayNoneCard() {
   const [hidden, setHidden] = useState(false);
   return (
-    <node style={controlColumn}>
-      <node style={row}>
-        <node style={box} />
-        <node
+    <ControlColumn>
+      <Row>
+        <Box />
+        <Box
           style={{
-            ...box,
             backgroundColor: Colors.green100,
             display: hidden ? "none" : "flex",
           }}
         />
-        <node style={{ ...box, backgroundColor: Colors.purple100 }} />
-      </node>
+        <Box style={{ backgroundColor: Colors.purple100 }} />
+      </Row>
       <Checkbox label="Hide middle box" enabled={hidden} onChange={setHidden} />
-    </node>
+    </ControlColumn>
   );
 }

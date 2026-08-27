@@ -1,8 +1,15 @@
 import { create } from "zustand";
+import {
+  Bold,
+  InlineCode,
+  ListItem,
+  Paragraph,
+  List,
+} from "@/components/typography";
 import type { BevyStyle } from "bevy-react/jsx";
 
 import { Checkbox, DemoRow, Example } from "@/components";
-import { B, Code, CodeTabs, InlineCode, Li, P, Ul } from "@/components/docs";
+import { Code, CodeTabs } from "@/components/docs";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
 import { BUILTIN_TRANSITIONS, CUSTOM_MORPHS, type FilterEntry } from "./params";
 import { MorphTile } from "./tiles";
@@ -15,15 +22,15 @@ const PAGE: ExplanationData = {
   title: "Morph filters",
   info: (
     <>
-      <P>
+      <Paragraph>
         <InlineCode>{"morphFilter: { key, name, params }"}</InlineCode> is a
         view-transition surface: when <InlineCode>key</InlineCode> changes, the
-        node's previous rendered appearance is <B>frozen</B> and blended into
-        the live content with a two-input filter (crossfade, linearWipe,
+        node's previous rendered appearance is <Bold>frozen</Bold> and blended
+        into the live content with a two-input filter (crossfade, linearWipe,
         pixelize, or a custom single-pass filter), driven by an engine-owned
         progress. React swaps the content freely in the same commit as the key
         flip.
-      </P>
+      </Paragraph>
       <Code lang="tsx">{`<node
   style={{
     morphFilter: {
@@ -36,27 +43,28 @@ const PAGE: ExplanationData = {
 >
   <Content variant={variant} />
 </node>`}</Code>
-      <Ul>
-        <Li>
+      <List>
+        <ListItem>
           A built-in 300ms ease applies with no transition config;{" "}
           <InlineCode>{"transition: { morphFilter }"}</InlineCode> overrides the
           timing.
-        </Li>
-        <Li>
+        </ListItem>
+        <ListItem>
           First mount never animates; a mid-flight key change freezes the
           in-flight blend and restarts, so an interruption stays smooth.
-        </Li>
-        <Li>
+        </ListItem>
+        <ListItem>
           Each tile below swaps between four content variants when clicked, or
           on its own randomized schedule with autoplay on; every tile carries
           its own duration slider and filter params.
-        </Li>
-        <Li>
-          The enter & exit row shows the <B>empty-carrier idiom</B>: content
-          morphs in and out of a carrier that paints nothing — an empty layer
-          captures as valid transparent, so no placeholder background is needed.
-        </Li>
-      </Ul>
+        </ListItem>
+        <ListItem>
+          The enter & exit row shows the <Bold>empty-carrier idiom</Bold>:
+          content morphs in and out of a carrier that paints nothing — an empty
+          layer captures as valid transparent, so no placeholder background is
+          needed.
+        </ListItem>
+      </List>
     </>
   ),
 };
@@ -109,14 +117,14 @@ function OptionsDemo() {
       title="Options"
       info={
         <>
-          <P>
-            <B>autoplay</B> gives each tile a self-rescheduling timer with a
-            random few-second period (re-rolled each cycle) and a random initial
-            delay, so only a handful of tiles morph at any moment; clicking a
-            tile always works too and resets that tile's timer.{" "}
-            <B>show params</B> toggles the duration and filter-param controls
-            under every tile.
-          </P>
+          <Paragraph>
+            <Bold>autoplay</Bold> gives each tile a self-rescheduling timer with
+            a random few-second period (re-rolled each cycle) and a random
+            initial delay, so only a handful of tiles morph at any moment;
+            clicking a tile always works too and resets that tile's timer.{" "}
+            <Bold>show params</Bold> toggles the duration and filter-param
+            controls under every tile.
+          </Paragraph>
           <Code lang="tsx">{`useEffect(() => {
   if (!autoplay) return;
   let id;
@@ -158,7 +166,7 @@ function BuiltinMorphsDemo() {
       title="Built-in morphs"
       info={
         <>
-          <P>
+          <Paragraph>
             <InlineCode>crossfade</InlineCode>,{" "}
             <InlineCode>linearWipe</InlineCode> and{" "}
             <InlineCode>pixelize</InlineCode> ship with bevy-react. Every tile
@@ -166,7 +174,7 @@ function BuiltinMorphsDemo() {
             two banners — picking a random different one on each click (or
             automatically with autoplay on); the sliders under a tile set its
             morph duration and feed the filter's params live.
-          </P>
+          </Paragraph>
           <Code lang="tsx">{`const swap = () => setVariant((v) => pickOther(v));
 
 <node
@@ -199,13 +207,13 @@ function CustomMorphsDemo() {
       title="Custom morphs"
       info={
         <>
-          <P>
+          <Paragraph>
             Ports of gl-transitions.com transitions as custom single-pass
             filters — any of them is a <InlineCode>morphFilter</InlineCode>{" "}
             name. Each tile exposes its filter's key params (curtain's
             checkboxes flip it into a vertical or closing curtain); color-only
             filters like circleCrop and burn ride their defaults.
-          </P>
+          </Paragraph>
           <CodeTabs
             tsx={`<node
   style={{

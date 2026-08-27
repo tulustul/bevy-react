@@ -1,10 +1,10 @@
 import { useState } from "react";
+import { InlineCode, Paragraph } from "@/components/typography";
 import { BevyStyle } from "bevy-react/jsx";
-import { Button, DemoRow, Example } from "@/components";
-import { Code, InlineCode, P } from "@/components/docs";
+import { Button, Column, DemoRow, Example, Stage } from "@/components";
+import { Code } from "@/components/docs";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
 import { Colors, FontSizes } from "@/theme";
-import { column } from "./shared";
 
 // Layout rounding: bevy snaps every laid-out rect to whole physical pixels,
 // per node, inherited (`LayoutConfig::use_rounding`). `layoutRounding: false`
@@ -14,7 +14,7 @@ const PAGE: ExplanationData = {
   title: "Layout rounding",
   info: (
     <>
-      <P>
+      <Paragraph>
         Layout rounds every node's rect to whole physical pixels: crisp edges,
         sharp text, no seams between neighbours. It also means a box whose size
         is animated through layout grows in 1px steps, and everything laid out
@@ -22,7 +22,7 @@ const PAGE: ExplanationData = {
         <InlineCode>layoutRounding: false</InlineCode> turns the rounding off
         for a node and its descendants (unset inherits, the root default is{" "}
         <InlineCode>true</InlineCode>).
-      </P>
+      </Paragraph>
       <Code lang="tsx">{`<node style={{ layoutRounding: false }}>
   <node
     style={{
@@ -34,12 +34,12 @@ const PAGE: ExplanationData = {
   />
   <text>re-flows smoothly</text>
 </node>`}</Code>
-      <P>
+      <Paragraph>
         It inherits downward only, so set it on the parent that lays out the
         animated node and its neighbours, and keep it that local: inside an
         unrounded subtree, whatever rests on a half pixel gets anti-aliased soft
         edges, slightly blurred text and hairline seams.
-      </P>
+      </Paragraph>
     </>
   ),
 };
@@ -60,13 +60,13 @@ function ComparisonDemo() {
       title="Rounded vs unrounded"
       info={
         <>
-          <P>
+          <Paragraph>
             Two identical panels; the right one sets{" "}
             <InlineCode>layoutRounding: false</InlineCode>. Toggle the size ease
             (3 seconds, so the steps are easy to see): on the left the box grows
             in whole pixels and the caption and the block below hop with it, on
             the right they all glide.
-          </P>
+          </Paragraph>
           <Code lang="tsx">{`// on the PARENT that lays out the
 // animated box and its neighbours
 <node style={{ layoutRounding: false }}>
@@ -92,7 +92,7 @@ function ComparisonDemo() {
 function ComparisonCard() {
   const [open, setOpen] = useState(false);
   return (
-    <node style={column}>
+    <Column>
       <node style={panels}>
         <Panel title="rounded" open={open} />
         <Panel
@@ -102,7 +102,7 @@ function ComparisonCard() {
         />
       </node>
       <Button onClick={() => setOpen((v) => !v)}>Toggle size</Button>
-    </node>
+    </Column>
   );
 }
 
@@ -116,11 +116,11 @@ function Panel({
   style?: BevyStyle;
 }) {
   return (
-    <node style={{ ...panel, ...style }}>
+    <Stage style={{ ...panel, ...style }}>
       <node style={{ ...growBox, height: open ? 120 : 40 }} />
       <text style={label}>{title}</text>
       <node style={followBox} />
-    </node>
+    </Stage>
   );
 }
 
@@ -133,13 +133,10 @@ const panels: BevyStyle = {
 const panel: BevyStyle = {
   width: 140,
   height: 220,
-  padding: 10,
   gap: 10,
   flexDirection: "column",
   alignItems: "center",
   justifyContent: "center",
-  borderRadius: 8,
-  backgroundColor: Colors.surface100,
 };
 
 const growBox: BevyStyle = {

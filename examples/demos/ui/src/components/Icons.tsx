@@ -1,44 +1,4 @@
-import type { PropsWithChildren } from "react";
-import { BevyStyle } from "bevy-react/jsx";
 import { Colors } from "@/theme";
-
-/** A square, borderless tap target for one icon (the shell's menu/close). */
-export function IconButton({
-  size = 36,
-  style,
-  onClick,
-  children,
-}: PropsWithChildren<{
-  size?: number;
-  style?: BevyStyle;
-  onClick: () => void;
-}>) {
-  return (
-    <node
-      style={{ ...iconButtonStyle, width: size, height: size, ...style }}
-      hoverStyle={iconButtonHoverStyle}
-      pressStyle={iconButtonPressStyle}
-      onClick={onClick}
-    >
-      {children}
-    </node>
-  );
-}
-
-const iconButtonStyle: BevyStyle = {
-  alignItems: "center",
-  justifyContent: "center",
-  borderRadius: 8,
-  cursor: "pointer",
-};
-
-const iconButtonHoverStyle: BevyStyle = {
-  backgroundColor: Colors.surface300,
-};
-
-const iconButtonPressStyle: BevyStyle = {
-  backgroundColor: Colors.surface400,
-};
 
 type IconProps = { size?: number; color?: string };
 

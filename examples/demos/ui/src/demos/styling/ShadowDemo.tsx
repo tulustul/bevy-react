@@ -1,21 +1,28 @@
 import { useState } from "react";
+import { InlineCode, Paragraph } from "@/components/typography";
 import { BevyStyle } from "bevy-react/jsx";
-import { DemoRow, Example, Slider } from "@/components";
-import { Code, InlineCode, P } from "@/components/docs";
+import {
+  Box,
+  ControlColumn,
+  DemoRow,
+  Example,
+  Slider,
+  Stage,
+} from "@/components";
+import { Code } from "@/components/docs";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
 import { Colors } from "@/theme";
-import { box, controlColumn } from "./shared";
 
 const PAGE: ExplanationData = {
   title: "Shadows",
   info: (
     <>
-      <P>
+      <Paragraph>
         <InlineCode>boxShadow</InlineCode> casts a drop shadow behind the node's
         box: <InlineCode>color</InlineCode>, <InlineCode>blurRadius</InlineCode>
         , <InlineCode>spreadRadius</InlineCode>, and{" "}
         <InlineCode>xOffset/yOffset</InlineCode> to imply a light direction.
-      </P>
+      </Paragraph>
       <Code lang="tsx">{`boxShadow: {
   color: "#FFFFFF33",
   xOffset: 8,
@@ -23,10 +30,10 @@ const PAGE: ExplanationData = {
   blurRadius: 12,
   spreadRadius: 3,
 }`}</Code>
-      <P>
+      <Paragraph>
         An array stacks multiple shadows back-to-front. Shadows draw outside the
         box and never affect layout.
-      </P>
+      </Paragraph>
     </>
   ),
 };
@@ -48,10 +55,10 @@ function StackedShadowsDemo() {
       title="Stacked shadows"
       info={
         <>
-          <P>
+          <Paragraph>
             An array of shadows stacks back-to-front — here a tight red drop
             plus a wide soft glow.
-          </P>
+          </Paragraph>
           <Code lang="tsx">{`boxShadow: [
   { color: "#FF000066", yOffset: 4, blurRadius: 6 },
   { color: "#4F8CFF55", blurRadius: 28, spreadRadius: 6 },
@@ -65,11 +72,10 @@ function StackedShadowsDemo() {
 
 function StackedShadowsCard() {
   return (
-    <node style={controlColumn}>
-      <node style={stage}>
-        <node
+    <ControlColumn>
+      <Stage style={stage}>
+        <Box
           style={{
-            ...box,
             backgroundColor: Colors.surface100,
             boxShadow: [
               { color: "#FF000066", yOffset: 4, blurRadius: 6 },
@@ -77,8 +83,8 @@ function StackedShadowsCard() {
             ],
           }}
         />
-      </node>
-    </node>
+      </Stage>
+    </ControlColumn>
   );
 }
 
@@ -88,11 +94,11 @@ function BlurDemo() {
       title="Blur and spread"
       info={
         <>
-          <P>
+          <Paragraph>
             <InlineCode>blurRadius</InlineCode> softens the shadow's edge;{" "}
             <InlineCode>spreadRadius</InlineCode> grows it outward from the box
             before blurring. Drag both to shape the halo.
-          </P>
+          </Paragraph>
           <Code lang="tsx">{`boxShadow: { color: "#FFFFFF33", blurRadius: 12, spreadRadius: 3 }`}</Code>
         </>
       }
@@ -105,11 +111,10 @@ function BlurCard() {
   const [blur, setBlur] = useState(12);
   const [spread, setSpread] = useState(3);
   return (
-    <node style={controlColumn}>
-      <node style={stage}>
-        <node
+    <ControlColumn>
+      <Stage style={stage}>
+        <Box
           style={{
-            ...box,
             boxShadow: {
               color: Colors.shadow200,
               blurRadius: blur,
@@ -117,22 +122,22 @@ function BlurCard() {
             },
           }}
         />
-      </node>
+      </Stage>
       <Slider
         value={blur}
         min={0}
         max={40}
         onChange={setBlur}
-        label={`blurRadius ${blur.toFixed(0)}`}
+        name="blurRadius"
       />
       <Slider
         value={spread}
         min={0}
         max={16}
         onChange={setSpread}
-        label={`spreadRadius ${spread.toFixed(0)}`}
+        name="spreadRadius"
       />
-    </node>
+    </ControlColumn>
   );
 }
 
@@ -142,11 +147,11 @@ function OffsetDemo() {
       title="Offsets"
       info={
         <>
-          <P>
+          <Paragraph>
             <InlineCode>xOffset / yOffset</InlineCode> push the shadow away from
             the box to imply a light direction — negative values move it the
             other way.
-          </P>
+          </Paragraph>
           <Code lang="tsx">{`boxShadow: { xOffset: 8, yOffset: 8, blurRadius: 6 }`}</Code>
         </>
       }
@@ -159,11 +164,10 @@ function OffsetCard() {
   const [x, setX] = useState(8);
   const [y, setY] = useState(8);
   return (
-    <node style={controlColumn}>
-      <node style={stage}>
-        <node
+    <ControlColumn>
+      <Stage style={stage}>
+        <Box
           style={{
-            ...box,
             backgroundColor: Colors.red100,
             boxShadow: {
               color: Colors.shadow200,
@@ -173,29 +177,16 @@ function OffsetCard() {
             },
           }}
         />
-      </node>
-      <Slider
-        value={x}
-        min={-24}
-        max={24}
-        onChange={setX}
-        label={`xOffset ${x.toFixed(0)}`}
-      />
-      <Slider
-        value={y}
-        min={-24}
-        max={24}
-        onChange={setY}
-        label={`yOffset ${y.toFixed(0)}`}
-      />
-    </node>
+      </Stage>
+      <Slider value={x} min={-24} max={24} onChange={setX} name="xOffset" />
+      <Slider value={y} min={-24} max={24} onChange={setY} name="yOffset" />
+    </ControlColumn>
   );
 }
 
 const stage: BevyStyle = {
   alignItems: "center",
   justifyContent: "center",
+  // deliberately roomy: the shadows need somewhere to fall
   padding: 32,
-  backgroundColor: Colors.surface100,
-  borderRadius: 12,
 };

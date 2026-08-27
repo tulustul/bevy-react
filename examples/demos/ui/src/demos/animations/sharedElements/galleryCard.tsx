@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from "react";
+import { CardTitle, InlineCode, Paragraph } from "@/components/typography";
 import { useSharedValue, withTiming } from "bevy-react";
 import { BevyStyle } from "bevy-react/jsx";
 
-import { Button, Example } from "@/components";
-import { Code, InlineCode, P } from "@/components/docs";
-import { Colors, FontSizes } from "@/theme";
+import { Button, Example, Stage } from "@/components";
+import { Code } from "@/components/docs";
 
 export function Gallery() {
   return (
@@ -12,19 +12,19 @@ export function Gallery() {
       title="Gallery"
       info={
         <>
-          <P>
+          <Paragraph>
             Click a thumbnail: the grid unmounts and the detail screen mounts in
             the same commit. The hero image carries the thumbnail's tag, so it
             takes off from the thumbnail's rect — mid-flight if you go back
             early — and lands in its own layout. Back reverses it the same way:
             the thumbnail is now the incoming node.
-          </P>
-          <P>
+          </Paragraph>
+          <Paragraph>
             The rest of each screen is not shared, so it fades and scales
             instead: the outgoing screen lingers, absolutely positioned, with
             its shared node swapped for a same-size placeholder (the unmount
             still pairs), and unmounts once its exit animation completes.
-          </P>
+          </Paragraph>
           <Code lang="tsx">{`// the outgoing screen lingers, absolute,
 // its shared node a placeholder
 {exiting ? (
@@ -41,16 +41,16 @@ export function Gallery() {
     opacity: { animated: presence },
   }}
 />`}</Code>
-          <P>
+          <Paragraph>
             The stage sets <InlineCode>layoutRounding: false</InlineCode>: the
             hero's size flies through real layout, and with pixel rounding on,
             its box and the caption below would grow in whole pixel hops.
-          </P>
-          <P>
+          </Paragraph>
+          <Paragraph>
             The outgoing node unmounts instantly and the flight lives inside the
             new parent (its <InlineCode>overflow</InlineCode> clips it like any
             layout transition), so keep the flight path unclipped.
-          </P>
+          </Paragraph>
         </>
       }
       demo={GalleryCard}
@@ -95,7 +95,7 @@ function GalleryCard() {
     setScreens((s) => s.filter((x) => x.id !== id));
 
   return (
-    <node style={stage}>
+    <Stage style={stage}>
       {screens.map((s) => {
         const item = ITEMS.find((i) => i.id === s.item);
         return item ? (
@@ -117,7 +117,7 @@ function GalleryCard() {
           />
         );
       })}
-    </node>
+    </Stage>
   );
 }
 
@@ -187,7 +187,7 @@ function DetailScreen({
         />
       )}
       <node style={{ ...detailChrome, ...fade }}>
-        <text style={caption}>{item.title}</text>
+        <CardTitle>{item.title}</CardTitle>
         <Button onClick={exiting ? undefined : onBack}>Back</Button>
       </node>
     </node>
@@ -260,8 +260,6 @@ const stage: BevyStyle = {
   height: 300,
   justifyContent: "center",
   alignItems: "center",
-  borderRadius: 8,
-  backgroundColor: Colors.surface100,
   layoutRounding: false,
 };
 
@@ -328,10 +326,4 @@ const hero: BevyStyle = {
 const heroBox: BevyStyle = {
   width: 200,
   height: 200,
-};
-
-const caption: BevyStyle = {
-  color: Colors.textColor100,
-  fontSize: FontSizes.base,
-  fontWeight: "bold",
 };

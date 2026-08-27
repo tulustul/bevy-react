@@ -1,10 +1,11 @@
 import { useState } from "react";
+import { InlineCode, Paragraph } from "@/components/typography";
 import { BevyStyle } from "bevy-react/jsx";
 
 import { Example } from "@/components";
-import { Code, InlineCode, P } from "@/components/docs";
-import { Colors, FontSizes, Responsiveness } from "@/theme";
-import { useWindowSize } from "@/useWindowSize";
+import { Code } from "@/components/docs";
+import { Colors, FontSizes } from "@/theme";
+import { useIsMobile } from "@/hooks";
 
 export function MoveBetweenCards() {
   return (
@@ -12,7 +13,7 @@ export function MoveBetweenCards() {
       title="Tickets board"
       info={
         <>
-          <P>
+          <Paragraph>
             Click an item to move it to the other card. React re-renders both
             lists: the item unmounts from one and mounts in the other — a
             different parent — in the same commit, so the tag pairs them and the
@@ -20,7 +21,7 @@ export function MoveBetweenCards() {
             color to the new card's on the way. The siblings it leaves behind
             close the gap with their own{" "}
             <InlineCode>{"transition: { layout }"}</InlineCode>.
-          </P>
+          </Paragraph>
           <Code lang="tsx">{`<button
   sharedTag={\`item-\${id}\`}
   onClick={() => move(id)}
@@ -45,7 +46,7 @@ function TicketsBoard() {
   const [done, setDone] = useState<string[]>(["Delta"]);
   const todo = KANBAN_IDS.filter((id) => !done.includes(id));
 
-  const window = useWindowSize();
+  const isMobile = useIsMobile();
 
   function move(id: string) {
     setDone((d) => (d.includes(id) ? d.filter((x) => x !== id) : [...d, id]));
@@ -55,9 +56,7 @@ function TicketsBoard() {
     <node
       style={{
         ...kanbanColumn,
-        ...(window.width < Responsiveness.desktop && {
-          width: 140,
-        }),
+        ...(isMobile && { width: 140 }),
       }}
     >
       <text style={kanbanTitle}>{side === "todo" ? "To do" : "Done"}</text>

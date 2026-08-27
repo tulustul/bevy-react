@@ -1,7 +1,8 @@
 import { useState } from "react";
+import { InlineCode, ListItem, Paragraph, List } from "@/components/typography";
 import { BevyStyle } from "bevy-react/jsx";
 import { Example } from "@/components";
-import { Code, InlineCode, Li, P, Ul } from "@/components/docs";
+import { Code } from "@/components/docs";
 import { Colors, FontSizes } from "@/theme";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
 
@@ -9,13 +10,13 @@ const PAGE: ExplanationData = {
   title: "<editableText>",
   info: (
     <>
-      <P>
+      <Paragraph>
         <InlineCode>{"<editableText>"}</InlineCode> is a focusable text input
         with the controlled-component contract you know from React:{" "}
         <InlineCode>value</InlineCode> + <InlineCode>onChange</InlineCode>.
         Editing, caret, selection, IME composition, and clipboard (Ctrl+C/V/X)
         are all handled engine-side.
-      </P>
+      </Paragraph>
       <Code lang="tsx">{`<editableText
   value={name}
   onChange={setName}
@@ -24,17 +25,19 @@ const PAGE: ExplanationData = {
   style={inputStyle}
   focusStyle={{ borderColor: "#89b4fa" }}
 />`}</Code>
-      <Ul>
-        <Li>
+      <List>
+        <ListItem>
           focusStyle overlays while the field has focus — applied on the Bevy
           side, no onFocus/onBlur round-trip or React focus state needed.
-        </Li>
-        <Li>
+        </ListItem>
+        <ListItem>
           onFocus / onBlur / onSelect report focus and selection; onBlur for the
           old field fires AFTER onFocus for the new one.
-        </Li>
-        <Li>maxLength caps input; autofocus grabs focus on mount.</Li>
-      </Ul>
+        </ListItem>
+        <ListItem>
+          maxLength caps input; autofocus grabs focus on mount.
+        </ListItem>
+      </List>
     </>
   ),
 };
@@ -53,7 +56,7 @@ export function EditableTextDemo() {
       title="Name form"
       info={
         <>
-          <P>
+          <Paragraph>
             Two controlled fields feeding one greeting, with a status box
             mirroring what the element reports: which field is focused, the
             caret or selection range, and whether an IME composition is in
@@ -61,7 +64,7 @@ export function EditableTextDemo() {
             <InlineCode>onBlur</InlineCode> for the old field arrives after{" "}
             <InlineCode>onFocus</InlineCode> for the new one, clear the focused
             label only if it still names the field losing focus.
-          </P>
+          </Paragraph>
           <Code lang="tsx">{`const blur = (label: string) =>
   setFocused((f) => (f === label ? null : f));
 

@@ -1,9 +1,9 @@
 import { useState } from "react";
+import { Caption, InlineCode, Paragraph } from "@/components/typography";
 import { BevyStyle, ScrollbarStyle } from "bevy-react/jsx";
-import { Button, Example } from "@/components";
-import { Code, InlineCode, P } from "@/components/docs";
+import { Button, ControlColumn, Example, Stage, stage } from "@/components";
+import { Code } from "@/components/docs";
 import { Colors, FontSizes } from "@/theme";
-import { caption, controlColumn } from "../shared";
 
 export function WheelScrollDemo() {
   return (
@@ -11,11 +11,11 @@ export function WheelScrollDemo() {
       title="Scrollports"
       info={
         <>
-          <P>
+          <Paragraph>
             <InlineCode>overflowY: "scroll"</InlineCode> clips a tall child and
             makes the node a wheel-scrollable container. Hover the list and
             scroll — no extra props needed.
-          </P>
+          </Paragraph>
           <Code lang="tsx">{`<node style={{ height: 180, overflowY: "scroll", scrollbarWidth: 8 }}>
   {items.map((item) => (
     <node key={item}>
@@ -32,7 +32,7 @@ export function WheelScrollDemo() {
 
 function WheelScrollCard() {
   return (
-    <node style={listStyle}>
+    <Stage style={listStyle}>
       {ITEMS.map((item) => (
         <node key={item} style={rowStyle}>
           <text style={{ color: Colors.textColor100, fontSize: FontSizes.sm }}>
@@ -40,7 +40,7 @@ function WheelScrollCard() {
           </text>
         </node>
       ))}
-    </node>
+    </Stage>
   );
 }
 
@@ -53,13 +53,13 @@ export function ControlledScrollDemo() {
       title="Controlled scroll position"
       info={
         <>
-          <P>
+          <Paragraph>
             A controlled scroll container: <InlineCode>scrollTop</InlineCode> is
             React state. <InlineCode>onScroll</InlineCode> syncs it from the
             wheel; the buttons jump the offset by writing{" "}
             <InlineCode>scrollTop</InlineCode> back. The readout shows the live
             value.
-          </P>
+          </Paragraph>
           <Code lang="tsx">{`const [scrollTop, setScrollTop] = useState(0);
 
 <node
@@ -82,9 +82,11 @@ export function ControlledScrollDemo() {
 function ControlledScrollCard() {
   const [scrollTop, setScrollTop] = useState(0);
   return (
-    <node style={controlColumn}>
+    <ControlColumn>
+      {/* Controlled scrolling needs node props Stage doesn't forward, so this
+          one composes the stage chrome by hand. */}
       <node
-        style={listStyle}
+        style={{ ...stage, ...listStyle }}
         scrollTop={scrollTop}
         onScroll={(e) => setScrollTop(e.scrollTop)}
       >
@@ -101,9 +103,9 @@ function ControlledScrollCard() {
       <node style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
         <Button onClick={() => setScrollTop(0)}>Top</Button>
         <Button onClick={() => setScrollTop(10_000)}>Bottom</Button>
-        <text style={caption}>{`scrollTop: ${Math.round(scrollTop)}`}</text>
+        <Caption>{`scrollTop: ${Math.round(scrollTop)}`}</Caption>
       </node>
-    </node>
+    </ControlColumn>
   );
 }
 
@@ -116,12 +118,12 @@ export function SmoothScrollDemo() {
       title="Smooth scrolling"
       info={
         <>
-          <P>
+          <Paragraph>
             A <InlineCode>scroll</InlineCode> transition eases the offset
             instead of snapping: each wheel notch glides to its target (
             <InlineCode>scrollStep</InlineCode> sets the per-line distance).
             Compare with the plain wheel list, which jumps.
-          </P>
+          </Paragraph>
           <Code lang="tsx">{`<node
   style={{
     overflowY: "scroll",
@@ -138,7 +140,7 @@ export function SmoothScrollDemo() {
 
 function SmoothScrollCard() {
   return (
-    <node style={controlColumn}>
+    <ControlColumn>
       <node
         style={{
           ...listStyle,
@@ -156,7 +158,7 @@ function SmoothScrollCard() {
           </node>
         ))}
       </node>
-    </node>
+    </ControlColumn>
   );
 }
 
@@ -169,11 +171,11 @@ export function ScrollbarDefaultDemo() {
       title="Default scrollbars"
       info={
         <>
-          <P>
+          <Paragraph>
             <InlineCode>style.scrollbar</InlineCode> adds a visible, draggable
             scrollbar; <InlineCode>"default"</InlineCode> is the built-in bar.
             Drag the thumb or click the track to page.
-          </P>
+          </Paragraph>
           <Code lang="tsx">{`<node style={{ overflowY: "scroll", scrollbar: "default" }}>`}</Code>
         </>
       }
@@ -192,13 +194,13 @@ export function ScrollbarStyledDemo() {
       title="Styled scrollbars"
       info={
         <>
-          <P>
+          <Paragraph>
             A fully styled bar: <InlineCode>track</InlineCode> and{" "}
             <InlineCode>thumb</InlineCode> take node-like styles (color,
             radius), and <InlineCode>thickness</InlineCode> sets its width. By
             default the bar reserves a gutter, so the content shrinks to make
             room.
-          </P>
+          </Paragraph>
           <Code lang="tsx">{`scrollbar: {
   track: { backgroundColor: "#00000088", borderRadius: 8 },
   thumb: { backgroundColor: "#7aa2f7", borderRadius: 8 },
@@ -221,12 +223,12 @@ export function ScrollbarFloatDemo() {
       title="Floating scrollbars"
       info={
         <>
-          <P>
+          <Paragraph>
             <InlineCode>position: "float"</InlineCode> overlays the bar on the
             content instead of reserving a gutter — the list keeps its full
             width and the bar rides on top. The default is{" "}
             <InlineCode>"gutter"</InlineCode>.
-          </P>
+          </Paragraph>
           <Code lang="tsx">{`scrollbar: {
   track: { backgroundColor: "#00000088", borderRadius: 8 },
   thumb: { backgroundColor: "#7aa2f7", borderRadius: 8 },
@@ -250,11 +252,11 @@ export function ScrollbarLeftDemo() {
       title="Left-side scrollbars"
       info={
         <>
-          <P>
+          <Paragraph>
             <InlineCode>verticalSide</InlineCode> picks the edge the vertical
             bar sits on: <InlineCode>"left"</InlineCode> moves it across from
             the default <InlineCode>"right"</InlineCode>.
-          </P>
+          </Paragraph>
           <Code lang="tsx">{`scrollbar: {
   track: { backgroundColor: "#00000088", borderRadius: 8 },
   thumb: { backgroundColor: "#7aa2f7", borderRadius: 8 },
@@ -278,12 +280,12 @@ export function ScrollbarStatesDemo() {
       title="Thumb hover and press"
       info={
         <>
-          <P>
+          <Paragraph>
             <InlineCode>hover</InlineCode> and <InlineCode>pressed</InlineCode>{" "}
             styles nest inside <InlineCode>thumb</InlineCode>: this one
             brightens on hover and turns blue while dragging (pressed wins over
             hover).
-          </P>
+          </Paragraph>
           <Code lang="tsx">{`scrollbar: {
   thumb: {
     backgroundColor: "#313244",
@@ -310,7 +312,7 @@ function ScrollList({
   scrollbar: "none" | "default" | ScrollbarStyle;
 }) {
   return (
-    <node style={{ ...showcaseList, scrollbar }}>
+    <Stage style={{ ...showcaseList, scrollbar }}>
       {ITEMS.map((item) => (
         <node key={item} style={rowStyle}>
           <text style={{ color: Colors.textColor100, fontSize: FontSizes.sm }}>
@@ -318,7 +320,7 @@ function ScrollList({
           </text>
         </node>
       ))}
-    </node>
+    </Stage>
   );
 }
 
@@ -330,14 +332,14 @@ export function HorizontalScrollbarDemo() {
       title="Horizontal scrollbars"
       info={
         <>
-          <P>
+          <Paragraph>
             A horizontal scrollbar: <InlineCode>overflowX: "scroll"</InlineCode>{" "}
             on a fixed-width row whose tiles refuse to shrink, so the row
             overflows. The bar sits on the bottom edge by default;{" "}
             <InlineCode>horizontalSide: "top"</InlineCode> (with{" "}
             <InlineCode>position: "float"</InlineCode>) moves it above the
             content. Drag the thumb or click the track to page.
-          </P>
+          </Paragraph>
           <Code lang="tsx">{`<node
   style={{
     width: 360,
@@ -374,8 +376,8 @@ function HScrollList({
 }) {
   return (
     <node style={{ flexDirection: "column", gap: 6, width: "100%" }}>
-      <text style={caption}>{label}</text>
-      <node style={{ ...hScrollRow, scrollbar }}>
+      <Caption>{label}</Caption>
+      <Stage style={{ ...hScrollRow, scrollbar }}>
         {HTILES.map((n) => (
           <node key={n} style={hTileStyle}>
             <text
@@ -389,7 +391,7 @@ function HScrollList({
             </text>
           </node>
         ))}
-      </node>
+      </Stage>
     </node>
   );
 }
@@ -403,11 +405,8 @@ const listStyle: BevyStyle = {
   gap: 6,
   width: 240,
   height: 180,
-  padding: 8,
   overflowY: "scroll",
   scrollbarWidth: 8,
-  backgroundColor: Colors.surface100,
-  borderRadius: 8,
 };
 
 const rowStyle: BevyStyle = {
@@ -423,10 +422,7 @@ const showcaseList: BevyStyle = {
   gap: 6,
   width: 200,
   height: 180,
-  padding: 8,
   overflowY: "scroll",
-  backgroundColor: Colors.surface100,
-  borderRadius: 8,
 };
 
 // A fully-styled bar: translucent rounded track, violet rounded thumb.
@@ -470,10 +466,7 @@ const hScrollRow: BevyStyle = {
   gap: 8,
   width: 360,
   maxWidth: "100%",
-  padding: 8,
   overflowX: "scroll",
-  backgroundColor: Colors.surface100,
-  borderRadius: 8,
 };
 
 const hTileStyle: BevyStyle = {

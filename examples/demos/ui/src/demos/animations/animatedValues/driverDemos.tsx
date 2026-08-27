@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { BoxLabel, InlineCode, Paragraph } from "@/components/typography";
 import {
   cancelAnimation,
   useSharedValue,
@@ -9,9 +10,8 @@ import {
   withTiming,
 } from "bevy-react";
 import { BevyStyle } from "bevy-react/jsx";
-import { Button, Example, Slider } from "@/components";
-import { Code, InlineCode, P } from "@/components/docs";
-import { column } from "../shared";
+import { Button, Column, Example, Slider, Stage } from "@/components";
+import { Code } from "@/components/docs";
 import { Colors, FontSizes, Gradients } from "@/theme";
 
 // The remaining driver cards: a tunable damped spring, a composed sequence
@@ -28,14 +28,14 @@ export function SpringDemo() {
       title="Springs"
       info={
         <>
-          <P>
+          <Paragraph>
             <InlineCode>withSpring</InlineCode> drives the shared value with a
             damped physical spring instead of a fixed-duration curve: low
             damping overshoots and wobbles, high damping glides. Tune{" "}
             <InlineCode>stiffness</InlineCode> and{" "}
             <InlineCode>damping</InlineCode>, then press Bounce to send the
             square across.
-          </P>
+          </Paragraph>
           <Code lang="tsx">{SPRING_TSX}</Code>
         </>
       }
@@ -57,31 +57,31 @@ function SpringCard() {
   };
 
   return (
-    <node style={column}>
-      <node style={springStage}>
+    <Column style={{ gap: 16 }}>
+      <Stage style={springStage}>
         <node
           style={{
             ...springSquare,
             transform: { translateX: { animated: x } },
           }}
         />
-      </node>
+      </Stage>
       <Slider
         value={stiffness}
         min={20}
         max={300}
         onChange={setStiffness}
-        label={`stiffness ${stiffness.toFixed(0)}`}
+        name="stiffness"
       />
       <Slider
         value={damping}
         min={2}
         max={40}
         onChange={setDamping}
-        label={`damping ${damping.toFixed(0)}`}
+        name="damping"
       />
       <Button onClick={bounce}>Bounce</Button>
-    </node>
+    </Column>
   );
 }
 
@@ -90,8 +90,6 @@ const springStage: BevyStyle = {
   justifyContent: "center",
   width: 240,
   height: 64,
-  backgroundColor: Colors.surface100,
-  borderRadius: 12,
 };
 
 const springSquare: BevyStyle = {
@@ -121,7 +119,7 @@ export function SequenceDemo() {
       title="Sequences"
       info={
         <>
-          <P>
+          <Paragraph>
             <InlineCode>withSequence</InlineCode> chains drivers — each starts
             where the previous ended — and <InlineCode>withDelay</InlineCode>{" "}
             inserts the pauses between them: slide right, pause, slide left,
@@ -130,7 +128,7 @@ export function SequenceDemo() {
             reports the whole sequence settled (
             <InlineCode>finished=false</InlineCode> if interrupted), and here
             re-enables the Play button.
-          </P>
+          </Paragraph>
           <Code lang="tsx">{SEQUENCE_TSX}</Code>
         </>
       }
@@ -154,19 +152,19 @@ function SequenceCard() {
   };
 
   return (
-    <node style={column}>
-      <node style={sequenceStage}>
+    <Column style={{ gap: 16 }}>
+      <Stage style={sequenceStage}>
         <node
           style={{
             ...sequenceSquare,
             transform: { translateX: { animated: x } },
           }}
         />
-      </node>
+      </Stage>
       <Button onClick={running ? undefined : run}>
         {running ? "Playing…" : "Play"}
       </Button>
-    </node>
+    </Column>
   );
 }
 
@@ -175,8 +173,6 @@ const sequenceStage: BevyStyle = {
   justifyContent: "center",
   width: 280,
   height: 64,
-  backgroundColor: Colors.surface100,
-  borderRadius: 12,
 };
 
 const sequenceSquare: BevyStyle = {
@@ -202,13 +198,13 @@ export function SpinDemo() {
       title="Spinning"
       info={
         <>
-          <P>
+          <Paragraph>
             An endless rotation: <InlineCode>withRepeat</InlineCode> (no count)
             loops a linear <InlineCode>withTiming</InlineCode> over a full turn
             forever. Stop calls <InlineCode>cancelAnimation</InlineCode>, which
             freezes the shared value wherever it currently is instead of
             snapping back.
-          </P>
+          </Paragraph>
           <Code lang="tsx">{SPIN_TSX}</Code>
         </>
       }
@@ -236,19 +232,19 @@ function SpinCard() {
   };
 
   return (
-    <node style={column}>
-      <node style={spinStage}>
+    <Column style={{ gap: 16 }}>
+      <Stage style={spinStage}>
         <node
           style={{ ...spinSquare, transform: { rotate: { animated: rot } } }}
         >
-          <text style={spinSquareText}>^</text>
+          <BoxLabel style={{ fontSize: FontSizes.xxl }}>^</BoxLabel>
         </node>
-      </node>
+      </Stage>
       <node style={{ flexDirection: "row", gap: 10 }}>
         <Button onClick={start}>{spinning ? "Restart" : "Start"}</Button>
         <Button onClick={stop}>Stop</Button>
       </node>
-    </node>
+    </Column>
   );
 }
 
@@ -257,8 +253,6 @@ const spinStage: BevyStyle = {
   justifyContent: "center",
   width: 160,
   height: 120,
-  backgroundColor: Colors.surface100,
-  borderRadius: 12,
 };
 
 const spinSquare: BevyStyle = {
@@ -268,10 +262,4 @@ const spinSquare: BevyStyle = {
   backgroundColor: Colors.purple100,
   justifyContent: "center",
   alignItems: "center",
-};
-
-const spinSquareText: BevyStyle = {
-  color: Colors.textColor400,
-  fontSize: FontSizes.xxl,
-  fontWeight: "bold",
 };

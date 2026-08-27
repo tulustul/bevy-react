@@ -1,9 +1,8 @@
-import { Responsiveness } from "@/theme";
-import { useWindowSize } from "@/useWindowSize";
 import { PropsWithChildren } from "react";
+import { useIsMobile } from "@/hooks";
 
 export function DemoRow({ children }: PropsWithChildren) {
-  const window = useWindowSize();
+  const isMobile = useIsMobile();
 
   return (
     <node
@@ -12,7 +11,7 @@ export function DemoRow({ children }: PropsWithChildren) {
         flexWrap: "wrap",
         justifyContent: "center",
         width: "100%",
-        ...(window.width < Responsiveness.desktop && {
+        ...(isMobile && {
           flexDirection: "column",
           flexWrap: "nowrap",
           gap: 10,

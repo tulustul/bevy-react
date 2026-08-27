@@ -1,7 +1,8 @@
 import { useState } from "react";
+import { Bold, BoxLabel, InlineCode, Paragraph } from "@/components/typography";
 import { BevyStyle } from "bevy-react/jsx";
 import { Button, DemoRow, Example } from "@/components";
-import { B, Code, InlineCode, P } from "@/components/docs";
+import { Code } from "@/components/docs";
 import { Colors, FontSizes } from "@/theme";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
 
@@ -15,13 +16,13 @@ const PAGE: ExplanationData = {
   title: "<button>",
   info: (
     <>
-      <P>
+      <Paragraph>
         <InlineCode>{"<button>"}</InlineCode> is a clickable control: wire{" "}
         <InlineCode>onClick</InlineCode>, and give it{" "}
         <InlineCode>hoverStyle</InlineCode> /{" "}
         <InlineCode>pressStyle</InlineCode> overlays that apply while the
         pointer hovers or presses — no state juggling needed for feedback.
-      </P>
+      </Paragraph>
       <Code lang="tsx">{`<button
   onClick={() => setCount((c) => c + 1)}
   hoverStyle={{ backgroundColor: "#89b4fa" }}
@@ -29,16 +30,16 @@ const PAGE: ExplanationData = {
 >
   <text>Click me</text>
 </button>`}</Code>
-      <P>
+      <Paragraph>
         It styles exactly like a <InlineCode>{"<node>"}</InlineCode>; the
-        difference is intent. A button <B>blocks</B> pointer interaction by
-        default (<InlineCode>focusPolicy: "block"</InlineCode>), so a click
+        difference is intent. A button <Bold>blocks</Bold> pointer interaction
+        by default (<InlineCode>focusPolicy: "block"</InlineCode>), so a click
         stops at it instead of passing through to whatever is behind — a
         sibling, an ancestor, or the 3D scene. A{" "}
         <InlineCode>{"<node>"}</InlineCode> passes interaction through. Set{" "}
         <InlineCode>focusPolicy</InlineCode> on either to override.
-      </P>
-      <P>
+      </Paragraph>
+      <Paragraph>
         The host element is deliberately bare. Apps wrap it once with their own
         look — the gallery's <InlineCode>Button</InlineCode> component is
         exactly that: a fairly complex combination of filters, gradients,
@@ -46,7 +47,7 @@ const PAGE: ExplanationData = {
         <InlineCode>{"<button>"}</InlineCode>. Its source (
         <InlineCode>components/Button.tsx</InlineCode>) is a good reference for
         building your own.
-      </P>
+      </Paragraph>
     </>
   ),
 };
@@ -67,12 +68,12 @@ function BasicButtonExample() {
       title="Basic button"
       info={
         <>
-          <P>
+          <Paragraph>
             The host element as-is: <InlineCode>onClick</InlineCode> bumps React
             state, and the <InlineCode>hoverStyle</InlineCode> /{" "}
             <InlineCode>pressStyle</InlineCode> overlays give the button its
             feedback for free.
-          </P>
+          </Paragraph>
           <Code lang="tsx">{`const [count, setCount] = useState(0);
 
 <button
@@ -101,7 +102,7 @@ function BasicButtonCard() {
         hoverStyle={{ backgroundColor: Colors.primary200 }}
         pressStyle={{ backgroundColor: Colors.primary300 }}
       >
-        <text style={basicLabelStyle}>Click me</text>
+        <BoxLabel style={{ fontSize: FontSizes.base }}>Click me</BoxLabel>
       </button>
     </>
   );
@@ -113,14 +114,14 @@ function RichButtonExample() {
       title="Rich button"
       info={
         <>
-          <P>
+          <Paragraph>
             The same counter through the gallery's shared{" "}
             <InlineCode>Button</InlineCode> component. It is a complex
             combination of filters, gradients, transitions and press feedback
             layered over the plain element — too much to fit in a snippet, so
             look at <InlineCode>components/Button.tsx</InlineCode> in the demos
             source for reference.
-          </P>
+          </Paragraph>
           <Code lang="tsx">{`import { Button } from "@/components";
 
 const [count, setCount] = useState(0);
@@ -181,12 +182,6 @@ const basicButtonStyle: BevyStyle = {
   borderRadius: 8,
   backgroundColor: Colors.primary100,
   cursor: "pointer",
-};
-
-const basicLabelStyle: BevyStyle = {
-  color: Colors.textColor400,
-  fontSize: FontSizes.base,
-  fontWeight: "bold",
 };
 
 const richButtonStyle: BevyStyle = {

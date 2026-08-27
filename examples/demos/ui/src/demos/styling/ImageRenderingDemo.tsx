@@ -1,10 +1,16 @@
 import { useState } from "react";
+import {
+  Caption,
+  InlineCode,
+  ListItem,
+  Paragraph,
+  List,
+} from "@/components/typography";
 import { BevyStyle } from "bevy-react/jsx";
-import { DemoRow, Example, Radio } from "@/components";
-import { Code, InlineCode, Li, P, Ul } from "@/components/docs";
+import { DemoRow, Example, Figure, Radio, stage } from "@/components";
+import { Code } from "@/components/docs";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
 import { Colors } from "@/theme";
-import { caption, stage } from "./shared";
 
 type Mode = "auto" | "bilinear" | "trilinear" | "nearest";
 type Pic = "parrot" | "pixelArt" | "pattern";
@@ -51,14 +57,14 @@ const PAGE: ExplanationData = {
   title: "Image rendering",
   info: (
     <>
-      <P>
+      <Paragraph>
         <InlineCode>imageRendering</InlineCode> picks how a node's raster source
         — an <InlineCode>{"<image src>"}</InlineCode> or a{" "}
         <InlineCode>backgroundImage</InlineCode> — is resampled when it is drawn
         at a size other than its own. A loaded PNG has a single mip level, so a
         large image drawn small aliases and shimmers under plain bilinear
         sampling.
-      </P>
+      </Paragraph>
       <Code lang="tsx">{`<image
   src="images/parrot.png"
   style={{
@@ -66,26 +72,26 @@ const PAGE: ExplanationData = {
     imageRendering: "trilinear",
   }}
 />`}</Code>
-      <Ul>
-        <Li>
+      <List>
+        <ListItem>
           trilinear generates a mip pyramid for the image (once, off-thread) and
           samples across levels — the fix for minification.
-        </Li>
-        <Li>
+        </ListItem>
+        <ListItem>
           bilinear is level 0 only (the engine default, what auto means today);
           nearest is nearest-neighbor for pixel art.
-        </Li>
-        <Li>
+        </ListItem>
+        <ListItem>
           Per node, not inherited. Each explicit mode is a derived copy of the
           asset per (source, mode): the source is never modified, two nodes with
           different modes on one file both render as asked, and the copy is
           shared and dropped with its last user.
-        </Li>
-        <Li>
+        </ListItem>
+        <ListItem>
           Composited layers are unaffected; on a live texture (render target,
           portal, canvas, svg) every mode is ignored with a warning.
-        </Li>
-      </Ul>
+        </ListItem>
+      </List>
     </>
   ),
 };
@@ -117,12 +123,6 @@ const sizesRow: BevyStyle = {
   padding: 30,
 };
 
-const column: BevyStyle = {
-  flexDirection: "column",
-  alignItems: "center",
-  gap: 6,
-};
-
 const controls: BevyStyle = {
   flexDirection: "column",
   alignItems: "center",
@@ -148,9 +148,9 @@ function useControls() {
     width === picture.width ? `${width}px (native)` : `${width}px`;
   const panel = (
     <node style={controls}>
-      <text style={caption}>rendering</text>
+      <Caption>rendering</Caption>
       <Radio options={MODE_OPTIONS} value={mode} onChange={setMode} />
-      <text style={caption}>image</text>
+      <Caption>image</Caption>
       <Radio options={PIC_OPTIONS} value={pic} onChange={setPic} />
     </node>
   );
@@ -163,13 +163,13 @@ function ImageElementDemo() {
       title="<image>"
       info={
         <>
-          <P>
+          <Paragraph>
             One picture at three sizes — one of them native — under the selected
             mode. Minified, <InlineCode>bilinear</InlineCode> aliases and{" "}
             <InlineCode>trilinear</InlineCode> stays smooth; magnified pixel art
             is crisp only under <InlineCode>nearest</InlineCode>. Hover an image
             to scale it 20% and watch the resampling follow.
-          </P>
+          </Paragraph>
           <Code lang="tsx">{`<image
   src="images/parrot.png"
   style={{
@@ -197,7 +197,7 @@ function ImageElementCard() {
     <node style={body}>
       <node style={sizesRow}>
         {picture.sizes.map((width) => (
-          <node key={width} style={column}>
+          <Figure key={width} style={{ gap: 6 }} caption={label(width)}>
             <image
               src={picture.src}
               style={{
@@ -208,8 +208,7 @@ function ImageElementCard() {
               }}
               hoverStyle={hoverScale}
             />
-            <text style={caption}>{label(width)}</text>
-          </node>
+          </Figure>
         ))}
       </node>
       {panel}
@@ -223,12 +222,12 @@ function BackgroundImageDemo() {
       title="backgroundImage"
       info={
         <>
-          <P>
+          <Paragraph>
             The same keyword governs a node's{" "}
             <InlineCode>backgroundImage</InlineCode> — every raster source drawn
             through the node. Same picture, same three sizes, painted as a
             background; the file itself is never modified.
-          </P>
+          </Paragraph>
           <Code lang="tsx">{`<node
   style={{
     width: 64,
@@ -258,7 +257,7 @@ function BackgroundImageCard() {
     <node style={body}>
       <node style={sizesRow}>
         {picture.sizes.map((width) => (
-          <node key={width} style={column}>
+          <Figure key={width} style={{ gap: 6 }} caption={label(width)}>
             <node
               style={{
                 ...sizeOf(width),
@@ -271,8 +270,7 @@ function BackgroundImageCard() {
               }}
               hoverStyle={hoverScale}
             />
-            <text style={caption}>{label(width)}</text>
-          </node>
+          </Figure>
         ))}
       </node>
       {panel}

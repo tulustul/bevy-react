@@ -1,22 +1,28 @@
 import { useState } from "react";
-import { DemoRow, Example, Slider } from "@/components";
-import { B, Code, InlineCode, Li, P, Ul } from "@/components/docs";
+import {
+  Bold,
+  InlineCode,
+  ListItem,
+  Paragraph,
+  List,
+} from "@/components/typography";
+import { ControlColumn, DemoRow, Example, Slider } from "@/components";
+import { Code } from "@/components/docs";
 import { Colors, FontSizes } from "@/theme";
-import { controlColumn } from "./shared";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
 
 const PAGE: ExplanationData = {
   title: "Backdrop filters",
   info: (
     <>
-      <P>
+      <Paragraph>
         <InlineCode>backdropFilter</InlineCode> takes the same{" "}
         <InlineCode>{"{ name, params }"}</InlineCode> chains as{" "}
         <InlineCode>filter</InlineCode>, but filters what is rendered{" "}
-        <B>behind</B> the node and composites the result under the node's own
-        background — a semi-transparent background over it is the classic
+        <Bold>behind</Bold> the node and composites the result under the node's
+        own background — a semi-transparent background over it is the classic
         frosted-glass card:
-      </P>
+      </Paragraph>
       <Code lang="tsx">{`<node
   style={{
     backgroundColor: "rgba(26, 27, 38, 0.35)",
@@ -25,25 +31,25 @@ const PAGE: ExplanationData = {
 >
   <text>frosted glass</text>
 </node>`}</Code>
-      <Ul>
-        <Li>
+      <List>
+        <ListItem>
           The backdrop source is currently the camera's post-processed 3D frame
           — UI painted beneath the node is not included.
-        </Li>
-        <Li>
+        </ListItem>
+        <ListItem>
           The frosted quad covers the node's border box and respects{" "}
           <InlineCode>borderRadius</InlineCode>.
-        </Li>
-        <Li>
+        </ListItem>
+        <ListItem>
           The backdrop is live, so its passes re-run every frame; the node's own
           content still caches.
-        </Li>
-        <Li>
+        </ListItem>
+        <ListItem>
           Transitions and {"{ animated }"} param wrappers mirror{" "}
           <InlineCode>filter</InlineCode>, including the snap when easing to an
           empty chain on removal.
-        </Li>
-      </Ul>
+        </ListItem>
+      </List>
     </>
   ),
 };
@@ -81,7 +87,7 @@ function GlassCardDemo() {
       title="Blurred backdrop"
       info={
         <>
-          <P>
+          <Paragraph>
             A semi-transparent panel with a <InlineCode>blur</InlineCode>{" "}
             backdrop is the classic glass card: the moving cubes stay readable
             as soft shapes behind it. Drag the radius — only the backdrop passes
@@ -89,7 +95,7 @@ function GlassCardDemo() {
             respects <InlineCode>borderRadius</InlineCode>: it is masked to the
             panel's rounded border box with the same antialiased edge the
             background paints.
-          </P>
+          </Paragraph>
           <Code lang="tsx">{`<node
   style={{
     backgroundColor: "rgba(26, 27, 38, 0.35)",
@@ -108,7 +114,7 @@ function GlassCardDemo() {
 function GlassCard() {
   const [radius, setRadius] = useState(40);
   return (
-    <node style={controlColumn}>
+    <ControlColumn>
       <node
         style={{
           ...glass,
@@ -130,9 +136,11 @@ function GlassCard() {
         min={0}
         max={50}
         onChange={setRadius}
-        label={`radius ${radius.toFixed(1)}px`}
+        name="radius"
+        decimals={1}
+        unit="px"
       />
-    </node>
+    </ControlColumn>
   );
 }
 
@@ -142,12 +150,12 @@ function HueDemo() {
       title="Hue rotation"
       info={
         <>
-          <P>
+          <Paragraph>
             Any built-in works on the backdrop: here{" "}
             <InlineCode>hueRotate</InlineCode> recolors the scene behind the
             panel while the UI in front keeps its colors. Drag the slider to
             spin the hue.
-          </P>
+          </Paragraph>
           <Code lang="tsx">{`<node
   style={{
     backdropFilter: [{ name: "hueRotate", params: { angle } }],
@@ -165,7 +173,7 @@ function HueDemo() {
 function HueCard() {
   const [hue, setHue] = useState(180);
   return (
-    <node style={controlColumn}>
+    <ControlColumn>
       <node
         style={{
           ...glass,
@@ -177,9 +185,10 @@ function HueCard() {
         min={0}
         max={360}
         onChange={setHue}
-        label={`hue ${hue.toFixed(1)}`}
+        name="hue"
+        decimals={1}
       />
-    </node>
+    </ControlColumn>
   );
 }
 
@@ -189,13 +198,13 @@ function BothChainsDemo() {
       title="Filter and backdrop filter"
       info={
         <>
-          <P>
+          <Paragraph>
             <InlineCode>backdropFilter</InlineCode> and{" "}
             <InlineCode>filter</InlineCode> are independent chains on one node:
             the backdrop blurs the scene while the content chain (ripple +
             chromaticAberration) warps and fringes the panel's own children.
             Each resolves, transitions, and animates on its own.
-          </P>
+          </Paragraph>
           <Code lang="tsx">{`<node
   style={{
     backdropFilter: { name: "blur", params: { radius: 20 } },
@@ -219,7 +228,7 @@ function BothChainsDemo() {
 
 function BothChainsCard() {
   return (
-    <node style={controlColumn}>
+    <ControlColumn>
       <node
         style={{
           ...glass,
@@ -246,7 +255,7 @@ function BothChainsCard() {
           FILTERED CONTENT
         </text>
       </node>
-    </node>
+    </ControlColumn>
   );
 }
 
@@ -256,11 +265,11 @@ function CustomFilterDemo() {
       title="Custom backdrop filters"
       info={
         <>
-          <P>
+          <Paragraph>
             Custom <InlineCode>#[react_filter]</InlineCode>s run on the backdrop
             unchanged — this glass warps, fringes, and glitches the scene behind
             it (ripple + chromaticAberration + glitch).
-          </P>
+          </Paragraph>
           <Code lang="tsx">{`<node
   style={{
     backdropFilter: [

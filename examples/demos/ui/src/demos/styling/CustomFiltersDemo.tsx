@@ -1,5 +1,12 @@
 import { useEffect, useState } from "react";
 import {
+  CardTitle,
+  InlineCode,
+  ListItem,
+  Paragraph,
+  List,
+} from "@/components/typography";
+import {
   useSharedValue,
   withDelay,
   withRepeat,
@@ -7,23 +14,30 @@ import {
   withTiming,
 } from "bevy-react";
 import { BevyStyle } from "bevy-react/jsx";
-import { DemoRow, Example, Slider } from "@/components";
-import { Code, CodeTabs, InlineCode, Li, P, Ul } from "@/components/docs";
-import { Colors, FontSizes } from "@/theme";
-import { controlColumn } from "./shared";
+import {
+  ControlColumn,
+  DemoRow,
+  Example,
+  ParamControls,
+  Slider,
+  slider,
+  useParams,
+} from "@/components";
+import { Code, CodeTabs } from "@/components/docs";
+import { Colors } from "@/theme";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
 
 const PAGE: ExplanationData = {
   title: "Custom filters",
   info: (
     <>
-      <P>
+      <Paragraph>
         A custom filter is a <InlineCode>#[react_filter]</InlineCode> params
         struct plus a WGSL shader asset, registered with{" "}
         <InlineCode>{"app.add_react_filter::<T>()"}</InlineCode> — in both the
         running app and the bindings exporter — then regenerate{" "}
         <InlineCode>bevy.ts</InlineCode> so the params type-check in React.
-      </P>
+      </Paragraph>
       <Code lang="rust">{`#[react_filter(shader = "shaders/ripple.wgsl", outset = 12.0, time = true)]
 struct Ripple {
     amplitude: f32,
@@ -32,21 +46,21 @@ struct Ripple {
 }
 
 app.add_react_filter::<Ripple>();`}</Code>
-      <Ul>
-        <Li>
+      <List>
+        <ListItem>
           Shaders <InlineCode>#import bevy_react::filter</InlineCode>, name
           their entry point <InlineCode>fragment</InlineCode>, and follow the
           prelude's premultiplied-alpha rules.
-        </Li>
-        <Li>
+        </ListItem>
+        <ListItem>
           <InlineCode>time = true</InlineCode> feeds the clock uniform and
           re-runs the pass every frame without re-capturing.
-        </Li>
-        <Li>
+        </ListItem>
+        <ListItem>
           <InlineCode>outset</InlineCode> reserves extra pixels past the node's
           box for effects that displace outward.
-        </Li>
-      </Ul>
+        </ListItem>
+      </List>
     </>
   ),
 };
@@ -76,7 +90,7 @@ function RippleDemo() {
       title="Ripple"
       info={
         <>
-          <P>
+          <Paragraph>
             <InlineCode>ripple</InlineCode> is an app-authored WGSL pass (a{" "}
             <InlineCode>#[react_filter]</InlineCode> struct +{" "}
             <InlineCode>shaders/ripple.wgsl</InlineCode>). Declared with{" "}
@@ -84,7 +98,7 @@ function RippleDemo() {
             re-renders every frame — animating with zero re-captures: the
             subtree is captured once and only the filter pass re-runs. The wave
             displaces up to the macro's outset (12px) past the card edge.
-          </P>
+          </Paragraph>
           <CodeTabs
             tsx={`<node
   style={{
@@ -114,50 +128,26 @@ struct Ripple {
 }
 
 function RippleCard() {
-  const [amplitude, setAmplitude] = useState(4);
-  const [frequency, setFrequency] = useState(12);
-  const [speed, setSpeed] = useState(1);
+  const [params, controls] = useParams(RIPPLE);
   return (
-    <node style={controlColumn}>
-      <node
-        style={{
-          ...card,
-          filter: {
-            name: "ripple",
-            params: { amplitude, frequency, speed },
-          },
-        }}
-      >
+    <ControlColumn>
+      <node style={{ ...card, filter: { name: "ripple", params } }}>
         <image
           src="images/parrot.png"
           style={{ width: 130, borderRadius: 8 }}
         />
-        <text style={cardTitle}>Making waves</text>
+        <CardTitle>Making waves</CardTitle>
       </node>
-      <Slider
-        value={amplitude}
-        min={0}
-        max={12}
-        onChange={setAmplitude}
-        label={`amplitude ${amplitude.toFixed(1)}px`}
-      />
-      <Slider
-        value={frequency}
-        min={0}
-        max={30}
-        onChange={setFrequency}
-        label={`frequency ${frequency.toFixed(1)}`}
-      />
-      <Slider
-        value={speed}
-        min={0}
-        max={4}
-        onChange={setSpeed}
-        label={`speed ${speed.toFixed(2)}`}
-      />
-    </node>
+      <ParamControls {...controls} />
+    </ControlColumn>
   );
 }
+
+const RIPPLE = {
+  amplitude: slider(0, 12, 4, { decimals: 1, unit: "px" }),
+  frequency: slider(0, 30, 12, { decimals: 1 }),
+  speed: slider(0, 4, 1, { decimals: 2 }),
+};
 
 function GlitchDemo() {
   return (
@@ -166,14 +156,14 @@ function GlitchDemo() {
       title="Glitch"
       info={
         <>
-          <P>
+          <Paragraph>
             <InlineCode>glitch</InlineCode>: time-seeded horizontal slice
             offsets + RGB channel split, hashed procedurally in the shader — no
             noise textures. Also <InlineCode>time = true</InlineCode>, so the
             corruption pattern re-rolls a few times a second while the layer's
             capture stays untouched. One f32 param packs as{" "}
             <InlineCode>params[0].x</InlineCode>.
-          </P>
+          </Paragraph>
           <CodeTabs
             tsx={`<node style={{ filter: { name: "glitch", params: { intensity } } }}>
   …
@@ -194,7 +184,7 @@ struct Glitch {
 function GlitchCard() {
   const [intensity, setIntensity] = useState(0.5);
   return (
-    <node style={controlColumn}>
+    <ControlColumn>
       <node
         style={{
           ...card,
@@ -205,16 +195,16 @@ function GlitchCard() {
           src="images/parrot.png"
           style={{ width: 130, borderRadius: 8 }}
         />
-        <text style={cardTitle}>SIGNAL LOST</text>
+        <CardTitle>SIGNAL LOST</CardTitle>
       </node>
       <Slider
         value={intensity}
         min={0}
         max={1}
         onChange={setIntensity}
-        label={`intensity ${intensity.toFixed(2)}`}
+        name="intensity"
       />
-    </node>
+    </ControlColumn>
   );
 }
 
@@ -224,13 +214,13 @@ function DissolveDemo() {
       title="Dissolve"
       info={
         <>
-          <P>
+          <Paragraph>
             <InlineCode>dissolve</InlineCode> burns the image away: texels whose
             procedural noise falls below <InlineCode>progress</InlineCode> go
             fully transparent, with an ember edge at the front. No time uniform
             — this layer repaints only when the slider moves, a pure params-only
             update over the reused capture.
-          </P>
+          </Paragraph>
           <CodeTabs
             tsx={`<image
   src="images/parrot.png"
@@ -252,7 +242,7 @@ struct Dissolve {
 function DissolveCard() {
   const [progress, setProgress] = useState(0.4);
   return (
-    <node style={controlColumn}>
+    <ControlColumn>
       <node
         style={{
           ...card,
@@ -263,16 +253,16 @@ function DissolveCard() {
           src="images/parrot.png"
           style={{ width: 130, borderRadius: 8 }}
         />
-        <text style={cardTitle}>Burning!!!</text>
+        <CardTitle>Burning!!!</CardTitle>
       </node>
       <Slider
         value={progress}
         min={0}
         max={1}
         onChange={setProgress}
-        label={`progress ${progress.toFixed(2)}`}
+        name="progress"
       />
-    </node>
+    </ControlColumn>
   );
 }
 
@@ -282,7 +272,7 @@ function BurnDemo() {
       title="Animated parameters"
       info={
         <>
-          <P>
+          <Paragraph>
             The payoff: dissolve's <InlineCode>progress</InlineCode> bound to a
             shared value written inline in the filter's params. A{" "}
             <InlineCode>withRepeat</InlineCode> driver loops the sequence
@@ -290,7 +280,7 @@ function BurnDemo() {
             happens Bevy-side: zero React re-renders, zero re-captures, just the
             dissolve pass re-running over the reused capture with a fresh
             progress each frame.
-          </P>
+          </Paragraph>
           <Code lang="tsx">{`const progress = useSharedValue(0);
 progress.value = withRepeat(
   withSequence(
@@ -326,7 +316,7 @@ function BurnCard() {
     );
   }, [progress]);
   return (
-    <node style={controlColumn}>
+    <ControlColumn>
       <node
         style={{
           ...card,
@@ -340,9 +330,9 @@ function BurnCard() {
           src="images/parrot.png"
           style={{ width: 130, borderRadius: 8 }}
         />
-        <text style={cardTitle}>Burning!!!</text>
+        <CardTitle>Burning!!!</CardTitle>
       </node>
-    </node>
+    </ControlColumn>
   );
 }
 
@@ -353,14 +343,14 @@ function CyberpunkDemo() {
       style={{ cache: "never" }}
       info={
         <>
-          <P>
+          <Paragraph>
             Filters compose with the other layer styles: a{" "}
             <InlineCode>transform3d</InlineCode> tilts the keybinding panel in
             perspective while a bloom + glitch + chromaticAberration chain runs
             over the same capture — the whole HUD look is one style object.
             Hover a row: plain transitions keep easing inside the filtered
             layer.
-          </P>
+          </Paragraph>
           <Code lang="tsx">{`<node
   style={{
     transform3d: { rotateY: -30, rotateX: 10, perspective: 300 },
@@ -475,10 +465,4 @@ const card: BevyStyle = {
   padding: 14,
   borderRadius: 12,
   backgroundColor: Colors.surface300,
-};
-
-const cardTitle: BevyStyle = {
-  color: Colors.textColor100,
-  fontSize: FontSizes.base,
-  fontWeight: "bold",
 };

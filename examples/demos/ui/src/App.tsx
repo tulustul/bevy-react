@@ -1,17 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BevyStyle } from "bevy-react/jsx";
 import { bevy } from "@/bevy";
-import { Responsiveness, Scrollbar } from "@/theme";
+import { Scrollbar } from "@/theme";
 import { DEMOS, findDemoByLabel } from "./demos";
 import { Navigation } from "./Navigation";
 import { HeaderCard } from "./HeaderCard";
 import { ExampleModal } from "./ExampleModal";
 import { TopBar } from "./TopBar";
-import { LayoutProvider, useLayout } from "./layoutMode";
-import { useWindowSize } from "./useWindowSize";
+import { useWindowSize } from "./hooks/useWindowSize";
 import { useDemosStore } from "./demosStore";
 import { setNavigate } from "./demoNavigation";
 import type { MorphUse } from "./demos/styling/morphFilterDemo/params";
+import { useIsMobile } from "./hooks";
 
 // The page-transition morphs: each demo switch picks one at random.
 const PAGE_MORPHS: MorphUse[] = [
@@ -27,29 +27,24 @@ const PAGE_MORPHS: MorphUse[] = [
 ];
 
 export function App() {
-  // The one viewport subscription; the shell mode derives from it (see
-  // `layoutMode`). Nothing renders until the size is known: one blank frame
-  // is invisible, a desktop→compact flip mid entrance animation is not.
   const win = useWindowSize();
-  if (!win) return null;
-  return (
-    <LayoutProvider win={win}>
-      <Shell />
-    </LayoutProvider>
-  );
+
+  if (!win) {
+    return null;
+  }
+
+  return <Shell />;
 }
 
 function Shell() {
   const { selectedDemo, setSelectedDemo } = useDemosStore();
-  const { mode, contentPadding } = useLayout();
-  const compact = mode === "compact";
 
-  const window = useWindowSize();
+  const isMobile = useIsMobile();
 
   // Compact-only: the nav drawer's open state. Crossing the breakpoint (a
   // desktop resize) resets it — the regular shell has no drawer.
   const [navOpen, setNavOpen] = useState(false);
-  useEffect(() => setNavOpen(false), [mode]);
+  useEffect(() => setNavOpen(false), [isMobile]);
   const closeNav = useCallback(() => setNavOpen(false), []);
 
   // Re-rolled exactly when the demo changes — same commit as the morph key
@@ -78,19 +73,17 @@ function Shell() {
   }, [setSelectedDemo]);
 
   return (
-    <node style={compact ? rootCompactStyle : rootStyle}>
-      {compact && (
-        <TopBar title={selectedDemo.label} onMenu={() => setNavOpen(true)} />
-      )}
+    <node style={isMobile ? rootCompactStyle : rootStyle}>
+      {isMobile && <TopBar onMenu={() => setNavOpen(true)} />}
       {/* First in the row (regular: the left column); compact positions it
           absolutely, so order is irrelevant there and zIndex stacks it. */}
-      <Navigation compact={compact} open={navOpen} onClose={closeNav} />
+      <Navigation open={navOpen} onClose={closeNav} />
 
       <node
         style={{
           ...contentStyle,
           // A column child: take what the bar leaves, never the bar's share.
-          ...(compact ? { height: undefined, minHeight: 0 } : {}),
+          ...(isMobile ? { height: undefined, minHeight: 0 } : {}),
           morphFilter: { key: selectedDemo.label, ...pageMorph },
         }}
         scrollStep={100}
@@ -98,8 +91,7 @@ function Shell() {
         <node
           style={{
             ...contentInnerStyle,
-            ...(window.width < Responsiveness.desktop &&
-              contentInnerMobileStyle),
+            ...(isMobile && contentInnerMobileStyle),
           }}
         >
           <HeaderCard />
@@ -109,7 +101,7 @@ function Shell() {
 
       {/* Tap outside the open drawer to close it. Mounted only while open:
           a transparent node would still swallow the page's clicks. */}
-      {compact && navOpen && <node style={scrimStyle} onClick={closeNav} />}
+      {isMobile && navOpen && <node style={scrimStyle} onClick={closeNav} />}
 
       <ExampleModal />
     </node>
@@ -146,7 +138,6 @@ const contentStyle: BevyStyle = {
   flexDirection: "column",
   alignItems: "flexStart",
   overflowY: "scroll",
-  overflowX: "scroll",
   scrollbar: Scrollbar,
   transition: {
     scroll: { duration: 200, easing: "easeOut" },
@@ -158,7 +149,7 @@ const contentInnerStyle: BevyStyle = {
   flexDirection: "column",
   alignItems: "center",
   gap: 20,
-  minWidth: "100%",
+  width: "100%",
   padding: 24,
 };
 

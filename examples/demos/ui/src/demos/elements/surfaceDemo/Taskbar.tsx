@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
+import { CardTitle, TextMono } from "@/components/typography";
 import { BevyStyle } from "bevy-react/jsx";
-import { TextMono } from "@/components";
+
 import { Colors, FontSizes } from "@/theme";
 import { MenuList, Popup } from "./menu";
 
@@ -45,7 +46,7 @@ export function Taskbar({
           hoverStyle={startButtonHover}
           onClick={onStart}
         >
-          <text style={startText}>bevy-react</text>
+          <CardTitle>bevy-react</CardTitle>
         </button>
       </node>
 
@@ -113,12 +114,6 @@ const startButtonActive: BevyStyle = {
   borderRadius: 8,
   backgroundColor: Colors.primary300,
   cursor: "pointer",
-};
-
-const startText: BevyStyle = {
-  color: Colors.textColor100,
-  fontSize: FontSizes.base,
-  fontWeight: "bold",
 };
 
 // Anchored just above the Start button.

@@ -1,4 +1,5 @@
 import { useEffect, useState, type PropsWithChildren } from "react";
+import { Caption, CardTitle } from "@/components/typography";
 import {
   interpolate,
   useSharedValue,
@@ -10,7 +11,7 @@ import { BevyStyle } from "bevy-react/jsx";
 import { Typewriter } from "@/components";
 import { Colors, Filters, FontSizes } from "@/theme";
 import { useDemoPage } from "@/explanationStore";
-import { useLayout } from "@/layoutMode";
+import { useIsMobile } from "@/hooks";
 
 type Feature = { title: string; body: string };
 
@@ -77,17 +78,21 @@ export function Home() {
   // The landing page opts out of the explanation panel — the content area
   // then uses the full width (App.tsx drops the reserved panel padding).
   useDemoPage(null);
-  const layout = useLayout();
-  const compact = layout.mode === "compact";
-  // Explicit px clamps (not `width:"100%"` + `maxWidth`, see `layoutMode`).
-  const pageWidth = Math.min(PAGE_MAX_WIDTH, layout.contentWidth);
-  const innerWidth = pageWidth - 2 * PAGE_PADDING;
+
+  const isMobile = useIsMobile();
 
   return (
-    <node style={{ ...pageStyle, maxWidth: pageWidth }}>
-      <Hero compact={compact} width={Math.min(HERO_WIDTH, innerWidth)} />
+    <node
+      style={{
+        ...pageStyle,
+        ...(!isMobile && {
+          backdropFilter: Filters.backdrop,
+        }),
+      }}
+    >
+      <Hero />
       <Reveal delay={HERO_DONE_MS + 200}>
-        <text style={{ ...introStyle, maxWidth: Math.min(600, innerWidth) }}>
+        <text style={introStyle}>
           You write components in React/TSX and they render to native Bevy UI
           through a React Native-style bridge. State and interactions flow both
           ways, and edits hot-reload live while keeping component state.
@@ -95,17 +100,11 @@ export function Home() {
       </Reveal>
       <node style={cardsRowStyle}>
         {FEATURES.map((feature, index) => (
-          <FeatureCard
-            key={feature.title}
-            feature={feature}
-            index={index}
-            // Phones: one full-width card per row.
-            slotWidth={compact ? innerWidth : undefined}
-          />
+          <FeatureCard key={feature.title} feature={feature} index={index} />
         ))}
       </node>
       <Reveal delay={CARDS_DONE_MS}>
-        <text style={browseStyle}>Browse the demos in the side panel</text>
+        <CardTitle>Browse the demos in the side panel</CardTitle>
       </Reveal>
     </node>
   );
@@ -149,10 +148,11 @@ function Reveal({ delay, children }: PropsWithChildren<{ delay: number }>) {
 // layer (not chained after shadow: shadow's combine, like bloom's, layers
 // the original capture back over the blurred shadow, which would discard a
 // same-chain recolor); the outer node owns the morph + drop shadow.
-function Hero({ compact, width }: { compact: boolean; width: number }) {
+function Hero() {
   const [step, setStep] = useState(0);
   const bob = useSharedValue(0);
   const glow = useSharedValue(0);
+  const isMobile = useIsMobile();
   const title = TITLE_SEQUENCE[step];
 
   useEffect(() => {
@@ -217,7 +217,6 @@ function Hero({ compact, width }: { compact: boolean; width: number }) {
       >
         <node
           style={{
-            width,
             height: 72,
             alignItems: "center",
             justifyContent: "center",
@@ -230,7 +229,7 @@ function Hero({ compact, width }: { compact: boolean; width: number }) {
             },
           }}
         >
-          <text style={{ ...titleStyle, fontSize: compact ? 36 : 56 }}>
+          <text style={{ ...titleStyle, ...(isMobile && { fontSize: 36 }) }}>
             {title.text}
           </text>
         </node>
@@ -294,19 +293,15 @@ function FeatureCard({
           <text style={{ ...cardTitleStyle, color: accent }}>
             {feature.title}
           </text>
-          <text style={cardBodyStyle}>{feature.body}</text>
+          <Caption>{feature.body}</Caption>
         </node>
       </node>
     </node>
   );
 }
 
-const PAGE_MAX_WIDTH = 760;
 const PAGE_PADDING = 32;
-/** The hero title's morph rect width (see `Hero`), clamped to the page. */
-const HERO_WIDTH = 460;
 const CARD_WIDTH = 300;
-/** The tilt wrapper's padding around each feature card. */
 const CARD_WRAP_PADDING = 10;
 
 const pageStyle: BevyStyle = {
@@ -314,9 +309,9 @@ const pageStyle: BevyStyle = {
   alignItems: "center",
   gap: 24,
   padding: PAGE_PADDING,
-  backdropFilter: Filters.backdrop,
   backgroundColor: "rgba(0,0,0,0.3)",
   borderRadius: 20,
+  maxWidth: 720,
 };
 
 const heroStyle: BevyStyle = {
@@ -328,6 +323,7 @@ const heroStyle: BevyStyle = {
 const titleStyle: BevyStyle = {
   color: Colors.primary100,
   fontFamily: "MetalMania",
+  fontSize: 56,
 };
 
 const taglineStyle: BevyStyle = {
@@ -361,17 +357,6 @@ const cardHoverStyle: BevyStyle = {
 };
 
 const cardTitleStyle: BevyStyle = {
-  fontSize: FontSizes.base,
-  fontWeight: "bold",
-};
-
-const cardBodyStyle: BevyStyle = {
-  color: Colors.textColor200,
-  fontSize: FontSizes.xs,
-};
-
-const browseStyle: BevyStyle = {
-  color: Colors.textColor100,
   fontSize: FontSizes.base,
   fontWeight: "bold",
 };
