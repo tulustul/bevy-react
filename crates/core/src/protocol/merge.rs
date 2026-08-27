@@ -12,14 +12,17 @@ impl Props {
     /// opacity/filter reasons, the create-time layer-dirty seed) — a new
     /// variant slot extends this once, not each call site.
     pub fn all_styles(&self) -> impl Iterator<Item = &Style> {
-        [
-            &self.style,
-            &self.hover_style,
-            &self.press_style,
-            &self.focus_style,
-        ]
-        .into_iter()
-        .flatten()
+        // The base is inline, the variants are boxed (see `Props`), so the two
+        // halves are chained rather than listed in one array.
+        self.style.as_ref().into_iter().chain(
+            [
+                self.hover_style.as_deref(),
+                self.press_style.as_deref(),
+                self.focus_style.as_deref(),
+            ]
+            .into_iter()
+            .flatten(),
+        )
     }
 
     /// Split the event-like fields (see [`UpdateEvents`]) out of `self`,

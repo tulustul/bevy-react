@@ -16,20 +16,29 @@ use super::style::{Style, StyleDirty};
 #[serde(rename_all = "camelCase")]
 pub struct Props {
     /// CSS-like layout + visual style, mapped onto `bevy_ui` components.
+    ///
+    /// Inline (unboxed) deliberately: nearly every op carries one, so a box
+    /// would trade a memcpy for an allocation on the hot path. The variants
+    /// below are the opposite case — see [`Self::hover_style`].
     #[serde(default)]
     pub style: Option<Style>,
     /// Style overlaid on `style` while the element is hovered. Decoded exactly
     /// like `style`; applied on the Bevy side from the node's `Interaction`.
+    ///
+    /// **Boxed**, like its press/focus siblings: `Style` is ~4.4 KB, this
+    /// struct is default-initialized and merged once per Create/Update op, and
+    /// the vast majority of nodes declare no variant at all — inline they cost
+    /// every node 3 × `Style` for nothing. See [`props_stays_small`].
     #[serde(default)]
-    pub hover_style: Option<Style>,
+    pub hover_style: Option<Box<Style>>,
     /// Style overlaid on `style` (and `hover_style`) while the element is pressed.
     #[serde(default)]
-    pub press_style: Option<Style>,
+    pub press_style: Option<Box<Style>>,
     /// Style overlaid on `style` while the element is focused (currently
     /// `editableText`). Applied on the Bevy side from the node's focus state, so
     /// focus styling needs no React round-trip.
     #[serde(default)]
-    pub focus_style: Option<Style>,
+    pub focus_style: Option<Box<Style>>,
     /// Whether this element has an `onClick` handler registered in JS.
     #[serde(default)]
     pub on_click: bool,
@@ -288,4 +297,22 @@ pub struct UpdateEvents {
 #[cfg(test)]
 pub(crate) fn props_from_json(json: serde_json::Value) -> Props {
     serde_json::from_value(json).expect("valid props")
+}
+
+/// `Props` is heap-allocated, default-initialized, decoded and merged **once
+/// per Create/Update op**, and `apply_js_ops` cost is linear in its size —
+/// measured at ~230 ns/op per KB, flat across 0.4.0/0.5.0/0.6.0 (see
+/// `docs/BENCHMARKS.md`). Since the struct held four inline [`Style`]s, every
+/// byte added to `Style` cost four here, and the translate leg crept +10–18%
+/// per release. The variants are boxed so a new `Style` field costs 1×; this
+/// test fails if another `Style`-sized field is inlined.
+#[cfg(test)]
+#[test]
+fn props_stays_small() {
+    let size = size_of::<Props>();
+    assert!(
+        size <= 8 * 1024,
+        "Props grew to {size} B (>8 KiB): every Create/Update op pays for this. \
+         Box the new field instead of inlining it — see the `hover_style` docs."
+    );
 }

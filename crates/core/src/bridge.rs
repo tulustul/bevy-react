@@ -76,12 +76,16 @@ pub struct RRoot;
 /// and/or `pressStyle`. The interaction system re-applies the merged style as
 /// the node's `Interaction` changes, entirely on the Bevy side (no round-trip
 /// to JS). Absent on elements without variants — they style as before.
+///
+/// Every slot is **boxed**: `Style` is ~4.4 KB, so inline this component would
+/// weigh ~17.6 KB in the archetype row of every interactive node (and be
+/// memcpy'd on each table move) to hold at most a handful of set fields.
 #[derive(Component, Debug, Clone, Default)]
 pub struct StyleVariants {
-    pub base: Option<Style>,
-    pub hover: Option<Style>,
-    pub press: Option<Style>,
-    pub focus: Option<Style>,
+    pub base: Option<Box<Style>>,
+    pub hover: Option<Box<Style>>,
+    pub press: Option<Box<Style>>,
+    pub focus: Option<Box<Style>>,
 }
 
 /// Whether a node with a `focusStyle` [`StyleVariants::focus`] is currently

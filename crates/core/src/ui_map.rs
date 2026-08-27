@@ -895,11 +895,11 @@ pub fn apply_style_masked(
 /// overlay sets wins, the rest fall through to `base`. A `None` overlay leaves
 /// `base` untouched. Used to merge `hoverStyle`/`pressStyle` onto the base style
 /// for the current `Interaction` state.
-pub fn overlay_style(base: &Option<Style>, overlay: &Option<Style>) -> Option<Style> {
+pub fn overlay_style(base: Option<&Style>, overlay: Option<&Style>) -> Option<Style> {
     let Some(overlay) = overlay else {
-        return base.clone();
+        return base.cloned();
     };
-    let mut merged = base.clone().unwrap_or_default();
+    let mut merged = base.cloned().unwrap_or_default();
     // Driven by the shared field table (`protocol::with_style_fields`), so a new
     // `Style` field is overlaid automatically (and its absence from the table is
     // a test failure). Fields tagged `no_overlay` (`focus_policy`, `group_alpha`,
@@ -1885,7 +1885,7 @@ mod tests {
         })));
 
         // None overlay leaves base untouched.
-        let unchanged = overlay_style(&base, &None).unwrap();
+        let unchanged = overlay_style(base.as_ref(), None).unwrap();
         assert_eq!(
             unchanged.background_color.static_ref().map(String::as_str),
             Some("#111111")
@@ -1893,7 +1893,7 @@ mod tests {
 
         // Overlaid fields win; unset overlay fields fall through to base.
         let overlay = Some(style(serde_json::json!({ "backgroundColor": "#89b4fa" })));
-        let merged = overlay_style(&base, &overlay).unwrap();
+        let merged = overlay_style(base.as_ref(), overlay.as_ref()).unwrap();
         assert_eq!(
             merged.background_color.static_ref().map(String::as_str),
             Some("#89b4fa")
@@ -1908,7 +1908,7 @@ mod tests {
         ); // kept from base
 
         // Overlay onto an absent base still yields the overlay's fields.
-        let from_none = overlay_style(&None, &overlay).unwrap();
+        let from_none = overlay_style(None, overlay.as_ref()).unwrap();
         assert_eq!(
             from_none.background_color.static_ref().map(String::as_str),
             Some("#89b4fa")
@@ -1930,7 +1930,7 @@ mod tests {
             "focusPolicy": "pass",
             "backgroundColor": "red",
         })));
-        let merged = overlay_style(&base, &overlay).unwrap();
+        let merged = overlay_style(base.as_ref(), overlay.as_ref()).unwrap();
         // The variant's chain wins wholesale (CSS shorthand semantics, like
         // `transform`).
         assert_eq!(merged.filter, overlay.as_ref().unwrap().filter);
@@ -1943,7 +1943,7 @@ mod tests {
 
         // A variant with no filter falls through to the base chain.
         let no_filter = Some(style(serde_json::json!({ "backgroundColor": "red" })));
-        let merged = overlay_style(&base, &no_filter).unwrap();
+        let merged = overlay_style(base.as_ref(), no_filter.as_ref()).unwrap();
         assert_eq!(merged.filter, base.as_ref().unwrap().filter);
     }
 
@@ -1955,7 +1955,7 @@ mod tests {
         // Whole-object replace (CSS shorthand semantics): press's transform wins
         // entirely, dropping the base's translateX.
         let press = Some(style(serde_json::json!({ "transform": { "scale": 0.95 } })));
-        let merged = overlay_style(&base, &press).unwrap();
+        let merged = overlay_style(base.as_ref(), press.as_ref()).unwrap();
         let t = merged.transform.unwrap();
         assert_eq!(t.scale.static_val(), Some(0.95));
         assert_eq!(t.translate_x, None);

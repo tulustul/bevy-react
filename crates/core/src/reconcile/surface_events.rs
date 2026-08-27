@@ -263,14 +263,17 @@ pub fn apply_surface_interaction_styles(
         if ev.pointer_id == pointer.id
             && let Ok(v) = variants.get(ev.entity)
         {
-            restyle(ev.entity, v.base.clone());
+            restyle(ev.entity, v.base.as_deref().cloned());
         }
     }
     for ev in enters.read() {
         if ev.pointer_id == pointer.id
             && let Ok(v) = variants.get(ev.entity)
         {
-            restyle(ev.entity, overlay_style(&v.base, &v.hover));
+            restyle(
+                ev.entity,
+                overlay_style(v.base.as_deref(), v.hover.as_deref()),
+            );
         }
     }
     for ev in releases.read() {
@@ -279,7 +282,7 @@ pub fn apply_surface_interaction_styles(
             && let Some(t) = target(ev.entity)
             && let Ok(v) = variants.get(t)
         {
-            restyle(t, overlay_style(&v.base, &v.hover));
+            restyle(t, overlay_style(v.base.as_deref(), v.hover.as_deref()));
         }
     }
     for ev in presses.read() {
@@ -288,7 +291,10 @@ pub fn apply_surface_interaction_styles(
             && let Some(t) = target(ev.entity)
             && let Ok(v) = variants.get(t)
         {
-            let pressed = overlay_style(&overlay_style(&v.base, &v.hover), &v.press);
+            let pressed = overlay_style(
+                overlay_style(v.base.as_deref(), v.hover.as_deref()).as_ref(),
+                v.press.as_deref(),
+            );
             restyle(t, pressed);
         }
     }

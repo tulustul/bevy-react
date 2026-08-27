@@ -123,7 +123,7 @@ pub(super) fn apply_create(
         // arrive via the surface picking path (`collect_surface_events`),
         // not the legacy `Interaction` focus path.
         "surface" => {
-            let style = overlay_style(&surface_root_base(), &props.style);
+            let style = overlay_style(surface_root_base().as_ref(), props.style.as_ref());
             let mut ec = commands.spawn(ReactNode(id));
             apply_style(&mut ec, &style);
             ec.insert(RSurface(props.target.clone().unwrap_or_default()));
@@ -143,7 +143,7 @@ pub(super) fn apply_create(
         // re-asserting it. The root itself never blocks or hovers
         // picking; its children are ordinary pickable nodes.
         "root" => {
-            let style = overlay_style(&root_base(), &props.style);
+            let style = overlay_style(root_base().as_ref(), props.style.as_ref());
             let mut ec = commands.spawn(ReactNode(id));
             apply_style(&mut ec, &style);
             ec.insert((crate::bridge::RRoot, Pickable::IGNORE));

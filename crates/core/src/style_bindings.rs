@@ -318,9 +318,9 @@ pub(crate) fn derive_props_bindings(props: &Props) -> Option<AnimatedBindings> {
 /// devtools (`styleBinding`). Call under a `diag::node_scope`.
 pub(crate) fn warn_variant_bindings(props: &Props) {
     for (name, style) in [
-        ("hoverStyle", props.hover_style.as_ref()),
-        ("pressStyle", props.press_style.as_ref()),
-        ("focusStyle", props.focus_style.as_ref()),
+        ("hoverStyle", props.hover_style.as_deref()),
+        ("pressStyle", props.press_style.as_deref()),
+        ("focusStyle", props.focus_style.as_deref()),
     ] {
         if derive_bindings(style).is_some() {
             let msg =

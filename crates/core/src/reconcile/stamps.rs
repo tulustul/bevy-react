@@ -76,7 +76,7 @@ pub(super) fn apply_anchor(ec: &mut EntityCommands, props: &Props) {
 pub(super) fn apply_style_variants(ec: &mut EntityCommands, props: &Props) {
     if props.hover_style.is_some() || props.press_style.is_some() || props.focus_style.is_some() {
         ec.insert(StyleVariants {
-            base: props.style.clone(),
+            base: props.style.clone().map(Box::new),
             hover: props.hover_style.clone(),
             press: props.press_style.clone(),
             focus: props.focus_style.clone(),

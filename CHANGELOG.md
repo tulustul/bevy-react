@@ -3,6 +3,22 @@
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- **Op-apply is ~2–3x faster on mount-heavy commits.** `Props`' `hoverStyle` /
+  `pressStyle` / `focusStyle` slots are now `Option<Box<Style>>` instead of
+  inline `Style` (as are all four slots of the internal `StyleVariants`
+  component). `Props` is decoded, default-initialized and merged once per
+  create/update op, and its cost is linear in its size — holding four inline
+  `Style`s made every node pay for variants it almost never declares. The
+  struct drops 19,280 -> 6,056 bytes, and on the table-ops benchmark the
+  op-translate leg falls 47–71% (10k create 178.7 -> 59.7 ms) with the
+  serde decode down 18–30%; 10k create total is 29.9% faster than 0.5.0.
+  Source-breaking only for code constructing `protocol::props::Props`
+  directly. The wire format is unchanged.
+
 ## [0.5.1] - 2026-08-22
 
 ### Added

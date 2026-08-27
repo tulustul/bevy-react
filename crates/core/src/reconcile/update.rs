@@ -255,7 +255,7 @@ pub(super) fn apply_update(
         // below (which would wrongly stamp an `RPortal`).
         let mut ec = commands.entity(e);
         if dirty.style.any() {
-            let style = overlay_style(&surface_root_base(), &props.style);
+            let style = overlay_style(surface_root_base().as_ref(), props.style.as_ref());
             // Detached roots are never layer-promoted.
             apply_style_masked(&mut ec, &style, dirty.style, false);
         }
@@ -276,7 +276,7 @@ pub(super) fn apply_update(
         // keeps the baked `globalZIndex` instead of stripping it.
         let mut ec = commands.entity(e);
         if dirty.style.any() {
-            let style = overlay_style(&root_base(), &props.style);
+            let style = overlay_style(root_base().as_ref(), props.style.as_ref());
             // Detached roots are never layer-promoted.
             apply_style_masked(&mut ec, &style, dirty.style, false);
             crate::background_image::apply_background_image(

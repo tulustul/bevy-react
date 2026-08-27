@@ -46,14 +46,16 @@ pub fn apply_interaction_styles(
     for (entity, interaction, focus, variants, promoted) in &query {
         let mut style = match interaction {
             Some(Interaction::Pressed) => overlay_style(
-                &overlay_style(&variants.base, &variants.hover),
-                &variants.press,
+                overlay_style(variants.base.as_deref(), variants.hover.as_deref()).as_ref(),
+                variants.press.as_deref(),
             ),
-            Some(Interaction::Hovered) => overlay_style(&variants.base, &variants.hover),
-            _ => variants.base.clone(),
+            Some(Interaction::Hovered) => {
+                overlay_style(variants.base.as_deref(), variants.hover.as_deref())
+            }
+            _ => variants.base.as_deref().cloned(),
         };
         if focus.is_some_and(|f| f.0) {
-            style = overlay_style(&style, &variants.focus);
+            style = overlay_style(style.as_ref(), variants.focus.as_deref());
         }
         // Attribute re-parse warnings (e.g. a bad hoverStyle color) to the node.
         let rnode = rnodes.get(entity).ok();
