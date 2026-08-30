@@ -187,5 +187,4 @@ const basicButtonStyle: BevyStyle = {
 const richButtonStyle: BevyStyle = {
   width: 160,
   height: 30,
-  margin: 30,
 };

@@ -220,6 +220,37 @@ spring config.
 </button>
 ```
 
+### Layout animations
+
+`transition: { layout }` eases a node to wherever layout puts it next — whatever
+moved it: a reorder, a sibling growing or leaving, a parent resize, a flipped
+flex knob. The real layout snaps; the box glides from its old rect to the new
+one (FLIP), children ride along, and clicks land on the visual. Nothing to
+measure, no transforms to write.
+
+```tsx
+<node style={{ flexDirection, justifyContent, alignItems }}>
+  {swatches.map((g, i) => (
+    <node
+      key={i}
+      style={{
+        width: 40,
+        height: 40,
+        backgroundGradient: g,
+        transition: { layout: { duration: 350, easing: "easeInOut" } },
+      }}
+    />
+  ))}
+</node>
+```
+
+![Four gradient swatches in a flex container easing to their new slots as direction, justify, and align are flipped from the controls below.](https://raw.githubusercontent.com/tulustul/bevy-react/main/screenshots/layout-animations.webp)
+
+A size change eases the node's **own** box (its children stay crisp), but
+whatever is laid out _around_ it snaps — a container that must re-flow its
+neighbours uses the real-layout `transition: { size }` instead, with `layout`
+on the children. Demos: "Flexbox", "Style transitions".
+
 ### Shared elements
 
 Give two nodes that swap in one commit the same `sharedTag` — a thumbnail in a
@@ -252,6 +283,30 @@ tag, element type and UI root; the first mounted match seeds every incoming node
 with the tag. Size flies in measured pixels through real layout (children stay
 crisp, the parent re-flows), position by translation; the outgoing node unmounts
 instantly. Demo: "Shared elements".
+
+![A thumbnail grid opening into a detail screen: the tapped image flies from its round thumbnail to the large hero while the rest of the screen fades and scales.](https://raw.githubusercontent.com/tulustul/bevy-react/main/screenshots/shared-element-gallery.webp)
+
+Shared elements and layout animations compose. On the tickets board below a
+clicked ticket unmounts from one column and mounts in the other in the same
+commit: it carries `sharedTag` plus both transitions, so it takes off from
+where it sat, easing its width and color to the new column's on the way, while
+the siblings it leaves behind close the gap with their own `layout` transition.
+
+```tsx
+<button
+  sharedTag={`item-${id}`}
+  onClick={() => move(id)}
+  style={{
+    backgroundColor: color[side],
+    transition: {
+      sharedElement: { duration: 400, easing: "easeOut" },
+      layout: { duration: 400, easing: "easeOut" },
+    },
+  }}
+/>
+```
+
+![A two-column "To do / Done" tickets board: a clicked ticket flies to the other column and the remaining tickets slide up to close the gap.](https://raw.githubusercontent.com/tulustul/bevy-react/main/screenshots/shared-element-board.webp)
 
 ### Animations
 
@@ -290,9 +345,9 @@ degrees, bound lengths animate in px, and bindings are honored in the base
 
 The `filter` style runs a chain of GPU post-processing passes over an element
 **and its whole subtree**. The value is one `{ name, params }` object or an
-ordered array (pass order). Built-ins: `blur`, `grayscale`, `sepia`, `invert`,
-`brightness`, `contrast`, `saturate`, `hueRotate`, `bloom`,
-`chromaticAberration`.
+ordered array (pass order). The crate ships a set of built-ins — blurs, color
+ops, bloom, drop shadow, text effects, a press pinch, … — all showcased in the
+"Filters" demo and typed by name in the generated `bevy.ts`.
 
 ```tsx
 // One filter…
@@ -318,6 +373,16 @@ Filter params animate like any other style: ease them with
 JS and no re-capture of the subtree.
 
 ![A gallery of built-in filters: grayscale, sepia, invert, and hue-rotate parrots, a grayscaled subtree card, a blur+sepia chain, bloom on neon text, and chromatic aberration.](https://raw.githubusercontent.com/tulustul/bevy-react/main/screenshots/filters.png)
+
+Filters compose into interaction, too. The demos' `Button` presses through the
+`pinch` filter — its strength an inline `{ animated }` shared value eased in
+on press and sprung back on release — under a `shadow` filter that flattens
+while pressed via `transition: { filter }`. See
+[`components/Button.tsx`](https://github.com/tulustul/bevy-react/blob/main/examples/demos/ui/src/components/Button.tsx)
+and
+[`components/Pinchable.tsx`](https://github.com/tulustul/bevy-react/blob/main/examples/demos/ui/src/components/Pinchable.tsx).
+
+![A "Click me" button squeezing under the cursor on press and springing back with a wobble.](https://raw.githubusercontent.com/tulustul/bevy-react/main/screenshots/button.webp)
 
 Behind the scenes, some styles automatically promote a subtree to a
 **composited layer**: a non-empty `filter` or `backdropFilter`, `opacity` on a
@@ -594,33 +659,6 @@ Pin UI to a 3D entity so it tracks the entity on screen as the camera moves.
 
 ![Dozens of colored cubes in a 3D scene, each with a numbered React badge anchored above it that tracks its cube as the camera moves.](https://raw.githubusercontent.com/tulustul/bevy-react/main/screenshots/anchored-nodes.png)
 
-### Named nodes: reach React entities from Bevy
-
-Give any element a `name` and its entity carries a Bevy `Name`. Rust code can then
-find it — by hash lookup or plain query — and do whatever it wants: attach its own
-components, read layout or `Interaction`, spawn 3D things that follow it. Names are
-not unique (`all` is the group form), and `Added`/`RemovedComponents<ReactNode>` are
-the mount/unmount signals.
-
-```tsx
-<node name="pin" style={card}>
-  <text>#1</text>
-</node>
-```
-
-```rust
-// Bevy: one 3D pin under every node named "pin", after this frame's React ops.
-fn sync_pins(nodes: ReactNodes, cards: Query<(&ComputedNode, &UiGlobalTransform)>) {
-    for &card in nodes.all("pin") {
-        let Ok((size, transform)) = cards.get(card) else { continue };
-        // project the card's center onto the ground and move its pin there
-    }
-}
-app.add_systems(Update, sync_pins.after(ReactApplySet));
-```
-
-![Six draggable React cards over a 3D scene, each with a tube pinned to it and a glowing ball hanging below.](https://raw.githubusercontent.com/tulustul/bevy-react/main/screenshots/named-nodes.png)
-
 ### Talking to Bevy
 
 Three typed channels connect React and the ECS:
@@ -715,29 +753,6 @@ devtools code is still _compiled_ into release binaries; the panel's JS is
 stripped from production bundles either way. If a shipping build must not
 contain the code at all, disable the `devtools` default feature
 (`bevy-react = { version = "…", default-features = false }`).
-
-### Precompiling filter shaders
-
-Filter and morph shaders compile into GPU pipelines on first use — and while
-one compiles, its layer is withheld for a few frames (a dark blink the first
-time each morph runs). By default the plugin compiles every registered shader
-ahead of time, per camera target format, on the pipeline cache's background
-workers. Narrow it per partition — the crate's built-ins (both families), your
-`add_react_filter`s, your `add_react_morph_filter`s — or turn it off:
-
-```rust
-app.add_plugins(ReactUiPlugin::new("ui/dist/app.js").precompile_filters(
-    PrecompileFilters {
-        morphs: FilterSelection::Names(vec!["doorway".into(), "bookFlip".into()]),
-        ..default()
-    },
-));
-```
-
-A custom multi-pass filter whose params have no defaults warms its primary
-shader only (the extra passes are found by resolving the filter with its
-identity or empty params). A name that is unknown, or listed under the wrong
-partition, warns once at startup (`precompileFilters`) and is skipped.
 
 ## Performance
 
