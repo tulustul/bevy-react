@@ -5,8 +5,94 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-08-30
+
+### Added
+
+- **Layout transitions (`transition: { layout }`).** A node eases from its
+  old rect to its new one whenever layout moves it — a sibling inserted or
+  removed, a reorder, a parent resize, a re-wrap, a window resize (FLIP). The
+  real layout still snaps (no relayout, no layer); the node glides by
+  translation, children ride the translation and stay crisp, picking follows
+  the visual. The first layout adopts silently (no enter animation) and
+  `display: none` → shown grows in place. Composes with the node's own `size`
+  channel and with `{ animated }` layout bindings, which keep owning the rect.
+- **Shared elements (`sharedTag` + `transition: { sharedElement }`).** React
+  has no reparenting, so a node that "moves" between parents or screens is an
+  unmount + mount; give both the same `sharedTag` and the incoming node starts
+  where the outgoing one visually was — rect (mid-flight included),
+  background color, opacity, transforms, filters, gradients — and eases to
+  its own layout and style with the one `sharedElement` spec. The commit is
+  the trigger (no imperative API); pairing is same tag, same element kind,
+  same UI root, same commit. Size flies in measured px through real layout,
+  position by translation toward the root-space settled destination; nested
+  tagged nodes each fly their own straight line.
+- **Named nodes (`name` prop).** Every element takes `name="hud"`; it lands on
+  the entity as a Bevy `Name` (dynamic — a later delta replaces it, `""`
+  removes it). Rust reaches React-created entities through the public
+  `ReactNode(NodeId)` marker component and the `ReactNodes` system param
+  (`get` / `all` / `iter` / `contains`); order consumers `.after(ReactApplySet)`
+  for same-frame mounts. Names are group semantics, not unique.
+- **`layoutRounding` style.** Maps to bevy's `LayoutConfig::use_rounding`
+  (inherited downward, restarts at `<surface>`/`<root>`). `false` lays a
+  subtree out at fractional pixels — the fix for the 1px hops of any
+  real-layout size animation (`transition: { size }`, a shared-element size
+  flight, a bound `width`/`height`): the animated box and everything
+  re-flowing around it glide instead of stepping.
+- **`imageRendering` style.** `"auto" | "bilinear" | "trilinear" | "nearest"`
+  fixes large images drawn small. An explicit mode binds the node to a derived
+  variant asset per `(source, mode)` — `trilinear` builds a CPU mip pyramid off
+  the main thread, the node staying on its source until it lands. Variants are
+  shared and refcounted, rebuilt when the source reloads, and never made when
+  the source already satisfies the mode. Live textures (canvas, svg, portal,
+  `{ texture }`) refuse an explicit mode with a devtools warning.
+- **`padding` / `margin` axis pairs.** Both accept `{ horizontal, vertical }`
+  alongside the number, CSS shorthand string and `{ top, right, bottom, left }`
+  forms; an explicit side wins over its axis whatever the key order.
+- **`pinch` built-in filter.** Promoted from the demo's custom filter: `x`/`y`
+  center, `strength` (−1 bulge ..= 1 pinch), `radius`, plus lighting —
+  `light`, `lightAngle` (default −135 = top-left), `gloss`, `glossSize`.
+- **`chromaticAberration` gains `rotation`.** A tangential swirl in degrees on
+  top of the directional `offset`/`angle` split (R rotates by `+rotation`,
+  B by `−rotation`); 0 keeps the pure split.
+- **`ReactUiPlugin::precompile_filters(PrecompileFilters { .. })`.** Warms
+  the selected filter and morph pipelines (per partition: `builtins`,
+  `filters`, `morphs` × `All | Names | Off`, default `All`) plus the layer
+  pipelines for each camera format the first frame it is seen, so a morph's
+  first run no longer blinks dark while its pipeline compiles async.
+- **Devtools: component attribution.** The Nodes tab now leads each row with
+  the React component that emitted the node (`<Card>`), via React's owner
+  chain — dev-only, zero wire cost.
+- **Demos app.** Mobile support in the web build (responsive shell: compact
+  top bar + overlay nav drawer under 720px, touch scrolling); a new home page
+  (a gallery wall of live vignettes that expand via shared elements); new
+  pages — How it works?, Getting started, Layers, Named nodes, Shared
+  elements, Layout rounding, Image rendering, Pinch filter — and richer
+  per-example explanations with code snippets, param controls and a modal
+  viewer; a general look-and-feel pass (buttons, badges, navigation slide-in,
+  ripples in the bouncing-ball scene); `--shoot --size WxH`.
+
 ### Changed
 
+- **`borderRadius` is animatable.** `transition: { borderRadius }` eases the
+  corner radii per corner across every wire form (uniform, shorthand,
+  per-corner object); a corner that changes unit snaps alone, unsetting eases
+  to square. A uniform `borderRadius: { animated }` binding drives one px
+  value for all corners.
+- **`backgroundGradient` / `borderGradient` are animatable.**
+  `transition: { backgroundGradient | borderGradient }` eases
+  strictly-matching gradient structures stop-wise (colors like
+  `backgroundColor`, numeric long-way angles, same-unit lengths); a structural
+  mismatch, appear or unset snaps silently, so fade via transparent stops.
+  Gradient leaves (angles, positions, stop positions) accept inline
+  `{ animated }` wrappers.
+- **Filters and layer styles allowed on `<text>`.** A top-level `<text>` now
+  has full `<node>` parity: hover/press styles, click/pointer handlers and the
+  layer family (`filter`, `backdropFilter`, `morphFilter`, `transform3d`,
+  `opacity`, `cache`) work directly on it — no wrapper `<node>` needed. On a
+  nested span they are structural no-ops, flagged in the devtools inspector.
+- **`transition` channels are explicit-only.** The `all` shorthand was
+  removed; `morphFilter` keeps its built-in 300ms default.
 - **Op-apply is ~2–3x faster on mount-heavy commits.** `Props`' `hoverStyle` /
   `pressStyle` / `focusStyle` slots are now `Option<Box<Style>>` instead of
   inline `Style` (as are all four slots of the internal `StyleVariants`
@@ -18,6 +104,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   serde decode down 18–30%; 10k create total is 29.9% faster than 0.5.0.
   Source-breaking only for code constructing `protocol::props::Props`
   directly. The wire format is unchanged.
+- **Terminal warnings are deduplicated.** Every devtools warning is now also
+  logged once per distinct `(kind, value, message)` per process through
+  `diag`; several noisy per-frame styling warnings were dropped.
+
+### Fixed
+
+- Buttons (and any pressable node) no longer block touch-drag scrolling of an
+  enclosing scroll container.
+- Devtools console messages were not visible in the terminal.
+- Undriven transition channels are re-seeded on a spec-less commit, so a
+  style change that lands without its `transition` spec no longer resumes
+  from a stale current value.
 
 ## [0.5.1] - 2026-08-22
 
@@ -198,6 +296,8 @@ No behavior change, but worth knowing when reading or patching the crate:
 
 Last release before this changelog was introduced.
 
+[0.6.0]: https://github.com/tulustul/bevy-react/compare/v0.5.1...v0.6.0
+[0.5.1]: https://github.com/tulustul/bevy-react/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/tulustul/bevy-react/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/tulustul/bevy-react/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/tulustul/bevy-react/compare/v0.2.0...v0.3.0
