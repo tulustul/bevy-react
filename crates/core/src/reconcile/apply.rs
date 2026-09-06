@@ -1557,4 +1557,123 @@ mod tests {
             "the descendant editableText is dropped from the editable_inputs set"
         );
     }
+
+    /// The batched detach path (`despawn_detached`, taken from
+    /// `ParentDirt::MASS_REMOVAL_MIN` removals on one parent): survivors keep
+    /// their order and their `ChildOf`, a removed child's subtree despawns with
+    /// it, the bridge forgets the removed ids, later single removals still work
+    /// after the collection swap, and emptying the parent drops `Children`.
+    #[test]
+    fn mass_removal_detaches_children_in_one_pass() {
+        let (mut app, tx, _root) = ordering_app();
+        let n = 100u32;
+        assert!(n as usize / 2 >= ParentDirt::MASS_REMOVAL_MIN);
+        let mut ops = vec![
+            create_node(1),
+            Op::Append {
+                parent: ROOT_ID,
+                child: 1,
+            },
+        ];
+        for i in 0..n {
+            ops.push(create_node(10 + i));
+            ops.push(Op::Append {
+                parent: 1,
+                child: 10 + i,
+            });
+        }
+        // A grandchild under a to-be-removed child (odd index).
+        ops.push(create_node(1000));
+        ops.push(Op::Append {
+            parent: 11,
+            child: 1000,
+        });
+        tx.send(ops).unwrap();
+        app.update();
+        let parent = ent(&app, 1);
+        let grandchild = ent(&app, 1000);
+        assert_eq!(children_of(&app, parent).len(), n as usize);
+        let removed: Vec<Entity> = (0..n)
+            .filter(|i| i % 2 == 1)
+            .map(|i| ent(&app, 10 + i))
+            .collect();
+        let expected: Vec<Entity> = (0..n)
+            .filter(|i| i % 2 == 0)
+            .map(|i| ent(&app, 10 + i))
+            .collect();
+
+        // Remove every other child in one batch (React's front-to-back order).
+        tx.send(
+            (0..n)
+                .filter(|i| i % 2 == 1)
+                .map(|i| Op::Remove {
+                    parent: 1,
+                    child: 10 + i,
+                })
+                .collect(),
+        )
+        .unwrap();
+        app.update();
+        assert_eq!(
+            children_of(&app, parent),
+            expected,
+            "survivors keep their order"
+        );
+        for e in &removed {
+            assert!(
+                !app.world().entities().contains(*e),
+                "removed child despawned"
+            );
+        }
+        assert!(
+            !app.world().entities().contains(grandchild),
+            "a removed child's subtree is despawned with it"
+        );
+        for e in &expected {
+            assert_eq!(
+                app.world().get::<ChildOf>(*e).map(|c| c.parent()),
+                Some(parent),
+                "survivors stay ChildOf(parent)"
+            );
+        }
+        let bridge = app.world().resource::<JsBridge>();
+        assert!(
+            !bridge.nodes.contains_key(&11) && !bridge.nodes.contains_key(&1000),
+            "removed ids are forgotten"
+        );
+
+        // A single removal after the swap goes the ordinary way and still lands.
+        tx.send(vec![Op::Remove {
+            parent: 1,
+            child: 10,
+        }])
+        .unwrap();
+        app.update();
+        assert_eq!(children_of(&app, parent), expected[1..].to_vec());
+
+        // Removing the rest in one pass empties the parent: `Children` is dropped.
+        tx.send(
+            (2..n)
+                .filter(|i| i % 2 == 0)
+                .map(|i| Op::Remove {
+                    parent: 1,
+                    child: 10 + i,
+                })
+                .collect(),
+        )
+        .unwrap();
+        app.update();
+        assert!(
+            app.world().get::<Children>(parent).is_none(),
+            "an emptied Children is removed"
+        );
+        assert_eq!(
+            app.world_mut()
+                .query::<&ReactNode>()
+                .iter(app.world())
+                .count(),
+            1,
+            "only the container remains"
+        );
+    }
 }
