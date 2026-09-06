@@ -106,6 +106,11 @@ const hostConfig: Reconciler.HostConfig<
   scheduleTimeout: (fn: (...a: unknown[]) => void, delay?: number) =>
     setTimeout(fn, delay),
   cancelTimeout: (handle: number) => clearTimeout(handle),
+  // Let React drain non-flushSync updates on the microtask queue (the isolate
+  // provides `queueMicrotask`); otherwise every such update detours through
+  // React's Scheduler and the `setTimeout(_, 0)` polyfill.
+  supportsMicrotasks: true,
+  scheduleMicrotask: (fn: () => void) => queueMicrotask(fn),
 
   // Track whether we're inside a `<text>`, so nested `<text>` becomes a span and
   // bare strings inside become inheriting `TextSpan` runs (Bevy's text model).

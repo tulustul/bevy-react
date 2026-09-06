@@ -197,6 +197,18 @@ async fn op_sleep(ms: f64) {
     tokio::time::sleep(std::time::Duration::from_millis(ms)).await;
 }
 
+/// JS -> (no Bevy): a monotonic high-resolution clock in milliseconds since the
+/// first call (sub-millisecond, `f64`). Backs the prelude's `performance.now`:
+/// deno_core defines no `performance` global, so without it every JS-side timing
+/// (benchmark legs, React's scheduler clock, the devtools bridge tap) would fall
+/// back to `Date.now()` and be quantized to whole milliseconds.
+#[op2(fast)]
+fn op_now() -> f64 {
+    static ORIGIN: std::sync::LazyLock<std::time::Instant> =
+        std::sync::LazyLock::new(std::time::Instant::now);
+    ORIGIN.elapsed().as_secs_f64() * 1000.0
+}
+
 /// JS globals deno_core does not provide on its own. `setTimeout`/`setInterval`
 /// honor their delay via the async `op_sleep`; a `0`ms timeout stays on the
 /// microtask queue so React's scheduler (which yields with `setTimeout(_, 0)`)
@@ -234,6 +246,9 @@ globalThis.setInterval = (cb, ms = 0, ...args) => {
 };
 globalThis.clearInterval = (id) => { if (id != null) __cancelled.add(id); };
 globalThis.queueMicrotask = globalThis.queueMicrotask || ((cb) => { Promise.resolve().then(cb); });
+if (!globalThis.performance) {
+  globalThis.performance = { now: () => Deno.core.ops.op_now(), timeOrigin: Date.now() };
+}
 
 const __fmtArg = (a) => {
   if (typeof a === "string") return a;
@@ -428,6 +443,7 @@ fn build_runtime(
     const NEXT: OpDecl = op_next_event();
     const SLEEP: OpDecl = op_sleep();
     const LOG: OpDecl = op_log();
+    const NOW: OpDecl = op_now();
     let ext = Extension {
         name: "bevy_react_bridge",
         ops: std::borrow::Cow::Borrowed(&[
@@ -439,6 +455,7 @@ fn build_runtime(
             NEXT,
             SLEEP,
             LOG,
+            NOW,
         ]),
         ..Default::default()
     };
