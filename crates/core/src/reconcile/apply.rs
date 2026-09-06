@@ -218,7 +218,7 @@ pub fn apply_js_ops(
                     &mut ui_assets,
                     id,
                     kind,
-                    *props,
+                    props,
                     text,
                 );
             }
@@ -366,7 +366,7 @@ pub fn apply_js_ops(
                     &mut a11y_nodes,
                     &text_roots,
                     id,
-                    *props,
+                    props,
                     unset,
                     style_unset,
                 );

@@ -25,7 +25,7 @@ pub struct Props {
     /// Style overlaid on `style` while the element is hovered. Decoded exactly
     /// like `style`; applied on the Bevy side from the node's `Interaction`.
     ///
-    /// **Boxed**, like its press/focus siblings: `Style` is ~4.4 KB, this
+    /// **Boxed**, like its press/focus siblings: `Style` is ~1.2 KB, this
     /// struct is default-initialized and merged once per Create/Update op, and
     /// the vast majority of nodes declare no variant at all — inline they cost
     /// every node 3 × `Style` for nothing. See [`props_stays_small`].
@@ -173,8 +173,10 @@ pub struct Props {
     /// inside an `<svg>` element. The JS side folds the flat JSX attrs into
     /// this one object; on update it **replaces atomically** (see
     /// [`Props::merge_delta`]).
+    /// Boxed: a shape child's attrs are a few hundred bytes every other
+    /// element never carries.
     #[serde(default)]
-    pub shape: Option<crate::svg::ShapeAttrs>,
+    pub shape: Option<Box<crate::svg::ShapeAttrs>>,
     /// The `<svg>` element's `viewBox` (`"minX minY width height"`), parsed
     /// at the serde boundary. (`rename_all = "camelCase"` yields exactly the
     /// `viewBox` wire name — pinned by a test.)
@@ -304,15 +306,19 @@ pub(crate) fn props_from_json(json: serde_json::Value) -> Props {
 /// measured at ~230 ns/op per KB, flat across 0.4.0/0.5.0/0.6.0 (see
 /// `docs/BENCHMARKS.md`). Since the struct held four inline [`Style`]s, every
 /// byte added to `Style` cost four here, and the translate leg crept +10–18%
-/// per release. The variants are boxed so a new `Style` field costs 1×; this
-/// test fails if another `Style`-sized field is inlined.
+/// per release. The variants are boxed so a new `Style` field costs 1×, the
+/// op's box is passed end to end (never dereferenced into a stack copy), and
+/// the rare heavy payloads — `Animatable::Animated`, `transition`,
+/// `transform3d`, `morph_filter`, the gradients, `shape` — are boxed too
+/// (6056 → 1792 B; `Style` 4416 → 1232 B). This test fails if a heavy field
+/// is inlined again.
 #[cfg(test)]
 #[test]
 fn props_stays_small() {
     let size = size_of::<Props>();
     assert!(
-        size <= 8 * 1024,
-        "Props grew to {size} B (>8 KiB): every Create/Update op pays for this. \
+        size <= 2304,
+        "Props grew to {size} B (>2304 B): every Create/Update op pays for this. \
          Box the new field instead of inlining it — see the `hover_style` docs."
     );
 }

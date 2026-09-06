@@ -283,7 +283,7 @@ impl TransitionInput {
     /// timing ([`morph_default`]) and must be driven even when the style
     /// never mentions `transition`.
     pub(super) fn from_style(style: &Style) -> Option<Self> {
-        let spec = match style.transition.clone() {
+        let spec = match style.transition.as_deref().cloned() {
             Some(spec) => spec,
             None if style.morph_filter.is_some() => Transition::default(),
             None => return None,
@@ -313,7 +313,7 @@ impl TransitionInput {
             max_width: style.max_width.static_val(),
             max_height: style.max_height.static_val(),
             border_radius: style.border_radius.static_val(),
-            transform3d: style.transform3d.clone(),
+            transform3d: style.transform3d.as_deref().cloned(),
         })
     }
 }

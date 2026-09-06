@@ -25,36 +25,42 @@ impl Props {
         )
     }
 
-    /// Split the event-like fields (see [`UpdateEvents`]) out of `self`,
-    /// leaving the retained state. Used to seed the per-node props cache from
-    /// a create.
-    pub fn split_events(mut self) -> (Props, UpdateEvents) {
-        let events = UpdateEvents {
+    /// Take the event-like fields (see [`UpdateEvents`]) out of `self`,
+    /// leaving the retained state in place. Used to seed the per-node props
+    /// cache from a create. In place — never moves the (multi-KB) struct.
+    pub fn split_events(&mut self) -> UpdateEvents {
+        UpdateEvents {
             value: self.value.take(),
             selection_start: self.selection_start.take(),
             selection_end: self.selection_end.take(),
             scroll_top: self.scroll_top.take(),
             scroll_left: self.scroll_left.take(),
             draw: self.draw.take(),
-        };
-        (self, events)
+        }
     }
 
     /// Merge an [`super::op::Op::Update`] delta (`props` + `unset` + `style_unset`) into
     /// `self` (the retained last-applied props), returning what the delta
     /// touched and the event-like fields to act on. See the semantics on
     /// [`super::op::Op::Update`].
+    ///
+    /// The delta arrives boxed (the op carries it that way) and is consumed
+    /// field-wise through `&mut` — the struct is several KB and is never
+    /// moved or cloned on this path; `impl Into<Box<Props>>` lets tests pass
+    /// a bare `Props` (`From<T> for Box<T>`) at no cost to the hot path.
     pub fn merge_delta(
         &mut self,
-        delta: Props,
+        delta: impl Into<Box<Props>>,
         unset: &[String],
         style_unset: &[String],
     ) -> (PropsDirty, UpdateEvents) {
         let mut dirty = PropsDirty::default();
-        let (delta, events) = delta.split_events();
+        let mut delta = delta.into();
+        let delta: &mut Props = &mut delta;
+        let events = delta.split_events();
 
         // --- set: fields present in the delta ---
-        if let Some(style_delta) = &delta.style {
+        if let Some(style_delta) = &mut delta.style {
             let groups = self
                 .style
                 .get_or_insert_default()
@@ -62,15 +68,15 @@ impl Props {
             dirty.style.0 |= groups;
         }
         if delta.hover_style.is_some() {
-            self.hover_style = delta.hover_style;
+            self.hover_style = delta.hover_style.take();
             dirty.hover_style = true;
         }
         if delta.press_style.is_some() {
-            self.press_style = delta.press_style;
+            self.press_style = delta.press_style.take();
             dirty.press_style = true;
         }
         if delta.focus_style.is_some() {
-            self.focus_style = delta.focus_style;
+            self.focus_style = delta.focus_style.take();
             dirty.focus_style = true;
         }
         // `shape` replaces ATOMICALLY (the variant-style precedent above),
@@ -82,13 +88,13 @@ impl Props {
         // whenever anything changed, so an attr absent from the new value is
         // an attr removed, no `unset` bookkeeping needed). Compare-before-set
         // keeps an idempotent re-send silent, like the rest of the delta.
-        if let Some(shape) = delta.shape
+        if let Some(shape) = delta.shape.take()
             && self.shape.as_ref() != Some(&shape)
         {
             self.shape = Some(shape);
             dirty.shape = true;
         }
-        if let Some(view_box) = delta.view_box
+        if let Some(view_box) = delta.view_box.take()
             && self.view_box != Some(view_box)
         {
             self.view_box = Some(view_box);
@@ -139,7 +145,7 @@ impl Props {
             ($($f:ident => $($flag:ident)?),* $(,)?) => {
                 $(
                     if delta.$f.is_some() {
-                        self.$f = delta.$f;
+                        self.$f = delta.$f.take();
                         $( dirty.$flag = true; )?
                     }
                 )*
@@ -593,11 +599,11 @@ mod tests {
     /// `split_events` untouched.
     #[test]
     fn shape_and_view_box_are_retained_not_events() {
-        let p = props(serde_json::json!({
+        let mut retained = props(serde_json::json!({
             "shape": { "cx": 1 },
             "viewBox": "0 0 10 10",
         }));
-        let (retained, ev) = p.split_events();
+        let ev = retained.split_events();
         assert!(retained.shape.is_some() && retained.view_box.is_some());
         assert!(ev.value.is_none() && ev.draw.is_none());
     }
@@ -655,11 +661,11 @@ mod tests {
     /// `split_events` strips exactly the event-like fields, leaving state.
     #[test]
     fn split_events_strips_event_fields() {
-        let full = props(serde_json::json!({
+        let mut state = props(serde_json::json!({
             "style": { "width": 10 }, "onClick": true, "value": "v",
             "selectionStart": 0, "selectionEnd": 1, "scrollTop": 5.0,
         }));
-        let (state, ev) = full.split_events();
+        let ev = state.split_events();
         assert!(state.style.is_some() && state.on_click);
         assert!(state.value.is_none() && state.selection_start.is_none());
         assert!(state.scroll_top.is_none());

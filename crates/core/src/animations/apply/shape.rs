@@ -8,7 +8,7 @@
 //! ## The seed-slot write (the locked design)
 //!
 //! Driven values land in the wrapper's **seed slot**: the stage writes
-//! `Animatable::Animated { binding, seed: Some(driven) }` — never
+//! `Animatable::animated(binding, Some(driven))` — never
 //! `Static(driven)`, which would destroy the binding. Why this is right:
 //!
 //! - The read path already renders seeds
@@ -127,8 +127,8 @@ pub(super) fn apply_shape_attrs(
                 continue;
             };
             match slot {
-                Some(Animatable::Animated { seed, .. }) => {
-                    if *seed != Some(v) {
+                Some(Animatable::Animated(a)) => {
+                    if a.seed != Some(v) {
                         writes.push((name.as_str(), v));
                     }
                 }
@@ -158,8 +158,9 @@ pub(super) fn apply_shape_attrs(
     if !writes.is_empty() {
         let shape: &mut SvgShape = shape;
         for (name, v) in writes {
-            if let Some(Some(Animatable::Animated { seed, .. })) =
-                numeric_attr_mut(&mut shape.attrs, name).map(Option::as_mut)
+            if let Some(seed) = numeric_attr_mut(&mut shape.attrs, name)
+                .and_then(Option::as_mut)
+                .and_then(Animatable::seed_mut)
             {
                 *seed = Some(v);
             }
@@ -243,7 +244,7 @@ mod tests {
             "the driven value renders through the seed slot"
         );
         assert!(
-            matches!(shape.attrs.r, Some(Animatable::Animated { .. })),
+            matches!(shape.attrs.r, Some(Animatable::Animated(_))),
             "the binding survives — the driver must never write Static"
         );
         assert_eq!(
@@ -312,10 +313,10 @@ mod tests {
 
         // A re-render re-sent the attrs with the original seed (the op merge
         // runs before this stage): the still-active binding re-asserts.
-        world.entity_mut(e).get_mut::<SvgShape>().unwrap().attrs.r = Some(Animatable::Animated {
-            binding: protocol::Binding::Shared { id: 1 },
-            seed: Some(5.0),
-        });
+        world.entity_mut(e).get_mut::<SvgShape>().unwrap().attrs.r = Some(Animatable::animated(
+            protocol::Binding::Shared { id: 1 },
+            Some(5.0),
+        ));
         schedule.run(&mut world);
         assert_eq!(
             world

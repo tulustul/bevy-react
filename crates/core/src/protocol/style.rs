@@ -212,17 +212,20 @@ pub struct Style {
     /// channel that animates without being asked). Presence force-promotes
     /// the node to a composited layer (a cached capture must exist to
     /// freeze); unsetting demotes and snaps. See [`crate::filters`] (morph).
+    ///
+    /// Boxed (like `transition`, `transform3d`, the gradients): a rare,
+    /// heavy field kept off the inline `Style` footprint.
     #[serde(default, deserialize_with = "crate::filters::de_morph_filter")]
-    pub morph_filter: Option<crate::filters::MorphFilter>,
+    pub morph_filter: Option<Box<crate::filters::MorphFilter>>,
     /// Background gradient(s); one gradient or a layered list. bevy paints it
     /// *over* `backgroundColor` (CSS `background-image` semantics): an opaque
     /// gradient hides the color (fallback); transparent stops reveal it.
     #[serde(default)]
-    pub background_gradient: Option<GradientList>,
+    pub background_gradient: Option<Box<GradientList>>,
     /// Border gradient(s); one gradient or a layered list. Painted *over*
     /// `borderColor` (needs a `border` width to be visible).
     #[serde(default)]
-    pub border_gradient: Option<GradientList>,
+    pub border_gradient: Option<Box<GradientList>>,
     /// Background image: painted *over* `backgroundColor` **and**
     /// `backgroundGradient`, under the node's content (bevy's fixed per-node
     /// paint order). `src` is an asset path, or `{ texture }` naming a render
@@ -292,7 +295,7 @@ pub struct Style {
     /// and ancestor clips clamp the transformed result. With a
     /// [`transition`](Self::transition) a change eases field-wise.
     #[serde(default)]
-    pub transform3d: Option<Transform3d>,
+    pub transform3d: Option<Box<Transform3d>>,
     /// Opacity in `0.0..=1.0`, multiplied into the alpha of the background (and
     /// text) color. With a [`transition`](Self::transition) a change eases.
     /// On a node with children (unless [`group_alpha`](Self::group_alpha) is
@@ -322,7 +325,7 @@ pub struct Style {
     /// time using the same driver/easing engine as `{ animated }` bindings, rather than
     /// snapping. See [`crate::transition`].
     #[serde(default)]
-    pub transition: Option<crate::transition::Transition>,
+    pub transition: Option<Box<crate::transition::Transition>>,
 
     /// Visible scrollbar for an `overflow: scroll` node: `"none"` (default) /
     /// `"default"` / a styled object. Present → the reconciler stamps a
@@ -611,18 +614,19 @@ impl StyleDirty {
 }
 
 impl Style {
-    /// Overlay every `Some` field of `delta` onto `self` and return the OR of
-    /// the touched fields' [`style_groups`] bits. Unlike `overlay_style` this
+    /// Move every `Some` field of `delta` onto `self` (the delta is consumed —
+    /// its owned payloads are moved, never cloned) and return the OR of the
+    /// touched fields' [`style_groups`] bits. Unlike `overlay_style` this
     /// carries **all** fields (including the `no_overlay`-tagged ones like
     /// `focus_policy`): the delta is the app's own base style, not a hover
     /// variant.
-    pub(crate) fn overlay_delta(&mut self, delta: &Style) -> u32 {
+    pub(crate) fn overlay_delta(&mut self, delta: &mut Style) -> u32 {
         let mut groups = 0u32;
         macro_rules! merge_field {
             ($(($f:ident, $name:literal, $g:tt, $ov:ident),)*) => {
                 $(
                     if delta.$f.is_some() {
-                        self.$f = delta.$f.clone();
+                        self.$f = delta.$f.take();
                         groups |= {
                             use style_groups::*;
                             $g

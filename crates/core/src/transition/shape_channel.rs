@@ -357,10 +357,11 @@ mod tests {
         schedule.run(&mut world);
         let shape = world.entity(e).get::<SvgShape>().unwrap();
         assert!(
-            matches!(
-                shape.attrs.cx,
-                Some(crate::protocol::animatable::Animatable::Animated { seed: Some(s), .. }) if s == 10.0
-            ),
+            shape
+                .attrs
+                .cx
+                .as_ref()
+                .is_some_and(|a| a.binding().is_some() && a.seed() == Some(&10.0)),
             "the animated slot (wrapper + seed) survives untouched"
         );
     }

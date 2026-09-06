@@ -49,7 +49,7 @@ pub(super) fn apply_update(
     a11y_nodes: &mut Query<&mut AccessibilityNode>,
     text_roots: &Query<(), With<Node>>,
     id: NodeId,
-    props: Props,
+    props: Box<Props>,
     unset: Vec<String>,
     style_unset: Vec<String>,
 ) {
@@ -304,7 +304,7 @@ pub(super) fn apply_update(
             // atomic replace may add or remove it.
             crate::transition::apply_shape_transition(
                 &mut commands.entity(e),
-                props.shape.as_ref(),
+                props.shape.as_deref(),
             );
         }
         if dirty.pointer {

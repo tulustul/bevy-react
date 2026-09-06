@@ -39,12 +39,12 @@ pub struct MorphFilter {
 /// warns (`morphFilterParams`) and degrades the whole field to `None`.
 pub(crate) fn de_morph_filter<'de, D: Deserializer<'de>>(
     d: D,
-) -> Result<Option<MorphFilter>, D::Error> {
+) -> Result<Option<Box<MorphFilter>>, D::Error> {
     let v = Value::deserialize(d)?;
     if v.is_null() {
         return Ok(None);
     }
-    Ok(morph_from_value(v))
+    Ok(morph_from_value(v).map(Box::new))
 }
 
 fn morph_from_value(value: Value) -> Option<MorphFilter> {
@@ -836,11 +836,11 @@ mod tests {
         #[derive(Deserialize)]
         struct Holder {
             #[serde(default, deserialize_with = "de_morph_filter")]
-            morph_filter: Option<MorphFilter>,
+            morph_filter: Option<Box<MorphFilter>>,
         }
         let h: Holder = serde_json::from_str(&format!(r#"{{"morph_filter":{json}}}"#))
             .expect("morphFilter decode must not error");
-        h.morph_filter
+        h.morph_filter.map(|m| *m)
     }
 
     #[test]

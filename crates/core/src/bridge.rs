@@ -77,8 +77,8 @@ pub struct RRoot;
 /// the node's `Interaction` changes, entirely on the Bevy side (no round-trip
 /// to JS). Absent on elements without variants — they style as before.
 ///
-/// Every slot is **boxed**: `Style` is ~4.4 KB, so inline this component would
-/// weigh ~17.6 KB in the archetype row of every interactive node (and be
+/// Every slot is **boxed**: `Style` is ~1.2 KB, so inline this component would
+/// weigh ~5 KB in the archetype row of every interactive node (and be
 /// memcpy'd on each table move) to hold at most a handful of set fields.
 #[derive(Component, Debug, Clone, Default)]
 pub struct StyleVariants {

@@ -186,7 +186,9 @@ pub fn sync_transform3d_matrices(
 
 /// Convenience for the wire params carried by a style, if any.
 pub fn style_transform3d(style: &Option<protocol::style::Style>) -> Option<Transform3d> {
-    style.as_ref().and_then(|s| s.transform3d.clone())
+    style
+        .as_ref()
+        .and_then(|s| s.transform3d.as_deref().cloned())
 }
 
 #[cfg(test)]

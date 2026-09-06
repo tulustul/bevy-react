@@ -9,28 +9,44 @@ use super::decode_warn;
 #[derive(Debug, Clone, PartialEq)]
 pub enum Animatable<T> {
     Static(T),
-    Animated {
-        binding: crate::animations::protocol::Binding,
-        /// The wrapper's sibling `seed`, decoded as `T` (a malformed seed
-        /// warns `styleBinding` and drops to `None`).
-        ///
-        /// While an animation driver runs, the seed carries the **last driven
-        /// value**: the apply stage (`crate::animations`' shape-attr stage)
-        /// writes each frame's resolved value into this slot — never
-        /// replacing the variant with `Static`, which would destroy the
-        /// binding — so seed-rendering read sites (`static_or_seed`) see the
-        /// live value while the binding survives re-derivation.
-        seed: Option<T>,
-    },
+    /// The `{ animated, seed }` wrapper. Boxed: the payload (a [`Binding`]
+    /// with its curve `Vec`s + the seed) is ~10× the static value, and
+    /// `Style` carries dozens of these fields inline — boxing the rare
+    /// variant keeps every `Style`/`Props` move and `Default` at the size
+    /// of the common static case (see `props_stays_small`).
+    ///
+    /// [`Binding`]: crate::animations::protocol::Binding
+    Animated(Box<AnimatedSlot<T>>),
+}
+
+/// The payload of an [`Animatable::Animated`] wrapper.
+#[derive(Debug, Clone, PartialEq)]
+pub struct AnimatedSlot<T> {
+    pub binding: crate::animations::protocol::Binding,
+    /// The wrapper's sibling `seed`, decoded as `T` (a malformed seed
+    /// warns `styleBinding` and drops to `None`).
+    ///
+    /// While an animation driver runs, the seed carries the **last driven
+    /// value**: the apply stage (`crate::animations`' shape-attr stage)
+    /// writes each frame's resolved value into this slot — never
+    /// replacing the variant with `Static`, which would destroy the
+    /// binding — so seed-rendering read sites (`static_or_seed`) see the
+    /// live value while the binding survives re-derivation.
+    pub seed: Option<T>,
 }
 
 impl<T> Animatable<T> {
+    /// Wrap a binding + seed as the animated variant.
+    pub fn animated(binding: crate::animations::protocol::Binding, seed: Option<T>) -> Self {
+        Animatable::Animated(Box::new(AnimatedSlot { binding, seed }))
+    }
+
     /// The static value; `None` while animated (the seed is NOT a static
     /// value — see [`Self::seed`]).
     pub fn value(&self) -> Option<&T> {
         match self {
             Animatable::Static(v) => Some(v),
-            Animatable::Animated { .. } => None,
+            Animatable::Animated(_) => None,
         }
     }
 
@@ -38,7 +54,7 @@ impl<T> Animatable<T> {
     pub fn binding(&self) -> Option<&crate::animations::protocol::Binding> {
         match self {
             Animatable::Static(_) => None,
-            Animatable::Animated { binding, .. } => Some(binding),
+            Animatable::Animated(a) => Some(&a.binding),
         }
     }
 
@@ -46,7 +62,16 @@ impl<T> Animatable<T> {
     pub fn seed(&self) -> Option<&T> {
         match self {
             Animatable::Static(_) => None,
-            Animatable::Animated { seed, .. } => seed.as_ref(),
+            Animatable::Animated(a) => a.seed.as_ref(),
+        }
+    }
+
+    /// The animated wrapper's `seed` slot, mutably; `None` when static. The
+    /// driver's write path (`crate::animations`' shape-attr stage).
+    pub fn seed_mut(&mut self) -> Option<&mut Option<T>> {
+        match self {
+            Animatable::Static(_) => None,
+            Animatable::Animated(a) => Some(&mut a.seed),
         }
     }
 }
@@ -112,10 +137,7 @@ impl<'de, T: de::DeserializeOwned> Deserialize<'de> for Animatable<T> {
                     None
                 }
             });
-            return Ok(Animatable::Animated {
-                binding: binding_from_wrapper(inner),
-                seed,
-            });
+            return Ok(Animatable::animated(binding_from_wrapper(inner), seed));
         }
         T::deserialize(v)
             .map(Animatable::Static)

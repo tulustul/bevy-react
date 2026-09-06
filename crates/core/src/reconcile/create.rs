@@ -49,7 +49,7 @@ pub(super) fn apply_create(
     ui_assets: &mut UiAssets,
     id: NodeId,
     kind: String,
-    props: Props,
+    mut props: Box<Props>,
     text: Option<String>,
 ) {
     // Attribute apply-time parse warnings (colors, fonts, …) fired
@@ -369,11 +369,12 @@ pub(super) fn apply_create(
     {
         bridge.layer_dirty.insert(id);
     }
-    // Seed the retained props a later update's delta merges into.
-    // Event-like fields were consumed by the create itself and are
-    // never part of the retained state.
-    let (state, _) = props.split_events();
-    bridge.props_cache.insert(id, Box::new(state));
+    // Seed the retained props a later update's delta merges into — the
+    // op's own box, in place (no re-box, no copy). Event-like fields were
+    // consumed by the create itself and are never part of the retained
+    // state.
+    let _ = props.split_events();
+    bridge.props_cache.insert(id, props);
 }
 
 /// Spawn a `node`, `button`, or `image` host element with its style. Also the

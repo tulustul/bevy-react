@@ -54,7 +54,7 @@ pub(super) fn create_shape(
     kind: ShapeKind,
     props: &Props,
 ) -> Entity {
-    let attrs = props.shape.clone().unwrap_or_default();
+    let attrs = props.shape.as_deref().cloned().unwrap_or_default();
     // Pass-through for picking: the refined shape hit
     // (`crate::svg::pick::refine_svg_pointer_hits`) puts the shape at the top
     // of the pointer's hit stack, and bevy's hover map treats an entity
@@ -76,7 +76,7 @@ pub(super) fn create_shape(
     // A `transition` inside the attrs stamps the transition components (the
     // spec itself rides `SvgShape.attrs` — the stamp only makes the drive
     // query match; see `apply_shape_transition`).
-    crate::transition::apply_shape_transition(&mut ec, props.shape.as_ref());
+    crate::transition::apply_shape_transition(&mut ec, props.shape.as_deref());
     warn_shape_scroll(props);
     ec.id()
 }
@@ -132,7 +132,7 @@ pub(super) fn warn_shape_scroll(props: &Props) {
 /// rasterizer's dirt signal. `"shape"` in `unset` merged to `None` → default
 /// (empty) attrs.
 pub(super) fn update_shape_attrs(ec: &mut EntityCommands, props: &Props) {
-    let attrs = props.shape.clone().unwrap_or_default();
+    let attrs = props.shape.as_deref().cloned().unwrap_or_default();
     ec.queue(move |mut entity: EntityWorldMut| {
         if entity.get::<SvgShape>().is_some_and(|s| s.attrs != attrs)
             && let Some(mut shape) = entity.get_mut::<SvgShape>()

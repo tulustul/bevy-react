@@ -207,40 +207,40 @@ pub(crate) fn derive_bindings(style: Option<&Style>) -> Option<AnimatedBindings>
     // One rule per accessor shape (see the table's column contract).
     macro_rules! row {
         ($prop:tt, (base $field:ident)) => {
-            if let Some(Animatable::Animated { binding: b, .. }) = &style.$field {
-                out.insert($prop, b.clone());
+            if let Some(Animatable::Animated(a)) = &style.$field {
+                out.insert($prop, a.binding.clone());
             }
         };
         ($prop:tt, (transform $field:ident)) => {
             if let Some(t) = &style.transform
-                && let Some(Animatable::Animated { binding: b, .. }) = &t.$field
+                && let Some(Animatable::Animated(a)) = &t.$field
             {
-                out.insert($prop, b.clone());
+                out.insert($prop, a.binding.clone());
             }
         };
         ($prop:tt, (t3d $field:ident $($unit:tt)*)) => {
             if let Some(t) = &style.transform3d
-                && let Some(Animatable::Animated { binding: b, .. }) = &t.$field
+                && let Some(Animatable::Animated(a)) = &t.$field
             {
-                out.insert($prop, b.clone());
+                out.insert($prop, a.binding.clone());
             }
         };
         // `origin.x`/`origin.y` are `Animatable` directly (not `Option`).
         ($prop:tt, (t3d_origin $axis:ident)) => {
             if let Some(t) = &style.transform3d
                 && let Some(origin) = &t.origin
-                && let Animatable::Animated { binding: b, .. } = &origin.$axis
+                && let Animatable::Animated(a) = &origin.$axis
             {
-                out.insert($prop, b.clone());
+                out.insert($prop, a.binding.clone());
             }
         };
         // The one animatable field nested inside `backgroundImage` (its
         // `scale` stays static-only for now).
         ($prop:tt, (bg_tint)) => {
             if let Some(bg) = &style.background_image
-                && let Some(Animatable::Animated { binding: b, .. }) = &bg.tint
+                && let Some(Animatable::Animated(a)) = &bg.tint
             {
-                out.insert($prop, b.clone());
+                out.insert($prop, a.binding.clone());
             }
         };
     }
@@ -266,8 +266,8 @@ pub(crate) fn derive_bindings(style: Option<&Style>) -> Option<AnimatedBindings>
         }
     }
 
-    gradient_bindings(style.background_gradient.as_ref(), false, &mut out);
-    gradient_bindings(style.border_gradient.as_ref(), true, &mut out);
+    gradient_bindings(style.background_gradient.as_deref(), false, &mut out);
+    gradient_bindings(style.border_gradient.as_deref(), true, &mut out);
 
     (!out.is_empty()).then_some(AnimatedBindings(out))
 }
@@ -283,9 +283,8 @@ pub(crate) fn derive_shape_bindings(shape: Option<&ShapeAttrs>) -> Option<Animat
     let shape = shape?;
     let mut out = BTreeMap::new();
     for (name, field, _) in &crate::svg::NUMERIC_ATTRS {
-        if let Some(crate::protocol::animatable::Animatable::Animated { binding, .. }) =
-            field(shape)
-        {
+        if let Some(crate::protocol::animatable::Animatable::Animated(a)) = field(shape) {
+            let binding = &a.binding;
             out.insert(
                 P::ShapeAttr {
                     name: (*name).to_string(),
@@ -305,7 +304,7 @@ pub(crate) fn derive_shape_bindings(shape: Option<&ShapeAttrs>) -> Option<Animat
 /// `None` (remove the component) exactly when **both** sides are empty.
 pub(crate) fn derive_props_bindings(props: &Props) -> Option<AnimatedBindings> {
     let mut out = derive_bindings(props.style.as_ref()).map_or_else(BTreeMap::new, |b| b.0);
-    if let Some(shape) = derive_shape_bindings(props.shape.as_ref()) {
+    if let Some(shape) = derive_shape_bindings(props.shape.as_deref()) {
         out.extend(shape.0);
     }
     (!out.is_empty()).then_some(AnimatedBindings(out))

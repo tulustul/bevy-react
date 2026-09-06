@@ -283,7 +283,7 @@ mod tests {
             panic!()
         };
         assert!(l.angle.binding().is_some());
-        assert!(matches!(&l.stops[0].color, Animatable::Animated { .. }));
+        assert!(matches!(&l.stops[0].color, Animatable::Animated(_)));
         assert_eq!(l.stops[1].color, Animatable::Static("#ff0000".to_string()));
         assert_eq!(g.clone(), g, "PartialEq derived");
     }

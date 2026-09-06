@@ -703,7 +703,7 @@ fn apply_style_impl(
     // isn't reset by a coincident re-render). Queued set-if-neq like the
     // group alpha above: a settled value must not trip change detection.
     if dirty.intersects(g::TRANSFORM3D)
-        && let Some(t) = s.and_then(|s| s.transform3d.clone())
+        && let Some(t) = s.and_then(|s| s.transform3d.as_deref().cloned())
     {
         ec.queue(move |mut entity: EntityWorldMut| {
             use crate::layer::transform3d::LayerTransform3d;
