@@ -300,6 +300,9 @@ pub struct JsBridge {
     /// no `ChildOf`.
     pub surface_parent: HashMap<NodeId, NodeId>,
     pub child_surfaces: HashMap<NodeId, Vec<NodeId>>,
+    /// Reusable DFS stack for the subtree walks (`surfaces_under`,
+    /// `forget_subtree`) — always empty between calls.
+    walk_stack: Vec<NodeId>,
 }
 
 /// Doubly-linked sibling entry (present iff the node is attached to a parent).
@@ -349,6 +352,7 @@ impl JsBridge {
             parent_of: HashMap::new(),
             surface_parent: HashMap::new(),
             child_surfaces: HashMap::new(),
+            walk_stack: Vec::new(),
         }
     }
 
@@ -386,23 +390,31 @@ impl JsBridge {
     /// despawns surfaces that Bevy's recursive despawn of `node` can't reach.
     pub fn surfaces_under(&mut self, node: NodeId) -> Vec<NodeId> {
         let mut out = Vec::new();
-        self.collect_surfaces(node, &mut out);
-        out
-    }
-
-    fn collect_surfaces(&mut self, node: NodeId, out: &mut Vec<NodeId>) {
-        if let Some(surfaces) = self.child_surfaces.remove(&node) {
-            for surface in surfaces {
-                self.surface_parent.remove(&surface);
-                out.push(surface);
-                // A surface can itself host nested surfaces.
-                self.collect_surfaces(surface, out);
+        // No detached root anywhere (the common case): nothing to walk for.
+        if self.child_surfaces.is_empty() {
+            return out;
+        }
+        let mut stack = std::mem::take(&mut self.walk_stack);
+        stack.push(node);
+        while let Some(n) = stack.pop() {
+            if let Some(surfaces) = self.child_surfaces.remove(&n) {
+                for surface in surfaces {
+                    self.surface_parent.remove(&surface);
+                    out.push(surface);
+                    // A surface can itself host nested surfaces.
+                    stack.push(surface);
+                }
+                // The last detached root has been found: the rest of the walk
+                // can't find another.
+                if self.child_surfaces.is_empty() {
+                    break;
+                }
             }
+            stack.extend(self.children_of(n));
         }
-        let kids: Vec<NodeId> = self.children_of(node).collect();
-        for kid in kids {
-            self.collect_surfaces(kid, out);
-        }
+        stack.clear();
+        self.walk_stack = stack;
+        out
     }
 
     /// Unlink `child` from its current parent's ordered children list (if any). Called
@@ -535,22 +547,22 @@ impl JsBridge {
         }
         self.shared_tags
             .forget(id, props.as_ref().and_then(|p| p.shared_tag.as_deref()));
-        self.layer_dirty.remove(&id);
-        self.promoted_layers.remove(&id);
-        self.text_styles.remove(&id);
-        self.spans.remove(&id);
-        self.editable_inputs.remove(&id);
-        self.surfaces.remove(&id);
-        self.roots.remove(&id);
-        self.foreign_images.remove(&id);
-        self.svg_roots.remove(&id);
-        self.shapes.remove(&id);
-        self.editable_values.remove(&id);
-        self.editable_selections.remove(&id);
-        self.editable_select_handlers.remove(&id);
-        self.editable_focus_handlers.remove(&id);
-        self.editable_pending_selection.remove(&id);
-        self.scroll_positions.remove(&id);
+        take_if_any(&mut self.layer_dirty, id);
+        take_if_any(&mut self.promoted_layers, id);
+        remove_if_any(&mut self.text_styles, id);
+        remove_if_any(&mut self.spans, id);
+        take_if_any(&mut self.editable_inputs, id);
+        take_if_any(&mut self.surfaces, id);
+        take_if_any(&mut self.roots, id);
+        take_if_any(&mut self.foreign_images, id);
+        take_if_any(&mut self.svg_roots, id);
+        take_if_any(&mut self.shapes, id);
+        remove_if_any(&mut self.editable_values, id);
+        remove_if_any(&mut self.editable_selections, id);
+        take_if_any(&mut self.editable_select_handlers, id);
+        take_if_any(&mut self.editable_focus_handlers, id);
+        remove_if_any(&mut self.editable_pending_selection, id);
+        remove_if_any(&mut self.scroll_positions, id);
     }
 
     /// Drop `child` and its whole subtree from the shadow tree. React emits a `Remove`
@@ -560,13 +572,37 @@ impl JsBridge {
     /// descendant ids would linger as stale entity handles until the next `Op::Reset`.
     /// Does not unlink the root from its parent's ordered list; call `detach` for that.
     pub fn forget_subtree(&mut self, child: NodeId) {
-        self.forget_node_data(child);
-        let grandkids: Vec<NodeId> = self.children_of(child).collect();
-        self.child_list.remove(&child);
-        for grandkid in grandkids {
-            self.parent_of.remove(&grandkid);
-            self.siblings.remove(&grandkid);
-            self.forget_subtree(grandkid);
+        let mut stack = std::mem::take(&mut self.walk_stack);
+        stack.push(child);
+        while let Some(id) = stack.pop() {
+            self.forget_node_data(id);
+            // Unlink every child as the list is walked (the links are consumed
+            // in the same step that yields the next sibling).
+            if let Some(list) = self.child_list.remove(&id) {
+                let mut cursor = Some(list.head);
+                while let Some(kid) = cursor {
+                    self.parent_of.remove(&kid);
+                    cursor = self.siblings.remove(&kid).and_then(|l| l.next);
+                    stack.push(kid);
+                }
+            }
         }
+        self.walk_stack = stack;
+    }
+}
+
+/// `map.remove(&id)`, skipping the hash when the table is empty — most of the
+/// per-node side-tables are empty in most apps, and every removed node pays
+/// for all of them.
+fn remove_if_any<V>(map: &mut HashMap<NodeId, V>, id: NodeId) {
+    if !map.is_empty() {
+        map.remove(&id);
+    }
+}
+
+/// [`remove_if_any`] for the set-typed side-tables.
+fn take_if_any(set: &mut HashSet<NodeId>, id: NodeId) {
+    if !set.is_empty() {
+        set.remove(&id);
     }
 }

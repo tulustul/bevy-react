@@ -124,6 +124,12 @@ pub fn apply_js_ops(
     // relationship cleanup drops the child from `Children` preserving the order
     // of the rest.
     let mut dirty: HashMap<NodeId, ParentDirt> = HashMap::new();
+    // Removed subtree roots this batch as `(parent, entity)`, in op order,
+    // despawned after the loop (see there); `removed_under` counts them per
+    // parent — a parent shedding [`ParentDirt::MASS_REMOVAL_MIN`] or more gets
+    // them detached in one pass — and doubles as the content-dirt dedupe.
+    let mut removals: Vec<(NodeId, Entity)> = Vec::new();
+    let mut removed_under: HashMap<NodeId, usize> = HashMap::new();
 
     // Shared-element pairing (see `crate::shared_tags`): plan against the
     // pre-batch shadow tree, then snapshot every outgoing node BEFORE any
@@ -205,6 +211,10 @@ pub fn apply_js_ops(
                 bridge.surface_parent.clear();
                 bridge.child_surfaces.clear();
                 dirty.clear();
+                // The pending despawns stay queued (they tolerate the root
+                // sweep above having taken them already), but the counts are
+                // keyed by ids the reloaded app re-uses.
+                removed_under.clear();
             }
             Op::Create {
                 id,
@@ -339,12 +349,18 @@ pub fn apply_js_ops(
                 // The removal also changes the parent's rendered content →
                 // re-capture its layer.
                 bridge.layer_dirty.insert(parent);
-                if let Some(p) = resolve(&bridge, parent) {
+                // One content-dirt push per parent per batch is enough (ids are
+                // never re-used within a batch, so the entity is the same).
+                let count = removed_under.entry(parent).or_insert(0);
+                *count += 1;
+                if *count == 1
+                    && let Some(p) = resolve(&bridge, parent)
+                {
                     crate::layer::mark_content_dirty(&mut commands.entity(p));
                 }
-                // The removed node may be a positional insert's `before`: its
-                // despawn lands before the positional command, which would then
-                // find no anchor and leave the inserted child at the tail.
+                // The removed node may be a positional insert's `before`: the
+                // positional command would then find no anchor and leave the
+                // inserted child at the tail.
                 ParentDirt::escalate(&mut dirty, parent);
                 // React emits `Remove` only for the subtree's top node, and Bevy
                 // despawns that node recursively — but a `<surface>`/`<root>` nested
@@ -369,7 +385,10 @@ pub fn apply_js_ops(
                 }
 
                 if let Some(c) = resolve(&bridge, child) {
-                    commands.entity(c).despawn();
+                    // The despawn is queued after the loop (see `removals`); a
+                    // same-batch attach under `child` has landed by then, so the
+                    // recursive despawn still reaches it.
+                    removals.push((parent, c));
                     // Unlink from the parent's ordered list, then drop the whole subtree
                     // from the shadow tree — `forget_subtree` prunes `child` and every
                     // despawned descendant from all per-node side-tables, so no stale
@@ -457,11 +476,11 @@ pub fn apply_js_ops(
     // order becomes exactly the slice's). Skipping unresolvable parents guards the
     // despawned-entity panic: anything removed (or wiped by `Reset`) mid-batch was
     // pruned from `bridge.nodes` by `forget_subtree`.
-    for (parent, dirt) in dirty {
+    for (&parent, dirt) in &dirty {
         let Some(p) = resolve(&bridge, parent) else {
             continue;
         };
-        if let ParentDirt::InsertsOnly(inserts) = &dirt
+        if let ParentDirt::InsertsOnly(inserts) = dirt
             && let Some(planned) = inserts
                 .iter()
                 .map(|&(child, before)| Some((resolve(&bridge, child)?, resolve(&bridge, before)?)))
@@ -501,6 +520,40 @@ pub fn apply_js_ops(
         // here (its live parent is the AnchorLayer) — same as the old per-op
         // `insert_child` path; the anchor system self-heals it next frame.
         commands.entity(p).replace_children(&list);
+    }
+
+    // Despawn the removed subtrees (recursively). Despawn's relationship
+    // cleanup drops the child from its parent's `Children` by a scan from the
+    // BACK plus a `Vec::remove` memmove of what follows, and React emits a
+    // commit's deletions in child order — front to back, so applied as-is every
+    // scan is a full one and k removals out of N siblings cost O(k·N) (a
+    // 10k-row `clear` spent ~57 ms there). Two measures: the despawns go in
+    // REVERSE op order, so each removed child is the last one still attached
+    // (a `clear` is O(N); a removal of every other child scans only the
+    // survivors between it and the tail), and a parent shedding
+    // `MASS_REMOVAL_MIN`+ children — unless a rebuild above already detached
+    // them — has its children detached in one pass by [`despawn_detached`].
+    // Nothing here orders against the other commands: the removed subtrees are
+    // disjoint from the rest of the batch (ids are never re-used, a same-batch
+    // attach under one of them has landed by now), and a subtree an earlier
+    // removal already covered, or a same-batch `Reset` swept, is skipped.
+    let mut mass: HashMap<NodeId, (Entity, Vec<Entity>)> = HashMap::new();
+    for (parent, e) in removals.into_iter().rev() {
+        // (A same-batch `Reset` cleared the counts: those go the plain way.)
+        if removed_under.get(&parent).copied().unwrap_or(0) >= ParentDirt::MASS_REMOVAL_MIN
+            && !dirty.contains_key(&parent)
+            && let Some(p) = resolve(&bridge, parent)
+        {
+            mass.entry(parent)
+                .or_insert_with(|| (p, Vec::new()))
+                .1
+                .push(e);
+        } else {
+            commands.entity(e).try_despawn();
+        }
+    }
+    for (p, removed) in mass.into_values() {
+        commands.queue(move |world: &mut World| despawn_detached(world, p, removed));
     }
 
     // Record this batch for live instrumentation (see [`OpApplyStats`]).
@@ -550,6 +603,13 @@ impl ParentDirt {
     /// Above this many positional inserts on one parent per batch, the parent
     /// falls back to a full rebuild.
     const POSITIONAL_CAP: usize = 16;
+
+    /// From this many removals on one parent per batch, [`despawn_detached`]
+    /// takes over from per-despawn relationship cleanup: its one O(siblings)
+    /// `retain` pays off once the reverse-order scans (about k·N/2 sibling
+    /// compares + memmoves for k removals spread over N) cost more, at k of a
+    /// few dozen whatever N is.
+    const MASS_REMOVAL_MIN: usize = 32;
 
     /// The parent needs a full rebuild.
     fn rebuild(dirty: &mut HashMap<NodeId, ParentDirt>, parent: NodeId) {
@@ -609,6 +669,47 @@ fn inherit_text_style(
 
 pub(super) fn resolve(bridge: &JsBridge, id: NodeId) -> Option<Entity> {
     bridge.nodes.get(&id).copied()
+}
+
+/// Despawn `removed` (children of `parent`, recursively) with `Children`
+/// detached in one pass instead of once per despawn. `ChildOf`'s on-remove
+/// hook drops the entity from the parent's `Children` by a linear scan +
+/// `Vec::remove` memmove, O(N) per child; here the collection is taken off
+/// the parent for the duration (the hooks scan an empty list), and the
+/// survivors — the same entities, still `ChildOf(parent)`, in the same order —
+/// are put back afterwards. Bevy's own `replace_related` does this same
+/// `collection_mut_risky` swap; the invariant kept is that every entity in the
+/// collection is `ChildOf(parent)`, which nothing here changes. The hook may
+/// drop the emptied `Children` meanwhile (its "remove when empty" command),
+/// hence the re-insert; a parent already despawned (by a same-batch ancestor
+/// removal) took its children with it.
+fn despawn_detached(world: &mut World, parent: Entity, removed: Vec<Entity>) {
+    use bevy::ecs::entity::EntityHashSet;
+    use bevy::ecs::relationship::RelationshipTarget;
+
+    let taken = world.get_entity_mut(parent).ok().and_then(|mut p| {
+        p.get_mut::<Children>()
+            .map(|mut c| std::mem::take(c.collection_mut_risky()))
+    });
+    for &e in &removed {
+        if let Ok(e) = world.get_entity_mut(e) {
+            e.despawn();
+        }
+    }
+    let Some(mut survivors) = taken else {
+        return;
+    };
+    let removed: EntityHashSet = removed.into_iter().collect();
+    survivors.retain(|e| !removed.contains(e));
+    if let Ok(mut p) = world.get_entity_mut(parent) {
+        if survivors.is_empty() {
+            p.remove::<Children>();
+        } else if let Some(mut c) = p.get_mut::<Children>() {
+            *c.collection_mut_risky() = survivors;
+        } else {
+            p.insert(Children::from_collection_risky(survivors));
+        }
+    }
 }
 
 #[cfg(test)]
