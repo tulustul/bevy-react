@@ -5,7 +5,7 @@
 
 use bevy::a11y::AccessibilityNode;
 use bevy::image::Image;
-use bevy::platform::collections::HashSet;
+use bevy::platform::collections::HashMap;
 use bevy::prelude::*;
 use bevy::text::EditableText;
 use bevy::ui::{ComputedNode, ScrollPosition};
@@ -113,14 +113,17 @@ pub fn apply_js_ops(
     debug!("applying {op_count} reconciler op(s)");
 
     // Parents whose child ORDER diverged from the ECS this batch (same-parent
-    // re-appends and every `Insert`); they get one `replace_children` after the
-    // loop instead of a per-op O(siblings) splice — mass reorders are O(ops) +
-    // one O(children) rebuild, not quadratic. First-time attaches still queue an
+    // re-appends, cross-parent moves, and `Insert`s of fresh nodes); see
+    // [`ParentDirt`] for the two sync strategies. A reorder-heavy parent gets one
+    // `replace_children` after the loop instead of a per-op O(siblings) splice —
+    // mass reorders are O(ops) + one O(children) rebuild, not quadratic; a parent
+    // that only received a few fresh mid-list inserts gets one positional
+    // `insert_children` per insert instead. First-time attaches still queue an
     // O(1) `add_child` per op (a same-batch ancestor removal must reach the child
     // recursively), and removals don't dirty their parent at all: despawn's
     // relationship cleanup drops the child from `Children` preserving the order
     // of the rest.
-    let mut dirty: HashSet<NodeId> = HashSet::new();
+    let mut dirty: HashMap<NodeId, ParentDirt> = HashMap::new();
 
     // Shared-element pairing (see `crate::shared_tags`): plan against the
     // pre-batch shadow tree, then snapshot every outgoing node BEFORE any
@@ -247,7 +250,8 @@ pub fn apply_js_ops(
                     continue;
                 }
                 if let (Some(p), Some(c)) = (resolve(&bridge, parent), resolve(&bridge, child)) {
-                    let same_parent = bridge.parent_of.get(&child) == Some(&parent);
+                    let old_parent = bridge.parent_of.get(&child).copied();
+                    let same_parent = old_parent == Some(parent);
                     // Child count may cross 0↔1+: re-evaluate the parent's layer
                     // promotion (see `crate::layer`). The attach also changes the
                     // parent's rendered content → re-capture its layer.
@@ -257,8 +261,13 @@ pub fn apply_js_ops(
                     if same_parent {
                         // Re-append = move to the end: an O(1) shadow reorder, synced
                         // to the ECS by the end-of-batch rebuild.
-                        dirty.insert(parent);
+                        ParentDirt::rebuild(&mut dirty, parent);
                     } else {
+                        // Leaving the old parent may take a positional insert's
+                        // `before` with it: that parent can no longer sync by index.
+                        if let Some(old) = old_parent {
+                            ParentDirt::escalate(&mut dirty, old);
+                        }
                         // Fresh node (or cross-parent move): attach in the ECS NOW —
                         // a same-batch removal of an ancestor must be able to despawn
                         // it recursively; deferring the attach would leak it as an
@@ -286,23 +295,42 @@ pub fn apply_js_ops(
                 // Ordered insertion: place `child` at `before`'s position. The live
                 // `Children` can't be read here (commands queued earlier in this same
                 // batch haven't applied), so the shadow tree is the ordering truth and
-                // the ECS position is fixed up by the end-of-batch rebuild of the
-                // (always dirty) parent. A missing `before` falls back to appending.
+                // the ECS position is fixed up after the loop — positionally for a
+                // fresh node, by a full rebuild of the parent for a move (see
+                // [`ParentDirt`]). A missing `before` falls back to appending.
                 if let (Some(p), Some(c)) = (resolve(&bridge, parent), resolve(&bridge, child)) {
-                    let same_parent = bridge.parent_of.get(&child) == Some(&parent);
+                    let old_parent = bridge.parent_of.get(&child).copied();
+                    let before_attached = bridge.parent_of.get(&before) == Some(&parent);
                     // Child count may cross 0↔1+: re-evaluate the parent's layer
                     // promotion (see `crate::layer`). The attach also changes the
                     // parent's rendered content → re-capture its layer.
                     bridge.layer_dirty.insert(parent);
                     crate::layer::mark_content_dirty(&mut commands.entity(p));
                     bridge.insert_before(parent, child, before);
-                    if !same_parent {
-                        // Fresh/cross-parent: attach NOW (at the end — the rebuild
+                    match old_parent {
+                        // Same-parent move: an O(1) shadow reorder, synced to the ECS
+                        // by the end-of-batch rebuild.
+                        Some(old) if old == parent => ParentDirt::rebuild(&mut dirty, parent),
+                        // Cross-parent move: attach NOW (at the end — the rebuild
                         // moves it into place); see `Op::Append` for why deferring
-                        // the attach itself would leak on same-batch removal.
-                        commands.entity(p).add_child(c);
+                        // the attach itself would leak on same-batch removal. The old
+                        // parent may have lost a positional insert's `before`.
+                        Some(old) => {
+                            ParentDirt::escalate(&mut dirty, old);
+                            commands.entity(p).add_child(c);
+                            ParentDirt::rebuild(&mut dirty, parent);
+                        }
+                        // Fresh node: attach NOW at the end (same leak argument), then
+                        // move it before `before` positionally after the loop. When
+                        // the shadow fell back to appending, the ECS tail already
+                        // matches and nothing is dirty.
+                        None => {
+                            commands.entity(p).add_child(c);
+                            if before_attached {
+                                ParentDirt::insert(&mut dirty, parent, child, before);
+                            }
+                        }
                     }
-                    dirty.insert(parent);
                     inherit_text_style(&mut commands, &bridge, parent, child, c);
                 }
             }
@@ -314,6 +342,10 @@ pub fn apply_js_ops(
                 if let Some(p) = resolve(&bridge, parent) {
                     crate::layer::mark_content_dirty(&mut commands.entity(p));
                 }
+                // The removed node may be a positional insert's `before`: its
+                // despawn lands before the positional command, which would then
+                // find no anchor and leave the inserted child at the tail.
+                ParentDirt::escalate(&mut dirty, parent);
                 // React emits `Remove` only for the subtree's top node, and Bevy
                 // despawns that node recursively — but a `<surface>`/`<root>` nested
                 // under it is a detached root (no `ChildOf`), so neither reaches it.
@@ -416,15 +448,40 @@ pub fn apply_js_ops(
         }
     }
 
-    // Sync the ECS hierarchy: one `replace_children` per parent whose child list
-    // changed this batch (Bevy diffs — kept children get no `ChildOf` rewrite, the
+    // Sync the ECS hierarchy. An insert-only parent gets one positional
+    // `insert_children` per fresh child (its `before` is located in the live
+    // `Children` when the command applies — every earlier command of this batch,
+    // including the child's own tail attach and any same-batch `before`'s
+    // placement, has landed by then); every other dirty parent gets one
+    // `replace_children` (Bevy diffs — kept children get no `ChildOf` rewrite, the
     // order becomes exactly the slice's). Skipping unresolvable parents guards the
     // despawned-entity panic: anything removed (or wiped by `Reset`) mid-batch was
     // pruned from `bridge.nodes` by `forget_subtree`.
-    for parent in dirty {
+    for (parent, dirt) in dirty {
         let Some(p) = resolve(&bridge, parent) else {
             continue;
         };
+        if let ParentDirt::InsertsOnly(inserts) = &dirt
+            && let Some(planned) = inserts
+                .iter()
+                .map(|&(child, before)| Some((resolve(&bridge, child)?, resolve(&bridge, before)?)))
+                .collect::<Option<Vec<_>>>()
+        {
+            for (c, b) in planned {
+                commands.entity(p).queue(move |mut parent: EntityWorldMut| {
+                    let Some(index) = parent
+                        .get::<Children>()
+                        .and_then(|kids| kids.iter().position(|e| e == b))
+                    else {
+                        return;
+                    };
+                    // Already `ChildOf(parent)` (attached at op time): this moves it
+                    // from the tail to `before`'s slot, shifting the rest right.
+                    parent.insert_children(index, &[c]);
+                });
+            }
+            continue;
+        }
         let mut list: Vec<Entity> = Vec::new();
         // The AnchorLayer is a Rust-side child of the root, invisible to the shadow
         // tree — keep it as the first child (its spawn-time position; overlays are
@@ -464,6 +521,67 @@ pub fn apply_js_ops(
         stats.last_pre_apply = pre;
         stats.last_translate = end.duration_since(started);
         stats.last_apply_end = Some(end);
+    }
+}
+
+/// How a parent's ECS `Children` is brought back in line with the shadow tree at
+/// the end of a batch.
+///
+/// A fresh node inserted mid-list (`Op::Insert` of a never-parented child before
+/// an existing sibling) is attached at the tail at op time and moved into place by
+/// one positional `insert_children` — a contiguous scan of the live `Children`,
+/// microseconds even at 10k siblings — instead of rebuilding the whole child list
+/// from the shadow tree (`children_of` + `replace_children`, which hashes every
+/// sibling twice and builds an `EntityHashSet` of all of them). Anything the
+/// positional path can't express escalates the parent to a full rebuild: a
+/// same-parent reorder (re-append or `Insert` of an existing child), a
+/// cross-parent move (into it, or out of it — the departing node may be a
+/// positional insert's anchor), a removal (same reason), or more than
+/// [`Self::POSITIONAL_CAP`] inserts (per-insert scans stop paying off against one
+/// O(children) rebuild — the mass-insert case).
+enum ParentDirt {
+    /// Only fresh-node inserts so far: `(child, before)` pairs in op order.
+    InsertsOnly(Vec<(NodeId, NodeId)>),
+    /// Rebuild the whole child list from the shadow tree.
+    Rebuild,
+}
+
+impl ParentDirt {
+    /// Above this many positional inserts on one parent per batch, the parent
+    /// falls back to a full rebuild.
+    const POSITIONAL_CAP: usize = 16;
+
+    /// The parent needs a full rebuild.
+    fn rebuild(dirty: &mut HashMap<NodeId, ParentDirt>, parent: NodeId) {
+        dirty.insert(parent, ParentDirt::Rebuild);
+    }
+
+    /// Record a fresh-node insert of `child` before `before` under `parent`.
+    fn insert(
+        dirty: &mut HashMap<NodeId, ParentDirt>,
+        parent: NodeId,
+        child: NodeId,
+        before: NodeId,
+    ) {
+        match dirty
+            .entry(parent)
+            .or_insert_with(|| ParentDirt::InsertsOnly(Vec::new()))
+        {
+            ParentDirt::InsertsOnly(inserts) if inserts.len() < Self::POSITIONAL_CAP => {
+                inserts.push((child, before));
+            }
+            slot @ ParentDirt::InsertsOnly(_) => *slot = ParentDirt::Rebuild,
+            ParentDirt::Rebuild => {}
+        }
+    }
+
+    /// A structural change the positional path can't express happened under
+    /// `parent`: if it is insert-only so far, make it a full rebuild. A parent that
+    /// isn't dirty stays clean (the change alone keeps the ECS order intact).
+    fn escalate(dirty: &mut HashMap<NodeId, ParentDirt>, parent: NodeId) {
+        if let Some(slot) = dirty.get_mut(&parent) {
+            *slot = ParentDirt::Rebuild;
+        }
     }
 }
 
@@ -926,6 +1044,114 @@ mod tests {
 
         let parent = ent(&app, 1);
         assert_eq!(children_of(&app, parent), vec![ent(&app, 4), ent(&app, 2)]);
+    }
+
+    /// The positional insert path (no rebuild): a fresh node before the FIRST
+    /// child, then another fresh node before that same-batch-inserted one. Each
+    /// `insert_children` must find its `before` in the live `Children` — the
+    /// second one's anchor is placed by the first command of the same batch.
+    /// `[A,B]` + insert C before A + insert D before C → `[D,C,A,B]`.
+    #[test]
+    fn fresh_inserts_before_first_and_before_same_batch_insert() {
+        let (mut app, tx, _root) = ordering_app();
+        tx.send(vec![
+            create_node(1),
+            create_node(2),
+            create_node(3),
+            Op::Append {
+                parent: ROOT_ID,
+                child: 1,
+            },
+            Op::Append {
+                parent: 1,
+                child: 2,
+            },
+            Op::Append {
+                parent: 1,
+                child: 3,
+            },
+        ])
+        .unwrap();
+        app.update();
+
+        tx.send(vec![
+            create_node(4),
+            create_node(5),
+            Op::Insert {
+                parent: 1,
+                child: 4,
+                before: 2,
+            },
+            Op::Insert {
+                parent: 1,
+                child: 5,
+                before: 4,
+            },
+        ])
+        .unwrap();
+        app.update();
+
+        let parent = ent(&app, 1);
+        assert_eq!(
+            children_of(&app, parent),
+            vec![ent(&app, 5), ent(&app, 4), ent(&app, 2), ent(&app, 3)],
+            "fresh inserts before the head and before a same-batch insert: [D, C, A, B]"
+        );
+    }
+
+    /// A fresh insert whose `before` is removed later in the SAME batch: the
+    /// positional anchor is gone by the time the command applies, so the parent
+    /// must escalate to a full rebuild — `[A,B,C]` + insert D before B + remove B
+    /// → `[A,D,C]`, not `[A,C,D]`.
+    #[test]
+    fn fresh_insert_then_remove_of_its_anchor_rebuilds() {
+        let (mut app, tx, _root) = ordering_app();
+        tx.send(vec![
+            create_node(1),
+            create_node(2),
+            create_node(3),
+            create_node(4),
+            Op::Append {
+                parent: ROOT_ID,
+                child: 1,
+            },
+            Op::Append {
+                parent: 1,
+                child: 2,
+            },
+            Op::Append {
+                parent: 1,
+                child: 3,
+            },
+            Op::Append {
+                parent: 1,
+                child: 4,
+            },
+        ])
+        .unwrap();
+        app.update();
+
+        tx.send(vec![
+            create_node(5),
+            Op::Insert {
+                parent: 1,
+                child: 5,
+                before: 3,
+            },
+            Op::Remove {
+                parent: 1,
+                child: 3,
+            },
+        ])
+        .unwrap();
+        app.update();
+
+        let parent = ent(&app, 1);
+        assert_eq!(
+            children_of(&app, parent),
+            vec![ent(&app, 2), ent(&app, 5), ent(&app, 4)],
+            "the inserted node must take its removed anchor's slot: [A, D, C]"
+        );
     }
 
     /// Regression: an inline-text nested `<text>` (a `textSpan` carrying its text
