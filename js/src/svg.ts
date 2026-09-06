@@ -78,8 +78,8 @@ export function packShapeProps(
     if (value !== undefined) (shape ??= {})[key] = value;
   }
   const rest: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(props)) {
-    if (!SHAPE_ATTR_KEY_SET.has(key)) rest[key] = value;
+  for (const key in props) {
+    if (!SHAPE_ATTR_KEY_SET.has(key)) rest[key] = props[key];
   }
   if (shape) rest.shape = shape;
   return rest;

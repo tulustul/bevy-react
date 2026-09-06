@@ -357,9 +357,9 @@ export function createCanvasElement(id: number): BevyCanvasElement {
   });
 }
 
-// Track (or drop) a node's declarative `draw` prop for resize replay. Called
-// beside `registerHandlers` on every serialization, so a Fast-Refreshed
-// painter replaces its stale predecessor.
+// Track (or drop) a `<canvas>` node's declarative `draw` prop for resize
+// replay. Called on every serialization of a canvas (the callers gate on the
+// element type), so a Fast-Refreshed painter replaces its stale predecessor.
 function registerCanvasPainter(
   id: number,
   props: Record<string, unknown>,
@@ -471,26 +471,33 @@ const HANDLER_KINDS = {
 // boolean flags from this map instead of hand-listing them.
 type HandlerPropKey = keyof typeof HANDLER_KINDS;
 
+// `HANDLER_KINDS` as a flat `[prop, kind]` list, built once — the create path
+// walks it per node, so it must not be re-derived per call.
+const HANDLER_ENTRIES: ReadonlyArray<readonly [HandlerPropKey, string]> =
+  Object.entries(HANDLER_KINDS) as [HandlerPropKey, string][];
+
 // The handler prop names, for the renderer's dirty-check: these props are
 // compared by presence, not identity (closures change every render).
 export const HANDLER_PROP_KEYS: ReadonlySet<string> = new Set(
   Object.keys(HANDLER_KINDS),
 );
 
-// (Re)populate the id -> handlers map from `props`, or clear it when there are no
-// handlers. Handler functions stay in JS (only a boolean crosses); their closures
-// change identity every render, so `commitUpdate` calls this even on a no-op update
-// to refresh them without emitting a Bevy op.
+type HandlerFn = (...args: unknown[]) => void;
+
+// Populate the id -> handlers map from a freshly created node's `props`, or
+// leave it absent when there are none. Handler functions stay in JS (only a
+// boolean crosses); their closures change identity every render, so the
+// update path (`buildUpdateOp`) refreshes the record in place without
+// emitting a Bevy op.
 export function registerHandlers(
   id: number,
   props: Record<string, unknown>,
 ): void {
-  let hs: Record<string, (...args: unknown[]) => void> | undefined;
-  for (const [key, kind] of Object.entries(HANDLER_KINDS)) {
+  let hs: Record<string, HandlerFn> | undefined;
+  for (let i = 0; i < HANDLER_ENTRIES.length; i++) {
+    const [key, kind] = HANDLER_ENTRIES[i];
     const value = props[key];
-    if (typeof value === "function") {
-      (hs ??= {})[kind] = value as (...args: unknown[]) => void;
-    }
+    if (typeof value === "function") (hs ??= {})[kind] = value as HandlerFn;
   }
   if (hs) handlers.set(id, hs);
   else handlers.delete(id);
@@ -630,16 +637,18 @@ export function packAnchorProps(
 // precedent so the reconciler imports both packers from one place.
 export { packShapeProps, SHAPE_KINDS } from "./svg";
 
+// Serialize a freshly created node's prop bag for its `create` op, and
+// register its handlers (+ a `<canvas>`'s declarative painter). `type` is the
+// element type (`createInstance`'s, not the wire kind).
 export function serializeProps(
   id: number,
   props: Record<string, unknown>,
+  type?: string,
 ): SerializedProps {
   const out: SerializedProps = {};
-  for (const [key, value] of Object.entries(props)) {
-    serializePropInto(out, key, value);
-  }
+  for (const key in props) serializePropInto(out, key, props[key]);
   registerHandlers(id, props);
-  registerCanvasPainter(id, props);
+  if (type === "canvas") registerCanvasPainter(id, props);
   return out;
 }
 
@@ -714,9 +723,121 @@ function diffStyle(
   return { delta, unset };
 }
 
+// The diff accumulator `diffKey` writes into (see `buildUpdateOp`). `handlers`
+// caches the node's handler record lookup across the keys of one diff.
+interface UpdateAcc {
+  id: number;
+  props: SerializedProps | null;
+  unset: string[] | null;
+  styleUnset: string[] | null;
+  handlers: Record<string, HandlerFn> | undefined;
+  handlersLost: boolean;
+}
+
+const UPDATE_ACC: UpdateAcc = {
+  id: 0,
+  props: null,
+  unset: null,
+  styleUnset: null,
+  handlers: undefined,
+  handlersLost: false,
+};
+
+// Reset the scratch accumulator for one diff. A function (not inline
+// assignments) so TypeScript doesn't narrow `acc.props` to `null` at the read
+// sites after the `diffKey` calls.
+function resetAcc(id: number): UpdateAcc {
+  const acc = UPDATE_ACC;
+  acc.id = id;
+  acc.props = null;
+  acc.unset = null;
+  acc.styleUnset = null;
+  acc.handlers = undefined;
+  acc.handlersLost = false;
+  return acc;
+}
+
+function isObj(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null;
+}
+
+function isEmpty(o: Record<string, unknown>): boolean {
+  for (const _ in o) return false;
+  return true;
+}
+
+// Diff one prop between the old and new bag into `acc`. A handler key also
+// maintains the node's handler record in place: its closure changes identity
+// every render, so the newest one replaces its predecessor whether or not the
+// presence flag (the only thing that crosses) changed.
+function diffKey(acc: UpdateAcc, key: string, a: unknown, b: unknown): void {
+  if (HANDLER_PROP_KEYS.has(key)) {
+    const had = typeof a === "function";
+    const has = typeof b === "function";
+    if (had || has) {
+      const kind = HANDLER_KINDS[key as HandlerPropKey];
+      let hs = acc.handlers ?? (acc.handlers = handlers.get(acc.id));
+      if (has) {
+        if (!hs) handlers.set(acc.id, (hs = acc.handlers = {}));
+        hs[kind] = b as HandlerFn;
+      } else if (hs) {
+        delete hs[kind];
+        acc.handlersLost = true;
+      }
+    }
+    if (had === has) return;
+    if (has) serializePropInto((acc.props ??= {}), key, b);
+    else (acc.unset ??= []).push(key);
+    return;
+  }
+  if (Object.is(a, b)) return;
+  if (key === "style") {
+    const av = isObj(a) ? a : undefined;
+    const bv = isObj(b) ? b : undefined;
+    if (av && bv) {
+      const d = diffStyle(av, bv);
+      if (!d) return;
+      if (d.delta) (acc.props ??= {}).style = d.delta;
+      if (d.unset) acc.styleUnset = d.unset;
+    } else if (bv) {
+      (acc.props ??= {}).style = bv;
+    } else if (av) {
+      (acc.unset ??= []).push("style");
+    }
+    return;
+  }
+  if (OBJECT_PROP_KEYS.has(key)) {
+    // Atomic object props: structurally equal → unchanged; present → replace
+    // whole; gone → unset.
+    if (isObj(b)) {
+      if (isObj(a) && valuesEqual(a, b)) return;
+      serializePropInto((acc.props ??= {}), key, b);
+    } else if (isObj(a)) {
+      (acc.unset ??= []).push(key);
+    }
+    return;
+  }
+  if (BOOL_PROP_KEYS.has(key) && b === false) {
+    // A `false` in the delta would be a silent no-op on the Rust side
+    // (`merge_bool!` only acts on `true`); turning a flag off rides `unset`.
+    if (a === true) (acc.unset ??= []).push(key);
+    return;
+  }
+  if (b === undefined) {
+    // Dropping an event-like prop is a no-op (nothing retained to reset).
+    if (EVENT_PROP_KEYS.has(key)) return;
+    if (serializePropInto({}, key, a)) {
+      (acc.unset ??= []).push(key);
+    }
+    return;
+  }
+  serializePropInto((acc.props ??= {}), key, b);
+}
+
 // Diff two prop bags into a delta `update` op, or `null` when no Bevy-visible
-// prop changed. The JS-side handler closures are (re)registered either way —
-// they change identity every render but that needs no backend op.
+// prop changed. The JS-side handler closures are refreshed either way (in
+// place, only for the handler keys present) — they change identity every
+// render but that needs no backend op.
 //
 // Semantics (mirrored by `Props::merge_delta` on the Rust side): a field in
 // `props` is set, a name in `unset` is reset to its default, anything in
@@ -726,82 +847,33 @@ function diffStyle(
 // Handlers compare by *presence*; everything else structurally (`valuesEqual`),
 // so hoisted style objects skip on reference equality and inline-but-identical
 // objects skip on structure.
+//
+// `type` is the element type; it gates the `<canvas>` painter bookkeeping.
+// (Omitted by the unit tests, which only assert the op.)
 export function buildUpdateOp(
   id: number,
   oldProps: Record<string, unknown>,
   newProps: Record<string, unknown>,
+  type?: string,
 ): Op | null {
-  // Accumulated behind one object so the `diffKey` closure's writes stay
-  // visible to TypeScript's flow analysis at the read sites below.
-  const acc: {
-    props: SerializedProps | null;
-    unset: string[] | null;
-    styleUnset: string[] | null;
-  } = { props: null, unset: null, styleUnset: null };
-
-  const isObj = (v: unknown): v is Record<string, unknown> =>
-    typeof v === "object" && v !== null;
-
-  const diffKey = (key: string, a: unknown, b: unknown) => {
-    if (HANDLER_PROP_KEYS.has(key)) {
-      const had = typeof a === "function";
-      const has = typeof b === "function";
-      if (had === has) return;
-      if (has) serializePropInto((acc.props ??= {}), key, b);
-      else (acc.unset ??= []).push(key);
-      return;
-    }
-    if (Object.is(a, b)) return;
-    if (key === "style") {
-      const av = isObj(a) ? a : undefined;
-      const bv = isObj(b) ? b : undefined;
-      if (av && bv) {
-        const d = diffStyle(av, bv);
-        if (!d) return;
-        if (d.delta) (acc.props ??= {}).style = d.delta;
-        if (d.unset) acc.styleUnset = d.unset;
-      } else if (bv) {
-        (acc.props ??= {}).style = bv;
-      } else if (av) {
-        (acc.unset ??= []).push("style");
-      }
-      return;
-    }
-    if (OBJECT_PROP_KEYS.has(key)) {
-      // Atomic object props: structurally equal → unchanged; present → replace
-      // whole; gone → unset.
-      if (isObj(b)) {
-        if (isObj(a) && valuesEqual(a, b)) return;
-        serializePropInto((acc.props ??= {}), key, b);
-      } else if (isObj(a)) {
-        (acc.unset ??= []).push(key);
-      }
-      return;
-    }
-    if (BOOL_PROP_KEYS.has(key) && b === false) {
-      // A `false` in the delta would be a silent no-op on the Rust side
-      // (`merge_bool!` only acts on `true`); turning a flag off rides `unset`.
-      if (a === true) (acc.unset ??= []).push(key);
-      return;
-    }
-    if (b === undefined) {
-      // Dropping an event-like prop is a no-op (nothing retained to reset).
-      if (EVENT_PROP_KEYS.has(key)) return;
-      if (serializePropInto({}, key, a)) {
-        (acc.unset ??= []).push(key);
-      }
-      return;
-    }
-    serializePropInto((acc.props ??= {}), key, b);
-  };
+  // One scratch accumulator for the whole module: `buildUpdateOp` is
+  // synchronous and never re-entered (a `draw` painter recorded on the way
+  // can't reach the reconciler), so it is reset on entry rather than
+  // allocated per node.
+  const acc = resetAcc(id);
 
   for (const key in oldProps) {
     if (key === "children") continue;
-    diffKey(key, oldProps[key], newProps[key]);
+    diffKey(acc, key, oldProps[key], newProps[key]);
   }
   for (const key in newProps) {
     if (key === "children" || key in oldProps) continue;
-    diffKey(key, undefined, newProps[key]);
+    diffKey(acc, key, undefined, newProps[key]);
+  }
+  // A record whose last closure just went away is dropped, so the map only
+  // ever holds nodes with at least one handler (as `registerHandlers` does).
+  if (acc.handlersLost && acc.handlers && isEmpty(acc.handlers)) {
+    handlers.delete(id);
   }
 
   // The controlled selection is applied as a (start, end) pair on the Bevy
@@ -818,10 +890,7 @@ export function buildUpdateOp(
       props.selectionEnd = newProps.selectionEnd;
   }
 
-  // Refresh the JS-side closures even for a no-op update (their identity
-  // changes every render; no backend op needed for that).
-  registerHandlers(id, newProps);
-  registerCanvasPainter(id, newProps);
+  if (type === "canvas") registerCanvasPainter(id, newProps);
 
   if (!props && !acc.unset && !acc.styleUnset) return null;
   const op: Op = { op: "update", id, props: props ?? {} };

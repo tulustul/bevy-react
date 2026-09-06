@@ -55,6 +55,14 @@ interface HostContext {
   inText: boolean;
 }
 
+// The two host contexts, as frozen singletons. `pushHostContext` pushes a
+// context-stack frame whenever `getChildHostContext` returns an object that
+// is not `===` the parent's, so a fresh `{ inText }` per host fiber costs an
+// allocation plus a push/pop on every render; returning the parent unchanged
+// (the common case) keeps the stack flat.
+const ROOT_CTX: HostContext = Object.freeze({ inText: false });
+const TEXT_CTX: HostContext = Object.freeze({ inText: true });
+
 // Fold element-specific flat props into the single opaque object their wire
 // carries: an `<anchor>`'s `entity`/`offset`/`scale` → `anchor`, an SVG shape
 // child's attrs (`cx`/`r`/`fill`/…) → `shape`. Both the create and the update
@@ -114,10 +122,9 @@ const hostConfig: Reconciler.HostConfig<
 
   // Track whether we're inside a `<text>`, so nested `<text>` becomes a span and
   // bare strings inside become inheriting `TextSpan` runs (Bevy's text model).
-  getRootHostContext: (): HostContext => ({ inText: false }),
-  getChildHostContext: (parent: HostContext, type: string): HostContext => ({
-    inText: parent.inText || type === "text",
-  }),
+  getRootHostContext: (): HostContext => ROOT_CTX,
+  getChildHostContext: (parent: HostContext, type: string): HostContext =>
+    parent.inText || type !== "text" ? parent : TEXT_CTX,
   getPublicInstance: (instance: Instance) => instance,
   prepareForCommit: () => null,
   // react-reconciler commits each root separately and passes its containerInfo
@@ -185,12 +192,12 @@ const hostConfig: Reconciler.HostConfig<
         : undefined;
     push(
       text === undefined
-        ? { op: "create", id, kind, props: serializeProps(id, wireProps) }
+        ? { op: "create", id, kind, props: serializeProps(id, wireProps, type) }
         : {
             op: "create",
             id,
             kind,
-            props: serializeProps(id, wireProps),
+            props: serializeProps(id, wireProps, type),
             text,
           },
     );
@@ -281,12 +288,11 @@ const hostConfig: Reconciler.HostConfig<
     const id = instance.id;
     // Anchors and SVG shapes diff in packed form so a folded-field change
     // re-sends the full `anchor`/`shape` object (replaced atomically on the
-    // Rust side).
-    const op = buildUpdateOp(
-      id,
-      packForWire(type, oldProps),
-      packForWire(type, newProps),
-    );
+    // Rust side). One bag packs once.
+    const oldWire = packForWire(type, oldProps);
+    const newWire =
+      oldProps === newProps ? oldWire : packForWire(type, newProps);
+    const op = buildUpdateOp(id, oldWire, newWire, type);
     if (op) push(op);
     // Inline-text `<text>` (shouldSetTextContent): its string child rides as `text`,
     // so its change arrives here (not via commitTextUpdate).
