@@ -12,10 +12,14 @@ use bevy::ui::{ComputedNode, ScrollPosition};
 use crate::anchor::{AnchorScaling, Anchored};
 use crate::animations::AnimatedNode;
 use crate::bridge::{
-    ClickOwner, FocusState, HoverState, JsBridge, PointerHandlers, ScrollListener, ScrollStep,
-    StyleVariants, WheelListener,
+    ClickOwner, FocusState, HoverState, JsBridge, PointerHandlers, Restyle, ScrollListener,
+    ScrollStep, StyleVariants, WheelListener,
 };
-use crate::protocol::{NodeId, props::Props, style::Style};
+use crate::protocol::{
+    NodeId,
+    props::{Props, PropsDirty},
+    style::Style,
+};
 use crate::transition::ScrollTransitionState;
 
 /// Stamp (or clear) the [`AnimatedNode`] bindings on a host element, derived
@@ -27,16 +31,29 @@ use crate::transition::ScrollTransitionState;
 /// devtools-mirrored) about wrappers in hover/press/focus variants, which are
 /// ignored by design, and about a gradient `transition` spec made inert by
 /// gradient bindings on the same surface (bindings park the channel).
-pub(super) fn apply_animated(ec: &mut EntityCommands, props: &Props) {
+///
+/// `animated` is the bridge's mirror of which nodes carry the component
+/// ([`JsBridge::animated`]): the remove is queued only for a node that had
+/// bindings — a style delta on a binding-less node (nearly every node)
+/// queues nothing.
+pub(super) fn apply_animated(
+    ec: &mut EntityCommands,
+    animated: &mut HashSet<NodeId>,
+    id: NodeId,
+    props: &Props,
+) {
     crate::style_bindings::warn_variant_bindings(props);
     let bindings = crate::style_bindings::derive_props_bindings(props);
     crate::style_bindings::warn_gradient_transition_mix(props, bindings.as_ref());
     match bindings {
         Some(bindings) => {
             ec.insert(AnimatedNode(bindings));
+            animated.insert(id);
         }
         None => {
-            ec.remove::<AnimatedNode>();
+            if !animated.is_empty() && animated.remove(&id) {
+                ec.remove::<AnimatedNode>();
+            }
         }
     }
 }
@@ -80,6 +97,7 @@ pub(super) fn apply_style_variants(ec: &mut EntityCommands, props: &Props) {
             hover: props.hover_style.clone(),
             press: props.press_style.clone(),
             focus: props.focus_style.clone(),
+            restyle: Restyle::Full,
         });
         // Hover/press are driven by `Interaction`; focus by `FocusState` (toggled
         // by the focus observers). Add each only for the variants present.
@@ -94,6 +112,39 @@ pub(super) fn apply_style_variants(ec: &mut EntityCommands, props: &Props) {
     } else {
         ec.remove::<StyleVariants>();
         ec.remove::<FocusState>();
+    }
+}
+
+/// The delta-update form of [`apply_style_variants`]: a variant field in the
+/// delta (set or unset) re-stamps/clears the component wholesale; a
+/// base-style-only delta on a node that HAS variants updates
+/// `StyleVariants.base` in place and records the delta's dirty groups
+/// ([`Restyle::note_base_delta`]) so the interaction restyle re-applies only
+/// those — or nothing at all on an idle node; a delta on a node with no
+/// variants (and none in the delta) queues nothing.
+pub(super) fn apply_style_variants_delta(
+    ec: &mut EntityCommands,
+    props: &Props,
+    dirty: &PropsDirty,
+) {
+    if !dirty.any_style_variant() {
+        return;
+    }
+    if dirty.hover_style || dirty.press_style || dirty.focus_style {
+        apply_style_variants(ec, props);
+        return;
+    }
+    // Base groups changed only. The component exists exactly when a variant
+    // is present (create and the arm above keep that invariant).
+    if props.hover_style.is_some() || props.press_style.is_some() || props.focus_style.is_some() {
+        let base = props.style.clone().map(Box::new);
+        let mask = dirty.style;
+        ec.queue(move |mut entity: EntityWorldMut| {
+            if let Some(mut variants) = entity.get_mut::<StyleVariants>() {
+                variants.base = base;
+                variants.restyle.note_base_delta(mask);
+            }
+        });
     }
 }
 
@@ -255,10 +306,15 @@ pub(super) fn apply_scroll_step(ec: &mut EntityCommands, props: &Props) {
 /// "absent → remove" arm is skipped (nothing to remove), and the components a
 /// prop set implies land as one insert each (one archetype move, not one per
 /// component). The update path keeps using the stamp/clear helpers directly.
-pub(super) fn stamp_common(ec: &mut EntityCommands, props: &Props) {
+pub(super) fn stamp_common(
+    ec: &mut EntityCommands,
+    animated: &mut HashSet<NodeId>,
+    id: NodeId,
+    props: &Props,
+) {
     apply_style_variants_fresh(ec, props);
     apply_pointer_handlers_fresh(ec, props);
-    apply_animated_fresh(ec, props);
+    apply_animated_fresh(ec, animated, id, props);
     // `apply_anchor` is insert-only when the prop is present — call it only then.
     if props.anchor.is_some() {
         apply_anchor(ec, props);
@@ -275,6 +331,7 @@ pub(super) fn apply_style_variants_fresh(ec: &mut EntityCommands, props: &Props)
             hover: props.hover_style.clone(),
             press: props.press_style.clone(),
             focus: props.focus_style.clone(),
+            restyle: Restyle::Full,
         });
         if props.hover_style.is_some() || props.press_style.is_some() {
             ec.insert_if_new(Interaction::default());
@@ -316,13 +373,19 @@ pub(super) fn apply_pointer_handlers_fresh(ec: &mut EntityCommands, props: &Prop
 }
 
 /// [`apply_animated`] for a **freshly spawned** entity: stamp the bindings when
-/// there are any, never remove.
-pub(super) fn apply_animated_fresh(ec: &mut EntityCommands, props: &Props) {
+/// there are any (recording the node in `animated`), never remove.
+pub(super) fn apply_animated_fresh(
+    ec: &mut EntityCommands,
+    animated: &mut HashSet<NodeId>,
+    id: NodeId,
+    props: &Props,
+) {
     crate::style_bindings::warn_variant_bindings(props);
     let bindings = crate::style_bindings::derive_props_bindings(props);
     crate::style_bindings::warn_gradient_transition_mix(props, bindings.as_ref());
     if let Some(bindings) = bindings {
         ec.insert(AnimatedNode(bindings));
+        animated.insert(id);
     }
 }
 

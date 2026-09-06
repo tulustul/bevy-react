@@ -6,7 +6,12 @@ use bevy::prelude::*;
 use bevy::text::{LetterSpacing, LineHeight};
 use crossbeam_channel::Receiver;
 
-use crate::protocol::{NodeId, op::Op, outbound::Outbound, style::Style};
+use crate::protocol::{
+    NodeId,
+    op::Op,
+    outbound::Outbound,
+    style::{Style, StyleDirty},
+};
 
 /// The text appearance a `<text>` element/span carries, kept so inheriting child
 /// runs (bare strings) can copy it on append without an ECS query (Bevy commands
@@ -86,6 +91,43 @@ pub struct StyleVariants {
     pub hover: Option<Box<Style>>,
     pub press: Option<Box<Style>>,
     pub focus: Option<Box<Style>>,
+    /// Why the next interaction restyle runs — what a base-only delta has
+    /// dirtied since the last one consumed it. Written by the op-apply path
+    /// (a queued in-place `base` update ORs its `StyleDirty` mask in), read
+    /// and reset to [`Restyle::Idle`] by `apply_interaction_styles`.
+    pub restyle: Restyle,
+}
+
+/// The pending work behind a `Changed<StyleVariants>` tick (see
+/// [`StyleVariants::restyle`]). A change with no recorded reason — a full
+/// (re)stamp, or a poke from the layer evaluator — re-merges and re-applies
+/// every style group, exactly as an `Interaction`/`FocusState` flip does; a
+/// base-only delta re-applies just the groups it touched (the merged style
+/// can't differ anywhere else), and when the node is idle (not hovered,
+/// pressed, or focused) the merged style IS the base the op path already
+/// applied with that same mask, so the restyle is skipped outright.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum Restyle {
+    /// Re-apply everything (the value a full stamp inserts with).
+    #[default]
+    Full,
+    /// Nothing recorded — the resting value; a change tick without a reason
+    /// (a promotion-flip poke) is treated as [`Restyle::Full`].
+    Idle,
+    /// Only a base-style delta happened; re-apply these groups.
+    Base(StyleDirty),
+}
+
+impl Restyle {
+    /// Fold a base-only delta's dirty groups in: accumulates across several
+    /// deltas in one frame, never narrows a pending full restyle.
+    pub fn note_base_delta(&mut self, mask: StyleDirty) {
+        *self = match *self {
+            Restyle::Idle => Restyle::Base(mask),
+            Restyle::Base(prev) => Restyle::Base(StyleDirty(prev.0 | mask.0)),
+            Restyle::Full => Restyle::Full,
+        };
+    }
 }
 
 /// Whether a node with a `focusStyle` [`StyleVariants::focus`] is currently
@@ -257,6 +299,11 @@ pub struct JsBridge {
     /// only the folded `shape` attrs — the update path must skip styling,
     /// background images, and every other stamp for them.
     pub shapes: HashSet<NodeId>,
+    /// Nodes currently carrying an [`AnimatedNode`](crate::animations::AnimatedNode)
+    /// (a mirror of the component's presence, maintained by the stamp helpers),
+    /// so a style delta on a binding-less node — the common case — queues no
+    /// `remove::<AnimatedNode>()` no-op command.
+    pub animated: HashSet<NodeId>,
     /// The last text value emitted to JS for each `editableText`, used to dedup
     /// `TextEditChange` (which also fires on cursor moves) into real `"change"`s.
     pub editable_values: HashMap<NodeId, String>,
@@ -341,6 +388,7 @@ impl JsBridge {
             foreign_images: HashSet::new(),
             svg_roots: HashSet::new(),
             shapes: HashSet::new(),
+            animated: HashSet::new(),
             editable_values: HashMap::new(),
             editable_selections: HashMap::new(),
             editable_select_handlers: HashSet::new(),
@@ -557,6 +605,7 @@ impl JsBridge {
         take_if_any(&mut self.foreign_images, id);
         take_if_any(&mut self.svg_roots, id);
         take_if_any(&mut self.shapes, id);
+        take_if_any(&mut self.animated, id);
         remove_if_any(&mut self.editable_values, id);
         remove_if_any(&mut self.editable_selections, id);
         take_if_any(&mut self.editable_select_handlers, id);

@@ -601,13 +601,6 @@ fn remove_unless_fresh<B: Bundle>(ec: &mut EntityCommands, fresh: bool) {
     }
 }
 
-/// [`apply_style`] for a node whose layer-promotion state is known (see
-/// `crate::layer`): when `promoted`, the per-node `opacity` fold is suppressed
-/// — the value becomes the subtree's composite-time group alpha instead.
-pub fn apply_style_promoted(ec: &mut EntityCommands, style: &Option<Style>, promoted: bool) {
-    apply_style_masked(ec, style, StyleDirty::ALL, promoted);
-}
-
 /// [`apply_style`] restricted to the dirty
 /// [`style_groups`](crate::protocol::style::style_groups): each derived
 /// component is only rebuilt/inserted/removed when one of the style fields its
@@ -1299,7 +1292,7 @@ pub fn resolved_text_style(
 /// [`resolved_text_style`] for a text root whose layer-promotion state is
 /// known: when `promoted`, the `opacity` fold into the glyph color is
 /// suppressed — the value drives the layer's composite-time group alpha
-/// instead (the text analogue of [`apply_style_promoted`]'s fold rule; without
+/// instead (the text analogue of [`apply_style_masked`]'s fold rule; without
 /// this, a promoted `<text>` would fade twice).
 pub fn resolved_text_style_promoted(
     style: &Option<Style>,

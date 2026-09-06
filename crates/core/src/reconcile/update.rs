@@ -15,7 +15,7 @@ use super::create::{root_base, surface_root_base};
 use super::image::{is_image, rebuild_image};
 use super::stamps::{
     apply_anchor, apply_animated, apply_button_focus_default, apply_pointer_handlers,
-    apply_scroll_listener, apply_scroll_step, apply_style_variants, apply_wheel_listener,
+    apply_scroll_listener, apply_scroll_step, apply_style_variants_delta, apply_wheel_listener,
     queue_pending_selection, register_editable_handlers, update_controlled_scroll,
 };
 use super::stats::UiAssets;
@@ -161,9 +161,7 @@ pub(super) fn apply_update(
         // variants, handlers, listeners, and animation bindings all
         // refresh on re-render, not just at mount.
         if is_root {
-            if dirty.any_style_variant() {
-                apply_style_variants(&mut ec, &props);
-            }
+            apply_style_variants_delta(&mut ec, &props, &dirty);
             if dirty.pointer {
                 apply_pointer_handlers(&mut ec, &props);
             }
@@ -180,7 +178,7 @@ pub(super) fn apply_update(
                 apply_scroll_transition(&mut ec, &props.style);
             }
             if dirty.style.any() {
-                apply_animated(&mut ec, &props);
+                apply_animated(&mut ec, &mut bridge.animated, id, &props);
             }
             update_controlled_scroll(
                 bridge,
@@ -245,9 +243,7 @@ pub(super) fn apply_update(
             promoted,
             assets,
         );
-        if dirty.any_style_variant() {
-            apply_style_variants(&mut ec, &props);
-        }
+        apply_style_variants_delta(&mut ec, &props, &dirty);
     } else if bridge.surfaces.contains(&id) {
         // A `<surface>` re-render: re-apply the (full-size-defaulted)
         // style and rebind its `target`. It shares the `target` wire field
@@ -299,7 +295,7 @@ pub(super) fn apply_update(
             // Bindings derive from the (atomically replaced) attrs — their
             // only source on a styleless shape — so any shape change may
             // add/remove/retarget them.
-            apply_animated(&mut commands.entity(e), &props);
+            apply_animated(&mut commands.entity(e), &mut bridge.animated, id, &props);
             // Same for the transition stamp: the spec rides the attrs, so an
             // atomic replace may add or remove it.
             crate::transition::apply_shape_transition(
@@ -368,13 +364,11 @@ pub(super) fn apply_update(
         if dirty.style.intersects(g::FOCUS_POLICY) && buttons.get(e).is_ok() {
             apply_button_focus_default(&mut ec, &props.style);
         }
-        // `StyleVariants.base` mirrors the (merged) base style, so any
-        // style change rebuilds it. Skipping when untouched also avoids
-        // a spurious `Changed<StyleVariants>` → full restyle merge from
-        // `apply_interaction_styles` on every unrelated update.
-        if dirty.any_style_variant() {
-            apply_style_variants(&mut ec, &props);
-        }
+        // `StyleVariants.base` mirrors the (merged) base style: a base-only
+        // delta updates it in place with its dirty mask (the interaction
+        // restyle re-applies just those groups, or nothing on an idle node);
+        // a variant swap re-stamps; a variant-less node queues nothing.
+        apply_style_variants_delta(&mut ec, &props, &dirty);
         if dirty.pointer {
             apply_pointer_handlers(&mut ec, &props);
         }
@@ -393,7 +387,7 @@ pub(super) fn apply_update(
         // Bindings are derived from the merged style, so any style change may
         // add/remove/retarget them (bind/unbind is an ordinary field delta).
         if dirty.style.any() {
-            apply_animated(&mut ec, &props);
+            apply_animated(&mut ec, &mut bridge.animated, id, &props);
         }
         if dirty.anchor {
             apply_anchor(&mut ec, &props);
@@ -431,11 +425,12 @@ pub(crate) fn reapply_opacity_outputs(
 ) {
     use crate::protocol::style::style_groups as g;
     // Variant-bearing nodes re-merge through `apply_interaction_styles`
-    // (ordered after the evaluator): poking change detection re-runs the full
+    // (ordered after the evaluator): requesting a full restyle re-runs the
     // merge with the new promotion state without clobbering an active
-    // hover/press overlay.
+    // hover/press overlay (`Full`, not a poke — a same-frame base delta may
+    // have recorded a narrower mask, which must not win here).
     if let Ok(mut variants) = style_variants.get_mut(entity) {
-        variants.set_changed();
+        variants.restyle = crate::bridge::Restyle::Full;
     } else {
         let mut ec = commands.entity(entity);
         // Every group `opacity` feeds, minus TRANSITION (transition *state*

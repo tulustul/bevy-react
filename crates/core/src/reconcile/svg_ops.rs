@@ -6,6 +6,7 @@
 
 use bevy::image::Image;
 use bevy::picking::Pickable;
+use bevy::platform::collections::HashSet;
 use bevy::prelude::*;
 use bevy::ui::widget::NodeImageMode;
 
@@ -23,6 +24,7 @@ use crate::ui_map::{apply_style_fresh, fresh_style_bundle};
 pub(super) fn create_svg_root(
     commands: &mut Commands,
     images: &mut Assets<Image>,
+    animated: &mut HashSet<NodeId>,
     id: NodeId,
     props: &Props,
 ) -> Entity {
@@ -36,7 +38,7 @@ pub(super) fn create_svg_root(
         SvgSurface::jsx(props.view_box),
     ));
     apply_style_fresh(&mut ec, &props.style);
-    stamp_common(&mut ec, props);
+    stamp_common(&mut ec, animated, id, props);
     ec.id()
 }
 
@@ -50,6 +52,7 @@ pub(super) fn create_svg_root(
 /// on a styleless shape the bindings derive from the attrs alone).
 pub(super) fn create_shape(
     commands: &mut Commands,
+    animated: &mut HashSet<NodeId>,
     id: NodeId,
     kind: ShapeKind,
     props: &Props,
@@ -72,7 +75,7 @@ pub(super) fn create_shape(
         },
     ));
     apply_shape_pointer(&mut ec, props);
-    apply_animated_fresh(&mut ec, props);
+    apply_animated_fresh(&mut ec, animated, id, props);
     // A `transition` inside the attrs stamps the transition components (the
     // spec itself rides `SvgShape.attrs` — the stamp only makes the drive
     // query match; see `apply_shape_transition`).

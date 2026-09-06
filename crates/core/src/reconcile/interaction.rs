@@ -5,7 +5,7 @@
 
 use bevy::prelude::*;
 
-use crate::bridge::{FocusState, ReactNode, StyleVariants};
+use crate::bridge::{FocusState, ReactNode, Restyle, StyleVariants};
 use crate::ui_map::overlay_style;
 
 /// Re-apply the merged style for any element with [`StyleVariants`] whose
@@ -16,15 +16,21 @@ use crate::ui_map::overlay_style;
 /// `FocusState` are optional — a focus-only `editableText` has no `Interaction`, and
 /// a hover-only node has no `FocusState`. Runs entirely on the Bevy side: no
 /// round-trip to JS, no React re-render on mouse move or focus change.
+///
+/// How much is re-applied follows [`StyleVariants::restyle`]: a state flip, a
+/// variant swap, or a promotion poke re-applies every group; a base-only
+/// delta re-applies just the groups it dirtied — and on an idle node (no
+/// hover/press/focus overlay) is skipped entirely, since the merged style is
+/// the base the op path already applied with that same mask.
 #[allow(clippy::type_complexity)]
 pub fn apply_interaction_styles(
     mut commands: Commands,
-    query: Query<
+    mut query: Query<
         (
             Entity,
-            Option<&Interaction>,
-            Option<&FocusState>,
-            &StyleVariants,
+            Option<Ref<Interaction>>,
+            Option<Ref<FocusState>>,
+            &mut StyleVariants,
             Option<&crate::layer::PromotedLayer>,
         ),
         Or<(
@@ -41,9 +47,32 @@ pub fn apply_interaction_styles(
     bridge: Option<Res<crate::bridge::JsBridge>>,
     fonts: Option<Res<crate::plugin::Fonts>>,
 ) {
+    use crate::protocol::style::{StyleDirty, style_groups as g};
     let default_fonts = crate::plugin::Fonts::default();
     let fonts = fonts.as_deref().unwrap_or(&default_fonts);
-    for (entity, interaction, focus, variants, promoted) in &query {
+    for (entity, interaction, focus, mut variants, promoted) in &mut query {
+        // Consume the recorded reason without re-marking the component (a
+        // detected write here would re-trigger this system next frame).
+        let pending = std::mem::replace(
+            &mut variants.bypass_change_detection().restyle,
+            Restyle::Idle,
+        );
+        let state_changed = interaction.as_ref().is_some_and(|i| i.is_changed())
+            || focus.as_ref().is_some_and(|f| f.is_changed());
+        let interaction = interaction.as_deref().copied();
+        let focused = focus.as_deref().is_some_and(|f| f.0);
+        let mask = match pending {
+            Restyle::Base(mask) if !state_changed => mask,
+            _ => StyleDirty::ALL,
+        };
+        // Idle node + base-only delta: merged == base, already applied.
+        if matches!(pending, Restyle::Base(_))
+            && !state_changed
+            && !focused
+            && matches!(interaction, None | Some(Interaction::None))
+        {
+            continue;
+        }
         let mut style = match interaction {
             Some(Interaction::Pressed) => overlay_style(
                 overlay_style(variants.base.as_deref(), variants.hover.as_deref()).as_ref(),
@@ -54,7 +83,7 @@ pub fn apply_interaction_styles(
             }
             _ => variants.base.as_deref().cloned(),
         };
-        if focus.is_some_and(|f| f.0) {
+        if focused {
             style = overlay_style(style.as_ref(), variants.focus.as_deref());
         }
         // Attribute re-parse warnings (e.g. a bad hoverStyle color) to the node.
@@ -67,7 +96,7 @@ pub fn apply_interaction_styles(
         // (`promotion_reasons` unions variant presence; `groupAlpha` is
         // `no_overlay`).
         let mut ec = commands.entity(entity);
-        crate::ui_map::apply_style_promoted(&mut ec, &style, promoted.is_some());
+        crate::ui_map::apply_style_masked(&mut ec, &style, mask, promoted.is_some());
         // The merged `backgroundImage` (a variant can swap it Bevy-side) —
         // built here because it needs `assets`, and guarded off elements
         // whose `ImageNode` is element-owned (canvas/portal/image DO carry
@@ -80,7 +109,7 @@ pub fn apply_interaction_styles(
             crate::background_image::apply_background_image(
                 &mut ec,
                 &style,
-                crate::protocol::style::StyleDirty::ALL,
+                mask,
                 promoted.is_some(),
                 &assets,
             );
@@ -90,23 +119,28 @@ pub fn apply_interaction_styles(
         // re-derive it from the merged style so hover/press/focus color and
         // font changes actually land, with the opacity fold suppressed on a
         // promoted root (its group alpha owns the fade). Bare-string children
-        // inherit the merged result like they do on a re-render.
+        // inherit the merged result like they do on a re-render. Gated on the
+        // same groups the op path's text arm uses.
         if texts.contains(entity) {
-            let resolved =
-                crate::ui_map::resolved_text_style_promoted(&style, fonts, promoted.is_some());
-            ec.insert(resolved.clone());
-            if let Some(layout) = crate::ui_map::text_layout(&style) {
-                ec.insert(layout);
-            }
-            if let (Some(bridge), Some(rnode)) = (bridge.as_ref(), rnode) {
-                let kids: Vec<_> = bridge.children_of(rnode.0).collect();
-                for kid in kids {
-                    if bridge.spans.get(&kid) == Some(&crate::bridge::SpanKind::RawInherited)
-                        && let Some(&kid_entity) = bridge.nodes.get(&kid)
-                    {
-                        commands.entity(kid_entity).insert(resolved.clone());
+            if mask.intersects(g::TEXT) {
+                let resolved =
+                    crate::ui_map::resolved_text_style_promoted(&style, fonts, promoted.is_some());
+                ec.insert(resolved.clone());
+                if let (Some(bridge), Some(rnode)) = (bridge.as_ref(), rnode) {
+                    let kids: Vec<_> = bridge.children_of(rnode.0).collect();
+                    for kid in kids {
+                        if bridge.spans.get(&kid) == Some(&crate::bridge::SpanKind::RawInherited)
+                            && let Some(&kid_entity) = bridge.nodes.get(&kid)
+                        {
+                            commands.entity(kid_entity).insert(resolved.clone());
+                        }
                     }
                 }
+            }
+            if mask.intersects(g::TEXT_LAYOUT)
+                && let Some(layout) = crate::ui_map::text_layout(&style)
+            {
+                commands.entity(entity).insert(layout);
             }
         }
     }

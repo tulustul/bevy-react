@@ -162,6 +162,16 @@ pub(crate) fn plan_pairs(bridge: &JsBridge, ops: &[Op]) -> Vec<SharedPair> {
     if tags.is_empty() {
         return Vec::new();
     }
+    // Nothing to pair without a tagged create this batch — checked before any
+    // hashing so a tagged app's ordinary batches (a screen swap with no
+    // incoming tag) cost one flat scan.
+    let any_tagged_create = ops.iter().any(|op| {
+        matches!(op, Op::Create { props, .. }
+            if SharedTags::effective(props.shared_tag.as_deref()).is_some())
+    });
+    if !any_tagged_create {
+        return Vec::new();
+    }
     // Removed subtree roots this batch; nothing to pair without one.
     let removed: HashSet<NodeId> = ops
         .iter()

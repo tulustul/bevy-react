@@ -267,8 +267,11 @@ pub struct PropsDirty {
 }
 
 impl PropsDirty {
-    /// Whether the [`crate::bridge::StyleVariants`] component needs rebuilding:
-    /// its `base` mirrors `style`, so any style-field change counts too.
+    /// Whether the delta can touch the [`crate::bridge::StyleVariants`]
+    /// component at all: a variant set/unset, or — since its `base` mirrors
+    /// `style` — any style-field change (the stamp helper then decides
+    /// between a full re-stamp, an in-place masked base update, or nothing
+    /// for a variant-less node).
     pub fn any_style_variant(&self) -> bool {
         self.style.any() || self.hover_style || self.press_style || self.focus_style
     }

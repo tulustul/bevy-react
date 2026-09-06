@@ -8,6 +8,7 @@ use bevy::a11y::AccessibilityNode;
 use bevy::image::Image;
 use bevy::input_focus::AutoFocus;
 use bevy::input_focus::tab_navigation::TabIndex;
+use bevy::platform::collections::HashSet;
 use bevy::prelude::*;
 use bevy::text::{EditableText, TextCursorStyle};
 use bevy::ui::FocusPolicy;
@@ -75,7 +76,7 @@ pub(super) fn apply_create(
             if let Some(layout) = text_layout(&props.style) {
                 ec.insert(layout);
             }
-            stamp_common(&mut ec, &props);
+            stamp_common(&mut ec, &mut bridge.animated, id, &props);
             ec.id()
         }
         // A nested `<text>`: a styled span (no layout box of its own).
@@ -107,7 +108,7 @@ pub(super) fn apply_create(
                 CanvasSizeTracker::default(),
             ));
             apply_style_fresh(&mut ec, &props.style);
-            stamp_common(&mut ec, &props);
+            stamp_common(&mut ec, &mut bridge.animated, id, &props);
             ec.id()
         }
         // A `<portal>`: a styled node carrying an `ImageNode` whose
@@ -125,12 +126,14 @@ pub(super) fn apply_create(
                 RPortal(props.target.clone().unwrap_or_default()),
             ));
             apply_style_fresh(&mut ec, &props.style);
-            stamp_common(&mut ec, &props);
+            stamp_common(&mut ec, &mut bridge.animated, id, &props);
             ec.id()
         }
         // A JSX `<svg>`: a styled node with an element-owned texture the
         // svg rasterizer paints from the Node-less `SvgShape` children.
-        "svg" => super::svg_ops::create_svg_root(commands, images, id, &props),
+        "svg" => {
+            super::svg_ops::create_svg_root(commands, images, &mut bridge.animated, id, &props)
+        }
         // A `<surface>`: a styled container whose subtree renders into
         // an offscreen image instead of the on-screen UI. It is a
         // **detached UI root** — `crate::surface::bind_surfaces`
@@ -244,9 +247,12 @@ pub(super) fn apply_create(
         // `SvgShape` entities — dispatched here so they never fall through
         // to the plain-node `spawn_element` path.
         _ => match shape_kind {
-            Some(shape) => super::svg_ops::create_shape(commands, id, shape, &props),
+            Some(shape) => {
+                super::svg_ops::create_shape(commands, &mut bridge.animated, id, shape, &props)
+            }
             None => spawn_element(
                 commands,
+                &mut bridge.animated,
                 id,
                 &kind,
                 &props,
@@ -380,8 +386,10 @@ pub(super) fn apply_create(
 /// Spawn a `node`, `button`, or `image` host element with its style. Also the
 /// landing spot for `anchor` (via `apply_create`'s `_` arm): an `<anchor>` is a
 /// plain node whose `anchor` prop `stamp_common` → `apply_anchor` binds.
+#[allow(clippy::too_many_arguments)]
 fn spawn_element(
     commands: &mut Commands,
+    animated: &mut HashSet<NodeId>,
     id: NodeId,
     kind: &str,
     props: &Props,
@@ -427,7 +435,7 @@ fn spawn_element(
         }
         _ => {}
     }
-    stamp_common(&mut ec, props);
+    stamp_common(&mut ec, animated, id, props);
     ec.id()
 }
 
