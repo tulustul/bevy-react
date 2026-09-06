@@ -22,6 +22,7 @@
 
 pub mod animatable;
 pub mod background_image;
+pub(crate) mod de_map;
 pub mod grid;
 pub mod keywords;
 mod merge;

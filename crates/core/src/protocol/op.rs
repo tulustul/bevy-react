@@ -4,11 +4,12 @@
 use std::fmt;
 
 use serde::Deserialize;
-use serde::de::{self, Deserializer, Visitor};
+use serde::de::{self, Deserializer, MapAccess, Visitor};
 
 use crate::canvas::DrawCmd;
 
 use super::NodeId;
+use super::de_map::PresentKeys;
 use super::props::Props;
 
 /// A single mutation produced by the React reconciler during a commit. The
@@ -22,8 +23,14 @@ use super::props::Props;
 /// of megabytes for ops carrying no props at all, and the decode/translate legs
 /// scaled with the widest variant instead of the actual payload. Boxing keeps
 /// `Op` pointer-sized (see `op_stays_narrow` below).
-#[derive(Debug, Clone, Deserialize)]
-#[serde(tag = "op", rename_all = "camelCase")]
+///
+/// Wire form: an object tagged by `op` (camelCase variant name) with the
+/// variant's fields alongside (`{ "op": "append", "parent": 0, "child": 7 }`).
+/// `Deserialize` is hand-written (below) rather than `#[serde(tag = "op")]`:
+/// serde's internally-tagged derive buffers the whole object into its private
+/// `Content` tree before it can dispatch on the tag, so every op paid a full
+/// key-by-key copy plus a second walk — the dominant cost of `op_flush`.
+#[derive(Debug, Clone)]
 pub enum Op {
     /// Tear down the entire current tree. Emitted first by every fresh runtime
     /// so a hot reload clears the previous UI before the new render is applied.
@@ -32,11 +39,9 @@ pub enum Op {
     Create {
         id: NodeId,
         kind: String,
-        #[serde(default)]
         props: Box<Props>,
         /// Inline text content for a single-string `<text>`/`<textSpan>` (the
         /// `shouldSetTextContent` fast path — no separate child text entity).
-        #[serde(default)]
         text: Option<String>,
     },
     /// Spawn a standalone text node (a bare string outside any `<text>`).
@@ -71,15 +76,11 @@ pub enum Op {
     /// and are never part of the retained state (see [`Props::merge_delta`]).
     Update {
         id: NodeId,
-        #[serde(default)]
         props: Box<Props>,
         /// Top-level prop wire names (camelCase) reset to their defaults.
-        #[serde(default)]
         unset: Vec<String>,
-        /// Style field wire names (camelCase) cleared from the merged style.
-        /// (The enum's `rename_all` covers variant names, not their fields, so
-        /// the wire name is spelled out.)
-        #[serde(default, rename = "styleUnset")]
+        /// Style field wire names (camelCase) cleared from the merged style
+        /// (wire name `styleUnset`).
         style_unset: Vec<String>,
     },
     /// Replace the string of a text node.
@@ -92,6 +93,163 @@ pub enum Op {
     /// retained protocol-side). A missing or non-canvas node is skipped
     /// silently, like every other op.
     Draw { id: NodeId, cmds: Vec<DrawCmd> },
+}
+
+/// The wire tag (`op`) values, camelCase variant names.
+#[derive(Debug, Clone, Copy, Deserialize)]
+#[serde(rename_all = "camelCase")]
+enum OpTag {
+    Reset,
+    Create,
+    CreateText,
+    CreateTextSpan,
+    Append,
+    Insert,
+    Remove,
+    Update,
+    UpdateText,
+    Draw,
+}
+
+/// Every key an op object can carry, across all variants. A key's value type
+/// is the same in every variant that has it, so the visitor can decode each
+/// entry as it streams by — in any key order, no buffering — and assemble the
+/// variant once the object is exhausted.
+#[derive(Deserialize)]
+#[serde(field_identifier, rename_all = "camelCase")]
+enum OpKey {
+    Op,
+    Id,
+    Kind,
+    Props,
+    Text,
+    Parent,
+    Child,
+    Before,
+    Unset,
+    StyleUnset,
+    Cmds,
+    #[serde(other)]
+    Other,
+}
+
+impl<'de> Deserialize<'de> for Op {
+    fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        d.deserialize_map(OpVisitor)
+    }
+}
+
+struct OpVisitor;
+
+/// Fill `slot` from a streamed entry; a repeated key is an error, as with the
+/// derive.
+fn take<T, E: de::Error>(slot: &mut Option<T>, value: T, key: &'static str) -> Result<(), E> {
+    if slot.is_some() {
+        return Err(E::duplicate_field(key));
+    }
+    *slot = Some(value);
+    Ok(())
+}
+
+fn required<T, E: de::Error>(slot: Option<T>, key: &'static str) -> Result<T, E> {
+    slot.ok_or_else(|| E::missing_field(key))
+}
+
+impl<'de> Visitor<'de> for OpVisitor {
+    type Value = Op;
+
+    fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str("a reconciler op object tagged by `op`")
+    }
+
+    fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Op, A::Error> {
+        let mut tag: Option<OpTag> = None;
+        let mut id: Option<NodeId> = None;
+        let mut kind: Option<String> = None;
+        let mut props: Option<Box<Props>> = None;
+        let mut text: Option<String> = None;
+        let mut parent: Option<NodeId> = None;
+        let mut child: Option<NodeId> = None;
+        let mut before: Option<NodeId> = None;
+        let mut unset: Option<Vec<String>> = None;
+        let mut style_unset: Option<Vec<String>> = None;
+        let mut cmds: Option<Vec<DrawCmd>> = None;
+        while let Some(key) = map.next_key::<OpKey>()? {
+            match key {
+                OpKey::Op => take(&mut tag, map.next_value()?, "op")?,
+                OpKey::Id => take(&mut id, map.next_value()?, "id")?,
+                OpKey::Kind => take(&mut kind, map.next_value()?, "kind")?,
+                // `Props` (and every struct under it) decodes through
+                // `PresentKeys`: the host enumerates the keys the object has
+                // instead of probing all ~40 (+~75 per `Style`) declared fields.
+                OpKey::Props => take(
+                    &mut props,
+                    map.next_value_seed(PresentKeys::seed::<Box<Props>>())?,
+                    "props",
+                )?,
+                // `Option`: `create` carries `text` optionally (a JSON `null`
+                // reads as absent), the text ops require it.
+                OpKey::Text => {
+                    if let Some(t) = map.next_value::<Option<String>>()? {
+                        take(&mut text, t, "text")?;
+                    }
+                }
+                OpKey::Parent => take(&mut parent, map.next_value()?, "parent")?,
+                OpKey::Child => take(&mut child, map.next_value()?, "child")?,
+                OpKey::Before => take(&mut before, map.next_value()?, "before")?,
+                OpKey::Unset => take(&mut unset, map.next_value()?, "unset")?,
+                OpKey::StyleUnset => take(&mut style_unset, map.next_value()?, "styleUnset")?,
+                OpKey::Cmds => take(&mut cmds, map.next_value()?, "cmds")?,
+                OpKey::Other => {
+                    map.next_value::<de::IgnoredAny>()?;
+                }
+            }
+        }
+        Ok(match required(tag, "op")? {
+            OpTag::Reset => Op::Reset,
+            OpTag::Create => Op::Create {
+                id: required(id, "id")?,
+                kind: required(kind, "kind")?,
+                props: props.unwrap_or_default(),
+                text,
+            },
+            OpTag::CreateText => Op::CreateText {
+                id: required(id, "id")?,
+                text: required(text, "text")?,
+            },
+            OpTag::CreateTextSpan => Op::CreateTextSpan {
+                id: required(id, "id")?,
+                text: required(text, "text")?,
+            },
+            OpTag::Append => Op::Append {
+                parent: required(parent, "parent")?,
+                child: required(child, "child")?,
+            },
+            OpTag::Insert => Op::Insert {
+                parent: required(parent, "parent")?,
+                child: required(child, "child")?,
+                before: required(before, "before")?,
+            },
+            OpTag::Remove => Op::Remove {
+                parent: required(parent, "parent")?,
+                child: required(child, "child")?,
+            },
+            OpTag::Update => Op::Update {
+                id: required(id, "id")?,
+                props: props.unwrap_or_default(),
+                unset: unset.unwrap_or_default(),
+                style_unset: style_unset.unwrap_or_default(),
+            },
+            OpTag::UpdateText => Op::UpdateText {
+                id: required(id, "id")?,
+                text: required(text, "text")?,
+            },
+            OpTag::Draw => Op::Draw {
+                id: required(id, "id")?,
+                cmds: required(cmds, "cmds")?,
+            },
+        })
+    }
 }
 
 /// A `Vec<Op>` whose `Deserialize` brackets each element's decode with the
