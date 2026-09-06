@@ -10,12 +10,12 @@ use bevy::input_focus::AutoFocus;
 use bevy::input_focus::tab_navigation::TabIndex;
 use bevy::prelude::*;
 use bevy::text::{EditableText, TextCursorStyle};
+use bevy::ui::FocusPolicy;
 use bevy::ui::widget::NodeImageMode;
 
 use super::stamps::{
-    apply_anchor, apply_button_focus_default, apply_scroll_listener, apply_scroll_step,
-    apply_style_variants, apply_wheel_listener, create_controlled_scroll, queue_pending_selection,
-    register_editable_handlers, stamp_common, warn_span_ignored,
+    apply_anchor, apply_scroll_props_fresh, apply_style_variants_fresh, create_controlled_scroll,
+    queue_pending_selection, register_editable_handlers, stamp_common, warn_span_ignored,
 };
 use super::stats::UiAssets;
 use crate::bridge::{CanvasSizeTracker, JsBridge, ReactNode, SpanKind};
@@ -24,14 +24,21 @@ use crate::plugin::Fonts;
 use crate::portal::{RPortal, blank_portal_image};
 use crate::protocol::{NodeId, props::Props, style::Style};
 use crate::surface::RSurface;
-use crate::transition::apply_scroll_transition;
+use crate::transition::apply_scroll_transition_fresh;
 use crate::ui_map::{
-    AtlasLayoutCache, apply_atlas, apply_style, apply_text_style, image_node, overlay_style,
-    resolved_text_style, svg_image_node, text_layout,
+    AtlasLayoutCache, apply_atlas, apply_style_fresh, fresh_style_bundle, image_node,
+    overlay_style, resolved_text_style, svg_image_node, text_layout,
 };
 
 /// Apply one `Op::Create`: spawn the element for `kind` and record it in the
 /// bridge. Extracted from the `apply_js_ops` match; runs once per create op.
+///
+/// The spawn is **fresh-path** throughout: the always-present components ride
+/// the `spawn((…))` bundle ([`fresh_style_bundle`] + the element's own — one
+/// archetype, no moves), the rest of the style goes through
+/// [`apply_style_fresh`], and the prop stamps are the insert-only variants
+/// (`stamps::*_fresh`, [`stamp_common`]) — a fresh entity has nothing to remove,
+/// so none of the update path's "absent → remove" commands are queued.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn apply_create(
     commands: &mut Commands,
@@ -58,10 +65,13 @@ pub(super) fn apply_create(
         // pointer handlers, animation bindings, anchor — and layer-eligible
         // (a `filter`/`transform3d`/… promotes it like any element).
         "text" => {
-            let mut ec = commands.spawn(ReactNode(id));
-            apply_style(&mut ec, &props.style);
-            ec.insert(Text::new(text.clone().unwrap_or_default()));
-            apply_text_style(&mut ec, &props.style, fonts);
+            let mut ec = commands.spawn((
+                ReactNode(id),
+                fresh_style_bundle(&props.style, FocusPolicy::Pass),
+                Text::new(text.clone().unwrap_or_default()),
+                resolved_text_style(&props.style, fonts),
+            ));
+            apply_style_fresh(&mut ec, &props.style);
             if let Some(layout) = text_layout(&props.style) {
                 ec.insert(layout);
             }
@@ -74,10 +84,13 @@ pub(super) fn apply_create(
         // the silence is visible in devtools.
         "textSpan" => {
             warn_span_ignored(&props);
-            let mut ec =
-                commands.spawn((ReactNode(id), TextSpan(text.clone().unwrap_or_default())));
-            apply_text_style(&mut ec, &props.style, fonts);
-            ec.id()
+            commands
+                .spawn((
+                    ReactNode(id),
+                    TextSpan(text.clone().unwrap_or_default()),
+                    resolved_text_style(&props.style, fonts),
+                ))
+                .id()
         }
         // A `<canvas>`: a styled node carrying an `ImageNode` whose
         // texture the canvas system paints from the display list. The
@@ -86,13 +99,14 @@ pub(super) fn apply_create(
             let handle = images.add(blank_canvas_image());
             let mut node_img = ImageNode::new(handle);
             node_img.image_mode = NodeImageMode::Stretch;
-            let mut ec = commands.spawn(ReactNode(id));
-            apply_style(&mut ec, &props.style);
-            ec.insert((
+            let mut ec = commands.spawn((
+                ReactNode(id),
+                fresh_style_bundle(&props.style, FocusPolicy::Pass),
                 node_img,
                 CanvasSurface::new(props.draw.clone().unwrap_or_default()),
                 CanvasSizeTracker::default(),
             ));
+            apply_style_fresh(&mut ec, &props.style);
             stamp_common(&mut ec, &props);
             ec.id()
         }
@@ -104,9 +118,13 @@ pub(super) fn apply_create(
             let handle = images.add(blank_portal_image());
             let mut node_img = ImageNode::new(handle);
             node_img.image_mode = NodeImageMode::Stretch;
-            let mut ec = commands.spawn(ReactNode(id));
-            apply_style(&mut ec, &props.style);
-            ec.insert((node_img, RPortal(props.target.clone().unwrap_or_default())));
+            let mut ec = commands.spawn((
+                ReactNode(id),
+                fresh_style_bundle(&props.style, FocusPolicy::Pass),
+                node_img,
+                RPortal(props.target.clone().unwrap_or_default()),
+            ));
+            apply_style_fresh(&mut ec, &props.style);
             stamp_common(&mut ec, &props);
             ec.id()
         }
@@ -124,10 +142,15 @@ pub(super) fn apply_create(
         // not the legacy `Interaction` focus path.
         "surface" => {
             let style = overlay_style(surface_root_base().as_ref(), props.style.as_ref());
-            let mut ec = commands.spawn(ReactNode(id));
-            apply_style(&mut ec, &style);
-            ec.insert(RSurface(props.target.clone().unwrap_or_default()));
-            apply_anchor(&mut ec, &props);
+            let mut ec = commands.spawn((
+                ReactNode(id),
+                fresh_style_bundle(&style, FocusPolicy::Pass),
+                RSurface(props.target.clone().unwrap_or_default()),
+            ));
+            apply_style_fresh(&mut ec, &style);
+            if props.anchor.is_some() {
+                apply_anchor(&mut ec, &props);
+            }
             ec.id()
         }
         // A `<root>`: the screen-space twin of `<surface>` — a styled
@@ -144,10 +167,18 @@ pub(super) fn apply_create(
         // picking; its children are ordinary pickable nodes.
         "root" => {
             let style = overlay_style(root_base().as_ref(), props.style.as_ref());
-            let mut ec = commands.spawn(ReactNode(id));
-            apply_style(&mut ec, &style);
-            ec.insert((crate::bridge::RRoot, Pickable::IGNORE));
-            apply_anchor(&mut ec, &props);
+            let mut ec = commands.spawn((
+                ReactNode(id),
+                fresh_style_bundle(&style, FocusPolicy::Pass),
+                crate::bridge::RRoot,
+            ));
+            // Overrides the bundle's `focusPolicy` mirror in place (same
+            // archetype — `Pickable` is already present).
+            ec.insert(Pickable::IGNORE);
+            apply_style_fresh(&mut ec, &style);
+            if props.anchor.is_some() {
+                apply_anchor(&mut ec, &props);
+            }
             ec.id()
         }
         // An `<editableText>`: a focusable native text input. Bevy's
@@ -155,14 +186,14 @@ pub(super) fn apply_create(
         // drives keyboard/focus/cursor/selection/clipboard; we just
         // spawn the widget and observe `TextEditChange` for `onChange`.
         "editableText" => {
-            let mut ec = commands.spawn(ReactNode(id));
-            apply_style(&mut ec, &props.style);
             let mut editable = EditableText::new(props.value.as_deref().unwrap_or_default());
             editable.max_characters = props.max_length;
             editable.allow_newlines = props.multiline;
             let (text_color, font, line_height, letter_spacing) =
                 resolved_text_style(&props.style, fonts);
-            ec.insert((
+            let mut ec = commands.spawn((
+                ReactNode(id),
+                fresh_style_bundle(&props.style, FocusPolicy::Pass),
                 editable,
                 text_color,
                 font,
@@ -196,14 +227,17 @@ pub(super) fn apply_create(
                 // value is kept in sync by `sync_editable_a11y`.
                 AccessibilityNode(editable_a11y_node(&props)),
             ));
+            apply_style_fresh(&mut ec, &props.style);
             // `AutoFocus`'s `on_add` hook focuses the entity once mounted.
             if props.autofocus {
                 ec.insert(AutoFocus);
             }
             // `focusStyle` (and any hover/press) — applied Bevy-side as
             // the field's focus/interaction state changes.
-            apply_style_variants(&mut ec, &props);
-            apply_anchor(&mut ec, &props);
+            apply_style_variants_fresh(&mut ec, &props);
+            if props.anchor.is_some() {
+                apply_anchor(&mut ec, &props);
+            }
             ec.id()
         }
         // SVG shape kinds (`<circle>`/`<rect>`/…/`<g>`) mount as Node-less
@@ -259,10 +293,8 @@ pub(super) fn apply_create(
     // harmless there.
     {
         let mut ec = commands.entity(entity);
-        apply_scroll_listener(&mut ec, &props);
-        apply_wheel_listener(&mut ec, &props);
-        apply_scroll_step(&mut ec, &props);
-        apply_scroll_transition(&mut ec, &props.style);
+        apply_scroll_props_fresh(&mut ec, &props);
+        apply_scroll_transition_fresh(&mut ec, &props.style);
         create_controlled_scroll(bridge, &mut ec, id, &props);
     }
     // `backgroundImage`: applied on any element EXCEPT those whose
@@ -287,7 +319,13 @@ pub(super) fn apply_create(
         "textSpan" => {}
         // Neither has an SVG shape child (Node-less, unstyled).
         _ if shape_kind.is_some() => {}
-        _ => {
+        // Fresh entity: only a present `backgroundImage` has anything to
+        // stamp (the absent arm is a remove).
+        _ if props
+            .style
+            .as_ref()
+            .is_some_and(|s| s.background_image.is_some()) =>
+        {
             let mut ec = commands.entity(entity);
             crate::background_image::apply_background_image(
                 &mut ec,
@@ -297,6 +335,7 @@ pub(super) fn apply_create(
                 assets,
             );
         }
+        _ => {}
     }
     bridge.nodes.insert(id, entity);
     // `name` → Bevy `Name` + the by-name index (see `crate::names`).
@@ -349,16 +388,26 @@ fn spawn_element(
     layouts: &mut Assets<TextureAtlasLayout>,
     atlas_cache: &mut AtlasLayoutCache,
 ) -> Entity {
-    let mut ec = commands.spawn(ReactNode(id));
-    apply_style(&mut ec, &props.style);
+    // A `<button>` captures the pointer by default (`FocusPolicy::Block` unless
+    // the style says otherwise — the create-time twin of
+    // `stamps::apply_button_focus_default`); `Button` requires `Interaction`,
+    // which the spawn adds automatically.
+    let focus_default = if kind == "button" {
+        FocusPolicy::Block
+    } else {
+        FocusPolicy::Pass
+    };
+    let bundle = (
+        ReactNode(id),
+        fresh_style_bundle(&props.style, focus_default),
+    );
+    let mut ec = if kind == "button" {
+        commands.spawn((bundle, Button))
+    } else {
+        commands.spawn(bundle)
+    };
+    apply_style_fresh(&mut ec, &props.style);
     match kind {
-        // `Button` requires `Interaction`, which is added automatically.
-        "button" => {
-            ec.insert(Button);
-            // Buttons capture the pointer by default; `apply_style` already
-            // defaulted this entity to `Pass`, so override unless the prop is set.
-            apply_button_focus_default(&mut ec, &props.style);
-        }
         // An `.svg` src (case-insensitive) enters **svg mode**: the texture is
         // an element-owned raster target painted at laid-out size, the parsed
         // document rides an `SvgSurface`, and the path is never loaded as an

@@ -486,12 +486,119 @@ fn set_node_if_changed(node: Node) -> impl EntityCommand {
     }
 }
 
+/// Queued compare-before-write for any `PartialEq` component (the
+/// [`set_node_if_changed`] pattern generalized): `set_if_neq` when present, insert
+/// when absent. Used for the components bevy's `Node` **requires**
+/// (`BackgroundColor`/`BorderColor`/`ZIndex`): they are always present on a
+/// node, so "absent in the style" writes the default value instead of removing
+/// the component — a removal is a real table move on every create and every
+/// hover/press flip, and bevy would re-add the component on the next `Node`
+/// insert anyway. The defaults render exactly like absence (transparent
+/// background/border; `ZIndex(0)` is bevy's documented fallback for a missing
+/// `ZIndex`).
+fn set_if_neq_or_insert<T: Component<Mutability = bevy::ecs::component::Mutable> + PartialEq>(
+    value: T,
+) -> impl EntityCommand {
+    move |mut entity: EntityWorldMut| match entity.get_mut::<T>() {
+        Some(mut current) => {
+            current.set_if_neq(value);
+        }
+        None => {
+            entity.insert(value);
+        }
+    }
+}
+
+/// Style groups whose components ride the **spawn bundle** of a fresh element
+/// ([`fresh_style_bundle`]) rather than [`apply_style_fresh`]: `Node` and its
+/// required `BackgroundColor`/`BorderColor`/`ZIndex`/`FocusPolicy` plus the
+/// never-absent `Pickable` mirror.
+const FRESH_BUNDLED: u32 = {
+    use crate::protocol::style::style_groups as g;
+    g::LAYOUT | g::BACKGROUND | g::BORDER_COLOR | g::Z_INDEX | g::FOCUS_POLICY
+};
+
+/// The always-present components of a freshly spawned element, built from its
+/// style so they ride the `spawn((ReactNode, …))` bundle — one archetype, no
+/// moves — instead of landing as separate inserts. `focus_default` is the
+/// element's `focusPolicy` when the style has none (`Pass` for a node, `Block`
+/// for a `<button>` — see `stamps::apply_button_focus_default`, the update
+/// path's equivalent); the `Pickable` mirror follows it (see the
+/// `FOCUS_POLICY` doc in [`apply_style_masked`]).
+///
+/// Pair with [`apply_style_fresh`] for the rest of the style.
+pub fn fresh_style_bundle(style: &Option<Style>, focus_default: FocusPolicy) -> impl Bundle {
+    let s = style.as_ref();
+    let opacity = s.and_then(|s| s.opacity.static_val());
+    let focus_policy = s.and_then(|s| s.focus_policy).unwrap_or(focus_default);
+    (
+        node_from_style(style),
+        background_color(s, opacity),
+        border_color(s),
+        ZIndex(s.and_then(|s| s.z_index).unwrap_or_default()),
+        focus_policy,
+        Pickable {
+            should_block_lower: focus_policy == FocusPolicy::Block,
+            is_hoverable: true,
+        },
+    )
+}
+
+/// The `BackgroundColor` a style resolves to: the folded static color, or the
+/// transparent default when the style has none (or the color is `{ animated }`).
+fn background_color(s: Option<&Style>, opacity: Option<f32>) -> BackgroundColor {
+    match s.and_then(|s| s.background_color.static_ref()) {
+        Some(hex) => BackgroundColor(apply_opacity(parse_color(hex), opacity)),
+        None => BackgroundColor::DEFAULT,
+    }
+}
+
+/// The `BorderColor` a style resolves to: per-side static colors (an unset side
+/// is transparent), or the all-transparent default when the style has none.
+fn border_color(s: Option<&Style>) -> BorderColor {
+    match s.and_then(|s| s.border_color.static_ref()) {
+        Some(spec) => {
+            let side = |c: &Option<String>| c.as_deref().map(parse_color).unwrap_or(Color::NONE);
+            BorderColor {
+                top: side(&spec.top),
+                right: side(&spec.right),
+                bottom: side(&spec.bottom),
+                left: side(&spec.left),
+            }
+        }
+        None => BorderColor::DEFAULT,
+    }
+}
+
 /// Apply a style to an element: update its `Node` (only relaying out when a layout
 /// field changed — see [`set_node_if_changed`]) plus the sibling visual components
 /// present in the style (and remove ones that are absent, so toggling a style key
 /// off clears the component).
 pub fn apply_style(ec: &mut EntityCommands, style: &Option<Style>) {
     apply_style_masked(ec, style, StyleDirty::ALL, false);
+}
+
+/// [`apply_style`] for a **freshly spawned** element whose spawn bundle carried
+/// [`fresh_style_bundle`]: stamps the remaining style-derived components that
+/// are present and skips every "absent → remove" arm (a fresh entity has nothing
+/// to remove — each of those would otherwise be a queued no-op command, ~30 per
+/// node on a typical style). The create path only; updates and restyles keep
+/// the full remove semantics of [`apply_style_masked`].
+pub fn apply_style_fresh(ec: &mut EntityCommands, style: &Option<Style>) {
+    apply_style_impl(
+        ec,
+        style,
+        StyleDirty(StyleDirty::ALL.0 & !FRESH_BUNDLED),
+        false,
+        true,
+    );
+}
+
+/// `ec.remove::<B>()` unless the entity is known fresh (nothing to remove).
+fn remove_unless_fresh<B: Bundle>(ec: &mut EntityCommands, fresh: bool) {
+    if !fresh {
+        ec.remove::<B>();
+    }
 }
 
 /// [`apply_style`] for a node whose layer-promotion state is known (see
@@ -516,6 +623,20 @@ pub fn apply_style_masked(
     style: &Option<Style>,
     dirty: StyleDirty,
     promoted: bool,
+) {
+    apply_style_impl(ec, style, dirty, promoted, false);
+}
+
+/// The shared body of [`apply_style_masked`] and [`apply_style_fresh`]. `fresh`
+/// marks a just-spawned entity: every "absent → remove" arm is skipped (see
+/// [`remove_unless_fresh`]) and the bundled groups are expected to be masked
+/// out by the caller.
+fn apply_style_impl(
+    ec: &mut EntityCommands,
+    style: &Option<Style>,
+    dirty: StyleDirty,
+    promoted: bool,
+    fresh: bool,
 ) {
     use crate::protocol::style::style_groups as g;
 
@@ -553,15 +674,11 @@ pub fn apply_style_masked(
             }
         });
     }
+    // `BackgroundColor`/`BorderColor`/`ZIndex` are `Node`-required: never
+    // removed, written compare-before-write (see `set_if_neq_or_insert`) so a
+    // no-change restyle ticks nothing and an absent field lands the default.
     if dirty.intersects(g::BACKGROUND) {
-        match s.and_then(|s| s.background_color.static_ref()) {
-            Some(hex) => {
-                ec.insert(BackgroundColor(apply_opacity(parse_color(hex), opacity)));
-            }
-            None => {
-                ec.remove::<BackgroundColor>();
-            }
-        }
+        ec.queue(set_if_neq_or_insert(background_color(s, opacity)));
     }
 
     // A static `transform` writes `UiTransform`. When absent we *leave it
@@ -601,21 +718,7 @@ pub fn apply_style_masked(
         });
     }
     if dirty.intersects(g::BORDER_COLOR) {
-        match s.and_then(|s| s.border_color.static_ref()) {
-            Some(spec) => {
-                let side =
-                    |c: &Option<String>| c.as_deref().map(parse_color).unwrap_or(Color::NONE);
-                ec.insert(BorderColor {
-                    top: side(&spec.top),
-                    right: side(&spec.right),
-                    bottom: side(&spec.bottom),
-                    left: side(&spec.left),
-                });
-            }
-            None => {
-                ec.remove::<BorderColor>();
-            }
-        }
+        ec.queue(set_if_neq_or_insert(border_color(s)));
     }
     if dirty.intersects(g::OUTLINE) {
         match s.and_then(|s| s.outline.as_ref()) {
@@ -627,7 +730,7 @@ pub fn apply_style_masked(
                 });
             }
             None => {
-                ec.remove::<Outline>();
+                remove_unless_fresh::<Outline>(ec, fresh);
             }
         }
     }
@@ -637,7 +740,7 @@ pub fn apply_style_masked(
                 ec.insert(BoxShadow(build_box_shadows(b)));
             }
             None => {
-                ec.remove::<BoxShadow>();
+                remove_unless_fresh::<BoxShadow>(ec, fresh);
             }
         }
     }
@@ -647,7 +750,7 @@ pub fn apply_style_masked(
                 ec.insert(BackgroundGradient(build_gradients(grad, opacity)));
             }
             None => {
-                ec.remove::<BackgroundGradient>();
+                remove_unless_fresh::<BackgroundGradient>(ec, fresh);
             }
         }
     }
@@ -657,7 +760,7 @@ pub fn apply_style_masked(
                 ec.insert(BorderGradient(build_gradients(grad, opacity)));
             }
             None => {
-                ec.remove::<BorderGradient>();
+                remove_unless_fresh::<BorderGradient>(ec, fresh);
             }
         }
     }
@@ -674,20 +777,23 @@ pub fn apply_style_masked(
                 .map(|g| build_gradients(g, None)),
             opacity,
         };
-        ec.queue(move |mut entity: EntityWorldMut| {
-            if targets.background.is_none() && targets.border.is_none() {
-                entity.remove::<GradientTargets>();
-            } else {
-                match entity.get_mut::<GradientTargets>() {
-                    Some(mut current) => {
-                        current.set_if_neq(targets);
-                    }
-                    None => {
-                        entity.insert(targets);
+        let gradient_less = targets.background.is_none() && targets.border.is_none();
+        if !(fresh && gradient_less) {
+            ec.queue(move |mut entity: EntityWorldMut| {
+                if gradient_less {
+                    entity.remove::<GradientTargets>();
+                } else {
+                    match entity.get_mut::<GradientTargets>() {
+                        Some(mut current) => {
+                            current.set_if_neq(targets);
+                        }
+                        None => {
+                            entity.insert(targets);
+                        }
                     }
                 }
-            }
-        });
+            });
+        }
     }
     // A `<text>` root's drop shadow (block-level). No-op on non-text nodes (no
     // `Text` to shadow); removed when the style drops it on a re-render/hover-out.
@@ -697,19 +803,14 @@ pub fn apply_style_masked(
                 ec.insert(shadow);
             }
             None => {
-                ec.remove::<TextShadow>();
+                remove_unless_fresh::<TextShadow>(ec, fresh);
             }
         }
     }
     if dirty.intersects(g::Z_INDEX) {
-        match s.and_then(|s| s.z_index) {
-            Some(z) => {
-                ec.insert(ZIndex(z));
-            }
-            None => {
-                ec.remove::<ZIndex>();
-            }
-        }
+        ec.queue(set_if_neq_or_insert(ZIndex(
+            s.and_then(|s| s.z_index).unwrap_or_default(),
+        )));
     }
     if dirty.intersects(g::GLOBAL_Z_INDEX) {
         match s.and_then(|s| s.global_z_index) {
@@ -717,7 +818,7 @@ pub fn apply_style_masked(
                 ec.insert(GlobalZIndex(z));
             }
             None => {
-                ec.remove::<GlobalZIndex>();
+                remove_unless_fresh::<GlobalZIndex>(ec, fresh);
             }
         }
     }
@@ -731,7 +832,7 @@ pub fn apply_style_masked(
                 ec.insert(ImageRenderingMode(mode));
             }
             _ => {
-                ec.remove::<ImageRenderingMode>();
+                remove_unless_fresh::<ImageRenderingMode>(ec, fresh);
             }
         }
     }
@@ -746,7 +847,7 @@ pub fn apply_style_masked(
                 ec.insert(bevy::ui::LayoutConfig { use_rounding });
             }
             None => {
-                ec.remove::<bevy::ui::LayoutConfig>();
+                remove_unless_fresh::<bevy::ui::LayoutConfig>(ec, fresh);
             }
         }
     }
@@ -756,7 +857,7 @@ pub fn apply_style_masked(
                 ec.insert(NodeCursor(c.clone()));
             }
             None => {
-                ec.remove::<NodeCursor>();
+                remove_unless_fresh::<NodeCursor>(ec, fresh);
             }
         }
     }
@@ -769,7 +870,7 @@ pub fn apply_style_masked(
                 ec.insert(ScrollbarConfig(spec.clone()));
             }
             _ => {
-                ec.remove::<ScrollbarConfig>();
+                remove_unless_fresh::<ScrollbarConfig>(ec, fresh);
             }
         }
     }
@@ -812,7 +913,7 @@ pub fn apply_style_masked(
                 ec.insert(crate::filters::FilterInput(chain.clone()));
             }
             None => {
-                ec.remove::<crate::filters::FilterInput>();
+                remove_unless_fresh::<crate::filters::FilterInput>(ec, fresh);
             }
         }
     }
@@ -829,7 +930,7 @@ pub fn apply_style_masked(
                 ec.insert(crate::filters::BackdropInput(chain.clone()));
             }
             None => {
-                ec.remove::<crate::filters::BackdropInput>();
+                remove_unless_fresh::<crate::filters::BackdropInput>(ec, fresh);
             }
         }
     }
@@ -851,7 +952,9 @@ pub fn apply_style_masked(
                 });
             }
             None => {
-                ec.remove::<(crate::filters::MorphInput, crate::filters::MorphState)>();
+                remove_unless_fresh::<(crate::filters::MorphInput, crate::filters::MorphState)>(
+                    ec, fresh,
+                );
             }
         }
     }
@@ -865,7 +968,7 @@ pub fn apply_style_masked(
     // and must exist (with its built-in default timing) even when the style
     // has no `transition` at all — a morph delta alone stamps it.
     if dirty.intersects(g::TRANSITION | g::MORPH) {
-        crate::transition::apply_transition(ec, style);
+        crate::transition::apply_transition(ec, style, fresh);
     }
 
     // Layer-cache tap: any touched style group may have changed this node's
@@ -1242,11 +1345,6 @@ pub fn resolved_text_style_promoted(
         }
     }
     (color, font, line, spacing)
-}
-
-/// Insert the resolved text components for a `<text>` element or span.
-pub fn apply_text_style(ec: &mut EntityCommands, style: &Option<Style>, fonts: &Fonts) {
-    ec.insert(resolved_text_style(style, fonts));
 }
 
 /// The `TextLayout` for a `<text>` root, if `textAlign` or `lineBreak` is set

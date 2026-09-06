@@ -248,11 +248,96 @@ pub(super) fn apply_scroll_step(ec: &mut EntityCommands, props: &Props) {
 /// The interactive-element create tail shared by `<canvas>`, `<portal>`, and
 /// the generic elements (`spawn_element`): stamp the style variants, pointer
 /// handlers, animation bindings, and anchor from the props, in that order.
+///
+/// **Create only** — the entity is freshly spawned, so this is the insert-only
+/// mirror of the stamp/clear helpers above ([`apply_style_variants`],
+/// [`apply_pointer_handlers`], [`apply_animated`], [`apply_anchor`]): every
+/// "absent → remove" arm is skipped (nothing to remove), and the components a
+/// prop set implies land as one insert each (one archetype move, not one per
+/// component). The update path keeps using the stamp/clear helpers directly.
 pub(super) fn stamp_common(ec: &mut EntityCommands, props: &Props) {
-    apply_style_variants(ec, props);
-    apply_pointer_handlers(ec, props);
-    apply_animated(ec, props);
-    apply_anchor(ec, props);
+    apply_style_variants_fresh(ec, props);
+    apply_pointer_handlers_fresh(ec, props);
+    apply_animated_fresh(ec, props);
+    // `apply_anchor` is insert-only when the prop is present — call it only then.
+    if props.anchor.is_some() {
+        apply_anchor(ec, props);
+    }
+}
+
+/// [`apply_style_variants`] for a **freshly spawned** entity: stamp the
+/// variants (and the `Interaction`/`FocusState` they need) when present, never
+/// remove.
+pub(super) fn apply_style_variants_fresh(ec: &mut EntityCommands, props: &Props) {
+    if props.hover_style.is_some() || props.press_style.is_some() || props.focus_style.is_some() {
+        ec.insert(StyleVariants {
+            base: props.style.clone().map(Box::new),
+            hover: props.hover_style.clone(),
+            press: props.press_style.clone(),
+            focus: props.focus_style.clone(),
+        });
+        if props.hover_style.is_some() || props.press_style.is_some() {
+            ec.insert_if_new(Interaction::default());
+        }
+        if props.focus_style.is_some() {
+            ec.insert(FocusState::default());
+        }
+    }
+}
+
+/// [`apply_pointer_handlers`] for a **freshly spawned** entity: the same
+/// components, inserted in prop-implied groups, no removes. `insert_if_new` for
+/// the `Interaction` pair keeps a `<button>`'s (required) or a hover/press
+/// variant's `Interaction` untouched, exactly like the update-path helper.
+pub(super) fn apply_pointer_handlers_fresh(ec: &mut EntityCommands, props: &Props) {
+    let any_pointer = props.on_pointer_down
+        || props.on_pointer_move
+        || props.on_pointer_up
+        || props.on_pointer_enter
+        || props.on_pointer_leave;
+    if any_pointer {
+        ec.insert((
+            PointerHandlers {
+                down: props.on_pointer_down,
+                moved: props.on_pointer_move,
+                up: props.on_pointer_up,
+                enter: props.on_pointer_enter,
+                leave: props.on_pointer_leave,
+            },
+            RelativeCursorPosition::default(),
+        ));
+    }
+    if props.on_pointer_enter || props.on_pointer_leave {
+        ec.insert(HoverState::default());
+    }
+    if props.on_click || any_pointer {
+        ec.insert_if_new((Interaction::default(), ClickOwner));
+    }
+}
+
+/// [`apply_animated`] for a **freshly spawned** entity: stamp the bindings when
+/// there are any, never remove.
+pub(super) fn apply_animated_fresh(ec: &mut EntityCommands, props: &Props) {
+    crate::style_bindings::warn_variant_bindings(props);
+    let bindings = crate::style_bindings::derive_props_bindings(props);
+    crate::style_bindings::warn_gradient_transition_mix(props, bindings.as_ref());
+    if let Some(bindings) = bindings {
+        ec.insert(AnimatedNode(bindings));
+    }
+}
+
+/// [`apply_scroll_listener`] + [`apply_wheel_listener`] + [`apply_scroll_step`]
+/// for a **freshly spawned** entity: inserts only.
+pub(super) fn apply_scroll_props_fresh(ec: &mut EntityCommands, props: &Props) {
+    if props.on_scroll {
+        ec.insert(ScrollListener);
+    }
+    if props.on_wheel {
+        ec.insert(WheelListener);
+    }
+    if let Some(step) = props.scroll_step {
+        ec.insert(ScrollStep(step));
+    }
 }
 
 /// Apply a controlled `scrollTop`/`scrollLeft` on **create**: insert the offset

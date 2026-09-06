@@ -48,11 +48,7 @@ impl ScrollTransitionState {
 /// alongside `apply_scroll_listener`/`apply_scroll_step`. The spec input is always
 /// reinserted (so a spec change lands); the state is created once and persists.
 pub fn apply_scroll_transition(ec: &mut EntityCommands, style: &Option<Style>) {
-    match style
-        .as_ref()
-        .and_then(|s| s.transition.as_ref())
-        .and_then(|t| t.for_scroll())
-    {
+    match scroll_spec(style) {
         Some(spec) => {
             ec.insert(ScrollTransitionInput(spec.clone()));
             ec.insert_if_new(ScrollTransitionState::default());
@@ -62,6 +58,26 @@ pub fn apply_scroll_transition(ec: &mut EntityCommands, style: &Option<Style>) {
             ec.remove::<ScrollTransitionState>();
         }
     }
+}
+
+/// [`apply_scroll_transition`] for a **freshly spawned** node: one insert when
+/// the style has a scroll transition, nothing at all otherwise (nothing to
+/// remove on a fresh entity).
+pub fn apply_scroll_transition_fresh(ec: &mut EntityCommands, style: &Option<Style>) {
+    if let Some(spec) = scroll_spec(style) {
+        ec.insert((
+            ScrollTransitionInput(spec.clone()),
+            ScrollTransitionState::default(),
+        ));
+    }
+}
+
+/// The style's scroll-channel transition spec, if any.
+fn scroll_spec(style: &Option<Style>) -> Option<&ChannelTransition> {
+    style
+        .as_ref()
+        .and_then(|s| s.transition.as_ref())
+        .and_then(|t| t.for_scroll())
 }
 
 /// Ease each `ScrollTransitionState` node's `ScrollPosition` toward its `target`

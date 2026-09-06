@@ -52,7 +52,10 @@ mod spec;
 mod tests;
 mod transform3d;
 
-pub use scroll::{ScrollTransitionState, apply_scroll_transition, drive_scroll_transition};
+pub use scroll::{
+    ScrollTransitionState, apply_scroll_transition, apply_scroll_transition_fresh,
+    drive_scroll_transition,
+};
 // Reached as `crate::transition::ScrollTransitionInput` only from the
 // scrollbar test harness — the lib target alone doesn't see that use.
 #[allow(unused_imports)]
@@ -66,14 +69,22 @@ use channels::with_input_channels;
 /// [`crate::ui_map::apply_style`] with the resolved style, so the input always
 /// reflects the current `Interaction` (base / hover / press). Sibling to
 /// `apply_animated` in the reconciler's apply pattern.
-pub fn apply_transition(ec: &mut EntityCommands, style: &Option<Style>) {
-    match style.as_ref().and_then(TransitionInput::from_style) {
-        Some(input) => {
+///
+/// `fresh` marks a just-spawned entity: the input + state land as one insert
+/// (one archetype move) and the absent case queues nothing — there is nothing
+/// to remove.
+pub fn apply_transition(ec: &mut EntityCommands, style: &Option<Style>, fresh: bool) {
+    match (style.as_ref().and_then(TransitionInput::from_style), fresh) {
+        (Some(input), true) => {
+            ec.insert((input, TransitionState::default()));
+        }
+        (Some(input), false) => {
             ec.insert(input);
             // The runtime state persists across re-renders, so only create it once.
             ec.insert_if_new(TransitionState::default());
         }
-        None => {
+        (None, true) => {}
+        (None, false) => {
             ec.remove::<TransitionInput>();
             ec.remove::<TransitionState>();
         }

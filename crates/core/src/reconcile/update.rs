@@ -665,9 +665,10 @@ mod tests {
         app.update();
 
         let entity = app.world().entity(e);
-        assert!(
-            entity.get::<BackgroundColor>().is_none(),
-            "an unset style field removes its component"
+        assert_eq!(
+            entity.get::<BackgroundColor>(),
+            Some(&BackgroundColor::DEFAULT),
+            "an unset style field resets its component (a `Node`-required one lands the default)"
         );
         assert_eq!(
             entity.get::<Node>().unwrap().width,
@@ -863,8 +864,9 @@ mod tests {
         app.update();
 
         let entity = app.world().entity(e);
-        assert!(
-            entity.get::<BackgroundColor>().is_none(),
+        assert_eq!(
+            entity.get::<BackgroundColor>(),
+            Some(&BackgroundColor::DEFAULT),
             "styleUnset resets the background"
         );
         assert!(

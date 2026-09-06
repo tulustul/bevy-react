@@ -9,12 +9,12 @@ use bevy::picking::Pickable;
 use bevy::prelude::*;
 use bevy::ui::widget::NodeImageMode;
 
-use super::stamps::{apply_animated, apply_pointer_handlers, stamp_common};
+use super::stamps::{apply_animated_fresh, apply_pointer_handlers, stamp_common};
 use crate::bridge::ReactNode;
 use crate::canvas::blank_canvas_image;
 use crate::protocol::{NodeId, props::Props};
 use crate::svg::{ShapeKind, SvgShape, SvgSurface, SvgUserPos};
-use crate::ui_map::apply_style;
+use crate::ui_map::{apply_style_fresh, fresh_style_bundle};
 
 /// Spawn a JSX `<svg>` root: a styled node carrying an `ImageNode` whose
 /// element-owned texture the svg rasterizer paints from the Node-less
@@ -29,9 +29,13 @@ pub(super) fn create_svg_root(
     let handle = images.add(blank_canvas_image());
     let mut node_img = ImageNode::new(handle);
     node_img.image_mode = NodeImageMode::Stretch;
-    let mut ec = commands.spawn(ReactNode(id));
-    apply_style(&mut ec, &props.style);
-    ec.insert((node_img, SvgSurface::jsx(props.view_box)));
+    let mut ec = commands.spawn((
+        ReactNode(id),
+        fresh_style_bundle(&props.style, bevy::ui::FocusPolicy::Pass),
+        node_img,
+        SvgSurface::jsx(props.view_box),
+    ));
+    apply_style_fresh(&mut ec, &props.style);
     stamp_common(&mut ec, props);
     ec.id()
 }
@@ -68,7 +72,7 @@ pub(super) fn create_shape(
         },
     ));
     apply_shape_pointer(&mut ec, props);
-    apply_animated(&mut ec, props);
+    apply_animated_fresh(&mut ec, props);
     // A `transition` inside the attrs stamps the transition components (the
     // spec itself rides `SvgShape.attrs` — the stamp only makes the drive
     // query match; see `apply_shape_transition`).
