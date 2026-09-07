@@ -2,11 +2,12 @@
 //! `bevy_ui_render`, public API only (no fork). Mechanism per frame:
 //!
 //! 1. [`extract_ui_layers`] (`ExtractSchedule`, after
-//!    `extract_ui_camera_view`): per promoted layer, spawn a **synthetic view**
-//!    whose `clip_from_view` is an orthographic projection over the layer's
-//!    capture rect — the same physical screen space stock UI vertices live in —
-//!    and register an empty `TransparentUi` phase for it. Stock extraction /
-//!    queue never know it exists.
+//!    `extract_ui_camera_view`): per promoted layer, maintain a **synthetic
+//!    view** (a persistent render entity, see [`LayerEntities`]) whose
+//!    `clip_from_view` is an orthographic projection over the layer's capture
+//!    rect — the same physical screen space stock UI vertices live in — and
+//!    register an empty `TransparentUi` phase for it. Stock extraction / queue
+//!    never know it exists.
 //! 2. [`redistribute_ui_layers`] (`PhaseSort`, before the stock sort): move
 //!    the already-queued phase items whose `main_entity` lies in a promoted
 //!    subtree, **verbatim**, from the camera's UI phase into their layer's
@@ -78,7 +79,7 @@ use bevy::render::render_phase::{
 use bevy::render::render_resource::binding_types::{sampler, texture_2d, uniform_buffer};
 use bevy::render::render_resource::*;
 use bevy::render::renderer::{RenderContext, RenderDevice, RenderQueue, ViewQuery};
-use bevy::render::sync_world::{MainEntity, RenderEntity, TemporaryRenderEntity};
+use bevy::render::sync_world::{MainEntity, RenderEntity};
 use bevy::render::view::{ExtractedView, RetainedViewEntity, ViewUniform};
 use bevy::shader::Shader;
 use bevy::shader::ShaderCacheError;
@@ -180,12 +181,14 @@ fn extract_chain(chain: Option<&ResolvedFilterChain>) -> Option<ExtractedChain> 
 pub struct ExtractedLayer {
     /// The layer root's main-world entity (subtree identity).
     pub main_entity: MainEntity,
-    /// The synthetic capture view (render-world entity, lives one frame).
+    /// The synthetic capture view ([`LayerEntities::view`], persistent). Only
+    /// meaningful — carries an `ExtractedView` + `ViewUniformOffset` — while
+    /// [`Self::needs_capture`], the only time the phase renders against it.
     pub view_entity: Entity,
     /// The synthetic view's phase key.
     pub retained: RetainedViewEntity,
-    /// Render-world entity of the composite quad (carries
-    /// [`LayerCompositeBatch`] after prepare).
+    /// Render-world entity of the composite quad ([`LayerEntities::quad`],
+    /// persistent; its [`LayerCompositeBatch`] is rewritten by prepare).
     pub quad_entity: Entity,
     /// Capture anchor: fractional physical px, stock UI view space (top-left
     /// of the node's border box — translation moves it without re-capturing).
@@ -220,8 +223,8 @@ pub struct ExtractedLayer {
     /// backdrop state.
     pub backdrop_chain: Option<ExtractedChain>,
     /// Render-world entity of the backdrop composite quad (the frosted
-    /// underlay drawn one epsilon below the content quad). Spawned only when
-    /// [`Self::backdrop_chain`] is present.
+    /// underlay drawn one epsilon below the content quad). Present only when
+    /// [`Self::backdrop_chain`] is ([`LayerEntities::backdrop_quad`]).
     pub backdrop_quad_entity: Option<Entity>,
     /// The quantized outset margin baked into `min`/`size`
     /// ([`LayerCaptureRect::outset`]). The backdrop quad shrinks by this to
@@ -305,12 +308,14 @@ pub struct ExtractedUiLayers {
     pub capture_order: Vec<usize>,
 }
 
-/// Extracts promoted layers into the render world and spawns their synthetic
-/// capture views. Must run after `extract_ui_camera_view`: that system ends
-/// with a `retain` that would drop any phase it didn't create.
+/// Extracts promoted layers into the render world and maintains their
+/// persistent render entities ([`LayerEntities`]: synthetic capture view +
+/// composite quads). Must run after `extract_ui_camera_view`: that system
+/// ends with a `retain` that would drop any phase it didn't create.
 #[allow(clippy::type_complexity, clippy::too_many_arguments)]
 pub fn extract_ui_layers(
     mut commands: Commands,
+    mut views: Query<&mut ExtractedView, With<LayerCaptureView>>,
     mut phases: ResMut<ViewSortedRenderPhases<TransparentUi>>,
     mut extracted: ResMut<ExtractedUiLayers>,
     layers: Extract<
@@ -334,8 +339,11 @@ pub fn extract_ui_layers(
     clips: Extract<Res<crate::layer::clip::LayerClips>>,
     cameras: Extract<Query<(RenderEntity, &Camera), Or<(With<Camera2d>, With<Camera3d>)>>>,
     main_pass_formats: Res<CameraMainPassTextureFormats>,
-    store: Res<LayerTextureStore>,
+    mut store: ResMut<LayerTextureStore>,
 ) {
+    // Split borrow: `entities` (maintained here) and `slots` (read for the
+    // cache decision) are used together below.
+    let store = &mut *store;
     extracted.layers.clear();
     extracted.capture_order.clear();
     extracted.stock_view = None;
@@ -345,6 +353,10 @@ pub fn extract_ui_layers(
         extracted.membership.clear();
         extracted.enclosing.clear();
         extracted.roots.clear();
+        // No layers at all: every persistent entity set is stale.
+        for (_, entities) in store.entities.drain() {
+            despawn_layer_entities(&mut commands, &entities);
+        }
         return;
     }
 
@@ -389,41 +401,23 @@ pub fn extract_ui_layers(
         }
 
         let (min, size) = (rect.min, rect.size);
-        // Ortho over the capture rect in stock UI view space: vertices keep
-        // their physical screen coordinates; the projection alone remaps the
-        // rect to the capture target's clip space. Top-left origin like stock.
-        // The bounds are fractional — the window tracks the node exactly, so
-        // capture content is translation-invariant even subpixel.
-        let projection = Mat4::orthographic_rh(
-            min.x,
-            min.x + size.x as f32,
-            min.y + size.y as f32,
-            min.y,
-            0.0,
-            UI_CAMERA_FAR,
-        );
         let retained =
             RetainedViewEntity::new(MainEntity::from(root), None, UI_LAYER_CAPTURE_SUBVIEW);
-        let view_entity = commands
-            .spawn((
-                ExtractedView {
-                    retained_view_entity: retained,
-                    clip_from_view: projection,
-                    world_from_view: GlobalTransform::from_xyz(
-                        0.0,
-                        0.0,
-                        UI_CAMERA_FAR + UI_CAMERA_TRANSFORM_OFFSET,
-                    ),
-                    clip_from_world: None,
-                    target_format,
-                    viewport: UVec4::new(0, 0, size.x, size.y),
-                    color_grading: Default::default(),
-                    invert_culling: false,
-                },
-                TemporaryRenderEntity,
-            ))
-            .id();
-        let quad_entity = commands.spawn(TemporaryRenderEntity).id();
+        // The layer's persistent entities: spawned on first sight, kept until
+        // the layer stops being extracted (evicted below). The view gets its
+        // `ExtractedView` in the sync pass at the end — `needs_capture` is
+        // only final after propagation.
+        let entities = store
+            .entities
+            .entry(MainEntity::from(root))
+            .or_insert_with(|| LayerEntities {
+                view: commands.spawn(LayerCaptureView).id(),
+                view_extracted: false,
+                quad: commands.spawn(LayerCompositeBatch::default()).id(),
+                backdrop_quad: None,
+            });
+        let view_entity = entities.view;
+        let quad_entity = entities.quad;
         phases.prepare_for_new_frame(retained);
 
         let wants_mips = promoted.reasons.0 & crate::layer::PromotionReasons::TRANSFORM3D != 0;
@@ -448,8 +442,22 @@ pub fn extract_ui_layers(
 
         let chain = extract_chain(filter_chain);
         let backdrop_chain = extract_chain(backdrop.map(|b| &b.0));
-        let backdrop_quad_entity =
-            (backdrop_chain.is_some()).then(|| commands.spawn(TemporaryRenderEntity).id());
+        // The backdrop quad follows the chain's presence (spawned when a
+        // `backdropFilter` appears, despawned when it goes).
+        let backdrop_quad_entity = match (backdrop_chain.is_some(), entities.backdrop_quad) {
+            (true, Some(quad)) => Some(quad),
+            (true, None) => {
+                let quad = commands.spawn(LayerCompositeBatch::default()).id();
+                entities.backdrop_quad = Some(quad);
+                Some(quad)
+            }
+            (false, Some(quad)) => {
+                commands.entity(quad).despawn();
+                entities.backdrop_quad = None;
+                None
+            }
+            (false, None) => None,
+        };
         // An in-flight morph: active state + a recorded freeze rect + a
         // resolved single-pass chain (the resolver's cap guarantees one pass;
         // guard anyway — no morph must ever read as a partial one).
@@ -513,6 +521,15 @@ pub fn extract_ui_layers(
     let live: HashSet<RetainedViewEntity> = extracted.layers.iter().map(|l| l.retained).collect();
     phases.retain(|retained, _| {
         retained.subview_index != UI_LAYER_CAPTURE_SUBVIEW || live.contains(retained)
+    });
+    // Same for the persistent entities: a layer not extracted this frame
+    // (demoted, despawned, camera gone inactive) loses its view + quads.
+    store.entities.retain(|main, entities| {
+        let live = layer_index.contains_key(&main.id());
+        if !live {
+            despawn_layer_entities(&mut commands, entities);
+        }
+        live
     });
 
     // The steal index (node → layer index) and the quad routing derive from
@@ -603,6 +620,87 @@ pub fn extract_ui_layers(
     let mut order: Vec<usize> = (0..extracted.layers.len()).collect();
     order.sort_by_key(|&i| std::cmp::Reverse(depth_of(i)));
     extracted.capture_order = order;
+
+    // Sync each layer's synthetic view to its FINAL `needs_capture`: a
+    // capturing layer's view carries an `ExtractedView` (inserted on the
+    // flip, updated in place — compare-before-write — while it stays), a
+    // cached layer's view carries none (removed on the flip), so
+    // `prepare_view_uniforms` only ever writes uniforms for views whose
+    // phase actually renders this frame.
+    for layer in &extracted.layers {
+        let Some(entities) = store.entities.get_mut(&layer.main_entity) else {
+            continue;
+        };
+        match (layer.needs_capture, entities.view_extracted) {
+            (true, true) => {
+                if let Ok(mut view) = views.get_mut(entities.view) {
+                    update_capture_view(&mut view, layer);
+                }
+            }
+            (true, false) => {
+                commands.entity(entities.view).insert(capture_view(layer));
+                entities.view_extracted = true;
+            }
+            (false, true) => {
+                commands.entity(entities.view).remove::<ExtractedView>();
+                entities.view_extracted = false;
+            }
+            (false, false) => {}
+        }
+    }
+}
+
+/// The synthetic capture view for `layer`: an ortho over the capture rect in
+/// stock UI view space — vertices keep their physical screen coordinates; the
+/// projection alone remaps the rect to the capture target's clip space.
+/// Top-left origin like stock. The bounds are fractional — the window tracks
+/// the node exactly, so capture content is translation-invariant even
+/// subpixel.
+fn capture_view(layer: &ExtractedLayer) -> ExtractedView {
+    let (min, size) = (layer.min, layer.size);
+    ExtractedView {
+        retained_view_entity: layer.retained,
+        clip_from_view: Mat4::orthographic_rh(
+            min.x,
+            min.x + size.x as f32,
+            min.y + size.y as f32,
+            min.y,
+            0.0,
+            UI_CAMERA_FAR,
+        ),
+        world_from_view: GlobalTransform::from_xyz(
+            0.0,
+            0.0,
+            UI_CAMERA_FAR + UI_CAMERA_TRANSFORM_OFFSET,
+        ),
+        clip_from_world: None,
+        target_format: layer.target_format,
+        viewport: UVec4::new(0, 0, size.x, size.y),
+        color_grading: Default::default(),
+        invert_culling: false,
+    }
+}
+
+/// Bring a persistent view up to date with `layer`, touching it only when
+/// something moved (a stationary re-capturing layer writes nothing).
+fn update_capture_view(view: &mut Mut<ExtractedView>, layer: &ExtractedLayer) {
+    let fresh = capture_view(layer);
+    if view.clip_from_view != fresh.clip_from_view
+        || view.viewport != fresh.viewport
+        || view.target_format != fresh.target_format
+        || view.retained_view_entity != fresh.retained_view_entity
+    {
+        **view = fresh;
+    }
+}
+
+/// Despawn a layer's persistent entity set (the layer left extraction).
+fn despawn_layer_entities(commands: &mut Commands, entities: &LayerEntities) {
+    commands.entity(entities.view).despawn();
+    commands.entity(entities.quad).despawn();
+    if let Some(quad) = entities.backdrop_quad {
+        commands.entity(quad).despawn();
+    }
 }
 
 /// Moves promoted subtrees' phase items from the camera's UI phase into their
@@ -739,13 +837,14 @@ pub fn redistribute_ui_layers(
     }
 }
 
-/// One composite-quad vertex: physical screen position (the stock UI view
+/// One composite-quad vertex: physical screen position (2D — the quad lies in
+/// the UI plane, `composite.wgsl` flattens z anyway; the stock UI view
 /// projects it), capture UV, and the group alpha. Future composite params
 /// (per-rule) extend this struct — the pass stays rule-agnostic.
 #[repr(C)]
 #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct LayerCompositeVertex {
-    pub position: [f32; 3],
+    pub position: [f32; 2],
     pub uv: [f32; 2],
     pub alpha: f32,
 }
@@ -753,7 +852,12 @@ pub struct LayerCompositeVertex {
 /// Vertex buffer + per-layer capture bind groups for the composite draws.
 #[derive(Resource)]
 pub struct LayerCompositeMeta {
+    /// This frame's staged vertices (CPU side) + the GPU vertex buffer.
     pub vertices: RawBufferVec<LayerCompositeVertex>,
+    /// What the GPU buffer currently holds: the staged list is uploaded only
+    /// when it differs (a static scene of cached layers re-stages identical
+    /// bytes every frame — the upload is skipped, the buffer already matches).
+    pub uploaded: Vec<LayerCompositeVertex>,
     pub atlas_bind_groups: Vec<BindGroup>,
 }
 
@@ -761,13 +865,17 @@ impl Default for LayerCompositeMeta {
     fn default() -> Self {
         Self {
             vertices: RawBufferVec::new(BufferUsages::VERTEX),
+            uploaded: Vec::new(),
             atlas_bind_groups: Vec::new(),
         }
     }
 }
 
 /// The composite quad's draw data on its render entity (mirrors `UiBatch`).
-#[derive(Component)]
+/// Always present on a quad entity ([`LayerEntities`]): a quad that staged
+/// nothing this frame keeps a stale value, which is never read — its phase
+/// item's `batch_range` stays `0..0` and empty ranges are skipped unrendered.
+#[derive(Component, Default, Clone)]
 pub struct LayerCompositeBatch {
     pub range: Range<u32>,
     /// Index into [`LayerCompositeMeta::atlas_bind_groups`].
@@ -797,14 +905,52 @@ fn inflated_transform_quad(min: Vec2, size: UVec2, inset: f32) -> clip::ClippedQ
     }
 }
 
-/// Builds composite-quad vertices + bind groups and stamps
-/// [`LayerCompositeBatch`] onto the quad entities, writing each quad's vertex
-/// range back into its phase item.
+/// A quad that staged vertices this frame, pending its
+/// [`LayerCompositeBatch`] write once the uniform offsets are known.
+struct StagedQuad {
+    entity: Entity,
+    range: Range<u32>,
+    atlas: usize,
+    /// Index into [`transform3d::CompositeUniformsMeta::staged`].
+    uniform: usize,
+}
+
+/// Stage one quad (two triangles, 6 vertices) spanning `min..max` with UVs
+/// `uv_min..uv_max` at group alpha `alpha`.
+fn push_quad_vertices(
+    vertices: &mut RawBufferVec<LayerCompositeVertex>,
+    min: Vec2,
+    max: Vec2,
+    uv_min: Vec2,
+    uv_max: Vec2,
+    alpha: f32,
+) {
+    let corners = [
+        ([min.x, min.y], [uv_min.x, uv_min.y]),
+        ([max.x, min.y], [uv_max.x, uv_min.y]),
+        ([max.x, max.y], [uv_max.x, uv_max.y]),
+        ([min.x, min.y], [uv_min.x, uv_min.y]),
+        ([max.x, max.y], [uv_max.x, uv_max.y]),
+        ([min.x, max.y], [uv_min.x, uv_max.y]),
+    ];
+    for (position, uv) in corners {
+        vertices.push(LayerCompositeVertex {
+            position,
+            uv,
+            alpha,
+        });
+    }
+}
+
+/// Builds composite-quad vertices + bind groups and writes each quad's
+/// [`LayerCompositeBatch`] (through its persistent entity) and vertex range
+/// back into its phase item. GPU uploads happen only when the staged data
+/// differs from what the buffers hold (see [`LayerCompositeMeta::uploaded`]).
 #[allow(clippy::too_many_arguments)]
 pub fn prepare_layer_composites(
-    mut commands: Commands,
     extracted: Res<ExtractedUiLayers>,
     mut store: ResMut<LayerTextureStore>,
+    mut batches: Query<&mut LayerCompositeBatch>,
     pipeline: Option<Res<LayerCompositePipeline>>,
     pipeline_cache: Res<PipelineCache>,
     render_device: Res<RenderDevice>,
@@ -818,8 +964,7 @@ pub fn prepare_layer_composites(
 ) {
     meta.vertices.clear();
     meta.atlas_bind_groups.clear();
-    uniforms_meta.uniforms.clear();
-    uniforms_meta.bind_group = None;
+    uniforms_meta.staged.clear();
     let Some(pipeline) = pipeline else {
         return;
     };
@@ -833,6 +978,7 @@ pub fn prepare_layer_composites(
     // Membership set for the post-sort batch-range pass at the bottom: the
     // render entities of every quad that actually staged vertices this frame.
     let mut drawable: HashSet<Entity> = HashSet::default();
+    let mut staged_quads: Vec<StagedQuad> = Vec::new();
     // Filtered layers whose output isn't ready this frame: their quads stay
     // batch-less, so any enclosing capture rendered without them must not be
     // served from cache — see the invalidation loop after this one.
@@ -1035,48 +1181,32 @@ pub fn prepare_layer_composites(
         let (uv_min, uv_max) = (q.uv_min, q.uv_max);
         // UVs are quad-relative (spike: texture == rect; slot-relative UVs
         // arrive with the shared atlas).
-        let corners = [
-            ([min.x, min.y, 0.0], [uv_min.x, uv_min.y]),
-            ([max.x, min.y, 0.0], [uv_max.x, uv_min.y]),
-            ([max.x, max.y, 0.0], [uv_max.x, uv_max.y]),
-            ([min.x, min.y, 0.0], [uv_min.x, uv_min.y]),
-            ([max.x, max.y, 0.0], [uv_max.x, uv_max.y]),
-            ([min.x, max.y, 0.0], [uv_min.x, uv_max.y]),
-        ];
-        for (position, uv) in corners {
-            meta.vertices.push(LayerCompositeVertex {
-                position,
-                uv,
-                alpha: layer.alpha,
-            });
-        }
+        push_quad_vertices(&mut meta.vertices, min, max, uv_min, uv_max, layer.alpha);
         ranges[idx] = Some(start..start + 6);
         drawable.insert(layer.quad_entity);
         let atlas_index = meta.atlas_bind_groups.len();
         meta.atlas_bind_groups.push(bind_group);
         let (open_min, open_max) = transform3d::open_clip();
-        let uniform_offset = uniforms_meta
-            .uniforms
-            .push(&transform3d::CompositeUniforms {
-                model,
-                clip_min: clip_rect.map_or(open_min, |r| r.min),
-                clip_max: clip_rect.map_or(open_max, |r| r.max),
-                edge_feather: feather,
-                pad_a: 0.0,
-                image_size,
-                // Content quads never round: the capture already holds the
-                // node's own rounded paint. Zero radii disable the mask.
-                radius: Vec4::ZERO,
-                box_center: Vec2::ZERO,
-                box_size: Vec2::ZERO,
-            });
-        commands
-            .entity(layer.quad_entity)
-            .insert(LayerCompositeBatch {
-                range: ranges[idx].clone().unwrap(),
-                atlas: atlas_index,
-                uniform_offset,
-            });
+        let uniform = uniforms_meta.staged.len();
+        uniforms_meta.staged.push(transform3d::CompositeUniforms {
+            model,
+            clip_min: clip_rect.map_or(open_min, |r| r.min),
+            clip_max: clip_rect.map_or(open_max, |r| r.max),
+            edge_feather: feather,
+            pad_a: 0.0,
+            image_size,
+            // Content quads never round: the capture already holds the
+            // node's own rounded paint. Zero radii disable the mask.
+            radius: Vec4::ZERO,
+            box_center: Vec2::ZERO,
+            box_size: Vec2::ZERO,
+        });
+        staged_quads.push(StagedQuad {
+            entity: layer.quad_entity,
+            range: start..start + 6,
+            atlas: atlas_index,
+            uniform,
+        });
     }
     // Backdrop quads: the frosted underlay, staged after the content quads so
     // both share the vertex buffer + bind-group list. Geometry is the
@@ -1117,23 +1247,14 @@ pub fn prepare_layer_composites(
             continue;
         };
         let start = meta.vertices.len() as u32;
-        let (min, max) = (q.pos_min, q.pos_max);
-        let (uv_min, uv_max) = (q.uv_min, q.uv_max);
-        let corners = [
-            ([min.x, min.y, 0.0], [uv_min.x, uv_min.y]),
-            ([max.x, min.y, 0.0], [uv_max.x, uv_min.y]),
-            ([max.x, max.y, 0.0], [uv_max.x, uv_max.y]),
-            ([min.x, min.y, 0.0], [uv_min.x, uv_min.y]),
-            ([max.x, max.y, 0.0], [uv_max.x, uv_max.y]),
-            ([min.x, max.y, 0.0], [uv_min.x, uv_max.y]),
-        ];
-        for (position, uv) in corners {
-            meta.vertices.push(LayerCompositeVertex {
-                position,
-                uv,
-                alpha: layer.alpha,
-            });
-        }
+        push_quad_vertices(
+            &mut meta.vertices,
+            q.pos_min,
+            q.pos_max,
+            q.uv_min,
+            q.uv_max,
+            layer.alpha,
+        );
         backdrop_ranges[idx] = Some(start..start + 6);
         drawable.insert(backdrop_quad_entity);
         let atlas_index = meta.atlas_bind_groups.len();
@@ -1144,29 +1265,27 @@ pub fn prepare_layer_composites(
         let box_min = layer.min + Vec2::splat(layer.outset as f32);
         let box_max = layer.min + layer.size.as_vec2() - Vec2::splat(layer.outset as f32);
         let (open_min, open_max) = transform3d::open_clip();
-        let uniform_offset = uniforms_meta
-            .uniforms
-            .push(&transform3d::CompositeUniforms {
-                model: Mat4::IDENTITY,
-                clip_min: open_min,
-                clip_max: open_max,
-                edge_feather: 0.0,
-                pad_a: 0.0,
-                image_size,
-                // Frost is masked to the node's rounded border box; the radii
-                // are the layout-resolved ones bevy_ui paints with, so the
-                // frost edge coincides with the panel's own rounded edge.
-                radius: Vec4::from(layer.corner_radius),
-                box_center: (box_min + box_max) * 0.5,
-                box_size: box_max - box_min,
-            });
-        commands
-            .entity(backdrop_quad_entity)
-            .insert(LayerCompositeBatch {
-                range: backdrop_ranges[idx].clone().unwrap(),
-                atlas: atlas_index,
-                uniform_offset,
-            });
+        let uniform = uniforms_meta.staged.len();
+        uniforms_meta.staged.push(transform3d::CompositeUniforms {
+            model: Mat4::IDENTITY,
+            clip_min: open_min,
+            clip_max: open_max,
+            edge_feather: 0.0,
+            pad_a: 0.0,
+            image_size,
+            // Frost is masked to the node's rounded border box; the radii
+            // are the layout-resolved ones bevy_ui paints with, so the
+            // frost edge coincides with the panel's own rounded edge.
+            radius: Vec4::from(layer.corner_radius),
+            box_center: (box_min + box_max) * 0.5,
+            box_size: box_max - box_min,
+        });
+        staged_quads.push(StagedQuad {
+            entity: backdrop_quad_entity,
+            range: start..start + 6,
+            atlas: atlas_index,
+            uniform,
+        });
     }
     // A gated quad drew nothing into its enclosing captures this frame, yet
     // those captures' `content_valid` was predicted from pipeline readiness
@@ -1181,19 +1300,64 @@ pub fn prepare_layer_composites(
             true
         });
     }
-    meta.vertices.write_buffer(&render_device, &render_queue);
-    // Composite uniforms: write, then bind the (possibly fresh) buffer — one
-    // whole-buffer bind group, per-quad entries selected by dynamic offset.
-    uniforms_meta
-        .uniforms
-        .write_buffer(&render_device, &render_queue);
-    uniforms_meta.bind_group = uniforms_meta.uniforms.binding().map(|binding| {
-        render_device.create_bind_group(
-            "ui_layer_composite_uniforms",
-            &pipeline_cache.get_bind_group_layout(&pipeline.uniform_layout),
-            &BindGroupEntries::single(binding),
-        )
-    });
+    // Uploads, skipped when nothing changed: both staging lists are rebuilt
+    // every frame, but for a still scene (cached layers, nothing moving) they
+    // come out byte-identical to what the GPU buffers already hold — no
+    // `write_buffer`, and the uniform offsets from that upload stay valid.
+    // A never-created buffer always writes.
+    {
+        let LayerCompositeMeta {
+            vertices, uploaded, ..
+        } = &mut *meta;
+        let staged: &[u8] = bytemuck::cast_slice(vertices.values());
+        if vertices.buffer().is_none() || staged != bytemuck::cast_slice::<_, u8>(uploaded) {
+            vertices.write_buffer(&render_device, &render_queue);
+            uploaded.clear();
+            uploaded.extend_from_slice(vertices.values());
+        }
+    }
+    // Composite uniforms: one whole-buffer bind group, per-quad entries
+    // selected by dynamic offset. The bind group is rebuilt only when the
+    // buffer object changes (a growth realloc) — the `PassBindKey` rule.
+    let uniforms_meta = &mut *uniforms_meta;
+    if uniforms_meta.uniforms.buffer().is_none() || uniforms_meta.staged != uniforms_meta.uploaded {
+        let transform3d::CompositeUniformsMeta {
+            uniforms,
+            staged,
+            uploaded,
+            offsets,
+            ..
+        } = uniforms_meta;
+        uniforms.clear();
+        offsets.clear();
+        offsets.extend(staged.iter().map(|entry| uniforms.push(entry)));
+        uniforms.write_buffer(&render_device, &render_queue);
+        std::mem::swap(staged, uploaded);
+    }
+    if let Some(buffer) = uniforms_meta.uniforms.buffer()
+        && !matches!(&uniforms_meta.bind_group, Some((id, _)) if *id == buffer.id())
+    {
+        let binding = uniforms_meta.uniforms.binding().expect("buffer exists");
+        uniforms_meta.bind_group = Some((
+            buffer.id(),
+            render_device.create_bind_group(
+                "ui_layer_composite_uniforms",
+                &pipeline_cache.get_bind_group_layout(&pipeline.uniform_layout),
+                &BindGroupEntries::single(binding),
+            ),
+        ));
+    }
+    // Stamp the batches through the quads' persistent entities (no
+    // commands: the component is always present, see `LayerCompositeBatch`).
+    for staged in staged_quads {
+        if let Ok(mut batch) = batches.get_mut(staged.entity) {
+            *batch = LayerCompositeBatch {
+                range: staged.range,
+                atlas: staged.atlas,
+                uniform_offset: uniforms_meta.offsets[staged.uniform],
+            };
+        }
+    }
 
     // Mark the injected quads drawable (post-sort, pre-draw). A phase item's
     // `batch_range` is an *item-skip count* — `SortedRenderPhase::render`
@@ -1296,8 +1460,8 @@ impl SpecializedRenderPipeline for LayerCompositePipeline {
         let vertex_layout = VertexBufferLayout::from_vertex_formats(
             VertexStepMode::Vertex,
             vec![
-                // position
-                VertexFormat::Float32x3,
+                // position (2D, UI plane)
+                VertexFormat::Float32x2,
                 // uv
                 VertexFormat::Float32x2,
                 // alpha

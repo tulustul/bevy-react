@@ -16,13 +16,13 @@ use bevy::prelude::*;
 use bevy::render::render_phase::{
     PhaseItem, RenderCommand, RenderCommandResult, TrackedRenderPass,
 };
-use bevy::render::render_resource::{BindGroup, DynamicUniformBuffer, ShaderType};
+use bevy::render::render_resource::{BindGroup, BufferId, DynamicUniformBuffer, ShaderType};
 
 /// Per-quad composite params. Field order matches `CompositeParams` in
 /// `composite.wgsl` byte for byte (128 bytes; guarded by
 /// `composite_uniforms_match_the_documented_wgsl_layout`). Pad names are
 /// digit-free on purpose (the naga-namer constraint, see `FilterUniforms`).
-#[derive(Clone, Copy, ShaderType)]
+#[derive(Clone, Copy, PartialEq, ShaderType)]
 pub struct CompositeUniforms {
     /// Screen-space model matrix (physical px, homogeneous — the vertex stage
     /// keeps the real `w` for perspective-correct interpolation and flattens
@@ -67,12 +67,23 @@ pub fn open_clip() -> (Vec2, Vec2) {
     (Vec2::splat(-f32::MAX), Vec2::splat(f32::MAX))
 }
 
-/// Frame-staged composite uniforms + their whole-buffer bind group (rebuilt
-/// every frame after `write_buffer` — the buffer may reallocate).
+/// Frame-staged composite uniforms + their whole-buffer bind group.
+/// `prepare_layer_composites` rebuilds [`Self::staged`] every frame but
+/// uploads it into [`Self::uniforms`] only when it differs from
+/// [`Self::uploaded`] (what the GPU buffer holds) — a still scene skips the
+/// upload and keeps [`Self::offsets`]; the bind group is rebuilt only when
+/// the buffer object itself changes (a growth realloc).
 #[derive(Resource)]
 pub struct CompositeUniformsMeta {
     pub uniforms: DynamicUniformBuffer<CompositeUniforms>,
-    pub bind_group: Option<BindGroup>,
+    /// This frame's entries, in push order (one per drawn quad).
+    pub staged: Vec<CompositeUniforms>,
+    /// The entries the GPU buffer currently holds.
+    pub uploaded: Vec<CompositeUniforms>,
+    /// Dynamic offset of `uploaded[i]` in the buffer.
+    pub offsets: Vec<u32>,
+    /// The whole-buffer bind group, keyed by the buffer it was built over.
+    pub bind_group: Option<(BufferId, BindGroup)>,
 }
 
 impl Default for CompositeUniformsMeta {
@@ -81,6 +92,9 @@ impl Default for CompositeUniformsMeta {
         uniforms.set_label(Some("ui_layer_composite_uniforms"));
         Self {
             uniforms,
+            staged: Vec::new(),
+            uploaded: Vec::new(),
+            offsets: Vec::new(),
             bind_group: None,
         }
     }
@@ -105,7 +119,7 @@ impl<P: PhaseItem, const I: usize> RenderCommand<P> for SetCompositeUniforms<I> 
         let Some(batch) = batch else {
             return RenderCommandResult::Skip;
         };
-        let Some(bind_group) = &meta.into_inner().bind_group else {
+        let Some((_, bind_group)) = &meta.into_inner().bind_group else {
             return RenderCommandResult::Failure("composite uniforms bind group missing");
         };
         pass.set_bind_group(I, bind_group, &[batch.uniform_offset]);

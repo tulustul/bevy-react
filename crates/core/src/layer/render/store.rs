@@ -275,13 +275,50 @@ impl PassBindGroups {
     }
 }
 
+/// Marker on a layer's persistent synthetic capture-view entity
+/// ([`LayerEntities::view`]) — scopes the in-place `ExtractedView` update
+/// query in `extract_ui_layers` to our views.
+#[derive(Component)]
+pub struct LayerCaptureView;
+
+/// A layer's **persistent** render-world entities, spawned when the layer is
+/// first extracted and despawned when it stops being extracted (demote,
+/// despawn, inactive camera). Formerly all three were `TemporaryRenderEntity`
+/// respawns every frame — at hundreds of cached layers that was ~5 archetype
+/// moves per layer per frame plus Bevy's temporary-entity teardown
+/// (`despawn_temporary_render_entities`, ~0.2 ms at 500 layers), paid even
+/// when nothing about the layer changed.
+pub struct LayerEntities {
+    /// The synthetic capture view. Carries an `ExtractedView` **only while
+    /// the layer re-captures** ([`Self::view_extracted`]): `prepare_view_uniforms`
+    /// writes a `ViewUniform` for every `ExtractedView` entity each frame,
+    /// and a cached layer never renders its phase, so its view would only
+    /// cost. The component is inserted/removed on dirt flips and updated in
+    /// place (compare-before-write) while present.
+    pub view: Entity,
+    /// Whether [`Self::view`] currently carries an `ExtractedView`.
+    pub view_extracted: bool,
+    /// The composite quad; spawned with a default
+    /// [`LayerCompositeBatch`](super::LayerCompositeBatch) that
+    /// `prepare_layer_composites` overwrites through a query (a quad that
+    /// stages nothing keeps a stale batch, harmlessly — its phase item's
+    /// `batch_range` stays `0..0`, and empty ranges are never drawn).
+    pub quad: Entity,
+    /// The backdrop composite quad, present iff the layer had a
+    /// `backdropFilter` chain when last extracted.
+    pub backdrop_quad: Option<Entity>,
+}
+
 /// Persistent (cross-frame) capture textures, keyed by layer root — the
 /// resource that makes capture caching possible. Slots are allocated /
 /// reallocated by [`prepare_layer_textures`] and evicted a few frames after
-/// their layer disappears (demote, despawn).
+/// their layer disappears (demote, despawn). Also home to each layer's
+/// persistent render entities ([`LayerEntities`], maintained by
+/// `extract_ui_layers` — they exist before the slot does).
 #[derive(Resource, Default)]
 pub struct LayerTextureStore {
     pub slots: HashMap<MainEntity, LayerSlot>,
+    pub entities: HashMap<MainEntity, LayerEntities>,
     pub frame: u64,
 }
 

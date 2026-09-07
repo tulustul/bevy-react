@@ -82,20 +82,21 @@ fn sd_rounded_box(point: vec2<f32>, size: vec2<f32>, corner_radii: vec4<f32>) ->
 
 @vertex
 fn vertex(
-    @location(0) position: vec3<f32>,
+    @location(0) position: vec2<f32>,
     @location(1) uv: vec2<f32>,
     @location(2) alpha: f32,
 ) -> VertexOutput {
     var out: VertexOutput;
-    // Positions are physical screen px; the model matrix is the layer's 3D
-    // transform in that same space (identity when untransformed). `w` is kept
-    // REAL through the projection — that is what buys perspective-correct UV
-    // interpolation — but `z` is flattened post-transform: the phase's view
-    // (the stock UI view, or an outer layer's capture view) projects with a
-    // near plane at the UI plane, and a rotated quad's depth excursions would
-    // otherwise be depth-clipped. Flattening is exactly the CSS projective
-    // flatten — the homography lives entirely in xy/w.
-    let world = params.model * vec4(position, 1.0);
+    // Positions are physical screen px in the UI plane (z = 0); the model
+    // matrix is the layer's 3D transform in that same space (identity when
+    // untransformed). `w` is kept REAL through the projection — that is what
+    // buys perspective-correct UV interpolation — but `z` is flattened
+    // post-transform: the phase's view (the stock UI view, or an outer
+    // layer's capture view) projects with a near plane at the UI plane, and a
+    // rotated quad's depth excursions would otherwise be depth-clipped.
+    // Flattening is exactly the CSS projective flatten — the homography lives
+    // entirely in xy/w.
+    let world = params.model * vec4(position, 0.0, 1.0);
     out.position = view.clip_from_world * vec4(world.xy, 0.0, world.w);
     out.uv = uv;
     out.alpha = alpha;
