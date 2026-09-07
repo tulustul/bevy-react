@@ -162,8 +162,9 @@ pub struct BenchStep {
 
 /// React → Bevy: the app finished committing the last step. `js_ms` is the time it
 /// spent in `setState` + the synchronous reconciler commit (this includes
-/// `flush_ms`); `flush_ms` is just the `op_flush` native call — i.e. the `serde_v8`
-/// decode of the op batch at the boundary. The op count is read Bevy-side from
+/// `flush_ms`); `flush_ms` is just the `op_flush` native call — i.e. the
+/// `JSON.stringify` of the op batch + its `serde_json` decode at the boundary.
+/// The op count is read Bevy-side from
 /// [`OpApplyStats`] (React doesn't see the flushed batch size).
 #[react_message(name = "bench.stepDone")]
 pub struct StepDone {
@@ -289,7 +290,8 @@ struct Sample {
     rows: u32,
     total_ms: f64,
     js_ms: f64,
-    /// `op_flush` native call = `serde_v8` decode of the batch (subset of `js_ms`).
+    /// `op_flush` native call = `JSON.stringify` + `serde_json` decode of the
+    /// batch (subset of `js_ms`).
     flush_ms: f64,
     /// Diagnostic: `apply_start - t0` (event-send → `apply_js_ops` begins).
     pre_apply_ms: f64,
@@ -765,7 +767,7 @@ fn render_markdown(report: &Report) -> String {
     );
     let _ = writeln!(
         out,
-        "| **Flush** | The `op_flush` native call alone = `serde_v8` decode of the batch. Subset of **JS**. |"
+        "| **Flush** | The `op_flush` native call alone = `JSON.stringify` of the batch + its `serde_json` decode. Subset of **JS**. |"
     );
     let _ = writeln!(
         out,

@@ -9,7 +9,6 @@ use serde::de::{self, Deserializer, MapAccess, Visitor};
 use crate::canvas::DrawCmd;
 
 use super::NodeId;
-use super::de_map::PresentKeys;
 use super::props::Props;
 
 /// A single mutation produced by the React reconciler during a commit. The
@@ -179,14 +178,7 @@ impl<'de> Visitor<'de> for OpVisitor {
                 OpKey::Op => take(&mut tag, map.next_value()?, "op")?,
                 OpKey::Id => take(&mut id, map.next_value()?, "id")?,
                 OpKey::Kind => take(&mut kind, map.next_value()?, "kind")?,
-                // `Props` (and every struct under it) decodes through
-                // `PresentKeys`: the host enumerates the keys the object has
-                // instead of probing all ~40 (+~75 per `Style`) declared fields.
-                OpKey::Props => take(
-                    &mut props,
-                    map.next_value_seed(PresentKeys::seed::<Box<Props>>())?,
-                    "props",
-                )?,
+                OpKey::Props => take(&mut props, map.next_value()?, "props")?,
                 // `Option`: `create` carries `text` optionally (a JSON `null`
                 // reads as absent), the text ops require it.
                 OpKey::Text => {

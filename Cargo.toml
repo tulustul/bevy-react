@@ -18,6 +18,9 @@ bevy = { version = "0.19", features = ["system_clipboard", "custom_cursor"] }
 bytemuck = { version = "1", features = ["derive"] }
 crossbeam-channel = "0.5.15"
 deno_core = "0.404.0"
+# The `JsErrorClass` types deno_core throws into JS (`JsErrorBox`); the version
+# deno_core 0.404 itself depends on.
+deno_error = "0.7"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.150"
 tiny-skia = "0.12"

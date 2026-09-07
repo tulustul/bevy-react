@@ -70,9 +70,9 @@ struct SetFollowMode(bool);
 
 /// React selected (or cleared) a cube from its anchored badge: the entity as
 /// bits, `null` to clear. The selected cube swaps to its emissive material.
-/// The bits cross as an `f64` like `Anchor.entity` does — serde_v8 can't
-/// decode a JS `BigInt` into an integer field, and `Entity::to_bits()` values
-/// are lossless in an `f64` for realistic generations (well under 2^53).
+/// The bits cross as an `f64` like `Anchor.entity` does — the wire carries a
+/// plain JS number, not a `BigInt`, and `Entity::to_bits()` values are lossless
+/// in an `f64` for realistic generations (well under 2^53).
 #[react_message(name = "crowdedCubes.select")]
 struct SelectCube(Option<f64>);
 

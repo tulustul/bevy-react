@@ -12,7 +12,8 @@ import type { CanvasPainter, DrawCmd } from "./canvas";
 //     bundle runs.
 // Same names and signatures both ways, so everything below is host-agnostic.
 interface BevyHost {
-  op_flush(ops: Op[], devtools: boolean): void;
+  /** The op batch, `JSON.stringify`ed (see `flushRaw`). */
+  op_flush(json: string, devtools: boolean): void;
   op_emit(name: string, value: unknown): void;
   op_request(id: bigint, name: string, value: unknown): void;
   op_animate(cmd: AnimationCommand): void;
@@ -307,18 +308,24 @@ export function __installBridgeTap(tap: BridgeTap | null): void {
 // batches from the devtools panel's own React container (and its edit ops), so
 // the recorder can exclude them and the op mirror can attribute node ownership.
 //
-// deno_core deserializes the arg (serde_v8: v8 -> Vec<Op>) synchronously as part
-// of this call; a malformed op throws a TypeError HERE and the whole batch is
-// lost (Bevy never sees it) — callers sending hand-built ops (devtools edits)
-// must flush them in isolation inside try/catch so an invalid value can never
-// eat React's own pending ops. The timing stash on `__bevyReactFlush` captures
-// serde-decode + the (near-free) channel send for benchmark hosts.
+// The batch crosses as ONE JSON string: the engine's native `JSON.stringify`
+// plus a single linear `serde_json` parse on the Rust side is a fraction of the
+// cost of a host-side object walk (serde_v8 / serde_wasm_bindgen pay per-property
+// API traffic for every key of every op). `JSON.stringify` drops `undefined`
+// props and `null`s NaN/Infinity, exactly like the object walk treated them;
+// nothing in an `Op` is a BigInt (entities cross as numbers — see
+// `packAnchorProps`). Rust decodes synchronously as part of this call; a
+// structurally malformed op throws a TypeError HERE and the whole batch is lost
+// (Bevy never sees it) — callers sending hand-built ops (devtools edits) must
+// flush them in isolation inside try/catch so an invalid value can never eat
+// React's own pending ops. The timing stash on `__bevyReactFlush` captures
+// stringify + decode + the (near-free) channel send for benchmark hosts.
 export function flushRaw(batch: Op[], devtools = false): void {
   if (batch.length === 0) return;
   const t0 = nowMs();
   // The flag crosses the bridge with the ops, so Rust can attribute the apply
   // (devtools batch-stats skip the panel's own commits — no self-observation).
-  ops.op_flush(batch, devtools);
+  ops.op_flush(JSON.stringify(batch), devtools);
   (
     globalThis as { __bevyReactFlush?: { ms: number; ops: number } }
   ).__bevyReactFlush = {
@@ -620,10 +627,10 @@ function serializePropInto(
 // Package an `<anchor>` element's flat `entity`/`offset`/`scale` props into the
 // single opaque `anchor` object the wire carries (the renderer calls this for
 // both the create and update prop bags, so delta diffs compare packed forms).
-// The entity crosses as a plain number: `op_flush`'s serde_v8 can't decode a
-// struct `u64` field from either a JS number (f64) or a BigInt, so the Rust
-// `Anchor.entity` is an `f64` — lossless for realistic `Entity::to_bits()`
-// values (well under 2^53) — and cast back to the entity id on apply.
+// The entity crosses as a plain number: the op wire is JSON (no BigInt —
+// `JSON.stringify` throws on one), so the Rust `Anchor.entity` is an `f64` —
+// lossless for realistic `Entity::to_bits()` values (well under 2^53) — and
+// cast back to the entity id on apply.
 export function packAnchorProps(
   props: Record<string, unknown>,
 ): Record<string, unknown> {

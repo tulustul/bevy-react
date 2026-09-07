@@ -1,9 +1,10 @@
 //! The wire protocol shared between the JS reconciler and the Bevy side.
 //!
-//! Everything here derives `serde` so deno_core's `serde_v8` can convert
-//! directly between the plain JS objects the reconciler builds and these Rust
-//! types — no JSON strings on the hot path. Ops only ever flow JS -> Rust, so
-//! they need `Deserialize` only; `UiEvent` flows Rust -> JS and is `Serialize`.
+//! Everything here derives `serde`. Ops only ever flow JS -> Rust — as ONE
+//! `JSON.stringify`ed batch per commit, decoded with `serde_json` (see
+//! `js_thread::op_flush` for why that beats a per-property `serde_v8` walk) —
+//! so they need `Deserialize` only; `UiEvent` flows Rust -> JS (via `serde_v8`
+//! natively) and is `Serialize`.
 //!
 //! Wire strings are decoded **once, here at the serde boundary** — never
 //! re-parsed on apply. The unit-bearing types (`Length`/`Angle`/`Time`/
@@ -22,7 +23,6 @@
 
 pub mod animatable;
 pub mod background_image;
-pub(crate) mod de_map;
 pub mod grid;
 pub mod keywords;
 mod merge;

@@ -1,5 +1,6 @@
 //! Headless end-to-end check of the decode-warning path through the REAL
-//! deno_core runtime (serde_v8, not serde_json): a flushed batch with invalid
+//! deno_core runtime and the real `op_flush` (one JSON string in, `serde_json`
+//! decode behind the op — the production wire): a flushed batch with invalid
 //! style values must decode without dropping ops, collect per-op-attributed
 //! [`bevy_react` diag] warnings, and hand them back through the
 //! `op_take_decode_warnings` op — the exact sequence the devtools bridge tap
@@ -23,12 +24,12 @@ use bevy_react::{RawRequest, ReactMessage};
 /// over the emit channel.
 const APP: &str = r#"
 const ops = Deno.core.ops;
-ops.op_flush([
+ops.op_flush(JSON.stringify([
   { op: "create", id: 1, kind: "node", props: { style: { width: "aa16" } } },
   { op: "append", parent: 0, child: 1 },
   { op: "update", id: 2, props: { style: { display: "flexx", padding: "1px bogus" } } },
   { op: "update", id: 3, props: { style: { backgroundImage: { src: "x.png", mode: "tile" } } } },
-], false);
+]), false);
 ops.op_emit("decodeWarnings", ops.op_take_decode_warnings());
 "#;
 
@@ -105,7 +106,7 @@ fn decode_warnings_round_trip() {
             (Some(2), "rect", "bogus"),
             (Some(3), "backgroundImage", "tile"),
         ],
-        "serde_v8 decode must attribute each warning to its op's node"
+        "the op decode must attribute each warning to its op's node"
     );
     eprintln!("PASS decode warnings end-to-end: {brief:?}");
 }

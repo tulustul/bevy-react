@@ -223,7 +223,7 @@ export function App() {
     pendingRef.current = null;
     const ms = now() - startRef.current;
     if (p.driven) {
-      // The bridge stashes the last commit's op_flush (serde-decode) time.
+      // The bridge stashes the last commit's op_flush (stringify + decode) time.
       const flush = (globalThis as { __bevyReactFlush?: { ms: number } })
         .__bevyReactFlush;
       emit("bench.stepDone", { js_ms: ms, flush_ms: flush?.ms ?? 0 });

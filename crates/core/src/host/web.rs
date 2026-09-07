@@ -84,19 +84,27 @@ pub(crate) fn spawn(app: &mut App, _config: HostConfig, senders: HostSenders) ->
 fn install_host_object() -> Object {
     let host = Object::new();
 
-    // op_flush(ops, devtools): JS → Bevy, a commit's worth of mutation ops,
-    // flagged with its origin (the panel's own container vs the app). The flag
-    // is sent first so the aligned FIFOs never desync (see `FlushFlags`).
-    let flush = Closure::<dyn Fn(JsValue, JsValue)>::new(|ops: JsValue, devtools: JsValue| {
+    // op_flush(json, devtools): JS → Bevy, a commit's worth of mutation ops as
+    // ONE `JSON.stringify`ed batch (same wire as the native host — see
+    // `js_thread::op_flush`), flagged with its origin (the panel's own container
+    // vs the app). The flag is sent first so the aligned FIFOs never desync
+    // (see `FlushFlags`). A structurally invalid batch throws into the JS call
+    // (native semantics: `bridge.ts` isolates hand-built devtools edits on it);
+    // value-level fallbacks only warn (see `crate::diag`).
+    let flush = Closure::<dyn Fn(JsValue, JsValue)>::new(|json: JsValue, devtools: JsValue| {
+        let Some(json) = json.as_string() else {
+            wasm_bindgen::throw_str("op_flush: expected the op batch as a JSON string");
+        };
         // `OpBatch` decodes exactly like `Vec<Op>` but stamps decode-fallback
         // warnings with their op's node id (see `crate::diag`).
-        match serde_wasm_bindgen::from_value::<OpBatch>(ops) {
-            Ok(batch) => with_host(|h| {
-                let _ = h.flush_devtools.send(devtools.as_bool().unwrap_or(false));
-                let _ = h.ops.send(batch.0);
-            }),
-            Err(e) => error(&format!("op_flush decode: {e}")),
-        }
+        let batch = match serde_json::from_str::<OpBatch>(&json) {
+            Ok(batch) => batch,
+            Err(e) => wasm_bindgen::throw_str(&format!("op_flush decode: {e}")),
+        };
+        with_host(|h| {
+            let _ = h.flush_devtools.send(devtools.as_bool().unwrap_or(false));
+            let _ = h.ops.send(batch.0);
+        });
     });
     set_method(&host, "op_flush", flush.as_ref());
     flush.forget();

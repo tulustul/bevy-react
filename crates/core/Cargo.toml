@@ -81,6 +81,7 @@ uuid = { workspace = true }
 # a tokio current-thread runtime. Neither builds for wasm.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 deno_core = { workspace = true }
+deno_error = { workspace = true }
 tokio = { workspace = true }
 
 # Web host: React runs in the browser's own engine, reached over wasm-bindgen.

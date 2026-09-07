@@ -73,7 +73,7 @@ export function AnchorDemo() {
   const toggleSelect = (entity: bigint) => {
     const next = selected === entity ? null : entity;
     setSelected(next);
-    // Entity bits cross as a plain number (serde_v8 rejects BigInt payloads;
+    // Entity bits cross as a plain number (the wire rejects BigInt payloads;
     // lossless under 2^53 — the same convention as `<anchor entity>`).
     bevy.crowdedCubes.select(next === null ? null : Number(next));
   };

@@ -60,7 +60,7 @@ All timings are the **median (p50)** over the samples, in **milliseconds**.
 | **Total**       | End-to-end wall time, event trigger → post-layout on the frame the batch applied. Equals `Pre-apply + Translate + Bevy`.             |
 | **Pre-apply**   | Trigger → Bevy starts applying the batch. Covers the JS round-trip + inter-thread scheduling. Contains **JS**.                       |
 | **JS**          | React reconcile + build the op batch + the `op_flush` call (measured on the JS thread). Subset of **Pre-apply**; contains **Flush**. |
-| **Flush**       | The `op_flush` native call alone = `serde_v8` decode of the batch. Subset of **JS**.                                                 |
+| **Flush**       | The `op_flush` native call alone = `JSON.stringify` of the batch + its `serde_json` decode. Subset of **JS**.                        |
 | **Translate**   | `apply_js_ops` walks the op batch → queues ECS commands (Bevy side).                                                                 |
 | **Command**     | Execute the queued ECS commands + UI prepare/content, before layout.                                                                 |
 | **Layout**      | `bevy_ui` layout: taffy solve + transform/clip propagation.                                                                          |

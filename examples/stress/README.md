@@ -82,8 +82,9 @@ race never inflates them) plus a per-leg breakdown (each a
 `{p50,p99,mean,min,max}`):
 
 - `jsMs` — React reconcile + build the op array + the serde decode (JS thread).
-- `flushMs` — the `op_flush` native call alone = `serde_v8` decode of the op
-  batch at the boundary. A **subset of `jsMs`**; `jsMs − flushMs` ≈ React work.
+- `flushMs` — the `op_flush` native call alone = `JSON.stringify` of the op
+  batch + its `serde_json` decode at the boundary. A **subset of `jsMs`**;
+  `jsMs − flushMs` ≈ React work.
 - `translateMs` — walk the ops → queue ECS commands (`apply_js_ops` body).
 - `commandMs` — execute the commands (spawn entities / insert components /
   hierarchy) + UI prepare/content, up to layout.

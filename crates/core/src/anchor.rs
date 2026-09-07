@@ -18,8 +18,8 @@ use serde::Deserialize;
 #[serde(rename_all = "camelCase")]
 pub struct Anchor {
     /// The target entity's `Entity::to_bits()` value, sent from React. Carried as
-    /// `f64` because `op_flush`'s serde_v8 can't decode a struct `u64` field from a
-    /// JS number or BigInt; lossless for realistic ids (well under 2^53).
+    /// `f64` because it crosses as a plain JS number (the op wire is JSON, which
+    /// has no BigInt); lossless for realistic ids (well under 2^53).
     pub entity: f64,
     /// World-space offset added to the target's translation before projecting.
     #[serde(default)]

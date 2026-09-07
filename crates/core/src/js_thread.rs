@@ -16,6 +16,7 @@ use std::rc::Rc;
 use bevy::log::{debug, error, info, warn};
 use crossbeam_channel::Sender;
 use deno_core::{Extension, JsRuntime, OpDecl, OpState, RuntimeOptions, op2};
+use deno_error::JsErrorBox;
 use tokio::sync::Mutex;
 use tokio::sync::Notify;
 use tokio::sync::mpsc::UnboundedReceiver;
@@ -70,20 +71,32 @@ struct ReloadFlag(Rc<Cell<bool>>);
 struct ReloadNotify(Rc<Notify>);
 
 /// JS -> Bevy: ship one commit's worth of mutation ops. Synchronous.
+///
+/// The batch crosses as ONE JSON string (`JSON.stringify` in `bridge.ts`'s
+/// `flushRaw`, `serde_json` here) rather than a `serde_v8` object walk: V8's
+/// native stringify plus one linear parse costs a fraction of the per-property
+/// v8 API traffic (key interning, `Get`s, type probes) a serde_v8 decode of the
+/// same tree pays — measured 60-75% off the boundary cost of every batch op.
 /// `devtools` marks batches from the panel's own React container (see
 /// [`FlushDevtoolsSender`]). The [`OpBatch`] wrapper decodes exactly like a
 /// `Vec<Op>` but stamps any decode-fallback warnings with their op's node id
-/// (see [`crate::diag`]); [`op_take_decode_warnings`] drains them.
-#[op2]
-fn op_flush(state: &mut OpState, #[serde] ops: OpBatch, devtools: bool) {
-    // Stamp + flag first (see `FlushStampSender`): the serde_v8 decode of `ops`
-    // already happened, so the stamp marks pure channel-entry time.
+/// (see [`crate::diag`]); [`op_take_decode_warnings`] drains them. Those are
+/// value-level fallbacks; a *structurally* invalid batch is a `TypeError`
+/// thrown into the JS call, which `bridge.ts` relies on to isolate a hand-built
+/// (devtools edit) op without losing React's own pending ops.
+#[op2(fast)]
+fn op_flush(state: &mut OpState, #[string] json: &str, devtools: bool) -> Result<(), JsErrorBox> {
+    let ops: OpBatch =
+        serde_json::from_str(json).map_err(|e| JsErrorBox::type_error(e.to_string()))?;
+    // Stamp + flag first (see `FlushStampSender`): the decode of `ops` already
+    // happened, so the stamp marks pure channel-entry time.
     let stamp = state.borrow::<FlushStampSender>();
     let _ = stamp.0.send(std::time::Instant::now());
     let flag = state.borrow::<FlushDevtoolsSender>();
     let _ = flag.0.send(devtools);
     let sender = state.borrow::<OpSender>();
     let _ = sender.0.send(ops.0);
+    Ok(())
 }
 
 /// JS -> Bevy(-side state): drain the invalid-value warnings collected while

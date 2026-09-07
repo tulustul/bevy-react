@@ -68,8 +68,8 @@ export interface LogEntry {
   devtools: boolean;
   /** Rust render timings ("ops" entries only; attached when reported). */
   stats?: BatchTimings;
-  /** This flush's `op_flush` boundary cost — serde_v8 decode + channel send
-   *  ("ops" entries only). */
+  /** This flush's `op_flush` boundary cost — `JSON.stringify` + serde_json
+   *  decode + channel send ("ops" entries only). */
   flushMs?: number;
   /** Handler + synchronous React render/commit time of the event wrap that
    *  produced this flush, minus the flush costs inside it. Absent for commits

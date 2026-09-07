@@ -178,7 +178,7 @@ function makeSharedValue(id: number, initial: number): SharedValue {
 }
 
 /** Copy a driver tree without its JS-only `callback` fields (the wire shape
- *  must stay JSON-pure for `serde_v8`). Only the top-level callback is honored
+ *  must stay JSON-pure for the wire). Only the top-level callback is honored
  *  (extracted by the caller before this walk); a nested one is dropped with a
  *  warning — this engine reports the settlement of the *assigned* driver, not
  *  of every stage inside it. */
