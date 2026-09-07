@@ -337,8 +337,11 @@ pub fn drive_render_targets(
 ///
 /// Scheduled in `PostUpdate` after bevy_ui's layout + clipping and bevy's
 /// visibility propagation, so the gate reads **this frame's** geometry and
-/// visibility, and before extraction reads `is_active` — a portal that becomes
-/// visible renders the same frame. [`register`](RenderTargets::register)ed
+/// visibility, and before bevy's view culling (`CheckVisibility`) and directional
+/// shadow cascade build (`UpdateDirectionalLightCascades`), which only prepare
+/// cameras that are already `is_active` — a camera activated after them has no
+/// cascades for extraction to read (`prepare_lights` panics) and no visible
+/// entities. So a portal that becomes visible renders, fully, the same frame. [`register`](RenderTargets::register)ed
 /// app-owned entries are Snapshot + never dirty: untouched.
 pub fn drive_portal_cameras(
     mut targets: ResMut<RenderTargets>,

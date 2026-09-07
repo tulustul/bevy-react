@@ -968,16 +968,35 @@ impl Plugin for ReactUiPlugin {
         );
         // `<portal>`/`<surface>` camera activity, from THIS frame's visibility:
         // after bevy_ui layout + clipping (a `display: none` or scrolled-away
-        // portal is empty/clipped) and after visibility propagation + culling
-        // (hidden subtrees; culled surface meshes), before extraction reads
-        // `Camera::is_active` — a portal that becomes visible renders the same
-        // frame, and a hidden one skips its whole camera pass.
+        // portal is empty/clipped) and after visibility propagation (hidden
+        // subtrees), before extraction reads `Camera::is_active` — a portal that
+        // becomes visible renders the same frame, and a hidden one skips its
+        // whole camera pass.
+        //
+        // A portal camera is a 3D view, and bevy prepares a 3D view's per-frame
+        // data only while `is_active` is already set: `CheckVisibility` fills its
+        // `VisibleEntities`, and `bevy_light`'s `UpdateDirectionalLightCascades`
+        // builds the shadow cascades `prepare_lights` later `unwrap`s per
+        // extracted view. Activating a camera AFTER those ran hands extraction
+        // an active view with no cascade entry — a panic in
+        // `bevy_pbr::render::light::prepare_lights` — so the portal gate must
+        // flip `is_active` BEFORE both. Only `InheritedVisibility` (propagation)
+        // and layout feed the gate, so nothing later is needed. Cascades order
+        // after `CameraUpdateSystems` only; the explicit `before` is required.
         app.add_systems(
             PostUpdate,
-            (
-                crate::portal::drive_portal_cameras,
-                crate::surface::drive_surfaces,
-            )
+            crate::portal::drive_portal_cameras
+                .after(bevy::ui::UiSystems::PostLayout)
+                .after(bevy::camera::visibility::VisibilitySystems::VisibilityPropagate)
+                .before(bevy::camera::visibility::VisibilitySystems::CheckVisibility)
+                .before(bevy::light::SimulationLightSystems::UpdateDirectionalLightCascades),
+        );
+        // A surface camera is a 2D UI view (no cascades, no `VisibleEntities`
+        // culling), and its gate reads the `ViewVisibility` of the meshes that
+        // display it — so it stays after culling + newly-hidden marking.
+        app.add_systems(
+            PostUpdate,
+            crate::surface::drive_surfaces
                 .after(bevy::ui::UiSystems::PostLayout)
                 .after(bevy::camera::visibility::VisibilitySystems::VisibilityPropagate)
                 .after(

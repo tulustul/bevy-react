@@ -341,7 +341,8 @@ pub fn bind_surfaces(
 /// Scheduled in `PostUpdate` after bevy's visibility culling (`ViewVisibility` is
 /// this frame's) and before extraction reads `is_active`, so a screen that scrolls
 /// back into a frustum renders the same frame. Mirrors the portal module's
-/// `drive_portal_cameras`. Also despawns the camera of a surface that has been
+/// `drive_portal_cameras`, which (unlike this 2D UI camera) must run before
+/// culling and the shadow cascade build. Also despawns the camera of a surface that has been
 /// [`remove`](Surfaces::remove)d, so a torn-down surface (e.g. on a scene switch)
 /// leaves no orphan camera rendering into a freed texture.
 pub fn drive_surfaces(
