@@ -25,9 +25,8 @@
 
 #import bevy_react::filter::{
     FullscreenVertexOutput,
-    capture_texture,
-    source_sampler,
-    source_texture,
+    sample_capture,
+    sample_source,
     uniforms,
 }
 
@@ -36,12 +35,12 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     if uniforms.params[0].w < 0.5 {
         // PREP: offset + tint the alpha silhouette.
         let offset = uniforms.params[1].xy * uniforms.texel_size;
-        let silhouette = textureSample(source_texture, source_sampler, in.uv - offset).a;
+        let silhouette = sample_source(in.uv - offset).a;
         let color = uniforms.params[2];
         return vec4<f32>(color.rgb * color.a, color.a) * silhouette;
     }
     // COMBINE: original content over the blurred shadow.
-    let content = textureSample(capture_texture, source_sampler, in.uv);
-    let shadow = textureSample(source_texture, source_sampler, in.uv);
+    let content = sample_capture(in.uv);
+    let shadow = sample_source(in.uv);
     return content + shadow * (1.0 - content.a);
 }

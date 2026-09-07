@@ -38,6 +38,20 @@ pub trait ReactFilter: Send + Sync + Sized + 'static {
     /// keep the default.
     const IS_MORPH: bool = false;
 
+    /// Whether the pass shader reads its inputs **only** through the
+    /// prelude's sampling helpers (`sample_source`/`sample_capture`/
+    /// `morph_sample_*` and their `_lod` variants — never a raw
+    /// `textureSample` on `source_texture`/`capture_texture`). The helpers
+    /// remap image-normalized UVs onto the texture the image actually lives
+    /// in, which lets the engine hand such a filter **bucket-allocated**
+    /// textures (a size-animating layer keeps its textures across frames
+    /// instead of reallocating capture + ping-pongs on every 1 px change;
+    /// see `layer::render::store`). A raw lookup would read the transparent
+    /// padding, so the default is `false`: the layer's textures stay
+    /// exactly image-sized and a shader that samples by hand is never handed
+    /// padding. Every built-in opts in.
+    const SAMPLES_VIA_PRELUDE: bool = false;
+
     /// The params JSON of this filter's **identity** invocation (no visual
     /// effect), if it has one — brightness/contrast/saturate `amount: 1`,
     /// grayscale/sepia/invert `amount: 0` (their identity is `0`, NOT the
@@ -205,6 +219,9 @@ pub struct FilterRegistration {
     /// Mirrors [`ReactFilter::IS_MORPH`] — which family the name belongs to
     /// (regular chains vs `morphFilter`).
     pub(crate) is_morph: bool,
+    /// Mirrors [`ReactFilter::SAMPLES_VIA_PRELUDE`] — whether a chain using
+    /// this filter may run over bucket-allocated (padded) textures.
+    pub(crate) samples_via_prelude: bool,
     /// Mirrors [`ReactFilter::identity_params`] — `None` means the filter has
     /// no identity and cannot pad a chain extension (see
     /// [`plan_filter_ease`](crate::filters::plan_filter_ease)).
@@ -372,6 +389,7 @@ impl FilterRegistry {
                 outset: |value| decode_params::<T>(value)?.outset(),
                 uses_time: T::USES_TIME,
                 is_morph: T::IS_MORPH,
+                samples_via_prelude: T::SAMPLES_VIA_PRELUDE,
                 identity: T::identity_params,
                 // `T` is concrete here, so its TS shape is baked into these
                 // fns (the same split as `EventRegistration`).

@@ -40,7 +40,7 @@
 // `alpha * k` (a white light scaled by coverage — transparent texels stay
 // transparent), and the result is clamped to `rgb <= alpha`.
 
-#import bevy_react::filter::{FullscreenVertexOutput, content_rect_min, content_rect_size, source_sampler, source_texture, uniforms}
+#import bevy_react::filter::{FullscreenVertexOutput, content_rect_min, content_rect_size, sample_source, uniforms}
 
 // Light elevation above the surface plane; 45° reads as a soft key light.
 // (`sin`/`cos` of it, precomputed — WGSL consts can't call builtins.)
@@ -115,7 +115,7 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     let factor = 1.0 + strength * profile;
 
     let sample_px = center_px + offset * factor;
-    let color = textureSample(source_texture, source_sampler, sample_px * uniforms.texel_size);
+    let color = sample_source(sample_px * uniforms.texel_size);
 
     // --- Lighting -----------------------------------------------------------
     // Height field z(dist) = -strength * DEPTH * radius_px * profile(u)

@@ -22,9 +22,8 @@
 
 #import bevy_react::filter::{
     FullscreenVertexOutput,
-    capture_texture,
-    source_sampler,
-    source_texture,
+    sample_capture,
+    sample_source,
     uniforms,
 }
 
@@ -38,13 +37,13 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
         // bright-LOOKING UI colors sit surprisingly low — so the cut is on
         // PERCEPTUAL luminance (gamma 2.2 encode): threshold 0.7 blooms what
         // reads as bright, 1 blooms nothing, 0 blooms everything.
-        let c = textureSample(source_texture, source_sampler, in.uv);
+        let c = sample_source(in.uv);
         let lum_linear = dot(c.rgb, vec3<f32>(0.2126, 0.7152, 0.0722));
         let lum = pow(max(lum_linear, 0.0), 1.0 / 2.2);
         return c * (max(lum - threshold, 0.0) / max(lum, 1e-4));
     }
     // COMBINE: original + intensity × blurred bright-pass.
-    let orig = textureSample(capture_texture, source_sampler, in.uv);
-    let glow = textureSample(source_texture, source_sampler, in.uv);
+    let orig = sample_capture(in.uv);
+    let glow = sample_source(in.uv);
     return clamp(orig + glow * intensity, vec4<f32>(0.0), vec4<f32>(1.0));
 }

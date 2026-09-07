@@ -123,6 +123,7 @@ impl ShadowParams {
 
 impl ReactFilter for ShadowParams {
     const NAME: &'static str = "shadow";
+    const SAMPLES_VIA_PRELUDE: bool = true;
 
     fn shader(assets: &AssetServer) -> Handle<Shader> {
         load_embedded_asset!(assets, "shadow.wgsl")

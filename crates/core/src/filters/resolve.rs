@@ -114,6 +114,11 @@ pub struct ResolvedFilterChain {
     /// True when any pass's filter `USES_TIME` — the layer must re-render
     /// every frame.
     pub always_dirty: bool,
+    /// True when EVERY pass's filter [`SAMPLES_VIA_PRELUDE`](crate::filters::ReactFilter::SAMPLES_VIA_PRELUDE)
+    /// — the layer's textures may then be bucket-allocated (larger than the
+    /// image, see `layer::render::store`); one hand-sampling filter in the
+    /// chain pins the layer to exact image-sized textures.
+    pub bucketable: bool,
     /// Bumped (wrapping — it is a pure change signal, only inequality
     /// matters) on every real change so downstream caches can detect it.
     /// Writer registry — exactly three systems bump this counter, and every
@@ -199,6 +204,7 @@ pub fn resolve_chains<I: ChainInput, R: ResolvedChain>(
         let mut passes: Vec<ResolvedFilterPass> = Vec::new();
         let mut outset_px = 0u32;
         let mut always_dirty = I::FORCE_ALWAYS_DIRTY;
+        let mut bucketable = true;
         for (index, fu) in input.chain().0.iter().enumerate() {
             let Some(reg) = registry.entries.get(fu.name.as_str()) else {
                 crate::diag::report(
@@ -248,6 +254,7 @@ pub fn resolve_chains<I: ChainInput, R: ResolvedChain>(
                 .saturating_add((outset.max(0.0) * scale).ceil() as u32)
                 .min(MAX_FILTER_OUTSET_PX);
             always_dirty |= reg.uses_time;
+            bucketable &= reg.samples_via_prelude;
             stamp_and_push(resolved, index, scale, &mut passes);
         }
 
@@ -265,6 +272,7 @@ pub fn resolve_chains<I: ChainInput, R: ResolvedChain>(
                 if chain.passes == passes
                     && chain.outset_px == outset_px
                     && chain.always_dirty == always_dirty
+                    && chain.bucketable == bucketable
                 {
                     // Identical output — keep version + dirt quiet, but track
                     // the scale so a mismatch doesn't re-resolve every frame.
@@ -277,6 +285,7 @@ pub fn resolve_chains<I: ChainInput, R: ResolvedChain>(
                     passes,
                     outset_px,
                     always_dirty,
+                    bucketable,
                     version: chain.version.wrapping_add(1),
                     scale,
                 };
@@ -289,6 +298,7 @@ pub fn resolve_chains<I: ChainInput, R: ResolvedChain>(
                         passes,
                         outset_px,
                         always_dirty,
+                        bucketable,
                         version: 1,
                         scale,
                     }));

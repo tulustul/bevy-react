@@ -49,6 +49,7 @@ macro_rules! color_matrix_filters {
 
         impl ReactFilter for $ty {
             const NAME: &'static str = $name;
+            const SAMPLES_VIA_PRELUDE: bool = true;
 
             fn shader(assets: &AssetServer) -> Handle<Shader> {
                 color_matrix_shader(assets)
@@ -111,6 +112,7 @@ pub struct HueRotateParams {
 
 impl ReactFilter for HueRotateParams {
     const NAME: &'static str = "hueRotate";
+    const SAMPLES_VIA_PRELUDE: bool = true;
 
     fn shader(assets: &AssetServer) -> Handle<Shader> {
         color_matrix_shader(assets)

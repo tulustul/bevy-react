@@ -105,6 +105,7 @@ impl OutlineParams {
 
 impl ReactFilter for OutlineParams {
     const NAME: &'static str = "outline";
+    const SAMPLES_VIA_PRELUDE: bool = true;
 
     fn shader(assets: &AssetServer) -> Handle<Shader> {
         load_embedded_asset!(assets, "outline.wgsl")

@@ -13,8 +13,7 @@
 
 #import bevy_react::filter::{
     FullscreenVertexOutput,
-    source_sampler,
-    source_texture,
+    sample_source,
     uniforms,
 }
 
@@ -27,7 +26,7 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     let radius = uniforms.params[0].x;
     let dir = uniforms.params[0].yz;
     if radius <= 0.0 {
-        return textureSample(source_texture, source_sampler, in.uv);
+        return sample_source(in.uv);
     }
     // One tap per px of radius up to the cap, so samples stay dense; past the
     // cap the taps spread (`span` px apart) and bilinear filtering smooths
@@ -46,7 +45,7 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
         let d = f32(i) * span; // px distance from center
         let w = exp(-(d * d) / two_sigma2);
         let uv = in.uv + dir * uniforms.texel_size * d;
-        sum = sum + textureSample(source_texture, source_sampler, uv) * w;
+        sum = sum + sample_source(uv) * w;
         wsum = wsum + w;
     }
     return sum / wsum;

@@ -78,16 +78,19 @@ pub struct ExtractedMorph {
 /// extracted morph disappears (settle, unset, demote).
 pub struct MorphSlot {
     /// The frozen "from" pixels, layout-anchored: the blend stretches them
-    /// onto the current capture rect (0..1 UV over both textures). `None` =
+    /// onto the current capture rect (image UV over both textures). `None` =
     /// nothing valid to freeze existed (startup) — the pass degrades to a
     /// self-blend of the live capture.
-    pub snapshot: Option<CachedTexture>,
+    pub snapshot: Option<MorphSnapshot>,
     /// The blend target (`RENDER_ATTACHMENT | TEXTURE_BINDING`), allocated
-    /// at the capture's size + format and re-allocated when they change
+    /// at the capture's extent + format and re-allocated when they change
     /// (its content is rewritten every in-flight frame anyway).
     pub blend: CachedTexture,
-    /// The blend's allocation key.
-    pub blend_size: UVec2,
+    /// The blend's allocation key (the slot's `alloc`).
+    pub blend_alloc: UVec2,
+    /// The image size the blend was last rendered at (the slot's `size` of
+    /// that frame) — the geometry an interrupt freeze steals it with.
+    pub blend_image: UVec2,
     /// The last consumed [`ExtractedMorph::freeze_seq`].
     pub seen_seq: u64,
     /// The staged chain version (warn re-arm only; see
@@ -111,14 +114,25 @@ pub struct MorphSlot {
     pub pass_bind_group: PassBindGroups,
 }
 
+/// A stolen texture and the image geometry it was rendered with: the pixels
+/// occupy its top-left `image` texels (a bucket-allocated texture is larger),
+/// which the blend pass needs to stretch the image onto the current rect.
+pub struct MorphSnapshot {
+    pub texture: CachedTexture,
+    pub image: UVec2,
+}
+
 /// Consume a new `freeze_seq`: steal the pixels currently on screen as the
 /// snapshot and reset the slot's morph state around it. MUST run before the
-/// caller's realloc branch — the steal reads the pre-realloc textures — and
-/// the caller must preserve `slot.morph` across that realloc.
+/// caller's realloc branch AND before its image-size update — the steal
+/// reads the pre-realloc textures with last frame's image geometry — and the
+/// caller must preserve `slot.morph` across that realloc. `wanted`/`alloc`
+/// are this frame's image size and (final) allocation, for the blend target.
 pub fn freeze_morph_snapshot(
     slot: &mut LayerSlot,
     layer: &ExtractedLayer,
     wanted: UVec2,
+    alloc: UVec2,
     render_device: &RenderDevice,
 ) {
     let Some(morph) = &layer.morph else {
@@ -134,7 +148,10 @@ pub fn freeze_morph_snapshot(
     let snapshot = match slot.morph.take() {
         // Interrupt: the previous blend holds the in-flight mix that is on
         // screen right now — exactly what the restarted morph eases FROM.
-        Some(prev) if prev.output_valid => Some(prev.blend),
+        Some(prev) if prev.output_valid => Some(MorphSnapshot {
+            texture: prev.blend,
+            image: prev.blend_image,
+        }),
         _ => {
             if slot.content_valid {
                 // Plain freeze: the capture holds last frame's appearance.
@@ -144,7 +161,7 @@ pub fn freeze_morph_snapshot(
                 let (fresh, fresh_mips) = alloc_capture_texture(
                     render_device,
                     "ui_layer_capture",
-                    slot.size,
+                    slot.alloc,
                     slot.format,
                     slot.mips.is_some(),
                 );
@@ -154,7 +171,10 @@ pub fn freeze_morph_snapshot(
                 slot.bind_group = None;
                 slot.bind_group_mips = None;
                 slot.content_valid = false;
-                Some(stolen)
+                Some(MorphSnapshot {
+                    texture: stolen,
+                    image: slot.size,
+                })
             } else {
                 // Nothing valid on screen (startup): degrade to a self-blend.
                 None
@@ -164,14 +184,15 @@ pub fn freeze_morph_snapshot(
     let (blend, _) = alloc_capture_texture(
         render_device,
         "ui_layer_morph_blend",
-        wanted,
+        alloc,
         layer.target_format,
         false,
     );
     slot.morph = Some(MorphSlot {
         snapshot,
         blend,
-        blend_size: wanted,
+        blend_alloc: alloc,
+        blend_image: wanted,
         seen_seq: morph.freeze_seq,
         params_version: 0,
         output_valid: false,
@@ -182,34 +203,37 @@ pub fn freeze_morph_snapshot(
     });
 }
 
-/// Post-realloc maintenance: clear the slot when the morph ended, and track
-/// the capture size with the blend target (a mid-flight resize re-allocates
-/// the blend only — the snapshot survives untouched).
+/// Post-realloc maintenance (after the slot's image size update): clear the
+/// slot when the morph ended, track the capture allocation with the blend
+/// target (a mid-flight realloc re-allocates the blend only — the snapshot
+/// survives untouched), and record the image size this frame's blend
+/// renders at.
 pub fn maintain_morph_blend(
     slot: &mut LayerSlot,
     layer: &ExtractedLayer,
-    wanted: UVec2,
     render_device: &RenderDevice,
 ) {
     if layer.morph.is_none() {
         slot.morph = None;
         return;
     }
-    if let Some(morph) = slot.morph.as_mut()
-        && morph.blend_size != wanted
-    {
+    let Some(morph) = slot.morph.as_mut() else {
+        return;
+    };
+    if morph.blend_alloc != slot.alloc {
         let (blend, _) = alloc_capture_texture(
             render_device,
             "ui_layer_morph_blend",
-            wanted,
+            slot.alloc,
             layer.target_format,
             false,
         );
         morph.blend = blend;
-        morph.blend_size = wanted;
+        morph.blend_alloc = slot.alloc;
         morph.output_valid = false;
         morph.composite_bind_group = None;
     }
+    morph.blend_image = slot.size;
 }
 
 /// Per-frame morph staging, index-aligned with
@@ -327,6 +351,14 @@ pub fn prepare_layer_morphs(
             // The blend target is capture-sized, so it carries the same
             // inflation as the content chain.
             content_inset: Vec2::splat(layer.outset as f32),
+            // Binding 3 = the snapshot, frozen with its own image geometry
+            // (the prelude stretches it onto the current rect from this);
+            // the self-blend degrade binds the live capture — same image.
+            from_image_size: morph
+                .snapshot
+                .as_ref()
+                .map_or(resolution, |s| s.image.as_vec2()),
+            pad_b: Vec2::ZERO,
             params: morph_engine_params(&extracted_morph.pass.params, extracted_morph.progress),
         });
         staged.push((idx, id, offset));
@@ -349,6 +381,7 @@ pub fn prepare_layer_morphs(
             continue;
         };
         let live_view = &slot.texture.default_view;
+        let viewport = slot.image_viewport();
         let Some(morph) = slot.morph.as_mut() else {
             continue;
         };
@@ -358,7 +391,7 @@ pub fn prepare_layer_morphs(
         let from_view = morph
             .snapshot
             .as_ref()
-            .map_or(live_view, |s| &s.default_view);
+            .map_or(live_view, |s| &s.texture.default_view);
         let key = PassBindKey {
             source: live_view.id(),
             capture: from_view.id(),
@@ -383,6 +416,7 @@ pub fn prepare_layer_morphs(
                 uniform_offset,
                 target: morph.blend.default_view.clone(),
             }],
+            viewport,
         });
     }
 
@@ -446,6 +480,9 @@ pub fn run_morph_passes(
             occlusion_query_set: None,
             multiview_mask: None,
         });
+        if let Some(image) = run.viewport {
+            super::set_image_viewport(&mut pass, image);
+        }
         pass.set_render_pipeline(pipeline);
         pass.set_bind_group(0, &pass_data.bind_group, &[pass_data.uniform_offset]);
         pass.draw(0..3, 0..1);

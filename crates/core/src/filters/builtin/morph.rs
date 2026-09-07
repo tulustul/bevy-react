@@ -109,6 +109,7 @@ fn crossfade_layout() -> Arc<[ParamSlot]> {
 
 impl ReactFilter for CrossfadeParams {
     const NAME: &'static str = "crossfade";
+    const SAMPLES_VIA_PRELUDE: bool = true;
     const IS_MORPH: bool = true;
 
     fn shader(assets: &AssetServer) -> Handle<Shader> {
@@ -196,6 +197,7 @@ fn linear_wipe_layout() -> Arc<[ParamSlot]> {
 
 impl ReactFilter for LinearWipeParams {
     const NAME: &'static str = "linearWipe";
+    const SAMPLES_VIA_PRELUDE: bool = true;
     const IS_MORPH: bool = true;
 
     fn shader(assets: &AssetServer) -> Handle<Shader> {

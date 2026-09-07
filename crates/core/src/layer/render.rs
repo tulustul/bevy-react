@@ -136,6 +136,9 @@ pub struct ExtractedChain {
     /// Mirrors [`ResolvedFilterChain::always_dirty`] (time-driven filters
     /// re-run every frame).
     pub always_dirty: bool,
+    /// Mirrors [`ResolvedFilterChain::bucketable`] (every pass samples via
+    /// the prelude helpers, so padded textures are safe).
+    pub bucketable: bool,
 }
 
 /// Map a main-world resolved chain into its render-side [`ExtractedChain`].
@@ -169,6 +172,7 @@ fn extract_chain(chain: Option<&ResolvedFilterChain>) -> Option<ExtractedChain> 
                 .collect(),
             version: chain.version,
             always_dirty: chain.always_dirty,
+            bucketable: chain.bucketable,
         })
 }
 
@@ -241,6 +245,14 @@ pub struct ExtractedLayer {
     /// animated frame. Trilinear sampling itself engages only when
     /// [`Self::transform3d`] is `Some` AND the chain is valid.
     pub wants_mips: bool,
+    /// Whether the layer's textures may be **bucket-allocated** (larger than
+    /// the image, see [`store`]): no mip chain (mips downsample the padding
+    /// into the image's edge), and every chain that samples them — content,
+    /// backdrop, and the morph chain whenever one is resolved (a freeze
+    /// steals the capture as the morph's input) — is
+    /// [`bucketable`](ExtractedChain::bucketable). A flip reallocates (and
+    /// re-captures) like a mip-state flip.
+    pub bucketable: bool,
     /// The layer's in-flight morph, if any (an active
     /// [`crate::filters::MorphState`] + a resolved single-pass morph chain).
     /// Drives the freeze/steal in `prepare_layer_textures` and the blend
@@ -415,17 +427,22 @@ pub fn extract_ui_layers(
         phases.prepare_for_new_frame(retained);
 
         let wants_mips = promoted.reasons.0 & crate::layer::PromotionReasons::TRANSFORM3D != 0;
+        let bucketable = !wants_mips
+            && filter_chain.is_none_or(|c| c.bucketable)
+            && backdrop.is_none_or(|b| b.0.bucketable)
+            && morph_chain.is_none_or(|m| m.0.bucketable);
         // Cache decision: re-capture on main-world dirt, or when the persistent
-        // slot can't serve (first frame, resize realloc, format flip, or a
-        // mip-state flip — the fresh mipped/unmipped texture needs content).
+        // slot can't serve (first frame, a size change — the image is
+        // re-laid-out even when the allocation still fits —, or a realloc:
+        // outgrown allocation, format flip, or a mip-state flip — the fresh
+        // texture needs content).
         let cached_ok = store
             .slots
             .get(&MainEntity::from(root))
             .is_some_and(|slot| {
                 slot.content_valid
                     && slot.size == size
-                    && slot.format == target_format
-                    && slot.mips.is_some() == wants_mips
+                    && !slot.needs_realloc(size, target_format, wants_mips, bucketable)
             });
         let needs_capture = !cached_ok || repaints.dirty.contains(&root);
 
@@ -480,6 +497,7 @@ pub fn extract_ui_layers(
             // untransformed layer (CPU clip path), and picking stays inert.
             transform3d: transform3d.filter(|m| !m.identity).map(|m| m.model),
             wants_mips,
+            bucketable,
             fallback_sort_key: morph
                 .as_ref()
                 .and(stack_index)
@@ -823,6 +841,9 @@ pub fn prepare_layer_composites(
         let Some(slot) = store.slots.get_mut(&layer.main_entity) else {
             continue;
         };
+        // Every texture the quad may sample (capture, filter output, blend)
+        // holds the layer's image in its top-left `slot.size` texels.
+        let image_size = slot.size.as_vec2();
         // Pick the quad's source: the raw capture, or — for a filtered
         // layer — the final filter pass's ping-pong output.
         let bind_group = if layer.chain.is_some() {
@@ -1042,7 +1063,7 @@ pub fn prepare_layer_composites(
                 clip_max: clip_rect.map_or(open_max, |r| r.max),
                 edge_feather: feather,
                 pad_a: 0.0,
-                pad_b: Vec2::ZERO,
+                image_size,
                 // Content quads never round: the capture already holds the
                 // node's own rounded paint. Zero radii disable the mask.
                 radius: Vec4::ZERO,
@@ -1075,6 +1096,7 @@ pub fn prepare_layer_composites(
         let Some(slot) = store.slots.get_mut(&layer.main_entity) else {
             continue;
         };
+        let image_size = slot.size.as_vec2();
         let Some(backdrop_slot) = slot.backdrop.as_mut() else {
             continue;
         };
@@ -1130,7 +1152,7 @@ pub fn prepare_layer_composites(
                 clip_max: open_max,
                 edge_feather: 0.0,
                 pad_a: 0.0,
-                pad_b: Vec2::ZERO,
+                image_size,
                 // Frost is masked to the node's rounded border box; the radii
                 // are the layout-resolved ones bevy_ui paints with, so the
                 // frost edge coincides with the panel's own rounded edge.
@@ -1382,12 +1404,12 @@ pub type DrawLayerComposite = (
 
 /// The Rust mirror of the prelude's `FilterUniforms`
 /// (`layer/filter_prelude.wgsl`) — one entry per staged filter pass in
-/// [`LayerFilterMeta::uniforms`]. The explicit `pad_a` field reproduces the
-/// WGSL uniform-address-space layout byte for byte (160 bytes total; asserted
-/// by `filter_uniforms_match_the_documented_wgsl_layout`). The digit-free
-/// `pad_a` name is load-bearing on the WGSL side: naga's namer appends `_` to
-/// identifiers ending in a digit, which naga_oil rejects in composable
-/// modules — and the mirror matches field for field.
+/// [`LayerFilterMeta::uniforms`]. The explicit pad fields reproduce the WGSL
+/// uniform-address-space layout byte for byte (176 bytes total; asserted by
+/// `filter_uniforms_match_the_documented_wgsl_layout`). The digit-free
+/// `pad_a`/`pad_b` names are load-bearing on the WGSL side: naga's namer
+/// appends `_` to identifiers ending in a digit, which naga_oil rejects in
+/// composable modules — and the mirror matches field for field.
 #[derive(Clone, Copy, ShaderType)]
 pub struct FilterUniforms {
     /// Seconds since startup (render-world `Time`), for `USES_TIME` filters.
@@ -1402,6 +1424,13 @@ pub struct FilterUniforms {
     /// ([`ExtractedLayer::outset`], splatted). Lets a shader anchor geometry
     /// to the node rect (prelude `content_uv`) inside the inflated capture.
     pub content_inset: Vec2,
+    /// The image size (physical px) of the texture at binding 3
+    /// (`capture_texture`): `resolution` for content and backdrop passes; a
+    /// morph pass binds the frozen snapshot there, whose image was captured
+    /// at its own size (prelude `from_image_size` — the sampling helpers
+    /// remap onto a bucket-allocated texture from it).
+    pub from_image_size: Vec2,
+    pub pad_b: Vec2,
     /// The packed filter params ([`ExtractedFilterPass::params`]).
     pub params: [Vec4; MAX_FILTER_PARAM_VECS],
 }
@@ -1615,6 +1644,20 @@ pub struct LayerFilterPass {
 /// A layer's staged filter run this frame.
 pub struct LayerFilterRun {
     pub passes: Vec<LayerFilterPass>,
+    /// `Some(image size)` when the pass targets are bucket-allocated (larger
+    /// than the image): every pass sets this viewport + scissor so the
+    /// fullscreen triangle covers exactly the image and `uv` spans it
+    /// ([`LayerSlot::image_viewport`]). `None` = the full target.
+    pub viewport: Option<UVec2>,
+}
+
+/// Restrict a pass writing a bucket-allocated texture to its top-left
+/// `image`-texel sub-rect: the viewport maps clip space onto the image (the
+/// fullscreen triangle's `uv` then spans exactly the image), the scissor
+/// keeps stray fragments out of the padding.
+pub(super) fn set_image_viewport(pass: &mut TrackedRenderPass, image: UVec2) {
+    pass.set_viewport(0.0, 0.0, image.x as f32, image.y as f32, 0.0, 1.0);
+    pass.set_scissor_rect(0, 0, image.x, image.y);
 }
 
 /// Per-frame filter staging: the uniform buffer (one entry per staged pass)
@@ -1681,8 +1724,8 @@ pub fn prepare_layer_filters(
         let Some(slot) = store.slots.get_mut(&layer.main_entity) else {
             continue;
         };
-        // Uniforms describe the pass targets, which share the capture's
-        // (clamped) size.
+        // Uniforms describe the IMAGE the pass targets share with the
+        // capture (`resolution`); the targets themselves may be larger.
         let size = slot.size;
         let Some(filter) = slot.filter.as_mut() else {
             continue;
@@ -1734,6 +1777,9 @@ pub fn prepare_layer_filters(
                 resolution,
                 texel_size,
                 content_inset: Vec2::splat(layer.outset as f32),
+                // Binding 3 is the capture (or the blend), same image.
+                from_image_size: resolution,
+                pad_b: Vec2::ZERO,
                 params: pass.params,
             });
             passes.push(StagedPass {
@@ -1769,6 +1815,7 @@ pub fn prepare_layer_filters(
             .morph
             .as_ref()
             .map_or(&slot.texture.default_view, |m| &m.blend.default_view);
+        let viewport = slot.image_viewport();
         let Some(filter) = slot.filter.as_mut() else {
             continue;
         };
@@ -1809,7 +1856,7 @@ pub fn prepare_layer_filters(
                 }
             })
             .collect();
-        runs[idx] = Some(LayerFilterRun { passes });
+        runs[idx] = Some(LayerFilterRun { passes, viewport });
     }
 
     // Phase 3: predict execution and mark outputs valid. Mirrors the
@@ -1921,6 +1968,14 @@ pub fn ui_layer_capture_pass(
                 occlusion_query_set: None,
                 multiview_mask: None,
             });
+            // A bucket-allocated texture: the synthetic view's ortho maps the
+            // capture rect onto clip space, so the viewport places the image
+            // 1:1 in the texture's top-left `size` texels (the clear above
+            // still wipes the whole attachment — the padding stays
+            // transparent).
+            if let Some(image) = atlases.viewports.get(idx).copied().flatten() {
+                set_image_viewport(&mut pass, image);
+            }
             if let Err(err) = phase.render(&mut pass, world, layer.view_entity) {
                 bevy::log::error!("layer capture pass failed: {err:?}");
             }
@@ -1968,6 +2023,9 @@ pub fn ui_layer_capture_pass(
                         occlusion_query_set: None,
                         multiview_mask: None,
                     });
+                    if let Some(image) = run.viewport {
+                        set_image_viewport(&mut pass, image);
+                    }
                     pass.set_render_pipeline(pipeline);
                     pass.set_bind_group(0, &pass_data.bind_group, &[pass_data.uniform_offset]);
                     pass.draw(0..3, 0..1);
@@ -2018,13 +2076,13 @@ mod tests {
         f32::from_le_bytes(bytes[offset..offset + 4].try_into().unwrap())
     }
 
-    /// The Rust mirror must reproduce the prelude's documented 160-byte
+    /// The Rust mirror must reproduce the prelude's documented 176-byte
     /// uniform layout exactly (`layer/filter_prelude.wgsl`): time@0,
-    /// resolution@8, texel_size@16, content_inset@24, params@32 (stride 16),
-    /// total 160.
+    /// resolution@8, texel_size@16, content_inset@24, from_image_size@32,
+    /// pad_b@40, params@48 (stride 16), total 176.
     #[test]
     fn filter_uniforms_match_the_documented_wgsl_layout() {
-        assert_eq!(FilterUniforms::min_size().get(), 160);
+        assert_eq!(FilterUniforms::min_size().get(), 176);
 
         let mut params = [Vec4::ZERO; MAX_FILTER_PARAM_VECS];
         params[0] = Vec4::new(1.0, 2.0, 3.0, 4.0);
@@ -2035,12 +2093,14 @@ mod tests {
             resolution: Vec2::new(320.0, 240.0),
             texel_size: Vec2::new(0.5, 0.25),
             content_inset: Vec2::new(9.0, 9.5),
+            from_image_size: Vec2::new(300.0, 200.0),
+            pad_b: Vec2::ZERO,
             params,
         };
         let mut buffer = UniformBuffer::new(Vec::<u8>::new());
         buffer.write(&value).expect("uniform write");
         let bytes = buffer.into_inner();
-        assert_eq!(bytes.len(), 160);
+        assert_eq!(bytes.len(), 176);
         // Per-field offsets, per the prelude's comment block.
         assert_eq!(f32_at(&bytes, 0), 1.5); // time
         assert_eq!(f32_at(&bytes, 8), 320.0); // resolution.x
@@ -2049,10 +2109,12 @@ mod tests {
         assert_eq!(f32_at(&bytes, 20), 0.25); // texel_size.y
         assert_eq!(f32_at(&bytes, 24), 9.0); // content_inset.x
         assert_eq!(f32_at(&bytes, 28), 9.5); // content_inset.y
-        assert_eq!(f32_at(&bytes, 32), 1.0); // params[0].x
-        assert_eq!(f32_at(&bytes, 44), 4.0); // params[0].w
-        assert_eq!(f32_at(&bytes, 32 + 7 * 16), 5.0); // params[7].x
-        assert_eq!(f32_at(&bytes, 32 + 7 * 16 + 12), 8.0); // params[7].w
+        assert_eq!(f32_at(&bytes, 32), 300.0); // from_image_size.x
+        assert_eq!(f32_at(&bytes, 36), 200.0); // from_image_size.y
+        assert_eq!(f32_at(&bytes, 48), 1.0); // params[0].x
+        assert_eq!(f32_at(&bytes, 60), 4.0); // params[0].w
+        assert_eq!(f32_at(&bytes, 48 + 7 * 16), 5.0); // params[7].x
+        assert_eq!(f32_at(&bytes, 48 + 7 * 16 + 12), 8.0); // params[7].w
     }
 
     /// The re-run decision, exhaustively: any of "capture re-rendered",

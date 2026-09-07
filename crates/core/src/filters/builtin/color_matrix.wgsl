@@ -15,8 +15,7 @@
 #import bevy_react::filter::{
     FullscreenVertexOutput,
     premultiply,
-    source_sampler,
-    source_texture,
+    sample_source,
     uniforms,
     unpremultiply,
 }
@@ -40,7 +39,7 @@ fn hue_rotate(rgb: vec3<f32>, angle: f32) -> vec3<f32> {
 fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     let color = uniforms.params[0];
     let color2 = uniforms.params[1];
-    let texel = unpremultiply(textureSample(source_texture, source_sampler, in.uv));
+    let texel = unpremultiply(sample_source(in.uv));
     var rgb = texel.rgb;
 
     // Fixed canonical order: brightness → contrast → saturate → grayscale →

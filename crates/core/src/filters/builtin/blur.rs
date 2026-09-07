@@ -53,6 +53,7 @@ fn blur_layout() -> Arc<[ParamSlot]> {
 
 impl ReactFilter for BlurParams {
     const NAME: &'static str = "blur";
+    const SAMPLES_VIA_PRELUDE: bool = true;
 
     fn shader(assets: &AssetServer) -> Handle<Shader> {
         load_embedded_asset!(assets, "blur.wgsl")

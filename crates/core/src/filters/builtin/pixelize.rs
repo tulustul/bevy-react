@@ -71,6 +71,7 @@ fn pixelize_layout() -> Arc<[ParamSlot]> {
 
 impl ReactFilter for PixelizeParams {
     const NAME: &'static str = "pixelize";
+    const SAMPLES_VIA_PRELUDE: bool = true;
     const IS_MORPH: bool = true;
 
     fn shader(assets: &AssetServer) -> Handle<Shader> {

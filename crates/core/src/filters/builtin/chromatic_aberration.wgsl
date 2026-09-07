@@ -32,8 +32,7 @@
     FullscreenVertexOutput,
     content_rect_min,
     content_rect_size,
-    source_sampler,
-    source_texture,
+    sample_source,
     uniforms,
 }
 
@@ -61,8 +60,8 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     // the angle); B mirrors it. All three samples are unconditional (uniform
     // control flow); at offset 0 + rotation 0 they coincide and the pass is
     // an identity.
-    let r = textureSample(source_texture, source_sampler, r_uv - offset);
-    let g = textureSample(source_texture, source_sampler, in.uv);
-    let b = textureSample(source_texture, source_sampler, b_uv + offset);
+    let r = sample_source(r_uv - offset);
+    let g = sample_source(in.uv);
+    let b = sample_source(b_uv + offset);
     return vec4<f32>(r.r, g.g, b.b, max(r.a, max(g.a, b.a)));
 }

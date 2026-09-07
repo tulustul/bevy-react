@@ -16,7 +16,7 @@
 
 #import bevy_react::filter::{
     FullscreenVertexOutput, content_rect_size, content_uv, premultiply,
-    source_sampler, source_texture, uniforms, unpremultiply,
+    sample_source, uniforms, unpremultiply,
 }
 
 fn stop_position(index: i32) -> f32 {
@@ -33,7 +33,7 @@ fn stop_position(index: i32) -> f32 {
 
 @fragment
 fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
-    let src = textureSample(source_texture, source_sampler, in.uv);
+    let src = sample_source(in.uv);
     let amount = uniforms.params[7].w;
     if amount <= 0.0 {
         // Exact identity — the transition-padding contract (`amount: 0`).

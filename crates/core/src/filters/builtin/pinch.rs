@@ -211,6 +211,7 @@ fn pinch_layout() -> Arc<[ParamSlot]> {
 
 impl ReactFilter for PinchParams {
     const NAME: &'static str = "pinch";
+    const SAMPLES_VIA_PRELUDE: bool = true;
 
     fn shader(assets: &AssetServer) -> Handle<Shader> {
         load_embedded_asset!(assets, "pinch.wgsl")

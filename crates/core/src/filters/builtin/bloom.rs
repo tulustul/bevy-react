@@ -98,6 +98,7 @@ fn bloom_layout() -> Arc<[ParamSlot]> {
 
 impl ReactFilter for BloomParams {
     const NAME: &'static str = "bloom";
+    const SAMPLES_VIA_PRELUDE: bool = true;
 
     fn shader(assets: &AssetServer) -> Handle<Shader> {
         load_embedded_asset!(assets, "bloom.wgsl")

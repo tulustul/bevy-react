@@ -25,6 +25,9 @@ use super::{ExtractedUiLayers, mips};
 #[derive(Resource, Default)]
 pub struct LayerAtlases {
     pub textures: Vec<CachedTexture>,
+    /// Index-aligned with `textures`: the viewport the capture pass must set
+    /// for a bucket-allocated texture ([`LayerSlot::image_viewport`]).
+    pub viewports: Vec<Option<UVec2>>,
 }
 
 /// One layer's persistent capture texture. Unlike Bevy's `TextureCache`
@@ -38,7 +41,17 @@ pub struct LayerSlot {
     /// filter-pass sources (level-0, 1:1 contract), and the bilinear
     /// composite bind group (can never accidentally sample a stale mip).
     pub texture: CachedTexture,
+    /// The IMAGE size: the layer's capture rect in texels, refreshed every
+    /// frame. The pixels occupy the top-left `size` of every texture in the
+    /// slot; the composite and the filter prelude sample only that sub-rect.
     pub size: UVec2,
+    /// The textures' real extent, `>= size`. Equal to `size` for a layer
+    /// that isn't [`bucketable`](super::ExtractedLayer::bucketable); a
+    /// bucketable layer allocates in [`BUCKET_PX`] steps with shrink slack
+    /// ([`alloc_fits`]), so a size-animating layer keeps its textures — and
+    /// every bind group built over their views — across 1 px changes instead
+    /// of reallocating capture + ping-pongs each frame.
+    pub alloc: UVec2,
     pub format: TextureFormat,
     /// Composite bind group, built lazily and kept until realloc (per-frame
     /// bind-group creation is real cost at hundreds of layers).
@@ -80,6 +93,65 @@ pub struct LayerSlot {
     /// morph disappears.
     pub morph: Option<super::morph::MorphSlot>,
     pub last_seen: u64,
+}
+
+impl LayerSlot {
+    /// Whether this slot's textures must be re-created for a layer that now
+    /// wants `wanted` texels in `format` (mipped or not, bucketable or not).
+    /// Shared by extraction (its `cached_ok` must mirror the realloc key —
+    /// a fresh texture needs a capture) and [`prepare_layer_textures`].
+    pub fn needs_realloc(
+        &self,
+        wanted: UVec2,
+        format: TextureFormat,
+        mipped: bool,
+        bucketable: bool,
+    ) -> bool {
+        self.format != format
+            || self.mips.is_some() != mipped
+            || !alloc_fits(self.alloc, wanted, bucketable)
+    }
+
+    /// The viewport a pass writing this slot's image must set: `Some(image
+    /// size)` when the textures are larger than the image (top-left
+    /// anchored), `None` when they are exactly image-sized (full target).
+    pub fn image_viewport(&self) -> Option<UVec2> {
+        (self.alloc != self.size).then_some(self.size)
+    }
+}
+
+/// Texture allocation granularity (px per side) for bucketable layers.
+pub const BUCKET_PX: u32 = 32;
+/// How far above `bucket_size(wanted)` a bucketed allocation may stay before
+/// a *shrinking* layer reallocates: two buckets, so a size oscillation
+/// spanning up to 64 px (crossing at most two bucket boundaries) settles on
+/// one allocation after its first growth.
+const SHRINK_SLACK_PX: u32 = 2 * BUCKET_PX;
+
+/// `wanted` rounded up to whole buckets (at least one).
+pub fn bucket_size(wanted: UVec2) -> UVec2 {
+    let round_up = |v: u32| v.max(1).div_ceil(BUCKET_PX) * BUCKET_PX;
+    UVec2::new(round_up(wanted.x), round_up(wanted.y))
+}
+
+/// Whether an existing allocation of `alloc` texels can keep serving a layer
+/// that wants `wanted`: exact match for non-bucketable layers; for bucketable
+/// ones, large enough and not more than [`SHRINK_SLACK_PX`] over the bucket.
+pub fn alloc_fits(alloc: UVec2, wanted: UVec2, bucketable: bool) -> bool {
+    if bucketable {
+        alloc.cmpge(wanted).all() && alloc.cmple(bucket_size(wanted) + SHRINK_SLACK_PX).all()
+    } else {
+        alloc == wanted
+    }
+}
+
+/// The extent to allocate for a layer wanting `wanted` texels.
+pub fn alloc_for(wanted: UVec2, bucketable: bool) -> UVec2 {
+    if bucketable {
+        bucket_size(wanted)
+    } else {
+        wanted
+    }
 }
 
 /// A layer's persistent filter-pass resources: two same-size ping-pong
@@ -232,6 +304,7 @@ pub fn prepare_layer_textures(
     mut atlases: ResMut<LayerAtlases>,
 ) {
     atlases.textures.clear();
+    atlases.viewports.clear();
     let store = &mut *store;
     store.frame += 1;
     let frame = store.frame;
@@ -241,46 +314,65 @@ pub fn prepare_layer_textures(
             alloc_layer_slot(
                 &render_device,
                 wanted,
+                alloc_for(wanted, layer.bucketable),
                 layer.target_format,
                 layer.wants_mips,
             )
         });
+        // Decide this frame's allocation up front: the morph freeze below
+        // allocates its blend target at the final extent.
+        let realloc = slot.needs_realloc(
+            wanted,
+            layer.target_format,
+            layer.wants_mips,
+            layer.bucketable,
+        );
+        let alloc = if realloc {
+            alloc_for(wanted, layer.bucketable)
+        } else {
+            slot.alloc
+        };
         // Morph freeze first: a new `freeze_seq` steals the pixels currently
         // on screen (the capture, or an interrupted morph's blend) BEFORE
-        // the realloc below would drop them.
-        super::morph::freeze_morph_snapshot(slot, layer, wanted, &render_device);
-        if slot.size != wanted
-            || slot.format != layer.target_format
-            || slot.mips.is_some() != layer.wants_mips
-        {
-            // Resize / format / mip-state flip: fresh texture, and the stale
-            // bind group dies with the slot — as does the filter state
-            // (`filter: None`), which re-allocates at the new size just
-            // below. Extraction already flagged `needs_capture` (its
-            // `cached_ok` mirrors this key). The morph state is the one
-            // survivor: its frozen snapshot must outlive the union-rect
-            // resize (the blend re-allocates below).
+        // the realloc below would drop them — and before the image size
+        // update, so the stolen texture's image geometry is last frame's.
+        super::morph::freeze_morph_snapshot(slot, layer, wanted, alloc, &render_device);
+        if realloc {
+            // Outgrown allocation / format / mip-state flip: fresh texture,
+            // and the stale bind group dies with the slot — as does the
+            // filter state (`filter: None`), which re-allocates at the new
+            // extent just below. Extraction already flagged `needs_capture`
+            // (its `cached_ok` mirrors this key via `needs_realloc`). The
+            // morph state is the one survivor: its frozen snapshot must
+            // outlive the resize (the blend re-allocates below).
             let morph = slot.morph.take();
             *slot = alloc_layer_slot(
                 &render_device,
                 wanted,
+                alloc,
                 layer.target_format,
                 layer.wants_mips,
             );
             slot.morph = morph;
         }
+        // The image size tracks the layer every frame; the allocation only
+        // when it stops fitting. A bucketable layer whose size moves within
+        // its allocation keeps textures, bind groups and filter state — the
+        // capture re-renders (extraction saw the size change) but nothing is
+        // re-created.
+        slot.size = wanted;
         // Post-realloc morph maintenance: clear an ended morph, track the
-        // capture size with the blend target.
-        super::morph::maintain_morph_blend(slot, layer, wanted, &render_device);
+        // capture allocation with the blend target.
+        super::morph::maintain_morph_blend(slot, layer, &render_device);
         if layer.chain.is_some() {
-            // Ping-pong textures ride the capture's size + format; a realloc
-            // above reset `filter` to `None`, so this re-allocates them too
-            // (with `output_valid: false` / `params_version: 0` — the staged
-            // run restarts from scratch).
+            // Ping-pong textures ride the capture's extent + format; a
+            // realloc above reset `filter` to `None`, so this re-allocates
+            // them too (with `output_valid: false` / `params_version: 0` —
+            // the staged run restarts from scratch).
             if slot.filter.is_none() {
                 slot.filter = Some(alloc_filter_slot(
                     &render_device,
-                    wanted,
+                    slot.alloc,
                     layer.target_format,
                     layer.wants_mips,
                 ));
@@ -301,7 +393,7 @@ pub fn prepare_layer_textures(
             if slot.backdrop.is_none() {
                 slot.backdrop = Some(super::backdrop::alloc_backdrop_slot(
                     &render_device,
-                    wanted,
+                    slot.alloc,
                     layer.target_format,
                 ));
             }
@@ -334,6 +426,7 @@ pub fn prepare_layer_textures(
         }
         slot.last_seen = frame;
         atlases.textures.push(slot.texture.clone());
+        atlases.viewports.push(slot.image_viewport());
     }
     // Demoted/despawned layers: keep the slot for a short grace (cheap
     // re-promotion churn), then free the texture memory.
@@ -384,17 +477,21 @@ pub(super) fn alloc_capture_texture(
     )
 }
 
+/// A fresh slot holding a `size` image in textures of `alloc` texels
+/// (`alloc >= size`; see [`alloc_for`]).
 fn alloc_layer_slot(
     render_device: &RenderDevice,
     size: UVec2,
+    alloc: UVec2,
     format: TextureFormat,
     mipped: bool,
 ) -> LayerSlot {
     let (texture, mips) =
-        alloc_capture_texture(render_device, "ui_layer_capture", size, format, mipped);
+        alloc_capture_texture(render_device, "ui_layer_capture", alloc, format, mipped);
     LayerSlot {
         texture,
         size,
+        alloc,
         format,
         bind_group: None,
         mips,
@@ -408,22 +505,23 @@ fn alloc_layer_slot(
     }
 }
 
-/// Allocate a layer's two filter ping-pong textures at the capture's size and
-/// format (same-size passes — the prelude documents `uv` as a 1:1 lookup; the
-/// capture format keeps every pass target compatible with the composite).
+/// Allocate a layer's two filter ping-pong textures at the capture's extent
+/// and format (same-extent passes — the prelude's `uv` is a 1:1 lookup over
+/// the shared image rect; the capture format keeps every pass target
+/// compatible with the composite).
 fn alloc_filter_slot(
     render_device: &RenderDevice,
-    size: UVec2,
+    alloc: UVec2,
     format: TextureFormat,
     mipped: bool,
 ) -> FilterSlot {
     // Both ping-pongs get the chain when mipped: either can be the final
     // output on a pass-count parity flip, and that output is what the
     // transformed composite samples trilinearly.
-    let alloc =
-        |label: &'static str| alloc_capture_texture(render_device, label, size, format, mipped);
-    let (ping, ping_mips) = alloc("ui_layer_filter_ping");
-    let (pong, pong_mips) = alloc("ui_layer_filter_pong");
+    let alloc_one =
+        |label: &'static str| alloc_capture_texture(render_device, label, alloc, format, mipped);
+    let (ping, ping_mips) = alloc_one("ui_layer_filter_ping");
+    let (pong, pong_mips) = alloc_one("ui_layer_filter_pong");
     FilterSlot {
         textures: [ping, pong],
         params_version: 0,
@@ -436,5 +534,73 @@ fn alloc_filter_slot(
         mips_valid: false,
         composite_bind_group_mips: None,
         pass_bind_groups: PassBindGroups::default(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Bucket rounding: whole buckets, at least one, exact multiples kept.
+    #[test]
+    fn bucket_size_rounds_up_to_whole_buckets() {
+        assert_eq!(bucket_size(UVec2::new(1, 1)), UVec2::splat(BUCKET_PX));
+        assert_eq!(bucket_size(UVec2::ZERO), UVec2::splat(BUCKET_PX));
+        assert_eq!(bucket_size(UVec2::new(32, 33)), UVec2::new(32, 64));
+        assert_eq!(bucket_size(UVec2::new(213, 150)), UVec2::new(224, 160));
+    }
+
+    /// The fit rule: non-bucketable layers need the exact extent; bucketable
+    /// ones keep an allocation that is large enough and at most two buckets
+    /// over the wanted bucket — so a ±20 px oscillation, after growing once,
+    /// never reallocates again, while a real shrink eventually frees memory.
+    #[test]
+    fn alloc_fits_table() {
+        let exact = |a: (u32, u32), w: (u32, u32)| {
+            alloc_fits(UVec2::new(a.0, a.1), UVec2::new(w.0, w.1), false)
+        };
+        assert!(exact((200, 150), (200, 150)));
+        assert!(!exact((201, 150), (200, 150)), "larger is not exact");
+        assert!(!exact((199, 150), (200, 150)));
+
+        let bucketed = |a: (u32, u32), w: (u32, u32)| {
+            alloc_fits(UVec2::new(a.0, a.1), UVec2::new(w.0, w.1), true)
+        };
+        // Grows only when outgrown…
+        assert!(bucketed((224, 160), (213, 150)));
+        assert!(bucketed((224, 160), (224, 160)));
+        assert!(!bucketed((224, 160), (225, 160)), "one px over the extent");
+        // …and shrinks only past the slack: alloc 256 serves wanted down to
+        // the bucket 192 (192 + 64 = 256), not below.
+        assert!(bucketed((256, 160), (193, 150)));
+        assert!(bucketed((256, 160), (192, 150)));
+        assert!(!bucketed((256, 160), (160, 150)), "bucket 160 + 64 < 256");
+        // The ±20 px stress scenario: 180..220 wide crosses one boundary
+        // (192); alloc 224 (from the top) serves the whole range.
+        for w in 180..=220 {
+            assert!(bucketed((224, 192), (w, 170)), "width {w}");
+        }
+        // A degenerate wanted still fits any allocation ≤ one bucket + slack.
+        assert!(bucketed((32, 32), (1, 1)));
+        assert!(!bucketed((128, 32), (1, 1)));
+    }
+
+    /// `alloc_for` picks the bucket for bucketable layers and the exact
+    /// extent otherwise; the two agree with `alloc_fits` right after.
+    #[test]
+    fn alloc_for_is_a_fit() {
+        for (w, h) in [(1, 1), (31, 33), (200, 150), (1280, 832)] {
+            let wanted = UVec2::new(w, h);
+            for bucketable in [false, true] {
+                let alloc = alloc_for(wanted, bucketable);
+                assert!(alloc.cmpge(wanted).all());
+                assert!(
+                    alloc_fits(alloc, wanted, bucketable),
+                    "{wanted} {bucketable}"
+                );
+            }
+            assert_eq!(alloc_for(wanted, false), wanted);
+            assert_eq!(alloc_for(wanted, true), bucket_size(wanted));
+        }
     }
 }

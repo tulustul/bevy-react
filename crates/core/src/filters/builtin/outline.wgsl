@@ -20,7 +20,7 @@
 // own — no unpremultiply anywhere), and the composite is a premultiplied
 // source-over: src + outline_pm * (1 - src.a).
 
-#import bevy_react::filter::{FullscreenVertexOutput, source_sampler, source_texture, uniforms}
+#import bevy_react::filter::{FullscreenVertexOutput, sample_source, sample_source_lod, uniforms}
 
 const DIRECTION_COUNT: i32 = 16;
 const MAX_RINGS: i32 = 12;
@@ -31,7 +31,7 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     let width = uniforms.params[0].x;
     let softness = uniforms.params[0].y;
     let color = uniforms.params[1];
-    let src = textureSample(source_texture, source_sampler, in.uv);
+    let src = sample_source(in.uv);
     if (width <= 0.0 && softness <= 0.0) || color.a <= 0.0 {
         // Exact identity — the transition-padding contract (`width: 0`).
         return src;
@@ -55,7 +55,7 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
             let offset = vec2<f32>(cos(ang), sin(ang)) * d * uniforms.texel_size;
             // Explicit LOD: `textureSample` needs uniform control flow and
             // the `continue` above breaks it; LOD 0 is exact for 1:1 passes.
-            let tap = textureSampleLevel(source_texture, source_sampler, in.uv + offset, 0.0);
+            let tap = sample_source_lod(in.uv + offset);
             cov = max(cov, tap.a * falloff);
         }
     }

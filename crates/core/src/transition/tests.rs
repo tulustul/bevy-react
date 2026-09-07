@@ -507,6 +507,7 @@ fn filter_param_binding_gates_filter_transition() {
         passes: vec![pass(amount)],
         outset_px: 0,
         always_dirty: false,
+        bucketable: true,
         version: 1,
         scale: 1.0,
     };

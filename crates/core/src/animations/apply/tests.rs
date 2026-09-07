@@ -574,6 +574,7 @@ fn chain(
         passes,
         outset_px: 0,
         always_dirty: false,
+        bucketable: true,
         version: 1,
         scale,
     }

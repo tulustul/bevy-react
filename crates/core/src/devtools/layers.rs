@@ -624,6 +624,7 @@ mod tests {
                     ],
                     outset_px: 26,
                     always_dirty: false,
+                    bucketable: true,
                     version: 1,
                     scale: 2.0,
                 },

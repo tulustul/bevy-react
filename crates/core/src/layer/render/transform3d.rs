@@ -39,7 +39,12 @@ pub struct CompositeUniforms {
     /// clipped edges, where uv-distance feathering would be wrong).
     pub edge_feather: f32,
     pub pad_a: f32,
-    pub pad_b: Vec2,
+    /// The sampled texture's IMAGE size in texels (the layer's
+    /// `LayerSlot::size`): a bucket-allocated texture is larger than the
+    /// image it holds, and the fragment stage rescales + clamps the quad's
+    /// image UVs onto it (see `layer/render/store.rs`). Equal to the texture
+    /// size for exactly-sized layers, where the shader passes UVs through.
+    pub image_size: Vec2,
     /// Rounded-corner mask radii, `[top_left, top_right, bottom_right,
     /// bottom_left]` physical px — the node's layout-resolved
     /// `ComputedNode.border_radius` (already clamped per corner to
@@ -131,7 +136,7 @@ mod tests {
             clip_max: Vec2::new(3.0, 4.0),
             edge_feather: 1.5,
             pad_a: 0.0,
-            pad_b: Vec2::ZERO,
+            image_size: Vec2::new(14.0, 15.0),
             radius: Vec4::new(5.0, 6.0, 7.0, 8.0),
             box_center: Vec2::new(10.0, 11.0),
             box_size: Vec2::new(12.0, 13.0),
@@ -147,6 +152,8 @@ mod tests {
         assert_eq!(f32_at(&bytes, 72), 3.0); // clip_max.x
         assert_eq!(f32_at(&bytes, 76), 4.0); // clip_max.y
         assert_eq!(f32_at(&bytes, 80), 1.5); // edge_feather
+        assert_eq!(f32_at(&bytes, 88), 14.0); // image_size.x
+        assert_eq!(f32_at(&bytes, 92), 15.0); // image_size.y
         assert_eq!(f32_at(&bytes, 96), 5.0); // radius.x (top_left)
         assert_eq!(f32_at(&bytes, 100), 6.0); // radius.y (top_right)
         assert_eq!(f32_at(&bytes, 104), 7.0); // radius.z (bottom_right)

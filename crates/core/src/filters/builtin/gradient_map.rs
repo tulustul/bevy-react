@@ -257,6 +257,7 @@ impl GradientMapParams {
 
 impl ReactFilter for GradientMapParams {
     const NAME: &'static str = "gradientMap";
+    const SAMPLES_VIA_PRELUDE: bool = true;
 
     fn shader(assets: &AssetServer) -> Handle<Shader> {
         load_embedded_asset!(assets, "gradient_map.wgsl")

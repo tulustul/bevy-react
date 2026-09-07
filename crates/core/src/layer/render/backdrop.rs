@@ -84,14 +84,14 @@ pub struct BackdropSlot {
     pub pass_bind_groups: PassBindGroups,
 }
 
-/// Allocate a layer's backdrop slot at the capture's size and format.
+/// Allocate a layer's backdrop slot at the capture's extent and format.
 pub fn alloc_backdrop_slot(
     render_device: &RenderDevice,
-    size: UVec2,
+    alloc: UVec2,
     format: TextureFormat,
 ) -> BackdropSlot {
     let alloc =
-        |label: &'static str| alloc_capture_texture(render_device, label, size, format, false).0;
+        |label: &'static str| alloc_capture_texture(render_device, label, alloc, format, false).0;
     BackdropSlot {
         snapshot: alloc("ui_layer_backdrop_snapshot"),
         textures: [
@@ -197,6 +197,9 @@ pub struct BackdropBlit {
     pub pipeline: CachedRenderPipelineId,
     pub uniform_offset: u32,
     pub target: TextureView,
+    /// Image viewport for a bucket-allocated snapshot (see
+    /// [`LayerFilterRun::viewport`]).
+    pub viewport: Option<UVec2>,
 }
 
 /// Per-frame backdrop staging, index-aligned with
@@ -346,6 +349,9 @@ pub fn prepare_layer_backdrops(
                     // capture rect, so the node rect sits `outset` px in —
                     // same as the content chain.
                     content_inset: Vec2::splat(layer.outset as f32),
+                    // Binding 3 is the snapshot itself — same image.
+                    from_image_size: resolution,
+                    pad_b: Vec2::ZERO,
                     params: pass.params,
                 });
                 (id, offset)
@@ -380,6 +386,7 @@ pub fn prepare_layer_backdrops(
         let Some(slot) = store.slots.get_mut(&layer.main_entity) else {
             continue;
         };
+        let viewport = slot.image_viewport();
         let Some(backdrop) = slot.backdrop.as_mut() else {
             continue;
         };
@@ -429,8 +436,9 @@ pub fn prepare_layer_backdrops(
             pipeline: staged.blit_pipeline,
             uniform_offset: staged.blit_offset,
             target: backdrop.snapshot.default_view.clone(),
+            viewport,
         });
-        runs[idx] = Some(LayerFilterRun { passes });
+        runs[idx] = Some(LayerFilterRun { passes, viewport });
     }
 
     // Phase 3: predict execution. Valid iff the blit AND every chain pass
@@ -526,6 +534,11 @@ pub fn run_backdrop_passes(
             occlusion_query_set: None,
             multiview_mask: None,
         });
+        // Bucket-allocated snapshot: blit into its image sub-rect only (the
+        // triangle's `uv` then spans the image, as the crop math assumes).
+        if let Some(image) = blit.viewport {
+            super::set_image_viewport(&mut pass, image);
+        }
         pass.set_render_pipeline(blit_compiled);
         pass.set_bind_group(0, &blit_bind_group, &[blit.uniform_offset]);
         pass.draw(0..3, 0..1);
@@ -547,6 +560,9 @@ pub fn run_backdrop_passes(
             occlusion_query_set: None,
             multiview_mask: None,
         });
+        if let Some(image) = run.viewport {
+            super::set_image_viewport(&mut pass, image);
+        }
         pass.set_render_pipeline(pipeline);
         pass.set_bind_group(0, &pass_data.bind_group, &[pass_data.uniform_offset]);
         pass.draw(0..3, 0..1);

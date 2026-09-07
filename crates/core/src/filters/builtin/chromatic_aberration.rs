@@ -96,6 +96,7 @@ fn chromatic_aberration_layout() -> Arc<[ParamSlot]> {
 
 impl ReactFilter for ChromaticAberrationParams {
     const NAME: &'static str = "chromaticAberration";
+    const SAMPLES_VIA_PRELUDE: bool = true;
 
     fn shader(assets: &AssetServer) -> Handle<Shader> {
         load_embedded_asset!(assets, "chromatic_aberration.wgsl")

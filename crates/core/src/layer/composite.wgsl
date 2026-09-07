@@ -20,16 +20,20 @@
 
 // Mirrored byte-for-byte by `render/transform3d.rs::CompositeUniforms` (128
 // bytes, guarded by `composite_uniforms_match_the_documented_wgsl_layout`).
-// Offsets: model @0, clip_min @64, clip_max @72, edge_feather @80, radius
-// @96, box_center @112, box_size @120. Pad names are digit-free (naga's
-// namer appends `_` to digit-suffixed identifiers).
+// Offsets: model @0, clip_min @64, clip_max @72, edge_feather @80,
+// image_size @88, radius @96, box_center @112, box_size @120. Pad names are
+// digit-free (naga's namer appends `_` to digit-suffixed identifiers).
 struct CompositeParams {
     model: mat4x4<f32>,
     clip_min: vec2<f32>,
     clip_max: vec2<f32>,
     edge_feather: f32,
     pad_a: f32,
-    pad_b: vec2<f32>,
+    // The sampled texture's IMAGE size in texels: the layer's pixels occupy
+    // its top-left `image_size` — a bucket-allocated texture is larger (see
+    // `layer/render/store.rs`), and `uv` 0..1 spans the image, not the
+    // texture. Equal to the texture size for exactly-sized layers.
+    image_size: vec2<f32>,
     // Rounded-corner mask: per-corner radii [TL, TR, BR, BL] (physical px,
     // the node's layout-resolved values) over the UNCLIPPED border box.
     // All-zero disables the mask (the edge_feather pattern); today only
@@ -138,6 +142,16 @@ fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
     if any(screen < params.clip_min) || any(screen > params.clip_max) {
         discard;
     }
+    // Image UV -> texture UV. A bucketed texture holds the image in its
+    // top-left `image_size` texels with transparent padding beyond, so the
+    // lookup is rescaled and clamped to the image (bilinear footprint kept
+    // inside it — the same result clamp-to-edge gives on an exactly-sized
+    // texture; the edge-AA ring of a transformed quad deliberately samples
+    // past uv 0/1 and relies on that). Exactly-sized textures pass `in.uv`
+    // through untouched — bit-identical to the plain lookup.
+    let texture_size = vec2<f32>(textureDimensions(atlas_texture));
+    let image_px = clamp(in.uv * params.image_size, vec2<f32>(0.5), params.image_size - 0.5);
+    let uv = select(in.uv, image_px / texture_size, any(params.image_size != texture_size));
     // Premultiplied output: coverage multiplies rgb AND a, like the group alpha.
-    return textureSample(atlas_texture, atlas_sampler, in.uv) * in.alpha * coverage;
+    return textureSample(atlas_texture, atlas_sampler, uv) * in.alpha * coverage;
 }
