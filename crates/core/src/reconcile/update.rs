@@ -25,7 +25,10 @@ use crate::plugin::Fonts;
 use crate::portal::RPortal;
 use crate::protocol::{NodeId, props::Props};
 use crate::transition::{ScrollTransitionState, apply_scroll_transition};
-use crate::ui_map::{apply_style_masked, overlay_style, resolved_text_style_promoted, text_layout};
+use crate::ui_map::{
+    apply_resolved_text_style, apply_style_masked, overlay_style, resolved_text_style_promoted,
+    text_layout,
+};
 
 /// Apply one `Op::Update`: merge the delta into the retained props and
 /// re-apply only what it dirtied. Extracted from the `apply_js_ops` match;
@@ -121,15 +124,18 @@ pub(super) fn apply_update(
         // A `<text>` element: refresh its resolved style — but only
         // when a text-style field actually changed (resolution does
         // color parsing + a font lookup, and the raw-span
-        // re-propagation below is O(children)).
-        let resolved = dirty.style.intersects(g::TEXT).then(|| {
+        // re-propagation below is O(children)). The cache keeps the
+        // whole tuple (a span attaching later inherits all of it); the
+        // entity write is masked to the dirty half so a recolor never
+        // touches the shaping components (see `apply_resolved_text_style`).
+        let resolved = dirty.style.intersects(g::TEXT_STYLE).then(|| {
             let style = resolved_text_style_promoted(&props.style, fonts, promoted);
             bridge.text_styles.insert(id, style.clone());
             style
         });
         let mut ec = commands.entity(e);
         if let Some(style) = &resolved {
-            ec.insert(style.clone());
+            apply_resolved_text_style(&mut ec, style, dirty.style);
         }
         // A text *root* (has a `Node`) also gets the layout/visual/
         // transform style + transition, mirroring its create path —
@@ -200,7 +206,7 @@ pub(super) fn apply_update(
                 if let Ok(rnode) = rnodes.get(child)
                     && bridge.spans.get(&rnode.0) == Some(&SpanKind::RawInherited)
                 {
-                    commands.entity(child).insert(style.clone());
+                    apply_resolved_text_style(&mut commands.entity(child), &style, dirty.style);
                 }
             }
         }

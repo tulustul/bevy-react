@@ -120,19 +120,25 @@ pub fn apply_interaction_styles(
         // font changes actually land, with the opacity fold suppressed on a
         // promoted root (its group alpha owns the fade). Bare-string children
         // inherit the merged result like they do on a re-render. Gated on the
-        // same groups the op path's text arm uses.
+        // same groups the op path's text arm uses, and written through the
+        // same masked compare-before-write (a hover recolor must not
+        // re-shape the block).
         if texts.contains(entity) {
-            if mask.intersects(g::TEXT) {
+            if mask.intersects(g::TEXT_STYLE) {
                 let resolved =
                     crate::ui_map::resolved_text_style_promoted(&style, fonts, promoted.is_some());
-                ec.insert(resolved.clone());
+                crate::ui_map::apply_resolved_text_style(&mut ec, &resolved, mask);
                 if let (Some(bridge), Some(rnode)) = (bridge.as_ref(), rnode) {
                     let kids: Vec<_> = bridge.children_of(rnode.0).collect();
                     for kid in kids {
                         if bridge.spans.get(&kid) == Some(&crate::bridge::SpanKind::RawInherited)
                             && let Some(&kid_entity) = bridge.nodes.get(&kid)
                         {
-                            commands.entity(kid_entity).insert(resolved.clone());
+                            crate::ui_map::apply_resolved_text_style(
+                                &mut commands.entity(kid_entity),
+                                &resolved,
+                                mask,
+                            );
                         }
                     }
                 }

@@ -414,10 +414,13 @@ pub mod style_groups {
     pub const TRANSITION: u32 = 1 << 13;
     /// `ScrollTransitionInput` (reads `transition`).
     pub const SCROLL_TRANSITION: u32 = 1 << 14;
-    /// The resolved text style (`resolved_text_style`: `color`, `font_size`,
-    /// `font_weight`, `font_family`, `line_height`, `letter_spacing`,
-    /// `opacity`) — includes the `<text>` re-propagation to inheriting spans.
-    pub const TEXT: u32 = 1 << 15;
+    /// The glyph color half of the resolved text style (`resolved_text_style`:
+    /// `color`, `opacity`) → `TextColor` — includes the `<text>`
+    /// re-propagation to inheriting spans. Split from [`TEXT_FONT`] because
+    /// bevy_text re-shapes a block on `Changed<TextFont | LineHeight |
+    /// LetterSpacing>` (never `TextColor`): a color-only delta must not touch
+    /// the font components, or every recolor is a re-shape + relayout.
+    pub const TEXT_COLOR: u32 = 1 << 15;
     /// `TextLayout` (`text_layout`: `text_align`, `line_break`).
     pub const TEXT_LAYOUT: u32 = 1 << 16;
     /// `NodeCursor` (reads `cursor`) — the per-node cursor `drive_cursor_icon`
@@ -468,6 +471,17 @@ pub mod style_groups {
     /// unrounded result at read time, so no `Node` write and no relayout;
     /// the geometry shift lands through the ordinary global-transform path.
     pub const LAYOUT_ROUNDING: u32 = 1 << 25;
+    /// The shaping half of the resolved text style (`resolved_text_style`:
+    /// `font_size`, `font_weight`, `font_family`, `line_height`,
+    /// `letter_spacing`) → `TextFont` + `LineHeight` + `LetterSpacing` —
+    /// includes the `<text>` re-propagation to inheriting spans. See
+    /// [`TEXT_COLOR`] for why the two halves are separate groups.
+    pub const TEXT_FONT: u32 = 1 << 26;
+    /// Both halves of the resolved text style: the mask a text arm re-resolves
+    /// on (`crate::ui_map::resolved_text_style` computes the whole tuple; the
+    /// masked writer `crate::ui_map::apply_resolved_text_style` then lands
+    /// only the dirty half).
+    pub const TEXT_STYLE: u32 = TEXT_COLOR | TEXT_FONT;
 }
 
 /// The single source of truth for [`Style`]'s field list. Invokes the callback
@@ -566,7 +580,7 @@ macro_rules! with_style_fields {
                 opacity,
                 "opacity",
                 (BACKGROUND | BG_GRADIENT | BORDER_GRADIENT | BG_IMAGE | TEXT_SHADOW
-                    | TRANSITION | TEXT | LAYER),
+                    | TRANSITION | TEXT_COLOR | LAYER),
                 overlay
             ),
             (group_alpha, "groupAlpha", (LAYER), no_overlay),
@@ -577,13 +591,13 @@ macro_rules! with_style_fields {
                 (TRANSITION | SCROLL_TRANSITION),
                 overlay
             ),
-            (color, "color", (TEXT), overlay),
-            (font_size, "fontSize", (TEXT), overlay),
-            (font_weight, "fontWeight", (TEXT), overlay),
-            (font_family, "fontFamily", (TEXT), overlay),
+            (color, "color", (TEXT_COLOR), overlay),
+            (font_size, "fontSize", (TEXT_FONT), overlay),
+            (font_weight, "fontWeight", (TEXT_FONT), overlay),
+            (font_family, "fontFamily", (TEXT_FONT), overlay),
             (text_align, "textAlign", (TEXT_LAYOUT), overlay),
-            (line_height, "lineHeight", (TEXT), overlay),
-            (letter_spacing, "letterSpacing", (TEXT), overlay),
+            (line_height, "lineHeight", (TEXT_FONT), overlay),
+            (letter_spacing, "letterSpacing", (TEXT_FONT), overlay),
             (text_shadow, "textShadow", (TEXT_SHADOW), overlay),
             (line_break, "lineBreak", (TEXT_LAYOUT), overlay),
         }

@@ -526,13 +526,21 @@ fn reapply_text_fold(
     let style = bridge.props_cache.get(&id).and_then(|p| p.style.clone());
     let resolved = crate::ui_map::resolved_text_style_promoted(&style, fonts, promoted);
     bridge.text_styles.insert(id, resolved.clone());
-    commands.entity(entity).insert(resolved.clone());
+    // Only the opacity fold (the color half) depends on promotion; the masked
+    // compare-before-write leaves the shaping components untouched, so a
+    // promotion flip never re-shapes the block.
+    let mask = crate::protocol::style::StyleDirty(crate::protocol::style::style_groups::TEXT_COLOR);
+    crate::ui_map::apply_resolved_text_style(&mut commands.entity(entity), &resolved, mask);
     let kids: Vec<NodeId> = bridge.children_of(id).collect();
     for kid in kids {
         if bridge.spans.get(&kid) == Some(&crate::bridge::SpanKind::RawInherited)
             && let Some(&kid_entity) = bridge.nodes.get(&kid)
         {
-            commands.entity(kid_entity).insert(resolved.clone());
+            crate::ui_map::apply_resolved_text_style(
+                &mut commands.entity(kid_entity),
+                &resolved,
+                mask,
+            );
         }
     }
 }

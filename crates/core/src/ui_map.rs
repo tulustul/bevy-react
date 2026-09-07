@@ -1340,6 +1340,32 @@ pub fn resolved_text_style_promoted(
     (color, font, line, spacing)
 }
 
+/// Land a resolved text style on a text root or an inheriting span, writing
+/// only the half `dirty` touched — and each component compare-before-write
+/// ([`set_if_neq_or_insert`]), so an unchanged `TextFont` never ticks even
+/// when its group is dirty. This is what keeps a `color`-only delta from
+/// re-shaping the block: bevy_text's `detect_text_needs_rerender` keys on
+/// `Changed<TextFont | LineHeight | LetterSpacing>`, and a re-shape rebuilds
+/// the measure func → `ContentSize` → a taffy relayout of the whole tree.
+/// `TEXT_COLOR` writes `TextColor`; `TEXT_FONT` writes the shaping trio. The
+/// spawn paths insert the whole tuple directly (nothing to compare against).
+pub fn apply_resolved_text_style(
+    ec: &mut EntityCommands,
+    resolved: &crate::bridge::ResolvedTextStyle,
+    dirty: StyleDirty,
+) {
+    use crate::protocol::style::style_groups as g;
+    let (color, font, line, spacing) = resolved;
+    if dirty.intersects(g::TEXT_COLOR) {
+        ec.queue(set_if_neq_or_insert(*color));
+    }
+    if dirty.intersects(g::TEXT_FONT) {
+        ec.queue(set_if_neq_or_insert(font.clone()));
+        ec.queue(set_if_neq_or_insert(*line));
+        ec.queue(set_if_neq_or_insert(*spacing));
+    }
+}
+
 /// The `TextLayout` for a `<text>` root, if `textAlign` or `lineBreak` is set
 /// (root only). Either field present builds the layout; the other keeps its
 /// bevy default.
