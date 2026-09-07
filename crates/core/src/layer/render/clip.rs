@@ -61,12 +61,34 @@ pub fn swap_interior_clips_out(mut main_world: ResMut<MainWorld>, mut stash: Res
 }
 
 /// Core of [`swap_interior_clips_in`], factored on `&mut World` for tests.
+///
+/// The members to swap are the intersection of the interior map and the
+/// entities carrying a [`CalculatedClip`]; whichever side is smaller drives
+/// the loop — a UI without clipping ancestors (nothing carries the component)
+/// costs nothing per member, a UI whose clipped nodes vastly outnumber the
+/// layer members walks the map as before.
 pub fn swap_in(world: &mut World, stash: &mut Vec<(Entity, Rect)>) {
     stash.clear();
     if world.get_resource::<LayerClips>().is_none() {
         return; // Main app without the plugin's resources: nothing to swap.
     }
     world.resource_scope(|world, clips: Mut<LayerClips>| {
+        if clips.interior.is_empty() {
+            return;
+        }
+        let mut clipped = world.query::<(Entity, &mut CalculatedClip)>();
+        if clipped.iter(world).len() < clips.interior.len() {
+            for (entity, mut clip) in clipped.iter_mut(world) {
+                // Not a member: its clip is real and stays.
+                let Some(&interior) = clips.interior.get(&entity) else {
+                    continue;
+                };
+                let clip = clip.bypass_change_detection();
+                stash.push((entity, clip.clip));
+                clip.clip = interior.unwrap_or(UNCLIPPED);
+            }
+            return;
+        }
         for (&entity, &interior) in clips.interior.iter() {
             // A member without the component needs no swap: its interior clip
             // is provably `None` too (interior clip sources are a subset of

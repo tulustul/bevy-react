@@ -52,8 +52,11 @@ use bevy::ui::{CalculatedClip, ComputedNode, OverrideClip, UiGlobalTransform};
 
 use super::{LayerMembership, PromotedLayer};
 
-/// Per-frame clip maps for promoted layers, rebuilt from scratch by
-/// [`sync_layer_clips`] (like [`LayerMembership`] — nothing persists).
+/// Clip maps for promoted layers, maintained by [`sync_layer_clips`]. They
+/// persist across frames: rebuilt from scratch when [`LayerMembership`] is
+/// (a structural frame), refreshed per root when something a cascade depends
+/// on changed under it, untouched otherwise — a translating layer without
+/// interior clippers costs nothing here.
 #[derive(Resource, Debug, Default)]
 pub struct LayerClips {
     /// Subtree member → the clip its extracted items use inside the capture
@@ -70,38 +73,110 @@ pub struct LayerClips {
     pub quads: HashMap<Entity, Option<Rect>>,
 }
 
-/// Rebuilds [`LayerClips`] for this frame. Runs in `PostUpdate` after
-/// [`super::sync_layer_geometry`] (fresh [`LayerMembership`]) and after
+/// What [`sync_layer_clips`] last consumed from [`LayerMembership`]'s
+/// counters: a moved `rebuilds` means the maps are stale wholesale, a moved
+/// `syncs` means `clip_touched` is this frame's.
+#[derive(Default)]
+pub struct ClipSyncMemory {
+    rebuilds: u64,
+    syncs: u64,
+}
+
+/// Maintains [`LayerClips`]. Runs in `PostUpdate` after
+/// [`super::sync_layer_geometry`] (this frame's [`LayerMembership`]) and after
 /// `bevy_ui`'s `UiSystems::PostLayout` (final [`CalculatedClip`] values for
 /// the top-level quad clips). Must NOT feed [`super::resolve_layer_repaints`]:
 /// clip changes never dirty a capture — that is the point.
-#[allow(clippy::type_complexity)]
+///
+/// A cascade's inputs are the subtree's hierarchy, each member's `Node`
+/// (overflow, display, clip margin), `OverrideClip` presence, the geometry of
+/// **clipping** members only, and — for a top-level root's quad — the root's
+/// own `CalculatedClip`. Each has a signal: a membership rebuild re-cascades
+/// everything; otherwise only the roots owning a changed input re-cascade
+/// (the geometry sync hands over the clipper-geometry roots in
+/// `LayerMembership::clip_touched`, the rest are queried here). Scrollbar
+/// widgets are excluded from the `Node` signal for the ping-pong reason the
+/// geometry gate documents.
+#[allow(clippy::type_complexity, clippy::too_many_arguments)]
 pub fn sync_layer_clips(
     roots: Query<(Entity, Option<&CalculatedClip>), With<PromotedLayer>>,
     root_markers: Query<(), With<PromotedLayer>>,
     children: Query<&Children>,
     nodes: Query<(&Node, &ComputedNode, &UiGlobalTransform, Has<OverrideClip>)>,
+    changed_nodes: Query<
+        Entity,
+        (
+            Changed<Node>,
+            Without<bevy::ui_widgets::Scrollbar>,
+            Without<bevy::ui_widgets::ScrollbarThumb>,
+        ),
+    >,
+    changed_root_clips: Query<Entity, (Changed<CalculatedClip>, With<PromotedLayer>)>,
+    mut removed_clips: RemovedComponents<CalculatedClip>,
+    added_overrides: Query<Entity, Added<OverrideClip>>,
+    mut removed_overrides: RemovedComponents<OverrideClip>,
     membership: Res<LayerMembership>,
+    mut memory: Local<ClipSyncMemory>,
     mut clips: ResMut<LayerClips>,
 ) {
-    let clips = &mut *clips;
-    clips.interior.clear();
-    clips.quads.clear();
-    for (root, calculated_clip) in &roots {
-        // Only ACTIVE roots (present in this frame's membership as their own
-        // layer) ran `mark_subtree`; inactive ones (zero-sized, not laid out)
-        // have no capture to clip and may carry stale components.
-        if membership.node_to_layer.get(&root) != Some(&root) {
-            continue;
+    let cascade_root =
+        |root: Entity, calculated_clip: Option<&CalculatedClip>, clips: &mut LayerClips| {
+            // Only ACTIVE roots (present in this frame's membership as their own
+            // layer) ran `mark_subtree`; inactive ones (zero-sized, not laid out)
+            // have no capture to clip and may carry stale components.
+            if membership.node_to_layer.get(&root) != Some(&root) {
+                return;
+            }
+            // Interior cascade: restart with NO inherited clip at the root —
+            // exactly `bevy_ui`'s `update_clipping`, minus everything above.
+            cascade(root, root, None, &children, &root_markers, &nodes, clips);
+            // A top-level root's quad composites into the screen phase and clamps
+            // to the root's real inherited clip. (Nested roots' quad clips were
+            // recorded by their enclosing root's cascade at the prune point.)
+            if membership.enclosing.get(&root) == Some(&None) {
+                clips.quads.insert(root, calculated_clip.map(|c| c.clip));
+            }
+        };
+    if memory.rebuilds != membership.rebuilds {
+        // Structural frame: membership is fresh, the maps are stale wholesale.
+        memory.rebuilds = membership.rebuilds;
+        memory.syncs = membership.syncs;
+        removed_clips.clear();
+        removed_overrides.clear();
+        let clips = &mut *clips;
+        clips.interior.clear();
+        clips.quads.clear();
+        for (root, calculated_clip) in &roots {
+            cascade_root(root, calculated_clip, clips);
         }
-        // Interior cascade: restart with NO inherited clip at the root —
-        // exactly `bevy_ui`'s `update_clipping`, minus everything above.
-        cascade(root, root, None, &children, &root_markers, &nodes, clips);
-        // A top-level root's quad composites into the screen phase and clamps
-        // to the root's real inherited clip. (Nested roots' quad clips were
-        // recorded by their enclosing root's cascade at the prune point.)
-        if membership.enclosing.get(&root) == Some(&None) {
-            clips.quads.insert(root, calculated_clip.map(|c| c.clip));
+        return;
+    }
+    let mut touched: Vec<Entity> = Vec::new();
+    if memory.syncs != membership.syncs {
+        memory.syncs = membership.syncs;
+        touched.extend_from_slice(&membership.clip_touched);
+    }
+    let to_root = |entity: Entity| {
+        if root_markers.contains(entity) {
+            Some(entity)
+        } else {
+            membership.node_to_layer.get(&entity).copied()
+        }
+    };
+    touched.extend(changed_nodes.iter().filter_map(to_root));
+    touched.extend(added_overrides.iter().filter_map(to_root));
+    touched.extend(removed_overrides.read().filter_map(to_root));
+    touched.extend(&changed_root_clips);
+    touched.extend(removed_clips.read().filter(|e| root_markers.contains(*e)));
+    if touched.is_empty() {
+        return; // Clip-idle: last frame's maps stand (no `ResMut` deref).
+    }
+    touched.sort_unstable();
+    touched.dedup();
+    let clips = &mut *clips;
+    for root in touched {
+        if let Ok((root, calculated_clip)) = roots.get(root) {
+            cascade_root(root, calculated_clip, clips);
         }
     }
 }

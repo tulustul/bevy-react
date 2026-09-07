@@ -271,11 +271,18 @@ pub struct ExtractedLayer {
 #[derive(Resource, Default)]
 pub struct ExtractedUiLayers {
     pub layers: Vec<ExtractedLayer>,
-    /// node main entity → index into `layers` (steal routing).
+    /// node main entity → index into `layers` (steal routing). Derived from
+    /// [`LayerMembership`] + the extraction order; rebuilt only when either
+    /// moved (`membership_rebuilds` / `roots`), kept otherwise.
     pub membership: HashMap<MainEntity, usize>,
     /// layer index → index of its enclosing layer (quad routing); `None` =
-    /// composite into the stock camera phase.
+    /// composite into the stock camera phase. Rebuilt with `membership`.
     pub enclosing: Vec<Option<usize>>,
+    /// The `LayerMembership::rebuilds` the two maps above were derived from.
+    pub membership_rebuilds: u64,
+    /// The layer roots in `layers` order the two maps were derived from — a
+    /// changed order re-indexes them.
+    pub roots: Vec<Entity>,
     /// The stock UI view's phase key for the target camera.
     pub stock_view: Option<RetainedViewEntity>,
     /// The camera's render-world entity ([`ui_layer_capture_pass`] gates on
@@ -318,13 +325,14 @@ pub fn extract_ui_layers(
     store: Res<LayerTextureStore>,
 ) {
     extracted.layers.clear();
-    extracted.membership.clear();
-    extracted.enclosing.clear();
     extracted.capture_order.clear();
     extracted.stock_view = None;
     extracted.camera_render_entity = None;
 
     if layers.is_empty() {
+        extracted.membership.clear();
+        extracted.enclosing.clear();
+        extracted.roots.clear();
         return;
     }
 
@@ -484,28 +492,46 @@ pub fn extract_ui_layers(
     // Prune phases of layers that died since last frame: stock `retain` only
     // keeps its own views alive, and ours re-register just above, so any
     // subview-2 phase without a live layer this frame is stale.
-    let live: Vec<RetainedViewEntity> = extracted.layers.iter().map(|l| l.retained).collect();
+    let live: HashSet<RetainedViewEntity> = extracted.layers.iter().map(|l| l.retained).collect();
     phases.retain(|retained, _| {
         retained.subview_index != UI_LAYER_CAPTURE_SUBVIEW || live.contains(retained)
     });
 
-    for (node, layer_root) in membership.node_to_layer.iter() {
-        if let Some(&idx) = layer_index.get(layer_root) {
-            extracted.membership.insert(MainEntity::from(*node), idx);
+    // The steal index (node → layer index) and the quad routing derive from
+    // main-world membership and this frame's layer order; both are stable
+    // across a plain geometry frame, so re-derive only when one moved.
+    let roots_changed = extracted.roots.len() != extracted.layers.len()
+        || extracted
+            .roots
+            .iter()
+            .zip(&extracted.layers)
+            .any(|(root, layer)| *root != layer.main_entity.id());
+    if roots_changed || extracted.membership_rebuilds != membership.rebuilds {
+        let extracted = &mut *extracted;
+        extracted.membership_rebuilds = membership.rebuilds;
+        extracted.roots.clear();
+        extracted
+            .roots
+            .extend(extracted.layers.iter().map(|l| l.main_entity.id()));
+        extracted.membership.clear();
+        for (node, layer_root) in membership.node_to_layer.iter() {
+            if let Some(&idx) = layer_index.get(layer_root) {
+                extracted.membership.insert(MainEntity::from(*node), idx);
+            }
         }
+        extracted.enclosing = extracted
+            .layers
+            .iter()
+            .map(|layer| {
+                membership
+                    .enclosing
+                    .get(&layer.main_entity.id())
+                    .copied()
+                    .flatten()
+                    .and_then(|e| layer_index.get(&e).copied())
+            })
+            .collect();
     }
-    extracted.enclosing = extracted
-        .layers
-        .iter()
-        .map(|layer| {
-            membership
-                .enclosing
-                .get(&layer.main_entity.id())
-                .copied()
-                .flatten()
-                .and_then(|e| layer_index.get(&e).copied())
-        })
-        .collect();
     // Propagate `needs_capture` outward: a re-capturing inner layer's quad
     // re-draws inside its enclosing captures, so those must re-capture too.
     // (The main-world resolver already propagates its dirt the same way; this

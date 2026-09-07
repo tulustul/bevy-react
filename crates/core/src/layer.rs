@@ -39,6 +39,7 @@
 //! composite parameters the render pass forwards without interpreting.
 //! Promotion is `!reasons.is_empty()`; demotion is the flags emptying.
 
+use bevy::ecs::entity::EntityHashSet;
 use bevy::platform::collections::{HashMap, HashSet};
 use bevy::prelude::*;
 use bevy::ui::{ComputedNode, UiGlobalTransform};
@@ -143,11 +144,14 @@ pub struct LayerCaptureRect {
 
 /// Which layer root each node under a promoted subtree belongs to
 /// (ancestor-or-self, nearest wins — so nested layers map their interior,
-/// including the inner root's own paint, to the *inner* root). Rebuilt every
-/// frame after layout; extracted to the render world to route stolen phase
-/// items. A layer root's *composite quad* is the one thing that routes by
-/// [`Self::enclosing`] instead (it draws inside the parent layer's capture,
-/// or the screen when there is none).
+/// including the inner root's own paint, to the *inner* root). Rebuilt from
+/// scratch by [`sync_layer_geometry`] on **structural** frames (a hierarchy
+/// edit, a promotion flip, a root (de)activating); on pure geometry frames
+/// the maps persist and only the touched roots' rects/hashes refresh.
+/// Extracted to the render world to route stolen phase items. A layer root's
+/// *composite quad* is the one thing that routes by [`Self::enclosing`]
+/// instead (it draws inside the parent layer's capture, or the screen when
+/// there is none).
 #[derive(Resource, Debug, Default)]
 pub struct LayerMembership {
     /// node entity → its nearest layer-root ancestor-or-self.
@@ -156,6 +160,18 @@ pub struct LayerMembership {
     /// top-level layers, whose quads composite straight into the screen
     /// phase). Also doubles as the per-layer nesting-depth source.
     pub enclosing: HashMap<Entity, Option<Entity>>,
+    /// Bumped on every from-scratch rebuild of the two maps. Readers that
+    /// derive their own per-member state from the maps (the clip cascade,
+    /// render extraction's steal index) re-derive only when this moves.
+    pub rebuilds: u64,
+    /// Bumped on every non-idle frame (rebuild or per-root refresh) —
+    /// stamps [`Self::clip_touched`] as this frame's.
+    pub syncs: u64,
+    /// One-frame handoff to [`clip::sync_layer_clips`]: the roots whose
+    /// interior clip cascade must re-run because a **clipping** member (a
+    /// node with non-visible overflow) changed geometry this frame. Written
+    /// on refresh frames, valid while `syncs` is unchanged since.
+    pub clip_touched: Vec<Entity>,
 }
 
 /// Per-layer observability row in [`LayersRegistry`]. Identity fields are
@@ -527,6 +543,13 @@ fn reapply_text_fold(
 /// populated membership every frame. Stale entries for despawned entities are
 /// filtered by every reader, and a reparent ticks `Changed<Children>`.
 ///
+/// Signals split into **structural** ones (any `Children` change or removal,
+/// a promotion flip) that rebuild the maps from scratch, and **geometry** ones
+/// (`ComputedNode`/`UiGlobalTransform`/resolved-chain changes) that refresh
+/// only the roots they map to through the preserved membership — so a node
+/// moving outside every layer (an orbit-camera anchor) costs one lookup, and
+/// a translating layer re-hashes itself alone.
+///
 /// The scrollbar exclusion: `bevy_ui_widgets`' `update_scrollbar_thumb`
 /// (`.after(ui_layout_system)`, both inside `UiSystems::Layout`) and
 /// `ui_layout_system` each compare-guard their thumb writes but against
@@ -541,13 +564,19 @@ pub struct LayerGeometryGate<'w, 's> {
     changed_geometry: Query<
         'w,
         's,
+        (Entity, Option<&'static Node>),
+        (
+            Or<(Changed<ComputedNode>, Changed<UiGlobalTransform>)>,
+            Without<bevy::ui_widgets::Scrollbar>,
+            Without<bevy::ui_widgets::ScrollbarThumb>,
+        ),
+    >,
+    changed_children: Query<
+        'w,
+        's,
         (),
         (
-            Or<(
-                Changed<ComputedNode>,
-                Changed<UiGlobalTransform>,
-                Changed<Children>,
-            )>,
+            Changed<Children>,
             Without<bevy::ui_widgets::Scrollbar>,
             Without<bevy::ui_widgets::ScrollbarThumb>,
         ),
@@ -560,7 +589,7 @@ pub struct LayerGeometryGate<'w, 's> {
     changed_chains: Query<
         'w,
         's,
-        (),
+        Entity,
         Or<(
             Changed<crate::filters::ResolvedFilterChain>,
             Changed<crate::filters::ResolvedBackdropChain>,
@@ -570,24 +599,106 @@ pub struct LayerGeometryGate<'w, 's> {
     removed_backdrop_chains: RemovedComponents<'w, 's, crate::filters::ResolvedBackdropChain>,
 }
 
+/// What [`sync_layer_geometry`] has to do this frame.
+enum GeometryWork {
+    /// No signal: leave every map and hash as the previous frame left it.
+    Idle,
+    /// Geometry-only signals: refresh the listed roots through the preserved
+    /// membership.
+    Refresh(EntityHashSet),
+    /// A structural signal: rebuild membership from scratch, every root.
+    Rebuild,
+}
+
 impl LayerGeometryGate<'_, '_> {
-    /// True when any signal fired this frame. Consumes the removal readers
-    /// either way, so a removal observed on a rebuild frame doesn't hold the
-    /// gate open a second frame.
-    fn take_signal(&mut self) -> bool {
-        let hot = !self.changed_geometry.is_empty()
+    /// Classify this frame's signals. Consumes the removal readers either way,
+    /// so a removal observed on a rebuild frame doesn't hold the gate open a
+    /// second frame. On a refresh frame also collects, into `clip_touched`,
+    /// the roots owning a **clipping** node that changed geometry — the clip
+    /// cascade's only geometry dependency (a visible-overflow node's position
+    /// never moves a clip rect).
+    fn take_work(
+        &mut self,
+        membership: &LayerMembership,
+        roots: &Query<(), With<PromotedLayer>>,
+        clip_touched: &mut Vec<Entity>,
+    ) -> GeometryWork {
+        let structural = !self.changed_children.is_empty()
             || !self.added_roots.is_empty()
-            || !self.changed_chains.is_empty()
             || self.removed_children.read().next().is_some()
-            || self.removed_roots.read().next().is_some()
-            || self.removed_filter_chains.read().next().is_some()
-            || self.removed_backdrop_chains.read().next().is_some();
+            || self.removed_roots.read().next().is_some();
         self.removed_children.clear();
         self.removed_roots.clear();
-        self.removed_filter_chains.clear();
-        self.removed_backdrop_chains.clear();
-        hot
+        let removed_chains: Vec<Entity> = self
+            .removed_filter_chains
+            .read()
+            .chain(self.removed_backdrop_chains.read())
+            .collect();
+        if structural {
+            return GeometryWork::Rebuild;
+        }
+        if roots.is_empty() {
+            return GeometryWork::Idle; // No layers: nothing a geometry tick could refresh.
+        }
+        // Deduplicate at the source: on a frame where a whole layer moves,
+        // every member maps to the same root (a hash set beats sorting the
+        // per-member list).
+        let mut touched = EntityHashSet::default();
+        let mut clip_set = EntityHashSet::default();
+        for (entity, node) in &self.changed_geometry {
+            // The membership map already knows roots (they map to
+            // themselves); only an INACTIVE top-level root is absent from it
+            // and needs the component check. A root's own geometry is also
+            // its ENCLOSING layer's content (the nested quad's place in the
+            // outer capture — see `mark_subtree`).
+            let root = match membership.node_to_layer.get(&entity) {
+                Some(&layer) if layer == entity => {
+                    if let Some(&Some(outer)) = membership.enclosing.get(&entity) {
+                        touched.insert(outer);
+                    }
+                    entity
+                }
+                Some(&layer) => layer,
+                None if roots.contains(entity) => entity,
+                None => continue, // Outside every promoted subtree: not ours.
+            };
+            touched.insert(root);
+            if node.is_some_and(|n| !n.overflow.is_visible()) {
+                clip_set.insert(root);
+            }
+        }
+        touched.extend(self.changed_chains.iter().filter(|e| roots.contains(*e)));
+        touched.extend(removed_chains.into_iter().filter(|e| roots.contains(*e)));
+        if touched.is_empty() {
+            return GeometryWork::Idle;
+        }
+        clip_touched.extend(clip_set);
+        GeometryWork::Refresh(touched)
     }
+}
+
+/// The capture window of a root's border box: the screen-space AABB of the
+/// box under the root's own linear part (a user `transform.scale`, or a
+/// layout transition's FLIP scale — members are extracted with that full
+/// affine, so an unscaled window would crop a magnified capture). `None`
+/// while the root is INACTIVE: zero-sized / not laid out yet. The gate reads
+/// the CONTENT size (pre-inflation) on purpose — a filter outset alone must
+/// not activate an empty node.
+fn capture_window(computed: &ComputedNode, transform: &UiGlobalTransform) -> Option<(Vec2, UVec2)> {
+    let size = computed.size();
+    if size.x <= 0.5 || size.y <= 0.5 {
+        return None;
+    }
+    let m = transform.matrix2;
+    let half = size * 0.5;
+    let extent = Vec2::new(
+        m.x_axis.x.abs() * half.x + m.y_axis.x.abs() * half.y,
+        m.x_axis.y.abs() * half.x + m.y_axis.y.abs() * half.y,
+    );
+    let min = transform.translation - extent;
+    let window = extent * 2.0;
+    let size = UVec2::new(window.x.ceil() as u32, window.y.ceil() as u32);
+    (size.x != 0 && size.y != 0).then_some((min, size))
 }
 
 /// Recomputes each promoted layer's capture rect (inflated by the node's
@@ -600,7 +711,11 @@ impl LayerGeometryGate<'_, '_> {
 ///
 /// Gated by [`LayerGeometryGate`]: a geometry-idle frame returns before
 /// touching any `ResMut` (so `Res::is_changed()` stays a truthful idle probe),
-/// leaving membership + hashes exactly as the previous rebuild left them.
+/// leaving membership + hashes exactly as the previous rebuild left them. A
+/// geometry-only frame refreshes just the touched roots (rect + hash) through
+/// the preserved membership; a structural frame — or a touched root flipping
+/// between active and inactive, which changes its subtree's membership —
+/// rebuilds everything.
 #[allow(clippy::too_many_arguments, clippy::type_complexity)]
 pub fn sync_layer_geometry(
     mut commands: Commands,
@@ -617,65 +732,121 @@ pub fn sync_layer_geometry(
         With<PromotedLayer>,
     >,
     root_markers: Query<(), With<PromotedLayer>>,
-    children: Query<&Children>,
-    parents: Query<&ChildOf>,
-    existing_rects: Query<&LayerCaptureRect>,
-    geometry: Query<(&ComputedNode, &UiGlobalTransform)>,
+    // `'static` data so the borrows can be bundled into `RootSync` (the
+    // elided form gives each `&T` its own anonymous lifetime).
+    children: Query<&'static Children>,
+    parents: Query<&'static ChildOf>,
+    existing_rects: Query<&'static LayerCaptureRect>,
+    geometry: Query<(&'static ComputedNode, &'static UiGlobalTransform)>,
     mut membership: ResMut<LayerMembership>,
     mut registry: ResMut<LayersRegistry>,
     mut repaints: ResMut<LayerRepaintState>,
 ) {
-    if !gate.take_signal() {
-        // Geometry-idle: membership + hashes persist for this frame's readers
-        // (the clip sync and the repaint resolver run on the preserved maps).
-        return;
+    let mut clip_touched = Vec::new();
+    let touched = match gate.take_work(&membership, &root_markers, &mut clip_touched) {
+        GeometryWork::Idle => return, // Membership + hashes persist for this frame's readers.
+        GeometryWork::Rebuild => None,
+        GeometryWork::Refresh(touched) => Some(touched),
+    };
+    let mut ctx = RootSync {
+        commands: &mut commands,
+        root_markers: &root_markers,
+        children: &children,
+        parents: &parents,
+        existing_rects: &existing_rects,
+        geometry: &geometry,
+        registry: &mut registry,
+        repaints: &mut repaints,
+    };
+    let membership = &mut *membership;
+    membership.syncs += 1;
+    membership.clip_touched = clip_touched;
+    if let Some(touched) = touched {
+        // A root whose activity flips changes its subtree's membership (an
+        // active root claims its subtree; an inactive one doesn't): that is
+        // structural after all — fall through to the rebuild. Hash presence
+        // ⇔ active at the last sync, by construction in `sync_root`; the
+        // refresh work already done is idempotent under the rebuild.
+        let mut flipped = false;
+        for root in touched {
+            let Ok(row) = roots.get(root) else {
+                continue;
+            };
+            let had_hash = ctx.repaints.hashes.contains_key(&root);
+            if ctx.sync_root(row, RootMode::Refresh(membership)) != had_hash {
+                flipped = true;
+                break;
+            }
+        }
+        if !flipped {
+            return;
+        }
     }
     membership.node_to_layer.clear();
     membership.enclosing.clear();
-    for (root, computed, transform, rnode, chain, backdrop_chain) in &roots {
-        let row = registry.layers.get_mut(&rnode.0);
+    membership.rebuilds += 1;
+    for row in &roots {
+        ctx.sync_root(row, RootMode::Rebuild(membership));
+    }
+    // Demoted/despawned roots must not keep a hash — a re-promotion (or a
+    // new layer reusing the entity id) has to hit the absent-hash
+    // first-frame rule.
+    ctx.repaints.hashes.retain(|e, _| root_markers.contains(*e));
+}
+
+/// The per-root body of [`sync_layer_geometry`], shared by the rebuild and
+/// refresh paths.
+struct RootSync<'a, 'cw, 'cs, 'w, 's> {
+    // `&mut` makes the inner lifetimes invariant: `Commands` needs its own
+    // pair, the shared query refs coerce to a common `'w`/`'s`.
+    commands: &'a mut Commands<'cw, 'cs>,
+    root_markers: &'a Query<'w, 's, (), With<PromotedLayer>>,
+    children: &'a Query<'w, 's, &'static Children>,
+    parents: &'a Query<'w, 's, &'static ChildOf>,
+    existing_rects: &'a Query<'w, 's, &'static LayerCaptureRect>,
+    geometry: &'a Query<'w, 's, (&'static ComputedNode, &'static UiGlobalTransform)>,
+    registry: &'a mut LayersRegistry,
+    repaints: &'a mut LayerRepaintState,
+}
+
+type RootRow<'a> = (
+    Entity,
+    &'a ComputedNode,
+    &'a UiGlobalTransform,
+    &'a crate::bridge::ReactNode,
+    Option<&'a crate::filters::ResolvedFilterChain>,
+    Option<&'a crate::filters::ResolvedBackdropChain>,
+);
+
+impl RootSync<'_, '_, '_, '_, '_> {
+    /// Rect, registry mirror, geometry hash — and, on the rebuild path, the
+    /// subtree's membership claims plus the root's enclosing/depth. On the
+    /// refresh path membership is preserved and valid, so the walk only
+    /// re-hashes (pruning at nested roots, whose interiors hash separately). Returns whether the root is
+    /// ACTIVE (has a capture window) — `false` leaves it without a hash.
+    fn sync_root(&mut self, row: RootRow<'_>, mut membership: RootMode<'_>) -> bool {
+        let (root, computed, transform, rnode, chain, backdrop_chain) = row;
+        let row = self.registry.layers.get_mut(&rnode.0);
         if let Some(row) = &row {
             debug_assert_eq!(row.entity, root);
         }
-        let size = computed.size();
-        if size.x <= 0.5 || size.y <= 0.5 {
-            // Zero-sized / not laid out yet: inactive this frame. The gate
-            // reads the CONTENT size (pre-inflation) on purpose — a filter
-            // outset alone must not activate an empty node. Drop the
-            // persistent hash so a reactivation at the old size re-captures.
-            repaints.hashes.remove(&root);
-            if let Some(row) = row {
-                row.capture_rect = None;
-            }
-            continue;
-        }
         // Fractional anchor + whole-texel size (see `LayerCaptureRect`): the
         // anchor tracks the node exactly so translation never re-captures;
-        // only a size change reallocs. The window is the border box's
-        // screen-space AABB under the root's own linear part (a user
-        // `transform.scale`, or a layout transition's FLIP scale): the
-        // members are extracted with that full affine, so an unscaled
-        // window would crop a magnified capture. Identity → the plain box.
-        let m = transform.matrix2;
-        let half = size * 0.5;
-        let extent = Vec2::new(
-            m.x_axis.x.abs() * half.x + m.y_axis.x.abs() * half.y,
-            m.x_axis.y.abs() * half.x + m.y_axis.y.abs() * half.y,
-        );
-        let min = transform.translation - extent;
-        let window = extent * 2.0;
-        let mut rect = LayerCaptureRect {
-            min,
-            size: UVec2::new(window.x.ceil() as u32, window.y.ceil() as u32),
-            outset: 0,
-        };
-        if rect.size.x == 0 || rect.size.y == 0 {
-            repaints.hashes.remove(&root);
+        // only a size change reallocs. Inactive (zero-sized / not laid out):
+        // drop the persistent hash so a reactivation at the old size
+        // re-captures.
+        let Some((min, size)) = capture_window(computed, transform) else {
+            self.repaints.hashes.remove(&root);
             if let Some(row) = row {
                 row.capture_rect = None;
             }
-            continue;
-        }
+            return false;
+        };
+        let mut rect = LayerCaptureRect {
+            min,
+            size,
+            outset: 0,
+        };
         // A filter chain reads/writes beyond the border box (blur bleed):
         // grow the capture window by the chain's outset on every side.
         // Quantized to 16px steps because an animated blur radius changes
@@ -694,8 +865,8 @@ pub fn sync_layer_geometry(
             rect.size += UVec2::splat(2 * outset);
             rect.outset = outset;
         }
-        if existing_rects.get(root) != Ok(&rect) {
-            commands.entity(root).insert(rect);
+        if self.existing_rects.get(root) != Ok(&rect) {
+            self.commands.entity(root).insert(rect);
         }
         // Mirror live geometry into the observability registry (the registry
         // keeps integer px for display — round the anchor; the rect includes
@@ -726,31 +897,35 @@ pub fn sync_layer_geometry(
         // semantics).
         fold_geo_i32(&mut hash, rect.size.x as i32);
         fold_geo_i32(&mut hash, rect.size.y as i32);
-        mark_subtree(
-            root,
-            root,
-            root,
-            transform.translation,
-            &children,
-            &root_markers,
-            &geometry,
-            &mut hash,
-            &mut membership.node_to_layer,
-        );
+        let mut walk = SubtreeWalk {
+            dfs_root: root,
+            root_translation: transform.translation,
+            children: self.children,
+            roots: self.root_markers,
+            geometry: self.geometry,
+        };
+        let mut mode = match &mut membership {
+            RootMode::Rebuild(m) => WalkMode::Claim(&mut m.node_to_layer),
+            RootMode::Refresh(m) => WalkMode::Hash(&m.node_to_layer),
+        };
+        walk.mark_subtree(root, root, &mut hash, &mut mode);
         // Compare-and-update in place; an absent previous hash (the first
         // frame after promotion) counts as changed.
-        if repaints.hashes.get(&root) != Some(&hash) {
-            repaints.hashes.insert(root, hash);
-            repaints.geo_dirty.insert(root);
+        if self.repaints.hashes.get(&root) != Some(&hash) {
+            self.repaints.hashes.insert(root, hash);
+            self.repaints.geo_dirty.insert(root);
         }
+        let RootMode::Rebuild(membership) = membership else {
+            return true; // Refresh: enclosing/depth are structural, unchanged.
+        };
         // The quad target: nearest strictly-enclosing promoted ancestor. Depth
         // = number of promoted ancestors + 1.
         let mut enclosing = None;
         let mut depth = 1u32;
         let mut cursor = root;
-        while let Ok(parent) = parents.get(cursor) {
+        while let Ok(parent) = self.parents.get(cursor) {
             cursor = parent.parent();
-            if root_markers.contains(cursor) {
+            if self.root_markers.contains(cursor) {
                 if enclosing.is_none() {
                     enclosing = Some(cursor);
                 }
@@ -758,55 +933,92 @@ pub fn sync_layer_geometry(
             }
         }
         membership.enclosing.insert(root, enclosing);
-        if let Some(row) = registry.layers.get_mut(&rnode.0) {
+        if let Some(row) = self.registry.layers.get_mut(&rnode.0) {
             row.depth = depth;
         }
+        true
     }
-    // Demoted/despawned roots must not keep a hash — a re-promotion (or a new
-    // layer reusing the entity id) has to hit the absent-hash first-frame rule.
-    repaints.hashes.retain(|e, _| root_markers.contains(*e));
 }
 
-#[allow(clippy::too_many_arguments)]
-fn mark_subtree(
-    node: Entity,
-    layer: Entity,
+/// Which path [`RootSync::sync_root`] runs.
+enum RootMode<'m> {
+    /// Structural frame: membership is being rebuilt from scratch.
+    Rebuild(&'m mut LayerMembership),
+    /// Geometry frame: membership is valid, read-only.
+    Refresh(&'m LayerMembership),
+}
+
+/// How [`SubtreeWalk::mark_subtree`] treats the membership map.
+enum WalkMode<'m> {
+    /// Rebuild: claim every visited node for its nearest layer.
+    Claim(&'m mut HashMap<Entity, Entity>),
+    /// Refresh: the map is valid; read it to spot nested roots (a visited
+    /// node owned by another layer) and prune there.
+    Hash(&'m HashMap<Entity, Entity>),
+}
+
+/// One root's subtree DFS (membership claims + geometry hash).
+struct SubtreeWalk<'a, 'w, 's> {
     dfs_root: Entity,
     root_translation: Vec2,
-    children: &Query<&Children>,
-    roots: &Query<(), With<PromotedLayer>>,
-    geometry: &Query<(&ComputedNode, &UiGlobalTransform)>,
-    hash: &mut u64,
-    map: &mut HashMap<Entity, Entity>,
-) {
-    // Geometry-hash contribution: a node is `dfs_root`'s *content* while the
-    // incoming claim context is still `dfs_root` itself — that covers its
-    // directly-owned members plus each directly nested layer root (whose
-    // composite quad draws inside this capture; the nested root's *interior*
-    // belongs to the inner hash, and inner dirt propagates outward anyway).
-    if layer == dfs_root
-        && let Ok((computed, transform)) = geometry.get(node)
-    {
-        fold_member_geometry(hash, root_translation, transform, computed);
-    }
-    // An inner promoted root claims itself and its subtree: its own paint
-    // fades with the *inner* group. (Its composite quad routes by
-    // `LayerMembership::enclosing`, not this map.)
-    let layer = if roots.contains(node) { node } else { layer };
-    map.insert(node, layer);
-    if let Ok(kids) = children.get(node) {
-        for &kid in kids {
-            mark_subtree(
-                kid,
-                layer,
-                dfs_root,
-                root_translation,
-                children,
-                roots,
-                geometry,
-                hash,
-                map,
-            );
+    children: &'a Query<'w, 's, &'static Children>,
+    roots: &'a Query<'w, 's, (), With<PromotedLayer>>,
+    geometry: &'a Query<'w, 's, (&'static ComputedNode, &'static UiGlobalTransform)>,
+}
+
+impl SubtreeWalk<'_, '_, '_> {
+    /// With `map` (rebuild): claim every node for its nearest layer, walking
+    /// nested subtrees too so an inner root re-claims its own interior
+    /// regardless of iteration order. Without (refresh): membership is
+    /// valid, so a nested root only contributes its own geometry (it is this
+    /// layer's content) and the walk prunes there — its interior is hashed
+    /// by its own refresh.
+    fn mark_subtree(
+        &mut self,
+        node: Entity,
+        layer: Entity,
+        hash: &mut u64,
+        mode: &mut WalkMode<'_>,
+    ) {
+        // Geometry-hash contribution: a node is `dfs_root`'s *content* while
+        // the incoming claim context is still `dfs_root` itself — that covers
+        // its directly-owned members plus each directly nested layer root
+        // (whose composite quad draws inside this capture; the nested root's
+        // *interior* belongs to the inner hash, and inner dirt propagates
+        // outward anyway).
+        if layer == self.dfs_root
+            && let Ok((computed, transform)) = self.geometry.get(node)
+        {
+            fold_member_geometry(hash, self.root_translation, transform, computed);
+        }
+        // An inner promoted root claims itself and its subtree: its own paint
+        // fades with the *inner* group. (Its composite quad routes by
+        // `LayerMembership::enclosing`, not this map.)
+        let layer = match mode {
+            WalkMode::Claim(map) => {
+                let layer = if node != self.dfs_root && self.roots.contains(node) {
+                    node
+                } else {
+                    layer
+                };
+                map.insert(node, layer);
+                layer
+            }
+            WalkMode::Hash(map) => {
+                // Owned by another layer ⇒ a nested root: pruned (its interior
+                // hashes with its own refresh). Unmapped entities (none in a
+                // valid map) fall through as own members, like the claim walk.
+                if node != self.dfs_root && matches!(map.get(&node), Some(&l) if l != self.dfs_root)
+                {
+                    return;
+                }
+                layer
+            }
+        };
+        if let Ok(kids) = self.children.get(node) {
+            for &kid in kids {
+                self.mark_subtree(kid, layer, hash, mode);
+            }
         }
     }
 }
@@ -814,10 +1026,13 @@ fn mark_subtree(
 /// FNV-1a offset basis — the seed of every per-layer geometry hash.
 const GEO_HASH_SEED: u64 = 0xcbf29ce484222325;
 
+/// FNV-1a over 32-bit words (one xor-multiply per value, not per byte): the
+/// hash is only ever compared with its own previous value, and the full
+/// 64-bit state distinguishes word sequences exactly as well as the
+/// byte-wise variant does — every multiply carries every input bit upward.
+/// At ~8 words per member this is the geometry walk's hot loop.
 fn fold_geo_i32(hash: &mut u64, v: i32) {
-    for b in v.to_le_bytes() {
-        *hash = (*hash ^ b as u64).wrapping_mul(0x100000001b3);
-    }
+    *hash = (*hash ^ (v as u32 as u64)).wrapping_mul(0x100000001b3);
 }
 
 /// Fold one member's **root-relative** geometry into a layer's content hash:
