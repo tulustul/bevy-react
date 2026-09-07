@@ -8,8 +8,8 @@ use bevy::platform::collections::HashMap;
 use bevy::prelude::*;
 use bevy::render::render_phase::ViewSortedRenderPhases;
 use bevy::render::render_resource::{
-    BindGroup, Extent3d, PipelineCache, TextureDescriptor, TextureDimension, TextureFormat,
-    TextureUsages, TextureViewDescriptor,
+    BindGroup, BufferId, Extent3d, PipelineCache, TextureDescriptor, TextureDimension,
+    TextureFormat, TextureUsages, TextureViewDescriptor, TextureViewId,
 };
 use bevy::render::renderer::RenderDevice;
 use bevy::render::sync_world::MainEntity;
@@ -134,6 +134,73 @@ pub struct FilterSlot {
     /// with the same `output_index` invalidation as
     /// [`Self::composite_bind_group`].
     pub composite_bind_group_mips: Option<(usize, BindGroup)>,
+    /// The chain's per-pass bind groups, kept across staged frames (see
+    /// [`PassBindGroups`]).
+    pub pass_bind_groups: PassBindGroups,
+}
+
+/// Identity of everything a filter-style pass bind group references: the
+/// views bound at binding 0 (the pass source) and binding 3 (the capture —
+/// or the morph snapshot), and the dynamic-offset uniform **buffer**. The
+/// per-frame variation is the dynamic *offset*, which lives on the pass, not
+/// in the bind group; the buffer itself only changes when
+/// `DynamicUniformBuffer::write_buffer` reallocates it (growth). The sampler
+/// and the bind-group layout are pipeline-lifetime constants
+/// (`LayerFilterPipeline` is built once and every pass shader shares its one
+/// layout), so they need no slot here. All three ids are process-unique
+/// atomics — never reused — so a stale key can't alias a fresh resource.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct PassBindKey {
+    pub source: TextureViewId,
+    pub capture: TextureViewId,
+    pub uniforms: BufferId,
+}
+
+/// Per-pass bind groups cached across staged frames, indexed by pass. A
+/// chain that restages every frame (animated params, `always_dirty`, an
+/// in-flight morph) used to rebuild every pass's bind group per frame —
+/// hundreds of layers × passes of `create_bind_group` for inputs that had
+/// not changed. Entries are reused while their [`PassBindKey`] matches, so
+/// a texture-slot realloc (new view ids) or a uniform-buffer realloc (new
+/// buffer id) rebuilds exactly the affected passes.
+#[derive(Default)]
+pub struct PassBindGroups {
+    entries: Vec<(PassBindKey, BindGroup)>,
+}
+
+impl PassBindGroups {
+    /// Drop cached entries past `len` (the chain shrank).
+    pub fn truncate(&mut self, len: usize) {
+        self.entries.truncate(len);
+    }
+
+    /// The bind group for pass `index`, reused when its key matches and
+    /// (re)built via `build` otherwise. Passes are staged in order, so
+    /// `index` is at most `entries.len()`; a caller skipping ahead gets an
+    /// uncached bind group (never a wrong one).
+    pub fn get_or_create(
+        &mut self,
+        index: usize,
+        key: PassBindKey,
+        build: impl FnOnce() -> BindGroup,
+    ) -> BindGroup {
+        match self.entries.get_mut(index) {
+            Some((cached_key, bind_group)) => {
+                if *cached_key != key {
+                    *cached_key = key;
+                    *bind_group = build();
+                }
+                bind_group.clone()
+            }
+            None => {
+                let bind_group = build();
+                if index == self.entries.len() {
+                    self.entries.push((key, bind_group.clone()));
+                }
+                bind_group
+            }
+        }
+    }
 }
 
 /// Persistent (cross-frame) capture textures, keyed by layer root — the
@@ -368,5 +435,6 @@ fn alloc_filter_slot(
         mips: [ping_mips, pong_mips],
         mips_valid: false,
         composite_bind_group_mips: None,
+        pass_bind_groups: PassBindGroups::default(),
     }
 }

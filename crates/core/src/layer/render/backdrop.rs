@@ -39,7 +39,7 @@ use bevy::render::view::ViewTarget;
 use bevy::shader::Shader;
 
 use super::clip::ClippedQuad;
-use super::store::alloc_capture_texture;
+use super::store::{PassBindGroups, PassBindKey, alloc_capture_texture};
 use super::{
     ExtractedUiLayers, FilterUniforms, LayerFilterPass, LayerFilterPipeline,
     LayerFilterPipelineKey, LayerFilterRun, LayerTextureStore, STUCK_GATE_HANG_FRAMES,
@@ -79,6 +79,9 @@ pub struct BackdropSlot {
     /// Composite bind group over `textures[.0]`, index-invalidated on
     /// `output_index` parity flips.
     pub composite_bind_group: Option<(usize, BindGroup)>,
+    /// The chain's per-pass bind groups, kept across frames (the chain
+    /// restages every frame — see [`PassBindGroups`]).
+    pub pass_bind_groups: PassBindGroups,
 }
 
 /// Allocate a layer's backdrop slot at the capture's size and format.
@@ -101,6 +104,7 @@ pub fn alloc_backdrop_slot(
         gate_warned: false,
         output_index: 0,
         composite_bind_group: None,
+        pass_bind_groups: PassBindGroups::default(),
     }
 }
 
@@ -365,18 +369,21 @@ pub fn prepare_layer_backdrops(
     // deliberately NOT built here — see the module doc.
     blit_uniforms.write_buffer(&render_device, &render_queue);
     filter_uniforms.write_buffer(&render_device, &render_queue);
-    let Some(uniform_binding) = filter_uniforms.binding() else {
+    let (Some(uniform_binding), Some(uniform_buffer)) =
+        (filter_uniforms.binding(), filter_uniforms.buffer())
+    else {
         return;
     };
     let layout = pipeline_cache.get_bind_group_layout(&filter_pipeline.layout);
     for (idx, staged) in staged {
         let layer = &extracted.layers[idx];
-        let Some(slot) = store.slots.get(&layer.main_entity) else {
+        let Some(slot) = store.slots.get_mut(&layer.main_entity) else {
             continue;
         };
-        let Some(backdrop) = slot.backdrop.as_ref() else {
+        let Some(backdrop) = slot.backdrop.as_mut() else {
             continue;
         };
+        backdrop.pass_bind_groups.truncate(staged.passes.len());
         let passes = staged
             .passes
             .iter()
@@ -387,19 +394,27 @@ pub fn prepare_layer_backdrops(
                     None => &backdrop.snapshot.default_view,
                     Some(ping) => &backdrop.textures[ping].default_view,
                 };
-                let bind_group = render_device.create_bind_group(
-                    "ui_layer_backdrop_filter",
-                    &layout,
-                    &BindGroupEntries::sequential((
-                        source,
-                        &filter_pipeline.sampler,
-                        uniform_binding.clone(),
-                        // Binding 3 (`capture_texture`) = the unfiltered
-                        // snapshot, so combine-style passes (bloom) composite
-                        // over the real backdrop.
-                        &backdrop.snapshot.default_view,
-                    )),
-                );
+                // Binding 3 (`capture_texture`) = the unfiltered snapshot,
+                // so combine-style passes (bloom) composite over the real
+                // backdrop.
+                let capture = &backdrop.snapshot.default_view;
+                let key = PassBindKey {
+                    source: source.id(),
+                    capture: capture.id(),
+                    uniforms: uniform_buffer.id(),
+                };
+                let bind_group = backdrop.pass_bind_groups.get_or_create(i, key, || {
+                    render_device.create_bind_group(
+                        "ui_layer_backdrop_filter",
+                        &layout,
+                        &BindGroupEntries::sequential((
+                            source,
+                            &filter_pipeline.sampler,
+                            uniform_binding.clone(),
+                            capture,
+                        )),
+                    )
+                });
                 LayerFilterPass {
                     pipeline,
                     bind_group,

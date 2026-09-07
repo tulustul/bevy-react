@@ -46,7 +46,7 @@ use bevy::render::renderer::{RenderContext, RenderDevice, RenderQueue};
 use bevy::render::texture::CachedTexture;
 use bevy::shader::ShaderCacheError;
 
-use super::store::alloc_capture_texture;
+use super::store::{PassBindGroups, PassBindKey, alloc_capture_texture};
 use super::{
     ExtractedFilterPass, ExtractedLayer, ExtractedUiLayers, FilterUniforms, LayerFilterPass,
     LayerFilterPipeline, LayerFilterPipelineKey, LayerFilterRun, LayerSlot, LayerTextureStore,
@@ -105,6 +105,10 @@ pub struct MorphSlot {
     /// Composite bind group over `blend` (morph-only layers); dies with the
     /// blend realloc.
     pub composite_bind_group: Option<BindGroup>,
+    /// The blend pass's bind group, kept across in-flight frames (see
+    /// [`PassBindGroups`]); its key carries the snapshot view, so a
+    /// re-freeze or the capture steal rebuilds it.
+    pub pass_bind_group: PassBindGroups,
 }
 
 /// Consume a new `freeze_seq`: steal the pixels currently on screen as the
@@ -174,6 +178,7 @@ pub fn freeze_morph_snapshot(
         gated_frames: 0,
         gate_warned: false,
         composite_bind_group: None,
+        pass_bind_group: PassBindGroups::default(),
     });
 }
 
@@ -333,16 +338,18 @@ pub fn prepare_layer_morphs(
     // Phase 2: write the uniforms, then build the bind groups against the
     // (possibly fresh) buffer.
     uniforms.write_buffer(&render_device, &render_queue);
-    let Some(uniform_binding) = uniforms.binding() else {
+    let (Some(uniform_binding), Some(uniform_buffer)) = (uniforms.binding(), uniforms.buffer())
+    else {
         return;
     };
     let layout = pipeline_cache.get_bind_group_layout(&pipeline.layout);
     for (idx, pipeline_id, uniform_offset) in staged {
         let layer = &extracted.layers[idx];
-        let Some(slot) = store.slots.get(&layer.main_entity) else {
+        let Some(slot) = store.slots.get_mut(&layer.main_entity) else {
             continue;
         };
-        let Some(morph) = slot.morph.as_ref() else {
+        let live_view = &slot.texture.default_view;
+        let Some(morph) = slot.morph.as_mut() else {
             continue;
         };
         // Binding 0 = the live capture (the "to"); binding 3 = the frozen
@@ -351,17 +358,24 @@ pub fn prepare_layer_morphs(
         let from_view = morph
             .snapshot
             .as_ref()
-            .map_or(&slot.texture.default_view, |s| &s.default_view);
-        let bind_group = render_device.create_bind_group(
-            "ui_layer_morph",
-            &layout,
-            &BindGroupEntries::sequential((
-                &slot.texture.default_view,
-                &pipeline.sampler,
-                uniform_binding.clone(),
-                from_view,
-            )),
-        );
+            .map_or(live_view, |s| &s.default_view);
+        let key = PassBindKey {
+            source: live_view.id(),
+            capture: from_view.id(),
+            uniforms: uniform_buffer.id(),
+        };
+        let bind_group = morph.pass_bind_group.get_or_create(0, key, || {
+            render_device.create_bind_group(
+                "ui_layer_morph",
+                &layout,
+                &BindGroupEntries::sequential((
+                    live_view,
+                    &pipeline.sampler,
+                    uniform_binding.clone(),
+                    from_view,
+                )),
+            )
+        });
         runs[idx] = Some(LayerFilterRun {
             passes: vec![LayerFilterPass {
                 pipeline: pipeline_id,

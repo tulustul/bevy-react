@@ -1750,16 +1750,14 @@ pub fn prepare_layer_filters(
     // Phase 2: write the uniforms, then build the per-pass bind groups
     // against the (possibly fresh) buffer.
     uniforms.write_buffer(&render_device, &render_queue);
-    let Some(uniform_binding) = uniforms.binding() else {
+    let (Some(uniform_binding), Some(uniform_buffer)) = (uniforms.binding(), uniforms.buffer())
+    else {
         return;
     };
     let layout = pipeline_cache.get_bind_group_layout(&pipeline.layout);
     for (idx, staged_passes) in staged {
         let layer = &extracted.layers[idx];
-        let Some(slot) = store.slots.get(&layer.main_entity) else {
-            continue;
-        };
-        let Some(filter) = slot.filter.as_ref() else {
+        let Some(slot) = store.slots.get_mut(&layer.main_entity) else {
             continue;
         };
         // A morphing layer's chain filters the BLEND (the morph pass's
@@ -1771,6 +1769,13 @@ pub fn prepare_layer_filters(
             .morph
             .as_ref()
             .map_or(&slot.texture.default_view, |m| &m.blend.default_view);
+        let Some(filter) = slot.filter.as_mut() else {
+            continue;
+        };
+        // Bind groups are cached per pass and reused while their inputs
+        // (views + uniform buffer) are the same objects — a restaging chain
+        // (animated params) pays nothing here after its first frame.
+        filter.pass_bind_groups.truncate(staged_passes.len());
         let passes = staged_passes
             .into_iter()
             .enumerate()
@@ -1779,16 +1784,23 @@ pub fn prepare_layer_filters(
                     None => effective_capture,
                     Some(ping) => &filter.textures[ping].default_view,
                 };
-                let bind_group = render_device.create_bind_group(
-                    "ui_layer_filter",
-                    &layout,
-                    &BindGroupEntries::sequential((
-                        source,
-                        &pipeline.sampler,
-                        uniform_binding.clone(),
-                        effective_capture,
-                    )),
-                );
+                let key = PassBindKey {
+                    source: source.id(),
+                    capture: effective_capture.id(),
+                    uniforms: uniform_buffer.id(),
+                };
+                let bind_group = filter.pass_bind_groups.get_or_create(i, key, || {
+                    render_device.create_bind_group(
+                        "ui_layer_filter",
+                        &layout,
+                        &BindGroupEntries::sequential((
+                            source,
+                            &pipeline.sampler,
+                            uniform_binding.clone(),
+                            effective_capture,
+                        )),
+                    )
+                });
                 LayerFilterPass {
                     pipeline: pass.pipeline,
                     bind_group,
