@@ -71,6 +71,10 @@ pub enum BenchOp {
     UpdateColor1,
     /// Recolor every 2nd row's background (paint-only → should not relayout).
     UpdateColorEvery2nd,
+    /// Recolor one middle row's label text (`color` only → should not re-shape).
+    UpdateTextColor1,
+    /// Recolor every 2nd row's label text (`color` only → should not re-shape).
+    UpdateTextColorEvery2nd,
     /// Swap two rows far apart (rows 1 and len−2, js-framework-benchmark-style).
     Swap1,
     /// Swap each adjacent pair (0↔1, 2↔3, …) — mass move ops.
@@ -96,6 +100,8 @@ impl BenchOp {
             BenchOp::UpdateTextEvery2nd => "updateTextEvery2nd",
             BenchOp::UpdateColor1 => "updateColor1",
             BenchOp::UpdateColorEvery2nd => "updateColorEvery2nd",
+            BenchOp::UpdateTextColor1 => "updateTextColor1",
+            BenchOp::UpdateTextColorEvery2nd => "updateTextColorEvery2nd",
             BenchOp::Swap1 => "swap1",
             BenchOp::SwapEvery2nd => "swapEvery2nd",
             BenchOp::Remove1 => "remove1",
@@ -106,7 +112,7 @@ impl BenchOp {
 }
 
 /// Every op, in a fixed order, for grouping the report deterministically.
-const ALL_OPS: [BenchOp; 14] = [
+const ALL_OPS: [BenchOp; 16] = [
     BenchOp::Create,
     BenchOp::Append1,
     BenchOp::Append1k,
@@ -116,6 +122,8 @@ const ALL_OPS: [BenchOp; 14] = [
     BenchOp::UpdateTextEvery2nd,
     BenchOp::UpdateColor1,
     BenchOp::UpdateColorEvery2nd,
+    BenchOp::UpdateTextColor1,
+    BenchOp::UpdateTextColorEvery2nd,
     BenchOp::Swap1,
     BenchOp::SwapEvery2nd,
     BenchOp::Remove1,
@@ -357,6 +365,8 @@ fn default_sequence() -> Vec<Step> {
             (UpdateTextEvery2nd, true),
             (UpdateColor1, true),
             (UpdateColorEvery2nd, true),
+            (UpdateTextColor1, true),
+            (UpdateTextColorEvery2nd, true),
             (Swap1, true),
             (SwapEvery2nd, true),
             (Clear, true),
@@ -413,7 +423,13 @@ fn rows_after(op: BenchOp, rows: u32, n: u32) -> u32 {
         // Keeps the even indices: ceil(rows / 2).
         RemoveEvery2nd => rows - rows / 2,
         Clear => 0,
-        UpdateText1 | UpdateTextEvery2nd | UpdateColor1 | UpdateColorEvery2nd | Swap1
+        UpdateText1
+        | UpdateTextEvery2nd
+        | UpdateColor1
+        | UpdateColorEvery2nd
+        | UpdateTextColor1
+        | UpdateTextColorEvery2nd
+        | Swap1
         | SwapEvery2nd => rows,
     }
 }

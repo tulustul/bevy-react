@@ -65,6 +65,9 @@ export interface Row {
   // Optional per-row background, toggled by the `UpdateColor*` benchmark ops.
   // Left unset by `buildData` so a fresh row uses the default style.
   bg?: string;
+  // Optional label text color, toggled by the `UpdateTextColor*` benchmark ops.
+  // Left unset by `buildData` so a fresh label uses the default color.
+  fg?: string;
 }
 
 // A monotonic id source, so ids stay unique across create/append (the benchmark

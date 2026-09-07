@@ -23,6 +23,8 @@ const CONTROLS: { label: string; op: BenchOp; n?: number }[] = [
   { label: "Text every 2nd", op: "UpdateTextEvery2nd" },
   { label: "Color 1", op: "UpdateColor1" },
   { label: "Color every 2nd", op: "UpdateColorEvery2nd" },
+  { label: "Text color 1", op: "UpdateTextColor1" },
+  { label: "Text color every 2nd", op: "UpdateTextColorEvery2nd" },
   { label: "Swap 1", op: "Swap1" },
   { label: "Swap every 2nd", op: "SwapEvery2nd" },
   { label: "Remove 1", op: "Remove1" },
@@ -122,6 +124,29 @@ export function App() {
           rs.map((r, i) =>
             i % 2 === 0
               ? { ...r, bg: r.bg === ROW_BG_A ? ROW_BG_B : ROW_BG_A }
+              : r,
+          ),
+        );
+        break;
+      case "UpdateTextColor1":
+        // Color-only change on one middle row's label `<text>`: only `color`
+        // moves — no font field, no content — so the text must not re-shape.
+        setRows((rs) => {
+          const mid = Math.floor(rs.length / 2);
+          return rs.map((r, i) =>
+            i === mid
+              ? { ...r, fg: r.fg === ROW_FG_A ? ROW_FG_B : ROW_FG_A }
+              : r,
+          );
+        });
+        break;
+      case "UpdateTextColorEvery2nd":
+        // Color-only change on every 2nd row's label `<text>`. Toggles between
+        // two colors so repeated runs keep changing.
+        setRows((rs) =>
+          rs.map((r, i) =>
+            i % 2 === 0
+              ? { ...r, fg: r.fg === ROW_FG_A ? ROW_FG_B : ROW_FG_A }
               : r,
           ),
         );
@@ -266,9 +291,15 @@ const RowView = memo(function RowView({ row, isSelected, onSelect }: RowProps) {
           : rowStyle,
     [isSelected, row.bg],
   );
+  // Same stability rule for the label: only a real `fg` change rebuilds the
+  // style object (an unset `fg` keeps the element default — `undefined` style).
+  const labelStyle = useMemo<BevyStyle | undefined>(
+    () => (row.fg ? { color: row.fg } : undefined),
+    [row.fg],
+  );
   return (
     <button style={style} onClick={() => onSelect(row.id)}>
-      <text>{`${row.id} ${row.label}`}</text>
+      <text style={labelStyle}>{`${row.id} ${row.label}`}</text>
     </button>
   );
 });
@@ -299,6 +330,11 @@ const MONO = "Noto Sans Mono";
 // same layout, only `backgroundColor` differs).
 const ROW_BG_A = "#45475a";
 const ROW_BG_B = "#585b70";
+
+// Two label colors the `UpdateTextColor*` ops toggle between (a `color`-only
+// change on the row's `<text>`: same font, same content, no re-shape).
+const ROW_FG_A = "#f5c2e7";
+const ROW_FG_B = "#94e2d5";
 
 const appStyle: BevyStyle = {
   width: "100%",

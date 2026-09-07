@@ -16,26 +16,29 @@ throughput stays linear. `insertEvery2nd` doubles as a quadratic-behavior
 detector: if applying interleaved mid-list inserts costs O(table) each (e.g. a
 per-insert `Children` splice), the 1k→10k ratio reads ~100× instead of ~10×.
 
-| Op                    | Semantics (table of N rows)                          | Wire path exercised            |
-| --------------------- | ---------------------------------------------------- | ------------------------------ |
-| `create`              | replace the table with N fresh rows                  | mass spawn                     |
-| `append1`             | append 1 fresh row at the end                        | single insert-at-end           |
-| `append1k`            | append 1,000 fresh rows (fixed batch at both scales) | mass insert-at-end             |
-| `insert1`             | insert 1 fresh row at the middle                     | single mid-list `insertBefore` |
-| `insertEvery2nd`      | a fresh row after every 2nd existing row (→ ~1.5N)   | mass interleaved inserts       |
-| `updateText1`         | append `" !!!"` to one middle row's label            | single text update → relayout  |
-| `updateTextEvery2nd`  | same for every 2nd row                               | mass text updates → relayout   |
-| `updateColor1`        | toggle one middle row's `backgroundColor`            | single paint-only style delta  |
-| `updateColorEvery2nd` | same for every 2nd row                               | mass paint-only style deltas   |
-| `swap1`               | swap rows 1 and N−2                                  | 2 keyed moves                  |
-| `swapEvery2nd`        | swap each adjacent pair (0↔1, 2↔3, …)                | mass keyed moves               |
-| `remove1`             | remove one middle row                                | single despawn                 |
-| `removeEvery2nd`      | remove every 2nd row (→ N/2)                         | mass despawns                  |
-| `clear`               | empty the table                                      | full teardown                  |
+| Op                        | Semantics (table of N rows)                          | Wire path exercised            |
+| ------------------------- | ---------------------------------------------------- | ------------------------------ |
+| `create`                  | replace the table with N fresh rows                  | mass spawn                     |
+| `append1`                 | append 1 fresh row at the end                        | single insert-at-end           |
+| `append1k`                | append 1,000 fresh rows (fixed batch at both scales) | mass insert-at-end             |
+| `insert1`                 | insert 1 fresh row at the middle                     | single mid-list `insertBefore` |
+| `insertEvery2nd`          | a fresh row after every 2nd existing row (→ ~1.5N)   | mass interleaved inserts       |
+| `updateText1`             | append `" !!!"` to one middle row's label            | single text update → relayout  |
+| `updateTextEvery2nd`      | same for every 2nd row                               | mass text updates → relayout   |
+| `updateColor1`            | toggle one middle row's `backgroundColor`            | single paint-only style delta  |
+| `updateColorEvery2nd`     | same for every 2nd row                               | mass paint-only style deltas   |
+| `updateTextColor1`        | toggle one middle row's label `color`                | single text-color-only delta   |
+| `updateTextColorEvery2nd` | same for every 2nd row                               | mass text-color-only deltas    |
+| `swap1`                   | swap rows 1 and N−2                                  | 2 keyed moves                  |
+| `swapEvery2nd`            | swap each adjacent pair (0↔1, 2↔3, …)                | mass keyed moves               |
+| `remove1`                 | remove one middle row                                | single despawn                 |
+| `removeEvery2nd`          | remove every 2nd row (→ N/2)                         | mass despawns                  |
+| `clear`                   | empty the table                                      | full teardown                  |
 
 The rows are keyed and memoized, so swaps emit hierarchy **move** ops (not
-per-row updates), text updates hit the relayout path, and color updates hit the
-paint-only delta path.
+per-row updates), text updates hit the relayout path, color updates hit the
+paint-only delta path, and text-color updates hit the text-style delta path
+without changing content or font (so they must not re-shape the text).
 
 Capture runs the set in blocks so each measured op has a consistent, reported
 precondition (the `rows` column): the count-stable in-place ops share one
