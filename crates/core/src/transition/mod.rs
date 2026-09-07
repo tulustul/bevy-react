@@ -189,10 +189,127 @@ pub struct TransitionTargets {
     shared_seed: Option<&'static shared::SharedSeed>,
 }
 
+/// The drive's wake filter: a change tick on the input or on any component
+/// [`TransitionTargets`] reads or writes — one entry per target field (add
+/// the field's component here AND to [`RemovedTargets`] when adding a
+/// field). `TransitionState` itself is deliberately absent:
+/// `drive_layout_transitions` steps every state through `DerefMut` each
+/// frame, and the one cross-system state write this drive must see — a
+/// shared flight arming — holds `TransitionState::settled` false for the
+/// whole flight.
+type AnyTargetChanged = Or<(
+    Changed<TransitionInput>,
+    Changed<UiTransform>,
+    Changed<BackgroundColor>,
+    Changed<TextColor>,
+    Changed<ImageNode>,
+    Changed<Node>,
+    Changed<AnimatedNode>,
+    Changed<crate::layer::PromotedLayer>,
+    Changed<crate::layer::LayerGroupAlpha>,
+    Changed<crate::filters::FilterInput>,
+    Changed<crate::filters::ResolvedFilterChain>,
+    Changed<crate::filters::BackdropInput>,
+    Changed<crate::filters::ResolvedBackdropChain>,
+    Changed<crate::filters::MorphInput>,
+    Or<(
+        Changed<crate::filters::ResolvedMorphChain>,
+        Changed<crate::filters::MorphState>,
+        Changed<crate::layer::LayerCaptureRect>,
+        Changed<crate::layer::transform3d::LayerTransform3d>,
+        Changed<crate::svg::SvgShape>,
+        Changed<crate::ui_map::GradientTargets>,
+        Changed<BackgroundGradient>,
+        Changed<BorderGradient>,
+        Changed<shared::SharedSeed>,
+    )>,
+)>;
+
+/// The removal half of the wake set: a target component vanishing leaves no
+/// change tick, so any removal since the last run wakes EVERY node (a full
+/// walk — the pre-gate behavior — rather than per-node bookkeeping; removals
+/// are rare next to idle frames). Same field list as [`AnyTargetChanged`]
+/// minus the input (its removal takes the state with it) and the seed (only
+/// this drive removes it, after consuming it).
+#[derive(bevy::ecs::system::SystemParam)]
+pub struct RemovedTargets<'w, 's> {
+    bg: RemovedComponents<'w, 's, BackgroundColor>,
+    text: RemovedComponents<'w, 's, TextColor>,
+    image: RemovedComponents<'w, 's, ImageNode>,
+    node: RemovedComponents<'w, 's, Node>,
+    anim: RemovedComponents<'w, 's, AnimatedNode>,
+    promoted: RemovedComponents<'w, 's, crate::layer::PromotedLayer>,
+    layer_alpha: RemovedComponents<'w, 's, crate::layer::LayerGroupAlpha>,
+    filter_input: RemovedComponents<'w, 's, crate::filters::FilterInput>,
+    resolved_filter: RemovedComponents<'w, 's, crate::filters::ResolvedFilterChain>,
+    backdrop_input: RemovedComponents<'w, 's, crate::filters::BackdropInput>,
+    resolved_backdrop: RemovedComponents<'w, 's, crate::filters::ResolvedBackdropChain>,
+    morph_input: RemovedComponents<'w, 's, crate::filters::MorphInput>,
+    resolved_morph: RemovedComponents<'w, 's, crate::filters::ResolvedMorphChain>,
+    morph_state: RemovedComponents<'w, 's, crate::filters::MorphState>,
+    capture_rect: RemovedComponents<'w, 's, crate::layer::LayerCaptureRect>,
+    transform3d: RemovedComponents<'w, 's, crate::layer::transform3d::LayerTransform3d>,
+    shape: RemovedComponents<'w, 's, crate::svg::SvgShape>,
+    gradient_input: RemovedComponents<'w, 's, crate::ui_map::GradientTargets>,
+    bg_gradient: RemovedComponents<'w, 's, BackgroundGradient>,
+    border_gradient: RemovedComponents<'w, 's, BorderGradient>,
+}
+
+impl RemovedTargets<'_, '_> {
+    /// Whether any tracked component was removed since the last run. Reads
+    /// (and thereby consumes) every stream, so a removal is seen once.
+    fn any(&mut self) -> bool {
+        let mut any = false;
+        macro_rules! drain {
+            ($($f:ident),*) => {
+                $(any |= self.$f.read().next().is_some(); self.$f.clear();)*
+            };
+        }
+        drain!(
+            bg,
+            text,
+            image,
+            node,
+            anim,
+            promoted,
+            layer_alpha,
+            filter_input,
+            resolved_filter,
+            backdrop_input,
+            resolved_backdrop,
+            morph_input,
+            resolved_morph,
+            morph_state,
+            capture_rect,
+            transform3d,
+            shape,
+            gradient_input,
+            bg_gradient,
+            border_gradient
+        );
+        any
+    }
+}
+
 /// Advance every transitioning entity toward its [`TransitionInput`] target and
 /// write the eased value onto `UiTransform` / `BackgroundColor` / alpha. Runs
 /// after `apply_interaction_styles` (and thus after the op drain) so its writes
 /// land last in the frame.
+///
+/// Idle gate: a node whose channels are all settled
+/// ([`TransitionState::settled`], stamped at the end of its last drive) and
+/// whose input, targets and component set are exactly as this system last
+/// saw them has nothing to do — every block of the body is a retarget check
+/// followed by a compare-before-write, and both would find nothing. So the
+/// body runs only for the wake set: nodes still in flight, plus nodes with
+/// a change tick on ANY component the drive reads or writes (a re-render's
+/// static snap, a promotion flip, a resolver re-resolve, an op-merge shape
+/// write — [`AnyTargetChanged`], evaluated as a filter query so an idle node
+/// costs a per-archetype tick scan and never the full target fetch), plus
+/// every node when a target component vanished anywhere
+/// ([`RemovedTargets`]). Every re-assert path thus stays same-frame; the
+/// system's own writes carry its own tick and never wake it.
+#[allow(clippy::type_complexity, clippy::too_many_arguments)]
 pub fn drive_transitions(
     time: Res<Time>,
     mut commands: Commands,
@@ -203,15 +320,41 @@ pub fn drive_transitions(
     // a discrete swap (see `crate::filters::plan_filter_ease`).
     filter_registry: Option<Res<crate::filters::FilterRegistry>>,
     assets: Option<Res<AssetServer>>,
-    mut query: Query<(
-        Entity,
-        &TransitionInput,
-        &mut TransitionState,
-        TransitionTargets,
+    // `p0`: the change half of the wake set; `p1`: every node's settled
+    // flag; `p2`: the drive itself. A `ParamSet` because the first two read
+    // what the third writes.
+    mut queries: ParamSet<(
+        Query<Entity, (With<TransitionState>, AnyTargetChanged)>,
+        Query<(Entity, &TransitionState)>,
+        Query<(
+            Entity,
+            &TransitionInput,
+            &mut TransitionState,
+            TransitionTargets,
+        )>,
     )>,
+    mut removed: RemovedTargets,
+    // The wake set, kept across frames so an idle frame allocates nothing.
+    mut woken: Local<Vec<Entity>>,
 ) {
     let dt = time.delta_secs();
-    for (entity, input, mut state, mut targets) in &mut query {
+    woken.clear();
+    let all = removed.any();
+    for (entity, state) in &queries.p1() {
+        if all || !state.settled {
+            woken.push(entity);
+        }
+    }
+    if !all {
+        woken.extend(&queries.p0());
+        woken.sort_unstable();
+        woken.dedup();
+    }
+    let mut query = queries.p2();
+    for entity in woken.drain(..) {
+        let Ok((entity, input, mut state, mut targets)) = query.get_mut(entity) else {
+            continue;
+        };
         // Seed resting values on first sight so a freshly mounted element snaps to
         // its initial style instead of animating in from zero.
         if !state.initialized {
@@ -761,6 +904,14 @@ pub fn drive_transitions(
             state.shared.seed_frame = false;
         } else if state.shared.active && !state.seeded_still_running() {
             state.shared.active = false;
+        }
+
+        // Stamp the idle gate's flag (see the system doc): a node with
+        // nothing in flight is skipped next frame unless something changes
+        // under it.
+        let settled = !state.in_flight();
+        if state.settled != settled {
+            state.settled = settled;
         }
     }
 }

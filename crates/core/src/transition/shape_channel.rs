@@ -63,6 +63,14 @@ pub(super) struct ShapeChannel {
 }
 
 impl ShapeChannel {
+    /// Whether any tracked attr is still easing.
+    pub(super) fn in_flight(&self) -> bool {
+        self.slots
+            .iter()
+            .flatten()
+            .any(|slot| slot.ch.runner.is_some())
+    }
+
     /// Drop all tracking so the next [`Self::drive`] snaps. Called while the
     /// channel is parked (any `ShapeAttr` binding on the entity): unparking
     /// must re-seed at the live values, not ease from stale ones. This

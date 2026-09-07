@@ -85,9 +85,31 @@ pub struct TransitionState {
     /// Shared-element flight bookkeeping (see [`super::shared`]).
     pub(super) shared: super::shared::SharedFlight,
     pub(super) initialized: bool,
+    /// Nothing was in flight when `drive_transitions` last ran this node
+    /// (its idle gate: a settled node is skipped until something changes
+    /// under it). `false` until the first drive, so a fresh state always
+    /// runs its mount seed.
+    pub(super) settled: bool,
 }
 
 impl TransitionState {
+    /// Whether anything on this node is mid-flight — a runner live in any
+    /// channel `drive_transitions` steps, a morph settling, or a shared
+    /// flight owning the node. `false` means the next drive would be a pure
+    /// re-check (retarget detection + compare-before-write), which the
+    /// drive's idle gate skips unless something changed under it
+    /// ([`Self::settled`]).
+    pub(super) fn in_flight(&self) -> bool {
+        self.running_mask() != 0
+            || self.size_in_flight()
+            || self.morph.runner.is_some()
+            || self.morph.settling
+            || self.shape.in_flight()
+            || self.shared.active
+            || self.shared.seed_frame
+            || self.shared.size.is_some()
+    }
+
     /// Whether the node's own `size` channel is easing a `Node` dimension
     /// right now — while it is, the layout channel adopts each frame's rect
     /// silently (the one cause of a rect change the engine can attribute),
