@@ -25,7 +25,11 @@
 //! main-world system — picking, focus, `visibility_propagate_system`,
 //! devtools — can observe the flip, and both writes bypass change detection
 //! (the net effect within a frame is identity). Only VISIBLE members are
-//! flipped and stashed; a member the app hid stays as it is.
+//! flipped and stashed; a member the app hid stays as it is. Only members of
+//! layers that were actually **extracted** are candidates: `membership` is
+//! derived from the extracted layer set, so a layer skipped for being under
+//! a non-stock camera ([`super::stock_camera`]) keeps its members visible to
+//! stock extraction — that is how its subtree renders at all.
 //!
 //! The layer root is a member of its own layer, so its own drawable (its
 //! background/border) is skipped too — it is part of the capture. With no

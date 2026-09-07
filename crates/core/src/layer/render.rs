@@ -57,6 +57,7 @@ pub mod cached;
 pub mod clip;
 pub mod mips;
 pub mod morph;
+pub mod stock_camera;
 pub mod store;
 pub mod transform3d;
 pub mod warm;
@@ -328,6 +329,10 @@ pub struct ExtractedUiLayers {
     /// The camera's render-world entity ([`ui_layer_capture_pass`] gates on
     /// the current view being this camera).
     pub camera_render_entity: Option<Entity>,
+    /// Non-stock cameras already warned about ([`stock_camera`]): layers
+    /// under them are skipped every frame; the warn (and its formatting)
+    /// happens once per camera.
+    pub warned_cameras: HashSet<Entity>,
     /// Layer indices in capture order: deepest (innermost) first, so an outer
     /// capture's pass samples already-rendered inner captures.
     pub capture_order: Vec<usize>,
@@ -363,7 +368,17 @@ pub fn extract_ui_layers(
     membership: Extract<Res<LayerMembership>>,
     repaints: Extract<Res<super::LayerRepaintState>>,
     clips: Extract<Res<crate::layer::clip::LayerClips>>,
-    cameras: Extract<Query<(RenderEntity, &Camera), Or<(With<Camera2d>, With<Camera3d>)>>>,
+    cameras: Extract<
+        Query<
+            (
+                RenderEntity,
+                &Camera,
+                Option<&bevy::camera::RenderTarget>,
+                Has<bevy::ui::IsDefaultUiCamera>,
+            ),
+            Or<(With<Camera2d>, With<Camera3d>)>,
+        >,
+    >,
     main_pass_formats: Res<CameraMainPassTextureFormats>,
     mut store: ResMut<LayerTextureStore>,
 ) {
@@ -386,8 +401,34 @@ pub fn extract_ui_layers(
         return;
     }
 
-    // v1: all layers composite on one camera — the first layer root's UI
-    // target camera. (Multi-camera roots are a documented non-goal for now.)
+    // v1: all layers composite on ONE camera — the stock camera picked among
+    // the cameras that have layers this frame (default UI camera > window
+    // target > first seen, see [`stock_camera`]); a layer under any other
+    // camera is skipped below, so it never injects a quad specialized on a
+    // foreign target format into the stock phase.
+    let camera_of = |target_camera: &ComputedUiTargetCamera| {
+        let camera_main = target_camera.get()?;
+        let (camera_render, camera, target, is_default_ui) = cameras.get(camera_main).ok()?;
+        if !camera.is_active {
+            return None;
+        }
+        let target_format = main_pass_formats.get(&camera_render).copied()?;
+        let window_target = matches!(target, Some(bevy::camera::RenderTarget::Window(_)));
+        Some((
+            stock_camera::CameraCandidate {
+                entity: camera_main,
+                is_default_ui,
+                window_target,
+            },
+            camera_render,
+            target_format,
+        ))
+    };
+    let stock_camera = stock_camera::pick_stock_camera(
+        layers
+            .iter()
+            .filter_map(|l| camera_of(l.3).map(|(candidate, _, _)| candidate)),
+    );
     let mut layer_index: HashMap<Entity, usize> = HashMap::default();
     for (
         root,
@@ -405,18 +446,21 @@ pub fn extract_ui_layers(
         root_visibility,
     ) in layers.iter()
     {
-        let Some(camera_main) = target_camera.get() else {
+        let Some((candidate, camera_render, target_format)) = camera_of(target_camera) else {
             continue;
         };
-        let Ok((camera_render, camera)) = cameras.get(camera_main) else {
-            continue;
-        };
-        if !camera.is_active {
+        let camera_main = candidate.entity;
+        if Some(camera_main) != stock_camera {
+            // Non-stock camera: skipped, not extracted (no persistent
+            // entities, no membership → its members are neither stolen nor
+            // hidden by the cached-member skip; the subtree renders
+            // unpromoted in its own camera's phase).
+            let stock = stock_camera.expect("a candidate exists, so a stock camera was picked");
+            if extracted.warned_cameras.insert(camera_main) {
+                stock_camera::warn_skipped(camera_main, stock);
+            }
             continue;
         }
-        let Some(target_format) = main_pass_formats.get(&camera_render).copied() else {
-            continue;
-        };
         if extracted.stock_view.is_none() {
             extracted.stock_view = Some(RetainedViewEntity::new(
                 camera_main.into(),

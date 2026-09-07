@@ -75,6 +75,7 @@ fn js_warning_kind_table_covers_known_kinds() {
         "letterSpacing",
         "cache",
         "precompileFilters",
+        "layerCamera",
     ] {
         assert!(
             warnings_ts.contains(&format!("{kind}:"))
