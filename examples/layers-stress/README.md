@@ -65,10 +65,17 @@ cargo run -p bevy-react --example layers-stress -- --measure 15
   `n`, `animate`, `groupAlpha`, `filterMode` (`"off" | "half" | "all"`),
   `blur`, `animateFilter`. Unset, the committed defaults regenerate
   byte-identical. Rebuild without it to restore the interactive defaults.
-- `--measure <secs>` prints `[measure] t=…s fps=…` once per second (smoothed
-  FPS) and exits after `<secs>`. Hot reload is disabled so the file watcher
-  can't perturb the numbers. The first ~5 s are warm-up (pipeline compilation,
-  initial captures) — read the steady state off the tail.
+- `--measure <secs>` prints `[measure] t=…s fps=… viewport=…` once per second
+  (smoothed FPS) and exits after `<secs>`. Hot reload is disabled so the file
+  watcher can't perturb the numbers. The first ~5 s are warm-up (pipeline
+  compilation, initial captures) — read the steady state off the tail.
+- Measure mode renders **offscreen**: the UI camera is re-pointed at a
+  1280×832 `Image` render target (the demos example's `--shoot` mechanism), so
+  it works on an occluded or unmapped desktop window. Without it a 0×0 X11
+  surface records no camera target format, layout is empty, and the whole
+  render-side layer path (captures, filter passes, composites) silently never
+  runs — the FPS would measure an empty frame. The logged `viewport` proves
+  the frame is real (`Some(UVec2(1280, 832))`).
 
 ## Filter cost (measured 2026-07-22)
 

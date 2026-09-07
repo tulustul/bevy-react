@@ -11,7 +11,12 @@
 //!
 //! Unattended measurement: bake a scenario into the bundle with
 //! `STRESS_PRESET` (see `ui/build.mjs` and the README), then run with
-//! `--measure <secs>` to log FPS once per second and exit.
+//! `--measure <secs>` to log FPS once per second and exit. Measure mode renders
+//! into an **offscreen image** (the UI camera is re-pointed at it, the `--shoot`
+//! mechanism of the demos example): an occluded/unmapped X11 window reports a
+//! 0×0 surface, under which bevy records no camera target format, layout is
+//! empty, and the whole layer path (captures, filters, composites) never runs —
+//! the FPS would measure an empty frame.
 //!
 //! Vsync is always off (`PresentMode::AutoNoVsync`) so FPS reflects actual
 //! throughput instead of pinning at the refresh rate.
@@ -23,7 +28,9 @@ mod fps;
 
 use std::path::PathBuf;
 
+use bevy::camera::RenderTarget;
 use bevy::prelude::*;
+use bevy::render::render_resource::TextureFormat;
 use bevy::ui::IsDefaultUiCamera;
 use bevy::window::PresentMode;
 use bevy_react::ReactUiPlugin;
@@ -54,7 +61,8 @@ fn main() {
     // `--measure <secs>` runs unattended: log the smoothed FPS to stdout once
     // per second and exit after <secs>. Preset the scenario by baking a
     // `STRESS_PRESET` into the bundle first (see `ui/build.mjs`). Hot reload is
-    // off so the file watcher can't perturb the numbers.
+    // off so the file watcher can't perturb the numbers, and the app renders
+    // offscreen (see the module doc).
     let measure = args.iter().position(|a| a == "--measure").map(|i| {
         args.get(i + 1)
             .and_then(|s| s.parse::<f64>().ok())
@@ -64,6 +72,7 @@ fn main() {
     let mut app = build_app(/* hot_reload */ measure.is_none());
     if let Some(secs) = measure {
         app.insert_resource(MeasureFor(secs))
+            .add_systems(PostStartup, redirect_ui_camera_to_image)
             .add_systems(Update, measure_fps);
     }
     app.run();
@@ -73,13 +82,40 @@ fn main() {
 #[derive(Resource)]
 struct MeasureFor(f64);
 
+/// The offscreen target `--measure` renders into (logical = physical px; the
+/// demos example's `--shoot` default).
+const MEASURE_SIZE: (u32, u32) = (1280, 832);
+
+/// Re-point the UI camera (spawned by `spawn_ui_camera` in `Startup`) at an
+/// offscreen image of [`MEASURE_SIZE`], so layout and the render-side layer
+/// path run for real whatever the window surface is (see the module doc). The
+/// `RenderTarget` component holds the image handle, keeping the asset alive.
+fn redirect_ui_camera_to_image(
+    mut commands: Commands,
+    mut images: ResMut<Assets<Image>>,
+    camera: Single<Entity, With<IsDefaultUiCamera>>,
+) {
+    let (width, height) = MEASURE_SIZE;
+    let handle = images.add(Image::new_target_texture(
+        width,
+        height,
+        TextureFormat::Rgba8UnormSrgb,
+        None,
+    ));
+    commands
+        .entity(*camera)
+        .insert(RenderTarget::Image(handle.into()));
+}
+
 /// Print the smoothed FPS once per second; request exit once the measurement
 /// window has elapsed. The first samples are warm-up (pipeline compilation,
-/// initial captures) — read the steady state off the tail.
+/// initial captures) — read the steady state off the tail. The camera's
+/// viewport size rides along so a log proves the frame was a real one.
 fn measure_fps(
     time: Res<Time>,
     diagnostics: Res<bevy::diagnostic::DiagnosticsStore>,
     cfg: Res<MeasureFor>,
+    camera: Single<&Camera, With<IsDefaultUiCamera>>,
     mut last_print: Local<f64>,
     mut exit: MessageWriter<AppExit>,
 ) {
@@ -90,7 +126,8 @@ fn measure_fps(
             .get(&bevy::diagnostic::FrameTimeDiagnosticsPlugin::FPS)
             .and_then(|d| d.smoothed())
         {
-            println!("[measure] t={t:.0}s fps={fps:.1}");
+            let viewport = camera.physical_viewport_size();
+            println!("[measure] t={t:.0}s fps={fps:.1} viewport={viewport:?}");
         }
     }
     if t >= cfg.0 {
