@@ -9,8 +9,10 @@ export function TestBanner({ style }: Props) {
   return (
     <node
       style={{
-        ...style,
         width: 180,
+        // The caller's style wins over the defaults above it (the size
+        // animation overrides `width`/`height`).
+        ...style,
         backgroundColor: Colors.surface300,
         border: 2,
         borderColor: "white",

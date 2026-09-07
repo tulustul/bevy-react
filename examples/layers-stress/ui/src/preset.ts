@@ -16,6 +16,7 @@ export type Preset = {
   filterMode: FilterMode;
   blur: boolean;
   animateFilter: boolean;
+  animateSize: boolean;
 };
 
 export const PRESET: Preset = {
@@ -25,4 +26,5 @@ export const PRESET: Preset = {
   filterMode: "off",
   blur: false,
   animateFilter: false,
+  animateSize: false,
 };

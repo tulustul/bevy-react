@@ -25,6 +25,7 @@ const DEFAULT_PRESET = {
   filterMode: "off",
   blur: false,
   animateFilter: false,
+  animateSize: false,
 };
 
 const FILTER_MODES = ["off", "half", "all"];
@@ -92,6 +93,7 @@ export type Preset = {
   filterMode: FilterMode;
   blur: boolean;
   animateFilter: boolean;
+  animateSize: boolean;
 };
 
 export const PRESET: Preset = {
@@ -101,6 +103,7 @@ export const PRESET: Preset = {
   filterMode: ${JSON.stringify(p.filterMode)},
   blur: ${JSON.stringify(p.blur)},
   animateFilter: ${JSON.stringify(p.animateFilter)},
+  animateSize: ${JSON.stringify(p.animateSize)},
 };
 `;
   writeFileSync(

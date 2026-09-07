@@ -30,6 +30,11 @@ is always off, so the FPS readout reflects real throughput.
   the bridge as a params-only style delta per filtered item — this exercises
   the filter-param update path (re-run filter passes, no re-capture). Only
   meaningful with the `blur` variant.
+- **animate size** — Rust-driven `width`/`height` ping-pong on every banner
+  (`{ animated }` bindings, +20 px, per-card duration/stagger like
+  **animations**). Each frame relayouts the card and re-captures its layer —
+  and changes the layer's texture size, which is what stresses the layer
+  texture allocation path (a capture + ping-pongs sized to the border box).
 - **fps** — smoothed FPS from Bevy's `FrameTimeDiagnosticsPlugin`, pushed to
   React ~4x/sec over the `layersStress.fps` event.
 
@@ -63,7 +68,7 @@ cargo run -p bevy-react --example layers-stress -- --measure 15
   invalid `filterMode` variants are rejected at build time) is baked into the
   bundle by `ui/build.mjs` as `src/preset.ts` — the UI's startup state. Keys:
   `n`, `animate`, `groupAlpha`, `filterMode` (`"off" | "half" | "all"`),
-  `blur`, `animateFilter`. Unset, the committed defaults regenerate
+  `blur`, `animateFilter`, `animateSize`. Unset, the committed defaults regenerate
   byte-identical. Rebuild without it to restore the interactive defaults.
 - `--measure <secs>` prints `[measure] t=…s fps=… viewport=…` once per second
   (smoothed FPS) and exits after `<secs>`. Hot reload is disabled so the file

@@ -24,6 +24,7 @@ export function App() {
   const [filterMode, setFilterMode] = useState<FilterMode>(PRESET.filterMode);
   const [blur, setBlur] = useState(PRESET.blur);
   const [animateFilter, setAnimateFilter] = useState(PRESET.animateFilter);
+  const [animateSize, setAnimateSize] = useState(PRESET.animateSize);
 
   // One shared driver for every filtered item's blur radius: a JS interval
   // oscillating 2..10 px. Unlike the Rust-driven opacity/translate animations
@@ -57,6 +58,7 @@ export function App() {
               key={item.id}
               item={item}
               animate={animate}
+              animateSize={animateSize}
               groupAlpha={groupAlpha}
               filtered={filtered}
               blur={blur}
@@ -106,6 +108,11 @@ export function App() {
           label={animateFilter ? "animate filter: on" : "animate filter: off"}
           selected={animateFilter}
           onClick={() => setAnimateFilter((a) => !a)}
+        />
+        <Btn
+          label={animateSize ? "animate size: on" : "animate size: off"}
+          selected={animateSize}
+          onClick={() => setAnimateSize((a) => !a)}
         />
         <FpsReadout />
       </node>

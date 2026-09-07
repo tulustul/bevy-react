@@ -12,9 +12,16 @@ import type { Item } from "./items";
 // Known upstream caveat: shared-value ids are never freed on unmount, so
 // switching 500 → 20 strands Bevy-side table entries until a reload. Harmless
 // for a stress tool.
+/** The banner's resting size (its natural layout at `width: 180`) and the
+ *  `animateSize` ping-pong amplitude in px. */
+const BASE_WIDTH = 180;
+const BASE_HEIGHT = 150;
+const SIZE_AMPLITUDE = 20;
+
 export const StressItem = memo(function StressItem({
   item,
   animate,
+  animateSize,
   groupAlpha,
   filtered,
   blur,
@@ -22,6 +29,9 @@ export const StressItem = memo(function StressItem({
 }: {
   item: Item;
   animate: boolean;
+  /** Rust-driven `width`/`height` ping-pong on the banner (±20 px): every
+   *  frame relayouts + re-captures the layer and changes its texture size. */
+  animateSize: boolean;
   groupAlpha: boolean;
   /** Whether this item carries a `filter` chain (share picked by the App). */
   filtered: boolean;
@@ -37,6 +47,36 @@ export const StressItem = memo(function StressItem({
   const tx = useSharedValue(0);
   const ty = useSharedValue(0);
   const op = useSharedValue(item.opacity);
+  const w = useSharedValue(BASE_WIDTH);
+  const h = useSharedValue(BASE_HEIGHT);
+
+  useEffect(() => {
+    if (animateSize) {
+      const loop = (to: number) =>
+        withDelay(
+          item.delay,
+          withRepeat(
+            withTiming(to, { duration: item.durMove, easing: "easeInOut" }),
+            { reverse: true },
+          ),
+        );
+      w.value = loop(BASE_WIDTH + SIZE_AMPLITUDE);
+      h.value = loop(BASE_HEIGHT + SIZE_AMPLITUDE);
+    } else {
+      w.value = BASE_WIDTH;
+      h.value = BASE_HEIGHT;
+    }
+  }, [animateSize, item, w, h]);
+
+  // Only bind the banner's size while animating: with the key off the
+  // banner keeps its natural (content-driven) height, exactly as before.
+  const bannerStyle = useMemo<BevyStyle | undefined>(
+    () =>
+      animateSize
+        ? { width: { animated: w }, height: { animated: h } }
+        : undefined,
+    [animateSize, w, h],
+  );
 
   useEffect(() => {
     if (animate) {
@@ -92,7 +132,7 @@ export const StressItem = memo(function StressItem({
 
   return (
     <node style={style}>
-      <TestBanner />
+      <TestBanner style={bannerStyle} />
     </node>
   );
 });
