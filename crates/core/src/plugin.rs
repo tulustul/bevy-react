@@ -356,6 +356,7 @@ impl Plugin for ReactUiPlugin {
                         ),
                     )
                     .init_resource::<lr::clip::SwappedClips>()
+                    .init_resource::<lr::cached::HiddenMembers>()
                     // `precompile_filters`: the shader list crosses in extract,
                     // the pipelines are queued per newly seen camera format
                     // before any prepare that would specialize them lazily.
@@ -404,6 +405,31 @@ impl Plugin for ReactUiPlugin {
                                 .after(RenderUiSystems::ExtractCursor)
                                 .after(RenderUiSystems::ExtractDebug)
                                 .after(RenderUiSystems::ExtractGradient),
+                            // The cached-layer extraction skip: members of
+                            // layers served from cache are HIDDEN for the
+                            // span of the stock item extractors (same
+                            // exclusive-borrow contract as the clip swap).
+                            // Needs the final `needs_capture`, so it follows
+                            // `extract_ui_layers` (itself after the camera
+                            // view set) and precedes every item set.
+                            lr::cached::hide_cached_layer_members
+                                .after(lr::extract_ui_layers)
+                                .before(RenderUiSystems::ExtractBoxShadows)
+                                .before(RenderUiSystems::ExtractBackgrounds)
+                                .before(RenderUiSystems::ExtractImages)
+                                .before(RenderUiSystems::ExtractTextureSlice)
+                                .before(RenderUiSystems::ExtractBorders)
+                                .before(RenderUiSystems::ExtractViewportNodes)
+                                .before(RenderUiSystems::ExtractTextBackgrounds)
+                                .before(RenderUiSystems::ExtractTextShadows)
+                                .before(RenderUiSystems::ExtractText)
+                                .before(RenderUiSystems::ExtractCursor)
+                                .before(RenderUiSystems::ExtractDebug)
+                                .before(RenderUiSystems::ExtractGradient),
+                            // Restore after every item set — the clip
+                            // swap-out already sits after all of them.
+                            lr::cached::restore_cached_layer_members
+                                .after(lr::clip::swap_interior_clips_out),
                         ),
                     )
                     .add_systems(
