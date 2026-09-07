@@ -24,6 +24,34 @@ use bevy::ui::{ComputedNode, ComputedUiRenderTargetInfo, ContentSize};
 
 use super::walk::{ShapeQuery, climb_to_svg_root, walk_shapes};
 use super::{SvgDocument, SvgShape, SvgSurface, stamp_intrinsic_measure};
+use crate::animations::AnimatedNode;
+use crate::transition::TransitionState;
+
+/// While a file-mode node's size is being eased, its raster re-runs only once
+/// an axis has moved this fraction from the last raster (the `Stretch` image
+/// mode carries the old pixels in between) — see [`resize_deferred`].
+const EASE_RERASTER_RATIO: f32 = 0.12;
+
+/// Whether a file-mode layout resize from `last` (the last rastered size) to
+/// `size` is deferred: the node's size is in motion — its own `size` channel
+/// (a `transition: { size }` ease or a shared-element flight) or a `Node`
+/// layout binding — and no axis has drifted [`EASE_RERASTER_RATIO`] yet.
+/// A resize the engine is not driving (a plain style change, a window
+/// resize) re-rasters immediately, as does the frame the ease settles.
+fn resize_deferred(
+    state: Option<&TransitionState>,
+    animated: Option<&AnimatedNode>,
+    last: UVec2,
+    size: UVec2,
+) -> bool {
+    let moving = state.is_some_and(TransitionState::size_in_flight)
+        || animated.is_some_and(|a| a.0.has_node_props());
+    if !moving {
+        return false;
+    }
+    let ratio = |a: u32, b: u32| (a as f32 - b as f32).abs() / (b.max(1) as f32);
+    ratio(size.x, last.x).max(ratio(size.y, last.y)) < EASE_RERASTER_RATIO
+}
 
 /// Rasterize `doc` into a `w`×`h` pixmap with the web's `<img>` behavior for
 /// SVG sources: uniform scale, `xMidYMid meet` centering — the document's
@@ -63,7 +91,8 @@ fn touched_docs(events: &mut MessageReader<AssetEvent<SvgDocument>>) -> Vec<Asse
 }
 
 /// Repaint every svg surface whose raster is stale — a repaint request
-/// (`dirty`), a layout resize, a document load/hot-reload (file mode), or a
+/// (`dirty`), a layout resize (file mode: deferred while the engine eases the
+/// size, see [`resize_deferred`]), a document load/hot-reload (file mode), or a
 /// shape/child-list change (JSX mode, derived below) — and upload the result
 /// into the backing image. Reads the node's size from [`ComputedNode`]
 /// (already physical px, so HiDPI rasters crisp); a freshly-mounted node has
@@ -81,6 +110,8 @@ pub fn update_svg_surfaces(
         Option<&Children>,
         &mut SvgSurface,
         &mut ContentSize,
+        Option<&TransitionState>,
+        Option<&AnimatedNode>,
     )>,
     shapes: ShapeQuery,
     changed_shapes: Query<Entity, Changed<SvgShape>>,
@@ -128,7 +159,9 @@ pub fn update_svg_surfaces(
     }
 
     let touched = touched_docs(&mut doc_events);
-    for (entity, node, image_node, children, mut surface, mut content_size) in &mut query {
+    for (entity, node, image_node, children, mut surface, mut content_size, state, animated) in
+        &mut query
+    {
         // `None` is a JSX `<svg>` root — its picture is the `SvgShape`
         // children, not an asset.
         let Some(doc_handle) = surface.doc.as_ref() else {
@@ -164,6 +197,16 @@ pub fn update_svg_surfaces(
         let size = UVec2::new(w, h);
         if !surface.dirty && surface.last_size == size && !doc_touched {
             continue; // clean: not a single mutable deref taken
+        }
+        // A resize the engine is easing keeps stretching the previous raster
+        // until it settles or drifts far enough (deref-free, like the clean
+        // path) — a `resvg::render` + upload per eased frame is the cost.
+        if !surface.dirty
+            && !doc_touched
+            && surface.last_size != UVec2::ZERO
+            && resize_deferred(state, animated, surface.last_size, size)
+        {
+            continue;
         }
         // `contains` (not `get_mut`) so a skipped raster below never flags the
         // asset changed — and thus re-uploaded — for nothing.

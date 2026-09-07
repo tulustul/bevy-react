@@ -90,8 +90,9 @@ pub struct TransitionState {
 impl TransitionState {
     /// Whether the node's own `size` channel is easing a `Node` dimension
     /// right now — while it is, the layout channel adopts each frame's rect
-    /// silently (the one cause of a rect change the engine can attribute).
-    pub(super) fn size_in_flight(&self) -> bool {
+    /// silently (the one cause of a rect change the engine can attribute),
+    /// and a file-mode svg defers its re-raster (`svg::raster`).
+    pub(crate) fn size_in_flight(&self) -> bool {
         // Generated from the channel table's `size` rows — the same rows the
         // size drive block writes — so a new size channel can't be missed.
         macro_rules! size_row {
