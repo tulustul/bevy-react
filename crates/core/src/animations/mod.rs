@@ -126,6 +126,10 @@ pub struct AnimationInbox(pub(crate) Receiver<AnimationCommand>);
 pub struct SharedValues {
     values: HashMap<SharedId, SharedValueState>,
     settled: Vec<AnimationSettled>,
+    /// How many entries carry a live driver — the tick's idle gate (an
+    /// idle table is neither iterated nor marked changed, so the applier's
+    /// `Res` change detection reads "nothing moved").
+    active: usize,
 }
 
 struct SharedValueState {
@@ -165,6 +169,12 @@ impl SharedValues {
         self.values.is_empty()
     }
 
+    /// Whether any shared value has a live driver (something will move on
+    /// the next tick).
+    pub fn has_active(&self) -> bool {
+        self.active > 0
+    }
+
     fn declare(&mut self, id: SharedId, initial: f32) {
         // Idempotent: only the first declaration sets the initial reading, so a
         // value survives React re-renders (matching `useSharedValue`).
@@ -183,7 +193,9 @@ impl SharedValues {
         });
         self.settled.extend(s.interrupted(id));
         s.current = value;
-        s.active = None;
+        if s.active.take().is_some() {
+            self.active -= 1;
+        }
     }
 
     fn animate(&mut self, id: SharedId, driver: &Driver, token: Option<u64>) {
@@ -194,6 +206,9 @@ impl SharedValues {
         });
         self.settled.extend(s.interrupted(id));
         let from = s.current;
+        if s.active.is_none() {
+            self.active += 1;
+        }
         s.active = Some(build_runner(driver, from));
         s.token = token;
     }
@@ -201,24 +216,31 @@ impl SharedValues {
     fn cancel(&mut self, id: SharedId) {
         if let Some(s) = self.values.get_mut(&id) {
             self.settled.extend(s.interrupted(id));
-            s.active = None;
+            if s.active.take().is_some() {
+                self.active -= 1;
+            }
         }
     }
 
     fn clear(&mut self) {
         self.values.clear();
+        self.active = 0;
         // Reset also wipes the JS callback registry, so pending settlements would
         // land on nobody — drop them.
         self.settled.clear();
     }
 
     fn tick(&mut self, dt: f32) {
+        if self.active == 0 {
+            return;
+        }
         for (&id, s) in self.values.iter_mut() {
             if let Some(runner) = s.active.as_mut() {
                 let (value, finished) = runner.step(dt);
                 s.current = value;
                 if finished {
                     s.active = None;
+                    self.active -= 1;
                     if let Some(token) = s.token.take() {
                         self.settled.push(AnimationSettled {
                             id,
@@ -253,7 +275,11 @@ fn drain_animation_commands(
             AnimationCommand::Clear => values.clear(),
         }
     }
-    settled.write_batch(values.take_settled());
+    // Read before write: an idle frame must not mark the table changed (the
+    // applier's idle gate reads that tick as "a value moved").
+    if !values.settled.is_empty() {
+        settled.write_batch(values.take_settled());
+    }
 }
 
 fn tick_animations(
@@ -261,6 +287,11 @@ fn tick_animations(
     mut values: ResMut<SharedValues>,
     mut settled: MessageWriter<AnimationSettled>,
 ) {
+    // Idle gate: no live driver → nothing to step, and no `DerefMut` so the
+    // table's change tick stays put (see `apply_animated_nodes`).
+    if !values.has_active() {
+        return;
+    }
     values.tick(time.delta_secs());
     settled.write_batch(values.take_settled());
 }

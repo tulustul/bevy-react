@@ -73,6 +73,85 @@ pub(super) struct AnimTargets {
     border_gradient: Option<&'static mut bevy::ui::BorderGradient>,
 }
 
+/// The applier's wake filter: a change tick on the bindings or on any
+/// component [`AnimTargets`] reads or writes (one entry per target field —
+/// add the field's component here when adding a field).
+type AnyTargetChanged = Or<(
+    Changed<AnimatedNode>,
+    Changed<UiTransform>,
+    Changed<BackgroundColor>,
+    Changed<BorderColor>,
+    Changed<TextColor>,
+    Changed<ImageNode>,
+    Changed<Node>,
+    Changed<crate::layer::PromotedLayer>,
+    Changed<crate::layer::LayerGroupAlpha>,
+    Changed<crate::filters::ResolvedFilterChain>,
+    Changed<crate::filters::ResolvedBackdropChain>,
+    Changed<crate::filters::ResolvedMorphChain>,
+    Changed<crate::layer::transform3d::LayerTransform3d>,
+    Changed<crate::svg::SvgShape>,
+    Or<(
+        Changed<crate::ui_map::GradientTargets>,
+        Changed<bevy::ui::BackgroundGradient>,
+        Changed<bevy::ui::BorderGradient>,
+    )>,
+)>;
+
+/// The removal half of the wake set: a target component (or the bindings)
+/// vanishing since the last run — same field list as [`AnyTargetChanged`].
+#[derive(bevy::ecs::system::SystemParam)]
+pub(super) struct RemovedTargets<'w, 's> {
+    anim: RemovedComponents<'w, 's, AnimatedNode>,
+    bg: RemovedComponents<'w, 's, BackgroundColor>,
+    border: RemovedComponents<'w, 's, BorderColor>,
+    text: RemovedComponents<'w, 's, TextColor>,
+    image: RemovedComponents<'w, 's, ImageNode>,
+    node: RemovedComponents<'w, 's, Node>,
+    promoted: RemovedComponents<'w, 's, crate::layer::PromotedLayer>,
+    layer_alpha: RemovedComponents<'w, 's, crate::layer::LayerGroupAlpha>,
+    resolved_filter: RemovedComponents<'w, 's, crate::filters::ResolvedFilterChain>,
+    resolved_backdrop: RemovedComponents<'w, 's, crate::filters::ResolvedBackdropChain>,
+    resolved_morph: RemovedComponents<'w, 's, crate::filters::ResolvedMorphChain>,
+    transform3d: RemovedComponents<'w, 's, crate::layer::transform3d::LayerTransform3d>,
+    shape: RemovedComponents<'w, 's, crate::svg::SvgShape>,
+    gradient_input: RemovedComponents<'w, 's, crate::ui_map::GradientTargets>,
+    bg_gradient: RemovedComponents<'w, 's, bevy::ui::BackgroundGradient>,
+    border_gradient: RemovedComponents<'w, 's, bevy::ui::BorderGradient>,
+}
+
+impl RemovedTargets<'_, '_> {
+    /// Whether any tracked component was removed since the last run. Reads
+    /// (and thereby consumes) every stream, so a removal is seen once.
+    fn any(&mut self) -> bool {
+        let mut any = false;
+        macro_rules! drain {
+            ($($f:ident),*) => {
+                $(any |= self.$f.read().next().is_some(); self.$f.clear();)*
+            };
+        }
+        drain!(
+            anim,
+            bg,
+            border,
+            text,
+            image,
+            node,
+            promoted,
+            layer_alpha,
+            resolved_filter,
+            resolved_backdrop,
+            resolved_morph,
+            transform3d,
+            shape,
+            gradient_input,
+            bg_gradient,
+            border_gradient
+        );
+        any
+    }
+}
+
 /// Bind-time validation memory for a warn-once stage: which entities'
 /// bindings have been validated, each with a stamp of per-entity stage state
 /// `S` whose drift re-triggers validation. Stage 4 stamps the chains'
@@ -122,7 +201,7 @@ impl<S: PartialEq> ValidationMemory<S> {
 /// opacity's final alpha (3), filter/backdrop params (4), shape attrs (5),
 /// gradient leaves (6 — after the opacity pre-resolve so the driven alpha
 /// folds in), then the validation-memory prunes.
-#[allow(clippy::type_complexity)]
+#[allow(clippy::type_complexity, clippy::too_many_arguments)]
 pub(super) fn apply_animated_nodes(
     mut commands: Commands,
     values: Res<SharedValues>,
@@ -142,11 +221,36 @@ pub(super) fn apply_animated_nodes(
     // the stamp is rebuilt from every gradient style change, which also
     // restamps the bindings, so no state pair is needed.
     mut gradient_validated: Local<ValidationMemory<()>>,
-    mut query: Query<(Entity, Ref<AnimatedNode>, AnimTargets)>,
+    // `p0`: the idle gate's wake set (see the body) — any animated node
+    // whose bindings or any target component changed since this system
+    // last ran. `p1`: the walk itself. A `ParamSet` because the change
+    // filters read what the walk writes.
+    mut queries: ParamSet<(
+        Query<(), (With<AnimatedNode>, AnyTargetChanged)>,
+        Query<(Entity, Ref<AnimatedNode>, AnimTargets)>,
+    )>,
+    mut removed: RemovedTargets,
 ) {
+    // Idle gate: every stage is "evaluate the bindings, compare, write on a
+    // difference" — when no shared value moved since the last run
+    // (`SharedValues` is only marked changed by a command or a live tick —
+    // see `drain_animation_commands`/`tick_animations`), no node's bindings
+    // or target components changed under the last writes, and no target
+    // component vanished (a removal leaves no change tick; stage 2
+    // re-inserts a removed background/border), every write below would be a
+    // no-op. Skipping the walk keeps the re-assert contracts intact: a
+    // re-render's static snap, a promotion flip, a chain re-resolve or a
+    // gradient restamp all tick a component in the wake set, and the walk
+    // runs the same frame as before. The validation-memory prunes only run
+    // with the walk, over the complete lists — nothing was removed on a
+    // skipped frame (`RemovedComponents<AnimatedNode>` is in the wake set).
+    if !values.is_changed() && queries.p0().is_empty() && !removed.any() {
+        return;
+    }
     let mut filter_bound: Vec<Entity> = Vec::new();
     let mut shape_bound: Vec<Entity> = Vec::new();
     let mut gradient_bound: Vec<Entity> = Vec::new();
+    let mut query = queries.p1();
     for (entity, anim, mut t) in &mut query {
         let b = &anim.0;
         let promoted = t.promoted.is_some();
