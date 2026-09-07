@@ -18,9 +18,12 @@
 //! ## Render model
 //!
 //! Each surface is [`RenderMode::Live`] (the UI camera renders every frame — the
-//! default, correct for animated/interactive UI) or [`RenderMode::Snapshot`]
-//! (renders once on register/[`invalidate`](Surfaces::invalidate), then freezes —
-//! cheap for static panels). [`drive_surfaces`] toggles `Camera::is_active`.
+//! default, correct for animated/interactive UI — **while a mesh displaying it is
+//! visible**: a surface whose every [`SurfacePointer`] mesh is culled from all views
+//! costs nothing; a surface with no tagged mesh is assumed visible) or
+//! [`RenderMode::Snapshot`] (renders once on register/[`invalidate`](Surfaces::invalidate),
+//! then freezes — cheap for static panels). [`drive_surfaces`] toggles
+//! `Camera::is_active`.
 //!
 //! ## Interaction
 //!
@@ -33,11 +36,12 @@
 //! `onClick`/`onPointer*` calls. The virtual pointer's id is published in
 //! [`SurfaceVirtualPointer`] so the core crate can scope its event collection to it.
 
+use bevy::camera::visibility::ViewVisibility;
 use bevy::camera::{ImageRenderTarget, NormalizedRenderTarget, RenderTarget as BevyRenderTarget};
 use bevy::mesh::{Indices, VertexAttributeValues};
 use bevy::picking::mesh_picking::ray_cast::{MeshRayCast, MeshRayCastSettings, RayMeshHit};
 use bevy::picking::pointer::{Location, PointerAction, PointerButton, PointerId, PointerInput};
-use bevy::platform::collections::HashMap;
+use bevy::platform::collections::{HashMap, HashSet};
 use bevy::prelude::*;
 use bevy::render::render_resource::TextureFormat;
 
@@ -59,7 +63,9 @@ const SURFACE_POINTER_UUID: uuid::Uuid =
 /// How often a surface's UI camera renders into its texture.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RenderMode {
-    /// The camera renders every frame (animated or interactive UI — the default).
+    /// The camera renders every frame a [`SurfacePointer`] mesh displaying the
+    /// surface is visible (animated or interactive UI — the default); with no
+    /// tagged mesh it renders every frame. See [`drive_surfaces`].
     Live,
     /// The camera renders once when the surface is registered or
     /// [`invalidate`](Surfaces::invalidate)d, then freezes (static panels).
@@ -323,16 +329,38 @@ pub fn bind_surfaces(
     }
 }
 
-/// Toggle each surface camera's activity: always on for [`RenderMode::Live`]; on
-/// for one frame after a dirty [`RenderMode::Snapshot`], then off. Mirrors the
-/// portal crate's `drive_render_targets`. Also despawns the camera of a surface
-/// that has been [`remove`](Surfaces::remove)d, so a torn-down surface (e.g. on a
-/// scene switch) leaves no orphan camera rendering into a freed texture.
+/// Set each surface camera's `is_active` for this frame's render:
+/// - [`RenderMode::Live`]: on while some [`SurfacePointer`] mesh naming the surface
+///   is [`ViewVisibility`]-visible in any view this frame (the tagged meshes are the
+///   only consumers the crate can see — a material sampling the texture is opaque
+///   to it). A surface with **no** tagged mesh is assumed displayed and renders
+///   every frame, so untagged/decal consumers never go dark; tag every mesh that
+///   displays a surface to get the idle saving.
+/// - [`RenderMode::Snapshot`]: on for one frame after it is dirtied, then off.
+///
+/// Scheduled in `PostUpdate` after bevy's visibility culling (`ViewVisibility` is
+/// this frame's) and before extraction reads `is_active`, so a screen that scrolls
+/// back into a frustum renders the same frame. Mirrors the portal module's
+/// `drive_portal_cameras`. Also despawns the camera of a surface that has been
+/// [`remove`](Surfaces::remove)d, so a torn-down surface (e.g. on a scene switch)
+/// leaves no orphan camera rendering into a freed texture.
 pub fn drive_surfaces(
     mut commands: Commands,
     mut surfaces: ResMut<Surfaces>,
+    displays: Query<(&SurfacePointer, Option<&ViewVisibility>)>,
     mut cameras: Query<(Entity, &SurfaceCamera, &mut Camera)>,
 ) {
+    // Surfaces with a tagged display mesh, and those with one visible this frame.
+    // A tagged entity without `ViewVisibility` (not a renderable) counts as visible.
+    let mut tagged: HashSet<&str> = HashSet::default();
+    let mut seen: HashSet<&str> = HashSet::default();
+    for (pointer, visibility) in &displays {
+        tagged.insert(pointer.surface.as_str());
+        if visibility.is_none_or(|v| v.get()) {
+            seen.insert(pointer.surface.as_str());
+        }
+    }
+
     for (entity, cam, mut camera) in &mut cameras {
         let Some(entry) = surfaces.entries.get_mut(&cam.0) else {
             commands.entity(entity).despawn();
@@ -344,19 +372,17 @@ pub fn drive_surfaces(
             commands.entity(entity).despawn();
             continue;
         }
-        match entry.mode {
-            RenderMode::Live => {
-                if !camera.is_active {
-                    camera.is_active = true;
-                }
-            }
+        let name = cam.0.as_str();
+        let active = match entry.mode {
+            RenderMode::Live => !tagged.contains(name) || seen.contains(name),
             RenderMode::Snapshot => {
-                let active = entry.dirty;
-                if camera.is_active != active {
-                    camera.is_active = active;
-                }
+                let dirty = entry.dirty;
                 entry.dirty = false;
+                dirty
             }
+        };
+        if camera.is_active != active {
+            camera.is_active = active;
         }
     }
 }
@@ -576,6 +602,44 @@ mod tests {
         surfaces.entries.get_mut("monitor").unwrap().dirty = false;
         surfaces.invalidate("monitor");
         assert!(surfaces.entries["monitor"].dirty);
+    }
+
+    /// A live surface camera renders while no mesh is tagged for it, or while any
+    /// tagged [`SurfacePointer`] mesh is visible in some view; it idles once every
+    /// tagged mesh is culled.
+    #[test]
+    fn live_surface_camera_follows_tagged_mesh_visibility() {
+        let mut app = test_app();
+        app.add_systems(Update, (bind_surfaces, drive_surfaces).chain());
+        app.world_mut()
+            .resource_scope(|world, mut surfaces: Mut<Surfaces>| {
+                let mut images = world.resource_mut::<Assets<Image>>();
+                surfaces.create(&mut images, "monitor", SurfaceSpec::default());
+            });
+        app.update(); // bind spawns the camera
+        let cam = app.world().resource::<Surfaces>().entries["monitor"]
+            .camera
+            .expect("bind_surfaces spawned the camera");
+        let active = |app: &App| app.world().entity(cam).get::<Camera>().unwrap().is_active;
+        app.update();
+        assert!(active(&app), "no tagged mesh → assumed displayed, renders");
+
+        let screen = app
+            .world_mut()
+            .spawn((SurfacePointer::new("monitor"), ViewVisibility::HIDDEN))
+            .id();
+        app.update();
+        assert!(!active(&app), "its only display culled → the camera idles");
+
+        app.world_mut()
+            .entity_mut(screen)
+            .insert(ViewVisibility::VISIBLE);
+        app.update();
+        assert!(active(&app), "the display back in view → renders again");
+
+        app.world_mut().entity_mut(screen).despawn();
+        app.update();
+        assert!(active(&app), "no tagged mesh again → renders");
     }
 
     /// `bind_surfaces` spawns a camera for a registered surface and binds the root

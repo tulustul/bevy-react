@@ -21,10 +21,13 @@
 //!
 //! ## Render model
 //!
-//! Each target is [`RenderMode::Live`] (its camera renders every frame — minimaps,
-//! rotating previews) or [`RenderMode::Snapshot`] (renders once when registered or
-//! invalidated, then its camera is deactivated and the texture reused — cheap for
-//! static thumbnails). [`drive_render_targets`] toggles `Camera::is_active`.
+//! Each target is [`RenderMode::Live`] (its camera renders every frame **while a
+//! `<portal>` showing it is visible** — minimaps, rotating previews; a portal that
+//! is `display: none`, `Visibility::Hidden`, scrolled entirely out of its clip, or
+//! unmounted costs nothing) or [`RenderMode::Snapshot`] (renders once when
+//! registered or invalidated, then its camera is deactivated and the texture
+//! reused — cheap for static thumbnails). [`drive_portal_cameras`] toggles
+//! `Camera::is_active`; [`drive_render_targets`] drives resolution.
 //!
 //! ## Resolution
 //!
@@ -33,13 +36,15 @@
 //! camera aspect for free) or [`Fixed`](Resolution::Fixed) (a fixed cost, for a
 //! target shared by several portals).
 
+use bevy::camera::visibility::InheritedVisibility;
 use bevy::camera::{ImageRenderTarget, RenderTarget as BevyRenderTarget};
 use bevy::image::Image;
 use bevy::platform::collections::HashMap;
+use bevy::platform::collections::HashSet;
 use bevy::prelude::*;
 use bevy::render::render_resource::{Extent3d, TextureFormat};
-use bevy::ui::ComputedNode;
 use bevy::ui::widget::ImageNode;
+use bevy::ui::{CalculatedClip, ComputedNode, UiGlobalTransform};
 
 /// Largest render-target dimension we allocate, in physical pixels — a guard
 /// against a degenerate layout asking for an enormous texture.
@@ -53,7 +58,8 @@ const SIZE_STEP: u32 = 16;
 /// How often a target's camera renders into its texture.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RenderMode {
-    /// The camera renders every frame (minimaps, rotating/animated previews).
+    /// The camera renders every frame a `<portal>` showing the target is visible
+    /// (minimaps, rotating/animated previews); see [`drive_portal_cameras`].
     Live,
     /// The camera renders once when the target is registered or
     /// [`invalidate`](RenderTargets::invalidate)d, then deactivates and the
@@ -285,18 +291,16 @@ pub fn bind_portals(
     }
 }
 
-/// Drive resolution and the snapshot lifecycle each frame:
-/// - For [`Resolution::Auto`] targets, size the texture to the binding portal's
-///   laid-out physical size (quantized to [`SIZE_STEP`]) and mark dirty on change.
-/// - For each [`PortalCamera`], set `is_active`: always on for [`RenderMode::Live`];
-///   on for one frame for a dirty [`RenderMode::Snapshot`], then off.
+/// Drive resolution each frame: for [`Resolution::Auto`] targets, size the texture
+/// to the binding portal's laid-out physical size (quantized to [`SIZE_STEP`]) and
+/// mark the target dirty on change. Runs in `Update`, before bevy's `camera_system`
+/// reads the target's size, so the camera renders at the new size the same frame.
+/// Camera activity is [`drive_portal_cameras`]'s job.
 pub fn drive_render_targets(
     mut targets: ResMut<RenderTargets>,
     mut images: ResMut<Assets<Image>>,
     nodes: Query<&ComputedNode>,
-    mut cameras: Query<(&PortalCamera, &mut Camera)>,
 ) {
-    // 1. Resolution: resize Auto textures to their binding portal.
     for entry in targets.entries.values_mut() {
         if entry.resolution != Resolution::Auto {
             continue;
@@ -319,29 +323,83 @@ pub fn drive_render_targets(
             entry.dirty = true;
         }
     }
+}
 
-    // 2. Snapshot lifecycle: toggle each portal camera's activity.
+/// Set each [`PortalCamera`]'s `is_active` for this frame's render:
+/// - [`RenderMode::Live`]: on while at least one `<portal>` bound to the target is
+///   **showing** — `InheritedVisibility` visible, laid out non-empty (`display:
+///   none` is empty), and not entirely outside its inherited [`CalculatedClip`]
+///   (scrolled away). Nothing samples a hidden portal's texture, so its camera's
+///   full render pass would be waste; an unmounted portal counts as hidden.
+/// - [`RenderMode::Snapshot`]: on for exactly the frame `dirty` is cleared (create,
+///   resize, [`invalidate`](RenderTargets::invalidate), mode switch), then off —
+///   regardless of binders, so a re-snapshot is ready before it scrolls into view.
+///
+/// Scheduled in `PostUpdate` after bevy_ui's layout + clipping and bevy's
+/// visibility propagation, so the gate reads **this frame's** geometry and
+/// visibility, and before extraction reads `is_active` — a portal that becomes
+/// visible renders the same frame. [`register`](RenderTargets::register)ed
+/// app-owned entries are Snapshot + never dirty: untouched.
+pub fn drive_portal_cameras(
+    mut targets: ResMut<RenderTargets>,
+    portals: Query<(
+        &RPortal,
+        &InheritedVisibility,
+        &ComputedNode,
+        &UiGlobalTransform,
+        Option<&CalculatedClip>,
+    )>,
+    mut cameras: Query<(&PortalCamera, &mut Camera)>,
+) {
+    // Targets with at least one showing portal this frame.
+    let mut showing: HashSet<&str> = HashSet::default();
+    for (portal, visibility, node, transform, clip) in &portals {
+        if visibility.get() && !node.is_empty() && !clipped_out(node, transform, clip) {
+            showing.insert(portal.0.as_str());
+        }
+    }
+
     for (cam, mut camera) in &mut cameras {
         let Some(entry) = targets.entries.get_mut(&cam.0) else {
             continue;
         };
-        match entry.mode {
-            RenderMode::Live => {
-                if !camera.is_active {
-                    camera.is_active = true;
-                }
-            }
+        let active = match entry.mode {
+            RenderMode::Live => showing.contains(cam.0.as_str()),
             RenderMode::Snapshot => {
                 // Active for exactly the frame we clear `dirty`, so the camera
                 // renders once; off until the next invalidate/resize.
-                let active = entry.dirty;
-                if camera.is_active != active {
-                    camera.is_active = active;
-                }
+                let dirty = entry.dirty;
                 entry.dirty = false;
+                dirty
             }
+        };
+        if camera.is_active != active {
+            camera.is_active = active;
         }
     }
+}
+
+/// Whether the node's border box lies entirely outside its inherited clip rect —
+/// both in physical px, the space `CalculatedClip` and `UiGlobalTransform` share.
+fn clipped_out(
+    node: &ComputedNode,
+    transform: &UiGlobalTransform,
+    clip: Option<&CalculatedClip>,
+) -> bool {
+    let Some(clip) = clip else {
+        return false;
+    };
+    let half = node.size() / 2.0;
+    let corners = [
+        Vec2::new(-half.x, -half.y),
+        Vec2::new(half.x, -half.y),
+        Vec2::new(-half.x, half.y),
+        half,
+    ];
+    let rect = corners.iter().fold(Rect::EMPTY, |rect, corner| {
+        rect.union_point(transform.transform_point2(*corner))
+    });
+    clip.clip.intersect(rect).is_empty()
 }
 
 /// Round a laid-out physical size up to the next [`SIZE_STEP`] multiple, clamped
@@ -395,7 +453,7 @@ mod tests {
     #[test]
     fn register_app_texture_is_inert() {
         let mut app = test_app();
-        app.add_systems(Update, drive_render_targets);
+        app.add_systems(Update, (drive_render_targets, drive_portal_cameras).chain());
         let handle = {
             let mut images = app.world_mut().resource_mut::<Assets<Image>>();
             images.add(blank_portal_image())
@@ -504,12 +562,12 @@ mod tests {
         );
     }
 
-    /// `drive_render_targets` renders a snapshot camera for exactly one frame after
-    /// it is created/invalidated, and keeps a live camera always active.
+    /// `drive_portal_cameras` renders a snapshot camera for exactly one frame after
+    /// it is created/invalidated (no portal need be showing).
     #[test]
     fn snapshot_camera_renders_once_then_deactivates() {
         let mut app = test_app();
-        app.add_systems(Update, drive_render_targets);
+        app.add_systems(Update, (drive_render_targets, drive_portal_cameras).chain());
         app.world_mut()
             .resource_scope(|world, mut targets: Mut<RenderTargets>| {
                 let mut images = world.resource_mut::<Assets<Image>>();
@@ -549,6 +607,85 @@ mod tests {
             app.world().entity(cam).get::<Camera>().unwrap().is_active,
             "invalidate re-renders the snapshot once"
         );
+    }
+
+    /// A live camera renders only while a `<portal>` showing its target is
+    /// visible: mounted, `InheritedVisibility` visible, laid out non-empty, and
+    /// not scrolled entirely out of its clip.
+    #[test]
+    fn live_camera_renders_only_while_a_portal_is_showing() {
+        let mut app = test_app();
+        app.add_systems(Update, (drive_render_targets, drive_portal_cameras).chain());
+        app.world_mut()
+            .resource_scope(|world, mut targets: Mut<RenderTargets>| {
+                let mut images = world.resource_mut::<Assets<Image>>();
+                targets.create(&mut images, "live", RenderTargetSpec::default());
+            });
+        let cam = app
+            .world_mut()
+            .spawn((PortalCamera("live".into()), Camera::default()))
+            .id();
+        let active = |app: &App| app.world().entity(cam).get::<Camera>().unwrap().is_active;
+
+        app.update();
+        assert!(
+            !active(&app),
+            "no portal shows the target → the camera idles"
+        );
+
+        let shown = ComputedNode {
+            size: Vec2::splat(64.0),
+            ..default()
+        };
+        let portal = app
+            .world_mut()
+            .spawn((
+                RPortal("live".into()),
+                InheritedVisibility::VISIBLE,
+                shown,
+                UiGlobalTransform::default(),
+            ))
+            .id();
+        app.update();
+        assert!(active(&app), "a visible portal turns the camera on");
+
+        app.world_mut()
+            .entity_mut(portal)
+            .insert(InheritedVisibility::HIDDEN);
+        app.update();
+        assert!(!active(&app), "a hidden portal turns it off");
+
+        app.world_mut()
+            .entity_mut(portal)
+            .insert((InheritedVisibility::VISIBLE, ComputedNode::default()));
+        app.update();
+        assert!(
+            !active(&app),
+            "an empty (display: none) portal keeps it off"
+        );
+
+        // Node box spans (-32..32)²; a clip rect entirely to its right hides it.
+        app.world_mut().entity_mut(portal).insert((
+            shown,
+            CalculatedClip {
+                clip: Rect::new(100.0, -10.0, 200.0, 10.0),
+            },
+        ));
+        app.update();
+        assert!(
+            !active(&app),
+            "a portal scrolled out of its clip keeps it off"
+        );
+
+        app.world_mut().entity_mut(portal).insert(CalculatedClip {
+            clip: Rect::new(0.0, 0.0, 200.0, 200.0),
+        });
+        app.update();
+        assert!(active(&app), "a partly clipped portal turns it back on");
+
+        app.world_mut().entity_mut(portal).despawn();
+        app.update();
+        assert!(!active(&app), "an unmounted portal turns it off");
     }
 
     #[test]

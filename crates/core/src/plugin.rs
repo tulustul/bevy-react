@@ -760,14 +760,13 @@ impl Plugin for ReactUiPlugin {
                 ),
                 // Bind `<portal>` nodes to their render-target textures after the
                 // op drain (so a freshly-spawned portal binds the same frame), then
-                // drive resolution + the snapshot camera lifecycle.
+                // drive `Auto` resolution (here, before `camera_system` reads the
+                // target size). Camera activity is decided in `PostUpdate` below.
                 crate::portal::bind_portals.after(apply_js_ops),
                 crate::portal::drive_render_targets.after(crate::portal::bind_portals),
                 // Bind `<surface>` roots to their offscreen UI cameras after the op
-                // drain (so a freshly-mounted surface binds the same frame), then
-                // drive the snapshot camera lifecycle.
+                // drain (so a freshly-mounted surface binds the same frame).
                 crate::surface::bind_surfaces.after(apply_js_ops),
-                crate::surface::drive_surfaces.after(crate::surface::bind_surfaces),
                 // Surface interaction: turn the virtual pointer's picking events on
                 // the offscreen subtree into `onClick`/`onPointer*` + hover/press
                 // styling. The picking events are produced in `PreUpdate`, so these
@@ -966,6 +965,24 @@ impl Plugin for ReactUiPlugin {
                 // fresh geometry.
                 crate::scroll::settle_controlled_scroll.after(bevy::ui::UiSystems::Layout),
             ),
+        );
+        // `<portal>`/`<surface>` camera activity, from THIS frame's visibility:
+        // after bevy_ui layout + clipping (a `display: none` or scrolled-away
+        // portal is empty/clipped) and after visibility propagation + culling
+        // (hidden subtrees; culled surface meshes), before extraction reads
+        // `Camera::is_active` — a portal that becomes visible renders the same
+        // frame, and a hidden one skips its whole camera pass.
+        app.add_systems(
+            PostUpdate,
+            (
+                crate::portal::drive_portal_cameras,
+                crate::surface::drive_surfaces,
+            )
+                .after(bevy::ui::UiSystems::PostLayout)
+                .after(bevy::camera::visibility::VisibilitySystems::VisibilityPropagate)
+                .after(
+                    bevy::camera::visibility::VisibilitySystems::MarkNewlyHiddenEntitiesInvisible,
+                ),
         );
         // Re-stamp the svg intrinsic measure after `bevy_ui`'s
         // `update_image_content_size_system` (`UiSystems::Content`), which
