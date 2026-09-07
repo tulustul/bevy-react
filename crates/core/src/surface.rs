@@ -167,8 +167,10 @@ impl Surfaces {
         }
     }
 
-    /// Drop a surface. Its UI camera is despawned on the next [`bind_surfaces`];
-    /// React `<surface>` roots bound to the name hide until it is re-registered.
+    /// Drop a surface. Its UI camera is despawned by [`retire_surface_cameras`]
+    /// (before this frame's shadow-cascade build, if called before `PostUpdate`;
+    /// else next frame's); React `<surface>` roots bound to the name hide until it
+    /// is re-registered.
     pub fn remove(&mut self, name: &str) {
         self.entries.remove(name);
     }
@@ -329,6 +331,31 @@ pub fn bind_surfaces(
     }
 }
 
+/// Despawn the camera of every surface that has been [`remove`](Surfaces::remove)d
+/// (or re-created — a fresh camera replaced it in the registry), so a torn-down
+/// surface (e.g. on a scene switch) leaves no orphan camera rendering into a freed
+/// texture.
+///
+/// Scheduled in `PostUpdate` **before** `bevy_light`'s shadow-cascade build (and
+/// view culling): the build keys every light's `Cascades` map by every active
+/// camera with a `Projection` — this 2D camera included — and a key whose entity
+/// is gone by extraction makes bevy 0.19.0's `extract_lights` drop the cascades of
+/// every view after it (`prepare_lights` then panics on an unrelated 3D camera).
+/// Despawning here means the build never sees the camera at all. Split out of
+/// [`drive_surfaces`], which must run *after* culling and so cannot despawn.
+pub fn retire_surface_cameras(
+    mut commands: Commands,
+    surfaces: Res<Surfaces>,
+    cameras: Query<(Entity, &SurfaceCamera)>,
+) {
+    for (entity, cam) in &cameras {
+        let current = surfaces.entries.get(&cam.0).and_then(|e| e.camera);
+        if current != Some(entity) {
+            commands.entity(entity).despawn();
+        }
+    }
+}
+
 /// Set each surface camera's `is_active` for this frame's render:
 /// - [`RenderMode::Live`]: on while some [`SurfacePointer`] mesh naming the surface
 ///   is [`ViewVisibility`]-visible in any view this frame (the tagged meshes are the
@@ -342,11 +369,10 @@ pub fn bind_surfaces(
 /// this frame's) and before extraction reads `is_active`, so a screen that scrolls
 /// back into a frustum renders the same frame. Mirrors the portal module's
 /// `drive_portal_cameras`, which (unlike this 2D UI camera) must run before
-/// culling and the shadow cascade build. Also despawns the camera of a surface that has been
-/// [`remove`](Surfaces::remove)d, so a torn-down surface (e.g. on a scene switch)
-/// leaves no orphan camera rendering into a freed texture.
+/// culling and the shadow cascade build. Runs after the cascade build, so it
+/// never despawns — retiring stale cameras is [`retire_surface_cameras`]'s job
+/// (a camera it retired this frame is already gone from the query).
 pub fn drive_surfaces(
-    mut commands: Commands,
     mut surfaces: ResMut<Surfaces>,
     displays: Query<(&SurfacePointer, Option<&ViewVisibility>)>,
     mut cameras: Query<(Entity, &SurfaceCamera, &mut Camera)>,
@@ -363,16 +389,14 @@ pub fn drive_surfaces(
     }
 
     for (entity, cam, mut camera) in &mut cameras {
-        let Some(entry) = surfaces.entries.get_mut(&cam.0) else {
-            commands.entity(entity).despawn();
+        // A camera whose registry entry is gone or replaced is being retired.
+        let Some(entry) = surfaces
+            .entries
+            .get_mut(&cam.0)
+            .filter(|e| e.camera == Some(entity))
+        else {
             continue;
         };
-        // A re-created surface allocates a fresh camera; retire the stale one whose
-        // image no longer matches the registry entry.
-        if entry.camera != Some(entity) {
-            commands.entity(entity).despawn();
-            continue;
-        }
         let name = cam.0.as_str();
         let active = match entry.mode {
             RenderMode::Live => !tagged.contains(name) || seen.contains(name),
@@ -641,6 +665,81 @@ mod tests {
         app.world_mut().entity_mut(screen).despawn();
         app.update();
         assert!(active(&app), "no tagged mesh again → renders");
+    }
+
+    /// Regression: a removed surface's camera must be gone **before** bevy's shadow
+    /// cascade build, never after it. The build keys every light's `Cascades` map
+    /// by every active camera with a `Projection` (this `Camera2d` included); a key
+    /// left pointing at a camera despawned later in the frame made bevy 0.19.0's
+    /// `extract_lights` drop the cascades of every other view (`prepare_lights`
+    /// panic on the main camera — the demos' `<surface>` → `<portal>` crash). Runs
+    /// the plugin's real `PostUpdate` ordering against bevy's real cascade builder,
+    /// scheduled in its real set exactly as `bevy_light`'s `LightPlugin` does (the
+    /// plugin itself drags in gizmo systems that need a renderer).
+    #[test]
+    fn removed_surface_camera_never_outlives_the_cascade_build() {
+        use bevy::camera::CameraUpdateSystems;
+        use bevy::light::cascade::build_directional_light_cascades;
+        use bevy::light::{Cascades, DirectionalLightShadowMap, SimulationLightSystems};
+
+        let mut app = test_app();
+        app.init_resource::<DirectionalLightShadowMap>();
+        app.add_systems(
+            PostUpdate,
+            build_directional_light_cascades
+                .in_set(SimulationLightSystems::UpdateDirectionalLightCascades)
+                .after(CameraUpdateSystems),
+        );
+        app.init_resource::<crate::portal::RenderTargets>();
+        app.add_systems(Update, bind_surfaces);
+        crate::plugin::add_camera_gate_systems(&mut app);
+
+        let light = app
+            .world_mut()
+            .spawn(DirectionalLight {
+                shadow_maps_enabled: true,
+                ..default()
+            })
+            .id();
+        app.world_mut()
+            .resource_scope(|world, mut surfaces: Mut<Surfaces>| {
+                let mut images = world.resource_mut::<Assets<Image>>();
+                surfaces.create(&mut images, "monitor", SurfaceSpec::default());
+            });
+        app.update(); // bind spawns the camera; the cascade build keys it
+        let cam = app.world().resource::<Surfaces>().entries["monitor"]
+            .camera
+            .expect("bind_surfaces spawned the camera");
+        let keys = |app: &App| -> Vec<Entity> {
+            app.world()
+                .entity(light)
+                .get::<Cascades>()
+                .expect("DirectionalLight requires Cascades")
+                .cascades
+                .keys()
+                .copied()
+                .collect()
+        };
+        assert!(
+            keys(&app).contains(&cam),
+            "the harness exercises the real cascade build: the active 2D surface camera is keyed"
+        );
+
+        app.world_mut().resource_mut::<Surfaces>().remove("monitor");
+        app.update();
+        assert!(
+            app.world().get_entity(cam).is_err(),
+            "the removed surface's camera is despawned within the frame"
+        );
+        let dead: Vec<Entity> = keys(&app)
+            .into_iter()
+            .filter(|k| app.world().get_entity(*k).is_err())
+            .collect();
+        assert!(
+            dead.is_empty(),
+            "no cascade may be keyed by a despawned camera at the end of the frame \
+             (the camera was despawned after the build): {dead:?}"
+        );
     }
 
     /// `bind_surfaces` spawns a camera for a registered surface and binds the root

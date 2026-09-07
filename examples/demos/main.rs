@@ -80,11 +80,12 @@ fn main() {
         return;
     }
 
-    // `--shoot <demo-label> <out.png> [settle-secs] [--size WxH]` navigates the
-    // gallery to a demo, lets it settle, captures the Bevy framebuffer to a PNG, and
-    // exits (see `screenshot`). A fixed window size + no hot reload keep the shot
-    // deterministic; `--size` (default 1280x832) picks the logical resolution — the
-    // way to look at the app at phone sizes without a phone.
+    // `--shoot <demo-label> <out.png> [settle-secs] [--size WxH] [--from <label>]`
+    // navigates the gallery to a demo, lets it settle, captures the Bevy framebuffer
+    // to a PNG, and exits (see `screenshot`). A fixed window size + no hot reload
+    // keep the shot deterministic; `--size` (default 1280x832) picks the logical
+    // resolution — the way to look at the app at phone sizes without a phone;
+    // `--from` shows another demo first, to exercise the transition.
     let shoot = parse_shoot_args(std::env::args().skip(1));
 
     let Some(cfg) = shoot else {
@@ -99,8 +100,9 @@ fn main() {
     app.run();
 }
 
-/// Parse `--shoot <label> <out.png> [settle-secs] [--size WxH]`; `None` when the
-/// first argument isn't `--shoot`. `--size` may sit anywhere after `--shoot`.
+/// Parse `--shoot <label> <out.png> [settle-secs] [--size WxH] [--from <label>]`;
+/// `None` when the first argument isn't `--shoot`. The `--` options may sit
+/// anywhere after `--shoot`.
 /// Anything unrecognized panics rather than being absorbed: a mistyped
 /// `--size=…` silently producing a desktop-sized shot would defeat the point.
 #[cfg(not(target_arch = "wasm32"))]
@@ -110,13 +112,16 @@ fn parse_shoot_args(mut args: impl Iterator<Item = String>) -> Option<screenshot
     }
     let mut positional: Vec<String> = Vec::new();
     let mut size = screenshot::DEFAULT_SIZE;
+    let mut from = None;
     while let Some(arg) = args.next() {
         if arg == "--size" {
             let spec = args.next().expect("--size requires a WxH value");
             size = parse_size(&spec)
                 .unwrap_or_else(|| panic!("--size expects WxH (e.g. 390x844), got {spec:?}"));
+        } else if arg == "--from" {
+            from = Some(args.next().expect("--from requires a <demo-label>"));
         } else if arg.starts_with("--") {
-            panic!("unknown --shoot option {arg:?} (expected `--size WxH`)");
+            panic!("unknown --shoot option {arg:?} (expected `--size WxH` or `--from <label>`)");
         } else {
             positional.push(arg);
         }
@@ -139,6 +144,7 @@ fn parse_shoot_args(mut args: impl Iterator<Item = String>) -> Option<screenshot
         out,
         settle_secs,
         size,
+        from,
     })
 }
 
@@ -370,6 +376,26 @@ mod tests {
             parse_shoot_args(args(&["--shoot", "Home", "o.png", "--size", "844X390"])).unwrap();
         assert_eq!(cfg.size, (844, 390));
         assert_eq!(cfg.settle_secs, 3.0);
+    }
+
+    #[test]
+    fn shoot_from_hops_via_another_demo() {
+        let cfg = parse_shoot_args(args(&[
+            "--shoot",
+            "<portal>",
+            "o.png",
+            "--from",
+            "<surface>",
+        ]))
+        .unwrap();
+        assert_eq!(cfg.label, "<portal>");
+        assert_eq!(cfg.from.as_deref(), Some("<surface>"));
+        assert_eq!(
+            parse_shoot_args(args(&["--shoot", "Home", "o.png"]))
+                .unwrap()
+                .from,
+            None
+        );
     }
 
     #[test]

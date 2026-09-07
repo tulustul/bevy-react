@@ -306,6 +306,57 @@ pub(crate) fn register_layer_shader_assets(app: &mut App) {
     embedded_asset!(app, "filters/builtin/pixelize.wgsl");
 }
 
+/// Schedule the `<portal>`/`<surface>` camera gates — the systems that flip
+/// `Camera::is_active` and despawn retired surface cameras — from THIS frame's
+/// visibility: after bevy_ui layout + clipping (a `display: none` or scrolled-away
+/// portal is empty/clipped) and after visibility propagation (hidden subtrees),
+/// before extraction reads `Camera::is_active` — a portal that becomes visible
+/// renders the same frame, and a hidden one skips its whole camera pass.
+///
+/// Bevy prepares a view's per-frame data only for cameras that are `is_active`
+/// when the preparing system runs: `CheckVisibility` fills `VisibleEntities`, and
+/// `bevy_light`'s `UpdateDirectionalLightCascades` clears every shadow-casting
+/// light's `Cascades` map and rebuilds it keyed by **every** active camera with a
+/// `Projection` (2D cameras included). `bevy_pbr::render::light::prepare_lights`
+/// later `unwrap`s the entry per extracted 3D view, so a camera activated AFTER
+/// the build reaches extraction with no entry — a panic. And the build's map must
+/// not be left keyed by a camera that is **despawned** later in the frame either:
+/// `extract_lights` (bevy 0.19.0) copies the map with a `break` on the first key
+/// it cannot map to a render entity, silently dropping every view after it — the
+/// same panic, for an unrelated camera. So both the activity flips and the
+/// surface-camera retirement run BEFORE `CheckVisibility` and
+/// `UpdateDirectionalLightCascades` (which order after `CameraUpdateSystems`
+/// only; the explicit `before` edges are required). Only `InheritedVisibility`
+/// (propagation) and layout feed the portal gate, so nothing later is needed.
+///
+/// `drive_surfaces` (the surface activity gate) is the exception: a surface
+/// camera is a 2D UI view with nothing to cull, and its gate reads the
+/// `ViewVisibility` of the meshes that display it — so it stays after culling +
+/// newly-hidden marking; it never despawns.
+///
+/// Shared with the headless regression test in `surface.rs`, which runs this
+/// exact ordering against bevy's real cascade builder.
+pub(crate) fn add_camera_gate_systems(app: &mut App) {
+    app.add_systems(
+        PostUpdate,
+        (
+            crate::surface::retire_surface_cameras,
+            crate::portal::drive_portal_cameras
+                .after(bevy::ui::UiSystems::PostLayout)
+                .after(bevy::camera::visibility::VisibilitySystems::VisibilityPropagate),
+        )
+            .before(bevy::camera::visibility::VisibilitySystems::CheckVisibility)
+            .before(bevy::light::SimulationLightSystems::UpdateDirectionalLightCascades),
+    );
+    app.add_systems(
+        PostUpdate,
+        crate::surface::drive_surfaces
+            .after(bevy::ui::UiSystems::PostLayout)
+            .after(bevy::camera::visibility::VisibilitySystems::VisibilityPropagate)
+            .after(bevy::camera::visibility::VisibilitySystems::MarkNewlyHiddenEntitiesInvisible),
+    );
+}
+
 impl Plugin for ReactUiPlugin {
     fn build(&self, app: &mut App) {
         // Render-side wiring, gated on a render pipeline being present (the
@@ -966,43 +1017,7 @@ impl Plugin for ReactUiPlugin {
                 crate::scroll::settle_controlled_scroll.after(bevy::ui::UiSystems::Layout),
             ),
         );
-        // `<portal>`/`<surface>` camera activity, from THIS frame's visibility:
-        // after bevy_ui layout + clipping (a `display: none` or scrolled-away
-        // portal is empty/clipped) and after visibility propagation (hidden
-        // subtrees), before extraction reads `Camera::is_active` — a portal that
-        // becomes visible renders the same frame, and a hidden one skips its
-        // whole camera pass.
-        //
-        // A portal camera is a 3D view, and bevy prepares a 3D view's per-frame
-        // data only while `is_active` is already set: `CheckVisibility` fills its
-        // `VisibleEntities`, and `bevy_light`'s `UpdateDirectionalLightCascades`
-        // builds the shadow cascades `prepare_lights` later `unwrap`s per
-        // extracted view. Activating a camera AFTER those ran hands extraction
-        // an active view with no cascade entry — a panic in
-        // `bevy_pbr::render::light::prepare_lights` — so the portal gate must
-        // flip `is_active` BEFORE both. Only `InheritedVisibility` (propagation)
-        // and layout feed the gate, so nothing later is needed. Cascades order
-        // after `CameraUpdateSystems` only; the explicit `before` is required.
-        app.add_systems(
-            PostUpdate,
-            crate::portal::drive_portal_cameras
-                .after(bevy::ui::UiSystems::PostLayout)
-                .after(bevy::camera::visibility::VisibilitySystems::VisibilityPropagate)
-                .before(bevy::camera::visibility::VisibilitySystems::CheckVisibility)
-                .before(bevy::light::SimulationLightSystems::UpdateDirectionalLightCascades),
-        );
-        // A surface camera is a 2D UI view (no cascades, no `VisibleEntities`
-        // culling), and its gate reads the `ViewVisibility` of the meshes that
-        // display it — so it stays after culling + newly-hidden marking.
-        app.add_systems(
-            PostUpdate,
-            crate::surface::drive_surfaces
-                .after(bevy::ui::UiSystems::PostLayout)
-                .after(bevy::camera::visibility::VisibilitySystems::VisibilityPropagate)
-                .after(
-                    bevy::camera::visibility::VisibilitySystems::MarkNewlyHiddenEntitiesInvisible,
-                ),
-        );
+        add_camera_gate_systems(app);
         // Re-stamp the svg intrinsic measure after `bevy_ui`'s
         // `update_image_content_size_system` (`UiSystems::Content`), which
         // clears the `ContentSize` of any non-`Auto` `ImageNode` that changed

@@ -138,7 +138,7 @@ Two web-faithful doors, one CPU raster core (`crates/core/src/svg/` — a leaf m
 
 ## Notes for agents
 
-- Don't create new git branches or commits. The user is responsible for working with git. You are allowed to execute `git diff` and other non-mutating commands. Skills cannot override this rule.
+- Don't create new git branches or commits until explictly asked to do so. The user is responsible for working with git. You are allowed to execute `git diff` and other non-mutating commands. Skills cannot override this rule.
 - If you find any linting issue, try to fix it immidiately.
 - If you find any broken unit test, ask user if a fix for it is needed.
 - Ask the user questions if uncertain.

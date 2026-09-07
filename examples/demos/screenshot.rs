@@ -1,10 +1,13 @@
 //! Headless-friendly screenshot automation for the demos app.
 //!
-//! `cargo run -p bevy-react --example demos -- --shoot "<portal>" out.png [secs] [--size WxH]`
+//! `cargo run -p bevy-react --example demos -- --shoot "<portal>" out.png [secs] [--size WxH] [--from <label>]`
 //! navigates the React gallery to a demo by its nav label, lets it settle, then
 //! captures the rendered frame to a PNG and exits. `--size` (default 1280x832) sets
 //! the logical resolution of both the window and the capture — phone-sized shots
 //! (`--size 390x844`) are how the responsive shell is verified without a device.
+//! `--from <label>` first shows *that* demo for [`HOP_SECS`], then navigates to the
+//! target — the way a page **transition** (scene switch, camera teardown/spawn) is
+//! reproduced headlessly; the settle timer starts at the hop.
 //!
 //! Capture renders the whole app (3D scene + React UI) into an **offscreen image**
 //! and screenshots that image — not the OS screen or the window swapchain. That
@@ -43,6 +46,9 @@ pub fn register_bindings(app: &mut App) {
 /// The `--size` default: the desktop shell at the size every existing shot used.
 pub const DEFAULT_SIZE: (u32, u32) = (1280, 832);
 
+/// How long `--from <label>` shows the starting demo before hopping to the target.
+pub const HOP_SECS: f32 = 2.0;
+
 /// Parsed `--shoot` arguments.
 pub struct ShootConfig {
     /// The target demo's nav label (e.g. `"<portal>"`).
@@ -53,14 +59,19 @@ pub struct ShootConfig {
     pub settle_secs: f32,
     /// Logical resolution of the window and the offscreen capture (`--size WxH`).
     pub size: (u32, u32),
+    /// A demo to show first (`--from <label>`), hopping to `label` after [`HOP_SECS`].
+    pub from: Option<String>,
 }
 
-/// Drives one screenshot run: nav → settle → capture → exit.
+/// Drives one screenshot run: [nav to `from` → hop →] nav → settle → capture → exit.
 #[derive(Resource)]
 struct Shoot {
     label: String,
     out: PathBuf,
     settle: Timer,
+    /// The starting demo, while the hop timer runs; `None` once we've hopped.
+    from: Option<String>,
+    hop: Timer,
     /// Capture resolution in pixels (the window is sized to match, at scale 1).
     size: (u32, u32),
     /// The offscreen target the app renders into (set in `PostStartup`).
@@ -78,6 +89,8 @@ pub fn add_screenshot_mode(app: &mut App, config: ShootConfig) {
         label: config.label,
         out: config.out,
         settle: Timer::from_seconds(config.settle_secs, TimerMode::Once),
+        from: config.from,
+        hop: Timer::from_seconds(HOP_SECS, TimerMode::Once),
         size: config.size,
         image: None,
         shot: false,
@@ -124,6 +137,18 @@ fn drive_shoot(
     // Capture requested; wait for the async readback → the observer sets `captured`.
     if shoot.shot {
         return;
+    }
+
+    // `--from`: show the starting demo until the hop timer fires, then fall through
+    // to the target (the settle timer only starts ticking after the hop).
+    if let Some(from) = shoot.from.clone() {
+        if shoot.hop.tick(time.delta()).is_finished() {
+            info!("hopping from {from:?} to {:?}", shoot.label);
+            shoot.from = None;
+        } else {
+            events.send(&SelectDemo { label: from });
+            return;
+        }
     }
 
     // Keep (idempotently) asking React to show the target demo every frame until we
