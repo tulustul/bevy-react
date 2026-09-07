@@ -160,7 +160,7 @@ pub(super) fn apply_update(
             ec.insert(layout);
         }
         if dirty.anchor {
-            apply_anchor(&mut ec, &props);
+            apply_anchor(&mut ec, &mut bridge.anchors, id, &props);
         }
         // Interactivity parity with the general arm (a `<text>` root is
         // fully interactive since its create path stamps `stamp_common`):
@@ -270,7 +270,7 @@ pub(super) fn apply_update(
             ec.insert(crate::surface::RSurface(name.clone()));
         }
         if dirty.anchor {
-            apply_anchor(&mut ec, &props);
+            apply_anchor(&mut ec, &mut bridge.anchors, id, &props);
         }
     } else if bridge.roots.contains(&id) {
         // A `<root>` re-render: re-overlay the screen-filling,
@@ -290,7 +290,7 @@ pub(super) fn apply_update(
             );
         }
         if dirty.anchor {
-            apply_anchor(&mut ec, &props);
+            apply_anchor(&mut ec, &mut bridge.anchors, id, &props);
         }
     } else if bridge.shapes.contains(&id) {
         // An SVG shape child: a Node-less entity (no style, no layout) whose
@@ -396,7 +396,7 @@ pub(super) fn apply_update(
             apply_animated(&mut ec, &mut bridge.animated, id, &props);
         }
         if dirty.anchor {
-            apply_anchor(&mut ec, &props);
+            apply_anchor(&mut ec, &mut bridge.anchors, id, &props);
         }
         update_controlled_scroll(
             bridge,

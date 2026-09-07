@@ -76,7 +76,13 @@ pub(super) fn apply_create(
             if let Some(layout) = text_layout(&props.style) {
                 ec.insert(layout);
             }
-            stamp_common(&mut ec, &mut bridge.animated, id, &props);
+            stamp_common(
+                &mut ec,
+                &mut bridge.animated,
+                &mut bridge.anchors,
+                id,
+                &props,
+            );
             ec.id()
         }
         // A nested `<text>`: a styled span (no layout box of its own).
@@ -108,7 +114,13 @@ pub(super) fn apply_create(
                 CanvasSizeTracker::default(),
             ));
             apply_style_fresh(&mut ec, &props.style);
-            stamp_common(&mut ec, &mut bridge.animated, id, &props);
+            stamp_common(
+                &mut ec,
+                &mut bridge.animated,
+                &mut bridge.anchors,
+                id,
+                &props,
+            );
             ec.id()
         }
         // A `<portal>`: a styled node carrying an `ImageNode` whose
@@ -126,14 +138,25 @@ pub(super) fn apply_create(
                 RPortal(props.target.clone().unwrap_or_default()),
             ));
             apply_style_fresh(&mut ec, &props.style);
-            stamp_common(&mut ec, &mut bridge.animated, id, &props);
+            stamp_common(
+                &mut ec,
+                &mut bridge.animated,
+                &mut bridge.anchors,
+                id,
+                &props,
+            );
             ec.id()
         }
         // A JSX `<svg>`: a styled node with an element-owned texture the
         // svg rasterizer paints from the Node-less `SvgShape` children.
-        "svg" => {
-            super::svg_ops::create_svg_root(commands, images, &mut bridge.animated, id, &props)
-        }
+        "svg" => super::svg_ops::create_svg_root(
+            commands,
+            images,
+            &mut bridge.animated,
+            &mut bridge.anchors,
+            id,
+            &props,
+        ),
         // A `<surface>`: a styled container whose subtree renders into
         // an offscreen image instead of the on-screen UI. It is a
         // **detached UI root** — `crate::surface::bind_surfaces`
@@ -152,7 +175,7 @@ pub(super) fn apply_create(
             ));
             apply_style_fresh(&mut ec, &style);
             if props.anchor.is_some() {
-                apply_anchor(&mut ec, &props);
+                apply_anchor(&mut ec, &mut bridge.anchors, id, &props);
             }
             ec.id()
         }
@@ -180,7 +203,7 @@ pub(super) fn apply_create(
             ec.insert(Pickable::IGNORE);
             apply_style_fresh(&mut ec, &style);
             if props.anchor.is_some() {
-                apply_anchor(&mut ec, &props);
+                apply_anchor(&mut ec, &mut bridge.anchors, id, &props);
             }
             ec.id()
         }
@@ -239,7 +262,7 @@ pub(super) fn apply_create(
             // the field's focus/interaction state changes.
             apply_style_variants_fresh(&mut ec, &props);
             if props.anchor.is_some() {
-                apply_anchor(&mut ec, &props);
+                apply_anchor(&mut ec, &mut bridge.anchors, id, &props);
             }
             ec.id()
         }
@@ -253,6 +276,7 @@ pub(super) fn apply_create(
             None => spawn_element(
                 commands,
                 &mut bridge.animated,
+                &mut bridge.anchors,
                 id,
                 &kind,
                 &props,
@@ -390,6 +414,7 @@ pub(super) fn apply_create(
 fn spawn_element(
     commands: &mut Commands,
     animated: &mut HashSet<NodeId>,
+    anchors: &mut crate::anchor::AnchorIndex,
     id: NodeId,
     kind: &str,
     props: &Props,
@@ -435,7 +460,7 @@ fn spawn_element(
         }
         _ => {}
     }
-    stamp_common(&mut ec, animated, id, props);
+    stamp_common(&mut ec, animated, anchors, id, props);
     ec.id()
 }
 

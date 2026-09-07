@@ -304,6 +304,9 @@ pub struct JsBridge {
     /// so a style delta on a binding-less node — the common case — queues no
     /// `remove::<AnimatedNode>()` no-op command.
     pub animated: HashSet<NodeId>,
+    /// Nodes carrying an `anchor` prop, split by whether the anchor system has
+    /// moved them under the anchor layer yet — see [`crate::anchor::AnchorIndex`].
+    pub anchors: crate::anchor::AnchorIndex,
     /// The last text value emitted to JS for each `editableText`, used to dedup
     /// `TextEditChange` (which also fires on cursor moves) into real `"change"`s.
     pub editable_values: HashMap<NodeId, String>,
@@ -389,6 +392,7 @@ impl JsBridge {
             svg_roots: HashSet::new(),
             shapes: HashSet::new(),
             animated: HashSet::new(),
+            anchors: crate::anchor::AnchorIndex::default(),
             editable_values: HashMap::new(),
             editable_selections: HashMap::new(),
             editable_select_handlers: HashSet::new(),
@@ -606,6 +610,7 @@ impl JsBridge {
         take_if_any(&mut self.svg_roots, id);
         take_if_any(&mut self.shapes, id);
         take_if_any(&mut self.animated, id);
+        self.anchors.forget(id);
         remove_if_any(&mut self.editable_values, id);
         remove_if_any(&mut self.editable_selections, id);
         take_if_any(&mut self.editable_select_handlers, id);

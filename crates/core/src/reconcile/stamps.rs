@@ -62,7 +62,12 @@ pub(super) fn apply_animated(
 /// positioning system projects the target entity's world position to the screen
 /// each frame and writes this node's `left`/`top`. A malformed/dead entity id is
 /// ignored (the binding is simply not applied).
-pub(super) fn apply_anchor(ec: &mut EntityCommands, props: &Props) {
+pub(super) fn apply_anchor(
+    ec: &mut EntityCommands,
+    anchors: &mut crate::anchor::AnchorIndex,
+    id: NodeId,
+    props: &Props,
+) {
     match &props.anchor {
         Some(anchor) => match Entity::try_from_bits(anchor.entity as u64) {
             Some(target) => {
@@ -74,13 +79,16 @@ pub(super) fn apply_anchor(ec: &mut EntityCommands, props: &Props) {
                     // on JS-supplied NaN/reversed bounds.
                     scale: anchor.scale.and_then(AnchorScaling::sanitized),
                 });
+                anchors.stamp(id, true);
             }
             None => {
                 ec.remove::<Anchored>();
+                anchors.stamp(id, false);
             }
         },
         None => {
             ec.remove::<Anchored>();
+            anchors.stamp(id, false);
         }
     }
 }
@@ -309,6 +317,7 @@ pub(super) fn apply_scroll_step(ec: &mut EntityCommands, props: &Props) {
 pub(super) fn stamp_common(
     ec: &mut EntityCommands,
     animated: &mut HashSet<NodeId>,
+    anchors: &mut crate::anchor::AnchorIndex,
     id: NodeId,
     props: &Props,
 ) {
@@ -317,7 +326,7 @@ pub(super) fn stamp_common(
     apply_animated_fresh(ec, animated, id, props);
     // `apply_anchor` is insert-only when the prop is present — call it only then.
     if props.anchor.is_some() {
-        apply_anchor(ec, props);
+        apply_anchor(ec, anchors, id, props);
     }
 }
 

@@ -89,6 +89,59 @@ fn distance_scale(c: &AnchorScaling, dist: f32) -> f32 {
     }
 }
 
+/// The bridge's view of which reconciler nodes carry an `anchor` prop
+/// (maintained by the stamp helper as props apply). `settled` nodes live under
+/// the [`AnchorLayer`] — [`position_anchored_nodes`] moved them there on the
+/// frame they were stamped — so the end-of-batch child rebuild of their
+/// declared parent leaves them out (re-asserting `ChildOf(parent)` only to be
+/// moved back the same frame cost two hierarchy changes per batch). A node
+/// stamped during the current op drain is `fresh`: it is still attached to
+/// its declared parent, so the rebuild must keep it there; the next drain
+/// promotes it to `settled`.
+#[derive(Default)]
+pub struct AnchorIndex {
+    settled: bevy::platform::collections::HashSet<crate::protocol::NodeId>,
+    fresh: Vec<crate::protocol::NodeId>,
+}
+
+impl AnchorIndex {
+    /// Record `id` as carrying (`present`) or having dropped its `anchor` prop.
+    pub(crate) fn stamp(&mut self, id: crate::protocol::NodeId, present: bool) {
+        if present {
+            if !self.settled.contains(&id) && !self.fresh.contains(&id) {
+                self.fresh.push(id);
+            }
+        } else if !self.settled.is_empty() || !self.fresh.is_empty() {
+            self.settled.remove(&id);
+            self.fresh.retain(|&f| f != id);
+        }
+    }
+
+    /// A new op drain starts: last drain's fresh nodes have been moved under
+    /// the layer since.
+    pub(crate) fn begin_drain(&mut self) {
+        if !self.fresh.is_empty() {
+            self.settled.extend(self.fresh.drain(..));
+        }
+    }
+
+    /// Whether `id` is a settled anchored node (excluded from its declared
+    /// parent's rebuilt child list).
+    pub(crate) fn is_settled(&self, id: crate::protocol::NodeId) -> bool {
+        !self.settled.is_empty() && self.settled.contains(&id)
+    }
+
+    /// Forget a removed node.
+    pub(crate) fn forget(&mut self, id: crate::protocol::NodeId) {
+        self.stamp(id, false);
+    }
+
+    pub(crate) fn clear(&mut self) {
+        self.settled.clear();
+        self.fresh.clear();
+    }
+}
+
 /// Marker for the dedicated overlay container that every [`Anchored`] node is
 /// reparented under. Spawned once at startup as a zero-size, absolutely-positioned
 /// child of the UI root at the window origin, so anchored overlays live in their own
@@ -151,6 +204,22 @@ pub fn position_anchored_nodes(
         &mut UiTransform,
     )>,
 ) {
+    // The overlay container every anchored node is reparented under.
+    let Ok(layer_entity) = layer.single() else {
+        return;
+    };
+    // Move each overlay into the shared anchor layer (once; self-heals on
+    // reorder) so it can't affect its declared parent's flex layout or scroll
+    // range. Done before every guard below — camera, layout readiness — so a
+    // node stamped this frame is under the layer by its next frame whatever
+    // the app's camera setup: the bridge's child rebuild relies on it
+    // (`AnchorIndex`).
+    for (entity, _, child_of, ..) in &anchored {
+        if child_of.map(|c| c.parent()) != Some(layer_entity) {
+            commands.entity(entity).insert(ChildOf(layer_entity));
+        }
+    }
+
     // Project through the default UI camera; if none is marked, fall back to any
     // camera (the host app's UI camera may carry no marker).
     let Some((cam, cam_tf)) = default_cam
@@ -158,11 +227,6 @@ pub fn position_anchored_nodes(
         .next()
         .or_else(|| other_cam.iter().next())
     else {
-        return;
-    };
-
-    // The overlay container every anchored node is reparented under.
-    let Ok(layer_entity) = layer.single() else {
         return;
     };
     // Anchored nodes position relative to the layer's box, so subtract its
@@ -178,15 +242,7 @@ pub fn position_anchored_nodes(
         .map(|(c, t)| t.translation * c.inverse_scale_factor())
         .unwrap_or(Vec2::ZERO);
 
-    for (entity, anchor, child_of, mut node, mut visibility, mut transform) in &mut anchored {
-        // Move the overlay into the shared anchor layer (once; self-heals on reorder) so
-        // it can't affect its declared parent's flex layout or scroll range. Done before
-        // the layout-readiness guards so it happens even while the node waits to be laid
-        // out below.
-        if child_of.map(|c| c.parent()) != Some(layer_entity) {
-            commands.entity(entity).insert(ChildOf(layer_entity));
-        }
-
+    for (entity, anchor, _, mut node, mut visibility, mut transform) in &mut anchored {
         // Seed the layout position once (self-heals after a re-render's
         // wholesale `Node` re-stamp): always absolute — so a hidden overlay
         // never takes flex-flow space — anchored at the layer's origin. The

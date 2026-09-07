@@ -25,6 +25,7 @@ pub(super) fn create_svg_root(
     commands: &mut Commands,
     images: &mut Assets<Image>,
     animated: &mut HashSet<NodeId>,
+    anchors: &mut crate::anchor::AnchorIndex,
     id: NodeId,
     props: &Props,
 ) -> Entity {
@@ -38,7 +39,7 @@ pub(super) fn create_svg_root(
         SvgSurface::jsx(props.view_box),
     ));
     apply_style_fresh(&mut ec, &props.style);
-    stamp_common(&mut ec, animated, id, props);
+    stamp_common(&mut ec, animated, anchors, id, props);
     ec.id()
 }
 

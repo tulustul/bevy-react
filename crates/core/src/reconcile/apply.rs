@@ -124,6 +124,9 @@ pub fn apply_js_ops(
     // relationship cleanup drops the child from `Children` preserving the order
     // of the rest.
     let mut dirty: HashMap<NodeId, ParentDirt> = HashMap::new();
+    // Anchored nodes stamped by an earlier drain are under the anchor layer
+    // by now (`position_anchored_nodes` runs after this system every frame).
+    bridge.anchors.begin_drain();
     // Removed subtree roots this batch as `(parent, entity)`, in op order,
     // despawned after the loop (see there); `removed_under` counts them per
     // parent — a parent shedding [`ParentDirt::MASS_REMOVAL_MIN`] or more gets
@@ -185,6 +188,7 @@ pub fn apply_js_ops(
                 bridge.nodes.retain(|&id, _| id == ROOT_ID);
                 bridge.names.clear();
                 bridge.shared_tags.clear();
+                bridge.anchors.clear();
                 commands.queue(crate::transition::shared::clear_pending);
                 bridge.props_cache.clear();
                 bridge.text_styles.clear();
@@ -512,14 +516,17 @@ pub fn apply_js_ops(
         {
             list.push(layer);
         }
+        // A settled anchored overlay declared under `parent` lives under the
+        // AnchorLayer (`crate::anchor::AnchorIndex`): leaving it out of the list
+        // keeps it there — re-asserting `ChildOf(parent)` here only made the
+        // anchor system move it back the same frame (two hierarchy changes per
+        // batch). One stamped this drain is still attached here and stays in.
         list.extend(
             bridge
                 .children_of(parent)
+                .filter(|&id| !bridge.anchors.is_settled(id))
                 .filter_map(|id| resolve(&bridge, id)),
         );
-        // Note: an anchored overlay under `parent` gets `ChildOf(parent)` re-asserted
-        // here (its live parent is the AnchorLayer) — same as the old per-op
-        // `insert_child` path; the anchor system self-heals it next frame.
         commands.entity(p).replace_children(&list);
     }
 
