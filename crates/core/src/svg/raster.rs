@@ -19,7 +19,6 @@ use bevy::asset::{AssetEvent, AssetId, Assets};
 use bevy::ecs::change_detection::Ref;
 use bevy::ecs::entity::EntityHashSet;
 use bevy::prelude::*;
-use bevy::render::render_resource::Extent3d;
 use bevy::ui::widget::ImageNode;
 use bevy::ui::{ComputedNode, ComputedUiRenderTargetInfo, ContentSize};
 
@@ -32,14 +31,22 @@ use super::{SvgDocument, SvgShape, SvgSurface, stamp_intrinsic_measure};
 /// `None` on a zero-sized target.
 pub fn rasterize_document(doc: &SvgDocument, w: u32, h: u32) -> Option<tiny_skia::Pixmap> {
     let mut pixmap = tiny_skia::Pixmap::new(w, h)?;
+    render_document(doc, &mut pixmap);
+    Some(pixmap)
+}
+
+/// [`rasterize_document`] onto a caller-owned transparent pixmap (the raster
+/// system's reused one) — resvg composites over whatever is there, so a
+/// cleared pixmap paints identically to a fresh one.
+fn render_document(doc: &SvgDocument, pixmap: &mut tiny_skia::Pixmap) {
     if doc.size.x <= 0.0 || doc.size.y <= 0.0 {
-        return Some(pixmap); // nothing to draw (usvg guarantees non-zero)
+        return; // nothing to draw (usvg guarantees non-zero)
     }
     // Same `xMidYMid meet` math as the JSX painter's viewBox fit — one shared
     // helper, two callers (see `paint::view_box_transform`).
-    let transform = super::paint::meet_transform(Vec2::ZERO, doc.size, w, h);
+    let transform =
+        super::paint::meet_transform(Vec2::ZERO, doc.size, pixmap.width(), pixmap.height());
     resvg::render(&doc.tree, transform, &mut pixmap.as_mut());
-    Some(pixmap)
 }
 
 /// Drain the frame's [`SvgDocument`] asset events into the set of documents
@@ -163,10 +170,24 @@ pub fn update_svg_surfaces(
         if !images.contains(&image_node.image) {
             continue;
         }
-        let Some(pixmap) = rasterize_document(doc, w, h) else {
+        // The buffers are a cache: written past change detection so this
+        // repaint ticks `SvgSurface` only through the state writes below.
+        let raster = &mut surface.bypass_change_detection().raster;
+        let Some(mut pixmap) = raster.take_pixmap(w, h) else {
             continue;
         };
-        upload_pixmap(entity, image_node, &mut images, &mut dirt, w, h, &pixmap);
+        render_document(doc, &mut pixmap);
+        upload_pixmap(
+            entity,
+            image_node,
+            &mut images,
+            &mut dirt,
+            w,
+            h,
+            &pixmap,
+            raster,
+        );
+        raster.keep_pixmap(pixmap);
         // First successful raster for this node: stamp the intrinsic measure.
         // This covers docs that arrive without a load event (e.g. parked
         // directly into `Assets` — only `Added` fires); an event-carrying
@@ -236,21 +257,26 @@ fn raster_jsx_surface(
     if !images.contains(&image_node.image) {
         return;
     }
-    let Some(mut pixmap) = tiny_skia::Pixmap::new(w, h) else {
-        return;
-    };
     let scale_factor = if node.inverse_scale_factor > 0.0 {
         node.inverse_scale_factor.recip()
     } else {
         1.0
     };
     let transform = super::paint::view_box_transform(surface.view_box.as_ref(), w, h, scale_factor);
+    // The buffers are a cache: written past change detection, so a derived-dirt
+    // repaint still leaves `SvgSurface` untouched (pinned by
+    // `shape_delta_rerasters_same_frame`).
+    let raster = &mut surface.bypass_change_detection().raster;
+    let Some(mut pixmap) = raster.take_pixmap(w, h) else {
+        return;
+    };
     if let Some(children) = children {
         walk_shapes(children, shapes, transform, 1.0, &mut |_, shape, t, o| {
             super::paint::paint_shape(&mut pixmap, shape.kind, &shape.attrs, t, o);
         });
     }
-    upload_pixmap(entity, image_node, images, dirt, w, h, &pixmap);
+    upload_pixmap(entity, image_node, images, dirt, w, h, &pixmap, raster);
+    raster.keep_pixmap(pixmap);
     // Compare-before-write: any `deref_mut` ticks `Changed<SvgSurface>`, so
     // touch only the fields that are actually stale.
     if surface.last_size != size {
@@ -263,9 +289,11 @@ fn raster_jsx_surface(
 
 /// Upload freshly-painted pixels into the node's element-owned image: the
 /// [`LayerContentDirt`](crate::layer::LayerContentDirt) tap first (a real
-/// pixel write stales the owning layer's capture), then resize-if-needed and
-/// the straight-alpha write. Shared by the file and JSX branches — callers
-/// verified `images.contains` before painting.
+/// pixel write stales the owning layer's capture), then the straight-alpha
+/// write into the cache's spare buffer, which swaps with the image's current
+/// one. Shared by the file and JSX branches — callers verified
+/// `images.contains` before painting.
+#[allow(clippy::too_many_arguments)] // a private per-entity slice of the system's params
 fn upload_pixmap(
     entity: Entity,
     image_node: &ImageNode,
@@ -274,20 +302,15 @@ fn upload_pixmap(
     w: u32,
     h: u32,
     pixmap: &tiny_skia::Pixmap,
+    raster: &mut super::SvgRasterCache,
 ) {
     dirt.nodes.push(entity);
     let Some(mut image) = images.get_mut(&image_node.image) else {
         return;
     };
-    let extent = Extent3d {
-        width: w,
-        height: h,
-        depth_or_array_layers: 1,
-    };
-    if image.texture_descriptor.size != extent {
-        image.resize(extent);
-    }
-    image.data = Some(crate::canvas::to_straight_alpha(pixmap));
+    let mut data = std::mem::take(&mut raster.spare);
+    crate::canvas::write_straight_alpha(pixmap, &mut data);
+    raster.spare = crate::canvas::replace_image_pixels(&mut image, w, h, data);
 }
 
 /// Re-stamp the svg intrinsic measure after `bevy_ui` may have cleared it.

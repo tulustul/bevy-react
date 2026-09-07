@@ -120,6 +120,41 @@ pub struct SvgSurface {
     /// (`Changed<SvgShape>`/`Changed<Children>`, plus
     /// `RemovedComponents<Children>` for an emptied container).
     pub dirty: bool,
+    /// Reused raster buffers — a cache, not state: the raster system writes
+    /// it through `bypass_change_detection`, so a repaint alone never ticks
+    /// `Changed<SvgSurface>` (the clean-frame / derived-dirt contract).
+    pub(crate) raster: SvgRasterCache,
+}
+
+/// The buffers an svg surface's repaint reuses frame to frame: the pixmap it
+/// paints into (cleared, not reallocated, while the size holds) and the
+/// straight-alpha upload buffer the backing image handed back when it took
+/// the previous one (two buffers ping-pong, so a per-frame repaint allocates
+/// nothing at steady state).
+#[derive(Default)]
+pub(crate) struct SvgRasterCache {
+    pixmap: Option<tiny_skia::Pixmap>,
+    spare: Vec<u8>,
+}
+
+impl SvgRasterCache {
+    /// A transparent `w`×`h` pixmap to paint into: the retained one cleared
+    /// when the size matches, else a fresh allocation. `None` only for a
+    /// zero/overflowing size.
+    pub(crate) fn take_pixmap(&mut self, w: u32, h: u32) -> Option<tiny_skia::Pixmap> {
+        match self.pixmap.take() {
+            Some(mut pixmap) if pixmap.width() == w && pixmap.height() == h => {
+                pixmap.fill(tiny_skia::Color::TRANSPARENT);
+                Some(pixmap)
+            }
+            _ => tiny_skia::Pixmap::new(w, h),
+        }
+    }
+
+    /// Retain the painted pixmap for the next repaint.
+    pub(crate) fn keep_pixmap(&mut self, pixmap: tiny_skia::Pixmap) {
+        self.pixmap = Some(pixmap);
+    }
 }
 
 impl SvgSurface {
@@ -130,6 +165,7 @@ impl SvgSurface {
             view_box: None,
             last_size: UVec2::ZERO,
             dirty: true,
+            raster: SvgRasterCache::default(),
         }
     }
 
@@ -141,6 +177,7 @@ impl SvgSurface {
             view_box,
             last_size: UVec2::ZERO,
             dirty: true,
+            raster: SvgRasterCache::default(),
         }
     }
 }

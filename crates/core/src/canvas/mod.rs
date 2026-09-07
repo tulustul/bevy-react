@@ -152,6 +152,12 @@ pub struct CanvasSurface {
     /// Physical size of `pixmap`; a mismatch with the laid-out size recreates
     /// it cleared (HTML width/height-set semantics).
     last_size: (u32, u32),
+    /// The upload buffer the backing image gave back when it took the last
+    /// one ([`recycle`](Self::recycle)); the next [`sync`](Self::sync) fills
+    /// it instead of allocating. Two buffers ping-pong between the surface
+    /// and the image, so a per-frame draw loop allocates nothing at steady
+    /// state. Empty until the first upload.
+    spare: Vec<u8>,
 }
 
 impl CanvasSurface {
@@ -165,6 +171,7 @@ impl CanvasSurface {
             state: RasterState::default(),
             pixmap: None,
             last_size: (0, 0),
+            spare: Vec::new(),
         }
     }
 
@@ -187,6 +194,8 @@ impl CanvasSurface {
     /// drain queued commands. Returns the straight-alpha RGBA buffer when the
     /// pixels changed (painted, cleared, or resized), else `None`. `scale` is
     /// the device pixel ratio mapping logical draw coords onto the buffer.
+    /// The buffer is the recycled one when the caller handed one back (see
+    /// [`recycle`](Self::recycle)), else freshly allocated.
     pub(crate) fn sync(&mut self, w: u32, h: u32, scale: f32) -> Option<Vec<u8>> {
         let resized = self.pixmap.is_none() || self.last_size != (w, h);
         if resized {
@@ -210,7 +219,15 @@ impl CanvasSurface {
         let pixmap = self.pixmap.as_mut().unwrap();
         let cmds = std::mem::take(&mut self.pending);
         apply_cmds(pixmap, &mut self.state, &cmds, scale);
-        Some(to_straight_alpha(pixmap))
+        let mut out = std::mem::take(&mut self.spare);
+        write_straight_alpha(pixmap, &mut out);
+        Some(out)
+    }
+
+    /// Hand back the buffer the backing image held before the last upload
+    /// replaced it, for the next [`sync`](Self::sync) to fill in place.
+    pub(crate) fn recycle(&mut self, buf: Vec<u8>) {
+        self.spare = buf;
     }
 }
 
@@ -268,16 +285,26 @@ pub fn update_canvas_surfaces(
         let Some(mut image) = images.get_mut(&image_node.image) else {
             continue;
         };
-        let extent = Extent3d {
-            width: w,
-            height: h,
-            depth_or_array_layers: 1,
-        };
-        if image.texture_descriptor.size != extent {
-            image.resize(extent);
-        }
-        image.data = Some(data);
+        let previous = replace_image_pixels(&mut image, w, h, data);
+        surface.recycle(previous);
     }
+}
+
+/// Make `data` — a `w`×`h` straight-alpha RGBA8 buffer — the pixels of
+/// `image` (an asset write, so the texture re-uploads), and return the buffer
+/// it displaces for the caller to reuse. The descriptor size is set directly
+/// rather than via [`Image::resize`]: that would zero-fill the old buffer to
+/// the new size only for it to be replaced here. Shared with `crate::svg`.
+pub(crate) fn replace_image_pixels(image: &mut Image, w: u32, h: u32, data: Vec<u8>) -> Vec<u8> {
+    let extent = Extent3d {
+        width: w,
+        height: h,
+        depth_or_array_layers: 1,
+    };
+    if image.texture_descriptor.size != extent {
+        image.texture_descriptor.size = extent;
+    }
+    image.data.replace(data).unwrap_or_default()
 }
 
 /// Replay `cmds` onto the retained pixmap using the persistent raster state.
@@ -397,17 +424,43 @@ fn apply_cmds(pixmap: &mut Pixmap, state: &mut RasterState, cmds: &[DrawCmd], sc
     }
 }
 
-/// Copy the pixmap out as an RGBA8 (straight-alpha, sRGB) pixel buffer.
-/// tiny-skia stores premultiplied alpha; Bevy's UI shader expects straight
-/// alpha, so demultiply each pixel on the way out. Shared with `crate::svg`,
-/// whose resvg output is premultiplied the same way.
-pub(crate) fn to_straight_alpha(pixmap: &Pixmap) -> Vec<u8> {
-    let mut out = Vec::with_capacity((pixmap.width() * pixmap.height() * 4) as usize);
-    for px in pixmap.pixels() {
-        let c = px.demultiply();
-        out.extend_from_slice(&[c.red(), c.green(), c.blue(), c.alpha()]);
+/// Copy the pixmap into `out` as an RGBA8 (straight-alpha, sRGB) pixel
+/// buffer, replacing its contents (the capacity is reused). tiny-skia stores
+/// premultiplied alpha; Bevy's UI shader expects straight alpha, so each pixel
+/// is demultiplied on the way out — bit-identical to tiny-skia's own
+/// [`PremultipliedColorU8::demultiply`](tiny_skia::PremultipliedColorU8::demultiply)
+/// (pinned by `straight_alpha_matches_per_pixel_demultiply`). Pixels are
+/// processed in blocks: a block that is entirely opaque is already straight
+/// (tiny-skia's pixel layout is RGBA8 in memory, so it copies as-is) and an
+/// all-zero block is already transparent — between them the bulk of any real
+/// surface; only mixed blocks (antialiased edges, translucent paint) take the
+/// per-pixel demultiply. Shared with `crate::svg`, whose resvg output is
+/// premultiplied the same way.
+pub(crate) fn write_straight_alpha(pixmap: &Pixmap, out: &mut Vec<u8>) {
+    /// Pixels per block — 128 bytes, a couple of cache lines.
+    const BLOCK: usize = 32;
+    /// The alpha byte of a pixel read as a native-endian word.
+    const ALPHA: u32 = u32::from_ne_bytes([0, 0, 0, 0xFF]);
+    let pixels = pixmap.pixels();
+    let bytes = pixmap.data();
+    out.clear();
+    out.reserve(bytes.len());
+    for (i, chunk) in bytes.chunks(BLOCK * 4).enumerate() {
+        let (and, or) = chunk
+            .chunks_exact(4)
+            .map(|px| u32::from_ne_bytes([px[0], px[1], px[2], px[3]]))
+            .fold((u32::MAX, 0u32), |(and, or), w| (and & w, or | w));
+        if and & ALPHA == ALPHA {
+            out.extend_from_slice(chunk); // all opaque: premultiplied == straight
+        } else if or == 0 {
+            out.resize(out.len() + chunk.len(), 0); // all transparent zeros
+        } else {
+            for px in &pixels[i * BLOCK..i * BLOCK + chunk.len() / 4] {
+                let c = px.demultiply();
+                out.extend_from_slice(&[c.red(), c.green(), c.blue(), c.alpha()]);
+            }
+        }
     }
-    out
 }
 
 /// An anti-aliased solid-color paint from straight-alpha RGBA bytes.
@@ -650,6 +703,56 @@ mod tests {
         let buf = s.sync(4, 4, 1.0).expect("painted");
         // Width 2 (the last valid value) covers rows 1..3; row 1 is opaque red.
         assert_eq!(px(&buf, 4, 2, 1), &[255, 0, 0, 255]);
+    }
+
+    #[test]
+    fn straight_alpha_matches_per_pixel_demultiply() {
+        // The reference: tiny-skia's demultiply on every pixel, as the
+        // pre-fast-path loop did it. Pseudo-random premultiplied pixels with
+        // every edge alpha (0, 1, 254, 255), including out-of-range color
+        // bytes (color > alpha, color with alpha 0) a rasterizer never emits
+        // but the fast path must still not reinterpret — plus whole runs of
+        // opaque and of zero pixels so the block-level shortcuts are hit.
+        let (w, h) = (64u32, 33u32);
+        let mut seed = 0x2545_F491_4F6C_DD1Du64;
+        let mut next = || {
+            seed ^= seed << 13;
+            seed ^= seed >> 7;
+            seed ^= seed << 17;
+            seed
+        };
+        let mut data = Vec::with_capacity((w * h * 4) as usize);
+        for i in 0..(w * h) as usize {
+            let r = next();
+            if (500..700).contains(&i) {
+                data.extend_from_slice(&[0, 0, 0, 0]); // a transparent run
+                continue;
+            }
+            let a = match i % 7 {
+                _ if (200..400).contains(&i) => 255, // an opaque run
+                0 => 255,
+                1 => 0,
+                2 => 1,
+                3 => 254,
+                _ => (r >> 8) as u8,
+            };
+            let ch = |shift: u32| {
+                let v = (r >> shift) as u8;
+                if i % 11 == 0 { v } else { v.min(a) }
+            };
+            data.extend_from_slice(&[ch(16), ch(24), ch(32), a]);
+        }
+        let pixmap =
+            Pixmap::from_vec(data, tiny_skia::IntSize::from_wh(w, h).unwrap()).expect("pixmap");
+        let mut expected = Vec::new();
+        for px in pixmap.pixels() {
+            let c = px.demultiply();
+            expected.extend_from_slice(&[c.red(), c.green(), c.blue(), c.alpha()]);
+        }
+        // A stale, differently-sized buffer is fully replaced.
+        let mut out = vec![7u8; 13];
+        write_straight_alpha(&pixmap, &mut out);
+        assert_eq!(out, expected);
     }
 
     #[test]
