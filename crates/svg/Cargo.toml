@@ -1,0 +1,42 @@
+[package]
+name = "bevy_react_svg"
+version.workspace = true
+edition.workspace = true
+description = "The JSX <svg> element and shape intrinsics for bevy_react_core."
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords = ["bevy", "react", "svg", "ui", "gamedev"]
+categories = ["gui", "game-development"]
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+[lib]
+name = "bevy_react_svg"
+path = "src/lib.rs"
+
+# Mirrors the core's default `devtools` feature (the diag-flagged tests
+# assert on the structured warnings it collects).
+[features]
+default = ["devtools"]
+devtools = ["bevy_react_core/devtools"]
+
+[dependencies]
+bevy = { workspace = true }
+bevy_react_core = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tiny-skia = { workspace = true }
+# SVG micro-grammar parsers (path `d`, transform lists, viewBox).
+svgtypes = { workspace = true }
+# 2D curve math for hit-testing (winding + nearest-point).
+kurbo = { workspace = true }
+
+[dev-dependencies]
+bevy_react_core = { workspace = true, features = ["test-util"] }
+crossbeam-channel = { workspace = true }
+tokio = { workspace = true }
+uuid = { workspace = true }

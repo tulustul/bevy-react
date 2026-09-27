@@ -14,9 +14,9 @@
 
 use std::time::{Duration, Instant};
 
-use bevy_react::js_thread::spawn_js_thread;
-use bevy_react::protocol::{op::Op, outbound::Outbound};
-use bevy_react::{RawRequest, ReactMessage};
+use bevy_react_core::js_thread::spawn_js_thread;
+use bevy_react_core::protocol::{op::Op, outbound::Outbound};
+use bevy_react_core::{RawRequest, ReactMessage};
 
 /// Flush a batch that is not even an array, then one whose op tag is unknown
 /// (each must throw a `TypeError` and ship nothing), then a valid two-op batch
@@ -66,6 +66,7 @@ fn invalid_batch_throws_type_error_and_next_batch_arrives() {
     let (_reload_tx, reload_rx) = tokio::sync::mpsc::unbounded_channel::<()>();
 
     spawn_js_thread(
+        bevy_react_core::ext::ExtRegistrySlot::ready(bevy_react_core::ext::builtin_registry()),
         vendor,
         app,
         ops_tx,

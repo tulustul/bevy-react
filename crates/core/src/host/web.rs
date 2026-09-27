@@ -36,6 +36,16 @@ struct WebHost {
     emit: Sender<ReactMessage>,
     request: Sender<RawRequest>,
     anim: Sender<AnimationCommand>,
+    // The feature-registry handoff (`crate::ext`): installed on this (the
+    // only) thread before the first decode.
+    ext: crate::ext::ExtRegistrySlot,
+    // `op_flush` batches (raw JSON + devtools flag) that arrived before the
+    // registry did. On wasm Bevy defers `Plugin::finish` (which fills the
+    // slot) until the renderer's async setup lands, while the page may start
+    // React right after `init()` — decoding those batches without the
+    // registry would drop every feature-owned prop key for good. They are
+    // held here, in order, and decoded once the slot is filled.
+    held_flushes: VecDeque<(String, bool)>,
     // Bevy → JS: events waiting for a JS `op_next_event` caller, and the `resolve`
     // callbacks of callers parked on `op_next_event`. At most one side is ever
     // non-empty — an arriving event resolves a waiter immediately, else it queues.
@@ -48,7 +58,7 @@ thread_local! {
 }
 
 /// Wire the web host into `app` and return the sender outbound producers use.
-pub(crate) fn spawn(app: &mut App, _config: HostConfig, senders: HostSenders) -> OutboundSender {
+pub(crate) fn spawn(app: &mut App, config: HostConfig, senders: HostSenders) -> OutboundSender {
     console_error_panic_hook::set_once();
 
     // Bevy → JS over a crossbeam channel drained each frame (no async needed — the
@@ -62,6 +72,8 @@ pub(crate) fn spawn(app: &mut App, _config: HostConfig, senders: HostSenders) ->
             emit: senders.emit,
             request: senders.request,
             anim: senders.anim,
+            ext: config.ext,
+            held_flushes: VecDeque::new(),
             pending_events: VecDeque::new(),
             waiters: VecDeque::new(),
         });
@@ -73,6 +85,7 @@ pub(crate) fn spawn(app: &mut App, _config: HostConfig, senders: HostSenders) ->
         .expect("install globalThis.__bevyHost");
 
     app.insert_resource(OutboundDrain(outbound_rx))
+        .add_systems(First, release_held_flushes)
         .add_systems(Last, drain_outbound);
 
     outbound_tx
@@ -95,16 +108,18 @@ fn install_host_object() -> Object {
         let Some(json) = json.as_string() else {
             wasm_bindgen::throw_str("op_flush: expected the op batch as a JSON string");
         };
-        // `OpBatch` decodes exactly like `Vec<Op>` but stamps decode-fallback
-        // warnings with their op's node id (see `crate::diag`).
-        let batch = match serde_json::from_str::<OpBatch>(&json) {
-            Ok(batch) => batch,
-            Err(e) => wasm_bindgen::throw_str(&format!("op_flush decode: {e}")),
-        };
-        with_host(|h| {
-            let _ = h.flush_devtools.send(devtools.as_bool().unwrap_or(false));
-            let _ = h.ops.send(batch.0);
-        });
+        let devtools = devtools.as_bool().unwrap_or(false);
+        // Hold the batch until the feature registry is installed (see
+        // `WebHost::held_flushes`); a batch behind held ones waits too, so
+        // decode order is commit order.
+        if !registry_ready() || with_host(|h| !h.held_flushes.is_empty()) {
+            with_host(|h| h.held_flushes.push_back((json, devtools)));
+            release_held_flushes();
+            return;
+        }
+        if let Err(e) = decode_and_send(&json, devtools) {
+            wasm_bindgen::throw_str(&e);
+        }
     });
     set_method(&host, "op_flush", flush.as_ref());
     flush.forget();
@@ -161,6 +176,50 @@ fn install_host_object() -> Object {
     next.forget();
 
     host
+}
+
+/// Install the feature registry on this thread once the plugin's slot is
+/// filled; whether it is installed.
+fn registry_ready() -> bool {
+    if crate::ext::with_thread_registry(|r| r.is_some()) {
+        return true;
+    }
+    match with_host(|h| h.ext.get()) {
+        Some(registry) => {
+            crate::ext::set_thread_registry(registry);
+            true
+        }
+        None => false,
+    }
+}
+
+/// Decode one `op_flush` batch and hand it to Bevy. A structurally invalid
+/// batch is an `Err` (the live call throws it into JS; a held batch, whose
+/// caller is gone, logs it).
+fn decode_and_send(json: &str, devtools: bool) -> Result<(), String> {
+    // `OpBatch` decodes exactly like `Vec<Op>` but stamps decode-fallback
+    // warnings with their op's node id (see `crate::diag`).
+    let batch =
+        serde_json::from_str::<OpBatch>(json).map_err(|e| format!("op_flush decode: {e}"))?;
+    with_host(|h| {
+        let _ = h.flush_devtools.send(devtools);
+        let _ = h.ops.send(batch.0);
+    });
+    Ok(())
+}
+
+/// Decode the batches held while the registry was missing, in order, once it
+/// is installed. Runs from `op_flush` and in `First` (so held batches land
+/// even if React never flushes again), ahead of the op drain in `Update`.
+fn release_held_flushes() {
+    if !registry_ready() {
+        return;
+    }
+    while let Some((json, devtools)) = with_host(|h| h.held_flushes.pop_front()) {
+        if let Err(e) = decode_and_send(&json, devtools) {
+            error(&e);
+        }
+    }
 }
 
 /// `op_next_event`: hand back the next queued event, or a Promise that the drain

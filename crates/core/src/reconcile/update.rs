@@ -63,6 +63,18 @@ pub(super) fn apply_update(
     // `crate::diag`); the guard restores the outer scope on any
     // exit from this fn.
     let _diag = crate::diag::node_scope(id);
+    // The element-kind facts the branches below need (is this a shape? does
+    // the element own its `ImageNode`?), derived from the recorded kind —
+    // the synchronous twin of the entity's `ElementFlags` (commands queued
+    // this batch have not flushed, so the component can't be queried yet).
+    let registry = bridge.ext.clone();
+    // The kinds are interned (`SharedTags::note_kind`), so this is a cheap
+    // clone of an `Arc`-backed string — not the mutable borrow the shared-tag
+    // update below needs.
+    let kind: std::borrow::Cow<'static, str> = bridge.shared_tags.kind_cow(id);
+    let kind: &str = &kind;
+    let kind_flags = registry.flags_for_kind(kind);
+    let handler = registry.element(kind);
     // Merge the delta into the retained per-node props, yielding the
     // merged full props, what the delta touched, and the event-like
     // fields to act on.
@@ -292,36 +304,21 @@ pub(super) fn apply_update(
         if dirty.anchor {
             apply_anchor(&mut ec, &mut bridge.anchors, id, &props);
         }
-    } else if bridge.shapes.contains(&id) {
-        // An SVG shape child: a Node-less entity (no style, no layout) whose
-        // prop surface is the atomically-replaced `shape` attrs plus the
-        // pointer handlers — nothing else applies to a shape (see `svg_ops`).
-        if dirty.shape {
-            super::svg_ops::update_shape_attrs(&mut commands.entity(e), &props);
-            // Bindings derive from the (atomically replaced) attrs — their
-            // only source on a styleless shape — so any shape change may
-            // add/remove/retarget them.
-            apply_animated(&mut commands.entity(e), &mut bridge.animated, id, &props);
-            // Same for the transition stamp: the spec rides the attrs, so an
-            // atomic replace may add or remove it.
-            crate::transition::apply_shape_transition(
-                &mut commands.entity(e),
-                props.shape.as_deref(),
-            );
-        }
-        if dirty.pointer {
-            super::svg_ops::apply_shape_pointer(&mut commands.entity(e), &props);
-        }
-        if dirty.scroll_listener || dirty.wheel {
-            super::svg_ops::warn_shape_scroll(&props);
-        }
+    } else if let Some(handler) = handler.filter(|_| kind_flags.node_less) {
+        // A registered node-less kind (an SVG shape child): no style, no
+        // layout box — the handler owns the whole prop surface.
+        let mut ctx = crate::ext::ElementUpdateCtx {
+            animated: &mut bridge.animated,
+            id,
+        };
+        handler.update(&mut ctx, &mut commands.entity(e), kind, &props, &dirty);
     } else {
         let promoted = bridge.promoted_layers.contains(&id);
         let mut ec = commands.entity(e);
         apply_style_masked(&mut ec, &props.style, dirty.style, promoted);
         // `backgroundImage` — except where the entity's `ImageNode` is
         // element-owned (image/canvas/portal; warned at create).
-        if !bridge.foreign_images.contains(&id) {
+        if !kind_flags.owns_image {
             crate::background_image::apply_background_image(
                 &mut ec,
                 &props.style,
@@ -353,15 +350,21 @@ pub(super) fn apply_update(
         // surface and request a re-raster (see `svg_ops`). Svg roots
         // otherwise flow through this general arm as normal styled nodes
         // (`foreign_images` already guards their element-owned `ImageNode`).
-        if dirty.view_box && bridge.svg_roots.contains(&id) {
-            super::svg_ops::update_view_box(&mut ec, &props);
+        // A registered styled kind (an `<svg>` root): its own keys, after the
+        // generic path.
+        if let Some(handler) = handler {
+            let mut ctx = crate::ext::ElementUpdateCtx {
+                animated: &mut bridge.animated,
+                id,
+            };
+            handler.update(&mut ctx, &mut ec, kind, &props, &dirty);
         }
         // A `<portal>`'s new target name: rebind it (the binding system
         // points its `ImageNode` at the new target next frame).
         if dirty.target
             && let Some(target) = &props.target
         {
-            ec.insert(RPortal(target.clone()));
+            ec.insert((RPortal(target.clone()), crate::ext::LiveTexture));
         }
         // When `apply_style_masked` reset this entity's `FocusPolicy` to
         // the `Pass` default, re-assert a button's `Block` (no-op /

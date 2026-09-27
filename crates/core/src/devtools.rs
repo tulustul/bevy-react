@@ -104,7 +104,7 @@ use stats::{DevtoolsTimers, emit_batch_stats, mark_post_layout, mark_pre_layout}
 ///
 /// ```no_run
 /// # use bevy::prelude::*;
-/// # use bevy_react::{DevtoolsConfig, ReactUiPlugin};
+/// # use bevy_react_core::{DevtoolsConfig, ReactUiPlugin};
 /// # let mut app = App::new();
 /// app.add_plugins(ReactUiPlugin::new("ui/dist/app.js").devtools(DevtoolsConfig {
 ///     settings_path: Some(".config/devtools.json".into()),

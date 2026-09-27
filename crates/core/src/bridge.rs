@@ -228,6 +228,10 @@ pub enum SpanKind {
 /// The Bevy resource holding the live boundary state.
 #[derive(Resource)]
 pub struct JsBridge {
+    /// The app's feature registrations (element kinds, prop keys — see
+    /// [`crate::ext`]), snapshotted at startup. On the bridge rather than a
+    /// system param because `apply_js_ops` is at Bevy's 16-param cap.
+    pub ext: std::sync::Arc<crate::ext::ExtRegistry>,
     /// Incoming op batches from the reconciler.
     pub ops_rx: OpReceiver,
     /// Outgoing UI events to the reconciler (wrapped in [`Outbound::UiEvent`]).
@@ -278,27 +282,6 @@ pub struct JsBridge {
     /// top-level trees on the default UI camera. Like surfaces they are never
     /// parented into the Bevy hierarchy; see [`Self::is_detached_root`].
     pub roots: HashSet<NodeId>,
-    /// Node ids whose `ImageNode` belongs to the **element** (`image`,
-    /// `canvas`, `portal`): the `backgroundImage` style must never touch it
-    /// (it is ignored there, with a diag warning). Consulted by the update
-    /// path, the interaction restyles, and the layer-promotion rebuild —
-    /// membership also answers removal ownership: on any node NOT in this
-    /// set, a present `ImageNode` was inserted by `backgroundImage` and is
-    /// safe to remove. On the bridge (not a marker component) because
-    /// `apply_js_ops` is at Bevy's 16-system-param cap, like
-    /// [`Self::layer_dirty`].
-    pub foreign_images: HashSet<NodeId>,
-    /// Node ids that are JSX `<svg>` roots. Their `viewBox` deltas write into
-    /// the entity's [`crate::svg::SvgSurface`] (the general update arm,
-    /// gated on this set); the rasterizer walks their `Children` for the
-    /// shape children. They are also in [`Self::foreign_images`] (the
-    /// `ImageNode` is element-owned, like `canvas`).
-    pub svg_roots: HashSet<NodeId>,
-    /// Node ids that are SVG shape children ([`crate::svg::SvgShape`]):
-    /// Node-less entities (the `textSpan` precedent) whose deltas rewrite
-    /// only the folded `shape` attrs — the update path must skip styling,
-    /// background images, and every other stamp for them.
-    pub shapes: HashSet<NodeId>,
     /// Nodes currently carrying an [`AnimatedNode`](crate::animations::AnimatedNode)
     /// (a mirror of the component's presence, maintained by the stamp helpers),
     /// so a style delta on a binding-less node — the common case — queues no
@@ -375,6 +358,7 @@ impl JsBridge {
         // ROOT_ID (0) always resolves to the UI root entity.
         nodes.insert(crate::protocol::ROOT_ID, root);
         Self {
+            ext: Default::default(),
             ops_rx,
             outbound_tx,
             nodes,
@@ -388,9 +372,6 @@ impl JsBridge {
             editable_inputs: HashSet::new(),
             surfaces: HashSet::new(),
             roots: HashSet::new(),
-            foreign_images: HashSet::new(),
-            svg_roots: HashSet::new(),
-            shapes: HashSet::new(),
             animated: HashSet::new(),
             anchors: crate::anchor::AnchorIndex::default(),
             editable_values: HashMap::new(),
@@ -606,9 +587,6 @@ impl JsBridge {
         take_if_any(&mut self.editable_inputs, id);
         take_if_any(&mut self.surfaces, id);
         take_if_any(&mut self.roots, id);
-        take_if_any(&mut self.foreign_images, id);
-        take_if_any(&mut self.svg_roots, id);
-        take_if_any(&mut self.shapes, id);
         take_if_any(&mut self.animated, id);
         self.anchors.forget(id);
         remove_if_any(&mut self.editable_values, id);

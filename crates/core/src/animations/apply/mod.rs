@@ -16,7 +16,6 @@ use super::protocol::{AnimatableProperty, AnimatedBindings};
 mod filter_params;
 mod gradient;
 mod node_colors;
-mod shape;
 #[cfg(test)]
 mod tests;
 mod warn;
@@ -32,7 +31,7 @@ use super::{AnimatedNode, SharedValues, build_ui_transform, eval_scalar, props};
 /// by [`AnimatedNode`]).
 #[derive(QueryData)]
 #[query_data(mutable)]
-pub(super) struct AnimTargets {
+pub(crate) struct AnimTargets {
     transform: &'static mut UiTransform,
     bg: Option<&'static mut BackgroundColor>,
     border: Option<&'static mut BorderColor>,
@@ -60,11 +59,11 @@ pub(super) struct AnimTargets {
     /// overwrite single fields; `sync_transform3d_matrices` derives the
     /// matrix + composite-only dirt from the change — no dirt push here).
     transform3d: Option<&'static mut crate::layer::transform3d::LayerTransform3d>,
-    /// The SVG shape entity's kind + folded attrs — stage 5 (`shape`)
-    /// writes driven `ShapeAttr` values into the bound attrs' seed slots.
-    /// Present only on JSX `<svg>` shape children (Node-less entities);
-    /// `<g>` groups qualify too (their `opacity` is bindable).
-    shape: Option<&'static mut crate::svg::SvgShape>,
+    /// The feature-owned bindings' publish slot — stage 5 evaluates every
+    /// `Ext` binding and compare-writes the scalars here for the owning
+    /// feature's consumer (see [`DrivenExtValues`](crate::ext::DrivenExtValues)).
+    /// Stamped with the bindings exactly when any `Ext` binding exists.
+    ext: Option<&'static mut crate::ext::DrivenExtValues>,
     /// The gradient engines' input stamp (the resolver's UNfolded lists +
     /// the static fold opacity) — stage 6's rebuild base.
     gradient_input: Option<&'static crate::ui_map::GradientTargets>,
@@ -90,7 +89,7 @@ type AnyTargetChanged = Or<(
     Changed<crate::filters::ResolvedBackdropChain>,
     Changed<crate::filters::ResolvedMorphChain>,
     Changed<crate::layer::transform3d::LayerTransform3d>,
-    Changed<crate::svg::SvgShape>,
+    Changed<crate::ext::DrivenExtValues>,
     Or<(
         Changed<crate::ui_map::GradientTargets>,
         Changed<bevy::ui::BackgroundGradient>,
@@ -101,7 +100,7 @@ type AnyTargetChanged = Or<(
 /// The removal half of the wake set: a target component (or the bindings)
 /// vanishing since the last run — same field list as [`AnyTargetChanged`].
 #[derive(bevy::ecs::system::SystemParam)]
-pub(super) struct RemovedTargets<'w, 's> {
+pub(crate) struct RemovedTargets<'w, 's> {
     anim: RemovedComponents<'w, 's, AnimatedNode>,
     bg: RemovedComponents<'w, 's, BackgroundColor>,
     border: RemovedComponents<'w, 's, BorderColor>,
@@ -114,7 +113,7 @@ pub(super) struct RemovedTargets<'w, 's> {
     resolved_backdrop: RemovedComponents<'w, 's, crate::filters::ResolvedBackdropChain>,
     resolved_morph: RemovedComponents<'w, 's, crate::filters::ResolvedMorphChain>,
     transform3d: RemovedComponents<'w, 's, crate::layer::transform3d::LayerTransform3d>,
-    shape: RemovedComponents<'w, 's, crate::svg::SvgShape>,
+    ext: RemovedComponents<'w, 's, crate::ext::DrivenExtValues>,
     gradient_input: RemovedComponents<'w, 's, crate::ui_map::GradientTargets>,
     bg_gradient: RemovedComponents<'w, 's, bevy::ui::BackgroundGradient>,
     border_gradient: RemovedComponents<'w, 's, bevy::ui::BorderGradient>,
@@ -143,7 +142,7 @@ impl RemovedTargets<'_, '_> {
             resolved_backdrop,
             resolved_morph,
             transform3d,
-            shape,
+            ext,
             gradient_input,
             bg_gradient,
             border_gradient
@@ -159,7 +158,7 @@ impl RemovedTargets<'_, '_> {
 /// bump doesn't — see the stamp call); stage 5 needs no state (`S = ()`,
 /// where "stamp drifted" degenerates to "not yet stamped"). One type, one
 /// prune idiom, two stages.
-pub(super) struct ValidationMemory<S>(HashMap<Entity, S>);
+pub(crate) struct ValidationMemory<S>(HashMap<Entity, S>);
 
 impl<S> Default for ValidationMemory<S> {
     fn default() -> Self {
@@ -202,7 +201,7 @@ impl<S: PartialEq> ValidationMemory<S> {
 /// gradient leaves (6 — after the opacity pre-resolve so the driven alpha
 /// folds in), then the validation-memory prunes.
 #[allow(clippy::type_complexity, clippy::too_many_arguments)]
-pub(super) fn apply_animated_nodes(
+pub(crate) fn apply_animated_nodes(
     mut commands: Commands,
     values: Res<SharedValues>,
     mut dirt: ResMut<crate::layer::LayerContentDirt>,
@@ -213,10 +212,6 @@ pub(super) fn apply_animated_nodes(
     // animating valid binding) is stamped back after the apply so it never
     // reads as a re-resolve.
     mut validated: Local<ValidationMemory<(Option<u32>, Option<u32>, Option<u32>)>>,
-    // The shape-attr analog (stage 5): entities whose `ShapeAttr` bindings
-    // were validated since they last restamped (`Ref` change tick) — the
-    // once-per-restamp warn gate; no version pair needed (no chain here).
-    mut shape_validated: Local<ValidationMemory<()>>,
     // The gradient-leaf analog (stage 6): same degenerate `S = ()` gate —
     // the stamp is rebuilt from every gradient style change, which also
     // restamps the bindings, so no state pair is needed.
@@ -248,7 +243,6 @@ pub(super) fn apply_animated_nodes(
         return;
     }
     let mut filter_bound: Vec<Entity> = Vec::new();
-    let mut shape_bound: Vec<Entity> = Vec::new();
     let mut gradient_bound: Vec<Entity> = Vec::new();
     let mut query = queries.p1();
     for (entity, anim, mut t) in &mut query {
@@ -289,15 +283,7 @@ pub(super) fn apply_animated_nodes(
             &mut dirt,
             &mut t,
         );
-        stage_shape_attrs(
-            entity,
-            anim.is_changed(),
-            b,
-            &values,
-            &mut shape_validated,
-            &mut shape_bound,
-            &mut t,
-        );
+        stage_ext(b, &values, &mut t);
         stage_gradient_params(
             entity,
             anim.is_changed(),
@@ -312,7 +298,6 @@ pub(super) fn apply_animated_nodes(
         );
     }
     validated.prune(&filter_bound);
-    shape_validated.prune(&shape_bound);
     gradient_validated.prune(&gradient_bound);
 }
 
@@ -611,30 +596,37 @@ fn stage_filter_params(
     validated.stamp(entity, validate, &pre, post);
 }
 
-/// Stage 5 — SVG shape-attr bindings (`shape.<attr>` wrappers): write
-/// the resolved values into the bound attrs' **seed slots** (see
-/// `shape` for the seed-slot design and the write-ordering
-/// contract). NOTHING extra is dirtied here: the `Changed<SvgShape>`
-/// tick from a real write IS the raster's derived-dirt signal —
-/// `svg::update_svg_surfaces` (ordered after `AnimationSet::Apply` in
-/// `plugin.rs`, so the write lands the same frame) repaints and taps
-/// the layer dirt itself.
-fn stage_shape_attrs(
-    entity: Entity,
-    anim_changed: bool,
-    b: &AnimatedBindings,
-    values: &SharedValues,
-    shape_validated: &mut ValidationMemory<()>,
-    shape_bound: &mut Vec<Entity>,
-    t: &mut AnimTargetsItem,
-) {
-    if !b.has_shape_attrs() {
-        return;
+/// Stage 5 — feature-owned bindings (`Ext { domain, name }`): evaluate each
+/// against the shared values and **publish** the scalars into the entity's
+/// [`DrivenExtValues`](crate::ext::DrivenExtValues), compare-before-write
+/// (a settled frame never ticks it). The owning feature's consumer system —
+/// ordered after `AnimationSet::Apply`, so the value lands the same frame —
+/// writes them where they belong and validates its own bindings (the core
+/// knows nothing about the domain's fields). A binding the core cannot
+/// evaluate to a scalar (a color binding, a missing shared value) publishes
+/// nothing; the consumer sees the gap. Nothing is dirtied here: the
+/// consumer's write is the repaint signal.
+fn stage_ext(b: &AnimatedBindings, values: &SharedValues, t: &mut AnimTargetsItem) {
+    let Some(ext) = t.ext.as_mut() else {
+        return; // Stamped exactly when an `Ext` binding exists.
+    };
+    let next: Vec<crate::ext::DrivenExt> = b
+        .iter()
+        .filter_map(|(property, binding)| match property {
+            AnimatableProperty::Ext { domain, name } => {
+                eval_scalar(binding, values).map(|value| crate::ext::DrivenExt {
+                    domain,
+                    name: name.clone(),
+                    value,
+                })
+            }
+            _ => None,
+        })
+        .collect();
+    // One `deref_mut`, only on a real change.
+    if ext.0 != next {
+        ext.0 = next;
     }
-    shape_bound.push(entity);
-    let validate = anim_changed || shape_validated.should_validate(entity, &());
-    shape::apply_shape_attrs(b, values, t.shape.as_mut(), t.rnode, validate);
-    shape_validated.stamp(entity, validate, &(), ());
 }
 
 /// Stage 6 — gradient-leaf bindings (`backgroundGradient[<i>]` /

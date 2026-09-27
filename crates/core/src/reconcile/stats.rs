@@ -72,7 +72,9 @@ pub struct OpApplyStats {
 /// FIFOs are aligned (stamp sent first), so draining one stamp per received
 /// batch keeps them in lockstep. Feeds [`OpApplyStats::last_frame_wait`] and
 /// [`OpApplyStats::last_pre_apply`].
+/// Never read on wasm (no `Instant` there; the web host sends no stamps).
 #[derive(Resource)]
+#[cfg_attr(target_arch = "wasm32", allow(dead_code))]
 pub struct FlushStamps(pub(crate) crossbeam_channel::Receiver<std::time::Instant>);
 
 /// The instant Bevy's `First` schedule ran this frame (native only; stays
@@ -80,6 +82,7 @@ pub struct FlushStamps(pub(crate) crossbeam_channel::Receiver<std::time::Instant
 /// The frame boundary that splits [`OpApplyStats::last_frame_wait`] from
 /// `last_pre_apply`.
 #[derive(Resource, Default, Debug, Clone, Copy)]
+#[cfg_attr(target_arch = "wasm32", allow(dead_code))]
 pub struct FrameStamp(pub Option<std::time::Instant>);
 
 /// Stamp the frame's start. Registered in `First` (native only).

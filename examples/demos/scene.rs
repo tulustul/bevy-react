@@ -2,7 +2,7 @@
 //! time; each scene's plugin (under `scenes/`) gates its systems on this state.
 
 use bevy::prelude::*;
-use bevy_react::{ReactAppExt, react_message};
+use bevy_react_core::{ReactAppExt, react_message};
 use serde::Deserialize;
 use ts_rs::TS;
 

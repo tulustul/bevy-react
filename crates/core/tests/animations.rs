@@ -3,8 +3,8 @@
 //! the plugin builds (no `app.update()`), so no GPU/window is needed.
 
 use bevy::prelude::*;
-use bevy_react::ReactUiPlugin;
-use bevy_react::animations::SharedValues;
+use bevy_react_core::ReactUiPlugin;
+use bevy_react_core::animations::SharedValues;
 
 /// Minimal app + vendor bundles so `ReactUiPlugin::build` (which panics on a
 /// missing bundle) is satisfied. The plugin loads `vendor.js` beside the app

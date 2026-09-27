@@ -38,7 +38,7 @@ pub(super) fn rebuild_image(
             &mut ui_assets.atlas_cache,
         );
         ec.insert(img);
-        ec.remove::<crate::svg::SvgSurface>();
+        ec.remove::<(crate::svg::SvgSurface, crate::ext::LiveTexture)>();
     }
 }
 

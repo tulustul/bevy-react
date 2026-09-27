@@ -373,6 +373,7 @@ pub fn promotion_reasons(
 /// `bridge.promoted_layers`. Ordered after `apply_js_ops` and before the
 /// interaction/transition/animation appliers so every later alpha writer this
 /// frame sees the final promotion state.
+#[allow(clippy::too_many_arguments)]
 pub fn evaluate_layer_promotions(
     mut commands: Commands,
     mut bridge: ResMut<crate::bridge::JsBridge>,
@@ -381,6 +382,7 @@ pub fn evaluate_layer_promotions(
     fonts: Res<crate::plugin::Fonts>,
     mut ui_assets: crate::reconcile::UiAssets,
     mut style_variants: Query<&mut crate::bridge::StyleVariants>,
+    flags: Query<&crate::ext::ElementFlags>,
 ) {
     // Sweep rows whose node vanished (removal forgets the node's bridge data
     // — including `promoted_layers` — but can't reach this resource).
@@ -396,16 +398,16 @@ pub fn evaluate_layer_promotions(
         let Some(&entity) = bridge.nodes.get(&id) else {
             continue; // Removed in the same batch; sweep handled the row.
         };
+        let element = flags.get(entity).copied().unwrap_or_default();
         let reasons = match bridge.props_cache.get(&id) {
             Some(props) => promotion_reasons(
                 props,
                 bridge.children_of(id).count(),
                 // Node-less bridge entities (`<text>` spans, SVG shape
                 // children — no box to capture) and detached roots
-                // (`<surface>`/`<root>` — own render paths) are ineligible.
-                bridge.spans.contains_key(&id)
-                    || bridge.shapes.contains(&id)
-                    || bridge.is_detached_root(id),
+                // (`<surface>`/`<root>` — own render paths) are ineligible,
+                // as their `ElementFlags` declare.
+                element.layer_ineligible,
             ),
             None => PromotionReasons::default(),
         };
@@ -455,7 +457,7 @@ pub fn evaluate_layer_promotions(
                         entity,
                         props,
                         true,
-                        bridge.foreign_images.contains(&id),
+                        element.owns_image,
                         &assets,
                         &mut ui_assets,
                         &mut style_variants,
@@ -489,7 +491,7 @@ pub fn evaluate_layer_promotions(
                     entity,
                     props,
                     false,
-                    bridge.foreign_images.contains(&id),
+                    element.owns_image,
                     &assets,
                     &mut ui_assets,
                     &mut style_variants,

@@ -8,7 +8,7 @@ Rows manipulations benchmark:
 
 `npm run build:prod -w stress-app`
 
-`cargo run --release -p bevy-react --example stress -- --run table-ops --out benchmark_results/results.json`
+`cargo run --release -p stress -- --run table-ops --out benchmark_results/results.json`
 
 ## Median per op — 1k table (p50, ms)
 

@@ -1,6 +1,6 @@
 //! Tests for the `#[react_filter]` attribute macro (custom filters). Like the
 //! other `react_*` attributes, the macro is exercised through `core` — its
-//! expansion resolves `::bevy_react::` via `extern crate self`.
+//! expansion resolves `::bevy_react_core::` via `extern crate self`.
 
 use std::f32::consts::PI;
 

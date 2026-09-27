@@ -168,20 +168,15 @@ pub struct Props {
     #[serde(default)]
     pub target: Option<String>,
 
-    // --- `svg` element + shape-child attributes ---
-    /// The folded SVG attributes of a shape child (`<circle>`/`<rect>`/…)
-    /// inside an `<svg>` element. The JS side folds the flat JSX attrs into
-    /// this one object; on update it **replaces atomically** (see
-    /// [`Props::merge_delta`]).
-    /// Boxed: a shape child's attrs are a few hundred bytes every other
-    /// element never carries.
-    #[serde(default)]
-    pub shape: Option<Box<crate::svg::ShapeAttrs>>,
-    /// The `<svg>` element's `viewBox` (`"minX minY width height"`), parsed
-    /// at the serde boundary. (`rename_all = "camelCase"` yields exactly the
-    /// `viewBox` wire name — pinned by a test.)
-    #[serde(default, deserialize_with = "crate::svg::de_view_box")]
-    pub view_box: Option<crate::svg::ViewBox>,
+    // --- feature-owned keys ---
+    /// Every wire key a feature registered (`add_react_prop`), decoded by
+    /// its owner at the serde boundary — e.g. an SVG shape child's folded
+    /// `shape` attrs or an `<svg>`'s `viewBox`. Each value **replaces
+    /// atomically** on update and is removed by `unset` (see
+    /// [`Props::merge_delta`] and [`crate::ext`]). Flattened: the keys sit
+    /// beside the built-in ones on the wire.
+    #[serde(flatten)]
+    pub ext: crate::ext::ExtProps,
 
     // --- `editableText` element attributes ---
     /// The controlled text value of an `editableText`. Seeds the field on create;
@@ -226,7 +221,7 @@ pub struct Props {
 /// Which parts of a [`Props`] a delta update touched; drives which of the
 /// reconciler's `apply_*` helpers run. Style granularity lives in
 /// [`StyleDirty`]; the other flags are per prop group.
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct PropsDirty {
     /// Style groups touched via `style` / `style_unset`.
     pub style: StyleDirty,
@@ -255,10 +250,9 @@ pub struct PropsDirty {
     pub shared_tag: bool,
     /// `target` (portal/surface binding) changed.
     pub target: bool,
-    /// `shape` (an SVG shape child's folded attrs) changed.
-    pub shape: bool,
-    /// `viewBox` (an `<svg>` element's user-unit rect) changed.
-    pub view_box: bool,
+    /// Feature-owned keys ([`Props::ext`]) set, replaced, or unset — the
+    /// registry's static key per changed entry (see [`Self::ext_dirty`]).
+    pub ext: Vec<&'static str>,
     /// Any `editableText` handler flag (`onChange`/`onSelect`/`onFocus`/
     /// `onBlur`) toggled.
     pub editable_handlers: bool,
@@ -267,6 +261,11 @@ pub struct PropsDirty {
 }
 
 impl PropsDirty {
+    /// Whether the feature-owned `key` changed (set, replaced, or unset).
+    pub fn ext_dirty(&self, key: &str) -> bool {
+        self.ext.contains(&key)
+    }
+
     /// Whether the delta can touch the [`crate::bridge::StyleVariants`]
     /// component at all: a variant set/unset, or — since its `base` mirrors
     /// `style` — any style-field change (the stamp helper then decides
@@ -301,6 +300,7 @@ pub struct UpdateEvents {
 /// `Props` from a JSON value, panicking on malformed input.
 #[cfg(test)]
 pub(crate) fn props_from_json(json: serde_json::Value) -> Props {
+    crate::ext::install_builtin_registry();
     serde_json::from_value(json).expect("valid props")
 }
 

@@ -68,12 +68,12 @@ pub(crate) fn ensure_svg_image(mut entity: EntityWorldMut, path: String, mut img
     // raster system has to know about.
     let same_doc = entity
         .get::<SvgSurface>()
-        .map(|surface| surface.doc.as_ref().map(Handle::id) == Some(doc.id()));
+        .map(|surface| surface.doc.id() == doc.id());
     match same_doc {
         Some(true) => {}
         Some(false) => {
             if let Some(mut surface) = entity.get_mut::<SvgSurface>() {
-                surface.doc = Some(doc.clone());
+                surface.doc = doc.clone();
                 surface.dirty = true;
             }
         }
@@ -81,7 +81,7 @@ pub(crate) fn ensure_svg_image(mut entity: EntityWorldMut, path: String, mut img
             entity.insert(SvgSurface::new(doc.clone()));
         }
     }
-    entity.insert(img);
+    entity.insert((img, crate::ext::LiveTexture));
 }
 
 #[cfg(test)]

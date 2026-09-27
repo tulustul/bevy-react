@@ -21,6 +21,7 @@ use super::stamps::{
 use super::stats::UiAssets;
 use crate::bridge::{CanvasSizeTracker, JsBridge, ReactNode, SpanKind};
 use crate::canvas::{CanvasSurface, blank_canvas_image};
+use crate::ext::ElementFlags;
 use crate::plugin::Fonts;
 use crate::portal::{RPortal, blank_portal_image};
 use crate::protocol::{NodeId, props::Props, style::Style};
@@ -56,9 +57,10 @@ pub(super) fn apply_create(
     // Attribute apply-time parse warnings (colors, fonts, …) fired
     // while building this node to its id (see `crate::diag`).
     let _diag = crate::diag::node_scope(id);
-    // Resolved once for the four sites that branch on "is this an SVG shape
-    // child" (spawn dispatch, `bridge.shapes`, the background-image no-op).
-    let shape_kind = crate::svg::ShapeKind::from_kind(&kind);
+    // The kind's flags (built-in by name, registered through its handler):
+    // the sites below that branch on "is this a node-less child" read them.
+    let registry = bridge.ext.clone();
+    let flags = registry.flags_for_kind(&kind);
     let entity = match kind.as_str() {
         // A `<text>` root: a UI node carrying the text block + style. A
         // single-string child rides inline as `text` (no child span). Fully
@@ -71,6 +73,7 @@ pub(super) fn apply_create(
                 fresh_style_bundle(&props.style, FocusPolicy::Pass),
                 Text::new(text.clone().unwrap_or_default()),
                 resolved_text_style(&props.style, fonts),
+                ElementFlags::NODE,
             ));
             apply_style_fresh(&mut ec, &props.style);
             if let Some(layout) = text_layout(&props.style) {
@@ -96,6 +99,7 @@ pub(super) fn apply_create(
                     ReactNode(id),
                     TextSpan(text.clone().unwrap_or_default()),
                     resolved_text_style(&props.style, fonts),
+                    ElementFlags::NODE_LESS,
                 ))
                 .id()
         }
@@ -112,6 +116,8 @@ pub(super) fn apply_create(
                 node_img,
                 CanvasSurface::new(props.draw.clone().unwrap_or_default()),
                 CanvasSizeTracker::default(),
+                crate::ext::LiveTexture,
+                ElementFlags::OWNS_IMAGE,
             ));
             apply_style_fresh(&mut ec, &props.style);
             stamp_common(
@@ -136,6 +142,8 @@ pub(super) fn apply_create(
                 fresh_style_bundle(&props.style, FocusPolicy::Pass),
                 node_img,
                 RPortal(props.target.clone().unwrap_or_default()),
+                crate::ext::LiveTexture,
+                ElementFlags::OWNS_IMAGE,
             ));
             apply_style_fresh(&mut ec, &props.style);
             stamp_common(
@@ -147,16 +155,6 @@ pub(super) fn apply_create(
             );
             ec.id()
         }
-        // A JSX `<svg>`: a styled node with an element-owned texture the
-        // svg rasterizer paints from the Node-less `SvgShape` children.
-        "svg" => super::svg_ops::create_svg_root(
-            commands,
-            images,
-            &mut bridge.animated,
-            &mut bridge.anchors,
-            id,
-            &props,
-        ),
         // A `<surface>`: a styled container whose subtree renders into
         // an offscreen image instead of the on-screen UI. It is a
         // **detached UI root** — `crate::surface::bind_surfaces`
@@ -172,6 +170,7 @@ pub(super) fn apply_create(
                 ReactNode(id),
                 fresh_style_bundle(&style, FocusPolicy::Pass),
                 RSurface(props.target.clone().unwrap_or_default()),
+                ElementFlags::DETACHED_ROOT,
             ));
             apply_style_fresh(&mut ec, &style);
             if props.anchor.is_some() {
@@ -197,6 +196,7 @@ pub(super) fn apply_create(
                 ReactNode(id),
                 fresh_style_bundle(&style, FocusPolicy::Pass),
                 crate::bridge::RRoot,
+                ElementFlags::DETACHED_ROOT,
             ));
             // Overrides the bundle's `focusPolicy` mirror in place (same
             // archetype — `Pickable` is already present).
@@ -252,6 +252,7 @@ pub(super) fn apply_create(
                 // Announce as a text field to assistive tech; the live
                 // value is kept in sync by `sync_editable_a11y`.
                 AccessibilityNode(editable_a11y_node(&props)),
+                ElementFlags::NODE,
             ));
             apply_style_fresh(&mut ec, &props.style);
             // `AutoFocus`'s `on_add` hook focuses the entity once mounted.
@@ -266,24 +267,35 @@ pub(super) fn apply_create(
             }
             ec.id()
         }
-        // SVG shape kinds (`<circle>`/`<rect>`/…/`<g>`) mount as Node-less
-        // `SvgShape` entities — dispatched here so they never fall through
-        // to the plain-node `spawn_element` path.
-        _ => match shape_kind {
-            Some(shape) => {
-                super::svg_ops::create_shape(commands, &mut bridge.animated, id, shape, &props)
+        // A registered kind (a feature crate's element — see `crate::ext`)
+        // mounts through its handler. An unregistered kind mounts as a plain
+        // node so its children still attach; if it is a known optional
+        // feature's kind, that is reported (`featureMissing`).
+        _ => match registry.element(&kind) {
+            Some(handler) => {
+                let mut ctx = crate::ext::ElementCtx {
+                    commands,
+                    images,
+                    animated: &mut bridge.animated,
+                    anchors: &mut bridge.anchors,
+                    id,
+                };
+                handler.spawn(&mut ctx, &kind, &props, text.as_deref())
             }
-            None => spawn_element(
-                commands,
-                &mut bridge.animated,
-                &mut bridge.anchors,
-                id,
-                &kind,
-                &props,
-                assets,
-                &mut ui_assets.layouts,
-                &mut ui_assets.atlas_cache,
-            ),
+            None => {
+                crate::ext::warn_feature_missing_kind(&kind);
+                spawn_element(
+                    commands,
+                    &mut bridge.animated,
+                    &mut bridge.anchors,
+                    id,
+                    &kind,
+                    &props,
+                    assets,
+                    &mut ui_assets.layouts,
+                    &mut ui_assets.atlas_cache,
+                )
+            }
         },
     };
     if matches!(kind.as_str(), "text" | "textSpan") {
@@ -311,12 +323,6 @@ pub(super) fn apply_create(
     if kind == "root" {
         bridge.roots.insert(id);
     }
-    if kind == "svg" {
-        bridge.svg_roots.insert(id);
-    }
-    if shape_kind.is_some() {
-        bridge.shapes.insert(id);
-    }
     // Controlled scroll + the `onScroll` listener apply to any node
     // (anything with `overflow: scroll`). A `textSpan` or an SVG shape
     // child has no `Node` and so never matches the read-back query —
@@ -329,26 +335,27 @@ pub(super) fn apply_create(
     }
     // `backgroundImage`: applied on any element EXCEPT those whose
     // `ImageNode` belongs to the element itself (image/canvas/portal/svg —
-    // the set also guards the update/restyle paths) and `surface` (a detached
+    // `ElementFlags::owns_image` guards the update/restyle paths) and `surface` (a detached
     // root with its own branches everywhere). The build needs `assets`, so
     // it can't live in `apply_style` — see `crate::background_image`.
     match kind.as_str() {
-        "image" | "canvas" | "portal" | "svg" => {
-            bridge.foreign_images.insert(id);
+        "image" | "canvas" | "portal" => {
             let element: &'static str = match kind.as_str() {
                 "image" => "image",
                 "canvas" => "canvas",
                 "portal" => "portal",
-                "svg" => "svg",
                 _ => unreachable!("guarded by the outer arm"),
             };
             crate::background_image::warn_ignored(element, &props);
         }
         "surface" => crate::background_image::warn_ignored("surface", &props),
-        // A `textSpan` has no `Node`/box of its own to paint into.
-        "textSpan" => {}
-        // Neither has an SVG shape child (Node-less, unstyled).
-        _ if shape_kind.is_some() => {}
+        // A node-less element (`textSpan`, an SVG shape child) has no
+        // `Node`/box of its own to paint into; an element-owned image
+        // (a registered kind's raster) is guarded like the built-ins above.
+        _ if flags.node_less => {}
+        _ if flags.owns_image => {
+            crate::background_image::warn_ignored("element", &props);
+        }
         // Fresh entity: only a present `backgroundImage` has anything to
         // stamp (the absent arm is a remove).
         _ if props
@@ -376,7 +383,7 @@ pub(super) fn apply_create(
         props.name.as_deref(),
     );
     // Every node's kind + the `sharedTag` index (see `crate::shared_tags`).
-    bridge.shared_tags.note_kind(id, &kind);
+    bridge.shared_tags.note_kind(id, &kind, &registry);
     bridge
         .shared_tags
         .apply(id, None, props.shared_tag.as_deref());
@@ -434,6 +441,7 @@ fn spawn_element(
     let bundle = (
         ReactNode(id),
         fresh_style_bundle(&props.style, focus_default),
+        crate::ext::builtin_flags(kind).unwrap_or(ElementFlags::NODE),
     );
     let mut ec = if kind == "button" {
         commands.spawn((bundle, Button))

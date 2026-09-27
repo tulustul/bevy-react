@@ -13,7 +13,7 @@
 //!
 //! ```no_run
 //! use bevy::prelude::*;
-//! use bevy_react::ReactUiPlugin;
+//! use bevy_react_core::ReactUiPlugin;
 //!
 //! App::new()
 //!     .add_plugins(DefaultPlugins)
@@ -24,9 +24,9 @@
 //! The `protocol` and `js_thread` modules are exposed for advanced use (custom
 //! integrations, headless tests); most users only need [`ReactUiPlugin`].
 
-// Let the `#[react_message]` macro's generated `::bevy_react::…` paths resolve
+// Let the `#[react_message]` macro's generated `::bevy_react_core::…` paths resolve
 // inside this crate too (e.g. in our own tests and examples).
-extern crate self as bevy_react;
+extern crate self as bevy_react_core;
 
 mod anchor;
 mod bridge;
@@ -42,7 +42,7 @@ pub mod console_log;
 // the protocol/apply call sites are unconditional — but its real implementation
 // only exists with the `devtools` feature on a debug build; otherwise every fn
 // is an inline no-op stub.
-mod diag;
+pub mod diag;
 // The devtools inspector. A feature-gated module (not a separate
 // crate — it needs `JsBridge` and friends, which stay private) that is fully
 // compiled out unless the `devtools` cargo feature (a default feature) is on.
@@ -51,6 +51,9 @@ mod diag;
 #[cfg(feature = "devtools")]
 mod devtools;
 mod event;
+// The extension contract (feature-facing components, sets, registries).
+pub mod ext;
+// Shared CPU-raster helpers (part of the contract).
 mod gamepad;
 mod host;
 mod keyboard;
@@ -58,6 +61,7 @@ mod message;
 mod names;
 mod pick_clip;
 mod plugin;
+pub mod raster;
 mod reconcile;
 mod registry;
 mod request;
@@ -66,7 +70,9 @@ mod scrollbar;
 mod shared_tags;
 mod style_bindings;
 mod touch_scroll;
-mod transition;
+// The transition engine. Public for its primitives (`Channel`,
+// `ChannelTransition`) that a feature crate eases its own values with.
+pub mod transition;
 mod ts_codegen;
 mod ui_map;
 mod window;
@@ -100,6 +106,49 @@ pub use animations::ReactUiAnimationsPlugin;
 pub use bevy_react_macros::{
     react_event, react_filter, react_message, react_morph_filter, react_request,
 };
+
+/// The headless op harness for a feature crate's own tests (`test-util`
+/// feature): the op app, op builders, the bridge, and the engine hooks the
+/// core's own tests use. Unstable — a dev-dependency surface, not an API.
+#[cfg(any(test, feature = "test-util"))]
+#[doc(hidden)]
+pub mod test_util {
+    pub use crate::bridge::{JsBridge, PointerHandlers};
+    pub use crate::diag::{arm_runtime, take_decode_warnings, take_runtime_warnings, test_lock};
+    pub use crate::plugin::Fonts;
+    pub use crate::reconcile::test_util::*;
+    pub use crate::reconcile::{OpApplyStats, apply_js_ops, collect_ui_events};
+    pub use crate::ui_map::AtlasLayoutCache;
+
+    use crate::animations::{Driver, SharedId, SharedValues};
+
+    /// The animation engine's apply system, for a schedule that runs it
+    /// without the plugin (a feature's publish→consume ordering test).
+    pub fn animation_apply()
+    -> bevy::ecs::schedule::ScheduleConfigs<bevy::ecs::system::ScheduleSystem> {
+        use bevy::ecs::schedule::IntoScheduleConfigs;
+        crate::animations::apply_animated_nodes.into_configs()
+    }
+
+    /// Shared-value mutators (the `op_animate` command path, minus the op).
+    pub fn shared_declare(values: &mut SharedValues, id: SharedId, initial: f32) {
+        values.declare(id, initial);
+    }
+    pub fn shared_set(values: &mut SharedValues, id: SharedId, value: f32) {
+        values.set(id, value);
+    }
+    pub fn shared_animate(
+        values: &mut SharedValues,
+        id: SharedId,
+        driver: &Driver,
+        token: Option<u64>,
+    ) {
+        values.animate(id, driver, token);
+    }
+    pub fn shared_tick(values: &mut SharedValues, dt: f32) {
+        values.tick(dt);
+    }
+}
 pub use bridge::ReactNode;
 pub use canvas::CanvasSurface;
 #[cfg(feature = "devtools")]

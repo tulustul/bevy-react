@@ -9,7 +9,7 @@
 //! interaction restyle systems) instead of from an `apply_style_masked` arm —
 //! the same split as an `image` element's `image_node` build. Elements that
 //! own their entity's `ImageNode` (`image`, `canvas`, `portal`) are guarded by
-//! `JsBridge::foreign_images` at those call sites.
+//! `ElementFlags::owns_image` at those call sites.
 
 use bevy::image::TRANSPARENT_IMAGE_HANDLE;
 use bevy::prelude::*;
@@ -42,7 +42,7 @@ pub struct BackgroundTileScale(pub f32);
 /// remove the [`ImageNode`] (plus the [`RBackgroundTexture`] /
 /// [`BackgroundTileScale`] markers) per the spec. Skips entirely unless the
 /// `BG_IMAGE` group is dirty. Callers guarantee the entity's `ImageNode` is
-/// not element-owned (see `JsBridge::foreign_images`); on a node that never
+/// not element-owned (see `ElementFlags::owns_image`); on a node that never
 /// had the style, the removes are no-ops (same pattern as the
 /// `BackgroundColor` arm in `apply_style_masked`).
 pub fn apply_background_image(
@@ -60,18 +60,23 @@ pub fn apply_background_image(
         None => None,
     };
     let Some(spec) = spec else {
-        ec.remove::<(ImageNode, RBackgroundTexture, BackgroundTileScale)>();
+        ec.remove::<(
+            ImageNode,
+            RBackgroundTexture,
+            BackgroundTileScale,
+            crate::ext::LiveTexture,
+        )>();
         return;
     };
     let mut image = match &spec.src {
         BackgroundImageSource::Path(path) => {
             // A stale marker would let `bind_background_textures` stomp the
             // asset handle — clear it whenever the source is a path.
-            ec.remove::<RBackgroundTexture>();
+            ec.remove::<(RBackgroundTexture, crate::ext::LiveTexture)>();
             ImageNode::new(assets.load(path.clone()))
         }
         BackgroundImageSource::Texture { texture } => {
-            ec.insert(RBackgroundTexture(texture.clone()));
+            ec.insert((RBackgroundTexture(texture.clone()), crate::ext::LiveTexture));
             ImageNode::new(TRANSPARENT_IMAGE_HANDLE)
         }
     };

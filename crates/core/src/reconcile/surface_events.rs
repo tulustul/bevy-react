@@ -229,9 +229,8 @@ pub fn apply_surface_interaction_styles(
     variants: Query<&StyleVariants>,
     child_of: Query<&ChildOf>,
     rnodes: Query<&ReactNode>,
+    flags: Query<&crate::ext::ElementFlags>,
     assets: Res<AssetServer>,
-    // `Option`: headless test harnesses build partial apps without the bridge.
-    bridge: Option<Res<crate::bridge::JsBridge>>,
 ) {
     let Some(pointer) = pointer else { return };
     let mut restyle = |entity: Entity, style: Option<Style>| {
@@ -242,10 +241,7 @@ pub fn apply_surface_interaction_styles(
         apply_style(&mut ec, &style);
         // The merged `backgroundImage` needs the asset server, so it can't
         // ride `apply_style`; surface interiors are never promoted layers.
-        let foreign = bridge
-            .as_ref()
-            .zip(rnode)
-            .is_some_and(|(b, r)| b.foreign_images.contains(&r.0));
+        let foreign = flags.get(entity).is_ok_and(|f| f.owns_image);
         if !foreign {
             crate::background_image::apply_background_image(
                 &mut ec,

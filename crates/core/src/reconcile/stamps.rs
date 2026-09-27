@@ -36,7 +36,7 @@ use crate::transition::ScrollTransitionState;
 /// ([`JsBridge::animated`]): the remove is queued only for a node that had
 /// bindings — a style delta on a binding-less node (nearly every node)
 /// queues nothing.
-pub(super) fn apply_animated(
+pub(crate) fn apply_animated(
     ec: &mut EntityCommands,
     animated: &mut HashSet<NodeId>,
     id: NodeId,
@@ -47,12 +47,19 @@ pub(super) fn apply_animated(
     crate::style_bindings::warn_gradient_transition_mix(props, bindings.as_ref());
     match bindings {
         Some(bindings) => {
+            // The engine's publish slot for feature-owned bindings rides
+            // the stamp (see `crate::ext::DrivenExtValues`).
+            if bindings.has_ext() {
+                ec.insert_if_new(crate::ext::DrivenExtValues::default());
+            } else {
+                ec.remove::<crate::ext::DrivenExtValues>();
+            }
             ec.insert(AnimatedNode(bindings));
             animated.insert(id);
         }
         None => {
             if !animated.is_empty() && animated.remove(&id) {
-                ec.remove::<AnimatedNode>();
+                ec.remove::<(AnimatedNode, crate::ext::DrivenExtValues)>();
             }
         }
     }
@@ -173,7 +180,7 @@ pub(super) fn apply_style_variants_delta(
 /// pair a plain `<node onClick>` — no hover/press style, not a `<button>` —
 /// would never be reported as clicked. `insert_if_new` leaves an existing
 /// `Interaction` (a `button`'s, or a hover/press variant's) untouched.
-pub(super) fn apply_pointer_handlers(ec: &mut EntityCommands, props: &Props) {
+pub(crate) fn apply_pointer_handlers(ec: &mut EntityCommands, props: &Props) {
     let any_pointer = props.on_pointer_down
         || props.on_pointer_move
         || props.on_pointer_up
@@ -314,7 +321,7 @@ pub(super) fn apply_scroll_step(ec: &mut EntityCommands, props: &Props) {
 /// "absent → remove" arm is skipped (nothing to remove), and the components a
 /// prop set implies land as one insert each (one archetype move, not one per
 /// component). The update path keeps using the stamp/clear helpers directly.
-pub(super) fn stamp_common(
+pub(crate) fn stamp_common(
     ec: &mut EntityCommands,
     animated: &mut HashSet<NodeId>,
     anchors: &mut crate::anchor::AnchorIndex,
@@ -383,7 +390,7 @@ pub(super) fn apply_pointer_handlers_fresh(ec: &mut EntityCommands, props: &Prop
 
 /// [`apply_animated`] for a **freshly spawned** entity: stamp the bindings when
 /// there are any (recording the node in `animated`), never remove.
-pub(super) fn apply_animated_fresh(
+pub(crate) fn apply_animated_fresh(
     ec: &mut EntityCommands,
     animated: &mut HashSet<NodeId>,
     id: NodeId,
@@ -393,6 +400,9 @@ pub(super) fn apply_animated_fresh(
     let bindings = crate::style_bindings::derive_props_bindings(props);
     crate::style_bindings::warn_gradient_transition_mix(props, bindings.as_ref());
     if let Some(bindings) = bindings {
+        if bindings.has_ext() {
+            ec.insert(crate::ext::DrivenExtValues::default());
+        }
         ec.insert(AnimatedNode(bindings));
         animated.insert(id);
     }

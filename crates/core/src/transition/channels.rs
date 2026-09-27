@@ -9,7 +9,7 @@ use crate::animations::{Lerp, Runner, build_runner};
 use crate::protocol::units::{Length, Rect};
 
 use super::spec::ChannelTransition;
-use super::{gradient_channel, shape_channel, transform3d};
+use super::{gradient_channel, transform3d};
 
 /// The transition engine's plain scalar/length channels — one row per
 /// [`TransitionState`] channel whose target rides a same-named
@@ -74,10 +74,6 @@ pub struct TransitionState {
     pub(super) border_gradient: gradient_channel::GradientChannel,
     pub(super) morph: MorphChannel,
     pub(super) transform3d: transform3d::Transform3dChannels,
-    /// SVG shape-attr easing (spec + targets both ride `SvgShape.attrs` —
-    /// shapes have no style). Self-seeding per attr, so it doesn't
-    /// participate in the `initialized` block.
-    pub(super) shape: shape_channel::ShapeChannel,
     /// The laid-out-rect channel (see [`super::layout`]) — driven in
     /// `PostUpdate` by `drive_layout_transitions`, not by `drive_transitions`;
     /// self-seeding (mount rule), so it doesn't participate in `initialized`.
@@ -104,7 +100,6 @@ impl TransitionState {
             || self.size_in_flight()
             || self.morph.runner.is_some()
             || self.morph.settling
-            || self.shape.in_flight()
             || self.shared.active
             || self.shared.seed_frame
             || self.shared.size.is_some()
@@ -438,17 +433,19 @@ impl MorphChannel {
 }
 
 /// One scalar channel: its current reading, last target, and active driver.
+/// Public as an engine primitive (a feature crate eases its own scalars
+/// with it — the SVG shape channel); [`ChannelTransition`] is the timing.
 #[derive(Default)]
-pub(super) struct Channel {
-    pub(super) current: f32,
-    pub(super) target: f32,
-    pub(super) runner: Option<Runner>,
+pub struct Channel {
+    pub current: f32,
+    pub target: f32,
+    pub runner: Option<Runner>,
 }
 
 impl Channel {
     /// Snap to `value` without animating (used to seed the resting state so an
     /// element doesn't animate from zero when it first appears).
-    pub(super) fn init(&mut self, value: f32) {
+    pub fn init(&mut self, value: f32) {
         self.current = value;
         self.target = value;
         self.runner = None;
@@ -456,7 +453,7 @@ impl Channel {
 
     /// Advance toward `target`. `spec` `Some` eases; `None` snaps. Returns the
     /// current value.
-    pub(super) fn drive(&mut self, target: f32, spec: Option<&ChannelTransition>, dt: f32) -> f32 {
+    pub fn drive(&mut self, target: f32, spec: Option<&ChannelTransition>, dt: f32) -> f32 {
         if target != self.target {
             self.target = target;
             match spec {

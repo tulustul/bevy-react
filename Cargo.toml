@@ -1,7 +1,14 @@
 [workspace]
 resolver = "3"
-members = ["crates/core", "crates/macros"]
-default-members = ["crates/core"]
+members = [
+    "crates/core",
+    "crates/macros",
+    "crates/svg",
+    "examples/demos",
+    "examples/minimal",
+    "examples/stress",
+    "examples/layers-stress",
+]
 
 [workspace.package]
 version = "0.6.0"
@@ -56,7 +63,9 @@ serde-wasm-bindgen = "0.6"
 console_error_panic_hook = "0.1"
 getrandom = "0.3"
 
-bevy-react-macros = { path = "crates/macros", version = "0.6.0" }
+bevy_react_macros = { path = "crates/macros", version = "0.6.0" }
+bevy_react_core = { path = "crates/core", version = "0.6.0" }
+bevy_react_svg = { path = "crates/svg", version = "0.6.0" }
 
 [profile.dev]
 opt-level = 1

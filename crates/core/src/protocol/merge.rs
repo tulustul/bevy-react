@@ -79,26 +79,19 @@ impl Props {
             self.focus_style = delta.focus_style.take();
             dirty.focus_style = true;
         }
-        // `shape` replaces ATOMICALLY (the variant-style precedent above),
-        // deliberately not field-wise like `style`: a shape change has a
-        // single Rust-side consequence — a full re-raster of the enclosing
-        // `<svg>` surface, with no per-field dirty groups to save — the
-        // object is small, and atomic replace handles JSX attr *removal*
-        // correctly by construction (JS sends the complete folded object
-        // whenever anything changed, so an attr absent from the new value is
-        // an attr removed, no `unset` bookkeeping needed). Compare-before-set
+        // Feature-owned keys replace ATOMICALLY (the variant-style precedent
+        // above), deliberately not field-wise like `style`: a feature value
+        // is one object with one Rust-side consequence (an SVG shape's attrs
+        // → a full re-raster of the enclosing `<svg>`), with no per-field
+        // dirty groups to save — and atomic replace handles *removal* inside
+        // the value correctly by construction (JS sends the complete object
+        // whenever anything changed, so a field absent from the new value is
+        // a field removed, no `unset` bookkeeping needed). Compare-before-set
         // keeps an idempotent re-send silent, like the rest of the delta.
-        if let Some(shape) = delta.shape.take()
-            && self.shape.as_ref() != Some(&shape)
-        {
-            self.shape = Some(shape);
-            dirty.shape = true;
-        }
-        if let Some(view_box) = delta.view_box.take()
-            && self.view_box != Some(view_box)
-        {
-            self.view_box = Some(view_box);
-            dirty.view_box = true;
+        for (key, value) in delta.ext.drain() {
+            if self.ext.insert(key, value) {
+                dirty.ext.push(key);
+            }
         }
         // Handler/flag booleans: the delta only ever carries `true` (a handler
         // appeared / a flag turned on); turning one off rides `unset`.
@@ -289,14 +282,6 @@ impl Props {
                     self.target = None;
                     dirty.target = true;
                 }
-                "shape" => {
-                    self.shape = None;
-                    dirty.shape = true;
-                }
-                "viewBox" => {
-                    self.view_box = None;
-                    dirty.view_box = true;
-                }
                 "ariaLabel" => {
                     self.aria_label = None;
                     dirty.aria_label = true;
@@ -311,12 +296,14 @@ impl Props {
                         "event-like prop {name:?} in unset; nothing to reset"
                     );
                 }
-                other => {
-                    tracing::warn!(
+                // A feature-owned key (`Props::ext`) clears to absent.
+                other => match self.ext.remove(other) {
+                    Some(key) => dirty.ext.push(key),
+                    None => tracing::warn!(
                         target: "bevy_react",
                         "unknown prop {other:?} in unset; ignoring"
-                    );
-                }
+                    ),
+                },
             }
         }
 
@@ -342,7 +329,6 @@ mod tests {
     use crate::protocol::props::{Props, props_from_json as props};
     use crate::protocol::style::style_groups;
     use crate::protocol::units::Length;
-    use crate::svg::ViewBox;
 
     /// A delta sets exactly the supplied fields; everything else is preserved.
     #[test]
@@ -533,79 +519,6 @@ mod tests {
         assert_eq!(hover.background_color, None, "atomic replace, not a merge");
         assert_eq!(hover.width, None);
         assert!(dirty.hover_style);
-    }
-
-    /// `shape` replaces atomically — the delta value is the whole new object,
-    /// so an attr absent from it is an attr removed (the amended-C1 semantics:
-    /// NOT a field-wise merge like `style`) — while an identical re-send stays
-    /// silent, and `"shape"` in `unset` clears it.
-    #[test]
-    fn merge_delta_replaces_shape_atomically() {
-        let mut cached = props(serde_json::json!({ "shape": { "cx": 5, "r": 2 } }));
-        let (dirty, _) =
-            cached.merge_delta(props(serde_json::json!({ "shape": { "cx": 9 } })), &[], &[]);
-        let shape = cached.shape.as_ref().unwrap();
-        assert_eq!(shape.cx.static_val(), Some(9.0));
-        assert_eq!(shape.r, None, "atomic replace: the absent attr is removed");
-        assert!(dirty.shape);
-
-        // Idempotent re-send: compare-before-set keeps the delta silent.
-        let (dirty, _) =
-            cached.merge_delta(props(serde_json::json!({ "shape": { "cx": 9 } })), &[], &[]);
-        assert!(!dirty.shape, "an identical shape re-send must not dirty");
-
-        let (dirty, _) = cached.merge_delta(Props::default(), &["shape".into()], &[]);
-        assert!(cached.shape.is_none());
-        assert!(dirty.shape);
-    }
-
-    /// The `viewBox` wire name (camelCase of `view_box`, pinned here) decodes
-    /// into `Props::view_box`; merge dirties on change only, and `"viewBox"`
-    /// in `unset` clears it.
-    #[test]
-    fn merge_delta_view_box_wire_name_set_and_unset() {
-        let mut cached = Props::default();
-        let (dirty, _) = cached.merge_delta(
-            props(serde_json::json!({ "viewBox": "0 0 100 50" })),
-            &[],
-            &[],
-        );
-        assert_eq!(
-            cached.view_box,
-            Some(ViewBox {
-                min: bevy::math::Vec2::ZERO,
-                size: bevy::math::Vec2::new(100.0, 50.0),
-            }),
-            "the camelCase `viewBox` wire name must land in `view_box`"
-        );
-        assert!(dirty.view_box);
-
-        let (dirty, _) = cached.merge_delta(
-            props(serde_json::json!({ "viewBox": "0 0 100 50" })),
-            &[],
-            &[],
-        );
-        assert!(
-            !dirty.view_box,
-            "an identical viewBox re-send must not dirty"
-        );
-
-        let (dirty, _) = cached.merge_delta(Props::default(), &["viewBox".into()], &[]);
-        assert!(cached.view_box.is_none());
-        assert!(dirty.view_box);
-    }
-
-    /// `shape`/`viewBox` are retained state, not act-now events: they survive
-    /// `split_events` untouched.
-    #[test]
-    fn shape_and_view_box_are_retained_not_events() {
-        let mut retained = props(serde_json::json!({
-            "shape": { "cx": 1 },
-            "viewBox": "0 0 10 10",
-        }));
-        let ev = retained.split_events();
-        assert!(retained.shape.is_some() && retained.view_box.is_some());
-        assert!(ev.value.is_none() && ev.draw.is_none());
     }
 
     /// Unknown names in `unset`/`style_unset` warn and are ignored — a delta

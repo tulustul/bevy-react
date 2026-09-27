@@ -37,7 +37,7 @@ mod screenshot;
 use std::path::PathBuf;
 
 use bevy::prelude::*;
-use bevy_react::ReactUiPlugin;
+use bevy_react_core::ReactUiPlugin;
 
 use camera::CameraPlugin;
 use scene::Scene;
@@ -61,7 +61,7 @@ fn main() {
 #[cfg(not(target_arch = "wasm32"))]
 fn main() {
     use bevy::window::WindowResolution;
-    use bevy_react::ReactAppExt;
+    use bevy_react_core::ReactAppExt;
 
     // `cargo run -p bevy-react --example demos -- --export-bindings <path>` writes the TypeScript
     // bindings instead of running the app, keeping `ui/src/bevy.ts` in sync
@@ -157,11 +157,11 @@ fn parse_size(spec: &str) -> Option<(u32, u32)> {
 }
 
 /// Generate a small plaid texture CPU-side and register it as `"checker"` in
-/// [`bevy_react::portal::RenderTargets`] — the app-owned **static** texture a
+/// [`bevy_react_core::portal::RenderTargets`] — the app-owned **static** texture a
 /// `backgroundImage` `{ texture }` source (or a `<portal>`) can display.
 /// Painted once at startup; nothing ever renders into it.
 fn register_host_textures(
-    mut targets: ResMut<bevy_react::portal::RenderTargets>,
+    mut targets: ResMut<bevy_react_core::portal::RenderTargets>,
     mut images: ResMut<Assets<Image>>,
 ) {
     use bevy::asset::RenderAssetUsages;
@@ -217,8 +217,7 @@ fn build_app(window: Window, hot_reload: bool) -> App {
     // CARGO_MANIFEST_DIR is the `bevy-react` crate (crates/core); the example and its
     // bundle live at the repo root, two levels up. The path is unused on web (the page
     // loads the bundle itself) but `ReactUiPlugin` still takes one.
-    let bundle =
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../examples/demos/ui/dist/app.js");
+    let bundle = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("ui/dist/app.js");
 
     // Our `CameraPlugin` (added below) provides the 3D camera that also renders the
     // UI. NotoSans is the app-wide default font; DancingScript / Noto Sans Mono are
@@ -254,7 +253,7 @@ fn build_app(window: Window, hot_reload: bool) -> App {
     let default_plugins = DefaultPlugins
         .set(window_plugin)
         .set(bevy::asset::AssetPlugin {
-            file_path: "../../examples/assets".into(),
+            file_path: "../assets".into(),
             ..default()
         });
     #[cfg(target_arch = "wasm32")]
@@ -263,6 +262,9 @@ fn build_app(window: Window, hot_reload: bool) -> App {
     let mut app = App::new();
     app.add_plugins(default_plugins)
         .add_plugins(react_plugin)
+        // The JSX `<svg>` element (a feature crate; any order relative to
+        // `ReactUiPlugin`).
+        .add_plugins(bevy_react_svg::SvgPlugin)
         // State must be registered after DefaultPlugins (which brings StatesPlugin).
         .init_state::<Scene>()
         // The shared 3D camera (auto-orbit + mouse-drag + wheel-zoom + per-scene reframe).

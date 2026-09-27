@@ -1,6 +1,6 @@
 //! Headless end-to-end check of the devtools console ring through the REAL
 //! deno_core runtime: `console.*` calls in app code must land in
-//! [`bevy_react::console_log`] with the right source/level (via the prelude
+//! [`bevy_react_core::console_log`] with the right source/level (via the prelude
 //! shim → `op_log`), and an unhandled promise rejection must be captured by
 //! the prelude's rejection handler as a js/error entry instead of erroring
 //! the event loop.
@@ -14,10 +14,10 @@
 
 use std::time::{Duration, Instant};
 
-use bevy_react::console_log::{self, Level, Source};
-use bevy_react::js_thread::spawn_js_thread;
-use bevy_react::protocol::{op::Op, outbound::Outbound};
-use bevy_react::{RawRequest, ReactMessage};
+use bevy_react_core::console_log::{self, Level, Source};
+use bevy_react_core::js_thread::spawn_js_thread;
+use bevy_react_core::protocol::{op::Op, outbound::Outbound};
+use bevy_react_core::{RawRequest, ReactMessage};
 
 /// Exercise every console level plus an unhandled rejection, then park on
 /// `op_next_event` so the event loop stays alive to process the rejection.
@@ -51,6 +51,7 @@ fn console_capture_round_trip() {
     let (_reload_tx, reload_rx) = tokio::sync::mpsc::unbounded_channel::<()>();
 
     spawn_js_thread(
+        bevy_react_core::ext::ExtRegistrySlot::ready(bevy_react_core::ext::builtin_registry()),
         vendor,
         app,
         ops_tx,

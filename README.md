@@ -95,7 +95,9 @@ Currently, the project is a **quick, vibecoded proof of concept** demonstrating 
 ## Getting started
 
 ```sh
-cargo add bevy-react
+cargo add bevy_react_core
+# plus the feature crates you use, e.g. the JSX <svg> element:
+cargo add bevy_react_svg
 ```
 
 Scaffold the React UI:
@@ -108,7 +110,7 @@ cd ui && npm run watch
 Add the plugin to your app
 
 ```rust
-use bevy_react::{ReactUiPlugin};
+use bevy_react_core::ReactUiPlugin;
 
 app.add_plugins(ReactUiPlugin::new("ui/dist/app.js")
 ```
@@ -142,7 +144,7 @@ Rembember to regenerate the client each time you update the communication channe
 ```sh
 npm install
 npm run build -w demos
-cargo run --example demos
+cargo run -p demos
 ```
 
 ## Features
@@ -420,7 +422,7 @@ params in TSX** via the generated `bevy.ts` (the same codegen flow as messages
 and events).
 
 ```rust
-use bevy_react::{ReactAppExt, react_filter};
+use bevy_react_core::{ReactAppExt, react_filter};
 
 // Fields pack into the shader's `uniforms.params` in declaration order.
 #[react_filter(shader = "shaders/dissolve.wgsl")]
@@ -484,7 +486,7 @@ the generated `BevyMorphFilters` typing, so `params` is fully typed in TSX —
 the same codegen flow as custom filters.
 
 ```rust
-use bevy_react::{ReactAppExt, react_morph_filter};
+use bevy_react_core::{ReactAppExt, react_morph_filter};
 
 // Fields pack into the shader's `uniforms.params` in declaration order.
 #[react_morph_filter(shader = "shaders/morphs/windowslice.wgsl")]
@@ -671,7 +673,7 @@ Three typed channels connect React and the ECS:
 
 ```rust
 use bevy::prelude::*;
-use bevy_react::{ReactAppExt, ReactEvents, react_event, react_message};
+use bevy_react_core::{ReactAppExt, ReactEvents, react_event, react_message};
 
 // React → Bevy: `bevy.game.reset()`.
 #[react_message(name = "game.reset")]

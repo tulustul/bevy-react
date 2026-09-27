@@ -8,16 +8,16 @@ use bevy::ui::{ComputedNode, ComputedStackIndex, RelativeCursorPosition, UiGloba
 
 use super::events::normalized_01;
 use crate::bridge::{JsBridge, PointerHandlers, ReactNode};
+use crate::ext::EventLocalPos;
 use crate::protocol::{outbound::Outbound, outbound::UiEvent};
-use crate::svg::SvgUserPos;
 
 /// Event x/y for a node: an SVG shape's **user-space** cursor when its
-/// [`SvgUserPos`] slot carries one (written by the shape synthesis while
+/// [`EventLocalPos`] slot carries one (written by the shape synthesis while
 /// hovered — see `crate::svg::interact`), else the clamped `0..1` normalized
 /// position. `None` when neither is known. The single home of the
 /// user-pos-wins rule — both the drag and hover collectors go through it.
 pub(super) fn event_pos(
-    user: Option<&SvgUserPos>,
+    user: Option<&EventLocalPos>,
     rel: Option<&RelativeCursorPosition>,
 ) -> Option<Vec2> {
     user.and_then(|u| u.0)
@@ -119,7 +119,7 @@ pub fn collect_pointer_events(
         &RelativeCursorPosition,
         &PointerHandlers,
         // SVG shapes report x/y in user units instead (see [`event_pos`]).
-        Option<&SvgUserPos>,
+        Option<&EventLocalPos>,
         // Node geometry, for the touch-begin hit-test (required components of
         // `Node`, so every production handler node carries them).
         &ComputedNode,
@@ -170,7 +170,7 @@ pub fn collect_pointer_events(
                 &ReactNode,
                 &RelativeCursorPosition,
                 &PointerHandlers,
-                Option<&SvgUserPos>,
+                Option<&EventLocalPos>,
             )> = None;
             for (entity, rnode, interaction, rel, handlers, user, _, _, stack) in &nodes {
                 let over = if mb == MouseButton::Left {
@@ -235,7 +235,7 @@ pub fn collect_pointer_events(
                 &ReactNode,
                 &RelativeCursorPosition,
                 &PointerHandlers,
-                Option<&SvgUserPos>,
+                Option<&EventLocalPos>,
             )> = None;
             for (entity, rnode, interaction, rel, handlers, user, computed, transform, stack) in
                 &nodes
@@ -927,7 +927,7 @@ mod tests {
     }
 
     /// SVG shapes report pointer-event x/y in SVG **user units**: a node
-    /// carrying `SvgUserPos(Some(..))` (written by the shape synthesis while
+    /// carrying `EventLocalPos(Some(..))` (written by the shape synthesis while
     /// hovered) emits those coordinates; once the slot is `None` the clamped
     /// normalized position is the fallback.
     #[test]
@@ -958,7 +958,7 @@ mod tests {
                     up: true,
                     ..default()
                 },
-                crate::svg::SvgUserPos(Some(Vec2::new(42.0, 17.0))),
+                crate::ext::EventLocalPos(Some(Vec2::new(42.0, 17.0))),
                 ComputedNode {
                     size: Vec2::new(200.0, 200.0),
                     inverse_scale_factor: 1.0,
@@ -985,7 +985,7 @@ mod tests {
         // Release with the slot cleared (the synthesis clears it on leave):
         // the up event falls back to the normalized 0..1 position.
         app.world_mut()
-            .get_mut::<crate::svg::SvgUserPos>(node)
+            .get_mut::<crate::ext::EventLocalPos>(node)
             .unwrap()
             .0 = None;
         app.world_mut()

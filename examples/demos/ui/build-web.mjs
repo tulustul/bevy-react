@@ -80,11 +80,11 @@ await buildVendor({ outfile: "dist/vendor.js", prod, cwd });
 await buildApp({ entry: "src/index.tsx", outfile: "dist/app.js", prod, cwd });
 console.log("[web] vendor.js + app.js built");
 
-// 2) Bevy → wasm. The example's `fn main()` (target_arch = wasm32) builds + starts
+// 2) Bevy → wasm. The demos package's `fn main()` (target_arch = wasm32) builds + starts
 //    the app and installs `globalThis.__bevyHost` (see examples/demos/main.rs).
 run("cargo", [
   "build",
-  "--example",
+  "-p",
   "demos",
   "--target",
   "wasm32-unknown-unknown",
@@ -93,7 +93,7 @@ run("cargo", [
 
 const wasm = resolve(
   repoRoot,
-  `target/wasm32-unknown-unknown/${profile}/examples/demos.wasm`,
+  `target/wasm32-unknown-unknown/${profile}/demos.wasm`,
 );
 if (!existsSync(wasm)) {
   throw new Error(`wasm artifact not found at ${wasm}`);

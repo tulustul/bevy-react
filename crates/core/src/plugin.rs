@@ -32,7 +32,7 @@ use crate::request::{RawRequest, ReactRequestRegistry, RequestReceiver, dispatch
 /// Order such a system after the set to read the current frame's state:
 /// ```no_run
 /// # use bevy::prelude::*;
-/// # use bevy_react::PointerCaptureSet;
+/// # use bevy_react_core::PointerCaptureSet;
 /// # fn orbit_camera() {}
 /// # let mut app = App::new();
 /// app.add_systems(Update, orbit_camera.after(PointerCaptureSet));
@@ -161,7 +161,7 @@ impl ReactUiPlugin {
     ///
     /// ```no_run
     /// # use bevy::prelude::*;
-    /// # use bevy_react::{DevtoolsConfig, ReactUiPlugin};
+    /// # use bevy_react_core::{DevtoolsConfig, ReactUiPlugin};
     /// # let mut app = App::new();
     /// app.add_plugins(ReactUiPlugin::new("ui/dist/app.js").devtools(DevtoolsConfig {
     ///     toggle_key: KeyCode::F1,
@@ -204,7 +204,7 @@ impl ReactUiPlugin {
     ///
     /// ```no_run
     /// # use bevy::prelude::*;
-    /// # use bevy_react::{FilterSelection, PrecompileFilters, ReactUiPlugin};
+    /// # use bevy_react_core::{FilterSelection, PrecompileFilters, ReactUiPlugin};
     /// # let mut app = App::new();
     /// // Only two of the app's morphs, everything else as usual.
     /// app.add_plugins(ReactUiPlugin::new("ui/dist/app.js").precompile_filters(
@@ -358,6 +358,15 @@ pub(crate) fn add_camera_gate_systems(app: &mut App) {
 }
 
 impl Plugin for ReactUiPlugin {
+    /// Every plugin has built: snapshot the feature registry for the
+    /// decoding host (see [`crate::ext::ExtRegistrySlot`]).
+    fn finish(&self, app: &mut App) {
+        let registry = app.world().resource::<crate::ext::ExtRegistry>().clone();
+        app.world()
+            .resource::<crate::ext::ExtRegistrySlot>()
+            .fill(registry);
+    }
+
     fn build(&self, app: &mut App) {
         // Render-side wiring, gated on a render pipeline being present (the
         // canonical `DefaultPlugins`-first setup), since `embedded_asset!` and the
@@ -566,9 +575,17 @@ impl Plugin for ReactUiPlugin {
         // browser's own engine. The host owns the Bevy->JS transport and returns the
         // sender every outbound producer writes to. It starts before `setup` builds
         // the root, so the first ops simply queue until then.
+        // The feature registry (`crate::ext`): in-crate features register
+        // here; feature plugins register in their own `build` in any order.
+        // The handoff slot is filled with the final registry at startup
+        // (`finish`, and `setup` as the headless fallback).
+        app.init_resource::<crate::ext::ExtRegistry>();
+        let ext_slot = crate::ext::ExtRegistrySlot::default();
+        app.insert_resource(ext_slot.clone());
         let outbound_tx = host::spawn(
             app,
             HostConfig {
+                ext: ext_slot,
                 bundle: self.bundle.clone(),
                 hot_reload: self.hot_reload,
             },
@@ -618,9 +635,6 @@ impl Plugin for ReactUiPlugin {
         // resolution-independent asset, rasterized per node at laid-out size.
         .init_asset::<crate::svg::SvgDocument>()
         .register_asset_loader(crate::svg::SvgAssetLoader)
-        // Per-pointer refined svg shape hits — the picking refinement's
-        // handoff to the Interaction/event synthesis.
-        .init_resource::<crate::svg::pick::SvgPointerShapeHits>()
         // The offscreen render-target ("portal") registry and its shared blank
         // placeholder texture, created before the first portal can mount.
         .init_resource::<crate::portal::RenderTargets>()
@@ -679,9 +693,10 @@ impl Plugin for ReactUiPlugin {
         // settle first so a refinement only ever amplifies a SURVIVING svg-node
         // hit (refining a hit that suppression then strips would leave a
         // shape hit with no live node under it).
-        .add_systems(
+        // The `PickRefineSet` slot is the contract's name for this position.
+        .configure_sets(
             PreUpdate,
-            crate::svg::pick::refine_svg_pointer_hits
+            crate::ext::PickRefineSet
                 .after(bevy::picking::PickingSystems::Backend)
                 .after(crate::pick_clip::filter_clipped_pointer_hits)
                 .after(crate::layer::pick3d::suppress_transformed_layer_hits)
@@ -789,10 +804,7 @@ impl Plugin for ReactUiPlugin {
                     // transition channel writes eased `SvgShape` attrs and the
                     // raster must paint them the SAME frame (pinned by
                     // `eased_shape_attr_repaints_same_frame`).
-                    crate::svg::update_svg_surfaces
-                        .after(apply_js_ops)
-                        .after(AnimationSet::Apply)
-                        .after(crate::transition::drive_transitions),
+                    crate::svg::update_svg_surfaces.in_set(crate::ext::ElementRasterSet),
                     crate::cursor::drive_cursor_icon.after(apply_js_ops),
                     // Spawn/teardown the Bevy scrollbar widget over each
                     // `overflow: scroll` container that declared a `scrollbar`
@@ -938,13 +950,29 @@ impl Plugin for ReactUiPlugin {
         // two writes ping-pong `Changed` every frame. The svg synthesis must
         // land last: it holds the refined user-space hit. A separate
         // `add_systems` call — the Update tuple above is at Bevy's arity cap.
-        app.add_systems(
+        // `InteractionSyncSet` is the contract's name for this slot.
+        app.configure_sets(
             Update,
-            crate::svg::interact::sync_shape_interactions
+            crate::ext::InteractionSyncSet
                 .after(crate::layer::pick3d::correct_transformed_interactions)
                 .before(apply_interaction_styles)
                 .before(collect_hover_events)
                 .before(crate::reconcile::collect_pointer_events),
+        );
+
+        // `ElementRasterSet`: an element-owned texture repaints from this
+        // frame's final state — after the op drain (fresh surfaces and the
+        // flushed queued writes visible), the animation appliers (driven
+        // seeds), and the transition drive (eased values), so nothing paints
+        // a frame late (pinned by `driven_shape_attr_repaints_same_frame` /
+        // `eased_shape_attr_repaints_same_frame`). With animations disabled
+        // the set is empty and that edge is vacuous.
+        app.configure_sets(
+            Update,
+            crate::ext::ElementRasterSet
+                .after(apply_js_ops)
+                .after(AnimationSet::Apply)
+                .after(crate::transition::drive_transitions),
         );
         // Resolve each promoted root's wire `filter`, `backdropFilter`, and
         // `morphFilter` chains into packed render passes — the three
@@ -1024,11 +1052,16 @@ impl Plugin for ReactUiPlugin {
         // this frame — every svg-mode prop rebuild re-inserts the `ImageNode`,
         // so without this the measure vanishes on each delta. Before `Layout`
         // so the re-stamp feeds the same frame's layout pass.
-        app.add_systems(
+        // `MeasureStampSet` is the contract's name for this slot.
+        app.configure_sets(
             PostUpdate,
-            crate::svg::stamp_svg_measures
+            crate::ext::MeasureStampSet
                 .after(bevy::ui::widget::update_image_content_size_system)
                 .before(bevy::ui::UiSystems::Layout),
+        );
+        app.add_systems(
+            PostUpdate,
+            crate::svg::stamp_svg_measures.in_set(crate::ext::MeasureStampSet),
         );
         app.add_react_request_handler(crate::window::handle_window_size_request);
 
@@ -1155,7 +1188,12 @@ fn setup(
     mut channels: ResMut<BridgeChannels>,
     config: Res<ReactUiConfig>,
     assets: Res<AssetServer>,
+    ext_registry: Res<crate::ext::ExtRegistry>,
+    ext_slot: Res<crate::ext::ExtRegistrySlot>,
 ) {
+    // Hand the final feature registry to the decoding host (a no-op when
+    // `finish` already did — `App::update`-driven harnesses never `finish`).
+    ext_slot.fill(ext_registry.clone());
     // Load configured fonts into the `Fonts` resource before the first
     // `apply_js_ops` (Update) creates any text.
     commands.insert_resource(Fonts {
@@ -1233,7 +1271,9 @@ fn setup(
     ));
 
     let ops_rx = channels.ops_rx.take().expect("setup runs once");
-    commands.insert_resource(JsBridge::new(ops_rx, channels.outbound_tx.clone(), root));
+    let mut bridge = JsBridge::new(ops_rx, channels.outbound_tx.clone(), root);
+    bridge.ext = std::sync::Arc::new(ext_registry.clone());
+    commands.insert_resource(bridge);
 }
 
 #[cfg(test)]

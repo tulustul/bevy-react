@@ -15,14 +15,14 @@ cargo install wasm-bindgen-cli                # once, for web (need not be on PA
 
 ## Running
 
-| Mode             | JS                                  | Rust                                  |
-| ---------------- | ----------------------------------- | ------------------------------------- |
-| Native · dev     | `npm run build -w demos`            | `cargo run --example demos`           |
-| Native · release | `npm run build:prod -w demos`       | `cargo run --example demos --release` |
-| Native · watch   | `npm run watch -w demos`            | `cargo run --example demos`           |
-| Web · dev        | `npm run build:web -w demos` ¹      | N/A                                   |
-| Web · release    | `npm run build:web:prod -w demos` ¹ | N/A                                   |
-| Web · deploy     | `npm run deploy:web -w demos`       | N/A                                   |
+| Mode             | JS                                  | Rust                           |
+| ---------------- | ----------------------------------- | ------------------------------ |
+| Native · dev     | `npm run build -w demos`            | `cargo run -p demos`           |
+| Native · release | `npm run build:prod -w demos`       | `cargo run -p demos --release` |
+| Native · watch   | `npm run watch -w demos`            | `cargo run -p demos`           |
+| Web · dev        | `npm run build:web -w demos` ¹      | N/A                            |
+| Web · release    | `npm run build:web:prod -w demos` ¹ | N/A                            |
+| Web · deploy     | `npm run deploy:web -w demos`       | N/A                            |
 
 ¹ **`build:web`** does it all in one command: bundles the React app (esbuild), compiles
 the Bevy app to wasm (`wasm-bindgen`), writes a static site to `ui/dist/`, and serves it
@@ -33,5 +33,5 @@ disk-heavy — keep tens of GB free (`cargo clean --target wasm32-unknown-unknow
 
 ```sh
 npm run bevy:generate -w demos            # regen ui/src/bevy.ts after #[react_*] changes
-cargo run --example demos -- --shoot "<portal>" out.png   # headless screenshot (native)
+cargo run -p demos -- --shoot "<portal>" out.png   # headless screenshot (native)
 ```

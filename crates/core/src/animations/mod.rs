@@ -28,7 +28,7 @@ pub(crate) mod props;
 pub mod protocol;
 mod runner;
 
-use apply::apply_animated_nodes;
+pub(crate) use apply::apply_animated_nodes;
 pub(crate) use apply::push_transform_dirt;
 pub use eval::{Lerp, build_ui_transform};
 use eval::{eval_color, eval_scalar};
@@ -42,7 +42,7 @@ pub use runner::{Runner, build_runner};
 /// Adds the animation orchestration: the [`SharedValues`] table, the per-frame
 /// driver/apply systems, and the [`AnimationInbox`] that feeds commands in.
 ///
-/// Added automatically by `bevy_react::ReactUiPlugin` unless
+/// Added automatically by `bevy_react_core::ReactUiPlugin` unless
 /// `.with_animations(false)`. The integrator is responsible for ordering
 /// [`AnimationSet::Apply`] after the reconciler's op-apply so per-frame animation
 /// writes win over this frame's static style.
@@ -175,7 +175,7 @@ impl SharedValues {
         self.active > 0
     }
 
-    fn declare(&mut self, id: SharedId, initial: f32) {
+    pub(crate) fn declare(&mut self, id: SharedId, initial: f32) {
         // Idempotent: only the first declaration sets the initial reading, so a
         // value survives React re-renders (matching `useSharedValue`).
         self.values.entry(id).or_insert(SharedValueState {
@@ -185,7 +185,7 @@ impl SharedValues {
         });
     }
 
-    fn set(&mut self, id: SharedId, value: f32) {
+    pub(crate) fn set(&mut self, id: SharedId, value: f32) {
         let s = self.values.entry(id).or_insert(SharedValueState {
             current: value,
             active: None,
@@ -198,7 +198,7 @@ impl SharedValues {
         }
     }
 
-    fn animate(&mut self, id: SharedId, driver: &Driver, token: Option<u64>) {
+    pub(crate) fn animate(&mut self, id: SharedId, driver: &Driver, token: Option<u64>) {
         let s = self.values.entry(id).or_insert(SharedValueState {
             current: 0.0,
             active: None,
@@ -230,7 +230,7 @@ impl SharedValues {
         self.settled.clear();
     }
 
-    fn tick(&mut self, dt: f32) {
+    pub(crate) fn tick(&mut self, dt: f32) {
         if self.active == 0 {
             return;
         }

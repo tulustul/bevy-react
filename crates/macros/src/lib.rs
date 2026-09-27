@@ -7,7 +7,7 @@
 // TODO(review): these macros expand to `::serde::` and `::ts_rs::` paths, forcing every
 // downstream consumer crate to add `serde` AND `ts_rs` as direct dependencies (works in-repo
 // only because examples share the package's deps). Re-export both from the lib (e.g.
-// `bevy_react::__private::{serde, ts_rs}`) and reference those paths so consumers need only
+// `bevy_react_core::__private::{serde, ts_rs}`) and reference those paths so consumers need only
 // `bevy_react` + `bevy`.
 
 use proc_macro::TokenStream;
@@ -17,7 +17,7 @@ use syn::{DeriveInput, LitStr, Type, parse_macro_input};
 /// Turn a struct into a typed React message payload.
 ///
 /// Applying `#[react_message]` derives `serde::Deserialize` and `ts_rs::TS` and
-/// implements both `bevy::ecs::event::Event` and `bevy_react::ReactPayload`, so the
+/// implements both `bevy::ecs::event::Event` and `bevy_react_core::ReactPayload`, so the
 /// type can be registered with `App::add_react_handler` / `add_react_message`, routed
 /// from a React `emit(name, value)` call, and exported to TypeScript via
 /// `App::export_react_typescript`.
@@ -57,7 +57,7 @@ pub fn react_message(attr: TokenStream, item: TokenStream) -> TokenStream {
             type Trigger<'a> = ::bevy::ecs::event::GlobalTrigger;
         }
 
-        impl #impl_generics ::bevy_react::ReactPayload for #ident #ty_generics #where_clause {
+        impl #impl_generics ::bevy_react_core::ReactPayload for #ident #ty_generics #where_clause {
             const NAME: &'static str = #name;
         }
     }
@@ -68,7 +68,7 @@ pub fn react_message(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// awaits a typed reply).
 ///
 /// Derives `serde::Deserialize` + `ts_rs::TS` and implements
-/// `bevy_react::ReactRequest`, so the type can be registered with
+/// `bevy_react_core::ReactRequest`, so the type can be registered with
 /// `App::add_react_request_handler` and answered from a React `request(name, value)`
 /// call. Observe `On<Request<T>>` and reply with `req.respond(value)`.
 ///
@@ -127,7 +127,7 @@ pub fn react_request(attr: TokenStream, item: TokenStream) -> TokenStream {
         #[derive(::serde::Deserialize, ::ts_rs::TS)]
         #input
 
-        impl #impl_generics ::bevy_react::ReactRequest for #ident #ty_generics #where_clause {
+        impl #impl_generics ::bevy_react_core::ReactRequest for #ident #ty_generics #where_clause {
             const NAME: &'static str = #name;
             type Response = #response;
         }
@@ -138,7 +138,7 @@ pub fn react_request(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// Turn a struct into a typed React **event** payload (a Bevy → React broadcast).
 ///
 /// Derives `serde::Serialize` + `ts_rs::TS` and implements
-/// `bevy_react::ReactEvent`. Send it from a system with the `ReactEvents` param;
+/// `bevy_react_core::ReactEvent`. Send it from a system with the `ReactEvents` param;
 /// React listens with `bevy.on(name, cb)`. Register the type with
 /// `App::add_react_event::<E>()` so it appears in the generated typings.
 ///
@@ -168,7 +168,7 @@ pub fn react_event(attr: TokenStream, item: TokenStream) -> TokenStream {
         #[derive(::serde::Serialize, ::ts_rs::TS)]
         #input
 
-        impl #impl_generics ::bevy_react::ReactEvent for #ident #ty_generics #where_clause {
+        impl #impl_generics ::bevy_react_core::ReactEvent for #ident #ty_generics #where_clause {
             const NAME: &'static str = #name;
         }
     }
@@ -183,7 +183,7 @@ pub fn react_event(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// Derives `serde::Deserialize` — adding `#[serde(deny_unknown_fields)]`, so
 /// unknown param keys reject like the built-ins; per-field `#[serde(default)]`
 /// attributes you write are preserved — plus `ts_rs::TS`, and implements
-/// `bevy_react::filters::ReactFilter`. Built-in filters stay hand-written
+/// `bevy_react_core::filters::ReactFilter`. Built-in filters stay hand-written
 /// (they share canonical shader layouts); this macro is for custom filters,
 /// which pack against their own shader.
 ///
@@ -416,7 +416,7 @@ fn expand_react_filter(
         let (v, c) = (vec_i, comp);
         let kind = param.value_kind();
         slots.push(quote! {
-            ::bevy_react::filters::ParamSlot {
+            ::bevy_react_core::filters::ParamSlot {
                 name: #field_name,
                 kind: #kind,
                 vec: #v,
@@ -448,13 +448,13 @@ fn expand_react_filter(
                 // falls back to 0.0 — a non-px unit can't reach the shader
                 // because the generated `outset`/`resolve` reject it first.
                 writes.push(quote! {
-                    params[#v][#c] = ::bevy_react::filters::length_logical_px(
+                    params[#v][#c] = ::bevy_react_core::filters::length_logical_px(
                         #name, #field_name, self.#ident,
                     )
                     .unwrap_or(0.0);
                 });
                 length_checks.push(quote! {
-                    ::bevy_react::filters::length_logical_px(#name, #field_name, self.#ident)?;
+                    ::bevy_react_core::filters::length_logical_px(#name, #field_name, self.#ident)?;
                 });
             }
             FilterField::Color => {
@@ -499,18 +499,18 @@ fn expand_react_filter(
                 &self,
                 assets: &::bevy::asset::AssetServer,
             ) -> ::std::result::Result<
-                ::std::vec::Vec<::bevy_react::filters::ResolvedFilterPass>,
+                ::std::vec::Vec<::bevy_react_core::filters::ResolvedFilterPass>,
                 ::std::string::String,
             > {
                 #(#length_checks)*
-                ::bevy_react::filters::resolve_single_pass(self, assets)
+                ::bevy_react_core::filters::resolve_single_pass(self, assets)
             }
         }
     });
 
     let morph_marker = is_morph.then(|| {
         quote! {
-            impl #impl_generics ::bevy_react::filters::ReactMorphFilter
+            impl #impl_generics ::bevy_react_core::filters::ReactMorphFilter
                 for #ident #ty_generics #where_clause {}
         }
     });
@@ -520,7 +520,7 @@ fn expand_react_filter(
         #[serde(deny_unknown_fields)]
         #input
 
-        impl #impl_generics ::bevy_react::filters::ReactFilter for #ident #ty_generics #where_clause {
+        impl #impl_generics ::bevy_react_core::filters::ReactFilter for #ident #ty_generics #where_clause {
             const NAME: &'static str = #name;
             const USES_TIME: bool = #time;
             const IS_MORPH: bool = #is_morph;
@@ -540,10 +540,10 @@ fn expand_react_filter(
                 &self,
             ) -> (
                 ::std::vec::Vec<::bevy::math::Vec4>,
-                ::std::sync::Arc<[::bevy_react::filters::ParamSlot]>,
+                ::std::sync::Arc<[::bevy_react_core::filters::ParamSlot]>,
             ) {
                 static LAYOUT: ::std::sync::LazyLock<
-                    ::std::sync::Arc<[::bevy_react::filters::ParamSlot]>,
+                    ::std::sync::Arc<[::bevy_react_core::filters::ParamSlot]>,
                 > = ::std::sync::LazyLock::new(|| {
                     ::std::sync::Arc::from(::std::vec![#(#slots),*])
                 });
@@ -592,11 +592,11 @@ impl FilterField {
     fn value_kind(&self) -> proc_macro2::TokenStream {
         match self {
             Self::Scalar | Self::Vector(_) | Self::Array(_) => {
-                quote!(::bevy_react::animations::ValueKind::Scalar)
+                quote!(::bevy_react_core::animations::ValueKind::Scalar)
             }
-            Self::Angle => quote!(::bevy_react::animations::ValueKind::Angle),
-            Self::Length => quote!(::bevy_react::animations::ValueKind::Length),
-            Self::Color => quote!(::bevy_react::animations::ValueKind::Color),
+            Self::Angle => quote!(::bevy_react_core::animations::ValueKind::Angle),
+            Self::Length => quote!(::bevy_react_core::animations::ValueKind::Length),
+            Self::Color => quote!(::bevy_react_core::animations::ValueKind::Color),
         }
     }
 

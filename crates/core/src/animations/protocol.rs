@@ -237,17 +237,19 @@ pub enum AnimatableProperty {
         leaf: GradientLeaf,
     },
 
-    /// One numeric attribute of an SVG shape entity (`<circle>`/`<rect>`/…),
-    /// addressed by its **wire** name — the camelCase key in the folded
-    /// `shape` object (`"cx"`, `"r"`, `"strokeWidth"`, …; the full set is
-    /// `crate::svg::NUMERIC_ATTRS`). Derived from `{ animated }` wrappers on
-    /// the shape's numeric attrs
-    /// (`crate::style_bindings::derive_shape_bindings`); the apply stage
-    /// drives the entity's `SvgShape.attrs` field of that name per frame.
-    /// Bound values are in **wire units**: SVG user-space units for geometry
-    /// and `strokeWidth` (the viewBox maps them onto the layout box at
-    /// raster), `0..1` for `opacity`.
-    ShapeAttr {
+    /// One field of a feature-owned prop value (`crate::ext`): `domain` is
+    /// the registered prop key (`"shape"` for an SVG shape child's folded
+    /// attrs), `name` the field's wire name within it (`"cx"`, `"r"`,
+    /// `"strokeWidth"`, …). Derived from the value's own
+    /// [`ExtValue::bindings`](crate::ext::ExtValue::bindings); the apply
+    /// stage evaluates each per frame and **publishes** the scalar into the
+    /// entity's [`DrivenExtValues`](crate::ext::DrivenExtValues), which the
+    /// owning feature's system consumes (an SVG shape writes it into the
+    /// attr's seed slot). Bound values are in the value's **wire units**
+    /// (SVG user-space units for geometry and `strokeWidth`, `0..1` for
+    /// `opacity`).
+    Ext {
+        domain: &'static str,
         name: String,
     },
 
@@ -328,7 +330,7 @@ impl AnimatableProperty {
                     // above): shape attrs are raw user-space numbers — no logical→
                     // physical px rewrite applies (the viewBox scales them at
                     // raster), so `Length` semantics would be wrong here.
-                    Self::ShapeAttr { .. } => ValueKind::Scalar,
+                    Self::Ext { .. } => ValueKind::Scalar,
                 }
             };
         }
@@ -430,12 +432,19 @@ impl AnimatedBindings {
         self.has_stage(crate::animations::props::PropStage::Gradient)
     }
 
-    /// Whether any SVG shape-attr binding ([`AnimatableProperty::ShapeAttr`])
-    /// is bound — gates the applier's shape stage and, in the transition
-    /// engine, the shape channel's coarse skip (any attr binding parks the
-    /// whole shape group).
-    pub fn has_shape_attrs(&self) -> bool {
-        self.has_stage(crate::animations::props::PropStage::Shape)
+    /// Whether any feature-owned binding ([`AnimatableProperty::Ext`]) is
+    /// bound — gates the applier's publish stage.
+    pub fn has_ext(&self) -> bool {
+        self.has_stage(crate::animations::props::PropStage::Ext)
+    }
+
+    /// Whether any binding of the feature-owned `domain` is bound — a
+    /// feature's own coarse park rule (an SVG shape's transition channel
+    /// stands down while any of its attrs is bound).
+    pub fn has_ext_domain(&self, domain: &str) -> bool {
+        self.0
+            .keys()
+            .any(|p| matches!(p, AnimatableProperty::Ext { domain: d, .. } if *d == domain))
     }
 
     /// Whether any `transform3d.<field>` binding is bound — gates the

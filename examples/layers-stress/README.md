@@ -46,7 +46,7 @@ estimated texture memory) while the app runs.
 ```sh
 npm install                          # once, repo root
 npm run build -w layers-stress-app   # build the React bundles
-cargo run -p bevy-react --example layers-stress
+cargo run -p layers-stress
 npm run watch -w layers-stress-app   # rebuild on edit → Fast Refresh
 ```
 
@@ -61,7 +61,7 @@ no extra bindings involved:
 ```sh
 STRESS_PRESET='{"n":500,"animate":false,"filterMode":"all","blur":true}' \
   npm run build -w layers-stress-app
-cargo run -p bevy-react --example layers-stress -- --measure 15
+cargo run -p layers-stress -- --measure 15
 ```
 
 - `STRESS_PRESET` (a JSON object; unknown keys, wrong-typed values, and

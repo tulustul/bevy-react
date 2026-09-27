@@ -628,32 +628,32 @@ mod tests {
         }
         assert_eq!(
             &path_of(&color),
-            "embedded://bevy_react/filters/builtin/color_matrix.wgsl"
+            "embedded://bevy_react_core/filters/builtin/color_matrix.wgsl"
         );
 
         let blur = shader_of("blur");
         assert_ne!(blur, color);
         assert_eq!(
             &path_of(&blur),
-            "embedded://bevy_react/filters/builtin/blur.wgsl"
+            "embedded://bevy_react_core/filters/builtin/blur.wgsl"
         );
 
         assert_eq!(
             &path_of(&shader_of("chromaticAberration")),
-            "embedded://bevy_react/filters/builtin/chromatic_aberration.wgsl"
+            "embedded://bevy_react_core/filters/builtin/chromatic_aberration.wgsl"
         );
 
         assert_eq!(
             &path_of(&shader_of("gradientMap")),
-            "embedded://bevy_react/filters/builtin/gradient_map.wgsl"
+            "embedded://bevy_react_core/filters/builtin/gradient_map.wgsl"
         );
         assert_eq!(
             &path_of(&shader_of("outline")),
-            "embedded://bevy_react/filters/builtin/outline.wgsl"
+            "embedded://bevy_react_core/filters/builtin/outline.wgsl"
         );
         assert_eq!(
             &path_of(&shader_of("pinch")),
-            "embedded://bevy_react/filters/builtin/pinch.wgsl"
+            "embedded://bevy_react_core/filters/builtin/pinch.wgsl"
         );
 
         // Bloom deliberately mixes shaders across its passes, so it can't go
@@ -663,7 +663,7 @@ mod tests {
         assert_eq!(passes.len(), 4);
         assert_eq!(
             &path_of(&passes[0].shader),
-            "embedded://bevy_react/filters/builtin/bloom.wgsl"
+            "embedded://bevy_react_core/filters/builtin/bloom.wgsl"
         );
         assert_eq!(passes[3].shader, passes[0].shader);
         assert_eq!(passes[1].shader, blur, "middle passes reuse blur's shader");
@@ -676,7 +676,7 @@ mod tests {
         assert_eq!(passes.len(), 4);
         assert_eq!(
             &path_of(&passes[0].shader),
-            "embedded://bevy_react/filters/builtin/shadow.wgsl"
+            "embedded://bevy_react_core/filters/builtin/shadow.wgsl"
         );
         assert_eq!(passes[3].shader, passes[0].shader);
         assert_eq!(passes[1].shader, blur, "middle passes reuse blur's shader");

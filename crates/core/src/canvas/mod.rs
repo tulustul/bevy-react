@@ -295,7 +295,7 @@ pub fn update_canvas_surfaces(
 /// it displaces for the caller to reuse. The descriptor size is set directly
 /// rather than via [`Image::resize`]: that would zero-fill the old buffer to
 /// the new size only for it to be replaced here. Shared with `crate::svg`.
-pub(crate) fn replace_image_pixels(image: &mut Image, w: u32, h: u32, data: Vec<u8>) -> Vec<u8> {
+pub fn replace_image_pixels(image: &mut Image, w: u32, h: u32, data: Vec<u8>) -> Vec<u8> {
     let extent = Extent3d {
         width: w,
         height: h,
@@ -436,7 +436,7 @@ fn apply_cmds(pixmap: &mut Pixmap, state: &mut RasterState, cmds: &[DrawCmd], sc
 /// surface; only mixed blocks (antialiased edges, translucent paint) take the
 /// per-pixel demultiply. Shared with `crate::svg`, whose resvg output is
 /// premultiplied the same way.
-pub(crate) fn write_straight_alpha(pixmap: &Pixmap, out: &mut Vec<u8>) {
+pub fn write_straight_alpha(pixmap: &Pixmap, out: &mut Vec<u8>) {
     /// Pixels per block — 128 bytes, a couple of cache lines.
     const BLOCK: usize = 32;
     /// The alpha byte of a pixel read as a native-endian word.

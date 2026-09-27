@@ -7,7 +7,7 @@
 //!
 //! ```ignore
 //! use bevy::prelude::*;
-//! use bevy_react::{react_event, ReactEvents};
+//! use bevy_react_core::{react_event, ReactEvents};
 //!
 //! #[react_event(name = "user.disconnected")]
 //! struct UserDisconnected { user_id: String }

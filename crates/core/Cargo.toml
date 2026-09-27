@@ -1,8 +1,8 @@
 [package]
-name = "bevy-react"
+name = "bevy_react_core"
 version.workspace = true
 edition.workspace = true
-description = "Drive bevy_ui from a React app over an embedded V8 runtime."
+description = "Drive bevy_ui from a React app over an embedded V8 runtime (the core bridge; feature crates such as bevy_react_svg plug into it)."
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
@@ -19,32 +19,8 @@ all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
 
 [lib]
-name = "bevy_react"
+name = "bevy_react_core"
 path = "src/lib.rs"
-
-# The example and its React UI live at the repo root (`examples/`), so declare it
-# explicitly rather than relying on the default `examples/` directory lookup.
-[[example]]
-name = "demos"
-path = "../../examples/demos/main.rs"
-# The example carries unit tests (`--shoot` arg parsing, camera grab rules);
-# examples are compile-only by default, so opt them into `cargo test`.
-test = true
-
-# The benchmark / stress-test runner (see `examples/stress/`), declared explicitly
-# for the same reason as `demos` (it lives at the repo root).
-[[example]]
-name = "stress"
-path = "../../examples/stress/main.rs"
-
-# Auto layer-promotion stress test (see `examples/layers-stress/`).
-[[example]]
-name = "layers-stress"
-path = "../../examples/layers-stress/main.rs"
-
-[[example]]
-name = "minimal"
-path = "../../examples/minimal/main.rs"
 
 # The devtools inspector (auto-registered by `ReactUiPlugin`, `<root>`-hosted
 # panel). A default feature: consumers get devtools in dev builds with zero
@@ -58,19 +34,20 @@ devtools = []
 # usvg splits the two halves: `text` is shaping (fontdb + rustybuzz),
 # `system-fonts` is fontdb's filesystem scan — loading system fonts needs both.
 svg-text = ["usvg/text", "usvg/system-fonts"]
+# The headless op harness (`bevy_react_core::test_util`) for a feature crate's
+# own tests: unstable, dev-dependency only.
+test-util = []
 
 [dependencies]
 accesskit = { workspace = true }
 anyhow = { workspace = true }
 bevy = { workspace = true }
-bevy-react-macros = { workspace = true }
+bevy_react_macros = { workspace = true }
 bytemuck = { workspace = true }
 crossbeam-channel = { workspace = true }
-kurbo = { workspace = true }
 resvg = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-svgtypes = { workspace = true }
 tiny-skia = { workspace = true }
 usvg = { workspace = true }
 tracing = { workspace = true }

@@ -35,7 +35,6 @@ use crate::protocol::{
     props::Props,
     style::Style,
 };
-use crate::svg::ShapeAttrs;
 
 /// Classify a raw filter-param value for the chain resolver: `None` = a plain
 /// static param (decode as-is); `Some(seed)` = an `{ animated: … }` wrapper,
@@ -272,40 +271,18 @@ pub(crate) fn derive_bindings(style: Option<&Style>) -> Option<AnimatedBindings>
     (!out.is_empty()).then_some(AnimatedBindings(out))
 }
 
-/// Derive bindings from an SVG shape's folded attrs — the shape analog of
-/// [`derive_bindings`]: each numeric attr carrying an `{ animated }` wrapper
-/// ([`crate::svg::NUMERIC_ATTRS`], the one wire-name table) emits an
-/// [`AnimatableProperty::ShapeAttr`](P::ShapeAttr) keyed by the attr's wire
-/// name. `None` when the shape carries no wrapper (or there is no shape).
-/// Shapes have no hover/press/focus variants, so the base-style-only rule is
-/// trivially satisfied — no variant warn needed.
-pub(crate) fn derive_shape_bindings(shape: Option<&ShapeAttrs>) -> Option<AnimatedBindings> {
-    let shape = shape?;
-    let mut out = BTreeMap::new();
-    for (name, field, _) in &crate::svg::NUMERIC_ATTRS {
-        if let Some(crate::protocol::animatable::Animatable::Animated(a)) = field(shape) {
-            let binding = &a.binding;
-            out.insert(
-                P::ShapeAttr {
-                    name: (*name).to_string(),
-                },
-                binding.clone(),
-            );
-        }
-    }
-    (!out.is_empty()).then_some(AnimatedBindings(out))
-}
-
 /// The complete binding map of a node's props: the merged base style's
-/// wrappers ([`derive_bindings`]) plus the shape attrs' ([`derive_shape_bindings`]).
+/// wrappers ([`derive_bindings`]) plus every feature-owned value's own
+/// ([`ExtProps::bindings`](crate::ext::ExtProps::bindings)).
 /// In practice at most one side contributes — shape entities are Node-less
 /// and styleless, styled nodes carry no `shape` — but the union keeps the
 /// [`AnimatedNode`](crate::animations::AnimatedNode) stamp a single decision:
 /// `None` (remove the component) exactly when **both** sides are empty.
 pub(crate) fn derive_props_bindings(props: &Props) -> Option<AnimatedBindings> {
     let mut out = derive_bindings(props.style.as_ref()).map_or_else(BTreeMap::new, |b| b.0);
-    if let Some(shape) = derive_shape_bindings(props.shape.as_deref()) {
-        out.extend(shape.0);
+    // Feature-owned values (an SVG shape's attrs) declare their own bindings.
+    for (domain, name, binding) in props.ext.bindings() {
+        out.insert(P::Ext { domain, name }, binding);
     }
     (!out.is_empty()).then_some(AnimatedBindings(out))
 }
@@ -538,78 +515,6 @@ mod tests {
         }));
         assert!(derive_bindings(Some(&s)).is_none());
         assert!(derive_bindings(None).is_none());
-    }
-
-    /// Shape numeric attrs derive `ShapeAttr` bindings keyed by wire name
-    /// (camelCase — `strokeWidth`); static attrs and shape-less props derive
-    /// nothing; the `has_shape_attrs` gate tracks the map.
-    #[test]
-    fn derives_shape_attr_bindings_by_wire_name() {
-        let shape: crate::svg::ShapeAttrs = serde_json::from_value(serde_json::json!({
-            "cx": { "animated": { "id": 3 } },
-            "strokeWidth": { "animated": { "id": 4 }, "seed": 2 },
-            "r": 10,
-        }))
-        .unwrap();
-        let b = derive_shape_bindings(Some(&shape)).expect("bindings derived");
-        assert_eq!(b.0.len(), 2, "exactly the animated attrs derive");
-        assert_eq!(b.get(P::ShapeAttr { name: "cx".into() }), Some(&shared(3)));
-        assert_eq!(
-            b.get(P::ShapeAttr {
-                name: "strokeWidth".into()
-            }),
-            Some(&shared(4)),
-            "wire name is the camelCase key, not the field name"
-        );
-        assert_eq!(b.get(P::ShapeAttr { name: "r".into() }), None, "static");
-        assert!(b.has_shape_attrs(), "the gate sees a bound attr");
-        assert!(!b.has_filter_params(), "no cross-talk with other gates");
-
-        let static_shape: crate::svg::ShapeAttrs =
-            serde_json::from_value(serde_json::json!({ "cx": 1, "r": 2 })).unwrap();
-        assert!(
-            derive_shape_bindings(Some(&static_shape)).is_none(),
-            "all-static attrs derive nothing"
-        );
-        assert!(derive_shape_bindings(None).is_none());
-
-        let style_only = derive_bindings(Some(&style(
-            serde_json::json!({ "opacity": { "animated": { "id": 1 } } }),
-        )))
-        .unwrap();
-        assert!(!style_only.has_shape_attrs(), "gate is false without attrs");
-    }
-
-    /// `derive_props_bindings` unions style + shape maps (either side alone
-    /// suffices), and is `None` only when both are empty — the single
-    /// `AnimatedNode` stamp decision.
-    #[test]
-    fn props_bindings_union_style_and_shape() {
-        let props = |v: serde_json::Value| -> crate::protocol::props::Props {
-            serde_json::from_value(v).unwrap()
-        };
-        let both = props(serde_json::json!({
-            "style": { "opacity": { "animated": { "id": 1 } } },
-            "shape": { "cx": { "animated": { "id": 2 } } },
-        }));
-        let b = derive_props_bindings(&both).expect("union derived");
-        assert_eq!(b.get(P::Opacity), Some(&shared(1)));
-        assert_eq!(b.get(P::ShapeAttr { name: "cx".into() }), Some(&shared(2)));
-
-        let shape_only = props(serde_json::json!({
-            "shape": { "r": { "animated": { "id": 5 } } },
-        }));
-        let b = derive_props_bindings(&shape_only).expect("shape alone derives");
-        assert_eq!(b.get(P::ShapeAttr { name: "r".into() }), Some(&shared(5)));
-
-        let neither = props(serde_json::json!({
-            "style": { "opacity": 0.5 },
-            "shape": { "cx": 1 },
-        }));
-        assert!(
-            derive_props_bindings(&neither).is_none(),
-            "both-empty removes the stamp"
-        );
     }
 
     /// A style animating EVERY static table row (plus both chains) derives a

@@ -39,7 +39,7 @@ use bevy::ui::{CalculatedClip, ComputedNode};
 /// render target, so window pointers (window scale factor) and image-target
 /// virtual pointers (surface/transform3d) take the same path. Shared with the
 /// svg per-shape hit refinement ([`crate::svg::pick`]).
-pub(crate) fn pointer_physical_position(location: &Location, camera: &Camera) -> Vec2 {
+pub fn pointer_physical_position(location: &Location, camera: &Camera) -> Vec2 {
     let mut point = location.position * camera.target_scaling_factor().unwrap_or(1.0);
     if let Some(viewport) = camera.physical_viewport_rect() {
         point -= viewport.min.as_vec2();

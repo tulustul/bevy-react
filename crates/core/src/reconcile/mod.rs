@@ -21,15 +21,14 @@ mod hover;
 mod image;
 mod interaction;
 mod pointer;
-mod stamps;
+pub(crate) mod stamps;
 mod stats;
 mod surface_events;
-mod svg_ops;
 mod update;
 
 #[cfg(test)]
 mod svg_tests;
-#[cfg(test)]
+#[cfg(any(test, feature = "test-util"))]
 pub(crate) mod test_util;
 
 pub use apply::apply_js_ops;

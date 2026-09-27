@@ -155,8 +155,9 @@ pub(crate) enum PropStage {
     Backdrop,
     /// Stage 4 — `morphFilter.<param>`, writes the resolved morph chain.
     Morph,
-    /// Stage 5 — an SVG shape attr, writes `SvgShape.attrs` seed slots.
-    Shape,
+    /// Stage 5 — a feature-owned binding, published into `DrivenExtValues`
+    /// for the owning feature's consumer system.
+    Ext,
     /// Stage 6 — a gradient leaf, rebuilds the folded gradient component.
     Gradient,
 }
@@ -249,10 +250,10 @@ impl super::protocol::AnimatableProperty {
                     // channel eases a complete list, no per-leaf seam.
                     P::BackgroundGradientParam { .. } => Some(ChannelId::BackgroundGradient),
                     P::BorderGradientParam { .. } => Some(ChannelId::BorderGradient),
-                    // Shape parking is the shape channel's own coarse
-                    // mechanism (`crate::transition`'s shape channel), not a
-                    // `ChannelId`.
-                    P::ShapeAttr { .. } => None,
+                    // A feature-owned binding parks nothing in the core: the
+                    // owning feature runs its own park rule
+                    // (`AnimatedBindings::has_ext_domain`).
+                    P::Ext { .. } => None,
                 }
             };
         }
@@ -274,7 +275,7 @@ impl super::protocol::AnimatableProperty {
                     P::BackgroundGradientParam { .. } | P::BorderGradientParam { .. } => {
                         PropStage::Gradient
                     }
-                    P::ShapeAttr { .. } => PropStage::Shape,
+                    P::Ext { .. } => PropStage::Ext,
                 }
             };
         }
@@ -313,7 +314,7 @@ mod tests {
                     | P::MorphParam { .. }
                     | P::BackgroundGradientParam { .. }
                     | P::BorderGradientParam { .. }
-                    | P::ShapeAttr { .. } => {}
+                    | P::Ext { .. } => {}
                 }
             };
         }

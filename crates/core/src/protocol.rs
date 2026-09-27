@@ -45,6 +45,6 @@ pub const ROOT_ID: NodeId = 0;
 /// structured [`crate::diag`] entry so the inspector can flag the row. `kind`
 /// names the value's domain (`"length"`, `"rect"`, a keyword field's kind, …);
 /// `value` is the raw offending wire string.
-pub(crate) fn decode_warn(kind: &'static str, value: &str, message: &str) {
+pub fn decode_warn(kind: &'static str, value: &str, message: &str) {
     crate::diag::decode_report(kind, value, message);
 }

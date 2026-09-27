@@ -24,7 +24,7 @@ use std::time::{Duration, Instant};
 
 use bevy::prelude::*;
 use bevy::ui::UiSystems;
-use bevy_react::{OpApplyStats, ReactAppExt, ReactEvents, react_event, react_message};
+use bevy_react_core::{OpApplyStats, ReactAppExt, ReactEvents, react_event, react_message};
 use serde::Serialize;
 use ts_rs::TS;
 

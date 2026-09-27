@@ -11,26 +11,45 @@ use crate::ui_map::AtlasLayoutCache;
 
 /// Spin up a minimal app wired to `apply_js_ops`, returning the app and the
 /// op sender (the outbound receiver is leaked to keep the sender open).
-pub(crate) fn op_app() -> (App, crossbeam_channel::Sender<Vec<Op>>) {
-    let (app, ops_tx, _root) = build_op_app(false);
+pub fn op_app() -> (App, crossbeam_channel::Sender<Vec<Op>>) {
+    let (app, ops_tx, _root) = build_op_app(false, |_| {});
+    (app, ops_tx)
+}
+
+/// [`op_app`] with a setup hook run before the bridge snapshots the feature
+/// registry — where a feature crate's tests add their plugin
+/// (`app.add_plugins(SvgPlugin)`), so its kinds and keys dispatch.
+pub fn op_app_with(setup: impl FnOnce(&mut App)) -> (App, crossbeam_channel::Sender<Vec<Op>>) {
+    let (app, ops_tx, _root) = build_op_app(false, setup);
+    (app, ops_tx)
+}
+
+/// [`op_app_manual_time`] with a setup hook (see [`op_app_with`]).
+pub fn op_app_manual_time_with(
+    setup: impl FnOnce(&mut App),
+) -> (App, crossbeam_channel::Sender<Vec<Op>>) {
+    let (app, ops_tx, _root) = build_op_app(true, setup);
     (app, ops_tx)
 }
 
 /// [`op_app`] with `TimePlugin` swapped for a manually-advanced `Time` (the
 /// `filters::test_util` precedent) — for tests that assert on eased values
 /// at exact points along a transition.
-pub(crate) fn op_app_manual_time() -> (App, crossbeam_channel::Sender<Vec<Op>>) {
-    let (app, ops_tx, _root) = build_op_app(true);
+pub fn op_app_manual_time() -> (App, crossbeam_channel::Sender<Vec<Op>>) {
+    let (app, ops_tx, _root) = build_op_app(true, |_| {});
     (app, ops_tx)
 }
 
 /// [`op_app`] that also exposes the spawned UI root entity, for tests that
 /// assert on the root's `Children`.
-pub(crate) fn ordering_app() -> (App, crossbeam_channel::Sender<Vec<Op>>, Entity) {
-    build_op_app(false)
+pub fn ordering_app() -> (App, crossbeam_channel::Sender<Vec<Op>>, Entity) {
+    build_op_app(false, |_| {})
 }
 
-fn build_op_app(manual_time: bool) -> (App, crossbeam_channel::Sender<Vec<Op>>, Entity) {
+fn build_op_app(
+    manual_time: bool,
+    setup: impl FnOnce(&mut App),
+) -> (App, crossbeam_channel::Sender<Vec<Op>>, Entity) {
     let mut app = App::new();
     if manual_time {
         app.add_plugins((
@@ -54,12 +73,21 @@ fn build_op_app(manual_time: bool) -> (App, crossbeam_channel::Sender<Vec<Op>>, 
     let (out_tx, out_rx) = tokio::sync::mpsc::unbounded_channel::<Outbound>();
     std::mem::forget(out_rx); // keep the channel open for the test's lifetime
     let root = app.world_mut().spawn_empty().id();
-    app.insert_resource(JsBridge::new(ops_rx, out_tx, root));
+    // The caller's feature registrations (a feature plugin's kinds/keys), then
+    // the registry snapshot the bridge dispatches on and the thread-local
+    // decode scope the test's own `serde_json::from_value` calls resolve
+    // feature keys against.
+    setup(&mut app);
+    let registry = crate::ext::ExtRegistry::from_app(&app);
+    crate::ext::set_thread_registry(std::sync::Arc::new(registry.clone()));
+    let mut bridge = JsBridge::new(ops_rx, out_tx, root);
+    bridge.ext = std::sync::Arc::new(registry);
+    app.insert_resource(bridge);
     app.add_systems(Update, apply_js_ops);
     (app, ops_tx, root)
 }
 
-pub(crate) fn create_node(id: NodeId) -> Op {
+pub fn create_node(id: NodeId) -> Op {
     Op::Create {
         id,
         kind: "node".into(),
@@ -69,7 +97,7 @@ pub(crate) fn create_node(id: NodeId) -> Op {
 }
 
 /// A delta update: only the supplied fields are touched.
-pub(crate) fn update_delta(id: NodeId, props: Props, unset: &[&str], style_unset: &[&str]) -> Op {
+pub fn update_delta(id: NodeId, props: Props, unset: &[&str], style_unset: &[&str]) -> Op {
     Op::Update {
         id,
         props: Box::new(props),
@@ -80,7 +108,7 @@ pub(crate) fn update_delta(id: NodeId, props: Props, unset: &[&str], style_unset
 
 // Pass rotate as an explicit `rad` string so the asserted radian value is
 // carried verbatim (a bare number would be read as degrees).
-pub(crate) fn text_props(rotate: f32) -> Props {
+pub fn text_props(rotate: f32) -> Props {
     serde_json::from_value(serde_json::json!({
         "style": {
             "transform": { "rotate": format!("{rotate}rad") },
@@ -91,12 +119,12 @@ pub(crate) fn text_props(rotate: f32) -> Props {
 }
 
 /// The entity a node id resolved to.
-pub(crate) fn ent(app: &App, id: NodeId) -> Entity {
+pub fn ent(app: &App, id: NodeId) -> Entity {
     app.world().resource::<JsBridge>().nodes[&id]
 }
 
 /// The parent's children, in order.
-pub(crate) fn children_of(app: &App, parent: Entity) -> Vec<Entity> {
+pub fn children_of(app: &App, parent: Entity) -> Vec<Entity> {
     app.world()
         .entity(parent)
         .get::<Children>()

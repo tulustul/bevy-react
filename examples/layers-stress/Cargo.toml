@@ -1,0 +1,16 @@
+[package]
+name = "layers-stress"
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[[bin]]
+name = "layers-stress"
+path = "main.rs"
+
+[dependencies]
+bevy = { workspace = true }
+bevy_react_core = { workspace = true }
+serde = { workspace = true }
+ts-rs = { workspace = true }
+

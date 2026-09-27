@@ -398,48 +398,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "bevy-react"
-version = "0.6.0"
-dependencies = [
- "accesskit",
- "anyhow",
- "bevy",
- "bevy-react-macros",
- "bytemuck",
- "console_error_panic_hook",
- "crossbeam-channel",
- "deno_core",
- "deno_error",
- "getrandom 0.3.4",
- "js-sys",
- "kurbo",
- "naga",
- "resvg",
- "serde",
- "serde-wasm-bindgen",
- "serde_json",
- "svgtypes",
- "tiny-skia 0.12.0",
- "tokio",
- "tracing",
- "ts-rs",
- "usvg",
- "uuid",
- "wasm-bindgen",
- "wasm-bindgen-futures",
- "web-sys",
-]
-
-[[package]]
-name = "bevy-react-macros"
-version = "0.6.0"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
 name = "bevy_a11y"
 version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1363,6 +1321,62 @@ name = "bevy_ptr"
 version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b511e89f7078fd21fdea77061a0ca3e737297c7011bb10c073e0aecb17c9fea6"
+
+[[package]]
+name = "bevy_react_core"
+version = "0.6.0"
+dependencies = [
+ "accesskit",
+ "anyhow",
+ "bevy",
+ "bevy_react_macros",
+ "bytemuck",
+ "console_error_panic_hook",
+ "crossbeam-channel",
+ "deno_core",
+ "deno_error",
+ "getrandom 0.3.4",
+ "js-sys",
+ "naga",
+ "resvg",
+ "serde",
+ "serde-wasm-bindgen",
+ "serde_json",
+ "tiny-skia 0.12.0",
+ "tokio",
+ "tracing",
+ "ts-rs",
+ "usvg",
+ "uuid",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
+]
+
+[[package]]
+name = "bevy_react_macros"
+version = "0.6.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "bevy_react_svg"
+version = "0.6.0"
+dependencies = [
+ "bevy",
+ "bevy_react_core",
+ "crossbeam-channel",
+ "kurbo",
+ "serde",
+ "serde_json",
+ "svgtypes",
+ "tiny-skia 0.12.0",
+ "tokio",
+ "uuid",
+]
 
 [[package]]
 name = "bevy_reflect"
@@ -2468,6 +2482,21 @@ checksum = "bef552e6f588e446098f6ba40d89ac146c8c7b64aade83c051ee00bb5d2bc18d"
 dependencies = [
  "serde",
  "uuid",
+]
+
+[[package]]
+name = "demos"
+version = "0.6.0"
+dependencies = [
+ "bevy",
+ "bevy_react_core",
+ "bevy_react_svg",
+ "crossbeam-channel",
+ "naga",
+ "serde",
+ "serde_json",
+ "tokio",
+ "ts-rs",
 ]
 
 [[package]]
@@ -3800,6 +3829,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "layers-stress"
+version = "0.6.0"
+dependencies = [
+ "bevy",
+ "bevy_react_core",
+ "serde",
+ "ts-rs",
+]
+
+[[package]]
 name = "lazy_static"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3936,6 +3975,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "714098028fe011992e1c3962653c96b2d578c4b4bce9036e15ff220319b1e0e3"
 dependencies = [
  "libc",
+]
+
+[[package]]
+name = "minimal"
+version = "0.6.0"
+dependencies = [
+ "bevy",
+ "bevy_react_core",
 ]
 
 [[package]]
@@ -5508,6 +5555,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "42316e70da376f3d113a68d138a60d8a9883c604fe97942721ec2068dab13a9f"
 dependencies = [
  "unicode-ident",
+]
+
+[[package]]
+name = "stress"
+version = "0.6.0"
+dependencies = [
+ "bevy",
+ "bevy_react_core",
+ "serde",
+ "serde_json",
+ "ts-rs",
 ]
 
 [[package]]

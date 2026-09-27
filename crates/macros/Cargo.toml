@@ -1,5 +1,5 @@
 [package]
-name = "bevy-react-macros"
+name = "bevy_react_macros"
 version.workspace = true
 edition.workspace = true
 description = "Proc-macros for bevy-react's typed React<->Bevy messaging."

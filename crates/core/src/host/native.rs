@@ -38,6 +38,7 @@ pub(crate) fn spawn(app: &mut App, config: HostConfig, senders: HostSenders) -> 
     }
 
     spawn_js_thread(
+        config.ext,
         vendor,
         bundle.clone(),
         senders.ops,

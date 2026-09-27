@@ -196,9 +196,6 @@ pub fn apply_js_ops(
                 bridge.editable_inputs.clear();
                 bridge.surfaces.clear();
                 bridge.roots.clear();
-                bridge.foreign_images.clear();
-                bridge.svg_roots.clear();
-                bridge.shapes.clear();
                 bridge.animated.clear();
                 bridge.editable_values.clear();
                 bridge.editable_selections.clear();
@@ -242,14 +239,25 @@ pub fn apply_js_ops(
             }
             Op::CreateText { id, text } => {
                 let entity = commands
-                    .spawn((Text::new(text), TextColor(Color::WHITE), ReactNode(id)))
+                    .spawn((
+                        Text::new(text),
+                        TextColor(Color::WHITE),
+                        ReactNode(id),
+                        crate::ext::ElementFlags::NODE,
+                    ))
                     .id();
                 bridge.nodes.insert(id, entity);
             }
             Op::CreateTextSpan { id, text } => {
                 // A bare-string run inside a `<text>`. Style is inherited from its
                 // parent on append (see below); until then it keeps span defaults.
-                let entity = commands.spawn((TextSpan(text), ReactNode(id))).id();
+                let entity = commands
+                    .spawn((
+                        TextSpan(text),
+                        ReactNode(id),
+                        crate::ext::ElementFlags::NODE_LESS,
+                    ))
+                    .id();
                 bridge.nodes.insert(id, entity);
                 bridge.spans.insert(id, SpanKind::RawInherited);
             }

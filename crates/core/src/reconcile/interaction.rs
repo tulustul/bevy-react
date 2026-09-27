@@ -32,6 +32,7 @@ pub fn apply_interaction_styles(
             Option<Ref<FocusState>>,
             &mut StyleVariants,
             Option<&crate::layer::PromotedLayer>,
+            Option<&crate::ext::ElementFlags>,
         ),
         Or<(
             Changed<Interaction>,
@@ -50,7 +51,7 @@ pub fn apply_interaction_styles(
     use crate::protocol::style::{StyleDirty, style_groups as g};
     let default_fonts = crate::plugin::Fonts::default();
     let fonts = fonts.as_deref().unwrap_or(&default_fonts);
-    for (entity, interaction, focus, mut variants, promoted) in &mut query {
+    for (entity, interaction, focus, mut variants, promoted, flags) in &mut query {
         // Consume the recorded reason without re-marking the component (a
         // detected write here would re-trigger this system next frame).
         let pending = std::mem::replace(
@@ -101,10 +102,7 @@ pub fn apply_interaction_styles(
         // built here because it needs `assets`, and guarded off elements
         // whose `ImageNode` is element-owned (canvas/portal/image DO carry
         // `StyleVariants`).
-        let foreign = bridge
-            .as_ref()
-            .zip(rnode)
-            .is_some_and(|(b, r)| b.foreign_images.contains(&r.0));
+        let foreign = flags.is_some_and(|f| f.owns_image);
         if !foreign {
             crate::background_image::apply_background_image(
                 &mut ec,

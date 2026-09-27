@@ -14,9 +14,9 @@
 
 use std::time::{Duration, Instant};
 
-use bevy_react::js_thread::spawn_js_thread;
-use bevy_react::protocol::{op::Op, outbound::Outbound};
-use bevy_react::{RawRequest, ReactMessage};
+use bevy_react_core::js_thread::spawn_js_thread;
+use bevy_react_core::protocol::{op::Op, outbound::Outbound};
+use bevy_react_core::{RawRequest, ReactMessage};
 
 /// Flush one batch with four invalid values (a bad length, a bad keyword, a
 /// bad rect token, a bad backgroundImage mode — each after the first on a
@@ -53,6 +53,7 @@ fn decode_warnings_round_trip() {
     let (_reload_tx, reload_rx) = tokio::sync::mpsc::unbounded_channel::<()>();
 
     spawn_js_thread(
+        bevy_react_core::ext::ExtRegistrySlot::ready(bevy_react_core::ext::builtin_registry()),
         vendor,
         app,
         ops_tx,

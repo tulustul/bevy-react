@@ -86,13 +86,29 @@ impl SharedTags {
         self.by_tag.is_empty()
     }
 
-    /// Record a node's element kind (every create, tagged or not).
-    pub(crate) fn note_kind(&mut self, id: NodeId, kind: &str) {
-        self.kinds.insert(id, intern_kind(kind));
+    /// Record a node's element kind (every create, tagged or not). A kind
+    /// the registry owns is stored borrowed (its `&'static str` key), like a
+    /// built-in; only a genuinely unknown kind allocates.
+    pub(crate) fn note_kind(&mut self, id: NodeId, kind: &str, registry: &crate::ext::ExtRegistry) {
+        let interned = match registry.static_kind(kind) {
+            Some(k) => Cow::Borrowed(k),
+            None => intern_kind(kind),
+        };
+        self.kinds.insert(id, interned);
     }
 
-    pub(crate) fn kind_of(&self, id: NodeId) -> Option<&str> {
+    pub fn kind_of(&self, id: NodeId) -> Option<&str> {
         self.kinds.get(&id).map(|k| k.as_ref())
+    }
+
+    /// The node's kind as an owned handle (`"node"` for an unknown id): a
+    /// free clone for every interned kind, so the caller can keep it across
+    /// a mutable borrow of the bridge.
+    pub(crate) fn kind_cow(&self, id: NodeId) -> Cow<'static, str> {
+        self.kinds
+            .get(&id)
+            .cloned()
+            .unwrap_or(Cow::Borrowed("node"))
     }
 
     /// Apply a `sharedTag` prop transition on one node (`old`/`new` are the

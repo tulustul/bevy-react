@@ -441,7 +441,8 @@ fn live_textures_refuse_every_mode_once() {
         .world_mut()
         .spawn((
             ImageNode::new(plain.clone()),
-            RBackgroundTexture("tex".into()),
+            crate::background_image::RBackgroundTexture("tex".into()),
+            crate::ext::LiveTexture,
             ImageRenderingMode(ImageRendering::Trilinear),
         ))
         .id();

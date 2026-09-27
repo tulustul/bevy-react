@@ -105,7 +105,9 @@ impl From<&DevtoolsSettings> for DevtoolsRestore {
 
 /// Settings persistence state: what was loaded at startup (drives the one-shot
 /// restore), the latest blob from JS, and the debounced-write bookkeeping.
+/// Only the restore half runs on wasm (no settings file is written there).
 #[derive(Resource)]
+#[cfg_attr(target_arch = "wasm32", allow(dead_code))]
 pub(super) struct DevtoolsPersistence {
     loaded: Option<DevtoolsSettings>,
     pending: Option<DevtoolsSettings>,

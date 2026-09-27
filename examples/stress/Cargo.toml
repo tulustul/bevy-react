@@ -1,0 +1,17 @@
+[package]
+name = "stress"
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[[bin]]
+name = "stress"
+path = "main.rs"
+
+[dependencies]
+bevy = { workspace = true }
+bevy_react_core = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+ts-rs = { workspace = true }
+

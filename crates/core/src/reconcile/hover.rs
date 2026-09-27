@@ -9,7 +9,7 @@ use bevy::ui::RelativeCursorPosition;
 use super::events::send_ui_event;
 use super::pointer::event_pos;
 use crate::bridge::{HoverState, JsBridge, PointerHandlers, ReactNode};
-use crate::svg::SvgUserPos;
+use crate::ext::EventLocalPos;
 
 /// Emit `pointerEnter` / `pointerLeave` for main-window nodes that declared those
 /// handlers. Hover in/out is the `Interaction` `None`↔(`Hovered`|`Pressed`) boundary
@@ -30,7 +30,7 @@ pub fn collect_hover_events(
             &ReactNode,
             Option<&RelativeCursorPosition>,
             // SVG shapes report x/y in user units instead (see [`event_pos`]).
-            Option<&SvgUserPos>,
+            Option<&EventLocalPos>,
         ),
         Changed<Interaction>,
     >,
@@ -148,7 +148,7 @@ mod tests {
                     cursor_over: true,
                     normalized: Some(Vec2::ZERO),
                 },
-                crate::svg::SvgUserPos(Some(Vec2::new(30.0, 60.0))),
+                crate::ext::EventLocalPos(Some(Vec2::new(30.0, 60.0))),
             ))
             .id();
         app.update(); // Mount frame: still outside.

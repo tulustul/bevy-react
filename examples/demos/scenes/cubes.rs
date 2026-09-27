@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use bevy_react::{ReactAppExt, react_message};
+use bevy_react_core::{ReactAppExt, react_message};
 
 use crate::scene::Scene;
 

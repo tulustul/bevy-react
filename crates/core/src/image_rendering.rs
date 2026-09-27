@@ -34,12 +34,9 @@ use bevy::render::render_resource::TextureUsages;
 use bevy::tasks::{AsyncComputeTaskPool, Task, futures_lite::future::block_on, poll_once};
 use bevy::ui::widget::ImageNode;
 
-use crate::background_image::RBackgroundTexture;
 use crate::bridge::ReactNode;
-use crate::canvas::CanvasSurface;
+use crate::ext::LiveTexture;
 use crate::layer::LayerContentDirt;
-use crate::portal::RPortal;
-use crate::svg::SvgSurface;
 
 /// The `imageRendering` keyword. `Auto` is **passive** — it never touches an
 /// asset and renders as the engine default (level-0 bilinear today).
@@ -243,15 +240,11 @@ fn spawn_pyramid(source: &Image) -> Task<Image> {
     })
 }
 
-/// Whether the entity's own element makes its texture live: element-owned
-/// rasters (`canvas`, svg) and registry bindings (`<portal>`,
-/// `backgroundImage: { texture }`), which are rebound by their own systems.
-type LiveMarkers = (
-    Has<CanvasSurface>,
-    Has<SvgSurface>,
-    Has<RPortal>,
-    Has<RBackgroundTexture>,
-);
+/// Whether the entity's texture is live — element-owned rasters (`canvas`,
+/// svg) and registry bindings (`<portal>`, `backgroundImage: { texture }`),
+/// rebound by their own systems — as declared by the feature that bound it
+/// (the [`LiveTexture`] contract marker).
+type LiveMarkers = Has<LiveTexture>;
 
 /// Decide what a node with `mode` binds to, from its source asset alone.
 /// `Err` carries the warning to report; the node keeps its source.
@@ -366,7 +359,7 @@ pub fn bind_image_rendering(
             variants.pending.remove(&entity);
             continue;
         };
-        let live_element = live.0 || live.1 || live.2 || live.3;
+        let live_element = live;
         bind(
             entity,
             mode.0,

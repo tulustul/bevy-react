@@ -11,9 +11,9 @@
 
 use std::time::Duration;
 
-use bevy_react::js_thread::spawn_js_thread;
-use bevy_react::protocol::{op::Op, outbound::Outbound, outbound::UiEvent};
-use bevy_react::{RawRequest, ReactMessage};
+use bevy_react_core::js_thread::spawn_js_thread;
+use bevy_react_core::protocol::{op::Op, outbound::Outbound, outbound::UiEvent};
+use bevy_react_core::{RawRequest, ReactMessage};
 
 const APP: &[u8] = br#"
 (function () {
@@ -73,6 +73,7 @@ fn hot_reload_preserves_isolate_state() {
     let (reload_tx, reload_rx) = tokio::sync::mpsc::unbounded_channel::<()>();
 
     spawn_js_thread(
+        bevy_react_core::ext::ExtRegistrySlot::ready(bevy_react_core::ext::builtin_registry()),
         dir.join("vendor.js"),
         app,
         ops_tx,

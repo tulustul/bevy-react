@@ -55,7 +55,7 @@ a live timing readout. A debug build with hot reload is fine here:
 
 ```sh
 npm run build -w stress-app
-cargo run -p bevy-react --example stress
+cargo run -p stress
 ```
 
 **Capture** (automated) — drives the operation set one op at a time, records
@@ -70,7 +70,7 @@ present mode.
 
 ```sh
 npm run build:prod -w stress-app
-cargo run --release -p bevy-react --example stress -- --run table-ops --out results.json [--iterations N]
+cargo run --release -p stress -- --run table-ops --out results.json [--iterations N]
 ```
 
 Results are written to `benchmark_results/` (gitignored).

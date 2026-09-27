@@ -564,14 +564,13 @@ mod tests {
         app.add_systems(Update, collect_ui_events);
 
         let root = app.world_mut().spawn((ReactNode(1), ClickOwner)).id();
+        // A node-less, handler-less child (an SVG shape's shape, minus the
+        // feature): no `ClickOwner` of its own.
         let shape = app
             .world_mut()
             .spawn((
                 ReactNode(2),
-                crate::svg::SvgShape {
-                    kind: crate::svg::ShapeKind::Circle,
-                    attrs: crate::svg::ShapeAttrs::default(),
-                },
+                crate::ext::ElementFlags::NODE_LESS,
                 ChildOf(root),
             ))
             .id();

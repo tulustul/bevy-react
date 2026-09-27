@@ -45,7 +45,6 @@ mod layout_shared_tests;
 #[cfg(test)]
 mod layout_tests;
 mod scroll;
-mod shape_channel;
 pub mod shared;
 mod spec;
 #[cfg(test)]
@@ -62,8 +61,8 @@ pub use scroll::{
 pub use scroll::ScrollTransitionInput;
 pub use spec::{ChannelTransition, Transition, TransitionInput};
 
-pub use channels::TransitionState;
 use channels::with_input_channels;
+pub use channels::{Channel, TransitionState};
 
 /// Stamp (or clear) the transition components on a host element. Called from
 /// [`crate::ui_map::apply_style`] with the resolved style, so the input always
@@ -92,26 +91,6 @@ pub fn apply_transition(ec: &mut EntityCommands, style: &Option<Style>, fresh: b
 }
 
 /// Stamp (or clear) the transition components on an SVG **shape** entity from
-/// its folded attrs. Shapes have no style, so the spec rides
-/// `attrs.transition` (see `crate::svg::ShapeTransitionSpec`) and the stamped
-/// [`TransitionInput`] is an empty default whose only job is making the
-/// [`drive_transitions`] query match — the shape channel reads spec and
-/// targets live from `SvgShape`. Sibling of [`apply_transition`], called
-/// from the reconciler's shape create/update paths.
-pub fn apply_shape_transition(ec: &mut EntityCommands, attrs: Option<&crate::svg::ShapeAttrs>) {
-    match attrs.is_some_and(|a| a.transition.is_some()) {
-        true => {
-            // Both persist across re-sends (the input carries nothing).
-            ec.insert_if_new(TransitionInput::default());
-            ec.insert_if_new(TransitionState::default());
-        }
-        false => {
-            ec.remove::<TransitionInput>();
-            ec.remove::<TransitionState>();
-        }
-    }
-}
-
 /// The components a transition can drive, plus the read-only inputs that gate how
 /// it drives them. A `QueryData` struct (rather than a tuple) so a new transition
 /// target component is one field, not a tuple-arity problem — the filter
@@ -169,11 +148,6 @@ pub struct TransitionTargets {
     /// value lands here and `sync_transform3d_matrices` (PostUpdate) turns
     /// the change into the matrix + composite-only dirt — no dirt push here.
     transform3d: Option<&'static mut crate::layer::transform3d::LayerTransform3d>,
-    /// An SVG shape child's kind + folded attrs — the shape channel's target
-    /// AND spec carrier (`attrs.transition`; shapes have no style, so
-    /// nothing rides [`TransitionInput`]). Snapped to the target by the op
-    /// merge (`apply_js_ops`), ordered before this system.
-    shape: Option<&'static mut crate::svg::SvgShape>,
     /// The gradient channels' target: the resolver's UNfolded stamp
     /// (live-read like [`Self::filter_input`] — a gradient-only delta
     /// re-stamps this, never [`TransitionInput`]).
@@ -217,7 +191,6 @@ type AnyTargetChanged = Or<(
         Changed<crate::filters::MorphState>,
         Changed<crate::layer::LayerCaptureRect>,
         Changed<crate::layer::transform3d::LayerTransform3d>,
-        Changed<crate::svg::SvgShape>,
         Changed<crate::ui_map::GradientTargets>,
         Changed<BackgroundGradient>,
         Changed<BorderGradient>,
@@ -249,7 +222,6 @@ pub struct RemovedTargets<'w, 's> {
     morph_state: RemovedComponents<'w, 's, crate::filters::MorphState>,
     capture_rect: RemovedComponents<'w, 's, crate::layer::LayerCaptureRect>,
     transform3d: RemovedComponents<'w, 's, crate::layer::transform3d::LayerTransform3d>,
-    shape: RemovedComponents<'w, 's, crate::svg::SvgShape>,
     gradient_input: RemovedComponents<'w, 's, crate::ui_map::GradientTargets>,
     bg_gradient: RemovedComponents<'w, 's, BackgroundGradient>,
     border_gradient: RemovedComponents<'w, 's, BorderGradient>,
@@ -282,7 +254,6 @@ impl RemovedTargets<'_, '_> {
             morph_state,
             capture_rect,
             transform3d,
-            shape,
             gradient_input,
             bg_gradient,
             border_gradient
@@ -878,21 +849,6 @@ pub fn drive_transitions(
                     }
                 }
                 MorphAction::None => {}
-            }
-        }
-
-        // SVG shape attrs: ease the numeric attrs toward the values the op
-        // merge snapped into `SvgShape.attrs` (spec AND targets ride the
-        // component — see `shape_channel`). Coarse park like `skip_filter`:
-        // ANY `ShapeAttr` binding parks the WHOLE channel (the animation
-        // driver owns bound attrs via the seed slot); parked state resets so
-        // unparking re-seeds at the live values. No dirt push — the
-        // `Changed<SvgShape>` tick from a real write is the raster's signal.
-        if let Some(shape) = &mut targets.shape {
-            if targets.anim.is_some_and(|a| a.0.has_shape_attrs()) {
-                state.shape.reset();
-            } else {
-                state.shape.drive(shape, dt);
             }
         }
 

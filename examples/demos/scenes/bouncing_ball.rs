@@ -5,7 +5,7 @@ use bevy::render::render_resource::{
     AsBindGroup, RenderPipelineDescriptor, SpecializedMeshPipelineError,
 };
 use bevy::shader::ShaderRef;
-use bevy_react::{ReactAppExt, ReactEvents, Request, react_event, react_request};
+use bevy_react_core::{ReactAppExt, ReactEvents, Request, react_event, react_request};
 use serde::Serialize;
 use ts_rs::TS;
 

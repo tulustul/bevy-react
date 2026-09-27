@@ -3,8 +3,8 @@
 ### 1. Bump the version
 
 Rust side — one command (needs `cargo install cargo-edit` once). It updates
-`[workspace.package] version` **and** the `bevy-react-macros` entry in
-`[workspace.dependencies]` together:
+`[workspace.package] version` **and** the `bevy_react_macros` / `bevy_react_core` /
+`bevy_react_svg` entries in `[workspace.dependencies]` together:
 
 ```sh
 cargo set-version --bump patch   # or --bump minor / --bump major
@@ -22,10 +22,10 @@ npm version <version> -w bevy-react --no-git-tag-version
 
 ```sh
 npm run build:prod -w demos
-cargo run --release --example demos
+cargo run --release -p demos
 
 npm run build:prod -w minimal
-cargo run --release --example minimal
+cargo run --release -p minimal
 ```
 
 ### 4. Verify the web build works
@@ -37,8 +37,8 @@ npm run build:web:prod -w demos
 ### 5. Run stress tests, compare with previous version results, and check if there is any performance regression
 
 ```sh
-cargo run --release -p bevy-react --example stress -- --run table-ops --out benchmark_results/<version>.json
-cargo run -p bevy-react --example layers-stress --release
+cargo run --release -p stress -- --run table-ops --out benchmark_results/<version>.json
+cargo run -p layers-stress --release
 ```
 
 ### 6. Update the CHANGELOG.md file

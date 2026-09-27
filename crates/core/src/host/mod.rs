@@ -42,6 +42,9 @@ pub(crate) struct HostSenders {
 
 /// Host configuration carried over from [`ReactUiPlugin`](crate::ReactUiPlugin).
 pub(crate) struct HostConfig {
+    /// The feature-registry handoff the decoding host installs before its
+    /// first op decode (see [`crate::ext::ExtRegistrySlot`]).
+    pub ext: crate::ext::ExtRegistrySlot,
     /// Path to the built app bundle (`app.js`); its `vendor.js` sibling is loaded
     /// alongside. Native only — on web the HTML page loads the bundle itself, so
     /// the field is ignored there.

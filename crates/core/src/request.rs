@@ -9,7 +9,7 @@
 //!
 //! ```ignore
 //! use bevy::prelude::*;
-//! use bevy_react::{react_request, Request, ReactAppExt};
+//! use bevy_react_core::{react_request, Request, ReactAppExt};
 //!
 //! #[react_request(name = "board.get", response = Board)]
 //! struct BoardGet; // unit payload → `bevy.board.get()` takes no args

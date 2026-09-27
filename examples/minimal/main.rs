@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use bevy_react::{ReactAppExt, ReactUiPlugin};
+use bevy_react_core::{ReactAppExt, ReactUiPlugin};
 
 fn main() {
     // Bindings export: `cargo run -- --export-bindings ui/src/bevy.ts` builds a

@@ -92,6 +92,9 @@ const KIND_FIELDS: Record<string, { style?: string[]; props?: string[] }> = {
   // `onScroll`/`onWheel` on a shape never fire. The warning value names the
   // offending prop, so the field-name match flags the exact row.
   svgShapeScroll: { props: ["onScroll", "onWheel"] },
+  // Feature-owned keys (`crate::ext`): the warning's value names the prop.
+  featureMissing: { props: [] },
+  extProp: { props: [] },
   // JSX <svg> shape protocol: retained props hold the folded `shape` object
   // (path d, points, paints, keyword enums, transform all live inside it) and
   // the <svg> root's `viewBox` string.
