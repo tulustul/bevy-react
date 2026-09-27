@@ -15,13 +15,40 @@
 
 import type { MirrorNode } from "./mirror";
 
+/** A table entry: candidate style/prop rows, or `byName` — the warning's
+ *  value IS the offending row's name (a dropped or ignored prop/property). */
+interface KindSpec {
+  style?: string[];
+  props?: string[];
+  byName?: "style" | "props";
+}
+
+/** The numeric SVG shape attributes (the `{ animated }`-capable ones). */
+const SHAPE_NUMERIC = [
+  "x",
+  "y",
+  "width",
+  "height",
+  "cx",
+  "cy",
+  "r",
+  "rx",
+  "ry",
+  "x1",
+  "y1",
+  "x2",
+  "y2",
+  "strokeWidth",
+  "opacity",
+];
+
 /** Candidate rows per warning kind. `style`/`props` name exact fields; a kind
  *  with no entry (or the broad `length`/`angle`/`time` kinds) falls back to
  *  scanning every style field. Kind literals come from the Rust warn sites:
  *  `protocol/`'s `decode_warn` calls (`"length"`, `"rect"`, …) and the
  *  `diag::report` calls in `ui_map.rs`/`cursor.rs`; keyword properties' kinds
  *  are added at install from the style registry (`installStyleKinds`). */
-const KIND_FIELDS: Record<string, { style?: string[]; props?: string[] }> = {
+const KIND_FIELDS: Record<string, KindSpec> = {
   // Keyword properties' kinds (`display`, `overflow` → both axes, …) come
   // from the style registry at install — see `installStyleKinds`.
   // Sized/structured decode kinds.
@@ -65,7 +92,7 @@ const KIND_FIELDS: Record<string, { style?: string[]; props?: string[] }> = {
   gradientBinding: { style: ["backgroundGradient", "borderGradient"] },
   scrollbar: { style: ["scrollbar"] },
   // backgroundImage: decode fallbacks (bad mode keyword, missing `src`,
-  // ignored `scale`) and the apply-time "element owns its image" report.
+  // ignored `scale`).
   backgroundImage: { style: ["backgroundImage"] },
   // imageRendering: a refused mode (live texture / no CPU data / an
   // unsupported format for `trilinear`) — the node keeps its source.
@@ -73,48 +100,39 @@ const KIND_FIELDS: Record<string, { style?: string[]; props?: string[] }> = {
   // svg-mode <image>: `atlas`/`sourceRect` are ignored (the document rasters
   // whole at laid-out size — no source texture to grid or crop).
   svgImageAttrs: { props: ["atlas", "sourceRect"] },
-  // SVG shape children are Node-less (no ScrollPosition, no wheel surface):
-  // `onScroll`/`onWheel` on a shape never fire. The warning value names the
-  // offending prop, so the field-name match flags the exact row.
-  svgShapeScroll: { props: ["onScroll", "onWheel"] },
-  // Feature-owned keys (`crate::ext`): the warning's value names the prop.
+  // An element kind a known optional feature provides, mounted without its
+  // plugin: no node row to flag (the value names the kind).
   featureMissing: { props: [] },
-  extProp: { props: [] },
-  // JSX <svg> shape protocol: retained props hold the folded `shape` object
-  // (path d, points, paints, keyword enums, transform all live inside it) and
-  // the <svg> root's `viewBox` string.
+  // The element registry's decode/apply reports: the value names the
+  // offending prop (a key the element doesn't have, a common prop outside its
+  // groups) or style property (one only writers the element masked off read).
+  unknownProp: { byName: "props" },
+  propIgnored: { byName: "props" },
+  styleIgnored: { byName: "style" },
+  // The JSX <svg> root's `viewBox` string.
   viewBox: { props: ["viewBox"] },
   // `ReactNodes::get` hit 2+ nodes sharing the name (the first one is flagged).
   nameAmbiguous: { props: ["name"] },
-  shapePath: { props: ["shape"] },
-  shapePoints: { props: ["shape"] },
-  shapePaint: { props: ["shape"] },
-  shapeEnum: { props: ["shape"] },
-  shapeTransform: { props: ["shape"] },
+  // JSX <svg> shape attributes (flat props): path data, points, paints,
+  // keyword enums, the transform list.
+  shapePath: { props: ["d"] },
+  shapePoints: { props: ["points"] },
+  shapePaint: { props: ["fill", "stroke"] },
+  shapeEnum: { props: ["fillRule", "strokeLinecap", "strokeLinejoin"] },
+  shapeTransform: { props: ["transform"] },
   // Nested <text> spans are Node-less runs: layer-family styles can never
   // promote them (no layout box — the enclosing <text> is the filterable
-  // surface), and pointer handlers on them never fire. The warning value
-  // names the offending field/prop, so the match flags the exact row.
+  // surface). The warning value names the offending field, so the match
+  // flags the exact row.
   spanLayerStyle: {
     style: ["filter", "backdropFilter", "morphFilter", "transform3d", "cache"],
   },
-  spanHandlers: {
-    props: [
-      "onClick",
-      "onPointerDown",
-      "onPointerMove",
-      "onPointerUp",
-      "onPointerEnter",
-      "onPointerLeave",
-    ],
-  },
-  // Shape `transition` timing (rides the folded shape object): an unknown /
-  // non-numeric attr key or a malformed per-attr spec warns and drops the key.
-  shapeTransition: { props: ["shape"] },
+  // A shape's `transition` timing: an unknown / non-numeric attr key or a
+  // malformed per-attr spec warns and drops the key.
+  shapeTransition: { props: ["transition"] },
   // Shape-attr animation bindings (the apply stage's bind-time validation):
-  // the warning value is the attr's wire name (`r`), and the `{ animated }`
-  // wrapper lives inline in the folded `shape` object.
-  shapeBinding: { props: ["shape"] },
+  // the warning value is the attr's wire name (`r`), which names its row.
+  shapeBinding: { props: SHAPE_NUMERIC },
   // Inline `{ animated }` wrapper problems: a malformed wrapper (decode
   // sink, attributed to the style row per-op) or a wrapper in a variant
   // style, where bindings are ignored (the warning value names the variant —
@@ -192,6 +210,12 @@ export function matchWarning(
 ): string[] {
   const spec = KIND_FIELDS[warning.kind];
   const out: string[] = [];
+  // The value names the row itself.
+  if (spec?.byName === "props") {
+    if (warning.value in node.props) out.push(`prop:${warning.value}`);
+  } else if (spec?.byName === "style") {
+    if (warning.value in node.style) out.push(`style:${warning.value}`);
+  }
   // No table entry (broad kinds like length/angle/time, `unknownStyleField` —
   // whose value is the unknown key itself — or a future kind this table lags
   // behind on) → every style field is a candidate.

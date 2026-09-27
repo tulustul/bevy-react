@@ -151,7 +151,7 @@ pub struct PointerHandlers {
 
 /// Marks an element that **owns** clicks: the click collectors
 /// ([`collect_ui_events`](crate::reconcile::collect_ui_events) /
-/// `collect_surface_clicks`) climb a picked leaf to the nearest click owner,
+/// `collect_virtual_clicks`) climb a picked leaf to the nearest click owner,
 /// and only owners are reported to JS. Stamped by `apply_pointer_handlers`
 /// when `onClick` or any `onPointer*` handler is declared; native `<button>`s
 /// and `editableText` inputs own clicks by element type (the collectors match
@@ -195,14 +195,6 @@ pub struct WheelListener;
 /// (trackpads report `Pixel` deltas, which are used raw).
 #[derive(Component, Debug, Clone, Copy)]
 pub struct ScrollStep(pub f32);
-
-/// The last physical size reported to JS as a `"resize"` event for a `<canvas>`
-/// (`collect_canvas_resize_events`). `ComputedNode` is rewritten by layout far
-/// more often than the size actually changes, so this compare is the real
-/// filter. Starts `(0, 0)`, so the first layout fires an event. A component
-/// (not a `Local` map) so a despawn cleans it up automatically.
-#[derive(Component, Debug, Clone, Copy, Default)]
-pub struct CanvasSizeTracker(pub (u32, u32));
 
 /// A standalone clone of the outbound sender, inserted in [`Plugin::build`] so
 /// the request dispatcher and the [`ReactEvents`](crate::ReactEvents) system
@@ -269,41 +261,15 @@ pub struct JsBridge {
     /// so `Op::UpdateText` updates the right component, and what [`SpanKind`]
     /// each one is. Nodes absent from the map hold a plain `Text` (or no text).
     pub spans: HashMap<NodeId, SpanKind>,
-    /// Node ids that are `editableText` inputs, so an `Update` knows to push a
-    /// diverging `value` into the live `EditableText` buffer.
-    pub editable_inputs: HashSet<NodeId>,
-    /// Node ids that are `<surface>` detached roots. Their subtree renders into an
-    /// offscreen image via a dedicated UI camera, so they must NOT be parented into
-    /// the on-screen Bevy hierarchy: child-attach ops skip Bevy parenting for these.
-    pub surfaces: HashSet<NodeId>,
-    /// Node ids that are `<root>` detached roots ([`RRoot`]): screen-space
-    /// top-level trees on the default UI camera. Like surfaces they are never
-    /// parented into the Bevy hierarchy; see [`Self::is_detached_root`].
-    pub roots: HashSet<NodeId>,
+    /// Detached nodes — elements whose `ElementFlags::detached` is set
+    /// (`<surface>`/`<root>` UI roots, `<anchor>` overlays): never attached in
+    /// the Bevy hierarchy by the op path; see [`Self::is_detached`].
+    pub detached: HashSet<NodeId>,
     /// Nodes currently carrying an [`AnimatedNode`](crate::animations::AnimatedNode)
     /// (a mirror of the component's presence, maintained by the stamp helpers),
     /// so a style delta on a binding-less node — the common case — queues no
     /// `remove::<AnimatedNode>()` no-op command.
     pub animated: HashSet<NodeId>,
-    /// Nodes carrying an `anchor` prop, split by whether the anchor system has
-    /// moved them under the anchor layer yet — see [`crate::anchor::AnchorIndex`].
-    pub anchors: crate::anchor::AnchorIndex,
-    /// The last text value emitted to JS for each `editableText`, used to dedup
-    /// `TextEditChange` (which also fires on cursor moves) into real `"change"`s.
-    pub editable_values: HashMap<NodeId, String>,
-    /// The last selection (anchor, focus) byte offsets emitted to JS per
-    /// `editableText`, used to dedup `"select"` events. Pre-seeded by a controlled
-    /// selection write so its echoed `TextEditChange` doesn't re-emit.
-    pub editable_selections: HashMap<NodeId, (usize, usize)>,
-    /// `editableText` ids with an `onSelect` handler. Selection moves are very
-    /// high-frequency, so `"select"` is only emitted for nodes in this set.
-    pub editable_select_handlers: HashSet<NodeId>,
-    /// `editableText` ids with an `onFocus`/`onBlur` handler — gates `"focus"`/
-    /// `"blur"` emission the same way.
-    pub editable_focus_handlers: HashSet<NodeId>,
-    /// Controlled selection (anchor, focus) byte offsets awaiting application to
-    /// the live `EditableText`, drained by `apply_pending_selections`.
-    pub editable_pending_selection: HashMap<NodeId, (usize, usize)>,
     /// The last `ScrollPosition` emitted to JS (or written by a controlled
     /// `scrollTop`/`scrollLeft`) per node. Dedups `"scroll"` events and breaks the
     /// controlled-component echo loop: a programmatic write-back equal to this is
@@ -322,16 +288,15 @@ pub struct JsBridge {
     /// Reverse lookup (child → its current parent) so a re-parent or reorder can detach
     /// the child from its old parent's ordered list before re-inserting it.
     pub parent_of: HashMap<NodeId, NodeId>,
-    /// React-tree parentage of detached roots (`<surface>` and `<root>` alike):
-    /// detached id → its React parent id, plus the reverse (parent → its detached
-    /// children). A detached root is kept OUT of `siblings`/`parent_of` (it's not a
-    /// Bevy child, and counting it would skew sibling ordering), so its structural
-    /// position lives here instead. This lets `Op::Remove` of an *ancestor* despawn
-    /// the detached root — which Bevy's recursive despawn can't reach, since it has
-    /// no `ChildOf`.
-    pub surface_parent: HashMap<NodeId, NodeId>,
-    pub child_surfaces: HashMap<NodeId, Vec<NodeId>>,
-    /// Reusable DFS stack for the subtree walks (`surfaces_under`,
+    /// React-tree parentage of detached nodes: detached id → its React parent
+    /// id, plus the reverse (parent → its detached children). A detached node is
+    /// kept OUT of `siblings`/`parent_of` (it's not a Bevy child of its React
+    /// parent, and counting it would skew sibling ordering), so its structural
+    /// position lives here instead. This lets `Op::Remove` of an *ancestor*
+    /// despawn the detached node — which Bevy's recursive despawn can't reach.
+    pub detached_parent: HashMap<NodeId, NodeId>,
+    pub child_detached: HashMap<NodeId, Vec<NodeId>>,
+    /// Reusable DFS stack for the subtree walks (`detached_under`,
     /// `forget_subtree`) — always empty between calls.
     walk_stack: Vec<NodeId>,
 }
@@ -367,77 +332,69 @@ impl JsBridge {
             promoted_layers: HashSet::new(),
             text_styles: HashMap::new(),
             spans: HashMap::new(),
-            editable_inputs: HashSet::new(),
-            surfaces: HashSet::new(),
-            roots: HashSet::new(),
+            detached: HashSet::new(),
             animated: HashSet::new(),
-            anchors: crate::anchor::AnchorIndex::default(),
-            editable_values: HashMap::new(),
-            editable_selections: HashMap::new(),
-            editable_select_handlers: HashSet::new(),
-            editable_focus_handlers: HashSet::new(),
-            editable_pending_selection: HashMap::new(),
             scroll_positions: HashMap::new(),
             siblings: HashMap::new(),
             child_list: HashMap::new(),
             parent_of: HashMap::new(),
-            surface_parent: HashMap::new(),
-            child_surfaces: HashMap::new(),
+            detached_parent: HashMap::new(),
+            child_detached: HashMap::new(),
             walk_stack: Vec::new(),
         }
     }
 
-    /// Whether `id` is a detached UI root — a `<surface>` (offscreen camera) or a
-    /// `<root>` (screen-space overlay). Detached roots are never parented into the
-    /// Bevy hierarchy; the child-attach ops record their React parentage via
-    /// [`Self::attach_surface`] instead.
-    pub fn is_detached_root(&self, id: NodeId) -> bool {
-        self.surfaces.contains(&id) || self.roots.contains(&id)
+    /// Whether `id` is a detached node (see [`Self::detached`]): the
+    /// child-attach ops record its React parentage via
+    /// [`Self::attach_detached`] instead of attaching it.
+    pub fn is_detached(&self, id: NodeId) -> bool {
+        !self.detached.is_empty() && self.detached.contains(&id)
     }
 
-    /// Record a detached root's React parent (detaching it from any previous one
-    /// first), so a later removal of an ancestor can find and despawn it. Despite
-    /// the name this covers `<root>`s too (they share the parentage maps).
-    pub fn attach_surface(&mut self, surface: NodeId, parent: NodeId) {
-        self.detach_surface(surface);
-        self.surface_parent.insert(surface, parent);
-        self.child_surfaces.entry(parent).or_default().push(surface);
+    /// Record a detached node's React parent (detaching it from any previous
+    /// one first), so a later removal of an ancestor can find and despawn it.
+    pub fn attach_detached(&mut self, node: NodeId, parent: NodeId) {
+        self.detach_detached(node);
+        self.detached_parent.insert(node, parent);
+        self.child_detached.entry(parent).or_default().push(node);
     }
 
-    /// Unlink `surface` from its current React parent's surface list (if any). Called
-    /// before a re-`Append`/`Insert` (a reorder/re-parent) and on removal.
-    pub fn detach_surface(&mut self, surface: NodeId) {
-        if let Some(parent) = self.surface_parent.remove(&surface)
-            && let Some(list) = self.child_surfaces.get_mut(&parent)
+    /// Unlink a detached `node` from its current React parent's list (if
+    /// any). Called before a re-`Append`/`Insert` (a reorder/re-parent) and on
+    /// removal.
+    pub fn detach_detached(&mut self, node: NodeId) {
+        if let Some(parent) = self.detached_parent.remove(&node)
+            && let Some(list) = self.child_detached.get_mut(&parent)
         {
-            list.retain(|&id| id != surface);
+            list.retain(|&id| id != node);
         }
     }
 
-    /// Every detached surface id structurally **under** `node` — its surface children,
-    /// recursively through normal descendants (the sibling lists) and nested surfaces —
-    /// removing their parentage bookkeeping as it goes. Does NOT include `node` itself
-    /// (a surface removed directly is handled by its own `Remove`). Used so `Op::Remove`
-    /// despawns surfaces that Bevy's recursive despawn of `node` can't reach.
-    pub fn surfaces_under(&mut self, node: NodeId) -> Vec<NodeId> {
+    /// Every detached node structurally **under** `node` — its detached
+    /// children, recursively through normal descendants (the sibling lists)
+    /// and nested detached nodes — removing their parentage bookkeeping as it
+    /// goes. Does NOT include `node` itself (a detached node removed directly
+    /// is handled by its own `Remove`). Used so `Op::Remove` despawns detached
+    /// nodes that Bevy's recursive despawn of `node` can't reach.
+    pub fn detached_under(&mut self, node: NodeId) -> Vec<NodeId> {
         let mut out = Vec::new();
-        // No detached root anywhere (the common case): nothing to walk for.
-        if self.child_surfaces.is_empty() {
+        // No detached node anywhere (the common case): nothing to walk for.
+        if self.child_detached.is_empty() {
             return out;
         }
         let mut stack = std::mem::take(&mut self.walk_stack);
         stack.push(node);
         while let Some(n) = stack.pop() {
-            if let Some(surfaces) = self.child_surfaces.remove(&n) {
-                for surface in surfaces {
-                    self.surface_parent.remove(&surface);
-                    out.push(surface);
-                    // A surface can itself host nested surfaces.
-                    stack.push(surface);
+            if let Some(detached) = self.child_detached.remove(&n) {
+                for d in detached {
+                    self.detached_parent.remove(&d);
+                    out.push(d);
+                    // A detached node can itself host nested ones.
+                    stack.push(d);
                 }
-                // The last detached root has been found: the rest of the walk
-                // can't find another.
-                if self.child_surfaces.is_empty() {
+                // The last detached node has been found: the rest of the
+                // walk can't find another.
+                if self.child_detached.is_empty() {
                     break;
                 }
             }
@@ -566,8 +523,8 @@ impl JsBridge {
 
     /// Drop all per-node side-table data for a single node id. Covers the `NodeId`-keyed
     /// data tables only — NOT the structural `siblings`/`child_list`/`parent_of` maps
-    /// (handled by `forget_subtree`/`detach`) nor the surface parentage maps `surface_parent`/
-    /// `child_surfaces` (handled by `attach_surface`/`detach_surface`/`surfaces_under`).
+    /// (handled by `forget_subtree`/`detach`) nor the detached parentage maps
+    /// (handled by `attach_detached`/`detach_detached`/`detached_under`).
     fn forget_node_data(&mut self, id: NodeId) {
         let entity = self.nodes.remove(&id);
         let props = self.props_cache.remove(&id);
@@ -582,16 +539,8 @@ impl JsBridge {
         take_if_any(&mut self.promoted_layers, id);
         remove_if_any(&mut self.text_styles, id);
         remove_if_any(&mut self.spans, id);
-        take_if_any(&mut self.editable_inputs, id);
-        take_if_any(&mut self.surfaces, id);
-        take_if_any(&mut self.roots, id);
+        take_if_any(&mut self.detached, id);
         take_if_any(&mut self.animated, id);
-        self.anchors.forget(id);
-        remove_if_any(&mut self.editable_values, id);
-        remove_if_any(&mut self.editable_selections, id);
-        take_if_any(&mut self.editable_select_handlers, id);
-        take_if_any(&mut self.editable_focus_handlers, id);
-        remove_if_any(&mut self.editable_pending_selection, id);
         remove_if_any(&mut self.scroll_positions, id);
     }
 

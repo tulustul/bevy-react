@@ -24,6 +24,7 @@ pub use property::{AnyStyleProperty, PropertyValue, StyleProperty};
 pub(crate) use registry::core_id;
 pub use registry::{PropId, StyleRegistry};
 pub use stamp::{STAMP_WRITER, StyleValue};
+pub(crate) use store::stored as stored_value;
 pub use store::{OldValues, StoredValue, Style, StyleValueDyn};
 pub use writer::{ComponentKey, Writer, WriterCtx, WriterMask, owns};
 

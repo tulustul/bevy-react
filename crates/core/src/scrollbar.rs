@@ -14,7 +14,7 @@
 //! the container. The track is parented to the container's *own* ECS parent and
 //! positioned each frame over the container's edge, so it is never scrolled or
 //! clipped by the container and stacks just above it (not above the whole app) —
-//! the same overlay trick as [`crate::anchor`], `ChildOf` self-healed against the
+//! the same overlay trick as `bevy_react_anchor`, `ChildOf` self-healed against the
 //! reconciler's end-of-batch child rebuild.
 //!
 //! `ScrollbarThumb` has no `Node`, so the styleable surface is deliberately a

@@ -23,17 +23,36 @@
 //! - [`LiveTexture`] — the entity's `ImageNode` texture is owned and
 //!   rewritten by a feature system (a CPU raster, a render target), so the
 //!   image-rendering module must never copy or mutate it.
+//!
+//! And one resource: [`VirtualPointers`] — the picking pointers a feature
+//! drives over UI the window cursor cannot reach, whose events the core turns
+//! into the common UI events.
 
 use bevy::prelude::*;
 
+/// The text model an element takes part in.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
+pub enum TextRole {
+    /// Not a text element: the text writers skip it.
+    #[default]
+    None,
+    /// A text block root (`<text>`): carries the `Text`, and its bare-string
+    /// children inherit its resolved style.
+    Block,
+    /// A styled span inside a block (a nested `<text>`): `Node`-less, its
+    /// own style (never inherited).
+    Span,
+    /// A text input (`<editableText>`): the text writers keep its color and
+    /// font (and caret); its layout comes from its own attributes.
+    Input,
+}
+
 /// What kind of element an entity is, as far as the core's shared systems
-/// care. Stamped at spawn by the element's create path (every kind, built-in
-/// or registered) and never changed afterwards — the facts are fixed by the
-/// element kind. Replaces the bridge's `shapes` / `svg_roots` /
-/// `foreign_images` membership sets: a system queries `&ElementFlags`, and
-/// the op-apply path (where commands are still deferred) derives the same
-/// bits from the node's recorded kind through
-/// [`ExtRegistry::flags_for_kind`](crate::ext::ExtRegistry::flags_for_kind).
+/// care. Declared on the [`Element`](crate::element::Element) and stamped at
+/// spawn for every kind, never changed afterwards — the facts are fixed by
+/// the element kind. A system queries `&ElementFlags`; the op-apply path
+/// (where commands are still deferred) reads the same bits off the node's
+/// registered element.
 #[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct ElementFlags {
     /// The entity carries no `Node`: no style, no layout box (a `<text>`
@@ -42,14 +61,23 @@ pub struct ElementFlags {
     pub node_less: bool,
     /// The entity's `ImageNode` belongs to the element itself (`image`,
     /// `canvas`, `portal`, `svg`): the `backgroundImage` style must never
-    /// touch it (ignored with a diag warning), and on removal ownership: a
-    /// present `ImageNode` on any OTHER element was inserted by
-    /// `backgroundImage` and is safe to remove.
+    /// touch it, and on removal ownership: a present `ImageNode` on any
+    /// OTHER element was inserted by `backgroundImage` and is safe to remove.
     pub owns_image: bool,
     /// Never promoted to a composited layer: node-less entities (no box to
     /// capture — their pixels belong to the enclosing block/root) and
-    /// detached roots (`<surface>`/`<root>` — own render paths).
+    /// detached nodes (their own render paths).
     pub layer_ineligible: bool,
+    /// The core never attaches the entity in the Bevy hierarchy: it records
+    /// the React parent (so removing an ancestor despawns it) and leaves the
+    /// Bevy parent to the element — none for a detached UI root (`<surface>`,
+    /// `<root>`), a feature-owned layer for an `<anchor>`.
+    pub detached: bool,
+    /// The text model the element takes part in.
+    pub text: TextRole,
+    /// Never a picking target itself (`Pickable::IGNORE`) — a window-filling
+    /// overlay root whose children are the pickable nodes.
+    pub pick_ignore: bool,
 }
 
 impl ElementFlags {
@@ -58,38 +86,28 @@ impl ElementFlags {
         node_less: false,
         owns_image: false,
         layer_ineligible: false,
+        detached: false,
+        text: TextRole::None,
+        pick_ignore: false,
     };
     /// A styled node whose `ImageNode` is element-owned.
     pub const OWNS_IMAGE: Self = Self {
-        node_less: false,
         owns_image: true,
-        layer_ineligible: false,
+        ..Self::NODE
     };
     /// A `Node`-less child (span, shape): styleless and never a layer.
     pub const NODE_LESS: Self = Self {
         node_less: true,
-        owns_image: false,
         layer_ineligible: true,
+        ..Self::NODE
     };
-    /// A detached root (`<surface>`, `<root>`): styled, never a layer.
+    /// A detached UI root (`<surface>`, `<root>`): styled, never a layer,
+    /// never attached under its React parent.
     pub const DETACHED_ROOT: Self = Self {
-        node_less: false,
-        owns_image: false,
         layer_ineligible: true,
+        detached: true,
+        ..Self::NODE
     };
-}
-
-/// The flags of a built-in element kind (the create-op `kind` string), or
-/// `None` for a kind the built-in dispatch does not own (a registered or
-/// unknown kind — see [`ExtRegistry::flags_for_kind`]).
-pub(crate) fn builtin_flags(kind: &str) -> Option<ElementFlags> {
-    Some(match kind {
-        "node" | "button" | "text" | "editableText" | "anchor" => ElementFlags::NODE,
-        "textSpan" => ElementFlags::NODE_LESS,
-        "image" | "canvas" | "portal" => ElementFlags::OWNS_IMAGE,
-        "surface" | "root" => ElementFlags::DETACHED_ROOT,
-        _ => return None,
-    })
 }
 
 /// An element-defined coordinate for pointer events on this entity: while
@@ -119,6 +137,39 @@ pub struct EventLocalPos(pub Option<Vec2>);
 /// always explicit).
 #[derive(Component, Debug, Default, Clone, Copy)]
 pub struct LiveTexture;
+
+/// The picking pointers a feature drives over UI the window cursor cannot
+/// reach (a `<surface>`'s texture-space subtree, driven from an in-world
+/// ray-cast): their `Pointer<…>` picking events are the core's to turn into
+/// the common UI events (`click`, `onPointer*`, hover styling) — the
+/// main-window collectors skip them — and their hover map feeds the OS
+/// cursor. A feature registers its pointer once, when it spawns it.
+#[derive(Resource, Debug, Default, Clone)]
+pub struct VirtualPointers(Vec<bevy::picking::pointer::PointerId>);
+
+impl VirtualPointers {
+    /// Route `id`'s picking events through the virtual-pointer collectors.
+    pub fn register(&mut self, id: bevy::picking::pointer::PointerId) {
+        if !self.0.contains(&id) {
+            self.0.push(id);
+        }
+    }
+
+    /// Whether `id` is a registered virtual pointer.
+    pub fn contains(&self, id: bevy::picking::pointer::PointerId) -> bool {
+        self.0.contains(&id)
+    }
+
+    /// Whether no virtual pointer is registered.
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    /// Every registered virtual pointer, in registration order.
+    pub fn iter(&self) -> impl Iterator<Item = bevy::picking::pointer::PointerId> + '_ {
+        self.0.iter().copied()
+    }
+}
 
 /// One evaluated `{ animated }` binding of a feature-owned value: the
 /// prop key it lives under (`domain`), the field (`name`), and this frame's
@@ -170,6 +221,9 @@ impl DrivenExtValues {
 ///   this frame's final state. After the op drain, the animation appliers,
 ///   and the transition drive, so a driven or eased value paints the same
 ///   frame.
+/// - [`ElementOverrideSet`] (`Update`): an element system that overrides
+///   this frame's driven values (an `<anchor>`'s projected translation). After
+///   the op drain, the animation appliers, and the transition drive.
 /// - [`MeasureStampSet`] (`PostUpdate`): re-stamp an intrinsic
 ///   `ContentSize` measure after `bevy_ui`'s content-size pass clears it,
 ///   before layout.
@@ -183,41 +237,17 @@ pub struct InteractionSyncSet;
 pub struct ElementRasterSet;
 /// See [`PickRefineSet`].
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct ElementOverrideSet;
+/// See [`PickRefineSet`].
+#[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct MeasureStampSet;
 
-mod element;
-mod props;
+mod registry;
 
-pub use element::{ElementCtx, ElementKind, ElementUpdateCtx};
-pub(crate) use props::{warn_feature_missing, warn_feature_missing_kind};
-
-/// The registry with what the core itself registers — its style properties
-/// and writers ([`crate::style::props::CORE_STYLES`],
-/// [`crate::style::writers::CORE_WRITERS`]); every element and prop key beyond
-/// the built-ins comes from a feature crate's plugin. The harness twin of an
-/// app with no feature plugins, for headless tests that decode or apply ops
-/// without building the plugin.
-#[doc(hidden)]
-pub fn builtin_registry() -> ExtRegistry {
-    let mut registry = ExtRegistry::default();
-    for property in crate::style::props::CORE_STYLES {
-        registry.add_style(*property);
-    }
-    for writer in crate::style::writers::CORE_WRITERS {
-        registry.add_style_writer(writer);
-    }
-    registry
-}
-
-/// Install an empty decode scope on this thread when none is (idempotent).
 #[cfg(test)]
-pub(crate) fn install_builtin_registry() {
-    with_thread_registry(|r| r.is_none()).then(|| {
-        set_thread_registry(std::sync::Arc::new(builtin_registry()));
-    });
-}
-
-pub use props::{
-    ExtDecodeFn, ExtProp, ExtPropDecoder, ExtProps, ExtRegistry, ExtRegistrySlot, ExtValue,
-    FeatureHint, KNOWN_FEATURES, feature_hint, set_thread_registry, with_thread_registry,
+pub(crate) use registry::install_builtin_registry;
+pub(crate) use registry::warn_feature_missing_kind;
+pub use registry::{
+    ExtRegistry, ExtRegistrySlot, FeatureHint, KNOWN_FEATURES, builtin_registry, core_element_info,
+    feature_hint, set_thread_registry, with_thread_registry,
 };

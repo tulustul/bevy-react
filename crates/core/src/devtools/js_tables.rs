@@ -10,7 +10,8 @@
 /// `diag::report` sites
 /// (`ui_map.rs`, `cursor.rs`, `filters.rs`, `layer.rs`,
 /// `animations/apply/{filter_params,gradient,shape,warn}.rs`, `svg/image.rs`,
-/// `reconcile/svg_ops.rs`, `reconcile/stamps.rs`,
+/// `reconcile/stamps.rs`, `protocol/props.rs` (the element registry's
+/// `unknownProp`/`propIgnored`), the svg crate's `protocol.rs`,
 /// `transition/gradient_channel.rs`); extend
 /// BOTH this list and the table when
 /// adding one. (`length`/`angle`/`time`/`unknownStyleField` are
@@ -44,7 +45,6 @@ fn js_warning_kind_table_covers_known_kinds() {
         "imageRendering",
         "nameAmbiguous",
         "svgImageAttrs",
-        "svgShapeScroll",
         "viewBox",
         "shapePath",
         "shapePoints",
@@ -54,7 +54,6 @@ fn js_warning_kind_table_covers_known_kinds() {
         "shapeTransition",
         "shapeBinding",
         "spanLayerStyle",
-        "spanHandlers",
         "color",
         "fontFamily",
         "cursor",
@@ -63,7 +62,9 @@ fn js_warning_kind_table_covers_known_kinds() {
         "precompileFilters",
         "layerCamera",
         "featureMissing",
-        "extProp",
+        "unknownProp",
+        "propIgnored",
+        "styleIgnored",
     ] {
         assert!(
             warnings_ts.contains(&format!("{kind}:"))

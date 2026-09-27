@@ -5,26 +5,7 @@ import type * as React from "react";
 
 export { Fragment, jsxDEV } from "react/jsx-dev-runtime";
 
-import type {
-  BevyAnchorProps,
-  BevyCanvasProps,
-  BevyCircleProps,
-  BevyEditableTextProps,
-  BevyEllipseProps,
-  BevyGProps,
-  BevyImageProps,
-  BevyLineShapeProps,
-  BevyNodeProps,
-  BevyPathShapeProps,
-  BevyPolygonProps,
-  BevyPolylineProps,
-  BevyPortalProps,
-  BevyRectShapeProps,
-  BevyRootProps,
-  BevySurfaceProps,
-  BevySvgProps,
-  BevyTextProps,
-} from "./jsx";
+import type { BevyIntrinsicElements } from "./generated/elements";
 
 export namespace JSX {
   export type ElementType = React.JSX.ElementType;
@@ -39,27 +20,8 @@ export namespace JSX {
   export interface IntrinsicAttributes extends React.JSX.IntrinsicAttributes {}
   export interface IntrinsicClassAttributes<T> extends React.JSX
     .IntrinsicClassAttributes<T> {}
-  // Kept in exact sync with `jsx-runtime.ts` — the dev runtime types the same
-  // host elements (it had drifted to a subset).
-  export interface IntrinsicElements {
-    node: BevyNodeProps;
-    button: BevyNodeProps;
-    image: BevyImageProps;
-    canvas: BevyCanvasProps;
-    portal: BevyPortalProps;
-    surface: BevySurfaceProps;
-    root: BevyRootProps;
-    text: BevyTextProps;
-    editableText: BevyEditableTextProps;
-    anchor: BevyAnchorProps;
-    svg: BevySvgProps;
-    path: BevyPathShapeProps;
-    rect: BevyRectShapeProps;
-    circle: BevyCircleProps;
-    ellipse: BevyEllipseProps;
-    line: BevyLineShapeProps;
-    polyline: BevyPolylineProps;
-    polygon: BevyPolygonProps;
-    g: BevyGProps;
-  }
+  // The host elements: generated from the Rust element registry (the core's
+  // in the package, an app's own — a feature crate's included — merged in by
+  // its generated `bevy.ts`).
+  export interface IntrinsicElements extends BevyIntrinsicElements {}
 }

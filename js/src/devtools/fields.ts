@@ -1,10 +1,11 @@
 // The devtools editor's field tables: every style wire-field name with a coarse
-// value category (for pre-flight validation of inline edits), plus the safelist
-// of editable top-level props.
+// value category (for pre-flight validation of inline edits), and per element
+// kind the editable and act-now props.
 //
-// STYLE_FIELDS comes from Rust: the style registry (core properties and the
-// app's own, `app.add_react_style`) answers `devtools.styleFields` once at
-// install — see `installStyleFields`.
+// Both come from Rust at install: the style registry (core properties and the
+// app's own, `app.add_react_style`) answers `devtools.styleFields`, the element
+// registry (core elements and every feature/app one) `devtools.elements` — see
+// `installStyleFields` / `installElements`.
 
 /** Coarse wire-value shapes, checked before an edit crosses the bridge. The
  *  Rust deserializers degrade malformed *strings* gracefully (warn + default),
@@ -45,57 +46,90 @@ export function getStyleFieldsVersion(): number {
   return styleFieldsVersion;
 }
 
-/** Every wire field of an SVG shape child's folded `shape` object
- *  (`svg/protocol.rs`'s `ShapeAttrs`) — the inspector renders the object as
- *  its own read-only section, one row per present field, and flags keys not
- *  listed here as unknown. A Rust test
- *  (`devtools.rs::js_shape_field_table_covers_shape_attrs`) `include_str!`s
- *  this file and asserts each wire name appears, so extend BOTH that list and
- *  this table when a `ShapeAttrs` field lands. */
-export const SHAPE_FIELDS: Record<string, FieldCategory> = {
-  // geometry (SVG user units)
-  x: "number",
-  y: "number",
-  width: "number",
-  height: "number",
-  cx: "number",
-  cy: "number",
-  r: "number",
-  rx: "number",
-  ry: "number",
-  x1: "number",
-  y1: "number",
-  x2: "number",
-  y2: "number",
-  points: "json", // flat number array [x0, y0, x1, y1, …]
-  d: "string", // SVG path data
-  // paint — the wire carries CSS color strings (or the "none" keyword,
-  // still a string, so the color category's check holds)
-  fill: "color",
-  stroke: "color",
-  strokeWidth: "number",
-  opacity: "number",
-  fillRule: "keyword",
-  strokeLinecap: "keyword",
-  strokeLinejoin: "keyword",
-  transform: "string", // SVG transform list ("translate(10 20) rotate(45)")
-  transition: "json", // per-attr easing timing { cx: { duration, … }, … }
+/** One element's props as the devtools see them — the registry's answer to
+ *  `devtools.elements` (see `api.ts`'s `DevtoolsElement`). */
+export interface ElementInfo {
+  /** Attribute name → its editor category (`null` when not a scalar the
+   *  inspector edits inline). */
+  editable: Map<string, FieldCategory>;
+  /** Act-now props: act once, never retained (the mirror drops them). */
+  actNow: Set<string>;
+}
+
+/** The element table by kind, filled from Rust at install. Until it lands
+ *  (and for an unregistered kind) every prop reads as retained and
+ *  read-only. */
+const ELEMENTS = new Map<string, ElementInfo>();
+
+/** The common scalar props the inspector edits on elements with the matching
+ *  group (the act-now scroll offsets are editable too — an edit acts once). */
+const COMMON_EDITABLE: Record<string, [string, FieldCategory][]> = {
+  scroll: [
+    ["scrollTop", "number"],
+    ["scrollLeft", "number"],
+    ["scrollStep", "number"],
+  ],
 };
 
-/** Top-level props the inspector lets you edit. Everything else (handlers,
- *  opaque objects like `anchor`, structural props) is read-only. */
-export const EDITABLE_PROPS: Record<string, FieldCategory> = {
-  value: "string",
-  src: "string",
-  tint: "color",
-  maxLength: "number",
-  ariaLabel: "string",
-  scrollTop: "number",
-  scrollLeft: "number",
-  scrollStep: "number",
-  flipX: "boolean",
-  flipY: "boolean",
-};
+/** The common act-now props (never retained on any element). */
+const COMMON_ACT_NOW = ["scrollTop", "scrollLeft"];
+
+/** The categories an inline edit can produce from typed text. */
+const SCALAR: ReadonlySet<FieldCategory> = new Set([
+  "string",
+  "number",
+  "boolean",
+  "color",
+  "keyword",
+  "length",
+]);
+
+/** Fill the element table from the registry's answer. */
+export function installElements(
+  elements: readonly {
+    name: string;
+    attrs: readonly {
+      name: string;
+      category: FieldCategory;
+      actNow: boolean;
+      typed: boolean;
+    }[];
+    common: readonly string[];
+  }[],
+): void {
+  for (const el of elements) {
+    const editable = new Map<string, FieldCategory>();
+    const actNow = new Set(COMMON_ACT_NOW);
+    for (const attr of el.attrs) {
+      if (attr.actNow) actNow.add(attr.name);
+      // Wire-only attributes (a canvas `drawAppend`) are never authored.
+      if (attr.typed && SCALAR.has(attr.category)) {
+        editable.set(attr.name, attr.category);
+      }
+    }
+    for (const group of el.common) {
+      for (const [name, category] of COMMON_EDITABLE[group] ?? []) {
+        editable.set(name, category);
+      }
+    }
+    ELEMENTS.set(el.name, { editable, actNow });
+  }
+}
+
+/** Whether `field` is an act-now prop on a `kind` element. */
+export function isActNow(kind: string, field: string): boolean {
+  const el = ELEMENTS.get(kind);
+  return el ? el.actNow.has(field) : COMMON_ACT_NOW.includes(field);
+}
+
+/** The editor category of an inline-editable prop of a `kind` element, or
+ *  `undefined` when the inspector shows it read-only. */
+export function editableProp(
+  kind: string,
+  field: string,
+): FieldCategory | undefined {
+  return ELEMENTS.get(kind)?.editable.get(field);
+}
 
 /** Validate a coerced value against its field's category. Returns an error
  *  message, or `null` when the value may cross the bridge. */

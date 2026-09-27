@@ -16,7 +16,6 @@ use bevy_react_core::animations::AnimationCommand;
 use bevy_react_core::js_thread::spawn_js_thread;
 use bevy_react_core::protocol::{op::Op, outbound::Outbound, outbound::UiEvent};
 use bevy_react_core::{RawRequest, ReactMessage};
-use bevy_react_svg::ShapeAttrs;
 
 mod common;
 
@@ -416,14 +415,15 @@ fn animation_callback_round_trip() {
     panic!("no 'Play' label update after AnimationFinished — callback never fired");
 }
 
-/// End-to-end check of the canvas resize→replay path: a `"resize"` UI event on
-/// a `<canvas>` with a declarative `draw` painter must make the JS runtime
-/// re-record the painter and send a `draw` op that clears + replays (the Rust
-/// side just cleared the retained surface). Located by op kind, not tree
-/// shape, so the demo's structure can change freely.
+/// End-to-end check of the canvas resize→replay path: a `resize` element
+/// event on a `<canvas>` with a declarative `draw` painter must make the JS
+/// runtime re-record the painter and send an update op whose act-now
+/// `drawAppend` clears + replays (the Rust side just cleared the retained
+/// surface). Located by op kind, not tree shape, so the demo's structure can
+/// change freely.
 #[test]
 fn canvas_resize_replay_round_trip() {
-    use bevy_react_core::canvas::DrawCmd;
+    use bevy_react_canvas::{DRAW_APPEND, DrawCmd};
 
     let bundle = example_bundle();
     if !bundle.exists() {
@@ -509,25 +509,23 @@ fn canvas_resize_replay_round_trip() {
 
     // Play Bevy's part: the canvas was laid out (its surface cleared) — report it.
     outbound_tx
-        .send(Outbound::UiEvent {
-            event: UiEvent {
-                id: canvas_id,
-                kind: "resize".into(),
-                width: Some(460.0),
-                height: Some(260.0),
-                ..Default::default()
-            },
+        .send(Outbound::ElementEvent {
+            id: canvas_id,
+            event: "resize".into(),
+            payload: serde_json::json!({ "width": 460.0, "height": 260.0 }),
         })
         .expect("JS thread gone before resize");
 
-    // The runtime must replay the declarative painter: a `draw` op for this
-    // node, starting with a full clear, followed by the recorded drawing.
+    // The runtime must replay the declarative painter: an update op for this
+    // node whose `drawAppend` starts with a full clear, followed by the
+    // recorded drawing.
     let deadline = Instant::now() + Duration::from_secs(10);
     while Instant::now() < deadline {
         if let Ok(batch) = ops_rx.recv_timeout(Duration::from_millis(500)) {
             for op in &batch {
-                if let Op::Draw { id, cmds } = op
+                if let Op::Update { id, props, .. } = op
                     && *id == canvas_id
+                    && let Some(cmds) = props.attrs.get(&DRAW_APPEND)
                 {
                     assert_eq!(
                         cmds.first(),
@@ -535,14 +533,17 @@ fn canvas_resize_replay_round_trip() {
                         "resize replay must lead with a clear"
                     );
                     assert!(cmds.len() > 1, "resize replay recorded no drawing");
-                    eprintln!("OK   resize replay: draw op with {} commands", cmds.len());
+                    eprintln!(
+                        "OK   resize replay: drawAppend with {} commands",
+                        cmds.len()
+                    );
                     eprintln!("PASS canvas resize end-to-end");
                     return;
                 }
             }
         }
     }
-    panic!("no draw op after resize — declarative painter never replayed");
+    panic!("no drawAppend after resize — declarative painter never replayed");
 }
 
 /// End-to-end check of the `<root>` host element from APP code (the modal demo):
@@ -767,21 +768,17 @@ fn svg_jsx_render_round_trip() {
                     match kind.as_str() {
                         "svg" => {
                             assert!(
-                                props.ext.contains("viewBox"),
+                                props.attrs.get_by_name("viewBox").is_some(),
                                 "the chart <svg>'s viewBox must decode on its create op"
                             );
                             svg_seen = true;
                         }
                         "rect" | "circle" | "line" | "path" | "polyline" | "polygon"
                         | "ellipse" | "g" => {
-                            let shape = props.ext.get::<ShapeAttrs>("shape").unwrap_or_else(|| {
-                                panic!("<{kind}> created without a folded shape object")
-                            });
-                            if kind == "rect"
-                                && shape.x.is_some()
-                                && shape.width.is_some()
-                                && shape.fill.is_some()
-                            {
+                            // Shape attributes cross flat, each decoded against
+                            // the shape's own element.
+                            let has = |name: &str| props.attrs.get_by_name(name).is_some();
+                            if kind == "rect" && has("x") && has("width") && has("fill") {
                                 chart_rect = Some(*id);
                             }
                             shape_ids.push(*id);
@@ -793,8 +790,7 @@ fn svg_jsx_render_round_trip() {
         }
     }
     assert!(svg_seen, "no <svg> create op in the '<svg>' demo");
-    let chart_rect =
-        chart_rect.expect("no chart <rect> with x/width/fill in its folded shape object");
+    let chart_rect = chart_rect.expect("no chart <rect> with x/width/fill attributes");
 
     // Let the render settle (drain whatever the mount still flushes)…
     let settle_deadline = Instant::now() + Duration::from_secs(2);
@@ -944,11 +940,10 @@ fn svg_shape_click_round_trip() {
                             props.on_pointer_enter && props.on_pointer_leave,
                             "clickable circle created without its hover handler flags"
                         );
-                        let shape = props
-                            .ext
-                            .get::<ShapeAttrs>("shape")
-                            .expect("clickable circle created without a folded shape object");
-                        let fill = shape.fill.as_ref().expect("clickable circle has no fill");
+                        let fill = props
+                            .attrs
+                            .get_by_name("fill")
+                            .expect("clickable circle has no fill");
                         circle = Some((*id, format!("{fill:?}")));
                     }
                     if text.as_deref().map(str::trim) == Some("clicks: 0") {
@@ -987,8 +982,8 @@ fn svg_shape_click_round_trip() {
     eprintln!("OK   shape click round trip: counter updated to 'clicks: 1'");
 
     // Hover: a `pointerEnter` (coords in user space, as the shape synthesis
-    // reports them) must run the enter handler — the fill swaps, and the
-    // whole folded shape object re-crosses on an update op.
+    // reports them) must run the enter handler — the fill swaps, crossing on
+    // an update op.
     send(UiEvent {
         id: circle_id,
         kind: "pointerEnter".into(),
@@ -1002,13 +997,12 @@ fn svg_shape_click_round_trip() {
             for op in &batch {
                 if let Op::Update { id, props, .. } = op
                     && *id == circle_id
-                    && let Some(shape) = props.ext.get::<ShapeAttrs>("shape")
+                    && let Some(fill) = props.attrs.get_by_name("fill")
                 {
-                    let fill = shape.fill.as_ref().expect("hovered circle lost its fill");
                     assert_ne!(
                         format!("{fill:?}"),
                         initial_fill,
-                        "hover update re-crossed the shape without swapping the fill"
+                        "hover update re-sent the fill without swapping it"
                     );
                     eprintln!("OK   hover round trip: circle fill swapped on pointerEnter");
                     eprintln!("PASS <svg> shape events end-to-end");
@@ -1108,9 +1102,8 @@ fn named_nodes_round_trip() {
                         pins += 1;
                     }
                     if let Op::Create { props, .. } = op {
-                        assert_ne!(
-                            props.target.as_deref(),
-                            Some("pin"),
+                        assert!(
+                            props.attrs.get_by_name("target").is_none(),
                             "`name` must not alias to the `target` wire field"
                         );
                     }

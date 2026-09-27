@@ -201,7 +201,7 @@ mod tests {
         assert!(s.get(&TRANSFORM3D).expect("present").is_identity());
 
         let mut cached = Props::default();
-        let (dirty, _) = cached.merge_delta(
+        let (dirty, _) = cached.merge_delta_node(
             props(serde_json::json!({ "style": { "transform3d": { "rotateY": 45 } } })),
             &[],
             &[],

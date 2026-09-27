@@ -1,24 +1,35 @@
 // Shared prop/style types for the host elements the bevy-react renderer
-// understands. The JSX element registry itself lives in `jsx-runtime.ts`; point
-// your tsconfig at it with `"jsx": "react-jsx"` + `"jsxImportSource": "bevy-react"`.
-// Import `BevyStyle` here to type a shared style object.
+// understands. The per-element props interfaces and `BevyIntrinsicElements`
+// are generated from the Rust element registry (`generated/elements.ts`,
+// re-exported here); this file holds the hand-written pieces they compose:
+// the common prop groups every element shares, the payload types of the
+// common events, and the named value types attributes and styles reference.
+// Point your tsconfig at the runtime with `"jsx": "react-jsx"` +
+// `"jsxImportSource": "bevy-react"`. Import `BevyStyle` here to type a shared
+// style object.
 
-import type { Key, ReactNode, Ref } from "react";
+import type { Key } from "react";
 import type { Animatable } from "./animated";
-import type { BevyCanvasElement, CanvasPainter, DrawCmd } from "./canvas";
 import type { BevyStyle } from "./generated/style";
 
 // `BevyStyle` is generated from the Rust style registry (one field per core
 // style property); apps augment it with their own properties.
 export type { BevyStyle };
 
-/** Attributes React manages itself (not real host props — React strips `key`
- *  before props reach the reconciler). Shared by every host element so keyed
- *  lists type-check. Most host elements take no `ref` — `<canvas>` is the
- *  exception (its ref resolves to a persistent `BevyCanvasElement` handle,
- *  typed on `BevyCanvasProps`). */
-export interface BevyAttributes {
+// The per-element props interfaces + `BevyIntrinsicElements`, generated from
+// the Rust element registry (`CORE_ELEMENTS`).
+export type * from "./generated/elements";
+
+/** What React manages itself on every host element: `key` (React strips it
+ *  before props reach the reconciler) — so keyed lists type-check. Most host
+ *  elements take no `ref`; an element whose runtime hands out a handle (the
+ *  `<canvas>`'s `BevyCanvasElement`) types it on its own props. */
+export interface BevyKeyProps {
   key?: Key | null | undefined;
+}
+
+/** The identity props every element shares (the `IDENTITY` common group). */
+export interface BevyAttributes extends BevyKeyProps {
   /** Names the element's Bevy entity: the value lands on it as a Bevy `Name`
    *  component and in the `ReactNodes` index, so app systems can find
    *  React-created entities (`Query<(Entity, &Name), With<ReactNode>>` or
@@ -512,13 +523,20 @@ export interface WheelEventData {
   deltaMode: "line" | "pixel";
 }
 
-/** Props common to `node` and `button`. */
-export interface BevyNodeProps extends BevyAttributes {
-  style?: BevyStyle;
+/** Hover/press/focus style overlays (the `VARIANTS` common group). */
+export interface BevyVariantProps {
   /** Style overlaid on `style` while the element is hovered. */
   hoverStyle?: BevyStyle;
   /** Style overlaid on `style` (and `hoverStyle`) while the element is pressed. */
   pressStyle?: BevyStyle;
+  /** Style overlaid on `style` while the element is focused. Applied on the
+   *  Bevy side from the element's focus state, so it needs no React `onFocus`
+   *  round-trip (the focus analogue of `hoverStyle`/`pressStyle`). */
+  focusStyle?: BevyStyle;
+}
+
+/** Click and pointer handlers (the `POINTER` common group). */
+export interface BevyPointerProps {
   /** Clicked with the primary (left) mouse button: fires on release over the
    *  element the press landed on (press, drag off, release elsewhere does not
    *  click — DOM `click` semantics). For right/middle interactions use
@@ -537,6 +555,10 @@ export interface BevyNodeProps extends BevyAttributes {
   onPointerEnter?: (e: PointerEventData) => void;
   /** Pointer left this element (hover ends). */
   onPointerLeave?: (e: PointerEventData) => void;
+}
+
+/** Controlled scrolling (the `SCROLL` common group). */
+export interface BevyScrollProps {
   /** Controlled vertical scroll offset in logical px (maps to `ScrollPosition.y`).
    *  Meaningful on a node with `overflowY: "scroll"`. Pushed into the node only
    *  when it diverges from the live offset, so it never fights the user's wheel. */
@@ -551,12 +573,66 @@ export interface BevyNodeProps extends BevyAttributes {
    *  Receives the new offset; pair with `scrollTop`/`scrollLeft` for a controlled
    *  scroll container. */
   onScroll?: (e: { scrollTop: number; scrollLeft: number }) => void;
+}
+
+/** The raw wheel (the `WHEEL` common group). */
+export interface BevyWheelProps {
   /** Mouse wheel over this node. Fires for **any** node (no `overflow: scroll`
    *  needed) with the raw deltas — drive a zoom, pan, or custom scroll. Handling
    *  the wheel traps it from world systems (a 3D camera behind it won't also zoom). */
   onWheel?: (e: WheelEventData) => void;
-  children?: ReactNode;
 }
+
+/** A source sub-rectangle of a texture, in source-texture pixels (an
+ *  `<image>`'s `sourceRect`). */
+export interface SourceRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/** A uniform sprite-sheet grid plus the selected cell (an `<image>`'s
+ *  `atlas`); change `index` to flip frames (e.g. animation). */
+export interface AtlasSpec {
+  tileWidth: number;
+  tileHeight: number;
+  columns: number;
+  rows: number;
+  /** Gap between cells, `[x, y]` px. */
+  padding?: [number, number];
+  /** Grid origin offset from the texture's top-left, `[x, y]` px. */
+  offset?: [number, number];
+  /** Cell to display (row-major); default `0`. */
+  index?: number;
+}
+
+/** Declarative easing for an SVG shape's **numeric** attributes
+ *  (`bevy_react_svg`): per-attr timing specs (the style-transition
+ *  `BevyTransitionSpec`, reused verbatim), keyed by the numeric attr names.
+ *  When a listed static attr changes, the painted value eases instead of
+ *  snapping; unlisted attrs — and every non-numeric one (`d`, `points`,
+ *  paints, keywords) — snap. An attr driven by an `{ animated }` binding is
+ *  owned by its driver: any binding on the shape parks the whole transition
+ *  (bindings win). */
+export type BevyShapeTransition = {
+  [K in
+    | "x"
+    | "y"
+    | "width"
+    | "height"
+    | "cx"
+    | "cy"
+    | "r"
+    | "rx"
+    | "ry"
+    | "x1"
+    | "y1"
+    | "x2"
+    | "y2"
+    | "strokeWidth"
+    | "opacity"]?: BevyTransitionSpec;
+};
 
 /** A world-space vector `[x, y, z]` in Bevy world units. */
 export type Vec3 = [number, number, number];
@@ -574,259 +650,3 @@ export interface AnchorScaling {
   /** Camera distance at which the overlay renders at scale 1. */
   baseDistance: number;
 }
-
-/** Props for the `anchor` element: a node-like container whose screen position
- *  Bevy recomputes every frame by projecting the target entity's world position
- *  (plus `offset`) onto the screen. Because it stays a flat overlay, clicks/
- *  hover work exactly like any other node — nest buttons, images, and text as
- *  children to anchor them. */
-export interface BevyAnchorProps extends BevyNodeProps {
-  /** The Bevy entity to follow, as `Entity::to_bits()` (received from Bevy).
-   *  A `u64` arrives from typed bindings as a `bigint`; either form is accepted. */
-  entity: number | bigint;
-  /** World-space offset added to the entity's position before projecting. */
-  offset?: Vec3;
-  /** When set, the overlay scales with camera distance (see `AnchorScaling`). */
-  scale?: AnchorScaling;
-}
-
-/** Props for the `text` element (maps to `bevy_ui::Text` / `TextSpan`). Style
- *  its `color`/`fontSize`/`fontWeight`/`textAlign`/`lineHeight`/`letterSpacing`/
- *  `textShadow`/`lineBreak` via `style`; nest `<text>` to restyle a run.
- *
- *  A top-level `<text>` has full `<node>` parity: hover/press styles, click/
- *  pointer handlers, and the layer-family styles (`filter`/`backdropFilter`/
- *  `morphFilter`/`transform3d`/`opacity`/`cache`) all work directly on it —
- *  no wrapper `<node>` needed. On a *nested* `<text>` (a span — no layout box
- *  of its own) those extras are structural no-ops; the runtime flags them in
- *  the devtools inspector. */
-export type BevyTextProps = BevyNodeProps;
-
-/** Props for the `canvas` element: an arbitrary anti-aliased vector drawing
- *  surface with web-faithful retained pixels (maps to a `bevy_ui::ImageNode`
- *  whose texture paint accumulates onto). Style it like any node; size it via
- *  `style.width`/`height`. Draw declaratively via `draw`, or imperatively —
- *  at any time, without a React render — through `ref.current.getContext()`. */
-export interface BevyCanvasProps extends BevyAttributes {
-  /** Persistent handle to the element (`BevyCanvasElement`): `getContext()`
-   *  for imperative, accumulating drawing, plus the laid-out `width`/`height`. */
-  ref?: Ref<BevyCanvasElement>;
-  style?: BevyStyle;
-  /** Style overlaid on `style` while the element is hovered. */
-  hoverStyle?: BevyStyle;
-  /** Style overlaid on `style` (and `hoverStyle`) while the element is pressed. */
-  pressStyle?: BevyStyle;
-  /** The declarative drawing: either a painter that receives an HTML-canvas-like
-   *  context (`CanvasContext`), or a pre-recorded `DrawCmd[]` display list.
-   *  Whenever this prop changes, the retained surface is **cleared and the
-   *  drawing replayed**; the runtime also replays it automatically after a
-   *  resize. Omit it to manage the surface purely through the ref handle. */
-  draw?: DrawCmd[] | CanvasPainter;
-  /** The laid-out size changed (including the first layout, 0 → W×H) and the
-   *  retained surface was **cleared** — redraw here when drawing imperatively
-   *  (a declarative `draw` prop is replayed for you). Receives the new logical
-   *  size. */
-  onResize?: (e: { width: number; height: number }) => void;
-  onClick?: () => void;
-  /** Pointer pressed on the canvas. Receives the cursor's normalized position. */
-  onPointerDown?: (e: PointerEventData) => void;
-  /** Pointer moved while held (a drag). Fires each frame until release. */
-  onPointerMove?: (e: PointerEventData) => void;
-  /** Pointer released after a press/drag that began on the canvas. */
-  onPointerUp?: (e: PointerEventData) => void;
-  /** Pointer entered the canvas (hover begins). */
-  onPointerEnter?: (e: PointerEventData) => void;
-  /** Pointer left the canvas (hover ends). */
-  onPointerLeave?: (e: PointerEventData) => void;
-  /** Mouse wheel over the canvas, with the raw deltas — e.g. to zoom a map.
-   *  Handling it traps the wheel from world systems (see `WheelEventData`). */
-  onWheel?: (e: WheelEventData) => void;
-}
-
-/** Props for the `portal` element: a view of an **offscreen render target** (the
- *  live or snapshot output of a Bevy camera drawing into a texture). Maps to a
- *  `bevy_ui::ImageNode` whose texture is the named render target the Bevy app
- *  registered. Style and size it like any node; the texture stretches to fill its
- *  box, and (for `Auto`-resolution targets) the camera renders at the box's
- *  resolution and aspect. */
-export interface BevyPortalProps extends BevyAttributes {
-  style?: BevyStyle;
-  /** Style overlaid on `style` while the element is hovered. */
-  hoverStyle?: BevyStyle;
-  /** Style overlaid on `style` (and `hoverStyle`) while the element is pressed. */
-  pressStyle?: BevyStyle;
-  /** The render-target name to display. The Bevy app registers it (via
-   *  `RenderTargets::create`) and hands the name to React over the typed event
-   *  channel; an unregistered name shows transparent until it appears. */
-  target: string;
-  onClick?: () => void;
-  /** Pointer pressed on the portal. Receives the cursor's normalized position. */
-  onPointerDown?: (e: PointerEventData) => void;
-  /** Pointer moved while held (a drag). Fires each frame until release. */
-  onPointerMove?: (e: PointerEventData) => void;
-  /** Pointer released after a press/drag that began on the portal. */
-  onPointerUp?: (e: PointerEventData) => void;
-  /** Pointer entered the portal (hover begins). */
-  onPointerEnter?: (e: PointerEventData) => void;
-  /** Pointer left the portal (hover ends). */
-  onPointerLeave?: (e: PointerEventData) => void;
-  /** Mouse wheel over the portal, with the raw deltas (see `WheelEventData`). */
-  onWheel?: (e: WheelEventData) => void;
-}
-
-/** Props for the `root` element: the **screen-space twin** of `<surface>`. Its
- *  children render as an independent top-level UI tree on the default camera —
- *  detached from wherever the element sits in your component tree — so an overlay
- *  (like the devtools panel) can float above the app without living inside the
- *  app's layout or inflating its node tree.
- *
- *  By default a `<root>` fills the window as a **column** (like the main app
- *  root — Bevy's own default is `row`) and sits just above the window tree
- *  (`globalZIndex: 1` — bevy_ui gives equal z-indices no defined order, so the
- *  default must win the tie deterministically); set `style.flexDirection` /
- *  `style.globalZIndex` to change either. The root node itself never blocks or
- *  hovers picking — its children are ordinary interactive nodes. */
-export interface BevyRootProps extends BevyAttributes {
-  /** Also labels this root in the devtools root selector (unnamed roots are
-   *  auto-numbered; the default window tree is `"main"`). */
-  name?: string;
-  style?: BevyStyle;
-  children?: ReactNode;
-}
-
-/** Props for the `surface` element: the **inverse** of `<portal>`. Its children
- *  are rendered into an **offscreen texture** instead of the on-screen UI; the Bevy
- *  app registers a surface by name (via `Surfaces::create`, choosing the pixel
- *  resolution) and uses the resulting `Handle<Image>` as a material texture on any
- *  3D mesh — a diegetic monitor, panel, or hologram driven by live React.
- *
- *  A `<surface>` is a **detached root**: place it anywhere in your tree and its
- *  subtree renders off-screen, not inline. It fills the texture by default; size or
- *  lay out its content with `style`. If the named surface isn't registered yet, it
- *  renders nowhere until it appears. Tag the displaying mesh with `SurfacePointer`
- *  on the Bevy side to make the subtree clickable in 3D — `onClick`/`onPointer*`
- *  and hover/press styles then fire from in-world pointer hits. */
-export interface BevySurfaceProps extends BevyAttributes {
-  /** The surface the Bevy app registered (`Surfaces::create`), by name. The
-   *  subtree renders into that surface's texture; an unregistered target
-   *  renders nowhere until it appears. (`name` is the element's own identity,
-   *  like on every element — the two are independent.) */
-  target: string;
-  style?: BevyStyle;
-  /** Style overlaid on `style` while a child is hovered (in-world). */
-  hoverStyle?: BevyStyle;
-  /** Style overlaid on `style` (and `hoverStyle`) while a child is pressed. */
-  pressStyle?: BevyStyle;
-  onClick?: () => void;
-  /** Pointer pressed on this element (an in-world drag begins). */
-  onPointerDown?: (e: PointerEventData) => void;
-  /** Pointer moved while held (an in-world drag). Fires each frame until release. */
-  onPointerMove?: (e: PointerEventData) => void;
-  /** Pointer released after a press/drag that began on this element. */
-  onPointerUp?: (e: PointerEventData) => void;
-  /** Pointer entered this element (hover begins). Fires from in-world pointer hits. */
-  onPointerEnter?: (e: PointerEventData) => void;
-  /** Pointer left this element (hover ends). */
-  onPointerLeave?: (e: PointerEventData) => void;
-  // NOTE: no `onWheel` on `<surface>` yet — the main-window wheel path can't reach a
-  // subtree rendered into an offscreen texture (it would need the in-world virtual
-  // pointer, like the surface `onPointer*` events). Deferred.
-  children?: ReactNode;
-}
-
-/** Props for the `image` element (maps to `bevy_ui::ImageNode`). */
-export interface BevyImageProps extends BevyAttributes {
-  style?: BevyStyle;
-  /** Style overlaid on `style` while the element is hovered. */
-  hoverStyle?: BevyStyle;
-  /** Style overlaid on `style` (and `hoverStyle`) while the element is pressed. */
-  pressStyle?: BevyStyle;
-  /** Asset path resolved by Bevy's `AssetServer` (relative to `assets/`). */
-  src?: string;
-  /** Tint multiplied with the image (any CSS [`Color`]); also the fill of a
-   *  `src`-less image. */
-  tint?: Color;
-  flipX?: boolean;
-  flipY?: boolean;
-  imageMode?: ImageMode;
-  /** Display only a sub-rectangle of the texture (source-texture pixels). Maps to
-   *  `ImageNode.rect`; with `atlas`, offsets from the selected cell's corner. */
-  sourceRect?: { x: number; y: number; width: number; height: number };
-  /** Treat `src` as a uniform sprite-sheet grid and show one cell. Maps to
-   *  `ImageNode.texture_atlas`; change `index` to flip frames (e.g. animation). */
-  atlas?: {
-    tileWidth: number;
-    tileHeight: number;
-    columns: number;
-    rows: number;
-    /** Gap between cells, `[x, y]` px. */
-    padding?: [number, number];
-    /** Grid origin offset from the texture's top-left, `[x, y]` px. */
-    offset?: [number, number];
-    /** Cell to display (row-major); default `0`. */
-    index?: number;
-  };
-  /** Which box of the node the image fills (default `"padding"`). */
-  visualBox?: "content" | "padding" | "border";
-  onClick?: () => void;
-}
-
-/** Props for the `editableText` element: a focusable, editable text field (maps
- *  to Bevy's native `bevy_text::EditableText`, which handles keyboard input,
- *  cursor, selection, clipboard, and word navigation). Controlled: pass `value`
- *  and update it from `onChange`. Style `color`/`fontSize`/`fontWeight` via
- *  `style`, like `<text>`. */
-export interface BevyEditableTextProps extends BevyAttributes {
-  style?: BevyStyle;
-  /** Style overlaid on `style` while the field is focused. Applied on the Bevy
-   *  side from the field's focus state, so it needs no React `onFocus` round-trip
-   *  (the focus analogue of `hoverStyle`/`pressStyle`). */
-  focusStyle?: BevyStyle;
-  /** The current text. Pushed into the field only when it differs from what the
-   *  widget already holds, so it never disrupts the caret while typing. */
-  value?: string;
-  /** Fires on every edit with the field's new text. */
-  onChange?: (value: string) => void;
-  /** Maximum number of characters accepted. */
-  maxLength?: number;
-  /** Allow newlines (multi-line input). Defaults to single-line. */
-  multiline?: boolean;
-  /** Focus the field when it mounts. */
-  autofocus?: boolean;
-  /** Controlled selection anchor, a UTF-8 **byte** offset into `value`. Set
-   *  together with `selectionEnd` to move the caret/selection programmatically. */
-  selectionStart?: number;
-  /** Controlled selection focus, a UTF-8 **byte** offset into `value`. */
-  selectionEnd?: number;
-  /** Accessible name announced to assistive tech (the a11y node's label). */
-  ariaLabel?: string;
-  /** Fires when the selection or caret moves. Offsets are UTF-8 **byte**
-   *  positions (not UTF-16 like the DOM). `direction` is the anchor→focus order. */
-  onSelect?: (selection: {
-    selectionStart: number;
-    selectionEnd: number;
-    selectionDirection: "forward" | "backward" | "none";
-    composing: boolean;
-  }) => void;
-  /** Fires when the field gains focus. */
-  onFocus?: () => void;
-  /** Fires when the field loses focus. */
-  onBlur?: () => void;
-}
-
-// The `<svg>` element + SVG shape-child prop types live in `jsx-svg.d.ts`
-// (split for file size); re-exported here so `bevy-react/jsx` remains the one
-// import surface for host-element props.
-export type {
-  BevyCircleProps,
-  BevyEllipseProps,
-  BevyGProps,
-  BevyLineShapeProps,
-  BevyPathShapeProps,
-  BevyPolygonProps,
-  BevyPolylineProps,
-  BevyRectShapeProps,
-  BevyShapeCommonProps,
-  BevyShapeTransition,
-  BevySvgProps,
-} from "./jsx-svg";

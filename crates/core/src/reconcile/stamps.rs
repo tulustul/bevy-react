@@ -8,7 +8,6 @@ use bevy::prelude::*;
 use bevy::ui::RelativeCursorPosition;
 use bevy::ui::{ComputedNode, ScrollPosition};
 
-use crate::anchor::{AnchorScaling, Anchored};
 use crate::animations::AnimatedNode;
 use crate::bridge::{
     ClickOwner, FocusState, HoverState, JsBridge, PointerHandlers, Restyle, ScrollListener,
@@ -16,8 +15,9 @@ use crate::bridge::{
 };
 use crate::protocol::{
     NodeId,
-    props::{Props, PropsDirty},
+    props::{Props, PropsDirty, UpdateEvents},
 };
+use crate::style::Style;
 use crate::style::props::{BACKDROP_FILTER, CACHE, FILTER, MORPH_FILTER, TRANSFORM3D};
 use crate::transition::ScrollTransitionState;
 
@@ -64,50 +64,16 @@ pub(crate) fn apply_animated(
     }
 }
 
-/// Stamp (or clear) the [`Anchored`] binding on a host element. Present → the
-/// positioning system projects the target entity's world position to the screen
-/// each frame and writes this node's `left`/`top`. A malformed/dead entity id is
-/// ignored (the binding is simply not applied).
-pub(super) fn apply_anchor(
-    ec: &mut EntityCommands,
-    anchors: &mut crate::anchor::AnchorIndex,
-    id: NodeId,
-    props: &Props,
-) {
-    match &props.anchor {
-        Some(anchor) => match Entity::try_from_bits(anchor.entity as u64) {
-            Some(target) => {
-                let offset = anchor.offset.map(Vec3::from).unwrap_or(Vec3::ZERO);
-                ec.insert(Anchored {
-                    target,
-                    offset,
-                    // Sanitized once here so the per-frame scale math can't panic
-                    // on JS-supplied NaN/reversed bounds.
-                    scale: anchor.scale.and_then(AnchorScaling::sanitized),
-                });
-                anchors.stamp(id, true);
-            }
-            None => {
-                ec.remove::<Anchored>();
-                anchors.stamp(id, false);
-            }
-        },
-        None => {
-            ec.remove::<Anchored>();
-            anchors.stamp(id, false);
-        }
-    }
-}
-
 /// Stamp (or clear) the hover/press [`StyleVariants`] on a host element. When
 /// either variant is present the element also gets an `Interaction` so the focus
 /// system tracks hover/press for it; `insert_if_new` leaves any existing
 /// `Interaction` untouched (a `button`'s, or a node already mid-hover) so we
-/// never reset its state on a re-render.
-pub(super) fn apply_style_variants(ec: &mut EntityCommands, props: &Props) {
+/// never reset its state on a re-render. `base` is the node's effective
+/// style (its element's default style overlaid by the user's).
+pub(super) fn apply_style_variants(ec: &mut EntityCommands, props: &Props, base: &Option<Style>) {
     if props.hover_style.is_some() || props.press_style.is_some() || props.focus_style.is_some() {
         ec.insert(StyleVariants {
-            base: props.style.clone(),
+            base: base.clone(),
             hover: props.hover_style.clone(),
             press: props.press_style.clone(),
             focus: props.focus_style.clone(),
@@ -140,19 +106,20 @@ pub(super) fn apply_style_variants(ec: &mut EntityCommands, props: &Props) {
 pub(super) fn apply_style_variants_delta(
     ec: &mut EntityCommands,
     props: &Props,
+    base: &Option<Style>,
     dirty: &PropsDirty,
 ) {
     if !dirty.any_style_variant() {
         return;
     }
     if dirty.hover_style || dirty.press_style || dirty.focus_style {
-        apply_style_variants(ec, props);
+        apply_style_variants(ec, props, base);
         return;
     }
     // Only base properties changed. The component exists exactly when a variant
     // is present (create and the arm above keep that invariant).
     if props.hover_style.is_some() || props.press_style.is_some() || props.focus_style.is_some() {
-        let base = props.style.clone();
+        let base = base.clone();
         let mask = dirty.style;
         ec.queue(move |mut entity: EntityWorldMut| {
             if let Some(mut variants) = entity.get_mut::<StyleVariants>() {
@@ -180,7 +147,11 @@ pub(super) fn apply_style_variants_delta(
 /// pair a plain `<node onClick>` — no hover/press style, not a `<button>` —
 /// would never be reported as clicked. `insert_if_new` leaves an existing
 /// `Interaction` (a `button`'s, or a hover/press variant's) untouched.
-pub(crate) fn apply_pointer_handlers(ec: &mut EntityCommands, props: &Props) {
+pub(crate) fn apply_pointer_handlers(
+    ec: &mut EntityCommands,
+    props: &Props,
+    flags: crate::ext::ElementFlags,
+) {
     let any_pointer = props.on_pointer_down
         || props.on_pointer_move
         || props.on_pointer_up
@@ -216,16 +187,34 @@ pub(crate) fn apply_pointer_handlers(ec: &mut EntityCommands, props: &Props) {
         // by element type in the collectors, not through this marker.
         ec.remove::<ClickOwner>();
     }
+    if flags.node_less {
+        node_less_pointer_slot(ec, props.on_click || any_pointer, false);
+    }
+}
+
+/// A node-less element (an SVG shape) has no box for the collectors to
+/// measure: with a pointer handler it carries an [`EventLocalPos`] slot the
+/// feature owning its coordinate space fills (the event's `x`/`y`). On full
+/// handler removal its `Interaction` goes too — unlike a layout node (where it
+/// may serve hover/press styling or a `<button>`), a node-less element's
+/// `Interaction` serves its handlers alone, and a leftover would keep
+/// stealing clicks an ancestor should own.
+///
+/// [`EventLocalPos`]: crate::ext::EventLocalPos
+fn node_less_pointer_slot(ec: &mut EntityCommands, any: bool, fresh: bool) {
+    if any {
+        ec.insert_if_new(crate::ext::EventLocalPos::default());
+    } else if !fresh {
+        ec.remove::<(crate::ext::EventLocalPos, Interaction)>();
+    }
 }
 
 /// A nested `<text>` span is a Node-less text run: it has no layout box, so
 /// the layer-family styles (`filter`/`backdropFilter`/`morphFilter`/
 /// `transform3d`/`cache`) can never promote it — its glyphs render under the
-/// enclosing `<text>` block, which is where those styles belong — and it is
-/// never a pointer target of its own, so click/pointer handlers on it never
-/// fire. Both are structurally silent no-ops; mirror them into devtools (the
-/// [`warn_shape_scroll`](super::svg_ops::warn_shape_scroll) pattern) so the
-/// surprise is at least visible. Call under the op's `diag::node_scope`.
+/// enclosing `<text>` block, which is where those styles belong. A
+/// structurally silent no-op; mirror it into devtools so the surprise is at
+/// least visible. Call under the op's `diag::node_scope`.
 pub(super) fn warn_span_ignored(props: &Props) {
     for (present, name) in [
         (
@@ -260,23 +249,36 @@ pub(super) fn warn_span_ignored(props: &Props) {
             );
         }
     }
-    for (present, name) in [
-        (props.on_click, "onClick"),
-        (props.on_pointer_down, "onPointerDown"),
-        (props.on_pointer_move, "onPointerMove"),
-        (props.on_pointer_up, "onPointerUp"),
-        (props.on_pointer_enter, "onPointerEnter"),
-        (props.on_pointer_leave, "onPointerLeave"),
-    ] {
-        if present {
-            crate::diag::report(
-                "spanHandlers",
-                name,
-                &format!(
-                    "`{name}` on a nested <text> span never fires — handlers \
-                     belong on the enclosing <text>"
-                ),
-            );
+}
+
+/// A style property the element ignores (only global writers its own writers
+/// masked off — or it opted out of — read it: `backgroundImage` on an
+/// `<image>`/`<canvas>`/`<portal>`/`<surface>`) warns `styleIgnored`, once per
+/// distinct value. Call under the op's `diag::node_scope`.
+pub(super) fn warn_ignored_styles(
+    info: &crate::element::ElementInfo,
+    styles: &crate::style::StyleRegistry,
+    props: &Props,
+) {
+    if !info.ignored_styles.any() {
+        return;
+    }
+    for style in props.all_styles() {
+        if !style.keys().intersects(&info.ignored_styles) {
+            continue;
+        }
+        for (property, _) in style.iter() {
+            if styles
+                .id_of(property)
+                .is_some_and(|id| info.ignored_styles.contains(id))
+            {
+                let name = property.name();
+                crate::diag::report(
+                    "styleIgnored",
+                    name,
+                    &format!("`{name}` has no effect on <{}>", info.name()),
+                );
+            }
         }
     }
 }
@@ -316,30 +318,32 @@ pub(super) fn apply_scroll_step(ec: &mut EntityCommands, props: &Props) {
     }
 }
 
-/// The interactive-element create tail shared by `<canvas>`, `<portal>`, and
-/// the generic elements (`spawn_element`): stamp the style variants, pointer
-/// handlers, animation bindings, and anchor from the props, in that order.
+/// The common prop stamps of a freshly spawned element, per the groups its
+/// element declares: the style variants (over the effective style `base`),
+/// the pointer handlers, and the `{ animated }` bindings (always — style and
+/// attribute bindings alike).
 ///
 /// **Create only** — the entity is freshly spawned, so this is the insert-only
-/// mirror of the stamp/clear helpers above ([`apply_style_variants`],
-/// [`apply_pointer_handlers`], [`apply_animated`], [`apply_anchor`]): every
-/// "absent → remove" arm is skipped (nothing to remove), and the components a
-/// prop set implies land as one insert each (one archetype move, not one per
-/// component). The update path keeps using the stamp/clear helpers directly.
+/// mirror of the stamp/clear helpers above: every "absent → remove" arm is
+/// skipped (nothing to remove), and the components a prop set implies land as
+/// one insert each. The update path keeps using the stamp/clear helpers.
 pub(crate) fn stamp_common(
     ec: &mut EntityCommands,
     animated: &mut HashSet<NodeId>,
-    anchors: &mut crate::anchor::AnchorIndex,
     id: NodeId,
     props: &Props,
+    base: &Option<Style>,
+    common: crate::element::Common,
+    flags: crate::ext::ElementFlags,
 ) {
-    apply_style_variants_fresh(ec, props);
-    apply_pointer_handlers_fresh(ec, props);
-    apply_animated_fresh(ec, animated, id, props);
-    // `apply_anchor` is insert-only when the prop is present — call it only then.
-    if props.anchor.is_some() {
-        apply_anchor(ec, anchors, id, props);
+    use crate::element::Common;
+    if common.contains(Common::VARIANTS) {
+        apply_style_variants_fresh(ec, props, base);
     }
+    if common.contains(Common::POINTER) {
+        apply_pointer_handlers_fresh(ec, props, flags);
+    }
+    apply_animated_fresh(ec, animated, id, props);
 }
 
 /// The properties a node's hover/press/focus variants set.
@@ -355,10 +359,14 @@ fn variant_keys(props: &Props) -> crate::style::StyleDirty {
 /// [`apply_style_variants`] for a **freshly spawned** entity: stamp the
 /// variants (and the `Interaction`/`FocusState` they need) when present, never
 /// remove.
-pub(super) fn apply_style_variants_fresh(ec: &mut EntityCommands, props: &Props) {
+pub(super) fn apply_style_variants_fresh(
+    ec: &mut EntityCommands,
+    props: &Props,
+    base: &Option<Style>,
+) {
     if props.hover_style.is_some() || props.press_style.is_some() || props.focus_style.is_some() {
         ec.insert(StyleVariants {
-            base: props.style.clone(),
+            base: base.clone(),
             hover: props.hover_style.clone(),
             press: props.press_style.clone(),
             focus: props.focus_style.clone(),
@@ -378,7 +386,11 @@ pub(super) fn apply_style_variants_fresh(ec: &mut EntityCommands, props: &Props)
 /// components, inserted in prop-implied groups, no removes. `insert_if_new` for
 /// the `Interaction` pair keeps a `<button>`'s (required) or a hover/press
 /// variant's `Interaction` untouched, exactly like the update-path helper.
-pub(super) fn apply_pointer_handlers_fresh(ec: &mut EntityCommands, props: &Props) {
+pub(super) fn apply_pointer_handlers_fresh(
+    ec: &mut EntityCommands,
+    props: &Props,
+    flags: crate::ext::ElementFlags,
+) {
     let any_pointer = props.on_pointer_down
         || props.on_pointer_move
         || props.on_pointer_up
@@ -401,6 +413,9 @@ pub(super) fn apply_pointer_handlers_fresh(ec: &mut EntityCommands, props: &Prop
     }
     if props.on_click || any_pointer {
         ec.insert_if_new((Interaction::default(), ClickOwner));
+        if flags.node_less {
+            node_less_pointer_slot(ec, true, true);
+        }
     }
 }
 
@@ -448,11 +463,12 @@ pub(super) fn create_controlled_scroll(
     ec: &mut EntityCommands,
     id: NodeId,
     props: &Props,
+    events: &UpdateEvents,
 ) {
-    if props.scroll_top.is_some() || props.scroll_left.is_some() {
+    if events.scroll_top.is_some() || events.scroll_left.is_some() {
         let pos = Vec2::new(
-            props.scroll_left.unwrap_or(0.0),
-            props.scroll_top.unwrap_or(0.0),
+            events.scroll_left.unwrap_or(0.0),
+            events.scroll_top.unwrap_or(0.0),
         );
         // Overrides the `ZERO` that `Node`'s required `ScrollPosition` defaults to.
         // No geometry exists yet to clamp against, so the raw request also gets
@@ -524,43 +540,6 @@ pub(super) fn update_controlled_scroll(
             ec.insert(crate::scroll::PendingControlledScroll(requested));
         }
         bridge.scroll_positions.insert(id, requested);
-    }
-}
-
-/// Add or remove `id` from `set` to mirror a boolean prop.
-fn set_membership(set: &mut HashSet<NodeId>, id: NodeId, present: bool) {
-    if present {
-        set.insert(id);
-    } else {
-        set.remove(&id);
-    }
-}
-
-/// Record which optional `editableText` handlers are registered in JS, so the
-/// high-frequency `"select"`/`"focus"`/`"blur"` events are only emitted when
-/// something is listening. Called on create and on every controlled update.
-pub(super) fn register_editable_handlers(bridge: &mut JsBridge, id: NodeId, props: &Props) {
-    set_membership(&mut bridge.editable_select_handlers, id, props.on_select);
-    set_membership(
-        &mut bridge.editable_focus_handlers,
-        id,
-        props.on_focus || props.on_blur,
-    );
-}
-
-/// Queue a controlled selection (byte offsets) for
-/// [`apply_pending_selections`](crate::reconcile::apply_pending_selections),
-/// when both `selectionStart` and `selectionEnd` are supplied. (The JS delta
-/// builder keeps the pair coupled: when either changes, both current values are
-/// sent, so a delta update never sees half a selection.)
-pub(super) fn queue_pending_selection(
-    bridge: &mut JsBridge,
-    id: NodeId,
-    start: Option<usize>,
-    end: Option<usize>,
-) {
-    if let (Some(start), Some(end)) = (start, end) {
-        bridge.editable_pending_selection.insert(id, (start, end));
     }
 }
 

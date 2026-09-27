@@ -33,7 +33,7 @@ const bundled = await build({
   logLevel: "silent",
 });
 const code = Buffer.from(bundled.outputFiles[0].contents).toString("base64");
-const { buildUpdateOp, packAnchorProps, packShapeProps, valuesEqual } =
+const { buildUpdateOp, handlerEvent, serializeProps, valuesEqual } =
   await import(`data:text/javascript;base64,${code}`);
 
 test("valuesEqual: primitives and reference identity", () => {
@@ -97,6 +97,7 @@ test("sharedTag crosses as a plain prop and unsets", () => {
   assert.deepEqual(buildUpdateOp(1, { sharedTag: "a" }, { sharedTag: "b" }), {
     op: "update",
     id: 1,
+    kind: "node",
     props: { sharedTag: "b" },
   });
   const gone = buildUpdateOp(1, { sharedTag: "a" }, {});
@@ -112,6 +113,7 @@ test("style diffs field-by-field", () => {
   assert.deepEqual(op, {
     op: "update",
     id: 1,
+    kind: "node",
     props: { style: { width: 250 } },
     styleUnset: ["flexGrow"],
   });
@@ -200,23 +202,26 @@ test("bind and unbind are ordinary style field deltas", () => {
   assert.deepEqual(unbound.props.style, { opacity: 0.5 });
 });
 
-test("event-like props are sent when changed but never unset", () => {
+test("act-now props are sent when changed and unset when dropped", () => {
   const changed = buildUpdateOp(1, { value: "a" }, { value: "b" });
   assert.deepEqual(changed.props, { value: "b" });
   assert.equal(changed.unset, undefined);
 
-  // Dropping a controlled/event prop is a no-op, not an unset.
-  assert.equal(buildUpdateOp(1, { value: "a", scrollTop: 5 }, {}), null);
+  // Dropping one rides `unset` like any prop — Rust ignores the reset of an
+  // act-now prop (nothing retained), so JS needs no per-key table.
+  assert.deepEqual(buildUpdateOp(1, { value: "a", scrollTop: 5 }, {}).unset, [
+    "value",
+    "scrollTop",
+  ]);
 });
 
-test("selection halves always travel as a pair", () => {
+test("selection halves travel independently (Rust applies the merged pair)", () => {
   const op = buildUpdateOp(
     1,
     { selectionStart: 0, selectionEnd: 2 },
     { selectionStart: 0, selectionEnd: 7 },
   );
-  assert.equal(op.props.selectionStart, 0);
-  assert.equal(op.props.selectionEnd, 7);
+  assert.deepEqual(op.props, { selectionEnd: 7 });
 });
 
 test("variant styles replace atomically and skip when structurally equal", () => {
@@ -243,24 +248,20 @@ test("scalar prop removed lands in unset under its wire name", () => {
   assert.deepEqual(op.unset, ["tint"]);
 });
 
-test("bool flag props ride unset when turned off, never send false", () => {
-  // Rust's merge_delta only honors `true` for plain-bool fields; an explicit
-  // `false` in the delta would be a silent no-op (the flip-disable bug).
+test("booleans cross as values — false included", () => {
+  // Rust decodes an explicit `false` as a set (a bool attribute resets to
+  // it), so turning a flag off is an ordinary value change.
   const off = buildUpdateOp(1, { flipX: true }, { flipX: false });
-  assert.deepEqual(off.unset, ["flipX"]);
-  assert.deepEqual(off.props, {});
+  assert.deepEqual(off.props, { flipX: false });
+  assert.equal(off.unset, undefined);
 
-  // Appearing as `false` is the default — nothing crosses.
-  assert.equal(buildUpdateOp(1, {}, { flipX: false }), null);
+  // Appearing as `false` crosses too (explicit is explicit).
+  assert.deepEqual(buildUpdateOp(1, {}, { flipX: false }).props, {
+    flipX: false,
+  });
 
-  // Turning on takes the normal set path.
-  const on = buildUpdateOp(1, { flipX: false }, { flipX: true });
-  assert.deepEqual(on.props, { flipX: true });
-  assert.equal(on.unset, undefined);
-
-  // The other bool flags share the contract.
-  const multi = buildUpdateOp(1, { multiline: true }, { multiline: false });
-  assert.deepEqual(multi.unset, ["multiline"]);
+  // Dropping the prop resets it.
+  assert.deepEqual(buildUpdateOp(1, { flipX: true }, {}).unset, ["flipX"]);
 });
 
 test("children changes never cross", () => {
@@ -285,160 +286,78 @@ test("a changed draw painter re-sends the recorded display list", () => {
   );
   assert.deepEqual(op.props.draw, [{ cmd: "rect", x: 0, y: 0, w: 4, h: 4 }]);
 
-  // Dropping the painter is a no-op (retained pixels stay), not an unset.
-  assert.equal(buildUpdateOp(1, { draw: (ctx) => ctx.fill() }, {}), null);
+  // Dropping the painter rides `unset` (Rust ignores it — `draw` is act-now,
+  // the retained pixels stay).
+  assert.deepEqual(buildUpdateOp(1, { draw: (ctx) => ctx.fill() }, {}).unset, [
+    "draw",
+  ]);
 });
 
-test("packAnchorProps packs entity/offset/scale into one anchor object", () => {
-  const style = { width: 10 };
-  const onClick = () => {};
-  const packed = packAnchorProps({
+test("handlerEvent maps the handler space only", () => {
+  assert.equal(handlerEvent("onClick"), "click");
+  assert.equal(handlerEvent("onPointerDown"), "pointerDown");
+  assert.equal(handlerEvent("onChange"), "change");
+  assert.equal(handlerEvent("onValueChange"), "valueChange");
+  // `on` + a lowercase letter (or nothing) is an ordinary prop.
+  assert.equal(handlerEvent("once"), null);
+  assert.equal(handlerEvent("on"), null);
+  assert.equal(handlerEvent("offset"), null);
+});
+
+test("every prop crosses generically; closures and children don't", () => {
+  const props = serializeProps(99, {
     entity: 5n, // bigint from typed bindings → plain number on the wire
     offset: [0, 1, 0],
-    style,
-    onClick,
-  });
-  assert.equal(packed.anchor.entity, 5);
-  assert.deepEqual(packed.anchor.offset, [0, 1, 0]);
-  assert.equal(packed.anchor.scale, undefined);
-  // The flat props are stripped; everything else passes through untouched.
-  assert.equal(packed.entity, undefined);
-  assert.equal(packed.offset, undefined);
-  assert.equal(packed.style, style);
-  assert.equal(packed.onClick, onClick);
-
-  // No entity → no anchor binding at all.
-  assert.equal(packAnchorProps({ style }).anchor, undefined);
-});
-
-test("anchor delta re-sends the full packed object", () => {
-  // An offset-only change must carry the whole anchor object — Rust replaces
-  // it atomically (OBJECT_PROP_KEYS), it can't merge a partial one.
-  const op = buildUpdateOp(
-    1,
-    packAnchorProps({ entity: 5, offset: [0, 1, 0] }),
-    packAnchorProps({ entity: 5, offset: [0, 2, 0] }),
-  );
-  assert.equal(op.props.anchor.entity, 5);
-  assert.deepEqual(op.props.anchor.offset, [0, 2, 0]);
-});
-
-test("anchor re-render with identical values is silent", () => {
-  // Fresh prop bags every render (as React produces them) — structural
-  // compare, not identity.
-  const bag = () => ({ entity: 7, offset: [0, 1, 0], scale: { min: 0.4 } });
-  assert.equal(
-    buildUpdateOp(1, packAnchorProps(bag()), packAnchorProps(bag())),
-    null,
-  );
-});
-
-test("dropping the anchor entity unsets the binding", () => {
-  const op = buildUpdateOp(
-    1,
-    packAnchorProps({ entity: 5, offset: [0, 1, 0] }),
-    packAnchorProps({ offset: [0, 1, 0] }),
-  );
-  assert.deepEqual(op.unset, ["anchor"]);
-});
-
-test("packShapeProps folds shape attrs into one shape object", () => {
-  const onClick = () => {};
-  const points = [0, 0, 10, 0, 5, 8];
-  const packed = packShapeProps({
     cx: 5,
-    cy: 6,
-    r: 4,
     fill: "red",
-    strokeWidth: 2,
-    points,
-    onClick,
+    madeUp: { any: "value" }, // Rust decides (warns unknownProp)
+    onValueChange: () => {}, // a custom element's own event
+    format: () => {}, // a non-handler function never crosses
     children: [],
   });
-  assert.deepEqual(packed.shape, {
+  assert.deepEqual(props, {
+    entity: 5,
+    offset: [0, 1, 0],
     cx: 5,
-    cy: 6,
-    r: 4,
     fill: "red",
-    strokeWidth: 2,
-    points,
+    madeUp: { any: "value" },
+    onValueChange: true,
   });
-  // The flat attrs are stripped; non-attr keys pass through untouched (they
-  // must all land in a diff bucket — see the invariant at packShapeProps).
-  assert.equal(packed.cx, undefined);
-  assert.equal(packed.fill, undefined);
-  assert.equal(packed.onClick, onClick);
+});
 
-  // No shape attr present → no shape key at all (so removing the last attr
-  // diffs as `unset: ["shape"]`, not an empty object).
-  assert.equal("shape" in packShapeProps({ onClick }), false);
-  assert.equal("shape" in packShapeProps({ cx: undefined }), false);
-
-  // An `{ animated }` binding wrapper on a numeric attr passes through the
-  // fold as an opaque object — Rust decodes it at its serde boundary; the JS
-  // side needs no special casing.
+test("flat attributes diff per key, structurally", () => {
+  // An `<anchor>` offset change sends only the offset.
+  const op = buildUpdateOp(
+    1,
+    { entity: 5, offset: [0, 1, 0] },
+    { entity: 5, offset: [0, 2, 0] },
+    "anchor",
+  );
+  assert.deepEqual(op, {
+    op: "update",
+    id: 1,
+    kind: "anchor",
+    props: { offset: [0, 2, 0] },
+  });
+  // Fresh prop bags with identical values are silent (structural compare).
+  const bag = () => ({ entity: 7, offset: [0, 1, 0], scale: { min: 0.4 } });
+  assert.equal(buildUpdateOp(1, bag(), bag(), "anchor"), null);
+  // An `{ animated }` wrapper on an svg attr is an ordinary object value.
   const wrapper = { animated: { id: 7 }, seed: 4 };
-  assert.equal(packShapeProps({ r: wrapper }).shape.r, wrapper);
-});
-
-test("shape delta re-sends the full packed object", () => {
-  // A one-attr change must carry the whole shape object — Rust replaces it
-  // atomically (OBJECT_PROP_KEYS), it can't merge a partial one.
-  const op = buildUpdateOp(
-    1,
-    packShapeProps({ cx: 5, cy: 6, r: 4, fill: "red" }),
-    packShapeProps({ cx: 5, cy: 6, r: 9, fill: "red" }),
-  );
-  assert.deepEqual(op.props.shape, { cx: 5, cy: 6, r: 9, fill: "red" });
-  assert.equal(op.unset, undefined);
-});
-
-test("shape re-render with identical values is silent", () => {
-  // Fresh prop bags every render (as React produces them) — structural
-  // compare, not identity. No leftover key may leak past the packing, or this
-  // would emit an empty `{op:"update",props:{}}` every render.
-  const bag = () => ({
-    d: "M 0 0 L 10 10",
-    fill: "none",
-    stroke: "#abc",
-    strokeLinejoin: "round",
-    onClick: () => {},
-  });
-  assert.equal(
-    buildUpdateOp(1, packShapeProps(bag()), packShapeProps(bag())),
-    null,
-  );
-});
-
-test("shape transition rides the folded shape object", () => {
-  // `transition` is a shape attr key: it folds into `props.shape` (atomic
-  // replace like every other attr), so the Rust side finds the spec inside
-  // the decoded ShapeAttrs — shapes have no `style` to carry it.
-  const transition = { cx: { duration: 200 }, r: { stiffness: 120 } };
-  const packed = packShapeProps({ cx: 5, r: 4, transition });
-  assert.deepEqual(packed.shape, { cx: 5, r: 4, transition });
-  assert.equal(packed.transition, undefined);
-
-  // A spec-only change re-sends the whole shape object (atomic replace).
-  const op = buildUpdateOp(
-    1,
-    packShapeProps({ cx: 5, transition: { cx: { duration: 100 } } }),
-    packShapeProps({ cx: 5, transition: { cx: { duration: 300 } } }),
-  );
-  assert.deepEqual(op.props.shape, {
-    cx: 5,
-    transition: { cx: { duration: 300 } },
+  assert.deepEqual(buildUpdateOp(1, { r: 4 }, { r: wrapper }, "circle").props, {
+    r: wrapper,
   });
 });
 
-test("removing every shape attr unsets the shape object", () => {
-  const op = buildUpdateOp(
-    1,
-    packShapeProps({ cx: 5, r: 4 }),
-    packShapeProps({}),
+test("the update op names its kind before props", () => {
+  const op = buildUpdateOp(1, {}, { name: "x" }, "text", "textSpan");
+  assert.deepEqual(Object.keys(op), ["op", "id", "kind", "props"]);
+  assert.equal(op.kind, "textSpan");
+  // Rust reads `kind` before `props` as the JSON streams by.
+  assert.ok(
+    JSON.stringify(op).indexOf('"kind"') <
+      JSON.stringify(op).indexOf('"props"'),
   );
-  assert.deepEqual(op.unset, ["shape"]);
-  assert.deepEqual(op.props, {});
 });
 
 test("name: crosses under its own wire field, set/rename/unset", () => {

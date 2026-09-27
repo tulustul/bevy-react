@@ -2,33 +2,38 @@
 
 use super::*;
 
-/// Build an `ImageNode` from an `image` element's props. `src` loads a texture
+/// Build an `ImageNode` from an `<image>`'s attributes. `src` loads a texture
 /// via the asset server; without it, a solid-color (tinted) image is used.
-/// On a `promoted` layer root the `opacity` tint fold is suppressed (group
-/// alpha applies at composite).
-pub fn image_node(props: &Props, assets: &AssetServer, promoted: bool) -> ImageNode {
-    let base = match &props.src {
-        Some(path) => ImageNode::new(assets.load(path)),
+/// `opacity` folds into the tint unless the node is a `promoted` layer root
+/// (group alpha applies at composite).
+pub fn image_node(
+    attrs: &Attrs,
+    opacity: Option<f32>,
+    assets: &AssetServer,
+    promoted: bool,
+) -> ImageNode {
+    use crate::elements::image::{SRC, TINT};
+    let base = match attrs.get(&SRC) {
+        Some(path) => ImageNode::new(assets.load(path.clone())),
         None => ImageNode::solid_color(
-            props
-                .tint
-                .as_deref()
-                .map(parse_color)
+            attrs
+                .get(&TINT)
+                .map(|t| parse_color(t))
                 .unwrap_or(Color::WHITE),
         ),
     };
-    finish_image_node(base, props, promoted)
+    finish_image_node(base, attrs, opacity, promoted)
 }
 
-/// The svg-mode `<image>` node: the same prop styling as
+/// The svg-mode `<image>` node: the same attribute styling as
 /// [`image_node`] (tint / opacity fold / flips / `visualBox`) around
 /// a texture the caller patches in afterwards (the element-owned raster
 /// target — `src` is never loaded as an `Image`; see `crate::svg`).
 /// `imageMode` is forced to `Stretch` (the raster is repainted at laid-out
 /// size, so any other mode is meaningless) and `sourceRect` is dropped
 /// (warned svg-side, like `atlas`).
-pub fn svg_image_node(props: &Props, promoted: bool) -> ImageNode {
-    let mut image = finish_image_node(ImageNode::default(), props, promoted);
+pub fn svg_image_node(attrs: &Attrs, opacity: Option<f32>, promoted: bool) -> ImageNode {
+    let mut image = finish_image_node(ImageNode::default(), attrs, opacity, promoted);
     image.image_mode = NodeImageMode::Stretch;
     image.rect = None;
     image
@@ -53,21 +58,24 @@ pub(crate) fn image_tint(
     }
 }
 
-/// Shared tail of the image builders: fold the `<image>` element props into
+/// Shared tail of the image builders: fold the `<image>` attributes into
 /// `image` (everything except the texture choice).
-fn finish_image_node(mut image: ImageNode, props: &Props, promoted: bool) -> ImageNode {
+fn finish_image_node(
+    mut image: ImageNode,
+    attrs: &Attrs,
+    opacity: Option<f32>,
+    promoted: bool,
+) -> ImageNode {
+    use crate::elements::image::{FLIP_X, FLIP_Y, IMAGE_MODE, SOURCE_RECT, TINT, VISUAL_BOX};
     image.color = image_tint(
         image.color,
-        props.tint.as_deref(),
-        props
-            .style
-            .as_ref()
-            .and_then(|s| s.get(&OPACITY).static_val()),
+        attrs.get(&TINT).map(String::as_str),
+        opacity,
         promoted,
     );
-    image.flip_x = props.flip_x;
-    image.flip_y = props.flip_y;
-    if let Some(mode) = &props.image_mode {
+    image.flip_x = attrs.get(&FLIP_X).copied().unwrap_or(false);
+    image.flip_y = attrs.get(&FLIP_Y).copied().unwrap_or(false);
+    if let Some(mode) = attrs.get(&IMAGE_MODE) {
         image.image_mode = match mode {
             ImageMode::Keyword(s) if s == "stretch" => NodeImageMode::Stretch,
             ImageMode::Keyword(_) => NodeImageMode::Auto,
@@ -81,7 +89,7 @@ fn finish_image_node(mut image: ImageNode, props: &Props, promoted: bool) -> Ima
     }
     // `Rect` here is the wire top/right/bottom/left type (imported above), so the
     // source sub-rect uses bevy's math `Rect` by its full path.
-    if let Some(r) = &props.source_rect {
+    if let Some(r) = attrs.get(&SOURCE_RECT) {
         image.rect = Some(bevy::math::Rect::new(
             r.x,
             r.y,
@@ -89,7 +97,7 @@ fn finish_image_node(mut image: ImageNode, props: &Props, promoted: bool) -> Ima
             r.y + r.height,
         ));
     }
-    if let Some(vb) = &props.visual_box {
+    if let Some(vb) = attrs.get(&VISUAL_BOX) {
         image.visual_box = match vb.as_str() {
             "content" => VisualBox::ContentBox,
             "border" => VisualBox::BorderBox,
@@ -131,17 +139,17 @@ impl AtlasKey {
     }
 }
 
-/// Set `image.texture_atlas` from `props.atlas` (a no-op if absent), building and
-/// caching the grid's `TextureAtlasLayout` so repeated commits reuse one asset.
-/// Kept out of [`image_node`] because it needs the `Assets`/cache resources, which
-/// only the reconcile systems hold.
+/// Set `image.texture_atlas` from an `atlas` attribute (a no-op if absent),
+/// building and caching the grid's `TextureAtlasLayout` so repeated commits
+/// reuse one asset. Kept out of [`image_node`] because it needs the
+/// `Assets`/cache resources.
 pub fn apply_atlas(
     image: &mut ImageNode,
-    props: &Props,
+    atlas: Option<&AtlasSpec>,
     layouts: &mut Assets<TextureAtlasLayout>,
     cache: &mut AtlasLayoutCache,
 ) {
-    let Some(a) = &props.atlas else { return };
+    let Some(a) = atlas else { return };
     let handle = cache
         .0
         .entry(AtlasKey::of(a))

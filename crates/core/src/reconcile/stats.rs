@@ -6,8 +6,6 @@
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 
-use crate::ui_map::AtlasLayoutCache;
-
 /// Live instrumentation of the [`apply_js_ops`](crate::reconcile::apply_js_ops)
 /// hot path. Updated once per frame
 /// that applies at least one reconciler op (empty frames leave it untouched), so
@@ -109,16 +107,6 @@ pub struct FlushMeta<'w> {
     pub(super) flags: Option<Res<'w, FlushFlags>>,
     #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     pub(super) frame: Option<Res<'w, FrameStamp>>,
-}
-
-/// The asset stores + caches the op-apply path builds components from: the
-/// `<image atlas>` `TextureAtlasLayout`s. Bundled as one `SystemParam`
-/// so [`apply_js_ops`](crate::reconcile::apply_js_ops) stays under Bevy's
-/// per-system parameter limit.
-#[derive(SystemParam)]
-pub struct UiAssets<'w> {
-    pub(super) layouts: ResMut<'w, Assets<TextureAtlasLayout>>,
-    pub(super) atlas_cache: ResMut<'w, AtlasLayoutCache>,
 }
 
 /// Split "op_flush send → apply start" into the cross-frame queue wait and the

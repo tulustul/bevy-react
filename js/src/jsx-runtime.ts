@@ -11,26 +11,7 @@ import type * as React from "react";
 
 export { Fragment, jsx, jsxs } from "react/jsx-runtime";
 
-import type {
-  BevyAnchorProps,
-  BevyCanvasProps,
-  BevyCircleProps,
-  BevyEditableTextProps,
-  BevyEllipseProps,
-  BevyGProps,
-  BevyImageProps,
-  BevyLineShapeProps,
-  BevyNodeProps,
-  BevyPathShapeProps,
-  BevyPolygonProps,
-  BevyPolylineProps,
-  BevyPortalProps,
-  BevyRectShapeProps,
-  BevyRootProps,
-  BevySurfaceProps,
-  BevySvgProps,
-  BevyTextProps,
-} from "./jsx";
+import type { BevyIntrinsicElements } from "./generated/elements";
 
 // Note: in a regular `.ts` module, namespace members must be `export`ed to be
 // visible as `JSX.IntrinsicElements` (unlike an ambient `.d.ts`).
@@ -47,50 +28,8 @@ export namespace JSX {
   export interface IntrinsicAttributes extends React.JSX.IntrinsicAttributes {}
   export interface IntrinsicClassAttributes<T> extends React.JSX
     .IntrinsicClassAttributes<T> {}
-  export interface IntrinsicElements {
-    /** A flex/grid container. */
-    node: BevyNodeProps;
-    /** A clickable container (maps to `bevy_ui::Button`). */
-    button: BevyNodeProps;
-    /** An image (maps to `bevy_ui::ImageNode`). */
-    image: BevyImageProps;
-    /** An anti-aliased vector drawing surface (HTML-`<canvas>`-style). */
-    canvas: BevyCanvasProps;
-    /** A view of an offscreen Bevy render target (render-to-texture). */
-    portal: BevyPortalProps;
-    /** Renders its subtree into an offscreen texture for use on a 3D material
-     *  (the inverse of `portal`). */
-    surface: BevySurfaceProps;
-    /** A detached, screen-space top-level UI tree floating above the app on the
-     *  default camera (the on-screen twin of `surface`). */
-    root: BevyRootProps;
-    /** Styled, nestable text (maps to `bevy_ui::Text` / `TextSpan`). */
-    text: BevyTextProps;
-    /** A focusable, editable text field (maps to `bevy_text::EditableText`). */
-    editableText: BevyEditableTextProps;
-    /** A world-anchored container: Bevy repositions it every frame to track the
-     *  target `entity`'s projected world position. */
-    anchor: BevyAnchorProps;
-    /** A resolution-independent vector drawing composed of SVG shape children,
-     *  rasterized at the element's laid-out size. */
-    svg: BevySvgProps;
-    /** SVG path geometry (`d` path data). Valid inside `<svg>`/`<g>` only. */
-    path: BevyPathShapeProps;
-    /** SVG rectangle (optionally rounded). Valid inside `<svg>`/`<g>` only. */
-    rect: BevyRectShapeProps;
-    /** SVG circle. Valid inside `<svg>`/`<g>` only. */
-    circle: BevyCircleProps;
-    /** SVG ellipse. Valid inside `<svg>`/`<g>` only. */
-    ellipse: BevyEllipseProps;
-    /** SVG line segment (stroke only). Valid inside `<svg>`/`<g>` only. */
-    line: BevyLineShapeProps;
-    /** SVG open poly-segment run (flat `points`). Valid inside `<svg>`/`<g>`
-     *  only. */
-    polyline: BevyPolylineProps;
-    /** SVG closed polygon (flat `points`). Valid inside `<svg>`/`<g>` only. */
-    polygon: BevyPolygonProps;
-    /** An SVG group: transforms/fades its shape children together. Valid
-     *  inside `<svg>` only. */
-    g: BevyGProps;
-  }
+  // The host elements: generated from the Rust element registry (the core's
+  // in the package, an app's own — a feature crate's included — merged in by
+  // its generated `bevy.ts`).
+  export interface IntrinsicElements extends BevyIntrinsicElements {}
 }

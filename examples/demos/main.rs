@@ -157,11 +157,11 @@ fn parse_size(spec: &str) -> Option<(u32, u32)> {
 }
 
 /// Generate a small plaid texture CPU-side and register it as `"checker"` in
-/// [`bevy_react_core::portal::RenderTargets`] — the app-owned **static** texture a
+/// [`bevy_react_core::RenderTargets`] — the app-owned **static** texture a
 /// `backgroundImage` `{ texture }` source (or a `<portal>`) can display.
 /// Painted once at startup; nothing ever renders into it.
 fn register_host_textures(
-    mut targets: ResMut<bevy_react_core::portal::RenderTargets>,
+    mut targets: ResMut<bevy_react_core::RenderTargets>,
     mut images: ResMut<Assets<Image>>,
 ) {
     use bevy::asset::RenderAssetUsages;
@@ -264,7 +264,13 @@ fn build_app(window: Window, hot_reload: bool) -> App {
         .add_plugins(react_plugin)
         // The JSX `<svg>` element (a feature crate; any order relative to
         // `ReactUiPlugin`).
-        .add_plugins(bevy_react_svg::SvgPlugin)
+        .add_plugins((
+            bevy_react_svg::SvgPlugin,
+            bevy_react_anchor::AnchorPlugin,
+            bevy_react_canvas::CanvasPlugin,
+            bevy_react_portal::PortalPlugin,
+            bevy_react_surface::SurfacePlugin,
+        ))
         // State must be registered after DefaultPlugins (which brings StatesPlugin).
         .init_state::<Scene>()
         // The shared 3D camera (auto-orbit + mouse-drag + wheel-zoom + per-scene reframe).
@@ -315,6 +321,13 @@ fn run() {
 /// so the generated TypeScript can never drift from the runtime.
 #[cfg(not(target_arch = "wasm32"))]
 fn register_react_bindings(app: &mut App) {
+    // Feature elements type their JSX from here (`<svg>` and its shapes,
+    // `<anchor>`, `<canvas>`, `<portal>`, `<surface>`).
+    bevy_react_svg::register_bindings(app);
+    bevy_react_anchor::register_bindings(app);
+    bevy_react_canvas::register_bindings(app);
+    bevy_react_portal::register_bindings(app);
+    bevy_react_surface::register_bindings(app);
     scene::register_bindings(app);
     screenshot::register_bindings(app);
     filters::register_bindings(app);

@@ -22,6 +22,7 @@ use crate::ui_map::{length_to_val, remove_unless_fresh};
 /// detection.
 pub static GROUP_ALPHA_WRITER: Writer = Writer {
     reads: &[&OPACITY],
+    attrs: &[],
     writes: &[owns::<LayerGroupAlpha>],
     apply: |ctx, s, ec| {
         if !ctx.promoted {
@@ -47,6 +48,7 @@ pub static GROUP_ALPHA_WRITER: Writer = Writer {
 /// transition isn't reset by a coincident re-render.
 pub static TRANSFORM_WRITER: Writer = Writer {
     reads: &[&TRANSFORM],
+    attrs: &[],
     writes: &[owns::<UiTransform>],
     apply: |_, s, ec| {
         if let Some(t) = s.get(&TRANSFORM) {
@@ -67,6 +69,7 @@ pub static TRANSFORM_WRITER: Writer = Writer {
 /// set-if-neq like the group alpha.
 pub static TRANSFORM3D_WRITER: Writer = Writer {
     reads: &[&TRANSFORM3D],
+    attrs: &[],
     writes: &[owns::<LayerTransform3d>],
     apply: |_, s, ec| {
         if let Some(t) = s.get(&TRANSFORM3D).cloned() {
@@ -88,6 +91,7 @@ pub static TRANSFORM3D_WRITER: Writer = Writer {
 /// filter transition channel's input). An empty chain is a wire no-op.
 pub static FILTER_WRITER: Writer = Writer {
     reads: &[&FILTER],
+    attrs: &[],
     writes: &[owns::<FilterInput>],
     apply: |ctx, s, ec| match s.get(&FILTER).filter(|c| !c.0.is_empty()) {
         Some(chain) => {
@@ -100,6 +104,7 @@ pub static FILTER_WRITER: Writer = Writer {
 /// The `backdropFilter` chain → `BackdropInput` (an independent channel).
 pub static BACKDROP_FILTER_WRITER: Writer = Writer {
     reads: &[&BACKDROP_FILTER],
+    attrs: &[],
     writes: &[owns::<BackdropInput>],
     apply: |ctx, s, ec| match s.get(&BACKDROP_FILTER).filter(|c| !c.0.is_empty()) {
         Some(chain) => {
@@ -116,6 +121,7 @@ pub static BACKDROP_FILTER_WRITER: Writer = Writer {
 /// that would otherwise deactivate it.
 pub static MORPH_FILTER_WRITER: Writer = Writer {
     reads: &[&MORPH_FILTER],
+    attrs: &[],
     writes: &[owns::<MorphInput>],
     apply: |ctx, s, ec| match s.get(&MORPH_FILTER) {
         Some(morph) => {
@@ -146,6 +152,7 @@ pub static TRANSITION_WRITER: Writer = Writer {
         &BORDER_RADIUS,
         &TRANSFORM3D,
     ],
+    attrs: &[],
     writes: &[owns::<TransitionInput>, owns::<TransitionState>],
     apply: |ctx, s, ec| crate::transition::apply_transition(ec, Some(s), ctx.fresh),
 };
@@ -155,6 +162,7 @@ pub static TRANSITION_WRITER: Writer = Writer {
 /// and persists.
 pub static SCROLL_TRANSITION_WRITER: Writer = Writer {
     reads: &[&TRANSITION],
+    attrs: &[],
     writes: &[owns::<ScrollTransitionInput>, owns::<ScrollTransitionState>],
     apply: apply_scroll_transition,
 };

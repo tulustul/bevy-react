@@ -1,17 +1,13 @@
-//! The `portal` host element: a UI rectangle that displays an **offscreen render
-//! target** — the live (or snapshot) output of a Bevy camera drawing into a GPU
-//! texture.
-//!
-//! It is the GPU sibling of [`crate::canvas`]: both are a styled [`ImageNode`]
-//! whose backing [`Image`] this crate manages. Where the canvas CPU-rasterizes a
-//! display list, a portal's image is a **render target** a secondary camera draws
-//! into (render-to-texture), so a portal can embed a minimap, a picture-in-picture,
-//! or a per-item 3D preview directly inside the React UI.
+//! Named **offscreen render targets**: the live (or snapshot) output of a Bevy
+//! camera drawing into a GPU texture, shown in the UI by any node carrying a
+//! [`TargetView`] (a `<portal>` element — the `bevy_react_portal` crate — or a
+//! `backgroundImage: { texture }`), so the UI can embed a minimap, a
+//! picture-in-picture, or a per-item 3D preview.
 //!
 //! ## Ownership split
 //!
-//! This crate owns only the **texture registry** ([`RenderTargets`]) and the
-//! portal↔texture **binding**. The consuming app owns the cameras, meshes, and
+//! The core owns the **texture registry** ([`RenderTargets`]) and the
+//! view↔texture **binding**. The consuming app owns the cameras, meshes, and
 //! render layers: it [`create`](RenderTargets::create)s a named target, spawns a
 //! camera pointed at [`RenderTarget::camera_target`], tags that camera with
 //! [`PortalCamera`], and (for snapshots) [`invalidate`](RenderTargets::invalidate)s
@@ -26,7 +22,7 @@
 //! is `display: none`, `Visibility::Hidden`, scrolled entirely out of its clip, or
 //! unmounted costs nothing) or [`RenderMode::Snapshot`] (renders once when
 //! registered or invalidated, then its camera is deactivated and the texture
-//! reused — cheap for static thumbnails). [`drive_portal_cameras`] toggles
+//! reused — cheap for static thumbnails). [`drive_target_cameras`] toggles
 //! `Camera::is_active`; [`drive_render_targets`] drives resolution.
 //!
 //! ## Resolution
@@ -59,7 +55,7 @@ const SIZE_STEP: u32 = 16;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RenderMode {
     /// The camera renders every frame a `<portal>` showing the target is visible
-    /// (minimaps, rotating/animated previews); see [`drive_portal_cameras`].
+    /// (minimaps, rotating/animated previews); see [`drive_target_cameras`].
     Live,
     /// The camera renders once when the target is registered or
     /// [`invalidate`](RenderTargets::invalidate)d, then deactivates and the
@@ -231,36 +227,23 @@ impl RenderTargets {
 #[derive(Component, Clone, Debug)]
 pub struct PortalCamera(pub String);
 
-/// Marks a reconciler node as a `<portal>` displaying the named target. The
-/// bevy-react reconciler inserts it; [`bind_portals`] keeps the node's
-/// [`ImageNode`] pointed at the registry's texture for this name.
+/// Marks a node whose `ImageNode` **shows** the named render target: a
+/// `<portal>` stamps it from its `target` attribute; [`bind_target_views`]
+/// keeps the node's [`ImageNode`] pointed at the registry's texture for the
+/// name, and [`drive_target_cameras`] runs a live target's camera only while
+/// a view of it is showing.
 #[derive(Component, Clone, Debug)]
-pub struct RPortal(pub String);
+pub struct TargetView(pub String);
 
 /// A shared 1×1 transparent texture a portal shows until (and after) it is bound
 /// to a live target. Held in a resource so every unbound portal shares one image.
 #[derive(Resource)]
-pub struct PortalPlaceholder(pub Handle<Image>);
+pub struct TargetPlaceholder(pub Handle<Image>);
 
-/// A 1×1 transparent image, mirroring [`crate::canvas::blank_canvas_image`].
-pub fn blank_portal_image() -> Image {
-    Image::new_fill(
-        Extent3d {
-            width: 1,
-            height: 1,
-            depth_or_array_layers: 1,
-        },
-        bevy::render::render_resource::TextureDimension::D2,
-        &[0, 0, 0, 0],
-        TextureFormat::Rgba8UnormSrgb,
-        bevy::asset::RenderAssetUsages::MAIN_WORLD | bevy::asset::RenderAssetUsages::RENDER_WORLD,
-    )
-}
-
-/// Create the shared [`PortalPlaceholder`] image at startup.
-pub fn init_portal_placeholder(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
-    let handle = images.add(blank_portal_image());
-    commands.insert_resource(PortalPlaceholder(handle));
+/// Create the shared [`TargetPlaceholder`] image at startup.
+pub fn init_target_placeholder(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
+    let handle = images.add(crate::raster::blank_image());
+    commands.insert_resource(TargetPlaceholder(handle));
 }
 
 /// Point every `<portal>`'s [`ImageNode`] at the texture for its target name (or
@@ -271,10 +254,10 @@ pub fn init_portal_placeholder(mut commands: Commands, mut images: ResMut<Assets
 /// This is what decouples ordering: a portal may mount before its target exists
 /// and rebinds the instant it appears (and reverts to the placeholder on
 /// [`remove`](RenderTargets::remove)).
-pub fn bind_portals(
+pub fn bind_target_views(
     mut targets: ResMut<RenderTargets>,
-    placeholder: Res<PortalPlaceholder>,
-    mut portals: Query<(Entity, &RPortal, &mut ImageNode)>,
+    placeholder: Res<TargetPlaceholder>,
+    mut portals: Query<(Entity, &TargetView, &mut ImageNode)>,
 ) {
     for (entity, portal, mut node) in &mut portals {
         let desired = targets
@@ -295,7 +278,7 @@ pub fn bind_portals(
 /// to the binding portal's laid-out physical size (quantized to [`SIZE_STEP`]) and
 /// mark the target dirty on change. Runs in `Update`, before bevy's `camera_system`
 /// reads the target's size, so the camera renders at the new size the same frame.
-/// Camera activity is [`drive_portal_cameras`]'s job.
+/// Camera activity is [`drive_target_cameras`]'s job.
 pub fn drive_render_targets(
     mut targets: ResMut<RenderTargets>,
     mut images: ResMut<Assets<Image>>,
@@ -343,10 +326,10 @@ pub fn drive_render_targets(
 /// cascades for extraction to read (`prepare_lights` panics) and no visible
 /// entities. So a portal that becomes visible renders, fully, the same frame. [`register`](RenderTargets::register)ed
 /// app-owned entries are Snapshot + never dirty: untouched.
-pub fn drive_portal_cameras(
+pub fn drive_target_cameras(
     mut targets: ResMut<RenderTargets>,
     portals: Query<(
-        &RPortal,
+        &TargetView,
         &InheritedVisibility,
         &ComputedNode,
         &UiGlobalTransform,
@@ -456,10 +439,10 @@ mod tests {
     #[test]
     fn register_app_texture_is_inert() {
         let mut app = test_app();
-        app.add_systems(Update, (drive_render_targets, drive_portal_cameras).chain());
+        app.add_systems(Update, (drive_render_targets, drive_target_cameras).chain());
         let handle = {
             let mut images = app.world_mut().resource_mut::<Assets<Image>>();
-            images.add(blank_portal_image())
+            images.add(crate::raster::blank_image())
         };
         app.world_mut()
             .resource_mut::<RenderTargets>()
@@ -516,13 +499,13 @@ mod tests {
         assert!(targets.entries["follow"].dirty);
     }
 
-    /// `bind_portals` points an `RPortal`'s `ImageNode` at the registered texture,
+    /// `bind_target_views` points an `TargetView`'s `ImageNode` at the registered texture,
     /// records the binder, and reverts to the placeholder after the target is gone.
     #[test]
     fn bind_portals_binds_and_reverts() {
         let mut app = test_app();
-        app.add_systems(Startup, init_portal_placeholder);
-        app.add_systems(Update, bind_portals);
+        app.add_systems(Startup, init_target_placeholder);
+        app.add_systems(Update, bind_target_views);
         app.update(); // run startup → placeholder exists
 
         let target_handle =
@@ -533,16 +516,16 @@ mod tests {
                         .create(&mut images, "follow", RenderTargetSpec::default())
                         .handle
                 });
-        let placeholder = app.world().resource::<PortalPlaceholder>().0.clone();
+        let placeholder = app.world().resource::<TargetPlaceholder>().0.clone();
         let portal = app
             .world_mut()
             .spawn((
-                RPortal("follow".into()),
+                TargetView("follow".into()),
                 ImageNode::new(placeholder.clone()),
             ))
             .id();
 
-        app.update(); // bind_portals runs
+        app.update(); // bind_target_views runs
         assert_eq!(
             app.world().entity(portal).get::<ImageNode>().unwrap().image,
             target_handle,
@@ -565,12 +548,12 @@ mod tests {
         );
     }
 
-    /// `drive_portal_cameras` renders a snapshot camera for exactly one frame after
+    /// `drive_target_cameras` renders a snapshot camera for exactly one frame after
     /// it is created/invalidated (no portal need be showing).
     #[test]
     fn snapshot_camera_renders_once_then_deactivates() {
         let mut app = test_app();
-        app.add_systems(Update, (drive_render_targets, drive_portal_cameras).chain());
+        app.add_systems(Update, (drive_render_targets, drive_target_cameras).chain());
         app.world_mut()
             .resource_scope(|world, mut targets: Mut<RenderTargets>| {
                 let mut images = world.resource_mut::<Assets<Image>>();
@@ -618,7 +601,7 @@ mod tests {
     #[test]
     fn live_camera_renders_only_while_a_portal_is_showing() {
         let mut app = test_app();
-        app.add_systems(Update, (drive_render_targets, drive_portal_cameras).chain());
+        app.add_systems(Update, (drive_render_targets, drive_target_cameras).chain());
         app.world_mut()
             .resource_scope(|world, mut targets: Mut<RenderTargets>| {
                 let mut images = world.resource_mut::<Assets<Image>>();
@@ -643,7 +626,7 @@ mod tests {
         let portal = app
             .world_mut()
             .spawn((
-                RPortal("live".into()),
+                TargetView("live".into()),
                 InheritedVisibility::VISIBLE,
                 shown,
                 UiGlobalTransform::default(),

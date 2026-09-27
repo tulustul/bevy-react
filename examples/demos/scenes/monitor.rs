@@ -14,9 +14,8 @@ use bevy::pbr::{ExtendedMaterial, MaterialExtension};
 use bevy::prelude::*;
 use bevy::render::render_resource::AsBindGroup;
 use bevy::shader::ShaderRef;
-use bevy_react_core::{
-    ReactAppExt, SurfacePointer, SurfaceSpec, Surfaces, UvChannel, react_message,
-};
+use bevy_react_core::{ReactAppExt, react_message};
+use bevy_react_surface::{SurfacePointer, SurfaceSpec, Surfaces, UvChannel};
 
 use crate::scene::Scene;
 

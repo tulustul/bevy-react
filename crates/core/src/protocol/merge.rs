@@ -3,6 +3,7 @@
 //! the act-now event fields.
 
 use super::props::{Props, PropsDirty, UpdateEvents};
+use crate::element::ElementInfo;
 use crate::style::{Style, StyleDirty};
 
 impl Props {
@@ -12,47 +13,41 @@ impl Props {
     /// opacity/filter reasons, the create-time layer-dirty seed) — a new
     /// variant slot extends this once, not each call site.
     pub fn all_styles(&self) -> impl Iterator<Item = &Style> {
-        // The base is inline, the variants are boxed (see `Props`), so the two
-        // halves are chained rather than listed in one array.
-        self.style.as_ref().into_iter().chain(
-            [
-                self.hover_style.as_ref(),
-                self.press_style.as_ref(),
-                self.focus_style.as_ref(),
-            ]
-            .into_iter()
-            .flatten(),
-        )
+        [
+            self.style.as_ref(),
+            self.hover_style.as_ref(),
+            self.press_style.as_ref(),
+            self.focus_style.as_ref(),
+        ]
+        .into_iter()
+        .flatten()
     }
 
     /// Take the event-like fields (see [`UpdateEvents`]) out of `self`,
     /// leaving the retained state in place. Used to seed the per-node props
-    /// cache from a create. In place — never moves the (multi-KB) struct.
+    /// cache from a create. In place — never moves the struct.
     pub fn split_events(&mut self) -> UpdateEvents {
         UpdateEvents {
-            value: self.value.take(),
-            selection_start: self.selection_start.take(),
-            selection_end: self.selection_end.take(),
             scroll_top: self.scroll_top.take(),
             scroll_left: self.scroll_left.take(),
-            draw: self.draw.take(),
+            attrs: self.attrs.take_events(),
         }
     }
 
     /// Merge an [`super::op::Op::Update`] delta (`props` + `unset` + `style_unset`) into
-    /// `self` (the retained last-applied props), returning what the delta
-    /// touched and the event-like fields to act on. See the semantics on
-    /// [`super::op::Op::Update`].
+    /// `self` (the retained last-applied props of an `element` node),
+    /// returning what the delta touched and the event-like fields to act on.
+    /// See the semantics on [`super::op::Op::Update`].
     ///
     /// The delta arrives boxed (the op carries it that way) and is consumed
-    /// field-wise through `&mut` — the struct is several KB and is never
-    /// moved or cloned on this path; `impl Into<Box<Props>>` lets tests pass
-    /// a bare `Props` (`From<T> for Box<T>`) at no cost to the hot path.
+    /// field-wise through `&mut`; `impl Into<Box<Props>>` lets tests pass a
+    /// bare `Props` (`From<T> for Box<T>`) at no cost to the hot path.
     pub fn merge_delta(
         &mut self,
         delta: impl Into<Box<Props>>,
         unset: &[String],
         style_unset: &[String],
+        element: &ElementInfo,
     ) -> (PropsDirty, UpdateEvents) {
         let mut dirty = PropsDirty::default();
         let mut delta = delta.into();
@@ -79,22 +74,15 @@ impl Props {
             self.focus_style = delta.focus_style.take();
             dirty.focus_style = true;
         }
-        // Feature-owned keys replace ATOMICALLY (the variant-style precedent
-        // above), deliberately not field-wise like `style`: a feature value
-        // is one object with one Rust-side consequence (an SVG shape's attrs
-        // → a full re-raster of the enclosing `<svg>`), with no per-field
-        // writers to save — and atomic replace handles *removal* inside
-        // the value correctly by construction (JS sends the complete object
-        // whenever anything changed, so a field absent from the new value is
-        // a field removed, no `unset` bookkeeping needed). Compare-before-set
-        // keeps an idempotent re-send silent, like the rest of the delta.
-        for (key, value) in delta.ext.drain() {
-            if self.ext.insert(key, value) {
-                dirty.ext.push(key);
-            }
+        // Attributes replace ATOMICALLY per key (the variant-style
+        // precedent): compare-before-set keeps an idempotent re-send silent.
+        dirty.attrs = self.attrs.overlay_delta(&mut delta.attrs);
+        if delta.handlers & !self.handlers != 0 {
+            self.handlers |= delta.handlers;
+            dirty.handlers = true;
         }
-        // Handler/flag booleans: the delta only ever carries `true` (a handler
-        // appeared / a flag turned on); turning one off rides `unset`.
+        // Handler booleans: the delta only ever carries `true` (a handler
+        // appeared); turning one off rides `unset`.
         macro_rules! merge_bool {
             ($($f:ident => $flag:ident),* $(,)?) => {
                 $(
@@ -114,57 +102,29 @@ impl Props {
             on_pointer_leave => pointer,
             on_scroll => scroll_listener,
             on_wheel => wheel,
-            on_change => editable_handlers,
-            on_select => editable_handlers,
-            on_focus => editable_handlers,
-            on_blur => editable_handlers,
-            flip_x => image,
-            flip_y => image,
         );
-        // `multiline`/`autofocus` are create-time only; keep the cache true to
-        // the props but no apply work keys off them.
-        if delta.multiline {
-            self.multiline = true;
-        }
-        if delta.autofocus {
-            self.autofocus = true;
-        }
-        // `onResize` gates nothing Rust-side (resize events are unconditional);
-        // cached only so the delta stays truthful.
-        if delta.on_resize {
-            self.on_resize = true;
-        }
         macro_rules! merge_option {
-            ($($f:ident => $($flag:ident)?),* $(,)?) => {
+            ($($f:ident => $flag:ident),* $(,)?) => {
                 $(
                     if delta.$f.is_some() {
                         self.$f = delta.$f.take();
-                        $( dirty.$flag = true; )?
+                        dirty.$flag = true;
                     }
                 )*
             };
         }
         merge_option!(
             scroll_step => scroll_step,
-            anchor => anchor,
-            src => image,
-            tint => image,
-            image_mode => image,
-            source_rect => image,
-            atlas => image,
-            visual_box => image,
             name => name,
             shared_tag => shared_tag,
-            target => target,
-            aria_label => aria_label,
-            max_length => , // create-time only, cached for completeness
         );
 
         // --- unset: wire names reset to their defaults ---
         for name in unset {
             match name.as_str() {
                 "style" => {
-                    self.style = None;
+                    // Back to the element's default style (none for most).
+                    self.style = element.default_style().cloned();
                     dirty.style = StyleDirty::ALL;
                 }
                 "hoverStyle" => {
@@ -211,64 +171,9 @@ impl Props {
                     self.on_wheel = false;
                     dirty.wheel = true;
                 }
-                "onChange" => {
-                    self.on_change = false;
-                    dirty.editable_handlers = true;
-                }
-                "onSelect" => {
-                    self.on_select = false;
-                    dirty.editable_handlers = true;
-                }
-                "onFocus" => {
-                    self.on_focus = false;
-                    dirty.editable_handlers = true;
-                }
-                "onBlur" => {
-                    self.on_blur = false;
-                    dirty.editable_handlers = true;
-                }
-                "flipX" => {
-                    self.flip_x = false;
-                    dirty.image = true;
-                }
-                "flipY" => {
-                    self.flip_y = false;
-                    dirty.image = true;
-                }
-                "multiline" => self.multiline = false,
-                "autofocus" => self.autofocus = false,
-                "onResize" => self.on_resize = false,
                 "scrollStep" => {
                     self.scroll_step = None;
                     dirty.scroll_step = true;
-                }
-                "anchor" => {
-                    self.anchor = None;
-                    dirty.anchor = true;
-                }
-                "src" => {
-                    self.src = None;
-                    dirty.image = true;
-                }
-                "tint" => {
-                    self.tint = None;
-                    dirty.image = true;
-                }
-                "imageMode" => {
-                    self.image_mode = None;
-                    dirty.image = true;
-                }
-                "sourceRect" => {
-                    self.source_rect = None;
-                    dirty.image = true;
-                }
-                "atlas" => {
-                    self.atlas = None;
-                    dirty.image = true;
-                }
-                "visualBox" => {
-                    self.visual_box = None;
-                    dirty.image = true;
                 }
                 "name" => {
                     self.name = None;
@@ -278,42 +183,41 @@ impl Props {
                     self.shared_tag = None;
                     dirty.shared_tag = true;
                 }
-                "target" => {
-                    self.target = None;
-                    dirty.target = true;
+                // Event-like props have no retained state to unset.
+                "scrollTop" | "scrollLeft" => {}
+                other => {
+                    if let Some((index, attr)) = element.attr(other) {
+                        // An act-now attribute retains nothing to reset.
+                        if !attr.is_event() && self.attrs.remove_index(index) {
+                            dirty.attrs.insert(index);
+                        }
+                    } else if let Some(index) = element.event_for_prop(other) {
+                        if self.handlers & (1 << index) != 0 {
+                            self.handlers &= !(1 << index);
+                            dirty.handlers = true;
+                        }
+                    } else {
+                        tracing::debug!(
+                            target: "bevy_react",
+                            "unknown prop {other:?} in unset; ignoring"
+                        );
+                    }
                 }
-                "ariaLabel" => {
-                    self.aria_label = None;
-                    dirty.aria_label = true;
-                }
-                "maxLength" => self.max_length = None,
-                // Event-like props have no retained state to unset; dropping
-                // the prop simply stops producing events.
-                "value" | "selectionStart" | "selectionEnd" | "scrollTop" | "scrollLeft"
-                | "draw" => {
-                    tracing::warn!(
-                        target: "bevy_react",
-                        "event-like prop {name:?} in unset; nothing to reset"
-                    );
-                }
-                // A feature-owned key (`Props::ext`) clears to absent.
-                other => match self.ext.remove(other) {
-                    Some(key) => dirty.ext.push(key),
-                    None => tracing::warn!(
-                        target: "bevy_react",
-                        "unknown prop {other:?} in unset; ignoring"
-                    ),
-                },
             }
         }
 
         // --- style_unset: after the overlay, so a (never-emitted) set+unset of
         // the same field resolves to unset ---
         if !style_unset.is_empty() {
+            let default = element.default_style();
             let style = self.style.get_or_insert_default();
             for name in style_unset {
                 if let Some(id) = style.unset_field(name, &mut dirty.style_old) {
                     dirty.style.insert(id);
+                    // An unset property falls back to the element's default.
+                    if let Some(default) = default {
+                        style.restore_default(default, id);
+                    }
                 }
             }
         }
@@ -324,27 +228,56 @@ impl Props {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use super::*;
+    use crate::element::ElementInfo;
+    use crate::elements::editable::{SELECTION_END, SELECTION_START, VALUE};
+    use crate::elements::image::{FLIP_X, FLIP_Y, SRC};
     use crate::protocol::animatable::AnimatableField;
-    use crate::protocol::props::{Props, props_from_json as props};
+    use crate::protocol::props::{Props, props_for};
     use crate::protocol::units::Length;
     use crate::style::props::{BACKGROUND_COLOR, BACKGROUND_IMAGE, CURSOR, HEIGHT, OUTLINE, WIDTH};
     use crate::style::test_support::runs;
     use crate::style::writers::*;
 
+    fn info(kind: &str) -> Arc<ElementInfo> {
+        crate::ext::core_element_info(kind).expect("a core element")
+    }
+
+    /// Decode a `<node>`'s props.
+    fn props(json: serde_json::Value) -> Props {
+        props_for("node", json)
+    }
+
+    /// Merge a `<node>` delta.
+    fn merge(
+        cached: &mut Props,
+        delta: Props,
+        unset: &[String],
+        style_unset: &[String],
+    ) -> (PropsDirty, UpdateEvents) {
+        cached.merge_delta(delta, unset, style_unset, &info("node"))
+    }
+
     /// A delta sets exactly the supplied fields; everything else is preserved.
     #[test]
     fn merge_delta_sets_and_preserves() {
-        let mut cached = props(serde_json::json!({
-            "style": { "backgroundColor": "red", "outline": { "color": "white" } },
-            "hoverStyle": { "backgroundColor": "blue" },
-            "onClick": true,
-            "src": "a.png",
-        }));
+        let image = info("image");
+        let mut cached = props_for(
+            "image",
+            serde_json::json!({
+                "style": { "backgroundColor": "red", "outline": { "color": "white" } },
+                "hoverStyle": { "backgroundColor": "blue" },
+                "onClick": true,
+                "src": "a.png",
+            }),
+        );
         let (dirty, ev) = cached.merge_delta(
-            props(serde_json::json!({ "style": { "width": 100 } })),
+            props_for("image", serde_json::json!({ "style": { "width": 100 } })),
             &[],
             &[],
+            &image,
         );
 
         let style = cached.style.as_ref().unwrap();
@@ -362,17 +295,17 @@ mod tests {
         );
         assert!(cached.hover_style.is_some(), "untouched props preserved");
         assert!(cached.on_click);
-        assert_eq!(cached.src.as_deref(), Some("a.png"));
+        assert_eq!(cached.attrs.get(&SRC).map(String::as_str), Some("a.png"));
 
         assert!(runs(&dirty.style, &LAYOUT_WRITER));
         assert!(
             !(runs(&dirty.style, &BACKGROUND_COLOR_WRITER) || runs(&dirty.style, &OUTLINE_WRITER)),
             "untouched writers must not re-run"
         );
-        assert!(!dirty.hover_style && !dirty.pointer && !dirty.image);
+        assert!(!dirty.hover_style && !dirty.pointer && !dirty.attrs.any());
         // `width` is a transitioned channel, so the transition writer re-runs.
         assert!(runs(&dirty.style, &TRANSITION_WRITER));
-        assert!(ev.value.is_none() && ev.draw.is_none());
+        assert!(ev.attrs.is_empty());
     }
 
     /// The `name` prop (→ Bevy `Name`) is retained like any string prop: a
@@ -383,11 +316,21 @@ mod tests {
         let mut cached = props(serde_json::json!({ "name": "hud" }));
         assert_eq!(cached.name.as_deref(), Some("hud"));
 
-        let (dirty, _) = cached.merge_delta(props(serde_json::json!({ "name": "hud2" })), &[], &[]);
+        let (dirty, _) = merge(
+            &mut cached,
+            props(serde_json::json!({ "name": "hud2" })),
+            &[],
+            &[],
+        );
         assert_eq!(cached.name.as_deref(), Some("hud2"));
         assert!(dirty.name);
 
-        let (dirty, _) = cached.merge_delta(props(serde_json::json!({ "src": "a.png" })), &[], &[]);
+        let (dirty, _) = merge(
+            &mut cached,
+            props(serde_json::json!({ "onClick": true })),
+            &[],
+            &[],
+        );
         assert_eq!(
             cached.name.as_deref(),
             Some("hud2"),
@@ -395,7 +338,7 @@ mod tests {
         );
         assert!(!dirty.name);
 
-        let (dirty, _) = cached.merge_delta(Props::default(), &["name".to_string()], &[]);
+        let (dirty, _) = merge(&mut cached, Props::default(), &["name".to_string()], &[]);
         assert_eq!(cached.name, None);
         assert!(dirty.name);
     }
@@ -408,7 +351,8 @@ mod tests {
         let mut cached = props(serde_json::json!({ "sharedTag": "hero-1" }));
         assert_eq!(cached.shared_tag.as_deref(), Some("hero-1"));
 
-        let (dirty, _) = cached.merge_delta(
+        let (dirty, _) = merge(
+            &mut cached,
             props(serde_json::json!({ "sharedTag": "hero-2" })),
             &[],
             &[],
@@ -416,11 +360,21 @@ mod tests {
         assert_eq!(cached.shared_tag.as_deref(), Some("hero-2"));
         assert!(dirty.shared_tag);
 
-        let (dirty, _) = cached.merge_delta(props(serde_json::json!({ "src": "a.png" })), &[], &[]);
+        let (dirty, _) = merge(
+            &mut cached,
+            props(serde_json::json!({ "onClick": true })),
+            &[],
+            &[],
+        );
         assert_eq!(cached.shared_tag.as_deref(), Some("hero-2"));
         assert!(!dirty.shared_tag);
 
-        let (dirty, _) = cached.merge_delta(Props::default(), &["sharedTag".to_string()], &[]);
+        let (dirty, _) = merge(
+            &mut cached,
+            Props::default(),
+            &["sharedTag".to_string()],
+            &[],
+        );
         assert_eq!(cached.shared_tag, None);
         assert!(dirty.shared_tag);
     }
@@ -434,7 +388,8 @@ mod tests {
             "hoverStyle": { "backgroundColor": "blue" },
             "onClick": true,
         }));
-        let (dirty, _) = cached.merge_delta(
+        let (dirty, _) = merge(
+            &mut cached,
             Props::default(),
             &["hoverStyle".into(), "onClick".into()],
             &["backgroundColor".into()],
@@ -455,25 +410,36 @@ mod tests {
         assert!(dirty.any_style_variant());
     }
 
-    /// The bool-flag contract the JS diff relies on (bridge.ts
-    /// `BOOL_PROP_KEYS`): a plain-`bool` field can't distinguish an explicit
-    /// `false` from absent on the wire, so a `false` in the delta is a no-op —
-    /// turning a flag off must ride `unset`, which resets it and dirties its
-    /// group.
+    /// A bool attribute is a real value: an explicit `false` in a delta sets
+    /// it (and dirties it), unlike the old presence-only flags; `unset`
+    /// removes it.
     #[test]
-    fn merge_delta_bool_false_is_noop_off_rides_unset() {
-        let mut cached = props(serde_json::json!({ "flipX": true, "flipY": true }));
+    fn merge_delta_bool_attribute_false_is_a_value() {
+        let image = info("image");
+        let mut cached = props_for("image", serde_json::json!({ "flipX": true, "flipY": true }));
 
-        // `{"flipX": false}` decodes identically to an absent field: no-op.
-        let (dirty, _) = cached.merge_delta(props(serde_json::json!({ "flipX": false })), &[], &[]);
-        assert!(cached.flip_x, "explicit false in a delta must not clear");
-        assert!(!dirty.image);
+        let (dirty, _) = cached.merge_delta(
+            props_for("image", serde_json::json!({ "flipX": false })),
+            &[],
+            &[],
+            &image,
+        );
+        assert_eq!(cached.attrs.get(&FLIP_X), Some(&false));
+        assert!(dirty.attrs.any());
 
-        // The off path: `unset` resets the flag and dirties the image group.
-        let (dirty, _) = cached.merge_delta(Props::default(), &["flipX".into()], &[]);
-        assert!(!cached.flip_x);
-        assert!(cached.flip_y, "sibling flag untouched");
-        assert!(dirty.image);
+        let (dirty, _) = cached.merge_delta(Props::default(), &["flipX".into()], &[], &image);
+        assert!(!cached.attrs.contains(&FLIP_X));
+        assert_eq!(cached.attrs.get(&FLIP_Y), Some(&true), "sibling untouched");
+        assert!(dirty.attrs.any());
+
+        // An identical re-send dirties nothing (compare-before-set).
+        let (dirty, _) = cached.merge_delta(
+            props_for("image", serde_json::json!({ "flipY": true })),
+            &[],
+            &[],
+            &image,
+        );
+        assert!(!dirty.attrs.any());
     }
 
     /// `"style"` in `unset` drops the whole style and touches every property.
@@ -482,30 +448,44 @@ mod tests {
         let mut cached = props(serde_json::json!({
             "style": { "backgroundColor": "red", "width": 50 },
         }));
-        let (dirty, _) = cached.merge_delta(Props::default(), &["style".into()], &[]);
+        let (dirty, _) = merge(&mut cached, Props::default(), &["style".into()], &[]);
         assert!(cached.style.is_none());
         assert_eq!(dirty.style, StyleDirty::ALL);
     }
 
-    /// Event-like fields ride out through `UpdateEvents` and are never retained.
+    /// Act-now fields ride out through `UpdateEvents` and are never retained;
+    /// retained attributes (the selection pair) merge like any other.
     #[test]
     fn merge_delta_events_not_cached() {
+        let editable = info("editableText");
         let mut cached = Props::default();
         let (dirty, ev) = cached.merge_delta(
-            props(serde_json::json!({
-                "value": "hi", "selectionStart": 1, "selectionEnd": 3,
-                "scrollTop": 40.0, "scrollLeft": 2.0,
-            })),
+            props_for(
+                "editableText",
+                serde_json::json!({
+                    "value": "hi", "selectionStart": 1, "selectionEnd": 3,
+                }),
+            ),
+            &[],
+            &[],
+            &editable,
+        );
+        assert_eq!(ev.attrs.get(&VALUE).map(String::as_str), Some("hi"));
+        assert!(!cached.attrs.contains(&VALUE));
+        assert_eq!(cached.attrs.get(&SELECTION_START), Some(&1));
+        assert_eq!(cached.attrs.get(&SELECTION_END), Some(&3));
+        assert!(!dirty.style.any());
+
+        // The common controlled scroll offsets are act-now too.
+        let mut node = Props::default();
+        let (_, ev) = merge(
+            &mut node,
+            props(serde_json::json!({ "scrollTop": 40.0, "scrollLeft": 2.0 })),
             &[],
             &[],
         );
-        assert_eq!(ev.value.as_deref(), Some("hi"));
-        assert_eq!((ev.selection_start, ev.selection_end), (Some(1), Some(3)));
         assert_eq!((ev.scroll_top, ev.scroll_left), (Some(40.0), Some(2.0)));
-        assert!(cached.value.is_none() && cached.scroll_top.is_none());
-        assert!(cached.selection_start.is_none());
-        // Event fields alone dirty nothing.
-        assert!(!dirty.style.any() && !dirty.image && !dirty.anchor);
+        assert!(node.scroll_top.is_none() && node.scroll_left.is_none());
     }
 
     /// Variant styles replace atomically: a delta `hoverStyle` is the whole new
@@ -515,7 +495,8 @@ mod tests {
         let mut cached = props(serde_json::json!({
             "hoverStyle": { "backgroundColor": "blue", "width": 10 },
         }));
-        let (dirty, _) = cached.merge_delta(
+        let (dirty, _) = merge(
+            &mut cached,
             props(serde_json::json!({ "hoverStyle": { "outline": { "color": "white" } } })),
             &[],
             &[],
@@ -531,21 +512,22 @@ mod tests {
         assert!(dirty.hover_style);
     }
 
-    /// Unknown names in `unset`/`style_unset` warn and are ignored — a delta
-    /// from a newer/older bundle must never panic the op drain.
+    /// Unknown names in `unset`/`style_unset` are ignored — a delta from a
+    /// newer/older bundle must never panic the op drain.
     #[test]
     fn merge_delta_ignores_unknown_names() {
         let mut cached = props(serde_json::json!({ "style": { "width": 10 } }));
-        let (dirty, _) = cached.merge_delta(
+        let (dirty, _) = merge(
+            &mut cached,
             Props::default(),
-            &["nope".into(), "value".into()],
+            &["nope".into(), "value".into(), "scrollTop".into()],
             &["alsoNope".into()],
         );
         assert_eq!(
             cached.style.as_ref().unwrap().get(&WIDTH).static_val(),
             Some(Length::Px(10.0))
         );
-        assert!(!dirty.style.any());
+        assert!(!dirty.style.any() && !dirty.attrs.any());
     }
 
     /// Two sequential deltas converge to the same state as one combined delta.
@@ -555,19 +537,22 @@ mod tests {
             "style": { "backgroundColor": "red", "width": 10 }, "onClick": true,
         });
         let mut two_steps = props(base.clone());
-        two_steps.merge_delta(
+        merge(
+            &mut two_steps,
             props(serde_json::json!({ "style": { "width": 20 } })),
             &[],
             &[],
         );
-        two_steps.merge_delta(
+        merge(
+            &mut two_steps,
             props(serde_json::json!({ "style": { "height": 5 } })),
             &[],
             &["backgroundColor".into()],
         );
 
         let mut one_step = props(base);
-        one_step.merge_delta(
+        merge(
+            &mut one_step,
             props(serde_json::json!({ "style": { "width": 20, "height": 5 } })),
             &[],
             &["backgroundColor".into()],
@@ -581,32 +566,52 @@ mod tests {
         assert!(two_steps.on_click && one_step.on_click);
     }
 
-    /// `split_events` strips exactly the event-like fields, leaving state.
+    /// `split_events` strips exactly the act-now fields, leaving state.
     #[test]
     fn split_events_strips_event_fields() {
-        let mut state = props(serde_json::json!({
-            "style": { "width": 10 }, "onClick": true, "value": "v",
-            "selectionStart": 0, "selectionEnd": 1, "scrollTop": 5.0,
-        }));
+        let mut state = props_for(
+            "editableText",
+            serde_json::json!({
+                "style": { "width": 10 }, "value": "v",
+                "selectionStart": 0, "selectionEnd": 1,
+            }),
+        );
         let ev = state.split_events();
-        assert!(state.style.is_some() && state.on_click);
-        assert!(state.value.is_none() && state.selection_start.is_none());
-        assert!(state.scroll_top.is_none());
-        assert_eq!(ev.value.as_deref(), Some("v"));
+        assert!(state.style.is_some());
+        assert!(!state.attrs.contains(&VALUE));
+        assert!(state.attrs.contains(&SELECTION_START), "retained");
+        assert_eq!(ev.attrs.get(&VALUE).map(String::as_str), Some("v"));
+
+        let mut node = props(serde_json::json!({ "onClick": true, "scrollTop": 5.0 }));
+        let ev = node.split_events();
+        assert!(node.on_click && node.scroll_top.is_none());
         assert_eq!(ev.scroll_top, Some(5.0));
     }
 
-    /// `onResize` decodes, merges into the cache, and unsets without warning —
-    /// it gates nothing Rust-side, so it dirties nothing.
+    /// An element-event handler flag (`onChange`) merges into the handler
+    /// bits and `unset` clears it — each flip dirties `handlers`.
     #[test]
-    fn merge_delta_on_resize_flag() {
+    fn merge_delta_element_handlers() {
+        let editable = info("editableText");
         let mut cached = Props::default();
-        let (dirty, _) =
-            cached.merge_delta(props(serde_json::json!({ "onResize": true })), &[], &[]);
-        assert!(cached.on_resize);
-        assert!(!dirty.pointer && !dirty.scroll_listener);
-        cached.merge_delta(Props::default(), &["onResize".into()], &[]);
-        assert!(!cached.on_resize);
+        let (dirty, _) = cached.merge_delta(
+            props_for("editableText", serde_json::json!({ "onChange": true })),
+            &[],
+            &[],
+            &editable,
+        );
+        assert_ne!(cached.handlers, 0);
+        assert!(dirty.handlers);
+        let (dirty, _) = cached.merge_delta(
+            props_for("editableText", serde_json::json!({ "onChange": true })),
+            &[],
+            &[],
+            &editable,
+        );
+        assert!(!dirty.handlers, "an identical re-send is silent");
+        let (dirty, _) = cached.merge_delta(Props::default(), &["onChange".into()], &[], &editable);
+        assert_eq!(cached.handlers, 0);
+        assert!(dirty.handlers);
     }
 
     /// `onWheel` sets the `wheel` dirty flag on appearance and clears it on `unset`,
@@ -614,13 +619,17 @@ mod tests {
     #[test]
     fn merge_delta_wheel_flag() {
         let mut cached = Props::default();
-        let (dirty, _) =
-            cached.merge_delta(props(serde_json::json!({ "onWheel": true })), &[], &[]);
+        let (dirty, _) = merge(
+            &mut cached,
+            props(serde_json::json!({ "onWheel": true })),
+            &[],
+            &[],
+        );
         assert!(cached.on_wheel);
         assert!(dirty.wheel);
         assert!(!dirty.pointer && !dirty.scroll_listener);
 
-        let (dirty, _) = cached.merge_delta(Props::default(), &["onWheel".into()], &[]);
+        let (dirty, _) = merge(&mut cached, Props::default(), &["onWheel".into()], &[]);
         assert!(!cached.on_wheel);
         assert!(dirty.wheel);
     }
@@ -630,7 +639,8 @@ mod tests {
     #[test]
     fn merge_delta_cursor_reruns_its_writer() {
         let mut cached = Props::default();
-        let (dirty, _) = cached.merge_delta(
+        let (dirty, _) = merge(
+            &mut cached,
             props(serde_json::json!({ "style": { "cursor": "pointer" } })),
             &[],
             &[],
@@ -647,7 +657,7 @@ mod tests {
         assert!(runs(&dirty.style, &CURSOR_WRITER));
         assert!(!runs(&dirty.style, &LAYOUT_WRITER));
 
-        let (dirty, _) = cached.merge_delta(Props::default(), &[], &["cursor".into()]);
+        let (dirty, _) = merge(&mut cached, Props::default(), &[], &["cursor".into()]);
         assert_eq!(
             cached
                 .style
@@ -665,7 +675,8 @@ mod tests {
     #[test]
     fn merge_delta_background_image_reruns_its_writer() {
         let mut cached = Props::default();
-        let (dirty, _) = cached.merge_delta(
+        let (dirty, _) = merge(
+            &mut cached,
             props(serde_json::json!({
                 "style": { "backgroundImage": { "src": "bg.png", "mode": "repeat" } }
             })),
@@ -683,7 +694,12 @@ mod tests {
         assert!(runs(&dirty.style, &BACKGROUND_IMAGE_WRITER));
         assert!(!runs(&dirty.style, &LAYOUT_WRITER));
 
-        let (dirty, _) = cached.merge_delta(Props::default(), &[], &["backgroundImage".into()]);
+        let (dirty, _) = merge(
+            &mut cached,
+            Props::default(),
+            &[],
+            &["backgroundImage".into()],
+        );
         assert!(
             cached
                 .style

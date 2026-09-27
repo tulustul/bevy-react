@@ -11,9 +11,9 @@ use super::NodeId;
 pub struct UiEvent {
     pub id: NodeId,
     /// `"click"`, a pointer kind (`"pointerDown"` / `"pointerMove"` /
-    /// `"pointerUp"` / `"pointerEnter"` / `"pointerLeave"`), `"scroll"`,
-    /// `"wheel"`, a `canvas`'s `"resize"`, or one of an `editableText`'s
-    /// `"change"` / `"select"` / `"focus"` / `"blur"` events.
+    /// `"pointerUp"` / `"pointerEnter"` / `"pointerLeave"`), `"scroll"`, or
+    /// `"wheel"` — the common events. An element's own events ride
+    /// [`Outbound::ElementEvent`].
     pub kind: String,
     /// Cursor x within the node, normalized to `0..1` (left→right). Present only
     /// for pointer events; `None` for `"click"`.
@@ -38,23 +38,6 @@ pub struct UiEvent {
     /// (primary-only, like DOM `click`) and hover/scroll/text events.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub button: Option<u8>,
-    /// The new text of an `editableText`. Present only for `"change"` events.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub value: Option<String>,
-    /// Selection anchor, a UTF-8 **byte** offset. Present only for `"select"`.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub selection_start: Option<usize>,
-    /// Selection focus, a UTF-8 **byte** offset. Present only for `"select"`.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub selection_end: Option<usize>,
-    /// `"forward"` (anchor ≤ focus), `"backward"`, or `"none"` (collapsed).
-    /// Present only for `"select"`.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub selection_direction: Option<String>,
-    /// Whether an IME composition is in progress. Present on an `editableText`'s
-    /// `"change"` / `"select"` events.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub composing: Option<bool>,
     /// Vertical scroll offset (logical px) → `ScrollPosition.y`. Present only for
     /// `"scroll"` events.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -76,16 +59,6 @@ pub struct UiEvent {
     /// DOM `WheelEvent.deltaMode`. Present only for `"wheel"` events.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub delta_mode: Option<String>,
-    /// New logical (CSS px) width of a `canvas`'s laid-out box. Present only for
-    /// `"resize"` events, which fire on first layout (0 → W×H) and whenever the
-    /// physical pixel size changes (including a DPR change at constant logical
-    /// size). The surface was cleared — redraw.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub width: Option<f32>,
-    /// New logical height of a `canvas`'s laid-out box. Present only for
-    /// `"resize"` events; see [`width`](Self::width).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub height: Option<f32>,
 }
 
 /// Everything that flows Bevy -> JS over the single outbound channel. Internally
@@ -96,6 +69,14 @@ pub struct UiEvent {
 pub enum Outbound {
     /// A UI interaction on a reconciler node (the original click path).
     UiEvent { event: UiEvent },
+    /// An element's own event (see [`crate::element::ElementEvent`]): routed
+    /// to the node's `on<Event>` handler, called with `payload` (none for a
+    /// `null` payload).
+    ElementEvent {
+        id: super::NodeId,
+        event: String,
+        payload: serde_json::Value,
+    },
     /// A named Bevy -> React app event (e.g. `"user.disconnected"`). `value` is
     /// the payload, pre-serialized so this channel stays a single concrete type.
     Event {
@@ -130,25 +111,22 @@ pub enum ResponseResult {
 mod tests {
     use super::*;
 
-    /// A `change` event serializes its new text as camelCase `value`, while the
-    /// pointer-only fields stay omitted.
+    /// An element event serializes its payload verbatim under `payload`.
     #[test]
-    fn serializes_change_event_with_value() {
-        let ev = UiEvent {
+    fn serializes_element_event() {
+        let v = serde_json::to_value(Outbound::ElementEvent {
             id: 7,
-            kind: "change".into(),
-            value: Some("hello".into()),
-            ..Default::default()
-        };
-        let v = serde_json::to_value(&ev).expect("serializable");
-        assert_eq!(v["kind"], "change");
-        assert_eq!(v["value"], "hello");
-        assert!(v.get("clientX").is_none(), "pointer fields omitted");
-        assert!(v.get("button").is_none(), "button omitted on text events");
+            event: "change".into(),
+            payload: serde_json::json!("hello"),
+        })
+        .expect("serializable");
+        assert_eq!(v["t"], "elementEvent");
+        assert_eq!(v["event"], "change");
+        assert_eq!(v["payload"], "hello");
     }
 
     /// A pointer event carries the DOM button number; button-less events omit it
-    /// entirely (see the `serializes_change_event_with_value` assertion above).
+    /// entirely.
     #[test]
     fn serializes_pointer_event_with_button() {
         let ev = UiEvent {
@@ -160,28 +138,5 @@ mod tests {
         let v = serde_json::to_value(&ev).expect("serializable");
         assert_eq!(v["kind"], "pointerDown");
         assert_eq!(v["button"], 2);
-    }
-
-    /// A `"resize"` UI event serializes its logical size and omits every other
-    /// optional field.
-    #[test]
-    fn serializes_resize_ui_event() {
-        let v = serde_json::to_value(Outbound::UiEvent {
-            event: UiEvent {
-                id: 5,
-                kind: "resize".into(),
-                width: Some(300.0),
-                height: Some(150.0),
-                ..Default::default()
-            },
-        })
-        .unwrap();
-        assert_eq!(v["t"], "uiEvent");
-        let ev = &v["event"];
-        assert_eq!(ev["id"], 5);
-        assert_eq!(ev["kind"], "resize");
-        assert_eq!(ev["width"], 300.0);
-        assert_eq!(ev["height"], 150.0);
-        assert!(ev.get("x").is_none() && ev.get("scrollTop").is_none());
     }
 }

@@ -7,9 +7,10 @@
 //! pass and renders a self-contained `bevy.ts`: per-payload type declarations,
 //! the `ReactMessages` / `ReactRequests` / `ReactEvents` maps, a
 //! `declare module "bevy-react"` block augmenting the `BevyFilters` interface
-//! (which types the `filter` style field) — and `BevyStyle` with the app's own
-//! style properties — typed `emit` / `request` / `on` wrappers, and a
-//! structured `bevy` proxy object.
+//! (which types the `filter` style field) — `BevyStyle` with the app's own
+//! style properties, and `BevyIntrinsicElements` with the app's own elements
+//! (a feature crate's included) — typed `emit` / `request` / `on` wrappers,
+//! and a structured `bevy` proxy object.
 //!
 //! [`export`] writes that module to disk; it backs
 //! [`ReactAppExt::export_react_typescript`](crate::ReactAppExt::export_react_typescript).
@@ -25,19 +26,21 @@ use std::path::Path;
 use bevy::ecs::world::World;
 use ts_rs::{TS, TypeVisitor};
 
+use crate::element::ts::render_app_element_augmentation;
 use crate::event::ReactEventRegistry;
+use crate::ext::ExtRegistry;
 use crate::filters::FilterRegistry;
 use crate::message::ReactRegistry;
 use crate::request::ReactRequestRegistry;
+use crate::style::core_id;
 use crate::style::ts::render_app_style_augmentation;
-use crate::style::{StyleRegistry, core_id};
 
 /// Render the four registries as one self-contained TypeScript module: every
 /// payload/request/response/event/filter-params type declaration (plus transitive
 /// dependencies), the `ReactMessages` / `ReactRequests` / `ReactEvents` maps, the
-/// `BevyFilters` (and, for app style properties, `BevyStyle`) module
-/// augmentations, typed `emit`/`request`/`on` wrappers, and the structured
-/// `bevy` proxy object. See
+/// `BevyFilters` (and, for app style properties, `BevyStyle`; for app
+/// elements, `BevyIntrinsicElements`) module augmentations, typed
+/// `emit`/`request`/`on` wrappers, and the structured `bevy` proxy object. See
 /// [`ReactAppExt::export_react_typescript`](crate::ReactAppExt::export_react_typescript).
 ///
 /// Output is deterministic (sorted) so a `git diff --exit-code` after regeneration
@@ -47,8 +50,9 @@ pub(crate) fn render_typescript(
     requests: &ReactRequestRegistry,
     events: &ReactEventRegistry,
     filters: &FilterRegistry,
-    styles: &StyleRegistry,
+    ext: &ExtRegistry,
 ) -> String {
+    let styles = ext.styles();
     // One shared collector across all four registries: a type referenced by more
     // than one (e.g. a struct used as both a message and a response) is declared once.
     let mut collector = TsCollector::default();
@@ -208,6 +212,17 @@ pub(crate) fn render_typescript(
             .map(|(_, p)| p),
         &mut collector.decls,
     );
+    // The app's own elements (every registered one the core doesn't declare
+    // — the core's are typed by the package's generated file).
+    let app_elements: Vec<&crate::element::Element> = ext
+        .elements()
+        .filter(|e| {
+            !crate::elements::CORE_ELEMENTS
+                .iter()
+                .any(|c| std::ptr::eq(*c, *e))
+        })
+        .collect();
+    let element_ts = render_app_element_augmentation(&app_elements, &mut collector.decls);
 
     let mut out = String::new();
     out.push_str(
@@ -220,8 +235,10 @@ pub(crate) fn render_typescript(
          \x20 request as rawRequest,\n\
          \x20 addEventListener as rawAddEventListener,\n\
          \x20 removeEventListener as rawRemoveEventListener,\n\
-         } from \"bevy-react\";\n\n",
+         } from \"bevy-react\";\n",
     );
+    out.push_str(&element_ts.imports);
+    out.push('\n');
 
     // Type declarations.
     for decl in collector.decls.values() {
@@ -282,6 +299,7 @@ pub(crate) fn render_typescript(
     }
     out.push_str("  }\n}\n\n");
     out.push_str(&style_block);
+    out.push_str(&element_ts.body);
 
     // Typed standalone wrappers.
     out.push_str(
@@ -506,6 +524,58 @@ impl TypeVisitor for TsCollector {
     }
 }
 
+/// The named types a TS type expression references: identifiers starting
+/// with an uppercase letter, outside string literals (so a keyword union's
+/// `"flexStart"` names nothing, and lowercase object keys are skipped), minus
+/// a mapped type's own parameters (`{ [K in …]: … }` names no `K`), each once
+/// in first-seen order.
+pub(crate) fn type_idents(ts: &str) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    let mut mapped: Vec<String> = Vec::new();
+    let mut prev_bracket = false;
+    let mut chars = ts.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c == '"' {
+            for c in chars.by_ref() {
+                if c == '"' {
+                    break;
+                }
+            }
+            prev_bracket = false;
+        } else if c.is_ascii_alphabetic() || c == '_' {
+            let mut ident = String::from(c);
+            while let Some(&c) = chars.peek() {
+                if !(c.is_ascii_alphanumeric() || c == '_') {
+                    break;
+                }
+                ident.push(c);
+                chars.next();
+            }
+            // `[K in …]`: `K` is the mapped type's own parameter.
+            if prev_bracket && ts_rest_starts_with(&mut chars.clone(), "in ") {
+                mapped.push(ident.clone());
+            }
+            if c.is_ascii_uppercase() && !out.contains(&ident) {
+                out.push(ident);
+            }
+            prev_bracket = false;
+        } else if !c.is_whitespace() {
+            prev_bracket = c == '[';
+        }
+    }
+    out.retain(|i| !mapped.contains(i));
+    out
+}
+
+/// Whether the remaining characters (after skipping whitespace) start with
+/// `word`.
+fn ts_rest_starts_with(chars: &mut std::iter::Peekable<std::str::Chars<'_>>, word: &str) -> bool {
+    while chars.peek().is_some_and(|c| c.is_whitespace()) {
+        chars.next();
+    }
+    word.chars().all(|w| chars.next() == Some(w))
+}
+
 /// Quote a TypeScript object key only when it isn't a plain identifier, so common
 /// names stay readable (`count:`) while odd ones (`hp-bar:`) are still valid.
 pub(crate) fn json_key(name: &str) -> String {
@@ -549,8 +619,7 @@ pub(crate) fn export(world: &World, path: &Path) -> std::io::Result<()> {
             .unwrap_or(&empty_filters),
         world
             .get_resource::<crate::ext::ExtRegistry>()
-            .unwrap_or(&ext)
-            .styles(),
+            .unwrap_or(&ext),
     );
     // Create any missing parent directories so callers can point at a path whose
     // containing dir doesn't exist yet (e.g. `ui/src/bevy.ts`) without a NotFound
@@ -742,7 +811,7 @@ mod tests {
                 world.resource::<ReactRequestRegistry>(),
                 world.resource::<ReactEventRegistry>(),
                 world.resource::<FilterRegistry>(),
-                world.resource::<crate::ext::ExtRegistry>().styles(),
+                world.resource::<crate::ext::ExtRegistry>(),
             )
         };
         let ts = render();
@@ -896,7 +965,7 @@ mod tests {
             &ReactRequestRegistry::default(),
             &ReactEventRegistry::default(),
             &FilterRegistry::default(),
-            &StyleRegistry::default(),
+            &ExtRegistry::default(),
         );
         // No app style property → no `BevyStyle` augmentation at all.
         assert!(!ts.contains("interface BevyStyle"), "{ts}");
@@ -945,7 +1014,7 @@ mod tests {
             &ReactRequestRegistry::default(),
             &ReactEventRegistry::default(),
             &FilterRegistry::default(),
-            &StyleRegistry::default(),
+            &ExtRegistry::default(),
         );
         assert!(ts.contains(r#""gamepad.rumble": GamepadRumble;"#), "{ts}");
         // The imposter never reaches the map or the proxy. (Its orphaned type
@@ -987,7 +1056,7 @@ mod tests {
             &ReactRequestRegistry::default(),
             &ReactEventRegistry::default(),
             &filters,
-            &StyleRegistry::default(),
+            &ExtRegistry::default(),
         );
         assert!(ts.contains("    blur: CustomBlurParams;"), "{ts}");
         assert!(!ts.contains("    blur: BlurParams;"), "{ts}");

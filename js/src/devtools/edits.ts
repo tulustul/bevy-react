@@ -11,10 +11,10 @@
 // own pending ops, then the single edit op crosses inside try/catch. An invalid
 // edit can therefore never eat app ops; it surfaces as an inline error instead.
 
-import { flush, flushRaw, type Op, type SerializedProps } from "../bridge";
+import { flush, flushRaw, type Op } from "../bridge";
 import {
   checkCategory,
-  EDITABLE_PROPS,
+  editableProp,
   STYLE_FIELDS,
   type FieldCategory,
 } from "./fields";
@@ -113,13 +113,15 @@ export function applyStyleEdit(
   return applyEdit(id, field, raw, category, /* isStyle */ true);
 }
 
-/** Apply an inline prop edit (safelisted props only). */
+/** Apply an inline prop edit (the element's scalar attributes and common
+ *  scalar props — see `fields.ts`'s `editableProp`). */
 export function applyPropEdit(
   id: number,
   field: string,
   raw: string,
 ): string | null {
-  const category = EDITABLE_PROPS[field];
+  const kind = mirror.get(id)?.kind ?? "node";
+  const category = editableProp(kind, field);
   if (!category) return `"${field}" is not editable`;
   return applyEdit(id, field, raw, category, /* isStyle */ false);
 }
@@ -132,12 +134,15 @@ function applyEdit(
   isStyle: boolean,
 ): string | null {
   const trimmed = raw.trim();
+  // Rust decodes an update's props against the node's element: the op names
+  // it (before `props`, as the reconciler's do).
+  const kind = mirror.get(id)?.kind ?? "node";
   let op: Op;
   if (trimmed === "") {
     // Empty input = reset the field to its default.
     op = isStyle
-      ? { op: "update", id, props: {}, styleUnset: [field] }
-      : { op: "update", id, props: {}, unset: [field] };
+      ? { op: "update", id, kind, props: {}, styleUnset: [field] }
+      : { op: "update", id, kind, props: {}, unset: [field] };
   } else {
     // `12` → number, `true` → boolean, `{…}` → object; anything that isn't
     // valid JSON stays a string (`50%`, `#ff0000`, `flex`).
@@ -149,13 +154,11 @@ function applyEdit(
     }
     const error = checkCategory(category, value);
     if (error) return error;
-    // A bool prop set to `false` must ride `unset`: Rust's `merge_bool!` only
-    // honors `true` in a delta (same contract as the reconciler's diff).
+    // An explicit `false` is a real set (same contract as the reconciler's
+    // diff).
     op = isStyle
-      ? { op: "update", id, props: { style: { [field]: value } } }
-      : category === "boolean" && value === false
-        ? { op: "update", id, props: {}, unset: [field] }
-        : { op: "update", id, props: { [field]: value } as SerializedProps };
+      ? { op: "update", id, kind, props: { style: { [field]: value } } }
+      : { op: "update", id, kind, props: { [field]: value } };
   }
   // Isolation: drain React's own pending ops first, then cross alone. The
   // bridge tap on a successful flush updates the mirror, so the inspector

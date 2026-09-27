@@ -17,12 +17,9 @@ import {
   createCanvasElement,
   dropHandlers,
   flush,
-  packAnchorProps,
-  packShapeProps,
   push,
   ROOT_ID,
   serializeProps,
-  SHAPE_KINDS,
 } from "./bridge";
 import { installDevtools, noteOwner } from "./devtools";
 import { setupRefreshRuntime } from "./hmr";
@@ -40,6 +37,11 @@ if (DEV) setupRefreshRuntime();
 interface Instance {
   id: number;
   type: string;
+  /** The wire kind the node was created as (`type`, except a nested `<text>`,
+   *  which is a `textSpan`) — every update op names it, since Rust decodes
+   *  the props against that element. Absent on a `<canvas>` handle (its kind
+   *  is its type). */
+  kind?: string;
 }
 interface TextInstance {
   id: number;
@@ -62,20 +64,6 @@ interface HostContext {
 // (the common case) keeps the stack flat.
 const ROOT_CTX: HostContext = Object.freeze({ inText: false });
 const TEXT_CTX: HostContext = Object.freeze({ inText: true });
-
-// Fold element-specific flat props into the single opaque object their wire
-// carries: an `<anchor>`'s `entity`/`offset`/`scale` → `anchor`, an SVG shape
-// child's attrs (`cx`/`r`/`fill`/…) → `shape`. Both the create and the update
-// path pack, so delta diffs compare packed forms and a folded-field change
-// re-sends the full object (replaced atomically on the Rust side).
-function packForWire(
-  type: string,
-  props: Record<string, unknown>,
-): Record<string, unknown> {
-  if (type === "anchor") return packAnchorProps(props);
-  if (SHAPE_KINDS.has(type)) return packShapeProps(props);
-  return props;
-}
 
 // react-reconciler 0.33 tracks an "update priority" via the host config; back it
 // with a module var (NoEventPriority until React sets one).
@@ -180,8 +168,6 @@ const hostConfig: Reconciler.HostConfig<
     if (DEV) noteOwner(id, internalHandle);
     // A nested `<text>` is a styled span; a top-level one is a text block root.
     const kind = type === "text" && hostContext.inText ? "textSpan" : type;
-    // An `<anchor>`'s / SVG shape's flat props cross as one folded object.
-    const wireProps = packForWire(type, props);
     // A single-string `<text>` child rides inline on the create op (see
     // shouldSetTextContent) instead of spawning its own text entity.
     const child = props.children;
@@ -192,18 +178,18 @@ const hostConfig: Reconciler.HostConfig<
         : undefined;
     push(
       text === undefined
-        ? { op: "create", id, kind, props: serializeProps(id, wireProps, type) }
+        ? { op: "create", id, kind, props: serializeProps(id, props, type) }
         : {
             op: "create",
             id,
             kind,
-            props: serializeProps(id, wireProps, type),
+            props: serializeProps(id, props, type),
             text,
           },
     );
     // A `<canvas>`'s instance is its persistent element handle (what a ref
     // resolves to via `getPublicInstance`); it satisfies `Instance`.
-    return type === "canvas" ? createCanvasElement(id) : { id, type };
+    return type === "canvas" ? createCanvasElement(id) : { id, type, kind };
   },
 
   createTextInstance(
@@ -286,13 +272,13 @@ const hostConfig: Reconciler.HostConfig<
     _internalHandle: unknown,
   ) {
     const id = instance.id;
-    // Anchors and SVG shapes diff in packed form so a folded-field change
-    // re-sends the full `anchor`/`shape` object (replaced atomically on the
-    // Rust side). One bag packs once.
-    const oldWire = packForWire(type, oldProps);
-    const newWire =
-      oldProps === newProps ? oldWire : packForWire(type, newProps);
-    const op = buildUpdateOp(id, oldWire, newWire, type);
+    const op = buildUpdateOp(
+      id,
+      oldProps,
+      newProps,
+      type,
+      instance.kind ?? type,
+    );
     if (op) push(op);
     // Inline-text `<text>` (shouldSetTextContent): its string child rides as `text`,
     // so its change arrives here (not via commitTextUpdate).

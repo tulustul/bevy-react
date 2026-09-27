@@ -1,6 +1,6 @@
 //! The main-window hover/press/focus restyle: re-merge and re-apply a
 //! variant-bearing element's style when its interaction or focus state flips.
-//! (The `<surface>` analogue lives in `surface_events.rs` — surface nodes
+//! (The `<surface>` analogue lives in `virtual_events.rs` — surface nodes
 //! never receive a legacy `Interaction`.)
 
 use bevy::prelude::*;
@@ -110,7 +110,23 @@ pub fn apply_interaction_styles(
             (Some(b), Some(r)) => b.shared_tags.kind_cow(r.0),
             _ => std::borrow::Cow::Borrowed("node"),
         };
+        let registry = bridge.as_ref().map(|b| b.ext.clone());
+        let fallback;
+        let info = match registry.as_ref() {
+            Some(r) => r.element_or_fallback(&kind),
+            None => {
+                fallback = crate::ext::core_element_info(&kind)
+                    .or_else(|| crate::ext::core_element_info("node"))
+                    .expect("the core registers <node>");
+                &fallback
+            }
+        };
         let is_text = texts.contains(entity);
+        let attrs = match (bridge.as_ref(), rnode) {
+            (Some(b), Some(r)) => b.props_cache.get(&r.0).map(|p| &p.attrs),
+            _ => None,
+        }
+        .unwrap_or(crate::element::Attrs::empty());
         // A promoted layer root's merged `opacity` (base or variant-carried)
         // drives the group alpha instead of folding into colors, and its
         // merged `filter` re-stamps `FilterInput` (a hover filter — with a
@@ -119,16 +135,20 @@ pub fn apply_interaction_styles(
         // included). A `<text>` root's (and an `editableText`'s) glyph
         // appearance rides the text writers, so hover/press/focus color and
         // font changes land — with the opacity fold suppressed on a
-        // promoted root.
+        // promoted root. The element's own writers reading a changed
+        // property re-run too (an `<image>`'s tint fold).
         let wctx = crate::style::WriterCtx {
             promoted: promoted.is_some(),
             fresh: false,
             kind: &kind,
-            flags: flags.copied().unwrap_or_default(),
-            text: is_text || kind == "editableText",
+            flags: flags.copied().unwrap_or(info.decl.flags),
             assets: &assets,
             fonts,
             styles,
+            element: info,
+            attrs,
+            events: crate::element::Attrs::empty(),
+            id: rnode.map_or(0, |r| r.0),
         };
         // The replaced values are unknown here (a computed invalidation
         // answers conservatively).
@@ -141,37 +161,9 @@ pub fn apply_interaction_styles(
                 kind: &kind,
             },
         );
+        let own = info.writers_for(&changed, crate::element::AttrDirty::NONE);
         let mut ec = commands.entity(entity);
-        crate::ui_map::apply_style_masked(&mut ec, &style, writers, &wctx, invalidation);
-        // An `<image>`'s own `ImageNode` folds the merged `opacity` into its
-        // tint (the element's `tint` prop lives in the retained props).
-        if kind == "image"
-            && writers.intersects(styles.readers_of(&crate::style::props::OPACITY))
-            && let (Some(bridge), Some(rnode)) = (bridge.as_ref(), rnode)
-        {
-            use crate::protocol::animatable::AnimatableField;
-            let tint = bridge
-                .props_cache
-                .get(&rnode.0)
-                .and_then(|p| p.tint.clone());
-            let opacity = style
-                .as_ref()
-                .and_then(|s| s.get(&crate::style::props::OPACITY).static_val());
-            let is_promoted = promoted.is_some();
-            ec.queue(move |mut entity: EntityWorldMut| {
-                if let Some(mut image) = entity.get_mut::<bevy::ui::widget::ImageNode>() {
-                    let color = crate::ui_map::image_tint(
-                        Color::WHITE,
-                        tint.as_deref(),
-                        opacity,
-                        is_promoted,
-                    );
-                    if image.color != color {
-                        image.color = color;
-                    }
-                }
-            });
-        }
+        crate::ui_map::apply_style_masked(&mut ec, &style, writers, own, &wctx, invalidation);
         // Bare-string children inherit the merged result like they do on a
         // re-render (the halves the restyle re-ran).
         let color_half = writers.intersects(styles.masks.text_color);

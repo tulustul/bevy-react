@@ -1,53 +1,31 @@
-//! The `Op::Create` path: spawn a host element of the op's kind with its
-//! style/props, and seed the bridge's per-node bookkeeping (props cache, text
-//! styles, editable/surface/root sets, controlled scroll, layer-promotion
-//! hints).
+//! The `Op::Create` path: spawn a host element of the op's kind through its
+//! registered [`Element`](crate::element::Element) — the spawn hook for the
+//! born-with components, then the style + element writers, the common prop
+//! stamps, and the bridge's per-node bookkeeping (props cache, text styles,
+//! detached nodes, controlled scroll, layer-promotion hints).
 
-use accesskit::Role;
-use bevy::a11y::AccessibilityNode;
 use bevy::image::Image;
-use bevy::input_focus::AutoFocus;
-use bevy::input_focus::tab_navigation::TabIndex;
-use bevy::platform::collections::HashSet;
 use bevy::prelude::*;
-use bevy::text::{EditableText, TextCursorStyle};
-use bevy::ui::FocusPolicy;
-use bevy::ui::widget::NodeImageMode;
 
-use super::stamps::{
-    apply_anchor, apply_scroll_props_fresh, apply_style_variants_fresh, create_controlled_scroll,
-    queue_pending_selection, register_editable_handlers, stamp_common, warn_span_ignored,
-};
-use super::stats::UiAssets;
-use crate::bridge::{CanvasSizeTracker, JsBridge, ReactNode, SpanKind};
-use crate::canvas::{CanvasSurface, blank_canvas_image};
-use crate::ext::ElementFlags;
+use super::stamps::{apply_scroll_props_fresh, create_controlled_scroll, stamp_common};
+use crate::bridge::{JsBridge, SpanKind};
+use crate::element::SpawnCtx;
+use crate::ext::TextRole;
 use crate::plugin::Fonts;
-use crate::portal::{RPortal, blank_portal_image};
-use crate::protocol::animatable::Animatable;
-use crate::protocol::units::Length;
 use crate::protocol::{NodeId, props::Props};
-use crate::style::Style;
 use crate::style::WriterCtx;
-use crate::style::props::{
-    BACKDROP_FILTER, CACHE, FILTER, FLEX_DIRECTION, GLOBAL_Z_INDEX, HEIGHT, MORPH_FILTER,
-    TRANSFORM3D, WIDTH,
-};
-use crate::surface::RSurface;
-use crate::ui_map::{
-    AtlasLayoutCache, apply_atlas, apply_style_fresh, fresh_style_bundle, image_node,
-    overlay_style, resolved_text_style, svg_image_node, text_layout,
-};
+use crate::style::props::{BACKDROP_FILTER, CACHE, FILTER, MORPH_FILTER, TRANSFORM3D};
+use crate::ui_map::{apply_style_fresh, resolved_text_style};
 
 /// Apply one `Op::Create`: spawn the element for `kind` and record it in the
-/// bridge. Extracted from the `apply_js_ops` match; runs once per create op.
+/// bridge. Runs once per create op.
 ///
 /// The spawn is **fresh-path** throughout: the always-present components ride
-/// the `spawn((…))` bundle ([`fresh_style_bundle`] + the element's own — one
-/// archetype, no moves), the rest of the style goes through
-/// [`apply_style_fresh`], and the prop stamps are the insert-only variants
-/// (`stamps::*_fresh`, [`stamp_common`]) — a fresh entity has nothing to remove,
-/// so none of the update path's "absent → remove" commands are queued.
+/// the spawn bundle ([`SpawnCtx::spawn`] — one archetype, no moves), the rest
+/// of the style and the element's attributes go through the writers' fresh
+/// apply, and the prop stamps are the insert-only variants — a fresh entity
+/// has nothing to remove, so none of the update path's "absent → remove"
+/// commands are queued.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn apply_create(
     commands: &mut Commands,
@@ -55,7 +33,6 @@ pub(super) fn apply_create(
     assets: &AssetServer,
     fonts: &Fonts,
     images: &mut Assets<Image>,
-    ui_assets: &mut UiAssets,
     id: NodeId,
     kind: String,
     mut props: Box<Props>,
@@ -64,318 +41,95 @@ pub(super) fn apply_create(
     // Attribute apply-time parse warnings (colors, fonts, …) fired
     // while building this node to its id (see `crate::diag`).
     let _diag = crate::diag::node_scope(id);
-    // The kind's flags (built-in by name, registered through its handler):
-    // the sites below that branch on "is this a node-less child" read them.
     let registry = bridge.ext.clone();
-    let flags = registry.flags_for_kind(&kind);
-    // What the style writers see of this node: fresh (nothing to remove),
-    // never promoted at create (promotion is evaluated after the drain).
+    // An unregistered kind mounts as a plain node so its children still
+    // attach; a known optional feature's kind is reported (`featureMissing`).
+    if registry.element_info(&kind).is_none() {
+        crate::ext::warn_feature_missing_kind(&kind);
+    }
+    let info = registry.element_or_fallback(&kind);
+    let flags = info.decl.flags;
+    // The act-now props act once, here, and are never retained.
+    let events = props.split_events();
+    // The retained style carries the element's defaults (see
+    // `ElementInfo::fill_default_style`).
+    info.fill_default_style(&mut props.style);
+    let style = &props.style;
+    let entity = {
+        let mut ctx = SpawnCtx {
+            commands,
+            images,
+            assets,
+            fonts,
+            id,
+            kind: &kind,
+            props: &props,
+            style,
+            text: text.as_deref(),
+            flags,
+        };
+        match info.decl.spawn {
+            Some(spawn) => spawn(&mut ctx),
+            None => ctx.spawn(()),
+        }
+    };
+    // What the writers see of this node: fresh (nothing to remove), never
+    // promoted at create (promotion is evaluated after the drain).
     let wctx = WriterCtx {
         promoted: false,
         fresh: true,
         kind: &kind,
         flags,
-        text: matches!(kind.as_str(), "text" | "textSpan" | "editableText"),
         assets,
         fonts,
         styles: registry.styles(),
+        element: info,
+        attrs: &props.attrs,
+        events: &events.attrs,
+        id,
     };
-    let entity = match kind.as_str() {
-        // A `<text>` root: a UI node carrying the text block + style. A
-        // single-string child rides inline as `text` (no child span). Fully
-        // interactive like a `<node>` (`stamp_common`): hover/press variants,
-        // pointer handlers, animation bindings, anchor — and layer-eligible
-        // (a `filter`/`transform3d`/… promotes it like any element).
-        "text" => {
-            let mut ec = commands.spawn((
-                ReactNode(id),
-                fresh_style_bundle(&props.style, FocusPolicy::Pass),
-                Text::new(text.clone().unwrap_or_default()),
-                resolved_text_style(props.style.as_ref(), fonts, false),
-                ElementFlags::NODE,
+    let mut ec = commands.entity(entity);
+    apply_style_fresh(&mut ec, style, &wctx);
+    super::stamps::warn_ignored_styles(info, registry.styles(), &props);
+    if flags.text == TextRole::Span {
+        super::stamps::warn_span_ignored(&props);
+    }
+    stamp_common(
+        &mut ec,
+        &mut bridge.animated,
+        id,
+        &props,
+        style,
+        info.decl.common,
+        flags,
+    );
+    if info.decl.common.contains(crate::element::Common::SCROLL) {
+        apply_scroll_props_fresh(&mut ec, &props);
+        create_controlled_scroll(bridge, &mut ec, id, &props, &events);
+    } else if info.decl.common.contains(crate::element::Common::WHEEL) && props.on_wheel {
+        ec.insert(crate::bridge::WheelListener);
+    }
+    if props.handlers != 0 {
+        commands
+            .entity(entity)
+            .insert(crate::element::EventSubscriptions(
+                props.handler_events(info),
             ));
-            apply_style_fresh(&mut ec, &props.style, &wctx);
-            if let Some(layout) = text_layout(props.style.as_ref()) {
-                ec.insert(layout);
-            }
-            stamp_common(
-                &mut ec,
-                &mut bridge.animated,
-                &mut bridge.anchors,
-                id,
-                &props,
-            );
-            ec.id()
-        }
-        // A nested `<text>`: a styled span (no layout box of its own).
-        // A single-string child rides inline as `text`. Layer-family styles
-        // and pointer handlers are structural no-ops on a span — warned so
-        // the silence is visible in devtools.
-        "textSpan" => {
-            warn_span_ignored(&props);
-            commands
-                .spawn((
-                    ReactNode(id),
-                    TextSpan(text.clone().unwrap_or_default()),
-                    resolved_text_style(props.style.as_ref(), fonts, false),
-                    ElementFlags::NODE_LESS,
-                ))
-                .id()
-        }
-        // A `<canvas>`: a styled node carrying an `ImageNode` whose
-        // texture the canvas system paints from the display list. The
-        // image stretches to fill the node's laid-out box.
-        "canvas" => {
-            let handle = images.add(blank_canvas_image());
-            let mut node_img = ImageNode::new(handle);
-            node_img.image_mode = NodeImageMode::Stretch;
-            let mut ec = commands.spawn((
-                ReactNode(id),
-                fresh_style_bundle(&props.style, FocusPolicy::Pass),
-                node_img,
-                CanvasSurface::new(props.draw.clone().unwrap_or_default()),
-                CanvasSizeTracker::default(),
-                crate::ext::LiveTexture,
-                ElementFlags::OWNS_IMAGE,
-            ));
-            apply_style_fresh(&mut ec, &props.style, &wctx);
-            stamp_common(
-                &mut ec,
-                &mut bridge.animated,
-                &mut bridge.anchors,
-                id,
-                &props,
-            );
-            ec.id()
-        }
-        // A `<portal>`: a styled node carrying an `ImageNode` whose
-        // texture is an offscreen render target the [`crate::portal`]
-        // registry owns. Starts on a blank placeholder; `bind_portals`
-        // swaps in the real target texture for `target` once it exists.
-        "portal" => {
-            let handle = images.add(blank_portal_image());
-            let mut node_img = ImageNode::new(handle);
-            node_img.image_mode = NodeImageMode::Stretch;
-            let mut ec = commands.spawn((
-                ReactNode(id),
-                fresh_style_bundle(&props.style, FocusPolicy::Pass),
-                node_img,
-                RPortal(props.target.clone().unwrap_or_default()),
-                crate::ext::LiveTexture,
-                ElementFlags::OWNS_IMAGE,
-            ));
-            apply_style_fresh(&mut ec, &props.style, &wctx);
-            stamp_common(
-                &mut ec,
-                &mut bridge.animated,
-                &mut bridge.anchors,
-                id,
-                &props,
-            );
-            ec.id()
-        }
-        // A `<surface>`: a styled container whose subtree renders into
-        // an offscreen image instead of the on-screen UI. It is a
-        // **detached UI root** — `crate::surface::bind_surfaces`
-        // points its `UiTargetCamera` at the surface's offscreen UI
-        // camera, and the child-attach ops keep it out of the
-        // on-screen Bevy hierarchy. The root fills the texture by
-        // default (user `style` overrides). Pointer/click events on it
-        // arrive via the surface picking path (`collect_surface_events`),
-        // not the legacy `Interaction` focus path.
-        "surface" => {
-            let style = overlay_style(surface_root_base().as_ref(), props.style.as_ref());
-            let mut ec = commands.spawn((
-                ReactNode(id),
-                fresh_style_bundle(&style, FocusPolicy::Pass),
-                RSurface(props.target.clone().unwrap_or_default()),
-                ElementFlags::DETACHED_ROOT,
-            ));
-            apply_style_fresh(&mut ec, &style, &wctx);
-            if props.anchor.is_some() {
-                apply_anchor(&mut ec, &mut bridge.anchors, id, &props);
-            }
-            ec.id()
-        }
-        // A `<root>`: the screen-space twin of `<surface>` — a styled
-        // container that is a **detached UI root** on the default UI
-        // camera (no `UiTargetCamera`), for overlays that must float
-        // above and stay out of the app's own tree (the devtools
-        // panel). The child-attach ops keep it out of the Bevy
-        // hierarchy like a surface. It fills the window as a column
-        // and sits just above the window tree by default — both from
-        // `root_base()`, overlaid by the user's `style`; baking
-        // `globalZIndex` into the style (instead of inserting a raw
-        // `GlobalZIndex`) means masked re-applies on re-render keep
-        // re-asserting it. The root itself never blocks or hovers
-        // picking; its children are ordinary pickable nodes.
-        "root" => {
-            let style = overlay_style(root_base().as_ref(), props.style.as_ref());
-            let mut ec = commands.spawn((
-                ReactNode(id),
-                fresh_style_bundle(&style, FocusPolicy::Pass),
-                crate::bridge::RRoot,
-                ElementFlags::DETACHED_ROOT,
-            ));
-            // Overrides the bundle's `focusPolicy` mirror in place (same
-            // archetype — `Pickable` is already present).
-            ec.insert(Pickable::IGNORE);
-            apply_style_fresh(&mut ec, &style, &wctx);
-            if props.anchor.is_some() {
-                apply_anchor(&mut ec, &mut bridge.anchors, id, &props);
-            }
-            ec.id()
-        }
-        // An `<editableText>`: a focusable native text input. Bevy's
-        // `EditableTextInputPlugin` (registered by `DefaultPlugins`)
-        // drives keyboard/focus/cursor/selection/clipboard; we just
-        // spawn the widget and observe `TextEditChange` for `onChange`.
-        "editableText" => {
-            let mut editable = EditableText::new(props.value.as_deref().unwrap_or_default());
-            editable.max_characters = props.max_length;
-            editable.allow_newlines = props.multiline;
-            let (text_color, font, line_height, letter_spacing) =
-                resolved_text_style(props.style.as_ref(), fonts, false);
-            let mut ec = commands.spawn((
-                ReactNode(id),
-                fresh_style_bundle(&props.style, FocusPolicy::Pass),
-                editable,
-                text_color,
-                font,
-                line_height,
-                letter_spacing,
-                TextLayout {
-                    linebreak: if props.multiline {
-                        LineBreak::WordBoundary
-                    } else {
-                        LineBreak::NoWrap
-                    },
-                    ..default()
-                },
-                // Caret follows the text color so it stays visible on
-                // any themed background (the default is a dark slate).
-                TextCursorStyle {
-                    color: text_color.0,
-                    ..default()
-                },
-                // Focusable via click (the widget's picking observers)
-                // and Tab navigation.
-                TabIndex(0),
-                // The input is a click owner BY TYPE — `collect_ui_events`
-                // matches `EditableText` directly — so a press inside it
-                // resolves to the input, not to an `onClick` ancestor behind
-                // it (e.g. a selectable card wrapping a form). The
-                // `Interaction` here serves hover/press styling and the
-                // pointer-capture claim.
-                Interaction::default(),
-                // Announce as a text field to assistive tech; the live
-                // value is kept in sync by `sync_editable_a11y`.
-                AccessibilityNode(editable_a11y_node(&props)),
-                ElementFlags::NODE,
-            ));
-            apply_style_fresh(&mut ec, &props.style, &wctx);
-            // `AutoFocus`'s `on_add` hook focuses the entity once mounted.
-            if props.autofocus {
-                ec.insert(AutoFocus);
-            }
-            // `focusStyle` (and any hover/press) — applied Bevy-side as
-            // the field's focus/interaction state changes.
-            apply_style_variants_fresh(&mut ec, &props);
-            if props.anchor.is_some() {
-                apply_anchor(&mut ec, &mut bridge.anchors, id, &props);
-            }
-            ec.id()
-        }
-        // A registered kind (a feature crate's element — see `crate::ext`)
-        // mounts through its handler. An unregistered kind mounts as a plain
-        // node so its children still attach; if it is a known optional
-        // feature's kind, that is reported (`featureMissing`).
-        _ => match registry.element(&kind) {
-            Some(handler) => {
-                let mut ctx = crate::ext::ElementCtx {
-                    commands,
-                    images,
-                    animated: &mut bridge.animated,
-                    anchors: &mut bridge.anchors,
-                    writer: &wctx,
-                    id,
-                };
-                handler.spawn(&mut ctx, &kind, &props, text.as_deref())
-            }
-            None => {
-                crate::ext::warn_feature_missing_kind(&kind);
-                spawn_element(
-                    commands,
-                    &mut bridge.animated,
-                    &mut bridge.anchors,
-                    id,
-                    &kind,
-                    &props,
-                    &wctx,
-                    assets,
-                    &mut ui_assets.layouts,
-                    &mut ui_assets.atlas_cache,
-                )
-            }
-        },
-    };
-    if matches!(kind.as_str(), "text" | "textSpan") {
+    }
+    // The text service: a block's bare-string children inherit its resolved
+    // style; a styled span keeps its own.
+    if matches!(flags.text, TextRole::Block | TextRole::Span) {
         bridge
             .text_styles
-            .insert(id, resolved_text_style(props.style.as_ref(), fonts, false));
+            .insert(id, resolved_text_style(style.as_ref(), fonts, false));
     }
-    // A `textSpan` carries its text in a `TextSpan` component, so a later
-    // `Op::UpdateText` must update that (not insert a stray `Text`). It is
-    // `InlineStyled`: nested `<text>` spans keep their own style.
-    if kind == "textSpan" {
+    if flags.text == TextRole::Span {
+        // Its text lives in a `TextSpan`, so a later `Op::UpdateText` must
+        // update that (not insert a stray `Text`).
         bridge.spans.insert(id, SpanKind::InlineStyled);
     }
-    if kind == "editableText" {
-        bridge.editable_inputs.insert(id);
-        bridge
-            .editable_values
-            .insert(id, props.value.clone().unwrap_or_default());
-        register_editable_handlers(bridge, id, &props);
-        queue_pending_selection(bridge, id, props.selection_start, props.selection_end);
-    }
-    if kind == "surface" {
-        bridge.surfaces.insert(id);
-    }
-    if kind == "root" {
-        bridge.roots.insert(id);
-    }
-    // Controlled scroll + the `onScroll` listener apply to any node
-    // (anything with `overflow: scroll`). A `textSpan` or an SVG shape
-    // child has no `Node` and so never matches the read-back query —
-    // harmless there.
-    {
-        let mut ec = commands.entity(entity);
-        apply_scroll_props_fresh(&mut ec, &props);
-        create_controlled_scroll(bridge, &mut ec, id, &props);
-    }
-    // `backgroundImage` is applied by its writer (in the fresh apply above)
-    // on any element except those whose `ImageNode` belongs to the element
-    // itself (image/canvas/portal/svg — `ElementFlags::owns_image`) and
-    // `surface` (a detached root with its own branches everywhere); those
-    // warn here so the silence is visible in devtools.
-    match kind.as_str() {
-        "image" | "canvas" | "portal" => {
-            let element: &'static str = match kind.as_str() {
-                "image" => "image",
-                "canvas" => "canvas",
-                "portal" => "portal",
-                _ => unreachable!("guarded by the outer arm"),
-            };
-            crate::background_image::warn_ignored(element, &props);
-        }
-        "surface" => crate::background_image::warn_ignored("surface", &props),
-        // A node-less element (`textSpan`, an SVG shape child) has no
-        // `Node`/box of its own to paint into.
-        _ if flags.node_less => {}
-        _ if flags.owns_image => {
-            crate::background_image::warn_ignored("element", &props);
-        }
-        _ => {}
+    if flags.detached {
+        bridge.detached.insert(id);
     }
     bridge.nodes.insert(id, entity);
     // `name` → Bevy `Name` + the by-name index (see `crate::names`).
@@ -409,123 +163,8 @@ pub(super) fn apply_create(
         bridge.layer_dirty.insert(id);
     }
     // Seed the retained props a later update's delta merges into — the
-    // op's own box, in place (no re-box, no copy). Event-like fields were
-    // consumed by the create itself and are never part of the retained
-    // state.
-    let _ = props.split_events();
+    // op's own box, in place (no re-box, no copy).
     bridge.props_cache.insert(id, props);
-}
-
-/// Spawn a `node`, `button`, or `image` host element with its style. Also the
-/// landing spot for `anchor` (via `apply_create`'s `_` arm): an `<anchor>` is a
-/// plain node whose `anchor` prop `stamp_common` → `apply_anchor` binds.
-#[allow(clippy::too_many_arguments)]
-fn spawn_element(
-    commands: &mut Commands,
-    animated: &mut HashSet<NodeId>,
-    anchors: &mut crate::anchor::AnchorIndex,
-    id: NodeId,
-    kind: &str,
-    props: &Props,
-    wctx: &WriterCtx,
-    assets: &AssetServer,
-    layouts: &mut Assets<TextureAtlasLayout>,
-    atlas_cache: &mut AtlasLayoutCache,
-) -> Entity {
-    // A `<button>` captures the pointer by default (`FocusPolicy::Block` unless
-    // the style says otherwise — the focus-policy writer's default);
-    // `Button` requires `Interaction`, which the spawn adds automatically.
-    let focus_default = crate::style::writers::default_focus_policy(kind);
-    let bundle = (
-        ReactNode(id),
-        fresh_style_bundle(&props.style, focus_default),
-        crate::ext::builtin_flags(kind).unwrap_or(ElementFlags::NODE),
-    );
-    let mut ec = if kind == "button" {
-        commands.spawn((bundle, Button))
-    } else {
-        commands.spawn(bundle)
-    };
-    apply_style_fresh(&mut ec, &props.style, wctx);
-    match kind {
-        // An `.svg` src (case-insensitive) enters **svg mode**: the texture is
-        // an element-owned raster target painted at laid-out size, the parsed
-        // document rides an `SvgSurface`, and the path is never loaded as an
-        // `Image` (see `crate::svg`). `atlas`/`sourceRect` have no source
-        // texture to apply to — warned here, under the op's diag node scope.
-        "image" if props.src.as_deref().is_some_and(crate::svg::is_svg_src) => {
-            crate::svg::warn_ignored_attrs(props.atlas.is_some(), props.source_rect.is_some());
-            let path = props.src.clone().expect("guarded by the arm");
-            let img = svg_image_node(props, false);
-            ec.queue(move |entity: EntityWorldMut| crate::svg::ensure_svg_image(entity, path, img));
-        }
-        "image" => {
-            let mut img = image_node(props, assets, false);
-            apply_atlas(&mut img, props, layouts, atlas_cache);
-            ec.insert(img);
-        }
-        _ => {}
-    }
-    stamp_common(&mut ec, animated, anchors, id, props);
-    ec.id()
-}
-
-/// The default style a `<surface>` root gets before the user's `style` is overlaid:
-/// it fills the offscreen texture (the camera's logical viewport) so the subtree
-/// has a definite box to lay out in. The user can override `width`/`height` (or any
-/// other field) via the element's `style` prop.
-pub(super) fn surface_root_base() -> Option<Style> {
-    let mut style = Style::default();
-    style.set(&WIDTH, Animatable::Static(Length::Percent(100.0)));
-    style.set(&HEIGHT, Animatable::Static(Length::Percent(100.0)));
-    Some(style)
-}
-
-/// The default style a `<root>` gets before the user's `style` is overlaid: a
-/// window-filling overlay just above the window tree. `globalZIndex: 1` (not a
-/// magic max — see below) because bevy_ui sorts root nodes by `(GlobalZIndex,
-/// ZIndex)` with NO tiebreak: equal keys fall back to query iteration order,
-/// which is unspecified — a bare `<root>` at the window tree's implicit 0 could
-/// land above OR below it. `1` is deterministically above, while leaving the
-/// whole range open for the user's own layering (`style.globalZIndex` overrides
-/// in either direction; the devtools panel claims `i32::MAX` explicitly).
-/// Baked into the *style* rather than inserted as a raw `GlobalZIndex`
-/// component so masked style re-applies on re-render re-assert it (a raw
-/// insert would be stripped the first time the global-z-index writer runs
-/// with no style value).
-pub(super) fn root_base() -> Option<Style> {
-    let mut style = Style::default();
-    style.set(&WIDTH, Animatable::Static(Length::Percent(100.0)));
-    style.set(&HEIGHT, Animatable::Static(Length::Percent(100.0)));
-    // Default to a column, like the main UI root (plugin.rs). Bevy's own
-    // default is `row`, but a row container mis-measures a single
-    // content-sized child that has `maxWidth` + wrapping text: the text is
-    // sized at max-content (one line) during the row's main-axis pass, then
-    // clamped to `maxWidth` and wrapped on render — so the child's height is
-    // committed one line short while its siblings sit at the wrapped
-    // positions. A `<root>` is a top-level app container like the main root,
-    // so `column` is both the least-surprising default and the one that
-    // sidesteps that quirk. Overridable via `style.flexDirection`.
-    style.set(&FLEX_DIRECTION, FlexDirection::Column);
-    style.set(&GLOBAL_Z_INDEX, 1);
-    Some(style)
-}
-
-/// Build the accesskit node for an `editableText` from its props (role + label +
-/// initial value). The live value is kept current by
-/// [`sync_editable_a11y`](crate::reconcile::sync_editable_a11y).
-pub(super) fn editable_a11y_node(props: &Props) -> accesskit::Node {
-    let role = if props.multiline {
-        Role::MultilineTextInput
-    } else {
-        Role::TextInput
-    };
-    let mut node = accesskit::Node::new(role);
-    if let Some(label) = &props.aria_label {
-        node.set_label(label.clone());
-    }
-    node.set_value(props.value.clone().unwrap_or_default());
-    node
 }
 
 #[cfg(test)]
@@ -600,11 +239,12 @@ mod tests {
         );
     }
 
-    /// Layer-family styles and pointer handlers on a nested `<text>` span are
-    /// structural no-ops (a span has no layout box; its glyphs belong to the
-    /// parent block) — both must warn into the devtools diag sink instead of
-    /// failing silently. The sink is process-global: serialize via the test
-    /// lock and filter drained entries by our node id.
+    /// Layer-family styles on a nested `<text>` span are structural no-ops
+    /// (a span has no layout box; its glyphs belong to the parent block) —
+    /// they warn into the devtools diag sink instead of failing silently.
+    /// Pointer handlers are outside a span's common groups: dropped at decode
+    /// with a `propIgnored` warning. The runtime sink is process-global:
+    /// serialize via the test lock and filter drained entries by our node id.
     #[cfg(all(feature = "devtools", debug_assertions))]
     #[test]
     fn span_layer_styles_and_handlers_warn() {
@@ -613,6 +253,22 @@ mod tests {
         let _ = crate::diag::take_runtime_warnings();
 
         let (mut app, tx, _root) = ordering_app();
+        crate::diag::decode_batch_start();
+        let span_props = Props::decode_for(
+            "textSpan",
+            serde_json::json!({
+                "style": { "filter": { "name": "blur" } },
+                "onClick": true,
+            }),
+        );
+        let decoded = crate::diag::take_decode_warnings();
+        assert!(
+            decoded
+                .iter()
+                .any(|w| w.kind == "propIgnored" && w.value == "onClick"),
+            "an onClick on a span is dropped with propIgnored; got {decoded:?}"
+        );
+        assert!(!span_props.on_click, "the ignored handler is dropped");
         tx.send(vec![
             Op::Create {
                 id: 1,
@@ -623,11 +279,7 @@ mod tests {
             Op::Create {
                 id: 2,
                 kind: "textSpan".into(),
-                props: serde_json::from_value(serde_json::json!({
-                    "style": { "filter": { "name": "blur" } },
-                    "onClick": true,
-                }))
-                .unwrap(),
+                props: span_props,
                 text: Some("run".into()),
             },
             Op::Append {
@@ -646,54 +298,6 @@ mod tests {
             mine.iter()
                 .any(|w| w.kind == "spanLayerStyle" && w.value == "filter"),
             "a filter on a span must warn spanLayerStyle; got {mine:?}"
-        );
-        assert!(
-            mine.iter()
-                .any(|w| w.kind == "spanHandlers" && w.value == "onClick"),
-            "an onClick on a span must warn spanHandlers; got {mine:?}"
-        );
-    }
-
-    /// A `<portal>` mounts to an `ImageNode` carrying an `RPortal` with its target
-    /// name; an update rebinds the name.
-    #[test]
-    fn portal_mounts_with_target_and_rebinds() {
-        use bevy::ui::widget::ImageNode;
-        let (mut app, tx, _root) = ordering_app();
-        tx.send(vec![Op::Create {
-            id: 1,
-            kind: "portal".into(),
-            props: serde_json::from_value(serde_json::json!({ "target": "follow" }))
-                .expect("valid portal props"),
-            text: None,
-        }])
-        .unwrap();
-        app.update();
-
-        let e = ent(&app, 1);
-        assert_eq!(
-            app.world().entity(e).get::<RPortal>().map(|p| p.0.clone()),
-            Some("follow".to_string()),
-            "a portal carries its target name"
-        );
-        assert!(
-            app.world().entity(e).get::<ImageNode>().is_some(),
-            "a portal is backed by an ImageNode"
-        );
-
-        tx.send(vec![update_delta(
-            1,
-            serde_json::from_value(serde_json::json!({ "target": "minimap" }))
-                .expect("valid portal props"),
-            &[],
-            &[],
-        )])
-        .unwrap();
-        app.update();
-        assert_eq!(
-            app.world().entity(e).get::<RPortal>().map(|p| p.0.clone()),
-            Some("minimap".to_string()),
-            "an update rebinds the portal's target name"
         );
     }
 
@@ -776,176 +380,6 @@ mod tests {
                 NodeImageMode::Stretch
             ),
             "default mode is Stretch"
-        );
-    }
-
-    /// A `backgroundImage` on a `<canvas>` is ignored (the canvas owns its
-    /// `ImageNode`): no marker components appear and the canvas texture is
-    /// left alone.
-    #[test]
-    fn background_image_ignored_on_canvas() {
-        use crate::background_image::{BackgroundTileScale, RBackgroundTexture};
-        use bevy::ui::widget::ImageNode;
-        let (mut app, tx, _root) = ordering_app();
-        tx.send(vec![Op::Create {
-            id: 1,
-            kind: "canvas".into(),
-            props: serde_json::from_value(serde_json::json!({
-                "style": { "backgroundImage": {
-                    "src": { "texture": "x" }, "mode": "repeat"
-                } }
-            }))
-            .expect("valid props"),
-            text: None,
-        }])
-        .unwrap();
-        app.update();
-
-        let e = ent(&app, 1);
-        assert!(
-            app.world().entity(e).get::<ImageNode>().is_some(),
-            "the canvas keeps its own ImageNode"
-        );
-        assert!(app.world().entity(e).get::<RBackgroundTexture>().is_none());
-        assert!(app.world().entity(e).get::<BackgroundTileScale>().is_none());
-    }
-
-    /// An `<anchor>` rides the plain-node fallback path: the kind has no dedicated
-    /// match arm, but its `anchor` prop stamps an [`Anchored`] binding via
-    /// `stamp_common` → `apply_anchor`. Pins the fallback contract the JS bridge
-    /// relies on (create, rebind on delta, and unset → component removal).
-    #[test]
-    fn anchor_kind_mounts_and_rebinds() {
-        use crate::anchor::Anchored;
-        let (mut app, tx, _root) = ordering_app();
-        let target = app.world_mut().spawn_empty().id();
-        let bits = target.to_bits() as f64;
-        tx.send(vec![Op::Create {
-            id: 1,
-            kind: "anchor".into(),
-            props: serde_json::from_value(serde_json::json!({
-                "anchor": { "entity": bits, "offset": [0.0, 1.0, 0.0] }
-            }))
-            .expect("valid anchor props"),
-            text: None,
-        }])
-        .unwrap();
-        app.update();
-
-        let e = ent(&app, 1);
-        assert!(
-            app.world().entity(e).get::<Node>().is_some(),
-            "an anchor is a plain node host element"
-        );
-        let anchored = app
-            .world()
-            .entity(e)
-            .get::<Anchored>()
-            .expect("the anchor prop stamps an Anchored binding")
-            .clone();
-        assert_eq!(anchored.target, target, "follows the wire entity");
-        assert_eq!(anchored.offset, Vec3::new(0.0, 1.0, 0.0));
-
-        // A delta with a new offset re-stamps the binding (the JS side always
-        // re-sends the full anchor object).
-        tx.send(vec![update_delta(
-            1,
-            serde_json::from_value(serde_json::json!({
-                "anchor": { "entity": bits, "offset": [0.0, 2.0, 0.0] }
-            }))
-            .expect("valid anchor props"),
-            &[],
-            &[],
-        )])
-        .unwrap();
-        app.update();
-        assert_eq!(
-            app.world().entity(e).get::<Anchored>().map(|a| a.offset),
-            Some(Vec3::new(0.0, 2.0, 0.0)),
-            "a delta rebinds the anchor offset"
-        );
-
-        // Unsetting the anchor prop removes the binding entirely.
-        tx.send(vec![update_delta(1, Props::default(), &["anchor"], &[])])
-            .unwrap();
-        app.update();
-        assert!(
-            app.world().entity(e).get::<Anchored>().is_none(),
-            "unset removes the Anchored binding"
-        );
-    }
-
-    /// A `<surface>` mounts carrying its name in an `RSurface`, and stays a detached
-    /// UI root: appending it under a parent must NOT add it to that parent's Bevy
-    /// `Children` (it renders to its own offscreen camera instead).
-    #[test]
-    fn surface_mounts_detached_with_name() {
-        let (mut app, tx, _root) = ordering_app();
-        tx.send(vec![
-            create_node(1), // a normal parent under the root
-            Op::Create {
-                id: 2,
-                kind: "surface".into(),
-                props: serde_json::from_value(serde_json::json!({ "target": "monitor" }))
-                    .expect("valid surface props"),
-                text: None,
-            },
-            Op::Append {
-                parent: ROOT_ID,
-                child: 1,
-            },
-            // React appends the surface under node 1; the reconciler must keep it
-            // detached (no Bevy parent) so it is an independent layout root.
-            Op::Append {
-                parent: 1,
-                child: 2,
-            },
-        ])
-        .unwrap();
-        app.update();
-
-        let surface = ent(&app, 2);
-        assert_eq!(
-            app.world()
-                .entity(surface)
-                .get::<RSurface>()
-                .map(|s| s.0.clone()),
-            Some("monitor".to_string()),
-            "a surface carries its name in RSurface"
-        );
-        assert!(
-            app.world().entity(surface).get::<ChildOf>().is_none(),
-            "a surface is a detached root — never parented into the on-screen tree"
-        );
-        assert!(
-            children_of(&app, ent(&app, 1)).is_empty(),
-            "the surface's React parent has no Bevy children"
-        );
-
-        // An update rebinds the surface name (and never stamps an RPortal).
-        tx.send(vec![update_delta(
-            2,
-            serde_json::from_value(serde_json::json!({ "target": "panel" }))
-                .expect("valid surface props"),
-            &[],
-            &[],
-        )])
-        .unwrap();
-        app.update();
-        assert_eq!(
-            app.world()
-                .entity(surface)
-                .get::<RSurface>()
-                .map(|s| s.0.clone()),
-            Some("panel".to_string()),
-            "an update rebinds the surface name"
-        );
-        assert!(
-            app.world()
-                .entity(surface)
-                .get::<crate::portal::RPortal>()
-                .is_none(),
-            "a surface update must not stamp an RPortal (shared `target` field)"
         );
     }
 
@@ -1059,7 +493,7 @@ mod tests {
         );
         let bridge = app.world().resource::<JsBridge>();
         assert!(
-            bridge.roots.is_empty() && !bridge.nodes.contains_key(&2),
+            bridge.detached.is_empty() && !bridge.nodes.contains_key(&2),
             "the <root>'s bookkeeping must be pruned on removal"
         );
     }

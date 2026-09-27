@@ -12,6 +12,10 @@ path = "main.rs"
 bevy = { workspace = true }
 bevy_react_core = { workspace = true }
 bevy_react_svg = { workspace = true }
+bevy_react_anchor = { workspace = true }
+bevy_react_canvas = { workspace = true }
+bevy_react_portal = { workspace = true }
+bevy_react_surface = { workspace = true }
 serde = { workspace = true }
 ts-rs = { workspace = true }
 

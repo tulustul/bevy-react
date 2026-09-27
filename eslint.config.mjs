@@ -13,6 +13,7 @@ export default tseslint.config(
       "**/dist/**",
       "**/node_modules/**",
       "target/**",
+      ".claude/**",
       "**/bevy.ts",
       "js/src/generated/**",
     ],

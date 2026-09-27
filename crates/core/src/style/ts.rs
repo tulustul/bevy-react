@@ -50,6 +50,7 @@ mod tests {
     use std::collections::BTreeSet;
 
     use super::*;
+    use crate::ts_codegen::type_idents;
 
     /// The package module (relative to `js/src/generated/`) each type the core
     /// codecs name is imported from; every other named type lives in `jsx.d.ts`.
@@ -116,36 +117,6 @@ mod tests {
             writeln!(out, "  {}?: {ts};", json_key(name)).unwrap();
         }
         out.push_str("}\n");
-        out
-    }
-
-    /// The named types a TS type expression references: identifiers starting
-    /// with an uppercase letter, outside string literals (so a keyword union's
-    /// `"flexStart"` names nothing, and lowercase object keys are skipped).
-    fn type_idents(ts: &str) -> Vec<String> {
-        let mut out = Vec::new();
-        let mut chars = ts.chars().peekable();
-        while let Some(c) = chars.next() {
-            if c == '"' {
-                for c in chars.by_ref() {
-                    if c == '"' {
-                        break;
-                    }
-                }
-            } else if c.is_ascii_alphabetic() || c == '_' {
-                let mut ident = String::from(c);
-                while let Some(&c) = chars.peek() {
-                    if !(c.is_ascii_alphanumeric() || c == '_') {
-                        break;
-                    }
-                    ident.push(c);
-                    chars.next();
-                }
-                if c.is_ascii_uppercase() {
-                    out.push(ident);
-                }
-            }
-        }
         out
     }
 

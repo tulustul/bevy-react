@@ -32,38 +32,6 @@ use std::collections::{HashMap, HashSet};
 use crate::bridge::JsBridge;
 use crate::protocol::{NodeId, op::Op};
 
-/// The intrinsic element names, interned so the per-node kind record costs
-/// no allocation for any known element.
-const KNOWN_KINDS: &[&str] = &[
-    "node",
-    "text",
-    "textSpan",
-    "button",
-    "image",
-    "canvas",
-    "portal",
-    "surface",
-    "root",
-    "svg",
-    "anchor",
-    "editableText",
-    "circle",
-    "rect",
-    "ellipse",
-    "line",
-    "polyline",
-    "polygon",
-    "path",
-    "g",
-];
-
-fn intern_kind(kind: &str) -> Cow<'static, str> {
-    match KNOWN_KINDS.iter().find(|k| **k == kind) {
-        Some(k) => Cow::Borrowed(k),
-        None => Cow::Owned(kind.to_owned()),
-    }
-}
-
 /// The `sharedTag` index over bridge nodes (tag → node ids, in mount order)
 /// plus every node's element kind (the pairing's type-match rule needs the
 /// kind of a node tagged by a later delta, which the update op doesn't
@@ -87,12 +55,12 @@ impl SharedTags {
     }
 
     /// Record a node's element kind (every create, tagged or not). A kind
-    /// the registry owns is stored borrowed (its `&'static str` key), like a
-    /// built-in; only a genuinely unknown kind allocates.
+    /// the registry owns is stored borrowed (its `&'static str` key); only a
+    /// genuinely unknown kind allocates.
     pub(crate) fn note_kind(&mut self, id: NodeId, kind: &str, registry: &crate::ext::ExtRegistry) {
         let interned = match registry.static_kind(kind) {
             Some(k) => Cow::Borrowed(k),
-            None => intern_kind(kind),
+            None => Cow::Owned(kind.to_owned()),
         };
         self.kinds.insert(id, interned);
     }
@@ -209,13 +177,13 @@ pub(crate) fn plan_pairs(bridge: &JsBridge, ops: &[Op]) -> Vec<SharedPair> {
             Op::Append { parent, child } | Op::Insert { parent, child, .. } => {
                 batch_parent.insert(*child, *parent);
             }
-            Op::Create { id, kind, .. } if kind == "surface" || kind == "root" => {
+            Op::Create { id, kind, .. } if bridge.ext.flags_for_kind(kind).detached => {
                 batch_detached.insert(*id);
             }
             _ => {}
         }
     }
-    let is_detached = |id: NodeId| bridge.is_detached_root(id) || batch_detached.contains(&id);
+    let is_detached = |id: NodeId| bridge.is_detached(id) || batch_detached.contains(&id);
     // The UI root of a node: the top of its parent chain, stopping at a
     // detached root (a `<surface>`/`<root>` is its own root). The batch's
     // parentage is consulted first so nodes created this batch resolve.
@@ -240,7 +208,7 @@ pub(crate) fn plan_pairs(bridge: &JsBridge, ops: &[Op]) -> Vec<SharedPair> {
             match bridge
                 .parent_of
                 .get(&id)
-                .or_else(|| bridge.surface_parent.get(&id))
+                .or_else(|| bridge.detached_parent.get(&id))
             {
                 Some(&p) => id = p,
                 None => return false,

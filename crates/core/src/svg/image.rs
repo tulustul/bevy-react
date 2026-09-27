@@ -1,9 +1,9 @@
 //! Svg-mode glue for the `<image>` element: `src` extension detection, the
 //! element-owned texture + [`SvgSurface`] lifecycle, and the ignored-attr
 //! warning. Called by the bridge machinery (`reconcile::create`/`update`);
-//! this module never reaches back into it. (It does borrow the sibling leaf
-//! `crate::canvas` for the 1×1 blank placeholder — svg paints into the same
-//! kind of CPU-backed image a canvas does.)
+//! this module never reaches back into it. (It borrows [`crate::raster`] for
+//! the 1×1 blank placeholder — svg paints into the same kind of CPU-backed
+//! image a canvas does.)
 
 use bevy::asset::{AssetServer, Assets, Handle};
 use bevy::ecs::world::EntityWorldMut;
@@ -58,7 +58,7 @@ pub(crate) fn ensure_svg_image(mut entity: EntityWorldMut, path: String, mut img
         _ => entity.world_scope(|world| {
             world
                 .resource_mut::<Assets<Image>>()
-                .add(crate::canvas::blank_canvas_image())
+                .add(crate::raster::blank_image())
         }),
     };
     img.image = texture;

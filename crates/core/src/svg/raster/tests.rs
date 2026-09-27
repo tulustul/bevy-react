@@ -71,8 +71,10 @@ fn svg_image_create(id: u32) -> crate::protocol::op::Op {
     crate::protocol::op::Op::Create {
         id,
         kind: "image".into(),
-        props: serde_json::from_value(serde_json::json!({ "src": "icons/a.svg" }))
-            .expect("valid props"),
+        props: crate::protocol::props::Props::decode_for(
+            "image",
+            serde_json::json!({ "src": "icons/a.svg" }),
+        ),
         text: None,
     }
 }
@@ -328,7 +330,7 @@ fn stamp_system_restamps_on_image_change_only() {
     // measure this frame → the stamp system must re-stamp it.
     tx.send(vec![update_delta(
         1,
-        serde_json::from_value(serde_json::json!({ "tint": "blue" })).unwrap(),
+        *crate::protocol::props::Props::decode_for("image", serde_json::json!({ "tint": "blue" })),
         &[],
         &[],
     )])

@@ -6,8 +6,6 @@ use std::fmt;
 use serde::Deserialize;
 use serde::de::{self, Deserializer, MapAccess, Visitor};
 
-use crate::canvas::DrawCmd;
-
 use super::NodeId;
 use super::props::Props;
 
@@ -34,7 +32,7 @@ pub enum Op {
     /// Tear down the entire current tree. Emitted first by every fresh runtime
     /// so a hot reload clears the previous UI before the new render is applied.
     Reset,
-    /// Spawn a host element (`node`, `button`, or `image`).
+    /// Spawn a host element of a registered kind (see [`crate::element`]).
     Create {
         id: NodeId,
         kind: String,
@@ -70,9 +68,14 @@ pub enum Op {
     /// (`hoverStyle`/`pressStyle`/`focusStyle`) and other object-valued props
     /// are atomic: present replaces the whole value, `unset` clears it.
     ///
-    /// The event-like props (`value`, `selectionStart`/`selectionEnd`,
-    /// `scrollTop`/`scrollLeft`, `draw`) keep their "present = act now" meaning
-    /// and are never part of the retained state (see [`Props::merge_delta`]).
+    /// The act-now props (`scrollTop`/`scrollLeft` and the element's act-now
+    /// attributes — `value`, `draw`, …) keep their "present = act now"
+    /// meaning and are never part of the retained state (see
+    /// [`Props::merge_delta`]). An update carrying only act-now attributes is
+    /// an imperative command (the canvas handle's `drawAppend`).
+    ///
+    /// The wire op carries the node's `kind` too (before `props`): the props
+    /// decode against the element's attributes (see [`crate::element`]).
     Update {
         id: NodeId,
         props: Box<Props>,
@@ -84,14 +87,6 @@ pub enum Op {
     },
     /// Replace the string of a text node.
     UpdateText { id: NodeId, text: String },
-    /// Append draw commands to a `canvas` element's retained surface — the
-    /// imperative `getContext()` handle's microtask flush, or the JS
-    /// runtime's clear+replay of a declarative painter after a resize. Paint
-    /// accumulates on the retained pixels; a leading [`DrawCmd::Clear`] makes
-    /// the batch a replace. Bypasses the props cache entirely (nothing is
-    /// retained protocol-side). A missing or non-canvas node is skipped
-    /// silently, like every other op.
-    Draw { id: NodeId, cmds: Vec<DrawCmd> },
 }
 
 /// The wire tag (`op`) values, camelCase variant names.
@@ -107,7 +102,6 @@ enum OpTag {
     Remove,
     Update,
     UpdateText,
-    Draw,
 }
 
 /// Every key an op object can carry, across all variants. A key's value type
@@ -127,7 +121,6 @@ enum OpKey {
     Before,
     Unset,
     StyleUnset,
-    Cmds,
     #[serde(other)]
     Other,
 }
@@ -172,12 +165,18 @@ impl<'de> Visitor<'de> for OpVisitor {
         let mut before: Option<NodeId> = None;
         let mut unset: Option<Vec<String>> = None;
         let mut style_unset: Option<Vec<String>> = None;
-        let mut cmds: Option<Vec<DrawCmd>> = None;
+        // The element the props decode against — opened by the `kind` key,
+        // which the runtime emits before `props` (see `crate::element`).
+        let mut _scope: Option<crate::element::DecodeScope> = None;
         while let Some(key) = map.next_key::<OpKey>()? {
             match key {
                 OpKey::Op => take(&mut tag, map.next_value()?, "op")?,
                 OpKey::Id => take(&mut id, map.next_value()?, "id")?,
-                OpKey::Kind => take(&mut kind, map.next_value()?, "kind")?,
+                OpKey::Kind => {
+                    let k: String = map.next_value()?;
+                    _scope = Some(crate::element::DecodeScope::new(&k));
+                    take(&mut kind, k, "kind")?;
+                }
                 OpKey::Props => take(&mut props, map.next_value()?, "props")?,
                 // `Option`: `create` carries `text` optionally (a JSON `null`
                 // reads as absent), the text ops require it.
@@ -191,7 +190,6 @@ impl<'de> Visitor<'de> for OpVisitor {
                 OpKey::Before => take(&mut before, map.next_value()?, "before")?,
                 OpKey::Unset => take(&mut unset, map.next_value()?, "unset")?,
                 OpKey::StyleUnset => take(&mut style_unset, map.next_value()?, "styleUnset")?,
-                OpKey::Cmds => take(&mut cmds, map.next_value()?, "cmds")?,
                 OpKey::Other => {
                     map.next_value::<de::IgnoredAny>()?;
                 }
@@ -236,10 +234,6 @@ impl<'de> Visitor<'de> for OpVisitor {
                 id: required(id, "id")?,
                 text: required(text, "text")?,
             },
-            OpTag::Draw => Op::Draw {
-                id: required(id, "id")?,
-                cmds: required(cmds, "cmds")?,
-            },
         })
     }
 }
@@ -260,8 +254,7 @@ fn op_target_id(op: &Op) -> Option<NodeId> {
         | Op::CreateText { id, .. }
         | Op::CreateTextSpan { id, .. }
         | Op::Update { id, .. }
-        | Op::UpdateText { id, .. }
-        | Op::Draw { id, .. } => Some(*id),
+        | Op::UpdateText { id, .. } => Some(*id),
         Op::Reset | Op::Append { .. } | Op::Insert { .. } | Op::Remove { .. } => None,
     }
 }
@@ -326,9 +319,9 @@ mod tests {
         // A leftover from an earlier decode on this thread must not leak in.
         crate::diag::decode_report("length", "stale", "stale entry");
         let json = r#"[
-            {"op":"update","id":7,"props":{"style":{"width":"aa16"}}},
+            {"op":"update","id":7,"kind":"node","props":{"style":{"width":"aa16"}}},
             {"op":"append","parent":0,"child":7},
-            {"op":"update","id":9,"props":{"style":{"display":"flexx","padding":"1px bogus"}}}
+            {"op":"update","id":9,"kind":"node","props":{"style":{"display":"flexx","padding":"1px bogus"}}}
         ]"#;
         let batch: OpBatch = serde_json::from_str(json).expect("batch decodes");
         assert_eq!(batch.0.len(), 3, "fallbacks must not drop ops");
@@ -352,9 +345,14 @@ mod tests {
         );
     }
 
-    /// An `<editableText>` create op carries its controlled value and attributes.
+    /// An `<editableText>` create op carries its attributes and handler
+    /// flags, decoded against the element the op's `kind` names.
     #[test]
     fn deserializes_editable_text_create() {
+        use crate::elements::editable::{
+            ARIA_LABEL, AUTOFOCUS, MAX_LENGTH, MULTILINE, SELECTION_END, SELECTION_START, VALUE,
+        };
+        crate::ext::install_builtin_registry();
         let json = r#"{"op":"create","id":7,"kind":"editableText","props":{
             "value":"hi","maxLength":40,"multiline":true,"onChange":true,
             "autofocus":true,"selectionStart":0,"selectionEnd":2,
@@ -366,17 +364,16 @@ mod tests {
             } => {
                 assert_eq!(id, 7);
                 assert_eq!(kind, "editableText");
-                assert_eq!(props.value.as_deref(), Some("hi"));
-                assert_eq!(props.max_length, Some(40));
-                assert!(props.multiline);
-                assert!(props.on_change);
-                assert!(props.autofocus);
-                assert_eq!(props.selection_start, Some(0));
-                assert_eq!(props.selection_end, Some(2));
-                assert_eq!(props.aria_label.as_deref(), Some("Name"));
-                assert!(props.on_select);
-                assert!(props.on_focus);
-                assert!(props.on_blur);
+                let a = &props.attrs;
+                assert_eq!(a.get(&VALUE).map(String::as_str), Some("hi"));
+                assert_eq!(a.get(&MAX_LENGTH), Some(&40));
+                assert_eq!(a.get(&MULTILINE), Some(&true));
+                assert_eq!(a.get(&AUTOFOCUS), Some(&true));
+                assert_eq!(a.get(&SELECTION_START), Some(&0));
+                assert_eq!(a.get(&SELECTION_END), Some(&2));
+                assert_eq!(a.get(&ARIA_LABEL).map(String::as_str), Some("Name"));
+                // onChange / onSelect / onFocus / onBlur: all four events.
+                assert_eq!(props.handlers, 0b1111);
                 assert!(props.focus_style.is_some());
             }
             other => panic!("expected create, got {other:?}"),
@@ -388,7 +385,9 @@ mod tests {
     /// doesn't cover variant fields).
     #[test]
     fn deserializes_update_delta_form() {
-        let minimal: Op = serde_json::from_str(r#"{"op":"update","id":3,"props":{}}"#).unwrap();
+        crate::ext::install_builtin_registry();
+        let minimal: Op =
+            serde_json::from_str(r#"{"op":"update","id":3,"kind":"node","props":{}}"#).unwrap();
         match minimal {
             Op::Update {
                 unset, style_unset, ..
@@ -398,7 +397,7 @@ mod tests {
             other => panic!("expected update, got {other:?}"),
         }
         let full: Op = serde_json::from_str(
-            r#"{"op":"update","id":3,"props":{"style":{"width":1}},
+            r#"{"op":"update","id":3,"kind":"node","props":{"style":{"width":1}},
                 "unset":["onClick"],"styleUnset":["backgroundColor"]}"#,
         )
         .unwrap();
@@ -413,44 +412,33 @@ mod tests {
         }
     }
 
-    /// A `draw` op decodes, including the clear commands (the imperative
-    /// canvas path). Struct-variant fields aren't renamed by the enum's
-    /// `rename_all`, so the wire form is pinned here.
+    /// An update op decodes its props against the element its `kind` names
+    /// (an `<editableText>`'s act-now `value` here — a `<canvas>`'s
+    /// `drawAppend` rides the same path). The decode scope ends with the op.
     #[test]
-    fn deserializes_draw_op() {
+    fn update_op_decodes_attributes_by_kind() {
+        use crate::elements::editable::VALUE;
+        crate::ext::install_builtin_registry();
         let op: Op = serde_json::from_str(
-            r##"{"op":"draw","id":7,"cmds":[
-                {"cmd":"clear"},
-                {"cmd":"clearRect","x":1.0,"y":2.0,"w":3.0,"h":4.0},
-                {"cmd":"fillStyle","color":"#f00"}
-            ]}"##,
+            r#"{"op":"update","id":7,"kind":"editableText","props":{"value":"hi"}}"#,
         )
         .unwrap();
         match op {
-            Op::Draw { id, cmds } => {
+            Op::Update { id, props, .. } => {
                 assert_eq!(id, 7);
-                assert_eq!(cmds.len(), 3);
-                assert_eq!(cmds[0], DrawCmd::Clear);
                 assert_eq!(
-                    cmds[1],
-                    DrawCmd::ClearRect {
-                        x: 1.0,
-                        y: 2.0,
-                        w: 3.0,
-                        h: 4.0
-                    }
-                );
-                assert_eq!(
-                    cmds[2],
-                    DrawCmd::FillStyle {
-                        color: "#f00".into()
-                    }
+                    props.attrs.get(&VALUE).map(String::as_str),
+                    Some("hi"),
+                    "decoded by kind"
                 );
             }
-            other => panic!("expected draw, got {other:?}"),
+            other => panic!("expected update, got {other:?}"),
         }
+        assert!(
+            crate::element::decode_element().is_none(),
+            "the op's decode scope closes with it"
+        );
     }
-
     /// `cursor` decodes to the raw name (keyword or custom); resolution (registry
     /// first, then system keyword) is deferred to `drive_cursor_icon`, like `fontFamily`.
     #[test]

@@ -8,8 +8,9 @@
 //
 // Merge semantics deliberately mirror Rust's `Props::merge_delta`: an update's
 // `props` shallow-merges (style field-by-field), `unset`/`styleUnset` delete,
-// and act-now event fields (`value`, `selection*`, `scroll*`, `draw`) are never
-// retained. Known limitation (same as the Rust props_cache): this is the
+// and act-now props (`scrollTop`/`scrollLeft`, and each element's act-now
+// attributes — `value`, a canvas `draw`/`drawAppend`, … — from the Rust
+// element table) are never retained. Known limitation (same as the Rust props_cache): this is the
 // React-authored tree — Rust-side mutations (interaction style variants,
 // animation-driven values, live scroll offsets) are not reflected.
 //
@@ -17,19 +18,9 @@
 // Refresh; a cold reload's `reset` op clears it along with the Bevy tree.
 
 import type { DecodeWarning, Op } from "../bridge";
+import { isActNow } from "./fields";
 import { clearOwners, takeOwner } from "./owners";
 import { matchWarning } from "./warnings";
-
-/** Event-like fields that act once and are never part of retained state —
- *  keep in sync with `protocol.rs`'s `Props::split_events`. */
-const ACT_NOW = new Set([
-  "value",
-  "selectionStart",
-  "selectionEnd",
-  "scrollTop",
-  "scrollLeft",
-  "draw",
-]);
 
 export interface MirrorNode {
   id: number;
@@ -130,7 +121,7 @@ function mergeProps(node: MirrorNode, props: Record<string, unknown>): void {
           // invalid value re-flags right after (post-merge matching).
           node.warnings?.delete(`style:${k}`);
         }
-    } else if (!ACT_NOW.has(key)) {
+    } else if (!isActNow(node.kind, key)) {
       node.props[key] = value;
       node.warnings?.delete(`prop:${key}`);
     }
@@ -207,8 +198,6 @@ function applyOp(op: Op, devtools: boolean): void {
       if (node) node.text = op.text;
       break;
     }
-    case "draw":
-      break; // imperative canvas paint — no retained tree state
   }
 }
 

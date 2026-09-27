@@ -25,6 +25,7 @@ struct Halo(f32);
 
 static HALO_WRITER: Writer = Writer {
     reads: &[&HALO],
+    attrs: &[],
     writes: &[owns::<Halo>],
     apply: |_, s, ec| match s.get(&HALO) {
         Some(r) => {
@@ -144,6 +145,7 @@ fn app_writer_writes_its_component() {
 fn writer_claiming_a_core_component_panics() {
     static STEAL: Writer = Writer {
         reads: &[&HALO],
+        attrs: &[],
         writes: &[owns::<BackgroundColor>],
         apply: |_, _, _| {},
     };

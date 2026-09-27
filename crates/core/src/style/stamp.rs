@@ -22,6 +22,7 @@ pub struct StyleValue<T: PropertyValue>(pub T);
 /// other writer reads (the registry wires those reads) and stamps each.
 pub static STAMP_WRITER: Writer = Writer {
     reads: &[],
+    attrs: &[],
     writes: &[],
     apply: apply_stamps,
 };

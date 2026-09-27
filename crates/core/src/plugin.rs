@@ -11,16 +11,18 @@ use bevy::prelude::*;
 use bevy::window::CustomCursorImage;
 
 use crate::bridge::{JsBridge, OpReceiver, OutboundResource, OutboundSender};
+use crate::elements::editable::{
+    apply_pending_selections, on_focus_gained, on_focus_lost, on_text_edit_change,
+    sync_editable_a11y,
+};
 use crate::event::ReactEventRegistry;
 use crate::host::{self, HostConfig, HostSenders};
 use crate::message::{ReactAppExt, ReactMessage, ReactRegistry};
 use crate::protocol::{op::Op, outbound::Outbound};
 use crate::reconcile::{
-    OpApplyStats, apply_interaction_styles, apply_js_ops, apply_pending_selections,
-    apply_surface_interaction_styles, collect_canvas_resize_events, collect_hover_events,
-    collect_pointer_events, collect_scroll_events, collect_surface_clicks,
-    collect_surface_hover_events, collect_surface_pointer_events, collect_ui_events,
-    on_focus_gained, on_focus_lost, on_text_edit_change, sync_editable_a11y,
+    OpApplyStats, apply_interaction_styles, apply_js_ops, apply_virtual_interaction_styles,
+    collect_hover_events, collect_pointer_events, collect_scroll_events, collect_ui_events,
+    collect_virtual_clicks, collect_virtual_hover_events, collect_virtual_pointer_events,
 };
 use crate::request::{RawRequest, ReactRequestRegistry, RequestReceiver, dispatch_react_requests};
 
@@ -306,54 +308,35 @@ pub(crate) fn register_layer_shader_assets(app: &mut App) {
     embedded_asset!(app, "filters/builtin/pixelize.wgsl");
 }
 
-/// Schedule the `<portal>`/`<surface>` camera gates — the systems that flip
-/// `Camera::is_active` and despawn retired surface cameras — from THIS frame's
-/// visibility: after bevy_ui layout + clipping (a `display: none` or scrolled-away
-/// portal is empty/clipped) and after visibility propagation (hidden subtrees),
-/// before extraction reads `Camera::is_active` — a portal that becomes visible
-/// renders the same frame, and a hidden one skips its whole camera pass.
+/// Schedule the render-target camera gate — the system that flips a
+/// [`PortalCamera`](crate::PortalCamera)'s `Camera::is_active` — from THIS
+/// frame's visibility: after bevy_ui layout + clipping (a `display: none` or
+/// scrolled-away view is empty/clipped) and after visibility propagation
+/// (hidden subtrees), before extraction reads `Camera::is_active` — a view
+/// that becomes visible renders the same frame, and a hidden one skips its
+/// whole camera pass.
 ///
-/// Bevy prepares a view's per-frame data only for cameras that are `is_active`
-/// when the preparing system runs: `CheckVisibility` fills `VisibleEntities`, and
-/// `bevy_light`'s `UpdateDirectionalLightCascades` clears every shadow-casting
-/// light's `Cascades` map and rebuilds it keyed by **every** active camera with a
-/// `Projection` (2D cameras included). `bevy_pbr::render::light::prepare_lights`
-/// later `unwrap`s the entry per extracted 3D view, so a camera activated AFTER
-/// the build reaches extraction with no entry — a panic. And the build's map must
-/// not be left keyed by a camera that is **despawned** later in the frame either:
-/// `extract_lights` (bevy 0.19.0) copies the map with a `break` on the first key
-/// it cannot map to a render entity, silently dropping every view after it — the
-/// same panic, for an unrelated camera. So both the activity flips and the
-/// surface-camera retirement run BEFORE `CheckVisibility` and
-/// `UpdateDirectionalLightCascades` (which order after `CameraUpdateSystems`
-/// only; the explicit `before` edges are required). Only `InheritedVisibility`
-/// (propagation) and layout feed the portal gate, so nothing later is needed.
-///
-/// `drive_surfaces` (the surface activity gate) is the exception: a surface
-/// camera is a 2D UI view with nothing to cull, and its gate reads the
-/// `ViewVisibility` of the meshes that display it — so it stays after culling +
-/// newly-hidden marking; it never despawns.
-///
-/// Shared with the headless regression test in `surface.rs`, which runs this
-/// exact ordering against bevy's real cascade builder.
+/// Bevy prepares a view's per-frame data only for cameras that are
+/// `is_active` when the preparing system runs: `CheckVisibility` fills
+/// `VisibleEntities`, and `bevy_light`'s `UpdateDirectionalLightCascades`
+/// clears every shadow-casting light's `Cascades` map and rebuilds it keyed
+/// by **every** active camera with a `Projection` (2D cameras included).
+/// `bevy_pbr::render::light::prepare_lights` later `unwrap`s the entry per
+/// extracted 3D view, so a camera activated AFTER the build reaches
+/// extraction with no entry — a panic. So the activity flip runs BEFORE
+/// `CheckVisibility` and `UpdateDirectionalLightCascades` (which order after
+/// `CameraUpdateSystems` only; the explicit `before` edges are required).
+/// Only `InheritedVisibility` (propagation) and layout feed the gate, so
+/// nothing later is needed. (A feature spawning or despawning cameras —
+/// `bevy_react_surface` — orders against the same two sets itself.)
 pub(crate) fn add_camera_gate_systems(app: &mut App) {
     app.add_systems(
         PostUpdate,
-        (
-            crate::surface::retire_surface_cameras,
-            crate::portal::drive_portal_cameras
-                .after(bevy::ui::UiSystems::PostLayout)
-                .after(bevy::camera::visibility::VisibilitySystems::VisibilityPropagate),
-        )
-            .before(bevy::camera::visibility::VisibilitySystems::CheckVisibility)
-            .before(bevy::light::SimulationLightSystems::UpdateDirectionalLightCascades),
-    );
-    app.add_systems(
-        PostUpdate,
-        crate::surface::drive_surfaces
+        crate::render_target::drive_target_cameras
             .after(bevy::ui::UiSystems::PostLayout)
             .after(bevy::camera::visibility::VisibilitySystems::VisibilityPropagate)
-            .after(bevy::camera::visibility::VisibilitySystems::MarkNewlyHiddenEntitiesInvisible),
+            .before(bevy::camera::visibility::VisibilitySystems::CheckVisibility)
+            .before(bevy::light::SimulationLightSystems::UpdateDirectionalLightCascades),
     );
 }
 
@@ -581,9 +564,11 @@ impl Plugin for ReactUiPlugin {
         // The handoff slot is filled with the final registry at startup
         // (`finish`, and `setup` as the headless fallback).
         app.init_resource::<crate::ext::ExtRegistry>();
-        // The core's style properties and writers register through the same
-        // calls a feature crate uses.
+        app.init_resource::<crate::ext::VirtualPointers>();
+        // The core's style properties and writers, and its elements, register
+        // through the same calls a feature crate uses.
         crate::style::add_core_styles(app);
+        app.add_react_elements(crate::elements::CORE_ELEMENTS);
         let ext_slot = crate::ext::ExtRegistrySlot::default();
         app.insert_resource(ext_slot.clone());
         let outbound_tx = host::spawn(
@@ -641,25 +626,13 @@ impl Plugin for ReactUiPlugin {
         .register_asset_loader(crate::svg::SvgAssetLoader)
         // The offscreen render-target ("portal") registry and its shared blank
         // placeholder texture, created before the first portal can mount.
-        .init_resource::<crate::portal::RenderTargets>()
-        .add_systems(Startup, crate::portal::init_portal_placeholder)
-        // The `<surface>` registry (UI subtrees rendered into offscreen textures)
-        // and its single virtual pointer for in-world clicks.
-        .init_resource::<crate::surface::Surfaces>()
-        .add_systems(Startup, crate::surface::init_surface_pointer)
+        .init_resource::<crate::render_target::RenderTargets>()
+        .add_systems(Startup, crate::render_target::init_target_placeholder)
         .add_systems(Startup, crate::layer::pick3d::init_transform3d_pointer)
         .add_systems(Startup, setup)
         .add_systems(
             PreUpdate,
             (dispatch_react_messages, dispatch_react_requests),
-        )
-        // Drive the surface virtual pointer (cursor → mesh UV → image render
-        // target) before `bevy_picking` processes inputs, so the offscreen UI is
-        // hit-tested with this frame's cursor.
-        .add_systems(
-            PreUpdate,
-            crate::surface::drive_surface_pointer
-                .before(bevy::picking::PickingSystems::ProcessInput),
         )
         // Remap the window cursor into 3D-transformed layers (inverse
         // homography → virtual pointer) before input processing, like the
@@ -772,28 +745,11 @@ impl Plugin for ReactUiPlugin {
                 // thus the op drain) so the eased value lands last and a coincident
                 // re-render's snap never wins.
                 crate::transition::drive_transitions.after(apply_interaction_styles),
-                // World-anchored overlays reposition after the op drain so they
-                // override this frame's static style, and after the animation
-                // applier + transition driver: all three write `UiTransform`
-                // (anchor owns `translation`), and without explicit edges the
-                // winner is nondeterministic — the same ping-pong hazard as
-                // `sync_shape_interactions` below. Anchor lands last so the
-                // projected position deterministically wins.
-                crate::anchor::position_anchored_nodes
-                    .after(apply_js_ops)
-                    .after(AnimationSet::Apply)
-                    .after(crate::transition::drive_transitions),
-                // Repaint `<canvas>` textures after their surfaces/sizes update,
-                // and report layout resizes to JS (the surface just cleared — so
-                // the app / the runtime's declarative replay redraws). Both read
-                // last frame's `ComputedNode`. The cursor driver rides here too —
-                // it also reads last frame's `ComputedNode` after the op drain
-                // (freshly-stamped `NodeCursor`s visible), and this sub-tuple keeps
-                // the outer tuple under Bevy's arity limit.
+                // The cursor driver reads last frame's `ComputedNode` after
+                // the op drain (freshly-stamped `NodeCursor`s visible); this
+                // sub-tuple keeps the outer tuple under Bevy's arity limit.
                 (
-                    crate::canvas::update_canvas_surfaces.after(apply_js_ops),
-                    collect_canvas_resize_events.after(apply_js_ops),
-                    // Repaint svg surfaces the same way — svg-mode `<image>`
+                    // Repaint svg surfaces — svg-mode `<image>`
                     // documents and JSX `<svg>` shape trees: reads last
                     // frame's `ComputedNode` after the op drain (fresh
                     // `SvgSurface`s AND the flushed queued `SvgShape`/child
@@ -829,19 +785,18 @@ impl Plugin for ReactUiPlugin {
                 // op drain (so a freshly-spawned portal binds the same frame), then
                 // drive `Auto` resolution (here, before `camera_system` reads the
                 // target size). Camera activity is decided in `PostUpdate` below.
-                crate::portal::bind_portals.after(apply_js_ops),
-                crate::portal::drive_render_targets.after(crate::portal::bind_portals),
-                // Bind `<surface>` roots to their offscreen UI cameras after the op
-                // drain (so a freshly-mounted surface binds the same frame).
-                crate::surface::bind_surfaces.after(apply_js_ops),
-                // Surface interaction: turn the virtual pointer's picking events on
-                // the offscreen subtree into `onClick`/`onPointer*` + hover/press
-                // styling. The picking events are produced in `PreUpdate`, so these
-                // read this frame's events.
-                collect_surface_clicks,
-                collect_surface_pointer_events,
-                collect_surface_hover_events,
-                apply_surface_interaction_styles,
+                crate::render_target::bind_target_views.after(apply_js_ops),
+                crate::render_target::drive_render_targets
+                    .after(crate::render_target::bind_target_views),
+                // Virtual-pointer interaction (a `<surface>`'s in-world pointer):
+                // turn its picking events on the offscreen subtree into
+                // `onClick`/`onPointer*` + hover/press styling. The picking
+                // events are produced in `PreUpdate`, so these read this
+                // frame's events.
+                collect_virtual_clicks,
+                collect_virtual_pointer_events,
+                collect_virtual_hover_events,
+                apply_virtual_interaction_styles,
             ),
         );
 
@@ -978,6 +933,18 @@ impl Plugin for ReactUiPlugin {
                 .after(AnimationSet::Apply)
                 .after(crate::transition::drive_transitions),
         );
+        // `ElementOverrideSet`: an element system that overrides this frame's
+        // driven values — the `<anchor>`'s projected translation writes
+        // `UiTransform` after the animation applier and the transition driver
+        // wrote it, so the projection deterministically wins (without the
+        // edges the winner would be nondeterministic — a ping-pong).
+        app.configure_sets(
+            Update,
+            crate::ext::ElementOverrideSet
+                .after(apply_js_ops)
+                .after(AnimationSet::Apply)
+                .after(crate::transition::drive_transitions),
+        );
         // Resolve each promoted root's wire `filter`, `backdropFilter`, and
         // `morphFilter` chains into packed render passes — the three
         // instances of `crate::filters::resolve_chains`. After the
@@ -1084,8 +1051,8 @@ impl Plugin for ReactUiPlugin {
         app.add_systems(bevy::app::First, crate::reconcile::mark_frame_start);
 
         // `editableText` edits arrive as Bevy's `TextEditChange` trigger; an observer
-        // turns real changes into `"change"` and selection moves into `"select"` UI
-        // events. Two more observers bridge focus gain/loss to `"focus"`/`"blur"`.
+        // turns real changes into its `change` event and selection moves into
+        // `select`. Two more observers bridge focus gain/loss to `focus`/`blur`.
         app.add_observer(on_text_edit_change);
         app.add_observer(on_focus_gained);
         app.add_observer(on_focus_lost);
@@ -1253,27 +1220,6 @@ fn setup(
             UiRoot,
         ))
         .id();
-
-    // The shared overlay container for world-anchored nodes (`<anchor>`).
-    // `position_anchored_nodes` reparents every anchored overlay under this so it lives
-    // in its own hierarchy and never inflates an app container's flex layout or
-    // scrollable `content_size`. Zero-size at the window origin (absolute, left/top 0)
-    // with default `Overflow::visible`, so it neither clips its children nor intercepts
-    // pointer input; anchored nodes position themselves relative to its (0,0) corner.
-    // Spawned as the root's first child so the app subtree (appended later via ops)
-    // renders above it — add a `GlobalZIndex` here to lift overlays above app content.
-    commands.spawn((
-        Node {
-            position_type: PositionType::Absolute,
-            left: Val::Px(0.0),
-            top: Val::Px(0.0),
-            width: Val::Px(0.0),
-            height: Val::Px(0.0),
-            ..default()
-        },
-        crate::anchor::AnchorLayer,
-        ChildOf(root),
-    ));
 
     let ops_rx = channels.ops_rx.take().expect("setup runs once");
     let mut bridge = JsBridge::new(ops_rx, channels.outbound_tx.clone(), root);

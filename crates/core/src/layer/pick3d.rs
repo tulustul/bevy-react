@@ -41,8 +41,8 @@ use bevy::window::PrimaryWindow;
 use super::transform3d::LayerTransform3dMatrix;
 use super::{LayerMembership, PromotedLayer};
 
-/// The transform3d virtual pointer's fixed id (see
-/// `crate::surface`'s `SURFACE_POINTER_UUID` for the pattern).
+/// The transform3d virtual pointer's fixed id (the pattern
+/// `bevy_react_surface`'s in-world pointer uses too).
 pub const TRANSFORM3D_POINTER_UUID: uuid::Uuid = uuid::Uuid::from_u128(0x7D3D_D001);
 
 /// The mouse buttons forwarded to the virtual pointer — the same set the

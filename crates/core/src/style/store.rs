@@ -237,6 +237,25 @@ impl Style {
         }
     }
 
+    /// Insert every property of `defaults` this style does not set (an
+    /// element's default style under the user's). Clones only the defaults'
+    /// entries.
+    pub(crate) fn fill_defaults(&mut self, defaults: &Style) {
+        for entry in &defaults.entries {
+            if let Err(i) = self.entries.binary_search_by_key(&entry.id, |e| e.id) {
+                self.entries.insert(i, entry.clone());
+            }
+        }
+    }
+
+    /// Restore `id` from `defaults` (after the user unset it), when the
+    /// defaults set it.
+    pub(crate) fn restore_default(&mut self, defaults: &Style, id: PropId) {
+        if let Ok(i) = defaults.entries.binary_search_by_key(&id, |e| e.id) {
+            self.insert(defaults.entries[i].clone());
+        }
+    }
+
     /// Overlay a hover/press/focus variant: every property the variant sets
     /// wins.
     pub(crate) fn overlay_variant(&mut self, overlay: &Style) {
@@ -305,17 +324,11 @@ impl<'de> Visitor<'de> for KeySeed {
         Ok(match resolved {
             Some((id, property)) => Key::Known(id, property),
             None => {
-                // A known optional feature's key names the crate to add;
-                // anything else is reported as unknown (and ignored).
-                if crate::ext::feature_hint(name, false).is_some() {
-                    crate::ext::warn_feature_missing(name, false);
-                } else {
-                    crate::protocol::decode_warn(
-                        "unknownStyleField",
-                        name,
-                        &format!("unknown style property {name:?}"),
-                    );
-                }
+                crate::protocol::decode_warn(
+                    "unknownStyleField",
+                    name,
+                    &format!("unknown style property {name:?}"),
+                );
                 Key::Unknown
             }
         })

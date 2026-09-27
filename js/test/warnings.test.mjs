@@ -27,7 +27,18 @@ const bundled = await build({
   logLevel: "silent",
 });
 const code = Buffer.from(bundled.outputFiles[0].contents).toString("base64");
-const { matchWarning } = await import(`data:text/javascript;base64,${code}`);
+const { installStyleKinds, matchWarning } = await import(
+  `data:text/javascript;base64,${code}`
+);
+
+// Keyword properties' kinds reach the table at install, from the style
+// registry's `devtools.styleFields` answer — the same rows here.
+installStyleKinds([
+  { name: "display", kind: "display" },
+  { name: "positionType", kind: "positionType" },
+  { name: "overflowX", kind: "overflow" },
+  { name: "overflowY", kind: "overflow" },
+]);
 
 /** A minimal MirrorNode: only `style`/`props` matter to the matcher. */
 const node = (style = {}, props = {}) => ({
@@ -53,6 +64,22 @@ test("overflow fans out to both axes", () => {
     "style:overflowX",
     "style:overflowY",
   ]);
+});
+
+test("name kinds flag the named prop / style row", () => {
+  const n = node({ backgroundImage: "a.png", width: 10 }, { src: "a.png" });
+  assert.deepEqual(matchWarning(n, { kind: "unknownProp", value: "src" }), [
+    "prop:src",
+  ]);
+  assert.deepEqual(
+    matchWarning(n, { kind: "styleIgnored", value: "backgroundImage" }),
+    ["style:backgroundImage"],
+  );
+  // A name the node doesn't carry flags nothing.
+  assert.deepEqual(
+    matchWarning(n, { kind: "propIgnored", value: "onWheel" }),
+    [],
+  );
 });
 
 test("broad length kind scans every style field", () => {

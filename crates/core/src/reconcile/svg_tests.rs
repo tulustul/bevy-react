@@ -18,13 +18,13 @@ fn image_create(id: u32, props: serde_json::Value) -> Op {
     Op::Create {
         id,
         kind: "image".into(),
-        props: serde_json::from_value(props).expect("valid image props"),
+        props: Props::decode_for("image", props),
         text: None,
     }
 }
 
 fn src_props(src: &str) -> Props {
-    serde_json::from_value(serde_json::json!({ "src": src })).expect("valid props")
+    *Props::decode_for("image", serde_json::json!({ "src": src }))
 }
 
 /// An `.svg` src enters svg mode: the entity carries an [`SvgSurface`] with
@@ -190,7 +190,7 @@ fn same_src_update_keeps_doc_handle_and_dirty_state() {
     // A tint-only delta re-derives the ImageNode but must not churn the doc.
     tx.send(vec![update_delta(
         1,
-        serde_json::from_value(serde_json::json!({ "tint": "blue" })).unwrap(),
+        *Props::decode_for("image", serde_json::json!({ "tint": "blue" })),
         &[],
         &[],
     )])
@@ -263,10 +263,12 @@ fn svg_mode_warns_on_atlas_and_source_rect() {
 
     tx.send(vec![update_delta(
         1,
-        serde_json::from_value(serde_json::json!({
-            "sourceRect": { "x": 0.0, "y": 0.0, "width": 4.0, "height": 4.0 },
-        }))
-        .unwrap(),
+        *Props::decode_for(
+            "image",
+            serde_json::json!({
+                "sourceRect": { "x": 0.0, "y": 0.0, "width": 4.0, "height": 4.0 },
+            }),
+        ),
         &[],
         &[],
     )])

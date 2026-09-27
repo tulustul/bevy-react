@@ -1,10 +1,12 @@
-//! The `<surface>` event path: clicks, pointer/drag, hover, and interaction
-//! styling for nodes that render offscreen. Surface nodes never receive a
-//! legacy `Interaction` (their offscreen camera makes `ui_focus_system` skip
-//! them), so everything here rides the [`SurfaceVirtualPointer`]'s picking
-//! events instead — deliberately mirroring the main-window collectors in
-//! `events.rs`/`pointer.rs`/`interaction.rs` rather than sharing their code:
-//! each side's attribution quirks are documented on its own systems.
+//! The virtual-pointer event path: clicks, pointer/drag, hover, and
+//! interaction styling for UI a feature drives with its own picking pointer
+//! ([`VirtualPointers`] — a `<surface>`'s offscreen subtree). Such nodes never
+//! receive a legacy `Interaction` (their offscreen camera makes
+//! `ui_focus_system` skip them), so everything here rides the virtual
+//! pointers' picking events instead — deliberately mirroring the main-window
+//! collectors in `events.rs`/`pointer.rs`/`interaction.rs` rather than
+//! sharing their code: each side's attribution quirks are documented on its
+//! own systems.
 
 use bevy::picking::events::{Click, Drag, Enter, Leave, Pointer, Press, Release};
 use bevy::picking::pointer::PointerButton;
@@ -14,20 +16,21 @@ use bevy::ui::{ComputedNode, UiGlobalTransform};
 
 use super::events::{climb, dom_button, send_ui_event, surface_relative};
 use crate::bridge::{JsBridge, PointerHandlers, ReactNode, StyleVariants};
+use crate::ext::VirtualPointers;
 use crate::style::Style;
-use crate::surface::SurfaceVirtualPointer;
 use crate::ui_map::{apply_style, overlay_style};
 
-/// Report `<surface>` clicks to JS. The in-world picking path drives a virtual
-/// pointer ([`SurfaceVirtualPointer`]) over the offscreen subtree, so a click on a
-/// surface node arrives as a `Pointer<Click>` for that pointer — the analogue of
-/// [`collect_ui_events`](crate::reconcile::collect_ui_events) for surfaces
-/// (whose nodes never get a legacy `Interaction`
-/// press, since they don't render to a window), primary-button-only like it too.
-/// Scoped to the surface pointer id so it never double-fires for main-window UI.
-pub fn collect_surface_clicks(
+/// Report virtual-pointer clicks to JS — the analogue of
+/// [`collect_ui_events`](crate::reconcile::collect_ui_events) for UI a
+/// registered virtual pointer drives (a `<surface>`'s in-world picking path
+/// moves one over the offscreen subtree, so a click there arrives as a
+/// `Pointer<Click>` for that pointer; the nodes never get a legacy
+/// `Interaction` press, since they don't render to a window).
+/// Primary-button-only like it, and scoped to the registered
+/// [`VirtualPointers`] so it never double-fires for main-window UI.
+pub fn collect_virtual_clicks(
     bridge: Res<JsBridge>,
-    pointer: Option<Res<SurfaceVirtualPointer>>,
+    pointers: Res<VirtualPointers>,
     mut clicks: MessageReader<Pointer<Click>>,
     // Click ownership (see [`ClickOwners`](super::events::ClickOwners)) —
     // matching `collect_ui_events`' attribution exactly (NOT `Interaction`:
@@ -36,7 +39,9 @@ pub fn collect_surface_clicks(
     targets: Query<&ReactNode, super::events::ClickOwners>,
     child_of: Query<&ChildOf>,
 ) {
-    let Some(pointer) = pointer else { return };
+    if pointers.is_empty() {
+        return;
+    }
     // A pass-through node stacked over the target makes one gesture fan out to
     // every entity in the hover map. Same no-bubbling rule as
     // `collect_ui_events`: only the topmost resolving hit (smallest
@@ -45,7 +50,7 @@ pub fn collect_surface_clicks(
     for ev in clicks.read() {
         // Like DOM `click` (and `collect_ui_events`), only the primary button
         // clicks; right/middle ride the `onPointer*` events.
-        if ev.pointer_id != pointer.id || ev.button != PointerButton::Primary {
+        if !pointers.contains(ev.pointer_id) || ev.button != PointerButton::Primary {
             continue;
         }
         // Resolve the picked leaf to the nearest interactive ancestor (the button),
@@ -59,12 +64,12 @@ pub fn collect_surface_clicks(
     if let Some((_, target)) = topmost
         && let Ok(rnode) = targets.get(target)
     {
-        debug!("surface click -> reconciler node {}", rnode.0);
+        debug!("virtual-pointer click -> reconciler node {}", rnode.0);
         send_ui_event(&bridge, rnode.0, "click", None, None, None);
     }
 }
 
-/// Report `onPointer*` drag events for `<surface>` nodes, mirroring
+/// Report `onPointer*` drag events for virtual-pointer UI, mirroring
 /// [`collect_pointer_events`](crate::reconcile::collect_pointer_events) for the
 /// in-world picking path. Press → `pointerDown`,
 /// drag → `pointerMove`, release → `pointerUp`, each gated on the node's declared
@@ -72,9 +77,9 @@ pub fn collect_surface_clicks(
 /// (the surface-space pixel as `client_x/y`) and the mouse button (a `Drag`'s
 /// button is the one doing the dragging).
 #[allow(clippy::too_many_arguments)]
-pub fn collect_surface_pointer_events(
+pub fn collect_virtual_pointer_events(
     bridge: Res<JsBridge>,
-    pointer: Option<Res<SurfaceVirtualPointer>>,
+    pointers: Res<VirtualPointers>,
     mut presses: MessageReader<Pointer<Press>>,
     mut releases: MessageReader<Pointer<Release>>,
     mut drags: MessageReader<Pointer<Drag>>,
@@ -86,11 +91,13 @@ pub fn collect_surface_pointer_events(
     )>,
     child_of: Query<&ChildOf>,
 ) {
-    let Some(pointer) = pointer else { return };
+    if pointers.is_empty() {
+        return;
+    }
     // Per-kind (owner, button) dedupe: a pass-through node stacked over the
     // target fans each gesture out to every hovered entity, and climbing can
     // resolve them to the same owner. (Moves see at most one `Drag` per button
-    // per frame — `drive_surface_pointer` emits at most one `Move` per frame —
+    // per frame — a virtual pointer's driver emits at most one `Move` per frame —
     // so the set never suppresses a genuine repeat.)
     let mut seen: HashSet<(Entity, PointerButton)> = HashSet::new();
     let emit = |entity: Entity,
@@ -117,7 +124,7 @@ pub fn collect_surface_pointer_events(
         }
     };
     for ev in presses.read() {
-        if ev.pointer_id == pointer.id {
+        if pointers.contains(ev.pointer_id) {
             emit(
                 ev.entity,
                 |h| h.down,
@@ -130,7 +137,7 @@ pub fn collect_surface_pointer_events(
     }
     seen.clear();
     for ev in drags.read() {
-        if ev.pointer_id == pointer.id {
+        if pointers.contains(ev.pointer_id) {
             emit(
                 ev.entity,
                 |h| h.moved,
@@ -143,7 +150,7 @@ pub fn collect_surface_pointer_events(
     }
     seen.clear();
     for ev in releases.read() {
-        if ev.pointer_id == pointer.id {
+        if pointers.contains(ev.pointer_id) {
             emit(
                 ev.entity,
                 |h| h.up,
@@ -156,17 +163,17 @@ pub fn collect_surface_pointer_events(
     }
 }
 
-/// Report `pointerEnter` / `pointerLeave` for `<surface>` nodes, mirroring
-/// [`collect_surface_pointer_events`] for the hover boundary. Surface nodes get no
+/// Report `pointerEnter` / `pointerLeave` for virtual-pointer UI, mirroring
+/// [`collect_virtual_pointer_events`] for the hover boundary. Such nodes get no
 /// legacy `Interaction`, so this reads the virtual pointer's `Pointer<Enter>` /
 /// `Pointer<Leave>` picking events. Those already implement DOM
 /// `mouseenter`/`mouseleave` semantics — they fire for the hovered entity *and*
 /// its ancestors, only on true boundary crossings — so no climb (and no dedupe)
 /// is needed, and crossing between a button's label and its padding never
 /// re-fires the button's boundary. Hover events carry no button.
-pub fn collect_surface_hover_events(
+pub fn collect_virtual_hover_events(
     bridge: Res<JsBridge>,
-    pointer: Option<Res<SurfaceVirtualPointer>>,
+    pointers: Res<VirtualPointers>,
     mut enters: MessageReader<Pointer<Enter>>,
     mut leaves: MessageReader<Pointer<Leave>>,
     nodes: Query<(
@@ -176,7 +183,9 @@ pub fn collect_surface_hover_events(
         &UiGlobalTransform,
     )>,
 ) {
-    let Some(pointer) = pointer else { return };
+    if pointers.is_empty() {
+        return;
+    }
     let emit = |entity: Entity, want: fn(&PointerHandlers) -> bool, kind: &str, at: Vec2| {
         if let Ok((rnode, handlers, node, transform)) = nodes.get(entity)
             && want(handlers)
@@ -186,7 +195,7 @@ pub fn collect_surface_hover_events(
         }
     };
     for ev in enters.read() {
-        if ev.pointer_id == pointer.id {
+        if pointers.contains(ev.pointer_id) {
             emit(
                 ev.entity,
                 |h| h.enter,
@@ -196,7 +205,7 @@ pub fn collect_surface_hover_events(
         }
     }
     for ev in leaves.read() {
-        if ev.pointer_id == pointer.id {
+        if pointers.contains(ev.pointer_id) {
             emit(
                 ev.entity,
                 |h| h.leave,
@@ -207,21 +216,21 @@ pub fn collect_surface_hover_events(
     }
 }
 
-/// Apply hover/press [`StyleVariants`] to `<surface>` nodes from the in-world
-/// picking path — the surface-side analogue of
+/// Apply hover/press [`StyleVariants`] to virtual-pointer UI (a `<surface>`'s
+/// subtree) from its picking path — the analogue of
 /// [`apply_interaction_styles`](crate::reconcile::apply_interaction_styles), which
-/// can't help here because surface nodes never receive a legacy `Interaction`
+/// can't help here because such nodes never receive a legacy `Interaction`
 /// (their offscreen camera makes `ui_focus_system` skip them). Enter →
 /// base+hover, press → base+hover+press, leave/release → base/hover. The hover
 /// axis rides `Pointer<Enter>`/`Pointer<Leave>` (boundary-only, ancestor-aware —
-/// see [`collect_surface_hover_events`]); the press axis keeps `Press`/`Release`
+/// see [`collect_virtual_hover_events`]); the press axis keeps `Press`/`Release`
 /// with the climb, filtered to the primary button so a right/middle press
 /// doesn't trigger `pressStyle` (DOM `:active` parity with the main window's
 /// `Interaction::Pressed`).
 #[allow(clippy::too_many_arguments)]
-pub fn apply_surface_interaction_styles(
+pub fn apply_virtual_interaction_styles(
     mut commands: Commands,
-    pointer: Option<Res<SurfaceVirtualPointer>>,
+    pointers: Res<VirtualPointers>,
     mut enters: MessageReader<Pointer<Enter>>,
     mut leaves: MessageReader<Pointer<Leave>>,
     mut presses: MessageReader<Pointer<Press>>,
@@ -236,7 +245,9 @@ pub fn apply_surface_interaction_styles(
     bridge: Option<Res<crate::bridge::JsBridge>>,
     fonts: Option<Res<crate::plugin::Fonts>>,
 ) {
-    let Some(pointer) = pointer else { return };
+    if pointers.is_empty() {
+        return;
+    }
     let default_fonts = crate::plugin::Fonts::default();
     let fonts = fonts.as_deref().unwrap_or(&default_fonts);
     let styles: &crate::style::StyleRegistry = match bridge.as_ref() {
@@ -251,16 +262,35 @@ pub fn apply_surface_interaction_styles(
             (Some(b), Some(r)) => b.shared_tags.kind_cow(r.0),
             _ => std::borrow::Cow::Borrowed("node"),
         };
-        // Surface interiors are never promoted layers.
+        let registry = bridge.as_ref().map(|b| b.ext.clone());
+        let fallback;
+        let info = match registry.as_ref() {
+            Some(r) => r.element_or_fallback(&kind),
+            None => {
+                fallback = crate::ext::core_element_info(&kind)
+                    .or_else(|| crate::ext::core_element_info("node"))
+                    .expect("the core registers <node>");
+                &fallback
+            }
+        };
+        let attrs = match (bridge.as_ref(), rnode) {
+            (Some(b), Some(r)) => b.props_cache.get(&r.0).map(|p| &p.attrs),
+            _ => None,
+        }
+        .unwrap_or(crate::element::Attrs::empty());
+        // Virtual-pointer UI (offscreen interiors) is never a promoted layer.
         let wctx = crate::style::WriterCtx {
             promoted: false,
             fresh: false,
             kind: &kind,
-            flags: flags.get(entity).copied().unwrap_or_default(),
-            text: false,
+            flags: flags.get(entity).copied().unwrap_or(info.decl.flags),
             assets: &assets,
             fonts,
             styles,
+            element: info,
+            attrs,
+            events: crate::element::Attrs::empty(),
+            id: rnode.map_or(0, |r| r.0),
         };
         apply_style(&mut commands.entity(entity), &style, &wctx);
     };
@@ -268,21 +298,21 @@ pub fn apply_surface_interaction_styles(
     // button), so its label text highlights the button rather than nothing.
     let target = |entity: Entity| climb(entity, &child_of, |e| variants.contains(e));
     for ev in leaves.read() {
-        if ev.pointer_id == pointer.id
+        if pointers.contains(ev.pointer_id)
             && let Ok(v) = variants.get(ev.entity)
         {
             restyle(ev.entity, v.base.as_ref().cloned());
         }
     }
     for ev in enters.read() {
-        if ev.pointer_id == pointer.id
+        if pointers.contains(ev.pointer_id)
             && let Ok(v) = variants.get(ev.entity)
         {
             restyle(ev.entity, overlay_style(v.base.as_ref(), v.hover.as_ref()));
         }
     }
     for ev in releases.read() {
-        if ev.pointer_id == pointer.id
+        if pointers.contains(ev.pointer_id)
             && ev.button == PointerButton::Primary
             && let Some(t) = target(ev.entity)
             && let Ok(v) = variants.get(t)
@@ -291,7 +321,7 @@ pub fn apply_surface_interaction_styles(
         }
     }
     for ev in presses.read() {
-        if ev.pointer_id == pointer.id
+        if pointers.contains(ev.pointer_id)
             && ev.button == PointerButton::Primary
             && let Some(t) = target(ev.entity)
             && let Ok(v) = variants.get(t)

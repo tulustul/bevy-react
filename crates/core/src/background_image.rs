@@ -14,12 +14,8 @@ use bevy::image::TRANSPARENT_IMAGE_HANDLE;
 use bevy::prelude::*;
 use bevy::ui::widget::NodeImageMode;
 
-use crate::protocol::background_image::BackgroundImageSource;
-use crate::protocol::props::Props;
-use crate::style::props::BACKGROUND_IMAGE;
-
 /// Marks a node whose background image samples a render target registered in
-/// [`crate::portal::RenderTargets`]. [`bind_background_textures`] keeps the
+/// [`crate::render_target::RenderTargets`]. [`bind_background_textures`] keeps the
 /// entity's [`ImageNode`] pointed at the registry's texture for this name
 /// (transparent placeholder while unregistered — the node binds late, like a
 /// `<portal>`). Unlike a portal, a background never becomes the target's
@@ -38,13 +34,13 @@ pub struct BackgroundTileScale(pub f32);
 /// Point every background-texture node's [`ImageNode`] at the registry
 /// texture for its [`RBackgroundTexture`] name (or the shared transparent
 /// placeholder while unregistered) — the `backgroundImage` analogue of
-/// `bind_portals`, minus the `binder` recording (that is portal
+/// `bind_target_views`, minus the `binder` recording (that is portal
 /// `Resolution::Auto` sizing semantics; a background never sizes its target).
 /// Only writes on change; a real swap marks layer content dirty so an
 /// enclosing cached layer repaints the late-bound pixels.
 pub fn bind_background_textures(
     mut commands: Commands,
-    targets: Res<crate::portal::RenderTargets>,
+    targets: Res<crate::render_target::RenderTargets>,
     mut nodes: Query<(Entity, &RBackgroundTexture, &mut ImageNode)>,
 ) {
     for (entity, marker, mut node) in &mut nodes {
@@ -99,29 +95,10 @@ pub fn sync_background_tile_scale(
     }
 }
 
-/// Report a `backgroundImage` present (in any style slot) on an element whose
-/// `ImageNode` belongs to the element itself — the style is ignored there.
-/// Callers hold the [`crate::diag`] node scope, so the devtools inspector can
-/// flag the offending row.
-pub(crate) fn warn_ignored(element: &'static str, props: &Props) {
-    let Some(spec) = props.all_styles().find_map(|s| s.get(&BACKGROUND_IMAGE)) else {
-        return;
-    };
-    let value = match &spec.src {
-        BackgroundImageSource::Path(p) => p.as_str(),
-        BackgroundImageSource::Texture { texture } => texture.as_str(),
-    };
-    let msg = format!(
-        "backgroundImage is ignored on `{element}` — the element owns its ImageNode; \
-         use the element's own props instead"
-    );
-    crate::diag::report("backgroundImage", value, &msg);
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::portal::{RenderTargetSpec, RenderTargets};
+    use crate::render_target::{RenderTargetSpec, RenderTargets};
     use bevy::asset::AssetPlugin;
 
     fn test_app() -> App {
@@ -169,7 +146,7 @@ mod tests {
             target_handle,
             "the background binds once the target registers"
         );
-        // (Unlike `bind_portals`, no `binder` is recorded — the system only
+        // (Unlike `bind_target_views`, no `binder` is recorded — the system only
         // reads the registry via `get`, so it *can't* touch sizing state.)
 
         app.world_mut()

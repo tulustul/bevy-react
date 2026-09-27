@@ -1,8 +1,24 @@
 use super::text::{letter_spacing, line_height};
 use super::*;
-use crate::protocol::props::Props;
+use crate::protocol::animatable::AnimatableField;
+use crate::protocol::props::{Props, props_for};
 use crate::style::Style;
 use crate::style::props::*;
+
+/// Decode an `<image>`'s props.
+fn image_props(json: serde_json::Value) -> Props {
+    props_for("image", json)
+}
+
+/// The `ImageNode` an `<image>`'s props build (its style's static opacity
+/// folded, unpromoted).
+fn image_of(props: &Props, assets: &AssetServer) -> ImageNode {
+    let opacity = props
+        .style
+        .as_ref()
+        .and_then(|s| s.get(&OPACITY).static_val());
+    image_node(&props.attrs, opacity, assets, false)
+}
 
 /// An unrecognized color reports into the diag runtime sink under the
 /// enclosing node scope, so devtools can flag the row. The sink is
@@ -52,12 +68,11 @@ fn image_opacity_fades_tint_alpha() {
     app.init_asset::<Image>();
     let assets = app.world().resource::<AssetServer>();
 
-    let props: Props = serde_json::from_value(serde_json::json!({
+    let props = image_props(serde_json::json!({
         "tint": "#ff0000",
         "style": { "opacity": 0.5 },
-    }))
-    .unwrap();
-    let image = image_node(&props, assets, false);
+    }));
+    let image = image_of(&props, assets);
     let c = image.color.to_srgba();
     assert!(
         (c.alpha - 0.5).abs() < 1e-6,
@@ -82,15 +97,19 @@ fn focus_policy_maps_with_pass_default() {
         let style: Style = serde_json::from_value(json).unwrap();
         let mut queue = CommandQueue::default();
         let mut commands = Commands::new(&mut queue, world);
+        let info = crate::ext::core_element_info("node").unwrap();
         let ctx = WriterCtx {
             promoted: false,
             fresh: false,
             kind: "node",
             flags: crate::ext::ElementFlags::NODE,
-            text: false,
             assets: &assets,
             fonts: &fonts,
             styles: crate::style::core_registry(),
+            element: &info,
+            attrs: crate::element::Attrs::empty(),
+            events: crate::element::Attrs::empty(),
+            id: 0,
         };
         apply_style(&mut commands.entity(entity), &Some(style), &ctx);
         queue.apply(world);
@@ -132,7 +151,7 @@ fn image_mode_sliced_maps_to_texture_slicer() {
     let app = assets_app();
     let assets = app.world().resource::<AssetServer>();
 
-    let props: Props = serde_json::from_value(serde_json::json!({
+    let props = image_props(serde_json::json!({
         "src": "modal.png",
         "imageMode": {
             "type": "sliced",
@@ -140,9 +159,8 @@ fn image_mode_sliced_maps_to_texture_slicer() {
             "sidesScaleMode": { "tile": 0.5 },
             "maxCornerScale": 2.0,
         },
-    }))
-    .unwrap();
-    let image = image_node(&props, assets, false);
+    }));
+    let image = image_of(&props, assets);
     match image.image_mode {
         NodeImageMode::Sliced(s) => {
             assert_eq!(s.border.min_inset, Vec2::new(40.0, 10.0));
@@ -164,22 +182,20 @@ fn image_mode_tiled_and_uniform_border() {
     let app = assets_app();
     let assets = app.world().resource::<AssetServer>();
 
-    let sliced: Props = serde_json::from_value(serde_json::json!({
+    let sliced = image_props(serde_json::json!({
         "src": "modal.png",
         "imageMode": { "type": "sliced", "border": 16.0 },
-    }))
-    .unwrap();
-    match image_node(&sliced, assets, false).image_mode {
+    }));
+    match image_of(&sliced, assets).image_mode {
         NodeImageMode::Sliced(s) => assert_eq!(s.border, BorderRect::all(16.0)),
         other => panic!("expected Sliced, got {other:?}"),
     }
 
-    let tiled: Props = serde_json::from_value(serde_json::json!({
+    let tiled = image_props(serde_json::json!({
         "src": "modal.png",
         "imageMode": { "type": "tiled", "tileX": true, "stretchValue": 2.0 },
-    }))
-    .unwrap();
-    match image_node(&tiled, assets, false).image_mode {
+    }));
+    match image_of(&tiled, assets).image_mode {
         NodeImageMode::Tiled {
             tile_x,
             tile_y,
@@ -199,16 +215,15 @@ fn image_mode_keyword_backward_compatible() {
     let app = assets_app();
     let assets = app.world().resource::<AssetServer>();
 
-    let stretch: Props =
-        serde_json::from_value(serde_json::json!({ "imageMode": "stretch" })).unwrap();
+    let stretch = image_props(serde_json::json!({ "imageMode": "stretch" }));
     assert!(matches!(
-        image_node(&stretch, assets, false).image_mode,
+        image_of(&stretch, assets).image_mode,
         NodeImageMode::Stretch
     ));
 
-    let auto: Props = serde_json::from_value(serde_json::json!({ "imageMode": "auto" })).unwrap();
+    let auto = image_props(serde_json::json!({ "imageMode": "auto" }));
     assert!(matches!(
-        image_node(&auto, assets, false).image_mode,
+        image_of(&auto, assets).image_mode,
         NodeImageMode::Auto
     ));
 }
@@ -220,13 +235,12 @@ fn source_rect_and_visual_box_map() {
     let app = assets_app();
     let assets = app.world().resource::<AssetServer>();
 
-    let props: Props = serde_json::from_value(serde_json::json!({
+    let props = image_props(serde_json::json!({
         "src": "logo.png",
         "sourceRect": { "x": 10.0, "y": 20.0, "width": 30.0, "height": 40.0 },
         "visualBox": "border",
-    }))
-    .unwrap();
-    let image = image_node(&props, assets, false);
+    }));
+    let image = image_of(&props, assets);
     assert_eq!(
         image.rect,
         Some(bevy::math::Rect::new(10.0, 20.0, 40.0, 60.0))
@@ -245,22 +259,22 @@ fn atlas_layout_cache_reuses_handle_across_index() {
     let mut cache = AtlasLayoutCache::default();
 
     let frame = |index: usize| -> Props {
-        serde_json::from_value(serde_json::json!({
+        image_props(serde_json::json!({
             "src": "sheet.png",
             "atlas": {
                 "tileWidth": 32, "tileHeight": 32,
                 "columns": 4, "rows": 4, "index": index,
             },
         }))
-        .unwrap()
     };
+    use crate::elements::image::ATLAS;
 
     let p0 = frame(0);
-    let mut a = image_node(&p0, assets, false);
-    apply_atlas(&mut a, &p0, &mut layouts, &mut cache);
+    let mut a = image_of(&p0, assets);
+    apply_atlas(&mut a, p0.attrs.get(&ATLAS), &mut layouts, &mut cache);
     let p2 = frame(2);
-    let mut b = image_node(&p2, assets, false);
-    apply_atlas(&mut b, &p2, &mut layouts, &mut cache);
+    let mut b = image_of(&p2, assets);
+    apply_atlas(&mut b, p2.attrs.get(&ATLAS), &mut layouts, &mut cache);
 
     let ta = a.texture_atlas.expect("atlas on a");
     let tb = b.texture_atlas.expect("atlas on b");

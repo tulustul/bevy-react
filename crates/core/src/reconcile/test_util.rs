@@ -73,16 +73,22 @@ fn build_op_app(
     let (out_tx, out_rx) = tokio::sync::mpsc::unbounded_channel::<Outbound>();
     std::mem::forget(out_rx); // keep the channel open for the test's lifetime
     let root = app.world_mut().spawn_empty().id();
-    // The caller's feature registrations (a feature plugin's kinds/keys), then
+    // The caller's feature registrations (a feature plugin's elements), then
     // the registry snapshot the bridge dispatches on and the thread-local
-    // decode scope the test's own `serde_json::from_value` calls resolve
-    // feature keys against. The core's style properties and writers first,
-    // as `ReactUiPlugin` registers them.
+    // decode scope the test's own props decodes resolve attributes against.
+    // The core's style properties, writers, and elements first, as
+    // `ReactUiPlugin` registers them.
     crate::style::add_core_styles(&mut app);
+    {
+        use crate::ReactAppExt;
+        app.add_react_elements(crate::elements::CORE_ELEMENTS);
+    }
     setup(&mut app);
     let registry = crate::ext::ExtRegistry::from_app(&app);
     registry.styles().validate();
     crate::ext::set_thread_registry(std::sync::Arc::new(registry.clone()));
+    // Element events (`ElementEvents`) send through the standalone sender.
+    app.insert_resource(crate::bridge::OutboundResource(out_tx.clone()));
     let mut bridge = JsBridge::new(ops_rx, out_tx, root);
     bridge.ext = std::sync::Arc::new(registry);
     app.insert_resource(bridge);
@@ -97,6 +103,29 @@ pub fn create_node(id: NodeId) -> Op {
         props: Box::default(),
         text: None,
     }
+}
+
+/// A create op of a `kind` element, its props decoded against the element
+/// (on this thread's registry — the harness installs the app's).
+pub fn create(id: NodeId, kind: &str, props: serde_json::Value) -> Op {
+    Op::Create {
+        id,
+        kind: kind.into(),
+        props: Props::decode_for(kind, props),
+        text: None,
+    }
+}
+
+/// A delta update of a `kind` element: only the supplied fields are touched
+/// (props decoded against the element).
+pub fn update(
+    id: NodeId,
+    kind: &str,
+    props: serde_json::Value,
+    unset: &[&str],
+    style_unset: &[&str],
+) -> Op {
+    update_delta(id, *Props::decode_for(kind, props), unset, style_unset)
 }
 
 /// A delta update: only the supplied fields are touched.

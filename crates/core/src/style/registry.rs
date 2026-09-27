@@ -49,8 +49,9 @@ pub struct StyleRegistry {
     props: Vec<Option<&'static dyn AnyStyleProperty>>,
     by_name: HashMap<&'static str, PropId>,
     writers: Vec<&'static Writer>,
-    /// Component → the writer claiming it (its type name, for the panic).
-    owners: HashMap<TypeId, &'static str>,
+    /// Component → the writer claiming it (its bit, and its type name for
+    /// the panic).
+    owners: HashMap<TypeId, (usize, &'static str)>,
     /// Per property (by id): the writers reading it. Rebuilt on every
     /// registration, so it is right whatever the registration order.
     readers: Vec<WriterMask>,
@@ -117,10 +118,16 @@ impl StyleRegistry {
             self.writers.len() < 64,
             "bevy-react: more than 64 style writers"
         );
+        assert!(
+            writer.attrs.is_empty(),
+            "bevy-react: a global style writer cannot read element attributes — list it on \
+             the element instead"
+        );
+        let bit = self.writers.len();
         for key in writer.writes {
             let (type_id, name) = key();
             assert!(
-                self.owners.insert(type_id, name).is_none(),
+                self.owners.insert(type_id, (bit, name)).is_none(),
                 "bevy-react: two style writers write {name}"
             );
         }
@@ -296,6 +303,22 @@ impl StyleRegistry {
             }
         }
         invalidation
+    }
+
+    /// The global writer writing the component `type_id`, as a mask (empty
+    /// when none does).
+    pub fn writers_writing(&self, type_id: TypeId) -> WriterMask {
+        self.owners
+            .get(&type_id)
+            .map_or(WriterMask::NONE, |(bit, _)| WriterMask(1 << bit))
+    }
+
+    /// The writers reading the property with id `id`.
+    pub fn readers_of_id(&self, id: PropId) -> WriterMask {
+        self.readers
+            .get(id.0 as usize)
+            .copied()
+            .unwrap_or(WriterMask::NONE)
     }
 
     /// The writers reading `property`.

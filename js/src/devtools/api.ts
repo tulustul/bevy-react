@@ -209,6 +209,34 @@ export function requestStyleFields(): Promise<DevtoolsStyleField[]> {
   return request("devtools.styleFields", null) as Promise<DevtoolsStyleField[]>;
 }
 
+/** One attribute of a registered element — a row of `DevtoolsElement.attrs`. */
+export interface DevtoolsAttr {
+  name: string;
+  category: FieldCategory;
+  /** The diag kind a bad keyword warns under (keyword attributes only). */
+  kind: string | null;
+  /** Acts once, never retained. */
+  actNow: boolean;
+  /** Named by the generated JSX typing (`false` for wire-only attributes). */
+  typed: boolean;
+}
+
+/** One registered element — a row of the `devtools.elements` response
+ *  (`devtools/element_fields.rs`): its attributes, its own event handler
+ *  props, and the common prop groups that apply (`identity`, `variants`,
+ *  `pointer`, `scroll`, `wheel`). */
+export interface DevtoolsElement {
+  name: string;
+  attrs: DevtoolsAttr[];
+  events: string[];
+  common: string[];
+}
+
+/** Pull the registered elements — core and every feature/app element. */
+export function requestElements(): Promise<DevtoolsElement[]> {
+  return request("devtools.elements", null) as Promise<DevtoolsElement[]>;
+}
+
 /** Report the panel's layout settings for persistence. Emitted on every
  *  change (per frame during drags) — Bevy debounces the actual file write. */
 export function sendSettings(s: DevtoolsSettings): void {

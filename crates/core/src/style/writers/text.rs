@@ -6,6 +6,7 @@ use bevy::prelude::*;
 use bevy::text::{LetterSpacing, LineHeight, TextCursorStyle};
 
 use super::folded_opacity;
+use crate::ext::TextRole;
 use crate::style::props::*;
 use crate::style::{Writer, owns};
 use crate::ui_map::{
@@ -18,14 +19,15 @@ use crate::ui_map::{
 /// themed background.
 pub static TEXT_COLOR_WRITER: Writer = Writer {
     reads: &[&COLOR, &OPACITY],
+    attrs: &[],
     writes: &[owns::<TextColor>, owns::<TextCursorStyle>],
     apply: |ctx, s, ec| {
-        if !ctx.text {
+        if !ctx.text() {
             return;
         }
         let color = resolve_text_color(Some(s), ctx.promoted);
         ec.queue(set_if_neq_or_insert(color));
-        if ctx.kind == "editableText" {
+        if ctx.flags.text == TextRole::Input {
             ec.queue(move |mut entity: EntityWorldMut| {
                 if let Some(mut cursor) = entity.get_mut::<TextCursorStyle>()
                     && cursor.color != color.0
@@ -47,9 +49,10 @@ pub static TEXT_FONT_WRITER: Writer = Writer {
         &LINE_HEIGHT,
         &LETTER_SPACING,
     ],
+    attrs: &[],
     writes: &[owns::<TextFont>, owns::<LineHeight>, owns::<LetterSpacing>],
     apply: |ctx, s, ec| {
-        if !ctx.text {
+        if !ctx.text() {
             return;
         }
         let (font, line, spacing) = resolve_text_font(Some(s), ctx.fonts);
@@ -64,9 +67,10 @@ pub static TEXT_FONT_WRITER: Writer = Writer {
 /// comes from its `multiline` prop instead.
 pub static TEXT_LAYOUT_WRITER: Writer = Writer {
     reads: &[&TEXT_ALIGN, &LINE_BREAK],
+    attrs: &[],
     writes: &[owns::<TextLayout>],
     apply: |ctx, s, ec| {
-        if !ctx.text || ctx.kind == "editableText" {
+        if !ctx.text() || ctx.flags.text == TextRole::Input {
             return;
         }
         if let Some(layout) = text_layout(Some(s)) {
@@ -79,6 +83,7 @@ pub static TEXT_LAYOUT_WRITER: Writer = Writer {
 /// when the style drops it.
 pub static TEXT_SHADOW_WRITER: Writer = Writer {
     reads: &[&TEXT_SHADOW, &OPACITY],
+    attrs: &[],
     writes: &[owns::<TextShadow>],
     apply: |ctx, s, ec| match text_shadow(Some(s), folded_opacity(ctx, s)) {
         Some(shadow) => {

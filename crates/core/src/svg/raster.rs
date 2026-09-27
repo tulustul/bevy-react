@@ -5,7 +5,7 @@
 //! [`crate::raster`] helpers.)
 //!
 //! [`update_svg_surfaces`] mirrors the `<canvas>` update discipline
-//! ([`crate::canvas::update_canvas_surfaces`]): CPU-side raster into the
+//! (`bevy_react_canvas::update_canvas_surfaces`): CPU-side raster into the
 //! node's [`ImageNode`] image, `contains` before `get_mut` so an idle surface
 //! never re-uploads, a [`LayerContentDirt`](crate::layer::LayerContentDirt)
 //! tap before every pixel write, and zero mutable derefs on a clean entity.
@@ -113,7 +113,7 @@ pub fn update_svg_surfaces(
             continue; // not loaded yet; `dirty` stays set, rasters on load
         };
         let doc_touched = touched.contains(&doc_handle.id());
-        let (w, h) = crate::canvas::clamp_physical_size(node.size);
+        let (w, h) = crate::raster::clamp_physical_size(node.size);
         if w == 0 || h == 0 {
             // Not laid out (fresh node) or hidden (`display: none`). A doc
             // hot-reload seen now would otherwise be lost with the drained

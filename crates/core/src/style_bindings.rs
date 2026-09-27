@@ -288,16 +288,25 @@ pub(crate) fn derive_bindings(style: Option<&Style>) -> Option<AnimatedBindings>
 
 /// The complete binding map of a node's props: the merged base style's
 /// wrappers ([`derive_bindings`]) plus every feature-owned value's own
-/// ([`ExtProps::bindings`](crate::ext::ExtProps::bindings)).
+/// ([`Attribute::animated`](crate::element::Attribute::animated)).
 /// In practice at most one side contributes — shape entities are Node-less
 /// and styleless, styled nodes carry no `shape` — but the union keeps the
 /// [`AnimatedNode`](crate::animations::AnimatedNode) stamp a single decision:
 /// `None` (remove the component) exactly when **both** sides are empty.
 pub(crate) fn derive_props_bindings(props: &Props) -> Option<AnimatedBindings> {
     let mut out = derive_bindings(props.style.as_ref()).map_or_else(BTreeMap::new, |b| b.0);
-    // Feature-owned values (an SVG shape's attrs) declare their own bindings.
-    for (domain, name, binding) in props.ext.bindings() {
-        out.insert(P::Ext { domain, name }, binding);
+    // Element attributes declare their own bindings (an SVG shape's numeric
+    // attributes): published under the attribute's domain, by name.
+    for (attr, value) in props.attrs.iter() {
+        if let Some((domain, binding)) = attr.binding(value) {
+            out.insert(
+                P::Ext {
+                    domain,
+                    name: attr.name().to_owned(),
+                },
+                binding,
+            );
+        }
     }
     (!out.is_empty()).then_some(AnimatedBindings(out))
 }

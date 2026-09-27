@@ -59,6 +59,7 @@ pub static LAYOUT_WRITER: Writer = Writer {
         &GRID_COLUMN,
         &BORDER_RADIUS,
     ],
+    attrs: &[],
     writes: &[owns::<Node>],
     apply: apply_layout,
 };
@@ -70,6 +71,7 @@ fn apply_layout(_ctx: &WriterCtx, s: &Style, ec: &mut EntityCommands) {
 /// `ZIndex` — `Node`-required: never removed; absent writes the default.
 pub static Z_INDEX_WRITER: Writer = Writer {
     reads: &[&Z_INDEX],
+    attrs: &[],
     writes: &[owns::<ZIndex>],
     apply: |_, s, ec| {
         ec.queue(set_if_neq_or_insert(ZIndex(
@@ -81,6 +83,7 @@ pub static Z_INDEX_WRITER: Writer = Writer {
 /// `GlobalZIndex`.
 pub static GLOBAL_Z_INDEX_WRITER: Writer = Writer {
     reads: &[&GLOBAL_Z_INDEX],
+    attrs: &[],
     writes: &[owns::<GlobalZIndex>],
     apply: |ctx, s, ec| match s.get(&GLOBAL_Z_INDEX).copied() {
         Some(z) => {
@@ -95,6 +98,7 @@ pub static GLOBAL_Z_INDEX_WRITER: Writer = Writer {
 /// nearest ancestor's setting. A component write only — no relayout.
 pub static LAYOUT_ROUNDING_WRITER: Writer = Writer {
     reads: &[&LAYOUT_ROUNDING],
+    attrs: &[],
     writes: &[owns::<LayoutConfig>],
     apply: |ctx, s, ec| match s.get(&LAYOUT_ROUNDING).copied() {
         Some(use_rounding) => {
@@ -109,6 +113,7 @@ pub static LAYOUT_ROUNDING_WRITER: Writer = Writer {
 /// from it. `"none"`/absent clears it (and the shell despawns any bars).
 pub static SCROLLBAR_WRITER: Writer = Writer {
     reads: &[&SCROLLBAR],
+    attrs: &[],
     writes: &[owns::<ScrollbarConfig>],
     apply: |ctx, s, ec| match s.get(&SCROLLBAR) {
         Some(spec) if spec.is_visible() => {

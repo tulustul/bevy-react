@@ -3,28 +3,26 @@
 //! - The `collect_*` systems report interactions back to the JS thread.
 //!
 //! File map: `apply` (the op-apply system + lifecycle/hierarchy arms),
-//! `create`/`update` (the two big op arms), `stamps` (props → component
-//! helpers shared by both), `image` (the `<image>` rebuild glue, incl. the
-//! svg-mode branch), `svg_ops` (the JSX `<svg>`/shape create + update
-//! bodies), `stats` (instrumentation + the `SystemParam`
-//! bundles), `events` (main-window click/scroll/canvas collectors + shared
-//! utilities), `pointer` (drag/hover), `interaction` (the hover/press/focus
-//! restyle), `editable` (`editableText` events + a11y), `surface_events`
-//! (the `<surface>` mirror of the event path). Submodules are private;
-//! everything is re-exported here, so `crate::reconcile::X` is the one path.
+//! `create`/`update` (the two big op arms — one generic path each, driven by
+//! the node's registered element, see [`crate::element`]), `stamps` (the
+//! common prop stamps shared by both), `stats` (instrumentation + the
+//! `SystemParam` bundles), `events` (main-window click/scroll collectors +
+//! shared utilities), `pointer` (drag/hover), `interaction` (the
+//! hover/press/focus restyle), `virtual_events` (the virtual-pointer mirror
+//! of the event path — a `<surface>`'s in-world pointer). Submodules are
+//! private; everything is re-exported here, so `crate::reconcile::X` is the
+//! one path.
 
 mod apply;
 mod create;
-mod editable;
 mod events;
 mod hover;
-mod image;
 mod interaction;
 mod pointer;
 pub(crate) mod stamps;
 mod stats;
-mod surface_events;
 mod update;
+mod virtual_events;
 
 #[cfg(test)]
 mod svg_tests;
@@ -32,12 +30,8 @@ mod svg_tests;
 pub(crate) mod test_util;
 
 pub use apply::apply_js_ops;
-pub use editable::{
-    apply_pending_selections, on_focus_gained, on_focus_lost, on_text_edit_change,
-    sync_editable_a11y,
-};
 pub(crate) use events::climb;
-pub use events::{collect_canvas_resize_events, collect_scroll_events, collect_ui_events};
+pub use events::{collect_scroll_events, collect_ui_events};
 pub use hover::collect_hover_events;
 pub use interaction::apply_interaction_styles;
 pub(crate) use pointer::ActiveDrag;
@@ -47,9 +41,9 @@ pub use pointer::collect_pointer_events;
 pub(crate) use pointer::DragSource;
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) use stats::mark_frame_start;
-pub use stats::{FlushFlags, FlushStamps, FrameStamp, OpApplyStats, UiAssets};
-pub use surface_events::{
-    apply_surface_interaction_styles, collect_surface_clicks, collect_surface_hover_events,
-    collect_surface_pointer_events,
-};
+pub use stats::{FlushFlags, FlushStamps, FrameStamp, OpApplyStats};
 pub(crate) use update::reapply_opacity_outputs;
+pub use virtual_events::{
+    apply_virtual_interaction_styles, collect_virtual_clicks, collect_virtual_hover_events,
+    collect_virtual_pointer_events,
+};

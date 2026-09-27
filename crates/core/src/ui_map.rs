@@ -5,7 +5,6 @@
 //! (parsed once at the serde boundary — see [`crate::protocol`]), so applying
 //! them here is a plain field copy.
 
-use bevy::picking::Pickable;
 use bevy::platform::collections::HashMap;
 use bevy::prelude::*;
 use bevy::sprite::{BorderRect, SliceScaleMode, TextureSlicer};
@@ -13,15 +12,16 @@ use bevy::text::{FontSize as BevyFontSize, LetterSpacing, LineHeight};
 use bevy::ui::FocusPolicy;
 use bevy::ui::widget::NodeImageMode;
 
+use crate::element::Attrs;
 use crate::plugin::Fonts;
 use crate::protocol::{
     animatable::Animatable, animatable::AnimatableField, background_image::AtlasSpec,
     background_image::ImageMode, background_image::ImageModeSpec, background_image::SliceBorder,
-    background_image::SliceScale, background_image::SliceSpec, props::Props, units::Angle,
-    units::FontSize, units::Length, units::Rect, visual::AngularStop, visual::BoxShadowList,
-    visual::BoxShadowSpec, visual::ConicGradientSpec, visual::GradientList, visual::GradientSpec,
-    visual::GradientStop, visual::LetterSpacingSpec, visual::LineHeightSpec,
-    visual::LinearGradientSpec, visual::RadialGradientSpec, visual::RadialShapeSpec,
+    background_image::SliceScale, background_image::SliceSpec, units::Angle, units::FontSize,
+    units::Length, units::Rect, visual::AngularStop, visual::BoxShadowList, visual::BoxShadowSpec,
+    visual::ConicGradientSpec, visual::GradientList, visual::GradientSpec, visual::GradientStop,
+    visual::LetterSpacingSpec, visual::LineHeightSpec, visual::LinearGradientSpec,
+    visual::RadialGradientSpec, visual::RadialShapeSpec,
 };
 use crate::scrollbar::ScrollbarPosition;
 use crate::style::Style;
@@ -39,10 +39,10 @@ use crate::style::{Invalidation, WriterCtx, WriterMask};
 
 /// Parse a CSS color string into a `Color`: hex, named colors, `transparent`, or
 /// `rgb()/hsl()/hwb()/oklab()/oklch()` functional notation (see
-/// [`crate::canvas::parse_css_color`]). On an unrecognized value it warns
+/// [`crate::raster::parse_css_color`]). On an unrecognized value it warns
 /// and falls back to a loud magenta so the typo is visible rather than silent.
 pub fn parse_color(input: &str) -> Color {
-    match crate::canvas::parse_css_color(input) {
+    match crate::raster::parse_css_color(input) {
         Some(c) => Color::from(c),
         None => {
             let msg = format!("unrecognized color {input:?}");
@@ -316,29 +316,24 @@ pub(crate) fn set_if_neq_or_insert<
 }
 
 /// The always-present components of a freshly spawned element, built from its
-/// style so they ride the `spawn((ReactNode, …))` bundle — one archetype, no
-/// moves — instead of landing as separate inserts. `focus_default` is the
-/// element's `focusPolicy` when the style has none (`Block` for a `<button>`,
-/// `Pass` otherwise — the focus-policy writer's default); the `Pickable`
-/// mirror follows it.
+/// (effective) style so they ride the `spawn((ReactNode, …))` bundle — one
+/// archetype, no moves — instead of landing as separate inserts. The
+/// `Pickable` mirror follows the focus policy and the element's `flags`.
 ///
 /// Pair with [`apply_style_fresh`] for the rest of the style.
-pub fn fresh_style_bundle(style: &Option<Style>, focus_default: FocusPolicy) -> impl Bundle {
+pub fn fresh_style_bundle(style: &Option<Style>, flags: crate::ext::ElementFlags) -> impl Bundle {
     let s = style.as_ref();
     let opacity = s.and_then(|s| s.get(&OPACITY).static_val());
     let focus_policy = s
         .and_then(|s| s.get(&FOCUS_POLICY).copied())
-        .unwrap_or(focus_default);
+        .unwrap_or(FocusPolicy::Pass);
     (
         node_from(s),
         background_color(s, opacity),
         border_color(s),
         ZIndex(s.and_then(|s| s.get(&Z_INDEX).copied()).unwrap_or_default()),
         focus_policy,
-        Pickable {
-            should_block_lower: focus_policy == FocusPolicy::Block,
-            is_hoverable: true,
-        },
+        crate::style::writers::focus_pickable(flags, focus_policy),
     )
 }
 
@@ -368,10 +363,10 @@ pub(crate) fn border_color(s: Option<&Style>) -> BorderColor {
     }
 }
 
-/// Apply a style to an element: every registered writer runs (see
+/// Apply a style to an element: every writer of its element runs (see
 /// [`apply_style_masked`]).
 pub fn apply_style(ec: &mut EntityCommands, style: &Option<Style>, ctx: &WriterCtx) {
-    apply_style_masked(ec, style, WriterMask::ALL, ctx, Invalidation::ALL);
+    apply_style_masked(ec, style, WriterMask::ALL, u64::MAX, ctx, Invalidation::ALL);
 }
 
 /// [`apply_style`] for a **freshly spawned** element whose spawn bundle carried
@@ -384,14 +379,19 @@ pub fn apply_style_fresh(ec: &mut EntityCommands, style: &Option<Style>, ctx: &W
     debug_assert!(ctx.fresh, "apply_style_fresh with a non-fresh ctx");
     let bundled = ctx.styles.masks.fresh_bundled;
     // A fresh entity has nothing to remove or reset: only the writers
-    // reading a property the style sets have work (see `Writer::apply`).
-    let present = style
+    // reading a property the style (or an attribute the node) sets have
+    // work (see `Writer::apply`).
+    let keys = style
         .as_ref()
-        .map_or(WriterMask::NONE, |s| ctx.styles.writers_for(&s.keys()));
+        .map_or(crate::style::StyleDirty::NONE, |s| s.keys());
+    let present = ctx.styles.writers_for(&keys);
+    let attrs = ctx.attrs.keys().union(ctx.events.keys());
+    let own = ctx.element.writers_for(&keys, attrs);
     apply_style_masked(
         ec,
         style,
         present.without(bundled),
+        own,
         ctx,
         Invalidation::PAINT,
     );
@@ -404,8 +404,10 @@ pub(crate) fn remove_unless_fresh<B: Bundle>(ec: &mut EntityCommands, fresh: boo
     }
 }
 
-/// Run the registered [writers](crate::style::Writer) in `writers` (their
-/// registration order), then act on the change's `invalidation`: a
+/// Run the global [writers](crate::style::Writer) in `writers` (their
+/// registration order, masked by the element's ownership table), then the
+/// element's own writers in `own` (bit = index in its `writers`), then act
+/// on the change's `invalidation`: a
 /// [`PAINT`](Invalidation::PAINT) change re-captures the node's owning layer
 /// (see `crate::layer::LayerContentDirt`). Composite-side changes (a promoted
 /// root's group alpha or translation, the filter chains, the 3D matrix) are
@@ -421,17 +423,27 @@ pub fn apply_style_masked(
     ec: &mut EntityCommands,
     style: &Option<Style>,
     writers: WriterMask,
+    own: u64,
     ctx: &WriterCtx,
     invalidation: Invalidation,
 ) {
     let empty = Style::empty();
     let s = style.as_ref().unwrap_or(empty);
     // Registration order = bit order: walk the set bits low to high.
-    let mut bits = writers.intersection(ctx.styles.all_writers()).0;
+    let mut bits = writers
+        .intersection(ctx.styles.all_writers())
+        .intersection(ctx.element.global_mask)
+        .0;
     while bits != 0 {
         let bit = bits.trailing_zeros() as usize;
         bits &= bits - 1;
         (ctx.styles.writer_at(bit).apply)(ctx, s, ec);
+    }
+    let mut bits = own & ctx.element.all_writers();
+    while bits != 0 {
+        let bit = bits.trailing_zeros() as usize;
+        bits &= bits - 1;
+        (ctx.element.writer_at(bit).apply)(ctx, s, ec);
     }
     if invalidation.contains(Invalidation::PAINT) {
         crate::layer::mark_content_dirty(ec);

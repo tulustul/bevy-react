@@ -57,8 +57,8 @@ impl ShapeKind {
 }
 
 /// One shape child of a JSX `<svg>` element: a **Node-less** entity (the
-/// `textSpan` precedent — no layout box, no style, no `stamp_common`)
-/// carrying only its kind and folded attrs. The rasterizer walks the `<svg>`
+/// `textSpan` precedent — no layout box, no style) carrying only its kind and
+/// assembled attributes ([`crate::attrs`]). The rasterizer walks the `<svg>`
 /// root's `Children` to paint these, and the hit-tester reads the same data.
 /// Updates rewrite `attrs` compare-before-write, so `Changed<SvgShape>` is a
 /// sound dirt signal for the raster.

@@ -1,14 +1,13 @@
-//! Wire types for the JSX `<svg>` element and its shape children — owned by
-//! the svg module (the [`bevy_react_core::canvas::DrawCmd`] precedent) and re-exported
-//! by [`crate::protocol`], which references them from `Props`.
+//! Wire types for the JSX `<svg>` element and its shape children, and their
+//! decoders — the codecs of the attributes in [`crate::attrs`].
 //!
 //! Decoding follows the protocol module's rule: wire strings parse **once, at
 //! the serde boundary**, and every malformed value **warns and drops the
-//! field** (via [`bevy_react_core::protocol::decode_warn`]) — never failing the batch.
-//! Warn kinds emitted here: `"viewBox"`, `"shapePath"`, `"shapePoints"`,
-//! `"shapePaint"`, `"shapeEnum"`, `"shapeTransform"`, `"shapeTransition"`
-//! (each mirrored in `devtools.rs`' kind list and
-//! `js/src/devtools/warnings.ts`).
+//! attribute** (via [`bevy_react_core::protocol::decode_warn`]) — never
+//! failing the batch. Warn kinds emitted here: `"viewBox"`, `"shapeNumber"`,
+//! `"shapePath"`, `"shapePoints"`, `"shapePaint"`, `"shapeEnum"`,
+//! `"shapeTransform"`, `"shapeTransition"` (each mirrored in the core
+//! devtools' kind list and `js/src/devtools/warnings.ts`).
 
 use std::fmt;
 
@@ -26,11 +25,14 @@ mod tests;
 
 pub use path::{PathData, PathSeg};
 
-/// The folded attribute object of one SVG shape child (`<circle>`, `<rect>`,
-/// `<line>`, `<polyline>`, `<polygon>`, `<path>`, `<g>`, …). All-`Option`:
-/// absent means "attribute not set", and the shape kind decides which fields
-/// it reads. On update the whole object **replaces atomically** (see
-/// [`bevy_react_core::protocol::props::Props::merge_delta`]).
+/// The assembled attributes of one SVG shape child (`<circle>`, `<rect>`,
+/// `<line>`, `<polyline>`, `<polygon>`, `<path>`, `<g>`, …) — the shape's
+/// registered attributes ([`crate::attrs`]) gathered into one value by the
+/// shape writer, which the painter, the hit-tester, the transition channel
+/// and the animation consumer all read. All-`Option`: absent means
+/// "attribute not set", and the shape kind decides which fields it reads.
+/// (Its `Deserialize` decodes the same flat object through the same
+/// per-field decoders — the protocol tests' form.)
 ///
 /// The **numeric** attrs (the [`NUMERIC_ATTRS`] set) accept the inline
 /// `{ animated: …, seed? }` wrapper ([`Animatable`], the style-field wire
@@ -97,7 +99,7 @@ pub struct ShapeAttrs {
     /// value: deliberately **outside** [`NUMERIC_ATTRS`], so the binding
     /// deriver / paint / hit never see it — but it participates in
     /// `PartialEq` like every field (a spec-only change is a real attrs
-    /// change; the atomic replace carries it). Boxed: the spec's inline
+    /// change). Boxed: the spec's inline
     /// entry array (~0.7 KB) would otherwise bulk EVERY `ShapeAttrs` — and
     /// ride every clone (props cache, `SvgShape`, the op-apply clones) — for
     /// a field most shapes don't set.
@@ -175,8 +177,9 @@ pub(crate) fn st(v: f32) -> Option<Animatable<f32>> {
 }
 
 /// The shape `transition` spec: per-attr easing timing, keyed by the
-/// [`NUMERIC_ATTRS`] wire names (shapes have no `style`, so the spec rides
-/// the shape object itself — explicit entries only, no non-numeric channels).
+/// [`NUMERIC_ATTRS`] wire names (shapes have no `style`, so the spec is the
+/// shape's own `transition` attribute — explicit entries only, no
+/// non-numeric channels).
 /// Entries are stored positionally in [`NUMERIC_ATTRS`] order; reuse of
 /// [`ChannelTransition`](bevy_react_core::transition::ChannelTransition) (the
 /// style-transition timing type) is verbatim —
@@ -214,7 +217,7 @@ impl ShapeTransitionSpec {
 /// warns and drops the whole field. Decodes through [`serde_json::Value`]
 /// (specs are tiny and rare — not a hot path) so no wire type can ever
 /// hard-error the batch.
-fn de_transition<'de, D: Deserializer<'de>>(
+pub(crate) fn de_transition<'de, D: Deserializer<'de>>(
     d: D,
 ) -> Result<Option<Box<ShapeTransitionSpec>>, D::Error> {
     let Some(value) = Option::<serde_json::Value>::deserialize(d)? else {
@@ -372,46 +375,67 @@ impl ViewBox {
     }
 }
 
-/// The `viewBox` prop's registered decoder (see [`super::register_ext`]):
-/// warn-and-drop on a malformed string — or on an object (`viewBox` is not
-/// animatable and takes no `{ animated }` wrapper) — like every other wire
-/// decode; `null`/absent is absent.
-pub(crate) fn decode_view_box(
-    value: serde_json::Value,
-) -> Result<Option<Box<dyn bevy_react_core::ext::ExtProp>>, String> {
-    match value {
-        serde_json::Value::String(s) => Ok(match ViewBox::parse(&s) {
-            Ok(vb) => Some(Box::new(vb)),
+/// The `viewBox` attribute's decoder: warn-and-drop on a malformed string —
+/// or on any non-string (`viewBox` is not animatable and takes no
+/// `{ animated }` wrapper) — like every other wire decode; `null`/absent is
+/// absent.
+pub(crate) fn de_view_box<'de, D: Deserializer<'de>>(d: D) -> Result<Option<ViewBox>, D::Error> {
+    Ok(match serde_json::Value::deserialize(d)? {
+        serde_json::Value::String(s) => match ViewBox::parse(&s) {
+            Ok(vb) => Some(vb),
             Err(e) => {
                 decode_warn("viewBox", &s, &e);
                 None
             }
-        }),
-        serde_json::Value::Null => Ok(None),
+        },
+        serde_json::Value::Null => None,
         serde_json::Value::Object(_) => {
             decode_warn(
                 "viewBox",
                 "{…}",
                 "`viewBox` takes a string \"minX minY width height\", not an object",
             );
-            Ok(None)
+            None
         }
-        other => Err(format!("expected a viewBox string, got {other}")),
-    }
+        other => {
+            decode_warn(
+                "viewBox",
+                &other.to_string(),
+                "`viewBox` takes a string \"minX minY width height\"",
+            );
+            None
+        }
+    })
 }
 
-impl bevy_react_core::ext::ExtValue for ViewBox {}
-
-impl bevy_react_core::ext::ExtValue for ShapeAttrs {
-    fn bindings(&self) -> Vec<(String, bevy_react_core::animations::protocol::Binding)> {
-        self.animated_bindings()
+/// A numeric attribute's decoder: a number, or an `{ animated, seed? }`
+/// wrapper ([`Animatable`]). Anything else warns (`shapeNumber`) and drops
+/// the attribute — never failing the batch.
+pub(crate) fn de_number<'de, D: Deserializer<'de>>(
+    d: D,
+) -> Result<Option<Animatable<f32>>, D::Error> {
+    let value = serde_json::Value::deserialize(d)?;
+    if value.is_null() {
+        return Ok(None);
     }
+    Ok(match Animatable::<f32>::deserialize(&value) {
+        Ok(n) => Some(n),
+        Err(e) => {
+            decode_warn(
+                "shapeNumber",
+                &value.to_string(),
+                &format!("expected a number or an {{ animated }} wrapper: {e}; dropping"),
+            );
+            None
+        }
+    })
 }
 
 impl ShapeAttrs {
     /// The `{ animated }` wrappers among the numeric attrs, by wire name
     /// ([`NUMERIC_ATTRS`], the one wire-name table) — what the animation
-    /// engine drives (see [`bevy_react_core::ext::ExtValue::bindings`]).
+    /// engine drives (each numeric attribute publishes its own binding —
+    /// [`crate::attrs`]).
     pub fn animated_bindings(
         &self,
     ) -> Vec<(String, bevy_react_core::animations::protocol::Binding)> {
@@ -448,7 +472,7 @@ fn warn_object_dropped<'de, A: de::MapAccess<'de>>(
     Ok(())
 }
 
-fn de_path<'de, D: Deserializer<'de>>(d: D) -> Result<Option<PathData>, D::Error> {
+pub(crate) fn de_path<'de, D: Deserializer<'de>>(d: D) -> Result<Option<PathData>, D::Error> {
     struct V;
     impl<'de> Visitor<'de> for V {
         type Value = Option<PathData>;
@@ -477,7 +501,7 @@ fn de_path<'de, D: Deserializer<'de>>(d: D) -> Result<Option<PathData>, D::Error
     d.deserialize_any(V)
 }
 
-fn de_points<'de, D: Deserializer<'de>>(d: D) -> Result<Option<Vec<Vec2>>, D::Error> {
+pub(crate) fn de_points<'de, D: Deserializer<'de>>(d: D) -> Result<Option<Vec<Vec2>>, D::Error> {
     struct V;
     impl<'de> Visitor<'de> for V {
         type Value = Option<Vec<Vec2>>;
@@ -519,7 +543,7 @@ fn de_points<'de, D: Deserializer<'de>>(d: D) -> Result<Option<Vec<Vec2>>, D::Er
     d.deserialize_any(V)
 }
 
-fn de_paint<'de, D: Deserializer<'de>>(d: D) -> Result<Option<ShapePaint>, D::Error> {
+pub(crate) fn de_paint<'de, D: Deserializer<'de>>(d: D) -> Result<Option<ShapePaint>, D::Error> {
     struct V;
     impl<'de> Visitor<'de> for V {
         type Value = Option<ShapePaint>;
@@ -551,7 +575,9 @@ fn de_paint<'de, D: Deserializer<'de>>(d: D) -> Result<Option<ShapePaint>, D::Er
     d.deserialize_any(V)
 }
 
-fn de_transform<'de, D: Deserializer<'de>>(d: D) -> Result<Option<ShapeTransform>, D::Error> {
+pub(crate) fn de_transform<'de, D: Deserializer<'de>>(
+    d: D,
+) -> Result<Option<ShapeTransform>, D::Error> {
     struct V;
     impl<'de> Visitor<'de> for V {
         type Value = Option<ShapeTransform>;
@@ -586,7 +612,7 @@ fn de_transform<'de, D: Deserializer<'de>>(d: D) -> Result<Option<ShapeTransform
 /// no "bevy default" to fall to; absent means the SVG default).
 macro_rules! shape_keywords {
     ($( fn $fn_name:ident($ty:ident) { $($kw:literal => $variant:ident),+ $(,)? } )+) => { $(
-        fn $fn_name<'de, D: Deserializer<'de>>(d: D) -> Result<Option<$ty>, D::Error> {
+        pub(crate) fn $fn_name<'de, D: Deserializer<'de>>(d: D) -> Result<Option<$ty>, D::Error> {
             struct V;
             impl<'de> Visitor<'de> for V {
                 type Value = Option<$ty>;

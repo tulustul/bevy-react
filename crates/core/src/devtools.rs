@@ -68,6 +68,7 @@ use crate::message::ReactAppExt;
 use crate::protocol::NodeId;
 
 mod console;
+mod element_fields;
 #[cfg(test)]
 mod js_tables;
 mod layers;
@@ -82,6 +83,7 @@ mod test_util;
 use console::{
     emit_console, emit_runtime_warnings, on_console_clear_message, on_console_open_message,
 };
+use element_fields::on_elements_request;
 use layers::{emit_layers, on_layers_open_message};
 use panel::{
     apply_dock_reservation, on_dock_message, on_open_message, on_overlay_message,
@@ -202,8 +204,10 @@ impl Plugin for DevtoolsPlugin {
         .add_react_handler(on_layers_open_message)
         .add_react_handler(on_console_open_message)
         .add_react_handler(on_console_clear_message)
-        // The editor's style-field table, pulled once at panel install.
+        // The editor's style-field and element tables, pulled once at panel
+        // install.
         .add_react_request_handler(on_style_fields_request)
+        .add_react_request_handler(on_elements_request)
         // Registered in the plugin's OWN tuples — `plugin.rs`'s Update tuple
         // sits at Bevy's 20-arity cap.
         .add_systems(Startup, spawn_highlight_overlay)

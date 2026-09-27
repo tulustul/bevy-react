@@ -1323,6 +1323,30 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b511e89f7078fd21fdea77061a0ca3e737297c7011bb10c073e0aecb17c9fea6"
 
 [[package]]
+name = "bevy_react_anchor"
+version = "0.6.0"
+dependencies = [
+ "bevy",
+ "bevy_react_core",
+ "crossbeam-channel",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "bevy_react_canvas"
+version = "0.6.0"
+dependencies = [
+ "bevy",
+ "bevy_react_core",
+ "crossbeam-channel",
+ "serde",
+ "serde_json",
+ "tiny-skia 0.12.0",
+ "ts-rs",
+]
+
+[[package]]
 name = "bevy_react_core"
 version = "0.6.0"
 dependencies = [
@@ -1365,12 +1389,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "bevy_react_portal"
+version = "0.6.0"
+dependencies = [
+ "bevy",
+ "bevy_react_core",
+ "crossbeam-channel",
+ "serde_json",
+]
+
+[[package]]
+name = "bevy_react_surface"
+version = "0.6.0"
+dependencies = [
+ "bevy",
+ "bevy_react_core",
+ "crossbeam-channel",
+ "serde_json",
+]
+
+[[package]]
 name = "bevy_react_svg"
 version = "0.6.0"
 dependencies = [
  "bevy",
  "bevy_react_core",
  "crossbeam-channel",
+ "erased-serde",
  "kurbo",
  "serde",
  "serde_json",
@@ -2491,7 +2536,11 @@ name = "demos"
 version = "0.6.0"
 dependencies = [
  "bevy",
+ "bevy_react_anchor",
+ "bevy_react_canvas",
  "bevy_react_core",
+ "bevy_react_portal",
+ "bevy_react_surface",
  "bevy_react_svg",
  "crossbeam-channel",
  "naga",

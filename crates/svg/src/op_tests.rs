@@ -1,25 +1,31 @@
 //! The JSX `<svg>` element through the real op path: root + shape mounts,
-//! atomic `shape` replaces, `viewBox` deltas, pointer-handler stamps, the
-//! animated-attr stamps, and the bridge bookkeeping on reset/remove.
+//! per-attribute shape deltas, `viewBox` deltas, the animated-attr stamps,
+//! and the bridge bookkeeping on reset/remove. (Pointer stamps and the
+//! decode warnings: `op_pointer_tests`.)
 
 use bevy::prelude::*;
-use bevy::ui::RelativeCursorPosition;
 use bevy::ui::widget::{ImageNode, NodeImageMode};
 
 use super::{ShapeAttrs, ShapeKind, SvgJsxSurface, SvgShape};
-use bevy_react_core::ext::{ElementFlags, EventLocalPos};
+use bevy_react_core::ext::ElementFlags;
 use bevy_react_core::protocol::{ROOT_ID, animatable::AnimatableField, op::Op, props::Props};
-use bevy_react_core::test_util::{JsBridge, PointerHandlers};
+use bevy_react_core::test_util::JsBridge;
 use bevy_react_core::test_util::{children_of, ent, update_delta};
 
-/// `Op::Create` for an arbitrary `kind` with the given props JSON.
-fn create_kind(id: u32, kind: &str, props: serde_json::Value) -> Op {
+/// `Op::Create` for an arbitrary `kind` with the given props JSON (decoded
+/// against the kind's element, like the op decoder does).
+pub(crate) fn create_kind(id: u32, kind: &str, props: serde_json::Value) -> Op {
     Op::Create {
         id,
         kind: kind.into(),
-        props: serde_json::from_value(props).expect("valid props"),
+        props: Props::decode_for(kind, props),
         text: None,
     }
+}
+
+/// A delta update of a `kind` node (props decoded against its element).
+pub(crate) fn update_kind(id: u32, kind: &str, props: serde_json::Value, unset: &[&str]) -> Op {
+    update_delta(id, *Props::decode_for(kind, props), unset, &[])
 }
 
 /// A JSX `<svg>` root mounts as a normal styled node backed by an
@@ -77,9 +83,9 @@ fn jsx_svg_root_mounts_styled_with_surface() {
 }
 
 /// Shape children are **Node-less** entities (the `textSpan` precedent): they
-/// carry an [`SvgShape`] with the decoded folded attrs and nothing layout- or
-/// style-related, register in `bridge.shapes`, and attach under the `<svg>`
-/// root in op order.
+/// carry an [`SvgShape`] with the assembled attributes and nothing layout- or
+/// style-related, are flagged node-less, and attach under the `<svg>` root in
+/// op order.
 #[test]
 fn shape_children_mount_nodeless_in_order() {
     let (mut app, tx) = crate::test_app();
@@ -88,9 +94,9 @@ fn shape_children_mount_nodeless_in_order() {
         create_kind(
             2,
             "circle",
-            serde_json::json!({ "shape": { "cx": 5.0, "cy": 6.0, "r": 4.0 } }),
+            serde_json::json!({ "cx": 5.0, "cy": 6.0, "r": 4.0 }),
         ),
-        create_kind(3, "rect", serde_json::json!({ "shape": { "width": 10.0 } })),
+        create_kind(3, "rect", serde_json::json!({ "width": 10.0 })),
         Op::Append {
             parent: ROOT_ID,
             child: 1,
@@ -142,8 +148,8 @@ fn shape_children_mount_nodeless_in_order() {
 
 /// `{ animated }` wrappers on a shape's numeric attrs stamp an
 /// [`AnimatedNode`](bevy_react_core::animations::AnimatedNode) carrying the
-/// `ShapeAttr` bindings (create AND update — bindings derive from the
-/// atomically-replaced attrs), and an update that drops the last wrapper
+/// `Ext { domain: "shape" }` bindings (create AND update — bindings derive
+/// from the merged attributes), and an update that drops the last wrapper
 /// removes the stamp. The seeded/static halves land in `SvgShape.attrs`
 /// (an animated attr reads its seed or as absent).
 #[test]
@@ -155,11 +161,11 @@ fn animated_shape_attrs_stamp_and_remove_animated_node() {
     tx.send(vec![create_kind(
         1,
         "circle",
-        serde_json::json!({ "shape": {
+        serde_json::json!({
             "cx": { "animated": { "id": 3 } },
             "r": { "animated": { "id": 7 }, "seed": 4 },
             "cy": 6,
-        } }),
+        }),
     )])
     .unwrap();
     app.update();
@@ -191,11 +197,14 @@ fn animated_shape_attrs_stamp_and_remove_animated_node() {
         assert_eq!(shape.attrs.cx.static_or_seed(), None, "seed-less = absent");
     }
 
-    // Replacing the attrs with all-static ones removes the stamp.
-    let static_attrs: Props =
-        serde_json::from_value(serde_json::json!({ "shape": { "cx": 9.0 } })).unwrap();
-    tx.send(vec![update_delta(1, static_attrs, &[], &[])])
-        .unwrap();
+    // A static `cx` and an unset `r` leave no wrapper: the stamp goes.
+    tx.send(vec![update_kind(
+        1,
+        "circle",
+        serde_json::json!({ "cx": 9.0 }),
+        &["r"],
+    )])
+    .unwrap();
     app.update();
     let entity = app.world().entity(e);
     assert!(
@@ -210,7 +219,7 @@ fn animated_shape_attrs_stamp_and_remove_animated_node() {
 
 /// A `<g>` often arrives with no attrs at all: it still mounts an [`SvgShape`]
 /// (kind `Group`, default attrs) — never falling through to the plain-node
-/// `spawn_element` path.
+/// fallback.
 #[test]
 fn group_mounts_with_default_attrs() {
     let (mut app, tx) = crate::test_app();
@@ -228,36 +237,37 @@ fn group_mounts_with_default_attrs() {
     assert_eq!(entity.get::<ElementFlags>(), Some(&ElementFlags::NODE_LESS));
 }
 
-/// `shape` updates replace the attrs **atomically** (the merged object is the
-/// whole truth: attrs absent from the new object reset), an identical re-send
-/// must not even tick `Changed<SvgShape>` (the raster's dirt signal), and
-/// `unset: ["shape"]` resets to default attrs.
+/// Shape attributes merge **per attribute**: a delta setting `cx` keeps `r`,
+/// `unset` removes one attribute, an identical re-send must not even tick
+/// `Changed<SvgShape>` (the raster's dirt signal), and unsetting every
+/// attribute returns to the default attrs.
 #[test]
-fn shape_update_replaces_attrs_atomically_and_tick_free() {
+fn shape_attrs_merge_per_attribute_and_tick_free() {
     let (mut app, tx) = crate::test_app();
     tx.send(vec![create_kind(
         1,
         "circle",
-        serde_json::json!({ "shape": { "cx": 5.0, "r": 4.0 } }),
+        serde_json::json!({ "cx": 5.0, "r": 4.0 }),
     )])
     .unwrap();
     app.update();
     let e = ent(&app, 1);
 
-    let cx9: Props = serde_json::from_value(serde_json::json!({ "shape": { "cx": 9.0 } })).unwrap();
-    tx.send(vec![update_delta(1, cx9.clone(), &[], &[])])
-        .unwrap();
+    tx.send(vec![update_kind(
+        1,
+        "circle",
+        serde_json::json!({ "cx": 9.0 }),
+        &[],
+    )])
+    .unwrap();
     app.update();
     {
         let shape = app.world().entity(e).get::<SvgShape>().unwrap();
+        assert_eq!(shape.attrs.cx.static_val(), Some(9.0), "the delta applies");
         assert_eq!(
-            shape.attrs.cx.static_val(),
-            Some(9.0),
-            "the new attrs apply"
-        );
-        assert_eq!(
-            shape.attrs.r, None,
-            "atomic replace: the absent attr resets"
+            shape.attrs.r.static_val(),
+            Some(4.0),
+            "untouched attrs stay"
         );
     }
     let tick = app
@@ -268,7 +278,13 @@ fn shape_update_replaces_attrs_atomically_and_tick_free() {
         .changed;
 
     // An identical re-send must be tick-free.
-    tx.send(vec![update_delta(1, cx9, &[], &[])]).unwrap();
+    tx.send(vec![update_kind(
+        1,
+        "circle",
+        serde_json::json!({ "cx": 9.0 }),
+        &[],
+    )])
+    .unwrap();
     app.update();
     assert_eq!(
         app.world()
@@ -277,17 +293,67 @@ fn shape_update_replaces_attrs_atomically_and_tick_free() {
             .unwrap()
             .changed,
         tick,
-        "an identical shape re-send must not tick Changed<SvgShape>"
+        "an identical attribute re-send must not tick Changed<SvgShape>"
     );
 
-    // `unset: ["shape"]` resets the attrs to default.
-    tx.send(vec![update_delta(1, Props::default(), &["shape"], &[])])
-        .unwrap();
+    tx.send(vec![update_kind(
+        1,
+        "circle",
+        serde_json::json!({}),
+        &["r"],
+    )])
+    .unwrap();
+    app.update();
+    assert_eq!(
+        app.world().entity(e).get::<SvgShape>().unwrap().attrs.r,
+        None,
+        "an unset attribute resets"
+    );
+
+    tx.send(vec![update_kind(
+        1,
+        "circle",
+        serde_json::json!({}),
+        &["cx"],
+    )])
+    .unwrap();
     app.update();
     assert_eq!(
         app.world().entity(e).get::<SvgShape>().unwrap().attrs,
         ShapeAttrs::default(),
-        "unsetting shape resets the attrs"
+        "no attribute left: default attrs"
+    );
+}
+
+/// A `transition` attribute stamps the transition state (create and
+/// update); unsetting it removes the state.
+#[test]
+fn shape_transition_attr_stamps_and_clears_state() {
+    use crate::ShapeTransitionState;
+    let (mut app, tx) = crate::test_app();
+    tx.send(vec![create_kind(
+        1,
+        "circle",
+        serde_json::json!({ "r": 4.0, "transition": { "r": { "duration": 0.2 } } }),
+    )])
+    .unwrap();
+    app.update();
+    let e = ent(&app, 1);
+    assert!(
+        app.world().entity(e).contains::<ShapeTransitionState>(),
+        "a transition on create stamps the state"
+    );
+    tx.send(vec![update_kind(
+        1,
+        "circle",
+        serde_json::json!({}),
+        &["transition"],
+    )])
+    .unwrap();
+    app.update();
+    assert!(
+        !app.world().entity(e).contains::<ShapeTransitionState>(),
+        "unsetting the transition removes the state"
     );
 }
 
@@ -312,10 +378,15 @@ fn svg_root_view_box_updates_compare_before_write() {
         .unwrap()
         .dirty = false;
 
-    let vb: Props =
-        serde_json::from_value(serde_json::json!({ "viewBox": "0 0 200 100" })).unwrap();
-    tx.send(vec![update_delta(1, vb.clone(), &[], &[])])
-        .unwrap();
+    let vb = || {
+        update_kind(
+            1,
+            "svg",
+            serde_json::json!({ "viewBox": "0 0 200 100" }),
+            &[],
+        )
+    };
+    tx.send(vec![vb()]).unwrap();
     app.update();
     {
         let surface = app.world().entity(e).get::<SvgJsxSurface>().unwrap();
@@ -339,7 +410,7 @@ fn svg_root_view_box_updates_compare_before_write() {
         .unwrap()
         .changed;
 
-    tx.send(vec![update_delta(1, vb, &[], &[])]).unwrap();
+    tx.send(vec![vb()]).unwrap();
     app.update();
     let entity = app.world().entity(e);
     assert_eq!(
@@ -373,8 +444,13 @@ fn svg_root_view_box_unset_resets_to_none() {
         .unwrap()
         .dirty = false;
 
-    tx.send(vec![update_delta(1, Props::default(), &["viewBox"], &[])])
-        .unwrap();
+    tx.send(vec![update_kind(
+        1,
+        "svg",
+        serde_json::json!({}),
+        &["viewBox"],
+    )])
+    .unwrap();
     app.update();
     let surface = app.world().entity(e).get::<SvgJsxSurface>().unwrap();
     assert_eq!(
@@ -393,7 +469,7 @@ fn stray_delta_on_shape_is_ignored() {
     tx.send(vec![create_kind(
         1,
         "circle",
-        serde_json::json!({ "shape": { "r": 4.0 } }),
+        serde_json::json!({ "r": 4.0 }),
     )])
     .unwrap();
     app.update();
@@ -405,13 +481,10 @@ fn stray_delta_on_shape_is_ignored() {
         .unwrap()
         .changed;
 
-    tx.send(vec![update_delta(
+    tx.send(vec![update_kind(
         1,
-        serde_json::from_value(serde_json::json!({
-            "style": { "width": 5, "backgroundColor": "red" },
-        }))
-        .unwrap(),
-        &[],
+        "circle",
+        serde_json::json!({ "style": { "width": 5, "backgroundColor": "red" } }),
         &[],
     )])
     .unwrap();
@@ -437,161 +510,13 @@ fn stray_delta_on_shape_is_ignored() {
     );
 }
 
-/// A shape declaring handlers mounts with the synthesis component set —
-/// `PointerHandlers` + `Interaction` + `RelativeCursorPosition` +
-/// [`EventLocalPos`] — and stays Node-less; a handler-less sibling gets none of
-/// them (its hits fall through to the `<svg>` root).
-#[test]
-fn shape_handlers_stamp_pointer_components_on_create() {
-    let (mut app, tx) = crate::test_app();
-    tx.send(vec![
-        create_kind(
-            1,
-            "circle",
-            serde_json::json!({
-                "shape": { "r": 4.0 },
-                "onClick": true,
-                "onPointerDown": true,
-            }),
-        ),
-        create_kind(2, "rect", serde_json::json!({ "shape": { "width": 3.0 } })),
-    ])
-    .unwrap();
-    app.update();
-
-    let with = app.world().entity(ent(&app, 1));
-    let handlers = with
-        .get::<PointerHandlers>()
-        .expect("a handler-bearing shape carries PointerHandlers");
-    assert!(handlers.down, "onPointerDown is registered");
-    assert!(
-        with.get::<Interaction>().is_some(),
-        "onClick/onPointer* need the Interaction click-ownership marker"
-    );
-    assert!(
-        with.get::<RelativeCursorPosition>().is_some(),
-        "pointer handlers need the relative cursor"
-    );
-    assert!(
-        with.get::<EventLocalPos>().is_some(),
-        "shapes additionally carry the user-space cursor slot"
-    );
-    assert!(with.get::<Node>().is_none(), "still Node-less");
-
-    let without = app.world().entity(ent(&app, 2));
-    assert!(
-        without.get::<PointerHandlers>().is_none()
-            && without.get::<Interaction>().is_none()
-            && without.get::<RelativeCursorPosition>().is_none()
-            && without.get::<EventLocalPos>().is_none(),
-        "a handler-less shape must stay bare (root fallthrough)"
-    );
-}
-
-/// `dirty.pointer` deltas toggle the whole component set on and off: adding
-/// handlers to a bare shape stamps them; unsetting every handler removes
-/// them — including `Interaction` (unlike layout nodes, a shape's
-/// `Interaction` serves its handlers alone, and a leftover would steal
-/// clicks from the `<svg>` root's climb).
-#[test]
-fn shape_pointer_update_adds_and_removes_components() {
-    let (mut app, tx) = crate::test_app();
-    tx.send(vec![create_kind(
-        1,
-        "circle",
-        serde_json::json!({ "shape": { "r": 4.0 } }),
-    )])
-    .unwrap();
-    app.update();
-    let e = ent(&app, 1);
-
-    tx.send(vec![update_delta(
-        1,
-        serde_json::from_value(serde_json::json!({ "onClick": true, "onPointerEnter": true }))
-            .unwrap(),
-        &[],
-        &[],
-    )])
-    .unwrap();
-    app.update();
-    {
-        let entity = app.world().entity(e);
-        assert!(
-            entity.get::<PointerHandlers>().is_some()
-                && entity.get::<Interaction>().is_some()
-                && entity.get::<EventLocalPos>().is_some(),
-            "an update adding handlers stamps the synthesis set"
-        );
-    }
-
-    tx.send(vec![update_delta(
-        1,
-        Props::default(),
-        &["onClick", "onPointerEnter"],
-        &[],
-    )])
-    .unwrap();
-    app.update();
-    let entity = app.world().entity(e);
-    assert!(
-        entity.get::<PointerHandlers>().is_none()
-            && entity.get::<Interaction>().is_none()
-            && entity.get::<RelativeCursorPosition>().is_none()
-            && entity.get::<EventLocalPos>().is_none(),
-        "unsetting every handler strips the synthesis set"
-    );
-}
-
-/// `onScroll`/`onWheel` on a shape never fire (shapes are Node-less — no
-/// `ScrollPosition`, no wheel surface): both the create and the update path
-/// record the `svgShapeScroll` warning, attributed to the node.
-#[cfg(all(feature = "devtools", debug_assertions))]
-#[test]
-fn shape_scroll_handlers_warn_on_create_and_update() {
-    let _lock = bevy_react_core::diag::test_lock();
-    bevy_react_core::diag::arm_runtime();
-    let _ = bevy_react_core::diag::take_runtime_warnings();
-
-    let (mut app, tx) = crate::test_app();
-    tx.send(vec![create_kind(
-        1,
-        "circle",
-        serde_json::json!({ "shape": { "r": 4.0 }, "onScroll": true }),
-    )])
-    .unwrap();
-    app.update();
-    let warns = bevy_react_core::diag::take_runtime_warnings();
-    assert!(
-        warns
-            .iter()
-            .any(|w| w.kind == "svgShapeScroll" && w.node == Some(1) && w.value == "onScroll"),
-        "create with onScroll on a shape must warn: {warns:?}"
-    );
-
-    tx.send(vec![update_delta(
-        1,
-        serde_json::from_value(serde_json::json!({ "onWheel": true })).unwrap(),
-        &[],
-        &[],
-    )])
-    .unwrap();
-    app.update();
-    let warns = bevy_react_core::diag::take_runtime_warnings();
-    assert!(
-        warns
-            .iter()
-            .any(|w| w.kind == "svgShapeScroll" && w.node == Some(1) && w.value == "onWheel"),
-        "update adding onWheel on a shape must warn: {warns:?}"
-    );
-}
-
 /// `Op::Reset` clears the svg side tables like every other per-node table.
 #[test]
 fn reset_clears_svg_tables() {
     let (mut app, tx) = crate::test_app();
     tx.send(vec![
         create_kind(1, "svg", serde_json::json!({})),
-        create_kind(2, "circle", serde_json::json!({ "shape": { "r": 1.0 } })),
+        create_kind(2, "circle", serde_json::json!({ "r": 1.0 })),
         Op::Append {
             parent: ROOT_ID,
             child: 1,
@@ -622,7 +547,7 @@ fn remove_svg_subtree_forgets_bookkeeping() {
     let (mut app, tx) = crate::test_app();
     tx.send(vec![
         create_kind(1, "svg", serde_json::json!({})),
-        create_kind(2, "circle", serde_json::json!({ "shape": { "r": 1.0 } })),
+        create_kind(2, "circle", serde_json::json!({ "r": 1.0 })),
         Op::Append {
             parent: ROOT_ID,
             child: 1,

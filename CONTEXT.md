@@ -158,3 +158,49 @@ Domain glossary for `bevy-react`. Use these terms as written; the code, the
 - **Style variant** — `hoverStyle`/`pressStyle`/`focusStyle`: overlays that
   carry every property. Promotion is a union over every state (base and
   variants), so an interaction never flips it.
+
+## Elements
+
+- **Element** — one JSX intrinsic kind (`<node>`, `<image>`, `<svg>`, a
+  feature crate's own), declared as a `static Element` and registered with
+  `add_react_element(s)` — the core's `CORE_ELEMENTS` the same way. It
+  carries its flags, attributes, common prop groups, writers, events, default
+  style, and spawn hook — never an update function (ADR-0005).
+- **Attribute** — an element-specific prop (`src`, `value`, `target`, `cx`),
+  declared as a `static Attribute<T>` — the static is the typed key the
+  merged attributes are read with (`attrs.get(&SRC)`). **Per element**: an
+  element's attribute list is its namespace, so one name may mean different
+  things on two elements; decoding needs the node's kind (every create and
+  update op carries it). "Prop" stays the React word for everything on a JSX
+  element.
+- **Common prop** — a prop every element shares, fixed on `Props` rather
+  than registered: `name`/`sharedTag` (identity), the style variants, the
+  pointer handlers, the scroll props, `onWheel`. Grouped by `Common`; an
+  element declares the groups that apply, and a common prop outside them is
+  ignored with a warning.
+- **Act-now attribute** — an attribute whose presence in a delta means "do
+  this once" (push a controlled `value`, replay a `draw` list): never
+  retained, and removing it from the JSX props is a no-op. An update op
+  carrying only act-now attributes is an imperative command (the canvas
+  handle's `drawAppend`).
+- **Element writer** — a writer listed on an element: runs only on that
+  element, may read its attributes as well as style properties. A component
+  it writes **masks off** the global style writer writing the same component
+  on that element; a style property only masked-off writers read is ignored
+  there (`styleIgnored`).
+- **Default style** — an element's built-in style under the user's (a web
+  UA stylesheet): unsetting a property falls back to it (`<button>`'s
+  `focusPolicy: "block"`, `<root>`'s window-filling column).
+- **Spawn hook** — the element's born-with components (a `Button`, a blank
+  raster `ImageNode`, a text block), spawned in one bundle with the node's
+  identity and style components. Everything prop-derived is the writers' job.
+- **Detached** — an element the op path never attaches in the Bevy
+  hierarchy: it records the React parent (removing an ancestor still
+  despawns it) and leaves the Bevy parent to the element — none for a
+  detached UI root (`<surface>`, `<root>`), the anchor layer for an
+  `<anchor>`.
+- **Element event** — an element's own event (`change`, `select`, `resize`),
+  declared as a `static ElementEvent<T>`: the handler prop is `on` + the
+  capitalized name, its argument the payload. Sent from Rust with
+  `ElementEvents`, only to nodes with a handler unless declared
+  unconditional.

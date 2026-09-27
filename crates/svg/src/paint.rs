@@ -325,7 +325,7 @@ fn replay_path(d: &PathData) -> Option<Path> {
 }
 
 /// An anti-aliased solid paint from a straight-alpha [`Srgba`] with the
-/// composed opacity multiplied in (the [`crate::canvas`] `solid()` pattern,
+/// composed opacity multiplied in (the `bevy_react_canvas` `solid()` pattern,
 /// taking `Srgba` + opacity instead of bytes). Non-finite components fall
 /// back to opaque black, matching the canvas color fallback.
 fn solid(c: Srgba, opacity: f32) -> Paint<'static> {

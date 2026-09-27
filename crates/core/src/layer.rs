@@ -387,7 +387,6 @@ pub fn evaluate_layer_promotions(
     mut registry: ResMut<LayersRegistry>,
     assets: Res<AssetServer>,
     fonts: Res<crate::plugin::Fonts>,
-    mut ui_assets: crate::reconcile::UiAssets,
     mut style_variants: Query<&mut crate::bridge::StyleVariants>,
     flags: Query<&crate::ext::ElementFlags>,
 ) {
@@ -472,18 +471,19 @@ pub fn evaluate_layer_promotions(
                         &mut commands,
                         entity,
                         props,
-                        true,
                         &crate::style::WriterCtx {
                             promoted: true,
                             fresh: false,
                             kind: &kind,
                             flags: element,
-                            text: false,
                             assets: &assets,
                             fonts: &fonts,
                             styles: ext.styles(),
+                            element: ext.element_or_fallback(&kind),
+                            attrs: &props.attrs,
+                            events: crate::element::Attrs::empty(),
+                            id,
                         },
-                        &mut ui_assets,
                         &mut style_variants,
                     );
                 }
@@ -514,18 +514,19 @@ pub fn evaluate_layer_promotions(
                     &mut commands,
                     entity,
                     props,
-                    false,
                     &crate::style::WriterCtx {
                         promoted: false,
                         fresh: false,
                         kind: &kind,
                         flags: element,
-                        text: false,
                         assets: &assets,
                         fonts: &fonts,
                         styles: ext.styles(),
+                        element: ext.element_or_fallback(&kind),
+                        attrs: &props.attrs,
+                        events: crate::element::Attrs::empty(),
+                        id,
                     },
-                    &mut ui_assets,
                     &mut style_variants,
                 );
             }
@@ -1149,9 +1150,8 @@ pub fn resolve_layer_repaints(
     mut state: ResMut<LayerRepaintState>,
     membership: Res<LayerMembership>,
     mut registry: ResMut<LayersRegistry>,
-    bridge: Option<Res<crate::bridge::JsBridge>>,
     reshaped: Query<Entity, Changed<bevy::text::TextLayoutInfo>>,
-    focus: Query<&crate::bridge::FocusState>,
+    focused_inputs: Query<(Entity, &crate::bridge::FocusState), With<bevy::text::EditableText>>,
     alphas: Query<&LayerGroupAlpha>,
 ) {
     let state = &mut *state;
@@ -1181,14 +1181,11 @@ pub fn resolve_layer_repaints(
     }
     // 4. A focused editable inside a layer repaints every frame: the caret
     //    blink is rendered by Bevy's text systems with no signal we can see.
-    if let Some(bridge) = bridge {
-        for id in &bridge.editable_inputs {
-            if let Some(&e) = bridge.nodes.get(id)
-                && focus.get(e).is_ok_and(|f| f.0)
-                && let Some(&layer) = membership.node_to_layer.get(&e)
-            {
-                state.dirty.insert(layer);
-            }
+    for (e, focus) in &focused_inputs {
+        if focus.0
+            && let Some(&layer) = membership.node_to_layer.get(&e)
+        {
+            state.dirty.insert(layer);
         }
     }
     // 5. Geometry: roots whose root-relative content geometry changed on this

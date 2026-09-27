@@ -23,7 +23,7 @@ fn create(id: u32, kind: &str, json: serde_json::Value) -> Op {
     Op::Create {
         id,
         kind: kind.into(),
-        props: Box::new(props(json)),
+        props: Props::decode_for(kind, json),
         text: None,
     }
 }

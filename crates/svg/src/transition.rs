@@ -11,7 +11,7 @@
 //! and independent of the style channels (a shape has none). Like the core's
 //! filter channel (the state-owned-current precedent), the component is
 //! **snapped to the target before the transition runs** (`apply_js_ops`
-//! merges the atomic `shape` replace earlier in the frame), so this channel
+//! merges the shape's attribute delta earlier in the frame), so this channel
 //! owns the value it last wrote per attr: a component value that differs from
 //! that last write is an external retarget; anything else means the ease is
 //! mid-flight over its own writes.
@@ -49,10 +49,10 @@ pub struct ShapeTransitionState {
     channel: ShapeChannel,
 }
 
-/// Stamp (or clear) a shape entity's transition state from its folded
+/// Stamp (or clear) a shape entity's transition state from its assembled
 /// attrs: present exactly while `attrs.transition` is. Persists across
-/// re-sends (the state carries the in-flight channels). Called from the svg
-/// element's create/update paths.
+/// re-sends (the state carries the in-flight channels). Called by the
+/// shapes' writer ([`crate::SHAPE_WRITER`]).
 pub fn apply_shape_transition(ec: &mut EntityCommands, attrs: Option<&ShapeAttrs>) {
     if attrs.is_some_and(|a| a.transition.is_some()) {
         ec.insert_if_new(ShapeTransitionState::default());
@@ -337,7 +337,7 @@ mod tests {
         );
         schedule.run(&mut world); // seed
 
-        // Retarget cx AND swap points in the same (atomic) attrs write.
+        // Retarget cx AND swap points in the same attrs write.
         {
             let mut shape = world.entity_mut(e);
             let mut shape = shape.get_mut::<SvgShape>().unwrap();
@@ -484,7 +484,7 @@ mod tests {
         );
     }
 
-    /// Removing the spec (the atomic replace carries target values) snaps:
+    /// Removing the spec (the same write carries the target values) snaps:
     /// tracking drops and the op-written values stand.
     #[test]
     fn spec_removal_snaps() {

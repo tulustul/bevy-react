@@ -56,6 +56,10 @@ export type AnimationCommand =
 // Mirrors `protocol::Outbound` on the Rust side (internally tagged with `t`).
 export type Outbound =
   | { t: "uiEvent"; event: UiEvent }
+  // An element's own event (`onChange`, a canvas `resize`, …): routed to the
+  // node's `on<Event>` handler with `payload` as its argument (none when
+  // `null`).
+  | { t: "elementEvent"; id: number; event: string; payload: unknown }
   | { t: "event"; name: string; value: unknown }
   | { t: "response"; id: number; result: ResponseResult }
   | { t: "animationFinished"; id: number; token: number; finished: boolean }
@@ -68,7 +72,9 @@ type ResponseResult =
 
 export const ROOT_ID = 0;
 
-// Mirrors `protocol::Op` on the Rust side (tag = "op").
+// Mirrors `protocol::Op` on the Rust side (tag = "op"). `create` and `update`
+// carry the node's element `kind` BEFORE `props`: Rust decodes the props
+// against that element's registered attributes as the key streams by.
 export type Op =
   | { op: "reset" }
   | {
@@ -87,76 +93,28 @@ export type Op =
   | {
       op: "update";
       id: number;
+      kind: string;
       // A delta against the node's last applied props: `props` carries only
       // the changed fields (`props.style` only the changed style fields);
       // `unset`/`styleUnset` name prop / style wire fields reset to their
       // defaults; anything in neither is left unchanged on the Bevy side.
+      // An update carrying only act-now attributes (a canvas `drawAppend`) is
+      // an imperative command.
       props: SerializedProps;
       unset?: string[];
       styleUnset?: string[];
     }
-  | { op: "updateText"; id: number; text: string }
-  // Append draw commands to a `<canvas>`'s retained surface (an imperative
-  // handle's microtask flush, or the runtime's clear+replay after a resize).
-  | { op: "draw"; id: number; cmds: DrawCmd[] };
+  | { op: "updateText"; id: number; text: string };
 
-// Handler props cross as presence booleans under their own prop name; the
-// flag set is derived from `HANDLER_KINDS` so it can't drift.
-export interface SerializedProps extends Partial<
-  Record<HandlerPropKey, boolean>
-> {
-  style?: Record<string, unknown>;
-  hoverStyle?: Record<string, unknown>;
-  pressStyle?: Record<string, unknown>;
-  focusStyle?: Record<string, unknown>;
-  // World-anchor binding (an `<anchor>`'s entity + offset), opaque like style;
-  // decoded on the Rust side into `Anchor`.
-  anchor?: Record<string, unknown>;
-  // An SVG shape child's folded attributes (`packShapeProps`), opaque like
-  // `anchor`; decoded on the Rust side into `ShapeAttrs`.
-  shape?: Record<string, unknown>;
-  // An `<svg>` element's `viewBox` (`"minX minY width height"`), parsed on
-  // the Rust side.
-  viewBox?: string;
-  color?: string;
-  fontSize?: number;
-  // Controlled scroll offsets (logical px) for any node with `overflow: scroll`.
-  scrollTop?: number;
-  scrollLeft?: number;
-  scrollStep?: number;
-  // `image` element attributes
-  src?: string;
-  tint?: string;
-  flipX?: boolean;
-  flipY?: boolean;
-  // `"auto"`/`"stretch"`, or an opaque 9-slice/tiled spec object, decoded on the
-  // Rust side into `NodeImageMode`.
-  imageMode?: string | Record<string, unknown>;
-  // Source sub-rect (`{x,y,width,height}` px) and sprite-sheet grid + cell, both
-  // opaque to JS and decoded on the Rust side into `ImageNode.rect`/`texture_atlas`.
-  sourceRect?: Record<string, unknown>;
-  atlas?: Record<string, unknown>;
-  // `"content"`/`"padding"`/`"border"` → `ImageNode.visual_box`.
-  visualBox?: string;
-  // `canvas` element: the recorded vector display list, rasterized on the Bevy
-  // side (clear + replay on the retained surface).
-  draw?: DrawCmd[];
-  // Any element: its Bevy `Name` (see `BevyAttributes.name`).
-  name?: string;
-  // `portal` element: the render-target name to display. Also carries a
-  // `surface` element's `target` (the offscreen surface its subtree renders into).
-  target?: string;
-  // `editableText` element attributes
-  value?: string;
-  maxLength?: number;
-  multiline?: boolean;
-  autofocus?: boolean;
-  // Controlled selection as UTF-8 byte offsets into `value`.
-  selectionStart?: number;
-  selectionEnd?: number;
-  ariaLabel?: string;
-}
+/** A node's wire props: every JSX prop except `children`/`key`/`ref`, with
+ *  handler closures replaced by `true` and bigints by numbers. Opaque here —
+ *  Rust decodes each key against the node's element (the common props, then
+ *  its registered attributes and events; anything else warns
+ *  `unknownProp`). */
+export type SerializedProps = Record<string, unknown>;
 
+/** A common UI event (click, pointer*, scroll, wheel). An element's own events
+ *  arrive as `elementEvent`s with their own payloads. */
 export interface UiEvent {
   id: number;
   kind: string;
@@ -170,17 +128,8 @@ export interface UiEvent {
   clientY?: number;
   // Which mouse button fired, DOM numbering (0 left, 1 middle, 2 right).
   // Present for pointerDown/Move/Up; absent for "click" (primary-only, like
-  // DOM click) and hover/scroll/text events.
+  // DOM click) and hover/scroll events.
   button?: number;
-  // The new text. Present only for an `editableText`'s "change" event.
-  value?: string;
-  // Selection as UTF-8 byte offsets. Present only for the "select" event.
-  selectionStart?: number;
-  selectionEnd?: number;
-  // "forward" | "backward" | "none". Present only for "select".
-  selectionDirection?: string;
-  // Whether an IME composition is in progress. Present on "change"/"select".
-  composing?: boolean;
   // New scroll offset (logical px). Present only for the "scroll" event.
   scrollTop?: number;
   scrollLeft?: number;
@@ -189,11 +138,12 @@ export interface UiEvent {
   deltaX?: number;
   deltaY?: number;
   deltaMode?: string;
-  // New laid-out size (logical px). Present only for a `canvas`'s "resize"
-  // event — fired on first layout and any size change, after the retained
-  // surface was cleared.
-  width?: number;
-  height?: number;
+}
+
+/** A `<canvas>`'s `resize` payload: its new laid-out size (logical px). */
+interface CanvasSize {
+  width: number;
+  height: number;
 }
 
 // Ops accumulated during the current commit, flushed in resetAfterCommit.
@@ -211,8 +161,10 @@ const handlers = new Map<
 const canvasPainters = new Map<number, CanvasPainter | DrawCmd[]>();
 
 // id -> a `<canvas>`'s last laid-out logical size, from its "resize" events.
-// Read by the element handle's `width`/`height`.
-const canvasSizes = new Map<number, { width: number; height: number }>();
+// Read by the element handle's `width`/`height`. Keyed exactly by the live
+// canvas nodes (an entry is created with the handle), so an element event
+// named `resize` on any other kind never reaches the canvas runtime.
+const canvasSizes = new Map<number, CanvasSize>();
 
 let nextId = 1; // 0 is reserved for the root container.
 
@@ -313,8 +265,8 @@ export function __installBridgeTap(tap: BridgeTap | null): void {
 // cost of a host-side object walk (serde_v8 / serde_wasm_bindgen pay per-property
 // API traffic for every key of every op). `JSON.stringify` drops `undefined`
 // props and `null`s NaN/Infinity, exactly like the object walk treated them;
-// nothing in an `Op` is a BigInt (entities cross as numbers — see
-// `packAnchorProps`). Rust decodes synchronously as part of this call; a
+// nothing in an `Op` is a BigInt (a bigint prop crosses as a number — see
+// `serializePropInto`). Rust decodes synchronously as part of this call; a
 // structurally malformed op throws a TypeError HERE and the whole batch is lost
 // (Bevy never sees it) — callers sending hand-built ops (devtools edits) must
 // flush them in isolation inside try/catch so an invalid value can never eat
@@ -348,16 +300,19 @@ export function flush(devtools = false): void {
 
 // --- `<canvas>` imperative drawing + resize plumbing ---
 
-// Send one draw batch for a canvas node, immediately. Rides the same op
-// channel as tree ops, so ordering against creates/updates is preserved.
+// Send one draw batch for a canvas node, immediately: an update op carrying
+// only the act-now `drawAppend` attribute (an imperative command — nothing is
+// retained). Rides the same op channel as tree ops, so ordering against
+// creates/updates is preserved.
 function sendDraw(id: number, cmds: DrawCmd[]): void {
-  push({ op: "draw", id, cmds });
+  push({ op: "update", id, kind: "canvas", props: { drawAppend: cmds } });
   flush();
 }
 
 // Build the public instance for a `<canvas>` (what a React ref resolves to).
 // Called by the renderer's `createInstance`.
 export function createCanvasElement(id: number): BevyCanvasElement {
+  canvasSizes.set(id, { width: 0, height: 0 });
   return new BevyCanvasElement(id, {
     send: (cmds) => sendDraw(id, cmds),
     size: () => canvasSizes.get(id),
@@ -382,15 +337,12 @@ function registerCanvasPainter(
 // and replay the declarative painter if there is one. The leading `clear`
 // keeps the replay a replace even if it interleaves with imperative draws
 // (right after the Rust-side clear it's a cheap no-op).
-function handleCanvasResize(event: UiEvent): void {
-  canvasSizes.set(event.id, {
-    width: event.width ?? 0,
-    height: event.height ?? 0,
-  });
-  const painter = canvasPainters.get(event.id);
+function handleCanvasResize(id: number, size: CanvasSize): void {
+  canvasSizes.set(id, { width: size.width ?? 0, height: size.height ?? 0 });
+  const painter = canvasPainters.get(id);
   if (!painter) return;
   const cmds = typeof painter === "function" ? recordDrawing(painter) : painter;
-  sendDraw(event.id, [{ cmd: "clear" }, ...cmds]);
+  sendDraw(id, [{ cmd: "clear" }, ...cmds]);
 }
 
 // Send a named app message to the Bevy side. Surfaced there as a
@@ -456,38 +408,29 @@ export function removeEventListener(
 // separate package helpers; they route through `addEventListener` like any event.
 
 // Split React props into a serializable payload + registered event handlers.
-// `children` and functions never go across the boundary.
-// React prop name -> the event kind stored in the handler map / reported by Bevy.
-const HANDLER_KINDS = {
-  onClick: "click",
-  onPointerDown: "pointerDown",
-  onPointerMove: "pointerMove",
-  onPointerUp: "pointerUp",
-  onPointerEnter: "pointerEnter",
-  onPointerLeave: "pointerLeave",
-  onChange: "change",
-  onSelect: "select",
-  onFocus: "focus",
-  onBlur: "blur",
-  onScroll: "scroll",
-  onWheel: "wheel",
-  onResize: "resize",
-} as const satisfies Record<string, string>;
+// The rule is generic — no per-element or per-key table: every prop except
+// `children`/`key`/`ref` crosses, and Rust decodes each against the node's
+// element (unknown keys warn there).
 
-// The handler prop names as a type, so `SerializedProps` derives its `onX`
-// boolean flags from this map instead of hand-listing them.
-type HandlerPropKey = keyof typeof HANDLER_KINDS;
+// `onXxx` → the event name `xxx` it is registered (and reported) under,
+// memoized per key (handler keys are few and repeat on every node).
+const handlerEvents = new Map<string, string | null>();
 
-// `HANDLER_KINDS` as a flat `[prop, kind]` list, built once — the create path
-// walks it per node, so it must not be re-derived per call.
-const HANDLER_ENTRIES: ReadonlyArray<readonly [HandlerPropKey, string]> =
-  Object.entries(HANDLER_KINDS) as [HandlerPropKey, string][];
-
-// The handler prop names, for the renderer's dirty-check: these props are
-// compared by presence, not identity (closures change every render).
-export const HANDLER_PROP_KEYS: ReadonlySet<string> = new Set(
-  Object.keys(HANDLER_KINDS),
-);
+/** The event a handler prop listens for (`onClick` → `click`, `onChange` →
+ *  `change`), or `null` for a key outside the handler space (`on` + an
+ *  uppercase letter — Rust reserves it, no attribute may take it). */
+export function handlerEvent(key: string): string | null {
+  let event = handlerEvents.get(key);
+  if (event === undefined) {
+    const c = key.charCodeAt(2);
+    event =
+      key.length > 2 && key[0] === "o" && key[1] === "n" && c >= 65 && c <= 90
+        ? key[2].toLowerCase() + key.slice(3)
+        : null;
+    handlerEvents.set(key, event);
+  }
+  return event;
+}
 
 type HandlerFn = (...args: unknown[]) => void;
 
@@ -501,148 +444,43 @@ export function registerHandlers(
   props: Record<string, unknown>,
 ): void {
   let hs: Record<string, HandlerFn> | undefined;
-  for (let i = 0; i < HANDLER_ENTRIES.length; i++) {
-    const [key, kind] = HANDLER_ENTRIES[i];
+  for (const key in props) {
     const value = props[key];
-    if (typeof value === "function") (hs ??= {})[kind] = value as HandlerFn;
+    if (typeof value !== "function") continue;
+    const event = handlerEvent(key);
+    if (event !== null) (hs ??= {})[event] = value as HandlerFn;
   }
   if (hs) handlers.set(id, hs);
   else handlers.delete(id);
 }
 
-// Object-valued props that ride across whole and are replaced atomically by a
-// delta update (unlike `style`, which diffs field-by-field):
-// - `style`/`hoverStyle`/`pressStyle`/`focusStyle` are fully opaque: every
-//   CSS-like key (incl. backgroundColor, border, grid, transition timings, …)
-//   rides inside the object and is decoded — units and all — on the Rust side.
-//   Bevy overlays the hover/press/focus variants onto the base style from the
-//   node's interaction state; `focusStyle` applies while an `editableText` is
-//   focused, no React focus state needed.
-// - An `<anchor>`'s `anchor` (entity + optional offset) is opaque too;
-//   Bevy projects the entity's world position to the screen each frame.
-// - An SVG shape child's `shape` (its folded attributes — `packShapeProps`)
-//   replaces atomically as well: a shape change has a single rasterization
-//   consequence, so Rust never merges shape fields.
-// Animated bindings ride *inside* `style` (the `{ animated }` wrapper) and
-// cross opaque like every other style value — Rust derives the node's
-// bindings from the merged style, so there is no separate animation prop.
-const OBJECT_PROP_KEYS = new Set([
-  "style",
-  "hoverStyle",
-  "pressStyle",
-  "focusStyle",
-  "anchor",
-  "shape",
-]);
-
-// Text + `image` + `editableText` + `svg` element attributes that pass through
-// by name (the wire name for each is the React prop name, `viewBox` included).
-// `name` is the universal identity prop (→ a Bevy `Name` on the entity);
-// `target` binds a `<portal>`/`<surface>` to a named render target.
-const PASSTHROUGH_PROP_KEYS = new Set([
-  "name",
-  "sharedTag",
-  "color",
-  "fontSize",
-  "src",
-  "tint",
-  "flipX",
-  "flipY",
-  "imageMode",
-  "sourceRect",
-  "atlas",
-  "visualBox",
-  "target",
-  "value",
-  "maxLength",
-  "multiline",
-  "autofocus",
-  "selectionStart",
-  "selectionEnd",
-  "ariaLabel",
-  "scrollTop",
-  "scrollLeft",
-  "scrollStep",
-  "viewBox",
-]);
-
-// Bool flag props. Rust's `Props::merge_delta` (protocol.rs `merge_bool!`)
-// only honors `true` in a delta — the wire can't tell an explicit `false` from
-// an absent field — so turning a flag off must ride `unset` (each has a reset
-// arm in the `unset` loop). Keep in sync with protocol.rs's plain-`bool`
-// passthrough fields.
-const BOOL_PROP_KEYS = new Set(["flipX", "flipY", "multiline", "autofocus"]);
-
-// "Act now" props: present = do something once (push a controlled value, draw a
-// display list), absent = no action. Removing one from the props is a no-op —
-// there is no retained state to reset — so a delta never lists them in `unset`
-// (Rust would only warn).
-const EVENT_PROP_KEYS = new Set([
-  "value",
-  "selectionStart",
-  "selectionEnd",
-  "scrollTop",
-  "scrollLeft",
-  "draw",
-]);
-
 // Serialize one React prop into `out` under its wire name. Returns whether the
-// prop is wire-visible (a handler closure becomes a boolean; `children` and
-// unrecognized keys never cross).
+// prop is wire-visible: a handler closure becomes `true`; a `<canvas>`'s
+// `draw` painter is recorded into its display list (the one kind-aware value —
+// `canvas.ts` is the documented exception to the generic wire); a bigint
+// crosses as a number (the wire is JSON, which has none — lossless below
+// 2^53, e.g. an `<anchor entity>`'s `Entity::to_bits()`); any other function,
+// `undefined`, and `children` never cross.
 function serializePropInto(
   out: SerializedProps,
   key: string,
   value: unknown,
 ): boolean {
-  if (key === "children") return false;
-  const rec = out as Record<string, unknown>;
-  // Event handlers: only a boolean crosses; the actual closures live in the
-  // handler map (see `registerHandlers`).
-  if (HANDLER_PROP_KEYS.has(key)) {
-    if (typeof value !== "function") return false;
-    rec[key] = true;
-    return true;
+  if (key === "children" || value === undefined) return false;
+  if (typeof value === "function") {
+    if (handlerEvent(key) !== null) {
+      out[key] = true;
+      return true;
+    }
+    if (key === "draw") {
+      out.draw = recordDrawing(value as CanvasPainter);
+      return true;
+    }
+    return false;
   }
-  if (OBJECT_PROP_KEYS.has(key)) {
-    if (!value || typeof value !== "object") return false;
-    rec[key] = value;
-    return true;
-  }
-  // A `canvas`'s `draw`: a painter callback (recorded against a fresh context)
-  // or an already-built `DrawCmd[]` display list. Either way it crosses as data.
-  if (key === "draw") {
-    out.draw =
-      typeof value === "function"
-        ? recordDrawing(value as CanvasPainter)
-        : (value as DrawCmd[]);
-    return true;
-  }
-  if (PASSTHROUGH_PROP_KEYS.has(key)) {
-    rec[key] = value;
-    return true;
-  }
-  return false;
+  out[key] = typeof value === "bigint" ? Number(value) : value;
+  return true;
 }
-
-// Package an `<anchor>` element's flat `entity`/`offset`/`scale` props into the
-// single opaque `anchor` object the wire carries (the renderer calls this for
-// both the create and update prop bags, so delta diffs compare packed forms).
-// The entity crosses as a plain number: the op wire is JSON (no BigInt —
-// `JSON.stringify` throws on one), so the Rust `Anchor.entity` is an `f64` —
-// lossless for realistic `Entity::to_bits()` values (well under 2^53) — and
-// cast back to the entity id on apply.
-export function packAnchorProps(
-  props: Record<string, unknown>,
-): Record<string, unknown> {
-  const { entity, offset, scale, ...rest } = props;
-  if (entity === undefined || entity === null) return rest;
-  return { ...rest, anchor: { entity: Number(entity), offset, scale } };
-}
-
-// The `shape`-object analogue for SVG shape children lives in `svg.ts` (the
-// JS mirror of the Rust `svg` module); re-exported here beside its anchor
-// precedent so the reconciler imports both packers from one place.
-export { packShapeProps, SHAPE_KINDS } from "./svg";
 
 // Serialize a freshly created node's prop bag for its `create` op, and
 // register its handlers (+ a `<canvas>`'s declarative painter). `type` is the
@@ -652,6 +490,7 @@ export function serializeProps(
   props: Record<string, unknown>,
   type?: string,
 ): SerializedProps {
+  // (`key`/`ref` never reach host props — React strips them.)
   const out: SerializedProps = {};
   for (const key in props) serializePropInto(out, key, props[key]);
   registerHandlers(id, props);
@@ -778,19 +617,17 @@ function isEmpty(o: Record<string, unknown>): boolean {
 // every render, so the newest one replaces its predecessor whether or not the
 // presence flag (the only thing that crosses) changed.
 function diffKey(acc: UpdateAcc, key: string, a: unknown, b: unknown): void {
-  if (HANDLER_PROP_KEYS.has(key)) {
+  const event = handlerEvent(key);
+  if (event !== null && (typeof a === "function" || typeof b === "function")) {
     const had = typeof a === "function";
     const has = typeof b === "function";
-    if (had || has) {
-      const kind = HANDLER_KINDS[key as HandlerPropKey];
-      let hs = acc.handlers ?? (acc.handlers = handlers.get(acc.id));
-      if (has) {
-        if (!hs) handlers.set(acc.id, (hs = acc.handlers = {}));
-        hs[kind] = b as HandlerFn;
-      } else if (hs) {
-        delete hs[kind];
-        acc.handlersLost = true;
-      }
+    let hs = acc.handlers ?? (acc.handlers = handlers.get(acc.id));
+    if (has) {
+      if (!hs) handlers.set(acc.id, (hs = acc.handlers = {}));
+      hs[event] = b as HandlerFn;
+    } else if (hs) {
+      delete hs[event];
+      acc.handlersLost = true;
     }
     if (had === has) return;
     if (has) serializePropInto((acc.props ??= {}), key, b);
@@ -813,31 +650,16 @@ function diffKey(acc: UpdateAcc, key: string, a: unknown, b: unknown): void {
     }
     return;
   }
-  if (OBJECT_PROP_KEYS.has(key)) {
-    // Atomic object props: structurally equal → unchanged; present → replace
-    // whole; gone → unset.
-    if (isObj(b)) {
-      if (isObj(a) && valuesEqual(a, b)) return;
-      serializePropInto((acc.props ??= {}), key, b);
-    } else if (isObj(a)) {
-      (acc.unset ??= []).push(key);
-    }
-    return;
-  }
-  if (BOOL_PROP_KEYS.has(key) && b === false) {
-    // A `false` in the delta would be a silent no-op on the Rust side
-    // (`merge_bool!` only acts on `true`); turning a flag off rides `unset`.
-    if (a === true) (acc.unset ??= []).push(key);
-    return;
-  }
   if (b === undefined) {
-    // Dropping an event-like prop is a no-op (nothing retained to reset).
-    if (EVENT_PROP_KEYS.has(key)) return;
-    if (serializePropInto({}, key, a)) {
-      (acc.unset ??= []).push(key);
-    }
+    // Gone → reset to its default. (Rust ignores the unset of an act-now
+    // prop — there is no retained state to reset.)
+    if (serializePropInto({}, key, a)) (acc.unset ??= []).push(key);
     return;
   }
+  // Everything else compares structurally (an inline object literal that
+  // didn't change is not a change) and is sent whole — a `false` included
+  // (Rust decodes an explicit `false` as a set).
+  if (valuesEqual(a, b)) return;
   serializePropInto((acc.props ??= {}), key, b);
 }
 
@@ -849,19 +671,19 @@ function diffKey(acc: UpdateAcc, key: string, a: unknown, b: unknown): void {
 // Semantics (mirrored by `Props::merge_delta` on the Rust side): a field in
 // `props` is set, a name in `unset` is reset to its default, anything in
 // neither is unchanged. `style` diffs field-by-field (`styleUnset` names the
-// removed style fields); the other object props replace atomically. Event-like
-// props (`EVENT_PROP_KEYS`) only ever appear when changed — never in `unset`.
-// Handlers compare by *presence*; everything else structurally (`valuesEqual`),
-// so hoisted style objects skip on reference equality and inline-but-identical
-// objects skip on structure.
+// removed style fields); every other prop replaces whole. Handlers compare by
+// *presence*; everything else structurally (`valuesEqual`), so hoisted
+// objects skip on reference equality and inline-but-identical ones skip on
+// structure.
 //
-// `type` is the element type; it gates the `<canvas>` painter bookkeeping.
-// (Omitted by the unit tests, which only assert the op.)
+// `type` is the element type (it gates the `<canvas>` painter bookkeeping);
+// `kind` the wire kind the op names (a nested `<text>` is `textSpan`).
 export function buildUpdateOp(
   id: number,
   oldProps: Record<string, unknown>,
   newProps: Record<string, unknown>,
-  type?: string,
+  type = "node",
+  kind: string = type,
 ): Op | null {
   // One scratch accumulator for the whole module: `buildUpdateOp` is
   // synchronous and never re-entered (a `draw` painter recorded on the way
@@ -883,24 +705,11 @@ export function buildUpdateOp(
     handlers.delete(id);
   }
 
-  // The controlled selection is applied as a (start, end) pair on the Bevy
-  // side; when either half changed, carry both current values so the delta
-  // never delivers half a selection.
-  const props = acc.props;
-  if (
-    props &&
-    (props.selectionStart !== undefined) !== (props.selectionEnd !== undefined)
-  ) {
-    if (typeof newProps.selectionStart === "number")
-      props.selectionStart = newProps.selectionStart;
-    if (typeof newProps.selectionEnd === "number")
-      props.selectionEnd = newProps.selectionEnd;
-  }
-
   if (type === "canvas") registerCanvasPainter(id, newProps);
 
+  const props = acc.props;
   if (!props && !acc.unset && !acc.styleUnset) return null;
-  const op: Op = { op: "update", id, props: props ?? {} };
+  const op: Op = { op: "update", id, kind, props: props ?? {} };
   if (acc.unset) op.unset = acc.unset;
   if (acc.styleUnset) op.styleUnset = acc.styleUnset;
   return op;
@@ -948,18 +757,35 @@ export async function runEventLoop(
       case "reload":
         return; // runtime is being rebuilt
       case "uiEvent": {
-        // A canvas resize needs the runtime first (size cache + declarative
-        // replay — the surface was cleared), whether or not a user handler
-        // is registered.
-        if (msg.event.kind === "resize") handleCanvasResize(msg.event);
         const fn = handlers.get(msg.event.id)?.[msg.event.kind];
         if (fn) {
           const event = msg.event;
           timedWrap(() => {
             try {
-              // Click handlers ignore the arg; pointer handlers read x/y; an
-              // `editableText`'s onChange receives the new text directly.
-              fn(event.kind === "change" ? event.value : event);
+              // Click handlers ignore the arg; pointer handlers read x/y.
+              fn(event);
+            } catch (e) {
+              console.error("[js] handler error:", e);
+            }
+          });
+        }
+        break;
+      }
+      case "elementEvent": {
+        // A canvas resize needs the runtime first (size cache + declarative
+        // replay — the surface was cleared), whether or not a user handler
+        // is registered (Rust sends it unconditionally).
+        if (msg.event === "resize" && canvasSizes.has(msg.id)) {
+          handleCanvasResize(msg.id, msg.payload as CanvasSize);
+        }
+        const fn = handlers.get(msg.id)?.[msg.event];
+        if (fn) {
+          const payload = msg.payload;
+          timedWrap(() => {
+            try {
+              // The handler receives the payload (none for a `null` one).
+              if (payload === null || payload === undefined) fn();
+              else fn(payload);
             } catch (e) {
               console.error("[js] handler error:", e);
             }

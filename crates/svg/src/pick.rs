@@ -15,7 +15,7 @@
 //! node. No shape under the cursor → no message: the hit falls through to
 //! the svg node itself (web `visiblePainted` empty-region semantics).
 //! The shape hit never blocks the hits beneath it: shapes are spawned with a
-//! pass-through `Pickable` (`reconcile::svg_ops::create_shape`), so the svg
+//! pass-through `Pickable` (the shapes' spawn hook in `element.rs`), so the svg
 //! node and its ancestors stay in the hover map — bevy's hover map treats an
 //! entity without one as blocking (pinned in `hover_tests`).
 //!

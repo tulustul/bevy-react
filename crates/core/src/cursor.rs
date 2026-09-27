@@ -12,18 +12,18 @@
 //! - **Main-window UI**: a geometric hit-test over the `UiStack`, topmost first, no
 //!   `Interaction` needed — so a plain `<node style={{ cursor }}>` works without
 //!   opting into the pointer machinery. Mirrors [`crate::scroll::collect_wheel_events`].
-//! - **`<surface>` UI**: an offscreen subtree hit-tested in the *texture's* space via
-//!   the in-world virtual pointer, so the window hit-test can't see it. Instead we
-//!   read the picking [`HoverMap`] for the [`SurfaceVirtualPointer`] — the same
-//!   authoritative hover state surface hover styling rides — take its topmost node,
-//!   and climb to the nearest cursor-bearing ancestor.
+//! - **Virtual-pointer UI** (a `<surface>`'s offscreen subtree): hit-tested
+//!   in the *texture's* space by a feature's virtual pointer, so the window
+//!   hit-test can't see it. Instead we read the picking [`HoverMap`] for each
+//!   registered [`VirtualPointers`](crate::ext::VirtualPointers) entry — the
+//!   same authoritative hover state its hover styling rides — take its topmost
+//!   node, and climb to the nearest cursor-bearing ancestor.
 //!
-//! Surface takes precedence: if the virtual pointer is over a surface cursor node,
+//! Virtual-pointer UI takes precedence: if a virtual pointer is over a cursor node,
 //! that wins; otherwise the main-window hit-test decides; otherwise the default
 //! arrow. Nodes without a `NodeCursor` are transparent to both scans, so a child
 //! inherits its nearest cursor-bearing ancestor (CSS-like).
 
-use crate::surface::SurfaceVirtualPointer;
 use bevy::picking::hover::HoverMap;
 use bevy::picking::pointer::PointerId;
 use bevy::platform::collections::HashMap;
@@ -122,7 +122,7 @@ pub fn drive_cursor_icon(
     ui_stack: Res<UiStack>,
     windowed: Query<(&ComputedNode, &UiGlobalTransform, &NodeCursor)>,
     hover_map: Option<Res<HoverMap>>,
-    surface_pointer: Option<Res<SurfaceVirtualPointer>>,
+    virtual_pointers: Option<Res<crate::ext::VirtualPointers>>,
     transform3d_pointer: Option<Res<crate::layer::pick3d::Transform3dPointer>>,
     membership: Option<Res<crate::layer::LayerMembership>>,
     matrices: Query<&crate::layer::transform3d::LayerTransform3dMatrix>,
@@ -144,14 +144,17 @@ pub fn drive_cursor_icon(
         .map(|membership| crate::layer::pick3d::visually_transformed_members(membership, &matrices))
         .unwrap_or_default();
 
-    // Surface UI wins: the in-world virtual pointer is the only thing that knows the
-    // pointer is over an offscreen subtree (the window hit-test can't — its geometry
-    // is in texture space). Then the transform3d remap, then the main-window scan.
-    let named = surface_pointer
+    // Virtual-pointer UI wins: a feature's virtual pointer (a `<surface>`'s
+    // in-world ray-cast) is the only thing that knows the pointer is over an
+    // offscreen subtree (the window hit-test can't — its geometry is in
+    // texture space). Then the transform3d remap, then the main-window scan.
+    let named = virtual_pointers
         .as_deref()
         .zip(hover_map.as_deref())
-        .and_then(|(pointer, hover_map)| {
-            surface_cursor_for(pointer.id, hover_map, &node_cursors, &child_of)
+        .and_then(|(pointers, hover_map)| {
+            pointers
+                .iter()
+                .find_map(|id| surface_cursor_for(id, hover_map, &node_cursors, &child_of))
         })
         .or_else(|| {
             transform3d_pointer
@@ -210,11 +213,9 @@ fn window_cursor(
     })
 }
 
-/// The cursor of the topmost `<surface>` node under the virtual pointer, climbing to
-/// the nearest cursor-bearing ancestor. `None` when the pointer is over no surface
-/// node, or that node (and its ancestors) declare no cursor. Split from the system so
-/// it can be unit-tested without constructing a [`SurfaceVirtualPointer`] (its fields
-/// are crate-private to the surface crate).
+/// The cursor of the topmost node under a virtual pointer, climbing to the
+/// nearest cursor-bearing ancestor. `None` when the pointer is over no node,
+/// or that node (and its ancestors) declare no cursor.
 fn surface_cursor_for(
     pointer_id: PointerId,
     hover_map: &HoverMap,

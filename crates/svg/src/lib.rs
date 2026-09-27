@@ -23,17 +23,22 @@
 //! plain node and the bridge reports a `featureMissing` warning naming this
 //! crate. Rendering an `.svg` *file* is the core's `<image src="x.svg">`.
 //!
-//! Everything here plugs into the core through its extension contract
-//! ([`bevy_react_core::ext`]): the element kinds and the `shape`/`viewBox`
-//! prop keys are registered, the numeric attrs' bindings ride the animation
-//! engine's publish slot, the shape transition is the crate's own system on
-//! the engine's channel primitive, and the four per-frame systems order by
-//! the contract's sets.
+//! Everything here plugs into the core through its element registry
+//! ([`bevy_react_core::element`]) and extension contract
+//! ([`bevy_react_core::ext`]): the nine elements are registered [`Element`]
+//! statics ([`SVG_ELEMENTS`]) listing their attributes ([`attrs`] — one per
+//! SVG attribute, `cx`/`fill`/`d`/…) and writers, the numeric attributes'
+//! bindings ride the animation engine's publish slot, the shape transition
+//! is the crate's own system on the engine's channel primitive, and the four
+//! per-frame systems order by the contract's sets.
+//!
+//! [`Element`]: bevy_react_core::element::Element
 
 use bevy::prelude::*;
 use bevy_react_core::ReactAppExt;
 
 mod animate;
+pub mod attrs;
 mod element;
 mod hit;
 pub(crate) mod interact;
@@ -47,14 +52,17 @@ mod walk;
 #[cfg(test)]
 mod bindings_tests;
 #[cfg(test)]
-mod js_tables_tests;
+mod op_pointer_tests;
 #[cfg(test)]
 mod op_tests;
 #[cfg(test)]
 mod raster_tests;
 
 pub use animate::apply_driven_shape_attrs;
-pub use element::SvgElements;
+pub use element::{
+    CIRCLE, ELLIPSE, G, LINE, PATH, POLYGON, POLYLINE, RECT, SHAPE_WRITER, SVG, SVG_ELEMENTS,
+    VIEW_BOX_WRITER,
+};
 #[cfg(test)]
 pub(crate) use protocol::st;
 pub use protocol::{
@@ -65,8 +73,8 @@ pub(crate) use protocol::{NUMERIC_ATTR_COUNT, NUMERIC_ATTRS, numeric_attr, numer
 pub use surface::{ShapeKind, SvgJsxSurface, SvgShape, node_scale_factor, update_jsx_svg_surfaces};
 pub use transition::{ShapeTransitionState, apply_shape_transition, drive_shape_transitions};
 
-/// Registers the `<svg>` element, its shape intrinsics, the `shape` /
-/// `viewBox` prop keys, and the crate's per-frame systems. Requires
+/// Registers the `<svg>` element and its shape intrinsics (with their
+/// attributes and writers), and the crate's per-frame systems. Requires
 /// `ReactUiPlugin` in the same app (added in any order; warned at `finish`
 /// when missing).
 pub struct SvgPlugin;
@@ -94,13 +102,11 @@ pub fn register(app: &mut App) {
     register_systems(app);
 }
 
-/// The element kinds and prop keys alone — what a headless op harness needs
-/// to mount an `<svg>` through the real op path (the systems are added per
-/// test, against the harness's own schedule).
+/// The elements alone — what a headless op harness (and the TypeScript
+/// exporter) needs to mount an `<svg>` through the real op path (the systems
+/// are added per test, against the harness's own schedule).
 pub fn register_bindings(app: &mut App) {
-    app.add_react_prop::<ShapeAttrs>("shape");
-    app.add_react_prop_with("viewBox", protocol::decode_view_box);
-    app.add_react_element(SvgElements);
+    app.add_react_elements(SVG_ELEMENTS);
 }
 
 /// The crate's per-frame systems and their resources, ordered by the

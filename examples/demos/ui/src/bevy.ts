@@ -9,6 +9,8 @@ import {
   addEventListener as rawAddEventListener,
   removeEventListener as rawRemoveEventListener,
 } from "bevy-react";
+import type { ReactNode, Ref } from "react";
+import type { AnchorScaling, Animatable, BevyAttributes, BevyCanvasElement, BevyPointerProps, BevyScrollProps, BevyShapeTransition, BevyStyle, BevyVariantProps, BevyWheelProps, CanvasPainter, DrawCmd, Vec3 } from "bevy-react";
 
 export type BallBounced = { 
 /**
@@ -29,6 +31,7 @@ export type Burn = {
  * Rim glow color (upstream `burnColor`), as a CSS color.
  */
 color: string, };
+export type CanvasSize = { width: number, height: number, };
 export type ChromaticAberrationParams = { offset: number | string, angle: number | string, 
 /**
  * Tangential swirl: the R image rotates by `+rotation` degrees
@@ -514,6 +517,180 @@ declare module "bevy-react" {
     stripDatamoshGlitch: StripDatamoshGlitch;
     tilesWave: TilesWave;
     windowslice: Windowslice;
+  }
+}
+
+/** The app's own elements' props (`app.add_react_element`). */
+export interface BevyAnchorProps extends BevyAttributes, BevyVariantProps, BevyPointerProps, BevyScrollProps, BevyWheelProps {
+  style?: BevyStyle;
+  entity: number | bigint;
+  offset?: Vec3;
+  scale?: AnchorScaling;
+  children?: ReactNode;
+}
+
+export interface BevyCanvasProps extends BevyAttributes, BevyVariantProps, BevyPointerProps, BevyScrollProps, BevyWheelProps {
+  style?: BevyStyle;
+  draw?: CanvasPainter | DrawCmd[];
+  onResize?: (payload: CanvasSize) => void;
+  ref?: Ref<BevyCanvasElement>;
+  children?: ReactNode;
+}
+
+export interface BevyCircleProps extends BevyAttributes, BevyPointerProps {
+  cx?: Animatable<number>;
+  cy?: Animatable<number>;
+  r?: Animatable<number>;
+  fill?: string;
+  stroke?: string;
+  strokeWidth?: Animatable<number>;
+  opacity?: Animatable<number>;
+  fillRule?: "nonzero" | "evenodd";
+  strokeLinecap?: "butt" | "round" | "square";
+  strokeLinejoin?: "miter" | "round" | "bevel";
+  transform?: string;
+  transition?: BevyShapeTransition;
+  children?: ReactNode;
+}
+
+export interface BevyEllipseProps extends BevyAttributes, BevyPointerProps {
+  cx?: Animatable<number>;
+  cy?: Animatable<number>;
+  rx?: Animatable<number>;
+  ry?: Animatable<number>;
+  fill?: string;
+  stroke?: string;
+  strokeWidth?: Animatable<number>;
+  opacity?: Animatable<number>;
+  fillRule?: "nonzero" | "evenodd";
+  strokeLinecap?: "butt" | "round" | "square";
+  strokeLinejoin?: "miter" | "round" | "bevel";
+  transform?: string;
+  transition?: BevyShapeTransition;
+  children?: ReactNode;
+}
+
+export interface BevyGProps extends BevyAttributes {
+  transform?: string;
+  opacity?: Animatable<number>;
+  transition?: BevyShapeTransition;
+  children?: ReactNode;
+}
+
+export interface BevyLineProps extends BevyAttributes, BevyPointerProps {
+  x1?: Animatable<number>;
+  y1?: Animatable<number>;
+  x2?: Animatable<number>;
+  y2?: Animatable<number>;
+  fill?: string;
+  stroke?: string;
+  strokeWidth?: Animatable<number>;
+  opacity?: Animatable<number>;
+  fillRule?: "nonzero" | "evenodd";
+  strokeLinecap?: "butt" | "round" | "square";
+  strokeLinejoin?: "miter" | "round" | "bevel";
+  transform?: string;
+  transition?: BevyShapeTransition;
+  children?: ReactNode;
+}
+
+export interface BevyPathProps extends BevyAttributes, BevyPointerProps {
+  d?: string;
+  fill?: string;
+  stroke?: string;
+  strokeWidth?: Animatable<number>;
+  opacity?: Animatable<number>;
+  fillRule?: "nonzero" | "evenodd";
+  strokeLinecap?: "butt" | "round" | "square";
+  strokeLinejoin?: "miter" | "round" | "bevel";
+  transform?: string;
+  transition?: BevyShapeTransition;
+  children?: ReactNode;
+}
+
+export interface BevyPolygonProps extends BevyAttributes, BevyPointerProps {
+  points?: number[];
+  fill?: string;
+  stroke?: string;
+  strokeWidth?: Animatable<number>;
+  opacity?: Animatable<number>;
+  fillRule?: "nonzero" | "evenodd";
+  strokeLinecap?: "butt" | "round" | "square";
+  strokeLinejoin?: "miter" | "round" | "bevel";
+  transform?: string;
+  transition?: BevyShapeTransition;
+  children?: ReactNode;
+}
+
+export interface BevyPolylineProps extends BevyAttributes, BevyPointerProps {
+  points?: number[];
+  fill?: string;
+  stroke?: string;
+  strokeWidth?: Animatable<number>;
+  opacity?: Animatable<number>;
+  fillRule?: "nonzero" | "evenodd";
+  strokeLinecap?: "butt" | "round" | "square";
+  strokeLinejoin?: "miter" | "round" | "bevel";
+  transform?: string;
+  transition?: BevyShapeTransition;
+  children?: ReactNode;
+}
+
+export interface BevyPortalProps extends BevyAttributes, BevyVariantProps, BevyPointerProps, BevyScrollProps, BevyWheelProps {
+  style?: BevyStyle;
+  target: string;
+  children?: ReactNode;
+}
+
+export interface BevyRectProps extends BevyAttributes, BevyPointerProps {
+  x?: Animatable<number>;
+  y?: Animatable<number>;
+  width?: Animatable<number>;
+  height?: Animatable<number>;
+  rx?: Animatable<number>;
+  ry?: Animatable<number>;
+  fill?: string;
+  stroke?: string;
+  strokeWidth?: Animatable<number>;
+  opacity?: Animatable<number>;
+  fillRule?: "nonzero" | "evenodd";
+  strokeLinecap?: "butt" | "round" | "square";
+  strokeLinejoin?: "miter" | "round" | "bevel";
+  transform?: string;
+  transition?: BevyShapeTransition;
+  children?: ReactNode;
+}
+
+export interface BevySurfaceProps extends BevyAttributes {
+  style?: BevyStyle;
+  target: string;
+  children?: ReactNode;
+}
+
+export interface BevySvgProps extends BevyAttributes, BevyVariantProps, BevyPointerProps, BevyScrollProps, BevyWheelProps {
+  style?: BevyStyle;
+  viewBox?: string;
+  children?: ReactNode;
+}
+
+/** The app's own elements (`app.add_react_element`). Augments the
+ *  `BevyIntrinsicElements` interface in the `bevy-react` package, so JSX
+ *  types them. */
+declare module "bevy-react" {
+  interface BevyIntrinsicElements {
+    anchor: BevyAnchorProps;
+    canvas: BevyCanvasProps;
+    circle: BevyCircleProps;
+    ellipse: BevyEllipseProps;
+    g: BevyGProps;
+    line: BevyLineProps;
+    path: BevyPathProps;
+    polygon: BevyPolygonProps;
+    polyline: BevyPolylineProps;
+    portal: BevyPortalProps;
+    rect: BevyRectProps;
+    surface: BevySurfaceProps;
+    svg: BevySvgProps;
   }
 }
 

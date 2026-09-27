@@ -28,7 +28,6 @@
 // inside this crate too (e.g. in our own tests and examples).
 extern crate self as bevy_react_core;
 
-mod anchor;
 mod bridge;
 mod cursor;
 // The devtools console ring (JS console output + diag messages + JS-runtime
@@ -52,6 +51,8 @@ pub mod diag;
 mod devtools;
 mod event;
 // The extension contract (feature-facing components, sets, registries).
+pub mod element;
+pub mod elements;
 pub mod ext;
 // Shared CPU-raster helpers (part of the contract).
 mod gamepad;
@@ -86,23 +87,21 @@ pub mod js_thread;
 pub mod protocol;
 
 // Filter wire types (the layer-based `filter` chain) and, later, the filter
-// registry. Owns its wire format the way `canvas`/`animations` own theirs.
+// registry. Owns its wire format the way `animations` owns its own.
 pub mod filters;
 
-// The animation engine and the canvas/portal/surface host elements. Public
+// The animation engine and the render-target service (`<portal>` views,
+// `backgroundImage: { texture }`). Public
 // modules so consumers can reach their full APIs; the most-used items are also
 // re-exported at the crate root below.
 pub mod animations;
 pub mod background_image;
-pub mod canvas;
 pub mod image_rendering;
 pub mod layer;
-pub mod portal;
-pub mod surface;
+pub mod render_target;
 // The SVG subsystem (parse + CPU rasterization via resvg/tiny-skia).
 pub mod svg;
 
-pub use anchor::{Anchor, AnchorScaling, Anchored};
 pub use animations::ReactUiAnimationsPlugin;
 pub use bevy_react_macros::{
     react_event, react_filter, react_message, react_morph_filter, react_request,
@@ -151,7 +150,6 @@ pub mod test_util {
     }
 }
 pub use bridge::ReactNode;
-pub use canvas::CanvasSurface;
 #[cfg(feature = "devtools")]
 #[cfg_attr(docsrs, doc(cfg(feature = "devtools")))]
 pub use devtools::DevtoolsConfig;
@@ -163,13 +161,12 @@ pub use plugin::{
     FilterSelection, Fonts, PointerCapture, PointerCaptureSet, PrecompileFilters, ReactApplySet,
     ReactUiPlugin,
 };
-pub use portal::{
+pub use reconcile::OpApplyStats;
+pub use render_target::{
     PortalCamera, RenderMode, RenderTarget, RenderTargetSpec, RenderTargets, Resolution,
 };
-pub use reconcile::OpApplyStats;
 pub use request::{RawRequest, ReactRequest, Request, RequestEvent, Responder};
 pub use scrollbar::{
     HorizontalEdge, ScrollbarConfig, ScrollbarPartStyle, ScrollbarPosition, ScrollbarSpec,
     VerticalEdge,
 };
-pub use surface::{SurfacePointer, SurfaceSpec, SurfaceVirtualPointer, Surfaces, UvChannel};

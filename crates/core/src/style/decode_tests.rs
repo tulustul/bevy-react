@@ -22,13 +22,13 @@ fn group_alpha_decodes_and_promotes() {
 
     // Delta-merge re-evaluates promotion for both trigger fields.
     let mut cached = Props::default();
-    let (dirty, _) = cached.merge_delta(
+    let (dirty, _) = cached.merge_delta_node(
         props(serde_json::json!({ "style": { "groupAlpha": false } })),
         &[],
         &[],
     );
     assert!(promotes(&dirty.style));
-    let (dirty, _) = cached.merge_delta(
+    let (dirty, _) = cached.merge_delta_node(
         props(serde_json::json!({ "style": { "opacity": 0.5 } })),
         &[],
         &[],
@@ -46,7 +46,7 @@ fn group_alpha_decodes_and_promotes() {
 fn border_radius_reruns_transition_and_decodes_binding() {
     let uniform8: Rect = serde_json::from_value(serde_json::json!(8)).expect("rect decodes");
     let mut cached = Props::default();
-    let (dirty, _) = cached.merge_delta(
+    let (dirty, _) = cached.merge_delta_node(
         props(serde_json::json!({ "style": { "borderRadius": 8 } })),
         &[],
         &[],
@@ -96,7 +96,7 @@ fn image_rendering_keyword_decodes_and_reruns_its_writer() {
     assert_eq!(s.get(&IMAGE_RENDERING).copied(), None);
 
     let mut cached = Props::default();
-    let (dirty, _) = cached.merge_delta(
+    let (dirty, _) = cached.merge_delta_node(
         props(serde_json::json!({ "style": { "imageRendering": "trilinear" } })),
         &[],
         &[],
@@ -122,7 +122,7 @@ fn layout_rounding_decodes_and_reruns_its_writer() {
     assert_eq!(s.get(&LAYOUT_ROUNDING).copied(), None);
 
     let mut cached = Props::default();
-    let (dirty, _) = cached.merge_delta(
+    let (dirty, _) = cached.merge_delta_node(
         props(serde_json::json!({ "style": { "layoutRounding": false } })),
         &[],
         &[],
@@ -136,7 +136,7 @@ fn layout_rounding_decodes_and_reruns_its_writer() {
             .and_then(|s| s.get(&LAYOUT_ROUNDING).copied()),
         Some(false)
     );
-    let (dirty, _) = cached.merge_delta(
+    let (dirty, _) = cached.merge_delta_node(
         props(serde_json::json!({ "style": {} })),
         &[],
         &["layoutRounding".to_string()],
@@ -168,7 +168,7 @@ fn cache_keyword_decodes_and_promotes() {
     assert_eq!(s.get(&CACHE).copied(), Some(LayerCache::Auto));
 
     let mut cached = Props::default();
-    let (dirty, _) = cached.merge_delta(
+    let (dirty, _) = cached.merge_delta_node(
         props(serde_json::json!({ "style": { "cache": "always" } })),
         &[],
         &[],
@@ -227,7 +227,7 @@ fn deserializes_filter_chain() {
 #[test]
 fn filter_delta_reruns_its_writer_and_promotes() {
     let mut cached = Props::default();
-    let (dirty, _) = cached.merge_delta(
+    let (dirty, _) = cached.merge_delta_node(
         props(serde_json::json!({ "style": { "filter": { "name": "blur" } } })),
         &[],
         &[],
@@ -235,7 +235,7 @@ fn filter_delta_reruns_its_writer_and_promotes() {
     assert!(runs(&dirty.style, &FILTER_WRITER));
     assert!(promotes(&dirty.style));
 
-    let (dirty, _) = cached.merge_delta(
+    let (dirty, _) = cached.merge_delta_node(
         props(serde_json::json!({ "hoverStyle": { "filter": { "name": "blur" } } })),
         &[],
         &[],
@@ -252,7 +252,7 @@ fn filter_delta_reruns_its_writer_and_promotes() {
 #[test]
 fn backdrop_filter_delta_reruns_its_writer_and_promotes() {
     let mut cached = Props::default();
-    let (dirty, _) = cached.merge_delta(
+    let (dirty, _) = cached.merge_delta_node(
         props(serde_json::json!({ "style": { "backdropFilter": { "name": "blur" } } })),
         &[],
         &[],
@@ -267,7 +267,7 @@ fn backdrop_filter_delta_reruns_its_writer_and_promotes() {
             .is_some_and(|s| s.get(&BACKDROP_FILTER).is_some())
     );
 
-    let (dirty, _) = cached.merge_delta(Props::default(), &[], &["backdropFilter".into()]);
+    let (dirty, _) = cached.merge_delta_node(Props::default(), &[], &["backdropFilter".into()]);
     assert!(runs(&dirty.style, &BACKDROP_FILTER_WRITER));
     assert!(promotes(&dirty.style));
     assert!(
@@ -286,7 +286,7 @@ fn backdrop_filter_delta_reruns_its_writer_and_promotes() {
 #[test]
 fn morph_filter_delta_reruns_its_writers_and_promotes() {
     let mut cached = Props::default();
-    let (dirty, _) = cached.merge_delta(
+    let (dirty, _) = cached.merge_delta_node(
         props(serde_json::json!({
             "style": { "morphFilter": { "key": "a", "name": "crossfade" } }
         })),
@@ -308,7 +308,7 @@ fn morph_filter_delta_reruns_its_writers_and_promotes() {
     assert_eq!(morph.key, serde_json::json!("a"));
     assert_eq!(morph.filter.name, "crossfade");
 
-    let (dirty, _) = cached.merge_delta(Props::default(), &[], &["morphFilter".into()]);
+    let (dirty, _) = cached.merge_delta_node(Props::default(), &[], &["morphFilter".into()]);
     assert!(runs(&dirty.style, &MORPH_FILTER_WRITER));
     assert!(promotes(&dirty.style));
     assert!(

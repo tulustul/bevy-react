@@ -103,7 +103,7 @@ pub fn length_logical_px(filter: &str, param: &str, len: Length) -> Result<f32, 
 /// A color filter parameter: **linear** (shader-ready) straight-alpha RGBA.
 ///
 /// Deserializes from a CSS color string — any form
-/// [`crate::canvas::parse_css_color`] accepts (hex, named colors,
+/// [`crate::raster::parse_css_color`] accepts (hex, named colors,
 /// `rgb()`/`hsl()`/`oklch()`/…) — converted sRGB → linear on decode, so
 /// [`ReactFilter::pack`](crate::filters::ReactFilter::pack) copies the four
 /// components into a `Vec4` slot untouched. `Default` is transparent black
@@ -120,7 +120,7 @@ pub struct FilterColor(pub [f32; 4]);
 impl<'de> Deserialize<'de> for FilterColor {
     fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
         let s = String::deserialize(d)?;
-        let srgba = crate::canvas::parse_css_color(&s)
+        let srgba = crate::raster::parse_css_color(&s)
             .ok_or_else(|| serde::de::Error::custom(format!("invalid color {s:?}")))?;
         let lin = bevy::color::LinearRgba::from(srgba);
         Ok(Self([lin.red, lin.green, lin.blue, lin.alpha]))

@@ -12,9 +12,9 @@
 //! collectors ([`crate::reconcile`]'s pointer/hover systems) read to report
 //! `x`/`y` in SVG **user units** instead of the node-normalized values.
 //!
-//! Only handler-bearing shapes participate: `reconcile::svg_ops` stamps
-//! `Interaction` (+ `RelativeCursorPosition`/[`EventLocalPos`]) exactly when the
-//! shape declares `onClick`/`onPointer*`, and this system queries through
+//! Only handler-bearing shapes participate: the core's pointer stamps give a
+//! node-less element `Interaction` (+ `RelativeCursorPosition`/[`EventLocalPos`])
+//! exactly when it declares `onClick`/`onPointer*`, and this system queries through
 //! `Interaction` — a handler-less shape is skipped entirely, so its hits fall
 //! through to the `<svg>` root's own handlers via the event collectors'
 //! `ChildOf` climb.
@@ -29,7 +29,8 @@ use super::pick::{SvgPointerShapeHits, map_point};
 use super::{SvgJsxSurface, SvgShape};
 // The user-space cursor slot: the contract component the event collectors
 // read (`x`/`y` in SVG user units while hovered, `None` otherwise). Stamped/
-// removed alongside the shape's handler components (see `reconcile::svg_ops`).
+// removed alongside the shape's handler components by the core's node-less
+// pointer stamps.
 use bevy_react_core::ext::EventLocalPos;
 
 /// Drive `Interaction`, `RelativeCursorPosition`, and [`EventLocalPos`] for

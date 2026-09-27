@@ -15,10 +15,11 @@ import {
   onRestore,
   onToggle,
   onWarning,
+  requestElements,
   requestStyleFields,
 } from "./api";
 import { DevtoolsHost } from "./DevtoolsHost";
-import { installStyleFields } from "./fields";
+import { installElements, installStyleFields } from "./fields";
 import { mirror } from "./mirror";
 import { recorder } from "./recorder";
 import { installStyleKinds } from "./warnings";
@@ -70,6 +71,12 @@ export function installDevtools(host: {
       installStyleKinds(fields);
     },
     (e) => console.error("[js] devtools style fields:", e),
+  );
+  // The element table (every registered element's attributes): which props
+  // are act-now (never retained by the mirror) and which edit inline.
+  requestElements().then(
+    (elements) => installElements(elements),
+    (e) => console.error("[js] devtools elements:", e),
   );
   host.mount(createElement(DevtoolsHost));
 }

@@ -263,10 +263,10 @@ fn background_image_unset_and_source_swap() {
 }
 
 /// An opacity-only delta re-folds the background image's tint alpha (the
-/// `opacity` table row carries `BG_IMAGE`), and a delta on a `<canvas>`
-/// leaves its element-owned `ImageNode` untouched.
+/// `opacity` table row carries `BG_IMAGE`), and a `backgroundImage` delta on
+/// an `<image>` leaves its element-owned `ImageNode` untouched.
 #[test]
-fn background_image_opacity_refold_and_canvas_guard() {
+fn background_image_opacity_refold_and_element_image_guard() {
     use bevy::ui::widget::ImageNode;
     let (mut app, ops_tx) = op_app();
     ops_tx
@@ -284,8 +284,11 @@ fn background_image_opacity_refold_and_canvas_guard() {
             },
             Op::Create {
                 id: 2,
-                kind: "canvas".into(),
-                props: serde_json::from_value(serde_json::json!({})).unwrap(),
+                kind: "image".into(),
+                props: crate::protocol::props::Props::decode_for(
+                    "image",
+                    serde_json::json!({ "src": "images/a.png" }),
+                ),
                 text: None,
             },
         ])
@@ -302,7 +305,7 @@ fn background_image_opacity_refold_and_canvas_guard() {
             .alpha(),
         1.0
     );
-    let canvas_handle = app
+    let image_handle = app
         .world()
         .entity(e2)
         .get::<ImageNode>()
@@ -318,7 +321,7 @@ fn background_image_opacity_refold_and_canvas_guard() {
                 &[],
                 &[],
             ),
-            // A backgroundImage delta on the canvas must not retarget its
+            // A backgroundImage delta on the image must not retarget its
             // element-owned texture.
             update_delta(
                 2,
@@ -344,8 +347,8 @@ fn background_image_opacity_refold_and_canvas_guard() {
     );
     assert_eq!(
         app.world().entity(e2).get::<ImageNode>().unwrap().image,
-        canvas_handle,
-        "the canvas keeps its own texture despite the ignored style"
+        image_handle,
+        "the image keeps its own texture despite the ignored style"
     );
 }
 

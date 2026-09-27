@@ -25,7 +25,7 @@ fn default_amount() -> f32 {
 /// A builtin default color, parsed once at pack/default time (infallible for
 /// the literals used here).
 fn css(color: &str) -> FilterColor {
-    let srgba = crate::canvas::parse_css_color(color).expect("valid builtin color literal");
+    let srgba = crate::raster::parse_css_color(color).expect("valid builtin color literal");
     let lin = bevy::color::LinearRgba::from(srgba);
     FilterColor([lin.red, lin.green, lin.blue, lin.alpha])
 }

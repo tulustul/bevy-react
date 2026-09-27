@@ -14,7 +14,9 @@
     "typecheck": "npm run typecheck --workspaces --if-present",
     "format": "prettier --write . && cargo fmt",
     "format:check": "prettier --check . && cargo fmt --check",
-    "style:generate": "UPDATE_STYLE_TS=1 cargo test -p bevy_react_core --lib style::ts::tests::core_style_ts_is_current"
+    "style:generate": "UPDATE_STYLE_TS=1 cargo test -p bevy_react_core --lib style::ts::tests::core_style_ts_is_current",
+    "elements:generate": "UPDATE_ELEMENT_TS=1 cargo test -p bevy_react_core --lib element::ts::tests::core_element_ts_is_current",
+    "generate": "npm run style:generate && npm run elements:generate"
   },
   "devDependencies": {
     "@eslint/js": "^9.18.0",

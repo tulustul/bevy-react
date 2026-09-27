@@ -140,29 +140,14 @@ impl ReactRegistry {
 
 /// Registers typed React message payloads on a Bevy [`App`].
 pub trait ReactAppExt {
-    /// Register a feature-owned prop key: `key` on any element's props
-    /// decodes into `T` at the serde boundary and lands in
-    /// [`Props::ext`](crate::protocol::props::Props::ext) (atomic replace
-    /// on update, removed by `unset`). See [`crate::ext`]. Panics on a
-    /// duplicate key.
-    fn add_react_prop<T: crate::ext::ExtValue + DeserializeOwned>(
-        &mut self,
-        key: &'static str,
-    ) -> &mut Self;
+    /// Register an element kind — its attributes, writers, and events with
+    /// it (see [`crate::element`]). The core registers its own elements
+    /// through this same call. Panics on a name already registered or a
+    /// malformed declaration.
+    fn add_react_element(&mut self, element: &'static crate::element::Element) -> &mut Self;
 
-    /// [`add_react_prop`](Self::add_react_prop) with a custom decoder, for a
-    /// value whose wire form is not its `Deserialize` impl.
-    fn add_react_prop_with(
-        &mut self,
-        key: &'static str,
-        decode: crate::ext::ExtDecodeFn,
-    ) -> &mut Self;
-
-    /// Register a feature-owned element handler: every kind it names
-    /// (`ElementKind::kinds`) mounts and updates through it. See
-    /// [`crate::ext`]. Panics on a kind already owned (a built-in or another
-    /// handler's).
-    fn add_react_element(&mut self, handler: impl crate::ext::ElementKind) -> &mut Self;
+    /// [`add_react_element`](Self::add_react_element) for several elements.
+    fn add_react_elements(&mut self, elements: &[&'static crate::element::Element]) -> &mut Self;
 
     /// Register a style property: `property.name` in any `style` object
     /// decodes through its codec (see [`crate::style`]). The core registers
@@ -323,31 +308,20 @@ pub trait ReactAppExt {
 }
 
 impl ReactAppExt for App {
-    fn add_react_prop<T: crate::ext::ExtValue + DeserializeOwned>(
-        &mut self,
-        key: &'static str,
-    ) -> &mut Self {
+    fn add_react_element(&mut self, element: &'static crate::element::Element) -> &mut Self {
         self.world_mut()
             .get_resource_or_init::<crate::ext::ExtRegistry>()
-            .add_prop::<T>(key);
+            .add_element(element);
         self
     }
 
-    fn add_react_prop_with(
-        &mut self,
-        key: &'static str,
-        decode: crate::ext::ExtDecodeFn,
-    ) -> &mut Self {
-        self.world_mut()
-            .get_resource_or_init::<crate::ext::ExtRegistry>()
-            .add_prop_with(key, decode);
-        self
-    }
-
-    fn add_react_element(&mut self, handler: impl crate::ext::ElementKind) -> &mut Self {
-        self.world_mut()
-            .get_resource_or_init::<crate::ext::ExtRegistry>()
-            .add_element(handler);
+    fn add_react_elements(&mut self, elements: &[&'static crate::element::Element]) -> &mut Self {
+        let mut registry = self
+            .world_mut()
+            .get_resource_or_init::<crate::ext::ExtRegistry>();
+        for element in elements {
+            registry.add_element(element);
+        }
         self
     }
 

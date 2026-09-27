@@ -1,19 +1,16 @@
 //! The op-apply system: [`apply_js_ops`] drains reconciler op batches and
 //! mutates the UI tree. Lifecycle/hierarchy arms (Reset, Append, Insert,
-//! Remove, UpdateText, Draw) live inline here; the two big arms are
+//! Remove, UpdateText) live inline here; the two big arms are
 //! `create::apply_create` and `update::apply_update`.
 
-use bevy::a11y::AccessibilityNode;
 use bevy::image::Image;
 use bevy::platform::collections::HashMap;
 use bevy::prelude::*;
-use bevy::text::EditableText;
 use bevy::ui::{ComputedNode, ScrollPosition};
 
-use super::stats::{FlushMeta, OpApplyStats, UiAssets};
+use super::stats::{FlushMeta, OpApplyStats};
 use super::{create, update};
 use crate::bridge::{JsBridge, ReactNode, SpanKind};
-use crate::canvas::CanvasSurface;
 use crate::plugin::Fonts;
 use crate::protocol::{NodeId, ROOT_ID, op::Op};
 use crate::transition::ScrollTransitionState;
@@ -28,18 +25,8 @@ pub fn apply_js_ops(
     assets: Res<AssetServer>,
     fonts: Res<Fonts>,
     mut images: ResMut<Assets<Image>>,
-    // Sprite-sheet grids for `<image atlas>`, plus the cache that keeps repeated
-    // commits from leaking a `TextureAtlasLayout` per frame (see `AtlasLayoutCache`),
-    // bundled into one `SystemParam` so `apply_js_ops` stays within Bevy's
-    // 16-param limit.
-    mut ui_assets: UiAssets,
     children: Query<&Children>,
     rnodes: Query<&ReactNode>,
-    // The persistent world-anchor overlay layer (a child of the root). It is
-    // infrastructure, not a reconciler node, so `Op::Reset` must preserve it and
-    // the end-of-batch hierarchy rebuild must keep it in the root's children.
-    anchor_layer: Query<Entity, With<crate::anchor::AnchorLayer>>,
-    mut editables: Query<&mut EditableText>,
     // Controlled `scrollTop`/`scrollLeft`: every `Node` has a `ScrollPosition`
     // (it's a required component), so `get_mut(e)` succeeds for any node — we only
     // write the axis React controls, and only when it diverges from the live value.
@@ -52,11 +39,6 @@ pub fn apply_js_ops(
         &ComputedNode,
         Option<&mut ScrollTransitionState>,
     )>,
-    mut a11y_nodes: Query<&mut AccessibilityNode>,
-    // A `<text>` *root* carries a layout `Node`; a span (nested `<text>` or a
-    // bare string) does not. Used on update to re-apply layout/visual/transform
-    // style to roots only — spans must never get a `Node`.
-    text_roots: Query<(), With<Node>>,
     mut stats: ResMut<OpApplyStats>,
     // The stamp + origin-flag side channels; absent in headless unit tests
     // (stamps also stay empty on web). See [`FlushMeta`].
@@ -119,9 +101,6 @@ pub fn apply_js_ops(
     // relationship cleanup drops the child from `Children` preserving the order
     // of the rest.
     let mut dirty: HashMap<NodeId, ParentDirt> = HashMap::new();
-    // Anchored nodes stamped by an earlier drain are under the anchor layer
-    // by now (`position_anchored_nodes` runs after this system every frame).
-    bridge.anchors.begin_drain();
     // Removed subtree roots this batch as `(parent, entity)`, in op order,
     // despawned after the loop (see there); `removed_under` counts them per
     // parent — a parent shedding [`ParentDirt::MASS_REMOVAL_MIN`] or more gets
@@ -155,48 +134,33 @@ pub fn apply_js_ops(
                     && let Ok(kids) = children.get(root)
                 {
                     for child in kids.iter() {
-                        // The anchor layer is persistent infrastructure: keep it,
-                        // but despawn the reconciler overlays reparented under it
-                        // so a reload doesn't leave stale duplicate overlays.
-                        if anchor_layer.contains(child) {
-                            if let Ok(overlays) = children.get(child) {
-                                for overlay in overlays.iter() {
-                                    commands.entity(overlay).despawn();
-                                }
-                            }
-                        } else {
+                        // Only reconciler nodes: infrastructure a feature
+                        // parented under the root survives a reload.
+                        if rnodes.contains(child) {
                             commands.entity(child).despawn();
                         }
                     }
                 }
-                // Detached roots (`<surface>`/`<root>`) aren't under `root`, so the
-                // child-despawn above misses them. On a cold reload the old React
-                // tree is discarded without unmount lifecycle (no
-                // `detachDeletedInstance`), so despawn them here too — otherwise a
-                // stale surface subtree keeps rendering into its texture, and a
-                // stale `<root>` stays on screen.
-                for id in bridge.surfaces.iter().chain(bridge.roots.iter()) {
+                // Detached nodes (`<surface>`/`<root>`/`<anchor>`) aren't under
+                // `root`, so the child-despawn above misses them. On a cold
+                // reload the old React tree is discarded without unmount
+                // lifecycle (no `detachDeletedInstance`), so despawn them here
+                // too — otherwise a stale surface subtree keeps rendering into
+                // its texture, and a stale `<root>` stays on screen.
+                for id in bridge.detached.iter() {
                     if let Some(&e) = bridge.nodes.get(id) {
-                        commands.entity(e).despawn();
+                        commands.entity(e).try_despawn();
                     }
                 }
                 bridge.nodes.retain(|&id, _| id == ROOT_ID);
                 bridge.names.clear();
                 bridge.shared_tags.clear();
-                bridge.anchors.clear();
                 commands.queue(crate::transition::shared::clear_pending);
                 bridge.props_cache.clear();
                 bridge.text_styles.clear();
                 bridge.spans.clear();
-                bridge.editable_inputs.clear();
-                bridge.surfaces.clear();
-                bridge.roots.clear();
+                bridge.detached.clear();
                 bridge.animated.clear();
-                bridge.editable_values.clear();
-                bridge.editable_selections.clear();
-                bridge.editable_select_handlers.clear();
-                bridge.editable_focus_handlers.clear();
-                bridge.editable_pending_selection.clear();
                 bridge.scroll_positions.clear();
                 // The root persists but its children were just despawned; the shadow
                 // tree is fully rebuilt by the ops that follow. Drop any pre-reset
@@ -205,8 +169,8 @@ pub fn apply_js_ops(
                 bridge.siblings.clear();
                 bridge.child_list.clear();
                 bridge.parent_of.clear();
-                bridge.surface_parent.clear();
-                bridge.child_surfaces.clear();
+                bridge.detached_parent.clear();
+                bridge.child_detached.clear();
                 dirty.clear();
                 // The pending despawns stay queued (they tolerate the root
                 // sweep above having taken them already), but the counts are
@@ -225,7 +189,6 @@ pub fn apply_js_ops(
                     &assets,
                     &fonts,
                     &mut images,
-                    &mut ui_assets,
                     id,
                     kind,
                     props,
@@ -257,14 +220,15 @@ pub fn apply_js_ops(
                 bridge.spans.insert(id, SpanKind::RawInherited);
             }
             Op::Append { parent, child } => {
-                // A `<surface>`/`<root>` is a detached UI root: never parent it into
-                // the on-screen hierarchy (a surface renders to its own offscreen
-                // camera; a `<root>` is an independent screen-space tree). Its own
-                // children attach to it normally via their own Append ops. Record
-                // its React parent so removing an ancestor can despawn this detached
-                // root (Bevy's recursive despawn never reaches it).
-                if bridge.is_detached_root(child) {
-                    bridge.attach_surface(child, parent);
+                // A detached node is never parented into the on-screen
+                // hierarchy by the op path (a surface renders to its own
+                // offscreen camera; a `<root>` is an independent screen-space
+                // tree; an `<anchor>` lives under the anchor layer). Its own
+                // children attach to it normally via their own Append ops.
+                // Record its React parent so removing an ancestor can despawn
+                // it (Bevy's recursive despawn never reaches it).
+                if bridge.is_detached(child) {
+                    bridge.attach_detached(child, parent);
                     continue;
                 }
                 if let (Some(p), Some(c)) = (resolve(&bridge, parent), resolve(&bridge, child)) {
@@ -303,11 +267,10 @@ pub fn apply_js_ops(
                 child,
                 before,
             } => {
-                // A detached root (`<surface>`/`<root>`) is never parented (see
-                // `Op::Append`), but still record its React parent for
-                // ancestor-removal cleanup.
-                if bridge.is_detached_root(child) {
-                    bridge.attach_surface(child, parent);
+                // A detached node is never parented (see `Op::Append`), but
+                // still record its React parent for ancestor-removal cleanup.
+                if bridge.is_detached(child) {
+                    bridge.attach_detached(child, parent);
                     continue;
                 }
                 // Ordered insertion: place `child` at `before`'s position. The live
@@ -371,18 +334,18 @@ pub fn apply_js_ops(
                 // inserted child at the tail.
                 ParentDirt::escalate(&mut dirty, parent);
                 // React emits `Remove` only for the subtree's top node, and Bevy
-                // despawns that node recursively — but a `<surface>`/`<root>` nested
-                // under it is a detached root (no `ChildOf`), so neither reaches it.
-                // Despawn every detached root at/under `child` (incl. `child` itself
-                // if it is one) before the recursive despawn below; otherwise the
-                // orphan keeps rendering (a surface into its often-shared texture, a
-                // `<root>` straight onto the screen).
-                let mut surfaces = bridge.surfaces_under(child);
-                if bridge.is_detached_root(child) {
-                    bridge.detach_surface(child);
-                    surfaces.push(child);
+                // despawns that node recursively — but a detached node nested
+                // under it (no `ChildOf` to its React parent) is not reached.
+                // Despawn every detached node at/under `child` (incl. `child`
+                // itself if it is one) before the recursive despawn below;
+                // otherwise the orphan keeps rendering (a surface into its
+                // often-shared texture, a `<root>` straight onto the screen).
+                let mut detached = bridge.detached_under(child);
+                if bridge.is_detached(child) {
+                    bridge.detach_detached(child);
+                    detached.push(child);
                 }
-                for s in surfaces {
+                for s in detached {
                     if let Some(se) = resolve(&bridge, s) {
                         commands.entity(se).despawn();
                     }
@@ -416,13 +379,9 @@ pub fn apply_js_ops(
                     &mut bridge,
                     &assets,
                     &fonts,
-                    &mut ui_assets,
                     &children,
                     &rnodes,
-                    &mut editables,
                     &mut scroll_query,
-                    &mut a11y_nodes,
-                    &text_roots,
                     id,
                     props,
                     unset,
@@ -441,21 +400,6 @@ pub fn apply_js_ops(
                     // Belt: the reshape watcher (`Changed<TextLayoutInfo>`)
                     // catches this too, but only once Bevy re-shapes.
                     crate::layer::mark_content_dirty(&mut commands.entity(e));
-                }
-            }
-            Op::Draw { id, cmds } => {
-                // Imperative canvas drawing (a handle's microtask flush) or the
-                // runtime's declarative replay after a resize: append to the
-                // retained surface. A missing node (already unmounted, stale
-                // handle) is skipped silently, like every other op. Queued so a
-                // same-batch `Create`'s deferred `CanvasSurface` insert lands
-                // first.
-                if let Some(e) = resolve(&bridge, id) {
-                    commands.entity(e).queue(move |mut entity: EntityWorldMut| {
-                        if let Some(mut surface) = entity.get_mut::<CanvasSurface>() {
-                            surface.enqueue(cmds);
-                        }
-                    });
                 }
             }
         }
@@ -508,27 +452,10 @@ pub fn apply_js_ops(
             }
             continue;
         }
-        let mut list: Vec<Entity> = Vec::new();
-        // The AnchorLayer is a Rust-side child of the root, invisible to the shadow
-        // tree — keep it as the first child (its spawn-time position; overlays are
-        // lifted by `GlobalZIndex`, not sibling order). Without this, the root's
-        // rebuild would strip its `ChildOf`.
-        if parent == ROOT_ID
-            && let Ok(layer) = anchor_layer.single()
-        {
-            list.push(layer);
-        }
-        // A settled anchored overlay declared under `parent` lives under the
-        // AnchorLayer (`crate::anchor::AnchorIndex`): leaving it out of the list
-        // keeps it there — re-asserting `ChildOf(parent)` here only made the
-        // anchor system move it back the same frame (two hierarchy changes per
-        // batch). One stamped this drain is still attached here and stays in.
-        list.extend(
-            bridge
-                .children_of(parent)
-                .filter(|&id| !bridge.anchors.is_settled(id))
-                .filter_map(|id| resolve(&bridge, id)),
-        );
+        let list: Vec<Entity> = bridge
+            .children_of(parent)
+            .filter_map(|id| resolve(&bridge, id))
+            .collect();
         commands.entity(p).replace_children(&list);
     }
 
@@ -1018,51 +945,6 @@ mod tests {
         );
     }
 
-    /// The `AnchorLayer` is a Rust-side child of the root, invisible to the shadow
-    /// tree — a root rebuild must keep it as the first child instead of stripping
-    /// its `ChildOf`.
-    #[test]
-    fn root_rebuild_preserves_anchor_layer() {
-        let (mut app, tx, root) = ordering_app();
-        let layer = app
-            .world_mut()
-            .spawn((crate::anchor::AnchorLayer, ChildOf(root)))
-            .id();
-
-        tx.send(vec![
-            create_node(1),
-            create_node(2),
-            Op::Append {
-                parent: ROOT_ID,
-                child: 1,
-            },
-            Op::Append {
-                parent: ROOT_ID,
-                child: 2,
-            },
-        ])
-        .unwrap();
-        app.update();
-        assert_eq!(
-            children_of(&app, root),
-            vec![layer, ent(&app, 1), ent(&app, 2)]
-        );
-
-        // Reorder the root's reconciler children; the layer must stay first.
-        tx.send(vec![Op::Insert {
-            parent: ROOT_ID,
-            child: 2,
-            before: 1,
-        }])
-        .unwrap();
-        app.update();
-        assert_eq!(
-            children_of(&app, root),
-            vec![layer, ent(&app, 2), ent(&app, 1)],
-            "the AnchorLayer must survive root rebuilds as the first child"
-        );
-    }
-
     /// The leak regression the demos app exposed: a child created and appended in
     /// the SAME batch that removes its (pre-existing) parent. The attach must be
     /// queued per op — if it were deferred to the end-of-batch rebuild (which skips
@@ -1345,53 +1227,20 @@ mod tests {
             "Op::Reset must despawn detached <root>s"
         );
         assert!(
-            app.world().resource::<JsBridge>().roots.is_empty(),
-            "Op::Reset must clear the roots set"
+            app.world().resource::<JsBridge>().detached.is_empty(),
+            "Op::Reset must clear the detached set"
         );
     }
 
-    /// `Op::Reset` must keep the persistent anchor layer alive (it is spawned once at
-    /// startup) while still clearing the reconciler overlays reparented under it.
+    /// `Op::Reset` despawns reconciler nodes only: infrastructure a feature
+    /// parented under the UI root survives a reload (a feature's own UI roots
+    /// — the `<anchor>` layer — are not the root's children at all).
     #[test]
-    fn reset_preserves_anchor_layer_but_clears_its_overlays() {
-        use crate::anchor::AnchorLayer;
+    fn reset_keeps_infrastructure_children() {
         let (mut app, tx, root) = ordering_app();
-
-        // The anchor layer is a child of the root; an overlay (a reconciler node) has
-        // been reparented under it, exactly as `position_anchored_nodes` would do.
-        let layer = app.world_mut().spawn((AnchorLayer, ChildOf(root))).id();
-        let overlay = app.world_mut().spawn((ReactNode(99), ChildOf(layer))).id();
-
-        tx.send(vec![Op::Reset]).unwrap();
-        app.update();
-
-        assert!(
-            app.world().entities().contains(layer),
-            "Op::Reset must preserve the persistent anchor layer"
-        );
-        assert!(
-            !app.world().entities().contains(overlay),
-            "Op::Reset must despawn overlays reparented under the anchor layer"
-        );
-    }
-
-    /// `Op::Reset` must despawn detached `<surface>` roots. They aren't children of the
-    /// UI root (a surface renders to its own offscreen camera), so the root-children
-    /// despawn misses them; a cold reload would otherwise leak a stale surface subtree
-    /// that keeps rendering into the texture.
-    #[test]
-    fn reset_despawns_detached_surfaces() {
-        let (mut app, tx, _root) = ordering_app();
-
-        // Mount a `<surface>` under the root (it stays a detached root in Bevy).
+        let infra = app.world_mut().spawn(ChildOf(root)).id();
         tx.send(vec![
-            Op::Create {
-                id: 1,
-                kind: "surface".into(),
-                props: serde_json::from_value(serde_json::json!({ "target": "monitor" }))
-                    .expect("valid surface props"),
-                text: None,
-            },
+            create_node(1),
             Op::Append {
                 parent: ROOT_ID,
                 child: 1,
@@ -1399,45 +1248,38 @@ mod tests {
         ])
         .unwrap();
         app.update();
-        let surface = ent(&app, 1);
-        assert!(app.world().entities().contains(surface));
+        let node = ent(&app, 1);
 
         tx.send(vec![Op::Reset]).unwrap();
         app.update();
 
         assert!(
-            !app.world().entities().contains(surface),
-            "Op::Reset must despawn the detached surface root"
+            app.world().entities().contains(infra),
+            "Op::Reset must keep non-reconciler children of the root"
         );
         assert!(
-            app.world().resource::<JsBridge>().surfaces.is_empty(),
-            "Op::Reset must clear surface bookkeeping"
+            !app.world().entities().contains(node),
+            "Op::Reset must despawn reconciler nodes"
         );
     }
-
-    /// Removing an ancestor whose subtree *contains* a detached `<surface>` must despawn
-    /// the surface too. React emits `Remove` only for the subtree's top node, and the
-    /// surface is a detached root (no `ChildOf`), so neither React's op nor Bevy's
-    /// recursive despawn of the ancestor reaches it — `apply_js_ops` must find it via the
-    /// tracked React parentage. Regression: navigating away from the Home demo left its
-    /// `<surface target="monitor">` rendering into the shared monitor texture under the
-    /// `<surface>` demo. This reproduces the exact op stream React emits (verified: only
-    /// the wrapper gets a `Remove`, never the nested surface).
+    /// Removing an ancestor whose subtree *contains* a detached root must despawn
+    /// it too. React emits `Remove` only for the subtree's top node, and a detached
+    /// root has no `ChildOf`, so neither React's op nor Bevy's recursive despawn of
+    /// the ancestor reaches it — `apply_js_ops` must find it via the tracked React
+    /// parentage. Regression: navigating away from the Home demo left its
+    /// `<surface target="monitor">` rendering into the shared monitor texture under
+    /// the `<surface>` demo. This reproduces the exact op stream React emits
+    /// (verified: only the wrapper gets a `Remove`, never the nested detached root) —
+    /// a `<root>` standing in for the feature crate's `<surface>`.
     #[test]
-    fn remove_ancestor_despawns_nested_surface() {
+    fn remove_ancestor_despawns_nested_detached_root() {
         let (mut app, tx, _root) = ordering_app();
-        // Mirror Home's shape: a wrapper `<node>` under the root, a `<surface>` nested
-        // inside it, and a normal node rendered inside the surface.
+        // Mirror Home's shape: a wrapper `<node>` under the root, a detached root
+        // nested inside it, and a normal node rendered inside that.
         tx.send(vec![
             create_node(1), // wrapper (Home's container)
-            Op::Create {
-                id: 2,
-                kind: "surface".into(),
-                props: serde_json::from_value(serde_json::json!({ "target": "monitor" }))
-                    .expect("valid surface props"),
-                text: None,
-            },
-            create_node(3), // content rendered inside the surface
+            super::super::test_util::create(2, "root", serde_json::json!({})),
+            create_node(3), // content rendered inside the detached root
             Op::Append {
                 parent: ROOT_ID,
                 child: 1,
@@ -1445,18 +1287,18 @@ mod tests {
             Op::Append {
                 parent: 1,
                 child: 2,
-            }, // surface nested under the wrapper
+            }, // detached root nested under the wrapper
             Op::Append {
                 parent: 2,
                 child: 3,
-            }, // content inside the surface
+            }, // content inside the detached root
         ])
         .unwrap();
         app.update();
         let wrapper = ent(&app, 1);
-        let surface = ent(&app, 2);
+        let detached = ent(&app, 2);
         let inner = ent(&app, 3);
-        assert!(app.world().entities().contains(surface));
+        assert!(app.world().entities().contains(detached));
 
         // React unmounts the wrapper: a single `Remove` for the top node only.
         tx.send(vec![Op::Remove {
@@ -1471,22 +1313,25 @@ mod tests {
             "the removed wrapper is despawned"
         );
         assert!(
-            !app.world().entities().contains(surface),
-            "the detached <surface> nested under the removed wrapper must be despawned"
+            !app.world().entities().contains(detached),
+            "the detached root nested under the removed wrapper must be despawned"
         );
         assert!(
             !app.world().entities().contains(inner),
-            "the surface's own subtree is despawned with it"
+            "the detached root's own subtree is despawned with it"
         );
         let bridge = app.world().resource::<JsBridge>();
-        assert!(bridge.surfaces.is_empty(), "surface bookkeeping is cleared");
         assert!(
-            !bridge.nodes.contains_key(&2),
-            "the surface node id is forgotten"
+            bridge.detached.is_empty(),
+            "detached bookkeeping is cleared"
         );
         assert!(
-            bridge.child_surfaces.is_empty() && bridge.surface_parent.is_empty(),
-            "surface parentage maps are cleared"
+            !bridge.nodes.contains_key(&2),
+            "the detached node id is forgotten"
+        );
+        assert!(
+            bridge.child_detached.is_empty() && bridge.detached_parent.is_empty(),
+            "detached parentage maps are cleared"
         );
     }
 
@@ -1497,16 +1342,16 @@ mod tests {
     #[test]
     fn remove_subtree_forgets_descendant_node_data() {
         let (mut app, tx, _root) = ordering_app();
-        // A plain nested subtree wrapper(1) → mid(2) → leaf(3); `leaf` is an
-        // `editableText` so a set-typed side-table (`editable_inputs`) is exercised too.
+        // A plain nested subtree wrapper(1) → mid(2) → leaf(3); `leaf` is a
+        // `<text>` so a side-table (`text_styles`) is exercised too.
         tx.send(vec![
             create_node(1),
             create_node(2),
             Op::Create {
                 id: 3,
-                kind: "editableText".into(),
+                kind: "text".into(),
                 props: Box::default(),
-                text: None,
+                text: Some("leaf".into()),
             },
             Op::Append {
                 parent: ROOT_ID,
@@ -1528,9 +1373,9 @@ mod tests {
         assert!(
             app.world()
                 .resource::<JsBridge>()
-                .editable_inputs
-                .contains(&3),
-            "the editableText descendant is tracked before removal"
+                .text_styles
+                .contains_key(&3),
+            "the text descendant is tracked before removal"
         );
 
         // React unmounts the wrapper: a single `Remove` for the top node only.
@@ -1563,8 +1408,8 @@ mod tests {
             "the descendant leaf node id is forgotten (no stale entity handle)"
         );
         assert!(
-            !bridge.editable_inputs.contains(&3),
-            "the descendant editableText is dropped from the editable_inputs set"
+            !bridge.text_styles.contains_key(&3),
+            "the descendant text is dropped from the text_styles table"
         );
     }
 

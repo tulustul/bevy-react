@@ -19,18 +19,6 @@ impl StyleDirty {
     /// Everything touched — full re-apply (create, a restyle).
     pub const ALL: Self = Self([u64::MAX; MAX_PROPERTIES / 64]);
 
-    /// The set of the given core properties (a `const` mask).
-    pub(crate) const fn of_core(ids: &[CoreId]) -> Self {
-        let mut words = [0u64; MAX_PROPERTIES / 64];
-        let mut i = 0;
-        while i < ids.len() {
-            let id = ids[i] as usize;
-            words[id / 64] |= 1 << (id % 64);
-            i += 1;
-        }
-        Self(words)
-    }
-
     /// Whether any property of `other` is in the set.
     pub fn intersects(&self, other: &Self) -> bool {
         self.0.iter().zip(other.0).any(|(a, b)| a & b != 0)

@@ -147,7 +147,7 @@ fn create(id: u32, kind: &str, props: serde_json::Value) -> Op {
     Op::Create {
         id,
         kind: kind.into(),
-        props: serde_json::from_value(props).expect("valid props"),
+        props: bevy_react_core::protocol::props::Props::decode_for(kind, props),
         text: None,
     }
 }
@@ -182,7 +182,7 @@ fn real_ops_press_release_on_shape_clicks_button() {
         create(
             5,
             "rect",
-            serde_json::json!({ "shape": { "x": 0.0, "y": 0.0, "width": 100.0, "height": 100.0 } }),
+            serde_json::json!({ "x": 0.0, "y": 0.0, "width": 100.0, "height": 100.0 }),
         ),
         append(bevy_react_core::protocol::ROOT_ID, 1),
         append(1, 2),
@@ -240,7 +240,7 @@ fn real_ops_press_on_shape_release_off_shape_still_clicks_button() {
         create(
             5,
             "rect",
-            serde_json::json!({ "shape": { "x": 20.0, "y": 20.0, "width": 20.0, "height": 20.0 } }),
+            serde_json::json!({ "x": 20.0, "y": 20.0, "width": 20.0, "height": 20.0 }),
         ),
         append(bevy_react_core::protocol::ROOT_ID, 2),
         append(2, 3),

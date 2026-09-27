@@ -4,6 +4,10 @@ members = [
     "crates/core",
     "crates/macros",
     "crates/svg",
+    "crates/anchor",
+    "crates/canvas",
+    "crates/portal",
+    "crates/surface",
     "examples/demos",
     "examples/minimal",
     "examples/stress",
@@ -73,6 +77,10 @@ getrandom = "0.3"
 bevy_react_macros = { path = "crates/macros", version = "0.6.0" }
 bevy_react_core = { path = "crates/core", version = "0.6.0" }
 bevy_react_svg = { path = "crates/svg", version = "0.6.0" }
+bevy_react_anchor = { path = "crates/anchor", version = "0.6.0" }
+bevy_react_canvas = { path = "crates/canvas", version = "0.6.0" }
+bevy_react_portal = { path = "crates/portal", version = "0.6.0" }
+bevy_react_surface = { path = "crates/surface", version = "0.6.0" }
 
 [profile.dev]
 opt-level = 1

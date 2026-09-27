@@ -22,6 +22,7 @@ use crate::ui_map::{
 /// removed, written compare-before-write, absent lands the default.
 pub static BACKGROUND_COLOR_WRITER: Writer = Writer {
     reads: &[&BACKGROUND_COLOR, &OPACITY],
+    attrs: &[],
     writes: &[owns::<BackgroundColor>],
     apply: |ctx, s, ec| {
         ec.queue(set_if_neq_or_insert(background_color(
@@ -34,6 +35,7 @@ pub static BACKGROUND_COLOR_WRITER: Writer = Writer {
 /// `BorderColor` — `Node`-required, like `BackgroundColor`.
 pub static BORDER_COLOR_WRITER: Writer = Writer {
     reads: &[&BORDER_COLOR],
+    attrs: &[],
     writes: &[owns::<BorderColor>],
     apply: |_, s, ec| {
         ec.queue(set_if_neq_or_insert(border_color(Some(s))));
@@ -42,6 +44,7 @@ pub static BORDER_COLOR_WRITER: Writer = Writer {
 
 pub static OUTLINE_WRITER: Writer = Writer {
     reads: &[&OUTLINE],
+    attrs: &[],
     writes: &[owns::<Outline>],
     apply: |ctx, s, ec| match s.get(&OUTLINE) {
         Some(o) => {
@@ -57,6 +60,7 @@ pub static OUTLINE_WRITER: Writer = Writer {
 
 pub static BOX_SHADOW_WRITER: Writer = Writer {
     reads: &[&BOX_SHADOW],
+    attrs: &[],
     writes: &[owns::<BoxShadow>],
     apply: |ctx, s, ec| match s.get(&BOX_SHADOW) {
         Some(b) => {
@@ -68,6 +72,7 @@ pub static BOX_SHADOW_WRITER: Writer = Writer {
 
 pub static BACKGROUND_GRADIENT_WRITER: Writer = Writer {
     reads: &[&BACKGROUND_GRADIENT, &OPACITY],
+    attrs: &[],
     writes: &[owns::<BackgroundGradient>],
     apply: |ctx, s, ec| match s.get(&BACKGROUND_GRADIENT) {
         Some(grad) => {
@@ -82,6 +87,7 @@ pub static BACKGROUND_GRADIENT_WRITER: Writer = Writer {
 
 pub static BORDER_GRADIENT_WRITER: Writer = Writer {
     reads: &[&BORDER_GRADIENT, &OPACITY],
+    attrs: &[],
     writes: &[owns::<BorderGradient>],
     apply: |ctx, s, ec| match s.get(&BORDER_GRADIENT) {
         Some(grad) => {
@@ -99,6 +105,7 @@ pub static BORDER_GRADIENT_WRITER: Writer = Writer {
 /// when neither surface has a gradient.
 pub static GRADIENT_TARGETS_WRITER: Writer = Writer {
     reads: &[&BACKGROUND_GRADIENT, &BORDER_GRADIENT, &OPACITY],
+    attrs: &[],
     writes: &[owns::<GradientTargets>],
     apply: apply_gradient_targets,
 };
@@ -136,6 +143,7 @@ fn apply_gradient_targets(ctx: &WriterCtx, s: &Style, ec: &mut EntityCommands) {
 /// passive, so it reads as absent.
 pub static IMAGE_RENDERING_WRITER: Writer = Writer {
     reads: &[&IMAGE_RENDERING],
+    attrs: &[],
     writes: &[owns::<ImageRenderingMode>],
     apply: |ctx, s, ec| match s.get(&IMAGE_RENDERING).copied() {
         Some(mode) if mode != ImageRendering::Auto => {
@@ -151,6 +159,7 @@ pub static IMAGE_RENDERING_WRITER: Writer = Writer {
 /// styleless or detached-surface nodes — those warn at the call site.
 pub static BACKGROUND_IMAGE_WRITER: Writer = Writer {
     reads: &[&BACKGROUND_IMAGE, &OPACITY],
+    attrs: &[],
     writes: &[
         owns::<ImageNode>,
         owns::<RBackgroundTexture>,
@@ -160,7 +169,7 @@ pub static BACKGROUND_IMAGE_WRITER: Writer = Writer {
 };
 
 fn apply_background_image(ctx: &WriterCtx, s: &Style, ec: &mut EntityCommands) {
-    if ctx.flags.owns_image || ctx.flags.node_less || ctx.kind == "surface" {
+    if ctx.flags.owns_image || ctx.flags.node_less {
         return;
     }
     let Some(spec) = s.get(&BACKGROUND_IMAGE) else {

@@ -1,58 +1,54 @@
 //! [`Props`] — the content/attribute level of a host element — and its
 //! dirty/event bookkeeping ([`PropsDirty`], [`UpdateEvents`]).
 
-use serde::Deserialize;
+use std::fmt;
 
-use crate::canvas::DrawCmd;
+use serde::de::{self, DeserializeSeed, Deserializer, IgnoredAny, MapAccess, Visitor};
 
-use super::background_image::{AtlasSpec, ImageMode, SourceRect};
+use crate::element::{AnyAttribute, AttrDirty, Attrs, Common, DecodeElement, ElementInfo};
 use crate::style::{Style, StyleDirty};
 
 /// Props for a host element. Event handlers never cross the boundary — the
 /// reconciler replaces them with booleans (e.g. `onClick: true`) and keeps the
-/// actual function in a JS-side map. Visual styling lives entirely in [`Style`];
-/// the fields here are content/attribute level.
-#[derive(Debug, Clone, Default, Deserialize)]
-#[serde(rename_all = "camelCase")]
+/// actual function in a JS-side map. Visual styling lives entirely in
+/// [`Style`]; the fields here are the **common** props every element shares
+/// (see [`Common`]), plus the element's own registered attributes
+/// ([`Self::attrs`]) and event handlers ([`Self::handlers`]).
+///
+/// Decoding is element-aware (see [`crate::element`]): a key that is
+/// neither a common prop nor one of the element's attributes/events warns
+/// `unknownProp`, and a common prop outside the element's [`Common`] groups
+/// warns `propIgnored` — both dropped.
+#[derive(Debug, Clone, Default)]
 pub struct Props {
     /// CSS-like layout + visual style, mapped onto `bevy_ui` components.
     /// Inline, like the variants below: a [`Style`] is a small handle (the
     /// sorted entries of the properties it sets), so a box would only add an
     /// allocation.
-    #[serde(default)]
     pub style: Option<Style>,
     /// Style overlaid on `style` while the element is hovered. Decoded exactly
     /// like `style`; applied on the Bevy side from the node's `Interaction`.
-    #[serde(default)]
     pub hover_style: Option<Style>,
     /// Style overlaid on `style` (and `hover_style`) while the element is pressed.
-    #[serde(default)]
     pub press_style: Option<Style>,
-    /// Style overlaid on `style` while the element is focused (currently
-    /// `editableText`). Applied on the Bevy side from the node's focus state, so
-    /// focus styling needs no React round-trip.
-    #[serde(default)]
+    /// Style overlaid on `style` while the element is focused. Applied on the
+    /// Bevy side from the node's focus state, so focus styling needs no React
+    /// round-trip.
     pub focus_style: Option<Style>,
     /// Whether this element has an `onClick` handler registered in JS.
-    #[serde(default)]
     pub on_click: bool,
     /// Whether this element has an `onPointerDown` handler registered in JS.
-    #[serde(default)]
     pub on_pointer_down: bool,
     /// Whether this element has an `onPointerMove` handler registered in JS.
     /// Fires each frame while the pointer is held down (a drag).
-    #[serde(default)]
     pub on_pointer_move: bool,
     /// Whether this element has an `onPointerUp` handler registered in JS.
-    #[serde(default)]
     pub on_pointer_up: bool,
     /// Whether this element has an `onPointerEnter` handler registered in JS.
     /// Fires once when the pointer enters the element (hover begins).
-    #[serde(default)]
     pub on_pointer_enter: bool,
     /// Whether this element has an `onPointerLeave` handler registered in JS.
     /// Fires once when the pointer leaves the element (hover ends).
-    #[serde(default)]
     pub on_pointer_leave: bool,
 
     // --- controlled scroll (any node with `overflow: scroll`) ---
@@ -60,89 +56,29 @@ pub struct Props {
     /// update it's pushed into the node only when it diverges from the live offset
     /// (so a re-render echoing the user's own wheel scroll is a no-op — see
     /// [`crate::reconcile`]). Each axis is independent; absent leaves it alone.
-    #[serde(default)]
     pub scroll_top: Option<f32>,
     /// Controlled horizontal scroll offset (logical px) → `ScrollPosition.x`.
-    #[serde(default)]
     pub scroll_left: Option<f32>,
     /// Logical pixels scrolled per mouse-wheel "line" for this container, overriding
     /// the default. Maps to [`crate::bridge::ScrollStep`]; only scales `Line`-unit
     /// wheels (trackpad `Pixel` deltas are used raw).
-    #[serde(default)]
     pub scroll_step: Option<f32>,
     /// Whether this element has an `onScroll` handler registered in JS. Present →
     /// the reconciler stamps a [`crate::bridge::ScrollListener`] so the read-back
     /// system reports offset changes (kept cheap by scoping its `Changed` query to
     /// that marker, since `ScrollPosition` is a required component of every `Node`).
-    #[serde(default)]
     pub on_scroll: bool,
     /// Whether this element has an `onWheel` handler registered in JS. Present →
     /// the reconciler stamps a [`crate::bridge::WheelListener`] so
     /// [`crate::scroll::collect_wheel_events`] reports raw wheel deltas over the
     /// node (any node, unlike `onScroll`, which needs `overflow: scroll`).
-    #[serde(default)]
     pub on_wheel: bool,
-
-    /// World-anchor binding for an `<anchor>` element: the Bevy entity to follow and
-    /// an optional offset. Present → the reconciler stamps a [`crate::anchor::Anchored`]
-    /// so the per-frame positioning system tracks it. Pure-serde, Bevy-free.
-    #[serde(default)]
-    pub anchor: Option<crate::anchor::Anchor>,
-
-    // --- `image` element attributes ---
-    /// Asset path for an `image`, resolved by Bevy's `AssetServer` (relative to
-    /// the app's `assets/` folder). Absent → a solid-color image (see `tint`).
-    #[serde(default)]
-    pub src: Option<String>,
-    /// Tint multiplied with the image (hex); also the fill of a `src`-less image.
-    #[serde(default)]
-    pub tint: Option<String>,
-    /// Flip the image along its x-axis.
-    #[serde(default)]
-    pub flip_x: bool,
-    /// Flip the image along its y-axis.
-    #[serde(default)]
-    pub flip_y: bool,
-    /// How the image fits its box: the keyword `"auto"`/`"stretch"`, or a
-    /// `type`-tagged object for 9-slice (`"sliced"`) / `"tiled"` scaling.
-    #[serde(default)]
-    pub image_mode: Option<ImageMode>,
-    /// Source sub-rect of the texture to display, in source-texture pixels.
-    /// Maps to `ImageNode.rect`. With `atlas`, it offsets from the atlas cell's
-    /// top-left corner.
-    #[serde(default)]
-    pub source_rect: Option<SourceRect>,
-    /// Treat `src` as a uniform sprite-sheet grid and select one cell. Maps to
-    /// `ImageNode.texture_atlas` (builds/caches a `TextureAtlasLayout`).
-    #[serde(default)]
-    pub atlas: Option<AtlasSpec>,
-    /// Which box of the node the image fills: `"content"` | `"padding"`
-    /// (default) | `"border"`. Maps to `ImageNode.visual_box`.
-    #[serde(default)]
-    pub visual_box: Option<String>,
-
-    // --- `canvas` element attributes ---
-    /// The declarative display list for a `canvas` element: an ordered batch of
-    /// vector draw commands (the recorded form of an HTML-canvas-like
-    /// `ctx.moveTo/lineTo/…` session). Present → the retained surface is
-    /// **cleared and the list replayed** (raster state reset first).
-    /// `Some(vec![])` clears the canvas; absent leaves the retained pixels.
-    /// Imperative (accumulating) drawing rides [`super::op::Op::Draw`] instead.
-    #[serde(default)]
-    pub draw: Option<Vec<DrawCmd>>,
-    /// Whether this element has an `onResize` handler registered in JS. Cached
-    /// only so the delta stays truthful — `"resize"` events are **not** gated
-    /// on it (the JS runtime consumes them unconditionally, to replay a
-    /// declarative painter and keep the canvas handle's size fresh).
-    #[serde(default)]
-    pub on_resize: bool,
 
     // --- identity ---
     /// The element's `name` prop: stamped on the entity as a Bevy `Name` and
     /// indexed by name (see [`crate::ReactNodes`]) so app systems can find
     /// React-created entities. Dynamic — a delta replaces the component,
     /// `unset` (or an empty string) removes it. Bridge-owned on React nodes.
-    #[serde(default)]
     pub name: Option<String>,
     /// The element's shared-element tag (the `shared_tags` module): when a
     /// commit unmounts a tagged node and mounts another with the same tag
@@ -151,70 +87,21 @@ pub struct Props {
     /// visually was. Indexed like `name` (mount order); an empty string
     /// means untagged. Pairing is Rust-side, so the prop crosses as a plain
     /// cached string.
-    #[serde(default)]
     pub shared_tag: Option<String>,
 
-    // --- `portal` element attribute ---
-    /// The render-target name a `portal` element displays. The reconciler stamps
-    /// a `crate::portal::RPortal` carrying it; the binding system points the
-    /// node's `ImageNode` at the texture the app registered under this name (or a
-    /// transparent placeholder until it appears). Pure-serde, Bevy-free.
-    #[serde(default)]
-    pub target: Option<String>,
-
-    // --- feature-owned keys ---
-    /// Every wire key a feature registered (`add_react_prop`), decoded by
-    /// its owner at the serde boundary — e.g. an SVG shape child's folded
-    /// `shape` attrs or an `<svg>`'s `viewBox`. Each value **replaces
-    /// atomically** on update and is removed by `unset` (see
-    /// [`Props::merge_delta`] and [`crate::ext`]). Flattened: the keys sit
-    /// beside the built-in ones on the wire.
-    #[serde(flatten)]
-    pub ext: crate::ext::ExtProps,
-
-    // --- `editableText` element attributes ---
-    /// The controlled text value of an `editableText`. Seeds the field on create;
-    /// on update it's pushed into the widget only when it diverges from the live
-    /// buffer (so normal typing is never clobbered — see [`crate::reconcile`]).
-    #[serde(default)]
-    pub value: Option<String>,
-    /// Maximum number of characters an `editableText` accepts.
-    #[serde(default)]
-    pub max_length: Option<usize>,
-    /// Whether an `editableText` accepts newlines (multi-line input).
-    #[serde(default)]
-    pub multiline: bool,
-    /// Whether this element has an `onChange` handler registered in JS.
-    #[serde(default)]
-    pub on_change: bool,
-    /// Focus an `editableText` when it mounts (inserts `AutoFocus`).
-    #[serde(default)]
-    pub autofocus: bool,
-    /// Controlled selection anchor, a UTF-8 **byte** offset into the value.
-    /// When `selection_start`/`selection_end` diverge from the live selection
-    /// they're pushed into the widget (see [`crate::reconcile`]).
-    #[serde(default)]
-    pub selection_start: Option<usize>,
-    /// Controlled selection focus, a UTF-8 **byte** offset into the value.
-    #[serde(default)]
-    pub selection_end: Option<usize>,
-    /// Accessible name announced to assistive tech (sets the a11y node's label).
-    #[serde(default)]
-    pub aria_label: Option<String>,
-    /// Whether this element has an `onSelect` handler registered in JS.
-    #[serde(default)]
-    pub on_select: bool,
-    /// Whether this element has an `onFocus` handler registered in JS.
-    #[serde(default)]
-    pub on_focus: bool,
-    /// Whether this element has an `onBlur` handler registered in JS.
-    #[serde(default)]
-    pub on_blur: bool,
+    // --- the element's own ---
+    /// The element's registered attributes (see [`crate::element`]), decoded
+    /// against the node's element. Each replaces atomically on a delta; act-now
+    /// ones are split off before the props are retained.
+    pub attrs: Attrs,
+    /// The element events this node has a handler for (bit = the event's
+    /// index in the element's `events`).
+    pub handlers: u64,
 }
 
 /// Which parts of a [`Props`] a delta update touched; drives which of the
-/// reconciler's `apply_*` helpers run. Style granularity lives in
-/// [`StyleDirty`]; the other flags are per prop group.
+/// reconciler's stamps and writers re-run. Style granularity lives in
+/// [`StyleDirty`], attribute granularity in [`AttrDirty`].
 #[derive(Debug, Clone, Default)]
 pub struct PropsDirty {
     /// Style properties touched via `style` / `style_unset`.
@@ -236,33 +123,17 @@ pub struct PropsDirty {
     pub wheel: bool,
     /// `scrollStep` changed.
     pub scroll_step: bool,
-    /// `anchor` changed.
-    pub anchor: bool,
-    /// Any `image` attribute (`src`/`tint`/`flipX`/`flipY`/`imageMode`/
-    /// `sourceRect`/`atlas`/`visualBox`) changed.
-    pub image: bool,
     /// `name` (the entity's Bevy `Name`) set or unset.
     pub name: bool,
     /// `sharedTag` (the shared-element identity) set or unset.
     pub shared_tag: bool,
-    /// `target` (portal/surface binding) changed.
-    pub target: bool,
-    /// Feature-owned keys ([`Props::ext`]) set, replaced, or unset — the
-    /// registry's static key per changed entry (see [`Self::ext_dirty`]).
-    pub ext: Vec<&'static str>,
-    /// Any `editableText` handler flag (`onChange`/`onSelect`/`onFocus`/
-    /// `onBlur`) toggled.
-    pub editable_handlers: bool,
-    /// `ariaLabel` changed.
-    pub aria_label: bool,
+    /// The element's attributes set, replaced, or unset.
+    pub attrs: AttrDirty,
+    /// An element-event handler appeared or went away.
+    pub handlers: bool,
 }
 
 impl PropsDirty {
-    /// Whether the feature-owned `key` changed (set, replaced, or unset).
-    pub fn ext_dirty(&self, key: &str) -> bool {
-        self.ext.contains(&key)
-    }
-
     /// Whether the delta can touch the [`crate::bridge::StyleVariants`]
     /// component at all: a variant set/unset, or — since its `base` mirrors
     /// `style` — any style-field change (the stamp helper then decides
@@ -279,26 +150,272 @@ impl PropsDirty {
 /// list). Absent fields mean "no event", exactly like the pre-delta protocol.
 #[derive(Debug, Default)]
 pub struct UpdateEvents {
-    /// Controlled `editableText` value to push (when diverging).
-    pub value: Option<String>,
-    /// Controlled selection anchor (UTF-8 byte offset).
-    pub selection_start: Option<usize>,
-    /// Controlled selection focus (UTF-8 byte offset).
-    pub selection_end: Option<usize>,
     /// Controlled vertical scroll offset.
     pub scroll_top: Option<f32>,
     /// Controlled horizontal scroll offset.
     pub scroll_left: Option<f32>,
-    /// A `<canvas>` display list to clear + replay.
-    pub draw: Option<Vec<DrawCmd>>,
+    /// The element's act-now attributes (`value`, `draw`, …).
+    pub attrs: Attrs,
+}
+
+/// A props key, resolved against the decode scope's element.
+enum Key {
+    Style,
+    HoverStyle,
+    PressStyle,
+    FocusStyle,
+    OnClick,
+    OnPointerDown,
+    OnPointerMove,
+    OnPointerUp,
+    OnPointerEnter,
+    OnPointerLeave,
+    OnScroll,
+    OnWheel,
+    ScrollTop,
+    ScrollLeft,
+    ScrollStep,
+    Name,
+    SharedTag,
+    Attr(u8, &'static dyn AnyAttribute),
+    Handler(u8),
+    /// Dropped (already reported when it needed to be).
+    Skip,
+}
+
+impl Key {
+    /// The common group a fixed key belongs to.
+    fn group(&self) -> Option<(Common, &'static str)> {
+        Some(match self {
+            Key::HoverStyle => (Common::VARIANTS, "hoverStyle"),
+            Key::PressStyle => (Common::VARIANTS, "pressStyle"),
+            Key::FocusStyle => (Common::VARIANTS, "focusStyle"),
+            Key::OnClick => (Common::POINTER, "onClick"),
+            Key::OnPointerDown => (Common::POINTER, "onPointerDown"),
+            Key::OnPointerMove => (Common::POINTER, "onPointerMove"),
+            Key::OnPointerUp => (Common::POINTER, "onPointerUp"),
+            Key::OnPointerEnter => (Common::POINTER, "onPointerEnter"),
+            Key::OnPointerLeave => (Common::POINTER, "onPointerLeave"),
+            Key::OnScroll => (Common::SCROLL, "onScroll"),
+            Key::ScrollTop => (Common::SCROLL, "scrollTop"),
+            Key::ScrollLeft => (Common::SCROLL, "scrollLeft"),
+            Key::ScrollStep => (Common::SCROLL, "scrollStep"),
+            Key::OnWheel => (Common::WHEEL, "onWheel"),
+            Key::Name => (Common::IDENTITY, "name"),
+            Key::SharedTag => (Common::IDENTITY, "sharedTag"),
+            _ => return None,
+        })
+    }
+}
+
+/// Resolves one props key (borrowing the key string — no allocation for a
+/// known key).
+struct KeySeed<'a>(Option<&'a DecodeElement>);
+
+impl<'de> DeserializeSeed<'de> for KeySeed<'_> {
+    type Value = Key;
+    fn deserialize<D: Deserializer<'de>>(self, d: D) -> Result<Key, D::Error> {
+        d.deserialize_str(self)
+    }
+}
+
+impl<'de> Visitor<'de> for KeySeed<'_> {
+    type Value = Key;
+    fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str("a prop name")
+    }
+    fn visit_str<E: de::Error>(self, name: &str) -> Result<Key, E> {
+        let fixed = match name {
+            "style" => Key::Style,
+            "hoverStyle" => Key::HoverStyle,
+            "pressStyle" => Key::PressStyle,
+            "focusStyle" => Key::FocusStyle,
+            "onClick" => Key::OnClick,
+            "onPointerDown" => Key::OnPointerDown,
+            "onPointerMove" => Key::OnPointerMove,
+            "onPointerUp" => Key::OnPointerUp,
+            "onPointerEnter" => Key::OnPointerEnter,
+            "onPointerLeave" => Key::OnPointerLeave,
+            "onScroll" => Key::OnScroll,
+            "onWheel" => Key::OnWheel,
+            "scrollTop" => Key::ScrollTop,
+            "scrollLeft" => Key::ScrollLeft,
+            "scrollStep" => Key::ScrollStep,
+            "name" => Key::Name,
+            "sharedTag" => Key::SharedTag,
+            _ => return Ok(element_key(self.0, name)),
+        };
+        // A common prop outside the element's groups is dropped.
+        if let (Some(DecodeElement::Known(info)), Some((group, prop))) = (self.0, fixed.group())
+            && !info.decl.common.contains(group)
+        {
+            super::decode_warn(
+                "propIgnored",
+                prop,
+                &format!("`{prop}` has no effect on <{}>", info.name()),
+            );
+            return Ok(Key::Skip);
+        }
+        Ok(fixed)
+    }
+}
+
+/// Resolve a non-common key against the element: an attribute, an event
+/// handler, or unknown (warned — unless the kind itself is unknown, whose
+/// props drop silently; the kind is reported once at apply).
+fn element_key(element: Option<&DecodeElement>, name: &str) -> Key {
+    match element {
+        Some(DecodeElement::Known(info)) => {
+            if let Some((index, attr)) = info.attr(name) {
+                return Key::Attr(index, attr);
+            }
+            if let Some(index) = info.event_for_prop(name) {
+                return Key::Handler(index);
+            }
+            super::decode_warn(
+                "unknownProp",
+                name,
+                &format!("<{}> has no attribute `{name}`", info.name()),
+            );
+            Key::Skip
+        }
+        Some(DecodeElement::Unknown) => Key::Skip,
+        None => {
+            super::decode_warn(
+                "unknownProp",
+                name,
+                &format!("unknown prop `{name}` (no element in scope)"),
+            );
+            Key::Skip
+        }
+    }
+}
+
+/// Decode one attribute value through its codec.
+struct AttrSeed(&'static dyn AnyAttribute);
+
+impl<'de> DeserializeSeed<'de> for AttrSeed {
+    type Value = Option<crate::style::StoredValue>;
+    fn deserialize<D: Deserializer<'de>>(self, d: D) -> Result<Self::Value, D::Error> {
+        let mut erased = <dyn erased_serde::Deserializer>::erase(d);
+        self.0.decode_value(&mut erased).map_err(de::Error::custom)
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for Props {
+    fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        struct V;
+        impl<'de> Visitor<'de> for V {
+            type Value = Props;
+            fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                f.write_str("a props object")
+            }
+            fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Props, A::Error> {
+                let element = crate::element::decode_element();
+                let mut props = Props::default();
+                while let Some(key) = map.next_key_seed(KeySeed(element.as_ref()))? {
+                    match key {
+                        Key::Style => props.style = map.next_value()?,
+                        Key::HoverStyle => props.hover_style = map.next_value()?,
+                        Key::PressStyle => props.press_style = map.next_value()?,
+                        Key::FocusStyle => props.focus_style = map.next_value()?,
+                        Key::OnClick => props.on_click = flag(&mut map)?,
+                        Key::OnPointerDown => props.on_pointer_down = flag(&mut map)?,
+                        Key::OnPointerMove => props.on_pointer_move = flag(&mut map)?,
+                        Key::OnPointerUp => props.on_pointer_up = flag(&mut map)?,
+                        Key::OnPointerEnter => props.on_pointer_enter = flag(&mut map)?,
+                        Key::OnPointerLeave => props.on_pointer_leave = flag(&mut map)?,
+                        Key::OnScroll => props.on_scroll = flag(&mut map)?,
+                        Key::OnWheel => props.on_wheel = flag(&mut map)?,
+                        Key::ScrollTop => props.scroll_top = map.next_value()?,
+                        Key::ScrollLeft => props.scroll_left = map.next_value()?,
+                        Key::ScrollStep => props.scroll_step = map.next_value()?,
+                        Key::Name => props.name = map.next_value()?,
+                        Key::SharedTag => props.shared_tag = map.next_value()?,
+                        Key::Attr(index, attr) => match map.next_value_seed(AttrSeed(attr))? {
+                            Some(value) => {
+                                props
+                                    .attrs
+                                    .insert(crate::element::Entry { index, attr, value })
+                            }
+                            // `null` (or a value its decoder dropped after
+                            // reporting it) is absent.
+                            None => {
+                                props.attrs.remove_index(index);
+                            }
+                        },
+                        Key::Handler(index) => {
+                            if flag(&mut map)? {
+                                props.handlers |= 1 << index;
+                            }
+                        }
+                        Key::Skip => {
+                            map.next_value::<IgnoredAny>()?;
+                        }
+                    }
+                }
+                Ok(props)
+            }
+        }
+        d.deserialize_map(V)
+    }
+}
+
+/// A handler presence flag: `true` present; `false`/`null` absent.
+fn flag<'de, A: MapAccess<'de>>(map: &mut A) -> Result<bool, A::Error> {
+    Ok(map.next_value::<Option<bool>>()?.unwrap_or(false))
+}
+
+impl Props {
+    /// Decode `json` as the props of a `kind` element (outside an op — a
+    /// harness, a test). Panics on malformed input.
+    pub fn decode_for(kind: &str, json: serde_json::Value) -> Box<Props> {
+        let _scope = crate::element::DecodeScope::new(kind);
+        serde_json::from_value(json).expect("valid props")
+    }
+
+    /// The element event handlers present, as the element's event statics.
+    pub(crate) fn handler_events(
+        &self,
+        info: &ElementInfo,
+    ) -> Vec<&'static dyn crate::element::AnyElementEvent> {
+        info.decl
+            .events
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| self.handlers & (1 << i) != 0)
+            .map(|(_, e)| *e)
+            .collect()
+    }
 }
 
 /// Test helper shared by the protocol submodules' unit tests: decode a
 /// `Props` from a JSON value, panicking on malformed input.
 #[cfg(test)]
 pub(crate) fn props_from_json(json: serde_json::Value) -> Props {
+    props_for("node", json)
+}
+
+/// [`Props::merge_delta`] against the core `<node>` element — the test form
+/// for deltas that only touch common props and style.
+#[cfg(test)]
+impl Props {
+    pub(crate) fn merge_delta_node(
+        &mut self,
+        delta: impl Into<Box<Props>>,
+        unset: &[String],
+        style_unset: &[String],
+    ) -> (PropsDirty, UpdateEvents) {
+        let info = crate::ext::core_element_info("node").expect("core <node>");
+        self.merge_delta(delta, unset, style_unset, &info)
+    }
+}
+
+/// [`props_from_json`] for a `kind` element.
+#[cfg(test)]
+pub(crate) fn props_for(kind: &str, json: serde_json::Value) -> Props {
     crate::ext::install_builtin_registry();
-    serde_json::from_value(json).expect("valid props")
+    *Props::decode_for(kind, json)
 }
 
 /// `Props` is heap-allocated, default-initialized, decoded and merged **once

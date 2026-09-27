@@ -66,22 +66,18 @@ export type {
 // must be exported here for that declaration merging to attach.
 export type { BevyStyle } from "./generated/style";
 
-// World-anchored overlays (`<anchor entity={…} offset={…}>…</anchor>`).
-export type { AnchorScaling, BevyAnchorProps, Vec3 } from "./jsx";
-
-// SVG vector drawings (`<svg viewBox="0 0 24 24"><circle cx={12} … /></svg>`).
-export type {
-  BevyCircleProps,
-  BevyEllipseProps,
-  BevyGProps,
-  BevyLineShapeProps,
-  BevyPathShapeProps,
-  BevyPolygonProps,
-  BevyPolylineProps,
-  BevyRectShapeProps,
-  BevyShapeCommonProps,
-  BevySvgProps,
-} from "./jsx";
+// The host elements. `BevyIntrinsicElements` and the per-element props
+// interfaces are generated from the Rust element registry
+// (`js/src/generated/elements.ts`); an app's generated `bevy.ts` augments
+// `BevyIntrinsicElements` (`declare module "bevy-react"`) with the app's own
+// elements — a feature crate's included, e.g. `bevy_react_svg`'s `<svg>` — so
+// it must be exported here for that declaration merging to attach. The
+// hand-written common prop groups and named value types the interfaces
+// compose (and a feature element's generated interfaces import) come from
+// `jsx.d.ts`.
+export type { BevyIntrinsicElements } from "./generated/elements";
+export type * from "./generated/elements";
+export type * from "./jsx";
 
 // Canvas drawing. `CanvasContext` records an HTML-canvas-like display list
 // rasterized on the Bevy side — declaratively via `<canvas draw={(ctx) => …}/>`,

@@ -11,7 +11,7 @@ use super::keywords::de_bg_image_mode;
 /// trivial `bevy_ui` modes; the `type`-tagged object forms map to bevy's 9-slice
 /// (`"sliced"`) and `"tiled"` scaling. Bevy-free; converted to `NodeImageMode` in
 /// `ui_map`.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, PartialEq)]
 #[serde(untagged)]
 pub enum ImageMode {
     /// `"auto"` or `"stretch"` (any unknown keyword falls back to `Auto`).
@@ -20,7 +20,7 @@ pub enum ImageMode {
 }
 
 /// The object forms of [`ImageMode`], discriminated by their `type` field.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, PartialEq)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum ImageModeSpec {
     Sliced(SliceSpec),
@@ -28,7 +28,7 @@ pub enum ImageModeSpec {
 }
 
 /// 9-slice scaling parameters, mirroring `bevy_sprite::TextureSlicer`.
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct SliceSpec {
     /// Border insets, in *source-texture pixels*, dividing the texture into nine
@@ -48,7 +48,7 @@ pub struct SliceSpec {
 
 /// 9-slice border insets: a single number (uniform) or per-side, in *source-texture
 /// pixels*.
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize, PartialEq)]
 #[serde(untagged)]
 pub enum SliceBorder {
     /// No border supplied → zero insets.
@@ -71,7 +71,7 @@ pub enum SliceBorder {
 
 /// How a 9-slice section scales when resized: `"stretch"` (the keyword) or
 /// `{ tile }`, where `tile` is the repeat `stretch_value`.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, PartialEq)]
 #[serde(untagged)]
 pub enum SliceScale {
     Keyword(String),
@@ -79,7 +79,7 @@ pub enum SliceScale {
 }
 
 /// `"tiled"` scaling: the whole image repeats once stretched beyond `stretch_value`.
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct TiledSpec {
     #[serde(default)]
@@ -93,7 +93,7 @@ pub struct TiledSpec {
 
 /// A source sub-rect in texture pixels: top-left (`x`, `y`) plus `width`/`height`.
 /// Converted to a `bevy_math::Rect` (min/max corners) in `ui_map`.
-#[derive(Debug, Clone, Copy, Deserialize)]
+#[derive(Debug, Clone, Copy, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct SourceRect {
     pub x: f32,
@@ -106,7 +106,7 @@ pub struct SourceRect {
 /// `TextureAtlasLayout::from_grid` (tile size, columns, rows, optional padding /
 /// offset, all in source-texture pixels) + `TextureAtlas.index`. Bevy-free;
 /// turned into a cached `TextureAtlasLayout` asset in `ui_map`.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct AtlasSpec {
     pub tile_width: u32,
@@ -127,7 +127,7 @@ pub struct AtlasSpec {
 /// Where a [`BACKGROUND_IMAGE`](crate::style::props::BACKGROUND_IMAGE) samples from: a bare string is an
 /// asset path (`AssetServer`-loaded, like an `image` element's `src`); the
 /// `{ texture }` object names an **app-registered texture** in
-/// `crate::portal::RenderTargets` (typically `RenderTargets::register` —
+/// `crate::render_target::RenderTargets` (typically `RenderTargets::register` —
 /// bound late: an unknown name shows the transparent placeholder until the
 /// app registers it). Texture backgrounds are for **static** content — they
 /// don't participate in live-repaint tracking; continuously-updating render

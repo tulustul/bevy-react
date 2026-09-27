@@ -244,16 +244,16 @@ fn malformed_seed_warns_and_keeps_binding() {
 }
 
 /// `viewBox` is not animatable: an object value (an `{ animated }` wrapper or
-/// any other) warns (`viewBox`) and drops the field instead of hard-erroring
-/// the containing struct (= aborting the op batch). Same never-fail rule as
-/// the shape-field visitors.
+/// any other) warns (`viewBox`) and drops the attribute instead of
+/// hard-erroring the op batch. Same never-fail rule as the shape-field
+/// visitors.
 #[test]
 fn view_box_object_warns_and_drops() {
     #[cfg(all(feature = "devtools", debug_assertions))]
     let _ = bevy_react_core::diag::take_decode_warnings();
-    // Through the registered decoder: an object is dropped (reported as the
-    // `viewBox` kind, not the generic `extProp` failure).
-    let decoded = super::decode_view_box(serde_json::json!({ "animated": { "id": 7 } }))
+    // Through the attribute's decoder: an object is dropped (reported as the
+    // `viewBox` kind), not a decode failure.
+    let decoded = super::de_view_box(serde_json::json!({ "animated": { "id": 7 } }))
         .expect("an object viewBox is a drop, not a decode failure");
     assert!(decoded.is_none());
     #[cfg(all(feature = "devtools", debug_assertions))]
@@ -273,8 +273,8 @@ fn plain_number_still_decodes_static() {
         ))
     );
     assert_eq!(a.r.static_val(), Some(4.0));
-    // PartialEq holds across the wrapper type (the compare-before-write
-    // discipline in `update_shape_attrs` relies on it).
+    // PartialEq holds across the wrapper type (the shape writer's
+    // compare-before-write relies on it).
     let b = attrs(serde_json::json!({ "r": 4.0 }));
     assert_eq!(a, b);
     let c = attrs(serde_json::json!({ "r": { "animated": { "id": 7 } } }));
@@ -372,9 +372,8 @@ fn unsupported_transform_warns_and_drops() {
 }
 
 /// `ViewBox` parses both whitespace- and comma-separated forms; a
-/// non-positive size or garbage warns (`viewBox`) and drops. (Wire-name and
-/// merge behavior of the `viewBox` *prop* are covered in
-/// `bevy_react_core::protocol::merge::tests`.)
+/// non-positive size or garbage warns (`viewBox`) and drops. (The attribute's
+/// merge behavior is covered by the op tests.)
 #[test]
 fn view_box_parses_and_validates() {
     #[cfg(all(feature = "devtools", debug_assertions))]
@@ -394,15 +393,15 @@ fn view_box_parses_and_validates() {
         "too few numbers rejected"
     );
 
-    // Through the registered decoder: warn + drop, not a decode failure.
-    let decoded = super::decode_view_box(serde_json::json!("0 0 -1 5"))
+    // Through the attribute's decoder: warn + drop, not a decode failure.
+    let decoded = super::de_view_box(serde_json::json!("0 0 -1 5"))
         .expect("a bad viewBox is a drop, not a decode failure");
     assert!(decoded.is_none());
     #[cfg(all(feature = "devtools", debug_assertions))]
     assert_eq!(drain_warn_kinds(), vec!["viewBox"]);
 }
 
-/// `transition` rides the shape object: a per-attr map of timing specs keyed
+/// `transition` is the shape's own attribute: a per-attr map of timing specs keyed
 /// by the numeric attr wire names. Present → `Some` spec with the named
 /// entries decoded (`ChannelTransition`, the style-transition timing type);
 /// absent → `None`.
@@ -430,7 +429,7 @@ fn shape_transition_decodes_per_attr_specs() {
     assert!(spec.for_attr("r").is_none(), "unlisted attrs have no entry");
 
     // Absent → None; spec participates in PartialEq (a spec-only change is a
-    // real attrs change — atomic replace + repaint).
+    // real attrs change — a repaint).
     let b = attrs(serde_json::json!({ "cx": 30.0 }));
     assert_eq!(b.transition, None);
     assert_ne!(a, b);
@@ -472,4 +471,24 @@ fn shape_transition_non_object_warns_and_drops() {
     assert_eq!(a.cx.static_val(), Some(5.0), "sibling attrs survive");
     #[cfg(all(feature = "devtools", debug_assertions))]
     assert_eq!(drain_warn_kinds(), vec!["shapeTransition"]);
+}
+
+/// A numeric attribute takes a number or an `{ animated }` wrapper; anything
+/// else warns (`shapeNumber`) and drops the attribute — never failing the
+/// batch (the old folded-object decode lost the whole shape instead).
+#[test]
+fn numeric_garbage_warns_and_drops() {
+    #[cfg(all(feature = "devtools", debug_assertions))]
+    let _ = bevy_react_core::diag::take_decode_warnings();
+    let decoded = super::de_number(serde_json::json!("wide")).expect("a drop, not a failure");
+    assert!(decoded.is_none());
+    #[cfg(all(feature = "devtools", debug_assertions))]
+    assert_eq!(drain_warn_kinds(), vec!["shapeNumber"]);
+    assert_eq!(
+        super::de_number(serde_json::json!(3)).unwrap(),
+        Some(bevy_react_core::protocol::animatable::Animatable::Static(
+            3.0
+        ))
+    );
+    assert_eq!(super::de_number(serde_json::Value::Null).unwrap(), None);
 }

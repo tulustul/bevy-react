@@ -53,14 +53,19 @@ fn style_fields(registry: &StyleRegistry) -> Vec<DevtoolsStyleField> {
 /// whole edit batch's decode), so anything not recognized is `json` —
 /// accepted as-is, Rust has the last word.
 fn category_of(property: &dyn AnyStyleProperty) -> &'static str {
-    if property.keyword_kind().is_some() {
+    category(property.keyword_kind(), &property.ts_type())
+}
+
+/// The editor category of a value with keyword kind `keyword` and TS type
+/// `ts` (shared by style properties and element attributes).
+pub(super) fn category(keyword: Option<&'static str>, ts: &str) -> &'static str {
+    if keyword.is_some() {
         return "keyword";
     }
-    let ts = property.ts_type();
     let ts = ts
         .strip_prefix("Animatable<")
         .and_then(|t| t.strip_suffix('>'))
-        .unwrap_or(&ts);
+        .unwrap_or(ts);
     match ts {
         "number" => "number",
         "boolean" => "boolean",

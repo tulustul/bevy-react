@@ -18,7 +18,7 @@
 //!   (deliberately — see the `Animatable` derive note in `protocol/animatable.rs`), so
 //!   compare-before-write and the raster's `Changed<SvgShape>` derived dirt
 //!   stay sound.
-//! - A JS atomic attrs re-send restoring the original seed is corrected the
+//! - A JS attribute re-send restoring the original seed is corrected the
 //!   **same frame**: the op merge runs in `apply_js_ops`, this system runs
 //!   after it (it wakes on `Changed<SvgShape>`), and the raster reads after
 //!   both.
@@ -146,9 +146,9 @@ fn apply_driven(
                         writes.push((name.as_str(), v));
                     }
                 }
-                // The attrs were re-sent without the wrapper while the
-                // binding is still stamped (the atomic replace re-derives
-                // bindings, so this is transient at worst): never overwrite
+                // The attr was re-sent without the wrapper while the
+                // binding is still stamped (the merge re-derives bindings,
+                // so this is transient at worst): never overwrite
                 // a static value — warn and stay inert.
                 Some(Animatable::Static(_)) | None => {
                     warn(validate, &|| {

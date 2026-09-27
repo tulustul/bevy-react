@@ -10,10 +10,8 @@ use bevy::text::EditableText;
 use bevy::ui::RelativeCursorPosition;
 use bevy::ui::{ComputedNode, ScrollPosition, UiGlobalTransform};
 
-use crate::bridge::{CanvasSizeTracker, ClickOwner, JsBridge, ReactNode, ScrollListener};
-use crate::canvas::{CanvasSurface, clamp_physical_size};
+use crate::bridge::{ClickOwner, JsBridge, ReactNode, ScrollListener};
 use crate::protocol::{NodeId, outbound::Outbound, outbound::UiEvent};
-use crate::surface::SurfaceVirtualPointer;
 
 /// Query filter matching every click-owning element: one with a declared
 /// click/pointer handler ([`ClickOwner`], stamped by `apply_pointer_handlers`),
@@ -27,20 +25,22 @@ pub(super) type ClickOwners = Or<(With<ClickOwner>, With<Button>, With<EditableT
 /// `Pointer<Click>`, which fires on *release over the same node the press landed
 /// on* — DOM click semantics, so press → drag off → release never clicks. Like
 /// DOM `click`, only the primary (left) button clicks; right/middle interactions
-/// are the `onPointer*` events' job (which carry the button). The surface
-/// virtual pointer is excluded: its clicks are
-/// [`collect_surface_clicks`](crate::reconcile::collect_surface_clicks)' job.
+/// are the `onPointer*` events' job (which carry the button). Virtual
+/// pointers ([`VirtualPointers`](crate::ext::VirtualPointers)) are excluded:
+/// their clicks are
+/// [`collect_virtual_clicks`](crate::reconcile::collect_virtual_clicks)' job.
 /// A touch whose scroll gesture moved past the tap slop is excluded too (web
 /// semantics: scrolling cancels the tap — `pointerUp` still fires).
 pub fn collect_ui_events(
     bridge: Res<JsBridge>,
-    surface_pointer: Option<Res<SurfaceVirtualPointer>>,
+    // `Option` so headless tests needn't init it (production: `ReactUiPlugin`).
+    virtual_pointers: Option<Res<crate::ext::VirtualPointers>>,
     // `Option` so the many headless tests that never touch scrolling don't
     // have to init it; production always has it (`ReactUiPlugin`).
     touch_scroll: Option<Res<crate::touch_scroll::TouchScrollState>>,
     mut clicks: MessageReader<Pointer<Click>>,
     // Click ownership (see [`ClickOwners`]) — same attribution rule as
-    // `collect_surface_clicks`.
+    // `collect_virtual_clicks`.
     targets: Query<&ReactNode, ClickOwners>,
     child_of: Query<&ChildOf>,
 ) {
@@ -56,9 +56,9 @@ pub fn collect_ui_events(
         if ev.button != PointerButton::Primary {
             continue;
         }
-        if surface_pointer
+        if virtual_pointers
             .as_ref()
-            .is_some_and(|p| ev.pointer_id == p.id)
+            .is_some_and(|p| p.contains(ev.pointer_id))
         {
             continue;
         }
@@ -123,47 +123,6 @@ pub fn collect_scroll_events(
                 kind: "scroll".to_string(),
                 scroll_top: Some(scroll.0.y),
                 scroll_left: Some(scroll.0.x),
-                ..default()
-            },
-        });
-    }
-}
-
-/// Emit a `"resize"` UI event (new logical size) for every `<canvas>` whose
-/// laid-out **physical** size changed — including its first layout (0 → W×H)
-/// and a DPR change at constant logical size, both of which cleared the
-/// retained surface. Not gated on a handler flag: the JS runtime consumes
-/// resizes unconditionally (to replay a declarative painter and keep the
-/// canvas handle's size fresh); a user `onResize` is dispatched if registered.
-/// The per-entity [`CanvasSizeTracker`] filters the non-size `ComputedNode`
-/// rewrites layout does every pass. Sizes clamp exactly like the rasterizer's,
-/// so the reported size always matches the actual buffer.
-#[allow(clippy::type_complexity)]
-pub fn collect_canvas_resize_events(
-    bridge: Res<JsBridge>,
-    mut query: Query<
-        (&ReactNode, &ComputedNode, &mut CanvasSizeTracker),
-        (With<CanvasSurface>, Changed<ComputedNode>),
-    >,
-) {
-    for (rnode, node, mut tracker) in &mut query {
-        let (w, h) = clamp_physical_size(node.size);
-        if w == 0 || h == 0 || tracker.0 == (w, h) {
-            continue;
-        }
-        tracker.0 = (w, h);
-        let scale = if node.inverse_scale_factor > 0.0 {
-            node.inverse_scale_factor
-        } else {
-            1.0
-        };
-        debug!("canvas resize -> reconciler node {}", rnode.0);
-        let _ = bridge.outbound_tx.send(Outbound::UiEvent {
-            event: UiEvent {
-                id: rnode.0,
-                kind: "resize".to_string(),
-                width: Some(w as f32 * scale),
-                height: Some(h as f32 * scale),
                 ..default()
             },
         });
@@ -248,7 +207,7 @@ pub(crate) fn climb(
 mod tests {
     use super::*;
     use crate::protocol::op::Op;
-    use crate::reconcile::collect_surface_clicks;
+    use crate::reconcile::collect_virtual_clicks;
 
     /// [`collect_scroll_events`] reports a `"scroll"` for a `ScrollListener` node
     /// whose offset diverges from the recorded one, ignores non-listener nodes, and
@@ -326,6 +285,17 @@ mod tests {
 
     /// A synthetic picking `Pointer<Click>` location: the render target is
     /// irrelevant to the collectors, so a default image handle stands in.
+    /// Register a virtual pointer the way a feature does (the `<surface>`
+    /// crate registers its in-world pointer), returning its id.
+    fn register_virtual_pointer(app: &mut App) -> PointerId {
+        let id = PointerId::Custom(bevy::asset::uuid::Uuid::from_u128(0x5eed));
+        app.world_mut().spawn(id);
+        app.world_mut()
+            .get_resource_or_init::<crate::ext::VirtualPointers>()
+            .register(id);
+        id
+    }
+
     fn click_location() -> bevy::picking::pointer::Location {
         bevy::picking::pointer::Location {
             target: bevy::camera::NormalizedRenderTarget::Image(
@@ -459,13 +429,13 @@ mod tests {
         assert_eq!(events[0].id, 2, "the inner (topmost) node owns the click");
     }
 
-    /// [`collect_surface_clicks`] applies the same no-bubbling rule: nested
+    /// [`collect_virtual_clicks`] applies the same no-bubbling rule: nested
     /// surface owners under one virtual-pointer gesture click only the topmost.
     #[test]
     fn surface_nested_onclick_owners_click_topmost_only() {
         let (mut app, mut out_rx) = click_app();
-        app.add_systems(Startup, crate::surface::init_surface_pointer);
-        app.add_systems(Update, collect_surface_clicks);
+        let surface_id = register_virtual_pointer(&mut app);
+        app.add_systems(Update, collect_virtual_clicks);
         app.update(); // Run Startup so the pointer resource exists.
 
         let outer = app.world_mut().spawn((ReactNode(1), ClickOwner)).id();
@@ -474,7 +444,6 @@ mod tests {
             .spawn((ReactNode(2), ClickOwner, ChildOf(outer)))
             .id();
 
-        let surface_id = app.world().resource::<SurfaceVirtualPointer>().id;
         let click = |entity, depth| {
             Pointer::new(
                 surface_id,
@@ -596,18 +565,17 @@ mod tests {
         );
     }
 
-    /// The surface virtual pointer's clicks belong to `collect_surface_clicks`
+    /// The surface virtual pointer's clicks belong to `collect_virtual_clicks`
     /// alone: [`collect_ui_events`] must skip them (no double-fire), and the
     /// surface collector reports exactly one click.
     #[test]
     fn surface_pointer_clicks_are_not_main_clicks() {
         let (mut app, mut out_rx) = click_app();
-        app.add_systems(Startup, crate::surface::init_surface_pointer);
-        app.add_systems(Update, (collect_ui_events, collect_surface_clicks));
+        let surface_id = register_virtual_pointer(&mut app);
+        app.add_systems(Update, (collect_ui_events, collect_virtual_clicks));
         app.update(); // Run Startup so the pointer resource exists.
 
         let owner = app.world_mut().spawn((ReactNode(7), ClickOwner)).id();
-        let surface_id = app.world().resource::<SurfaceVirtualPointer>().id;
         app.world_mut().write_message(Pointer::new(
             surface_id,
             click_location(),

@@ -2,7 +2,7 @@
 //! layer-based `filter` style chain.
 //!
 //! This module owns the filter wire format and registry the way
-//! [`crate::canvas`]/[`crate::animations`] own theirs: `protocol`/
+//! [`crate::animations`] owns its own: `protocol`/
 //! `reconcile`/`ui_map` reference these types by module path, never the
 //! reverse. On the wire a filter is one `{"name", "params"}` object or an
 //! ordered array of them; `params` stays an untyped JSON map at this layer —

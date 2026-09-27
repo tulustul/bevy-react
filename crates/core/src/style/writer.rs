@@ -19,19 +19,27 @@ pub fn owns<C: Component>() -> (TypeId, &'static str) {
     (TypeId::of::<C>(), std::any::type_name::<C>())
 }
 
-/// Style → ECS state for a set of properties. Register with
-/// `ReactAppExt::add_react_style_writer`.
+/// Style (and element attributes) → ECS state. A **global** writer reads
+/// style properties only and runs on every styled element — register it
+/// with `ReactAppExt::add_react_style_writer`. An **element** writer is
+/// listed on its [`Element`](crate::element::Element) and runs only there;
+/// it may also read the element's attributes (`attrs`), through
+/// [`WriterCtx::attr`] / [`WriterCtx::event`].
 ///
 /// ```ignore
 /// pub static GLOW_WRITER: Writer = Writer {
 ///     reads: &[&GLOW, &OPACITY],
+///     attrs: &[],
 ///     writes: &[owns::<GlowSettings>],
 ///     apply: apply_glow,
 /// };
 /// ```
 pub struct Writer {
-    /// The properties the writer reads: a change to any re-runs it.
+    /// The style properties the writer reads: a change to any re-runs it.
     pub reads: &'static [&'static dyn AnyStyleProperty],
+    /// The element attributes it reads (an element writer only): a change
+    /// to any re-runs it.
+    pub attrs: &'static [&'static dyn crate::element::AnyAttribute],
     /// The components it writes. A component has one writer — registering a
     /// second writer for it panics.
     pub writes: &'static [ComponentKey],
@@ -54,12 +62,42 @@ pub struct WriterCtx<'a> {
     pub kind: &'a str,
     /// The element kind's flags.
     pub flags: ElementFlags,
-    /// The node carries text (a `<text>` root, a span, an `editableText`).
-    pub text: bool,
     pub assets: &'a AssetServer,
     pub(crate) fonts: &'a crate::plugin::Fonts,
     /// The registry whose writers the apply loop runs.
     pub(crate) styles: &'a super::StyleRegistry,
+    /// The node's element (its writer tables).
+    pub(crate) element: &'a crate::element::ElementInfo,
+    /// The node's merged (retained) attributes.
+    pub attrs: &'a crate::element::Attrs,
+    /// The act-now attributes of the delta being applied (empty on a
+    /// restyle).
+    pub events: &'a crate::element::Attrs,
+    /// The node being written.
+    pub id: crate::protocol::NodeId,
+}
+
+impl WriterCtx<'_> {
+    /// The node's merged value of `attribute`.
+    pub fn attr<T: super::PropertyValue>(
+        &self,
+        attribute: &crate::element::Attribute<T>,
+    ) -> Option<&T> {
+        self.attrs.get(attribute)
+    }
+
+    /// The act-now `attribute` carried by the delta being applied.
+    pub fn event<T: super::PropertyValue>(
+        &self,
+        attribute: &crate::element::Attribute<T>,
+    ) -> Option<&T> {
+        self.events.get(attribute)
+    }
+
+    /// Whether the node takes part in the text model (its text writers run).
+    pub fn text(&self) -> bool {
+        self.flags.text != crate::ext::TextRole::None
+    }
 }
 
 /// A set of registered writers (bit = registration index).

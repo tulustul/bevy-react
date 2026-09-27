@@ -10,7 +10,7 @@ use bevy::ui::{ComputedNode, ContentSize};
 use super::{SvgJsxSurface, SvgShape, update_jsx_svg_surfaces};
 use bevy_react_core::protocol::{ROOT_ID, op::Op};
 use bevy_react_core::svg::stamp_svg_measures;
-use bevy_react_core::test_util::{ent, update_delta};
+use bevy_react_core::test_util::ent;
 
 use serde_json::json;
 
@@ -25,19 +25,11 @@ fn jsx_app() -> (App, crossbeam_channel::Sender<Vec<Op>>) {
     (app, tx)
 }
 
-/// `Op::Create` for an arbitrary `kind` with the given props JSON.
-fn create_kind(id: u32, kind: &str, props: serde_json::Value) -> Op {
-    Op::Create {
-        id,
-        kind: kind.into(),
-        props: serde_json::from_value(props).expect("valid props"),
-        text: None,
-    }
-}
+use crate::op_tests::create_kind;
 
-/// A delta carrying the given props JSON.
-fn delta(id: u32, props: serde_json::Value) -> Op {
-    update_delta(id, serde_json::from_value(props).unwrap(), &[], &[])
+/// A delta carrying the given props JSON, for a `kind` node.
+fn delta(id: u32, kind: &str, props: serde_json::Value) -> Op {
+    crate::op_tests::update_kind(id, kind, props, &[])
 }
 
 /// Fabricate last frame's layout: `w`×`h` physical px.
@@ -99,7 +91,7 @@ fn mounted_circle(app: &mut App, tx: &crossbeam_channel::Sender<Vec<Op>>) -> Ent
         create_kind(
             2,
             "circle",
-            json!({ "shape": { "cx": 30.0, "cy": 50.0, "r": 20.0, "fill": "red" } }),
+            json!({ "cx": 30.0, "cy": 50.0, "r": 20.0, "fill": "red" }),
         ),
         Op::Append {
             parent: ROOT_ID,
@@ -131,7 +123,7 @@ fn jsx_first_paint_rasters_shapes_then_idles() {
         create_kind(
             2,
             "circle",
-            json!({ "shape": { "cx": 50.0, "cy": 50.0, "r": 40.0, "fill": "red" } }),
+            json!({ "cx": 50.0, "cy": 50.0, "r": 40.0, "fill": "red" }),
         ),
         Op::Append {
             parent: ROOT_ID,
@@ -201,7 +193,8 @@ fn shape_delta_rerasters_same_frame() {
     let tick = surface_tick(&app, e);
     tx.send(vec![delta(
         2,
-        json!({ "shape": { "cx": 70.0, "cy": 50.0, "r": 20.0, "fill": "red" } }),
+        "circle",
+        json!({ "cx": 70.0, "cy": 50.0, "r": 20.0, "fill": "red" }),
     )])
     .unwrap();
     app.update(); // ONE frame
@@ -235,7 +228,7 @@ fn child_list_changes_reraster() {
         create_kind(
             2,
             "rect",
-            json!({ "shape": { "width": 40.0, "height": 40.0, "fill": "red" } }),
+            json!({ "width": 40.0, "height": 40.0, "fill": "red" }),
         ),
         Op::Append {
             parent: ROOT_ID,
@@ -259,7 +252,7 @@ fn child_list_changes_reraster() {
         create_kind(
             3,
             "rect",
-            json!({ "shape": { "width": 40.0, "height": 40.0, "fill": "blue" } }),
+            json!({ "width": 40.0, "height": 40.0, "fill": "blue" }),
         ),
         Op::Append {
             parent: 1,
@@ -305,12 +298,12 @@ fn group_transform_and_opacity_compose_into_children() {
         create_kind(
             2,
             "g",
-            json!({ "shape": { "transform": "translate(20 0)", "opacity": 0.5 } }),
+            json!({ "transform": "translate(20 0)", "opacity": 0.5 }),
         ),
         create_kind(
             3,
             "circle",
-            json!({ "shape": { "cx": 20.0, "cy": 20.0, "r": 10.0, "fill": "red" } }),
+            json!({ "cx": 20.0, "cy": 20.0, "r": 10.0, "fill": "red" }),
         ),
         Op::Append {
             parent: ROOT_ID,
@@ -353,7 +346,7 @@ fn view_box_update_rescales_content() {
     assert_eq!(texel(&app, e, 30, 50), [255, 0, 0, 255]);
 
     clear_dirt(&mut app);
-    tx.send(vec![delta(1, json!({ "viewBox": "0 0 200 200" }))])
+    tx.send(vec![delta(1, "svg", json!({ "viewBox": "0 0 200 200" }))])
         .unwrap();
     app.update();
 
@@ -386,7 +379,8 @@ fn shape_change_while_hidden_persists_into_dirty() {
     clear_dirt(&mut app);
     tx.send(vec![delta(
         2,
-        json!({ "shape": { "cx": 30.0, "cy": 50.0, "r": 20.0, "fill": "blue" } }),
+        "circle",
+        json!({ "cx": 30.0, "cy": 50.0, "r": 20.0, "fill": "blue" }),
     )])
     .unwrap();
     app.update();
@@ -524,10 +518,10 @@ fn driven_shape_attr_repaints_same_frame() {
         create_kind(
             2,
             "circle",
-            json!({ "shape": {
+            json!({
                 "cx": 50.0, "cy": 50.0, "fill": "red",
                 "r": { "animated": { "id": 1 }, "seed": 20.0 },
-            } }),
+            }),
         ),
         Op::Append {
             parent: ROOT_ID,
@@ -623,12 +617,12 @@ fn driven_group_opacity_fades_children_same_frame() {
         create_kind(
             2,
             "g",
-            json!({ "shape": { "opacity": { "animated": { "id": 1 }, "seed": 1.0 } } }),
+            json!({ "opacity": { "animated": { "id": 1 }, "seed": 1.0 } }),
         ),
         create_kind(
             3,
             "circle",
-            json!({ "shape": { "cx": 20.0, "cy": 20.0, "r": 10.0, "fill": "red" } }),
+            json!({ "cx": 20.0, "cy": 20.0, "r": 10.0, "fill": "red" }),
         ),
         Op::Append {
             parent: ROOT_ID,
@@ -678,7 +672,7 @@ fn removing_a_groups_last_child_clears_its_paint() {
         create_kind(
             3,
             "circle",
-            json!({ "shape": { "cx": 20.0, "cy": 20.0, "r": 10.0, "fill": "red" } }),
+            json!({ "cx": 20.0, "cy": 20.0, "r": 10.0, "fill": "red" }),
         ),
         Op::Append {
             parent: ROOT_ID,
@@ -719,7 +713,7 @@ fn removing_a_groups_last_child_clears_its_paint() {
 // --- Transition-eased shape attrs (E3) ---
 
 /// [`jsx_app`] with the SAME writer→raster ordering the plugin declares for
-/// the shape transition drive (svg's own system, `register_ext`):
+/// the shape transition drive (svg's own system, `register_systems`):
 /// `drive_shape_transitions` after `apply_js_ops` and `update_jsx_svg_surfaces`
 /// after BOTH. Manual `Time` so the ease can be advanced to exact points.
 fn jsx_transition_app() -> (App, crossbeam_channel::Sender<Vec<Op>>) {
@@ -758,7 +752,7 @@ fn eased_shape_attr_repaints_same_frame() {
     });
     tx.send(vec![
         create_kind(1, "svg", json!({ "viewBox": "0 0 100 100" })),
-        create_kind(2, "circle", json!({ "shape": shape })),
+        create_kind(2, "circle", shape),
         Op::Append {
             parent: ROOT_ID,
             child: 1,
@@ -783,10 +777,11 @@ fn eased_shape_attr_repaints_same_frame() {
     // the eased position (≈50) paints THIS frame.
     tx.send(vec![delta(
         2,
-        json!({ "shape": {
+        "circle",
+        json!({
             "cx": 70.0, "cy": 50.0, "r": 10.0, "fill": "red",
             "transition": { "cx": { "duration": 1000, "easing": "linear" } },
-        } }),
+        }),
     )])
     .unwrap();
     advance_time(&mut app, 0.5);
