@@ -24,9 +24,16 @@ use crate::canvas::{CanvasSurface, blank_canvas_image};
 use crate::ext::ElementFlags;
 use crate::plugin::Fonts;
 use crate::portal::{RPortal, blank_portal_image};
-use crate::protocol::{NodeId, props::Props, style::Style};
+use crate::protocol::animatable::Animatable;
+use crate::protocol::units::Length;
+use crate::protocol::{NodeId, props::Props};
+use crate::style::Style;
+use crate::style::WriterCtx;
+use crate::style::props::{
+    BACKDROP_FILTER, CACHE, FILTER, FLEX_DIRECTION, GLOBAL_Z_INDEX, HEIGHT, MORPH_FILTER,
+    TRANSFORM3D, WIDTH,
+};
 use crate::surface::RSurface;
-use crate::transition::apply_scroll_transition_fresh;
 use crate::ui_map::{
     AtlasLayoutCache, apply_atlas, apply_style_fresh, fresh_style_bundle, image_node,
     overlay_style, resolved_text_style, svg_image_node, text_layout,
@@ -61,6 +68,18 @@ pub(super) fn apply_create(
     // the sites below that branch on "is this a node-less child" read them.
     let registry = bridge.ext.clone();
     let flags = registry.flags_for_kind(&kind);
+    // What the style writers see of this node: fresh (nothing to remove),
+    // never promoted at create (promotion is evaluated after the drain).
+    let wctx = WriterCtx {
+        promoted: false,
+        fresh: true,
+        kind: &kind,
+        flags,
+        text: matches!(kind.as_str(), "text" | "textSpan" | "editableText"),
+        assets,
+        fonts,
+        styles: registry.styles(),
+    };
     let entity = match kind.as_str() {
         // A `<text>` root: a UI node carrying the text block + style. A
         // single-string child rides inline as `text` (no child span). Fully
@@ -72,11 +91,11 @@ pub(super) fn apply_create(
                 ReactNode(id),
                 fresh_style_bundle(&props.style, FocusPolicy::Pass),
                 Text::new(text.clone().unwrap_or_default()),
-                resolved_text_style(&props.style, fonts),
+                resolved_text_style(props.style.as_ref(), fonts, false),
                 ElementFlags::NODE,
             ));
-            apply_style_fresh(&mut ec, &props.style);
-            if let Some(layout) = text_layout(&props.style) {
+            apply_style_fresh(&mut ec, &props.style, &wctx);
+            if let Some(layout) = text_layout(props.style.as_ref()) {
                 ec.insert(layout);
             }
             stamp_common(
@@ -98,7 +117,7 @@ pub(super) fn apply_create(
                 .spawn((
                     ReactNode(id),
                     TextSpan(text.clone().unwrap_or_default()),
-                    resolved_text_style(&props.style, fonts),
+                    resolved_text_style(props.style.as_ref(), fonts, false),
                     ElementFlags::NODE_LESS,
                 ))
                 .id()
@@ -119,7 +138,7 @@ pub(super) fn apply_create(
                 crate::ext::LiveTexture,
                 ElementFlags::OWNS_IMAGE,
             ));
-            apply_style_fresh(&mut ec, &props.style);
+            apply_style_fresh(&mut ec, &props.style, &wctx);
             stamp_common(
                 &mut ec,
                 &mut bridge.animated,
@@ -145,7 +164,7 @@ pub(super) fn apply_create(
                 crate::ext::LiveTexture,
                 ElementFlags::OWNS_IMAGE,
             ));
-            apply_style_fresh(&mut ec, &props.style);
+            apply_style_fresh(&mut ec, &props.style, &wctx);
             stamp_common(
                 &mut ec,
                 &mut bridge.animated,
@@ -172,7 +191,7 @@ pub(super) fn apply_create(
                 RSurface(props.target.clone().unwrap_or_default()),
                 ElementFlags::DETACHED_ROOT,
             ));
-            apply_style_fresh(&mut ec, &style);
+            apply_style_fresh(&mut ec, &style, &wctx);
             if props.anchor.is_some() {
                 apply_anchor(&mut ec, &mut bridge.anchors, id, &props);
             }
@@ -201,7 +220,7 @@ pub(super) fn apply_create(
             // Overrides the bundle's `focusPolicy` mirror in place (same
             // archetype — `Pickable` is already present).
             ec.insert(Pickable::IGNORE);
-            apply_style_fresh(&mut ec, &style);
+            apply_style_fresh(&mut ec, &style, &wctx);
             if props.anchor.is_some() {
                 apply_anchor(&mut ec, &mut bridge.anchors, id, &props);
             }
@@ -216,7 +235,7 @@ pub(super) fn apply_create(
             editable.max_characters = props.max_length;
             editable.allow_newlines = props.multiline;
             let (text_color, font, line_height, letter_spacing) =
-                resolved_text_style(&props.style, fonts);
+                resolved_text_style(props.style.as_ref(), fonts, false);
             let mut ec = commands.spawn((
                 ReactNode(id),
                 fresh_style_bundle(&props.style, FocusPolicy::Pass),
@@ -254,7 +273,7 @@ pub(super) fn apply_create(
                 AccessibilityNode(editable_a11y_node(&props)),
                 ElementFlags::NODE,
             ));
-            apply_style_fresh(&mut ec, &props.style);
+            apply_style_fresh(&mut ec, &props.style, &wctx);
             // `AutoFocus`'s `on_add` hook focuses the entity once mounted.
             if props.autofocus {
                 ec.insert(AutoFocus);
@@ -278,6 +297,7 @@ pub(super) fn apply_create(
                     images,
                     animated: &mut bridge.animated,
                     anchors: &mut bridge.anchors,
+                    writer: &wctx,
                     id,
                 };
                 handler.spawn(&mut ctx, &kind, &props, text.as_deref())
@@ -291,6 +311,7 @@ pub(super) fn apply_create(
                     id,
                     &kind,
                     &props,
+                    &wctx,
                     assets,
                     &mut ui_assets.layouts,
                     &mut ui_assets.atlas_cache,
@@ -301,7 +322,7 @@ pub(super) fn apply_create(
     if matches!(kind.as_str(), "text" | "textSpan") {
         bridge
             .text_styles
-            .insert(id, resolved_text_style(&props.style, fonts));
+            .insert(id, resolved_text_style(props.style.as_ref(), fonts, false));
     }
     // A `textSpan` carries its text in a `TextSpan` component, so a later
     // `Op::UpdateText` must update that (not insert a stray `Text`). It is
@@ -330,14 +351,13 @@ pub(super) fn apply_create(
     {
         let mut ec = commands.entity(entity);
         apply_scroll_props_fresh(&mut ec, &props);
-        apply_scroll_transition_fresh(&mut ec, &props.style);
         create_controlled_scroll(bridge, &mut ec, id, &props);
     }
-    // `backgroundImage`: applied on any element EXCEPT those whose
-    // `ImageNode` belongs to the element itself (image/canvas/portal/svg —
-    // `ElementFlags::owns_image` guards the update/restyle paths) and `surface` (a detached
-    // root with its own branches everywhere). The build needs `assets`, so
-    // it can't live in `apply_style` — see `crate::background_image`.
+    // `backgroundImage` is applied by its writer (in the fresh apply above)
+    // on any element except those whose `ImageNode` belongs to the element
+    // itself (image/canvas/portal/svg — `ElementFlags::owns_image`) and
+    // `surface` (a detached root with its own branches everywhere); those
+    // warn here so the silence is visible in devtools.
     match kind.as_str() {
         "image" | "canvas" | "portal" => {
             let element: &'static str = match kind.as_str() {
@@ -350,27 +370,10 @@ pub(super) fn apply_create(
         }
         "surface" => crate::background_image::warn_ignored("surface", &props),
         // A node-less element (`textSpan`, an SVG shape child) has no
-        // `Node`/box of its own to paint into; an element-owned image
-        // (a registered kind's raster) is guarded like the built-ins above.
+        // `Node`/box of its own to paint into.
         _ if flags.node_less => {}
         _ if flags.owns_image => {
             crate::background_image::warn_ignored("element", &props);
-        }
-        // Fresh entity: only a present `backgroundImage` has anything to
-        // stamp (the absent arm is a remove).
-        _ if props
-            .style
-            .as_ref()
-            .is_some_and(|s| s.background_image.is_some()) =>
-        {
-            let mut ec = commands.entity(entity);
-            crate::background_image::apply_background_image(
-                &mut ec,
-                &props.style,
-                crate::protocol::style::StyleDirty::ALL,
-                false,
-                assets,
-            );
         }
         _ => {}
     }
@@ -396,14 +399,13 @@ pub(super) fn apply_create(
     // `cache: "auto"`, an empty chain — is fine: the dirty set is a
     // conservative "evaluate me" hint, the evaluator is authoritative,
     // and a spurious evaluation is cheap.
-    if props.style.as_ref().is_some_and(|s| s.cache.is_some())
-        || props.all_styles().any(|s| {
-            s.filter.is_some()
-                || s.backdrop_filter.is_some()
-                || s.morph_filter.is_some()
-                || s.transform3d.is_some()
-        })
-    {
+    if props.all_styles().any(|s| {
+        s.get(&CACHE).is_some()
+            || s.get(&FILTER).is_some()
+            || s.get(&BACKDROP_FILTER).is_some()
+            || s.get(&MORPH_FILTER).is_some()
+            || s.get(&TRANSFORM3D).is_some()
+    }) {
         bridge.layer_dirty.insert(id);
     }
     // Seed the retained props a later update's delta merges into — the
@@ -425,19 +427,15 @@ fn spawn_element(
     id: NodeId,
     kind: &str,
     props: &Props,
+    wctx: &WriterCtx,
     assets: &AssetServer,
     layouts: &mut Assets<TextureAtlasLayout>,
     atlas_cache: &mut AtlasLayoutCache,
 ) -> Entity {
     // A `<button>` captures the pointer by default (`FocusPolicy::Block` unless
-    // the style says otherwise — the create-time twin of
-    // `stamps::apply_button_focus_default`); `Button` requires `Interaction`,
-    // which the spawn adds automatically.
-    let focus_default = if kind == "button" {
-        FocusPolicy::Block
-    } else {
-        FocusPolicy::Pass
-    };
+    // the style says otherwise — the focus-policy writer's default);
+    // `Button` requires `Interaction`, which the spawn adds automatically.
+    let focus_default = crate::style::writers::default_focus_policy(kind);
     let bundle = (
         ReactNode(id),
         fresh_style_bundle(&props.style, focus_default),
@@ -448,7 +446,7 @@ fn spawn_element(
     } else {
         commands.spawn(bundle)
     };
-    apply_style_fresh(&mut ec, &props.style);
+    apply_style_fresh(&mut ec, &props.style, wctx);
     match kind {
         // An `.svg` src (case-insensitive) enters **svg mode**: the texture is
         // an element-owned raster target painted at laid-out size, the parsed
@@ -462,7 +460,7 @@ fn spawn_element(
             ec.queue(move |entity: EntityWorldMut| crate::svg::ensure_svg_image(entity, path, img));
         }
         "image" => {
-            let mut img = image_node(props, assets);
+            let mut img = image_node(props, assets, false);
             apply_atlas(&mut img, props, layouts, atlas_cache);
             ec.insert(img);
         }
@@ -477,15 +475,10 @@ fn spawn_element(
 /// has a definite box to lay out in. The user can override `width`/`height` (or any
 /// other field) via the element's `style` prop.
 pub(super) fn surface_root_base() -> Option<Style> {
-    Some(Style {
-        width: Some(crate::protocol::animatable::Animatable::Static(
-            crate::protocol::units::Length::Percent(100.0),
-        )),
-        height: Some(crate::protocol::animatable::Animatable::Static(
-            crate::protocol::units::Length::Percent(100.0),
-        )),
-        ..Default::default()
-    })
+    let mut style = Style::default();
+    style.set(&WIDTH, Animatable::Static(Length::Percent(100.0)));
+    style.set(&HEIGHT, Animatable::Static(Length::Percent(100.0)));
+    Some(style)
 }
 
 /// The default style a `<root>` gets before the user's `style` is overlaid: a
@@ -498,29 +491,24 @@ pub(super) fn surface_root_base() -> Option<Style> {
 /// in either direction; the devtools panel claims `i32::MAX` explicitly).
 /// Baked into the *style* rather than inserted as a raw `GlobalZIndex`
 /// component so masked style re-applies on re-render re-assert it (a raw
-/// insert would be stripped the first time the Z_INDEX dirty group executes
+/// insert would be stripped the first time the global-z-index writer runs
 /// with no style value).
 pub(super) fn root_base() -> Option<Style> {
-    Some(Style {
-        width: Some(crate::protocol::animatable::Animatable::Static(
-            crate::protocol::units::Length::Percent(100.0),
-        )),
-        height: Some(crate::protocol::animatable::Animatable::Static(
-            crate::protocol::units::Length::Percent(100.0),
-        )),
-        // Default to a column, like the main UI root (plugin.rs). Bevy's own
-        // default is `row`, but a row container mis-measures a single
-        // content-sized child that has `maxWidth` + wrapping text: the text is
-        // sized at max-content (one line) during the row's main-axis pass, then
-        // clamped to `maxWidth` and wrapped on render — so the child's height is
-        // committed one line short while its siblings sit at the wrapped
-        // positions. A `<root>` is a top-level app container like the main root,
-        // so `column` is both the least-surprising default and the one that
-        // sidesteps that quirk. Overridable via `style.flexDirection`.
-        flex_direction: Some(FlexDirection::Column),
-        global_z_index: Some(1),
-        ..Default::default()
-    })
+    let mut style = Style::default();
+    style.set(&WIDTH, Animatable::Static(Length::Percent(100.0)));
+    style.set(&HEIGHT, Animatable::Static(Length::Percent(100.0)));
+    // Default to a column, like the main UI root (plugin.rs). Bevy's own
+    // default is `row`, but a row container mis-measures a single
+    // content-sized child that has `maxWidth` + wrapping text: the text is
+    // sized at max-content (one line) during the row's main-axis pass, then
+    // clamped to `maxWidth` and wrapped on render — so the child's height is
+    // committed one line short while its siblings sit at the wrapped
+    // positions. A `<root>` is a top-level app container like the main root,
+    // so `column` is both the least-surprising default and the one that
+    // sidesteps that quirk. Overridable via `style.flexDirection`.
+    style.set(&FLEX_DIRECTION, FlexDirection::Column);
+    style.set(&GLOBAL_Z_INDEX, 1);
+    Some(style)
 }
 
 /// Build the accesskit node for an `editableText` from its props (role + label +

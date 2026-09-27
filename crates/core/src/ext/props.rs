@@ -187,6 +187,7 @@ pub struct ExtPropDecoder {
 pub struct ExtRegistry {
     props: HashMap<&'static str, ExtPropDecoder>,
     elements: HashMap<&'static str, Arc<dyn super::ElementKind>>,
+    styles: crate::style::StyleRegistry,
 }
 
 impl ExtRegistry {
@@ -276,6 +277,27 @@ impl ExtRegistry {
         let mut keys: Vec<_> = self.props.keys().copied().collect();
         keys.sort_unstable();
         keys
+    }
+
+    /// Register a style property (see [`crate::style`]).
+    ///
+    /// # Panics
+    /// On a property name already registered.
+    pub fn add_style(&mut self, property: &'static dyn crate::style::AnyStyleProperty) {
+        self.styles.add(property);
+    }
+
+    /// Register a style writer (see [`crate::style::Writer`]).
+    ///
+    /// # Panics
+    /// On a writer registered twice or a component another writer writes.
+    pub fn add_style_writer(&mut self, writer: &'static crate::style::Writer) {
+        self.styles.add_writer(writer);
+    }
+
+    /// Every registered style property.
+    pub fn styles(&self) -> &crate::style::StyleRegistry {
+        &self.styles
     }
 }
 

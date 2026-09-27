@@ -15,7 +15,7 @@
 //! space of composite-quad vertices and `UiGlobalTransform`), x right,
 //! y down, z toward the viewer (CSS's screen space). Wire lengths are logical
 //! px and scale by the node's scale factor; angles arrive as radians from
-//! [`protocol::units::Angle`]. Self-perspective divides by `w = 1 − z/d` so positive
+//! [`Angle`](crate::protocol::units::Angle). Self-perspective divides by `w = 1 − z/d` so positive
 //! `translateZ` moves toward the viewer and magnifies, with the vanishing
 //! point at the resolved `origin`.
 
@@ -23,7 +23,7 @@ use bevy::prelude::*;
 use bevy::ui::{ComputedNode, UiGlobalTransform};
 
 use super::{LayerContentDirt, PromotedLayer};
-use crate::protocol::{self, animatable::AnimatableField, transform::Transform3d, units::Length};
+use crate::protocol::{animatable::AnimatableField, transform::Transform3d, units::Length};
 
 /// The `transform3d` style params on a promoted layer root, exactly as merged
 /// from the wire (base style + active interaction variants). Written by
@@ -182,13 +182,6 @@ pub fn sync_transform3d_matrices(
             dirt.composite_only.push(entity);
         }
     }
-}
-
-/// Convenience for the wire params carried by a style, if any.
-pub fn style_transform3d(style: &Option<protocol::style::Style>) -> Option<Transform3d> {
-    style
-        .as_ref()
-        .and_then(|s| s.transform3d.as_deref().cloned())
 }
 
 #[cfg(test)]

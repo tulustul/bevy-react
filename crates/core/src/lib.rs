@@ -68,6 +68,7 @@ mod request;
 mod scroll;
 mod scrollbar;
 mod shared_tags;
+pub mod style;
 mod style_bindings;
 mod touch_scroll;
 // The transition engine. Public for its primitives (`Channel`,

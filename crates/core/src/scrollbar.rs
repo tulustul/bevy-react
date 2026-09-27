@@ -171,8 +171,8 @@ impl<'de> Deserialize<'de> for ScrollbarPartStyle {
 }
 
 /// A fully-configured scrollbar (the payload of [`ScrollbarSpec::Styled`]). Boxed
-/// in the enum so `ScrollbarSpec` — and thus [`crate::protocol::style::Style`], which
-/// embeds it four times over — stays small.
+/// in the enum so `ScrollbarSpec` stays small enough for the style store to
+/// hold inline.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct ScrollbarStyled {
     pub track: Option<ScrollbarPartStyle>,
@@ -849,17 +849,18 @@ pub fn style_scrollbar_states(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::protocol::style::Style;
+    use crate::style::Style;
+    use crate::style::props::SCROLLBAR;
 
     #[test]
     fn decodes_none_and_default_keywords() {
         let style: Style = serde_json::from_value(serde_json::json!({ "scrollbar": "none" }))
             .expect("decode none");
-        assert_eq!(style.scrollbar, Some(ScrollbarSpec::None));
+        assert_eq!(style.get(&SCROLLBAR), Some(&ScrollbarSpec::None));
 
         let style: Style = serde_json::from_value(serde_json::json!({ "scrollbar": "default" }))
             .expect("decode default");
-        assert_eq!(style.scrollbar, Some(ScrollbarSpec::Default));
+        assert_eq!(style.get(&SCROLLBAR), Some(&ScrollbarSpec::Default));
     }
 
     #[test]
@@ -876,7 +877,7 @@ mod tests {
             }
         }))
         .expect("decode styled");
-        let spec = style.scrollbar.expect("present");
+        let spec = style.get(&SCROLLBAR).expect("present");
         assert_eq!(spec.thickness(), 8.0);
         assert_eq!(spec.min_thumb_length(), 30.0);
         assert_eq!(spec.position(), ScrollbarPosition::Float);
@@ -891,7 +892,7 @@ mod tests {
     fn unknown_keyword_falls_back_to_none() {
         let style: Style = serde_json::from_value(serde_json::json!({ "scrollbar": "wat" }))
             .expect("must not error on a bad keyword");
-        assert_eq!(style.scrollbar, Some(ScrollbarSpec::None));
+        assert_eq!(style.get(&SCROLLBAR), Some(&ScrollbarSpec::None));
     }
 
     #[test]
@@ -906,7 +907,7 @@ mod tests {
             }
         }))
         .expect("decode variants");
-        let spec = style.scrollbar.expect("present");
+        let spec = style.get(&SCROLLBAR).expect("present");
         let thumb = spec.thumb_style().expect("thumb");
         assert_eq!(thumb.background_color.as_deref(), Some("#888888"));
         assert_eq!(
@@ -985,7 +986,7 @@ mod tests {
     fn defaults_when_object_omits_fields() {
         let style: Style =
             serde_json::from_value(serde_json::json!({ "scrollbar": {} })).expect("decode empty");
-        let spec = style.scrollbar.expect("present");
+        let spec = style.get(&SCROLLBAR).expect("present");
         assert_eq!(spec.thickness(), DEFAULT_THICKNESS);
         assert_eq!(spec.min_thumb_length(), DEFAULT_MIN_THUMB);
         assert_eq!(spec.position(), ScrollbarPosition::Gutter);

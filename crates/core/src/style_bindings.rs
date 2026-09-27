@@ -33,7 +33,11 @@ use crate::protocol::visual::{GradientList, GradientSpec, GradientStop, RadialSh
 use crate::protocol::{
     animatable::{AnimatableField, binding_from_wrapper},
     props::Props,
-    style::Style,
+};
+use crate::style::Style;
+use crate::style::props::{
+    BACKDROP_FILTER, BACKGROUND_GRADIENT, BACKGROUND_IMAGE, BORDER_GRADIENT, FILTER, MORPH_FILTER,
+    TRANSFORM, TRANSFORM3D, TRANSITION,
 };
 
 /// Classify a raw filter-param value for the chain resolver: `None` = a plain
@@ -202,23 +206,34 @@ pub(crate) fn derive_bindings(style: Option<&Style>) -> Option<AnimatedBindings>
     let style = style?;
     let mut out = BTreeMap::new();
     use crate::protocol::animatable::Animatable;
+    use crate::style::props::CoreId;
+
+    // Runs on every update: one pass over the store for the set properties,
+    // so a row probes the store only for a property the style holds, and the
+    // compound values are read once, not per row.
+    let keys = style.keys();
+    let transform = style.get(&TRANSFORM);
+    let transform3d = style.get(&TRANSFORM3D);
+    let background_image = style.get(&BACKGROUND_IMAGE);
 
     // One rule per accessor shape (see the table's column contract).
     macro_rules! row {
-        ($prop:tt, (base $field:ident)) => {
-            if let Some(Animatable::Animated(a)) = &style.$field {
+        ($prop:tt, (prop $key:ident)) => {
+            if keys.contains_core(CoreId::$key)
+                && let Some(Animatable::Animated(a)) = style.get(&crate::style::props::$key)
+            {
                 out.insert($prop, a.binding.clone());
             }
         };
         ($prop:tt, (transform $field:ident)) => {
-            if let Some(t) = &style.transform
+            if let Some(t) = transform
                 && let Some(Animatable::Animated(a)) = &t.$field
             {
                 out.insert($prop, a.binding.clone());
             }
         };
         ($prop:tt, (t3d $field:ident $($unit:tt)*)) => {
-            if let Some(t) = &style.transform3d
+            if let Some(t) = transform3d
                 && let Some(Animatable::Animated(a)) = &t.$field
             {
                 out.insert($prop, a.binding.clone());
@@ -226,7 +241,7 @@ pub(crate) fn derive_bindings(style: Option<&Style>) -> Option<AnimatedBindings>
         };
         // `origin.x`/`origin.y` are `Animatable` directly (not `Option`).
         ($prop:tt, (t3d_origin $axis:ident)) => {
-            if let Some(t) = &style.transform3d
+            if let Some(t) = transform3d
                 && let Some(origin) = &t.origin
                 && let Animatable::Animated(a) = &origin.$axis
             {
@@ -236,7 +251,7 @@ pub(crate) fn derive_bindings(style: Option<&Style>) -> Option<AnimatedBindings>
         // The one animatable field nested inside `backgroundImage` (its
         // `scale` stays static-only for now).
         ($prop:tt, (bg_tint)) => {
-            if let Some(bg) = &style.background_image
+            if let Some(bg) = background_image
                 && let Some(Animatable::Animated(a)) = &bg.tint
             {
                 out.insert($prop, a.binding.clone());
@@ -250,11 +265,11 @@ pub(crate) fn derive_bindings(style: Option<&Style>) -> Option<AnimatedBindings>
     }
     crate::animations::props::with_animatable_props!(walk);
 
-    chain_bindings(style.filter.as_ref(), false, &mut out);
-    chain_bindings(style.backdrop_filter.as_ref(), true, &mut out);
+    chain_bindings(style.get(&FILTER), false, &mut out);
+    chain_bindings(style.get(&BACKDROP_FILTER), true, &mut out);
     // The morph's single filter use — same wrapper recognition as the
     // chains, keyed by name alone (a morph has no chain index).
-    if let Some(morph) = &style.morph_filter {
+    if let Some(morph) = style.get(&MORPH_FILTER) {
         for (name, value) in &morph.filter.params {
             if let Some(inner) = value.as_object().and_then(|m| m.get("animated")) {
                 out.insert(
@@ -265,8 +280,8 @@ pub(crate) fn derive_bindings(style: Option<&Style>) -> Option<AnimatedBindings>
         }
     }
 
-    gradient_bindings(style.background_gradient.as_deref(), false, &mut out);
-    gradient_bindings(style.border_gradient.as_deref(), true, &mut out);
+    gradient_bindings(style.get(&BACKGROUND_GRADIENT), false, &mut out);
+    gradient_bindings(style.get(&BORDER_GRADIENT), true, &mut out);
 
     (!out.is_empty()).then_some(AnimatedBindings(out))
 }
@@ -294,9 +309,9 @@ pub(crate) fn derive_props_bindings(props: &Props) -> Option<AnimatedBindings> {
 /// devtools (`styleBinding`). Call under a `diag::node_scope`.
 pub(crate) fn warn_variant_bindings(props: &Props) {
     for (name, style) in [
-        ("hoverStyle", props.hover_style.as_deref()),
-        ("pressStyle", props.press_style.as_deref()),
-        ("focusStyle", props.focus_style.as_deref()),
+        ("hoverStyle", props.hover_style.as_ref()),
+        ("pressStyle", props.press_style.as_ref()),
+        ("focusStyle", props.focus_style.as_ref()),
     ] {
         if derive_bindings(style).is_some() {
             let msg =
@@ -315,7 +330,7 @@ pub(crate) fn warn_variant_bindings(props: &Props) {
 /// re-derived. Call under a `diag::node_scope`, beside
 /// [`warn_variant_bindings`].
 pub(crate) fn warn_gradient_transition_mix(props: &Props, bindings: Option<&AnimatedBindings>) {
-    let Some(t) = props.style.as_ref().and_then(|s| s.transition.as_ref()) else {
+    let Some(t) = props.style.as_ref().and_then(|s| s.get(&TRANSITION)) else {
         return;
     };
     let Some(b) = bindings else { return };
@@ -384,7 +399,7 @@ mod tests {
         assert_eq!(b.get(P::Transform3d(F::OriginY)), None);
         assert_eq!(b.get(P::Transform3d(F::Perspective)), None);
         // The static halves survive the decode next to the bindings.
-        assert!(s.transform3d.as_ref().unwrap().perspective.is_some());
+        assert!(s.get(&TRANSFORM3D).unwrap().perspective.is_some());
     }
 
     /// The nested `backgroundImage.tint` derives its binding; a static tint

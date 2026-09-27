@@ -76,47 +76,69 @@ impl<T> Animatable<T> {
     }
 }
 
-/// Read helpers for the `Option<Animatable<T>>` style fields, so read sites
-/// stay as terse as the plain `Option<T>` they replaced.
-pub trait AnimatableField<T> {
+/// Read helpers for `Option<Animatable<T>>` values — a field
+/// (`&Option<Animatable<T>>`, reached by autoref) or a keyed style read
+/// (`style.get(&OPACITY)` → `Option<&Animatable<T>>`) — so read sites stay
+/// as terse as the plain `Option<T>` they replaced. By-value receivers, so a
+/// reference result borrows the value, never the temporary `Option`.
+pub trait AnimatableField<'a, T: 'a> {
     /// The static value by copy; `None` when absent **or** animated.
-    fn static_val(&self) -> Option<T>
+    fn static_val(self) -> Option<T>
     where
         T: Copy;
     /// The static value by reference; `None` when absent or animated.
-    fn static_ref(&self) -> Option<&T>;
+    fn static_ref(self) -> Option<&'a T>;
     /// The static value — or, while animated, the wrapper's `seed`; `None`
     /// when absent or animated seed-less. The read helper for fields whose
     /// consumers should *render* the seed until a driver writes (SVG shape
     /// attrs); style read sites use [`Self::static_val`] instead (their
     /// animated fields read as absent by design).
-    fn static_or_seed(&self) -> Option<T>
+    fn static_or_seed(self) -> Option<T>
     where
         T: Copy;
     /// The binding; `None` when absent or static.
-    fn binding(&self) -> Option<&crate::animations::protocol::Binding>;
+    fn binding(self) -> Option<&'a crate::animations::protocol::Binding>;
 }
 
-impl<T> AnimatableField<T> for Option<Animatable<T>> {
-    fn static_val(&self) -> Option<T>
+impl<'a, T: 'a> AnimatableField<'a, T> for Option<&'a Animatable<T>> {
+    fn static_val(self) -> Option<T>
     where
         T: Copy,
     {
         self.static_ref().copied()
     }
-    fn static_ref(&self) -> Option<&T> {
-        self.as_ref().and_then(Animatable::value)
+    fn static_ref(self) -> Option<&'a T> {
+        self.and_then(Animatable::value)
     }
-    fn static_or_seed(&self) -> Option<T>
+    fn static_or_seed(self) -> Option<T>
     where
         T: Copy,
     {
-        self.as_ref()
-            .and_then(|a| a.value().or_else(|| a.seed()))
-            .copied()
+        self.and_then(|a| a.value().or_else(|| a.seed())).copied()
     }
-    fn binding(&self) -> Option<&crate::animations::protocol::Binding> {
-        self.as_ref().and_then(Animatable::binding)
+    fn binding(self) -> Option<&'a crate::animations::protocol::Binding> {
+        self.and_then(Animatable::binding)
+    }
+}
+
+impl<'a, T: 'a> AnimatableField<'a, T> for &'a Option<Animatable<T>> {
+    fn static_val(self) -> Option<T>
+    where
+        T: Copy,
+    {
+        self.as_ref().static_val()
+    }
+    fn static_ref(self) -> Option<&'a T> {
+        self.as_ref().static_ref()
+    }
+    fn static_or_seed(self) -> Option<T>
+    where
+        T: Copy,
+    {
+        self.as_ref().static_or_seed()
+    }
+    fn binding(self) -> Option<&'a crate::animations::protocol::Binding> {
+        self.as_ref().binding()
     }
 }
 

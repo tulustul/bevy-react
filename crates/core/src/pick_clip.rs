@@ -38,7 +38,7 @@ use bevy::ui::{CalculatedClip, ComputedNode};
 /// picking backend's own cursor math; `target_scaling_factor` resolves per
 /// render target, so window pointers (window scale factor) and image-target
 /// virtual pointers (surface/transform3d) take the same path. Shared with the
-/// svg per-shape hit refinement ([`crate::svg::pick`]).
+/// per-shape hit refinement of the `bevy_react_svg` crate.
 pub fn pointer_physical_position(location: &Location, camera: &Camera) -> Vec2 {
     let mut point = location.position * camera.target_scaling_factor().unwrap_or(1.0);
     if let Some(viewport) = camera.physical_viewport_rect() {

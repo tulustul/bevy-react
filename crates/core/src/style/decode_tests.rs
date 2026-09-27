@@ -1,42 +1,49 @@
-//! Decode + delta-merge tests for the `Style` wire type (`style_fields!` guards).
+//! Decode + delta-merge tests for the style store: each property decodes
+//! from the wire, and a delta re-runs exactly the writers reading it.
 use super::*;
 use crate::protocol::animatable::AnimatableField;
 use crate::protocol::props::{Props, props_from_json as props};
+use crate::protocol::units::Rect;
+use crate::style::props::{
+    BACKDROP_FILTER, BORDER_RADIUS, CACHE, FILTER, GROUP_ALPHA, IMAGE_RENDERING, LAYOUT_ROUNDING,
+    LayerCache, MORPH_FILTER, OPACITY,
+};
+use crate::style::test_support::{promotes, runs};
+use crate::style::writers::*;
 
-/// `groupAlpha` decodes as a plain bool, defaults to absent, and its wire
-/// delta dirties the `LAYER` group (the promotion evaluator's trigger),
-/// as does `opacity`.
+/// `groupAlpha` decodes as a plain bool, defaults to absent, and a delta
+/// touching it re-evaluates promotion, as one touching `opacity` does.
 #[test]
-fn group_alpha_decodes_and_dirties_layer() {
+fn group_alpha_decodes_and_promotes() {
     let s: Style = serde_json::from_str(r#"{ "groupAlpha": false }"#).expect("style decodes");
-    assert_eq!(s.group_alpha, Some(false));
+    assert_eq!(s.get(&GROUP_ALPHA).copied(), Some(false));
     let s: Style = serde_json::from_str("{}").expect("style decodes");
-    assert_eq!(s.group_alpha, None);
+    assert_eq!(s.get(&GROUP_ALPHA).copied(), None);
 
-    // Delta-merge marks the LAYER group for both trigger fields.
+    // Delta-merge re-evaluates promotion for both trigger fields.
     let mut cached = Props::default();
     let (dirty, _) = cached.merge_delta(
         props(serde_json::json!({ "style": { "groupAlpha": false } })),
         &[],
         &[],
     );
-    assert!(dirty.style.intersects(style_groups::LAYER));
+    assert!(promotes(&dirty.style));
     let (dirty, _) = cached.merge_delta(
         props(serde_json::json!({ "style": { "opacity": 0.5 } })),
         &[],
         &[],
     );
-    assert!(dirty.style.intersects(style_groups::LAYER));
+    assert!(promotes(&dirty.style));
     let style = cached.style.as_ref().expect("style retained");
-    assert_eq!(style.group_alpha, Some(false));
-    assert_eq!(style.opacity.static_val(), Some(0.5));
+    assert_eq!(style.get(&GROUP_ALPHA).copied(), Some(false));
+    assert_eq!(style.get(&OPACITY).static_val(), Some(0.5));
 }
 
-/// A `borderRadius` delta marks TRANSITION (its channel target rides
-/// `TransitionInput`) alongside LAYOUT, and the field takes an
-/// `{ animated }` wrapper whose seed decodes as a `Rect`.
+/// A `borderRadius` delta re-runs the transition writer (its channel target
+/// rides `TransitionInput`) alongside the layout writer, and the property
+/// takes an `{ animated }` wrapper whose seed decodes as a `Rect`.
 #[test]
-fn border_radius_dirties_transition_and_decodes_binding() {
+fn border_radius_reruns_transition_and_decodes_binding() {
     let uniform8: Rect = serde_json::from_value(serde_json::json!(8)).expect("rect decodes");
     let mut cached = Props::default();
     let (dirty, _) = cached.merge_delta(
@@ -44,34 +51,34 @@ fn border_radius_dirties_transition_and_decodes_binding() {
         &[],
         &[],
     );
-    assert!(dirty.style.intersects(style_groups::TRANSITION));
-    assert!(dirty.style.intersects(style_groups::LAYOUT));
+    assert!(runs(&dirty.style, &TRANSITION_WRITER));
+    assert!(runs(&dirty.style, &LAYOUT_WRITER));
     let style = cached.style.as_ref().expect("style retained");
-    assert_eq!(style.border_radius.static_val(), Some(uniform8));
+    assert_eq!(style.get(&BORDER_RADIUS).static_val(), Some(uniform8));
 
     let s: Style = serde_json::from_value(serde_json::json!({
         "borderRadius": { "animated": { "id": 3 }, "seed": 8 }
     }))
     .expect("style decodes");
     assert!(
-        s.border_radius.binding().is_some(),
+        s.get(&BORDER_RADIUS).binding().is_some(),
         "wrapper derives a binding"
     );
     assert_eq!(
-        s.border_radius.static_val(),
+        s.get(&BORDER_RADIUS).static_val(),
         None,
         "animated reads as unset"
     );
     assert_eq!(
-        s.border_radius.as_ref().and_then(|a| a.seed()),
+        s.get(&BORDER_RADIUS).and_then(|a| a.seed()),
         Some(&uniform8)
     );
 }
 
 /// `imageRendering` decodes its keywords (unknown → warn + `auto`) and a
-/// delta touching it marks the IMAGE_RENDERING group.
+/// delta touching it re-runs its own writer only.
 #[test]
-fn image_rendering_keyword_decodes_and_dirties_group() {
+fn image_rendering_keyword_decodes_and_reruns_its_writer() {
     use crate::image_rendering::ImageRendering;
     for (wire, want) in [
         ("auto", ImageRendering::Auto),
@@ -83,10 +90,10 @@ fn image_rendering_keyword_decodes_and_dirties_group() {
     ] {
         let s: Style = serde_json::from_str(&format!(r#"{{ "imageRendering": "{wire}" }}"#))
             .expect("style decodes");
-        assert_eq!(s.image_rendering, Some(want), "{wire}");
+        assert_eq!(s.get(&IMAGE_RENDERING).copied(), Some(want), "{wire}");
     }
     let s: Style = serde_json::from_str("{}").expect("style decodes");
-    assert_eq!(s.image_rendering, None);
+    assert_eq!(s.get(&IMAGE_RENDERING).copied(), None);
 
     let mut cached = Props::default();
     let (dirty, _) = cached.merge_delta(
@@ -94,22 +101,25 @@ fn image_rendering_keyword_decodes_and_dirties_group() {
         &[],
         &[],
     );
-    assert!(dirty.style.intersects(style_groups::IMAGE_RENDERING));
-    assert!(!dirty.style.intersects(style_groups::BG_IMAGE));
+    assert!(runs(&dirty.style, &IMAGE_RENDERING_WRITER));
+    assert!(!runs(&dirty.style, &BACKGROUND_IMAGE_WRITER));
     assert_eq!(
-        cached.style.as_ref().and_then(|s| s.image_rendering),
+        cached
+            .style
+            .as_ref()
+            .and_then(|s| s.get(&IMAGE_RENDERING).copied()),
         Some(ImageRendering::Trilinear)
     );
 }
 
 /// `layoutRounding` decodes as a plain boolean (absent = inherit) and a
-/// delta touching it marks the LAYOUT_ROUNDING group only.
+/// delta touching it re-runs its own writer only — never the layout writer.
 #[test]
-fn layout_rounding_decodes_and_dirties_group() {
+fn layout_rounding_decodes_and_reruns_its_writer() {
     let s: Style = serde_json::from_str(r#"{ "layoutRounding": false }"#).expect("style decodes");
-    assert_eq!(s.layout_rounding, Some(false));
+    assert_eq!(s.get(&LAYOUT_ROUNDING).copied(), Some(false));
     let s: Style = serde_json::from_str("{}").expect("style decodes");
-    assert_eq!(s.layout_rounding, None);
+    assert_eq!(s.get(&LAYOUT_ROUNDING).copied(), None);
 
     let mut cached = Props::default();
     let (dirty, _) = cached.merge_delta(
@@ -117,10 +127,13 @@ fn layout_rounding_decodes_and_dirties_group() {
         &[],
         &[],
     );
-    assert!(dirty.style.intersects(style_groups::LAYOUT_ROUNDING));
-    assert!(!dirty.style.intersects(style_groups::LAYOUT));
+    assert!(runs(&dirty.style, &LAYOUT_ROUNDING_WRITER));
+    assert!(!runs(&dirty.style, &LAYOUT_WRITER));
     assert_eq!(
-        cached.style.as_ref().and_then(|s| s.layout_rounding),
+        cached
+            .style
+            .as_ref()
+            .and_then(|s| s.get(&LAYOUT_ROUNDING).copied()),
         Some(false)
     );
     let (dirty, _) = cached.merge_delta(
@@ -128,25 +141,31 @@ fn layout_rounding_decodes_and_dirties_group() {
         &[],
         &["layoutRounding".to_string()],
     );
-    assert!(dirty.style.intersects(style_groups::LAYOUT_ROUNDING));
-    assert_eq!(cached.style.as_ref().and_then(|s| s.layout_rounding), None);
+    assert!(runs(&dirty.style, &LAYOUT_ROUNDING_WRITER));
+    assert_eq!(
+        cached
+            .style
+            .as_ref()
+            .and_then(|s| s.get(&LAYOUT_ROUNDING).copied()),
+        None
+    );
 }
 
 /// `cache` decodes its keywords (unknown → warn + default) and a delta
-/// touching it marks the LAYER group, driving promotion re-evaluation.
+/// touching it drives promotion re-evaluation.
 #[test]
-fn cache_keyword_decodes_and_dirties_layer() {
+fn cache_keyword_decodes_and_promotes() {
     let s: Style = serde_json::from_str(r#"{ "cache": "always" }"#).expect("style decodes");
-    assert_eq!(s.cache, Some(LayerCache::Always));
+    assert_eq!(s.get(&CACHE).copied(), Some(LayerCache::Always));
     let s: Style = serde_json::from_str(r#"{ "cache": "auto" }"#).expect("style decodes");
-    assert_eq!(s.cache, Some(LayerCache::Auto));
+    assert_eq!(s.get(&CACHE).copied(), Some(LayerCache::Auto));
     let s: Style = serde_json::from_str(r#"{ "cache": "never" }"#).expect("style decodes");
-    assert_eq!(s.cache, Some(LayerCache::Never));
+    assert_eq!(s.get(&CACHE).copied(), Some(LayerCache::Never));
     let s: Style = serde_json::from_str("{}").expect("style decodes");
-    assert_eq!(s.cache, None);
+    assert_eq!(s.get(&CACHE).copied(), None);
     // Unrecognized keyword: warn + fall back to the default (`auto`).
     let s: Style = serde_json::from_str(r#"{ "cache": "sometimes" }"#).expect("style decodes");
-    assert_eq!(s.cache, Some(LayerCache::Auto));
+    assert_eq!(s.get(&CACHE).copied(), Some(LayerCache::Auto));
 
     let mut cached = Props::default();
     let (dirty, _) = cached.merge_delta(
@@ -154,9 +173,9 @@ fn cache_keyword_decodes_and_dirties_layer() {
         &[],
         &[],
     );
-    assert!(dirty.style.intersects(style_groups::LAYER));
+    assert!(promotes(&dirty.style));
     assert_eq!(
-        cached.style.as_ref().and_then(|s| s.cache),
+        cached.style.as_ref().and_then(|s| s.get(&CACHE).copied()),
         Some(LayerCache::Always)
     );
 }
@@ -174,7 +193,7 @@ fn deserializes_filter_chain() {
     let s: Style =
         serde_json::from_str(r#"{ "filter": { "name": "blur", "params": { "radius": 4 } } }"#)
             .expect("filter decodes");
-    let chain = s.filter.expect("filter present");
+    let chain = s.get(&FILTER).expect("filter present");
     assert_eq!(chain.0.len(), 1);
     assert_eq!(chain.0[0].name, "blur");
     assert_eq!(chain.0[0].params["radius"], serde_json::json!(4));
@@ -184,7 +203,7 @@ fn deserializes_filter_chain() {
         serde_json::from_str(r#"{ "filter": [{ "name": "blur" }, { "name": "grayscale" }] }"#)
             .expect("filter decodes");
     let names: Vec<&str> = s
-        .filter
+        .get(&FILTER)
         .as_ref()
         .expect("filter present")
         .0
@@ -194,27 +213,27 @@ fn deserializes_filter_chain() {
     assert_eq!(names, ["blur", "grayscale"]);
 
     // A malformed entry degrades the whole chain to empty without
-    // aborting the Style — the sibling field still decodes.
+    // aborting the Style — the sibling property still decodes.
     let s: Style = serde_json::from_str(r#"{ "filter": [{ "name": "blur" }, 3], "opacity": 0.5 }"#)
         .expect("a bad filter entry must not abort the style");
-    assert_eq!(s.filter, Some(FilterChain::default()));
-    assert_eq!(s.opacity.static_val(), Some(0.5));
+    assert_eq!(s.get(&FILTER), Some(&FilterChain::default()));
+    assert_eq!(s.get(&OPACITY).static_val(), Some(0.5));
 }
 
-/// A `filter` delta dirties FILTER (the `FilterInput` re-stamp) and LAYER
-/// (the promotion evaluator's trigger); a variant carrying a filter rides
-/// the `hover_style` flag, which the reconciler also treats as a layer
-/// trigger (variant filters promote — the field is `overlay`).
+/// A `filter` delta re-runs the filter writer (the `FilterInput` re-stamp)
+/// and re-evaluates promotion; a variant carrying a filter rides the
+/// `hover_style` flag, which the reconciler also treats as a promotion
+/// trigger (promotion unions every style state).
 #[test]
-fn filter_delta_dirties_filter_and_layer() {
+fn filter_delta_reruns_its_writer_and_promotes() {
     let mut cached = Props::default();
     let (dirty, _) = cached.merge_delta(
         props(serde_json::json!({ "style": { "filter": { "name": "blur" } } })),
         &[],
         &[],
     );
-    assert!(dirty.style.intersects(style_groups::FILTER));
-    assert!(dirty.style.intersects(style_groups::LAYER));
+    assert!(runs(&dirty.style, &FILTER_WRITER));
+    assert!(promotes(&dirty.style));
 
     let (dirty, _) = cached.merge_delta(
         props(serde_json::json!({ "hoverStyle": { "filter": { "name": "blur" } } })),
@@ -223,49 +242,49 @@ fn filter_delta_dirties_filter_and_layer() {
     );
     assert!(dirty.hover_style);
     let hover = cached.hover_style.as_ref().expect("variant retained");
-    assert!(hover.filter.is_some(), "variant carries the chain");
+    assert!(hover.get(&FILTER).is_some(), "variant carries the chain");
 }
 
-/// A `backdropFilter` delta dirties BACKDROP (the `BackdropInput`
-/// re-stamp) and LAYER (the promotion trigger) — and never FILTER: the
-/// two chains are independent channels. `styleUnset` re-fires the same
-/// groups so the removal reaches the apply arm and the evaluator.
+/// A `backdropFilter` delta re-runs its writer (the `BackdropInput`
+/// re-stamp) and re-evaluates promotion — and never runs the filter writer:
+/// the two chains are independent channels. `styleUnset` does the same, so
+/// the removal reaches both the writer and the evaluator.
 #[test]
-fn backdrop_filter_delta_dirties_backdrop_and_layer() {
+fn backdrop_filter_delta_reruns_its_writer_and_promotes() {
     let mut cached = Props::default();
     let (dirty, _) = cached.merge_delta(
         props(serde_json::json!({ "style": { "backdropFilter": { "name": "blur" } } })),
         &[],
         &[],
     );
-    assert!(dirty.style.intersects(style_groups::BACKDROP));
-    assert!(dirty.style.intersects(style_groups::LAYER));
-    assert!(!dirty.style.intersects(style_groups::FILTER));
+    assert!(runs(&dirty.style, &BACKDROP_FILTER_WRITER));
+    assert!(promotes(&dirty.style));
+    assert!(!runs(&dirty.style, &FILTER_WRITER));
     assert!(
         cached
             .style
             .as_ref()
-            .is_some_and(|s| s.backdrop_filter.is_some())
+            .is_some_and(|s| s.get(&BACKDROP_FILTER).is_some())
     );
 
     let (dirty, _) = cached.merge_delta(Props::default(), &[], &["backdropFilter".into()]);
-    assert!(dirty.style.intersects(style_groups::BACKDROP));
-    assert!(dirty.style.intersects(style_groups::LAYER));
+    assert!(runs(&dirty.style, &BACKDROP_FILTER_WRITER));
+    assert!(promotes(&dirty.style));
     assert!(
         cached
             .style
             .as_ref()
-            .is_some_and(|s| s.backdrop_filter.is_none())
+            .is_some_and(|s| s.get(&BACKDROP_FILTER).is_none())
     );
 }
 
-/// A `morphFilter` delta dirties MORPH (the `MorphInput` re-stamp — which
-/// also routes to `apply_transition`) and LAYER (the promotion trigger) —
-/// never FILTER/BACKDROP/TRANSITION. `styleUnset` re-fires the same
-/// groups; a malformed value degrades to `None` without aborting the
+/// A `morphFilter` delta re-runs its writer (the `MorphInput` re-stamp) and
+/// the transition writer (the morph channel's input), and re-evaluates
+/// promotion — never the filter/backdrop writers. `styleUnset` does the
+/// same; a malformed value degrades to `None` without aborting the
 /// containing `Style`.
 #[test]
-fn morph_filter_delta_dirties_morph_and_layer() {
+fn morph_filter_delta_reruns_its_writers_and_promotes() {
     let mut cached = Props::default();
     let (dirty, _) = cached.merge_delta(
         props(serde_json::json!({
@@ -274,74 +293,35 @@ fn morph_filter_delta_dirties_morph_and_layer() {
         &[],
         &[],
     );
-    assert!(dirty.style.intersects(style_groups::MORPH));
-    assert!(dirty.style.intersects(style_groups::LAYER));
-    assert!(!dirty.style.intersects(style_groups::FILTER));
-    assert!(!dirty.style.intersects(style_groups::BACKDROP));
-    assert!(!dirty.style.intersects(style_groups::TRANSITION));
+    assert!(runs(&dirty.style, &MORPH_FILTER_WRITER));
+    assert!(promotes(&dirty.style));
+    assert!(!runs(&dirty.style, &FILTER_WRITER));
+    assert!(!runs(&dirty.style, &BACKDROP_FILTER_WRITER));
+    // The morph channel lives on the transition engine (built-in default
+    // timing), so a morph delta re-stamps the transition input.
+    assert!(runs(&dirty.style, &TRANSITION_WRITER));
     let morph = cached
         .style
         .as_ref()
-        .and_then(|s| s.morph_filter.as_ref())
+        .and_then(|s| s.get(&MORPH_FILTER))
         .expect("morph retained");
     assert_eq!(morph.key, serde_json::json!("a"));
     assert_eq!(morph.filter.name, "crossfade");
 
     let (dirty, _) = cached.merge_delta(Props::default(), &[], &["morphFilter".into()]);
-    assert!(dirty.style.intersects(style_groups::MORPH));
-    assert!(dirty.style.intersects(style_groups::LAYER));
+    assert!(runs(&dirty.style, &MORPH_FILTER_WRITER));
+    assert!(promotes(&dirty.style));
     assert!(
         cached
             .style
             .as_ref()
-            .is_some_and(|s| s.morph_filter.is_none())
+            .is_some_and(|s| s.get(&MORPH_FILTER).is_none())
     );
 
-    // Malformed (missing key) degrades to None; the sibling field lives.
+    // Malformed (missing key) degrades to None; the sibling property lives.
     let s: Style =
         serde_json::from_str(r#"{ "morphFilter": { "name": "crossfade" }, "opacity": 0.5 }"#)
             .expect("a bad morphFilter must not abort the style");
-    assert!(s.morph_filter.is_none());
-    assert_eq!(s.opacity.static_val(), Some(0.5));
-}
-
-/// Compile-time completeness guard: a `Style` struct literal built from the
-/// field table must name every field — adding a `Style` field without
-/// extending `with_style_fields!` fails this with E0063 (missing field).
-#[test]
-fn style_field_table_is_complete() {
-    macro_rules! build_full {
-        ($(($f:ident, $name:literal, $g:tt, $ov:ident),)*) => {
-            Style { $($f: None,)* }
-        };
-    }
-    let _style: Style = with_style_fields!(build_full);
-}
-
-/// Every table wire name must equal serde's `rename_all = "camelCase"`
-/// rendering of the field ident, or `unset_field`/the JS delta builder
-/// would miss the field.
-#[test]
-fn style_wire_names_match_serde_rename() {
-    fn camel(s: &str) -> String {
-        let mut out = String::new();
-        let mut up = false;
-        for c in s.chars() {
-            if c == '_' {
-                up = true;
-            } else if up {
-                out.extend(c.to_uppercase());
-                up = false;
-            } else {
-                out.push(c);
-            }
-        }
-        out
-    }
-    macro_rules! check {
-        ($(($f:ident, $name:literal, $g:tt, $ov:ident),)*) => {
-            $( assert_eq!(camel(stringify!($f)), $name, "table wire name for `{}`", stringify!($f)); )*
-        };
-    }
-    with_style_fields!(check);
+    assert!(s.get(&MORPH_FILTER).is_none());
+    assert_eq!(s.get(&OPACITY).static_val(), Some(0.5));
 }

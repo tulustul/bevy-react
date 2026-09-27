@@ -33,7 +33,10 @@ pub(crate) fn derive_shape_bindings(shape: Option<&ShapeAttrs>) -> Option<Animat
 
 fn derive_props_bindings(props: &Props) -> Option<AnimatedBindings> {
     let mut out = BTreeMap::new();
-    if let Some(style) = props.style.as_ref().and_then(|s| s.opacity.as_ref())
+    if let Some(style) = props
+        .style
+        .as_ref()
+        .and_then(|s| s.get(&bevy_react_core::style::props::OPACITY))
         && let bevy_react_core::protocol::animatable::Animatable::Animated(a) = style
     {
         out.insert(P::Opacity, a.binding.clone());

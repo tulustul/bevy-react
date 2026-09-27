@@ -36,11 +36,13 @@ pub fn answer_window_size(
     });
 }
 
-/// The feature registry the demos app runs with: `bevy_react_svg` (the
-/// gallery renders JSX `<svg>`s). Built on a bare `App`, exactly as the
-/// plugin registers into the real one.
+/// The feature registry the demos app runs with: the core's style
+/// properties and writers plus `bevy_react_svg` (the gallery renders JSX
+/// `<svg>`s). Built on a bare `App`, exactly as the plugins register into
+/// the real one.
 pub fn ext_registry() -> bevy_react_core::ext::ExtRegistry {
     let mut app = bevy::app::App::new();
+    bevy_react_core::style::add_core_styles(&mut app);
     app.add_plugins(bevy_react_svg::SvgPlugin);
     bevy_react_core::ext::ExtRegistry::from_app(&app)
 }

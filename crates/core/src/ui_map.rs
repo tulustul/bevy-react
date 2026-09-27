@@ -5,7 +5,6 @@
 //! (parsed once at the serde boundary — see [`crate::protocol`]), so applying
 //! them here is a plain field copy.
 
-use crate::animations::build_ui_transform;
 use bevy::picking::Pickable;
 use bevy::platform::collections::HashMap;
 use bevy::prelude::*;
@@ -14,19 +13,29 @@ use bevy::text::{FontSize as BevyFontSize, LetterSpacing, LineHeight};
 use bevy::ui::FocusPolicy;
 use bevy::ui::widget::NodeImageMode;
 
-use crate::cursor::NodeCursor;
 use crate::plugin::Fonts;
 use crate::protocol::{
     animatable::Animatable, animatable::AnimatableField, background_image::AtlasSpec,
     background_image::ImageMode, background_image::ImageModeSpec, background_image::SliceBorder,
-    background_image::SliceScale, background_image::SliceSpec, props::Props, style::Style,
-    style::StyleDirty, units::Angle, units::FontSize, units::Length, units::Rect,
-    visual::AngularStop, visual::BoxShadowList, visual::BoxShadowSpec, visual::ConicGradientSpec,
-    visual::GradientList, visual::GradientSpec, visual::GradientStop, visual::LetterSpacingSpec,
-    visual::LineHeightSpec, visual::LinearGradientSpec, visual::RadialGradientSpec,
-    visual::RadialShapeSpec,
+    background_image::SliceScale, background_image::SliceSpec, props::Props, units::Angle,
+    units::FontSize, units::Length, units::Rect, visual::AngularStop, visual::BoxShadowList,
+    visual::BoxShadowSpec, visual::ConicGradientSpec, visual::GradientList, visual::GradientSpec,
+    visual::GradientStop, visual::LetterSpacingSpec, visual::LineHeightSpec,
+    visual::LinearGradientSpec, visual::RadialGradientSpec, visual::RadialShapeSpec,
 };
-use crate::scrollbar::{ScrollbarConfig, ScrollbarPosition};
+use crate::scrollbar::ScrollbarPosition;
+use crate::style::Style;
+use crate::style::props::{
+    ALIGN_CONTENT, ALIGN_ITEMS, ALIGN_SELF, ASPECT_RATIO, BACKGROUND_COLOR, BORDER, BORDER_COLOR,
+    BORDER_RADIUS, BOTTOM, BOX_SIZING, COLOR, COLUMN_GAP, DISPLAY, FLEX_BASIS, FLEX_DIRECTION,
+    FLEX_GROW, FLEX_SHRINK, FLEX_WRAP, FOCUS_POLICY, FONT_FAMILY, FONT_SIZE, FONT_WEIGHT, GAP,
+    GRID_AUTO_COLUMNS, GRID_AUTO_FLOW, GRID_AUTO_ROWS, GRID_COLUMN, GRID_ROW,
+    GRID_TEMPLATE_COLUMNS, GRID_TEMPLATE_ROWS, HEIGHT, JUSTIFY_CONTENT, JUSTIFY_ITEMS,
+    JUSTIFY_SELF, LEFT, LETTER_SPACING, LINE_BREAK, LINE_HEIGHT, MARGIN, MAX_HEIGHT, MAX_WIDTH,
+    MIN_HEIGHT, MIN_WIDTH, OPACITY, OVERFLOW_X, OVERFLOW_Y, PADDING, POSITION_TYPE, RIGHT, ROW_GAP,
+    SCROLLBAR, SCROLLBAR_WIDTH, TEXT_ALIGN, TEXT_SHADOW, TOP, WIDTH, Z_INDEX,
+};
+use crate::style::{Invalidation, WriterCtx, WriterMask};
 
 /// Parse a CSS color string into a `Color`: hex, named colors, `transparent`, or
 /// `rgb()/hsl()/hwb()/oklab()/oklch()` functional notation (see
@@ -65,19 +74,6 @@ pub fn length_to_val(length: Length) -> Val {
     }
 }
 
-/// Convert a wire [`FontSize`] into bevy's `FontSize` (the `TextFont` field type),
-/// mapping each unit one-to-one (`Rem` resolves against bevy's `RemSize` resource).
-fn font_size_to_bevy(size: FontSize) -> BevyFontSize {
-    match size {
-        FontSize::Px(v) => BevyFontSize::Px(v),
-        FontSize::Vw(v) => BevyFontSize::Vw(v),
-        FontSize::Vh(v) => BevyFontSize::Vh(v),
-        FontSize::VMin(v) => BevyFontSize::VMin(v),
-        FontSize::VMax(v) => BevyFontSize::VMax(v),
-        FontSize::Rem(v) => BevyFontSize::Rem(v),
-    }
-}
-
 /// Convert a wire [`Rect`] (top/right/bottom/left) into a `UiRect`.
 pub fn rect_to_uirect(rect: Rect) -> UiRect {
     UiRect {
@@ -100,198 +96,6 @@ pub fn rect_to_border_radius(rect: Rect) -> BorderRadius {
     }
 }
 
-/// Map a wire color-space token to bevy's [`InterpolationColorSpace`]
-/// (default `Oklaba`, matching bevy's own default).
-fn parse_color_space(s: Option<&str>) -> InterpolationColorSpace {
-    match s {
-        Some("oklch") => InterpolationColorSpace::Oklcha,
-        Some("oklchLong") => InterpolationColorSpace::OklchaLong,
-        Some("srgb") => InterpolationColorSpace::Srgba,
-        Some("linearRgb") => InterpolationColorSpace::LinearRgba,
-        Some("hsl") => InterpolationColorSpace::Hsla,
-        Some("hslLong") => InterpolationColorSpace::HslaLong,
-        Some("hsv") => InterpolationColorSpace::Hsva,
-        Some("hsvLong") => InterpolationColorSpace::HsvaLong,
-        _ => InterpolationColorSpace::Oklaba,
-    }
-}
-
-/// Map a named anchor (`"center"`, `"topLeft"`, …) to a [`UiPosition`]
-/// (default center). Arbitrary `Val`-offset centers are not yet supported.
-fn parse_position(s: Option<&str>) -> UiPosition {
-    match s {
-        Some("top") => UiPosition::TOP,
-        Some("bottom") => UiPosition::BOTTOM,
-        Some("left") => UiPosition::LEFT,
-        Some("right") => UiPosition::RIGHT,
-        Some("topLeft") => UiPosition::TOP_LEFT,
-        Some("topRight") => UiPosition::TOP_RIGHT,
-        Some("bottomLeft") => UiPosition::BOTTOM_LEFT,
-        Some("bottomRight") => UiPosition::BOTTOM_RIGHT,
-        _ => UiPosition::CENTER,
-    }
-}
-
-/// Map a radial gradient's shape spec to bevy's [`RadialGradientShape`]
-/// (default `ClosestCorner`).
-fn parse_radial_shape(shape: Option<&RadialShapeSpec>) -> RadialGradientShape {
-    // Static-or-seed for a bare (non-`Option`) animated radius; a seedless
-    // bound radius falls back to the leaf's identity default (0px).
-    fn radius(a: &Animatable<Length>) -> Val {
-        length_to_val(a.value().or_else(|| a.seed()).copied().unwrap_or_default())
-    }
-    match shape {
-        Some(RadialShapeSpec::Circle { circle }) => RadialGradientShape::Circle(radius(circle)),
-        Some(RadialShapeSpec::Ellipse { ellipse }) => {
-            RadialGradientShape::Ellipse(radius(&ellipse[0]), radius(&ellipse[1]))
-        }
-        Some(RadialShapeSpec::Keyword(k)) => match k.as_str() {
-            "closestSide" => RadialGradientShape::ClosestSide,
-            "farthestSide" => RadialGradientShape::FarthestSide,
-            "farthestCorner" => RadialGradientShape::FarthestCorner,
-            _ => RadialGradientShape::ClosestCorner,
-        },
-        None => RadialGradientShape::ClosestCorner,
-    }
-}
-
-/// Static-or-seed read of an animated stop color (`String` isn't `Copy`, so
-/// the [`AnimatableField`] copy helpers don't apply): a bound color renders
-/// its seed until a driver writes; a seedless bound color is transparent.
-fn stop_color(color: &Animatable<String>) -> Color {
-    match color {
-        Animatable::Static(s) => parse_color(s),
-        a => a.seed().map(|s| parse_color(s)).unwrap_or(Color::NONE),
-    }
-}
-
-/// Build a positional [`ColorStop`] (linear/radial), folding `opacity` into the
-/// color like the solid background path. An absent `position` is auto-spaced.
-fn color_stop(stop: &GradientStop, opacity: Option<f32>) -> ColorStop {
-    ColorStop {
-        color: apply_opacity(stop_color(&stop.color), opacity),
-        point: stop
-            .position
-            .static_or_seed()
-            .map(length_to_val)
-            .unwrap_or(Val::Auto),
-        hint: stop.hint.static_or_seed().unwrap_or(0.5),
-    }
-}
-
-/// Build an [`AngularColorStop`] (conic). The wire [`Angle`] is already radians.
-fn angular_stop(stop: &AngularStop, opacity: Option<f32>) -> AngularColorStop {
-    AngularColorStop {
-        color: apply_opacity(stop_color(&stop.color), opacity),
-        angle: stop.angle.static_or_seed().map(Angle::radians),
-        hint: stop.hint.static_or_seed().unwrap_or(0.5),
-    }
-}
-
-fn build_linear(spec: &LinearGradientSpec, opacity: Option<f32>) -> Gradient {
-    LinearGradient::new(
-        spec.angle
-            .static_or_seed()
-            .map(Angle::radians)
-            .unwrap_or(0.0),
-        spec.stops.iter().map(|s| color_stop(s, opacity)).collect(),
-    )
-    .in_color_space(parse_color_space(spec.color_space.as_deref()))
-    .into()
-}
-
-fn build_radial(spec: &RadialGradientSpec, opacity: Option<f32>) -> Gradient {
-    RadialGradient::new(
-        parse_position(spec.position.as_deref()),
-        parse_radial_shape(spec.shape.as_ref()),
-        spec.stops.iter().map(|s| color_stop(s, opacity)).collect(),
-    )
-    .in_color_space(parse_color_space(spec.color_space.as_deref()))
-    .into()
-}
-
-fn build_conic(spec: &ConicGradientSpec, opacity: Option<f32>) -> Gradient {
-    ConicGradient::new(
-        parse_position(spec.position.as_deref()),
-        spec.stops
-            .iter()
-            .map(|s| angular_stop(s, opacity))
-            .collect(),
-    )
-    .with_start(
-        spec.start
-            .static_or_seed()
-            .map(Angle::radians)
-            .unwrap_or(0.0),
-    )
-    .in_color_space(parse_color_space(spec.color_space.as_deref()))
-    .into()
-}
-
-fn build_gradient(spec: &GradientSpec, opacity: Option<f32>) -> Gradient {
-    match spec {
-        GradientSpec::Linear(l) => build_linear(l, opacity),
-        GradientSpec::Radial(r) => build_radial(r, opacity),
-        GradientSpec::Conic(c) => build_conic(c, opacity),
-    }
-}
-
-/// Flatten a [`GradientList`] (one or many) into the `Vec<Gradient>` that
-/// `BackgroundGradient`/`BorderGradient` wrap. `opacity` fades every stop.
-pub fn build_gradients(list: &GradientList, opacity: Option<f32>) -> Vec<Gradient> {
-    match list {
-        GradientList::One(g) => vec![build_gradient(g, opacity)],
-        GradientList::Many(gs) => gs.iter().map(|g| build_gradient(g, opacity)).collect(),
-    }
-}
-
-/// The transition/binding engines' gradient input: the resolver's UNfolded
-/// output per surface (`build_gradients(_, None)`) plus the fold opacity
-/// `apply_style_masked` used (None on a promoted root — the group alpha owns
-/// it there). Stamped by the gradient dirty groups; both engines fold at
-/// write time so their settle equals the resolver's own folded component
-/// bit-exactly.
-#[derive(Component, Debug, Clone, Default, PartialEq)]
-pub struct GradientTargets {
-    pub background: Option<Vec<Gradient>>,
-    pub border: Option<Vec<Gradient>>,
-    pub opacity: Option<f32>,
-}
-
-/// Fold an opacity into every stop color of an unfolded gradient list —
-/// the write-time half of the split builder (must match `build_gradients`'
-/// own fold exactly: [`apply_opacity`] per stop). Consumed by the gradient
-/// transition channels at write time; the split-builder contract test pins
-/// it to `build_gradients`' own fold.
-pub fn fold_gradients(list: &[Gradient], opacity: Option<f32>) -> Vec<Gradient> {
-    let Some(o) = opacity else {
-        return list.to_vec();
-    };
-    list.iter()
-        .map(|g| {
-            let mut g = g.clone();
-            match &mut g {
-                Gradient::Linear(l) => {
-                    for s in &mut l.stops {
-                        s.color = apply_opacity(s.color, Some(o));
-                    }
-                }
-                Gradient::Radial(r) => {
-                    for s in &mut r.stops {
-                        s.color = apply_opacity(s.color, Some(o));
-                    }
-                }
-                Gradient::Conic(c) => {
-                    for s in &mut c.stops {
-                        s.color = apply_opacity(s.color, Some(o));
-                    }
-                }
-            }
-            g
-        })
-        .collect()
-}
-
 /// Convert one [`BoxShadowSpec`] into a `bevy_ui::ShadowStyle`.
 fn shadow_style(b: &BoxShadowSpec) -> ShadowStyle {
     ShadowStyle {
@@ -312,32 +116,32 @@ pub fn build_box_shadows(list: &BoxShadowList) -> Vec<ShadowStyle> {
     }
 }
 
-/// Build a `bevy_ui::Node` from the style subset. Unset fields keep Bevy's
-/// defaults.
-pub fn node_from_style(style: &Option<Style>) -> Node {
-    let mut node = Node::default();
-    let Some(s) = style.as_ref() else {
-        return node;
+/// Build a `bevy_ui::Node` from the layout properties. Unset properties
+/// keep Bevy's defaults.
+pub(crate) fn node_from(style: Option<&Style>) -> Node {
+    let Some(s) = style else {
+        return Node::default();
     };
+    let mut node = Node::default();
 
-    if let Some(v) = s.display {
+    if let Some(v) = s.get(&DISPLAY).copied() {
         node.display = v;
     }
-    if let Some(v) = s.box_sizing {
+    if let Some(v) = s.get(&BOX_SIZING).copied() {
         node.box_sizing = v;
     }
-    if let Some(v) = s.position_type {
+    if let Some(v) = s.get(&POSITION_TYPE).copied() {
         node.position_type = v;
     }
-    if let Some(v) = s.overflow_x {
+    if let Some(v) = s.get(&OVERFLOW_X).copied() {
         node.overflow.x = v;
     }
-    if let Some(v) = s.overflow_y {
+    if let Some(v) = s.get(&OVERFLOW_Y).copied() {
         node.overflow.y = v;
     }
-    if let Some(v) = s.scrollbar_width {
+    if let Some(v) = s.get(&SCROLLBAR_WIDTH).copied() {
         node.scrollbar_width = v;
-    } else if let Some(spec) = &s.scrollbar {
+    } else if let Some(spec) = s.get(&SCROLLBAR) {
         // A gutter-positioned visible scrollbar reserves space for itself (content
         // shrinks) via Bevy's own `scrollbar_width` — unless the user set one
         // explicitly (handled above). A floating bar reserves nothing.
@@ -346,122 +150,122 @@ pub fn node_from_style(style: &Option<Style>) -> Node {
         }
     }
 
-    if let Some(v) = s.left.static_val() {
+    if let Some(v) = s.get(&LEFT).static_val() {
         node.left = length_to_val(v);
     }
-    if let Some(v) = s.right.static_val() {
+    if let Some(v) = s.get(&RIGHT).static_val() {
         node.right = length_to_val(v);
     }
-    if let Some(v) = s.top.static_val() {
+    if let Some(v) = s.get(&TOP).static_val() {
         node.top = length_to_val(v);
     }
-    if let Some(v) = s.bottom.static_val() {
+    if let Some(v) = s.get(&BOTTOM).static_val() {
         node.bottom = length_to_val(v);
     }
 
-    if let Some(v) = s.width.static_val() {
+    if let Some(v) = s.get(&WIDTH).static_val() {
         node.width = length_to_val(v);
     }
-    if let Some(v) = s.height.static_val() {
+    if let Some(v) = s.get(&HEIGHT).static_val() {
         node.height = length_to_val(v);
     }
-    if let Some(v) = s.min_width.static_val() {
+    if let Some(v) = s.get(&MIN_WIDTH).static_val() {
         node.min_width = length_to_val(v);
     }
-    if let Some(v) = s.min_height.static_val() {
+    if let Some(v) = s.get(&MIN_HEIGHT).static_val() {
         node.min_height = length_to_val(v);
     }
-    if let Some(v) = s.max_width.static_val() {
+    if let Some(v) = s.get(&MAX_WIDTH).static_val() {
         node.max_width = length_to_val(v);
     }
-    if let Some(v) = s.max_height.static_val() {
+    if let Some(v) = s.get(&MAX_HEIGHT).static_val() {
         node.max_height = length_to_val(v);
     }
-    if let Some(v) = s.aspect_ratio.static_val() {
+    if let Some(v) = s.get(&ASPECT_RATIO).static_val() {
         node.aspect_ratio = Some(v);
     }
 
-    if let Some(v) = s.align_items {
+    if let Some(v) = s.get(&ALIGN_ITEMS).copied() {
         node.align_items = v;
     }
-    if let Some(v) = s.justify_items {
+    if let Some(v) = s.get(&JUSTIFY_ITEMS).copied() {
         node.justify_items = v;
     }
-    if let Some(v) = s.align_self {
+    if let Some(v) = s.get(&ALIGN_SELF).copied() {
         node.align_self = v;
     }
-    if let Some(v) = s.justify_self {
+    if let Some(v) = s.get(&JUSTIFY_SELF).copied() {
         node.justify_self = v;
     }
-    if let Some(v) = s.align_content {
+    if let Some(v) = s.get(&ALIGN_CONTENT).copied() {
         node.align_content = v;
     }
-    if let Some(v) = s.justify_content {
+    if let Some(v) = s.get(&JUSTIFY_CONTENT).copied() {
         node.justify_content = v;
     }
 
-    if let Some(r) = s.margin {
+    if let Some(r) = s.get(&MARGIN).copied() {
         node.margin = rect_to_uirect(r);
     }
-    if let Some(r) = s.padding {
+    if let Some(r) = s.get(&PADDING).copied() {
         node.padding = rect_to_uirect(r);
     }
-    if let Some(r) = s.border {
+    if let Some(r) = s.get(&BORDER).copied() {
         node.border = rect_to_uirect(r);
     }
 
-    if let Some(v) = s.flex_direction {
+    if let Some(v) = s.get(&FLEX_DIRECTION).copied() {
         node.flex_direction = v;
     }
-    if let Some(v) = s.flex_wrap {
+    if let Some(v) = s.get(&FLEX_WRAP).copied() {
         node.flex_wrap = v;
     }
-    if let Some(v) = s.flex_grow {
+    if let Some(v) = s.get(&FLEX_GROW).copied() {
         node.flex_grow = v;
     }
-    if let Some(v) = s.flex_shrink {
+    if let Some(v) = s.get(&FLEX_SHRINK).copied() {
         node.flex_shrink = v;
     }
-    if let Some(v) = s.flex_basis.static_val() {
+    if let Some(v) = s.get(&FLEX_BASIS).static_val() {
         node.flex_basis = length_to_val(v);
     }
-    if let Some(v) = s.gap.static_val() {
+    if let Some(v) = s.get(&GAP).static_val() {
         node.row_gap = length_to_val(v);
         node.column_gap = length_to_val(v);
     }
-    if let Some(v) = s.row_gap.static_val() {
+    if let Some(v) = s.get(&ROW_GAP).static_val() {
         node.row_gap = length_to_val(v);
     }
-    if let Some(v) = s.column_gap.static_val() {
+    if let Some(v) = s.get(&COLUMN_GAP).static_val() {
         node.column_gap = length_to_val(v);
     }
 
-    if let Some(v) = s.grid_auto_flow {
+    if let Some(v) = s.get(&GRID_AUTO_FLOW).copied() {
         node.grid_auto_flow = v;
     }
-    if let Some(v) = &s.grid_template_rows {
+    if let Some(v) = s.get(&GRID_TEMPLATE_ROWS) {
         node.grid_template_rows = v.clone();
     }
-    if let Some(v) = &s.grid_template_columns {
+    if let Some(v) = s.get(&GRID_TEMPLATE_COLUMNS) {
         node.grid_template_columns = v.clone();
     }
-    if let Some(v) = &s.grid_auto_rows {
+    if let Some(v) = s.get(&GRID_AUTO_ROWS) {
         node.grid_auto_rows = v.clone();
     }
-    if let Some(v) = &s.grid_auto_columns {
+    if let Some(v) = s.get(&GRID_AUTO_COLUMNS) {
         node.grid_auto_columns = v.clone();
     }
-    if let Some(v) = s.grid_row {
+    if let Some(v) = s.get(&GRID_ROW).copied() {
         node.grid_row = v;
     }
-    if let Some(v) = s.grid_column {
+    if let Some(v) = s.get(&GRID_COLUMN).copied() {
         node.grid_column = v;
     }
 
     // `static_val`: an `{ animated }` radius reads as unset here (identity
     // corners) and the animation apply stage re-asserts it each frame — the
     // `width` precedent.
-    if let Some(r) = s.border_radius.static_val() {
+    if let Some(r) = s.get(&BORDER_RADIUS).static_val() {
         node.border_radius = rect_to_border_radius(r);
     }
 
@@ -475,7 +279,7 @@ pub fn node_from_style(style: &Option<Style>) -> Node {
 /// added at command-apply time). Runs as a queued `EntityCommand`, so it needs no
 /// `&mut Node` query in the caller and applies in command order (correct when a node
 /// is updated more than once in one drained batch — sequential `set_if_neq`s converge).
-fn set_node_if_changed(node: Node) -> impl EntityCommand {
+pub(crate) fn set_node_if_changed(node: Node) -> impl EntityCommand {
     move |mut entity: EntityWorldMut| match entity.get_mut::<Node>() {
         Some(mut current) => {
             current.set_if_neq(node);
@@ -496,7 +300,9 @@ fn set_node_if_changed(node: Node) -> impl EntityCommand {
 /// insert anyway. The defaults render exactly like absence (transparent
 /// background/border; `ZIndex(0)` is bevy's documented fallback for a missing
 /// `ZIndex`).
-fn set_if_neq_or_insert<T: Component<Mutability = bevy::ecs::component::Mutable> + PartialEq>(
+pub(crate) fn set_if_neq_or_insert<
+    T: Component<Mutability = bevy::ecs::component::Mutable> + PartialEq,
+>(
     value: T,
 ) -> impl EntityCommand {
     move |mut entity: EntityWorldMut| match entity.get_mut::<T>() {
@@ -509,33 +315,25 @@ fn set_if_neq_or_insert<T: Component<Mutability = bevy::ecs::component::Mutable>
     }
 }
 
-/// Style groups whose components ride the **spawn bundle** of a fresh element
-/// ([`fresh_style_bundle`]) rather than [`apply_style_fresh`]: `Node` and its
-/// required `BackgroundColor`/`BorderColor`/`ZIndex`/`FocusPolicy` plus the
-/// never-absent `Pickable` mirror.
-const FRESH_BUNDLED: u32 = {
-    use crate::protocol::style::style_groups as g;
-    g::LAYOUT | g::BACKGROUND | g::BORDER_COLOR | g::Z_INDEX | g::FOCUS_POLICY
-};
-
 /// The always-present components of a freshly spawned element, built from its
 /// style so they ride the `spawn((ReactNode, …))` bundle — one archetype, no
 /// moves — instead of landing as separate inserts. `focus_default` is the
-/// element's `focusPolicy` when the style has none (`Pass` for a node, `Block`
-/// for a `<button>` — see `stamps::apply_button_focus_default`, the update
-/// path's equivalent); the `Pickable` mirror follows it (see the
-/// `FOCUS_POLICY` doc in [`apply_style_masked`]).
+/// element's `focusPolicy` when the style has none (`Block` for a `<button>`,
+/// `Pass` otherwise — the focus-policy writer's default); the `Pickable`
+/// mirror follows it.
 ///
 /// Pair with [`apply_style_fresh`] for the rest of the style.
 pub fn fresh_style_bundle(style: &Option<Style>, focus_default: FocusPolicy) -> impl Bundle {
     let s = style.as_ref();
-    let opacity = s.and_then(|s| s.opacity.static_val());
-    let focus_policy = s.and_then(|s| s.focus_policy).unwrap_or(focus_default);
+    let opacity = s.and_then(|s| s.get(&OPACITY).static_val());
+    let focus_policy = s
+        .and_then(|s| s.get(&FOCUS_POLICY).copied())
+        .unwrap_or(focus_default);
     (
-        node_from_style(style),
+        node_from(s),
         background_color(s, opacity),
         border_color(s),
-        ZIndex(s.and_then(|s| s.z_index).unwrap_or_default()),
+        ZIndex(s.and_then(|s| s.get(&Z_INDEX).copied()).unwrap_or_default()),
         focus_policy,
         Pickable {
             should_block_lower: focus_policy == FocusPolicy::Block,
@@ -546,8 +344,8 @@ pub fn fresh_style_bundle(style: &Option<Style>, focus_default: FocusPolicy) -> 
 
 /// The `BackgroundColor` a style resolves to: the folded static color, or the
 /// transparent default when the style has none (or the color is `{ animated }`).
-fn background_color(s: Option<&Style>, opacity: Option<f32>) -> BackgroundColor {
-    match s.and_then(|s| s.background_color.static_ref()) {
+pub(crate) fn background_color(s: Option<&Style>, opacity: Option<f32>) -> BackgroundColor {
+    match s.and_then(|s| s.get(&BACKGROUND_COLOR)).static_ref() {
         Some(hex) => BackgroundColor(apply_opacity(parse_color(hex), opacity)),
         None => BackgroundColor::DEFAULT,
     }
@@ -555,8 +353,8 @@ fn background_color(s: Option<&Style>, opacity: Option<f32>) -> BackgroundColor 
 
 /// The `BorderColor` a style resolves to: per-side static colors (an unset side
 /// is transparent), or the all-transparent default when the style has none.
-fn border_color(s: Option<&Style>) -> BorderColor {
-    match s.and_then(|s| s.border_color.static_ref()) {
+pub(crate) fn border_color(s: Option<&Style>) -> BorderColor {
+    match s.and_then(|s| s.get(&BORDER_COLOR)).static_ref() {
         Some(spec) => {
             let side = |c: &Option<String>| c.as_deref().map(parse_color).unwrap_or(Color::NONE);
             BorderColor {
@@ -570,419 +368,72 @@ fn border_color(s: Option<&Style>) -> BorderColor {
     }
 }
 
-/// Apply a style to an element: update its `Node` (only relaying out when a layout
-/// field changed — see [`set_node_if_changed`]) plus the sibling visual components
-/// present in the style (and remove ones that are absent, so toggling a style key
-/// off clears the component).
-pub fn apply_style(ec: &mut EntityCommands, style: &Option<Style>) {
-    apply_style_masked(ec, style, StyleDirty::ALL, false);
+/// Apply a style to an element: every registered writer runs (see
+/// [`apply_style_masked`]).
+pub fn apply_style(ec: &mut EntityCommands, style: &Option<Style>, ctx: &WriterCtx) {
+    apply_style_masked(ec, style, WriterMask::ALL, ctx, Invalidation::ALL);
 }
 
 /// [`apply_style`] for a **freshly spawned** element whose spawn bundle carried
-/// [`fresh_style_bundle`]: stamps the remaining style-derived components that
-/// are present and skips every "absent → remove" arm (a fresh entity has nothing
-/// to remove — each of those would otherwise be a queued no-op command, ~30 per
-/// node on a typical style). The create path only; updates and restyles keep
-/// the full remove semantics of [`apply_style_masked`].
-pub fn apply_style_fresh(ec: &mut EntityCommands, style: &Option<Style>) {
-    apply_style_impl(
+/// [`fresh_style_bundle`] (and, for text, the resolved text tuple): the
+/// bundled writers are skipped, and `ctx.fresh` makes every "absent → remove"
+/// branch a no-op (a fresh entity has nothing to remove — each of those would
+/// otherwise be a queued no-op command, ~30 per node on a typical style). The
+/// create path only; updates and restyles keep the full remove semantics.
+pub fn apply_style_fresh(ec: &mut EntityCommands, style: &Option<Style>, ctx: &WriterCtx) {
+    debug_assert!(ctx.fresh, "apply_style_fresh with a non-fresh ctx");
+    let bundled = ctx.styles.masks.fresh_bundled;
+    // A fresh entity has nothing to remove or reset: only the writers
+    // reading a property the style sets have work (see `Writer::apply`).
+    let present = style
+        .as_ref()
+        .map_or(WriterMask::NONE, |s| ctx.styles.writers_for(&s.keys()));
+    apply_style_masked(
         ec,
         style,
-        StyleDirty(StyleDirty::ALL.0 & !FRESH_BUNDLED),
-        false,
-        true,
+        present.without(bundled),
+        ctx,
+        Invalidation::PAINT,
     );
 }
 
 /// `ec.remove::<B>()` unless the entity is known fresh (nothing to remove).
-fn remove_unless_fresh<B: Bundle>(ec: &mut EntityCommands, fresh: bool) {
+pub(crate) fn remove_unless_fresh<B: Bundle>(ec: &mut EntityCommands, fresh: bool) {
     if !fresh {
         ec.remove::<B>();
     }
 }
 
-/// [`apply_style`] restricted to the dirty
-/// [`style_groups`](crate::protocol::style::style_groups): each derived
-/// component is only rebuilt/inserted/removed when one of the style fields its
-/// group reads was touched (see the field table in [`crate::protocol`]). A
-/// delta `Op::Update` passes the mask its merge computed; every other caller
-/// (create, hover/press restyle, legacy update) passes [`StyleDirty::ALL`].
+/// Run the registered [writers](crate::style::Writer) in `writers` (their
+/// registration order), then act on the change's `invalidation`: a
+/// [`PAINT`](Invalidation::PAINT) change re-captures the node's owning layer
+/// (see `crate::layer::LayerContentDirt`). Composite-side changes (a promoted
+/// root's group alpha or translation, the filter chains, the 3D matrix) are
+/// not paint — the chain resolvers and `sync_transform3d_matrices` push
+/// precise `composite_only` dirt themselves, and promotion flips dirty
+/// correctly (a promote through the first-frame geometry hash, a demote
+/// through `reapply_opacity_outputs`' paint restyle).
 ///
-/// `style` must always be the **full merged** style, never a delta — a skipped
-/// group keeps its current components, but an executed group trusts `style`
-/// completely (absence = remove).
+/// `style` must always be the **full merged** style, never a delta — a
+/// skipped writer keeps its current components, but a writer that runs
+/// trusts `style` completely (absence = remove).
 pub fn apply_style_masked(
     ec: &mut EntityCommands,
     style: &Option<Style>,
-    dirty: StyleDirty,
-    promoted: bool,
+    writers: WriterMask,
+    ctx: &WriterCtx,
+    invalidation: Invalidation,
 ) {
-    apply_style_impl(ec, style, dirty, promoted, false);
-}
-
-/// The shared body of [`apply_style_masked`] and [`apply_style_fresh`]. `fresh`
-/// marks a just-spawned entity: every "absent → remove" arm is skipped (see
-/// [`remove_unless_fresh`]) and the bundled groups are expected to be masked
-/// out by the caller.
-fn apply_style_impl(
-    ec: &mut EntityCommands,
-    style: &Option<Style>,
-    dirty: StyleDirty,
-    promoted: bool,
-    fresh: bool,
-) {
-    use crate::protocol::style::style_groups as g;
-
-    // Guarded in-place update, not a wholesale re-insert: `Op::Update` and the
-    // hover/press restyle systems all funnel through here, and re-inserting `Node`
-    // unconditionally marks it changed and relays out the subtree even for a
-    // paint-only change. The reconciler already skips no-op updates (`renderer.ts`'s
-    // delta builder); this skips the relayout when the *layout* is unchanged.
-    if dirty.intersects(g::LAYOUT) {
-        ec.queue(set_node_if_changed(node_from_style(style)));
+    let empty = Style::empty();
+    let s = style.as_ref().unwrap_or(empty);
+    // Registration order = bit order: walk the set bits low to high.
+    let mut bits = writers.intersection(ctx.styles.all_writers()).0;
+    while bits != 0 {
+        let bit = bits.trailing_zeros() as usize;
+        bits &= bits - 1;
+        (ctx.styles.writer_at(bit).apply)(ctx, s, ec);
     }
-    let s = style.as_ref();
-
-    // `opacity` multiplies into the background (and text) alpha — color before
-    // opacity, mirroring the animated path. On a promoted layer root the fold
-    // is suppressed wholesale (`opacity = None` starves every fold site below)
-    // and the value instead drives the subtree's composite-time group alpha.
-    let opacity = if promoted {
-        None
-    } else {
-        s.and_then(|s| s.opacity.static_val())
-    };
-    if promoted && dirty.intersects(g::LAYER) {
-        let alpha = s.and_then(|s| s.opacity.static_val()).unwrap_or(1.0);
-        // Queued set-if-neq (like `set_node_if_changed`): a settled value must
-        // not trip change detection every restyle.
-        ec.queue(move |mut entity: EntityWorldMut| {
-            match entity.get_mut::<crate::layer::LayerGroupAlpha>() {
-                Some(mut current) => {
-                    current.set_if_neq(crate::layer::LayerGroupAlpha(alpha));
-                }
-                None => {
-                    entity.insert(crate::layer::LayerGroupAlpha(alpha));
-                }
-            }
-        });
-    }
-    // `BackgroundColor`/`BorderColor`/`ZIndex` are `Node`-required: never
-    // removed, written compare-before-write (see `set_if_neq_or_insert`) so a
-    // no-change restyle ticks nothing and an absent field lands the default.
-    if dirty.intersects(g::BACKGROUND) {
-        ec.queue(set_if_neq_or_insert(background_color(s, opacity)));
-    }
-
-    // A static `transform` writes `UiTransform`. When absent we *leave it
-    // untouched* (never remove) so the `#[require(UiTransform)]` invariant on
-    // `AnimatedNode`/transition entities is never violated, and an in-flight
-    // animation/transition isn't reset by a coincident re-render.
-    if dirty.intersects(g::TRANSFORM)
-        && let Some(t) = s.and_then(|s| s.transform.as_ref())
-    {
-        ec.insert(build_ui_transform(
-            t.translate_x.static_val().map(length_to_val),
-            t.translate_y.static_val().map(length_to_val),
-            t.scale.static_val(),
-            t.scale_x.static_val(),
-            t.scale_y.static_val(),
-            t.rotate.static_val().map(Angle::radians),
-        ));
-    }
-    // `transform3d` params mirror the `UiTransform` never-remove rule: when
-    // absent the component is left untouched (demotion owns removal — see
-    // `evaluate_layer_promotions` — and an in-flight transition/animation
-    // isn't reset by a coincident re-render). Queued set-if-neq like the
-    // group alpha above: a settled value must not trip change detection.
-    if dirty.intersects(g::TRANSFORM3D)
-        && let Some(t) = s.and_then(|s| s.transform3d.as_deref().cloned())
-    {
-        ec.queue(move |mut entity: EntityWorldMut| {
-            use crate::layer::transform3d::LayerTransform3d;
-            match entity.get_mut::<LayerTransform3d>() {
-                Some(mut current) => {
-                    current.set_if_neq(LayerTransform3d(t));
-                }
-                None => {
-                    entity.insert(LayerTransform3d(t));
-                }
-            }
-        });
-    }
-    if dirty.intersects(g::BORDER_COLOR) {
-        ec.queue(set_if_neq_or_insert(border_color(s)));
-    }
-    if dirty.intersects(g::OUTLINE) {
-        match s.and_then(|s| s.outline.as_ref()) {
-            Some(o) => {
-                ec.insert(Outline {
-                    width: o.width.map(length_to_val).unwrap_or(Val::Px(1.0)),
-                    offset: o.offset.map(length_to_val).unwrap_or(Val::Px(0.0)),
-                    color: o.color.as_deref().map(parse_color).unwrap_or(Color::WHITE),
-                });
-            }
-            None => {
-                remove_unless_fresh::<Outline>(ec, fresh);
-            }
-        }
-    }
-    if dirty.intersects(g::BOX_SHADOW) {
-        match s.and_then(|s| s.box_shadow.as_ref()) {
-            Some(b) => {
-                ec.insert(BoxShadow(build_box_shadows(b)));
-            }
-            None => {
-                remove_unless_fresh::<BoxShadow>(ec, fresh);
-            }
-        }
-    }
-    if dirty.intersects(g::BG_GRADIENT) {
-        match s.and_then(|s| s.background_gradient.as_ref()) {
-            Some(grad) => {
-                ec.insert(BackgroundGradient(build_gradients(grad, opacity)));
-            }
-            None => {
-                remove_unless_fresh::<BackgroundGradient>(ec, fresh);
-            }
-        }
-    }
-    if dirty.intersects(g::BORDER_GRADIENT) {
-        match s.and_then(|s| s.border_gradient.as_ref()) {
-            Some(grad) => {
-                ec.insert(BorderGradient(build_gradients(grad, opacity)));
-            }
-            None => {
-                remove_unless_fresh::<BorderGradient>(ec, fresh);
-            }
-        }
-    }
-    // Stamp the gradient engines' input: unfolded builds + the fold opacity.
-    // Queued set-if-neq (the group-alpha pattern above) so a settled restyle
-    // doesn't trip change detection; removed when neither surface has a gradient.
-    if dirty.intersects(g::BG_GRADIENT | g::BORDER_GRADIENT) {
-        let targets = GradientTargets {
-            background: s
-                .and_then(|s| s.background_gradient.as_ref())
-                .map(|g| build_gradients(g, None)),
-            border: s
-                .and_then(|s| s.border_gradient.as_ref())
-                .map(|g| build_gradients(g, None)),
-            opacity,
-        };
-        let gradient_less = targets.background.is_none() && targets.border.is_none();
-        if !(fresh && gradient_less) {
-            ec.queue(move |mut entity: EntityWorldMut| {
-                if gradient_less {
-                    entity.remove::<GradientTargets>();
-                } else {
-                    match entity.get_mut::<GradientTargets>() {
-                        Some(mut current) => {
-                            current.set_if_neq(targets);
-                        }
-                        None => {
-                            entity.insert(targets);
-                        }
-                    }
-                }
-            });
-        }
-    }
-    // A `<text>` root's drop shadow (block-level). No-op on non-text nodes (no
-    // `Text` to shadow); removed when the style drops it on a re-render/hover-out.
-    if dirty.intersects(g::TEXT_SHADOW) {
-        match text_shadow(s, opacity) {
-            Some(shadow) => {
-                ec.insert(shadow);
-            }
-            None => {
-                remove_unless_fresh::<TextShadow>(ec, fresh);
-            }
-        }
-    }
-    if dirty.intersects(g::Z_INDEX) {
-        ec.queue(set_if_neq_or_insert(ZIndex(
-            s.and_then(|s| s.z_index).unwrap_or_default(),
-        )));
-    }
-    if dirty.intersects(g::GLOBAL_Z_INDEX) {
-        match s.and_then(|s| s.global_z_index) {
-            Some(z) => {
-                ec.insert(GlobalZIndex(z));
-            }
-            None => {
-                remove_unless_fresh::<GlobalZIndex>(ec, fresh);
-            }
-        }
-    }
-    // `imageRendering`: an explicit mode stamps the marker the binding systems
-    // (`crate::image_rendering`) pair with the entity's `ImageNode`; `auto`
-    // is passive, so it reads as absent.
-    if dirty.intersects(g::IMAGE_RENDERING) {
-        use crate::image_rendering::{ImageRendering, ImageRenderingMode};
-        match s.and_then(|s| s.image_rendering) {
-            Some(mode) if mode != ImageRendering::Auto => {
-                ec.insert(ImageRenderingMode(mode));
-            }
-            _ => {
-                remove_unless_fresh::<ImageRenderingMode>(ec, fresh);
-            }
-        }
-    }
-    // `layoutRounding`: bevy's per-subtree pixel-rounding switch. An explicit
-    // value (either way) is an override stamped as `LayoutConfig`; absent
-    // removes it so the node inherits the nearest ancestor's setting. A
-    // component write only — bevy picks the rounded/unrounded layout at read
-    // time, no relayout.
-    if dirty.intersects(g::LAYOUT_ROUNDING) {
-        match s.and_then(|s| s.layout_rounding) {
-            Some(use_rounding) => {
-                ec.insert(bevy::ui::LayoutConfig { use_rounding });
-            }
-            None => {
-                remove_unless_fresh::<bevy::ui::LayoutConfig>(ec, fresh);
-            }
-        }
-    }
-    if dirty.intersects(g::CURSOR) {
-        match s.and_then(|s| s.cursor.as_ref()) {
-            Some(c) => {
-                ec.insert(NodeCursor(c.clone()));
-            }
-            None => {
-                remove_unless_fresh::<NodeCursor>(ec, fresh);
-            }
-        }
-    }
-    // A visible `scrollbar` stamps `ScrollbarConfig`; the shell (`crate::scrollbar`)
-    // spawns Bevy's scrollbar widget over this container from it. `"none"`/absent
-    // clears it (and the shell despawns any bars).
-    if dirty.intersects(g::SCROLLBAR) {
-        match s.and_then(|s| s.scrollbar.as_ref()) {
-            Some(spec) if spec.is_visible() => {
-                ec.insert(ScrollbarConfig(spec.clone()));
-            }
-            _ => {
-                remove_unless_fresh::<ScrollbarConfig>(ec, fresh);
-            }
-        }
-    }
-    // `focusPolicy` controls pointer pass-through. The node's default is `Pass`
-    // (bevy_ui `Node` requires `FocusPolicy`, whose `Default` is `Pass`), so absent
-    // / "pass" stay click-through and only "block" makes the node capture pointer
-    // interaction (so nodes behind it don't receive it). We always *insert* — never
-    // remove — because removing the component makes `ui_focus_system` fall back to
-    // `.unwrap_or(&FocusPolicy::Block)` and silently block every node (e.g. a `<text>`
-    // child would then block its parent); inserting also makes toggling "block" back
-    // off reliably revert to `Pass`. (A `<button>`'s `Block` default is re-asserted
-    // by the reconciler under the same `FOCUS_POLICY` gate.)
-    //
-    // The policy is mirrored into `Pickable.should_block_lower` because bevy_ui's
-    // *picking* backend ignores `FocusPolicy` entirely and blocks by default when
-    // `Pickable` is absent — and clicks (plus all `<surface>` interaction) ride
-    // picking events. The same never-remove rule applies: an absent `Pickable`
-    // falls back to block.
-    if dirty.intersects(g::FOCUS_POLICY) {
-        let focus_policy = s.and_then(|s| s.focus_policy).unwrap_or(FocusPolicy::Pass); // absent (or a decode fallback) stays click-through
-        ec.insert(focus_policy);
-        ec.insert(Pickable {
-            should_block_lower: focus_policy == FocusPolicy::Block,
-            is_hoverable: true,
-        });
-    }
-
-    // Mirror the wire `filter` chain onto the entity for the chain resolver
-    // (`crate::filters::resolve_chains`) — the `TransitionInput`
-    // pattern. `s` may be a hover/press/focus-merged style (the field is
-    // `overlay`), so an interaction flip re-stamps the merged chain here and
-    // the resolver — plus the transition's filter channel — picks it up. A
-    // `Some` empty chain is a wire no-op — treated exactly like absent.
-    if dirty.intersects(g::FILTER) {
-        match s
-            .and_then(|s| s.filter.as_ref())
-            .filter(|c| !c.0.is_empty())
-        {
-            Some(chain) => {
-                ec.insert(crate::filters::FilterInput(chain.clone()));
-            }
-            None => {
-                remove_unless_fresh::<crate::filters::FilterInput>(ec, fresh);
-            }
-        }
-    }
-
-    // Same mirror for the `backdropFilter` chain → the backdrop resolver
-    // (`crate::filters::backdrop`). Independent channel: content and backdrop
-    // chains stamp, resolve, and transition separately.
-    if dirty.intersects(g::BACKDROP) {
-        match s
-            .and_then(|s| s.backdrop_filter.as_ref())
-            .filter(|c| !c.0.is_empty())
-        {
-            Some(chain) => {
-                ec.insert(crate::filters::BackdropInput(chain.clone()));
-            }
-            None => {
-                remove_unless_fresh::<crate::filters::BackdropInput>(ec, fresh);
-            }
-        }
-    }
-
-    // And for `morphFilter` → the morph resolver. The single `FilterUse`
-    // wraps into a 1-entry chain so the shared resolver applies; the `key`
-    // rides alongside for the morph transition channel's retarget detection
-    // (the resolver ignores it). Unset removes the runtime `MorphState` too:
-    // it is meaningless without the input, and with no `transition` style the
-    // unset also tears down `TransitionState` — the channel that would
-    // otherwise deactivate it — so a lingering active state would union the
-    // capture rect forever.
-    if dirty.intersects(g::MORPH) {
-        match s.and_then(|s| s.morph_filter.as_ref()) {
-            Some(morph) => {
-                ec.insert(crate::filters::MorphInput {
-                    chain: crate::filters::FilterChain(vec![morph.filter.clone()]),
-                    key: morph.key.clone(),
-                });
-            }
-            None => {
-                remove_unless_fresh::<(crate::filters::MorphInput, crate::filters::MorphState)>(
-                    ec, fresh,
-                );
-            }
-        }
-    }
-
-    // Stamp the transition engine's input from this (possibly hover/press-merged)
-    // style. `drive_transitions` eases the snap values written above to their new
-    // targets; see [`crate::transition`]. Skipping when no transitioned channel
-    // was touched is safe: `drive_transitions` polls every `TransitionState` (no
-    // `Changed` filter), so it never needs a fresh insert to keep easing.
-    // MORPH is included because the morph channel lives on `TransitionState`
-    // and must exist (with its built-in default timing) even when the style
-    // has no `transition` at all — a morph delta alone stamps it.
-    if dirty.intersects(g::TRANSITION | g::MORPH) {
-        crate::transition::apply_transition(ec, style, fresh);
-    }
-
-    // Layer-cache tap: any touched style group may have changed this node's
-    // painted appearance — let the resolver re-capture its owning layer (see
-    // `crate::layer::LayerContentDirt`). Deliberately conservative: style
-    // groups can't distinguish a composite-only opacity delta here; the fast
-    // fade paths (animations/transitions) carry precise carve-outs instead.
-    // The FILTER/BACKDROP/MORPH/LAYER/TRANSFORM3D groups are the exception
-    // and are masked out: their outputs are composite/promotion-side (a
-    // filter applies to the captured texture; the capture holds unfiltered
-    // content; a backdrop filters pixels *behind* the node, never the
-    // capture; a morph blends the capture against a frozen snapshot — the
-    // key-change re-capture is pushed precisely by the morph transition
-    // channel; the 3D matrix reshapes the quad), so a delta touching only
-    // them never dirties a capture — the chain resolvers and
-    // `sync_transform3d_matrices` push precise `composite_only` dirt
-    // themselves. Promotion flips still dirty correctly: a promote is caught
-    // by the first-frame geometry hash, and a demote by
-    // `reapply_opacity_outputs`' restyle (whose dirty groups intersect the
-    // unmasked set) — the hash alone would miss a leaf demote.
-    if dirty.intersects(!(g::FILTER | g::LAYER | g::TRANSFORM3D | g::BACKDROP | g::MORPH)) {
+    if invalidation.contains(Invalidation::PAINT) {
         crate::layer::mark_content_dirty(ec);
     }
 }
@@ -996,1182 +447,17 @@ pub fn overlay_style(base: Option<&Style>, overlay: Option<&Style>) -> Option<St
         return base.cloned();
     };
     let mut merged = base.cloned().unwrap_or_default();
-    // Driven by the shared field table (`protocol::with_style_fields`), so a new
-    // `Style` field is overlaid automatically (and its absence from the table is
-    // a test failure). Fields tagged `no_overlay` (`focus_policy`, `group_alpha`,
-    // `cache`) are deliberately NOT carried by hover/press/focus variants — see
-    // the table's docs for why.
-    macro_rules! overlay_field {
-        ($(($f:ident, $name:literal, $g:tt, $ov:ident),)*) => {
-            $( overlay_field!(@one $f, $ov); )*
-        };
-        (@one $f:ident, overlay) => {
-            if overlay.$f.is_some() {
-                merged.$f = overlay.$f.clone();
-            }
-        };
-        (@one $f:ident, no_overlay) => {};
-    }
-    crate::protocol::style::with_style_fields!(overlay_field);
+    merged.overlay_variant(overlay);
     Some(merged)
 }
 
-/// Build an `ImageNode` from an `image` element's props. `src` loads a texture
-/// via the asset server; without it, a solid-color (tinted) image is used.
-pub fn image_node(props: &Props, assets: &AssetServer) -> ImageNode {
-    image_node_promoted(props, assets, false)
-}
+mod gradient;
+mod image;
+mod text;
 
-/// [`image_node`] for a node whose layer-promotion state is known: promoted →
-/// the `opacity` tint fold is suppressed (group alpha applies at composite).
-pub fn image_node_promoted(props: &Props, assets: &AssetServer, promoted: bool) -> ImageNode {
-    let base = match &props.src {
-        Some(path) => ImageNode::new(assets.load(path)),
-        None => ImageNode::solid_color(
-            props
-                .tint
-                .as_deref()
-                .map(parse_color)
-                .unwrap_or(Color::WHITE),
-        ),
-    };
-    finish_image_node(base, props, promoted)
-}
-
-/// The svg-mode `<image>` node: the same prop styling as
-/// [`image_node_promoted`] (tint / opacity fold / flips / `visualBox`) around
-/// a texture the caller patches in afterwards (the element-owned raster
-/// target — `src` is never loaded as an `Image`; see `crate::svg`).
-/// `imageMode` is forced to `Stretch` (the raster is repainted at laid-out
-/// size, so any other mode is meaningless) and `sourceRect` is dropped
-/// (warned svg-side, like `atlas`).
-pub fn svg_image_node(props: &Props, promoted: bool) -> ImageNode {
-    let mut image = finish_image_node(ImageNode::default(), props, promoted);
-    image.image_mode = NodeImageMode::Stretch;
-    image.rect = None;
-    image
-}
-
-/// Shared tail of the image builders: fold the `<image>` element props into
-/// `image` (everything except the texture choice).
-fn finish_image_node(mut image: ImageNode, props: &Props, promoted: bool) -> ImageNode {
-    if let Some(tint) = &props.tint {
-        image.color = parse_color(tint);
-    }
-    // `opacity` multiplies into the image's tint alpha (the tint is multiplied with
-    // the texture), so it fades a `src` image too — mirroring how it fades a
-    // background/text color. Suppressed on a promoted layer root (group alpha
-    // applies once at composite — see `crate::layer`).
-    if !promoted {
-        image.color = apply_opacity(
-            image.color,
-            props.style.as_ref().and_then(|s| s.opacity.static_val()),
-        );
-    }
-    image.flip_x = props.flip_x;
-    image.flip_y = props.flip_y;
-    if let Some(mode) = &props.image_mode {
-        image.image_mode = match mode {
-            ImageMode::Keyword(s) if s == "stretch" => NodeImageMode::Stretch,
-            ImageMode::Keyword(_) => NodeImageMode::Auto,
-            ImageMode::Spec(ImageModeSpec::Sliced(s)) => NodeImageMode::Sliced(slicer(s)),
-            ImageMode::Spec(ImageModeSpec::Tiled(t)) => NodeImageMode::Tiled {
-                tile_x: t.tile_x,
-                tile_y: t.tile_y,
-                stretch_value: t.stretch_value.unwrap_or(1.0),
-            },
-        };
-    }
-    // `Rect` here is the wire top/right/bottom/left type (imported above), so the
-    // source sub-rect uses bevy's math `Rect` by its full path.
-    if let Some(r) = &props.source_rect {
-        image.rect = Some(bevy::math::Rect::new(
-            r.x,
-            r.y,
-            r.x + r.width,
-            r.y + r.height,
-        ));
-    }
-    if let Some(vb) = &props.visual_box {
-        image.visual_box = match vb.as_str() {
-            "content" => VisualBox::ContentBox,
-            "border" => VisualBox::BorderBox,
-            _ => VisualBox::PaddingBox,
-        };
-    }
-    image
-}
-
-/// Caches one `TextureAtlasLayout` asset per unique grid (keyed on the grid, *not*
-/// the cell `index`). `image_node` is re-inserted on every `Op::Update`, so without
-/// this an index-only change (sprite animation) would add a fresh layout asset each
-/// frame — an unbounded leak. Constant grid → one cache hit, one shared handle.
-#[derive(Resource, Default)]
-pub struct AtlasLayoutCache(HashMap<AtlasKey, Handle<TextureAtlasLayout>>);
-
-/// The grid identity of an [`AtlasSpec`] — everything `TextureAtlasLayout::from_grid`
-/// consumes, excluding the per-cell `index`.
-#[derive(PartialEq, Eq, Hash)]
-struct AtlasKey {
-    tile_width: u32,
-    tile_height: u32,
-    columns: u32,
-    rows: u32,
-    padding: Option<[u32; 2]>,
-    offset: Option<[u32; 2]>,
-}
-
-impl AtlasKey {
-    fn of(a: &AtlasSpec) -> Self {
-        AtlasKey {
-            tile_width: a.tile_width,
-            tile_height: a.tile_height,
-            columns: a.columns,
-            rows: a.rows,
-            padding: a.padding,
-            offset: a.offset,
-        }
-    }
-}
-
-/// Set `image.texture_atlas` from `props.atlas` (a no-op if absent), building and
-/// caching the grid's `TextureAtlasLayout` so repeated commits reuse one asset.
-/// Kept out of [`image_node`] because it needs the `Assets`/cache resources, which
-/// only the reconcile systems hold.
-pub fn apply_atlas(
-    image: &mut ImageNode,
-    props: &Props,
-    layouts: &mut Assets<TextureAtlasLayout>,
-    cache: &mut AtlasLayoutCache,
-) {
-    let Some(a) = &props.atlas else { return };
-    let handle = cache
-        .0
-        .entry(AtlasKey::of(a))
-        .or_insert_with(|| {
-            layouts.add(TextureAtlasLayout::from_grid(
-                UVec2::new(a.tile_width, a.tile_height),
-                a.columns,
-                a.rows,
-                a.padding.map(|[x, y]| UVec2::new(x, y)),
-                a.offset.map(|[x, y]| UVec2::new(x, y)),
-            ))
-        })
-        .clone();
-    image.texture_atlas = Some(TextureAtlas {
-        layout: handle,
-        index: a.index,
-    });
-}
-
-/// Build a `bevy_sprite::TextureSlicer` (9-slice config) from the wire [`SliceSpec`].
-fn slicer(spec: &SliceSpec) -> TextureSlicer {
-    let border = match spec.border {
-        SliceBorder::Zero => BorderRect::ZERO,
-        SliceBorder::Uniform(n) => BorderRect::all(n),
-        SliceBorder::Sides {
-            top,
-            right,
-            bottom,
-            left,
-        } => BorderRect {
-            min_inset: Vec2::new(left, top),
-            max_inset: Vec2::new(right, bottom),
-        },
-    };
-    TextureSlicer {
-        border,
-        center_scale_mode: slice_scale(&spec.center_scale_mode),
-        sides_scale_mode: slice_scale(&spec.sides_scale_mode),
-        max_corner_scale: spec.max_corner_scale.unwrap_or(1.0),
-    }
-}
-
-/// Map a wire [`SliceScale`] (`None`/`"stretch"` → stretch, `{ tile }` → tile) onto
-/// `bevy_sprite::SliceScaleMode`.
-fn slice_scale(mode: &Option<SliceScale>) -> SliceScaleMode {
-    match mode {
-        Some(SliceScale::Tile { tile }) => SliceScaleMode::Tile {
-            stretch_value: *tile,
-        },
-        _ => SliceScaleMode::Stretch,
-    }
-}
-
-/// Map a [`LineHeightSpec`] to bevy's [`LineHeight`]: a bare number is a multiple
-/// of the font size, `{ px }` is an absolute pixel height, and a string carries a
-/// unit (`"20px"` absolute, else a multiple).
-fn line_height(spec: &LineHeightSpec) -> LineHeight {
-    match spec {
-        LineHeightSpec::Relative(scale) => LineHeight::RelativeToFont(*scale),
-        LineHeightSpec::Px { px } => LineHeight::Px(*px),
-        LineHeightSpec::Str(s) => {
-            let s = s.trim();
-            if let Some(n) = s.strip_suffix("px") {
-                if let Ok(v) = n.trim().parse() {
-                    return LineHeight::Px(v);
-                }
-            } else {
-                // unitless or `em`/`rem` → a multiple of the font size.
-                let num = s
-                    .strip_suffix("rem")
-                    .or_else(|| s.strip_suffix("em"))
-                    .unwrap_or(s);
-                if let Ok(v) = num.trim().parse() {
-                    return LineHeight::RelativeToFont(v);
-                }
-            }
-            let msg = format!("invalid lineHeight {s:?}");
-            crate::diag::report("lineHeight", s, &msg);
-            LineHeight::default()
-        }
-    }
-}
-
-/// Map a [`LetterSpacingSpec`] to bevy's [`LetterSpacing`]: a bare number is
-/// logical pixels, `{ rem }` is a multiple of the font size, and a string carries a
-/// unit (`"2px"`, `"0.1rem"`, or `"normal"`).
-fn letter_spacing(spec: &LetterSpacingSpec) -> LetterSpacing {
-    match spec {
-        LetterSpacingSpec::Px(px) => LetterSpacing::Px(*px),
-        LetterSpacingSpec::Rem { rem } => LetterSpacing::Rem(*rem),
-        LetterSpacingSpec::Str(s) => {
-            let s = s.trim();
-            if s.eq_ignore_ascii_case("normal") {
-                return LetterSpacing::default();
-            }
-            if let Some(n) = s.strip_suffix("px") {
-                if let Ok(v) = n.trim().parse() {
-                    return LetterSpacing::Px(v);
-                }
-            } else if let Some(n) = s.strip_suffix("rem").or_else(|| s.strip_suffix("em")) {
-                if let Ok(v) = n.trim().parse() {
-                    return LetterSpacing::Rem(v);
-                }
-            } else if let Ok(v) = s.parse() {
-                return LetterSpacing::Px(v); // bare numeric string → logical pixels
-            }
-            let msg = format!("invalid letterSpacing {s:?}");
-            crate::diag::report("letterSpacing", s, &msg);
-            LetterSpacing::default()
-        }
-    }
-}
-
-/// Build a [`TextShadow`] from a style's `textShadow`, folding `opacity` (as
-/// resolved by the caller — `None` on a promoted layer root) into the color.
-/// Unset offset/color fields fall back to bevy's [`TextShadow::default`].
-fn text_shadow(style: Option<&Style>, opacity: Option<f32>) -> Option<TextShadow> {
-    let s = style?;
-    let spec = s.text_shadow.as_ref()?;
-    let mut shadow = TextShadow::default();
-    if let Some(x) = spec.offset_x {
-        shadow.offset.x = x;
-    }
-    if let Some(y) = spec.offset_y {
-        shadow.offset.y = y;
-    }
-    if let Some(c) = &spec.color {
-        shadow.color = parse_color(c);
-    }
-    shadow.color = apply_opacity(shadow.color, opacity);
-    Some(shadow)
-}
-
-/// Resolve a style's text appearance into the `TextColor` + `TextFont` +
-/// `LineHeight` + `LetterSpacing` a text run carries. Unset fields fall back to
-/// white / Bevy's defaults. Returned as concrete components so they can be copied
-/// onto inheriting child spans.
-pub fn resolved_text_style(
-    style: &Option<Style>,
-    fonts: &Fonts,
-) -> (TextColor, TextFont, LineHeight, LetterSpacing) {
-    resolved_text_style_promoted(style, fonts, false)
-}
-
-/// [`resolved_text_style`] for a text root whose layer-promotion state is
-/// known: when `promoted`, the `opacity` fold into the glyph color is
-/// suppressed — the value drives the layer's composite-time group alpha
-/// instead (the text analogue of [`apply_style_masked`]'s fold rule; without
-/// this, a promoted `<text>` would fade twice).
-pub fn resolved_text_style_promoted(
-    style: &Option<Style>,
-    fonts: &Fonts,
-    promoted: bool,
-) -> (TextColor, TextFont, LineHeight, LetterSpacing) {
-    let mut color = TextColor(Color::WHITE);
-    let mut font = TextFont::default();
-    let mut line = LineHeight::default();
-    let mut spacing = LetterSpacing::default();
-    // Default font face; a `fontFamily` below overrides it. Unset on both → leave
-    // `TextFont::default()`'s empty handle (Bevy's built-in font).
-    if let Some(h) = &fonts.default {
-        font.font = FontSource::Handle(h.clone());
-    }
-    if let Some(s) = style.as_ref() {
-        if let Some(c) = s.color.static_ref() {
-            color = TextColor(parse_color(c));
-        }
-        if s.opacity.is_some() && !promoted {
-            color = TextColor(apply_opacity(color.0, s.opacity.static_val()));
-        }
-        if let Some(size) = s.font_size {
-            font.font_size = font_size_to_bevy(size);
-        }
-        if let Some(w) = s.font_weight {
-            font.weight = w;
-        }
-        if let Some(family) = &s.font_family {
-            match fonts.named.get(family) {
-                Some(h) => font.font = FontSource::Handle(h.clone()),
-                None => {
-                    let msg = format!("unknown fontFamily {family:?}");
-                    crate::diag::report("fontFamily", family, &msg);
-                }
-            }
-        }
-        if let Some(lh) = &s.line_height {
-            line = line_height(lh);
-        }
-        if let Some(ls) = &s.letter_spacing {
-            spacing = letter_spacing(ls);
-        }
-    }
-    (color, font, line, spacing)
-}
-
-/// Land a resolved text style on a text root or an inheriting span, writing
-/// only the half `dirty` touched — and each component compare-before-write
-/// ([`set_if_neq_or_insert`]), so an unchanged `TextFont` never ticks even
-/// when its group is dirty. This is what keeps a `color`-only delta from
-/// re-shaping the block: bevy_text's `detect_text_needs_rerender` keys on
-/// `Changed<TextFont | LineHeight | LetterSpacing>`, and a re-shape rebuilds
-/// the measure func → `ContentSize` → a taffy relayout of the whole tree.
-/// `TEXT_COLOR` writes `TextColor`; `TEXT_FONT` writes the shaping trio. The
-/// spawn paths insert the whole tuple directly (nothing to compare against).
-pub fn apply_resolved_text_style(
-    ec: &mut EntityCommands,
-    resolved: &crate::bridge::ResolvedTextStyle,
-    dirty: StyleDirty,
-) {
-    use crate::protocol::style::style_groups as g;
-    let (color, font, line, spacing) = resolved;
-    if dirty.intersects(g::TEXT_COLOR) {
-        ec.queue(set_if_neq_or_insert(*color));
-    }
-    if dirty.intersects(g::TEXT_FONT) {
-        ec.queue(set_if_neq_or_insert(font.clone()));
-        ec.queue(set_if_neq_or_insert(*line));
-        ec.queue(set_if_neq_or_insert(*spacing));
-    }
-}
-
-/// The `TextLayout` for a `<text>` root, if `textAlign` or `lineBreak` is set
-/// (root only). Either field present builds the layout; the other keeps its
-/// bevy default.
-pub fn text_layout(style: &Option<Style>) -> Option<TextLayout> {
-    let s = style.as_ref()?;
-    if s.text_align.is_none() && s.line_break.is_none() {
-        return None;
-    }
-    Some(TextLayout {
-        justify: s.text_align.unwrap_or_default(),
-        linebreak: s.line_break.unwrap_or_default(),
-    })
-}
+pub use gradient::*;
+pub use image::*;
+pub use text::*;
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::protocol::{props::Props, style::Style};
-
-    /// An unrecognized color reports into the diag runtime sink under the
-    /// enclosing node scope, so devtools can flag the row. The sink is
-    /// process-global, so: serialize via the test lock, and filter drained
-    /// entries by our own node id rather than asserting emptiness.
-    #[cfg(all(feature = "devtools", debug_assertions))]
-    #[test]
-    fn bad_color_reports_runtime_warning() {
-        let _lock = crate::diag::test_lock();
-        crate::diag::arm_runtime();
-        let _ = crate::diag::take_runtime_warnings();
-
-        let color = {
-            let _scope = crate::diag::node_scope(4242);
-            parse_color("notexistingcolor")
-        };
-        assert_eq!(color, Color::srgb(1.0, 0.0, 1.0), "magenta debug fallback");
-
-        let mine: Vec<_> = crate::diag::take_runtime_warnings()
-            .into_iter()
-            .filter(|w| w.node == Some(4242))
-            .collect();
-        assert_eq!(mine.len(), 1);
-        assert_eq!(mine[0].kind, "color");
-        assert_eq!(mine[0].value, "notexistingcolor");
-        assert!(mine[0].message.contains("unrecognized color"));
-
-        // A valid color must not report.
-        {
-            let _scope = crate::diag::node_scope(4242);
-            parse_color("rebeccapurple");
-        }
-        assert!(
-            !crate::diag::take_runtime_warnings()
-                .iter()
-                .any(|w| w.node == Some(4242)),
-            "valid colors must not warn"
-        );
-    }
-
-    /// `opacity` fades an `<image>` by multiplying into its tint alpha (so a `src`
-    /// image dims too, not just colored boxes/text).
-    #[test]
-    fn image_opacity_fades_tint_alpha() {
-        let mut app = App::new();
-        app.add_plugins((MinimalPlugins, AssetPlugin::default()));
-        app.init_asset::<Image>();
-        let assets = app.world().resource::<AssetServer>();
-
-        let props: Props = serde_json::from_value(serde_json::json!({
-            "tint": "#ff0000",
-            "style": { "opacity": 0.5 },
-        }))
-        .unwrap();
-        let image = image_node(&props, assets);
-        let c = image.color.to_srgba();
-        assert!(
-            (c.alpha - 0.5).abs() < 1e-6,
-            "alpha should be 0.5, got {}",
-            c.alpha
-        );
-        assert!((c.red - 1.0).abs() < 1e-6, "tint hue preserved");
-    }
-
-    /// `focusPolicy` maps to `bevy::ui::FocusPolicy`: `"block"` → `Block`,
-    /// `"pass"` → `Pass`, and dropping the key falls back to the node's default
-    /// `Pass` (never removes the component — removal would make `ui_focus_system`
-    /// silently block the node).
-    #[test]
-    fn focus_policy_maps_with_pass_default() {
-        use bevy::ecs::world::CommandQueue;
-
-        let apply = |world: &mut World, entity: Entity, json: serde_json::Value| {
-            let style: Style = serde_json::from_value(json).unwrap();
-            let mut queue = CommandQueue::default();
-            let mut commands = Commands::new(&mut queue, world);
-            apply_style(&mut commands.entity(entity), &Some(style));
-            queue.apply(world);
-        };
-
-        let mut world = World::new();
-        let entity = world.spawn_empty().id();
-
-        apply(
-            &mut world,
-            entity,
-            serde_json::json!({ "focusPolicy": "block" }),
-        );
-        assert_eq!(world.get::<FocusPolicy>(entity), Some(&FocusPolicy::Block));
-
-        apply(
-            &mut world,
-            entity,
-            serde_json::json!({ "focusPolicy": "pass" }),
-        );
-        assert_eq!(world.get::<FocusPolicy>(entity), Some(&FocusPolicy::Pass));
-
-        // Dropping the key reverts to the default `Pass` (not removed → not Block).
-        apply(&mut world, entity, serde_json::json!({}));
-        assert_eq!(world.get::<FocusPolicy>(entity), Some(&FocusPolicy::Pass));
-    }
-
-    /// A `{ type: "sliced", … }` `imageMode` maps to `NodeImageMode::Sliced` with
-    /// the per-side border insets and tile scale modes carried through.
-    fn assets_app() -> App {
-        let mut app = App::new();
-        app.add_plugins((MinimalPlugins, AssetPlugin::default()));
-        app.init_asset::<Image>();
-        app
-    }
-
-    #[test]
-    fn image_mode_sliced_maps_to_texture_slicer() {
-        let app = assets_app();
-        let assets = app.world().resource::<AssetServer>();
-
-        let props: Props = serde_json::from_value(serde_json::json!({
-            "src": "modal.png",
-            "imageMode": {
-                "type": "sliced",
-                "border": { "top": 10.0, "right": 20.0, "bottom": 30.0, "left": 40.0 },
-                "sidesScaleMode": { "tile": 0.5 },
-                "maxCornerScale": 2.0,
-            },
-        }))
-        .unwrap();
-        let image = image_node(&props, assets);
-        match image.image_mode {
-            NodeImageMode::Sliced(s) => {
-                assert_eq!(s.border.min_inset, Vec2::new(40.0, 10.0));
-                assert_eq!(s.border.max_inset, Vec2::new(20.0, 30.0));
-                assert_eq!(s.max_corner_scale, 2.0);
-                assert_eq!(s.center_scale_mode, SliceScaleMode::Stretch);
-                assert_eq!(
-                    s.sides_scale_mode,
-                    SliceScaleMode::Tile { stretch_value: 0.5 }
-                );
-            }
-            other => panic!("expected Sliced, got {other:?}"),
-        }
-    }
-
-    /// A uniform-number border and a `"tiled"` mode both decode and map.
-    #[test]
-    fn image_mode_tiled_and_uniform_border() {
-        let app = assets_app();
-        let assets = app.world().resource::<AssetServer>();
-
-        let sliced: Props = serde_json::from_value(serde_json::json!({
-            "src": "modal.png",
-            "imageMode": { "type": "sliced", "border": 16.0 },
-        }))
-        .unwrap();
-        match image_node(&sliced, assets).image_mode {
-            NodeImageMode::Sliced(s) => assert_eq!(s.border, BorderRect::all(16.0)),
-            other => panic!("expected Sliced, got {other:?}"),
-        }
-
-        let tiled: Props = serde_json::from_value(serde_json::json!({
-            "src": "modal.png",
-            "imageMode": { "type": "tiled", "tileX": true, "stretchValue": 2.0 },
-        }))
-        .unwrap();
-        match image_node(&tiled, assets).image_mode {
-            NodeImageMode::Tiled {
-                tile_x,
-                tile_y,
-                stretch_value,
-            } => {
-                assert!(tile_x);
-                assert!(!tile_y);
-                assert_eq!(stretch_value, 2.0);
-            }
-            other => panic!("expected Tiled, got {other:?}"),
-        }
-    }
-
-    /// The bare-string `imageMode` keywords still decode (backward compatible).
-    #[test]
-    fn image_mode_keyword_backward_compatible() {
-        let app = assets_app();
-        let assets = app.world().resource::<AssetServer>();
-
-        let stretch: Props =
-            serde_json::from_value(serde_json::json!({ "imageMode": "stretch" })).unwrap();
-        assert!(matches!(
-            image_node(&stretch, assets).image_mode,
-            NodeImageMode::Stretch
-        ));
-
-        let auto: Props =
-            serde_json::from_value(serde_json::json!({ "imageMode": "auto" })).unwrap();
-        assert!(matches!(
-            image_node(&auto, assets).image_mode,
-            NodeImageMode::Auto
-        ));
-    }
-
-    /// `sourceRect` becomes a min/max `Rect` (x,y → top-left; +width/height →
-    /// bottom-right), and `visualBox` selects the box variant.
-    #[test]
-    fn source_rect_and_visual_box_map() {
-        let app = assets_app();
-        let assets = app.world().resource::<AssetServer>();
-
-        let props: Props = serde_json::from_value(serde_json::json!({
-            "src": "logo.png",
-            "sourceRect": { "x": 10.0, "y": 20.0, "width": 30.0, "height": 40.0 },
-            "visualBox": "border",
-        }))
-        .unwrap();
-        let image = image_node(&props, assets);
-        assert_eq!(
-            image.rect,
-            Some(bevy::math::Rect::new(10.0, 20.0, 40.0, 60.0))
-        );
-        assert_eq!(image.visual_box, VisualBox::BorderBox);
-    }
-
-    /// Two cells of the *same* grid (only `index` differs) share one cached
-    /// `TextureAtlasLayout` handle — the leak-guard that makes index-only sprite
-    /// animation safe across the per-`Op::Update` rebuilds.
-    #[test]
-    fn atlas_layout_cache_reuses_handle_across_index() {
-        let app = assets_app();
-        let assets = app.world().resource::<AssetServer>();
-        let mut layouts = Assets::<TextureAtlasLayout>::default();
-        let mut cache = AtlasLayoutCache::default();
-
-        let frame = |index: usize| -> Props {
-            serde_json::from_value(serde_json::json!({
-                "src": "sheet.png",
-                "atlas": {
-                    "tileWidth": 32, "tileHeight": 32,
-                    "columns": 4, "rows": 4, "index": index,
-                },
-            }))
-            .unwrap()
-        };
-
-        let p0 = frame(0);
-        let mut a = image_node(&p0, assets);
-        apply_atlas(&mut a, &p0, &mut layouts, &mut cache);
-        let p2 = frame(2);
-        let mut b = image_node(&p2, assets);
-        apply_atlas(&mut b, &p2, &mut layouts, &mut cache);
-
-        let ta = a.texture_atlas.expect("atlas on a");
-        let tb = b.texture_atlas.expect("atlas on b");
-        assert_eq!(ta.layout, tb.layout, "same grid reuses one layout handle");
-        assert_eq!(ta.index, 0);
-        assert_eq!(tb.index, 2);
-        assert_eq!(layouts.len(), 1, "only one layout asset created");
-    }
-
-    fn style(json: serde_json::Value) -> Style {
-        serde_json::from_value(json).unwrap()
-    }
-
-    #[test]
-    fn color_named_function_and_fallback() {
-        // named, hex, and rgb() all agree on pure red.
-        let red = parse_color("#ff0000").to_srgba();
-        assert_eq!(parse_color("red").to_srgba(), red);
-        assert_eq!(parse_color("rgb(255, 0, 0)").to_srgba(), red);
-        // transparent maps to a zero-alpha color.
-        assert_eq!(parse_color("transparent").to_srgba().alpha, 0.0);
-        // an unrecognized value falls back to the loud magenta debug color.
-        assert_eq!(
-            parse_color("definitely-not-a-color"),
-            Color::srgb(1.0, 0.0, 1.0)
-        );
-    }
-
-    #[test]
-    fn length_units() {
-        let s = style(serde_json::json!({
-            "width": "50%", "height": "auto", "maxWidth": "100vw", "minHeight": 24
-        }));
-        assert_eq!(
-            length_to_val(s.width.static_val().unwrap()),
-            Val::Percent(50.0)
-        );
-        assert_eq!(length_to_val(s.height.static_val().unwrap()), Val::Auto);
-        assert_eq!(
-            length_to_val(s.max_width.static_val().unwrap()),
-            Val::Vw(100.0)
-        );
-        assert_eq!(
-            length_to_val(s.min_height.static_val().unwrap()),
-            Val::Px(24.0)
-        );
-    }
-
-    #[test]
-    fn rect_shorthand_and_object() {
-        let s = style(serde_json::json!({
-            "padding": "8px 16px",
-            "margin": { "top": 1, "left": "2px" },
-        }));
-        let pad = rect_to_uirect(s.padding.unwrap());
-        assert_eq!(pad.top, Val::Px(8.0));
-        assert_eq!(pad.bottom, Val::Px(8.0));
-        assert_eq!(pad.left, Val::Px(16.0));
-        assert_eq!(pad.right, Val::Px(16.0));
-        let margin = rect_to_uirect(s.margin.unwrap());
-        assert_eq!(margin.top, Val::Px(1.0));
-        assert_eq!(margin.left, Val::Px(2.0));
-    }
-
-    /// The axis pair reaches `Val` like any other rect form. On `borderRadius`
-    /// the sides name corners, so `horizontal` is the top-right + bottom-left
-    /// pair (`rect_to_border_radius`'s top/right/bottom/left → TL/TR/BR/BL).
-    #[test]
-    fn rect_axis_pair_maps_to_val() {
-        let s = style(serde_json::json!({
-            "padding": { "horizontal": 16, "vertical": "50%" },
-            "borderRadius": { "horizontal": 4 },
-        }));
-        let pad = rect_to_uirect(s.padding.unwrap());
-        assert_eq!(pad.left, Val::Px(16.0));
-        assert_eq!(pad.right, Val::Px(16.0));
-        assert_eq!(pad.top, Val::Percent(50.0));
-        assert_eq!(pad.bottom, Val::Percent(50.0));
-
-        let radius = rect_to_border_radius(s.border_radius.static_val().unwrap());
-        assert_eq!(radius.top_right, Val::Px(4.0));
-        assert_eq!(radius.bottom_left, Val::Px(4.0));
-        assert_eq!(radius.top_left, Val::Px(0.0));
-        assert_eq!(radius.bottom_right, Val::Px(0.0));
-    }
-
-    #[test]
-    fn linear_gradient_maps_angle_and_stops() {
-        let s = style(serde_json::json!({
-            "backgroundGradient": {
-                "type": "linear",
-                "angle": 90.0,
-                "stops": [
-                    { "color": "#ff0000", "position": 0 },
-                    { "color": "#0000ff", "position": "100%" },
-                ],
-            },
-        }));
-        let grads = build_gradients(s.background_gradient.as_ref().unwrap(), None);
-        assert_eq!(grads.len(), 1);
-        let Gradient::Linear(lin) = &grads[0] else {
-            panic!("expected a linear gradient, got {:?}", grads[0]);
-        };
-        assert!((lin.angle - 90.0_f32.to_radians()).abs() < 1e-6);
-        assert_eq!(lin.stops.len(), 2);
-        assert_eq!(lin.stops[0].point, Val::Px(0.0));
-        assert_eq!(lin.stops[1].point, Val::Percent(100.0));
-        assert_eq!(lin.stops[0].color.to_srgba(), Srgba::hex("ff0000").unwrap());
-    }
-
-    /// A gradient style stamps [`GradientTargets`]: the UNfolded resolved
-    /// gradients per surface plus the fold opacity `apply_style` would use.
-    /// Unsetting both surfaces removes it; a promoted root stamps
-    /// `opacity: None` (the group alpha owns the fold there).
-    #[test]
-    fn gradient_style_stamps_unfolded_targets() {
-        use crate::filters::test_util::{create, ease_app, entity_of, update};
-        use crate::protocol::op::Op;
-
-        let (mut app, ops_tx) = ease_app();
-        let gradient_json = serde_json::json!({
-            "type": "linear",
-            "stops": [
-                { "color": "#ff0000", "position": 0 },
-                { "color": "#0000ff", "position": "100%" },
-            ],
-        });
-        ops_tx
-            .send(vec![
-                // Node 1: gradient + opacity, childless — NOT promoted, folds.
-                create(
-                    1,
-                    serde_json::json!({ "style": {
-                        "opacity": 0.5,
-                        "backgroundGradient": gradient_json,
-                    } }),
-                ),
-                // Node 2: same style but with a child — promoted, fold suppressed.
-                create(
-                    2,
-                    serde_json::json!({ "style": {
-                        "opacity": 0.5,
-                        "backgroundGradient": gradient_json,
-                    } }),
-                ),
-                create(3, serde_json::json!({})),
-                Op::Append {
-                    parent: 2,
-                    child: 3,
-                },
-            ])
-            .unwrap();
-        app.update();
-
-        let e = entity_of(&app, 1);
-        let targets = app
-            .world()
-            .get::<GradientTargets>(e)
-            .expect("gradient style stamps GradientTargets");
-        assert_eq!(targets.border, None);
-        assert_eq!(targets.opacity, Some(0.5), "unpromoted: fold opacity kept");
-        let unfolded = targets.background.as_ref().expect("background stamped");
-        assert_eq!(unfolded.len(), 1);
-        let Gradient::Linear(lin) = &unfolded[0] else {
-            panic!("expected a linear gradient, got {:?}", unfolded[0]);
-        };
-        // Unfolded: full-alpha stop colors, exactly `build_gradients(_, None)`.
-        assert_eq!(
-            lin.stops[0].color.to_srgba(),
-            Srgba::new(1.0, 0.0, 0.0, 1.0)
-        );
-        assert_eq!(
-            lin.stops[1].color.to_srgba(),
-            Srgba::new(0.0, 0.0, 1.0, 1.0)
-        );
-        // The applied component is still the folded snap (unchanged behavior).
-        let bg = app
-            .world()
-            .get::<BackgroundGradient>(e)
-            .expect("component still applied");
-        let Gradient::Linear(folded) = &bg.0[0] else {
-            panic!("expected a linear gradient, got {:?}", bg.0[0]);
-        };
-        assert_eq!(
-            folded.stops[0].color.to_srgba(),
-            Srgba::new(1.0, 0.0, 0.0, 0.5)
-        );
-        // The write-time fold of the stamp equals the resolver's own folded
-        // component bit-exactly — the split-builder contract.
-        assert_eq!(fold_gradients(unfolded, Some(0.5)), bg.0);
-        assert_eq!(fold_gradients(unfolded, None), *unfolded, "None = no fold");
-
-        // A promoted root stamps `opacity: None` — the group alpha owns it —
-        // and its applied component is unfolded too.
-        let promoted = entity_of(&app, 2);
-        assert!(
-            app.world()
-                .get::<crate::layer::PromotedLayer>(promoted)
-                .is_some(),
-            "promoted via opacity + child"
-        );
-        let targets = app
-            .world()
-            .get::<GradientTargets>(promoted)
-            .expect("promoted node stamped too");
-        assert_eq!(targets.opacity, None, "promoted: group alpha owns the fold");
-        assert!(targets.background.is_some());
-        let bg = app
-            .world()
-            .get::<BackgroundGradient>(promoted)
-            .expect("component applied on the promoted root");
-        let Gradient::Linear(l) = &bg.0[0] else {
-            panic!("expected a linear gradient, got {:?}", bg.0[0]);
-        };
-        assert_eq!(
-            l.stops[0].color.to_srgba().alpha,
-            1.0,
-            "promoted: fold suppressed in the applied component too"
-        );
-
-        // The opacity row's dirty groups include the gradient groups, so an
-        // opacity-only delta re-stamps.
-        ops_tx
-            .send(vec![update(
-                1,
-                serde_json::json!({ "style": { "opacity": 0.8 } }),
-                &[],
-            )])
-            .unwrap();
-        app.update();
-        let targets = app.world().get::<GradientTargets>(e).unwrap();
-        assert_eq!(targets.opacity, Some(0.8), "opacity delta re-stamps");
-
-        // Unsetting the last gradient surface removes the stamp.
-        ops_tx
-            .send(vec![update(
-                1,
-                serde_json::json!({ "style": {} }),
-                &["backgroundGradient"],
-            )])
-            .unwrap();
-        app.update();
-        assert!(
-            app.world().get::<GradientTargets>(e).is_none(),
-            "no gradient surface left: stamp removed"
-        );
-    }
-
-    #[test]
-    fn gradient_accepts_single_or_array() {
-        let one = style(serde_json::json!({
-            "backgroundGradient": { "type": "linear", "stops": [{ "color": "#fff" }] },
-        }));
-        let many = style(serde_json::json!({
-            "backgroundGradient": [
-                { "type": "linear", "stops": [{ "color": "#fff" }] },
-                { "type": "radial", "stops": [{ "color": "#000" }] },
-            ],
-        }));
-        assert_eq!(
-            build_gradients(one.background_gradient.as_ref().unwrap(), None).len(),
-            1
-        );
-        assert_eq!(
-            build_gradients(many.background_gradient.as_ref().unwrap(), None).len(),
-            2
-        );
-    }
-
-    #[test]
-    fn box_shadow_accepts_single_or_array() {
-        let one = style(serde_json::json!({
-            "boxShadow": { "color": "#000", "blurRadius": 8 },
-        }));
-        let many = style(serde_json::json!({
-            "boxShadow": [
-                { "color": "#000", "blurRadius": 4 },
-                { "color": "#FFFFFF33", "blurRadius": 16, "spreadRadius": 4 },
-            ],
-        }));
-        assert_eq!(build_box_shadows(one.box_shadow.as_ref().unwrap()).len(), 1);
-        assert_eq!(
-            build_box_shadows(many.box_shadow.as_ref().unwrap()).len(),
-            2
-        );
-    }
-
-    #[test]
-    fn conic_gradient_converts_degrees_to_radians() {
-        let s = style(serde_json::json!({
-            "backgroundGradient": {
-                "type": "conic",
-                "start": 45.0,
-                "stops": [
-                    { "color": "#ff0000", "angle": 0.0 },
-                    { "color": "#00ff00", "angle": 180.0 },
-                ],
-            },
-        }));
-        let grads = build_gradients(s.background_gradient.as_ref().unwrap(), None);
-        let Gradient::Conic(conic) = &grads[0] else {
-            panic!("expected a conic gradient, got {:?}", grads[0]);
-        };
-        assert!((conic.start - 45.0_f32.to_radians()).abs() < 1e-6);
-        assert_eq!(conic.stops[1].angle, Some(180.0_f32.to_radians()));
-    }
-
-    #[test]
-    fn line_height_px_vs_relative() {
-        let lh = |v: serde_json::Value| {
-            line_height(
-                style(serde_json::json!({ "lineHeight": v }))
-                    .line_height
-                    .as_ref()
-                    .unwrap(),
-            )
-        };
-        assert_eq!(lh(serde_json::json!(1.5)), LineHeight::RelativeToFont(1.5));
-        assert_eq!(lh(serde_json::json!({ "px": 28 })), LineHeight::Px(28.0));
-        // string forms: `px` is absolute, unitless/`em` is a multiple.
-        assert_eq!(lh(serde_json::json!("20px")), LineHeight::Px(20.0));
-        assert_eq!(
-            lh(serde_json::json!("1.5em")),
-            LineHeight::RelativeToFont(1.5)
-        );
-    }
-
-    #[test]
-    fn letter_spacing_px_vs_rem() {
-        let ls = |v: serde_json::Value| {
-            letter_spacing(
-                style(serde_json::json!({ "letterSpacing": v }))
-                    .letter_spacing
-                    .as_ref()
-                    .unwrap(),
-            )
-        };
-        assert_eq!(ls(serde_json::json!(2)), LetterSpacing::Px(2.0));
-        assert_eq!(
-            ls(serde_json::json!({ "rem": 0.1 })),
-            LetterSpacing::Rem(0.1)
-        );
-        // string forms: `px`, `rem`/`em`, and `normal`.
-        assert_eq!(ls(serde_json::json!("2px")), LetterSpacing::Px(2.0));
-        assert_eq!(ls(serde_json::json!("0.1rem")), LetterSpacing::Rem(0.1));
-        assert_eq!(ls(serde_json::json!("normal")), LetterSpacing::default());
-    }
-
-    #[test]
-    fn text_shadow_offset_and_color() {
-        let s = style(serde_json::json!({
-            "textShadow": { "color": "#ff0000", "offsetX": 2, "offsetY": 3 },
-        }));
-        let shadow = text_shadow(Some(&s), s.opacity.static_val()).unwrap();
-        assert_eq!(shadow.offset, Vec2::new(2.0, 3.0));
-        assert_eq!(shadow.color.to_srgba(), Srgba::hex("ff0000").unwrap());
-
-        // Unset offset falls back to bevy's default displacement (4.0).
-        let bare = style(serde_json::json!({ "textShadow": {} }));
-        assert_eq!(
-            text_shadow(Some(&bare), None).unwrap().offset,
-            Vec2::splat(4.0)
-        );
-        // No textShadow → no component.
-        assert!(text_shadow(Some(&style(serde_json::json!({}))), None).is_none());
-    }
-
-    #[test]
-    fn line_break_drives_layout() {
-        // `lineBreak` alone (no `textAlign`) still builds a `TextLayout`.
-        let s = style(serde_json::json!({ "lineBreak": "noWrap" }));
-        let layout = text_layout(&Some(s)).unwrap();
-        assert_eq!(layout.linebreak, LineBreak::NoWrap);
-        assert_eq!(layout.justify, Justify::default());
-
-        // Neither set → no layout.
-        assert!(text_layout(&Some(style(serde_json::json!({})))).is_none());
-
-        // Both set are honored.
-        let both = style(serde_json::json!({ "textAlign": "center", "lineBreak": "anyCharacter" }));
-        let layout = text_layout(&Some(both)).unwrap();
-        assert_eq!(layout.justify, Justify::Center);
-        assert_eq!(layout.linebreak, LineBreak::AnyCharacter);
-    }
-
-    #[test]
-    fn overlay_merges_fields() {
-        let base = Some(style(serde_json::json!({
-            "backgroundColor": "#111111",
-            "width": 64,
-            "color": "#ffffff",
-        })));
-
-        // None overlay leaves base untouched.
-        let unchanged = overlay_style(base.as_ref(), None).unwrap();
-        assert_eq!(
-            unchanged.background_color.static_ref().map(String::as_str),
-            Some("#111111")
-        );
-
-        // Overlaid fields win; unset overlay fields fall through to base.
-        let overlay = Some(style(serde_json::json!({ "backgroundColor": "#89b4fa" })));
-        let merged = overlay_style(base.as_ref(), overlay.as_ref()).unwrap();
-        assert_eq!(
-            merged.background_color.static_ref().map(String::as_str),
-            Some("#89b4fa")
-        ); // overridden
-        assert_eq!(
-            length_to_val(merged.width.static_val().unwrap()),
-            Val::Px(64.0)
-        ); // kept from base
-        assert_eq!(
-            merged.color.static_ref().map(String::as_str),
-            Some("#ffffff")
-        ); // kept from base
-
-        // Overlay onto an absent base still yields the overlay's fields.
-        let from_none = overlay_style(None, overlay.as_ref()).unwrap();
-        assert_eq!(
-            from_none.background_color.static_ref().map(String::as_str),
-            Some("#89b4fa")
-        );
-    }
-
-    /// `filter` IS carried by variants (a hover filter re-stamps `FilterInput`
-    /// through the merged style; promotion never flips — it unions variant
-    /// presence). `focusPolicy` is NOT: a variant must not silently toggle
-    /// pointer capture.
-    #[test]
-    fn overlay_carries_filter_but_skips_focus_policy() {
-        let base = Some(style(serde_json::json!({
-            "filter": { "name": "blur", "params": { "radius": 4 } },
-            "focusPolicy": "block",
-        })));
-        let overlay = Some(style(serde_json::json!({
-            "filter": { "name": "blur", "params": { "radius": 9 } },
-            "focusPolicy": "pass",
-            "backgroundColor": "red",
-        })));
-        let merged = overlay_style(base.as_ref(), overlay.as_ref()).unwrap();
-        // The variant's chain wins wholesale (CSS shorthand semantics, like
-        // `transform`).
-        assert_eq!(merged.filter, overlay.as_ref().unwrap().filter);
-        assert_ne!(merged.filter, base.as_ref().unwrap().filter);
-        assert_eq!(merged.focus_policy, Some(FocusPolicy::Block));
-        assert_eq!(
-            merged.background_color.static_ref().map(String::as_str),
-            Some("red")
-        );
-
-        // A variant with no filter falls through to the base chain.
-        let no_filter = Some(style(serde_json::json!({ "backgroundColor": "red" })));
-        let merged = overlay_style(base.as_ref(), no_filter.as_ref()).unwrap();
-        assert_eq!(merged.filter, base.as_ref().unwrap().filter);
-    }
-
-    #[test]
-    fn overlay_replaces_transform_wholesale() {
-        let base = Some(style(serde_json::json!({
-            "transform": { "translateX": 10, "scale": 1 },
-        })));
-        // Whole-object replace (CSS shorthand semantics): press's transform wins
-        // entirely, dropping the base's translateX.
-        let press = Some(style(serde_json::json!({ "transform": { "scale": 0.95 } })));
-        let merged = overlay_style(base.as_ref(), press.as_ref()).unwrap();
-        let t = merged.transform.unwrap();
-        assert_eq!(t.scale.static_val(), Some(0.95));
-        assert_eq!(t.translate_x, None);
-    }
-
-    #[test]
-    fn node_covers_layout() {
-        let s = style(serde_json::json!({
-            "display": "grid",
-            "positionType": "absolute",
-            "left": "10px",
-            "flexGrow": 2,
-            "gap": 12,
-        }));
-        let node = node_from_style(&Some(s));
-        assert_eq!(node.display, Display::Grid);
-        assert_eq!(node.position_type, PositionType::Absolute);
-        assert_eq!(node.left, Val::Px(10.0));
-        assert_eq!(node.flex_grow, 2.0);
-        assert_eq!(node.row_gap, Val::Px(12.0));
-        assert_eq!(node.column_gap, Val::Px(12.0));
-    }
-
-    /// Grid fields arrive pre-parsed from the serde boundary (see
-    /// `protocol::tests` for the parsing itself); `node_from_style` copies them
-    /// into the `Node` verbatim.
-    #[test]
-    fn grid_templates_and_placement() {
-        let s = style(serde_json::json!({
-            "gridTemplateColumns": "1fr 2fr 100px",
-            "gridAutoRows": "auto 40px",
-            "gridRow": "2 / span 3",
-        }));
-        let node = node_from_style(&Some(s));
-        assert_eq!(node.grid_template_columns.len(), 3);
-        assert_eq!(node.grid_auto_rows.len(), 2);
-        assert_eq!(
-            format!("{:?}", node.grid_row),
-            format!("{:?}", GridPlacement::start_span(2, 3))
-        );
-    }
-
-    #[test]
-    fn text_style_resolves() {
-        let s = style(serde_json::json!({
-            "color": "#7aa2f7", "fontSize": 20, "fontWeight": "bold"
-        }));
-        let (color, font, ..) = resolved_text_style(&Some(s), &Fonts::default());
-        assert_eq!(color.0, parse_color("#7aa2f7"));
-        assert_eq!(font.font_size, (20.0f32).into());
-        assert_eq!(font.weight, FontWeight::BOLD);
-    }
-
-    #[test]
-    fn font_size_units() {
-        let fs = |v: serde_json::Value| {
-            resolved_text_style(
-                &Some(style(serde_json::json!({ "fontSize": v }))),
-                &Fonts::default(),
-            )
-            .1
-            .font_size
-        };
-        // bare number and "px" are both logical pixels.
-        assert_eq!(fs(serde_json::json!(24)), BevyFontSize::Px(24.0));
-        assert_eq!(fs(serde_json::json!("24px")), BevyFontSize::Px(24.0));
-        // viewport + rem units map one-to-one onto bevy's `FontSize`.
-        assert_eq!(fs(serde_json::json!("2vw")), BevyFontSize::Vw(2.0));
-        assert_eq!(fs(serde_json::json!("1.5rem")), BevyFontSize::Rem(1.5));
-    }
-
-    /// Decoded text enums flow through to the `TextLayout` (keyword parsing
-    /// itself is covered in `protocol::tests`).
-    #[test]
-    fn text_enums() {
-        let layout =
-            text_layout(&Some(style(serde_json::json!({ "textAlign": "right" })))).unwrap();
-        assert_eq!(layout.justify, Justify::Right);
-    }
-}
+mod tests;

@@ -250,8 +250,8 @@ impl FilterChannel {
     /// The target rides the wire-chain component (`FilterInput` /
     /// `BackdropInput` — the caller projects to the inner
     /// [`FilterChain`](crate::filters::FilterChain)),
-    /// NOT [`TransitionInput`](super::TransitionInput) — a chain-only delta dirties the
-    /// FILTER/BACKDROP|LAYER groups, never TRANSITION, so a target stamped
+    /// NOT [`TransitionInput`](super::TransitionInput) — a chain-only delta re-runs the
+    /// chain writer, never the transition writer, so a target stamped
     /// into the input would go stale; the chain component is re-stamped by
     /// that same delta. Both channel instances (filter, backdropFilter) run
     /// this same code over their own component pair.

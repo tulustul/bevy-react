@@ -1,5 +1,5 @@
-//! Keyword-valued style fields: the `keyword_fields!` table decodes each wire
-//! keyword straight into the `bevy_ui`/`bevy_text` enum it drives.
+//! Keyword-valued style properties: the `keyword_fields!` table decodes each
+//! wire keyword straight into the `bevy_ui`/`bevy_text` enum it drives.
 
 use std::fmt;
 
@@ -13,21 +13,43 @@ use serde::de::{self, Deserializer, Visitor};
 
 use super::background_image::BackgroundImageMode;
 use super::decode_warn;
-use super::style::LayerCache;
 use crate::image_rendering::ImageRendering;
+use crate::style::KeywordTable;
+use crate::style::props::LayerCache;
 
-/// Declares one `deserialize_with` fn per keyword-valued
-/// [`Style`](super::style::Style) field,
+/// A keyword kind's [`KeywordTable`] (`as TABLE` in `keyword_fields!`) for
+/// the property codec that decodes through it; nothing for a kind that only
+/// decodes a sub-field of another property's value.
+macro_rules! keyword_table {
+    (; $($rest:tt)*) => {};
+    ($table:ident; $fn_name:ident, $kind:literal, $ty:ty, [$($kw:literal),+]) => {
+        /// The keyword table of this kind, for the style registry's codec.
+        pub(crate) static $table: KeywordTable<$ty> = KeywordTable {
+            kind: $kind,
+            keywords: &[$($kw),+],
+            decode: {
+                fn decode(
+                    d: &mut dyn erased_serde::Deserializer<'_>,
+                ) -> Result<Option<$ty>, erased_serde::Error> {
+                    $fn_name(d)
+                }
+                decode
+            },
+        };
+    };
+}
+
+/// Declares one `deserialize_with` fn per keyword kind (and, with
+/// `as TABLE`, the [`KeywordTable`] a keyword-valued property's codec uses),
 /// decoding the wire keyword straight into the `bevy_ui`/`bevy_text` enum it
-/// drives. An unrecognized keyword warns (naming the field and value) and falls
+/// drives. An unrecognized keyword warns (naming the kind and value) and falls
 /// back to the enum's bevy default — a typo must not abort the commit batch. A
-/// JSON `null` decodes to `None` (matching the former `Option<String>` fields);
-/// any other non-string value keeps hard-erroring, like
-/// [`Length`](super::units::Length).
+/// JSON `null` decodes to `None`; any other non-string value keeps
+/// hard-erroring, like [`Length`](super::units::Length).
 macro_rules! keyword_fields {
     ( $(
         $(#[$meta:meta])*
-        fn $fn_name:ident($kind:literal) -> $ty:ty {
+        fn $fn_name:ident($kind:literal) -> $ty:ty $(as $table:ident)? {
             $( $($kw:literal)|+ => $variant:ident ),+ $(,)?
         }
     )+ ) => { $(
@@ -61,24 +83,26 @@ macro_rules! keyword_fields {
             }
             d.deserialize_any(V)
         }
+
+        keyword_table! { $($table)?; $fn_name, $kind, $ty, [$( $($kw),+ ),+] }
     )+ };
 }
 
 keyword_fields! {
-    fn de_display("display") -> Display {
+    fn de_display("display") -> Display as DISPLAY_KEYWORDS {
         "flex" => Flex, "grid" => Grid, "block" => Block, "none" => None,
     }
-    fn de_layer_cache("cache") -> LayerCache {
+    fn de_layer_cache("cache") -> LayerCache as LAYER_CACHE_KEYWORDS {
         "auto" => Auto, "always" => Always, "never" => Never,
     }
-    fn de_box_sizing("boxSizing") -> BoxSizing {
+    fn de_box_sizing("boxSizing") -> BoxSizing as BOX_SIZING_KEYWORDS {
         "borderBox" | "border-box" => BorderBox,
         "contentBox" | "content-box" => ContentBox,
     }
-    fn de_position_type("positionType") -> PositionType {
+    fn de_position_type("positionType") -> PositionType as POSITION_TYPE_KEYWORDS {
         "absolute" => Absolute, "relative" => Relative,
     }
-    fn de_overflow_axis("overflow") -> OverflowAxis {
+    fn de_overflow_axis("overflow") -> OverflowAxis as OVERFLOW_KEYWORDS {
         "visible" => Visible, "clip" => Clip, "hidden" => Hidden, "scroll" => Scroll,
     }
     // `start`/`end` are the physical variants, `flexStart`/`flexEnd` the
@@ -86,59 +110,59 @@ keyword_fields! {
     // so the keywords must not collapse together. The alignment enums' bevy
     // default is the keyword-less `Default` variant ("align per the layout
     // spec"), which is also the unrecognized-keyword fallback.
-    fn de_align_items("alignItems") -> AlignItems {
+    fn de_align_items("alignItems") -> AlignItems as ALIGN_ITEMS_KEYWORDS {
         "start" => Start, "end" => End,
         "flexStart" => FlexStart, "flexEnd" => FlexEnd,
         "center" => Center, "baseline" => Baseline, "stretch" => Stretch,
     }
-    fn de_justify_items("justifyItems") -> JustifyItems {
+    fn de_justify_items("justifyItems") -> JustifyItems as JUSTIFY_ITEMS_KEYWORDS {
         "start" => Start, "end" => End,
         "center" => Center, "baseline" => Baseline, "stretch" => Stretch,
     }
-    fn de_align_self("alignSelf") -> AlignSelf {
+    fn de_align_self("alignSelf") -> AlignSelf as ALIGN_SELF_KEYWORDS {
         "auto" => Auto, "start" => Start, "end" => End,
         "flexStart" => FlexStart, "flexEnd" => FlexEnd,
         "center" => Center, "baseline" => Baseline, "stretch" => Stretch,
     }
-    fn de_justify_self("justifySelf") -> JustifySelf {
+    fn de_justify_self("justifySelf") -> JustifySelf as JUSTIFY_SELF_KEYWORDS {
         "auto" => Auto, "start" => Start, "end" => End,
         "center" => Center, "baseline" => Baseline, "stretch" => Stretch,
     }
-    fn de_align_content("alignContent") -> AlignContent {
+    fn de_align_content("alignContent") -> AlignContent as ALIGN_CONTENT_KEYWORDS {
         "start" => Start, "end" => End,
         "flexStart" => FlexStart, "flexEnd" => FlexEnd,
         "center" => Center, "stretch" => Stretch,
         "spaceBetween" => SpaceBetween, "spaceEvenly" => SpaceEvenly,
         "spaceAround" => SpaceAround,
     }
-    fn de_justify_content("justifyContent") -> JustifyContent {
+    fn de_justify_content("justifyContent") -> JustifyContent as JUSTIFY_CONTENT_KEYWORDS {
         "start" => Start, "end" => End,
         "flexStart" => FlexStart, "flexEnd" => FlexEnd,
         "center" => Center, "stretch" => Stretch,
         "spaceBetween" => SpaceBetween, "spaceEvenly" => SpaceEvenly,
         "spaceAround" => SpaceAround,
     }
-    fn de_flex_direction("flexDirection") -> FlexDirection {
+    fn de_flex_direction("flexDirection") -> FlexDirection as FLEX_DIRECTION_KEYWORDS {
         "row" => Row, "column" => Column,
         "rowReverse" => RowReverse, "columnReverse" => ColumnReverse,
     }
-    fn de_flex_wrap("flexWrap") -> FlexWrap {
+    fn de_flex_wrap("flexWrap") -> FlexWrap as FLEX_WRAP_KEYWORDS {
         "nowrap" | "noWrap" => NoWrap, "wrap" => Wrap, "wrapReverse" => WrapReverse,
     }
-    fn de_grid_auto_flow("gridAutoFlow") -> GridAutoFlow {
+    fn de_grid_auto_flow("gridAutoFlow") -> GridAutoFlow as GRID_AUTO_FLOW_KEYWORDS {
         "row" => Row, "column" => Column,
         "rowDense" => RowDense, "columnDense" => ColumnDense,
     }
     // Unknown values fall back to `Pass` (bevy's default) so a typo stays
     // click-through rather than silently swallowing pointer interaction.
-    fn de_focus_policy("focusPolicy") -> FocusPolicy {
+    fn de_focus_policy("focusPolicy") -> FocusPolicy as FOCUS_POLICY_KEYWORDS {
         "block" => Block, "pass" => Pass,
     }
-    fn de_text_align("textAlign") -> Justify {
+    fn de_text_align("textAlign") -> Justify as TEXT_ALIGN_KEYWORDS {
         "left" => Left, "center" => Center, "right" => Right,
         "justify" => Justified, "start" => Start, "end" => End,
     }
-    fn de_line_break("lineBreak") -> LineBreak {
+    fn de_line_break("lineBreak") -> LineBreak as LINE_BREAK_KEYWORDS {
         "wordBoundary" => WordBoundary, "anyCharacter" => AnyCharacter,
         "wordOrCharacter" => WordOrCharacter, "noWrap" => NoWrap,
     }
@@ -150,7 +174,7 @@ keyword_fields! {
     }
     // GPU sampling vocabulary on purpose (no CSS `smooth`/`pixelated`
     // aliases); unknown → `auto`, which never touches the asset.
-    fn de_image_rendering("imageRendering") -> ImageRendering {
+    fn de_image_rendering("imageRendering") -> ImageRendering as IMAGE_RENDERING_KEYWORDS {
         "auto" => Auto, "bilinear" => Bilinear,
         "trilinear" => Trilinear, "nearest" => Nearest,
     }
@@ -200,7 +224,11 @@ pub(crate) fn de_font_weight<'de, D: Deserializer<'de>>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::protocol::style::Style;
+    use crate::style::Style;
+    use crate::style::props::{
+        ALIGN_CONTENT, ALIGN_ITEMS, ALIGN_SELF, BOX_SIZING, DISPLAY, FLEX_DIRECTION, FLEX_WRAP,
+        FOCUS_POLICY, FONT_WEIGHT, JUSTIFY_CONTENT, LINE_BREAK, TEXT_ALIGN,
+    };
 
     /// Keyword style fields decode straight into their `bevy_ui`/`bevy_text`
     /// enums; `start`/`end` map to the physical `Start`/`End` variants while
@@ -221,15 +249,21 @@ mod tests {
             "lineBreak": "anyCharacter",
         }))
         .expect("keyword style decodes");
-        assert_eq!(s.display, Some(Display::Grid));
-        assert_eq!(s.align_items, Some(AlignItems::Start));
-        assert_eq!(s.align_self, Some(AlignSelf::FlexStart));
-        assert_eq!(s.align_content, Some(AlignContent::SpaceBetween));
-        assert_eq!(s.justify_content, Some(JustifyContent::FlexEnd));
-        assert_eq!(s.flex_wrap, Some(FlexWrap::NoWrap));
-        assert_eq!(s.focus_policy, Some(FocusPolicy::Block));
-        assert_eq!(s.text_align, Some(Justify::Justified));
-        assert_eq!(s.line_break, Some(LineBreak::AnyCharacter));
+        assert_eq!(s.get(&DISPLAY).copied(), Some(Display::Grid));
+        assert_eq!(s.get(&ALIGN_ITEMS).copied(), Some(AlignItems::Start));
+        assert_eq!(s.get(&ALIGN_SELF).copied(), Some(AlignSelf::FlexStart));
+        assert_eq!(
+            s.get(&ALIGN_CONTENT).copied(),
+            Some(AlignContent::SpaceBetween)
+        );
+        assert_eq!(
+            s.get(&JUSTIFY_CONTENT).copied(),
+            Some(JustifyContent::FlexEnd)
+        );
+        assert_eq!(s.get(&FLEX_WRAP).copied(), Some(FlexWrap::NoWrap));
+        assert_eq!(s.get(&FOCUS_POLICY).copied(), Some(FocusPolicy::Block));
+        assert_eq!(s.get(&TEXT_ALIGN).copied(), Some(Justify::Justified));
+        assert_eq!(s.get(&LINE_BREAK).copied(), Some(LineBreak::AnyCharacter));
 
         let s: Style = serde_json::from_value(serde_json::json!({
             "alignItems": "flexStart",
@@ -239,10 +273,13 @@ mod tests {
             "flexWrap": "noWrap",
         }))
         .expect("alias keywords decode");
-        assert_eq!(s.align_items, Some(AlignItems::FlexStart));
-        assert_eq!(s.justify_content, Some(JustifyContent::Start));
-        assert_eq!(s.box_sizing, Some(BoxSizing::BorderBox));
-        assert_eq!(s.flex_wrap, Some(FlexWrap::NoWrap));
+        assert_eq!(s.get(&ALIGN_ITEMS).copied(), Some(AlignItems::FlexStart));
+        assert_eq!(
+            s.get(&JUSTIFY_CONTENT).copied(),
+            Some(JustifyContent::Start)
+        );
+        assert_eq!(s.get(&BOX_SIZING).copied(), Some(BoxSizing::BorderBox));
+        assert_eq!(s.get(&FLEX_WRAP).copied(), Some(FlexWrap::NoWrap));
     }
 
     /// An unrecognized enum keyword falls back to the bevy default (and warns)
@@ -261,13 +298,16 @@ mod tests {
             "lineBreak": "wordBoundary",
         }))
         .expect("bad keywords must not abort deserialization");
-        assert_eq!(s.display, Some(Display::default()));
-        assert_eq!(s.align_items, Some(AlignItems::default()));
-        assert_eq!(s.flex_direction, Some(FlexDirection::default()));
-        assert_eq!(s.text_align, Some(Justify::default()));
-        assert_eq!(s.font_weight, Some(FontWeight::NORMAL));
-        assert_eq!(s.focus_policy, Some(FocusPolicy::Pass));
-        assert_eq!(s.line_break, Some(LineBreak::WordBoundary));
+        assert_eq!(s.get(&DISPLAY).copied(), Some(Display::default()));
+        assert_eq!(s.get(&ALIGN_ITEMS).copied(), Some(AlignItems::default()));
+        assert_eq!(
+            s.get(&FLEX_DIRECTION).copied(),
+            Some(FlexDirection::default())
+        );
+        assert_eq!(s.get(&TEXT_ALIGN).copied(), Some(Justify::default()));
+        assert_eq!(s.get(&FONT_WEIGHT).copied(), Some(FontWeight::NORMAL));
+        assert_eq!(s.get(&FOCUS_POLICY).copied(), Some(FocusPolicy::Pass));
+        assert_eq!(s.get(&LINE_BREAK).copied(), Some(LineBreak::WordBoundary));
     }
 
     /// `fontWeight` takes a named keyword or a numeric weight string.
@@ -276,7 +316,8 @@ mod tests {
         let fw = |v: serde_json::Value| {
             serde_json::from_value::<Style>(serde_json::json!({ "fontWeight": v }))
                 .expect("fontWeight decodes")
-                .font_weight
+                .get(&FONT_WEIGHT)
+                .copied()
         };
         assert_eq!(fw("bold".into()), Some(FontWeight::BOLD));
         assert_eq!(fw("600".into()), Some(FontWeight(600)));

@@ -28,7 +28,8 @@ pub struct Transform {
 }
 
 /// The `transform3d` style: a 3D perspective transform composited onto a
-/// promoted layer's quad (see [`super::style::Style::transform3d`]). Every field is optional;
+/// promoted layer's quad (the [`TRANSFORM3D`](crate::style::props::TRANSFORM3D) property).
+/// Every field is optional;
 /// unset channels stay at identity. Canonical application order around
 /// [`origin`](Self::origin): scale → rotateX → rotateY → rotateZ → translate,
 /// then the self-`perspective` projection.
@@ -131,7 +132,10 @@ impl Default for Transform3dOrigin {
 mod tests {
     use super::*;
     use crate::protocol::props::{Props, props_from_json as props};
-    use crate::protocol::style::{Style, style_groups};
+    use crate::style::Style;
+    use crate::style::props::{OPACITY, TRANSFORM, TRANSFORM3D, TRANSITION};
+    use crate::style::test_support::{promotes, runs};
+    use crate::style::writers::*;
 
     /// A style carries `transform`/`opacity`/`transition` over the wire (transform
     /// as a nested object, transition's `transform` entry resolving to a timing).
@@ -145,14 +149,14 @@ mod tests {
             }"#,
         )
         .expect("style decodes");
-        let t = s.transform.expect("transform present");
+        let t = s.get(&TRANSFORM).expect("transform present");
         assert_eq!(t.scale.static_val(), Some(0.95));
         // A bare number is logical pixels; a unit string carries an explicit unit.
         assert_eq!(t.translate_x.static_val(), Some(Length::Px(4.0)));
         assert_eq!(t.translate_y.static_val(), Some(Length::Percent(50.0)));
         assert_eq!(t.scale_x, None);
-        assert_eq!(s.opacity.static_val(), Some(0.5));
-        let transition = s.transition.expect("transition present");
+        assert_eq!(s.get(&OPACITY).static_val(), Some(0.5));
+        let transition = s.get(&TRANSITION).expect("transition present");
         assert!(transition.for_transform().is_some());
         assert!(transition.for_opacity().is_none());
     }
@@ -177,7 +181,7 @@ mod tests {
             }"#,
         )
         .expect("style decodes");
-        let t = s.transform3d.clone().expect("transform3d present");
+        let t = s.get(&TRANSFORM3D).cloned().expect("transform3d present");
         assert_eq!(t.perspective.static_val(), Some(800.0));
         assert_eq!(t.translate_z.static_val(), Some(-20.0));
         assert_eq!(
@@ -194,7 +198,7 @@ mod tests {
         assert!(!t.is_identity());
 
         let s: Style = serde_json::from_str(r#"{ "transform3d": {} }"#).expect("style decodes");
-        assert!(s.transform3d.expect("present").is_identity());
+        assert!(s.get(&TRANSFORM3D).expect("present").is_identity());
 
         let mut cached = Props::default();
         let (dirty, _) = cached.merge_delta(
@@ -202,8 +206,8 @@ mod tests {
             &[],
             &[],
         );
-        assert!(dirty.style.intersects(style_groups::TRANSFORM3D));
-        assert!(dirty.style.intersects(style_groups::LAYER));
-        assert!(dirty.style.intersects(style_groups::TRANSITION));
+        assert!(runs(&dirty.style, &TRANSFORM3D_WRITER));
+        assert!(promotes(&dirty.style));
+        assert!(runs(&dirty.style, &TRANSITION_WRITER));
     }
 }

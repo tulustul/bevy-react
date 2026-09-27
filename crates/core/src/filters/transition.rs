@@ -539,7 +539,7 @@ mod tests {
     // -- whole-value filter transitions (headless, schedule-driven) ----------
 
     /// Matched-chain ease: a grayscale amount 0→1 delta (filter-only — the
-    /// TRANSITION dirty group is never touched) eases the packed param each
+    /// transition writer never re-runs) eases the packed param each
     /// frame with a version bump + composite-only dirt per easing frame,
     /// settles EXACTLY on the resolver's own output, and stops churning after
     /// settle (the stage-interplay scar test).

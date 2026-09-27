@@ -2,10 +2,9 @@
 // value category (for pre-flight validation of inline edits), plus the safelist
 // of editable top-level props.
 //
-// STYLE_FIELDS must list every entry of `protocol.rs`'s `with_style_fields!`
-// table — a Rust test (`devtools.rs::js_style_field_table_covers_every_style_field`)
-// `include_str!`s this file and asserts each wire name appears as a key, so a
-// new style field can't silently go un-editable.
+// STYLE_FIELDS comes from Rust: the style registry (core properties and the
+// app's own, `app.add_react_style`) answers `devtools.styleFields` once at
+// install — see `installStyleFields`.
 
 /** Coarse wire-value shapes, checked before an edit crosses the bridge. The
  *  Rust deserializers degrade malformed *strings* gracefully (warn + default),
@@ -21,91 +20,30 @@ export type FieldCategory =
   | "string"
   | "json"; // structured objects (transform, gradients, transitions…)
 
-export const STYLE_FIELDS: Record<string, FieldCategory> = {
-  // display / box model
-  display: "keyword",
-  boxSizing: "keyword",
-  positionType: "keyword",
-  overflowX: "keyword",
-  overflowY: "keyword",
-  scrollbarWidth: "number",
-  // inset
-  left: "length",
-  right: "length",
-  top: "length",
-  bottom: "length",
-  // size
-  width: "length",
-  height: "length",
-  minWidth: "length",
-  minHeight: "length",
-  maxWidth: "length",
-  maxHeight: "length",
-  aspectRatio: "number",
-  // alignment
-  alignItems: "keyword",
-  justifyItems: "keyword",
-  alignSelf: "keyword",
-  justifySelf: "keyword",
-  alignContent: "keyword",
-  justifyContent: "keyword",
-  // spacing
-  margin: "rect",
-  padding: "rect",
-  border: "rect",
-  // flex
-  flexDirection: "keyword",
-  flexWrap: "keyword",
-  flexGrow: "number",
-  flexShrink: "number",
-  flexBasis: "length",
-  gap: "length",
-  rowGap: "length",
-  columnGap: "length",
-  // grid
-  gridAutoFlow: "keyword",
-  gridTemplateRows: "json",
-  gridTemplateColumns: "json",
-  gridAutoRows: "json",
-  gridAutoColumns: "json",
-  gridRow: "json",
-  gridColumn: "json",
-  // paint
-  backgroundColor: "color",
-  borderColor: "json", // color string or per-side object
-  borderRadius: "rect",
-  outline: "json",
-  boxShadow: "json",
-  filter: "json",
-  backdropFilter: "json",
-  morphFilter: "json",
-  backgroundGradient: "json",
-  borderGradient: "json",
-  backgroundImage: "json",
-  imageRendering: "keyword",
-  layoutRounding: "boolean",
-  zIndex: "number",
-  globalZIndex: "number",
-  focusPolicy: "keyword",
-  cursor: "keyword",
-  scrollbar: "json",
-  transform: "json",
-  transform3d: "json",
-  opacity: "number",
-  groupAlpha: "boolean",
-  cache: "keyword",
-  transition: "json",
-  // text
-  color: "color",
-  fontSize: "length",
-  fontWeight: "length", // number or keyword ("bold")
-  fontFamily: "keyword",
-  textAlign: "keyword",
-  lineHeight: "length",
-  letterSpacing: "length",
-  textShadow: "json",
-  lineBreak: "keyword",
-};
+/** Every registered style property's wire name → its category. Empty until
+ *  the `devtools.styleFields` response lands (right after install). */
+export const STYLE_FIELDS: Record<string, FieldCategory> = {};
+
+let styleFieldsVersion = 0;
+const styleFieldsListeners = new Set<() => void>();
+
+/** Fill `STYLE_FIELDS` from the registry's answer and notify subscribers. */
+export function installStyleFields(
+  fields: readonly { name: string; category: FieldCategory }[],
+): void {
+  for (const { name, category } of fields) STYLE_FIELDS[name] = category;
+  styleFieldsVersion++;
+  for (const cb of styleFieldsListeners) cb();
+}
+
+/** `useSyncExternalStore` pair: re-render once the table lands. */
+export function subscribeStyleFields(cb: () => void): () => void {
+  styleFieldsListeners.add(cb);
+  return () => styleFieldsListeners.delete(cb);
+}
+export function getStyleFieldsVersion(): number {
+  return styleFieldsVersion;
+}
 
 /** Every wire field of an SVG shape child's folded `shape` object
  *  (`svg/protocol.rs`'s `ShapeAttrs`) — the inspector renders the object as

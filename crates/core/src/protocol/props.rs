@@ -6,7 +6,7 @@ use serde::Deserialize;
 use crate::canvas::DrawCmd;
 
 use super::background_image::{AtlasSpec, ImageMode, SourceRect};
-use super::style::{Style, StyleDirty};
+use crate::style::{Style, StyleDirty};
 
 /// Props for a host element. Event handlers never cross the boundary — the
 /// reconciler replaces them with booleans (e.g. `onClick: true`) and keeps the
@@ -16,29 +16,23 @@ use super::style::{Style, StyleDirty};
 #[serde(rename_all = "camelCase")]
 pub struct Props {
     /// CSS-like layout + visual style, mapped onto `bevy_ui` components.
-    ///
-    /// Inline (unboxed) deliberately: nearly every op carries one, so a box
-    /// would trade a memcpy for an allocation on the hot path. The variants
-    /// below are the opposite case — see [`Self::hover_style`].
+    /// Inline, like the variants below: a [`Style`] is a small handle (the
+    /// sorted entries of the properties it sets), so a box would only add an
+    /// allocation.
     #[serde(default)]
     pub style: Option<Style>,
     /// Style overlaid on `style` while the element is hovered. Decoded exactly
     /// like `style`; applied on the Bevy side from the node's `Interaction`.
-    ///
-    /// **Boxed**, like its press/focus siblings: `Style` is ~1.2 KB, this
-    /// struct is default-initialized and merged once per Create/Update op, and
-    /// the vast majority of nodes declare no variant at all — inline they cost
-    /// every node 3 × `Style` for nothing. See [`props_stays_small`].
     #[serde(default)]
-    pub hover_style: Option<Box<Style>>,
+    pub hover_style: Option<Style>,
     /// Style overlaid on `style` (and `hover_style`) while the element is pressed.
     #[serde(default)]
-    pub press_style: Option<Box<Style>>,
+    pub press_style: Option<Style>,
     /// Style overlaid on `style` while the element is focused (currently
     /// `editableText`). Applied on the Bevy side from the node's focus state, so
     /// focus styling needs no React round-trip.
     #[serde(default)]
-    pub focus_style: Option<Box<Style>>,
+    pub focus_style: Option<Style>,
     /// Whether this element has an `onClick` handler registered in JS.
     #[serde(default)]
     pub on_click: bool,
@@ -223,8 +217,11 @@ pub struct Props {
 /// [`StyleDirty`]; the other flags are per prop group.
 #[derive(Debug, Clone, Default)]
 pub struct PropsDirty {
-    /// Style groups touched via `style` / `style_unset`.
+    /// Style properties touched via `style` / `style_unset`.
     pub style: StyleDirty,
+    /// The replaced values of the touched properties whose invalidation is
+    /// computed per change.
+    pub style_old: crate::style::OldValues,
     /// `hoverStyle` set or unset.
     pub hover_style: bool,
     /// `pressStyle` set or unset.
@@ -307,21 +304,21 @@ pub(crate) fn props_from_json(json: serde_json::Value) -> Props {
 /// `Props` is heap-allocated, default-initialized, decoded and merged **once
 /// per Create/Update op**, and `apply_js_ops` cost is linear in its size —
 /// measured at ~230 ns/op per KB, flat across 0.4.0/0.5.0/0.6.0 (see
-/// `docs/BENCHMARKS.md`). Since the struct held four inline [`Style`]s, every
-/// byte added to `Style` cost four here, and the translate leg crept +10–18%
-/// per release. The variants are boxed so a new `Style` field costs 1×, the
-/// op's box is passed end to end (never dereferenced into a stack copy), and
-/// the rare heavy payloads — `Animatable::Animated`, `transition`,
-/// `transform3d`, `morph_filter`, the gradients, `shape` — are boxed too
-/// (6056 → 1792 B; `Style` 4416 → 1232 B). This test fails if a heavy field
-/// is inlined again.
+/// `docs/BENCHMARKS.md`). When the struct held four inline typed styles (base +
+/// hover/press/focus, one field per property), every property added cost four
+/// times here and the translate leg crept +10–18% per release; boxing the
+/// variants and the rare heavy payloads took it 6056 → 1792 B. The op's box is
+/// passed end to end (never dereferenced into a stack copy). The style
+/// registry's sparse store (a 24 B handle — only set properties take space)
+/// then took it to 624 B with all four styles inline again. This test fails
+/// if a heavy field is inlined.
 #[cfg(test)]
 #[test]
 fn props_stays_small() {
     let size = size_of::<Props>();
     assert!(
-        size <= 2304,
-        "Props grew to {size} B (>2304 B): every Create/Update op pays for this. \
+        size <= 1024,
+        "Props grew to {size} B (>1024 B): every Create/Update op pays for this. \
          Box the new field instead of inlining it — see the `hover_style` docs."
     );
 }

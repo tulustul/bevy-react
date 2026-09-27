@@ -164,6 +164,31 @@ pub trait ReactAppExt {
     /// handler's).
     fn add_react_element(&mut self, handler: impl crate::ext::ElementKind) -> &mut Self;
 
+    /// Register a style property: `property.name` in any `style` object
+    /// decodes through its codec (see [`crate::style`]). The core registers
+    /// its own properties through this same call. Panics on a name already
+    /// registered.
+    fn add_react_style(
+        &mut self,
+        property: &'static dyn crate::style::AnyStyleProperty,
+    ) -> &mut Self;
+
+    /// [`add_react_style`](Self::add_react_style) for several properties.
+    fn add_react_styles(
+        &mut self,
+        properties: &[&'static dyn crate::style::AnyStyleProperty],
+    ) -> &mut Self;
+
+    /// Register a style writer: the code that turns the properties it reads
+    /// into the components it writes (see [`crate::style::Writer`]). The core
+    /// registers its own writers through this same call. Panics on a writer
+    /// registered twice or a component another writer already writes.
+    fn add_react_style_writer(&mut self, writer: &'static crate::style::Writer) -> &mut Self;
+
+    /// [`add_react_style_writer`](Self::add_react_style_writer) for several
+    /// writers, in apply order.
+    fn add_react_style_writers(&mut self, writers: &[&'static crate::style::Writer]) -> &mut Self;
+
     /// Register a typed React message payload without attaching an observer.
     ///
     /// After this, an `emit(T::NAME, value)` from the React app deserializes
@@ -323,6 +348,46 @@ impl ReactAppExt for App {
         self.world_mut()
             .get_resource_or_init::<crate::ext::ExtRegistry>()
             .add_element(handler);
+        self
+    }
+
+    fn add_react_style(
+        &mut self,
+        property: &'static dyn crate::style::AnyStyleProperty,
+    ) -> &mut Self {
+        self.world_mut()
+            .get_resource_or_init::<crate::ext::ExtRegistry>()
+            .add_style(property);
+        self
+    }
+
+    fn add_react_styles(
+        &mut self,
+        properties: &[&'static dyn crate::style::AnyStyleProperty],
+    ) -> &mut Self {
+        let mut registry = self
+            .world_mut()
+            .get_resource_or_init::<crate::ext::ExtRegistry>();
+        for property in properties {
+            registry.add_style(*property);
+        }
+        self
+    }
+
+    fn add_react_style_writer(&mut self, writer: &'static crate::style::Writer) -> &mut Self {
+        self.world_mut()
+            .get_resource_or_init::<crate::ext::ExtRegistry>()
+            .add_style_writer(writer);
+        self
+    }
+
+    fn add_react_style_writers(&mut self, writers: &[&'static crate::style::Writer]) -> &mut Self {
+        let mut registry = self
+            .world_mut()
+            .get_resource_or_init::<crate::ext::ExtRegistry>();
+        for writer in writers {
+            registry.add_style_writer(writer);
+        }
         self
     }
 

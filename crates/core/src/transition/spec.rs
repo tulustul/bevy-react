@@ -8,17 +8,22 @@ use serde::Deserialize;
 
 use crate::animations::{Driver, Easing};
 use crate::protocol::{
-    animatable::AnimatableField, style::Style, units::Length, units::Rect, units::Time as WireTime,
+    animatable::AnimatableField, units::Length, units::Rect, units::Time as WireTime,
 };
+use crate::style::Style;
 use crate::ui_map::parse_color;
 
 use super::color_to_rgba;
+use crate::style::props::{
+    BACKGROUND_COLOR, BORDER_RADIUS, HEIGHT, MAX_HEIGHT, MAX_WIDTH, MORPH_FILTER, OPACITY,
+    TRANSFORM, TRANSFORM3D, TRANSITION, WIDTH,
+};
 
-/// CSS-like per-channel transition timing, set on [`Style::transition`]. Each
+/// CSS-like per-channel transition timing: the [`TRANSITION`] property. Each
 /// field, if present, makes that channel ease on change; a channel without an
 /// entry snaps (there is no fallback key). `transform` covers all six
 /// transform channels together.
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Transition {
     /// Applies to every transform channel (translate/scale/rotate).
@@ -269,7 +274,7 @@ pub struct TransitionInput {
     pub max_width: Option<Length>,
     pub max_height: Option<Length>,
     /// Target corner radii, written onto `Node.border_radius`. `None` →
-    /// unset (square corners, what `node_from_style` writes).
+    /// unset (square corners, what `node_from` writes).
     pub border_radius: Option<Rect>,
     /// Target `transform3d` params, eased field-wise onto the layer's
     /// [`LayerTransform3d`](crate::layer::transform3d::LayerTransform3d).
@@ -283,12 +288,12 @@ impl TransitionInput {
     /// timing ([`morph_default`]) and must be driven even when the style
     /// never mentions `transition`.
     pub(super) fn from_style(style: &Style) -> Option<Self> {
-        let spec = match style.transition.as_deref().cloned() {
+        let spec = match style.get(&TRANSITION).cloned() {
             Some(spec) => spec,
-            None if style.morph_filter.is_some() => Transition::default(),
+            None if style.get(&MORPH_FILTER).is_some() => Transition::default(),
             None => return None,
         };
-        let t = style.transform.clone().unwrap_or_default();
+        let t = style.get(&TRANSFORM).cloned().unwrap_or_default();
         // `static_val` throughout: an `{ animated }` channel has no static
         // target to ease toward — it reads as unset here, and the per-channel
         // skip rules park it anyway (bindings win over transitions).
@@ -303,17 +308,17 @@ impl TransitionInput {
                 .rotate
                 .static_val()
                 .map(crate::protocol::units::Angle::radians),
-            opacity: style.opacity.static_val(),
+            opacity: style.get(&OPACITY).static_val(),
             background_color: style
-                .background_color
+                .get(&BACKGROUND_COLOR)
                 .static_ref()
                 .map(|hex| color_to_rgba(parse_color(hex))),
-            width: style.width.static_val(),
-            height: style.height.static_val(),
-            max_width: style.max_width.static_val(),
-            max_height: style.max_height.static_val(),
-            border_radius: style.border_radius.static_val(),
-            transform3d: style.transform3d.as_deref().cloned(),
+            width: style.get(&WIDTH).static_val(),
+            height: style.get(&HEIGHT).static_val(),
+            max_width: style.get(&MAX_WIDTH).static_val(),
+            max_height: style.get(&MAX_HEIGHT).static_val(),
+            border_radius: style.get(&BORDER_RADIUS).static_val(),
+            transform3d: style.get(&TRANSFORM3D).cloned(),
         })
     }
 }

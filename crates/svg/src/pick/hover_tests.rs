@@ -109,6 +109,7 @@ fn real_app() -> (
     let (ops_tx, ops_rx) = crossbeam_channel::unbounded::<Vec<Op>>();
     let (out_tx, out_rx) = tokio::sync::mpsc::unbounded_channel::<Outbound>();
     let ui_root = app.world_mut().spawn_empty().id();
+    bevy_react_core::style::add_core_styles(&mut app);
     crate::register_bindings(&mut app);
     let registry = bevy_react_core::ext::ExtRegistry::from_app(&app);
     bevy_react_core::ext::set_thread_registry(std::sync::Arc::new(registry.clone()));

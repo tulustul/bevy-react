@@ -66,6 +66,8 @@ pub struct ElementCtx<'a, 'w, 's> {
     pub images: &'a mut Assets<Image>,
     pub(crate) animated: &'a mut HashSet<NodeId>,
     pub(crate) anchors: &'a mut crate::anchor::AnchorIndex,
+    /// What the style writers see of the node being created.
+    pub(crate) writer: &'a crate::style::WriterCtx<'a>,
     /// The node id being created.
     pub id: NodeId,
 }
@@ -79,7 +81,7 @@ impl<'w, 's> ElementCtx<'_, 'w, 's> {
             crate::bridge::ReactNode(self.id),
             crate::ui_map::fresh_style_bundle(&props.style, focus_default),
         ));
-        crate::ui_map::apply_style_fresh(&mut ec, &props.style);
+        crate::ui_map::apply_style_fresh(&mut ec, &props.style, self.writer);
         ec.id()
     }
 

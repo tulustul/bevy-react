@@ -28,6 +28,13 @@ deno_core = "0.404.0"
 # The `JsErrorClass` types deno_core throws into JS (`JsErrorBox`); the version
 # deno_core 0.404 itself depends on.
 deno_error = "0.7"
+# Type-erased serde: the style registry decodes each property's value
+# straight into its registered type (`crates/core/src/style/codec.rs`). The
+# version bevy_reflect already pulls, so it adds nothing to the tree.
+erased-serde = "0.4"
+# Inline small-value storage for the style store (`crates/core/src/style/store.rs`):
+# a property value of ≤ 32 bytes lives in its entry, larger ones on the heap.
+smallbox = "0.8"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.150"
 tiny-skia = "0.12"

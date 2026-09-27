@@ -15,7 +15,8 @@
 //! canvas, svg, `{ texture }`/portal bindings) are never copied or written:
 //! every explicit mode is refused there with one warning.
 //!
-//! This module owns the wire type ([`ImageRendering`]); `protocol::style`
+//! This module owns the wire type ([`ImageRendering`]); the
+//! [`IMAGE_RENDERING`](crate::style::props::IMAGE_RENDERING) property
 //! references it by path, like `canvas`/`svg`.
 
 pub mod pyramid;

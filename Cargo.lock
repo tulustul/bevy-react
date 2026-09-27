@@ -1335,6 +1335,7 @@ dependencies = [
  "crossbeam-channel",
  "deno_core",
  "deno_error",
+ "erased-serde",
  "getrandom 0.3.4",
  "js-sys",
  "naga",
@@ -1342,6 +1343,7 @@ dependencies = [
  "serde",
  "serde-wasm-bindgen",
  "serde_json",
+ "smallbox",
  "tiny-skia 0.12.0",
  "tokio",
  "tracing",
@@ -5440,6 +5442,12 @@ checksum = "bdd58c3c93c3d278ca835519292445cb4b0d4dc59ccfdf7ceadaab3f8aeb4038"
 dependencies = [
  "version_check",
 ]
+
+[[package]]
+name = "smallbox"
+version = "0.8.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "aca054fd9f8c2ebe8557a2433f307e038c0716124efd045daa0388afa5172189"
 
 [[package]]
 name = "smallvec"

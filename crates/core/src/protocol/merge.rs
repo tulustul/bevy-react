@@ -1,9 +1,9 @@
 //! The delta-merge engine: [`Props::merge_delta`] folds an update op into the
-//! cached props and reports the dirty groups; [`Props::split_events`] strips
+//! cached props and reports what it touched; [`Props::split_events`] strips
 //! the act-now event fields.
 
 use super::props::{Props, PropsDirty, UpdateEvents};
-use super::style::{Style, StyleDirty};
+use crate::style::{Style, StyleDirty};
 
 impl Props {
     /// Iterate every present style slot: the base [`Self::style`] plus the
@@ -16,9 +16,9 @@ impl Props {
         // halves are chained rather than listed in one array.
         self.style.as_ref().into_iter().chain(
             [
-                self.hover_style.as_deref(),
-                self.press_style.as_deref(),
-                self.focus_style.as_deref(),
+                self.hover_style.as_ref(),
+                self.press_style.as_ref(),
+                self.focus_style.as_ref(),
             ]
             .into_iter()
             .flatten(),
@@ -61,11 +61,11 @@ impl Props {
 
         // --- set: fields present in the delta ---
         if let Some(style_delta) = &mut delta.style {
-            let groups = self
+            let touched = self
                 .style
                 .get_or_insert_default()
-                .overlay_delta(style_delta);
-            dirty.style.0 |= groups;
+                .overlay_delta(style_delta, &mut dirty.style_old);
+            dirty.style = dirty.style.union(touched);
         }
         if delta.hover_style.is_some() {
             self.hover_style = delta.hover_style.take();
@@ -83,7 +83,7 @@ impl Props {
         // above), deliberately not field-wise like `style`: a feature value
         // is one object with one Rust-side consequence (an SVG shape's attrs
         // → a full re-raster of the enclosing `<svg>`), with no per-field
-        // dirty groups to save — and atomic replace handles *removal* inside
+        // writers to save — and atomic replace handles *removal* inside
         // the value correctly by construction (JS sends the complete object
         // whenever anything changed, so a field absent from the new value is
         // a field removed, no `unset` bookkeeping needed). Compare-before-set
@@ -312,8 +312,8 @@ impl Props {
         if !style_unset.is_empty() {
             let style = self.style.get_or_insert_default();
             for name in style_unset {
-                if let Some(groups) = style.unset_field(name) {
-                    dirty.style.0 |= groups;
+                if let Some(id) = style.unset_field(name, &mut dirty.style_old) {
+                    dirty.style.insert(id);
                 }
             }
         }
@@ -327,8 +327,10 @@ mod tests {
     use super::*;
     use crate::protocol::animatable::AnimatableField;
     use crate::protocol::props::{Props, props_from_json as props};
-    use crate::protocol::style::style_groups;
     use crate::protocol::units::Length;
+    use crate::style::props::{BACKGROUND_COLOR, BACKGROUND_IMAGE, CURSOR, HEIGHT, OUTLINE, WIDTH};
+    use crate::style::test_support::runs;
+    use crate::style::writers::*;
 
     /// A delta sets exactly the supplied fields; everything else is preserved.
     #[test]
@@ -346,26 +348,30 @@ mod tests {
         );
 
         let style = cached.style.as_ref().unwrap();
-        assert_eq!(style.width.static_val(), Some(Length::Px(100.0)));
+        assert_eq!(style.get(&WIDTH).static_val(), Some(Length::Px(100.0)));
         assert_eq!(
-            style.background_color.static_ref().map(String::as_str),
+            style
+                .get(&BACKGROUND_COLOR)
+                .static_ref()
+                .map(String::as_str),
             Some("red")
         );
-        assert!(style.outline.is_some(), "untouched style fields preserved");
+        assert!(
+            style.get(&OUTLINE).is_some(),
+            "untouched style fields preserved"
+        );
         assert!(cached.hover_style.is_some(), "untouched props preserved");
         assert!(cached.on_click);
         assert_eq!(cached.src.as_deref(), Some("a.png"));
 
-        assert!(dirty.style.intersects(style_groups::LAYOUT));
+        assert!(runs(&dirty.style, &LAYOUT_WRITER));
         assert!(
-            !dirty
-                .style
-                .intersects(style_groups::BACKGROUND | style_groups::OUTLINE),
-            "untouched groups must stay clean"
+            !(runs(&dirty.style, &BACKGROUND_COLOR_WRITER) || runs(&dirty.style, &OUTLINE_WRITER)),
+            "untouched writers must not re-run"
         );
         assert!(!dirty.hover_style && !dirty.pointer && !dirty.image);
-        // `width` is a transitioned channel, so the transition group re-arms.
-        assert!(dirty.style.intersects(style_groups::TRANSITION));
+        // `width` is a transitioned channel, so the transition writer re-runs.
+        assert!(runs(&dirty.style, &TRANSITION_WRITER));
         assert!(ev.value.is_none() && ev.draw.is_none());
     }
 
@@ -435,16 +441,16 @@ mod tests {
         );
 
         let style = cached.style.as_ref().unwrap();
-        assert_eq!(style.background_color, None);
+        assert_eq!(style.get(&BACKGROUND_COLOR), None);
         assert_eq!(
-            style.width.static_val(),
+            style.get(&WIDTH).static_val(),
             Some(Length::Px(50.0)),
             "other style fields kept"
         );
         assert!(cached.hover_style.is_none());
         assert!(!cached.on_click);
-        assert!(dirty.style.intersects(style_groups::BACKGROUND));
-        assert!(!dirty.style.intersects(style_groups::LAYOUT));
+        assert!(runs(&dirty.style, &BACKGROUND_COLOR_WRITER));
+        assert!(!runs(&dirty.style, &LAYOUT_WRITER));
         assert!(dirty.hover_style && dirty.pointer);
         assert!(dirty.any_style_variant());
     }
@@ -470,7 +476,7 @@ mod tests {
         assert!(dirty.image);
     }
 
-    /// `"style"` in `unset` drops the whole style and dirties every group.
+    /// `"style"` in `unset` drops the whole style and touches every property.
     #[test]
     fn merge_delta_unsets_style_wholesale() {
         let mut cached = props(serde_json::json!({
@@ -515,9 +521,13 @@ mod tests {
             &[],
         );
         let hover = cached.hover_style.as_ref().unwrap();
-        assert!(hover.outline.is_some());
-        assert_eq!(hover.background_color, None, "atomic replace, not a merge");
-        assert_eq!(hover.width, None);
+        assert!(hover.get(&OUTLINE).is_some());
+        assert_eq!(
+            hover.get(&BACKGROUND_COLOR),
+            None,
+            "atomic replace, not a merge"
+        );
+        assert_eq!(hover.get(&WIDTH), None);
         assert!(dirty.hover_style);
     }
 
@@ -532,7 +542,7 @@ mod tests {
             &["alsoNope".into()],
         );
         assert_eq!(
-            cached.style.as_ref().unwrap().width.static_val(),
+            cached.style.as_ref().unwrap().get(&WIDTH).static_val(),
             Some(Length::Px(10.0))
         );
         assert!(!dirty.style.any());
@@ -565,9 +575,9 @@ mod tests {
 
         let a = two_steps.style.as_ref().unwrap();
         let b = one_step.style.as_ref().unwrap();
-        assert_eq!(a.width, b.width);
-        assert_eq!(a.height, b.height);
-        assert_eq!(a.background_color, b.background_color);
+        assert_eq!(a.get(&WIDTH), b.get(&WIDTH));
+        assert_eq!(a.get(&HEIGHT), b.get(&HEIGHT));
+        assert_eq!(a.get(&BACKGROUND_COLOR), b.get(&BACKGROUND_COLOR));
         assert!(two_steps.on_click && one_step.on_click);
     }
 
@@ -615,10 +625,10 @@ mod tests {
         assert!(dirty.wheel);
     }
 
-    /// A `cursor` delta sets the `CURSOR` dirty group; a `style` unset of it clears
-    /// the field and re-arms the group.
+    /// A `cursor` delta re-runs the cursor writer; a `style` unset of it clears
+    /// the field and re-runs it.
     #[test]
-    fn merge_delta_cursor_group() {
+    fn merge_delta_cursor_reruns_its_writer() {
         let mut cached = Props::default();
         let (dirty, _) = cached.merge_delta(
             props(serde_json::json!({ "style": { "cursor": "pointer" } })),
@@ -626,21 +636,34 @@ mod tests {
             &[],
         );
         assert_eq!(
-            cached.style.as_ref().unwrap().cursor.as_deref(),
+            cached
+                .style
+                .as_ref()
+                .unwrap()
+                .get(&CURSOR)
+                .map(String::as_str),
             Some("pointer")
         );
-        assert!(dirty.style.intersects(style_groups::CURSOR));
-        assert!(!dirty.style.intersects(style_groups::LAYOUT));
+        assert!(runs(&dirty.style, &CURSOR_WRITER));
+        assert!(!runs(&dirty.style, &LAYOUT_WRITER));
 
         let (dirty, _) = cached.merge_delta(Props::default(), &[], &["cursor".into()]);
-        assert_eq!(cached.style.as_ref().unwrap().cursor, None);
-        assert!(dirty.style.intersects(style_groups::CURSOR));
+        assert_eq!(
+            cached
+                .style
+                .as_ref()
+                .unwrap()
+                .get(&CURSOR)
+                .map(String::as_str),
+            None
+        );
+        assert!(runs(&dirty.style, &CURSOR_WRITER));
     }
 
-    /// The delta merge marks the `BG_IMAGE` group; `styleUnset` clears the
-    /// field and returns the same bit.
+    /// A `backgroundImage` delta re-runs its writer; `styleUnset` clears the
+    /// property and re-runs it again.
     #[test]
-    fn merge_delta_background_image_group() {
+    fn merge_delta_background_image_reruns_its_writer() {
         let mut cached = Props::default();
         let (dirty, _) = cached.merge_delta(
             props(serde_json::json!({
@@ -649,12 +672,26 @@ mod tests {
             &[],
             &[],
         );
-        assert!(cached.style.as_ref().unwrap().background_image.is_some());
-        assert!(dirty.style.intersects(style_groups::BG_IMAGE));
-        assert!(!dirty.style.intersects(style_groups::LAYOUT));
+        assert!(
+            cached
+                .style
+                .as_ref()
+                .unwrap()
+                .get(&BACKGROUND_IMAGE)
+                .is_some()
+        );
+        assert!(runs(&dirty.style, &BACKGROUND_IMAGE_WRITER));
+        assert!(!runs(&dirty.style, &LAYOUT_WRITER));
 
         let (dirty, _) = cached.merge_delta(Props::default(), &[], &["backgroundImage".into()]);
-        assert!(cached.style.as_ref().unwrap().background_image.is_none());
-        assert!(dirty.style.intersects(style_groups::BG_IMAGE));
+        assert!(
+            cached
+                .style
+                .as_ref()
+                .unwrap()
+                .get(&BACKGROUND_IMAGE)
+                .is_none()
+        );
+        assert!(runs(&dirty.style, &BACKGROUND_IMAGE_WRITER));
     }
 }

@@ -75,6 +75,7 @@ mod panel;
 mod pick;
 mod settings;
 mod stats;
+mod style_fields;
 #[cfg(test)]
 mod test_util;
 
@@ -95,6 +96,7 @@ use settings::{
     send_restore,
 };
 use stats::{DevtoolsTimers, emit_batch_stats, mark_post_layout, mark_pre_layout};
+use style_fields::on_style_fields_request;
 
 /// Devtools configuration, passed to
 /// [`ReactUiPlugin::devtools`](crate::ReactUiPlugin::devtools). Every field
@@ -200,6 +202,8 @@ impl Plugin for DevtoolsPlugin {
         .add_react_handler(on_layers_open_message)
         .add_react_handler(on_console_open_message)
         .add_react_handler(on_console_clear_message)
+        // The editor's style-field table, pulled once at panel install.
+        .add_react_request_handler(on_style_fields_request)
         // Registered in the plugin's OWN tuples — `plugin.rs`'s Update tuple
         // sits at Bevy's 20-arity cap.
         .add_systems(Startup, spawn_highlight_overlay)

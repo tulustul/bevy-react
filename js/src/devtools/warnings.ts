@@ -18,27 +18,12 @@ import type { MirrorNode } from "./mirror";
 /** Candidate rows per warning kind. `style`/`props` name exact fields; a kind
  *  with no entry (or the broad `length`/`angle`/`time` kinds) falls back to
  *  scanning every style field. Kind literals come from the Rust warn sites:
- *  `protocol.rs`'s `decode_warn` calls (`keyword_fields!` kinds, `"length"`,
- *  `"rect"`, …) and the `diag::report` calls in `ui_map.rs`/`cursor.rs`. */
+ *  `protocol/`'s `decode_warn` calls (`"length"`, `"rect"`, …) and the
+ *  `diag::report` calls in `ui_map.rs`/`cursor.rs`; keyword properties' kinds
+ *  are added at install from the style registry (`installStyleKinds`). */
 const KIND_FIELDS: Record<string, { style?: string[]; props?: string[] }> = {
-  // keyword_fields! kinds — the kind IS the field (overflow fans out).
-  display: { style: ["display"] },
-  boxSizing: { style: ["boxSizing"] },
-  positionType: { style: ["positionType"] },
-  overflow: { style: ["overflowX", "overflowY"] },
-  alignItems: { style: ["alignItems"] },
-  justifyItems: { style: ["justifyItems"] },
-  alignSelf: { style: ["alignSelf"] },
-  justifySelf: { style: ["justifySelf"] },
-  alignContent: { style: ["alignContent"] },
-  justifyContent: { style: ["justifyContent"] },
-  flexDirection: { style: ["flexDirection"] },
-  flexWrap: { style: ["flexWrap"] },
-  gridAutoFlow: { style: ["gridAutoFlow"] },
-  cache: { style: ["cache"] },
-  focusPolicy: { style: ["focusPolicy"] },
-  textAlign: { style: ["textAlign"] },
-  lineBreak: { style: ["lineBreak"] },
+  // Keyword properties' kinds (`display`, `overflow` → both axes, …) come
+  // from the style registry at install — see `installStyleKinds`.
   // Sized/structured decode kinds.
   fontSize: { style: ["fontSize"] },
   fontWeight: { style: ["fontWeight"] },
@@ -163,6 +148,19 @@ const KIND_FIELDS: Record<string, { style?: string[]; props?: string[] }> = {
   layerCamera: {},
 };
 
+/** Map each keyword property's kind to its row (the registry's answer to
+ *  `devtools.styleFields`): a kind shared by several properties (`overflow`)
+ *  flags each. */
+export function installStyleKinds(
+  fields: readonly { name: string; kind: string | null }[],
+): void {
+  for (const { name, kind } of fields) {
+    if (!kind) continue;
+    const style = ((KIND_FIELDS[kind] ??= {}).style ??= []);
+    if (!style.includes(name)) style.push(name);
+  }
+}
+
 /** The style variant props are opaque style objects under `props`; a bad value
  *  inside one (e.g. a `hoverStyle` color) should flag that prop's row, so they
  *  are always scanned in addition to the kind's own candidates. */
@@ -194,8 +192,9 @@ export function matchWarning(
 ): string[] {
   const spec = KIND_FIELDS[warning.kind];
   const out: string[] = [];
-  // No table entry (broad kinds like length/angle/time, or a future kind this
-  // table lags behind on) → every style field is a candidate.
+  // No table entry (broad kinds like length/angle/time, `unknownStyleField` —
+  // whose value is the unknown key itself — or a future kind this table lags
+  // behind on) → every style field is a candidate.
   // A warning whose value *names* the field flags that field directly (e.g.
   // `styleBinding`'s "hoverStyle": bindings ignored in a variant style).
   const styleFields = spec ? (spec.style ?? []) : Object.keys(node.style);

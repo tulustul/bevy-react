@@ -6,12 +6,8 @@ use bevy::prelude::*;
 use bevy::text::{LetterSpacing, LineHeight};
 use crossbeam_channel::Receiver;
 
-use crate::protocol::{
-    NodeId,
-    op::Op,
-    outbound::Outbound,
-    style::{Style, StyleDirty},
-};
+use crate::protocol::{NodeId, op::Op, outbound::Outbound};
+use crate::style::{Style, StyleDirty};
 
 /// The text appearance a `<text>` element/span carries, kept so inheriting child
 /// runs (bare strings) can copy it on append without an ECS query (Bevy commands
@@ -48,8 +44,8 @@ pub type OutboundSender = crossbeam_channel::Sender<Outbound>;
 ///
 /// The bridge re-applies the props it owns on every delta, so writes to
 /// **bridge-owned components** are clobbered on the next re-render (only the
-/// dirty style groups are rewritten, so a stray write may even survive for a
-/// while — don't rely on it). Read them freely; own everything else:
+/// writers reading a changed style property re-run, so a stray write may even
+/// survive for a while — don't rely on it). Read them freely; own everything else:
 ///
 /// - Bridge-owned: `Node`, `BackgroundColor`, `BorderColor`, `BorderRadius`,
 ///   `Outline`, `BoxShadow`, `ZIndex`/`GlobalZIndex`, `LayoutConfig`, `Visibility`,
@@ -81,16 +77,16 @@ pub struct RRoot;
 /// and/or `pressStyle`. The interaction system re-applies the merged style as
 /// the node's `Interaction` changes, entirely on the Bevy side (no round-trip
 /// to JS). Absent on elements without variants — they style as before.
-///
-/// Every slot is **boxed**: `Style` is ~1.2 KB, so inline this component would
-/// weigh ~5 KB in the archetype row of every interactive node (and be
-/// memcpy'd on each table move) to hold at most a handful of set fields.
 #[derive(Component, Debug, Clone, Default)]
 pub struct StyleVariants {
-    pub base: Option<Box<Style>>,
-    pub hover: Option<Box<Style>>,
-    pub press: Option<Box<Style>>,
-    pub focus: Option<Box<Style>>,
+    pub base: Option<Style>,
+    pub hover: Option<Style>,
+    pub press: Option<Style>,
+    pub focus: Option<Style>,
+    /// The properties any variant sets — what a hover/press/focus edge
+    /// re-applies (the merged value of anything else is the base's, already
+    /// applied).
+    pub keys: StyleDirty,
     /// Why the next interaction restyle runs — what a base-only delta has
     /// dirtied since the last one consumed it. Written by the op-apply path
     /// (a queued in-place `base` update ORs its `StyleDirty` mask in), read
@@ -100,12 +96,13 @@ pub struct StyleVariants {
 
 /// The pending work behind a `Changed<StyleVariants>` tick (see
 /// [`StyleVariants::restyle`]). A change with no recorded reason — a full
-/// (re)stamp, or a poke from the layer evaluator — re-merges and re-applies
-/// every style group, exactly as an `Interaction`/`FocusState` flip does; a
-/// base-only delta re-applies just the groups it touched (the merged style
-/// can't differ anywhere else), and when the node is idle (not hovered,
-/// pressed, or focused) the merged style IS the base the op path already
-/// applied with that same mask, so the restyle is skipped outright.
+/// (re)stamp, or a poke from the layer evaluator — re-merges and re-runs
+/// every writer. An `Interaction`/`FocusState` flip re-runs the writers of
+/// the properties any variant sets ([`StyleVariants::keys`]); a base-only
+/// delta re-runs just the writers of the properties it touched (the merged
+/// style can't differ anywhere else), and when the node is idle (not
+/// hovered, pressed, or focused) the merged style IS the base the op path
+/// already applied, so the restyle is skipped outright.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum Restyle {
     /// Re-apply everything (the value a full stamp inserts with).
@@ -114,17 +111,18 @@ pub enum Restyle {
     /// Nothing recorded — the resting value; a change tick without a reason
     /// (a promotion-flip poke) is treated as [`Restyle::Full`].
     Idle,
-    /// Only a base-style delta happened; re-apply these groups.
+    /// Only a base-style delta happened; re-run the writers of these
+    /// properties.
     Base(StyleDirty),
 }
 
 impl Restyle {
-    /// Fold a base-only delta's dirty groups in: accumulates across several
+    /// Fold a base-only delta's touched properties in: accumulates across several
     /// deltas in one frame, never narrows a pending full restyle.
     pub fn note_base_delta(&mut self, mask: StyleDirty) {
         *self = match *self {
             Restyle::Idle => Restyle::Base(mask),
-            Restyle::Base(prev) => Restyle::Base(StyleDirty(prev.0 | mask.0)),
+            Restyle::Base(prev) => Restyle::Base(prev.union(mask)),
             Restyle::Full => Restyle::Full,
         };
     }
@@ -358,7 +356,7 @@ impl JsBridge {
         // ROOT_ID (0) always resolves to the UI root entity.
         nodes.insert(crate::protocol::ROOT_ID, root);
         Self {
-            ext: Default::default(),
+            ext: std::sync::Arc::new(crate::ext::builtin_registry()),
             ops_rx,
             outbound_tx,
             nodes,

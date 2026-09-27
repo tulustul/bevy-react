@@ -76,9 +76,12 @@ fn build_op_app(
     // The caller's feature registrations (a feature plugin's kinds/keys), then
     // the registry snapshot the bridge dispatches on and the thread-local
     // decode scope the test's own `serde_json::from_value` calls resolve
-    // feature keys against.
+    // feature keys against. The core's style properties and writers first,
+    // as `ReactUiPlugin` registers them.
+    crate::style::add_core_styles(&mut app);
     setup(&mut app);
     let registry = crate::ext::ExtRegistry::from_app(&app);
+    registry.styles().validate();
     crate::ext::set_thread_registry(std::sync::Arc::new(registry.clone()));
     let mut bridge = JsBridge::new(ops_rx, out_tx, root);
     bridge.ext = std::sync::Arc::new(registry);

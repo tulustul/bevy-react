@@ -8,11 +8,10 @@
 //!
 //! Wire strings are decoded **once, here at the serde boundary** — never
 //! re-parsed on apply. The unit-bearing types (`Length`/`Angle`/`Time`/
-//! `FontSize`) parse into their own wire types, and the enum-like style fields
-//! (`display`/`align*`/`flex*`/grid tracks/…) decode directly into the
-//! `bevy_ui`/`bevy_text` values they drive, via field-level `deserialize_with`
-//! (which sidesteps the orphan rule), so applying a style in [`crate::ui_map`]
-//! is a plain field copy. A malformed string must **not** fail the whole batch
+//! `FontSize`) parse into their own wire types, and the keyword-valued style
+//! properties (`display`/`align*`/`flex*`/grid tracks/…) decode directly into
+//! the `bevy_ui`/`bevy_text` values they drive (their codecs wrap the decoders
+//! here — see [`crate::style`]), so a style writer copies the value as is. A malformed string must **not** fail the whole batch
 //! (one typo would abort the entire commit and trigger a reload), so every
 //! deserializer falls back to the bevy default and emits a
 //! `tracing::warn!` naming the bad value (`tracing` reaches the same log sink
@@ -29,7 +28,6 @@ mod merge;
 pub mod op;
 pub mod outbound;
 pub mod props;
-pub mod style;
 pub mod transform;
 pub mod units;
 pub mod visual;

@@ -4,8 +4,12 @@
 //! Everything a feature needs from the bridge lives here, under one module,
 //! so the supported surface is nameable: a feature crate uses `ext::*` plus
 //! the public engine primitives (`transition::{Channel, ChannelTransition,
-//! Easing}`, `layer::LayerContentDirt`, `animations::SharedValues`) and the
-//! [`raster`](crate::raster) helpers, never the reconciler's internals.
+//! Easing}`, `layer::LayerContentDirt`, `animations::SharedValues`), the
+//! [`raster`](crate::raster) helpers, and the style registry
+//! ([`crate::style`]: `StyleProperty` statics registered with
+//! `add_react_style(s)`, `Writer`s with `add_react_style_writer(s)`, and the
+//! auto-stamped `StyleValue<T>` component) — never the reconciler's
+//! internals.
 //!
 //! The contract components are the entity-keyed form of facts the bridge
 //! used to keep in per-node side tables or under a feature's own type name.
@@ -28,7 +32,8 @@ use bevy::prelude::*;
 /// element kind. Replaces the bridge's `shapes` / `svg_roots` /
 /// `foreign_images` membership sets: a system queries `&ElementFlags`, and
 /// the op-apply path (where commands are still deferred) derives the same
-/// bits from the node's recorded kind through [`flags_for_kind`].
+/// bits from the node's recorded kind through
+/// [`ExtRegistry::flags_for_kind`](crate::ext::ExtRegistry::flags_for_kind).
 #[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct ElementFlags {
     /// The entity carries no `Node`: no style, no layout box (a `<text>`
@@ -184,15 +189,24 @@ mod element;
 mod props;
 
 pub use element::{ElementCtx, ElementKind, ElementUpdateCtx};
-pub(crate) use props::warn_feature_missing_kind;
+pub(crate) use props::{warn_feature_missing, warn_feature_missing_kind};
 
-/// The registry with every feature the core itself ships registered — none:
-/// every element and prop key beyond the built-ins comes from a feature
-/// crate's plugin. The harness twin of an app with no feature plugins, for
-/// headless tests that decode or apply ops without building the plugin.
+/// The registry with what the core itself registers — its style properties
+/// and writers ([`crate::style::props::CORE_STYLES`],
+/// [`crate::style::writers::CORE_WRITERS`]); every element and prop key beyond
+/// the built-ins comes from a feature crate's plugin. The harness twin of an
+/// app with no feature plugins, for headless tests that decode or apply ops
+/// without building the plugin.
 #[doc(hidden)]
 pub fn builtin_registry() -> ExtRegistry {
-    ExtRegistry::default()
+    let mut registry = ExtRegistry::default();
+    for property in crate::style::props::CORE_STYLES {
+        registry.add_style(*property);
+    }
+    for writer in crate::style::writers::CORE_WRITERS {
+        registry.add_style_writer(writer);
+    }
+    registry
 }
 
 /// Install an empty decode scope on this thread when none is (idempotent).

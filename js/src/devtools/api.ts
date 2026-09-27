@@ -4,7 +4,8 @@
 // `--export-bindings` exporter never adds `DevtoolsPlugin`). The Rust twins of
 // these shapes live in `crates/core/src/devtools.rs`.
 
-import { addEventListener, emit } from "../bridge";
+import { addEventListener, emit, request } from "../bridge";
+import type { FieldCategory } from "./fields";
 
 /** Bevy→JS `devtools.toggle`: the panel's open state changed Bevy-side. */
 export interface DevtoolsToggle {
@@ -192,6 +193,20 @@ export function onLayers(cb: (e: DevtoolsLayers) => void): () => void {
  *  is active. */
 export function onConsole(cb: (e: DevtoolsConsole) => void): () => void {
   return addEventListener("devtools.console", cb as (v: unknown) => void);
+}
+
+/** One registered style property as the editor sees it — a row of the
+ *  `devtools.styleFields` response (`devtools/style_fields.rs`). `kind` is
+ *  the diag kind a bad keyword warns under (keyword properties only). */
+export interface DevtoolsStyleField {
+  name: string;
+  category: FieldCategory;
+  kind: string | null;
+}
+
+/** Pull the registered style properties — core and the app's own. */
+export function requestStyleFields(): Promise<DevtoolsStyleField[]> {
+  return request("devtools.styleFields", null) as Promise<DevtoolsStyleField[]>;
 }
 
 /** Report the panel's layout settings for persistence. Emitted on every

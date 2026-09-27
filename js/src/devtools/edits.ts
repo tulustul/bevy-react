@@ -1,7 +1,7 @@
 // Devtools inline editing: build a raw `Op::Update` for the target node and
 // send it through the NORMAL op pipeline (`op_flush` → `merge_delta` →
-// `apply_style_masked`), so merge semantics, dirty groups, and the Rust props
-// cache all behave exactly as if React had sent the change. Semantics are
+// `apply_style_masked`), so merge semantics, per-property writer dispatch, and
+// the Rust props cache all behave exactly as if React had sent the change. Semantics are
 // deliberately TRANSIENT: the edit applies now, and the next app
 // commit that touches the same field stomps it (one that doesn't leaves it).
 //

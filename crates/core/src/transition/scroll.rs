@@ -6,7 +6,8 @@ use bevy::ui::ScrollPosition;
 
 use super::channels::Channel;
 use super::spec::ChannelTransition;
-use crate::protocol::style::Style;
+use crate::style::Style;
+use crate::style::props::TRANSITION;
 
 /// The scroll-easing **spec** input: the `transition.scroll` timing, reinserted
 /// fresh on every render (like [`TransitionInput`](super::TransitionInput))
@@ -76,7 +77,7 @@ pub fn apply_scroll_transition_fresh(ec: &mut EntityCommands, style: &Option<Sty
 fn scroll_spec(style: &Option<Style>) -> Option<&ChannelTransition> {
     style
         .as_ref()
-        .and_then(|s| s.transition.as_ref())
+        .and_then(|s| s.get(&TRANSITION))
         .and_then(|t| t.for_scroll())
 }
 

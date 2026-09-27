@@ -5,7 +5,6 @@
 
 use bevy::platform::collections::HashSet;
 use bevy::prelude::*;
-use bevy::ui::FocusPolicy;
 use bevy::ui::RelativeCursorPosition;
 use bevy::ui::{ComputedNode, ScrollPosition};
 
@@ -18,8 +17,8 @@ use crate::bridge::{
 use crate::protocol::{
     NodeId,
     props::{Props, PropsDirty},
-    style::Style,
 };
+use crate::style::props::{BACKDROP_FILTER, CACHE, FILTER, MORPH_FILTER, TRANSFORM3D};
 use crate::transition::ScrollTransitionState;
 
 /// Stamp (or clear) the [`AnimatedNode`] bindings on a host element, derived
@@ -108,10 +107,11 @@ pub(super) fn apply_anchor(
 pub(super) fn apply_style_variants(ec: &mut EntityCommands, props: &Props) {
     if props.hover_style.is_some() || props.press_style.is_some() || props.focus_style.is_some() {
         ec.insert(StyleVariants {
-            base: props.style.clone().map(Box::new),
+            base: props.style.clone(),
             hover: props.hover_style.clone(),
             press: props.press_style.clone(),
             focus: props.focus_style.clone(),
+            keys: variant_keys(props),
             restyle: Restyle::Full,
         });
         // Hover/press are driven by `Interaction`; focus by `FocusState` (toggled
@@ -133,9 +133,9 @@ pub(super) fn apply_style_variants(ec: &mut EntityCommands, props: &Props) {
 /// The delta-update form of [`apply_style_variants`]: a variant field in the
 /// delta (set or unset) re-stamps/clears the component wholesale; a
 /// base-style-only delta on a node that HAS variants updates
-/// `StyleVariants.base` in place and records the delta's dirty groups
-/// ([`Restyle::note_base_delta`]) so the interaction restyle re-applies only
-/// those — or nothing at all on an idle node; a delta on a node with no
+/// `StyleVariants.base` in place and records the delta's touched properties
+/// ([`Restyle::note_base_delta`]) so the interaction restyle re-runs only
+/// their writers — or nothing at all on an idle node; a delta on a node with no
 /// variants (and none in the delta) queues nothing.
 pub(super) fn apply_style_variants_delta(
     ec: &mut EntityCommands,
@@ -149,10 +149,10 @@ pub(super) fn apply_style_variants_delta(
         apply_style_variants(ec, props);
         return;
     }
-    // Base groups changed only. The component exists exactly when a variant
+    // Only base properties changed. The component exists exactly when a variant
     // is present (create and the arm above keep that invariant).
     if props.hover_style.is_some() || props.press_style.is_some() || props.focus_style.is_some() {
-        let base = props.style.clone().map(Box::new);
+        let base = props.style.clone();
         let mask = dirty.style;
         ec.queue(move |mut entity: EntityWorldMut| {
             if let Some(mut variants) = entity.get_mut::<StyleVariants>() {
@@ -228,20 +228,25 @@ pub(crate) fn apply_pointer_handlers(ec: &mut EntityCommands, props: &Props) {
 /// surprise is at least visible. Call under the op's `diag::node_scope`.
 pub(super) fn warn_span_ignored(props: &Props) {
     for (present, name) in [
-        (props.all_styles().any(|s| s.filter.is_some()), "filter"),
         (
-            props.all_styles().any(|s| s.backdrop_filter.is_some()),
+            props.all_styles().any(|s| s.get(&FILTER).is_some()),
+            "filter",
+        ),
+        (
+            props
+                .all_styles()
+                .any(|s| s.get(&BACKDROP_FILTER).is_some()),
             "backdropFilter",
         ),
         (
-            props.all_styles().any(|s| s.morph_filter.is_some()),
+            props.all_styles().any(|s| s.get(&MORPH_FILTER).is_some()),
             "morphFilter",
         ),
         (
-            props.all_styles().any(|s| s.transform3d.is_some()),
+            props.all_styles().any(|s| s.get(&TRANSFORM3D).is_some()),
             "transform3d",
         ),
-        (props.all_styles().any(|s| s.cache.is_some()), "cache"),
+        (props.all_styles().any(|s| s.get(&CACHE).is_some()), "cache"),
     ] {
         if present {
             crate::diag::report(
@@ -337,16 +342,27 @@ pub(crate) fn stamp_common(
     }
 }
 
+/// The properties a node's hover/press/focus variants set.
+fn variant_keys(props: &Props) -> crate::style::StyleDirty {
+    [&props.hover_style, &props.press_style, &props.focus_style]
+        .into_iter()
+        .flatten()
+        .fold(crate::style::StyleDirty::NONE, |keys, s| {
+            keys.union(s.keys())
+        })
+}
+
 /// [`apply_style_variants`] for a **freshly spawned** entity: stamp the
 /// variants (and the `Interaction`/`FocusState` they need) when present, never
 /// remove.
 pub(super) fn apply_style_variants_fresh(ec: &mut EntityCommands, props: &Props) {
     if props.hover_style.is_some() || props.press_style.is_some() || props.focus_style.is_some() {
         ec.insert(StyleVariants {
-            base: props.style.clone().map(Box::new),
+            base: props.style.clone(),
             hover: props.hover_style.clone(),
             press: props.press_style.clone(),
             focus: props.focus_style.clone(),
+            keys: variant_keys(props),
             restyle: Restyle::Full,
         });
         if props.hover_style.is_some() || props.press_style.is_some() {
@@ -511,27 +527,6 @@ pub(super) fn update_controlled_scroll(
     }
 }
 
-/// `<button>` captures the pointer by default — bevy_ui's native `Button` sets
-/// `FocusPolicy::Block`, and we mirror that so a button doesn't leak its click to a
-/// sibling, an ancestor, or the 3D scene/portal behind it.
-/// [`apply_style`](crate::ui_map::apply_style) defaults
-/// every element to `Pass`, so for a button with no explicit `focusPolicy` we
-/// re-assert `Block` here. A bare `<node>` keeps `Pass`, so containers/labels stay
-/// click-through and don't swallow clicks meant for what's behind or around them.
-/// An explicit `focusPolicy` prop (handled in `apply_style`) always wins.
-pub(super) fn apply_button_focus_default(ec: &mut EntityCommands, style: &Option<Style>) {
-    let has_explicit = style.as_ref().is_some_and(|s| s.focus_policy.is_some());
-    if !has_explicit {
-        ec.insert(FocusPolicy::Block);
-        // Mirror into the picking backend's blocking flag, exactly as
-        // `apply_style` does for the `Pass` default (see its `FOCUS_POLICY` doc).
-        ec.insert(bevy::picking::Pickable {
-            should_block_lower: true,
-            is_hoverable: true,
-        });
-    }
-}
-
 /// Add or remove `id` from `set` to mirror a boolean prop.
 fn set_membership(set: &mut HashSet<NodeId>, id: NodeId, present: bool) {
     if present {
@@ -574,6 +569,7 @@ mod tests {
     use super::super::test_util::{ent, op_app, update_delta};
     use super::*;
     use crate::protocol::op::Op;
+    use bevy::ui::FocusPolicy;
 
     /// A plain `<node onClick>` — no hover/press style, not a `<button>` — must get
     /// an `Interaction` so `collect_ui_events` can report its clicks. Regression:
@@ -890,10 +886,10 @@ mod tests {
             "explicit pass unblocks picking on a button"
         );
 
-        // A delta that dirties the FOCUS_POLICY group (unsetting the — already
-        // absent — `focusPolicy` field) makes `apply_style` reset the bare
-        // button to `Pass`; the button default must be re-asserted so it stays
-        // `Block`. (A delta touching nothing wouldn't run the group at all.)
+        // A delta that re-runs the focus-policy writer (unsetting the —
+        // already absent — `focusPolicy` property) must keep the bare button
+        // at its kind default, `Block`. (A delta touching nothing wouldn't run
+        // the writer at all.)
         ops_tx
             .send(vec![update_delta(
                 1,

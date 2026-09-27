@@ -6,7 +6,7 @@ use bevy::prelude::*;
 
 use super::stats::UiAssets;
 use crate::protocol::props::Props;
-use crate::ui_map::{apply_atlas, image_node_promoted, svg_image_node};
+use crate::ui_map::{apply_atlas, image_node, svg_image_node};
 
 /// (Re)build an `<image>`'s `ImageNode` from its merged props, branching on
 /// svg mode: an `.svg` src keeps the element-owned raster texture + document
@@ -30,7 +30,7 @@ pub(super) fn rebuild_image(
         let path = path.to_owned();
         ec.queue(move |entity: EntityWorldMut| crate::svg::ensure_svg_image(entity, path, img));
     } else {
-        let mut img = image_node_promoted(props, assets, promoted);
+        let mut img = image_node(props, assets, promoted);
         apply_atlas(
             &mut img,
             props,

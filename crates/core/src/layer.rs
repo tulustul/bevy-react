@@ -45,6 +45,9 @@ use bevy::prelude::*;
 use bevy::ui::{ComputedNode, UiGlobalTransform};
 
 use crate::protocol::{NodeId, animatable::AnimatableField, props::Props};
+use crate::style::props::{
+    BACKDROP_FILTER, CACHE, FILTER, GROUP_ALPHA, MORPH_FILTER, OPACITY, TRANSFORM3D,
+};
 
 pub mod clip;
 pub mod pick3d;
@@ -203,7 +206,7 @@ pub struct LayerMeta {
     /// [`resolve_layer_repaints`] dirty this layer every frame (its pixels
     /// are written outside the dirt tracking's sight — live portals,
     /// app-owned render targets).
-    pub cache_policy: crate::protocol::style::LayerCache,
+    pub cache_policy: crate::style::props::LayerCache,
 }
 
 /// Public registry of currently promoted layers — the observability surface
@@ -286,8 +289,8 @@ pub fn mark_content_dirty(ec: &mut EntityCommands) {
 ///   promotion), and animated bindings;
 /// - at least one child (a leaf's group alpha is visually identical to the
 ///   per-node fold — promoting it would be pure cost);
-/// - `groupAlpha != false` (the opt-out, read from the base style only —
-///   the field is `no_overlay`);
+/// - no `groupAlpha: false` (the opt-out) in the base style or any variant —
+///   the same every-state union, so a hover can never flip it;
 /// - the element kind is eligible (`ineligible_element = false`). Ineligible:
 ///   Node-less bridge entities (`<text>` spans, SVG shape children — no
 ///   layout box to capture; their pixels belong to the enclosing block/root)
@@ -303,24 +306,28 @@ pub fn promotion_reasons(
     // Presence-based, value-blind — and an `{ animated }` opacity is presence
     // too (the field is `Some(Animatable::Animated)`), so an animated-only
     // opacity promotes exactly like a static one.
-    let opacity_present = props.all_styles().any(|s| s.opacity.is_some());
-    let group_gate = props.style.as_ref().and_then(|s| s.group_alpha) != Some(false);
+    let opacity_present = props.all_styles().any(|s| s.get(&OPACITY).is_some());
+    // `groupAlpha: false` anywhere — base or a variant — opts out: promotion
+    // is a union over every state, so a hover can never flip it.
+    let group_gate = !props
+        .all_styles()
+        .any(|s| s.get(&GROUP_ALPHA) == Some(&false));
 
     let mut reasons = 0;
     if opacity_present && group_gate && child_count >= 1 && !ineligible_element {
         reasons |= PromotionReasons::OPACITY;
     }
     // `cache: "always"`/`"never"` — forced promotion (for capture caching /
-    // for an always-recaptured live layer). Base style only (`no_overlay`),
-    // and deliberately NOT gated on children or `groupAlpha`: it has no
-    // visual semantics of its own, so the only gates are the element-kind
-    // ones.
-    let forced = matches!(
-        props.style.as_ref().and_then(|s| s.cache),
-        Some(
-            crate::protocol::style::LayerCache::Always | crate::protocol::style::LayerCache::Never
+    // for an always-recaptured live layer), unioned across the base style
+    // and the variants like the rest, and deliberately NOT gated on children
+    // or `groupAlpha`: it has no visual semantics of its own, so the only
+    // gates are the element-kind ones.
+    let forced = props.all_styles().any(|s| {
+        matches!(
+            s.get(&CACHE),
+            Some(crate::style::props::LayerCache::Always | crate::style::props::LayerCache::Never)
         )
-    );
+    });
     if forced && !ineligible_element {
         reasons |= PromotionReasons::FORCED;
     }
@@ -335,14 +342,14 @@ pub fn promotion_reasons(
     // definition, so even a leaf is a valid layer (same reasoning as FORCED).
     let filtered = props
         .all_styles()
-        .any(|s| s.filter.as_ref().is_some_and(|chain| !chain.0.is_empty()));
+        .any(|s| s.get(&FILTER).is_some_and(|chain| !chain.0.is_empty()));
     if filtered && !ineligible_element {
         reasons |= PromotionReasons::FILTER;
     }
     // `transform3d` presence — value-blind like FILTER (identity promotes, so
     // animating from identity never flips promotion), no child/`groupAlpha`
     // gate (the transform reshapes the captured result; a leaf is valid).
-    let transformed3d = props.all_styles().any(|s| s.transform3d.is_some());
+    let transformed3d = props.all_styles().any(|s| s.get(&TRANSFORM3D).is_some());
     if transformed3d && !ineligible_element {
         reasons |= PromotionReasons::TRANSFORM3D;
     }
@@ -352,7 +359,7 @@ pub fn promotion_reasons(
     // bindings do not join the union).
     let backdrop = props
         .all_styles()
-        .any(|s| s.backdrop_filter.as_ref().is_some_and(|c| !c.0.is_empty()));
+        .any(|s| s.get(&BACKDROP_FILTER).is_some_and(|c| !c.0.is_empty()));
     if backdrop && !ineligible_element {
         reasons |= PromotionReasons::BACKDROP;
     }
@@ -360,7 +367,7 @@ pub fn promotion_reasons(
     // FILTER (the decode already degraded malformed values to `None`). The
     // layer promotes eagerly so a cached capture exists to freeze on the
     // first key change.
-    let morph = props.all_styles().any(|s| s.morph_filter.is_some());
+    let morph = props.all_styles().any(|s| s.get(&MORPH_FILTER).is_some());
     if morph && !ineligible_element {
         reasons |= PromotionReasons::MORPH;
     }
@@ -394,11 +401,13 @@ pub fn evaluate_layer_promotions(
         return;
     }
     let dirty: Vec<NodeId> = bridge.layer_dirty.drain().collect();
+    let ext = bridge.ext.clone();
     for id in dirty {
         let Some(&entity) = bridge.nodes.get(&id) else {
             continue; // Removed in the same batch; sweep handled the row.
         };
         let element = flags.get(entity).copied().unwrap_or_default();
+        let kind = bridge.shared_tags.kind_cow(id);
         let reasons = match bridge.props_cache.get(&id) {
             Some(props) => promotion_reasons(
                 props,
@@ -419,13 +428,20 @@ pub fn evaluate_layer_promotions(
                 .props_cache
                 .get(&id)
                 .and_then(|p| p.style.as_ref())
-                .and_then(|s| s.opacity.static_val())
+                .and_then(|s| s.get(&OPACITY).static_val())
                 .unwrap_or(1.0);
+            // The first explicit policy — base style first, then variants
+            // (the promotion union's order).
             let cache_policy = bridge
                 .props_cache
                 .get(&id)
-                .and_then(|p| p.style.as_ref())
-                .and_then(|s| s.cache)
+                .and_then(|p| {
+                    p.all_styles().find_map(|s| {
+                        s.get(&CACHE)
+                            .copied()
+                            .filter(|c| *c != crate::style::props::LayerCache::Auto)
+                    })
+                })
                 .unwrap_or_default();
             commands
                 .entity(entity)
@@ -457,8 +473,16 @@ pub fn evaluate_layer_promotions(
                         entity,
                         props,
                         true,
-                        element.owns_image,
-                        &assets,
+                        &crate::style::WriterCtx {
+                            promoted: true,
+                            fresh: false,
+                            kind: &kind,
+                            flags: element,
+                            text: false,
+                            assets: &assets,
+                            fonts: &fonts,
+                            styles: ext.styles(),
+                        },
                         &mut ui_assets,
                         &mut style_variants,
                     );
@@ -491,8 +515,16 @@ pub fn evaluate_layer_promotions(
                     entity,
                     props,
                     false,
-                    element.owns_image,
-                    &assets,
+                    &crate::style::WriterCtx {
+                        promoted: false,
+                        fresh: false,
+                        kind: &kind,
+                        flags: element,
+                        text: false,
+                        assets: &assets,
+                        fonts: &fonts,
+                        styles: ext.styles(),
+                    },
                     &mut ui_assets,
                     &mut style_variants,
                 );
@@ -526,13 +558,12 @@ fn reapply_text_fold(
         return;
     }
     let style = bridge.props_cache.get(&id).and_then(|p| p.style.clone());
-    let resolved = crate::ui_map::resolved_text_style_promoted(&style, fonts, promoted);
+    let resolved = crate::ui_map::resolved_text_style(style.as_ref(), fonts, promoted);
     bridge.text_styles.insert(id, resolved.clone());
-    // Only the opacity fold (the color half) depends on promotion; the masked
-    // compare-before-write leaves the shaping components untouched, so a
+    // Only the opacity fold (the color half) depends on promotion; writing
+    // the color half alone leaves the shaping components untouched, so a
     // promotion flip never re-shapes the block.
-    let mask = crate::protocol::style::StyleDirty(crate::protocol::style::style_groups::TEXT_COLOR);
-    crate::ui_map::apply_resolved_text_style(&mut commands.entity(entity), &resolved, mask);
+    crate::ui_map::apply_resolved_text_style(&mut commands.entity(entity), &resolved, true, false);
     let kids: Vec<NodeId> = bridge.children_of(id).collect();
     for kid in kids {
         if bridge.spans.get(&kid) == Some(&crate::bridge::SpanKind::RawInherited)
@@ -541,7 +572,8 @@ fn reapply_text_fold(
             crate::ui_map::apply_resolved_text_style(
                 &mut commands.entity(kid_entity),
                 &resolved,
-                mask,
+                true,
+                false,
             );
         }
     }
@@ -1169,7 +1201,7 @@ pub fn resolve_layer_repaints(
     //    re-captures unconditionally. Seeded before the outward propagation:
     //    live pixels defeat ancestor caching (same rationale as backdrop).
     for meta in registry.layers.values() {
-        if meta.cache_policy == crate::protocol::style::LayerCache::Never {
+        if meta.cache_policy == crate::style::props::LayerCache::Never {
             state.dirty.insert(meta.entity);
         }
     }
@@ -1588,7 +1620,7 @@ mod tests {
     /// unsetting demotes.
     #[test]
     fn never_cache_lifecycle_and_policy() {
-        use crate::protocol::style::LayerCache;
+        use crate::style::props::LayerCache;
         let (mut app, ops_tx) = layer_app();
         ops_tx
             .send(vec![create(
@@ -1878,7 +1910,7 @@ mod tests {
     /// (live pixels defeat ancestor caching). Unrelated layers stay cached.
     #[test]
     fn never_policy_repaints_every_frame() {
-        use crate::protocol::style::LayerCache;
+        use crate::style::props::LayerCache;
         let mut world = World::new();
         world.init_resource::<LayerContentDirt>();
         world.init_resource::<LayerRepaintState>();

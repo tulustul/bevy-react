@@ -11,7 +11,7 @@ use super::decode_warn;
 use super::units::{Angle, Length};
 
 /// Outline drawn around (outside) the node's border box.
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OutlineSpec {
     #[serde(default)]
@@ -23,7 +23,7 @@ pub struct OutlineSpec {
 }
 
 /// A single drop shadow.
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BoxShadowSpec {
     #[serde(default)]
@@ -39,7 +39,7 @@ pub struct BoxShadowSpec {
 }
 
 /// A `boxShadow` value: one shadow or a stacked list (CSS `box-shadow: a, b, …`).
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(untagged)]
 pub enum BoxShadowList {
     One(BoxShadowSpec),
@@ -49,7 +49,7 @@ pub enum BoxShadowList {
 /// Line height for a `<text>`. A bare number is a multiple of the font size
 /// (`RelativeToFont`); a string carries a unit (`"20px"` absolute, `"1.5"` / `"1.5em"`
 /// a multiple); `{ "px": n }` is an absolute pixel height (legacy object form).
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(untagged)]
 pub enum LineHeightSpec {
     Relative(f32),
@@ -60,7 +60,7 @@ pub enum LineHeightSpec {
 /// Letter spacing for a `<text>`. A bare number is logical pixels; a string carries
 /// a unit (`"2px"`, `"0.1rem"`/`"0.1em"` for a font-size multiple, or `"normal"`);
 /// `{ "rem": n }` is a multiple of the font size (legacy object form).
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(untagged)]
 pub enum LetterSpacingSpec {
     Px(f32),
@@ -71,7 +71,7 @@ pub enum LetterSpacingSpec {
 /// A single text drop shadow. `offsetX`/`offsetY` are displacement in logical
 /// pixels (absent → bevy's default of `4.0`); `color` defaults to bevy's
 /// translucent black when unset.
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TextShadowSpec {
     #[serde(default)]
@@ -259,7 +259,8 @@ impl<'de> Deserialize<'de> for BorderColorSpec {
 #[cfg(test)]
 mod tests {
     use crate::protocol::animatable::AnimatableField;
-    use crate::protocol::style::Style;
+    use crate::style::Style;
+    use crate::style::props::BORDER_COLOR;
 
     /// Gradient leaves accept `{ animated }` wrappers; static forms decode as
     /// before; the wire types compare (PartialEq — required by the transition
@@ -339,7 +340,7 @@ mod tests {
         let uniform: Style =
             serde_json::from_str(r#"{ "borderColor": "white" }"#).expect("scalar decodes");
         let bc = uniform
-            .border_color
+            .get(&BORDER_COLOR)
             .static_ref()
             .expect("border_color present");
         assert_eq!(bc.top.as_deref(), Some("white"));
@@ -352,7 +353,7 @@ mod tests {
             serde_json::from_str(r##"{ "borderColor": { "top": "#f00", "left": "blue" } }"##)
                 .expect("object decodes");
         let bc = sided
-            .border_color
+            .get(&BORDER_COLOR)
             .static_ref()
             .expect("border_color present");
         assert_eq!(bc.top.as_deref(), Some("#f00"));
@@ -367,7 +368,7 @@ mod tests {
             serde_json::from_str(r#"{ "borderColor": { "middle": "red", "top": "blue" } }"#)
                 .expect("unknown side key must not abort deserialization");
         let bc = bogus
-            .border_color
+            .get(&BORDER_COLOR)
             .static_ref()
             .expect("border_color present");
         assert_eq!(bc.top.as_deref(), Some("blue"));

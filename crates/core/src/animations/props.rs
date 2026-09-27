@@ -1,6 +1,7 @@
 //! The one property table behind every static-property consumer of
-//! [`AnimatableProperty`] — the `with_style_fields!` precedent
-//! (`crate::protocol`) applied to the animation engine.
+//! [`AnimatableProperty`] — the animation engine's own declaration of the
+//! style properties it drives (engines declare their wiring; a property
+//! declares only itself — see [`crate::style`]).
 //!
 //! Historically the static property list existed in several unsynced copies
 //! (the derivation walker in `crate::style_bindings`, `write_node_value`'s
@@ -35,7 +36,7 @@
 //! - **kind** — the [`ValueKind`] variant name (`Length` / `Scalar` / `Angle`
 //!   / `Color`).
 //! - **accessor** — where the property lives in the merged [`Style`], for the
-//!   binding-derivation walker: `(base <field>)` a top-level
+//!   binding-derivation walker: `(prop <KEY>)` a top-level
 //!   `Option<Animatable<_>>` field, `(transform <field>)` a field of the
 //!   optional `transform` group, `(t3d <field> <unit>)` a field of the
 //!   optional `transform3d` group — the extra unit metadata (`num <default>`
@@ -75,7 +76,7 @@
 //! [`BackgroundGradientParam`]: super::protocol::AnimatableProperty::BackgroundGradientParam
 //! [`BorderGradientParam`]: super::protocol::AnimatableProperty::BorderGradientParam
 //! [`ShapeAttr`]: super::protocol::AnimatableProperty::ShapeAttr
-//! [`Style`]: crate::protocol::style::Style
+//! [`Style`]: crate::style::Style
 
 /// Invoke `$cb!` with every static property row (see the module doc for the
 /// column contract). The callback receives the full row list in one call:
@@ -95,27 +96,27 @@ macro_rules! with_animatable_props {
             ((P::ScaleX), Scalar, (transform scale_x), (none), Transform, Transform),
             ((P::ScaleY), Scalar, (transform scale_y), (none), Transform, Transform),
             ((P::Rotate), Angle, (transform rotate), (none), Transform, Transform),
-            ((P::Opacity), Scalar, (base opacity), (none), Opacity, Opacity),
-            ((P::BackgroundColor), Color, (base background_color), (color bg), Color, Background),
-            ((P::BorderColor), Color, (base border_color), (color border), Color, None),
-            ((P::Color), Color, (base color), (color text), Color, None),
+            ((P::Opacity), Scalar, (prop OPACITY), (none), Opacity, Opacity),
+            ((P::BackgroundColor), Color, (prop BACKGROUND_COLOR), (color bg), Color, Background),
+            ((P::BorderColor), Color, (prop BORDER_COLOR), (color border), Color, None),
+            ((P::Color), Color, (prop COLOR), (color text), Color, None),
             ((P::BackgroundImageTint), Color, (bg_tint), (color image_tint), Color, None),
-            ((P::Width), Length, (base width), (node width), Node, None),
-            ((P::Height), Length, (base height), (node height), Node, None),
-            ((P::MinWidth), Length, (base min_width), (node min_width), Node, None),
-            ((P::MinHeight), Length, (base min_height), (node min_height), Node, None),
-            ((P::MaxWidth), Length, (base max_width), (node max_width), Node, None),
-            ((P::MaxHeight), Length, (base max_height), (node max_height), Node, None),
-            ((P::Left), Length, (base left), (node left), Node, None),
-            ((P::Right), Length, (base right), (node right), Node, None),
-            ((P::Top), Length, (base top), (node top), Node, None),
-            ((P::Bottom), Length, (base bottom), (node bottom), Node, None),
-            ((P::FlexBasis), Length, (base flex_basis), (node flex_basis), Node, None),
-            ((P::Gap), Length, (base gap), (node_gap_both), Node, None),
-            ((P::RowGap), Length, (base row_gap), (node row_gap), Node, None),
-            ((P::ColumnGap), Length, (base column_gap), (node column_gap), Node, None),
-            ((P::AspectRatio), Scalar, (base aspect_ratio), (node_aspect), Node, None),
-            ((P::BorderRadius), Length, (base border_radius), (node_radius_all), Node, BorderRadius),
+            ((P::Width), Length, (prop WIDTH), (node width), Node, None),
+            ((P::Height), Length, (prop HEIGHT), (node height), Node, None),
+            ((P::MinWidth), Length, (prop MIN_WIDTH), (node min_width), Node, None),
+            ((P::MinHeight), Length, (prop MIN_HEIGHT), (node min_height), Node, None),
+            ((P::MaxWidth), Length, (prop MAX_WIDTH), (node max_width), Node, None),
+            ((P::MaxHeight), Length, (prop MAX_HEIGHT), (node max_height), Node, None),
+            ((P::Left), Length, (prop LEFT), (node left), Node, None),
+            ((P::Right), Length, (prop RIGHT), (node right), Node, None),
+            ((P::Top), Length, (prop TOP), (node top), Node, None),
+            ((P::Bottom), Length, (prop BOTTOM), (node bottom), Node, None),
+            ((P::FlexBasis), Length, (prop FLEX_BASIS), (node flex_basis), Node, None),
+            ((P::Gap), Length, (prop GAP), (node_gap_both), Node, None),
+            ((P::RowGap), Length, (prop ROW_GAP), (node row_gap), Node, None),
+            ((P::ColumnGap), Length, (prop COLUMN_GAP), (node column_gap), Node, None),
+            ((P::AspectRatio), Scalar, (prop ASPECT_RATIO), (node_aspect), Node, None),
+            ((P::BorderRadius), Length, (prop BORDER_RADIUS), (node_radius_all), Node, BorderRadius),
             ((P::Transform3d(F::Perspective)), Length, (t3d perspective num 0.0), (none), Transform3d, Transform3d),
             ((P::Transform3d(F::TranslateX)), Length, (t3d translate_x num 0.0), (none), Transform3d, Transform3d),
             ((P::Transform3d(F::TranslateY)), Length, (t3d translate_y num 0.0), (none), Transform3d, Transform3d),

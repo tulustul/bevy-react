@@ -362,6 +362,7 @@ impl Plugin for ReactUiPlugin {
     /// decoding host (see [`crate::ext::ExtRegistrySlot`]).
     fn finish(&self, app: &mut App) {
         let registry = app.world().resource::<crate::ext::ExtRegistry>().clone();
+        registry.styles().validate();
         app.world()
             .resource::<crate::ext::ExtRegistrySlot>()
             .fill(registry);
@@ -580,6 +581,9 @@ impl Plugin for ReactUiPlugin {
         // The handoff slot is filled with the final registry at startup
         // (`finish`, and `setup` as the headless fallback).
         app.init_resource::<crate::ext::ExtRegistry>();
+        // The core's style properties and writers register through the same
+        // calls a feature crate uses.
+        crate::style::add_core_styles(app);
         let ext_slot = crate::ext::ExtRegistrySlot::default();
         app.insert_resource(ext_slot.clone());
         let outbound_tx = host::spawn(
@@ -1193,6 +1197,7 @@ fn setup(
 ) {
     // Hand the final feature registry to the decoding host (a no-op when
     // `finish` already did — `App::update`-driven harnesses never `finish`).
+    ext_registry.styles().validate();
     ext_slot.fill(ext_registry.clone());
     // Load configured fonts into the `Fonts` resource before the first
     // `apply_js_ops` (Update) creates any text.

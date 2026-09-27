@@ -1,6 +1,7 @@
-//! Cross-language table guards: the JS devtools panel keeps hand-maintained
-//! field/kind tables (`js/src/devtools/*.ts`); these tests pin them to the
-//! Rust wire surface so growth on either side can't silently diverge.
+//! Cross-language table guards: the JS devtools panel keeps a hand-maintained
+//! warning-kind table (`js/src/devtools/warnings.ts`); this test pins it to
+//! the Rust warn sites so growth on either side can't silently diverge. (The
+//! style-field table comes from Rust at runtime — `style_fields.rs`.)
 
 /// `warnings.ts`'s `KIND_FIELDS` must know every warning kind Rust emits,
 /// or that kind degrades to a broad all-style-fields value scan. Kind
@@ -12,28 +13,14 @@
 /// `reconcile/svg_ops.rs`, `reconcile/stamps.rs`,
 /// `transition/gradient_channel.rs`); extend
 /// BOTH this list and the table when
-/// adding one. (`length`/`angle`/`time` are deliberately table-less —
-/// they're the broad-scan kinds.)
+/// adding one. (`length`/`angle`/`time`/`unknownStyleField` are
+/// deliberately table-less — they're the broad-scan kinds; a keyword
+/// property's kind reaches the table at install from the style registry —
+/// `devtools/style_fields.rs`.)
 #[test]
 fn js_warning_kind_table_covers_known_kinds() {
     let warnings_ts = include_str!("../../../../js/src/devtools/warnings.ts");
     for kind in [
-        "display",
-        "boxSizing",
-        "positionType",
-        "overflow",
-        "alignItems",
-        "justifyItems",
-        "alignSelf",
-        "justifySelf",
-        "alignContent",
-        "justifyContent",
-        "flexDirection",
-        "flexWrap",
-        "gridAutoFlow",
-        "focusPolicy",
-        "textAlign",
-        "lineBreak",
         "fontSize",
         "fontWeight",
         "rect",
@@ -73,7 +60,6 @@ fn js_warning_kind_table_covers_known_kinds() {
         "cursor",
         "lineHeight",
         "letterSpacing",
-        "cache",
         "precompileFilters",
         "layerCamera",
         "featureMissing",
@@ -85,32 +71,4 @@ fn js_warning_kind_table_covers_known_kinds() {
             "js/src/devtools/warnings.ts KIND_FIELDS is missing kind \"{kind}\""
         );
     }
-}
-
-/// The JS editor validates against its own field table
-/// (`js/src/devtools/fields.ts`); assert it names every wire field of
-/// `protocol/style.rs`'s `with_style_fields!` table, so adding a `Style` field
-/// can't silently leave it un-editable in devtools. Matches the key either
-/// bare (`width:`) or quoted (`"width":`) — prettier decides which.
-/// camelCase wire names make the bare `name:` probe unambiguous (a missing
-/// `top` is never satisfied by `scrollTop:`).
-#[test]
-fn js_style_field_table_covers_every_style_field() {
-    let fields_ts = include_str!("../../../../js/src/devtools/fields.ts");
-    macro_rules! check_fields {
-        ($(($field:ident, $wire:literal, ($($group:tt)*), $overlay:ident)),* $(,)?) => {
-            $(
-                assert!(
-                    fields_ts.contains(concat!($wire, ":"))
-                        || fields_ts.contains(concat!("\"", $wire, "\":")),
-                    concat!(
-                        "js/src/devtools/fields.ts is missing style field \"",
-                        $wire,
-                        "\" — add it to STYLE_FIELDS with a category"
-                    )
-                );
-            )*
-        };
-    }
-    crate::protocol::style::with_style_fields!(check_fields);
 }

@@ -124,7 +124,7 @@ pub struct AtlasSpec {
     pub index: usize,
 }
 
-/// Where a [`super::style::Style::background_image`] samples from: a bare string is an
+/// Where a [`BACKGROUND_IMAGE`](crate::style::props::BACKGROUND_IMAGE) samples from: a bare string is an
 /// asset path (`AssetServer`-loaded, like an `image` element's `src`); the
 /// `{ texture }` object names an **app-registered texture** in
 /// `crate::portal::RenderTargets` (typically `RenderTargets::register` —
@@ -132,7 +132,7 @@ pub struct AtlasSpec {
 /// app registers it). Texture backgrounds are for **static** content — they
 /// don't participate in live-repaint tracking; continuously-updating render
 /// targets belong in a `<portal>` element.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(untagged)]
 pub enum BackgroundImageSource {
     Path(String),
@@ -144,7 +144,7 @@ pub enum BackgroundImageSource {
 /// drives layout — a background must never do that) and `"sliced"`, and its
 /// unknown-keyword fallback is `Auto`. This spec's modes all map to
 /// layout-inert `NodeImageMode`s.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BackgroundImageSpec {
     /// Required — a spec with nothing to paint is dropped at decode
@@ -227,7 +227,7 @@ impl BackgroundImageMode {
 // compare-before-write + `Changed<SvgShape>` sound. For style fields (whose
 // read sites ignore the seed) a seed-only delta re-applies redundantly, but
 // the appliers' `set_if_neq` discipline absorbs it.
-/// Totalizing decode for [`super::style::Style::background_image`]: any malformed value —
+/// Totalizing decode for [`BACKGROUND_IMAGE`](crate::style::props::BACKGROUND_IMAGE): any malformed value —
 /// a bare string (there is no shorthand form), a spec missing `src`, a
 /// non-object — warns and decodes to `None` rather than aborting the whole
 /// batch (the repo-wide decode invariant). Also warns on a `scale` that a
@@ -265,7 +265,8 @@ pub(crate) fn de_background_image<'de, D: Deserializer<'de>>(
 mod tests {
     use super::*;
     use crate::protocol::animatable::AnimatableField;
-    use crate::protocol::style::Style;
+    use crate::style::Style;
+    use crate::style::props::{BACKGROUND_IMAGE, WIDTH};
 
     /// `backgroundImage` decode: both `src` forms, mode keywords, and the
     /// totalizing fallbacks (unknown mode → `Stretch`, invalid value → `None`
@@ -281,7 +282,7 @@ mod tests {
             }
         }))
         .unwrap();
-        let spec = s.background_image.expect("spec decodes");
+        let spec = s.get(&BACKGROUND_IMAGE).expect("spec decodes");
         assert!(matches!(&spec.src, BackgroundImageSource::Path(p) if p == "images/bg.png"));
         assert_eq!(spec.mode, Some(BackgroundImageMode::RepeatX));
         assert_eq!(spec.scale.static_val(), Some(2.0));
@@ -296,7 +297,7 @@ mod tests {
             }
         }))
         .unwrap();
-        let spec = s.background_image.expect("animated tint decodes");
+        let spec = s.get(&BACKGROUND_IMAGE).expect("animated tint decodes");
         assert!(spec.tint.static_ref().is_none());
         assert!(spec.tint.binding().is_some());
 
@@ -304,7 +305,7 @@ mod tests {
             "backgroundImage": { "src": { "texture": "minimap" } }
         }))
         .unwrap();
-        let spec = s.background_image.expect("texture source decodes");
+        let spec = s.get(&BACKGROUND_IMAGE).expect("texture source decodes");
         assert!(
             matches!(&spec.src, BackgroundImageSource::Texture { texture } if texture == "minimap")
         );
@@ -316,7 +317,7 @@ mod tests {
         }))
         .unwrap();
         assert_eq!(
-            s.background_image.unwrap().mode,
+            s.get(&BACKGROUND_IMAGE).unwrap().mode,
             Some(BackgroundImageMode::Stretch)
         );
 
@@ -330,8 +331,11 @@ mod tests {
                 "backgroundImage": bad, "width": 10,
             }))
             .unwrap();
-            assert!(s.background_image.is_none());
-            assert!(s.width.is_some(), "sibling fields survive the bad value");
+            assert!(s.get(&BACKGROUND_IMAGE).is_none());
+            assert!(
+                s.get(&WIDTH).is_some(),
+                "sibling fields survive the bad value"
+            );
         }
     }
 

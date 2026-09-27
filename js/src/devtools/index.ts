@@ -10,10 +10,18 @@
 
 import { createElement, type ReactNode } from "react";
 import { __installBridgeTap } from "../bridge";
-import { onBatchStats, onRestore, onToggle, onWarning } from "./api";
+import {
+  onBatchStats,
+  onRestore,
+  onToggle,
+  onWarning,
+  requestStyleFields,
+} from "./api";
 import { DevtoolsHost } from "./DevtoolsHost";
+import { installStyleFields } from "./fields";
 import { mirror } from "./mirror";
 import { recorder } from "./recorder";
+import { installStyleKinds } from "./warnings";
 
 // The renderer's other devtools entry point: per-node component attribution
 // (see `owners.ts`). Re-exported here so the renderer keeps ONE devtools
@@ -53,5 +61,15 @@ export function installDevtools(host: {
   // DevtoolsHost — a self-close gets no toggle echo from Bevy.)
   onToggle((e) => recorder.setEnabled(e.open));
   onRestore((s) => recorder.setEnabled(!!s.open));
+  // The editor's style-field table is the Rust style registry's (core + the
+  // app's own properties): categories for edit validation, keyword kinds for
+  // warning attribution.
+  requestStyleFields().then(
+    (fields) => {
+      installStyleFields(fields);
+      installStyleKinds(fields);
+    },
+    (e) => console.error("[js] devtools style fields:", e),
+  );
   host.mount(createElement(DevtoolsHost));
 }

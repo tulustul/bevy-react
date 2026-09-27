@@ -4,22 +4,19 @@
 //! [`ImageNode`] on the same entity. Never `NodeImageMode::Auto`, so the image
 //! contributes nothing to layout and a late-loading asset causes no reflow.
 //!
-//! The build needs `AssetServer`, which `apply_style_masked` doesn't hold, so
-//! [`apply_background_image`] is called from the reconcile sites (and the
-//! interaction restyle systems) instead of from an `apply_style_masked` arm —
-//! the same split as an `image` element's `image_node` build. Elements that
-//! own their entity's `ImageNode` (`image`, `canvas`, `portal`) are guarded by
-//! `ElementFlags::owns_image` at those call sites.
+//! The style writer (`crate::style::writers::BACKGROUND_IMAGE_WRITER`) builds
+//! the `ImageNode`; elements that own their entity's `ImageNode` (`image`,
+//! `canvas`, `portal`, `svg`) are skipped there (`ElementFlags::owns_image`)
+//! and warned about here ([`warn_ignored`]). This module keeps the markers
+//! and the systems that follow a texture binding / DPI change.
 
 use bevy::image::TRANSPARENT_IMAGE_HANDLE;
 use bevy::prelude::*;
 use bevy::ui::widget::NodeImageMode;
 
-use crate::protocol::{
-    animatable::AnimatableField, background_image::BackgroundImageSource, props::Props,
-    style::Style, style::StyleDirty, style::style_groups,
-};
-use crate::ui_map::{apply_opacity, parse_color};
+use crate::protocol::background_image::BackgroundImageSource;
+use crate::protocol::props::Props;
+use crate::style::props::BACKGROUND_IMAGE;
 
 /// Marks a node whose background image samples a render target registered in
 /// [`crate::portal::RenderTargets`]. [`bind_background_textures`] keeps the
@@ -37,82 +34,6 @@ pub struct RBackgroundTexture(pub String);
 /// texture's own size in *logical* px on every display (CSS semantics).
 #[derive(Component, Clone, Copy, Debug)]
 pub struct BackgroundTileScale(pub f32);
-
-/// Apply the style's `backgroundImage` onto the entity: insert/update or
-/// remove the [`ImageNode`] (plus the [`RBackgroundTexture`] /
-/// [`BackgroundTileScale`] markers) per the spec. Skips entirely unless the
-/// `BG_IMAGE` group is dirty. Callers guarantee the entity's `ImageNode` is
-/// not element-owned (see `ElementFlags::owns_image`); on a node that never
-/// had the style, the removes are no-ops (same pattern as the
-/// `BackgroundColor` arm in `apply_style_masked`).
-pub fn apply_background_image(
-    ec: &mut EntityCommands,
-    style: &Option<Style>,
-    dirty: StyleDirty,
-    promoted: bool,
-    assets: &AssetServer,
-) {
-    if !dirty.intersects(style_groups::BG_IMAGE) {
-        return;
-    }
-    let spec = match style.as_ref() {
-        Some(s) => s.background_image.as_ref(),
-        None => None,
-    };
-    let Some(spec) = spec else {
-        ec.remove::<(
-            ImageNode,
-            RBackgroundTexture,
-            BackgroundTileScale,
-            crate::ext::LiveTexture,
-        )>();
-        return;
-    };
-    let mut image = match &spec.src {
-        BackgroundImageSource::Path(path) => {
-            // A stale marker would let `bind_background_textures` stomp the
-            // asset handle — clear it whenever the source is a path.
-            ec.remove::<(RBackgroundTexture, crate::ext::LiveTexture)>();
-            ImageNode::new(assets.load(path.clone()))
-        }
-        BackgroundImageSource::Texture { texture } => {
-            ec.insert((RBackgroundTexture(texture.clone()), crate::ext::LiveTexture));
-            ImageNode::new(TRANSPARENT_IMAGE_HANDLE)
-        }
-    };
-    // An animated tint reads as absent here (white base) — the animation
-    // applier (`AnimatableProperty::BackgroundImageTint`) drives the color
-    // every frame instead.
-    if let Some(tint) = spec.tint.static_ref() {
-        image.color = parse_color(tint);
-    }
-    // `opacity` folds into the tint alpha exactly like `image_node_promoted`:
-    // suppressed on a promoted layer root (group alpha applies at composite).
-    if !promoted {
-        image.color = apply_opacity(
-            image.color,
-            style.as_ref().and_then(|s| s.opacity.static_val()),
-        );
-    }
-    let mode = spec.mode.unwrap_or_default();
-    if mode.tiles() {
-        // `stretch_value` is written in logical terms here;
-        // `sync_background_tile_scale` applies the DPI correction (it also
-        // reacts to this very insert via `Changed<ImageNode>`).
-        let scale = spec.scale.static_val().unwrap_or(1.0);
-        let (tile_x, tile_y) = mode.tile_axes();
-        image.image_mode = NodeImageMode::Tiled {
-            tile_x,
-            tile_y,
-            stretch_value: scale,
-        };
-        ec.insert(BackgroundTileScale(scale));
-    } else {
-        image.image_mode = NodeImageMode::Stretch;
-        ec.remove::<BackgroundTileScale>();
-    }
-    ec.insert(image);
-}
 
 /// Point every background-texture node's [`ImageNode`] at the registry
 /// texture for its [`RBackgroundTexture`] name (or the shared transparent
@@ -183,7 +104,7 @@ pub fn sync_background_tile_scale(
 /// Callers hold the [`crate::diag`] node scope, so the devtools inspector can
 /// flag the offending row.
 pub(crate) fn warn_ignored(element: &'static str, props: &Props) {
-    let Some(spec) = props.all_styles().find_map(|s| s.background_image.as_ref()) else {
+    let Some(spec) = props.all_styles().find_map(|s| s.get(&BACKGROUND_IMAGE)) else {
         return;
     };
     let value = match &spec.src {

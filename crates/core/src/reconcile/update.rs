@@ -1,5 +1,5 @@
 //! The `Op::Update` path: merge a props delta into the retained per-node
-//! props and re-apply exactly the dirty groups, branching per element
+//! props and re-run exactly the style writers it touched, branching per element
 //! category (text root/span, editableText, surface, root, SVG shape,
 //! general). Also owns
 //! [`reapply_opacity_outputs`], the layer evaluator's hook for re-deriving
@@ -14,9 +14,9 @@ use super::apply::resolve;
 use super::create::{root_base, surface_root_base};
 use super::image::{is_image, rebuild_image};
 use super::stamps::{
-    apply_anchor, apply_animated, apply_button_focus_default, apply_pointer_handlers,
-    apply_scroll_listener, apply_scroll_step, apply_style_variants_delta, apply_wheel_listener,
-    queue_pending_selection, register_editable_handlers, update_controlled_scroll,
+    apply_anchor, apply_animated, apply_pointer_handlers, apply_scroll_listener, apply_scroll_step,
+    apply_style_variants_delta, apply_wheel_listener, queue_pending_selection,
+    register_editable_handlers, update_controlled_scroll,
 };
 use super::stats::UiAssets;
 use crate::bridge::{JsBridge, ReactNode, SpanKind, StyleVariants};
@@ -24,10 +24,15 @@ use crate::canvas::CanvasSurface;
 use crate::plugin::Fonts;
 use crate::portal::RPortal;
 use crate::protocol::{NodeId, props::Props};
-use crate::transition::{ScrollTransitionState, apply_scroll_transition};
+use crate::style::Style;
+use crate::style::StyleDirty;
+use crate::style::WriterCtx;
+use crate::style::props::{CoreId, OPACITY};
+use crate::style::{Invalidation, NodeCtx};
+use crate::transition::ScrollTransitionState;
 use crate::ui_map::{
-    apply_resolved_text_style, apply_style_masked, overlay_style, resolved_text_style_promoted,
-    text_layout,
+    apply_resolved_text_style, apply_style_masked, overlay_style, resolve_text_color,
+    resolve_text_font,
 };
 
 /// Apply one `Op::Update`: merge the delta into the retained props and
@@ -42,7 +47,6 @@ pub(super) fn apply_update(
     ui_assets: &mut UiAssets,
     children: &Query<&Children>,
     rnodes: &Query<&ReactNode>,
-    buttons: &Query<(), With<Button>>,
     editables: &mut Query<&mut EditableText>,
     scroll_query: &mut Query<(
         &mut ScrollPosition,
@@ -109,13 +113,35 @@ pub(super) fn apply_update(
             .shared_tags
             .apply(id, old_tag.as_deref(), props.shared_tag.as_deref());
     }
-    use crate::protocol::style::style_groups as g;
-    // A delta touching a promotion trigger (`opacity`/`groupAlpha`/
-    // `filter`, all in the LAYER group — an `{ animated }` opacity is
-    // field presence like any other) or a variant style swap (variants
-    // can carry `opacity` and `filter`) re-evaluates this node's layer
-    // promotion (see `crate::layer`).
-    if dirty.style.intersects(g::LAYER)
+    // The writers this delta re-runs (those reading a touched property).
+    let styles = registry.styles();
+    let writers = styles.writers_for(&dirty.style);
+    let wctx = |promoted: bool, text: bool| WriterCtx {
+        promoted,
+        fresh: false,
+        kind,
+        flags: kind_flags,
+        text,
+        assets,
+        fonts,
+        styles,
+    };
+    // A delta that can flip layer promotion (`opacity`/`groupAlpha`/
+    // `filter`/… declare `PROMOTION` — an `{ animated }` opacity is presence
+    // like any other) or a variant style swap (variants can carry them too)
+    // re-evaluates this node's layer promotion (see `crate::layer`).
+    // What the change invalidates, per the touched properties' declarations
+    // (a text span is never a promoted root: `promoted_layers` holds roots).
+    let invalidation = styles.invalidation(
+        &dirty.style,
+        &dirty.style_old,
+        props.style.as_ref().unwrap_or(Style::empty()),
+        &NodeCtx {
+            promoted: bridge.promoted_layers.contains(&id),
+            kind,
+        },
+    );
+    if invalidation.contains(Invalidation::PROMOTION)
         || dirty.hover_style
         || dirty.press_style
         || dirty.focus_style
@@ -131,46 +157,45 @@ pub(super) fn apply_update(
             super::stamps::warn_span_ignored(&props);
         }
         // A promoted text root suppresses the glyph opacity fold — the
-        // layer's group alpha owns the fade (see `resolved_text_style_promoted`).
+        // layer's group alpha owns the fade (see `resolved_text_style`).
         let promoted = is_root && bridge.promoted_layers.contains(&id);
-        // A `<text>` element: refresh its resolved style — but only
-        // when a text-style field actually changed (resolution does
-        // color parsing + a font lookup, and the raw-span
-        // re-propagation below is O(children)). The cache keeps the
-        // whole tuple (a span attaching later inherits all of it); the
-        // entity write is masked to the dirty half so a recolor never
-        // touches the shaping components (see `apply_resolved_text_style`).
-        let resolved = dirty.style.intersects(g::TEXT_STYLE).then(|| {
-            let style = resolved_text_style_promoted(&props.style, fonts, promoted);
-            bridge.text_styles.insert(id, style.clone());
-            style
+        // Which halves of the resolved text style the delta re-ran: the
+        // cache keeps the whole tuple (a span attaching later inherits all
+        // of it), so only the dirty halves are re-resolved into it — a
+        // recolor never re-resolves (or re-writes) the shaping half.
+        let color_half = writers.intersects(styles.masks.text_color);
+        let font_half = writers.intersects(styles.masks.text_font);
+        let resolved = (color_half || font_half).then(|| {
+            let entry = bridge
+                .text_styles
+                .get_mut(&id)
+                .expect("guarded by the branch");
+            if color_half {
+                entry.0 = resolve_text_color(props.style.as_ref(), promoted);
+            }
+            if font_half {
+                let (font, line, spacing) = resolve_text_font(props.style.as_ref(), fonts);
+                (entry.1, entry.2, entry.3) = (font, line, spacing);
+            }
+            entry.clone()
         });
         let mut ec = commands.entity(e);
-        if let Some(style) = &resolved {
-            apply_resolved_text_style(&mut ec, style, dirty.style);
-        }
-        // A text *root* (has a `Node`) also gets the layout/visual/
-        // transform style + transition, mirroring its create path —
-        // otherwise a `transform`/`transition` on a `<text>` would only
-        // apply on mount and never animate. Spans have no `Node` and are
-        // skipped so they never gain a layout box.
-        if is_root {
-            apply_style_masked(&mut ec, &props.style, dirty.style, promoted);
-            crate::background_image::apply_background_image(
-                &mut ec,
-                &props.style,
-                dirty.style,
-                promoted,
-                assets,
-            );
-        }
-        // Parity quirk preserved: a stale `TextLayout` is never removed
-        // when both its fields go absent, only overwritten.
-        if dirty.style.intersects(g::TEXT_LAYOUT)
-            && let Some(layout) = text_layout(&props.style)
-        {
-            ec.insert(layout);
-        }
+        // A text *root* (has a `Node`) gets every writer — mirroring its
+        // create path, so a `transform`/`transition` on a `<text>` applies
+        // on re-render too. A span has no `Node`: only the text writers run,
+        // so it never gains a layout box.
+        let mask = if is_root {
+            writers
+        } else {
+            writers.intersection(styles.masks.span)
+        };
+        apply_style_masked(
+            &mut ec,
+            &props.style,
+            mask,
+            &wctx(promoted, true),
+            invalidation,
+        );
         if dirty.anchor {
             apply_anchor(&mut ec, &mut bridge.anchors, id, &props);
         }
@@ -191,9 +216,6 @@ pub(super) fn apply_update(
             }
             if dirty.scroll_step {
                 apply_scroll_step(&mut ec, &props);
-            }
-            if dirty.style.intersects(g::SCROLL_TRANSITION) {
-                apply_scroll_transition(&mut ec, &props.style);
             }
             if dirty.style.any() {
                 apply_animated(&mut ec, &mut bridge.animated, id, &props);
@@ -218,7 +240,12 @@ pub(super) fn apply_update(
                 if let Ok(rnode) = rnodes.get(child)
                     && bridge.spans.get(&rnode.0) == Some(&SpanKind::RawInherited)
                 {
-                    apply_resolved_text_style(&mut commands.entity(child), &style, dirty.style);
+                    apply_resolved_text_style(
+                        &mut commands.entity(child),
+                        &style,
+                        color_half,
+                        font_half,
+                    );
                 }
             }
         }
@@ -253,13 +280,13 @@ pub(super) fn apply_update(
         }
         let mut ec = commands.entity(e);
         let promoted = bridge.promoted_layers.contains(&id);
-        apply_style_masked(&mut ec, &props.style, dirty.style, promoted);
-        crate::background_image::apply_background_image(
+        // The text writers keep its color/font (and caret) current.
+        apply_style_masked(
             &mut ec,
             &props.style,
-            dirty.style,
-            promoted,
-            assets,
+            writers,
+            &wctx(promoted, true),
+            invalidation,
         );
         apply_style_variants_delta(&mut ec, &props, &dirty);
     } else if bridge.surfaces.contains(&id) {
@@ -271,9 +298,12 @@ pub(super) fn apply_update(
         if dirty.style.any() {
             let style = overlay_style(surface_root_base().as_ref(), props.style.as_ref());
             // Detached roots are never layer-promoted.
-            apply_style_masked(&mut ec, &style, dirty.style, false);
+            apply_style_masked(&mut ec, &style, writers, &wctx(false, false), invalidation);
         }
-        if dirty.style.intersects(g::BG_IMAGE) {
+        if dirty
+            .style
+            .intersects(&StyleDirty::of_core(&[CoreId::BACKGROUND_IMAGE]))
+        {
             crate::background_image::warn_ignored("surface", &props);
         }
         if dirty.target
@@ -292,14 +322,7 @@ pub(super) fn apply_update(
         if dirty.style.any() {
             let style = overlay_style(root_base().as_ref(), props.style.as_ref());
             // Detached roots are never layer-promoted.
-            apply_style_masked(&mut ec, &style, dirty.style, false);
-            crate::background_image::apply_background_image(
-                &mut ec,
-                &style,
-                dirty.style,
-                false,
-                assets,
-            );
+            apply_style_masked(&mut ec, &style, writers, &wctx(false, false), invalidation);
         }
         if dirty.anchor {
             apply_anchor(&mut ec, &mut bridge.anchors, id, &props);
@@ -315,22 +338,23 @@ pub(super) fn apply_update(
     } else {
         let promoted = bridge.promoted_layers.contains(&id);
         let mut ec = commands.entity(e);
-        apply_style_masked(&mut ec, &props.style, dirty.style, promoted);
-        // `backgroundImage` — except where the entity's `ImageNode` is
-        // element-owned (image/canvas/portal; warned at create).
-        if !kind_flags.owns_image {
-            crate::background_image::apply_background_image(
-                &mut ec,
-                &props.style,
-                dirty.style,
-                promoted,
-                assets,
-            );
-        }
-        // Image attributes only ever appear on `image` elements, so
-        // their presence is enough to re-apply the texture/tint.
-        if dirty.image && is_image(&props) {
-            rebuild_image(&mut ec, &props, assets, ui_assets, promoted, true);
+        apply_style_masked(
+            &mut ec,
+            &props.style,
+            writers,
+            &wctx(promoted, false),
+            invalidation,
+        );
+        // Image attributes only ever appear on `image` elements, so their
+        // presence is enough to re-apply the texture/tint. The image's own
+        // `ImageNode` also folds `opacity` into its tint, so an opacity
+        // change rebuilds it too.
+        let refold = kind == "image"
+            && dirty
+                .style
+                .intersects(&StyleDirty::of_core(&[CoreId::OPACITY]));
+        if (dirty.image && is_image(&props)) || refold {
+            rebuild_image(&mut ec, &props, assets, ui_assets, promoted, dirty.image);
             // Image attrs dirty without any style dirt (e.g. a bare
             // `src` swap) bypasses the `apply_style_masked` tap.
             crate::layer::mark_content_dirty(&mut ec);
@@ -366,16 +390,10 @@ pub(super) fn apply_update(
         {
             ec.insert((RPortal(target.clone()), crate::ext::LiveTexture));
         }
-        // When `apply_style_masked` reset this entity's `FocusPolicy` to
-        // the `Pass` default, re-assert a button's `Block` (no-op /
-        // `Pass` for plain nodes). Skipped when the mask skipped the
-        // `FocusPolicy` insert — nothing reset it.
-        if dirty.style.intersects(g::FOCUS_POLICY) && buttons.get(e).is_ok() {
-            apply_button_focus_default(&mut ec, &props.style);
-        }
         // `StyleVariants.base` mirrors the (merged) base style: a base-only
         // delta updates it in place with its dirty mask (the interaction
-        // restyle re-applies just those groups, or nothing on an idle node);
+        // restyle re-runs just those properties' writers, or nothing on an
+        // idle node);
         // a variant swap re-stamps; a variant-less node queues nothing.
         apply_style_variants_delta(&mut ec, &props, &dirty);
         if dirty.pointer {
@@ -389,9 +407,6 @@ pub(super) fn apply_update(
         }
         if dirty.scroll_step {
             apply_scroll_step(&mut ec, &props);
-        }
-        if dirty.style.intersects(g::SCROLL_TRANSITION) {
-            apply_scroll_transition(&mut ec, &props.style);
         }
         // Bindings are derived from the merged style, so any style change may
         // add/remove/retarget them (bind/unbind is an ordinary field delta).
@@ -427,12 +442,10 @@ pub(crate) fn reapply_opacity_outputs(
     entity: Entity,
     props: &Props,
     promoted: bool,
-    foreign_image: bool,
-    assets: &AssetServer,
+    wctx: &WriterCtx,
     ui_assets: &mut UiAssets,
     style_variants: &mut Query<&mut StyleVariants>,
 ) {
-    use crate::protocol::style::style_groups as g;
     // Variant-bearing nodes re-merge through `apply_interaction_styles`
     // (ordered after the evaluator): requesting a full restyle re-runs the
     // merge with the new promotion state without clobbering an active
@@ -442,33 +455,24 @@ pub(crate) fn reapply_opacity_outputs(
         variants.restyle = crate::bridge::Restyle::Full;
     } else {
         let mut ec = commands.entity(entity);
-        // Every group `opacity` feeds, minus TRANSITION (transition *state*
-        // persists across flips; only baked outputs re-derive). TEXT is
-        // absent because `apply_style_masked` doesn't own the glyph fold —
-        // a text root's re-derive is `crate::layer`'s `reapply_text_fold`,
-        // run by the evaluator alongside this.
-        let mask = crate::protocol::style::StyleDirty(
-            g::BACKGROUND | g::BG_GRADIENT | g::BORDER_GRADIENT | g::TEXT_SHADOW | g::LAYER,
-        );
-        apply_style_masked(&mut ec, &props.style, mask, promoted);
-        // The background image's tint fold re-derives the same way — unless
-        // the entity's `ImageNode` is element-owned (image/canvas/portal),
-        // where the style is ignored and the image rebuild below owns it.
-        if !foreign_image {
-            crate::background_image::apply_background_image(
-                &mut ec,
-                &props.style,
-                crate::protocol::style::StyleDirty(g::BG_IMAGE),
-                promoted,
-                assets,
-            );
-        }
+        // Every writer `opacity` feeds, minus the transition writer
+        // (transition *state* persists across flips; only baked outputs
+        // re-derive) and the text color writer (a text root's re-derive is
+        // `crate::layer`'s `reapply_text_fold`, run by the evaluator
+        // alongside this, which also re-propagates to inheriting spans).
+        let styles = wctx.styles;
+        let mask = styles
+            .readers_of(&OPACITY)
+            .without(styles.masks.transition.union(styles.masks.text_color));
+        // A flip always repaints: a demote resumes the folds in the node's
+        // own colors (the geometry hash would miss a leaf demote).
+        apply_style_masked(&mut ec, &props.style, mask, wctx, Invalidation::PAINT);
     }
     let mut ec = commands.entity(entity);
     if is_image(props) {
         // The promotion flip carries no new props, so the svg ignored-attr
         // warning would only repeat the create/update one — skip it.
-        rebuild_image(&mut ec, props, assets, ui_assets, promoted, false);
+        rebuild_image(&mut ec, props, wctx.assets, ui_assets, promoted, false);
     }
 }
 
@@ -482,582 +486,4 @@ fn dirty_shared_tag(delta: &Props, unset: &[String]) -> bool {
 }
 
 #[cfg(test)]
-mod tests {
-    use std::f32::consts::PI;
-
-    use super::super::test_util::{op_app, text_props, update_delta};
-    use super::*;
-    use crate::bridge::PointerHandlers;
-    use crate::protocol::op::Op;
-    use crate::transition::TransitionInput;
-
-    /// A `<text>` root's `transform`/`transition` must update on re-render — not
-    /// just at mount. Regression: the text-update branch skipped `apply_style`, so
-    /// a rotating chevron's target never changed and the animation never ran.
-    #[test]
-    fn text_update_reapplies_transform_target() {
-        let (mut app, ops_tx) = op_app();
-
-        // Mount a `<text>` with rotate 0.
-        ops_tx
-            .send(vec![Op::Create {
-                id: 1,
-                kind: "text".into(),
-                props: Box::new(text_props(0.0)),
-                text: None,
-            }])
-            .unwrap();
-        app.update();
-        let e = app.world().resource::<JsBridge>().nodes[&1];
-        assert_eq!(
-            app.world()
-                .entity(e)
-                .get::<TransitionInput>()
-                .unwrap()
-                .rotate,
-            Some(0.0),
-            "create stamps the initial transform target"
-        );
-
-        // Re-render with rotate π — the transition target must follow.
-        ops_tx
-            .send(vec![update_delta(1, text_props(PI), &[], &[])])
-            .unwrap();
-        app.update();
-        assert_eq!(
-            app.world()
-                .entity(e)
-                .get::<TransitionInput>()
-                .unwrap()
-                .rotate,
-            Some(PI),
-            "a text re-render must refresh the transform target so it animates"
-        );
-    }
-
-    /// A delta update touching only `width` must leave every other derived
-    /// component untouched — not merely re-inserted-equal, but with its change
-    /// tick intact (re-insertion would re-extract paint and re-run the
-    /// interaction restyle via `Changed<StyleVariants>`).
-    #[test]
-    fn delta_update_skips_untouched_groups() {
-        let (mut app, ops_tx) = op_app();
-        ops_tx
-            .send(vec![Op::Create {
-                id: 1,
-                kind: "node".into(),
-                props: serde_json::from_value(serde_json::json!({
-                    "style": {
-                        "backgroundColor": "red",
-                        "width": 10,
-                        "outline": { "color": "white" },
-                    },
-                    "hoverStyle": { "backgroundColor": "blue" },
-                    "onClick": true,
-                }))
-                .unwrap(),
-                text: None,
-            }])
-            .unwrap();
-        app.update();
-
-        let e = app.world().resource::<JsBridge>().nodes[&1];
-        let paint_ticks = |app: &App| {
-            let entity = app.world().entity(e);
-            (
-                entity
-                    .get_change_ticks::<BackgroundColor>()
-                    .unwrap()
-                    .changed,
-                entity.get_change_ticks::<Outline>().unwrap().changed,
-            )
-        };
-        let variants_tick = |app: &App| {
-            app.world()
-                .entity(e)
-                .get_change_ticks::<StyleVariants>()
-                .unwrap()
-                .changed
-        };
-        let ticks_before = paint_ticks(&app);
-
-        ops_tx
-            .send(vec![update_delta(
-                1,
-                serde_json::from_value(serde_json::json!({ "style": { "width": 100 } })).unwrap(),
-                &[],
-                &[],
-            )])
-            .unwrap();
-        app.update();
-
-        {
-            let entity = app.world().entity(e);
-            assert_eq!(
-                entity.get::<Node>().unwrap().width,
-                Val::Px(100.0),
-                "the delta's own field must apply"
-            );
-            assert_eq!(
-                entity.get::<BackgroundColor>().unwrap().0,
-                crate::ui_map::parse_color("red"),
-                "untouched background survives a width-only delta"
-            );
-            assert!(
-                entity.get::<StyleVariants>().is_some(),
-                "variants survive (base mirrors the style, so it was rebuilt)"
-            );
-            assert!(
-                entity.get::<Interaction>().is_some(),
-                "the onClick Interaction survives"
-            );
-        }
-        assert_eq!(
-            ticks_before,
-            paint_ticks(&app),
-            "untouched paint groups must not even be marked changed"
-        );
-
-        // A non-style delta (a handler toggle) must not touch `StyleVariants`
-        // at all — re-inserting it would trigger a full interaction restyle
-        // via `Changed<StyleVariants>` on every unrelated update.
-        let tick_before = variants_tick(&app);
-        ops_tx
-            .send(vec![update_delta(
-                1,
-                serde_json::from_value(serde_json::json!({ "onPointerDown": true })).unwrap(),
-                &[],
-                &[],
-            )])
-            .unwrap();
-        app.update();
-        assert_eq!(
-            tick_before,
-            variants_tick(&app),
-            "a handler-only delta must not re-insert StyleVariants"
-        );
-    }
-
-    /// `styleUnset` removes exactly the named field's component; the rest of
-    /// the merged style (and unrelated props) stay.
-    #[test]
-    fn delta_style_unset_removes_component() {
-        let (mut app, ops_tx) = op_app();
-        ops_tx
-            .send(vec![Op::Create {
-                id: 1,
-                kind: "node".into(),
-                props: serde_json::from_value(serde_json::json!({
-                    "style": { "backgroundColor": "red", "width": 10 },
-                }))
-                .unwrap(),
-                text: None,
-            }])
-            .unwrap();
-        app.update();
-        let e = app.world().resource::<JsBridge>().nodes[&1];
-        assert!(app.world().entity(e).get::<BackgroundColor>().is_some());
-
-        ops_tx
-            .send(vec![update_delta(
-                1,
-                Props::default(),
-                &[],
-                &["backgroundColor"],
-            )])
-            .unwrap();
-        app.update();
-
-        let entity = app.world().entity(e);
-        assert_eq!(
-            entity.get::<BackgroundColor>(),
-            Some(&BackgroundColor::DEFAULT),
-            "an unset style field resets its component (a `Node`-required one lands the default)"
-        );
-        assert_eq!(
-            entity.get::<Node>().unwrap().width,
-            Val::Px(10.0),
-            "the retained width survives the unset"
-        );
-    }
-
-    /// `styleUnset: ["backgroundImage"]` removes the `ImageNode` and both
-    /// marker components; a delta swapping a `{ texture }` source for a path
-    /// drops the stale `RBackgroundTexture` (or the bind system would stomp
-    /// the asset handle).
-    #[test]
-    fn background_image_unset_and_source_swap() {
-        use crate::background_image::{BackgroundTileScale, RBackgroundTexture};
-        use bevy::ui::widget::ImageNode;
-        let (mut app, ops_tx) = op_app();
-        ops_tx
-            .send(vec![Op::Create {
-                id: 1,
-                kind: "node".into(),
-                props: serde_json::from_value(serde_json::json!({
-                    "style": { "backgroundImage": {
-                        "src": { "texture": "minimap" }, "mode": "repeat"
-                    } }
-                }))
-                .unwrap(),
-                text: None,
-            }])
-            .unwrap();
-        app.update();
-        let e = app.world().resource::<JsBridge>().nodes[&1];
-        assert!(app.world().entity(e).get::<RBackgroundTexture>().is_some());
-        assert!(app.world().entity(e).get::<BackgroundTileScale>().is_some());
-
-        // texture → path source swap: marker (and tile scale, mode now
-        // defaults to stretch) must go; the ImageNode stays.
-        ops_tx
-            .send(vec![update_delta(
-                1,
-                serde_json::from_value(serde_json::json!({
-                    "style": { "backgroundImage": { "src": "images/bg.png" } }
-                }))
-                .unwrap(),
-                &[],
-                &[],
-            )])
-            .unwrap();
-        app.update();
-        let entity = app.world().entity(e);
-        assert!(
-            entity.get::<RBackgroundTexture>().is_none(),
-            "a path source drops the stale texture marker"
-        );
-        assert!(entity.get::<BackgroundTileScale>().is_none());
-        assert!(entity.get::<ImageNode>().is_some());
-
-        ops_tx
-            .send(vec![update_delta(
-                1,
-                Props::default(),
-                &[],
-                &["backgroundImage"],
-            )])
-            .unwrap();
-        app.update();
-        let entity = app.world().entity(e);
-        assert!(
-            entity.get::<ImageNode>().is_none(),
-            "unsetting backgroundImage removes the ImageNode"
-        );
-        assert!(entity.get::<BackgroundTileScale>().is_none());
-    }
-
-    /// An opacity-only delta re-folds the background image's tint alpha (the
-    /// `opacity` table row carries `BG_IMAGE`), and a delta on a `<canvas>`
-    /// leaves its element-owned `ImageNode` untouched.
-    #[test]
-    fn background_image_opacity_refold_and_canvas_guard() {
-        use bevy::ui::widget::ImageNode;
-        let (mut app, ops_tx) = op_app();
-        ops_tx
-            .send(vec![
-                Op::Create {
-                    id: 1,
-                    kind: "node".into(),
-                    props: serde_json::from_value(serde_json::json!({
-                        "style": { "backgroundImage": {
-                            "src": "images/bg.png", "tint": "#ffffff"
-                        } }
-                    }))
-                    .unwrap(),
-                    text: None,
-                },
-                Op::Create {
-                    id: 2,
-                    kind: "canvas".into(),
-                    props: serde_json::from_value(serde_json::json!({})).unwrap(),
-                    text: None,
-                },
-            ])
-            .unwrap();
-        app.update();
-        let bridge = app.world().resource::<JsBridge>();
-        let (e1, e2) = (bridge.nodes[&1], bridge.nodes[&2]);
-        assert_eq!(
-            app.world()
-                .entity(e1)
-                .get::<ImageNode>()
-                .unwrap()
-                .color
-                .alpha(),
-            1.0
-        );
-        let canvas_handle = app
-            .world()
-            .entity(e2)
-            .get::<ImageNode>()
-            .unwrap()
-            .image
-            .clone();
-
-        ops_tx
-            .send(vec![
-                update_delta(
-                    1,
-                    serde_json::from_value(serde_json::json!({ "style": { "opacity": 0.5 } }))
-                        .unwrap(),
-                    &[],
-                    &[],
-                ),
-                // A backgroundImage delta on the canvas must not retarget its
-                // element-owned texture.
-                update_delta(
-                    2,
-                    serde_json::from_value(serde_json::json!({
-                        "style": { "backgroundImage": { "src": { "texture": "x" } } }
-                    }))
-                    .unwrap(),
-                    &[],
-                    &[],
-                ),
-            ])
-            .unwrap();
-        app.update();
-        assert_eq!(
-            app.world()
-                .entity(e1)
-                .get::<ImageNode>()
-                .unwrap()
-                .color
-                .alpha(),
-            0.5,
-            "an opacity-only delta re-folds the background tint"
-        );
-        assert_eq!(
-            app.world().entity(e2).get::<ImageNode>().unwrap().image,
-            canvas_handle,
-            "the canvas keeps its own texture despite the ignored style"
-        );
-    }
-
-    /// Explicit unsets are the delta's "reset" mechanism: `styleUnset` drops
-    /// the style field's component, `unset` drops a whole prop (here the last
-    /// variant style, which must remove `StyleVariants` from the entity).
-    #[test]
-    fn delta_unsets_reset_absent_fields() {
-        let (mut app, ops_tx) = op_app();
-        ops_tx
-            .send(vec![Op::Create {
-                id: 1,
-                kind: "node".into(),
-                props: serde_json::from_value(serde_json::json!({
-                    "style": { "backgroundColor": "red" },
-                    "hoverStyle": { "backgroundColor": "blue" },
-                }))
-                .unwrap(),
-                text: None,
-            }])
-            .unwrap();
-        app.update();
-        let e = app.world().resource::<JsBridge>().nodes[&1];
-        assert!(app.world().entity(e).get::<StyleVariants>().is_some());
-
-        ops_tx
-            .send(vec![update_delta(
-                1,
-                serde_json::from_value(serde_json::json!({ "style": { "width": 5 } })).unwrap(),
-                &["hoverStyle"],
-                &["backgroundColor"],
-            )])
-            .unwrap();
-        app.update();
-
-        let entity = app.world().entity(e);
-        assert_eq!(
-            entity.get::<BackgroundColor>(),
-            Some(&BackgroundColor::DEFAULT),
-            "styleUnset resets the background"
-        );
-        assert!(
-            entity.get::<StyleVariants>().is_none(),
-            "unsetting the last variant style removes StyleVariants"
-        );
-        assert_eq!(
-            entity.get::<Node>().unwrap().width,
-            Val::Px(5.0),
-            "the delta's own field still applies"
-        );
-    }
-
-    /// An unrelated delta on a controlled-scroll node must not touch the
-    /// scroll offset (event-like props are never replayed from the cache).
-    #[test]
-    fn delta_update_does_not_replay_controlled_scroll() {
-        let (mut app, ops_tx) = op_app();
-        ops_tx
-            .send(vec![Op::Create {
-                id: 1,
-                kind: "node".into(),
-                props: serde_json::from_value(serde_json::json!({
-                    "scrollTop": 40.0,
-                    "style": { "overflowY": "scroll" },
-                }))
-                .unwrap(),
-                text: None,
-            }])
-            .unwrap();
-        app.update();
-        let e = app.world().resource::<JsBridge>().nodes[&1];
-        // Simulate the user scrolling away from the controlled value.
-        app.world_mut()
-            .entity_mut(e)
-            .get_mut::<ScrollPosition>()
-            .unwrap()
-            .0 = Vec2::new(0.0, 7.0);
-
-        ops_tx
-            .send(vec![update_delta(
-                1,
-                serde_json::from_value(serde_json::json!({ "style": { "width": 50 } })).unwrap(),
-                &[],
-                &[],
-            )])
-            .unwrap();
-        app.update();
-
-        assert_eq!(
-            app.world().entity(e).get::<ScrollPosition>().unwrap().0,
-            Vec2::new(0.0, 7.0),
-            "a width-only delta must not re-push the cached scrollTop"
-        );
-    }
-
-    /// On a `<text>` with inheriting bare-string spans, a transform-only delta
-    /// must skip the O(children) span re-propagation (their tick stays), while
-    /// a `color` delta re-propagates.
-    #[test]
-    fn text_delta_gates_span_repropagation() {
-        let (mut app, ops_tx) = op_app();
-        ops_tx
-            .send(vec![
-                Op::Create {
-                    id: 1,
-                    kind: "text".into(),
-                    props: serde_json::from_value(serde_json::json!({
-                        "style": { "color": "red" },
-                    }))
-                    .unwrap(),
-                    text: None,
-                },
-                Op::CreateTextSpan {
-                    id: 2,
-                    text: "run".into(),
-                },
-                Op::Append {
-                    parent: 1,
-                    child: 2,
-                },
-            ])
-            .unwrap();
-        app.update();
-        let bridge = app.world().resource::<JsBridge>();
-        let (root, span) = (bridge.nodes[&1], bridge.nodes[&2]);
-        let span_tick = app
-            .world()
-            .entity(span)
-            .get_change_ticks::<TextColor>()
-            .unwrap()
-            .changed;
-
-        // Transform-only delta: no text-style group dirty → span untouched.
-        ops_tx
-            .send(vec![update_delta(
-                1,
-                serde_json::from_value(
-                    serde_json::json!({ "style": { "transform": { "scale": 2.0 } } }),
-                )
-                .unwrap(),
-                &[],
-                &[],
-            )])
-            .unwrap();
-        app.update();
-        assert_eq!(
-            app.world()
-                .entity(span)
-                .get_change_ticks::<TextColor>()
-                .unwrap()
-                .changed,
-            span_tick,
-            "a transform-only text delta must not re-propagate to spans"
-        );
-
-        // Color delta: text group dirty → span restyled.
-        ops_tx
-            .send(vec![update_delta(
-                1,
-                serde_json::from_value(serde_json::json!({ "style": { "color": "blue" } }))
-                    .unwrap(),
-                &[],
-                &[],
-            )])
-            .unwrap();
-        app.update();
-        let world = app.world();
-        assert_eq!(
-            world.entity(span).get::<TextColor>().unwrap().0,
-            crate::ui_map::parse_color("blue"),
-            "a color delta re-propagates to inheriting spans"
-        );
-        assert_eq!(
-            world.entity(root).get::<TextColor>().unwrap().0,
-            crate::ui_map::parse_color("blue")
-        );
-    }
-
-    /// A handler toggled off via `unset` clears its marker; the merged (not
-    /// delta-only) props drive the rebuild, so the other handler survives.
-    #[test]
-    fn delta_toggles_pointer_handlers() {
-        let (mut app, ops_tx) = op_app();
-        ops_tx
-            .send(vec![Op::Create {
-                id: 1,
-                kind: "node".into(),
-                props: serde_json::from_value(
-                    serde_json::json!({ "onPointerDown": true, "onPointerUp": true }),
-                )
-                .unwrap(),
-                text: None,
-            }])
-            .unwrap();
-        app.update();
-        let e = app.world().resource::<JsBridge>().nodes[&1];
-
-        // Unset one of the two: the marker must keep the other (merged props).
-        ops_tx
-            .send(vec![update_delta(
-                1,
-                Props::default(),
-                &["onPointerUp"],
-                &[],
-            )])
-            .unwrap();
-        app.update();
-        let handlers = app
-            .world()
-            .entity(e)
-            .get::<PointerHandlers>()
-            .expect("one handler remains");
-        assert!(handlers.down && !handlers.up);
-
-        ops_tx
-            .send(vec![update_delta(
-                1,
-                Props::default(),
-                &["onPointerDown"],
-                &[],
-            )])
-            .unwrap();
-        app.update();
-        assert!(
-            app.world().entity(e).get::<PointerHandlers>().is_none(),
-            "unsetting the last handler clears the marker"
-        );
-    }
-}
+mod tests;

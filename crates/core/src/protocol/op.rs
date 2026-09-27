@@ -16,12 +16,12 @@ use super::props::Props;
 /// in one call.
 ///
 /// The prop-bearing variants box their [`Props`] deliberately. An enum is as
-/// wide as its widest variant, and `Props` inlines four [`super::style::Style`]s
-/// (base + hover/press/focus) — several kilobytes. Unboxed, *every* element of
-/// the flushed `Vec<Op>` paid that width, so a batch of 5k `Remove`s moved tens
-/// of megabytes for ops carrying no props at all, and the decode/translate legs
-/// scaled with the widest variant instead of the actual payload. Boxing keeps
-/// `Op` pointer-sized (see `op_stays_narrow` below).
+/// wide as its widest variant, and `Props` is hundreds of bytes (it was
+/// several kilobytes when it inlined four typed styles). Unboxed, *every*
+/// element of the flushed `Vec<Op>` pays that width — a batch of 5k `Remove`s
+/// once moved tens of megabytes for ops carrying no props at all, and the
+/// decode/translate legs scaled with the widest variant instead of the actual
+/// payload. Boxing keeps `Op` narrow (see `op_stays_narrow` below).
 ///
 /// Wire form: an object tagged by `op` (camelCase variant name) with the
 /// variant's fields alongside (`{ "op": "append", "parent": 0, "child": 7 }`).
@@ -298,7 +298,8 @@ impl<'de> Deserialize<'de> for OpBatch {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::protocol::style::Style;
+    use crate::style::Style;
+    use crate::style::props::CURSOR;
 
     /// Every element of a flushed batch is as wide as `Op`'s widest variant, so
     /// a fat variant taxes ops that carry nothing (a `Remove` is four words of
@@ -455,10 +456,10 @@ mod tests {
     #[test]
     fn deserializes_cursor_name() {
         let s: Style = serde_json::from_str(r#"{ "cursor": "pointer" }"#).expect("cursor decodes");
-        assert_eq!(s.cursor.as_deref(), Some("pointer"));
+        assert_eq!(s.get(&CURSOR).map(String::as_str), Some("pointer"));
 
         let s: Style =
             serde_json::from_str(r#"{ "cursor": "hand" }"#).expect("custom name decodes");
-        assert_eq!(s.cursor.as_deref(), Some("hand"));
+        assert_eq!(s.get(&CURSOR).map(String::as_str), Some("hand"));
     }
 }

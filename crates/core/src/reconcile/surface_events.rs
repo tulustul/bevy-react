@@ -14,7 +14,7 @@ use bevy::ui::{ComputedNode, UiGlobalTransform};
 
 use super::events::{climb, dom_button, send_ui_event, surface_relative};
 use crate::bridge::{JsBridge, PointerHandlers, ReactNode, StyleVariants};
-use crate::protocol::style::Style;
+use crate::style::Style;
 use crate::surface::SurfaceVirtualPointer;
 use crate::ui_map::{apply_style, overlay_style};
 
@@ -231,26 +231,38 @@ pub fn apply_surface_interaction_styles(
     rnodes: Query<&ReactNode>,
     flags: Query<&crate::ext::ElementFlags>,
     assets: Res<AssetServer>,
+    // `Option`: headless harnesses build partial apps without the bridge
+    // (and some without the fonts resource).
+    bridge: Option<Res<crate::bridge::JsBridge>>,
+    fonts: Option<Res<crate::plugin::Fonts>>,
 ) {
     let Some(pointer) = pointer else { return };
+    let default_fonts = crate::plugin::Fonts::default();
+    let fonts = fonts.as_deref().unwrap_or(&default_fonts);
+    let styles: &crate::style::StyleRegistry = match bridge.as_ref() {
+        Some(b) => b.ext.styles(),
+        None => crate::style::core_registry(),
+    };
     let mut restyle = |entity: Entity, style: Option<Style>| {
         // Attribute re-parse warnings (e.g. a bad hoverStyle color) to the node.
         let rnode = rnodes.get(entity).ok();
         let _diag = rnode.map(|r| crate::diag::node_scope(r.0));
-        let mut ec = commands.entity(entity);
-        apply_style(&mut ec, &style);
-        // The merged `backgroundImage` needs the asset server, so it can't
-        // ride `apply_style`; surface interiors are never promoted layers.
-        let foreign = flags.get(entity).is_ok_and(|f| f.owns_image);
-        if !foreign {
-            crate::background_image::apply_background_image(
-                &mut ec,
-                &style,
-                crate::protocol::style::StyleDirty::ALL,
-                false,
-                &assets,
-            );
-        }
+        let kind = match (bridge.as_ref(), rnode) {
+            (Some(b), Some(r)) => b.shared_tags.kind_cow(r.0),
+            _ => std::borrow::Cow::Borrowed("node"),
+        };
+        // Surface interiors are never promoted layers.
+        let wctx = crate::style::WriterCtx {
+            promoted: false,
+            fresh: false,
+            kind: &kind,
+            flags: flags.get(entity).copied().unwrap_or_default(),
+            text: false,
+            assets: &assets,
+            fonts,
+            styles,
+        };
+        apply_style(&mut commands.entity(entity), &style, &wctx);
     };
     // Resolve a picked leaf to the nearest ancestor with hover/press variants (the
     // button), so its label text highlights the button rather than nothing.
@@ -259,17 +271,14 @@ pub fn apply_surface_interaction_styles(
         if ev.pointer_id == pointer.id
             && let Ok(v) = variants.get(ev.entity)
         {
-            restyle(ev.entity, v.base.as_deref().cloned());
+            restyle(ev.entity, v.base.as_ref().cloned());
         }
     }
     for ev in enters.read() {
         if ev.pointer_id == pointer.id
             && let Ok(v) = variants.get(ev.entity)
         {
-            restyle(
-                ev.entity,
-                overlay_style(v.base.as_deref(), v.hover.as_deref()),
-            );
+            restyle(ev.entity, overlay_style(v.base.as_ref(), v.hover.as_ref()));
         }
     }
     for ev in releases.read() {
@@ -278,7 +287,7 @@ pub fn apply_surface_interaction_styles(
             && let Some(t) = target(ev.entity)
             && let Ok(v) = variants.get(t)
         {
-            restyle(t, overlay_style(v.base.as_deref(), v.hover.as_deref()));
+            restyle(t, overlay_style(v.base.as_ref(), v.hover.as_ref()));
         }
     }
     for ev in presses.read() {
@@ -288,8 +297,8 @@ pub fn apply_surface_interaction_styles(
             && let Ok(v) = variants.get(t)
         {
             let pressed = overlay_style(
-                overlay_style(v.base.as_deref(), v.hover.as_deref()).as_ref(),
-                v.press.as_deref(),
+                overlay_style(v.base.as_ref(), v.hover.as_ref()).as_ref(),
+                v.press.as_ref(),
             );
             restyle(t, pressed);
         }

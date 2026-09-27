@@ -32,7 +32,8 @@ use bevy::ecs::query::QueryData;
 use bevy::prelude::*;
 use bevy::ui::{BackgroundGradient, BorderGradient, UiTransform};
 
-use crate::protocol::{style::Style, units::Length};
+use crate::protocol::units::Length;
+use crate::style::Style;
 use crate::ui_map::{length_to_val, rect_to_border_radius};
 
 mod channels;
@@ -72,8 +73,8 @@ pub use channels::{Channel, TransitionState};
 /// `fresh` marks a just-spawned entity: the input + state land as one insert
 /// (one archetype move) and the absent case queues nothing — there is nothing
 /// to remove.
-pub fn apply_transition(ec: &mut EntityCommands, style: &Option<Style>, fresh: bool) {
-    match (style.as_ref().and_then(TransitionInput::from_style), fresh) {
+pub fn apply_transition(ec: &mut EntityCommands, style: Option<&Style>, fresh: bool) {
+    match (style.and_then(TransitionInput::from_style), fresh) {
         (Some(input), true) => {
             ec.insert((input, TransitionState::default()));
         }
@@ -115,8 +116,8 @@ pub struct TransitionTargets {
     layer_alpha: Option<&'static mut crate::layer::LayerGroupAlpha>,
     /// The wire `filter` chain — the filter channel's *target*. Read here
     /// (not from [`TransitionInput`]) because a filter-only delta re-stamps
-    /// this component but never the input: the `filter` style field is in the
-    /// FILTER|LAYER dirty groups, not TRANSITION.
+    /// this component but never the input: the transition writer doesn't
+    /// read the `filter` property.
     filter_input: Option<&'static crate::filters::FilterInput>,
     /// The resolved chain the filter channel writes eased packed params into
     /// (promoted roots only; snapped to the target by
@@ -681,7 +682,7 @@ pub fn drive_transitions(
         // Corner radii (layout, like size: the radius lives on `Node`, so an
         // eased frame is a relayout — compare-before-write keeps a settled
         // radius silent). Eased per corner; an unset target is square corners,
-        // what `node_from_style` wrote. Content dirt is required: the radius
+        // what `node_from` wrote. Content dirt is required: the radius
         // is not in the layer geometry hash (`fold_member_geometry` folds
         // translation/matrix/size only), so a cached enclosing layer would
         // otherwise never re-capture the changing corners.

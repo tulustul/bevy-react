@@ -6,7 +6,11 @@
 import type { Key, ReactNode, Ref } from "react";
 import type { Animatable } from "./animated";
 import type { BevyCanvasElement, CanvasPainter, DrawCmd } from "./canvas";
-import type { FilterChainValue, MorphFilterValue } from "./filters";
+import type { BevyStyle } from "./generated/style";
+
+// `BevyStyle` is generated from the Rust style registry (one field per core
+// style property); apps augment it with their own properties.
+export type { BevyStyle };
 
 /** Attributes React manages itself (not real host props — React strips `key`
  *  before props reach the reconciler). Shared by every host element so keyed
@@ -416,347 +420,57 @@ export interface ScrollbarStyle {
   horizontalSide?: "top" | "bottom";
 }
 
-/** A CSS-like style object mapped onto `bevy_ui::Node` and its sibling visual
- *  components. Every field is optional; unset fields keep Bevy's defaults. */
-export interface BevyStyle {
-  // display / box model
-  display?: "flex" | "grid" | "block" | "none";
-  boxSizing?: "borderBox" | "contentBox";
-  positionType?: "relative" | "absolute";
-  overflowX?: "visible" | "clip" | "hidden" | "scroll";
-  overflowY?: "visible" | "clip" | "hidden" | "scroll";
-  scrollbarWidth?: number;
+/** A static 2D transform (`style.transform`). With `transition` a change
+ *  eases instead of snapping. `translateX`/`translateY` are [`Length`]s (bare
+ *  number = logical pixels, or a unit string like `"50%"`/`"10vw"`, resolved
+ *  against the node's own size). `scale` is uniform; `scaleX`/`scaleY`
+ *  override one axis. `rotate` is an [`Angle`] (bare number = degrees, e.g.
+ *  `45`, or `"1.5rad"`). */
+export interface BevyTransform {
+  translateX?: Animatable<Length>;
+  translateY?: Animatable<Length>;
+  scale?: Animatable<number>;
+  scaleX?: Animatable<number>;
+  scaleY?: Animatable<number>;
+  /** Bound values are **degrees**, like the static [`Angle`] form. */
+  rotate?: Animatable<Angle>;
+}
 
-  // inset — animatable ([`Animatable`]; a bound length animates in px)
-  left?: Animatable<Length>;
-  right?: Animatable<Length>;
-  top?: Animatable<Length>;
-  bottom?: Animatable<Length>;
-
-  // size — animatable ([`Animatable`]; a bound length animates in px)
-  width?: Animatable<Length>;
-  height?: Animatable<Length>;
-  minWidth?: Animatable<Length>;
-  minHeight?: Animatable<Length>;
-  maxWidth?: Animatable<Length>;
-  maxHeight?: Animatable<Length>;
-  aspectRatio?: Animatable<number>;
-
-  // alignment
-  alignItems?:
-    | "start"
-    | "end"
-    | "flexStart"
-    | "flexEnd"
-    | "center"
-    | "baseline"
-    | "stretch";
-  alignSelf?:
-    | "auto"
-    | "start"
-    | "end"
-    | "flexStart"
-    | "flexEnd"
-    | "center"
-    | "baseline"
-    | "stretch";
-  alignContent?:
-    | "start"
-    | "end"
-    | "flexStart"
-    | "flexEnd"
-    | "center"
-    | "stretch"
-    | "spaceBetween"
-    | "spaceEvenly"
-    | "spaceAround";
-  justifyItems?: "start" | "end" | "center" | "baseline" | "stretch";
-  justifySelf?: "auto" | "start" | "end" | "center" | "baseline" | "stretch";
-  justifyContent?:
-    | "start"
-    | "end"
-    | "flexStart"
-    | "flexEnd"
-    | "center"
-    | "stretch"
-    | "spaceBetween"
-    | "spaceEvenly"
-    | "spaceAround";
-
-  // spacing
-  margin?: Rect;
-  padding?: Rect;
-  border?: Rect;
-
-  // flex
-  flexDirection?: "row" | "column" | "rowReverse" | "columnReverse";
-  flexWrap?: "nowrap" | "wrap" | "wrapReverse";
-  flexGrow?: number;
-  flexShrink?: number;
-  flexBasis?: Animatable<Length>;
-  gap?: Animatable<Length>;
-  rowGap?: Animatable<Length>;
-  columnGap?: Animatable<Length>;
-
-  // grid
-  gridAutoFlow?: "row" | "column" | "rowDense" | "columnDense";
-  gridTemplateRows?: string;
-  gridTemplateColumns?: string;
-  gridAutoRows?: string;
-  gridAutoColumns?: string;
-  gridRow?: string;
-  gridColumn?: string;
-
-  // visual (sibling components)
-  /** Background color (any CSS [`Color`], e.g. `"#1e1e2e"` or
-   *  `"rebeccapurple"`). Animatable via an `interpolateColor` binding. */
-  backgroundColor?: Animatable<Color>;
-  /** Border color: one CSS [`Color`] for all sides, or a per-side object.
-   *  Omitted sides are transparent. Per-side colors must use the object form —
-   *  a multi-value string is not supported (CSS color functions contain spaces).
-   *  Needs a `border` width to be visible. Only the single-color form is
-   *  animatable (the binding drives all four sides). */
-  borderColor?:
-    | Animatable<Color>
-    | { top?: Color; right?: Color; bottom?: Color; left?: Color };
-  /** Corner radii. Animatable as a whole: a bound value drives all four corners
-   *  in px (no per-corner wrappers); `transition: { borderRadius }` eases
-   *  static changes per corner. */
-  borderRadius?: Animatable<Rect>;
-  outline?: { width?: Length; offset?: Length; color?: Color };
-  /** One drop shadow, or an array of shadows stacked back-to-front (first
-   *  paints on top), like CSS `box-shadow: a, b, …`. */
-  boxShadow?: BoxShadow | BoxShadow[];
-  /** CSS-like `filter` chain: one `{ name, params }` entry (e.g.
-   *  `{ name: "blur", params: { radius: 4 } }`) or an ordered array of them —
-   *  chain order is pass order. Omitted params take the filter's shorthand
-   *  default: a *visible* effect, not necessarily the identity
-   *  (`{ name: "grayscale" }` is full grayscale; a bare `blur` is a visible
-   *  20px blur, unlike CSS's 0). Subtree semantics,
-   *  like CSS: the node is promoted to a composited layer and the filter
-   *  applies to its whole captured subtree (images, text, buttons, nested
-   *  nodes) as one image. */
-  filter?: FilterChainValue;
-  /** Backdrop filter chain — same wire shape as `filter`, but it filters what is
-   *  rendered BEHIND the node (v1: the camera's post-processed 3D scene — UI
-   *  painted beneath the node is not included) and draws the result under the
-   *  node's own content, like CSS `backdrop-filter` frosted glass. The node
-   *  promotes to a composited layer; the filtered region is the node's
-   *  rectangular border box (no `borderRadius` mask in v1) and re-renders every
-   *  frame (live source). Unsetting the chain demotes and snaps — keep an
-   *  identity entry (e.g. `{ name: "blur", params: { radius: 0 } }`) when
-   *  removal should transition smoothly. */
-  backdropFilter?: FilterChainValue;
-  /** View-transition-style morph: `{ key, name, params }`. When `key` changes,
-   *  the node's previous rendered appearance is frozen as a snapshot and the
-   *  named two-input morph filter (its own registry, separate from `filter` —
-   *  built-ins `crossfade`, `linearWipe`, `pixelize`; customs via
-   *  `#[react_morph_filter]`; a regular filter name here warns and snaps)
-   *  blends frozen → live content, driven by an engine-owned
-   *  progress with a built-in 300ms ease (override via
-   *  `transition: { morphFilter }`). React can swap the content freely in the
-   *  same commit — the old pixels are already frozen. The frozen image is
-   *  anchored to the node's layout rect (it scrolls and moves with the node);
-   *  if the swap changes the node's size, the old appearance stretches onto
-   *  the new box — handle size changes gracefully in app code. Presence
-   *  promotes the node to a composited layer; first mount never animates; a
-   *  mid-flight key change freezes the in-flight blend and restarts (always
-   *  smooth). A morph filter must resolve to a single pass (a multi-pass
-   *  resolve is rejected with a devtools warning). Enter/exit idiom: an
-   *  EMPTY carrier (a mounted node that paints nothing) is a valid
-   *  transparent capture — toggle the content in the same commit as the key
-   *  flip and the morph blends from/to nothing, no placeholder background
-   *  needed (the carrier must have rendered ≥1 frame before the first
-   *  flip; a same-commit mount+flip adopts the key silently). */
-  morphFilter?: MorphFilterValue;
-  /** Background gradient(s): one gradient or a layered list. Painted *over*
-   *  `backgroundColor` (like CSS `background-image`): an opaque gradient hides
-   *  it, so the color is a fallback; transparent stops let it show through.
-   *  Transitionable via `transition.backgroundGradient` (strict structural
-   *  match; mismatch/appear/unset snap). */
-  backgroundGradient?: Gradient | Gradient[];
-  /** Border gradient(s): one gradient or a layered list. Painted *over*
-   *  `borderColor` (needs a `border` width to be visible). Transitionable via
-   *  `transition.borderGradient` (strict structural match;
-   *  mismatch/appear/unset snap). */
-  borderGradient?: Gradient | Gradient[];
-  /** Background image: painted *over* `backgroundColor` AND
-   *  `backgroundGradient`, under the node's content (bevy's fixed paint
-   *  order — the color/gradient show through transparency and while the
-   *  texture loads). Never affects layout. Rounded corners clip it under
-   *  `"stretch"`, but NOT under the repeat modes (bevy's tiling pipeline
-   *  limitation); a swap snaps (no cross-fade). Ignored — with a devtools
-   *  warning — on `<image>`/`<canvas>`/`<portal>` (their `ImageNode` belongs
-   *  to the element) and `<surface>`. */
-  backgroundImage?: BackgroundImage;
-  /** How this node's raster source (`<image src>` or `backgroundImage`) is
-   * resampled when drawn at a size other than its own. `"auto"` (default)
-   * is passive: the engine default, level-0 bilinear today. `"bilinear"`
-   * samples level 0 only; `"trilinear"` generates a mip pyramid for the
-   * image and samples across levels — the fix for a large image drawn small
-   * (aliasing / shimmer while it scales); `"nearest"` is nearest-neighbor
-   * (pixel art). Per node, not inherited, not animatable. Each explicit mode
-   * is honored through a derived copy of the asset per `(source, mode)` —
-   * the source asset is never modified, two nodes with different modes on
-   * one file both render as asked, and the copy is shared and dropped with
-   * its last user. A live texture (`{ texture }` render target, `<portal>`,
-   * canvas, svg) can't be copied: every explicit mode is ignored there with
-   * a warning, as is `"trilinear"` on a non-RGBA8 format. Composited layers
-   * are unaffected (a `transform3d` layer always samples its capture
-   * trilinear). Silent on a node with no raster source. */
-  imageRendering?: "auto" | "bilinear" | "trilinear" | "nearest";
-  /** Whether layout rounds this node's rect to whole physical pixels (bevy's
-   * `LayoutConfig::use_rounding`). Unset = inherit from the nearest ancestor
-   * that sets it; the root default is `true`. It inherits downward only and
-   * restarts at every detached root (`<surface>`, `<root>`), so set it on the
-   * PARENT that lays out the animated node and its neighbours. `false` lays
-   * that subtree out at fractional pixels — the fix for the 1px hops of any
-   * real-layout size animation (`transition: { size }`, a shared-element size
-   * flight, a bound width/height): the animated box AND everything
-   * re-flowing around it glide instead of stepping. The price, at rest,
-   * wherever content lands on a half pixel: anti-aliased soft edges, slightly
-   * blurred text, hairline seams between adjacent boxes. Not a hover/press
-   * variant field. */
-  layoutRounding?: boolean;
-  zIndex?: number;
-  /** Lifts the node (and its subtree) into the UI's global stacking order,
-   *  escaping the parent stacking context — so a deeply-nested overlay can paint
-   *  above unrelated subtrees. Unlike `zIndex`, which only reorders a node among
-   *  its siblings. */
-  globalZIndex?: number;
-  /** Pointer pass-through. `"pass"` makes the element click-through — pointer
-   *  interaction (hover/press/click) falls to elements behind it. `"block"` makes
-   *  it *capture* interaction so siblings, the 3D scene, and portals behind it
-   *  don't receive it. Defaults differ by element: a `<button>` blocks (it's a
-   *  discrete control), a `<node>` (and other containers) passes — so a wrapper or
-   *  label never swallows clicks meant for what's behind or around it. Set this to
-   *  override, e.g. a click-through button or a click-capturing panel/backdrop. */
-  focusPolicy?: "block" | "pass";
-  /** Mouse cursor shown while the pointer is over this element (CSS `cursor`).
-   *  Drives the OS cursor icon; the topmost element under the pointer with a
-   *  `cursor` set wins, so a child without one inherits its ancestor's. A
-   *  {@link SystemCursor} keyword uses a built-in cursor; any other string names a
-   *  custom image cursor registered on the Rust side via `ReactUiPlugin::cursor`.
-   *  A custom cursor registered under a keyword name (e.g. `"pointer"`) *overrides*
-   *  that system cursor. */
-  cursor?: SystemCursor | (string & {});
-
-  // transform / opacity
-  /** Static 2D transform. With `transition` a change eases instead of snapping.
-   * `translateX`/`translateY` are [`Length`]s (bare number = logical pixels, or a
-   * unit string like `"50%"`/`"10vw"`, resolved against the node's own size).
-   * `scale` is uniform; `scaleX`/`scaleY` override one axis. `rotate` is an
-   * [`Angle`] (bare number = degrees, e.g. `45`, or `"1.5rad"`). */
-  transform?: {
-    translateX?: Animatable<Length>;
-    translateY?: Animatable<Length>;
-    scale?: Animatable<number>;
-    scaleX?: Animatable<number>;
-    scaleY?: Animatable<number>;
-    /** Bound values are **degrees**, like the static [`Angle`] form. */
-    rotate?: Animatable<Angle>;
-  };
-  /** 3D perspective transform, applied to the subtree's *rendered result* at
-   * composite time (group semantics, like `opacity`/`filter`). Its presence —
-   * even an empty `{}` — promotes the subtree to a composited layer; animating
-   * it never re-captures (composite-time cost, like translation). Picking,
-   * hover, and cursor follow the transformed visual. Field order is fixed:
-   * scale → rotateX → rotateY → rotateZ → translate, then the self
-   * `perspective` projection, all around `origin`.
-   *
-   * Units: translations and `perspective` are logical px; rotations are
-   * [`Angle`]s (bare number = degrees); `origin` is per-axis px-or-percent of
-   * the border box (default `"50%"`/`"50%"` = center). `translateZ` is only
-   * visible with `perspective` (positive = toward the viewer = magnify).
-   * Backfaces render mirrored and stay clickable.
-   *
-   * With `transition: { transform3d }` changes ease field-wise (perspective
-   * snaps when either endpoint is orthographic). Unsetting the whole field
-   * demotes the layer and **snaps** — keep an identity `{}` in the base style
-   * when removal should ease. Avoid hover-triggered transforms that move the
-   * element out from under the cursor (hover flips off → moves back →
-   * oscillates, as in CSS). */
-  transform3d?: {
-    /** Focal distance in logical px (CSS `perspective(d)`); unset = orthographic. */
-    perspective?: Animatable<number>;
-    translateX?: Animatable<number>;
-    translateY?: Animatable<number>;
-    translateZ?: Animatable<number>;
-    rotateX?: Animatable<Angle>;
-    rotateY?: Animatable<Angle>;
-    rotateZ?: Animatable<Angle>;
-    scale?: Animatable<number>;
-    scaleX?: Animatable<number>;
-    scaleY?: Animatable<number>;
-    /** Pivot + vanishing point, relative to the border box (bound axes in px). */
-    origin?: { x: Animatable<Length>; y: Animatable<Length> };
-  };
-  /** Opacity in `0..1`, multiplied into the background (and text) alpha. With a
-   * `transition` a change eases. On a node with children (unless `groupAlpha`
-   * is `false`) the subtree instead composites as a layer and the value fades
-   * the whole group at once (web semantics) — an `{ animated }` opacity
-   * promotes the same way. */
-  opacity?: Animatable<number>;
-  /** Whether `opacity` on a node with children fades the subtree as a group
-   * (composited layer, the default — web semantics) rather than folding into
-   * each node's own colors. Set `false` to opt out of layer promotion for
-   * perf-sensitive spots. Not carried by `hoverStyle`/`pressStyle`. */
-  groupAlpha?: boolean;
-  /** Layer-cache hint. `"always"` force-promotes this subtree to a composited
-   * layer so its capture is cached and re-rendered only when content changes —
-   * the `will-change` pattern for static or transform/opacity-animated
-   * subtrees. `"never"` also force-promotes, but re-captures every frame —
-   * the escape hatch for content whose pixels change outside the dirt
-   * tracking's sight (a live `<portal>` render target, an app-owned texture);
-   * every enclosing layer re-captures too. `"auto"` (default) promotes only
-   * when another rule does (e.g. `opacity`). Not carried by
-   * `hoverStyle`/`pressStyle`. */
-  cache?: "auto" | "always" | "never";
-  /** CSS-like transition timing. When a `transform` / `opacity` / `backgroundColor`
-   * change occurs — via re-render or `hoverStyle`/`pressStyle` — it eases over time
-   * (using the same driver/easing engine as the inline `{ animated }`
-   * bindings) instead of snapping. */
-  transition?: BevyTransition;
-  /** A visible scrollbar for an `overflow: scroll` node. `"none"` (default) hides
-   *  it; `"default"` is a built-in neutral bar; an object configures it. Draggable
-   *  thumb + click-to-page are built in. See [`ScrollbarStyle`]. */
-  scrollbar?: "none" | "default" | ScrollbarStyle;
-
-  // text (only meaningful on `<text>` elements/spans)
-  /** Text color (any CSS [`Color`]). Animatable via `interpolateColor`. */
-  color?: Animatable<Color>;
-  /** Font size: a bare number is logical pixels, or a unit string (`"24px"`,
-   * `"2vw"`, `"1.5rem"`). See [`FontSize`]. */
-  fontSize?: FontSize;
-  fontWeight?:
-    | "thin"
-    | "light"
-    | "normal"
-    | "medium"
-    | "semibold"
-    | "bold"
-    | "black"
-    | (string & {});
-  /** Registered font-family name to render with (see the plugin's
-   * `default_font`/`font` config). Unknown or unset → the configured default. */
-  fontFamily?: string;
-  /** Horizontal alignment of the text block (`<text>` root only). */
-  textAlign?: "left" | "center" | "right" | "justify" | "start" | "end";
-  /** Line height. A bare number is a multiple of the font size; a string carries a
-   * unit (`"20px"` absolute, `"1.5"`/`"1.5em"` a multiple); `{ px }` is an absolute
-   * pixel height. Unset → 1.2× the font size (bevy's default). */
-  lineHeight?: number | string | { px: number };
-  /** Letter spacing. A bare number is logical pixels; a string carries a unit
-   * (`"2px"`, `"0.1rem"`/`"0.1em"`, or `"normal"`); `{ rem }` is a font-size
-   * multiple. */
-  letterSpacing?: number | string | { rem: number };
-  /** A single drop shadow behind the text (`<text>` root only). `offsetX`/
-   * `offsetY` are displacement in logical pixels (default `4`); `color` defaults
-   * to bevy's translucent black. */
-  textShadow?: { color?: Color; offsetX?: number; offsetY?: number };
-  /** How the text wraps when it overflows its bounds (`<text>` root only).
-   * Default `"wordBoundary"`. */
-  lineBreak?: "wordBoundary" | "anyCharacter" | "wordOrCharacter" | "noWrap";
+/** A 3D perspective transform (`style.transform3d`), applied to the
+ *  subtree's *rendered result* at composite time (group semantics, like
+ *  `opacity`/`filter`). Its presence — even an empty `{}` — promotes the
+ *  subtree to a composited layer; animating it never re-captures
+ *  (composite-time cost, like translation). Picking, hover, and cursor follow
+ *  the transformed visual. Field order is fixed: scale → rotateX → rotateY →
+ *  rotateZ → translate, then the self `perspective` projection, all around
+ *  `origin`.
+ *
+ *  Units: translations and `perspective` are logical px; rotations are
+ *  [`Angle`]s (bare number = degrees); `origin` is per-axis px-or-percent of
+ *  the border box (default `"50%"`/`"50%"` = center). `translateZ` is only
+ *  visible with `perspective` (positive = toward the viewer = magnify).
+ *  Backfaces render mirrored and stay clickable.
+ *
+ *  With `transition: { transform3d }` changes ease field-wise (perspective
+ *  snaps when either endpoint is orthographic). Unsetting the whole field
+ *  demotes the layer and **snaps** — keep an identity `{}` in the base style
+ *  when removal should ease. Avoid hover-triggered transforms that move the
+ *  element out from under the cursor (hover flips off → moves back →
+ *  oscillates, as in CSS). */
+export interface BevyTransform3d {
+  /** Focal distance in logical px (CSS `perspective(d)`); unset = orthographic. */
+  perspective?: Animatable<number>;
+  translateX?: Animatable<number>;
+  translateY?: Animatable<number>;
+  translateZ?: Animatable<number>;
+  rotateX?: Animatable<Angle>;
+  rotateY?: Animatable<Angle>;
+  rotateZ?: Animatable<Angle>;
+  scale?: Animatable<number>;
+  scaleX?: Animatable<number>;
+  scaleY?: Animatable<number>;
+  /** Pivot + vanishing point, relative to the border box (bound axes in px). */
+  origin?: { x: Animatable<Length>; y: Animatable<Length> };
 }
 
 // TODO(review): the pointer model is bespoke — normalized x/y + clientX/Y and a DOM

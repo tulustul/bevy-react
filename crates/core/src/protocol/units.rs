@@ -442,8 +442,9 @@ impl<'de> Deserialize<'de> for Rect {
 mod tests {
     use super::*;
     use crate::protocol::animatable::AnimatableField;
-    use crate::protocol::style::Style;
     use crate::protocol::transform::Transform;
+    use crate::style::Style;
+    use crate::style::props::{FONT_SIZE, HEIGHT, PADDING, WIDTH};
 
     /// Angles parse from a bare number (degrees) or a unit string, always landing
     /// in radians.
@@ -466,13 +467,13 @@ mod tests {
         // Bad `width` (unknown unit) → default, sibling `height` intact.
         let s: Style = serde_json::from_str(r#"{ "width": "100pixels", "height": "40px" }"#)
             .expect("a bad length must not abort deserialization");
-        assert_eq!(s.width.static_val(), Some(Length::default()));
-        assert_eq!(s.height.static_val(), Some(Length::Px(40.0)));
+        assert_eq!(s.get(&WIDTH).static_val(), Some(Length::default()));
+        assert_eq!(s.get(&HEIGHT).static_val(), Some(Length::Px(40.0)));
 
         // Bad `fontSize` → default `Px(0.0)`.
         let s: Style = serde_json::from_str(r#"{ "fontSize": "16pxx" }"#)
             .expect("bad fontSize must not abort");
-        assert_eq!(s.font_size, Some(FontSize::Px(0.0)));
+        assert_eq!(s.get(&FONT_SIZE).copied(), Some(FontSize::Px(0.0)));
 
         // Bad transform `rotate` (angle) → default `Angle(0)`, valid `translateX` intact.
         let t: Transform = serde_json::from_str(r#"{ "rotate": "45degg", "translateX": "50%" }"#)
@@ -485,13 +486,13 @@ mod tests {
         // defaults the whole rect. None of these abort (the reported `padding: "16asd"`).
         let s: Style =
             serde_json::from_str(r#"{ "padding": "16asd" }"#).expect("bad rect must not abort");
-        assert_eq!(s.padding, Some(Rect::default()));
+        assert_eq!(s.get(&PADDING).copied(), Some(Rect::default()));
 
         let s: Style = serde_json::from_str(r#"{ "padding": "8px 16asd" }"#)
             .expect("partial-bad rect must not abort");
         // top/bottom = 8px (good), right/left = default (the bad token).
         assert_eq!(
-            s.padding,
+            s.get(&PADDING).copied(),
             Some(Rect {
                 top: Length::Px(8.0),
                 bottom: Length::Px(8.0),
@@ -503,7 +504,7 @@ mod tests {
         let s: Style = serde_json::from_str(r#"{ "padding": "8px 16px" }"#)
             .expect("valid two-value shorthand decodes");
         assert_eq!(
-            s.padding,
+            s.get(&PADDING).copied(),
             Some(Rect {
                 top: Length::Px(8.0),
                 bottom: Length::Px(8.0),
@@ -515,7 +516,7 @@ mod tests {
         // Too many values (>4) → whole rect falls back to default, no abort.
         let s: Style = serde_json::from_str(r#"{ "padding": "1px 2px 3px 4px 5px" }"#)
             .expect("bad value-count must not abort");
-        assert_eq!(s.padding, Some(Rect::default()));
+        assert_eq!(s.get(&PADDING).copied(), Some(Rect::default()));
     }
 
     /// The axis form: `horizontal` sets left + right, `vertical` sets top +
@@ -529,7 +530,7 @@ mod tests {
         let rect = |v: &str| {
             let s: Style = serde_json::from_str(&format!(r#"{{ "padding": {v} }}"#))
                 .expect("axis rect must decode");
-            s.padding.expect("padding present")
+            s.get(&PADDING).copied().expect("padding present")
         };
 
         assert_eq!(

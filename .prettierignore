@@ -7,3 +7,7 @@ package-lock.json
 # `#[react_message]`/`#[react_request]`/`#[react_event]` types are the source of
 # truth, so prettier must not reformat (it would break the regen diff check).
 **/bevy.ts
+
+# Generated from the Rust style registry (`CORE_STYLES`) by
+# `npm run style:generate`; a Rust test diffs it byte-for-byte.
+js/src/generated/

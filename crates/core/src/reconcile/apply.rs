@@ -35,11 +35,6 @@ pub fn apply_js_ops(
     mut ui_assets: UiAssets,
     children: Query<&Children>,
     rnodes: Query<&ReactNode>,
-    // On re-render the entity's kind isn't on the op, so we detect a `<button>` by
-    // its marker to keep re-asserting its `FocusPolicy::Block` default (see
-    // `stamps::apply_button_focus_default`) that the per-commit `apply_style`
-    // resets to `Pass`.
-    buttons: Query<(), With<Button>>,
     // The persistent world-anchor overlay layer (a child of the root). It is
     // infrastructure, not a reconciler node, so `Op::Reset` must preserve it and
     // the end-of-batch hierarchy rebuild must keep it in the root's children.
@@ -424,7 +419,6 @@ pub fn apply_js_ops(
                     &mut ui_assets,
                     &children,
                     &rnodes,
-                    &buttons,
                     &mut editables,
                     &mut scroll_query,
                     &mut a11y_nodes,

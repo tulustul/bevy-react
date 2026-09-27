@@ -236,7 +236,10 @@ grid_fields! {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::protocol::style::Style;
+    use crate::style::Style;
+    use crate::style::props::{
+        GRID_AUTO_ROWS, GRID_ROW, GRID_TEMPLATE_COLUMNS, GRID_TEMPLATE_ROWS,
+    };
 
     /// Grid templates/placements parse once at decode into the bevy types.
     #[test]
@@ -247,20 +250,20 @@ mod tests {
             "gridAutoRows": "auto 40px",
         }))
         .expect("grid template decodes");
-        assert_eq!(s.grid_template_columns.map(|t| t.len()), Some(3));
-        assert_eq!(s.grid_template_rows.map(|t| t.len()), Some(1));
-        assert_eq!(s.grid_auto_rows.map(|t| t.len()), Some(2));
+        assert_eq!(s.get(&GRID_TEMPLATE_COLUMNS).map(|t| t.len()), Some(3));
+        assert_eq!(s.get(&GRID_TEMPLATE_ROWS).map(|t| t.len()), Some(1));
+        assert_eq!(s.get(&GRID_AUTO_ROWS).map(|t| t.len()), Some(2));
 
         // An unparsable track is skipped (warned); the rest survive.
         let s: Style =
             serde_json::from_value(serde_json::json!({ "gridTemplateRows": "1fr bogus 2fr" }))
                 .expect("bad track must not abort");
-        assert_eq!(s.grid_template_rows.map(|t| t.len()), Some(2));
+        assert_eq!(s.get(&GRID_TEMPLATE_ROWS).map(|t| t.len()), Some(2));
 
         let placed = |v: &str| {
             let s: Style = serde_json::from_value(serde_json::json!({ "gridRow": v }))
                 .expect("grid placement decodes");
-            format!("{:?}", s.grid_row.unwrap())
+            format!("{:?}", s.get(&GRID_ROW).copied().unwrap())
         };
         let expect = |p: GridPlacement| format!("{p:?}");
         assert_eq!(placed("1 / 3"), expect(GridPlacement::start_end(1, 3)));
@@ -283,7 +286,7 @@ mod tests {
         let placed = |v: &str| {
             let s: Style = serde_json::from_value(serde_json::json!({ "gridRow": v }))
                 .expect("zero placement must not abort");
-            format!("{:?}", s.grid_row.unwrap())
+            format!("{:?}", s.get(&GRID_ROW).copied().unwrap())
         };
         let auto = format!("{:?}", GridPlacement::auto());
         for s in ["0", "span 0", "0 / 2", "2 / 0", "0 / span 2", "2 / span 0"] {

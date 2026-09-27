@@ -60,6 +60,12 @@ export type {
   MorphFilterValue,
 } from "./filters";
 
+// The style object. `BevyStyle` is generated from the Rust style registry
+// (`js/src/generated/style.ts`); an app's generated `bevy.ts` augments it
+// (`declare module "bevy-react"`) with the app's own style properties — it
+// must be exported here for that declaration merging to attach.
+export type { BevyStyle } from "./generated/style";
+
 // World-anchored overlays (`<anchor entity={…} offset={…}>…</anchor>`).
 export type { AnchorScaling, BevyAnchorProps, Vec3 } from "./jsx";
 

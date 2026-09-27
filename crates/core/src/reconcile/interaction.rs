@@ -17,11 +17,12 @@ use crate::ui_map::overlay_style;
 /// a hover-only node has no `FocusState`. Runs entirely on the Bevy side: no
 /// round-trip to JS, no React re-render on mouse move or focus change.
 ///
-/// How much is re-applied follows [`StyleVariants::restyle`]: a state flip, a
-/// variant swap, or a promotion poke re-applies every group; a base-only
-/// delta re-applies just the groups it dirtied — and on an idle node (no
+/// Which writers re-run follows [`StyleVariants::restyle`]: a state flip
+/// re-runs the writers of the properties any variant sets; a variant swap or
+/// a promotion poke re-runs every writer; a base-only delta re-runs just the
+/// writers of the properties it touched — and on an idle node (no
 /// hover/press/focus overlay) is skipped entirely, since the merged style is
-/// the base the op path already applied with that same mask.
+/// the base the op path already applied.
 #[allow(clippy::type_complexity)]
 pub fn apply_interaction_styles(
     mut commands: Commands,
@@ -48,9 +49,14 @@ pub fn apply_interaction_styles(
     bridge: Option<Res<crate::bridge::JsBridge>>,
     fonts: Option<Res<crate::plugin::Fonts>>,
 ) {
-    use crate::protocol::style::{StyleDirty, style_groups as g};
+    use crate::style::{StyleDirty, WriterMask};
     let default_fonts = crate::plugin::Fonts::default();
     let fonts = fonts.as_deref().unwrap_or(&default_fonts);
+    // The app's writers — or the core's alone in a harness without the bridge.
+    let styles: &crate::style::StyleRegistry = match bridge.as_ref() {
+        Some(b) => b.ext.styles(),
+        None => crate::style::core_registry(),
+    };
     for (entity, interaction, focus, mut variants, promoted, flags) in &mut query {
         // Consume the recorded reason without re-marking the component (a
         // detected write here would re-trigger this system next frame).
@@ -62,9 +68,19 @@ pub fn apply_interaction_styles(
             || focus.as_ref().is_some_and(|f| f.is_changed());
         let interaction = interaction.as_deref().copied();
         let focused = focus.as_deref().is_some_and(|f| f.0);
-        let mask = match pending {
-            Restyle::Base(mask) if !state_changed => mask,
+        // What changed: a base-only delta's properties; on a state edge the
+        // properties any variant sets (hover-in/out swaps exactly those);
+        // after a variant swap or a promotion poke, everything.
+        let changed = match pending {
+            Restyle::Base(dirty) if !state_changed => dirty,
+            Restyle::Base(dirty) => dirty.union(variants.keys),
+            Restyle::Idle if state_changed => variants.keys,
             _ => StyleDirty::ALL,
+        };
+        let writers = if changed.is_all() {
+            WriterMask::ALL
+        } else {
+            styles.writers_for(&changed)
         };
         // Idle node + base-only delta: merged == base, already applied.
         if matches!(pending, Restyle::Base(_))
@@ -76,75 +92,108 @@ pub fn apply_interaction_styles(
         }
         let mut style = match interaction {
             Some(Interaction::Pressed) => overlay_style(
-                overlay_style(variants.base.as_deref(), variants.hover.as_deref()).as_ref(),
-                variants.press.as_deref(),
+                overlay_style(variants.base.as_ref(), variants.hover.as_ref()).as_ref(),
+                variants.press.as_ref(),
             ),
             Some(Interaction::Hovered) => {
-                overlay_style(variants.base.as_deref(), variants.hover.as_deref())
+                overlay_style(variants.base.as_ref(), variants.hover.as_ref())
             }
-            _ => variants.base.as_deref().cloned(),
+            _ => variants.base.as_ref().cloned(),
         };
         if focused {
-            style = overlay_style(style.as_ref(), variants.focus.as_deref());
+            style = overlay_style(style.as_ref(), variants.focus.as_ref());
         }
         // Attribute re-parse warnings (e.g. a bad hoverStyle color) to the node.
         let rnode = rnodes.get(entity).ok();
         let _diag = rnode.map(|r| crate::diag::node_scope(r.0));
+        let kind = match (bridge.as_ref(), rnode) {
+            (Some(b), Some(r)) => b.shared_tags.kind_cow(r.0),
+            _ => std::borrow::Cow::Borrowed("node"),
+        };
+        let is_text = texts.contains(entity);
         // A promoted layer root's merged `opacity` (base or variant-carried)
         // drives the group alpha instead of folding into colors, and its
         // merged `filter` re-stamps `FilterInput` (a hover filter — with a
         // `transition` — eases). Promotion itself never flips on interaction
-        // (`promotion_reasons` unions variant presence; `groupAlpha` is
-        // `no_overlay`).
+        // (`promotion_reasons` unions every state, `groupAlpha`/`cache`
+        // included). A `<text>` root's (and an `editableText`'s) glyph
+        // appearance rides the text writers, so hover/press/focus color and
+        // font changes land — with the opacity fold suppressed on a
+        // promoted root.
+        let wctx = crate::style::WriterCtx {
+            promoted: promoted.is_some(),
+            fresh: false,
+            kind: &kind,
+            flags: flags.copied().unwrap_or_default(),
+            text: is_text || kind == "editableText",
+            assets: &assets,
+            fonts,
+            styles,
+        };
+        // The replaced values are unknown here (a computed invalidation
+        // answers conservatively).
+        let invalidation = styles.invalidation(
+            &changed,
+            &crate::style::OldValues::default(),
+            style.as_ref().unwrap_or(crate::style::Style::empty()),
+            &crate::style::NodeCtx {
+                promoted: promoted.is_some(),
+                kind: &kind,
+            },
+        );
         let mut ec = commands.entity(entity);
-        crate::ui_map::apply_style_masked(&mut ec, &style, mask, promoted.is_some());
-        // The merged `backgroundImage` (a variant can swap it Bevy-side) —
-        // built here because it needs `assets`, and guarded off elements
-        // whose `ImageNode` is element-owned (canvas/portal/image DO carry
-        // `StyleVariants`).
-        let foreign = flags.is_some_and(|f| f.owns_image);
-        if !foreign {
-            crate::background_image::apply_background_image(
-                &mut ec,
-                &style,
-                mask,
-                promoted.is_some(),
-                &assets,
-            );
-        }
-        // A `<text>` root's glyph appearance (`TextColor`/`TextFont`/…)
-        // resolves through `resolved_text_style`, not `apply_style_masked` —
-        // re-derive it from the merged style so hover/press/focus color and
-        // font changes actually land, with the opacity fold suppressed on a
-        // promoted root (its group alpha owns the fade). Bare-string children
-        // inherit the merged result like they do on a re-render. Gated on the
-        // same groups the op path's text arm uses, and written through the
-        // same masked compare-before-write (a hover recolor must not
-        // re-shape the block).
-        if texts.contains(entity) {
-            if mask.intersects(g::TEXT_STYLE) {
-                let resolved =
-                    crate::ui_map::resolved_text_style_promoted(&style, fonts, promoted.is_some());
-                crate::ui_map::apply_resolved_text_style(&mut ec, &resolved, mask);
-                if let (Some(bridge), Some(rnode)) = (bridge.as_ref(), rnode) {
-                    let kids: Vec<_> = bridge.children_of(rnode.0).collect();
-                    for kid in kids {
-                        if bridge.spans.get(&kid) == Some(&crate::bridge::SpanKind::RawInherited)
-                            && let Some(&kid_entity) = bridge.nodes.get(&kid)
-                        {
-                            crate::ui_map::apply_resolved_text_style(
-                                &mut commands.entity(kid_entity),
-                                &resolved,
-                                mask,
-                            );
-                        }
+        crate::ui_map::apply_style_masked(&mut ec, &style, writers, &wctx, invalidation);
+        // An `<image>`'s own `ImageNode` folds the merged `opacity` into its
+        // tint (the element's `tint` prop lives in the retained props).
+        if kind == "image"
+            && writers.intersects(styles.readers_of(&crate::style::props::OPACITY))
+            && let (Some(bridge), Some(rnode)) = (bridge.as_ref(), rnode)
+        {
+            use crate::protocol::animatable::AnimatableField;
+            let tint = bridge
+                .props_cache
+                .get(&rnode.0)
+                .and_then(|p| p.tint.clone());
+            let opacity = style
+                .as_ref()
+                .and_then(|s| s.get(&crate::style::props::OPACITY).static_val());
+            let is_promoted = promoted.is_some();
+            ec.queue(move |mut entity: EntityWorldMut| {
+                if let Some(mut image) = entity.get_mut::<bevy::ui::widget::ImageNode>() {
+                    let color = crate::ui_map::image_tint(
+                        Color::WHITE,
+                        tint.as_deref(),
+                        opacity,
+                        is_promoted,
+                    );
+                    if image.color != color {
+                        image.color = color;
                     }
                 }
-            }
-            if mask.intersects(g::TEXT_LAYOUT)
-                && let Some(layout) = crate::ui_map::text_layout(&style)
-            {
-                commands.entity(entity).insert(layout);
+            });
+        }
+        // Bare-string children inherit the merged result like they do on a
+        // re-render (the halves the restyle re-ran).
+        let color_half = writers.intersects(styles.masks.text_color);
+        let font_half = writers.intersects(styles.masks.text_font);
+        if is_text
+            && (color_half || font_half)
+            && let (Some(bridge), Some(rnode)) = (bridge.as_ref(), rnode)
+        {
+            let resolved =
+                crate::ui_map::resolved_text_style(style.as_ref(), fonts, promoted.is_some());
+            let kids: Vec<_> = bridge.children_of(rnode.0).collect();
+            for kid in kids {
+                if bridge.spans.get(&kid) == Some(&crate::bridge::SpanKind::RawInherited)
+                    && let Some(&kid_entity) = bridge.nodes.get(&kid)
+                {
+                    crate::ui_map::apply_resolved_text_style(
+                        &mut commands.entity(kid_entity),
+                        &resolved,
+                        color_half,
+                        font_half,
+                    );
+                }
             }
         }
     }

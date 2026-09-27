@@ -125,3 +125,36 @@ Domain glossary for `bevy-react`. Use these terms as written; the code, the
   target, a canvas, an svg): can't be copied or written (a write re-uploads
   over the GPU target), so every explicit mode is refused there with a
   warning and the node keeps its source.
+
+## Style properties
+
+- **Style property** — one key of the `style` object (and of its
+  hover/press/focus variants), declared as a `static StyleProperty<T>` — the
+  static is both the declaration and the typed key the merged style is read
+  with (`style.get(&OPACITY)`). Core and app properties are the same kind of
+  thing, registered the same way (`add_react_style(s)`); the core's are
+  `CORE_STYLES`. A property carries only its wire name, its **codec** and its
+  **invalidation** — never behavior (ADR-0004).
+- **Codec** — how a property's value crosses the wire: the decoder (lenient
+  warn-and-fall-back, like every wire decoder) and the TypeScript type the
+  generated `BevyStyle` names. Serde by default; a keyword table for bevy
+  enums; a custom decoder otherwise.
+- **Writer** — a unit of style behavior: the properties it reads, the
+  components it writes (owned — two writers claiming one component panic at
+  registration), and the fn that turns the merged style into those
+  components. A change re-runs exactly the writers that read a touched
+  property. App crates may register their own.
+- **Auto-stamp** — what happens to an app property no writer reads: its value
+  lands on the entity as a `StyleValue<T>` component (present while the
+  merged style sets it), for the app's own system to consume after
+  `ReactApplySet`. The value type must be unique among stamped properties.
+- **Invalidation** — what a change to a property affects, from a closed core
+  vocabulary (`LAYOUT`, `PAINT`, `COMPOSITE`, `PROMOTION`, …). The engine acts
+  on `PAINT` (an enclosing cached layer re-captures) and `PROMOTION`
+  (promotion re-evaluates); the rest document what Bevy's own change
+  detection handles. Fixed per property, or **computed** per change from the
+  old value, the new one, and the node (a promoted root's opacity or
+  translation is composite-only).
+- **Style variant** — `hoverStyle`/`pressStyle`/`focusStyle`: overlays that
+  carry every property. Promotion is a union over every state (base and
+  variants), so an interaction never flips it.

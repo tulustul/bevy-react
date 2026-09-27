@@ -4,7 +4,7 @@
 // semantics (see edits.ts). Invalid input stays in the editor with
 // an inline error and never crosses the bridge (or costs app ops).
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { addEventListener } from "../bridge";
 import {
   applyPropEdit,
@@ -14,13 +14,22 @@ import {
   enableStyle,
   orderedStyleFields,
 } from "./edits";
-import { EDITABLE_PROPS, SHAPE_FIELDS, STYLE_FIELDS } from "./fields";
+import {
+  EDITABLE_PROPS,
+  getStyleFieldsVersion,
+  SHAPE_FIELDS,
+  STYLE_FIELDS,
+  subscribeStyleFields,
+} from "./fields";
 import { mirror } from "./mirror";
 import { theme } from "./theme";
 import { useMirrorVersion } from "./TreeView";
 
 export function Inspector({ id }: { id: number | null }) {
   useMirrorVersion();
+  // `STYLE_FIELDS` fills from Rust right after install; re-render when it lands.
+  const styleFieldsLoaded =
+    useSyncExternalStore(subscribeStyleFields, getStyleFieldsVersion) > 0;
   // Which row is editing, if any — exclusive: opening one editor closes
   // the previous (its draft is discarded). Keyed `style:{field}` /
   // `prop:{field}` / `"add"` so style and prop rows can't collide.
@@ -66,12 +75,13 @@ export function Inspector({ id }: { id: number | null }) {
         const isDisabled = !(field in node.style);
         const value = isDisabled ? disabled.get(field) : node.style[field];
         // Row flags: Rust-reported invalid values (the mirror's
-        // per-row warnings), plus the pure-JS rule for a style key Rust's
-        // serde silently drops (it never even warns on those).
+        // per-row warnings — an unregistered key included), plus the same
+        // unknown-key rule in JS (the registry's table) for a row whose
+        // warning hasn't arrived.
         const warning = isDisabled
           ? undefined
           : (node.warnings?.get(`style:${field}`) ??
-            (field in STYLE_FIELDS
+            (!styleFieldsLoaded || field in STYLE_FIELDS
               ? undefined
               : `unknown style field "${field}" (ignored by Bevy)`));
         return (
