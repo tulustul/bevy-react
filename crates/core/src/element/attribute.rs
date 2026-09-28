@@ -15,9 +15,11 @@ use crate::style::{Codec, Invalidation, PropertyValue, StoredValue, StyleValueDy
 /// An attribute value's `{ animated }` support: the animation domain its
 /// binding publishes under (`Ext { domain, name: <attribute name> }`, read
 /// back from the entity's [`DrivenExtValues`](crate::ext::DrivenExtValues))
-/// and how to pull the binding out of a decoded value.
+/// and how to pull the binding out of a decoded value. The binding picks
+/// what is published — a number, or a color for an `interpolateColor` — so
+/// any attribute value type can animate; the consumer validates the kind.
 pub struct AttrBinding<T: 'static> {
-    /// The domain the evaluated scalar is published under.
+    /// The domain the evaluated value is published under.
     pub domain: &'static str,
     /// The value's binding, when it carries one.
     pub binding: fn(&T) -> Option<Binding>,

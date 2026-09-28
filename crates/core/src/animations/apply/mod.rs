@@ -12,7 +12,9 @@ use bevy::ecs::query::QueryData;
 use bevy::prelude::*;
 use bevy::ui::UiTransform;
 
-use super::protocol::{AnimatableProperty, AnimatedBindings};
+use super::protocol::{AnimatableProperty, AnimatedBindings, Binding};
+#[cfg(test)]
+mod ext_tests;
 mod filter_params;
 mod gradient;
 mod node_colors;
@@ -23,7 +25,7 @@ mod warn;
 use filter_params::apply_filter_params;
 use node_colors::stage_node_and_colors;
 
-use super::{AnimatedNode, SharedValues, build_ui_transform, eval_scalar, props};
+use super::{AnimatedNode, SharedValues, build_ui_transform, eval_color, eval_scalar, props};
 
 /// The components an animated node can drive. A `QueryData` struct (rather than a
 /// tuple) so a new animatable target component is one field, not a tuple-arity
@@ -597,30 +599,38 @@ fn stage_filter_params(
 }
 
 /// Stage 5 — feature-owned bindings (`Ext { domain, name }`): evaluate each
-/// against the shared values and **publish** the scalars into the entity's
+/// against the shared values and **publish** the results into the entity's
 /// [`DrivenExtValues`](crate::ext::DrivenExtValues), compare-before-write
-/// (a settled frame never ticks it). The owning feature's consumer system —
-/// ordered after `AnimationSet::Apply`, so the value lands the same frame —
-/// writes them where they belong and validates its own bindings (the core
-/// knows nothing about the domain's fields). A binding the core cannot
-/// evaluate to a scalar (a color binding, a missing shared value) publishes
-/// nothing; the consumer sees the gap. Nothing is dirtied here: the
-/// consumer's write is the repaint signal.
+/// (a settled frame never ticks it). The binding picks the kind: an
+/// `interpolateColor` publishes a color, anything else a scalar. The owning
+/// feature's consumer system — ordered after `AnimationSet::Apply`, so the
+/// value lands the same frame — writes them where they belong and validates
+/// its own bindings (the core knows nothing about the domain's fields, so a
+/// color bound to a numeric field is the consumer's warning to give). A
+/// missing shared value publishes nothing; the consumer sees the gap.
+/// Nothing is dirtied here: the consumer's write is the repaint signal.
 fn stage_ext(b: &AnimatedBindings, values: &SharedValues, t: &mut AnimTargetsItem) {
+    use crate::ext::{DrivenExt, DrivenValue};
     let Some(ext) = t.ext.as_mut() else {
         return; // Stamped exactly when an `Ext` binding exists.
     };
-    let next: Vec<crate::ext::DrivenExt> = b
+    let next: Vec<DrivenExt> = b
         .iter()
-        .filter_map(|(property, binding)| match property {
-            AnimatableProperty::Ext { domain, name } => {
-                eval_scalar(binding, values).map(|value| crate::ext::DrivenExt {
-                    domain,
-                    name: name.clone(),
-                    value,
-                })
-            }
-            _ => None,
+        .filter_map(|(property, binding)| {
+            let AnimatableProperty::Ext { domain, name } = property else {
+                return None;
+            };
+            let value = match binding {
+                Binding::InterpolateColor { .. } => {
+                    DrivenValue::Color(eval_color(binding, values)?)
+                }
+                _ => DrivenValue::Scalar(eval_scalar(binding, values)?),
+            };
+            Some(DrivenExt {
+                domain,
+                name: name.clone(),
+                value,
+            })
         })
         .collect();
     // One `deref_mut`, only on a real change.

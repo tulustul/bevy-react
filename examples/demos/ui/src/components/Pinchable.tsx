@@ -18,11 +18,19 @@ export type PinchableProps = {
    *  is behind it (`"block"`, the default — it is a button-shaped thing) or
    *  lets it through (`"pass"`). */
   focusPolicy?: "block" | "pass";
+  /** Called when the press starts (`true`) and ends (`false`) — the press
+   *  surface owns the gesture, so a child can't observe it with its own
+   *  pointer handlers (see `children`). */
+  onPressedChange?: (pressed: boolean) => void;
   /** The content to press. Rendered INSIDE Pinchable's own press surface —
    *  it is never cloned or restyled, so its `style`/`transition`/`pressStyle`/
    *  handlers are exactly what it declared. To be pressable through the
    *  wrapper it must not block pointer interaction itself: a `<node>` passes
-   *  by default; a `<button>` must set `focusPolicy: "pass"` (see `Button`). */
+   *  by default; a `<button>` must set `focusPolicy: "pass"` (see `Button`).
+   *  Nor may it carry `onPointer*` handlers: the topmost handler node owns a
+   *  press gesture, so it would take every press from the surface and the
+   *  pinch would never run (`onClick` is fine — use `onPressedChange` to
+   *  observe the press). */
   children: ReactNode;
 };
 
@@ -70,6 +78,7 @@ export function Pinchable({
   children,
   filters,
   focusPolicy = "block",
+  onPressedChange,
 }: PinchableProps) {
   const strength = useSharedValue(0);
   const [center, setCenter] = useState({ x: 0.5, y: 0.5 });
@@ -91,6 +100,7 @@ export function Pinchable({
 
   const press = (e: PointerEventData) => {
     setPressed(true);
+    onPressedChange?.(true);
     setCenter({ x: e.x, y: e.y });
     strength.value = withTiming(pressStrength, {
       duration: 100,
@@ -108,6 +118,7 @@ export function Pinchable({
   const release = () => {
     if (!pressed) return;
     setPressed(false);
+    onPressedChange?.(false);
     strength.value = withSpring(0, { stiffness: 700, damping: 10 });
   };
 

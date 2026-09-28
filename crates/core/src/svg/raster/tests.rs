@@ -3,7 +3,6 @@
 //! B3 behavior byte-for-byte. (The JSX `<svg>` suite lives beside its own
 //! raster: `svg/jsx_tests.rs`.)
 
-use bevy::prelude::*;
 use bevy::ui::widget::ImageNode;
 use bevy::ui::{ComputedNode, ContentSize};
 

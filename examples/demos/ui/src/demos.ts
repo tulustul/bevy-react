@@ -13,6 +13,7 @@ import { GamepadDemo } from "./demos/events/gamepadDemo";
 import { KeyboardDemo } from "./demos/events/KeyboardDemo";
 import { WindowDemo } from "./demos/events/WindowDemo";
 import { CanvasDemo } from "./demos/elements/CanvasDemo";
+import { CustomElementsDemo } from "./demos/elements/CustomElementsDemo";
 import { SvgDemo } from "./demos/elements/SvgDemo";
 import { PortalDemo } from "./demos/elements/PortalDemo";
 import { SurfaceDemo } from "./demos/elements/surfaceDemo";
@@ -42,6 +43,7 @@ import { ShadowDemo } from "./demos/styling/ShadowDemo";
 import { FilterDemo } from "./demos/styling/FilterDemo";
 import { BackdropFilterDemo } from "./demos/styling/BackdropFilterDemo";
 import { CustomFiltersDemo } from "./demos/styling/CustomFiltersDemo";
+import { CustomStylesDemo } from "./demos/styling/CustomStylesDemo";
 import { BackgroundImageDemo } from "./demos/styling/BackgroundImageDemo";
 import { ImageRenderingDemo } from "./demos/styling/ImageRenderingDemo";
 import { GradientsDemo } from "./demos/styling/GradientsDemo";
@@ -85,6 +87,7 @@ export const DEMOS: DemoItem[] = [
       { label: "<surface>", scene: "Surface", component: SurfaceDemo },
       { label: "<root>", component: RootDemo },
       { label: "<anchor>", scene: "CrowdedCubes", component: AnchorDemo },
+      { label: "Custom elements", component: CustomElementsDemo },
     ],
   },
   {
@@ -115,6 +118,7 @@ export const DEMOS: DemoItem[] = [
       },
       { label: "Morph filters", component: MorphFilterDemo },
       { label: "Custom filters", component: CustomFiltersDemo },
+      { label: "Custom styles", component: CustomStylesDemo },
       { label: "Gradients", component: GradientsDemo },
       { label: "Background images", component: BackgroundImageDemo },
       { label: "Image rendering", component: ImageRenderingDemo },

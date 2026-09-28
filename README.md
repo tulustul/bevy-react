@@ -661,6 +661,92 @@ Pin UI to a 3D entity so it tracks the entity on screen as the camera moves.
 
 ![Dozens of colored cubes in a 3D scene, each with a numbered React badge anchored above it that tracks its cube as the camera moves.](https://raw.githubusercontent.com/tulustul/bevy-react/main/screenshots/anchored-nodes.png)
 
+### Custom elements
+
+An app can register its own JSX elements — the same API every element above
+is built on (`<svg>`, `<canvas>`, `<portal>`, `<surface>` and `<anchor>` are
+each a crate registering one). An element needn't be UI: this `<cube>` is a 3D
+mesh entity, spawned, updated and despawned by React.
+
+```rust
+use bevy_react_core::ReactAppExt;
+use bevy_react_core::element::{AttrBinding, Attribute, Common, Element, animatable_binding};
+use bevy_react_core::ext::ElementFlags;
+use bevy_react_core::protocol::animatable::Animatable;
+use bevy_react_core::style::Codec;
+
+// A number, or an `{ animated }` wrapper the animation engine drives.
+static SIZE: Attribute<Animatable<f32>> = Attribute {
+    animated: Some(AttrBinding { domain: "cube", binding: animatable_binding::<f32> }),
+    ..Attribute::with_codec("size", Codec::serde_as("Animatable<number>"))
+};
+
+static CUBE: Element = Element {
+    // No `Node`, and never parented under its React parent.
+    flags: ElementFlags { detached: true, ..ElementFlags::NODE_LESS },
+    attrs: &[&SIZE, &COLOR],
+    common: Common::IDENTITY.with(Common::POINTER), // `name`, `onClick`, …
+    writers: &[&CUBE_WRITER], // attributes → components
+    spawn: Some(spawn_cube),  // mesh + material
+    ..Element::new("cube")
+};
+
+app.add_react_element(&CUBE);
+```
+
+```tsx
+// Typed by the generated bevy.ts.
+<cube
+  size={{ animated: interpolate(t, [0, 1], [0.6, 1.2]) }}
+  color={{ animated: interpolateColor(t, [0, 1], ["#7aa2f7", "#f7768e"]) }}
+  onClick={() => setPicked(true)}
+/>
+```
+
+Each frame the animation engine publishes a bound attribute's value — a
+number, or a color for `interpolateColor` — into the entity's
+`DrivenExtValues`, for the element's own system to apply. See
+[`examples/demos/cube`](https://github.com/tulustul/bevy-react/tree/main/examples/demos/cube)
+for the complete element. Register it in both the running app and the
+`--export-bindings` path, then regenerate `bevy.ts`.
+
+### Custom styles
+
+An app can register its own style properties, too. The value type decodes
+with serde and is typed into `BevyStyle`, so it works in `style` and in the
+hover, press and focus variants alike.
+
+```rust
+use bevy_react_core::ReactAppExt;
+use bevy_react_core::style::{StyleProperty, StyleValue};
+
+#[derive(Debug, Clone, PartialEq, serde::Deserialize, ts_rs::TS)]
+struct Sparkle {
+    rate: f32,
+}
+
+static SPARKLE: StyleProperty<Sparkle> = StyleProperty::new("sparkle");
+
+app.add_react_style(&SPARKLE);
+
+// No writer reads `sparkle`, so the core stamps its value on the node as a
+// component, present exactly while the merged style sets it.
+fn emit_sparkles(emitters: Query<(&StyleValue<Sparkle>, &ComputedNode, &UiGlobalTransform)>) {
+    // …
+}
+```
+
+```tsx
+<button style={{ sparkle: { rate: 8 } }} hoverStyle={{ sparkle: { rate: 24 } }}>
+  <text>Make a wish</text>
+</button>
+```
+
+A property that must shape its own component registers a `Writer` with
+`add_react_style_writer` instead. See
+[`examples/demos/sparkle`](https://github.com/tulustul/bevy-react/tree/main/examples/demos/sparkle)
+for the complete property.
+
 ### Talking to Bevy
 
 Three typed channels connect React and the ECS:

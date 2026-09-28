@@ -10,7 +10,7 @@ import {
   removeEventListener as rawRemoveEventListener,
 } from "bevy-react";
 import type { ReactNode, Ref } from "react";
-import type { AnchorScaling, Animatable, BevyAttributes, BevyCanvasElement, BevyPointerProps, BevyScrollProps, BevyShapeTransition, BevyStyle, BevyVariantProps, BevyWheelProps, CanvasPainter, DrawCmd, Vec3 } from "bevy-react";
+import type { AnchorScaling, Animatable, BevyAttributes, BevyCanvasElement, BevyPointerProps, BevyScrollProps, BevyShapeTransition, BevyStyle, BevyVariantProps, BevyWheelProps, CanvasPainter, Color, DrawCmd, Vec3 } from "bevy-react";
 
 export type BallBounced = { 
 /**
@@ -377,6 +377,20 @@ export type SetCount = number;
 export type SetCrt = boolean;
 export type SetFollowMode = boolean;
 export type ShadowParams = { color: string, offsetX: number | string, offsetY: number | string, spread: number | string, };
+export type Sparkle = { 
+/**
+ * Particles per second.
+ */
+rate: number, 
+/**
+ * Particle color, any CSS color (default gold).
+ */
+color?: string, 
+/**
+ * Particle size in logical px (default `6`).
+ */
+size?: number, };
+export type SparkleBurst = number;
 export type StripDatamoshGlitch = { 
 /**
  * Overall glitch intensity.
@@ -520,6 +534,16 @@ declare module "bevy-react" {
   }
 }
 
+/** The app's own style properties (`app.add_react_style`). Augments the
+ *  `BevyStyle` interface in the `bevy-react` package, so `style` (and the
+ *  hover/press/focus variants) type them. */
+declare module "bevy-react" {
+  interface BevyStyle {
+    sparkle?: Sparkle;
+    sparkleBurst?: SparkleBurst;
+  }
+}
+
 /** The app's own elements' props (`app.add_react_element`). */
 export interface BevyAnchorProps extends BevyAttributes, BevyVariantProps, BevyPointerProps, BevyScrollProps, BevyWheelProps {
   style?: BevyStyle;
@@ -550,6 +574,16 @@ export interface BevyCircleProps extends BevyAttributes, BevyPointerProps {
   strokeLinejoin?: "miter" | "round" | "bevel";
   transform?: string;
   transition?: BevyShapeTransition;
+  children?: ReactNode;
+}
+
+export interface BevyCubeProps extends BevyAttributes, BevyPointerProps {
+  size?: Animatable<number>;
+  x?: Animatable<number>;
+  y?: Animatable<number>;
+  z?: Animatable<number>;
+  rotateY?: Animatable<number>;
+  color?: Animatable<Color>;
   children?: ReactNode;
 }
 
@@ -681,6 +715,7 @@ declare module "bevy-react" {
     anchor: BevyAnchorProps;
     canvas: BevyCanvasProps;
     circle: BevyCircleProps;
+    cube: BevyCubeProps;
     ellipse: BevyEllipseProps;
     g: BevyGProps;
     line: BevyLineProps;

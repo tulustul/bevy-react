@@ -171,37 +171,66 @@ impl VirtualPointers {
     }
 }
 
+/// This frame's value of one evaluated binding. The binding decides the
+/// kind: `interpolateColor` evaluates to a [`Color`](Self::Color), a bare
+/// shared value or an `interpolate` to a [`Scalar`](Self::Scalar).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum DrivenValue {
+    /// A number, in the binding's wire units.
+    Scalar(f32),
+    /// An sRGB color, rgba channels in `0.0..=1.0`.
+    Color([f32; 4]),
+}
+
 /// One evaluated `{ animated }` binding of a feature-owned value: the
 /// prop key it lives under (`domain`), the field (`name`), and this frame's
-/// driven scalar (in the binding's wire units).
+/// driven value.
 #[derive(Debug, Clone, PartialEq)]
 pub struct DrivenExt {
     pub domain: &'static str,
     pub name: String,
-    pub value: f32,
+    pub value: DrivenValue,
 }
 
 /// The animation engine's publish slot for feature-owned bindings
 /// ([`AnimatableProperty::Ext`](crate::animations::AnimatableProperty::Ext)):
 /// every frame the shared values move, the engine evaluates each `Ext`
 /// binding and compare-writes the results here (one entry per binding it
-/// could evaluate to a scalar; a color binding publishes nothing). The
-/// feature that owns the domain consumes them in its own system, ordered
-/// after [`AnimationSet::Apply`](crate::animations::AnimationSet::Apply),
-/// and writes them wherever they land (an SVG shape's attr seed slots).
-/// Stamped alongside the entity's `AnimatedNode` exactly when it carries an
-/// `Ext` binding; the feature never writes it.
+/// could evaluate — a missing shared value publishes nothing). The feature
+/// that owns the domain consumes them in its own system, ordered after
+/// [`AnimationSet::Apply`](crate::animations::AnimationSet::Apply), and
+/// writes them wherever they land (an SVG shape's attr seed slots, a mesh's
+/// material color). Stamped alongside the entity's `AnimatedNode` exactly
+/// when it carries an `Ext` binding; the feature never writes it.
 #[derive(Component, Debug, Default, Clone, PartialEq)]
 pub struct DrivenExtValues(pub Vec<DrivenExt>);
 
 impl DrivenExtValues {
     /// This frame's driven value of `domain.name`, if the engine could
     /// evaluate its binding.
-    pub fn get(&self, domain: &str, name: &str) -> Option<f32> {
+    pub fn value(&self, domain: &str, name: &str) -> Option<DrivenValue> {
         self.0
             .iter()
             .find(|d| d.domain == domain && d.name == name)
             .map(|d| d.value)
+    }
+
+    /// This frame's driven scalar of `domain.name` — `None` when unbound,
+    /// unevaluated, or bound to a color.
+    pub fn get(&self, domain: &str, name: &str) -> Option<f32> {
+        match self.value(domain, name)? {
+            DrivenValue::Scalar(v) => Some(v),
+            DrivenValue::Color(_) => None,
+        }
+    }
+
+    /// This frame's driven color of `domain.name` — `None` when unbound,
+    /// unevaluated, or bound to a scalar.
+    pub fn get_color(&self, domain: &str, name: &str) -> Option<Srgba> {
+        match self.value(domain, name)? {
+            DrivenValue::Color([r, g, b, a]) => Some(Srgba::new(r, g, b, a)),
+            DrivenValue::Scalar(_) => None,
+        }
     }
 }
 

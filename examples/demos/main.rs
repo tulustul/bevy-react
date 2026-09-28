@@ -26,9 +26,11 @@
 
 mod camera;
 mod clipboard;
+mod cube;
 mod filters;
 mod scene;
 mod scenes;
+mod sparkle;
 // Framebuffer capture (`--shoot`) drives Bevy's `Screenshot` + `save_to_disk`, both
 // native-only; the whole module is excluded on web.
 #[cfg(not(target_arch = "wasm32"))]
@@ -275,6 +277,10 @@ fn build_app(window: Window, hot_reload: bool) -> App {
         .init_state::<Scene>()
         // The shared 3D camera (auto-orbit + mouse-drag + wheel-zoom + per-scene reframe).
         .add_plugins(CameraPlugin)
+        // The app-authored `<cube>` element (the "Custom elements" demo).
+        .add_plugins(cube::CubePlugin)
+        // The app-registered `sparkle` style (the "Custom styles" demo).
+        .add_plugins(sparkle::SparklePlugin)
         .add_plugins((
             AmbientScenePlugin,
             CubesScenePlugin,
@@ -328,6 +334,10 @@ fn register_react_bindings(app: &mut App) {
     bevy_react_canvas::register_bindings(app);
     bevy_react_portal::register_bindings(app);
     bevy_react_surface::register_bindings(app);
+    // The app's own `<cube>` element.
+    cube::register_bindings(app);
+    // The app's own `sparkle` style property.
+    sparkle::register_bindings(app);
     scene::register_bindings(app);
     screenshot::register_bindings(app);
     filters::register_bindings(app);

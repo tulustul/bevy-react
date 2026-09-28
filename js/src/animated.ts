@@ -113,7 +113,8 @@ export type AnimatedValue = SharedValue | Binding;
  *  (validated Rust-side against the resolved chain — `filterBinding`
  *  warnings; an unmatched binding is inert).
  *
- *  `seed` (filter/backdrop params and SVG shape attrs): the static value a
+ *  `seed` (filter/backdrop params and feature element attributes — SVG
+ *  shape attrs, an app's own element's): the static value a
  *  consumer uses in the wrapper's place. For chain params, resolve-time
  *  derivations read only static params — most visibly a blur's capture
  *  outset — so size it for the animation's range:

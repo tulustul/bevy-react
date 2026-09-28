@@ -242,7 +242,8 @@ pub enum AnimatableProperty {
     /// attrs), `name` the field's wire name within it (`"cx"`, `"r"`,
     /// `"strokeWidth"`, …). Derived from the value's own
     /// [`ExtValue::bindings`](crate::ext::ExtValue::bindings); the apply
-    /// stage evaluates each per frame and **publishes** the scalar into the
+    /// stage evaluates each per frame and **publishes** the result — a
+    /// scalar, or a color for an `interpolateColor` binding — into the
     /// entity's [`DrivenExtValues`](crate::ext::DrivenExtValues), which the
     /// owning feature's system consumes (an SVG shape writes it into the
     /// attr's seed slot). Bound values are in the value's **wire units**
@@ -326,10 +327,11 @@ impl AnimatableProperty {
                     // not this arm.
                     Self::BackgroundGradientParam { .. }
                     | Self::BorderGradientParam { .. } => ValueKind::Scalar,
-                    // Genuinely scalar (unlike the chain params' documented fallback
-                    // above): shape attrs are raw user-space numbers — no logical→
-                    // physical px rewrite applies (the viewBox scales them at
-                    // raster), so `Length` semantics would be wrong here.
+                    // Never consulted by the publish stage, which picks scalar
+                    // vs color from the binding itself (an `interpolateColor`
+                    // publishes a color). Scalar, not `Length`: feature values
+                    // are raw wire-unit numbers — no logical→physical px
+                    // rewrite applies (an SVG viewBox scales them at raster).
                     Self::Ext { .. } => ValueKind::Scalar,
                 }
             };

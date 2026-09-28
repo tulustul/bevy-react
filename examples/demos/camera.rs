@@ -4,6 +4,7 @@
 
 use bevy::camera::visibility::RenderLayers;
 use bevy::input::mouse::{AccumulatedMouseMotion, AccumulatedMouseScroll, MouseScrollUnit};
+use bevy::picking::mesh_picking::MeshPickingCamera;
 use bevy::post_process::bloom::Bloom;
 use bevy::prelude::*;
 use bevy::ui::IsDefaultUiCamera;
@@ -48,6 +49,9 @@ fn setup_camera_and_light(mut commands: Commands) {
         // Layer 0 (scene content) plus the aurora backdrop's dedicated layer —
         // extra world cameras (portals, minimap) never see the backdrop quad.
         RenderLayers::from_layers(&[0, AURORA_LAYER]),
+        // Mesh picking runs with `require_markers` (see `crate::cube`): only
+        // this camera ray-casts, and only `Pickable` meshes are hit.
+        MeshPickingCamera,
     ));
 
     commands.spawn((
