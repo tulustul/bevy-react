@@ -68,6 +68,7 @@ use std::ops::Range;
 
 use bevy::asset::{AssetServer, Handle};
 use bevy::camera::{Camera, Camera2d, Camera3d};
+use bevy::core_pipeline::FullscreenShader;
 use bevy::ecs::system::SystemParamItem;
 use bevy::ecs::system::lifetimeless::SRes;
 use bevy::math::{FloatOrd, Mat4, UVec4};
@@ -1711,33 +1712,22 @@ pub struct FilterUniforms {
 /// is the source texture (the capture, or the previous pass's ping-pong
 /// output), a linear clamp-to-edge sampler, one dynamically-offset
 /// [`FilterUniforms`], and the layer's original capture (always bound, so any
-/// pass can sample the unfiltered input) — plus the prelude shader, which is
-/// the **vertex stage of every filter pipeline**.
-///
-/// Split-stage design: the vertex entry (`vertex`, a fullscreen triangle)
-/// lives in the prelude module, the fragment entry (`fragment`) in each pass
-/// shader that `#import`s the prelude for bindings/helpers. naga_oil does not
-/// re-export an import's entry points into the composed module, so the pass
-/// shaders genuinely have no vertex entry — the pipeline descriptor names two
-/// different shader handles, which wgpu supports (per-stage modules; the
-/// cross-stage interface is the prelude's `FullscreenVertexOutput`).
-/// Validated at runtime by the executing filter passes (module-doc spike
-/// checklist); the documented fallback if a Bevy upgrade breaks it is a tiny
-/// per-shader `@vertex` delegating to a prelude helper.
+/// pass can sample the unfiltered input). The vertex stage of every filter
+/// pipeline is bevy's fullscreen triangle ([`FullscreenShader`]); the
+/// fragment entry (`fragment`) lives in each pass shader that `#import`s the
+/// prelude for bindings/helpers — the cross-stage interface is the prelude's
+/// `FullscreenVertexOutput`, bevy's own.
 #[derive(Resource)]
 pub struct LayerFilterPipeline {
     pub layout: BindGroupLayoutDescriptor,
     pub sampler: Sampler,
-    /// `layer/filter_prelude.wgsl` — registered with `load_shader_library!`,
-    /// which also embeds it as a loadable asset, so a plain handle to it
-    /// works as a pipeline stage.
-    pub prelude: Handle<Shader>,
+    pub fullscreen: FullscreenShader,
 }
 
 pub fn init_layer_filter_pipeline(
     mut commands: Commands,
     render_device: Res<RenderDevice>,
-    asset_server: Res<AssetServer>,
+    fullscreen: Res<FullscreenShader>,
 ) {
     let layout = BindGroupLayoutDescriptor::new(
         "ui_layer_filter_layout",
@@ -1764,7 +1754,7 @@ pub fn init_layer_filter_pipeline(
             min_filter: FilterMode::Linear,
             ..Default::default()
         }),
-        prelude: bevy::asset::load_embedded_asset!(asset_server.as_ref(), "filter_prelude.wgsl"),
+        fullscreen: fullscreen.clone(),
     });
 }
 
@@ -1782,13 +1772,7 @@ impl SpecializedRenderPipeline for LayerFilterPipeline {
 
     fn specialize(&self, key: Self::Key) -> RenderPipelineDescriptor {
         RenderPipelineDescriptor {
-            // No vertex buffers: the prelude's fullscreen triangle is
-            // generated from `vertex_index` alone.
-            vertex: VertexState {
-                shader: self.prelude.clone(),
-                entry_point: Some("vertex".into()),
-                ..Default::default()
-            },
+            vertex: self.fullscreen.to_vertex_state(),
             fragment: Some(FragmentState {
                 shader: key.shader,
                 // `filter` is a WGSL reserved word — the prelude's contract

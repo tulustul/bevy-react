@@ -278,61 +278,61 @@ mod tests {
             .filter(|l| !l.trim_start().starts_with("#define_import_path"))
             .collect::<Vec<_>>()
             .join("\n");
-        validate("filter_prelude.wgsl", &prelude_body, &["vertex"]);
+        validate("filter_prelude.wgsl", &prelude_body, &[]);
         validate(
             "color_matrix.wgsl",
             &splice(&prelude_body, include_str!("color_matrix.wgsl")),
-            &["vertex", "fragment"],
+            &["fragment"],
         );
         validate(
             "blur.wgsl",
             &splice(&prelude_body, include_str!("blur.wgsl")),
-            &["vertex", "fragment"],
+            &["fragment"],
         );
         validate(
             "bloom.wgsl",
             &splice(&prelude_body, include_str!("bloom.wgsl")),
-            &["vertex", "fragment"],
+            &["fragment"],
         );
         validate(
             "chromatic_aberration.wgsl",
             &splice(&prelude_body, include_str!("chromatic_aberration.wgsl")),
-            &["vertex", "fragment"],
+            &["fragment"],
         );
         validate(
             "gradient_map.wgsl",
             &splice(&prelude_body, include_str!("gradient_map.wgsl")),
-            &["vertex", "fragment"],
+            &["fragment"],
         );
         validate(
             "outline.wgsl",
             &splice(&prelude_body, include_str!("outline.wgsl")),
-            &["vertex", "fragment"],
+            &["fragment"],
         );
         validate(
             "shadow.wgsl",
             &splice(&prelude_body, include_str!("shadow.wgsl")),
-            &["vertex", "fragment"],
+            &["fragment"],
         );
         validate(
             "pinch.wgsl",
             &splice(&prelude_body, include_str!("pinch.wgsl")),
-            &["vertex", "fragment"],
+            &["fragment"],
         );
         validate(
             "crossfade.wgsl",
             &splice(&prelude_body, include_str!("crossfade.wgsl")),
-            &["vertex", "fragment"],
+            &["fragment"],
         );
         validate(
             "linear_wipe.wgsl",
             &splice(&prelude_body, include_str!("linear_wipe.wgsl")),
-            &["vertex", "fragment"],
+            &["fragment"],
         );
         validate(
             "pixelize.wgsl",
             &splice(&prelude_body, include_str!("pixelize.wgsl")),
-            &["vertex", "fragment"],
+            &["fragment"],
         );
 
         // The demos' app-side passes (every `examples/assets/shaders` WGSL
@@ -357,7 +357,7 @@ mod tests {
                     && src.contains("#import bevy_react::filter")
                 {
                     let name = path.display().to_string();
-                    validate(&name, &splice(&prelude_body, &src), &["vertex", "fragment"]);
+                    validate(&name, &splice(&prelude_body, &src), &["fragment"]);
                     checked += 1;
                 }
             }

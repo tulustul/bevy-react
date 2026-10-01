@@ -12,6 +12,9 @@
 // snapshot rect clamps to the frame's border pixels (same artifact browsers
 // show for backdrop-filter at the viewport edge).
 
+// The vertex stage is bevy's fullscreen triangle (`FullscreenShader`).
+#import bevy_core_pipeline::fullscreen_vertex_shader::FullscreenVertexOutput
+
 @group(0) @binding(0) var src_texture: texture_2d<f32>;
 @group(0) @binding(1) var src_sampler: sampler;
 
@@ -21,21 +24,6 @@ struct BlitUniforms {
     src_uv_scale: vec2<f32>,
 }
 @group(0) @binding(2) var<uniform> uniforms: BlitUniforms;
-
-struct FullscreenVertexOutput {
-    @builtin(position) position: vec4<f32>,
-    @location(0) uv: vec2<f32>,
-}
-
-// Single fullscreen triangle over the snapshot target (same construction as
-// the filter prelude's vertex stage).
-@vertex
-fn vertex(@builtin(vertex_index) vertex_index: u32) -> FullscreenVertexOutput {
-    var out: FullscreenVertexOutput;
-    out.uv = vec2<f32>(f32((vertex_index << 1u) & 2u), f32(vertex_index & 2u));
-    out.position = vec4<f32>(out.uv * vec2<f32>(2.0, -2.0) + vec2<f32>(-1.0, 1.0), 0.0, 1.0);
-    return out;
-}
 
 @fragment
 fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {

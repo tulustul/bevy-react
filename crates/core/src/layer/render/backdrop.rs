@@ -28,6 +28,7 @@
 //!    nothing and the region shows the real (unfiltered) frame already in
 //!    the target, never an invisible subtree.
 
+use bevy::core_pipeline::FullscreenShader;
 use bevy::math::{UVec2, Vec2};
 use bevy::prelude::*;
 use bevy::render::camera::ExtractedCamera;
@@ -114,12 +115,14 @@ pub struct BackdropBlitPipeline {
     pub layout: BindGroupLayoutDescriptor,
     pub sampler: Sampler,
     pub shader: Handle<Shader>,
+    pub fullscreen: FullscreenShader,
 }
 
 pub fn init_backdrop_blit_pipeline(
     mut commands: Commands,
     render_device: Res<RenderDevice>,
     asset_server: Res<AssetServer>,
+    fullscreen: Res<FullscreenShader>,
 ) {
     let layout = BindGroupLayoutDescriptor::new(
         "ui_layer_backdrop_blit_layout",
@@ -143,6 +146,7 @@ pub fn init_backdrop_blit_pipeline(
             ..Default::default()
         }),
         shader: bevy::asset::load_embedded_asset!(asset_server.as_ref(), "backdrop_blit.wgsl"),
+        fullscreen: fullscreen.clone(),
     });
 }
 
@@ -156,11 +160,7 @@ impl SpecializedRenderPipeline for BackdropBlitPipeline {
 
     fn specialize(&self, key: Self::Key) -> RenderPipelineDescriptor {
         RenderPipelineDescriptor {
-            vertex: VertexState {
-                shader: self.shader.clone(),
-                entry_point: Some("vertex".into()),
-                ..Default::default()
-            },
+            vertex: self.fullscreen.to_vertex_state(),
             fragment: Some(FragmentState {
                 shader: self.shader.clone(),
                 entry_point: Some("fragment".into()),

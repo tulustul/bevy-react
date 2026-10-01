@@ -23,6 +23,7 @@
 //! target is a standard 2×2 box downsample, correct on premultiplied content.
 
 use bevy::asset::{AssetServer, Handle};
+use bevy::core_pipeline::FullscreenShader;
 use bevy::prelude::*;
 use bevy::render::render_resource::binding_types::{sampler, texture_2d};
 use bevy::render::render_resource::{
@@ -30,7 +31,7 @@ use bevy::render::render_resource::{
     CachedRenderPipelineId, ColorTargetState, ColorWrites, FilterMode, FragmentState,
     PipelineCache, RenderPipelineDescriptor, Sampler, SamplerBindingType, SamplerDescriptor,
     ShaderStages, SpecializedRenderPipeline, SpecializedRenderPipelines, Texture, TextureFormat,
-    TextureSampleType, TextureView, TextureViewDescriptor, VertexState,
+    TextureSampleType, TextureView, TextureViewDescriptor,
 };
 use bevy::render::renderer::RenderDevice;
 use bevy::shader::Shader;
@@ -90,12 +91,14 @@ pub struct LayerBlitPipeline {
     /// level through a single-mip view.
     pub sampler: Sampler,
     pub shader: Handle<Shader>,
+    pub fullscreen: FullscreenShader,
 }
 
 pub fn init_layer_blit_pipeline(
     mut commands: Commands,
     render_device: Res<RenderDevice>,
     asset_server: Res<AssetServer>,
+    fullscreen: Res<FullscreenShader>,
 ) {
     let layout = BindGroupLayoutDescriptor::new(
         "ui_layer_blit_layout",
@@ -116,6 +119,7 @@ pub fn init_layer_blit_pipeline(
             ..Default::default()
         }),
         shader: bevy::asset::load_embedded_asset!(asset_server.as_ref(), "mip_blit.wgsl"),
+        fullscreen: fullscreen.clone(),
     });
 }
 
@@ -129,11 +133,7 @@ impl SpecializedRenderPipeline for LayerBlitPipeline {
 
     fn specialize(&self, key: Self::Key) -> RenderPipelineDescriptor {
         RenderPipelineDescriptor {
-            vertex: VertexState {
-                shader: self.shader.clone(),
-                entry_point: Some("vertex".into()),
-                ..Default::default()
-            },
+            vertex: self.fullscreen.to_vertex_state(),
             fragment: Some(FragmentState {
                 shader: self.shader.clone(),
                 entry_point: Some("fragment".into()),

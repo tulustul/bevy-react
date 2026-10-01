@@ -2,7 +2,7 @@
 //
 // A filter pass is a fullscreen pass between a layer's offscreen capture and
 // its composite quad: bind the previous texture (the capture, or the prior
-// pass's output) at group 0, draw 3 vertices with `vertex`, and write the
+// pass's output) at group 0, draw bevy's fullscreen triangle, and write the
 // filtered image with a `@fragment fn fragment` from one of the filter
 // shaders (`color_matrix.wgsl`, `blur.wgsl`). The entry point must be named
 // `fragment` — `filter` is a WGSL reserved word.
@@ -91,21 +91,12 @@ struct FilterUniforms {
     params: array<vec4<f32>, 8>,
 }
 
+// The fragment input from the vertex stage, bevy's fullscreen triangle
+// (`FullscreenShader`; same interface as its `FullscreenVertexOutput`).
 struct FullscreenVertexOutput {
     @builtin(position) position: vec4<f32>,
     // 0..1 across the pass target, y down (uv (0,0) = target top-left).
     @location(0) uv: vec2<f32>,
-}
-
-// Single fullscreen triangle: draw 3 vertices, no vertex buffer. The triangle
-// overshoots the target ((-1,1) (3,1) (-1,-3) in clip space) so its clipped
-// interior covers it exactly, with uv mapping 0..1 across it.
-@vertex
-fn vertex(@builtin(vertex_index) vertex_index: u32) -> FullscreenVertexOutput {
-    var out: FullscreenVertexOutput;
-    out.uv = vec2<f32>(f32((vertex_index << 1u) & 2u), f32(vertex_index & 2u));
-    out.position = vec4<f32>(out.uv * vec2<f32>(2.0, -2.0) + vec2<f32>(-1.0, 1.0), 0.0, 1.0);
-    return out;
 }
 
 // Premultiplied -> straight alpha. A fully transparent texel has no color to
