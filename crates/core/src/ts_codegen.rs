@@ -23,7 +23,9 @@ use std::collections::{BTreeMap, HashSet};
 use std::fmt::Write as _;
 use std::path::Path;
 
+use bevy::app::App;
 use bevy::ecs::world::World;
+use std::collections::HashMap;
 use ts_rs::{TS, TypeVisitor};
 
 use crate::element::ts::render_app_element_augmentation;
@@ -53,63 +55,42 @@ pub(crate) fn render_typescript(
     ext: &ExtRegistry,
 ) -> String {
     let styles = ext.styles();
+    // The bindings `ReactUiPlugin` always registers are seeded from a scratch
+    // `App`: the exporter runs on a bare one (`register_bindings` only).
+    // Built-in message/request/event names are reserved — a colliding app
+    // entry is dropped. A custom filter claiming a built-in name *wins*,
+    // family bit included — the registry's runtime rule (a custom shadows a
+    // built-in in either registration order).
+    let mut builtin_app = App::new();
+    crate::plugin::register_builtin_bindings(&mut builtin_app);
+    let builtin = builtin_app.world();
+    let builtin_messages = builtin.resource::<ReactRegistry>();
+    let builtin_requests = builtin.resource::<ReactRequestRegistry>();
+    let builtin_events = builtin.resource::<ReactEventRegistry>();
+    let builtin_filters = builtin.resource::<FilterRegistry>();
+    let messages = with_reserved(&builtin_messages.handlers, &messages.handlers);
+    let requests = with_reserved(&builtin_requests.handlers, &requests.handlers);
+    let events = with_reserved(&builtin_events.handlers, &events.handlers);
+    let filters = with_reserved(&filters.entries, &builtin_filters.entries);
+
     // One shared collector across all four registries: a type referenced by more
     // than one (e.g. a struct used as both a message and a response) is declared once.
     let mut collector = TsCollector::default();
-    for reg in messages.handlers.values() {
+    for reg in messages.values() {
         (reg.ts_collect)(&mut collector);
     }
-    for reg in requests.handlers.values() {
+    for reg in requests.values() {
         (reg.ts_collect)(&mut collector);
     }
-    for reg in events.handlers.values() {
+    for reg in events.values() {
         (reg.ts_collect)(&mut collector);
     }
-    // Built-in framework events: always seeded so `bevy.on("keyDown", …)` is typed
-    // in every app with no per-app registration (see `crate::keyboard` and
-    // `crate::window`). `Resize` pulls in `WindowSize`, which the built-in
-    // `window.size` request row below references too.
-    collector.add::<crate::keyboard::KeyDown>();
-    collector.add::<crate::keyboard::KeyUp>();
-    collector.add::<crate::window::Resize>();
-    // The gamepad built-ins (see `crate::gamepad`): three events and the two
-    // rumble messages. Payload/union deps (`GamepadConnectedData`,
-    // `GamepadButtonName`, …) are collected transitively.
-    collector.add::<crate::gamepad::GamepadConnected>();
-    collector.add::<crate::gamepad::GamepadDisconnected>();
-    collector.add::<crate::gamepad::GamepadInputEvent>();
-    collector.add::<crate::gamepad::GamepadRumble>();
-    collector.add::<crate::gamepad::GamepadStopRumble>();
-
-    // `gamepad.rumble`/`gamepad.stopRumble` are reserved for the built-in
-    // rumble messages (see `crate::gamepad`); drop any app message that
-    // collides, then append the built-ins (always present — the plugin
-    // registers their observers). Sorted name lists keep the maps and proxy
-    // stable across runs.
-    const BUILTIN_MESSAGES: [&str; 2] = ["gamepad.rumble", "gamepad.stopRumble"];
-    let mut message_names: Vec<(&str, String)> = messages
-        .handlers
+    // Sorted name lists keep the maps and proxy stable across runs.
+    let message_names: Vec<(&str, String)> = messages
         .iter()
         .map(|(name, reg)| (*name, (reg.ts_name)()))
-        .filter(|(name, _)| !BUILTIN_MESSAGES.contains(name))
         .collect();
-    message_names.push((
-        "gamepad.rumble",
-        <crate::gamepad::GamepadRumble as TS>::name(),
-    ));
-    message_names.push((
-        "gamepad.stopRumble",
-        <crate::gamepad::GamepadStopRumble as TS>::name(),
-    ));
-    message_names.sort();
-
-    // `window.size`/`gamepad.getAll` are reserved for the built-in requests
-    // (see `crate::window` / `crate::gamepad`); drop any app request that
-    // collides, then append the built-ins (always present — the plugin
-    // registers their handlers).
-    const BUILTIN_REQUESTS: [&str; 2] = ["window.size", "gamepad.getAll"];
-    let mut request_rows: Vec<RequestRow> = requests
-        .handlers
+    let request_rows: Vec<RequestRow> = requests
         .iter()
         .map(|(name, reg)| RequestRow {
             name,
@@ -117,70 +98,18 @@ pub(crate) fn render_typescript(
             response_ts: (reg.ts_response_name)(),
             void: (reg.request_is_void)(),
         })
-        .filter(|row| !BUILTIN_REQUESTS.contains(&row.name))
         .collect();
-    request_rows.push(RequestRow {
-        name: "window.size",
-        request_ts: <crate::window::WindowSizeGet as TS>::name(),
-        response_ts: <crate::window::WindowSize as TS>::name(),
-        void: true,
-    });
-    request_rows.push(RequestRow {
-        name: "gamepad.getAll",
-        request_ts: <crate::gamepad::GamepadGetAll as TS>::name(),
-        response_ts: <Vec<crate::gamepad::GamepadConnectedData> as TS>::name(),
-        void: true,
-    });
-    request_rows.sort_by(|a, b| a.name.cmp(b.name));
-
-    // The keyboard/resize/gamepad names are reserved for the built-in events;
-    // drop any app event that collides so the generated interface can't get a
-    // duplicate key, then append the built-ins (always present).
-    const BUILTIN_EVENTS: [&str; 6] = [
-        "keyDown",
-        "keyUp",
-        "resize",
-        "gamepadConnected",
-        "gamepadDisconnected",
-        "gamepadInput",
-    ];
-    let mut event_names: Vec<(&str, String)> = events
-        .handlers
+    let event_names: Vec<(&str, String)> = events
         .iter()
         .map(|(name, reg)| (*name, (reg.ts_name)()))
-        .filter(|(name, _)| !BUILTIN_EVENTS.contains(name))
         .collect();
-    event_names.push(("keyDown", <crate::keyboard::KeyDown as TS>::name()));
-    event_names.push(("keyUp", <crate::keyboard::KeyUp as TS>::name()));
-    event_names.push(("resize", <crate::window::Resize as TS>::name()));
-    event_names.push((
-        "gamepadConnected",
-        <crate::gamepad::GamepadConnected as TS>::name(),
-    ));
-    event_names.push((
-        "gamepadDisconnected",
-        <crate::gamepad::GamepadDisconnected as TS>::name(),
-    ));
-    event_names.push((
-        "gamepadInput",
-        <crate::gamepad::GamepadInputEvent as TS>::name(),
-    ));
-    event_names.sort();
 
-    // Filters: app-registered customs plus the thirteen built-ins, seeded
-    // here — like the built-in events/requests above — because the exporter
-    // runs on a bare `App` (`register_bindings` only) while `ReactUiPlugin`
-    // always registers the built-ins at runtime. Unlike the reserved event
-    // names, a custom filter claiming a built-in name *wins* — including its
-    // family bit — mirroring the registry's runtime rule (a custom shadows
-    // a built-in in either registration order). The two families split into two
-    // interfaces: regular filters (`filter`/`backdropFilter` chains) into
-    // `BevyFilters`, morph filters (`morphFilter`) into `BevyMorphFilters`.
-    let mut builtin_filters = FilterRegistry::default();
-    builtin_filters.register_builtins();
+    // The two filter families split into two interfaces: regular filters
+    // (`filter`/`backdropFilter` chains) into `BevyFilters`, morph filters
+    // (`morphFilter`) into `BevyMorphFilters`.
     let mut filter_rows: Vec<(&str, String)> = Vec::new();
     let mut morph_rows: Vec<(&str, String)> = Vec::new();
-    for (name, reg) in &filters.entries {
+    for (name, reg) in &filters {
         (reg.ts_collect)(&mut collector);
         let rows = if reg.is_morph {
             &mut morph_rows
@@ -189,19 +118,6 @@ pub(crate) fn render_typescript(
         };
         rows.push((*name, (reg.ts_name)()));
     }
-    for (name, reg) in &builtin_filters.entries {
-        if !filters.entries.contains_key(name) {
-            (reg.ts_collect)(&mut collector);
-            let rows = if reg.is_morph {
-                &mut morph_rows
-            } else {
-                &mut filter_rows
-            };
-            rows.push((*name, (reg.ts_name)()));
-        }
-    }
-    filter_rows.sort();
-    morph_rows.sort();
 
     // The app's own style properties (every registered one the core doesn't
     // declare — its `BevyStyle` is the package's generated file).
@@ -598,6 +514,17 @@ pub(crate) fn json_key(name: &str) -> String {
 /// to an empty one so the module is still valid (the built-in filters are seeded
 /// by `render_typescript` regardless). Backs
 /// [`ReactAppExt::export_react_typescript`](crate::ReactAppExt::export_react_typescript).
+/// The entries of `first` plus those of `second` whose names `first` lacks,
+/// sorted by name (`first` wins a name both claim).
+fn with_reserved<'a, R>(
+    first: &'a HashMap<&'static str, R>,
+    second: &'a HashMap<&'static str, R>,
+) -> BTreeMap<&'static str, &'a R> {
+    let mut merged: BTreeMap<_, _> = second.iter().map(|(name, reg)| (*name, reg)).collect();
+    merged.extend(first.iter().map(|(name, reg)| (*name, reg)));
+    merged
+}
+
 pub(crate) fn export(world: &World, path: &Path) -> std::io::Result<()> {
     let empty_messages = ReactRegistry::default();
     let empty_requests = ReactRequestRegistry::default();

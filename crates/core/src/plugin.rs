@@ -361,6 +361,24 @@ impl Default for ReactUiPlugin {
     }
 }
 
+/// Register the bindings `ReactUiPlugin` always provides — the built-in
+/// messages, requests, events, and filters — as payload types (the plugin
+/// attaches their observers and systems itself). The TypeScript exporter
+/// seeds its view the same way, since it runs on a bare `App` with no plugin.
+pub(crate) fn register_builtin_bindings(app: &mut App) {
+    app.add_react_message::<crate::gamepad::GamepadRumble>()
+        .add_react_message::<crate::gamepad::GamepadStopRumble>()
+        .add_react_request::<crate::window::WindowSizeGet>()
+        .add_react_request::<crate::gamepad::GamepadGetAll>()
+        .add_react_event::<crate::keyboard::KeyDown>()
+        .add_react_event::<crate::keyboard::KeyUp>()
+        .add_react_event::<crate::window::Resize>()
+        .add_react_event::<crate::gamepad::GamepadConnected>()
+        .add_react_event::<crate::gamepad::GamepadDisconnected>()
+        .add_react_event::<crate::gamepad::GamepadInputEvent>();
+    crate::filters::register_builtin_filters(app);
+}
+
 impl Plugin for ReactUiPlugin {
     /// Every plugin has built: snapshot the feature registry for the
     /// decoding host (see [`crate::ext::ExtRegistrySlot`]).
@@ -816,10 +834,11 @@ impl Plugin for ReactUiPlugin {
             ),
         );
 
-        // The built-in `filter` registry (blur + the color-matrix ops), beside
-        // the other name-keyed registries above. Registration is
-        // `AssetServer`-free — shaders load lazily inside each entry's resolve.
-        crate::filters::register_builtin_filters(app);
+        // The built-in bindings: the built-in messages', requests', and
+        // events' payload types, and the `filter` registry's built-ins (blur,
+        // the color-matrix ops, …) — `AssetServer`-free, shaders load lazily
+        // inside each entry's resolve.
+        register_builtin_bindings(app);
 
         // The built-in `"resize"` event + `bevy.window.size()` request (see
         // `crate::window`). A separate `add_systems` call — the Update tuple
@@ -1050,15 +1069,14 @@ impl Plugin for ReactUiPlugin {
             PostUpdate,
             crate::svg::stamp_svg_measures.in_set(crate::ext::MeasureStampSet),
         );
-        app.add_react_request_handler(crate::window::handle_window_size_request);
-
-        // The built-in rumble messages (`bevy.gamepad.rumble` / `.stopRumble`,
-        // see `crate::gamepad`): registers the payloads in `ReactRegistry` and
-        // attaches the observers in one call each. `bevy.gamepad.getAll()` is
-        // the pull companion to `gamepadConnected` for late-mounted components.
-        app.add_react_handler(crate::gamepad::on_rumble);
-        app.add_react_handler(crate::gamepad::on_stop_rumble);
-        app.add_react_request_handler(crate::gamepad::handle_gamepad_get_all);
+        // The built-in requests and rumble messages (their payload types are
+        // registered by `register_builtin_bindings`). `bevy.gamepad.getAll()`
+        // is the pull companion to `gamepadConnected` for late-mounted
+        // components.
+        app.add_observer(crate::window::handle_window_size_request);
+        app.add_observer(crate::gamepad::on_rumble);
+        app.add_observer(crate::gamepad::on_stop_rumble);
+        app.add_observer(crate::gamepad::handle_gamepad_get_all);
 
         // Frame-start stamp for the devtools frame-wait / pre-apply split
         // (native only — no usable `Instant::now` on wasm). `First`: before
