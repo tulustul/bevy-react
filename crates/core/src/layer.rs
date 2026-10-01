@@ -420,7 +420,7 @@ pub fn evaluate_layer_promotions(
             None => PromotionReasons::default(),
         };
         let was_promoted = bridge.promoted_layers.contains(&id);
-        if !reasons.is_empty() {
+        let flip = if !reasons.is_empty() {
             // The static group alpha; the style/animation/transition appliers
             // own per-frame updates from here on.
             let alpha = bridge
@@ -463,34 +463,9 @@ pub fn evaluate_layer_promotions(
             row.reasons = reasons;
             row.group_alpha = alpha;
             row.cache_policy = cache_policy;
-            if !was_promoted {
-                if let Some(props) = bridge.props_cache.get(&id) {
-                    // Promote flip: colors were folded while unpromoted — bake
-                    // the unfolded values + group alpha now, in one shot.
-                    crate::reconcile::reapply_opacity_outputs(
-                        &mut commands,
-                        entity,
-                        props,
-                        &crate::style::WriterCtx {
-                            promoted: true,
-                            fresh: false,
-                            kind: &kind,
-                            flags: element,
-                            assets: &assets,
-                            fonts: &fonts,
-                            styles: ext.styles(),
-                            element: ext.element_or_fallback(&kind),
-                            attrs: &props.attrs,
-                            events: crate::element::Attrs::empty(),
-                            id,
-                        },
-                        &mut style_variants,
-                    );
-                }
-                if style_variants.get(entity).is_err() {
-                    reapply_text_fold(&mut commands, &mut bridge, &fonts, id, entity, true);
-                }
-            }
+            // Promote flip: colors were folded while unpromoted — bake the
+            // unfolded values + group alpha now, in one shot.
+            (!was_promoted).then_some(true)
         } else if was_promoted {
             // The resolved chains are promotion-scoped state; `FilterInput`/
             // `BackdropInput` are NOT removed here (they mirror the style,
@@ -508,14 +483,19 @@ pub fn evaluate_layer_promotions(
             )>();
             bridge.promoted_layers.remove(&id);
             registry.layers.remove(&id);
+            // Demote flip: resume the per-node fold with baked values.
+            Some(false)
+        } else {
+            None
+        };
+        if let Some(promoted) = flip {
             if let Some(props) = bridge.props_cache.get(&id) {
-                // Demote flip: resume the per-node fold with baked values.
                 crate::reconcile::reapply_opacity_outputs(
                     &mut commands,
                     entity,
                     props,
                     &crate::style::WriterCtx {
-                        promoted: false,
+                        promoted,
                         fresh: false,
                         kind: &kind,
                         flags: element,
@@ -531,7 +511,7 @@ pub fn evaluate_layer_promotions(
                 );
             }
             if style_variants.get(entity).is_err() {
-                reapply_text_fold(&mut commands, &mut bridge, &fonts, id, entity, false);
+                reapply_text_fold(&mut commands, &mut bridge, &fonts, id, entity, promoted);
             }
         }
     }

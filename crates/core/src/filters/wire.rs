@@ -79,7 +79,7 @@ fn chain_from_value(value: Value) -> FilterChain {
 /// Decode one `{"name", "params"}` entry, consuming it — the accept path moves
 /// `name`/`params` out instead of cloning. An error hands back the most
 /// precise offending value alongside the message, for the decode-warning sink.
-fn filter_use(value: Value) -> Result<FilterUse, (Value, String)> {
+pub(super) fn filter_use(value: Value) -> Result<FilterUse, (Value, String)> {
     let mut obj = match value {
         Value::Object(obj) => obj,
         other => {

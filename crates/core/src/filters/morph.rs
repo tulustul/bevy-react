@@ -15,7 +15,7 @@
 
 use bevy::prelude::*;
 use serde::{Deserialize, Deserializer};
-use serde_json::{Map, Value};
+use serde_json::Value;
 
 use super::FilterUse;
 use super::registry::ResolvedFilterPass;
@@ -73,37 +73,14 @@ fn morph_from_value(value: Value) -> Option<MorphFilter> {
             return None;
         }
     };
-    let name = match obj.remove("name") {
-        Some(Value::String(name)) => name,
-        Some(other) => {
-            warn_decode(
-                &other,
-                &format!("morphFilter name must be a string, got {other}"),
-            );
-            return None;
+    // The rest is a regular filter use (`name` + `params`).
+    match super::wire::filter_use(Value::Object(obj)) {
+        Ok(filter) => Some(MorphFilter { key, filter }),
+        Err((value, message)) => {
+            warn_decode(&value, &format!("morphFilter: {message}"));
+            None
         }
-        None => {
-            let entry = Value::Object(obj);
-            warn_decode(&entry, &format!("morphFilter {entry} is missing \"name\""));
-            return None;
-        }
-    };
-    let params = match obj.remove("params") {
-        // Same null-leniency as the filter chain: `params: null` == absent.
-        None | Some(Value::Null) => Map::new(),
-        Some(Value::Object(params)) => params,
-        Some(other) => {
-            warn_decode(
-                &other,
-                &format!("morphFilter params must be an object, got {other}"),
-            );
-            return None;
-        }
-    };
-    Some(MorphFilter {
-        key,
-        filter: FilterUse { name, params },
-    })
+    }
 }
 
 fn warn_decode(value: &Value, message: &str) {
