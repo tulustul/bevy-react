@@ -8,7 +8,7 @@ use bevy::math::{UVec2, Vec2};
 use bevy::ui::widget::ImageMeasure;
 use bevy::ui::{ContentSize, NodeMeasure, VisualBox};
 
-pub use asset::{SvgAssetLoader, SvgDocument, SvgParseError, parse_svg_bytes};
+pub use asset::{SvgAssetLoader, SvgDocument, parse_svg_bytes};
 pub(crate) use image::{ensure_svg_image, is_svg_src, warn_ignored_attrs};
 pub use raster::{rasterize_document, stamp_svg_measures, update_svg_surfaces};
 

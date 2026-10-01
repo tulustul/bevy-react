@@ -21,30 +21,14 @@ pub struct SvgDocument {
     pub size: Vec2,
 }
 
-/// The document failed to parse as SVG. Wraps [`usvg::Error`], which already
-/// covers non-UTF-8 input, malformed gzip, and XML parse failures —
-/// [`usvg::Tree::from_data`] handles all of those itself.
-#[derive(Debug)]
-pub struct SvgParseError(pub usvg::Error);
-
-impl std::fmt::Display for SvgParseError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "invalid SVG: {}", self.0)
-    }
-}
-
-impl std::error::Error for SvgParseError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        Some(&self.0)
-    }
-}
-
 /// Parse raw SVG bytes (plain or gzip-compressed) into an [`SvgDocument`].
 /// All parsing logic lives here; the asset loader only feeds it file bytes.
-pub fn parse_svg_bytes(bytes: &[u8]) -> Result<SvgDocument, SvgParseError> {
+/// [`usvg::Tree::from_data`] covers non-UTF-8 input, malformed gzip, and XML
+/// parse failures itself.
+pub fn parse_svg_bytes(bytes: &[u8]) -> Result<SvgDocument, usvg::Error> {
     let mut opts = usvg::Options::default();
     super::text::configure_text_options(&mut opts);
-    let tree = usvg::Tree::from_data(bytes, &opts).map_err(SvgParseError)?;
+    let tree = usvg::Tree::from_data(bytes, &opts)?;
     let size = tree.size();
     Ok(SvgDocument {
         size: Vec2::new(size.width(), size.height()),
