@@ -13,21 +13,13 @@ use bevy::render::render_resource::TextureFormat;
 use crate::element::RSurface;
 use crate::pointer::SurfacePointer;
 
-/// Largest surface dimension we allocate, in pixels — a guard against a typo
-/// asking for an enormous texture.
-const MAX_DIM: u32 = 4096;
-
-/// How often a surface's UI camera renders into its texture.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum RenderMode {
-    /// The camera renders every frame a [`SurfacePointer`] mesh displaying the
-    /// surface is visible (animated or interactive UI — the default); with no
-    /// tagged mesh it renders every frame. See [`drive_surfaces`].
-    Live,
-    /// The camera renders once when the surface is registered or
-    /// [`invalidate`](Surfaces::invalidate)d, then freezes (static panels).
-    Snapshot,
-}
+/// How often a surface's UI camera renders into its texture — the portal's
+/// render modes: `Live` renders every frame a [`SurfacePointer`] mesh
+/// displaying the surface is visible (every frame with no tagged mesh — see
+/// [`drive_surfaces`]); `Snapshot` renders once when the surface is
+/// registered or [`invalidate`](Surfaces::invalidate)d, then freezes (static
+/// panels).
+pub use bevy_react_core::render_target::RenderMode;
 
 /// Parameters for [`Surfaces::create`].
 #[derive(Clone, Copy, Debug)]
@@ -84,7 +76,10 @@ impl Surfaces {
         name: impl Into<String>,
         spec: SurfaceSpec,
     ) -> Handle<Image> {
-        let size = spec.size.max(UVec2::ONE).min(UVec2::splat(MAX_DIM));
+        let size = spec
+            .size
+            .max(UVec2::ONE)
+            .min(UVec2::splat(bevy_react_core::raster::MAX_DIM));
         let image = Image::new_target_texture(size.x, size.y, TextureFormat::Rgba8UnormSrgb, None);
         let handle = images.add(image);
         self.entries.insert(
