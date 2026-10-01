@@ -86,10 +86,7 @@ impl ConsoleRing {
     pub fn push(&mut self, time_ms: u64, source: Source, level: Level, message: &str) {
         // Truncate on a char boundary; mark the cut so a capped stack trace
         // doesn't read as complete.
-        let mut end = message.len().min(MESSAGE_CAP);
-        while !message.is_char_boundary(end) {
-            end -= 1;
-        }
+        let end = message.floor_char_boundary(MESSAGE_CAP);
         let mut msg = message[..end].to_owned();
         if end < message.len() {
             msg.push('…');
