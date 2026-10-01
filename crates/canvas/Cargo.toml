@@ -17,7 +17,6 @@ path = "src/lib.rs"
 [dependencies]
 # Exactly what the code references (see the core manifest).
 bevy = { workspace = true, features = ["bevy_ui", "bevy_image", "bevy_color"] }
-tracing = { workspace = true }
 bevy_react_core = { workspace = true }
 serde = { workspace = true }
 tiny-skia = { workspace = true }

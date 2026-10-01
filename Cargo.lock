@@ -1357,7 +1357,6 @@ dependencies = [
  "serde",
  "serde_json",
  "tiny-skia 0.12.0",
- "tracing",
  "ts-rs",
 ]
 
@@ -1412,7 +1411,6 @@ dependencies = [
  "bevy_react_core",
  "crossbeam-channel",
  "serde_json",
- "tracing",
 ]
 
 [[package]]
@@ -1423,7 +1421,6 @@ dependencies = [
  "bevy_react_core",
  "crossbeam-channel",
  "serde_json",
- "tracing",
 ]
 
 [[package]]

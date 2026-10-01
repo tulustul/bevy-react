@@ -75,13 +75,7 @@ impl Plugin for AnchorPlugin {
     }
 
     fn finish(&self, app: &mut App) {
-        if !app.is_plugin_added::<bevy_react_core::ReactUiPlugin>() {
-            tracing::warn!(
-                target: "bevy_react",
-                "bevy_react_anchor::AnchorPlugin is added but ReactUiPlugin is not: \
-                 the <anchor> element has nothing to mount into"
-            );
-        }
+        bevy_react_core::ext::warn_without_core::<Self>(app, "anchor");
     }
 }
 

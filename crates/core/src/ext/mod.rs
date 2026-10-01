@@ -30,6 +30,19 @@
 
 use bevy::prelude::*;
 
+/// A feature plugin's `finish` guard: warn when `ReactUiPlugin` is missing,
+/// so the feature's `<element>` has nothing to mount into.
+pub fn warn_without_core<P: Plugin>(app: &App, element: &str) {
+    if !app.is_plugin_added::<crate::ReactUiPlugin>() {
+        tracing::warn!(
+            target: "bevy_react",
+            "{} is added but ReactUiPlugin is not: the <{element}> element has \
+             nothing to mount into",
+            std::any::type_name::<P>()
+        );
+    }
+}
+
 /// The text model an element takes part in.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
 pub enum TextRole {
