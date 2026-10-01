@@ -200,5 +200,5 @@ fn command_and_binding_deserialize() {
     }));
     assert!(bindings.contains(AnimatableProperty::TranslateX));
     assert!(bindings.contains(AnimatableProperty::BackgroundColor));
-    assert!(bindings.has_transform());
+    assert!(bindings.has_stage(crate::animations::props::PropStage::Transform));
 }

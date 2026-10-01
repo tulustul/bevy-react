@@ -343,17 +343,11 @@ impl AnimatedBindings {
         self.0.contains_key(&property)
     }
 
-    /// Whether any binding belongs to the given apply stage — the one
-    /// predicate behind every `has_*` gate (stages come from the property
+    /// Whether any binding belongs to the given apply stage — the gate of
+    /// each applier stage and transition park (stages come from the property
     /// table, `crate::animations::props`).
-    fn has_stage(&self, stage: crate::animations::props::PropStage) -> bool {
+    pub(crate) fn has_stage(&self, stage: crate::animations::props::PropStage) -> bool {
         self.0.keys().any(|p| p.stage() == stage)
-    }
-
-    /// Whether any transform channel is bound (so the orchestrator only writes
-    /// `UiTransform` when something actually drives it).
-    pub fn has_transform(&self) -> bool {
-        self.has_stage(crate::animations::props::PropStage::Transform)
     }
 
     /// Whether any `Node` layout-field binding (width/height/left/top/…) is
@@ -368,39 +362,6 @@ impl AnimatedBindings {
         })
     }
 
-    /// Whether any per-param filter binding ([`AnimatableProperty::FilterParam`])
-    /// is bound — gates the applier's filter stage and, in the transition
-    /// engine, `skip_filter` (any filter binding parks the *whole* whole-value
-    /// filter channel).
-    pub fn has_filter_params(&self) -> bool {
-        self.has_stage(crate::animations::props::PropStage::Filter)
-    }
-
-    /// The backdrop analog of [`Self::has_filter_params`] — gates the
-    /// applier's backdrop stage and the transition engine's `skip_backdrop`.
-    pub fn has_backdrop_params(&self) -> bool {
-        self.has_stage(crate::animations::props::PropStage::Backdrop)
-    }
-
-    /// The morph analog of [`Self::has_filter_params`] — gates the applier's
-    /// morph stage only (morph param bindings park no transition channel:
-    /// the morph channel owns progress, not params).
-    pub fn has_morph_params(&self) -> bool {
-        self.has_stage(crate::animations::props::PropStage::Morph)
-    }
-
-    /// Whether any gradient-leaf binding is bound — gates the applier's
-    /// gradient stage (the per-surface transition parks ride `park()`).
-    pub fn has_gradient_params(&self) -> bool {
-        self.has_stage(crate::animations::props::PropStage::Gradient)
-    }
-
-    /// Whether any feature-owned binding ([`AnimatableProperty::Ext`]) is
-    /// bound — gates the applier's publish stage.
-    pub fn has_ext(&self) -> bool {
-        self.has_stage(crate::animations::props::PropStage::Ext)
-    }
-
     /// Whether any binding of the feature-owned `domain` is bound — a
     /// feature's own coarse park rule (an SVG shape's transition channel
     /// stands down while any of its attrs is bound).
@@ -408,14 +369,6 @@ impl AnimatedBindings {
         self.0
             .keys()
             .any(|p| matches!(p, AnimatableProperty::Ext { domain: d, .. } if *d == domain))
-    }
-
-    /// Whether any `transform3d.<field>` binding is bound — gates the
-    /// applier's transform3d stage and, in the transition engine,
-    /// `skip_transform3d` (any binding parks the whole channel group: the
-    /// stage rebuilds the full params struct).
-    pub fn has_transform3d(&self) -> bool {
-        self.has_stage(crate::animations::props::PropStage::Transform3d)
     }
 
     /// Iterate the bound (property, binding) pairs in property order.

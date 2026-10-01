@@ -50,7 +50,7 @@ pub(crate) fn apply_animated(
         Some(bindings) => {
             // The engine's publish slot for feature-owned bindings rides
             // the stamp (see `crate::ext::DrivenExtValues`).
-            if bindings.has_ext() {
+            if bindings.has_stage(crate::animations::props::PropStage::Ext) {
                 ec.insert_if_new(crate::ext::DrivenExtValues::default());
             } else if !fresh {
                 ec.remove::<crate::ext::DrivenExtValues>();

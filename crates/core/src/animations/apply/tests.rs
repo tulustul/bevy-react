@@ -459,8 +459,11 @@ fn transform3d_bindings_drive_layer_params() {
     let bindings = style_bindings(serde_json::json!({
         "transform3d": { "rotateY": { "animated": { "id": 1 } } },
     }));
-    assert!(bindings.has_transform3d());
-    assert!(!bindings.has_transform(), "distinct from the 2D group");
+    assert!(bindings.has_stage(crate::animations::props::PropStage::Transform3d));
+    assert!(
+        !bindings.has_stage(crate::animations::props::PropStage::Transform),
+        "distinct from the 2D group"
+    );
 
     let static_params = Transform3d {
         perspective: Some(crate::protocol::animatable::Animatable::Static(500.0)),
@@ -516,8 +519,8 @@ fn bindings_with_filter_params_iterate_deterministically() {
         "opacity": { "animated": { "id": 3 } },
         "transform": { "scale": { "animated": { "id": 4 } } },
     }));
-    assert!(bindings.has_filter_params());
-    assert!(bindings.has_transform());
+    assert!(bindings.has_stage(crate::animations::props::PropStage::Filter));
+    assert!(bindings.has_stage(crate::animations::props::PropStage::Transform));
     let keys: Vec<_> = bindings.iter().map(|(p, _)| p.clone()).collect();
     assert_eq!(
         keys,

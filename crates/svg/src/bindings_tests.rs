@@ -78,7 +78,6 @@ fn derives_shape_attr_bindings_by_wire_name() {
     );
     assert_eq!(b.get(shape_attr("r")), None, "static");
     assert!(b.has_ext_domain("shape"), "the gate sees a bound attr");
-    assert!(!b.has_filter_params(), "no cross-talk with other gates");
 
     assert!(
         app.world()

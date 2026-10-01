@@ -502,7 +502,7 @@ mod tests {
             None,
             "static morph param not derived"
         );
-        assert!(b.has_morph_params());
+        assert!(b.has_stage(crate::animations::props::PropStage::Morph));
         assert!(
             b.parked(crate::animations::props::ChannelId::Filter),
             "the filter binding parks the filter channel"
@@ -679,7 +679,7 @@ mod tests {
 
     /// Conic `start` shares the `Angle` leaf; a conic stop's `angle` reuses
     /// `StopPosition` (it IS the stop's position, angular); an `Ellipse` shape
-    /// derives both radii; and `has_gradient_params()` tracks exactly the
+    /// derives both radii; and the gradient stage gate tracks exactly the
     /// gradient domain (false for a filter-only binding style).
     #[test]
     fn derives_conic_and_ellipse_gradient_leaves() {
@@ -719,14 +719,17 @@ mod tests {
             index: 0,
             leaf: L::ShapeY
         }));
-        assert!(b.has_gradient_params(), "the gate sees gradient bindings");
+        assert!(
+            b.has_stage(crate::animations::props::PropStage::Gradient),
+            "the gate sees gradient bindings"
+        );
 
         let filter_only = derive_bindings(Some(&style(serde_json::json!({
             "filter": { "name": "blur", "params": { "radius": { "animated": { "id": 9 } } } },
         }))))
         .expect("derived");
         assert!(
-            !filter_only.has_gradient_params(),
+            !filter_only.has_stage(crate::animations::props::PropStage::Gradient),
             "no cross-talk with the filter domain"
         );
     }

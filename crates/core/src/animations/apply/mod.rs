@@ -402,7 +402,7 @@ fn stage_transform(
     t: &mut AnimTargetsItem,
 ) {
     use AnimatableProperty as P;
-    if !b.has_transform() {
+    if !b.has_stage(props::PropStage::Transform) {
         return;
     }
     let new = build_ui_transform(
@@ -435,7 +435,7 @@ fn stage_transform(
 /// scalars. No dirt push — the matrix sync detects the change.
 fn stage_transform3d(b: &AnimatedBindings, values: &SharedValues, t: &mut AnimTargetsItem) {
     use AnimatableProperty as P;
-    if !b.has_transform3d() {
+    if !b.has_stage(props::PropStage::Transform3d) {
         return;
     }
     let Some(t3d) = &mut t.transform3d else {
@@ -531,9 +531,9 @@ fn stage_filter_params(
     dirt: &mut crate::layer::LayerContentDirt,
     t: &mut AnimTargetsItem,
 ) {
-    let has_filter = b.has_filter_params();
-    let has_backdrop = b.has_backdrop_params();
-    let has_morph = b.has_morph_params();
+    let has_filter = b.has_stage(props::PropStage::Filter);
+    let has_backdrop = b.has_stage(props::PropStage::Backdrop);
+    let has_morph = b.has_stage(props::PropStage::Morph);
     if !(has_filter || has_backdrop || has_morph) {
         return;
     }
@@ -670,7 +670,7 @@ fn stage_gradient_params(
     dirt: &mut crate::layer::LayerContentDirt,
     t: &mut AnimTargetsItem,
 ) {
-    if !b.has_gradient_params() {
+    if !b.has_stage(props::PropStage::Gradient) {
         return;
     }
     gradient_bound.push(entity);
