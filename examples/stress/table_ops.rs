@@ -678,7 +678,7 @@ All timings are the **median (p50)** over the samples, in **milliseconds**.
 
 Nesting: `Total = Pre-apply (⊇ JS ⊇ Flush) + Translate + Bevy (≈ Command + Layout)`.
 
-For the surgical (`*1`) ops, **JS**/**Flush** are sub-millisecond and the isolate's clock may only have 1 ms resolution (`Date.now()`), so those two columns can read as 0/1 ms noise — the Rust-side columns carry the signal. Bump `--iterations` for stable surgical p50s.
+For the surgical (`*1`) ops, **JS**/**Flush** are sub-millisecond — the Rust-side columns carry the signal. Bump `--iterations` for stable surgical p50s.
 
 ";
 

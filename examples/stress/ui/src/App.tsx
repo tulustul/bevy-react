@@ -3,12 +3,9 @@ import { BevyStyle } from "bevy-react/jsx";
 import { emit, on, type BenchOp } from "./bevy";
 import { buildData, type Row } from "./data";
 
-// Prefer a high-resolution clock when the runtime provides one; the embedded V8
-// isolate may only have `Date.now()` (1ms resolution).
-const now: () => number =
-  typeof performance !== "undefined" && typeof performance.now === "function"
-    ? () => performance.now()
-    : () => Date.now();
+// High-resolution: the core prelude backs `performance.now` with a Rust
+// `Instant` in the embedded isolate (browsers have their own).
+const now = () => performance.now();
 
 // Interactive control buttons. `n` only matters for `Create` (the table scale);
 // the capture driver owns its own sequence and sends `n` with every step.
