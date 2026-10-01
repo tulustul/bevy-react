@@ -97,7 +97,7 @@ impl Transform3dChannels {
             ($prop:tt, $other:tt) => {};
         }
         macro_rules! walk {
-            ($(($prop:tt, $kind:ident, $acc:tt, $write:tt, $stage:ident, $park:ident),)*) => {
+            ($(($prop:tt, $acc:tt, $write:tt, $stage:ident, $park:ident),)*) => {
                 $(seed!($prop, $acc);)*
             };
         }
@@ -160,7 +160,7 @@ impl Transform3dChannels {
             ($prop:tt, $other:tt) => {};
         }
         macro_rules! walk {
-            ($(($prop:tt, $kind:ident, $acc:tt, $write:tt, $stage:ident, $park:ident),)*) => {
+            ($(($prop:tt, $acc:tt, $write:tt, $stage:ident, $park:ident),)*) => {
                 $(drive_field!($prop, $acc);)*
             };
         }

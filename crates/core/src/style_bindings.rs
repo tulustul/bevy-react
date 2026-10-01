@@ -259,7 +259,7 @@ pub(crate) fn derive_bindings(style: Option<&Style>) -> Option<AnimatedBindings>
         };
     }
     macro_rules! walk {
-        ($(($prop:tt, $kind:ident, $acc:tt, $write:tt, $stage:ident, $park:ident),)*) => {
+        ($(($prop:tt, $acc:tt, $write:tt, $stage:ident, $park:ident),)*) => {
             $(row!($prop, $acc);)*
         };
     }
@@ -616,7 +616,7 @@ mod tests {
             "a radius binding never owns the rect (layout channel keeps chasing)"
         );
         macro_rules! rows {
-            ($(($prop:tt, $kind:ident, $acc:tt, $write:tt, $stage:ident, $park:ident),)*) => {
+            ($(($prop:tt, $acc:tt, $write:tt, $stage:ident, $park:ident),)*) => {
                 vec![$($prop),*]
             };
         }

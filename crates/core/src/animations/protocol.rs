@@ -300,45 +300,6 @@ pub enum GradientLeaf {
 }
 
 impl AnimatableProperty {
-    /// The kind of value this property animates — picks scalar-vs-color resolution
-    /// in the apply layer. `Rotate` is an `Angle`: the bound value is degrees
-    /// on the wire, resolved as a scalar and converted by the applier.
-    ///
-    /// Static rows generate from the property table
-    /// (`crate::animations::props`); the dynamic domains keep explicit arms.
-    #[allow(unused_parens)]
-    pub fn value_kind(&self) -> ValueKind {
-        use AnimatableProperty as P;
-        use Transform3dField as F;
-        macro_rules! kind_arms {
-            ($(($prop:tt, $kind:ident, $acc:tt, $write:tt, $stage:ident, $park:ident),)*) => {
-                match self {
-                    $($prop => ValueKind::$kind,)*
-                    // Never consulted for the chain params — the applier reads the
-                    // authoritative kind from the resolved chain's `ParamSlot`
-                    // layout (`crate::filters`). A documented fallback, not a
-                    // semantic: the slot decides scalar-vs-color, not this arm.
-                    Self::FilterParam { .. }
-                    | Self::BackdropParam { .. }
-                    | Self::MorphParam { .. } => ValueKind::Scalar,
-                    // Same documented fallback as the chain params above — the
-                    // gradient applier reads each leaf's own kind (color slot,
-                    // px length, degrees, raw hint) from the [`GradientLeaf`],
-                    // not this arm.
-                    Self::BackgroundGradientParam { .. }
-                    | Self::BorderGradientParam { .. } => ValueKind::Scalar,
-                    // Never consulted by the publish stage, which picks scalar
-                    // vs color from the binding itself (an `interpolateColor`
-                    // publishes a color). Scalar, not `Length`: feature values
-                    // are raw wire-unit numbers — no logical→physical px
-                    // rewrite applies (an SVG viewBox scales them at raster).
-                    Self::Ext { .. } => ValueKind::Scalar,
-                }
-            };
-        }
-        crate::animations::props::with_animatable_props!(kind_arms)
-    }
-
     /// Whether this property feeds the `UiTransform` (built from all transform
     /// channels together), so the apply layer can rebuild the transform once.
     /// The channel set is the table's `Transform` stage (`crate::animations::props`).

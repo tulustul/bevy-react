@@ -5,7 +5,7 @@
 //!
 //! Historically the static property list existed in several unsynced copies
 //! (the derivation walker in `crate::style_bindings`, `write_node_value`'s
-//! arms, the `value_kind()` match, the apply-stage skip set). Each copy is now
+//! arms, the apply-stage skip set). Each copy is now
 //! generated from [`with_animatable_props!`]; adding an animatable property is
 //! one enum variant plus one row here, and the exhaustiveness guard below
 //! turns a missing row into a compile error instead of a silently inert
@@ -23,7 +23,7 @@
 //! # Row shape
 //!
 //! ```text
-//! (property, kind, accessor, write-rule, stage, park)
+//! (property, accessor, write-rule, stage, park)
 //! ```
 //!
 //! - **property** — the variant, parenthesized so it rides as one token tree:
@@ -33,8 +33,6 @@
 //!   existing import convention at every consumer); a callback using the
 //!   column in match position needs `#[allow(unused_parens)]` (the parens
 //!   ride into the expanded arm).
-//! - **kind** — the [`ValueKind`] variant name (`Length` / `Scalar` / `Angle`
-//!   / `Color`).
 //! - **accessor** — where the property lives in the merged [`Style`], for the
 //!   binding-derivation walker: `(prop <KEY>)` a top-level
 //!   `Option<Animatable<_>>` field, `(transform <field>)` a field of the
@@ -56,7 +54,8 @@
 //! - **stage** — which apply stage owns the property: `Transform` (stage 1,
 //!   the six `UiTransform` channels), `Transform3d` (stage 1b), `Opacity`
 //!   (stage 3), `Node` / `Color` (stage 2). Stage 2's skip set is exactly
-//!   "stage is neither `Node` nor `Color`". Idents are variant names so
+//!   "stage is neither `Node` nor `Color`", and `Color` rows resolve as
+//!   colors, `Node` rows as scalars. Idents are variant names so
 //!   consumers can splice them into an enum path directly.
 //! - **park** — which transition channel a binding on this property parks
 //!   (imperative bindings win over eased transitions): `Transform` /
@@ -69,7 +68,6 @@
 //! by construction.
 //!
 //! [`AnimatableProperty`]: super::protocol::AnimatableProperty
-//! [`ValueKind`]: super::protocol::ValueKind
 //! [`FilterParam`]: super::protocol::AnimatableProperty::FilterParam
 //! [`BackdropParam`]: super::protocol::AnimatableProperty::BackdropParam
 //! [`MorphParam`]: super::protocol::AnimatableProperty::MorphParam
@@ -83,52 +81,52 @@
 ///
 /// ```text
 /// macro_rules! my_consumer {
-///     ($(($prop:tt, $kind:ident, $acc:tt, $write:tt, $stage:ident, $park:ident),)*) => { … };
+///     ($(($prop:tt, $acc:tt, $write:tt, $stage:ident, $park:ident),)*) => { … };
 /// }
 /// with_animatable_props!(my_consumer);
 /// ```
 macro_rules! with_animatable_props {
     ($cb:ident) => {
         $cb! {
-            ((P::TranslateX), Length, (transform translate_x), (none), Transform, Transform),
-            ((P::TranslateY), Length, (transform translate_y), (none), Transform, Transform),
-            ((P::Scale), Scalar, (transform scale), (none), Transform, Transform),
-            ((P::ScaleX), Scalar, (transform scale_x), (none), Transform, Transform),
-            ((P::ScaleY), Scalar, (transform scale_y), (none), Transform, Transform),
-            ((P::Rotate), Angle, (transform rotate), (none), Transform, Transform),
-            ((P::Opacity), Scalar, (prop OPACITY), (none), Opacity, Opacity),
-            ((P::BackgroundColor), Color, (prop BACKGROUND_COLOR), (color bg), Color, Background),
-            ((P::BorderColor), Color, (prop BORDER_COLOR), (color border), Color, None),
-            ((P::Color), Color, (prop COLOR), (color text), Color, None),
-            ((P::BackgroundImageTint), Color, (bg_tint), (color image_tint), Color, None),
-            ((P::Width), Length, (prop WIDTH), (node width), Node, None),
-            ((P::Height), Length, (prop HEIGHT), (node height), Node, None),
-            ((P::MinWidth), Length, (prop MIN_WIDTH), (node min_width), Node, None),
-            ((P::MinHeight), Length, (prop MIN_HEIGHT), (node min_height), Node, None),
-            ((P::MaxWidth), Length, (prop MAX_WIDTH), (node max_width), Node, None),
-            ((P::MaxHeight), Length, (prop MAX_HEIGHT), (node max_height), Node, None),
-            ((P::Left), Length, (prop LEFT), (node left), Node, None),
-            ((P::Right), Length, (prop RIGHT), (node right), Node, None),
-            ((P::Top), Length, (prop TOP), (node top), Node, None),
-            ((P::Bottom), Length, (prop BOTTOM), (node bottom), Node, None),
-            ((P::FlexBasis), Length, (prop FLEX_BASIS), (node flex_basis), Node, None),
-            ((P::Gap), Length, (prop GAP), (node_gap_both), Node, None),
-            ((P::RowGap), Length, (prop ROW_GAP), (node row_gap), Node, None),
-            ((P::ColumnGap), Length, (prop COLUMN_GAP), (node column_gap), Node, None),
-            ((P::AspectRatio), Scalar, (prop ASPECT_RATIO), (node_aspect), Node, None),
-            ((P::BorderRadius), Length, (prop BORDER_RADIUS), (node_radius_all), Node, BorderRadius),
-            ((P::Transform3d(F::Perspective)), Length, (t3d perspective num 0.0), (none), Transform3d, Transform3d),
-            ((P::Transform3d(F::TranslateX)), Length, (t3d translate_x num 0.0), (none), Transform3d, Transform3d),
-            ((P::Transform3d(F::TranslateY)), Length, (t3d translate_y num 0.0), (none), Transform3d, Transform3d),
-            ((P::Transform3d(F::TranslateZ)), Length, (t3d translate_z num 0.0), (none), Transform3d, Transform3d),
-            ((P::Transform3d(F::RotateX)), Angle, (t3d rotate_x angle), (none), Transform3d, Transform3d),
-            ((P::Transform3d(F::RotateY)), Angle, (t3d rotate_y angle), (none), Transform3d, Transform3d),
-            ((P::Transform3d(F::RotateZ)), Angle, (t3d rotate_z angle), (none), Transform3d, Transform3d),
-            ((P::Transform3d(F::Scale)), Scalar, (t3d scale num 1.0), (none), Transform3d, Transform3d),
-            ((P::Transform3d(F::ScaleX)), Scalar, (t3d scale_x num 1.0), (none), Transform3d, Transform3d),
-            ((P::Transform3d(F::ScaleY)), Scalar, (t3d scale_y num 1.0), (none), Transform3d, Transform3d),
-            ((P::Transform3d(F::OriginX)), Length, (t3d_origin x), (none), Transform3d, Transform3d),
-            ((P::Transform3d(F::OriginY)), Length, (t3d_origin y), (none), Transform3d, Transform3d),
+            ((P::TranslateX), (transform translate_x), (none), Transform, Transform),
+            ((P::TranslateY), (transform translate_y), (none), Transform, Transform),
+            ((P::Scale), (transform scale), (none), Transform, Transform),
+            ((P::ScaleX), (transform scale_x), (none), Transform, Transform),
+            ((P::ScaleY), (transform scale_y), (none), Transform, Transform),
+            ((P::Rotate), (transform rotate), (none), Transform, Transform),
+            ((P::Opacity), (prop OPACITY), (none), Opacity, Opacity),
+            ((P::BackgroundColor), (prop BACKGROUND_COLOR), (color bg), Color, Background),
+            ((P::BorderColor), (prop BORDER_COLOR), (color border), Color, None),
+            ((P::Color), (prop COLOR), (color text), Color, None),
+            ((P::BackgroundImageTint), (bg_tint), (color image_tint), Color, None),
+            ((P::Width), (prop WIDTH), (node width), Node, None),
+            ((P::Height), (prop HEIGHT), (node height), Node, None),
+            ((P::MinWidth), (prop MIN_WIDTH), (node min_width), Node, None),
+            ((P::MinHeight), (prop MIN_HEIGHT), (node min_height), Node, None),
+            ((P::MaxWidth), (prop MAX_WIDTH), (node max_width), Node, None),
+            ((P::MaxHeight), (prop MAX_HEIGHT), (node max_height), Node, None),
+            ((P::Left), (prop LEFT), (node left), Node, None),
+            ((P::Right), (prop RIGHT), (node right), Node, None),
+            ((P::Top), (prop TOP), (node top), Node, None),
+            ((P::Bottom), (prop BOTTOM), (node bottom), Node, None),
+            ((P::FlexBasis), (prop FLEX_BASIS), (node flex_basis), Node, None),
+            ((P::Gap), (prop GAP), (node_gap_both), Node, None),
+            ((P::RowGap), (prop ROW_GAP), (node row_gap), Node, None),
+            ((P::ColumnGap), (prop COLUMN_GAP), (node column_gap), Node, None),
+            ((P::AspectRatio), (prop ASPECT_RATIO), (node_aspect), Node, None),
+            ((P::BorderRadius), (prop BORDER_RADIUS), (node_radius_all), Node, BorderRadius),
+            ((P::Transform3d(F::Perspective)), (t3d perspective num 0.0), (none), Transform3d, Transform3d),
+            ((P::Transform3d(F::TranslateX)), (t3d translate_x num 0.0), (none), Transform3d, Transform3d),
+            ((P::Transform3d(F::TranslateY)), (t3d translate_y num 0.0), (none), Transform3d, Transform3d),
+            ((P::Transform3d(F::TranslateZ)), (t3d translate_z num 0.0), (none), Transform3d, Transform3d),
+            ((P::Transform3d(F::RotateX)), (t3d rotate_x angle), (none), Transform3d, Transform3d),
+            ((P::Transform3d(F::RotateY)), (t3d rotate_y angle), (none), Transform3d, Transform3d),
+            ((P::Transform3d(F::RotateZ)), (t3d rotate_z angle), (none), Transform3d, Transform3d),
+            ((P::Transform3d(F::Scale)), (t3d scale num 1.0), (none), Transform3d, Transform3d),
+            ((P::Transform3d(F::ScaleX)), (t3d scale_x num 1.0), (none), Transform3d, Transform3d),
+            ((P::Transform3d(F::ScaleY)), (t3d scale_y num 1.0), (none), Transform3d, Transform3d),
+            ((P::Transform3d(F::OriginX)), (t3d_origin x), (none), Transform3d, Transform3d),
+            ((P::Transform3d(F::OriginY)), (t3d_origin y), (none), Transform3d, Transform3d),
         }
     };
 }
@@ -238,7 +236,7 @@ impl super::protocol::AnimatableProperty {
             };
         }
         macro_rules! park_arms {
-            ($(($prop:tt, $kind:ident, $acc:tt, $write:tt, $stage:ident, $park:ident),)*) => {
+            ($(($prop:tt, $acc:tt, $write:tt, $stage:ident, $park:ident),)*) => {
                 match self {
                     $($prop => park_of!($park),)*
                     P::FilterParam { .. } => Some(ChannelId::Filter),
@@ -267,7 +265,7 @@ impl super::protocol::AnimatableProperty {
     pub(crate) fn stage(&self) -> PropStage {
         use super::protocol::{AnimatableProperty as P, Transform3dField as F};
         macro_rules! stage_arms {
-            ($(($prop:tt, $kind:ident, $acc:tt, $write:tt, $stage:ident, $park:ident),)*) => {
+            ($(($prop:tt, $acc:tt, $write:tt, $stage:ident, $park:ident),)*) => {
                 match self {
                     $($prop => PropStage::$stage,)*
                     P::FilterParam { .. } => PropStage::Filter,
@@ -298,7 +296,7 @@ impl super::protocol::AnimatedBindings {
 mod tests {
     // `with_animatable_props!` is in scope textually (defined above in this
     // file) — no import needed.
-    use super::super::protocol::{AnimatableProperty as P, Transform3dField as F, ValueKind::*};
+    use super::super::protocol::{AnimatableProperty as P, Transform3dField as F};
 
     /// The E0004 guard, both directions: the match has **no wildcard**, so an
     /// `AnimatableProperty` (or `Transform3dField`) variant without a table
@@ -307,7 +305,7 @@ mod tests {
     #[allow(dead_code, unused_parens)]
     fn table_covers_every_variant(p: &P) {
         macro_rules! check {
-            ($(($prop:tt, $kind:ident, $acc:tt, $write:tt, $stage:ident, $park:ident),)*) => {
+            ($(($prop:tt, $acc:tt, $write:tt, $stage:ident, $park:ident),)*) => {
                 match p {
                     $($prop => {})*
                     P::FilterParam { .. }
@@ -329,7 +327,7 @@ mod tests {
     #[test]
     fn table_rows_are_in_enum_order() {
         macro_rules! rows {
-            ($(($prop:tt, $kind:ident, $acc:tt, $write:tt, $stage:ident, $park:ident),)*) => {
+            ($(($prop:tt, $acc:tt, $write:tt, $stage:ident, $park:ident),)*) => {
                 vec![$($prop),*]
             };
         }
@@ -343,23 +341,5 @@ mod tests {
                 w[1]
             );
         }
-    }
-
-    /// Belt while consumers migrate: every row's kind column agrees with the
-    /// (still hand-written) `value_kind()`. Becomes a tautology once
-    /// `value_kind` generates from the table — kept as the kind column's pin.
-    #[test]
-    fn kind_column_matches_value_kind() {
-        macro_rules! check_kinds {
-            ($(($prop:tt, $kind:ident, $acc:tt, $write:tt, $stage:ident, $park:ident),)*) => {
-                $(assert_eq!(
-                    ($prop).value_kind(),
-                    $kind,
-                    "kind column disagrees for {:?}",
-                    $prop
-                );)*
-            };
-        }
-        with_animatable_props!(check_kinds);
     }
 }

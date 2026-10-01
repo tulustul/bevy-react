@@ -4,7 +4,7 @@
 
 use bevy::prelude::*;
 
-use super::super::protocol::{AnimatableProperty, AnimatedBindings, ValueKind};
+use super::super::protocol::{AnimatableProperty, AnimatedBindings};
 use super::super::{SharedValues, eval_color, eval_scalar, props};
 use super::AnimTargetsItem;
 
@@ -38,120 +38,116 @@ pub(super) fn stage_node_and_colors(
         ) {
             continue;
         }
-        match property.value_kind() {
-            ValueKind::Color => {
-                let Some(rgba) = eval_color(binding, values) else {
-                    continue;
-                };
-                // Bake the final alpha in for the components stage 3 drives —
-                // per-row data below: `bake` is true for every color target
-                // except the border (opacity never touches it).
-                let baked = |mut rgba: [f32; 4], bake: bool| {
-                    if bake
-                        && !promoted
-                        && let Some(alpha) = opacity_alpha
-                    {
-                        rgba[3] = alpha;
-                    }
-                    Color::srgba(rgba[0], rgba[1], rgba[2], rgba[3])
-                };
-                // Color routing generates from the write-rule column's
-                // `(color <target>)` rows; each target arm states its own
-                // contract (alpha bake, insert-if-absent vs write-if-present).
-                macro_rules! color_rule {
-                    // Background: bakes alpha; inserts the component when
-                    // absent (a node without a static background can still
-                    // animate one in).
-                    ($prop:tt, (color bg)) => {
-                        if property == &$prop {
-                            let color = baked(rgba, true);
-                            match &mut t.bg {
-                                Some(c) if c.0 != color => {
-                                    c.0 = color;
-                                    dirt.nodes.push(entity);
-                                }
-                                Some(_) => {}
-                                None => {
-                                    commands.entity(entity).insert(BackgroundColor(color));
-                                    dirt.nodes.push(entity);
-                                }
-                            }
-                        }
-                    };
-                    // Border: NO alpha bake (stage 3 never drives it);
-                    // inserts when absent, all four sides uniformly.
-                    ($prop:tt, (color border)) => {
-                        if property == &$prop {
-                            let color = baked(rgba, false);
-                            let bc = BorderColor {
-                                top: color,
-                                right: color,
-                                bottom: color,
-                                left: color,
-                            };
-                            match &mut t.border {
-                                Some(c) if **c != bc => {
-                                    **c = bc;
-                                    dirt.nodes.push(entity);
-                                }
-                                Some(_) => {}
-                                None => {
-                                    commands.entity(entity).insert(bc);
-                                    dirt.nodes.push(entity);
-                                }
-                            }
-                        }
-                    };
-                    // Text color: bakes alpha; write-if-present (a `<text>`
-                    // node always carries `TextColor`).
-                    ($prop:tt, (color text)) => {
-                        if property == &$prop {
-                            let color = baked(rgba, true);
-                            if let Some(tc) = &mut t.text
-                                && tc.0 != color
-                            {
-                                tc.0 = color;
-                                dirt.nodes.push(entity);
-                            }
-                        }
-                    };
-                    // A `backgroundImage` tint: bakes alpha; drives the
-                    // ImageNode's color, inert when the node carries no
-                    // ImageNode (e.g. the spec was ignored on a foreign
-                    // element or the style lost the field).
-                    ($prop:tt, (color image_tint)) => {
-                        if property == &$prop {
-                            let color = baked(rgba, true);
-                            if let Some(img) = &mut t.image
-                                && img.color != color
-                            {
-                                img.color = color;
-                                dirt.nodes.push(entity);
-                            }
-                        }
-                    };
-                    ($prop:tt, $other:tt) => {};
+        if property.stage() == props::PropStage::Color {
+            let Some(rgba) = eval_color(binding, values) else {
+                continue;
+            };
+            // Bake the final alpha in for the components stage 3 drives —
+            // per-row data below: `bake` is true for every color target
+            // except the border (opacity never touches it).
+            let baked = |mut rgba: [f32; 4], bake: bool| {
+                if bake
+                    && !promoted
+                    && let Some(alpha) = opacity_alpha
+                {
+                    rgba[3] = alpha;
                 }
-                macro_rules! walk {
-                    ($(($prop:tt, $kind:ident, $acc:tt, $write:tt, $stage:ident, $park:ident),)*) => {
+                Color::srgba(rgba[0], rgba[1], rgba[2], rgba[3])
+            };
+            // Color routing generates from the write-rule column's
+            // `(color <target>)` rows; each target arm states its own
+            // contract (alpha bake, insert-if-absent vs write-if-present).
+            macro_rules! color_rule {
+                // Background: bakes alpha; inserts the component when
+                // absent (a node without a static background can still
+                // animate one in).
+                ($prop:tt, (color bg)) => {
+                    if property == &$prop {
+                        let color = baked(rgba, true);
+                        match &mut t.bg {
+                            Some(c) if c.0 != color => {
+                                c.0 = color;
+                                dirt.nodes.push(entity);
+                            }
+                            Some(_) => {}
+                            None => {
+                                commands.entity(entity).insert(BackgroundColor(color));
+                                dirt.nodes.push(entity);
+                            }
+                        }
+                    }
+                };
+                // Border: NO alpha bake (stage 3 never drives it);
+                // inserts when absent, all four sides uniformly.
+                ($prop:tt, (color border)) => {
+                    if property == &$prop {
+                        let color = baked(rgba, false);
+                        let bc = BorderColor {
+                            top: color,
+                            right: color,
+                            bottom: color,
+                            left: color,
+                        };
+                        match &mut t.border {
+                            Some(c) if **c != bc => {
+                                **c = bc;
+                                dirt.nodes.push(entity);
+                            }
+                            Some(_) => {}
+                            None => {
+                                commands.entity(entity).insert(bc);
+                                dirt.nodes.push(entity);
+                            }
+                        }
+                    }
+                };
+                // Text color: bakes alpha; write-if-present (a `<text>`
+                // node always carries `TextColor`).
+                ($prop:tt, (color text)) => {
+                    if property == &$prop {
+                        let color = baked(rgba, true);
+                        if let Some(tc) = &mut t.text
+                            && tc.0 != color
+                        {
+                            tc.0 = color;
+                            dirt.nodes.push(entity);
+                        }
+                    }
+                };
+                // A `backgroundImage` tint: bakes alpha; drives the
+                // ImageNode's color, inert when the node carries no
+                // ImageNode (e.g. the spec was ignored on a foreign
+                // element or the style lost the field).
+                ($prop:tt, (color image_tint)) => {
+                    if property == &$prop {
+                        let color = baked(rgba, true);
+                        if let Some(img) = &mut t.image
+                            && img.color != color
+                        {
+                            img.color = color;
+                            dirt.nodes.push(entity);
+                        }
+                    }
+                };
+                ($prop:tt, $other:tt) => {};
+            }
+            macro_rules! walk {
+                    ($(($prop:tt, $acc:tt, $write:tt, $stage:ident, $park:ident),)*) => {
                         $(color_rule!($prop, $write);)*
                     };
                 }
-                props::with_animatable_props!(walk);
-            }
-            // Length/Scalar (and the unused Angle) all target `Node` here —
-            // transform's Length/Scalar/Angle members were handled in stage 1.
-            _ => {
-                let Some(v) = eval_scalar(binding, values) else {
-                    continue;
-                };
-                if let Some(node) = t.node.as_mut()
-                    && write_node_value(node, property, v)
-                {
-                    // Belt: the geometry hash catches the resulting layout
-                    // shift too, one system later.
-                    dirt.nodes.push(entity);
-                }
+            props::with_animatable_props!(walk);
+        } else {
+            // A `Node` row: a scalar layout field.
+            let Some(v) = eval_scalar(binding, values) else {
+                continue;
+            };
+            if let Some(node) = t.node.as_mut()
+                && write_node_value(node, property, v)
+            {
+                // Belt: the geometry hash catches the resulting layout
+                // shift too, one system later.
+                dirt.nodes.push(entity);
             }
         }
     }
@@ -227,7 +223,7 @@ fn write_node_value<N: std::ops::DerefMut<Target = Node>>(
         ($prop:tt, (none)) => {};
     }
     macro_rules! walk {
-        ($(($prop:tt, $kind:ident, $acc:tt, $write:tt, $stage:ident, $park:ident),)*) => {
+        ($(($prop:tt, $acc:tt, $write:tt, $stage:ident, $park:ident),)*) => {
             $(rule!($prop, $write);)*
         };
     }

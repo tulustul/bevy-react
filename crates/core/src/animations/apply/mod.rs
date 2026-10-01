@@ -429,7 +429,7 @@ fn stage_transform3d(b: &AnimatedBindings, values: &SharedValues, t: &mut AnimTa
             ($prop:tt, $other:tt) => {};
         }
         macro_rules! walk {
-            ($(($prop:tt, $kind:ident, $acc:tt, $write:tt, $stage:ident, $park:ident),)*) => {
+            ($(($prop:tt, $acc:tt, $write:tt, $stage:ident, $park:ident),)*) => {
                 $(rule!($prop, $acc);)*
             };
         }
