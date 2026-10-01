@@ -66,14 +66,10 @@ pub struct ShootConfig {
 /// Drives one screenshot run: [nav to `from` → hop →] nav → settle → capture → exit.
 #[derive(Resource)]
 struct Shoot {
-    label: String,
-    out: PathBuf,
+    /// The run's arguments; `config.from` is cleared once we've hopped.
+    config: ShootConfig,
     settle: Timer,
-    /// The starting demo, while the hop timer runs; `None` once we've hopped.
-    from: Option<String>,
     hop: Timer,
-    /// Capture resolution in pixels (the window is sized to match, at scale 1).
-    size: (u32, u32),
     /// The offscreen target the app renders into (set in `PostStartup`).
     image: Option<Handle<Image>>,
     /// The capture has been requested (waiting on the async readback).
@@ -86,12 +82,9 @@ struct Shoot {
 /// system that runs the nav → settle → capture → exit sequence.
 pub fn add_screenshot_mode(app: &mut App, config: ShootConfig) {
     app.insert_resource(Shoot {
-        label: config.label,
-        out: config.out,
         settle: Timer::from_seconds(config.settle_secs, TimerMode::Once),
-        from: config.from,
+        config,
         hop: Timer::from_seconds(HOP_SECS, TimerMode::Once),
-        size: config.size,
         image: None,
         shot: false,
         captured: false,
@@ -109,7 +102,7 @@ fn redirect_ui_camera_to_image(
     mut shoot: ResMut<Shoot>,
     camera: Single<Entity, With<IsDefaultUiCamera>>,
 ) {
-    let (width, height) = shoot.size;
+    let (width, height) = shoot.config.size;
     let handle = images.add(Image::new_target_texture(
         width,
         height,
@@ -141,10 +134,10 @@ fn drive_shoot(
 
     // `--from`: show the starting demo until the hop timer fires, then fall through
     // to the target (the settle timer only starts ticking after the hop).
-    if let Some(from) = shoot.from.clone() {
+    if let Some(from) = shoot.config.from.clone() {
         if shoot.hop.tick(time.delta()).is_finished() {
-            info!("hopping from {from:?} to {:?}", shoot.label);
-            shoot.from = None;
+            info!("hopping from {from:?} to {:?}", shoot.config.label);
+            shoot.config.from = None;
         } else {
             events.send(&SelectDemo { label: from });
             return;
@@ -155,17 +148,18 @@ fn drive_shoot(
     // capture, so it lands even if the JS isolate mounts a few frames late on a cold
     // start — selecting the already-selected demo is a no-op on the React side.
     events.send(&SelectDemo {
-        label: shoot.label.clone(),
+        label: shoot.config.label.clone(),
     });
 
     if shoot.settle.tick(time.delta()).just_finished() {
-        let Some(image) = shoot.image.clone() else {
-            return; // redirect hasn't run yet; try again next frame
-        };
-        let out = shoot.out.clone();
+        let image = shoot
+            .image
+            .clone()
+            .expect("the camera redirect runs in PostStartup");
+        let out = shoot.config.out.clone();
         info!(
             "capturing screenshot of {:?} → {}",
-            shoot.label,
+            shoot.config.label,
             out.display()
         );
         commands
