@@ -4,12 +4,12 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "node build.mjs",
-    "build:prod": "node build.mjs --prod",
+    "build": "bevy-react build",
+    "build:prod": "bevy-react build --prod",
     "build:web": "node build-web.mjs",
     "build:web:prod": "node build-web.mjs --prod",
     "deploy:web": "node build-web.mjs --prod --build-only && gh-pages -d dist --dotfiles --no-history -b gh-pages",
-    "watch": "node build.mjs --watch",
+    "watch": "bevy-react build --watch",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "bevy:generate": "cargo run --manifest-path ../Cargo.toml -- --export-bindings src/bevy.ts"
   },

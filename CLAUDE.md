@@ -21,7 +21,7 @@ cargo run -p demos   # run the Bevy app (needs a GPU/window)
 npm run watch -w demos           # rebuild app bundle on change → React Fast Refresh
 ```
 
-The build (`examples/demos/ui/build.mjs`, via `bevy-react/build-lib`) emits **two**
+The build (`bevy-react build`, the CLI over `bevy-react/build-lib`) emits **two**
 bundles into `dist/`: `vendor.js` (react + react-reconciler + the bevy-react runtime,
 loaded into the isolate once and never re-run) and `app.js` (the app's own components,
 an IIFE re-executed on each edit). Editing a component preserves its `useState`/hook

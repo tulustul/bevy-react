@@ -67,23 +67,15 @@ mount(<App />);`}</Code>
         components, re-executed on every edit — that split is what makes hot
         reload preserve component state).
       </Paragraph>
-      <Code
-        lang="tsx"
-        title="build.mjs"
-      >{`import { buildVendor, buildApp } from "bevy-react/build-lib";
-
-const cwd = process.cwd();
-await buildVendor({ outfile: "dist/vendor.js", cwd });
-await buildApp({
-  entry: "src/index.tsx",
-  outfile: "dist/app.js",
-  cwd,
-});`}</Code>
+      <Code lang="sh">{`npx bevy-react build
+npx bevy-react build --watch
+npx bevy-react build --prod`}</Code>
       <Paragraph>
-        Run <InlineCode>node build.mjs</InlineCode> before starting the Bevy
-        app. Use <InlineCode>watchApp</InlineCode> instead of{" "}
-        <InlineCode>buildApp</InlineCode> for rebuild-on-save with React Fast
-        Refresh.
+        Build before starting the Bevy app; <InlineCode>--watch</InlineCode>{" "}
+        rebuilds on save with React Fast Refresh. Custom setups can call{" "}
+        <InlineCode>bevy-react/build-lib</InlineCode> (
+        <InlineCode>buildVendor</InlineCode>, <InlineCode>buildApp</InlineCode>,{" "}
+        <InlineCode>watchApp</InlineCode>) directly.
       </Paragraph>
 
       <H2>5 · Typed messaging (optional)</H2>
@@ -101,7 +93,7 @@ app.export_react_typescript("ui/src/bevy.ts")?;`}</Code>
       <H2>Running this gallery</H2>
       <Code lang="sh">{`npm install
 npm run build -w demos
-cargo run -p bevy-react --example demos`}</Code>
+cargo run -p demos`}</Code>
     </>
   ),
 };

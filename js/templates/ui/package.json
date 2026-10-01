@@ -4,9 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "node build.mjs",
-    "build:prod": "node build.mjs --prod",
-    "watch": "node build.mjs --watch",
+    "build": "bevy-react build",
+    "build:prod": "bevy-react build --prod",
+    "watch": "bevy-react build --watch",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "bevy:generate": "cargo run --manifest-path ../Cargo.toml -- --export-bindings src/bevy.ts"
   },

@@ -1,7 +1,9 @@
 #!/usr/bin/env node
-// bevy-react scaffolding CLI. Zero runtime deps — Node built-ins only.
+// bevy-react CLI. `init` uses Node built-ins only; `build` loads
+// `build-lib.mjs` (esbuild + swc, the UI's dev dependencies) on demand.
 //
 //   npx bevy-react init [dir]   scaffold a React UI for a bevy-react app
+//   npx bevy-react build        bundle src/index.tsx → dist/vendor.js + dist/app.js
 //
 // Flags:
 //   --name <pkgName>   npm package name (default: the target dir's name)
@@ -9,6 +11,8 @@
 //   --force            allow writing into a non-empty directory
 //   --local <path>     depend on bevy-react via `file:<path>` instead of the
 //                      published version (for local development of this repo)
+//   --watch            (build) rebuild app.js on change (React Fast Refresh)
+//   --prod             (build) production bundles
 
 import {
   readFileSync,
@@ -31,7 +35,13 @@ function fail(msg) {
 }
 
 function parseArgs(argv) {
-  const opts = { positionals: [], install: false, force: false };
+  const opts = {
+    positionals: [],
+    install: false,
+    force: false,
+    watch: false,
+    prod: false,
+  };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     switch (a) {
@@ -40,6 +50,12 @@ function parseArgs(argv) {
         break;
       case "--force":
         opts.force = true;
+        break;
+      case "--watch":
+        opts.watch = true;
+        break;
+      case "--prod":
+        opts.prod = true;
         break;
       case "--name":
         opts.name = argv[++i];
@@ -64,12 +80,15 @@ function usage() {
 
 Usage:
   npx bevy-react init [dir]   scaffold a React UI for a bevy-react app (default dir: ui)
+  npx bevy-react build        bundle src/index.tsx → dist/vendor.js + dist/app.js
 
 Flags:
   --name <pkgName>   npm package name (default: the target dir's name)
   --install          run \`npm install\` in the new UI after scaffolding
   --force            allow writing into a non-empty directory
   --local <path>     depend on bevy-react via file:<path> (local development)
+  --watch            (build) rebuild app.js on change (React Fast Refresh)
+  --prod             (build) production bundles
 `);
 }
 
@@ -135,6 +154,24 @@ channels in Rust, run \`npm run bevy:generate\` to regenerate src/bevy.ts.
 `);
 }
 
+// Bundle the UI in the current directory as vendor.js (react + the runtime,
+// loaded once) + app.js (the app, re-executed on every hot reload) — see
+// build-lib.mjs for the why.
+async function build(opts) {
+  const { buildVendor, buildApp, watchApp } = await import("../build-lib.mjs");
+  const cwd = process.cwd();
+  const { prod } = opts;
+  const app = { entry: "src/index.tsx", outfile: "dist/app.js", prod, cwd };
+  await buildVendor({ outfile: "dist/vendor.js", prod, cwd });
+  if (opts.watch) {
+    await watchApp(app);
+    console.log("[build] watching app sources (vendor built once)…");
+  } else {
+    await buildApp(app);
+    console.log("[build] vendor.js + app.js built");
+  }
+}
+
 const opts = parseArgs(process.argv.slice(2));
 const cmd = opts.positionals.shift();
 
@@ -146,6 +183,9 @@ if (opts.help || !cmd || cmd === "help") {
 switch (cmd) {
   case "init":
     init(opts);
+    break;
+  case "build":
+    await build(opts);
     break;
   default:
     fail(`unknown command: ${cmd}\nRun \`npx bevy-react --help\` for usage.`);
