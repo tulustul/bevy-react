@@ -9,12 +9,10 @@
 //! `"shapeTransform"`, `"shapeTransition"` (each mirrored in the core
 //! devtools' kind list and `js/src/devtools/warnings.ts`).
 
-use std::fmt;
-
 use bevy::color::Srgba;
 use bevy::math::Vec2;
 use serde::Deserialize;
-use serde::de::{self, Deserializer, Visitor};
+use serde::de::Deserializer;
 
 use bevy_react_core::protocol::{animatable::Animatable, decode_warn};
 use bevy_react_core::raster::parse_css_color;
@@ -375,37 +373,10 @@ impl ViewBox {
     }
 }
 
-/// The `viewBox` attribute's decoder: warn-and-drop on a malformed string —
-/// or on any non-string (`viewBox` is not animatable and takes no
-/// `{ animated }` wrapper) — like every other wire decode; `null`/absent is
-/// absent.
+/// The `viewBox` attribute's decoder: a `"minX minY width height"` string
+/// (see [`de_attr`] for the drop rules).
 pub(crate) fn de_view_box<'de, D: Deserializer<'de>>(d: D) -> Result<Option<ViewBox>, D::Error> {
-    Ok(match serde_json::Value::deserialize(d)? {
-        serde_json::Value::String(s) => match ViewBox::parse(&s) {
-            Ok(vb) => Some(vb),
-            Err(e) => {
-                decode_warn("viewBox", &s, &e);
-                None
-            }
-        },
-        serde_json::Value::Null => None,
-        serde_json::Value::Object(_) => {
-            decode_warn(
-                "viewBox",
-                "{…}",
-                "`viewBox` takes a string \"minX minY width height\", not an object",
-            );
-            None
-        }
-        other => {
-            decode_warn(
-                "viewBox",
-                &other.to_string(),
-                "`viewBox` takes a string \"minX minY width height\"",
-            );
-            None
-        }
-    })
+    de_attr(d, "viewBox", |v| ViewBox::parse(expect_str(v)?))
 }
 
 /// A numeric attribute's decoder: a number, or an `{ animated, seed? }`
@@ -449,163 +420,81 @@ impl ShapeAttrs {
     }
 }
 
-/// Consume an unexpected JSON **object** on a non-animatable field — most
-/// likely an `{ animated }` wrapper (only the numeric attrs accept those) —
-/// warn with the field's own kind, and drop the field. Keeps the module's
-/// never-fail-the-batch rule: without this arm the visitors would hard-error
-/// on any object, aborting the whole op batch.
-fn warn_object_dropped<'de, A: de::MapAccess<'de>>(
-    map: A,
+/// Decode one non-numeric attribute through `parse`, never failing the
+/// batch: `null`/absent is absent; a value `parse` rejects warns `kind` and
+/// drops the field; an object — most likely an `{ animated }` wrapper, which
+/// only the numeric attrs accept — warns the same way.
+fn de_attr<'de, D: Deserializer<'de>, T>(
+    d: D,
     kind: &'static str,
-) -> Result<(), A::Error> {
-    let v = serde_json::Value::deserialize(de::value::MapAccessDeserializer::new(map))?;
-    let hint = if v.get("animated").is_some() {
-        " (only numeric shape attrs accept { animated } bindings)"
-    } else {
-        ""
+    parse: impl FnOnce(&serde_json::Value) -> Result<T, String>,
+) -> Result<Option<T>, D::Error> {
+    let value = serde_json::Value::deserialize(d)?;
+    let result = match &value {
+        serde_json::Value::Null => return Ok(None),
+        serde_json::Value::Object(map) if map.contains_key("animated") => Err(
+            "unexpected object value (only numeric shape attrs accept { animated } bindings); \
+             dropping"
+                .to_string(),
+        ),
+        serde_json::Value::Object(_) => Err("unexpected object value; dropping".to_string()),
+        other => parse(other),
     };
-    decode_warn(
-        kind,
-        &v.to_string(),
-        &format!("unexpected object value{hint}; dropping"),
-    );
-    Ok(())
+    Ok(result
+        .map_err(|e| {
+            let shown = value
+                .as_str()
+                .map_or_else(|| value.to_string(), str::to_owned);
+            decode_warn(kind, &shown, &e);
+        })
+        .ok())
+}
+
+/// The string inside a string-valued attribute.
+fn expect_str(value: &serde_json::Value) -> Result<&str, String> {
+    value
+        .as_str()
+        .ok_or_else(|| format!("expected a string, got {value}; dropping"))
 }
 
 pub(crate) fn de_path<'de, D: Deserializer<'de>>(d: D) -> Result<Option<PathData>, D::Error> {
-    struct V;
-    impl<'de> Visitor<'de> for V {
-        type Value = Option<PathData>;
-        fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
-            f.write_str("an SVG path data string")
-        }
-        fn visit_str<E: de::Error>(self, s: &str) -> Result<Self::Value, E> {
-            Ok(match PathData::parse(s) {
-                Ok(p) => Some(p),
-                Err(e) => {
-                    decode_warn("shapePath", s, &e);
-                    None
-                }
-            })
-        }
-        fn visit_map<A: de::MapAccess<'de>>(self, map: A) -> Result<Self::Value, A::Error> {
-            warn_object_dropped(map, "shapePath").map(|()| None)
-        }
-        fn visit_unit<E: de::Error>(self) -> Result<Self::Value, E> {
-            Ok(None)
-        }
-        fn visit_none<E: de::Error>(self) -> Result<Self::Value, E> {
-            Ok(None)
-        }
-    }
-    d.deserialize_any(V)
+    de_attr(d, "shapePath", |v| PathData::parse(expect_str(v)?))
 }
 
 pub(crate) fn de_points<'de, D: Deserializer<'de>>(d: D) -> Result<Option<Vec<Vec2>>, D::Error> {
-    struct V;
-    impl<'de> Visitor<'de> for V {
-        type Value = Option<Vec<Vec2>>;
-        fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
-            f.write_str("a flat number array [x0, y0, x1, y1, …]")
+    de_attr(d, "shapePoints", |v| {
+        let nums = Vec::<f32>::deserialize(v)
+            .map_err(|e| format!("expected a flat number array [x0, y0, x1, y1, …]: {e}"))?;
+        if nums.len() % 2 != 0 {
+            return Err(format!(
+                "points needs an even number of coordinates, got {}; dropping",
+                nums.len()
+            ));
         }
-        fn visit_seq<A: de::SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
-            let mut nums = Vec::with_capacity(seq.size_hint().unwrap_or(0));
-            while let Some(n) = seq.next_element::<f32>()? {
-                nums.push(n);
-            }
-            if nums.len() % 2 != 0 {
-                decode_warn(
-                    "shapePoints",
-                    &format!("[{} numbers]", nums.len()),
-                    &format!(
-                        "points needs an even number of coordinates, got {}; dropping",
-                        nums.len()
-                    ),
-                );
-                return Ok(None);
-            }
-            Ok(Some(
-                nums.as_chunks::<2>()
-                    .0
-                    .iter()
-                    .map(|&[x, y]| Vec2::new(x, y))
-                    .collect(),
-            ))
-        }
-        fn visit_map<A: de::MapAccess<'de>>(self, map: A) -> Result<Self::Value, A::Error> {
-            warn_object_dropped(map, "shapePoints").map(|()| None)
-        }
-        fn visit_unit<E: de::Error>(self) -> Result<Self::Value, E> {
-            Ok(None)
-        }
-        fn visit_none<E: de::Error>(self) -> Result<Self::Value, E> {
-            Ok(None)
-        }
-    }
-    d.deserialize_any(V)
+        Ok(nums
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|&[x, y]| Vec2::new(x, y))
+            .collect())
+    })
 }
 
 pub(crate) fn de_paint<'de, D: Deserializer<'de>>(d: D) -> Result<Option<ShapePaint>, D::Error> {
-    struct V;
-    impl<'de> Visitor<'de> for V {
-        type Value = Option<ShapePaint>;
-        fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
-            f.write_str("a CSS color string or the keyword \"none\"")
-        }
-        fn visit_str<E: de::Error>(self, s: &str) -> Result<Self::Value, E> {
-            if s == "none" {
-                return Ok(Some(ShapePaint::None));
-            }
-            Ok(match parse_css_color(s) {
-                Some(c) => Some(ShapePaint::Color(c)),
-                None => {
-                    decode_warn("shapePaint", s, &format!("unrecognized paint {s:?}"));
-                    None
-                }
-            })
-        }
-        fn visit_map<A: de::MapAccess<'de>>(self, map: A) -> Result<Self::Value, A::Error> {
-            warn_object_dropped(map, "shapePaint").map(|()| None)
-        }
-        fn visit_unit<E: de::Error>(self) -> Result<Self::Value, E> {
-            Ok(None)
-        }
-        fn visit_none<E: de::Error>(self) -> Result<Self::Value, E> {
-            Ok(None)
-        }
-    }
-    d.deserialize_any(V)
+    de_attr(d, "shapePaint", |v| match expect_str(v)? {
+        "none" => Ok(ShapePaint::None),
+        s => parse_css_color(s)
+            .map(ShapePaint::Color)
+            .ok_or_else(|| format!("unrecognized paint {s:?}")),
+    })
 }
 
 pub(crate) fn de_transform<'de, D: Deserializer<'de>>(
     d: D,
 ) -> Result<Option<ShapeTransform>, D::Error> {
-    struct V;
-    impl<'de> Visitor<'de> for V {
-        type Value = Option<ShapeTransform>;
-        fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
-            f.write_str("an SVG transform list string")
-        }
-        fn visit_str<E: de::Error>(self, s: &str) -> Result<Self::Value, E> {
-            Ok(match ShapeTransform::parse(s) {
-                Ok(t) => Some(t),
-                Err(e) => {
-                    decode_warn("shapeTransform", s, &e);
-                    None
-                }
-            })
-        }
-        fn visit_map<A: de::MapAccess<'de>>(self, map: A) -> Result<Self::Value, A::Error> {
-            warn_object_dropped(map, "shapeTransform").map(|()| None)
-        }
-        fn visit_unit<E: de::Error>(self) -> Result<Self::Value, E> {
-            Ok(None)
-        }
-        fn visit_none<E: de::Error>(self) -> Result<Self::Value, E> {
-            Ok(None)
-        }
-    }
-    d.deserialize_any(V)
+    de_attr(d, "shapeTransform", |v| {
+        ShapeTransform::parse(expect_str(v)?)
+    })
 }
 
 /// Keyword deserializers with the shared `"shapeEnum"` warn kind: an
@@ -615,39 +504,10 @@ pub(crate) fn de_transform<'de, D: Deserializer<'de>>(
 macro_rules! shape_keywords {
     ($( fn $fn_name:ident($ty:ident) { $($kw:literal => $variant:ident),+ $(,)? } )+) => { $(
         pub(crate) fn $fn_name<'de, D: Deserializer<'de>>(d: D) -> Result<Option<$ty>, D::Error> {
-            struct V;
-            impl<'de> Visitor<'de> for V {
-                type Value = Option<$ty>;
-                fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
-                    f.write_str(concat!("a `", stringify!($ty), "` keyword"))
-                }
-                fn visit_str<E: de::Error>(self, s: &str) -> Result<Self::Value, E> {
-                    Ok(match s {
-                        $( $kw => Some(<$ty>::$variant), )+
-                        _ => {
-                            decode_warn(
-                                "shapeEnum",
-                                s,
-                                &format!(
-                                    concat!("unrecognized ", stringify!($ty), " keyword {:?}"),
-                                    s
-                                ),
-                            );
-                            None
-                        }
-                    })
-                }
-                fn visit_map<A: de::MapAccess<'de>>(self, map: A) -> Result<Self::Value, A::Error> {
-                    warn_object_dropped(map, "shapeEnum").map(|()| None)
-                }
-                fn visit_unit<E: de::Error>(self) -> Result<Self::Value, E> {
-                    Ok(None)
-                }
-                fn visit_none<E: de::Error>(self) -> Result<Self::Value, E> {
-                    Ok(None)
-                }
-            }
-            d.deserialize_any(V)
+            de_attr(d, "shapeEnum", |v| match expect_str(v)? {
+                $( $kw => Ok(<$ty>::$variant), )+
+                s => Err(format!(concat!("unrecognized ", stringify!($ty), " keyword {:?}"), s)),
+            })
         }
     )+ };
 }
