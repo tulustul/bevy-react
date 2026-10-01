@@ -8,7 +8,6 @@ use bevy::shader::Shader;
 use serde::Deserialize;
 use serde_json::Value;
 
-use crate::animations::ValueKind;
 use crate::filters::params::{ParamSlot, static_layout};
 use crate::filters::registry::ReactFilter;
 use crate::protocol::units::Angle;
@@ -136,76 +135,16 @@ impl Default for PinchParams {
 
 fn pinch_layout() -> Arc<[ParamSlot]> {
     static_layout![
-        ParamSlot {
-            name: "x",
-            kind: ValueKind::Scalar,
-            vec: 0,
-            comp: 0,
-            len: 1,
-        },
-        ParamSlot {
-            name: "y",
-            kind: ValueKind::Scalar,
-            vec: 0,
-            comp: 1,
-            len: 1,
-        },
-        ParamSlot {
-            name: "strength",
-            kind: ValueKind::Scalar,
-            vec: 0,
-            comp: 2,
-            len: 1,
-        },
-        ParamSlot {
-            name: "radius",
-            kind: ValueKind::Scalar,
-            vec: 0,
-            comp: 3,
-            len: 1,
-        },
-        ParamSlot {
-            name: "light",
-            kind: ValueKind::Scalar,
-            vec: 1,
-            comp: 0,
-            len: 1,
-        },
-        ParamSlot {
-            name: "lightAngle",
-            kind: ValueKind::Angle,
-            vec: 1,
-            comp: 1,
-            len: 1,
-        },
-        ParamSlot {
-            name: "gloss",
-            kind: ValueKind::Scalar,
-            vec: 1,
-            comp: 2,
-            len: 1,
-        },
-        ParamSlot {
-            name: "glossSize",
-            kind: ValueKind::Scalar,
-            vec: 1,
-            comp: 3,
-            len: 1,
-        },
-        ParamSlot {
-            name: "outerSoftness",
-            kind: ValueKind::Scalar,
-            vec: 2,
-            comp: 0,
-            len: 1,
-        },
-        ParamSlot {
-            name: "innerSoftness",
-            kind: ValueKind::Scalar,
-            vec: 2,
-            comp: 1,
-            len: 1,
-        },
+        ("x", Scalar, 0, 0, 1),
+        ("y", Scalar, 0, 1, 1),
+        ("strength", Scalar, 0, 2, 1),
+        ("radius", Scalar, 0, 3, 1),
+        ("light", Scalar, 1, 0, 1),
+        ("lightAngle", Angle, 1, 1, 1),
+        ("gloss", Scalar, 1, 2, 1),
+        ("glossSize", Scalar, 1, 3, 1),
+        ("outerSoftness", Scalar, 2, 0, 1),
+        ("innerSoftness", Scalar, 2, 1, 1),
     ]
 }
 
@@ -247,6 +186,7 @@ mod tests {
     use serde_json::json;
 
     use super::*;
+    use crate::animations::ValueKind;
     use crate::filters::test_util::{asset_app, params};
 
     /// One pass: `params[0] = (x, y, strength, radius)`,

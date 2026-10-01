@@ -11,7 +11,6 @@ use bevy::prelude::*;
 use bevy::shader::Shader;
 use serde::Deserialize;
 
-use crate::animations::ValueKind;
 use crate::filters::params::{ParamSlot, static_layout};
 use crate::filters::registry::{ReactFilter, ReactMorphFilter};
 
@@ -51,22 +50,7 @@ impl Default for PixelizeParams {
 }
 
 fn pixelize_layout() -> Arc<[ParamSlot]> {
-    static_layout![
-        ParamSlot {
-            name: "squaresMin",
-            kind: ValueKind::Scalar,
-            vec: 0,
-            comp: 0,
-            len: 2,
-        },
-        ParamSlot {
-            name: "steps",
-            kind: ValueKind::Scalar,
-            vec: 0,
-            comp: 2,
-            len: 1,
-        },
-    ]
+    static_layout![("squaresMin", Scalar, 0, 0, 2), ("steps", Scalar, 0, 2, 1),]
 }
 
 impl ReactFilter for PixelizeParams {

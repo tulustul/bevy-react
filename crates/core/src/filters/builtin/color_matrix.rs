@@ -9,7 +9,6 @@ use bevy::shader::Shader;
 use serde::Deserialize;
 use serde_json::Value;
 
-use crate::animations::ValueKind;
 use crate::filters::params::{ParamSlot, static_layout};
 use crate::filters::registry::ReactFilter;
 use crate::protocol::units::Angle;
@@ -60,13 +59,7 @@ macro_rules! color_matrix_filters {
             }
 
             fn pack(&self) -> (Vec<Vec4>, Arc<[ParamSlot]>) {
-                let layout = static_layout![ParamSlot {
-                    name: "amount",
-                    kind: ValueKind::Scalar,
-                    vec: $vec,
-                    comp: $comp,
-                    len: 1,
-                }];
+                let layout = static_layout![("amount", Scalar, $vec, $comp, 1)];
                 let mut params = color_matrix_identity();
                 params[$vec][$comp] = self.amount;
                 (params, layout)
@@ -123,13 +116,7 @@ impl ReactFilter for HueRotateParams {
     }
 
     fn pack(&self) -> (Vec<Vec4>, Arc<[ParamSlot]>) {
-        let layout = static_layout![ParamSlot {
-            name: "angle",
-            kind: ValueKind::Angle,
-            vec: 1,
-            comp: 2,
-            len: 1,
-        }];
+        let layout = static_layout![("angle", Angle, 1, 2, 1)];
         let mut params = color_matrix_identity();
         params[1][2] = self.angle.radians();
         (params, layout)
@@ -143,6 +130,7 @@ mod tests {
     use serde_json::json;
 
     use super::*;
+    use crate::animations::ValueKind;
     use crate::filters::test_util::params;
 
     /// Each color op writes its value into its documented slot of the shared

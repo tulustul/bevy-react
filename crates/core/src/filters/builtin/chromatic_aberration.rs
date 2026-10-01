@@ -8,7 +8,6 @@ use bevy::shader::Shader;
 use serde::Deserialize;
 use serde_json::Value;
 
-use crate::animations::ValueKind;
 use crate::filters::params::{ParamSlot, length_logical_px, static_layout};
 use crate::filters::registry::{ReactFilter, ResolvedFilterPass, resolve_single_pass};
 use crate::protocol::{units::Angle, units::Length};
@@ -67,30 +66,12 @@ impl Default for ChromaticAberrationParams {
 
 fn chromatic_aberration_layout() -> Arc<[ParamSlot]> {
     static_layout![
-        ParamSlot {
-            name: "offset",
-            kind: ValueKind::Length,
-            vec: 0,
-            comp: 0,
-            len: 1,
-        },
-        ParamSlot {
-            name: "angle",
-            kind: ValueKind::Angle,
-            vec: 0,
-            comp: 1,
-            len: 1,
-        },
+        ("offset", Length, 0, 0, 1),
+        ("angle", Angle, 0, 1, 1),
         // Scalar, not Angle: the slot carries DEGREES (the shader converts) —
         // animated bindings write Scalar slots through unchanged, where an
         // Angle slot would convert them to radians.
-        ParamSlot {
-            name: "rotation",
-            kind: ValueKind::Scalar,
-            vec: 0,
-            comp: 2,
-            len: 1,
-        },
+        ("rotation", Scalar, 0, 2, 1),
     ]
 }
 
@@ -147,6 +128,7 @@ mod tests {
     use serde_json::json;
 
     use super::*;
+    use crate::animations::ValueKind;
     use crate::filters::registry::FilterRegistry;
     use crate::filters::test_util::{asset_app, params};
 

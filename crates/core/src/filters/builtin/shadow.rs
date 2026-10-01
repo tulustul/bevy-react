@@ -8,7 +8,6 @@ use bevy::shader::Shader;
 use serde::Deserialize;
 use serde_json::Value;
 
-use crate::animations::ValueKind;
 use crate::filters::builtin::BlurParams;
 use crate::filters::params::{FilterColor, ParamSlot, length_logical_px, static_layout};
 use crate::filters::registry::{ReactFilter, ResolvedFilterPass};
@@ -80,34 +79,10 @@ impl Default for ShadowParams {
 
 fn shadow_layout() -> Arc<[ParamSlot]> {
     static_layout![
-        ParamSlot {
-            name: "spread",
-            kind: ValueKind::Length,
-            vec: 0,
-            comp: 0,
-            len: 1,
-        },
-        ParamSlot {
-            name: "offsetX",
-            kind: ValueKind::Length,
-            vec: 1,
-            comp: 0,
-            len: 1,
-        },
-        ParamSlot {
-            name: "offsetY",
-            kind: ValueKind::Length,
-            vec: 1,
-            comp: 1,
-            len: 1,
-        },
-        ParamSlot {
-            name: "color",
-            kind: ValueKind::Color,
-            vec: 2,
-            comp: 0,
-            len: 4,
-        },
+        ("spread", Length, 0, 0, 1),
+        ("offsetX", Length, 1, 0, 1),
+        ("offsetY", Length, 1, 1, 1),
+        ("color", Color, 2, 0, 4),
     ]
 }
 
@@ -188,6 +163,7 @@ mod tests {
     use serde_json::json;
 
     use super::*;
+    use crate::animations::ValueKind;
     use crate::filters::registry::FilterRegistry;
     use crate::filters::test_util::{asset_app, params};
 

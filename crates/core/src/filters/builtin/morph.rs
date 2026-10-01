@@ -16,7 +16,6 @@ use bevy::prelude::*;
 use bevy::shader::Shader;
 use serde::Deserialize;
 
-use crate::animations::ValueKind;
 use crate::filters::params::{ParamSlot, length_logical_px, static_layout};
 use crate::filters::registry::{
     ReactFilter, ReactMorphFilter, ResolvedFilterPass, resolve_single_pass,
@@ -76,34 +75,10 @@ impl Default for CrossfadeParams {
 
 fn crossfade_layout() -> Arc<[ParamSlot]> {
     static_layout![
-        ParamSlot {
-            name: "spread",
-            kind: ValueKind::Scalar,
-            vec: 0,
-            comp: 0,
-            len: 1,
-        },
-        ParamSlot {
-            name: "scale",
-            kind: ValueKind::Length,
-            vec: 0,
-            comp: 1,
-            len: 1,
-        },
-        ParamSlot {
-            name: "softness",
-            kind: ValueKind::Scalar,
-            vec: 0,
-            comp: 2,
-            len: 1,
-        },
-        ParamSlot {
-            name: "seed",
-            kind: ValueKind::Scalar,
-            vec: 0,
-            comp: 3,
-            len: 1,
-        },
+        ("spread", Scalar, 0, 0, 1),
+        ("scale", Length, 0, 1, 1),
+        ("softness", Scalar, 0, 2, 1),
+        ("seed", Scalar, 0, 3, 1),
     ]
 }
 
@@ -177,22 +152,7 @@ impl Default for LinearWipeParams {
 }
 
 fn linear_wipe_layout() -> Arc<[ParamSlot]> {
-    static_layout![
-        ParamSlot {
-            name: "angle",
-            kind: ValueKind::Angle,
-            vec: 0,
-            comp: 0,
-            len: 1,
-        },
-        ParamSlot {
-            name: "softness",
-            kind: ValueKind::Length,
-            vec: 0,
-            comp: 1,
-            len: 1,
-        },
-    ]
+    static_layout![("angle", Angle, 0, 0, 1), ("softness", Length, 0, 1, 1),]
 }
 
 impl ReactFilter for LinearWipeParams {
@@ -238,6 +198,7 @@ mod tests {
     use serde_json::json;
 
     use super::*;
+    use crate::animations::ValueKind;
     use crate::filters::test_util::{asset_app, builtin_registry, params};
 
     /// Both morph built-ins resolve to exactly ONE pass (the morph resolver's

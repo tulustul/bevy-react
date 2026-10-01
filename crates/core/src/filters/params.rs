@@ -58,11 +58,21 @@ pub struct ParamSlot {
 /// The shared, lazily-built `Arc<[ParamSlot]>` layout of a hand-written
 /// built-in's `pack`: one static per call site, cloned on use (the
 /// `#[react_filter]` macro generates the equivalent for custom filters).
+/// One `(name, kind, vec, comp, len)` row per slot, `kind` a [`ValueKind`]
+/// variant name.
 macro_rules! static_layout {
-    ($($slot:expr),+ $(,)?) => {{
+    ($(($name:expr, $kind:ident, $vec:expr, $comp:expr, $len:expr)),+ $(,)?) => {{
         static LAYOUT: ::std::sync::LazyLock<
             ::std::sync::Arc<[crate::filters::ParamSlot]>,
-        > = ::std::sync::LazyLock::new(|| ::std::sync::Arc::from(vec![$($slot),+]));
+        > = ::std::sync::LazyLock::new(|| {
+            ::std::sync::Arc::from(vec![$(crate::filters::ParamSlot {
+                name: $name,
+                kind: crate::animations::ValueKind::$kind,
+                vec: $vec,
+                comp: $comp,
+                len: $len,
+            }),+])
+        });
         ::std::sync::Arc::clone(&LAYOUT)
     }};
 }

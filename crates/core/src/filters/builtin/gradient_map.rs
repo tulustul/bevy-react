@@ -8,7 +8,6 @@ use bevy::shader::Shader;
 use serde::Deserialize;
 use serde_json::Value;
 
-use crate::animations::ValueKind;
 use crate::filters::params::{FilterColor, ParamSlot, static_layout};
 use crate::filters::registry::{ReactFilter, ResolvedFilterPass, resolve_single_pass};
 use crate::protocol::units::Angle;
@@ -117,76 +116,16 @@ impl Default for GradientMapParams {
 
 fn gradient_map_layout() -> Arc<[ParamSlot]> {
     static_layout![
-        ParamSlot {
-            name: "stopColorA",
-            kind: ValueKind::Color,
-            vec: 0,
-            comp: 0,
-            len: 4,
-        },
-        ParamSlot {
-            name: "stopColorB",
-            kind: ValueKind::Color,
-            vec: 1,
-            comp: 0,
-            len: 4,
-        },
-        ParamSlot {
-            name: "stopColorC",
-            kind: ValueKind::Color,
-            vec: 2,
-            comp: 0,
-            len: 4,
-        },
-        ParamSlot {
-            name: "stopColorD",
-            kind: ValueKind::Color,
-            vec: 3,
-            comp: 0,
-            len: 4,
-        },
-        ParamSlot {
-            name: "stopColorE",
-            kind: ValueKind::Color,
-            vec: 4,
-            comp: 0,
-            len: 4,
-        },
-        ParamSlot {
-            name: "stopColorF",
-            kind: ValueKind::Color,
-            vec: 5,
-            comp: 0,
-            len: 4,
-        },
-        ParamSlot {
-            name: "stopPositionsA",
-            kind: ValueKind::Scalar,
-            vec: 6,
-            comp: 0,
-            len: 4,
-        },
-        ParamSlot {
-            name: "stopPositionsB",
-            kind: ValueKind::Scalar,
-            vec: 7,
-            comp: 0,
-            len: 2,
-        },
-        ParamSlot {
-            name: "angle",
-            kind: ValueKind::Angle,
-            vec: 7,
-            comp: 2,
-            len: 1,
-        },
-        ParamSlot {
-            name: "amount",
-            kind: ValueKind::Scalar,
-            vec: 7,
-            comp: 3,
-            len: 1,
-        },
+        ("stopColorA", Color, 0, 0, 4),
+        ("stopColorB", Color, 1, 0, 4),
+        ("stopColorC", Color, 2, 0, 4),
+        ("stopColorD", Color, 3, 0, 4),
+        ("stopColorE", Color, 4, 0, 4),
+        ("stopColorF", Color, 5, 0, 4),
+        ("stopPositionsA", Scalar, 6, 0, 4),
+        ("stopPositionsB", Scalar, 7, 0, 2),
+        ("angle", Angle, 7, 2, 1),
+        ("amount", Scalar, 7, 3, 1),
     ]
 }
 
@@ -302,6 +241,7 @@ mod tests {
     use serde_json::json;
 
     use super::*;
+    use crate::animations::ValueKind;
     use crate::filters::params::{MAX_FILTER_PARAM_VECS, lerp_packed_params};
     use crate::filters::registry::FilterRegistry;
     use crate::filters::test_util::{asset_app, params};

@@ -8,7 +8,6 @@ use bevy::shader::Shader;
 use serde::Deserialize;
 use serde_json::Value;
 
-use crate::animations::ValueKind;
 use crate::filters::params::{FilterColor, ParamSlot, length_logical_px, static_layout};
 use crate::filters::registry::{ReactFilter, ResolvedFilterPass, resolve_single_pass};
 use crate::protocol::units::Length;
@@ -69,27 +68,9 @@ impl Default for OutlineParams {
 
 fn outline_layout() -> Arc<[ParamSlot]> {
     static_layout![
-        ParamSlot {
-            name: "width",
-            kind: ValueKind::Length,
-            vec: 0,
-            comp: 0,
-            len: 1,
-        },
-        ParamSlot {
-            name: "softness",
-            kind: ValueKind::Length,
-            vec: 0,
-            comp: 1,
-            len: 1,
-        },
-        ParamSlot {
-            name: "color",
-            kind: ValueKind::Color,
-            vec: 1,
-            comp: 0,
-            len: 4,
-        },
+        ("width", Length, 0, 0, 1),
+        ("softness", Length, 0, 1, 1),
+        ("color", Color, 1, 0, 4),
     ]
 }
 
@@ -150,6 +131,7 @@ mod tests {
     use serde_json::json;
 
     use super::*;
+    use crate::animations::ValueKind;
     use crate::filters::registry::FilterRegistry;
     use crate::filters::test_util::{asset_app, params};
 

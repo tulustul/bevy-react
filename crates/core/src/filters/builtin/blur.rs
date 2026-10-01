@@ -8,7 +8,6 @@ use bevy::shader::Shader;
 use serde::Deserialize;
 use serde_json::Value;
 
-use crate::animations::ValueKind;
 use crate::filters::params::{ParamSlot, length_logical_px, static_layout};
 use crate::filters::registry::{ReactFilter, ResolvedFilterPass};
 use crate::protocol::units::Length;
@@ -42,13 +41,7 @@ impl Default for BlurParams {
 }
 
 fn blur_layout() -> Arc<[ParamSlot]> {
-    static_layout![ParamSlot {
-        name: "radius",
-        kind: ValueKind::Length,
-        vec: 0,
-        comp: 0,
-        len: 1,
-    }]
+    static_layout![("radius", Length, 0, 0, 1)]
 }
 
 impl ReactFilter for BlurParams {
@@ -101,6 +94,7 @@ mod tests {
     use serde_json::json;
 
     use super::*;
+    use crate::animations::ValueKind;
     use crate::filters::registry::FilterRegistry;
     use crate::filters::test_util::{asset_app, params};
 

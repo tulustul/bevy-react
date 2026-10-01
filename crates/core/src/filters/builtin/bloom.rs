@@ -8,7 +8,6 @@ use bevy::shader::Shader;
 use serde::Deserialize;
 use serde_json::Value;
 
-use crate::animations::ValueKind;
 use crate::filters::builtin::BlurParams;
 use crate::filters::params::{ParamSlot, length_logical_px, static_layout};
 use crate::filters::registry::{ReactFilter, ResolvedFilterPass};
@@ -72,27 +71,9 @@ impl Default for BloomParams {
 
 fn bloom_layout() -> Arc<[ParamSlot]> {
     static_layout![
-        ParamSlot {
-            name: "radius",
-            kind: ValueKind::Length,
-            vec: 0,
-            comp: 0,
-            len: 1,
-        },
-        ParamSlot {
-            name: "threshold",
-            kind: ValueKind::Scalar,
-            vec: 1,
-            comp: 0,
-            len: 1,
-        },
-        ParamSlot {
-            name: "intensity",
-            kind: ValueKind::Scalar,
-            vec: 1,
-            comp: 1,
-            len: 1,
-        },
+        ("radius", Length, 0, 0, 1),
+        ("threshold", Scalar, 1, 0, 1),
+        ("intensity", Scalar, 1, 1, 1)
     ]
 }
 
@@ -155,6 +136,7 @@ mod tests {
     use serde_json::json;
 
     use super::*;
+    use crate::animations::ValueKind;
     use crate::filters::registry::FilterRegistry;
     use crate::filters::test_util::{asset_app, params};
 
