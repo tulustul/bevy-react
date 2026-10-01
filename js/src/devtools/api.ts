@@ -67,16 +67,8 @@ export interface DevtoolsSettings {
   split: number;
 }
 
-/** Bevy→JS `devtools.window`: the window's logical size — once when the panel
- *  opens (and ahead of the restore payload) and on every resize while it stays
- *  open. The proportional layout resolves its fractions against this. */
-export interface DevtoolsWindow {
-  width: number;
-  height: number;
-}
-
 /** A layer rect in a `devtools.layers` payload: logical (CSS) px in window
- *  space — the same space as `devtools.window` — plus the physical capture
+ *  space — the same space as the built-in `resize` event — plus the physical capture
  *  dims for the texture-memory estimate (`physical_width * physical_height *
  *  4` bytes). */
 export interface DevtoolsLayerRect {
@@ -176,11 +168,6 @@ export function onWarning(cb: (w: DevtoolsWarning) => void): () => void {
  *  app mounts — the recorder's disarm signal, among other things. */
 export function onRestore(cb: (s: DevtoolsSettings) => void): () => void {
   return addEventListener("devtools.restore", cb as (v: unknown) => void);
-}
-
-/** The window's logical size (on panel open + every resize while open). */
-export function onWindow(cb: (w: DevtoolsWindow) => void): () => void {
-  return addEventListener("devtools.window", cb as (v: unknown) => void);
 }
 
 /** The current layer set (see [`DevtoolsLayers`]); streamed while the Layers

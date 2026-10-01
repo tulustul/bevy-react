@@ -9,13 +9,12 @@
 // and floating (drag by the header, resize by the bottom-right corner).
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { addEventListener } from "../bridge";
+import { addEventListener, request } from "../bridge";
 import type { PointerEventData } from "../jsx";
 import {
   onPicked,
   onRestore,
   onToggle,
-  onWindow,
   sendDock,
   sendOpen,
   sendOverlay,
@@ -98,9 +97,9 @@ export function DevtoolsHost() {
   // px against `win` at render; MIN_WIDTH/MIN_HEIGHT floor the result.
   const [widthFrac, setWidthFrac] = useState(0.3);
   const [rect, setRect] = useState({ x: 0.08, y: 0.1, w: 0.33, h: 0.7 });
-  // The window's logical size, streamed by Bevy (`devtools.window` — on open
-  // and on every resize while open). The fallback only matters for the first
-  // open frame if the size event races the toggle.
+  // The UI viewport's logical size: the built-in `window.size` request on
+  // install, then the built-in `resize` stream. The fallback only matters
+  // until the first answer lands.
   const [win, setWin] = useState({ w: 1280, h: 800 });
   // The inspector section's height (px); the tree/inspector separator drags it.
   const [split, setSplit] = useState(260);
@@ -116,7 +115,12 @@ export function DevtoolsHost() {
   useEffect(() => onToggle((e) => setOpen(e.open)), []);
 
   // The window size feed the proportional layout resolves against.
-  useEffect(() => onWindow((e) => setWin({ w: e.width, h: e.height })), []);
+  useEffect(() => {
+    type Size = { width: number; height: number };
+    const set = (e: Size) => setWin({ w: e.width, h: e.height });
+    void request("window.size", null).then((e) => set(e as Size));
+    return addEventListener("resize", (e) => set(e as Size));
+  }, []);
 
   // Pick mode clicked a node on screen: Bevy already selected it and exited
   // pick mode on its side; mirror both here and reveal the node in the tree.

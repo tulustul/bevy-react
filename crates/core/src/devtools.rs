@@ -87,7 +87,7 @@ use element_fields::on_elements_request;
 use layers::{emit_layers, on_layers_open_message};
 use panel::{
     apply_dock_reservation, on_dock_message, on_open_message, on_overlay_message,
-    on_panel_root_message, send_window_size, toggle_on_key,
+    on_panel_root_message, toggle_on_key,
 };
 use pick::{
     drive_pick_mode, on_highlight_message, on_pick_message, on_select_message, position_highlight,
@@ -215,7 +215,6 @@ impl Plugin for DevtoolsPlugin {
             Update,
             (
                 toggle_on_key,
-                send_window_size,
                 position_highlight,
                 apply_dock_reservation,
                 send_restore,

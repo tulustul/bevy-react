@@ -1,13 +1,10 @@
-//! Panel chrome lifecycle: the toggle key, JS↔Bevy open/close sync, the
-//! viewport-size stream, and the docked panel's window-space reservation.
+//! Panel chrome lifecycle: the toggle key, JS↔Bevy open/close sync, and the
+//! docked panel's window-space reservation.
 
 use bevy::prelude::*;
-use bevy::ui::IsDefaultUiCamera;
 
 use crate::event::ReactEvents;
 use crate::protocol::NodeId;
-use crate::reconcile::OpApplyStats;
-use crate::window::ui_viewport_size;
 use crate::{react_event, react_message};
 
 use super::{DevtoolsConfig, DevtoolsState, DockSide};
@@ -18,18 +15,6 @@ use super::{DevtoolsConfig, DevtoolsState, DockSide};
 #[react_event(name = "devtools.toggle")]
 pub(super) struct DevtoolsToggle {
     pub(super) open: bool,
-}
-
-/// Bevy → JS: the UI viewport's logical size. The panel's layout is
-/// proportional (fractions of the viewport), and JS can't see it on its own —
-/// sent once when the panel opens and on every size change while it stays open
-/// (see [`send_window_size`]; [`super::settings::send_restore`] also sends it
-/// ahead of the restore blob so the restored fractions resolve against a real
-/// size).
-#[react_event(name = "devtools.window")]
-pub(super) struct DevtoolsWindow {
-    pub(super) width: f32,
-    pub(super) height: f32,
 }
 
 /// JS → Bevy: the panel opened or closed itself (close button, install sync).
@@ -91,38 +76,6 @@ pub(super) fn on_dock_message(msg: On<DevtoolsDockMessage>, mut state: ResMut<De
         _ => None,
     };
     state.dock_width = msg.event().width.max(0.0);
-}
-
-/// Stream the UI viewport's logical size to the panel: once when it opens and
-/// on every change while it stays open (the `Local` resets while closed, so a
-/// resize-while-closed is caught up on the next open). The panel's layout is
-/// proportional, and JS has no other way to see the viewport.
-pub(super) fn send_window_size(
-    state: Res<DevtoolsState>,
-    stats: Res<OpApplyStats>,
-    cameras: Query<&Camera, With<IsDefaultUiCamera>>,
-    windows: Query<&Window>,
-    events: ReactEvents,
-    mut last: Local<Option<Vec2>>,
-) {
-    // Same first-batch gate as `send_restore`: no listener races.
-    if stats.applied_count == 0 {
-        return;
-    }
-    if !state.open {
-        *last = None;
-        return;
-    }
-    let Some(size) = ui_viewport_size(&cameras, &windows) else {
-        return;
-    };
-    if *last != Some(size) {
-        *last = Some(size);
-        events.send(&DevtoolsWindow {
-            width: size.x,
-            height: size.y,
-        });
-    }
 }
 
 /// Clear the transient interaction state that shouldn't outlive a closed panel.
@@ -200,8 +153,6 @@ pub(super) fn apply_dock_reservation(
 mod tests {
     use super::*;
     use crate::devtools::test_util::{drain_events, test_app};
-    use crate::protocol::outbound::Outbound;
-    use tokio::sync::mpsc::UnboundedReceiver;
 
     #[test]
     fn toggle_key_flips_state_and_notifies_js() {
@@ -309,76 +260,5 @@ mod tests {
         );
         assert_eq!(dock(&mut app, Some("bogus"), -5.0), (None, 0.0));
         assert_eq!(dock(&mut app, None, 380.0), (None, 380.0));
-    }
-
-    /// The window's logical size streams to the panel: once on open, again on
-    /// every change while open, and re-sent after a close → reopen (a resize
-    /// while closed must be caught up).
-    #[test]
-    fn window_size_sent_on_open_and_resize() {
-        use bevy::window::WindowResolution;
-
-        let (mut app, mut rx) = test_app(DevtoolsConfig {
-            settings_path: None,
-            ..default()
-        });
-        let window = app
-            .world_mut()
-            .spawn(Window {
-                resolution: WindowResolution::new(800, 600),
-                ..Default::default()
-            })
-            .id();
-        let sizes = |rx: &mut UnboundedReceiver<Outbound>| {
-            drain_events(rx)
-                .into_iter()
-                .filter(|(name, _)| name == "devtools.window")
-                .map(|(_, v)| (v["width"].as_f64().unwrap(), v["height"].as_f64().unwrap()))
-                .collect::<Vec<_>>()
-        };
-
-        // Closed: nothing, even after mount (send_restore fires one — drain it).
-        app.world_mut().resource_mut::<OpApplyStats>().applied_count = 1;
-        app.update();
-        let restore_frame = sizes(&mut rx);
-        assert_eq!(
-            restore_frame,
-            vec![(800.0, 600.0)],
-            "the restore one-shot sends the size once, ahead of the blob"
-        );
-
-        // Open: one size event; idle frames send nothing more.
-        app.world_mut().resource_mut::<DevtoolsState>().open = true;
-        app.update();
-        assert_eq!(sizes(&mut rx), vec![(800.0, 600.0)], "sent on open");
-        app.update();
-        assert!(sizes(&mut rx).is_empty(), "idle frames are silent");
-
-        // Resize while open: exactly one update.
-        app.world_mut()
-            .entity_mut(window)
-            .get_mut::<Window>()
-            .unwrap()
-            .resolution = WindowResolution::new(1024, 768);
-        app.update();
-        assert_eq!(sizes(&mut rx), vec![(1024.0, 768.0)], "sent on resize");
-
-        // Resize while closed → reopen catches up.
-        app.world_mut().resource_mut::<DevtoolsState>().open = false;
-        app.update();
-        app.world_mut()
-            .entity_mut(window)
-            .get_mut::<Window>()
-            .unwrap()
-            .resolution = WindowResolution::new(640, 480);
-        app.update();
-        assert!(sizes(&mut rx).is_empty(), "closed: no size traffic");
-        app.world_mut().resource_mut::<DevtoolsState>().open = true;
-        app.update();
-        assert_eq!(
-            sizes(&mut rx),
-            vec![(640.0, 480.0)],
-            "reopen must catch up on a resize that happened while closed"
-        );
     }
 }

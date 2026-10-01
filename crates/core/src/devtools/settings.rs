@@ -2,15 +2,13 @@
 //! (debounced writes, one-shot restore after the React app mounts).
 
 use bevy::prelude::*;
-use bevy::ui::IsDefaultUiCamera;
 use std::time::Duration;
 
 use crate::event::ReactEvents;
 use crate::reconcile::OpApplyStats;
-use crate::window::ui_viewport_size;
 use crate::{react_event, react_message};
 
-use super::panel::{DevtoolsToggle, DevtoolsWindow};
+use super::panel::DevtoolsToggle;
 use super::{DevtoolsConfig, DevtoolsState};
 
 /// The panel's persisted layout settings. One flat shape wears three hats: the
@@ -162,14 +160,11 @@ pub(super) fn on_settings_message(
 /// listener registration). Sent **always**, with defaults when no file loaded:
 /// the JS recorder arms at install to capture the initial mount and disarms on
 /// a restore that says the panel stays closed, so every session must get
-/// exactly one restore. The window size goes first (same system, so ordering
-/// is guaranteed) — the restored fractions need it — and a persisted
-/// `open: true` reopens the panel here (the JS side mirrors the toggle).
+/// exactly one restore. A persisted `open: true` reopens the panel here (the
+/// JS side mirrors the toggle).
 pub(super) fn send_restore(
     persist: Res<DevtoolsPersistence>,
     stats: Res<OpApplyStats>,
-    cameras: Query<&Camera, With<IsDefaultUiCamera>>,
-    windows: Query<&Window>,
     mut state: ResMut<DevtoolsState>,
     events: ReactEvents,
     mut done: Local<bool>,
@@ -181,12 +176,6 @@ pub(super) fn send_restore(
         return;
     }
     *done = true;
-    if let Some(size) = ui_viewport_size(&cameras, &windows) {
-        events.send(&DevtoolsWindow {
-            width: size.x,
-            height: size.y,
-        });
-    }
     let settings = persist.loaded.clone().unwrap_or_default();
     events.send(&DevtoolsRestore(settings.clone()));
     if settings.open {
