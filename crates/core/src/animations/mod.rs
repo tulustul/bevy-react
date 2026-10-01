@@ -4,17 +4,17 @@
 //! The model mirrors React Native's Reanimated: a React app declares **shared
 //! values** (one animatable `f32` with a stable id) and assigns **drivers**
 //! (`withTiming`, `withSpring`, `withRepeat`, `withSequence`) to them; an
-//! `Animated.node` binds style properties to those values. All per-frame work —
+//! inline `{ animated }` binding ties a style property or an element attribute
+//! to those values. All per-frame work —
 //! advancing drivers, interpolation, writing components — happens **here, on the
 //! Bevy side**, never crossing back to JS. The one exception is completion:
 //! a driver started with a correlation token reports its settlement (one
-//! [`AnimationSettled`] message, forwarded by the integrator) so a JS callback
-//! can fire — once per animation, not per frame.
+//! [`AnimationSettled`] message, forwarded to JS by the bridge) so a JS
+//! callback can fire — once per animation, not per frame.
 //!
-//! This crate is deliberately decoupled from the main `bevy-react` crate (which
-//! depends on it): it owns the animation wire types ([`mod@protocol`]) and the
+//! The module owns the animation wire types ([`mod@protocol`]) and the
 //! orchestration systems, and receives commands through an [`AnimationInbox`]
-//! channel the integrator hands it.
+//! channel the bridge hands it.
 
 use std::collections::HashMap;
 
@@ -106,8 +106,8 @@ pub enum AnimationSet {
     Apply,
 }
 
-/// Component placed (by the main reconciler) on any `Animated.node`. Carries the
-/// property→[`Binding`] map. Requires `UiTransform` so the apply system can always
+/// Component the reconciler places on any node with an inline `{ animated }`
+/// binding. Carries the property→[`Binding`] map. Requires `UiTransform` so the apply system can always
 /// drive it.
 #[derive(Component, Debug, Clone)]
 #[require(UiTransform)]
@@ -116,8 +116,8 @@ pub struct AnimatedNode(pub AnimatedBindings);
 /// A token-tagged driver settled: `finished` is `true` when it ran to its natural
 /// end, `false` when a `set`/`cancel`/new `animate` interrupted it. Written by
 /// the drain/tick systems for every [`AnimationCommand::Animate`] that carried a
-/// `token`; the integrator (`bevy-react`) forwards these to the JS completion
-/// callbacks. The one thing this crate sends back toward JS.
+/// `token`; the bridge forwards these to the JS completion callbacks — the
+/// one thing the engine sends back toward JS.
 #[derive(Message, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct AnimationSettled {
     /// The shared value the driver was animating.

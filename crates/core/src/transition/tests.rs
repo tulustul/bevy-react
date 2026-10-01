@@ -1,5 +1,4 @@
-//! The transition engine's unit tests — moved verbatim from the module
-//! root (assertions untouched; only this header is new).
+//! The transition engine's unit tests.
 use super::channels::{Channel, ProgressChannel};
 use super::*;
 use crate::animations::{AnimatedBindings, Driver, Easing, Lerp};

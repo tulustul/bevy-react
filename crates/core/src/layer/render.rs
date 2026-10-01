@@ -25,7 +25,7 @@
 //!    (same graph node, right after that layer's capture): fullscreen passes
 //!    capture → ping-pong textures ([`LayerFilterMeta::runs`], staged by
 //!    [`prepare_layer_filters`]), all of them or none — an uncompiled pass
-//!    pipeline aborts the whole run and [`FilterSlot::output_valid`] stays
+//!    pipeline aborts the whole run and [`GateState::output_valid`] stays
 //!    false, so the layer restages and retries next frame. And…
 //! 5. …a layer with the `TRANSFORM3D` promotion reason replays its staged
 //!    mip-downsample chain last in the iteration ([`mips`]) — its sampled
@@ -227,7 +227,7 @@ pub struct ExtractedFilterPass {
 pub struct ExtractedChain {
     pub passes: Vec<ExtractedFilterPass>,
     /// Mirrors [`ResolvedFilterChain::version`] — compared against
-    /// [`FilterSlot::params_version`] to detect param changes.
+    /// [`GateState::params_version`] to detect param changes.
     pub version: u32,
     /// Mirrors [`ResolvedFilterChain::always_dirty`] (time-driven filters
     /// re-run every frame).
@@ -2029,7 +2029,7 @@ impl Default for LayerFilterMeta {
 /// the capture/ping-pong textures. Execution happens in
 /// [`ui_layer_capture_pass`], which replays [`LayerFilterMeta::runs`] right
 /// after each layer's capture; this system also *predicts* that execution
-/// (phase 3) and writes [`FilterSlot::output_valid`] accordingly, so the
+/// (phase 3) and writes [`GateState::output_valid`] accordingly, so the
 /// downstream [`prepare_layer_composites`] gate is same-frame accurate.
 #[allow(clippy::too_many_arguments)]
 pub fn prepare_layer_filters(

@@ -1,6 +1,5 @@
 //! The apply engine's unit tests — stage order, dirt discipline, node/color
-//! writes, filter-param routing + validation. Moved verbatim from the
-//! engine's test module (assertions untouched).
+//! writes, filter-param routing + validation.
 use bevy::prelude::*;
 use bevy::ui::UiTransform;
 
@@ -376,7 +375,7 @@ fn validation_memory_prunes_and_revalidates() {
 }
 
 /// Once every bound shared value has settled, the apply system must stop
-/// marking the target components changed — otherwise every `Animated.node`
+/// marking the target components changed — otherwise every animated node
 /// keeps Bevy's transform propagation / render extraction hot forever.
 #[test]
 fn settled_apply_does_not_dirty_components() {

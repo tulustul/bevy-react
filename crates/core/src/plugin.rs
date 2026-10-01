@@ -516,7 +516,7 @@ impl Plugin for ReactUiPlugin {
                             // snapshot + live capture. Before the filter
                             // staging — a regular chain on a morphing layer
                             // sources the blend and its validity prediction
-                            // reads `MorphSlot::output_valid`.
+                            // reads the morph slot's `GateState::output_valid`.
                             lr::morph::prepare_layer_morphs
                                 .in_set(RenderSystems::PrepareBindGroups)
                                 .after(lr::prepare_layer_textures)

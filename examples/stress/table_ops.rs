@@ -16,7 +16,7 @@
 //! quiescence, records the sample, and moves on. See `examples/demos/screenshot.rs`
 //! for the sibling "drive → settle → record → exit" pattern.
 //!
-//! Reference: https://github.com/krausest/js-framework-benchmark
+//! Reference: <https://github.com/krausest/js-framework-benchmark>
 
 use std::fmt::Write as _;
 use std::path::PathBuf;

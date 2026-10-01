@@ -1,5 +1,5 @@
 //! The scroll transition: easing `ScrollPosition` toward a controlled
-//! target. Moved verbatim from the module root.
+//! target.
 
 use bevy::prelude::*;
 use bevy::ui::ScrollPosition;

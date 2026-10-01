@@ -264,7 +264,7 @@ fn morph_engine_params(
 /// in-flight frame (progress moves every frame). Ordered after
 /// `prepare_layer_textures` (the slot/blend exist) and before
 /// `prepare_layer_filters` (the regular chain's validity prediction reads
-/// [`MorphSlot::output_valid`]).
+/// [`GateState::output_valid`](super::GateState::output_valid)).
 #[allow(clippy::too_many_arguments)]
 pub fn prepare_layer_morphs(
     extracted: Res<ExtractedUiLayers>,

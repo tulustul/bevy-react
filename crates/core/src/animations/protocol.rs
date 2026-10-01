@@ -106,7 +106,7 @@ pub enum Binding {
         output: Vec<f32>,
     },
     /// Map the reading to an rgba color (each component in `0.0..=1.0`). JS
-    /// pre-parses hex, so this crate never parses colors.
+    /// pre-parses hex, so the engine never parses colors.
     InterpolateColor {
         id: SharedId,
         input: Vec<f32>,
