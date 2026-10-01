@@ -150,11 +150,6 @@ impl<T: ReactRequest> Request<T> {
         &self.payload
     }
 
-    /// Take ownership of the payload.
-    pub fn into_payload(self) -> T {
-        self.payload
-    }
-
     /// A clone of the responder, for replying later (e.g. from another system).
     pub fn responder(&self) -> Responder<T::Response> {
         self.responder.clone()
