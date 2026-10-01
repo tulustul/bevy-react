@@ -130,29 +130,6 @@ function GrayscaleDemo() {
   );
 }
 
-function GrayscaleCard() {
-  const [grayscale, setGrayscale] = useState(1);
-  return (
-    <>
-      <image
-        src="images/parrot.png"
-        style={{
-          width: 150,
-          filter: { name: "grayscale", params: { amount: grayscale } },
-        }}
-      />
-      <Slider
-        value={grayscale}
-        min={0}
-        max={1}
-        onChange={setGrayscale}
-        name="grayscale"
-        decimals={1}
-      />
-    </>
-  );
-}
-
 function SepiaDemo() {
   return (
     <Example
@@ -169,29 +146,6 @@ function SepiaDemo() {
       }
       demo={SepiaCard}
     />
-  );
-}
-
-function SepiaCard() {
-  const [sepia, setSepia] = useState(1);
-  return (
-    <>
-      <image
-        src="images/parrot.png"
-        style={{
-          width: 150,
-          filter: { name: "sepia", params: { amount: sepia } },
-        }}
-      />
-      <Slider
-        value={sepia}
-        min={0}
-        max={1}
-        onChange={setSepia}
-        name="sepia"
-        decimals={1}
-      />
-    </>
   );
 }
 
@@ -214,28 +168,30 @@ function InvertDemo() {
   );
 }
 
-function InvertCard() {
-  const [invert, setInvert] = useState(1);
+/** A parrot through one `amount`-param color filter, with its slider. */
+function AmountCard({ name }: { name: "grayscale" | "sepia" | "invert" }) {
+  const [amount, setAmount] = useState(1);
   return (
     <>
       <image
         src="images/parrot.png"
-        style={{
-          width: 150,
-          filter: { name: "invert", params: { amount: invert } },
-        }}
+        style={{ width: 150, filter: { name, params: { amount } } }}
       />
       <Slider
-        value={invert}
+        value={amount}
         min={0}
         max={1}
-        onChange={setInvert}
-        name="invert"
+        onChange={setAmount}
+        name={name}
         decimals={1}
       />
     </>
   );
 }
+
+const GrayscaleCard = () => <AmountCard name="grayscale" />;
+const SepiaCard = () => <AmountCard name="sepia" />;
+const InvertCard = () => <AmountCard name="invert" />;
 
 function HueDemo() {
   return (
