@@ -49,17 +49,6 @@ pub(crate) fn stored<T: PropertyValue>(value: T) -> StoredValue {
 #[derive(Debug, Default)]
 pub struct OldValues(Vec<(PropId, Option<StoredValue>)>);
 
-impl Clone for OldValues {
-    fn clone(&self) -> Self {
-        Self(
-            self.0
-                .iter()
-                .map(|(id, v)| (*id, v.as_ref().map(|v| v.clone_value())))
-                .collect(),
-        )
-    }
-}
-
 impl OldValues {
     /// The replaced value of `id`: `None` when not recorded, `Some(None)`
     /// when the property was absent.

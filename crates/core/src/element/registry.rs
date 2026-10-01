@@ -220,11 +220,6 @@ impl ElementInfo {
             .map(|(_, i)| *i)
     }
 
-    /// Every `(handler prop, event index)`.
-    pub fn event_props(&self) -> impl Iterator<Item = (&str, u8)> {
-        self.event_props.iter().map(|(p, i)| (p.as_str(), *i))
-    }
-
     /// The element writers a change re-runs: those reading a touched style
     /// property or a touched attribute.
     pub(crate) fn writers_for(&self, style: &StyleDirty, attrs: AttrDirty) -> u64 {

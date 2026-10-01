@@ -14,14 +14,9 @@ pub struct AttrDirty(pub u64);
 
 impl AttrDirty {
     pub const NONE: Self = Self(0);
-    pub const ALL: Self = Self(u64::MAX);
 
     pub fn insert(&mut self, index: u8) {
         self.0 |= 1 << index;
-    }
-
-    pub fn contains(&self, index: u8) -> bool {
-        self.0 & (1 << index) != 0
     }
 
     pub fn any(&self) -> bool {
@@ -103,16 +98,6 @@ impl Attrs {
     /// The attributes this set carries, as a dirty mask.
     pub fn keys(&self) -> AttrDirty {
         AttrDirty(self.entries.iter().fold(0, |m, e| m | 1 << e.index))
-    }
-
-    /// Set `attribute` (at `index` in its element's list) to `value` — the
-    /// harness/test form; decoding goes through the element.
-    pub fn set<T: PropertyValue>(&mut self, index: u8, attribute: &'static Attribute<T>, value: T) {
-        self.insert(Entry {
-            index,
-            attr: attribute,
-            value: crate::style::stored_value(value),
-        });
     }
 
     pub(crate) fn insert(&mut self, entry: Entry) {

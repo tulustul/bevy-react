@@ -246,18 +246,6 @@ impl StyleRegistry {
         dirty
     }
 
-    /// Whether `dirty` touches any of `properties`.
-    pub fn touches(&self, dirty: &StyleDirty, properties: &[&dyn AnyStyleProperty]) -> bool {
-        properties
-            .iter()
-            .any(|p| self.id_of(*p).is_some_and(|id| dirty.contains(id)))
-    }
-
-    /// Every registered writer, with its bit.
-    pub fn writers(&self) -> impl Iterator<Item = (usize, &'static Writer)> + '_ {
-        self.writers.iter().copied().enumerate()
-    }
-
     /// The writers a change to the `dirty` properties must re-run.
     pub fn writers_for(&self, dirty: &StyleDirty) -> WriterMask {
         if dirty.is_all() {

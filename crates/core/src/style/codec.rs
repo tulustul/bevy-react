@@ -52,8 +52,8 @@ impl<T: DeserializeOwned> Codec<T> {
         Self {
             decode: decode_serde::<T>,
             ts: TsSource::Type {
-                name: ts_name::<T>,
-                collect: ts_collect::<T>,
+                name: crate::ts_codegen::ts_name::<T>,
+                collect: crate::ts_codegen::ts_collect::<T>,
             },
         }
     }
@@ -145,12 +145,4 @@ fn decode_serde<T: DeserializeOwned>(
     d: &mut dyn erased_serde::Deserializer<'_>,
 ) -> Result<Option<T>, erased_serde::Error> {
     erased_serde::deserialize::<Option<T>>(d)
-}
-
-fn ts_name<T: ts_rs::TS>() -> String {
-    T::name()
-}
-
-fn ts_collect<T: ts_rs::TS + 'static>(collector: &mut TsCollector) {
-    collector.add::<T>();
 }

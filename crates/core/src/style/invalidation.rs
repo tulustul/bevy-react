@@ -2,8 +2,6 @@
 //! (owned by the core — it names engine stages), and each property's
 //! declaration of it ([`Invalidate`]).
 
-use std::ops::BitOr;
-
 /// The pipeline stages a style change can invalidate. A property declares
 /// the stages a change to it affects ([`Invalidate`]); the engine acts on
 /// [`PAINT`](Self::PAINT) (re-capture the owning composited layer) and
@@ -58,13 +56,6 @@ impl Invalidation {
 
     pub const fn is_empty(self) -> bool {
         self.0 == 0
-    }
-}
-
-impl BitOr for Invalidation {
-    type Output = Self;
-    fn bitor(self, rhs: Self) -> Self {
-        self.union(rhs)
     }
 }
 

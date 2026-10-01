@@ -128,10 +128,3 @@ impl WriterMask {
         self.0 == 0
     }
 }
-
-impl std::ops::BitOr for WriterMask {
-    type Output = Self;
-    fn bitor(self, rhs: Self) -> Self {
-        self.union(rhs)
-    }
-}

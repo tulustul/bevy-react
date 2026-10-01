@@ -37,28 +37,19 @@ impl<T: Serialize + ts_rs::TS + 'static> ElementEvent<T> {
         Self {
             name,
             always: false,
-            ts_name: ts_name::<T>,
-            ts_collect: ts_collect::<T>,
+            ts_name: crate::ts_codegen::ts_name::<T>,
+            ts_collect: crate::ts_codegen::ts_collect::<T>,
             _payload: PhantomData,
         }
     }
 
-    /// Send the event even to nodes without a handler (see
-    /// [`always`](Self::always)).
+    /// Send the event even to nodes without a handler.
     pub const fn unconditional(self) -> Self {
         Self {
             always: true,
             ..self
         }
     }
-}
-
-fn ts_name<T: ts_rs::TS>() -> String {
-    T::name()
-}
-
-fn ts_collect<T: ts_rs::TS + 'static>(collector: &mut TsCollector) {
-    collector.add::<T>();
 }
 
 mod sealed {
@@ -70,7 +61,6 @@ impl<T> sealed::Sealed for ElementEvent<T> {}
 /// The type-erased view of an [`ElementEvent`] (sealed).
 pub trait AnyElementEvent: sealed::Sealed + Send + Sync + 'static {
     fn name(&self) -> &'static str;
-    fn always(&self) -> bool;
     /// Whether the payload is `()` (a no-argument handler).
     fn is_unit(&self) -> bool;
     /// The payload's TypeScript type.
@@ -82,9 +72,6 @@ pub trait AnyElementEvent: sealed::Sealed + Send + Sync + 'static {
 impl<T: 'static> AnyElementEvent for ElementEvent<T> {
     fn name(&self) -> &'static str {
         self.name
-    }
-    fn always(&self) -> bool {
-        self.always
     }
     fn is_unit(&self) -> bool {
         TypeId::of::<T>() == TypeId::of::<()>()

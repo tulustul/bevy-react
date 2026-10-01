@@ -514,6 +514,17 @@ pub(crate) fn json_key(name: &str) -> String {
 /// to an empty one so the module is still valid (the built-in filters are seeded
 /// by `render_typescript` regardless). Backs
 /// [`ReactAppExt::export_react_typescript`](crate::ReactAppExt::export_react_typescript).
+/// A type's TypeScript name — the `fn` pointer form registries store.
+pub(crate) fn ts_name<T: TS>() -> String {
+    T::name()
+}
+
+/// Add a type's TypeScript declarations (and its dependencies') — the `fn`
+/// pointer form registries store.
+pub(crate) fn ts_collect<T: TS + 'static>(collector: &mut TsCollector) {
+    collector.add::<T>();
+}
+
 /// The entries of `first` plus those of `second` whose names `first` lacks,
 /// sorted by name (`first` wins a name both claim).
 fn with_reserved<'a, R>(

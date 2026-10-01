@@ -102,7 +102,7 @@ pub struct Props {
 /// Which parts of a [`Props`] a delta update touched; drives which of the
 /// reconciler's stamps and writers re-run. Style granularity lives in
 /// [`StyleDirty`], attribute granularity in [`AttrDirty`].
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Default)]
 pub struct PropsDirty {
     /// Style properties touched via `style` / `style_unset`.
     pub style: StyleDirty,
