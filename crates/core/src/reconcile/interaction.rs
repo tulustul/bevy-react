@@ -53,10 +53,10 @@ pub fn apply_interaction_styles(
     let default_fonts = crate::plugin::Fonts::default();
     let fonts = fonts.as_deref().unwrap_or(&default_fonts);
     // The app's writers — or the core's alone in a harness without the bridge.
-    let styles: &crate::style::StyleRegistry = match bridge.as_ref() {
-        Some(b) => b.ext.styles(),
-        None => crate::style::core_registry(),
-    };
+    let styles = bridge
+        .as_ref()
+        .map_or(crate::ext::core_registry(), |b| &*b.ext)
+        .styles();
     for (entity, interaction, focus, mut variants, promoted, flags) in &mut query {
         // Consume the recorded reason without re-marking the component (a
         // detected write here would re-trigger this system next frame).
@@ -110,17 +110,10 @@ pub fn apply_interaction_styles(
             (Some(b), Some(r)) => b.shared_tags.kind_cow(r.0),
             _ => std::borrow::Cow::Borrowed("node"),
         };
-        let registry = bridge.as_ref().map(|b| b.ext.clone());
-        let fallback;
-        let info = match registry.as_ref() {
-            Some(r) => r.element_or_fallback(&kind),
-            None => {
-                fallback = crate::ext::core_element_info(&kind)
-                    .or_else(|| crate::ext::core_element_info("node"))
-                    .expect("the core registers <node>");
-                &fallback
-            }
-        };
+        let info = bridge
+            .as_ref()
+            .map_or(crate::ext::core_registry(), |b| &*b.ext)
+            .element_or_fallback(&kind);
         let is_text = texts.contains(entity);
         let attrs = match (bridge.as_ref(), rnode) {
             (Some(b), Some(r)) => b.props_cache.get(&r.0).map(|p| &p.attrs),

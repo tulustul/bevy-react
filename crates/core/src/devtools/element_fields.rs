@@ -53,14 +53,7 @@ pub(super) fn on_elements_request(
     req: On<Request<DevtoolsElementsGet>>,
     ext: Option<Res<ExtRegistry>>,
 ) {
-    let fallback;
-    let registry = match ext.as_deref() {
-        Some(ext) => ext,
-        None => {
-            fallback = crate::ext::builtin_registry();
-            &fallback
-        }
-    };
+    let registry = ext.as_deref().unwrap_or(crate::ext::core_registry());
     req.respond(registry.elements().map(element).collect::<Vec<_>>());
 }
 

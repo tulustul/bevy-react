@@ -66,11 +66,11 @@ impl DecodeScope {
     /// Scope decoding to the element registered as `kind` on this thread.
     pub fn new(kind: &str) -> Self {
         let element = crate::ext::with_thread_registry(|r| {
-            let registry = match r {
-                Some(r) => r.element_info(kind).cloned(),
-                None => crate::ext::core_element_info(kind),
-            };
-            match registry {
+            match r
+                .unwrap_or_else(|| crate::ext::core_registry())
+                .element_info(kind)
+                .cloned()
+            {
                 Some(info) => DecodeElement::Known(info),
                 None => DecodeElement::Unknown,
             }

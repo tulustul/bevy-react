@@ -357,6 +357,6 @@ mod registry;
 pub(crate) use registry::install_builtin_registry;
 pub(crate) use registry::warn_feature_missing_kind;
 pub use registry::{
-    ExtRegistry, ExtRegistrySlot, FeatureHint, KNOWN_FEATURES, builtin_registry, core_element_info,
+    ExtRegistry, ExtRegistrySlot, FeatureHint, KNOWN_FEATURES, builtin_registry, core_registry,
     feature_hint, set_thread_registry, with_thread_registry,
 };

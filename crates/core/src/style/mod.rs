@@ -38,23 +38,6 @@ pub fn add_core_styles(app: &mut bevy::app::App) {
         .add_react_style_writers(writers::CORE_WRITERS);
 }
 
-/// The core's properties and writers alone — the registry the apply path
-/// falls back to where no app registry is at hand (headless harnesses
-/// without the bridge).
-pub(crate) fn core_registry() -> &'static StyleRegistry {
-    static CORE: std::sync::OnceLock<StyleRegistry> = std::sync::OnceLock::new();
-    CORE.get_or_init(|| {
-        let mut registry = StyleRegistry::default();
-        for property in props::CORE_STYLES {
-            registry.add(*property);
-        }
-        for writer in writers::CORE_WRITERS {
-            registry.add_writer(writer);
-        }
-        registry
-    })
-}
-
 #[cfg(test)]
 mod decode_tests;
 #[cfg(test)]
@@ -67,7 +50,11 @@ mod tests;
 /// Test helpers over the core registry.
 #[cfg(test)]
 pub(crate) mod test_support {
-    use super::{StyleDirty, Writer, core_registry};
+    use super::{StyleDirty, StyleRegistry, Writer};
+
+    fn core_registry() -> &'static StyleRegistry {
+        crate::ext::core_registry().styles()
+    }
 
     /// Whether a change to `dirty` re-runs `writer`.
     pub(crate) fn runs(dirty: &StyleDirty, writer: &Writer) -> bool {

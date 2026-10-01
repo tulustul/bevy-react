@@ -395,7 +395,10 @@ impl Props {
         unset: &[String],
         style_unset: &[String],
     ) -> (PropsDirty, UpdateEvents) {
-        let info = crate::ext::core_element_info("node").expect("core <node>");
+        let info = crate::ext::core_registry()
+            .element_info("node")
+            .cloned()
+            .expect("core <node>");
         self.merge_delta(delta, unset, style_unset, &info)
     }
 }

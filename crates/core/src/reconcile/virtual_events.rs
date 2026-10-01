@@ -250,10 +250,10 @@ pub fn apply_virtual_interaction_styles(
     }
     let default_fonts = crate::plugin::Fonts::default();
     let fonts = fonts.as_deref().unwrap_or(&default_fonts);
-    let styles: &crate::style::StyleRegistry = match bridge.as_ref() {
-        Some(b) => b.ext.styles(),
-        None => crate::style::core_registry(),
-    };
+    let styles = bridge
+        .as_ref()
+        .map_or(crate::ext::core_registry(), |b| &*b.ext)
+        .styles();
     let mut restyle = |entity: Entity, style: Option<Style>| {
         // Attribute re-parse warnings (e.g. a bad hoverStyle color) to the node.
         let rnode = rnodes.get(entity).ok();
@@ -262,17 +262,10 @@ pub fn apply_virtual_interaction_styles(
             (Some(b), Some(r)) => b.shared_tags.kind_cow(r.0),
             _ => std::borrow::Cow::Borrowed("node"),
         };
-        let registry = bridge.as_ref().map(|b| b.ext.clone());
-        let fallback;
-        let info = match registry.as_ref() {
-            Some(r) => r.element_or_fallback(&kind),
-            None => {
-                fallback = crate::ext::core_element_info(&kind)
-                    .or_else(|| crate::ext::core_element_info("node"))
-                    .expect("the core registers <node>");
-                &fallback
-            }
-        };
+        let info = bridge
+            .as_ref()
+            .map_or(crate::ext::core_registry(), |b| &*b.ext)
+            .element_or_fallback(&kind);
         let attrs = match (bridge.as_ref(), rnode) {
             (Some(b), Some(r)) => b.props_cache.get(&r.0).map(|p| &p.attrs),
             _ => None,

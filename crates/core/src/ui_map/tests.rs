@@ -97,7 +97,10 @@ fn focus_policy_maps_with_pass_default() {
         let style: Style = serde_json::from_value(json).unwrap();
         let mut queue = CommandQueue::default();
         let mut commands = Commands::new(&mut queue, world);
-        let info = crate::ext::core_element_info("node").unwrap();
+        let info = crate::ext::core_registry()
+            .element_info("node")
+            .cloned()
+            .unwrap();
         let ctx = WriterCtx {
             promoted: false,
             fresh: false,
@@ -105,7 +108,7 @@ fn focus_policy_maps_with_pass_default() {
             flags: crate::ext::ElementFlags::NODE,
             assets: &assets,
             fonts: &fonts,
-            styles: crate::style::core_registry(),
+            styles: crate::ext::core_registry().styles(),
             element: &info,
             attrs: crate::element::Attrs::empty(),
             events: crate::element::Attrs::empty(),

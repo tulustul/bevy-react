@@ -302,10 +302,7 @@ impl<'de> Visitor<'de> for KeySeed {
     }
     fn visit_str<E: de::Error>(self, name: &str) -> Result<Key, E> {
         let resolved = crate::ext::with_thread_registry(|r| {
-            let styles = match r {
-                Some(r) => r.styles(),
-                None => super::core_registry(),
-            };
+            let styles = r.unwrap_or(crate::ext::core_registry()).styles();
             styles
                 .id(name)
                 .and_then(|id| styles.by_id(id).map(|p| (id, p)))

@@ -214,7 +214,10 @@ mod tests {
     use crate::style::writers::*;
 
     fn info(kind: &str) -> Arc<ElementInfo> {
-        crate::ext::core_element_info(kind).expect("a core element")
+        crate::ext::core_registry()
+            .element_info(kind)
+            .cloned()
+            .expect("a core element")
     }
 
     /// Decode a `<node>`'s props.

@@ -30,10 +30,10 @@ pub(super) fn on_style_fields_request(
     req: On<Request<DevtoolsStyleFieldsGet>>,
     ext: Option<Res<ExtRegistry>>,
 ) {
-    let registry = match ext.as_deref() {
-        Some(ext) => ext.styles(),
-        None => crate::style::core_registry(),
-    };
+    let registry = ext
+        .as_deref()
+        .unwrap_or(crate::ext::core_registry())
+        .styles();
     req.respond(style_fields(registry));
 }
 
@@ -120,7 +120,7 @@ mod tests {
 
     #[test]
     fn keyword_properties_report_their_kind() {
-        let fields = style_fields(crate::style::core_registry());
+        let fields = style_fields(crate::ext::core_registry().styles());
         let kind = |name: &str| {
             fields
                 .iter()

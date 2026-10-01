@@ -162,13 +162,12 @@ pub fn builtin_registry() -> ExtRegistry {
     registry
 }
 
-/// The core's resolved element `kind` — what decoding falls back to on a
-/// thread without an installed registry (a bare harness decode).
-pub fn core_element_info(kind: &str) -> Option<Arc<ElementInfo>> {
+/// The [`builtin_registry`], built once — what decoding and applying fall back
+/// to where no app registry is at hand (a bare harness decode, a harness
+/// without the bridge).
+pub fn core_registry() -> &'static ExtRegistry {
     static CORE: OnceLock<ExtRegistry> = OnceLock::new();
     CORE.get_or_init(builtin_registry)
-        .element_info(kind)
-        .cloned()
 }
 
 /// Install the core registry as this thread's decode scope when none is
