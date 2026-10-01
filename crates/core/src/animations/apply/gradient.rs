@@ -28,14 +28,13 @@ use bevy::ui::{Gradient, RadialGradientShape};
 
 use super::super::protocol::{AnimatableProperty, AnimatedBindings, Binding, GradientLeaf};
 use super::super::{SharedValues, eval_color, eval_scalar};
-use super::warn::warn_if;
 
 /// One surface's identity: the wire style key and whether the walk is on the
 /// border twin ([`AnimatableProperty::BorderGradientParam`]).
 const SURFACES: [(&str, bool); 2] = [("backgroundGradient", false), ("borderGradient", true)];
 
-/// The lazy warn sink threaded into the leaf writer — the `warn_if`
-/// signature with the kind pre-bound (see `warn::warn_if`).
+/// The lazy warn sink threaded into the leaf writer — the
+/// [`crate::diag::report_if`] signature with the kind pre-bound.
 type WarnSink<'a> = &'a dyn Fn(bool, &dyn Fn() -> (String, String));
 
 /// The binding's wire-ish address, e.g. `backgroundGradient[3].stops[0].color`.
@@ -121,9 +120,9 @@ fn apply_surface(
     validate: bool,
     dirt: &mut crate::layer::LayerContentDirt,
 ) {
-    // Lazy like stages 4/5 — see `warn::warn_if`.
+    // Lazy like stages 4/5 — see `diag::report_if`.
     let warn = |validate: bool, make: &dyn Fn() -> (String, String)| {
-        warn_if(validate, "gradientBinding", make)
+        crate::diag::report_if(validate, "gradientBinding", make)
     };
     let mut bound = bindings
         .iter()

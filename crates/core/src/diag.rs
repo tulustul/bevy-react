@@ -216,6 +216,16 @@ mod imp {
 
 pub use imp::*;
 
+/// [`report`] only when `validate` — lazily: `make` (which allocates the
+/// value + message) runs only when the warning fires, so a per-binding
+/// per-frame validation path stays allocation-free in every build.
+pub fn report_if(validate: bool, kind: &'static str, make: &dyn Fn() -> (String, String)) {
+    if validate {
+        let (value, message) = make();
+        report(kind, &value, &message);
+    }
+}
+
 /// The terminal twin of a devtools warning: `warn!` (target `bevy_react`) the
 /// message — **once per distinct `(kind, value, message)` per process**. The
 /// sinks and the console ring take every occurrence (the inspector wants the

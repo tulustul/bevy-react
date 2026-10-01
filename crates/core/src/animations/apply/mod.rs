@@ -20,7 +20,6 @@ mod gradient;
 mod node_colors;
 #[cfg(test)]
 mod tests;
-mod warn;
 
 use filter_params::apply_filter_params;
 use node_colors::stage_node_and_colors;

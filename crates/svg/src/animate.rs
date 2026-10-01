@@ -70,15 +70,6 @@ pub fn apply_driven_shape_attrs(
     }
 }
 
-/// `make` (which allocates the key + message) runs only when the warning
-/// actually fires, so the per-binding per-frame path stays allocation-free.
-fn warn_if(validate: bool, kind: &'static str, make: &dyn Fn() -> (String, String)) {
-    if validate {
-        let (key, msg) = make();
-        bevy_react_core::diag::report(kind, &key, &msg);
-    }
-}
-
 /// Validate (when `validate`) and apply every `shape` binding of one node
 /// against its [`SvgShape`]. Phase A reads through `Deref` (no change mark)
 /// and collects real differences; phase B takes one `deref_mut` only when
@@ -93,7 +84,7 @@ fn apply_driven(
     // Attribute validation warnings to the node's devtools inspector.
     let _diag = rnode.map(|r| bevy_react_core::diag::node_scope(r.0));
     let warn = |validate: bool, make: &dyn Fn() -> (String, String)| {
-        warn_if(validate, "shapeBinding", make)
+        bevy_react_core::diag::report_if(validate, "shapeBinding", make)
     };
 
     // Phase A — read-only (through `Deref`, no change mark): resolve each

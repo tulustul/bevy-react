@@ -9,7 +9,6 @@ use bevy::prelude::*;
 
 use super::super::protocol::{AnimatableProperty, AnimatedBindings, Binding, ValueKind};
 use super::super::{SharedValues, eval_color, eval_scalar};
-use super::warn::warn_if;
 
 /// Which resolved chain a stage-4 apply targets. Picks the matched
 /// [`AnimatableProperty`] variant, the wire-key shape, and the warn kind;
@@ -74,9 +73,11 @@ pub(super) fn apply_filter_params(
     }
     // Attribute validation warnings to the node's devtools inspector.
     let _diag = rnode.map(|r| crate::diag::node_scope(r.0));
-    // Lazy on purpose — see `warn::warn_if`; `kind` picks the domain's
+    // Lazy on purpose — see `diag::report_if`; `kind` picks the domain's
     // devtools warn kind.
-    let warn = |validate: bool, make: &dyn Fn() -> (String, String)| warn_if(validate, kind, make);
+    let warn = |validate: bool, make: &dyn Fn() -> (String, String)| {
+        crate::diag::report_if(validate, kind, make)
+    };
 
     let Some(chain) = chain else {
         for (property, _) in bindings.iter() {
