@@ -84,7 +84,7 @@ fn op_flush(state: &mut OpState, #[string] json: &str, devtools: bool) -> Result
 /// production bundles never call it. Empty outside dev/devtools builds.
 #[op2]
 #[serde]
-fn op_take_decode_warnings() -> Vec<crate::diag::DecodeWarning> {
+fn op_take_decode_warnings() -> Vec<crate::diag::Warning> {
     crate::diag::take_decode_warnings()
 }
 

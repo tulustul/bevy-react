@@ -24,7 +24,7 @@ interface BevyHost {
   op_take_decode_warnings?(): DecodeWarning[];
 }
 
-/** Mirrors `bevy_react::diag::DecodeWarning`: one invalid style/prop value the
+/** Mirrors `bevy_react::diag::Warning`: one invalid style/prop value the
  *  Rust serde boundary replaced with a default while decoding an op batch.
  *  `node` is the target of the op that carried it; `kind` names the value's
  *  domain (`"length"`, `"rect"`, a keyword field name like `"display"`, …) —

@@ -69,39 +69,9 @@ impl Default for DevtoolsSettings {
 }
 
 /// Bevy → JS: the settings loaded from disk, sent once after the React app
-/// mounts (a struct can't wear both bridge macros, hence the twin).
+/// mounts (a struct can't wear both bridge macros, hence the wrapper).
 #[react_event(name = "devtools.restore")]
-struct DevtoolsRestore {
-    open: bool,
-    tab: String,
-    mode: String,
-    width_frac: f32,
-    float_x_frac: f32,
-    float_y_frac: f32,
-    float_w_frac: f32,
-    float_h_frac: f32,
-    reserve: bool,
-    overlay: bool,
-    split: f32,
-}
-
-impl From<&DevtoolsSettings> for DevtoolsRestore {
-    fn from(s: &DevtoolsSettings) -> Self {
-        Self {
-            open: s.open,
-            tab: s.tab.clone(),
-            mode: s.mode.clone(),
-            width_frac: s.width_frac,
-            float_x_frac: s.float_x_frac,
-            float_y_frac: s.float_y_frac,
-            float_w_frac: s.float_w_frac,
-            float_h_frac: s.float_h_frac,
-            reserve: s.reserve,
-            overlay: s.overlay,
-            split: s.split,
-        }
-    }
-}
+struct DevtoolsRestore(DevtoolsSettings);
 
 /// Settings persistence state: what was loaded at startup (drives the one-shot
 /// restore), the latest blob from JS, and the debounced-write bookkeeping.
@@ -218,7 +188,7 @@ pub(super) fn send_restore(
         });
     }
     let settings = persist.loaded.clone().unwrap_or_default();
-    events.send(&DevtoolsRestore::from(&settings));
+    events.send(&DevtoolsRestore(settings.clone()));
     if settings.open {
         state.open = true;
         events.send(&DevtoolsToggle { open: true });

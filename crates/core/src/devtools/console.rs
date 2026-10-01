@@ -5,7 +5,6 @@ use bevy::platform::collections::HashSet;
 use bevy::prelude::*;
 
 use crate::event::ReactEvents;
-use crate::protocol::NodeId;
 use crate::reconcile::OpApplyStats;
 use crate::{react_event, react_message};
 
@@ -19,16 +18,7 @@ use super::DevtoolsState;
 /// mirror so opening the panel later still shows them. (Decode-time warnings
 /// take the synchronous `op_take_decode_warnings` path instead — no event.)
 #[react_event(name = "devtools.warning")]
-struct DevtoolsWarning {
-    /// The affected node, when the parse site ran under a node scope.
-    id: Option<NodeId>,
-    /// The value's domain (`"color"`, `"fontFamily"`, `"cursor"`, …).
-    kind: String,
-    /// The raw offending wire value.
-    value: String,
-    /// The human-readable log message (shown under the flagged row).
-    message: String,
-}
+struct DevtoolsWarning(crate::diag::Warning);
 
 /// Bevy → JS: console entries from the [`crate::console_log`] ring — JS
 /// `console.*` output, [`crate::diag`] messages, and JS-runtime failures.
@@ -38,21 +28,8 @@ struct DevtoolsWarning {
 /// stubbed on wasm).
 #[react_event(name = "devtools.console")]
 struct DevtoolsConsole {
-    entries: Vec<DevtoolsConsoleEntry>,
-}
-
-/// One console row (oldest → newest within a batch).
-#[derive(serde::Serialize, ts_rs::TS, Debug, Clone, PartialEq)]
-struct DevtoolsConsoleEntry {
-    /// Process-monotonic id (never reused, survives clears).
-    seq: u64,
-    /// Wall-clock epoch milliseconds.
-    time_ms: u64,
-    /// `"js"` | `"rust"`.
-    source: String,
-    /// `"debug"` | `"info"` | `"warn"` | `"error"`.
-    level: String,
-    message: String,
+    /// Oldest → newest within a batch.
+    entries: Vec<crate::console_log::ConsoleEntry>,
 }
 
 /// JS → Bevy: the panel's Console tab was shown/hidden (mount/unmount of the
@@ -100,18 +77,7 @@ pub(super) fn emit_console(mut state: ResMut<DevtoolsState>, events: ReactEvents
     if entries.is_empty() {
         return;
     }
-    events.send(&DevtoolsConsole {
-        entries: entries
-            .into_iter()
-            .map(|e| DevtoolsConsoleEntry {
-                seq: e.seq,
-                time_ms: e.time_ms,
-                source: e.source.as_str().into(),
-                level: e.level.as_str().into(),
-                message: e.message,
-            })
-            .collect(),
-    });
+    events.send(&DevtoolsConsole { entries });
 }
 
 /// Drain the [`crate::diag`] runtime sink and ship each **new** warning to JS
@@ -141,12 +107,7 @@ pub(super) fn emit_runtime_warnings(
         let mut hasher = std::hash::DefaultHasher::new();
         std::hash::Hash::hash(&(w.node, w.kind, &w.value, &w.message), &mut hasher);
         if seen.insert(std::hash::Hasher::finish(&hasher)) {
-            events.send(&DevtoolsWarning {
-                id: w.node,
-                kind: w.kind.to_string(),
-                value: w.value,
-                message: w.message,
-            });
+            events.send(&DevtoolsWarning(w));
         }
     }
 }
@@ -185,7 +146,7 @@ mod tests {
         let mine = |events: &[(String, serde_json::Value)]| {
             events
                 .iter()
-                .filter(|(name, v)| name == "devtools.warning" && v["id"] == 31337)
+                .filter(|(name, v)| name == "devtools.warning" && v["node"] == 31337)
                 .count()
         };
 

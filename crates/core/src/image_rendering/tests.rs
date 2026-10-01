@@ -392,7 +392,7 @@ fn live_target() -> Image {
     img
 }
 
-fn take_warnings() -> Vec<crate::diag::RuntimeWarning> {
+fn take_warnings() -> Vec<crate::diag::Warning> {
     crate::diag::take_runtime_warnings()
         .into_iter()
         .filter(|w| w.kind == WARN_KIND)

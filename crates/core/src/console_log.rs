@@ -19,7 +19,8 @@
 use std::collections::VecDeque;
 
 /// Where a console entry originated.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, ts_rs::TS)]
+#[serde(rename_all = "lowercase")]
 pub enum Source {
     /// The JS isolate: `console.*` calls (including the runtime's own error
     /// handlers, which all route through `console.error`).
@@ -28,18 +29,10 @@ pub enum Source {
     Rust,
 }
 
-impl Source {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Source::Js => "js",
-            Source::Rust => "rust",
-        }
-    }
-}
-
 /// Console severity. JS entries carry the `op_log` level; `diag` reports are
 /// warnings; JS-runtime failures are errors.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, ts_rs::TS)]
+#[serde(rename_all = "lowercase")]
 pub enum Level {
     Debug,
     Info,
@@ -48,15 +41,6 @@ pub enum Level {
 }
 
 impl Level {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Level::Debug => "debug",
-            Level::Info => "info",
-            Level::Warn => "warn",
-            Level::Error => "error",
-        }
-    }
-
     /// The `op_log` level strings from the prelude console shim
     /// (`log/info/dir/table → "info"`, `debug/trace → "debug"`). Unknown
     /// strings degrade to `Info`, mirroring `op_log`'s catch-all arm.
@@ -71,8 +55,9 @@ impl Level {
 }
 
 /// One console row. `seq` is process-monotonic (never reused, survives
-/// `clear`); `time_ms` is wall-clock epoch milliseconds.
-#[derive(Debug, Clone, PartialEq)]
+/// `clear`); `time_ms` is wall-clock epoch milliseconds. Serializes as the
+/// panel's `devtools.console` row (enums lowercased: `"js"`, `"warn"`, …).
+#[derive(Debug, Clone, PartialEq, serde::Serialize, ts_rs::TS)]
 pub struct ConsoleEntry {
     pub seq: u64,
     pub time_ms: u64,

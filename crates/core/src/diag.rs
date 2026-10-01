@@ -40,28 +40,18 @@ use serde::Serialize;
 /// bridge machinery.
 pub type NodeId = u32;
 
-/// One invalid value caught at the serde boundary during an op-batch decode.
-/// `node` is the target of the op being decoded (`None` for tree ops, which
-/// carry no decodable values anyway). `kind` names the value's domain (a
-/// `keyword_fields!` kind like `"display"`, or `"length"`/`"rect"`/`"color"`…);
-/// the JS side resolves it to concrete style/prop rows by matching `value`
-/// against the mirror's retained wire values.
-#[derive(Debug, Clone, PartialEq, Serialize)]
-pub struct DecodeWarning {
+/// One invalid value that fell back to a default — caught at the serde
+/// boundary during an op-batch decode (`node` = the target of the op being
+/// decoded; `None` for tree ops, which carry no decodable values), or at
+/// apply time inside an ECS system (`node` from the enclosing
+/// [`node_scope`]). `kind` names the value's domain (a `keyword_fields!` kind
+/// like `"display"`, or `"length"`/`"rect"`/`"color"`…); the JS side resolves
+/// it to concrete style/prop rows by matching `value` against the mirror's
+/// retained wire values.
+#[derive(Debug, Clone, PartialEq, Serialize, ts_rs::TS)]
+pub struct Warning {
     pub node: Option<NodeId>,
-    pub kind: &'static str,
-    pub value: String,
-    pub message: String,
-}
-
-/// One invalid value caught at apply time inside an ECS system. Same shape as
-/// [`DecodeWarning`]; `node` comes from the enclosing [`node_scope`].
-// The runtime sink's only consumer is the feature-gated devtools module, so
-// without the feature this (and the drain/arm fns) is legitimately dead.
-#[cfg_attr(not(feature = "devtools"), allow(dead_code))]
-#[derive(Debug, Clone, PartialEq)]
-pub struct RuntimeWarning {
-    pub node: Option<NodeId>,
+    #[ts(type = "string")]
     pub kind: &'static str,
     pub value: String,
     pub message: String,
@@ -70,7 +60,7 @@ pub struct RuntimeWarning {
 #[cfg(all(feature = "devtools", debug_assertions))]
 mod imp {
     use super::NodeId;
-    use super::{DecodeWarning, RuntimeWarning};
+    use super::Warning;
     use std::cell::{Cell, RefCell};
     use std::sync::Mutex;
     use std::sync::atomic::{AtomicBool, Ordering};
@@ -83,12 +73,12 @@ mod imp {
     const RUNTIME_CAP: usize = 256;
 
     thread_local! {
-        static DECODE: RefCell<Vec<DecodeWarning>> = const { RefCell::new(Vec::new()) };
+        static DECODE: RefCell<Vec<Warning>> = const { RefCell::new(Vec::new()) };
         static CURRENT_NODE: Cell<Option<NodeId>> = const { Cell::new(None) };
     }
 
     static ARMED: AtomicBool = AtomicBool::new(false);
-    static RUNTIME: Mutex<Vec<RuntimeWarning>> = Mutex::new(Vec::new());
+    static RUNTIME: Mutex<Vec<Warning>> = Mutex::new(Vec::new());
 
     pub fn decode_batch_start() {
         DECODE.with(|d| d.borrow_mut().clear());
@@ -111,7 +101,7 @@ mod imp {
         DECODE.with(|d| {
             let mut d = d.borrow_mut();
             if d.len() < DECODE_CAP {
-                d.push(DecodeWarning {
+                d.push(Warning {
                     node: None,
                     kind,
                     value: value.to_owned(),
@@ -129,7 +119,7 @@ mod imp {
         });
     }
 
-    pub fn take_decode_warnings() -> Vec<DecodeWarning> {
+    pub fn take_decode_warnings() -> Vec<Warning> {
         DECODE.with(|d| std::mem::take(&mut *d.borrow_mut()))
     }
 
@@ -167,7 +157,7 @@ mod imp {
         );
         let mut sink = RUNTIME.lock().unwrap_or_else(|e| e.into_inner());
         if sink.len() < RUNTIME_CAP {
-            sink.push(RuntimeWarning {
+            sink.push(Warning {
                 node,
                 kind,
                 value: value.to_owned(),
@@ -176,7 +166,7 @@ mod imp {
         }
     }
 
-    pub fn take_runtime_warnings() -> Vec<RuntimeWarning> {
+    pub fn take_runtime_warnings() -> Vec<Warning> {
         std::mem::take(&mut *RUNTIME.lock().unwrap_or_else(|e| e.into_inner()))
     }
 }
@@ -187,7 +177,7 @@ mod imp {
 #[cfg(not(all(feature = "devtools", debug_assertions)))]
 mod imp {
     use super::NodeId;
-    use super::{DecodeWarning, RuntimeWarning};
+    use super::Warning;
 
     #[inline(always)]
     pub fn decode_batch_start() {}
@@ -202,7 +192,7 @@ mod imp {
     #[inline(always)]
     pub fn decode_attribute_since(_mark: usize, _node: Option<NodeId>) {}
     #[inline(always)]
-    pub fn take_decode_warnings() -> Vec<DecodeWarning> {
+    pub fn take_decode_warnings() -> Vec<Warning> {
         Vec::new()
     }
     #[inline(always)]
@@ -219,7 +209,7 @@ mod imp {
         super::log_warn(kind, value, message);
     }
     #[inline(always)]
-    pub fn take_runtime_warnings() -> Vec<RuntimeWarning> {
+    pub fn take_runtime_warnings() -> Vec<Warning> {
         Vec::new()
     }
 }

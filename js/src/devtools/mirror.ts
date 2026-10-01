@@ -271,13 +271,8 @@ export const mirror = {
   },
 
   /** Attach an apply-time (`devtools.warning` event) invalid-value flag. */
-  addRuntimeWarning(w: {
-    id: number | null;
-    kind: string;
-    value: string;
-    message: string;
-  }): void {
-    if (setWarnings(w.id, w)) scheduleNotify();
+  addRuntimeWarning(w: DecodeWarning): void {
+    if (setWarnings(w.node, w)) scheduleNotify();
   },
 
   get(id: number): MirrorNode | undefined {

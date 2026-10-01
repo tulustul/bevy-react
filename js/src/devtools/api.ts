@@ -37,7 +37,7 @@ export interface DevtoolsPicked {
  *  the flag for whenever it opens. Decode-time warnings take the synchronous
  *  `op_take_decode_warnings` path through the bridge tap instead. */
 export interface DevtoolsWarning {
-  id: number | null;
+  node: number | null;
   kind: string;
   value: string;
   message: string;
