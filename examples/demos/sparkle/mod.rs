@@ -93,8 +93,16 @@ pub struct SparklePlugin;
 impl Plugin for SparklePlugin {
     fn build(&self, app: &mut App) {
         register_bindings(app);
-        register_systems(app);
-        app.add_systems(Startup, spawn_sparkle_layer);
+        // Emit and burst after the op drain (this frame's stamps), then age
+        // every particle.
+        app.add_systems(Startup, spawn_sparkle_layer).add_systems(
+            Update,
+            (
+                (emit_sparkles, burst_sparkles).after(ReactApplySet),
+                animate_sparkles,
+            )
+                .chain(),
+        );
     }
 }
 
@@ -104,19 +112,6 @@ impl Plugin for SparklePlugin {
 pub fn register_bindings(app: &mut App) {
     app.add_react_style(&SPARKLE);
     app.add_react_style(&SPARKLE_BURST);
-}
-
-/// The per-frame systems: emit and burst after the op drain (this frame's
-/// stamps), then age every particle.
-pub fn register_systems(app: &mut App) {
-    app.add_systems(
-        Update,
-        (
-            (emit_sparkles, burst_sparkles).after(ReactApplySet),
-            animate_sparkles,
-        )
-            .chain(),
-    );
 }
 
 /// The overlay root every particle lives under.
