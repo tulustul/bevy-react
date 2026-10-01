@@ -54,7 +54,7 @@ fn parse_color_fn(name: &str, inner: &str) -> Option<Srgba> {
     // (legacy comma form). Absent → fully opaque.
     let alpha_tok = slash_alpha.or_else(|| comps.get(3).copied());
     let a = match alpha_tok {
-        Some(t) => parse_alpha(t)?,
+        Some(t) => parse_fraction(t)?,
         None => 1.0,
     };
     let c0 = comps.first().copied()?;
@@ -111,7 +111,7 @@ fn parse_num(tok: &str) -> Option<f32> {
 }
 
 /// A 0..=1 fraction: a `%` token divided by 100, else the bare number as-is
-/// (so both `50%` and `0.5` work for saturation/lightness/whiteness).
+/// (so both `50%` and `0.5` work for alpha and saturation/lightness/whiteness).
 fn parse_fraction(tok: &str) -> Option<f32> {
     match tok.strip_suffix('%') {
         Some(p) => p.trim().parse::<f32>().ok().map(|v| v / 100.0),
@@ -124,14 +124,6 @@ fn parse_rgb_channel(tok: &str) -> Option<f32> {
     match tok.strip_suffix('%') {
         Some(p) => p.trim().parse::<f32>().ok().map(|v| v / 100.0),
         None => tok.parse::<f32>().ok().map(|v| v / 255.0),
-    }
-}
-
-/// An alpha in 0..=1: a `%` token is /100, a bare number is already a fraction.
-fn parse_alpha(tok: &str) -> Option<f32> {
-    match tok.strip_suffix('%') {
-        Some(p) => p.trim().parse::<f32>().ok().map(|v| v / 100.0),
-        None => tok.parse().ok(),
     }
 }
 

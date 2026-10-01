@@ -65,12 +65,6 @@ pub fn check(image: &Image) -> Result<(), PyramidError> {
     }
 }
 
-/// Mip levels for a `width × height` texture — the full chain down to 1×1
-/// (the same count `layer/render/mips.rs` allocates for captures).
-pub fn level_count(width: u32, height: u32) -> u32 {
-    width.max(height).max(1).ilog2() + 1
-}
-
 /// Append the full mip chain to `image` (levels 1.. after level 0 in
 /// `data`, wgpu's default `LayerMajor` layout) and set `mip_level_count`.
 /// Returns the level count. On `Err` the image is untouched.
@@ -79,7 +73,7 @@ pub fn build_pyramid(image: &mut Image) -> Result<u32, PyramidError> {
     let desc = &image.texture_descriptor;
     let srgb = desc.format == TextureFormat::Rgba8UnormSrgb;
     let (mut w, mut h) = (desc.size.width, desc.size.height);
-    let levels = level_count(w, h);
+    let levels = crate::layer::render::mips::mip_level_count(bevy::math::UVec2::new(w, h));
     let data = image.data.as_mut().expect("checked");
     let decode = if srgb {
         &SRGB_TO_LINEAR
@@ -253,8 +247,6 @@ mod tests {
         let mut img = image(4, 2, TextureFormat::Rgba8UnormSrgb, &[b; 8]);
         assert_eq!(build_pyramid(&mut img), Ok(3));
         assert_eq!(img.data.as_ref().unwrap().len(), 32 + 8 + 4);
-        assert_eq!(level_count(486, 526), 10);
-        assert_eq!(level_count(1, 1), 1);
     }
 
     /// Unsupported inputs are refused with a reason and leave the image
