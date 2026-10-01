@@ -25,18 +25,16 @@ declare function require(id: string): typeof RefreshRuntime;
 
 interface HmrApi {
   mounted: boolean;
-  reloadCount: number;
   register(type: unknown, id: string): void;
   sign: typeof RefreshRuntime.createSignatureFunctionForTransform;
   // Called by the app bundle's tail after it re-registers components.
   applyUpdate(): void;
-  performReactRefresh(): void;
 }
 
-// Install the refresh runtime exactly once. MUST run before the reconciler is
-// created so the reconciler's `injectIntoDevTools` reaches a hook that the
-// refresh runtime has already patched.
-let installed = false;
+// Install the refresh runtime exactly once (the `__hmr` global marks it done).
+// MUST run before the reconciler is created so the reconciler's
+// `injectIntoDevTools` reaches a hook that the refresh runtime has already
+// patched.
 export function setupRefreshRuntime(): HmrApi {
   const g = globalThis as unknown as {
     __hmr?: HmrApi;
@@ -46,21 +44,13 @@ export function setupRefreshRuntime(): HmrApi {
   if (g.__hmr) return g.__hmr;
 
   const Refresh = require("react-refresh/runtime");
-  if (!installed) {
-    installed = true;
-    Refresh.injectIntoGlobalHook(globalThis);
-  }
+  Refresh.injectIntoGlobalHook(globalThis);
 
   const api: HmrApi = {
     mounted: false,
-    reloadCount: 0,
     register: (type, id) => Refresh.register(type, id),
     sign: Refresh.createSignatureFunctionForTransform,
-    performReactRefresh: () => Refresh.performReactRefresh(),
-    applyUpdate() {
-      this.reloadCount++;
-      Refresh.performReactRefresh();
-    },
+    applyUpdate: () => Refresh.performReactRefresh(),
   };
 
   // The transform emits bare `$RefreshReg$` / `$RefreshSig$` references; the

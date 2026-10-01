@@ -176,17 +176,14 @@ const hostConfig: Reconciler.HostConfig<
       (typeof child === "string" || typeof child === "number")
         ? String(child)
         : undefined;
-    push(
-      text === undefined
-        ? { op: "create", id, kind, props: serializeProps(id, props, type) }
-        : {
-            op: "create",
-            id,
-            kind,
-            props: serializeProps(id, props, type),
-            text,
-          },
-    );
+    // An undefined `text` drops out of the JSON.
+    push({
+      op: "create",
+      id,
+      kind,
+      props: serializeProps(id, props, type),
+      text,
+    });
     // A `<canvas>`'s instance is its persistent element handle (what a ref
     // resolves to via `getPublicInstance`); it satisfies `Instance`.
     return type === "canvas" ? createCanvasElement(id) : { id, type, kind };
@@ -350,24 +347,29 @@ let root: ReturnType<typeof reconciler.createContainer> | null = null;
 // the node-id allocator with the app container, so ids never collide.
 let devtoolsRoot: ReturnType<typeof reconciler.createContainer> | null = null;
 
+/** A concurrent React root over `container`, logging its errors as `label`. */
+function createRoot(container: Container, label: string) {
+  const onError = (e: unknown) => console.error(`[js] ${label}:`, e);
+  return reconciler.createContainer(
+    container,
+    ConcurrentRoot,
+    null, // hydrationCallbacks
+    false, // isStrictMode
+    null, // concurrentUpdatesByDefaultOverride
+    "", // identifierPrefix
+    onError, // onUncaughtError
+    onError, // onCaughtError
+    onError, // onRecoverableError
+    () => {}, // onDefaultTransitionIndicator
+  );
+}
+
 /** Mount the devtools panel tree in its own container. Devtools-internal. */
 export function renderDevtools(element: ReactNode): void {
-  if (devtoolsRoot === null) {
-    const container: Container = { id: ROOT_ID, devtools: true };
-    const onError = (e: unknown) => console.error("[js] devtools error:", e);
-    devtoolsRoot = reconciler.createContainer(
-      container,
-      ConcurrentRoot,
-      null,
-      false,
-      null,
-      "",
-      onError,
-      onError,
-      onError,
-      () => {},
-    );
-  }
+  devtoolsRoot ??= createRoot(
+    { id: ROOT_ID, devtools: true },
+    "devtools error",
+  );
   reconciler.flushSyncFromReconciler(() => {
     reconciler.updateContainer(element, devtoolsRoot, null, null);
   });
@@ -392,20 +394,7 @@ export function render(element: ReactNode): void {
     // concurrent features (Suspense, transitions, time-slicing) are unavailable. Either
     // commit to sync (a legacy root + the documented #327 workaround) or actually use
     // concurrency; the current middle ground pays for a feature it doesn't use.
-    const container: Container = { id: ROOT_ID };
-    const onError = (e: unknown) => console.error("[js] react error:", e);
-    root = reconciler.createContainer(
-      container,
-      ConcurrentRoot,
-      null, // hydrationCallbacks
-      false, // isStrictMode
-      null, // concurrentUpdatesByDefaultOverride
-      "", // identifierPrefix
-      onError, // onUncaughtError
-      onError, // onCaughtError
-      onError, // onRecoverableError
-      () => {}, // onDefaultTransitionIndicator
-    );
+    root = createRoot({ id: ROOT_ID }, "react error");
   }
   // Commit the initial mount synchronously: a concurrent root schedules the first
   // render asynchronously otherwise, delaying the initial op flush.
