@@ -92,7 +92,7 @@ pub fn collect_ui_events(
     }
     for (_, (_, target)) in topmost {
         if let Ok(rnode) = targets.get(target) {
-            debug!("click -> reconciler node {}", rnode.0);
+            tracing::debug!("click -> reconciler node {}", rnode.0);
             send_ui_event(&bridge, rnode.0, "click", None, None, None);
         }
     }
@@ -116,7 +116,7 @@ pub fn collect_scroll_events(
             continue;
         }
         bridge.scroll_positions.insert(id, scroll.0);
-        debug!("scroll -> reconciler node {id}");
+        tracing::debug!("scroll -> reconciler node {id}");
         let _ = bridge.outbound_tx.send(Outbound::UiEvent {
             event: UiEvent {
                 id,

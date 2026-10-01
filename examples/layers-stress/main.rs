@@ -33,12 +33,12 @@ use bevy::prelude::*;
 use bevy::render::render_resource::TextureFormat;
 use bevy::ui::IsDefaultUiCamera;
 use bevy::window::PresentMode;
-use bevy_react_core::ReactUiPlugin;
+use bevy_react::ReactUiPlugin;
 
 use fps::FpsPlugin;
 
 fn main() {
-    use bevy_react_core::ReactAppExt;
+    use bevy_react::ReactAppExt;
 
     let args: Vec<String> = std::env::args().skip(1).collect();
 

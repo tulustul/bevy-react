@@ -172,8 +172,8 @@ pub(crate) fn render_typescript(
     // runs on a bare `App` (`register_bindings` only) while `ReactUiPlugin`
     // always registers the built-ins at runtime. Unlike the reserved event
     // names, a custom filter claiming a built-in name *wins* — including its
-    // family bit — mirroring the registry's warn-and-replace runtime
-    // semantics (`register_entry`). The two families split into two
+    // family bit — mirroring the registry's runtime rule (a custom shadows
+    // a built-in in either registration order). The two families split into two
     // interfaces: regular filters (`filter`/`backdropFilter` chains) into
     // `BevyFilters`, morph filters (`morphFilter`) into `BevyMorphFilters`.
     let mut builtin_filters = FilterRegistry::default();

@@ -39,7 +39,7 @@ mod screenshot;
 use std::path::PathBuf;
 
 use bevy::prelude::*;
-use bevy_react_core::ReactUiPlugin;
+use bevy_react::prelude::*;
 
 use camera::CameraPlugin;
 use scene::Scene;
@@ -63,7 +63,7 @@ fn main() {
 #[cfg(not(target_arch = "wasm32"))]
 fn main() {
     use bevy::window::WindowResolution;
-    use bevy_react_core::ReactAppExt;
+    use bevy_react::ReactAppExt;
 
     // `cargo run -p bevy-react --example demos -- --export-bindings <path>` writes the TypeScript
     // bindings instead of running the app, keeping `ui/src/bevy.ts` in sync
@@ -159,11 +159,11 @@ fn parse_size(spec: &str) -> Option<(u32, u32)> {
 }
 
 /// Generate a small plaid texture CPU-side and register it as `"checker"` in
-/// [`bevy_react_core::RenderTargets`] — the app-owned **static** texture a
+/// [`bevy_react::RenderTargets`] — the app-owned **static** texture a
 /// `backgroundImage` `{ texture }` source (or a `<portal>`) can display.
 /// Painted once at startup; nothing ever renders into it.
 fn register_host_textures(
-    mut targets: ResMut<bevy_react_core::RenderTargets>,
+    mut targets: ResMut<bevy_react::RenderTargets>,
     mut images: ResMut<Assets<Image>>,
 ) {
     use bevy::asset::RenderAssetUsages;
@@ -216,9 +216,9 @@ fn window() -> Window {
 /// the shared 3D camera, and every demo scene plugin. Shared by the native run,
 /// the `--shoot` path, and the web entry — only the asset source differs by target.
 fn build_app(window: Window, hot_reload: bool) -> App {
-    // CARGO_MANIFEST_DIR is the `bevy-react` crate (crates/core); the example and its
-    // bundle live at the repo root, two levels up. The path is unused on web (the page
-    // loads the bundle itself) but `ReactUiPlugin` still takes one.
+    // The bundle is built under this package (`ui/dist`), so anchor it at the
+    // manifest dir rather than the default `ui/dist/app.js` (cwd-relative). Unused
+    // on web (the page loads the bundle itself).
     let bundle = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("ui/dist/app.js");
 
     // Our `CameraPlugin` (added below) provides the 3D camera that also renders the
@@ -263,16 +263,9 @@ fn build_app(window: Window, hot_reload: bool) -> App {
 
     let mut app = App::new();
     app.add_plugins(default_plugins)
-        .add_plugins(react_plugin)
-        // The JSX `<svg>` element (a feature crate; any order relative to
-        // `ReactUiPlugin`).
-        .add_plugins((
-            bevy_react_svg::SvgPlugin,
-            bevy_react_anchor::AnchorPlugin,
-            bevy_react_canvas::CanvasPlugin,
-            bevy_react_portal::PortalPlugin,
-            bevy_react_surface::SurfacePlugin,
-        ))
+        // Every bevy-react plugin this build compiles in (all of them: the
+        // `bevy-react` default features), with our configured bridge.
+        .add_plugins(ReactPlugins.set(react_plugin))
         // State must be registered after DefaultPlugins (which brings StatesPlugin).
         .init_state::<Scene>()
         // The shared 3D camera (auto-orbit + mouse-drag + wheel-zoom + per-scene reframe).
@@ -304,9 +297,6 @@ fn build_app(window: Window, hot_reload: bool) -> App {
     // register here.
     scene::register_bindings(&mut app);
     clipboard::register_bindings(&mut app);
-    // Custom filters must register AFTER `ReactUiPlugin` (added above): the
-    // plugin's `build` registers the built-in filters and would replace an
-    // earlier same-name custom (see `add_react_filter`'s ordering doc).
     filters::register_bindings(&mut app);
     // Screenshot navigation rides a `#[react_event]`; native-only (the module is too).
     #[cfg(not(target_arch = "wasm32"))]
@@ -328,12 +318,9 @@ fn run() {
 #[cfg(not(target_arch = "wasm32"))]
 fn register_react_bindings(app: &mut App) {
     // Feature elements type their JSX from here (`<svg>` and its shapes,
-    // `<anchor>`, `<canvas>`, `<portal>`, `<surface>`).
-    bevy_react_svg::register_bindings(app);
-    bevy_react_anchor::register_bindings(app);
-    bevy_react_canvas::register_bindings(app);
-    bevy_react_portal::register_bindings(app);
-    bevy_react_surface::register_bindings(app);
+    // `<anchor>`, `<canvas>`, `<portal>`, `<surface>` — every compiled-in
+    // `ReactPlugins` member).
+    ReactPlugins::register_bindings(app);
     // The app's own `<cube>` element.
     cube::register_bindings(app);
     // The app's own `sparkle` style property.

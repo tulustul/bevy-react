@@ -6,7 +6,7 @@
 
 use bevy::clipboard::Clipboard;
 use bevy::prelude::*;
-use bevy_react_core::{ReactAppExt, react_message};
+use bevy_react::{ReactAppExt, react_message};
 
 /// React → Bevy: put `text` on the system clipboard (`bevy.clipboard.copy(...)`).
 #[react_message(name = "clipboard.copy")]

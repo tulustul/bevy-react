@@ -64,7 +64,7 @@ pub fn collect_virtual_clicks(
     if let Some((_, target)) = topmost
         && let Ok(rnode) = targets.get(target)
     {
-        debug!("virtual-pointer click -> reconciler node {}", rnode.0);
+        tracing::debug!("virtual-pointer click -> reconciler node {}", rnode.0);
         send_ui_event(&bridge, rnode.0, "click", None, None, None);
     }
 }

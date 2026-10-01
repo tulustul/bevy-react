@@ -5,6 +5,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`ReactPlugins` and cargo features.** `bevy-react` is now a facade over
+  `bevy_react_core` and the element crates (`bevy_react_svg`, `_anchor`,
+  `_canvas`, `_portal`, `_surface`), one cargo feature each, all on by
+  default. `ReactPlugins` is bevy-react's `DefaultPlugins`: `ReactUiPlugin`
+  (loading `ui/dist/app.js` unless `.set(..)` overrides it) plus every
+  compiled-in element plugin; `.disable::<P>()` drops one. A disabled
+  feature isn't compiled, and its elements warn (`featureMissing`) naming
+  the feature and plugin. `ReactPlugins::register_bindings` registers the
+  compiled-in elements for the TypeScript exporter. `bevy_react::prelude`
+  carries the plugins, the `#[react_*]` macros, and the messaging APIs.
+- **`custom_cursor` feature** (default) gates `ReactUiPlugin::cursor`; it is
+  the one feature that pulls in `bevy_winit`.
+
+### Changed
+
+- **bevy-react no longer forces Bevy's default features.** Every crate
+  depends on `bevy` with `default-features = false` and lists what it uses
+  (UI, its renderer, text, picking, …, plus `ui_picking`, `default_font`,
+  and `system_clipboard`, which bevy-react needs at runtime) — no more
+  audio, glTF, PBR, gilrs, or `LogPlugin` pulled into every app. Logging
+  goes through `tracing` directly.
+- **The `#[react_*]` macros need no `serde`/`ts-rs` dependency in the
+  caller.** Expansions name the bevy-react crate found in the caller's
+  manifest (`bevy-react`, else `bevy_react_core`) and reach serde, ts-rs,
+  and bevy through its re-exports. Nested payload types you derive
+  `Serialize`/`TS` on yourself still need those crates.
+- **Custom filters shadow built-ins in any registration order.** A custom
+  filter named like a built-in wins whether it registers before or after
+  `ReactUiPlugin`; registering after the plugin is no longer required.
+- **Renamed cargo features:** `svg-text` → `svg_text` (Bevy's naming).
+
 ## [0.6.0] - 2026-08-30
 
 ### Added

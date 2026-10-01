@@ -26,9 +26,9 @@
 //! map (declaration-order packing) and its premultiplied-alpha reasoning.
 
 use bevy::prelude::*;
-use bevy_react_core::filters::FilterColor;
-use bevy_react_core::protocol::units::{Angle, Length};
-use bevy_react_core::{ReactAppExt, react_filter, react_morph_filter};
+use bevy_react::filters::FilterColor;
+use bevy_react::protocol::units::{Angle, Length};
+use bevy_react::{ReactAppExt, react_filter, react_morph_filter};
 
 /// Radial ripple emanating from the layer's center, driven by `uniforms.time`.
 ///

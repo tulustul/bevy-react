@@ -2,7 +2,7 @@
 name = "bevy_react_core"
 version.workspace = true
 edition.workspace = true
-description = "Drive bevy_ui from a React app over an embedded V8 runtime (the core bridge; feature crates such as bevy_react_svg plug into it)."
+description = "The core bridge of bevy-react (drive bevy_ui from React over an embedded V8 runtime). Apps depend on the `bevy-react` crate."
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
@@ -29,19 +29,62 @@ path = "src/lib.rs"
 [features]
 default = ["devtools"]
 devtools = []
-# SVG `<text>` element support: pulls in usvg's font machinery (fontdb + a
-# system-font scan). Off by default — most icon/illustration SVGs have no text.
-# usvg splits the two halves: `text` is shaping (fontdb + rustybuzz),
-# `system-fonts` is fontdb's filesystem scan — loading system fonts needs both.
-svg-text = ["usvg/text", "usvg/system-fonts"]
+# Named custom image cursors (`ReactUiPlugin::cursor`). Turns on
+# `bevy/custom_cursor`, which pulls in `bevy_winit` — so a build with it needs
+# a winit backend (`bevy/x11` or `bevy/wayland` on Linux; every windowed app
+# has one). Not a default here, so a standalone core build/test stays
+# winit-free; the `bevy-react` facade turns it on by default.
+custom_cursor = ["bevy/custom_cursor"]
+# SVG `<text>` support in file-mode SVGs (`<image src="x.svg">`): pulls in
+# usvg's font machinery (fontdb + a system-font scan). Off by default — most
+# icon/illustration SVGs have no text. usvg splits the two halves: `text` is
+# shaping (fontdb + rustybuzz), `system-fonts` is fontdb's filesystem scan —
+# loading system fonts needs both.
+svg_text = ["usvg/text", "usvg/system-fonts"]
 # The headless op harness (`bevy_react_core::test_util`) for a feature crate's
 # own tests: unstable, dev-dependency only.
-test-util = []
+test_util = []
 
 [dependencies]
 accesskit = { workspace = true }
 anyhow = { workspace = true }
-bevy = { workspace = true }
+# Exactly what the code references (no transitive shortcuts: the list
+# documents what the crate touches and survives bevy reshuffling its feature
+# graph). Cargo unifies features, so each of these also decides what the
+# app's `DefaultPlugins` contains — never add one the code doesn't need.
+bevy = { workspace = true, features = [
+    "std",
+    "bevy_asset",
+    "bevy_image",
+    "bevy_color",
+    "bevy_window",
+    "bevy_camera",
+    "bevy_mesh",
+    "bevy_shader",
+    "bevy_render",
+    "bevy_core_pipeline",
+    # Only for the camera gate's ordering against
+    # `UpdateDirectionalLightCascades` (plugin.rs) — required, not optional:
+    # our `cfg` can't see the app's bevy features, and an app with 3D lights
+    # needs the ordering.
+    "bevy_light",
+    "bevy_ui",
+    "bevy_ui_render",
+    "bevy_ui_widgets",
+    "bevy_input_focus",
+    "bevy_text",
+    "bevy_picking",
+    "keyboard",
+    "mouse",
+    "touch",
+    "gamepad",
+    # Not referenced by the code, but bevy-react is broken without them at
+    # runtime: no UI pointer hits (no clicks/hover), invisible text unless a
+    # font is configured, and `<editableText>` copy/paste confined to the app.
+    "ui_picking",
+    "default_font",
+    "system_clipboard",
+] }
 bevy_react_macros = { workspace = true }
 bytemuck = { workspace = true }
 crossbeam-channel = { workspace = true }
@@ -53,7 +96,11 @@ serde_json = { workspace = true }
 tiny-skia = { workspace = true }
 usvg = { workspace = true }
 tracing = { workspace = true }
-ts-rs = { workspace = true }
+# `no-serde-warnings`: the `#[react_*]` macros route serde through
+# `#[serde(crate = "…::__private::serde")]` (so callers need no direct serde
+# dependency), and ts-rs 10's serde-compat parser warns on that key at every
+# expansion. ts-rs 12 parses it silently — drop the feature on upgrade.
+ts-rs = { workspace = true, features = ["no-serde-warnings"] }
 uuid = { workspace = true }
 
 # Native host: the embedded V8 isolate (deno_core) on a dedicated thread, driven by

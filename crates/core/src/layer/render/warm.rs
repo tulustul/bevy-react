@@ -123,7 +123,7 @@ pub fn warm_layer_pipelines(
             &backdrop,
             BackdropBlitPipelineKey { target_format },
         );
-        debug!(
+        tracing::debug!(
             target: "bevy_react",
             "precompiling {} layer pipelines for {target_format:?}",
             handles.len() + 3

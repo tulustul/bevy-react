@@ -4,6 +4,10 @@
 //! the app can drape over any 3D mesh/material (a diegetic monitor, a control
 //! panel, a curved hologram — with the app's own shader on top).
 //!
+//! Apps normally get this crate through `bevy-react`'s `surface` cargo feature
+//! (on by default): `bevy_react::surface`, with [`SurfacePlugin`] a `ReactPlugins`
+//! member; depending on it directly, add [`SurfacePlugin`] beside `ReactUiPlugin`.
+//!
 //! ## Ownership split
 //!
 //! The consuming app owns the **surface registry** ([`Surfaces`]): it
@@ -80,7 +84,7 @@ impl Plugin for SurfacePlugin {
 
     fn finish(&self, app: &mut App) {
         if !app.is_plugin_added::<bevy_react_core::ReactUiPlugin>() {
-            warn!(
+            tracing::warn!(
                 target: "bevy_react",
                 "bevy_react_surface::SurfacePlugin is added but ReactUiPlugin is not: \
                  the <surface> element has nothing to mount into"

@@ -1,7 +1,6 @@
 //! The surface registry and its camera gates.
 
 use bevy::camera::visibility::ViewVisibility;
-use bevy::prelude::*;
 
 use super::*;
 use crate::element::RSurface;

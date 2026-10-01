@@ -27,7 +27,7 @@ use bevy::prelude::*;
 use bevy::render::render_resource::TextureFormat;
 use bevy::render::view::screenshot::{Screenshot, ScreenshotCaptured, save_to_disk};
 use bevy::ui::IsDefaultUiCamera;
-use bevy_react_core::{ReactAppExt, ReactEvents, react_event};
+use bevy_react::{ReactAppExt, ReactEvents, react_event};
 
 /// Bevy → React: navigate the gallery to the demo whose nav label is `label`
 /// (e.g. `"<portal>"`). The `App` looks it up in its demo tree and selects it.

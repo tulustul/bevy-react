@@ -95,9 +95,7 @@ Currently, the project is a **quick, vibecoded proof of concept** demonstrating 
 ## Getting started
 
 ```sh
-cargo add bevy_react_core
-# plus the feature crates you use, e.g. the JSX <svg> element:
-cargo add bevy_react_svg
+cargo add bevy-react
 ```
 
 Scaffold the React UI:
@@ -107,19 +105,66 @@ npx bevy-react init ui
 cd ui && npm run watch
 ```
 
-Add the plugin to your app
+Add the plugins to your app — `ReactPlugins` is bevy-react's `DefaultPlugins`:
+the bridge plus every element plugin your build compiles in.
 
 ```rust
-use bevy_react_core::ReactUiPlugin;
+use bevy::prelude::*;
+use bevy_react::prelude::*;
 
-app.add_plugins(ReactUiPlugin::new("ui/dist/app.js")
+App::new()
+    .add_plugins(DefaultPlugins)
+    .add_plugins(ReactPlugins) // loads `ui/dist/app.js`
+    .run();
+```
+
+Configure a member with `.set(..)` and leave one out with `.disable::<P>()`,
+like any Bevy plugin group:
+
+```rust
+app.add_plugins(
+    ReactPlugins
+        .set(ReactUiPlugin::new("assets/ui/app.js").hot_reload(false))
+        .disable::<CanvasPlugin>(),
+);
 ```
 
 Follow the [`examples/minimal`](https://github.com/tulustul/bevy-react/tree/main/examples/minimal/main.rs) example for a full working setup.
 
+### Cargo features
+
+Everything is on by default. A disabled feature is not compiled at all — its
+elements then mount as plain nodes with a `featureMissing` warning naming the
+feature to enable.
+
+| feature         | adds                                                        | default |
+| --------------- | ----------------------------------------------------------- | ------- |
+| `svg`           | `<svg>` and its shape elements (`SvgPlugin`)                | ✓       |
+| `anchor`        | `<anchor>`, world-anchored overlays (`AnchorPlugin`)        | ✓       |
+| `canvas`        | `<canvas>`, a retained drawing surface (`CanvasPlugin`)     | ✓       |
+| `portal`        | `<portal>`, render-target views (`PortalPlugin`)            | ✓       |
+| `surface`       | `<surface>`, UI on offscreen textures (`SurfacePlugin`)     | ✓       |
+| `devtools`      | the F12 inspector (inert in `--release` builds)             | ✓       |
+| `custom_cursor` | named image cursors, `ReactUiPlugin::cursor` (`bevy_winit`) | ✓       |
+| `svg_text`      | `<text>` inside `.svg` files (pulls in fontdb)              |         |
+
+Pick only what you use:
+
+```toml
+bevy-react = { version = "0.7", default-features = false, features = ["svg", "devtools"] }
+```
+
+bevy-react itself depends on Bevy with Bevy's default features off and enables
+only what it needs (UI, its renderer, text, picking, …), so trimming Bevy's own
+features in your app works as usual. A crate that extends bevy-react (custom
+elements, styles, filters) depends on `bevy-react` with
+`default-features = false`, the way a Bevy plugin crate depends on `bevy`.
+
 ### Typescript client generation
 
 Copy the `--export-bindings` flag implementation from [`examples/minimal`](https://github.com/tulustul/bevy-react/tree/main/examples/minimal/main.rs)
+— it registers the compiled-in element features with `ReactPlugins::register_bindings`,
+so the generated JSX types match your cargo features.
 
 After that you can run
 
@@ -422,7 +467,7 @@ params in TSX** via the generated `bevy.ts` (the same codegen flow as messages
 and events).
 
 ```rust
-use bevy_react_core::{ReactAppExt, react_filter};
+use bevy_react::{ReactAppExt, react_filter};
 
 // Fields pack into the shader's `uniforms.params` in declaration order.
 #[react_filter(shader = "shaders/dissolve.wgsl")]
@@ -486,7 +531,7 @@ the generated `BevyMorphFilters` typing, so `params` is fully typed in TSX —
 the same codegen flow as custom filters.
 
 ```rust
-use bevy_react_core::{ReactAppExt, react_morph_filter};
+use bevy_react::{ReactAppExt, react_morph_filter};
 
 // Fields pack into the shader's `uniforms.params` in declaration order.
 #[react_morph_filter(shader = "shaders/morphs/windowslice.wgsl")]
@@ -588,7 +633,7 @@ React-composed drawing surface: shape children (`<circle>`, `<rect>`, `<path>`,
 `<g>`, …) are real elements with props, per-shape pointer events (hit-testing
 follows painted geometry; event coords arrive in viewBox user units), `{ animated }`
 bindings on numeric attrs, and a `transition` prop for eased changes. SVG `<text>`
-in files is available behind the off-by-default `svg-text` cargo feature.
+in files is available behind the off-by-default `svg_text` cargo feature.
 
 ```tsx
 <svg viewBox="0 0 100 100" style={{ width: 200, height: 200 }}>
@@ -669,11 +714,11 @@ each a crate registering one). An element needn't be UI: this `<cube>` is a 3D
 mesh entity, spawned, updated and despawned by React.
 
 ```rust
-use bevy_react_core::ReactAppExt;
-use bevy_react_core::element::{AttrBinding, Attribute, Common, Element, animatable_binding};
-use bevy_react_core::ext::ElementFlags;
-use bevy_react_core::protocol::animatable::Animatable;
-use bevy_react_core::style::Codec;
+use bevy_react::ReactAppExt;
+use bevy_react::element::{AttrBinding, Attribute, Common, Element, animatable_binding};
+use bevy_react::ext::ElementFlags;
+use bevy_react::protocol::animatable::Animatable;
+use bevy_react::style::Codec;
 
 // A number, or an `{ animated }` wrapper the animation engine drives.
 static SIZE: Attribute<Animatable<f32>> = Attribute {
@@ -717,8 +762,8 @@ with serde and is typed into `BevyStyle`, so it works in `style` and in the
 hover, press and focus variants alike.
 
 ```rust
-use bevy_react_core::ReactAppExt;
-use bevy_react_core::style::{StyleProperty, StyleValue};
+use bevy_react::ReactAppExt;
+use bevy_react::style::{StyleProperty, StyleValue};
 
 #[derive(Debug, Clone, PartialEq, serde::Deserialize, ts_rs::TS)]
 struct Sparkle {
@@ -759,7 +804,7 @@ Three typed channels connect React and the ECS:
 
 ```rust
 use bevy::prelude::*;
-use bevy_react_core::{ReactAppExt, ReactEvents, react_event, react_message};
+use bevy_react::{ReactAppExt, ReactEvents, react_event, react_message};
 
 // React → Bevy: `bevy.game.reset()`.
 #[react_message(name = "game.reset")]
@@ -839,8 +884,9 @@ app.add_plugins(ReactUiPlugin::new("ui/dist/app.js").devtools(DevtoolsConfig {
 Cargo features can't depend on the build profile, so the (never-registered)
 devtools code is still _compiled_ into release binaries; the panel's JS is
 stripped from production bundles either way. If a shipping build must not
-contain the code at all, disable the `devtools` default feature
-(`bevy-react = { version = "…", default-features = false }`).
+contain the code at all, leave out the `devtools` feature
+(`default-features = false` plus the features you use — see
+[Cargo features](#cargo-features)).
 
 ## Performance
 

@@ -16,7 +16,7 @@ use bevy::prelude::*;
 use bevy::render::render_resource::AsBindGroup;
 use bevy::shader::ShaderRef;
 use bevy::ui::IsDefaultUiCamera;
-use bevy_react_core::{ReactAppExt, react_message};
+use bevy_react::{ReactAppExt, react_message};
 
 /// How far in front of the camera the backdrop quad sits, and its size. At
 /// distance 30 the default 45° vertical fov needs ~25 world units of height;

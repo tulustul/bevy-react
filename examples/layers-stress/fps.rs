@@ -5,7 +5,7 @@ use std::time::Duration;
 use bevy::diagnostic::{DiagnosticsStore, FrameTimeDiagnosticsPlugin};
 use bevy::prelude::*;
 use bevy::time::common_conditions::on_timer;
-use bevy_react_core::{ReactAppExt, ReactEvents, react_event};
+use bevy_react::{ReactAppExt, ReactEvents, react_event};
 
 pub struct FpsPlugin;
 

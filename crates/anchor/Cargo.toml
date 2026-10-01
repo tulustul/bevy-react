@@ -15,11 +15,13 @@ name = "bevy_react_anchor"
 path = "src/lib.rs"
 
 [dependencies]
-bevy = { workspace = true }
+# Exactly what the code references (see the core manifest).
+bevy = { workspace = true, features = ["bevy_ui", "bevy_picking", "bevy_camera"] }
+tracing = { workspace = true }
 bevy_react_core = { workspace = true }
 serde = { workspace = true }
 
 [dev-dependencies]
-bevy_react_core = { workspace = true, features = ["test-util"] }
+bevy_react_core = { workspace = true, features = ["test_util"] }
 crossbeam-channel = { workspace = true }
 serde_json = { workspace = true }

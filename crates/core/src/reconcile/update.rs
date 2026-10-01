@@ -73,7 +73,7 @@ pub(super) fn apply_update(
         // Only reachable through a bug (create always seeds the
         // cache); merging onto defaults degrades to "delta = the
         // whole truth" rather than crashing.
-        warn!("delta update for uncached node {id}; merging onto defaults");
+        tracing::warn!("delta update for uncached node {id}; merging onto defaults");
         Box::default()
     });
     // The pre-merge name, so a `name` change can leave its old index bucket.

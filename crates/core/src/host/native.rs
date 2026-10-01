@@ -90,7 +90,7 @@ fn watch_bundle(time: Res<Time>, mut watch: ResMut<BundleWatch>) {
     let current = file_mtime(&watch.path);
     if current.is_some() && current != watch.last_modified {
         watch.last_modified = current;
-        info!("bundle changed — hot reloading React app");
+        tracing::info!("bundle changed — hot reloading React app");
         let _ = watch.reload_tx.send(());
     }
 }

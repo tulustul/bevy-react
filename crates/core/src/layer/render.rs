@@ -1108,7 +1108,7 @@ pub fn prepare_layer_composites(
                             })
                         });
                     if let Some(err) = compile_error {
-                        warn!(
+                        tracing::warn!(
                             "UI layer {:?}: a filter pass shader failed to compile — the \
                              layer's subtree is invisible (the composite gate never falls \
                              back to unfiltered content) and its filter run restages every \
@@ -1117,13 +1117,14 @@ pub fn prepare_layer_composites(
                         );
                         filter.gate_warned = true;
                     } else if filter.gated_frames == STUCK_GATE_HANG_FRAMES {
-                        warn!(
+                        tracing::warn!(
                             "UI layer {:?}: composite quad withheld for {} consecutive \
                              frames and its filter pipeline is still not ready (no compile \
                              error reported — a hung/queued compile?). Until it resolves, \
                              the layer's subtree is invisible and its filter run restages \
                              every frame.",
-                            layer.main_entity, STUCK_GATE_HANG_FRAMES,
+                            layer.main_entity,
+                            STUCK_GATE_HANG_FRAMES,
                         );
                         filter.gate_warned = true;
                     }
@@ -2218,7 +2219,7 @@ pub fn ui_layer_capture_pass(
                 set_image_viewport(&mut pass, image);
             }
             if let Err(err) = phase.render(&mut pass, world, layer.view_entity) {
-                bevy::log::error!("layer capture pass failed: {err:?}");
+                tracing::error!("layer capture pass failed: {err:?}");
             }
         }
 

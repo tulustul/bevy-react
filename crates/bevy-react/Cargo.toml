@@ -1,0 +1,64 @@
+[package]
+name = "bevy-react"
+version.workspace = true
+edition.workspace = true
+description = "Drive bevy_ui from a React app over an embedded V8 runtime."
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme = "../../README.md"
+keywords = ["bevy", "react", "ui", "gamedev", "gui"]
+categories = ["gui", "game-development"]
+
+# docs.rs documents every feature. `custom_cursor` pulls in `bevy_winit`,
+# which only builds on Linux with a windowing backend — hence `bevy/x11`.
+# `rusty_v8` (via deno_core) skips its network V8 download when the `DOCS_RS`
+# env var is set, so the native build succeeds without network access.
+[package.metadata.docs.rs]
+all-features = true
+features = ["bevy/x11"]
+rustdoc-args = ["--cfg", "docsrs"]
+
+[lib]
+name = "bevy_react"
+path = "src/lib.rs"
+
+# One feature per feature crate (each compiles in its crate and adds its
+# plugin to `ReactPlugins`), plus the core's own switches. `default` is
+# everything except `svg_text`, like bevy's `DefaultPlugins`: an app trims
+# with `default-features = false` and lists what it uses.
+[features]
+default = ["svg", "anchor", "canvas", "portal", "surface", "devtools", "custom_cursor"]
+# `<svg>` and its shape elements (`bevy_react::svg`, `SvgPlugin`).
+svg = ["dep:bevy_react_svg"]
+# `<anchor>`: world-anchored UI overlays (`bevy_react::anchor`, `AnchorPlugin`).
+anchor = ["dep:bevy_react_anchor"]
+# `<canvas>`: a retained CPU-rastered drawing surface (`bevy_react::canvas`, `CanvasPlugin`).
+canvas = ["dep:bevy_react_canvas"]
+# `<portal>`: render-target views (`bevy_react::portal`, `PortalPlugin`).
+portal = ["dep:bevy_react_portal"]
+# `<surface>`: React UI rendered into offscreen textures (`bevy_react::surface`, `SurfacePlugin`).
+surface = ["dep:bevy_react_surface"]
+# The devtools inspector (F12; inert in `--release` builds).
+devtools = [
+    "bevy_react_core/devtools",
+    "bevy_react_svg?/devtools",
+    "bevy_react_portal?/devtools",
+    "bevy_react_surface?/devtools",
+]
+# Named custom image cursors (`ReactUiPlugin::cursor`). Pulls in `bevy_winit`
+# (needs `bevy/x11` or `bevy/wayland` on Linux — every windowed app has one).
+custom_cursor = ["bevy_react_core/custom_cursor"]
+# SVG `<text>` in file-mode SVGs (`<image src="x.svg">`, not the `svg`
+# feature's JSX `<svg>`): pulls in fontdb and scans system fonts.
+svg_text = ["bevy_react_core/svg_text"]
+
+[dependencies]
+bevy = { workspace = true }
+bevy_react_core = { workspace = true }
+bevy_react_svg = { workspace = true, optional = true }
+bevy_react_anchor = { workspace = true, optional = true }
+bevy_react_canvas = { workspace = true, optional = true }
+bevy_react_portal = { workspace = true, optional = true }
+bevy_react_surface = { workspace = true, optional = true }

@@ -1,6 +1,7 @@
 [workspace]
 resolver = "3"
 members = [
+    "crates/bevy-react",
     "crates/core",
     "crates/macros",
     "crates/svg",
@@ -25,7 +26,11 @@ homepage = "https://github.com/tulustul/bevy-react"
 [workspace.dependencies]
 accesskit = "0.24"
 anyhow = "1.0.102"
-bevy = { version = "0.19", features = ["system_clipboard", "custom_cursor"] }
+# Libraries take bevy with its defaults OFF and list exactly the features
+# their code needs (each crate's own manifest) — a library that leaves bevy's
+# defaults on forces audio/gltf/pbr/winit/… onto every app. The examples are
+# apps: they switch the defaults back on (`features = ["default"]`).
+bevy = { version = "0.19", default-features = false }
 bytemuck = { version = "1", features = ["derive"] }
 crossbeam-channel = "0.5.15"
 deno_core = "0.404.0"
@@ -62,6 +67,9 @@ tokio = { version = "1.52.3", features = ["rt", "macros", "sync"] }
 ts-rs = "10"
 uuid = "1"
 proc-macro2 = "1"
+# The macros resolve the path of the crate they expand against from the
+# caller's manifest (`bevy-react` or `bevy_react_core`).
+proc-macro-crate = "3"
 quote = "1"
 syn = "2"
 
@@ -74,13 +82,18 @@ serde-wasm-bindgen = "0.6"
 console_error_panic_hook = "0.1"
 getrandom = "0.3"
 
+# The workspace's own crates, released in lock-step. Defaults OFF here so a
+# member opts in explicitly: a feature crate that left core's defaults on
+# would switch `devtools` back on under a facade build that turned it off
+# (and a member can re-enable defaults, never disable inherited ones).
 bevy_react_macros = { path = "crates/macros", version = "0.6.0" }
-bevy_react_core = { path = "crates/core", version = "0.6.0" }
-bevy_react_svg = { path = "crates/svg", version = "0.6.0" }
-bevy_react_anchor = { path = "crates/anchor", version = "0.6.0" }
-bevy_react_canvas = { path = "crates/canvas", version = "0.6.0" }
-bevy_react_portal = { path = "crates/portal", version = "0.6.0" }
-bevy_react_surface = { path = "crates/surface", version = "0.6.0" }
+bevy_react_core = { path = "crates/core", version = "0.6.0", default-features = false }
+bevy_react_svg = { path = "crates/svg", version = "0.6.0", default-features = false }
+bevy_react_anchor = { path = "crates/anchor", version = "0.6.0", default-features = false }
+bevy_react_canvas = { path = "crates/canvas", version = "0.6.0", default-features = false }
+bevy_react_portal = { path = "crates/portal", version = "0.6.0", default-features = false }
+bevy_react_surface = { path = "crates/surface", version = "0.6.0", default-features = false }
+bevy-react = { path = "crates/bevy-react", version = "0.6.0", default-features = false }
 
 [profile.dev]
 opt-level = 1

@@ -237,11 +237,11 @@ pub enum AnimatableProperty {
         leaf: GradientLeaf,
     },
 
-    /// One field of a feature-owned prop value (`crate::ext`): `domain` is
-    /// the registered prop key (`"shape"` for an SVG shape child's folded
-    /// attrs), `name` the field's wire name within it (`"cx"`, `"r"`,
-    /// `"strokeWidth"`, …). Derived from the value's own
-    /// [`ExtValue::bindings`](crate::ext::ExtValue::bindings); the apply
+    /// One animated element attribute: `domain` is the attribute's
+    /// [`AttrBinding`](crate::element::AttrBinding) domain (`"shape"` for an
+    /// SVG shape's attrs), `name` the attribute's wire name (`"cx"`, `"r"`,
+    /// `"strokeWidth"`, …). Derived from an `{ animated }` attribute value
+    /// through its `AttrBinding`; the apply
     /// stage evaluates each per frame and **publishes** the result — a
     /// scalar, or a color for an `interpolateColor` binding — into the
     /// entity's [`DrivenExtValues`](crate::ext::DrivenExtValues), which the

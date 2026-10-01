@@ -5,8 +5,8 @@ use std::time::Duration;
 
 use bevy::prelude::*;
 use bevy::ui::{ComputedNode, UiGlobalTransform};
-use bevy_react_core::protocol::{ROOT_ID, op::Op};
-use bevy_react_core::style::StyleValue;
+use bevy_react::protocol::{ROOT_ID, op::Op};
+use bevy_react::style::StyleValue;
 use bevy_react_core::test_util::{create, ent, op_app_with, update};
 use serde_json::json;
 

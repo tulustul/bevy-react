@@ -5,8 +5,6 @@
 use std::any::TypeId;
 use std::collections::HashMap;
 
-use bevy::prelude::*;
-
 /// A registry entry that remembers which Rust type produced it, so a same-type
 /// re-registration (a no-op) can be told apart from a name collision between
 /// two different types.
@@ -28,7 +26,7 @@ pub(crate) fn register_entry<R: NamedEntry>(
         if existing.type_id() == entry.type_id() {
             return;
         }
-        warn!(
+        tracing::warn!(
             "react {kind} {name:?} is registered by two different types; replacing the previous entry"
         );
     }

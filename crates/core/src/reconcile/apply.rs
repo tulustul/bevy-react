@@ -87,7 +87,7 @@ pub fn apply_js_ops(
         }
         None => true,
     };
-    debug!("applying {op_count} reconciler op(s)");
+    tracing::debug!("applying {op_count} reconciler op(s)");
 
     // Parents whose child ORDER diverged from the ECS this batch (same-parent
     // re-appends, cross-parent moves, and `Insert`s of fresh nodes); see

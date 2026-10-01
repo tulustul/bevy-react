@@ -267,7 +267,7 @@ pub(crate) fn log_warn(kind: &str, value: &str, message: &str) -> bool {
 /// test's whole assertion window; the devtools test harness holds it for each
 /// app's lifetime. Available regardless of the feature cfg so test harnesses
 /// compile in every configuration.
-#[cfg(any(test, feature = "test-util"))]
+#[cfg(any(test, feature = "test_util"))]
 pub fn test_lock() -> std::sync::MutexGuard<'static, ()> {
     static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
     LOCK.lock().unwrap_or_else(|e| e.into_inner())

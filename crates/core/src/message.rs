@@ -128,10 +128,10 @@ impl ReactRegistry {
     /// Logs a warning for an unregistered name and an error for malformed JSON.
     pub(crate) fn dispatch(&self, msg: ReactMessage, commands: &mut Commands) {
         match self.handlers.get(msg.name.as_str()) {
-            None => warn!("no handler registered for react message {:?}", msg.name),
+            None => tracing::warn!("no handler registered for react message {:?}", msg.name),
             Some(reg) => {
                 if let Err(e) = (reg.handler)(msg.value, commands) {
-                    error!("malformed react message {:?}: {e}", msg.name);
+                    tracing::error!("malformed react message {:?}: {e}", msg.name);
                 }
             }
         }
@@ -248,11 +248,10 @@ pub trait ReactAppExt {
     /// appears in the generated typing (see
     /// [`export_react_typescript`](Self::export_react_typescript)).
     ///
-    /// To shadow a built-in name, register **after** `ReactUiPlugin` is
-    /// added: the plugin's `build` registers the built-ins and would replace
-    /// an earlier custom (with a warn), while the exporter — which never
-    /// runs the plugin — would still show yours, silently diverging the
-    /// generated types from runtime.
+    /// A custom filter registered under a built-in's name shadows the
+    /// built-in, before or after `ReactUiPlugin` is added (the plugin's
+    /// built-ins never displace an existing registration) — the runtime and
+    /// the exporter agree on the winner either way.
     fn add_react_filter<T>(&mut self) -> &mut Self
     where
         T: ReactFilter + DeserializeOwned + TS;

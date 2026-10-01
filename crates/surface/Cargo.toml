@@ -21,10 +21,12 @@ default = ["devtools"]
 devtools = ["bevy_react_core/devtools"]
 
 [dependencies]
-bevy = { workspace = true }
+# Exactly what the code references (see the core manifest).
+bevy = { workspace = true, features = ["bevy_ui", "bevy_camera", "bevy_light", "bevy_render", "bevy_mesh", "bevy_asset", "bevy_picking", "mesh_picking"] }
+tracing = { workspace = true }
 bevy_react_core = { workspace = true }
 
 [dev-dependencies]
-bevy_react_core = { workspace = true, features = ["test-util"] }
+bevy_react_core = { workspace = true, features = ["test_util"] }
 crossbeam-channel = { workspace = true }
 serde_json = { workspace = true }

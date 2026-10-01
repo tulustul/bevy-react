@@ -7,7 +7,8 @@
 //! The style writer (`crate::style::writers::BACKGROUND_IMAGE_WRITER`) builds
 //! the `ImageNode`; elements that own their entity's `ImageNode` (`image`,
 //! `canvas`, `portal`, `svg`) are skipped there (`ElementFlags::owns_image`)
-//! and warned about here ([`warn_ignored`]). This module keeps the markers
+//! and warned about by the op path (`styleIgnored`, the stamps'
+//! `warn_ignored_styles`). This module keeps the markers
 //! and the systems that follow a texture binding / DPI change.
 
 use bevy::image::TRANSPARENT_IMAGE_HANDLE;

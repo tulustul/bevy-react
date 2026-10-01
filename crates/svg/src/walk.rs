@@ -49,7 +49,7 @@ fn walk_inner(
     visit: &mut impl FnMut(Entity, &SvgShape, Transform, f32),
 ) {
     if depth >= MAX_DEPTH {
-        warn!("svg shape walk exceeded {MAX_DEPTH} nested groups; skipping deeper shapes");
+        tracing::warn!("svg shape walk exceeded {MAX_DEPTH} nested groups; skipping deeper shapes");
         return;
     }
     for child in children.iter() {
@@ -94,7 +94,9 @@ pub(crate) fn climb_to_svg_root(
         }
         entity = parent;
     }
-    warn!("svg ChildOf climb exceeded {MAX_DEPTH} hops without reaching an <svg> root; skipping");
+    tracing::warn!(
+        "svg ChildOf climb exceeded {MAX_DEPTH} hops without reaching an <svg> root; skipping"
+    );
     None
 }
 

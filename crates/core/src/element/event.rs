@@ -188,7 +188,7 @@ pub(crate) fn send_to<T: Serialize + 'static>(
         match serde_json::to_value(payload) {
             Ok(v) => v,
             Err(e) => {
-                error!("serialize element event {:?}: {e}", event.name);
+                tracing::error!("serialize element event {:?}: {e}", event.name);
                 return false;
             }
         }

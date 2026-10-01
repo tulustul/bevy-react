@@ -318,8 +318,9 @@ pub struct FilterRegistry {
 
 impl FilterRegistry {
     /// Register filter type `T` under `T::NAME`. Idempotent per type; a
-    /// different type claiming an occupied name warns and replaces (see
-    /// [`register_entry`]).
+    /// custom type claiming a built-in's name shadows it (in either
+    /// registration order), and a second custom type claiming an occupied
+    /// name warns and replaces (see [`register_entry`]).
     pub fn register<T: ReactFilter + DeserializeOwned + TS>(&mut self) {
         self.register_with::<T>(false);
     }
@@ -371,6 +372,22 @@ impl FilterRegistry {
     }
 
     fn register_with<T: ReactFilter + DeserializeOwned + TS>(&mut self, builtin: bool) {
+        // A custom filter shadows a built-in of the same name whichever
+        // registers first — the plugin's `build` or the app's own call — so
+        // plugin order never matters: a built-in never displaces an
+        // occupant, and a custom replaces a built-in silently (the exporter,
+        // `ts_codegen`, types the same winner). Only two different custom
+        // types on one name warn (`register_entry`).
+        if let Some(existing) = self.entries.get(T::NAME)
+            && existing.type_id != TypeId::of::<T>()
+        {
+            if builtin {
+                return;
+            }
+            if existing.builtin {
+                self.entries.remove(T::NAME);
+            }
+        }
         register_entry(
             &mut self.entries,
             T::NAME,

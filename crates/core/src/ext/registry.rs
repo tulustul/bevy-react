@@ -229,36 +229,47 @@ pub fn with_thread_registry<R>(f: impl FnOnce(Option<&ExtRegistry>) -> R) -> R {
     THREAD_REGISTRY.with(|r| f(r.borrow().as_deref()))
 }
 
-/// A known optional feature: the crate that provides a set of element
-/// kinds. Consulted only on a registry miss, to name the crate in the
-/// `featureMissing` warning; the core never depends on the crate.
+/// A known optional feature: the `bevy-react` cargo feature (and the plugin
+/// it compiles in) that provides a set of element kinds. Consulted only on a
+/// registry miss, to name both in the `featureMissing` warning; the core
+/// never depends on the feature crate. The `bevy-react` facade's tests pin
+/// this table against its feature list.
 pub struct FeatureHint {
-    pub crate_name: &'static str,
+    /// The `bevy-react` cargo feature (also the facade module and the crate
+    /// suffix: `svg` → `bevy_react::svg`, `bevy_react_svg`).
+    pub feature: &'static str,
+    /// The plugin that registers the kinds (a `ReactPlugins` member).
+    pub plugin: &'static str,
     pub kinds: &'static [&'static str],
 }
 
 /// The optional features the core knows to hint at.
 pub const KNOWN_FEATURES: &[FeatureHint] = &[
     FeatureHint {
-        crate_name: "bevy_react_svg",
+        feature: "svg",
+        plugin: "SvgPlugin",
         kinds: &[
             "svg", "path", "rect", "circle", "ellipse", "line", "polyline", "polygon", "g",
         ],
     },
     FeatureHint {
-        crate_name: "bevy_react_anchor",
+        feature: "anchor",
+        plugin: "AnchorPlugin",
         kinds: &["anchor"],
     },
     FeatureHint {
-        crate_name: "bevy_react_canvas",
+        feature: "canvas",
+        plugin: "CanvasPlugin",
         kinds: &["canvas"],
     },
     FeatureHint {
-        crate_name: "bevy_react_portal",
+        feature: "portal",
+        plugin: "PortalPlugin",
         kinds: &["portal"],
     },
     FeatureHint {
-        crate_name: "bevy_react_surface",
+        feature: "surface",
+        plugin: "SurfacePlugin",
         kinds: &["surface"],
     },
 ];
@@ -269,17 +280,19 @@ pub fn feature_hint(kind: &str) -> Option<&'static FeatureHint> {
 }
 
 /// Report an unregistered element kind that a known optional feature
-/// provides: one deduped `featureMissing` diag warning naming the crate to
-/// add (under the op's node scope). Any other unknown kind mounts as a
-/// plain node silently.
+/// provides: one deduped `featureMissing` diag warning naming the cargo
+/// feature and the plugin (under the op's node scope). The core can't tell
+/// "compiled out" from "plugin not added", so the message covers both. Any
+/// other unknown kind mounts as a plain node silently.
 pub(crate) fn warn_feature_missing_kind(kind: &str) {
     if let Some(hint) = feature_hint(kind) {
         crate::diag::report(
             "featureMissing",
             kind,
             &format!(
-                "element {kind:?} needs the `{}` crate: add its plugin to the app",
-                hint.crate_name
+                "element <{kind}> needs the `{}` feature of `bevy-react` and `{}` \
+                 (included in `ReactPlugins`)",
+                hint.feature, hint.plugin
             ),
         );
     }

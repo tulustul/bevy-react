@@ -60,7 +60,7 @@ impl ReactEvents<'_> {
                     value,
                 });
             }
-            Err(e) => error!("serialize react event {:?}: {e}", E::NAME),
+            Err(e) => tracing::error!("serialize react event {:?}: {e}", E::NAME),
         }
     }
 }

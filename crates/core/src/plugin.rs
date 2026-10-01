@@ -8,6 +8,7 @@ use crate::animations::{
 };
 use bevy::asset::embedded_asset;
 use bevy::prelude::*;
+#[cfg(feature = "custom_cursor")]
 use bevy::window::CustomCursorImage;
 
 use crate::bridge::{JsBridge, OpReceiver, OutboundResource, OutboundSender};
@@ -98,6 +99,7 @@ pub struct ReactUiPlugin {
     animations: bool,
     default_font: Option<PathBuf>,
     named_fonts: Vec<(String, PathBuf)>,
+    #[cfg(feature = "custom_cursor")]
     custom_cursors: Vec<(String, PathBuf, (u16, u16))>,
     #[cfg(feature = "devtools")]
     devtools: crate::devtools::DevtoolsConfig,
@@ -149,12 +151,17 @@ impl ReactUiPlugin {
             animations: true,
             default_font: None,
             named_fonts: Vec::new(),
+            #[cfg(feature = "custom_cursor")]
             custom_cursors: Vec::new(),
             #[cfg(feature = "devtools")]
             devtools: Default::default(),
             precompile_filters: Default::default(),
         }
     }
+
+    /// The bundle [`Default`] loads: what the `create` template's `ui/`
+    /// package builds, relative to the working directory.
+    pub const DEFAULT_BUNDLE: &'static str = "ui/dist/app.js";
 
     /// Configure the devtools inspector, on by default in dev builds (release
     /// builds never run it, even when compiled in). Every
@@ -264,6 +271,12 @@ impl ReactUiPlugin {
     /// the image at `path` is loaded via the `AssetServer` (relative to your
     /// `AssetPlugin.file_path`), and `hotspot` is the click-point pixel (top-left
     /// origin) within it. The cursor analogue of [`Self::font`].
+    ///
+    /// Needs the `custom_cursor` cargo feature (default; it pulls in
+    /// `bevy_winit`). Without it, built-in cursor keywords still work and a
+    /// custom name warns like any unknown cursor.
+    #[cfg(feature = "custom_cursor")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "custom_cursor")))]
     pub fn cursor(
         mut self,
         name: impl Into<String>,
@@ -338,6 +351,14 @@ pub(crate) fn add_camera_gate_systems(app: &mut App) {
             .before(bevy::camera::visibility::VisibilitySystems::CheckVisibility)
             .before(bevy::light::SimulationLightSystems::UpdateDirectionalLightCascades),
     );
+}
+
+/// The plugin for [`ReactUiPlugin::DEFAULT_BUNDLE`] (`ui/dist/app.js`) with
+/// every default — what `ReactPlugins` adds unless `.set(..)` overrides it.
+impl Default for ReactUiPlugin {
+    fn default() -> Self {
+        Self::new(Self::DEFAULT_BUNDLE)
+    }
 }
 
 impl Plugin for ReactUiPlugin {
@@ -602,6 +623,7 @@ impl Plugin for ReactUiPlugin {
         .insert_resource(ReactUiConfig {
             default_font: self.default_font.clone(),
             named_fonts: self.named_fonts.clone(),
+            #[cfg(feature = "custom_cursor")]
             custom_cursors: self.custom_cursors.clone(),
             precompile_filters: self.precompile_filters.clone(),
         })
@@ -1116,6 +1138,7 @@ pub(crate) struct UiRoot;
 pub(crate) struct ReactUiConfig {
     default_font: Option<PathBuf>,
     named_fonts: Vec<(String, PathBuf)>,
+    #[cfg(feature = "custom_cursor")]
     custom_cursors: Vec<(String, PathBuf, (u16, u16))>,
     pub(crate) precompile_filters: PrecompileFilters,
 }
@@ -1178,6 +1201,7 @@ fn setup(
     });
     // Likewise load configured custom image cursors into the registry `drive_cursor_icon`
     // resolves a `cursor` name against.
+    #[cfg(feature = "custom_cursor")]
     commands.insert_resource(crate::cursor::CustomCursors(
         config
             .custom_cursors

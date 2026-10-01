@@ -523,7 +523,7 @@ pub fn morph_gate(
                     })
                 });
             if let Some(err) = compile_error {
-                warn!(
+                tracing::warn!(
                     "UI layer {main_entity:?}: the morphFilter pass shader failed to \
                      compile — the layer's subtree is invisible while the morph is in \
                      flight (the composite gate never falls back to unblended content). \
@@ -531,7 +531,7 @@ pub fn morph_gate(
                 );
                 morph.gate_warned = true;
             } else if morph.gated_frames == STUCK_GATE_HANG_FRAMES {
-                warn!(
+                tracing::warn!(
                     "UI layer {main_entity:?}: morph composite withheld for {} consecutive \
                      frames and its pipeline is still not ready (no compile error \
                      reported). The layer's subtree is invisible until it resolves.",

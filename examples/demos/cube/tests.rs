@@ -1,4 +1,4 @@
-//! `<cube>` through the real op path (the core's `test-util` harness): the
+//! `<cube>` through the real op path (the core's `test_util` harness): the
 //! entity it spawns, attribute updates, driven values, lifetime, and the
 //! pointer plumbing.
 
@@ -7,8 +7,8 @@ use bevy::picking::backend::HitData;
 use bevy::picking::hover::HoverMap;
 use bevy::picking::pointer::PointerId;
 use bevy::prelude::*;
-use bevy_react_core::ext::{DrivenExt, DrivenExtValues, DrivenValue};
-use bevy_react_core::protocol::{ROOT_ID, op::Op};
+use bevy_react::ext::{DrivenExt, DrivenExtValues, DrivenValue};
+use bevy_react::protocol::{ROOT_ID, op::Op};
 use bevy_react_core::test_util::{create, create_node, ent, op_app_with, update};
 use serde_json::json;
 

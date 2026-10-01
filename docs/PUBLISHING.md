@@ -3,8 +3,10 @@
 ### 1. Bump the version
 
 Rust side — one command (needs `cargo install cargo-edit` once). It updates
-`[workspace.package] version` **and** the `bevy_react_macros` / `bevy_react_core` /
-`bevy_react_svg` entries in `[workspace.dependencies]` together:
+`[workspace.package] version` **and** the workspace's own entries in
+`[workspace.dependencies]` (`bevy_react_macros`, `bevy_react_core`, the five
+feature crates, and the `bevy-react` facade) together — every crate is
+released in lock-step:
 
 ```sh
 cargo set-version --bump patch   # or --bump minor / --bump major
@@ -57,6 +59,9 @@ npm publish --dry-run -w bevy-react
 ```sh
 cargo publish --workspace
 ```
+
+Cargo publishes in dependency order: `bevy_react_macros` → `bevy_react_core` →
+the feature crates → `bevy-react` (the facade apps depend on).
 
 ### 10. Publish to npm
 

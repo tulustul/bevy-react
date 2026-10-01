@@ -15,7 +15,7 @@ use bevy::light::NotShadowCaster;
 use bevy::prelude::*;
 use bevy::transform::TransformSystems;
 use bevy::ui::{CalculatedClip, ComputedNode, IsDefaultUiCamera, UiGlobalTransform, UiSystems};
-use bevy_react_core::{ReactApplySet, ReactNodes};
+use bevy_react::{ReactApplySet, ReactNodes};
 
 use crate::scene::Scene;
 

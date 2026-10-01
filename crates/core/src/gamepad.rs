@@ -53,7 +53,6 @@ use bevy::input::gamepad::{
     GamepadAxis, GamepadButton, GamepadConnection, GamepadConnectionEvent, GamepadEvent,
     GamepadRumbleIntensity, GamepadRumbleRequest,
 };
-use bevy::log::warn;
 use bevy::prelude::*;
 use serde::Serialize;
 use ts_rs::TS;
@@ -462,7 +461,7 @@ pub(crate) fn on_rumble(
 ) {
     let msg = on.event();
     let Some(entity) = registry.entity_for(msg.gamepad) else {
-        warn!("gamepad.rumble: unknown gamepad id {}", msg.gamepad);
+        tracing::warn!("gamepad.rumble: unknown gamepad id {}", msg.gamepad);
         return;
     };
     rumble.write(GamepadRumbleRequest::Add {
@@ -485,7 +484,7 @@ pub(crate) fn on_stop_rumble(
 ) {
     let msg = on.event();
     let Some(entity) = registry.entity_for(msg.gamepad) else {
-        warn!("gamepad.stopRumble: unknown gamepad id {}", msg.gamepad);
+        tracing::warn!("gamepad.stopRumble: unknown gamepad id {}", msg.gamepad);
         return;
     };
     rumble.write(GamepadRumbleRequest::Stop { gamepad: entity });

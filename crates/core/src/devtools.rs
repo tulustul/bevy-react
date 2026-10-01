@@ -162,7 +162,7 @@ impl Plugin for DevtoolsPlugin {
         // expected path for every consumer `--release` build — the plugin
         // registers nothing. `debug!`, not `warn!`: release logs stay clean.
         if !cfg!(debug_assertions) {
-            debug!("DevtoolsPlugin is inert in release builds");
+            tracing::debug!("DevtoolsPlugin is inert in release builds");
             return;
         }
         // The toggle/pick systems read `ButtonInput` resources; a headless app

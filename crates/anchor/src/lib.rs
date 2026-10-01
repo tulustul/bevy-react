@@ -7,7 +7,10 @@
 //! flat, fully interactive overlays — no render-to-texture, no second camera,
 //! no synthetic-pointer picking (clicks ride the normal `Interaction` path).
 //!
-//! Add [`AnchorPlugin`] to an app that also has `ReactUiPlugin` (any order):
+//! Apps normally get this crate through `bevy-react`'s `anchor` cargo feature
+//! (on by default): `bevy_react::anchor`, with [`AnchorPlugin`] a `ReactPlugins`
+//! member. Depending on this crate directly, add [`AnchorPlugin`] to an app that
+//! also has `ReactUiPlugin` (any order):
 //!
 //! ```no_run
 //! use bevy::prelude::*;
@@ -21,7 +24,7 @@
 //! ```
 //!
 //! Without the plugin an `<anchor>` in the React tree mounts as a plain node
-//! and the bridge reports a `featureMissing` warning naming this crate.
+//! and the bridge reports a `featureMissing` warning naming its feature and plugin.
 //!
 //! Everything here plugs into the core through its element registry
 //! ([`bevy_react_core::element`]) and extension contract
@@ -73,7 +76,7 @@ impl Plugin for AnchorPlugin {
 
     fn finish(&self, app: &mut App) {
         if !app.is_plugin_added::<bevy_react_core::ReactUiPlugin>() {
-            warn!(
+            tracing::warn!(
                 target: "bevy_react",
                 "bevy_react_anchor::AnchorPlugin is added but ReactUiPlugin is not: \
                  the <anchor> element has nothing to mount into"

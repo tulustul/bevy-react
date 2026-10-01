@@ -9,8 +9,9 @@ name = "stress"
 path = "main.rs"
 
 [dependencies]
-bevy = { workspace = true }
-bevy_react_core = { workspace = true }
+bevy = { workspace = true, features = ["default"] }
+# Core plus devtools (the benchmarks use no feature elements).
+bevy-react = { workspace = true, features = ["devtools"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 ts-rs = { workspace = true }

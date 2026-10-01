@@ -28,15 +28,15 @@ use bevy::picking::hover::HoverMap;
 use bevy::picking::mesh_picking::{MeshPickingPlugin, MeshPickingSettings};
 use bevy::picking::pointer::{PointerId, PointerPress};
 use bevy::prelude::*;
-use bevy_react_core::animations::protocol::Binding;
-use bevy_react_core::animations::{AnimatedNode, AnimationSet};
-use bevy_react_core::element::{
+use bevy_react::animations::protocol::Binding;
+use bevy_react::animations::{AnimatedNode, AnimationSet};
+use bevy_react::element::{
     AttrBinding, Attribute, Attrs, Common, Element, SpawnCtx, animatable_binding,
 };
-use bevy_react_core::ext::{DrivenExtValues, ElementFlags, InteractionSyncSet};
-use bevy_react_core::protocol::animatable::{Animatable, AnimatableField};
-use bevy_react_core::style::{Codec, Writer, owns};
-use bevy_react_core::{ReactAppExt, ReactApplySet, ReactNode};
+use bevy_react::ext::{DrivenExtValues, ElementFlags, InteractionSyncSet};
+use bevy_react::protocol::animatable::{Animatable, AnimatableField};
+use bevy_react::style::{Codec, Writer, owns};
+use bevy_react::{ReactAppExt, ReactApplySet, ReactNode};
 
 #[cfg(test)]
 mod tests;
@@ -177,9 +177,9 @@ impl CubeAttrs {
 }
 
 fn parse_color(input: &str) -> Srgba {
-    bevy_react_core::raster::parse_css_color(input).unwrap_or_else(|| {
+    bevy_react::raster::parse_css_color(input).unwrap_or_else(|| {
         let msg = format!("unrecognized color {input:?}");
-        bevy_react_core::diag::report("color", input, &msg);
+        bevy_react::diag::report("color", input, &msg);
         Srgba::new(1.0, 0.0, 1.0, 1.0)
     })
 }
@@ -278,7 +278,7 @@ pub fn apply_cube_attrs(
 ) {
     for (attrs, driven, anim, mut transform, material, rnode) in &mut cubes {
         if let Some(anim) = anim.as_ref().filter(|a| a.is_changed()) {
-            let _diag = rnode.map(|r| bevy_react_core::diag::node_scope(r.0));
+            let _diag = rnode.map(|r| bevy_react::diag::node_scope(r.0));
             validate_bindings(anim);
         }
         let next = Transform {
@@ -314,7 +314,7 @@ pub fn apply_cube_attrs(
 /// Warn about a binding whose kind can't drive its attribute: a color
 /// binding on a numeric attribute, or a numeric one on `color`.
 fn validate_bindings(anim: &AnimatedNode) {
-    use bevy_react_core::animations::AnimatableProperty;
+    use bevy_react::animations::AnimatableProperty;
     for (property, binding) in anim.0.iter() {
         let AnimatableProperty::Ext {
             domain: DOMAIN,
@@ -331,7 +331,7 @@ fn validate_bindings(anim: &AnimatedNode) {
             }
             _ => continue,
         };
-        bevy_react_core::diag::report("styleBinding", name, msg);
+        bevy_react::diag::report("styleBinding", name, msg);
     }
 }
 

@@ -1,23 +1,27 @@
 #![cfg_attr(docsrs, feature(doc_cfg))]
-//! Proc-macro support for `bevy-react`.
+//! Proc-macro support for `bevy-react`: the `#[react_*]` attributes that
+//! turn plain structs into typed React messages, requests, events, and
+//! custom filters.
 //!
-//! Provides [`react_message`], the attribute that turns a plain struct into a
-//! registrable React message payload.
-//
-// TODO(review): these macros expand to `::serde::` and `::ts_rs::` paths, forcing every
-// downstream consumer crate to add `serde` AND `ts_rs` as direct dependencies (works in-repo
-// only because examples share the package's deps). Re-export both from the lib (e.g.
-// `bevy_react_core::__private::{serde, ts_rs}`) and reference those paths so consumers need only
-// `bevy_react` + `bevy`.
+//! Expansions name the bevy-react crate the caller's manifest depends on
+//! (`bevy-react`, else `bevy_react_core`) and reach `serde`,
+//! `ts-rs`, and `bevy` through its `__private` re-exports, so a caller needs
+//! only bevy-react (nested payload types it derives `Serialize`/`TS` on
+//! itself still need those crates).
+
+mod krate;
 
 use proc_macro::TokenStream;
+use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 use syn::{DeriveInput, LitStr, Type, parse_macro_input};
+
+use krate::Krate;
 
 /// Turn a struct into a typed React message payload.
 ///
 /// Applying `#[react_message]` derives `serde::Deserialize` and `ts_rs::TS` and
-/// implements both `bevy::ecs::event::Event` and `bevy_react_core::ReactPayload`, so the
+/// implements both `bevy::ecs::event::Event` and `bevy_react::ReactPayload`, so the
 /// type can be registered with `App::add_react_handler` / `add_react_message`, routed
 /// from a React `emit(name, value)` call, and exported to TypeScript via
 /// `App::export_react_typescript`.
@@ -48,16 +52,19 @@ pub fn react_message(attr: TokenStream, item: TokenStream) -> TokenStream {
         where_clause,
         name,
     } = payload_parts(&input, name_override);
+    let krate = Krate::resolve();
+    let (core, bevy) = (krate.root(), krate.private("bevy"));
+    let derive = krate.derive_serde_ts("Deserialize");
 
     quote! {
-        #[derive(::serde::Deserialize, ::ts_rs::TS)]
+        #derive
         #input
 
-        impl #impl_generics ::bevy::ecs::event::Event for #ident #ty_generics #where_clause {
-            type Trigger<'a> = ::bevy::ecs::event::GlobalTrigger;
+        impl #impl_generics #bevy::ecs::event::Event for #ident #ty_generics #where_clause {
+            type Trigger<'a> = #bevy::ecs::event::GlobalTrigger;
         }
 
-        impl #impl_generics ::bevy_react_core::ReactPayload for #ident #ty_generics #where_clause {
+        impl #impl_generics #core::ReactPayload for #ident #ty_generics #where_clause {
             const NAME: &'static str = #name;
         }
     }
@@ -68,7 +75,7 @@ pub fn react_message(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// awaits a typed reply).
 ///
 /// Derives `serde::Deserialize` + `ts_rs::TS` and implements
-/// `bevy_react_core::ReactRequest`, so the type can be registered with
+/// `bevy_react::ReactRequest`, so the type can be registered with
 /// `App::add_react_request_handler` and answered from a React `request(name, value)`
 /// call. Observe `On<Request<T>>` and reply with `req.respond(value)`.
 ///
@@ -122,12 +129,15 @@ pub fn react_request(attr: TokenStream, item: TokenStream) -> TokenStream {
         where_clause,
         name,
     } = payload_parts(&input, name_override);
+    let krate = Krate::resolve();
+    let core = krate.root();
+    let derive = krate.derive_serde_ts("Deserialize");
 
     quote! {
-        #[derive(::serde::Deserialize, ::ts_rs::TS)]
+        #derive
         #input
 
-        impl #impl_generics ::bevy_react_core::ReactRequest for #ident #ty_generics #where_clause {
+        impl #impl_generics #core::ReactRequest for #ident #ty_generics #where_clause {
             const NAME: &'static str = #name;
             type Response = #response;
         }
@@ -138,7 +148,7 @@ pub fn react_request(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// Turn a struct into a typed React **event** payload (a Bevy → React broadcast).
 ///
 /// Derives `serde::Serialize` + `ts_rs::TS` and implements
-/// `bevy_react_core::ReactEvent`. Send it from a system with the `ReactEvents` param;
+/// `bevy_react::ReactEvent`. Send it from a system with the `ReactEvents` param;
 /// React listens with `bevy.on(name, cb)`. Register the type with
 /// `App::add_react_event::<E>()` so it appears in the generated typings.
 ///
@@ -163,12 +173,15 @@ pub fn react_event(attr: TokenStream, item: TokenStream) -> TokenStream {
         where_clause,
         name,
     } = payload_parts(&input, name_override);
+    let krate = Krate::resolve();
+    let core = krate.root();
+    let derive = krate.derive_serde_ts("Serialize");
 
     quote! {
-        #[derive(::serde::Serialize, ::ts_rs::TS)]
+        #derive
         #input
 
-        impl #impl_generics ::bevy_react_core::ReactEvent for #ident #ty_generics #where_clause {
+        impl #impl_generics #core::ReactEvent for #ident #ty_generics #where_clause {
             const NAME: &'static str = #name;
         }
     }
@@ -183,7 +196,7 @@ pub fn react_event(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// Derives `serde::Deserialize` — adding `#[serde(deny_unknown_fields)]`, so
 /// unknown param keys reject like the built-ins; per-field `#[serde(default)]`
 /// attributes you write are preserved — plus `ts_rs::TS`, and implements
-/// `bevy_react_core::filters::ReactFilter`. Built-in filters stay hand-written
+/// `bevy_react::filters::ReactFilter`. Built-in filters stay hand-written
 /// (they share canonical shader layouts); this macro is for custom filters,
 /// which pack against their own shader.
 ///
@@ -361,6 +374,8 @@ fn expand_react_filter(
 
     let mut input = parse_macro_input!(item as DeriveInput);
     let name = name_override.unwrap_or_else(|| lower_first(&input.ident.to_string()));
+    let krate = Krate::resolve();
+    let (core, bevy) = (krate.root(), krate.private("bevy"));
 
     let syn::Data::Struct(data) = &mut input.data else {
         return syn::Error::new_spanned(&input.ident, format!("`{macro_name}` requires a struct"))
@@ -414,9 +429,9 @@ fn expand_react_filter(
             comp = 0;
         }
         let (v, c) = (vec_i, comp);
-        let kind = param.value_kind();
+        let kind = param.value_kind(&core);
         slots.push(quote! {
-            ::bevy_react_core::filters::ParamSlot {
+            #core::filters::ParamSlot {
                 name: #field_name,
                 kind: #kind,
                 vec: #v,
@@ -448,13 +463,13 @@ fn expand_react_filter(
                 // falls back to 0.0 — a non-px unit can't reach the shader
                 // because the generated `outset`/`resolve` reject it first.
                 writes.push(quote! {
-                    params[#v][#c] = ::bevy_react_core::filters::length_logical_px(
+                    params[#v][#c] = #core::filters::length_logical_px(
                         #name, #field_name, self.#ident,
                     )
                     .unwrap_or(0.0);
                 });
                 length_checks.push(quote! {
-                    ::bevy_react_core::filters::length_logical_px(#name, #field_name, self.#ident)?;
+                    #core::filters::length_logical_px(#name, #field_name, self.#ident)?;
                 });
             }
             FilterField::Color => {
@@ -497,37 +512,39 @@ fn expand_react_filter(
         quote! {
             fn resolve(
                 &self,
-                assets: &::bevy::asset::AssetServer,
+                assets: &#bevy::asset::AssetServer,
             ) -> ::std::result::Result<
-                ::std::vec::Vec<::bevy_react_core::filters::ResolvedFilterPass>,
+                ::std::vec::Vec<#core::filters::ResolvedFilterPass>,
                 ::std::string::String,
             > {
                 #(#length_checks)*
-                ::bevy_react_core::filters::resolve_single_pass(self, assets)
+                #core::filters::resolve_single_pass(self, assets)
             }
         }
     });
 
     let morph_marker = is_morph.then(|| {
         quote! {
-            impl #impl_generics ::bevy_react_core::filters::ReactMorphFilter
+            impl #impl_generics #core::filters::ReactMorphFilter
                 for #ident #ty_generics #where_clause {}
         }
     });
 
+    let derive = krate.derive_serde_ts("Deserialize");
+
     quote! {
-        #[derive(::serde::Deserialize, ::ts_rs::TS)]
+        #derive
         #[serde(deny_unknown_fields)]
         #input
 
-        impl #impl_generics ::bevy_react_core::filters::ReactFilter for #ident #ty_generics #where_clause {
+        impl #impl_generics #core::filters::ReactFilter for #ident #ty_generics #where_clause {
             const NAME: &'static str = #name;
             const USES_TIME: bool = #time;
             const IS_MORPH: bool = #is_morph;
 
             fn shader(
-                assets: &::bevy::asset::AssetServer,
-            ) -> ::bevy::asset::Handle<::bevy::shader::Shader> {
+                assets: &#bevy::asset::AssetServer,
+            ) -> #bevy::asset::Handle<#bevy::shader::Shader> {
                 assets.load(#shader)
             }
 
@@ -539,16 +556,16 @@ fn expand_react_filter(
             fn pack(
                 &self,
             ) -> (
-                ::std::vec::Vec<::bevy::math::Vec4>,
-                ::std::sync::Arc<[::bevy_react_core::filters::ParamSlot]>,
+                ::std::vec::Vec<#bevy::math::Vec4>,
+                ::std::sync::Arc<[#core::filters::ParamSlot]>,
             ) {
                 static LAYOUT: ::std::sync::LazyLock<
-                    ::std::sync::Arc<[::bevy_react_core::filters::ParamSlot]>,
+                    ::std::sync::Arc<[#core::filters::ParamSlot]>,
                 > = ::std::sync::LazyLock::new(|| {
                     ::std::sync::Arc::from(::std::vec![#(#slots),*])
                 });
                 #[allow(unused_mut)]
-                let mut params = ::std::vec![::bevy::math::Vec4::ZERO; #total_vecs];
+                let mut params = ::std::vec![#bevy::math::Vec4::ZERO; #total_vecs];
                 #(#writes)*
                 (params, LAYOUT.clone())
             }
@@ -588,15 +605,16 @@ impl FilterField {
         }
     }
 
-    /// The `ValueKind` tokens for this param's `ParamSlot`.
-    fn value_kind(&self) -> proc_macro2::TokenStream {
+    /// The `ValueKind` tokens for this param's `ParamSlot` (`core`: the
+    /// resolved crate root).
+    fn value_kind(&self, core: &TokenStream2) -> TokenStream2 {
         match self {
             Self::Scalar | Self::Vector(_) | Self::Array(_) => {
-                quote!(::bevy_react_core::animations::ValueKind::Scalar)
+                quote!(#core::animations::ValueKind::Scalar)
             }
-            Self::Angle => quote!(::bevy_react_core::animations::ValueKind::Angle),
-            Self::Length => quote!(::bevy_react_core::animations::ValueKind::Length),
-            Self::Color => quote!(::bevy_react_core::animations::ValueKind::Color),
+            Self::Angle => quote!(#core::animations::ValueKind::Angle),
+            Self::Length => quote!(#core::animations::ValueKind::Length),
+            Self::Color => quote!(#core::animations::ValueKind::Color),
         }
     }
 

@@ -28,7 +28,7 @@ impl Plugin for CameraPlugin {
                 (
                     // After the React UI refreshes `PointerCapture` so the camera sees
                     // this frame's state and ignores the mouse while the UI owns it.
-                    orbit_camera.after(bevy_react_core::PointerCaptureSet),
+                    orbit_camera.after(bevy_react::PointerCaptureSet),
                     reframe_camera.run_if(state_changed::<Scene>),
                 ),
             );
@@ -124,13 +124,13 @@ fn orbit_camera(
     motion: Res<AccumulatedMouseMotion>,
     scroll: Res<AccumulatedMouseScroll>,
     buttons: Res<ButtonInput<MouseButton>>,
-    capture: Res<bevy_react_core::PointerCapture>,
+    capture: Res<bevy_react::PointerCapture>,
     state: Res<State<Scene>>,
     mut rig: ResMut<CameraRig>,
     mut grabbed: Local<bool>,
     // Exclude the offscreen portal cameras (the follow/minimap render-target cams)
     // so only the shared main camera orbits.
-    mut cam: Query<&mut Transform, (With<Camera3d>, Without<bevy_react_core::PortalCamera>)>,
+    mut cam: Query<&mut Transform, (With<Camera3d>, Without<bevy_react::PortalCamera>)>,
 ) {
     // A grab starts only on a press over non-interactive ground (the UI neither
     // dragging nor hovered); once latched it keeps rotating across UI until the

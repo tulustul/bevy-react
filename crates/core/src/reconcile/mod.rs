@@ -26,7 +26,7 @@ mod virtual_events;
 
 #[cfg(test)]
 mod svg_tests;
-#[cfg(any(test, feature = "test-util"))]
+#[cfg(any(test, feature = "test_util"))]
 pub(crate) mod test_util;
 
 pub use apply::apply_js_ops;

@@ -166,9 +166,9 @@ fn write_pending(persist: &mut DevtoolsPersistence, path: &std::path::Path) {
     match serde_json::to_string_pretty(&pending) {
         Ok(json) => match std::fs::write(path, json) {
             Ok(()) => persist.last_written = Some(pending),
-            Err(e) => warn!("devtools: failed to write settings {}: {e}", path.display()),
+            Err(e) => tracing::warn!("devtools: failed to write settings {}: {e}", path.display()),
         },
-        Err(e) => warn!("devtools: failed to serialize settings: {e}"),
+        Err(e) => tracing::warn!("devtools: failed to serialize settings: {e}"),
     }
 }
 

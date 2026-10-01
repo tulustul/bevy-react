@@ -26,10 +26,13 @@
 
 use bevy::picking::hover::HoverMap;
 use bevy::picking::pointer::PointerId;
+#[cfg(feature = "custom_cursor")]
 use bevy::platform::collections::HashMap;
 use bevy::prelude::*;
 use bevy::ui::{ComputedNode, UiGlobalTransform, UiStack};
-use bevy::window::{CursorIcon, CustomCursor, CustomCursorImage, PrimaryWindow, SystemCursorIcon};
+use bevy::window::{CursorIcon, PrimaryWindow, SystemCursorIcon};
+#[cfg(feature = "custom_cursor")]
+use bevy::window::{CustomCursor, CustomCursorImage};
 
 /// The cursor a node requests while the pointer is over it — the raw `cursor` style
 /// name (a system keyword or a custom-cursor name), resolved at drive time by
@@ -42,21 +45,37 @@ pub struct NodeCursor(pub String);
 /// loaded to handles in the plugin's `Startup` `setup` (mirroring the
 /// [`Fonts`](crate::Fonts) registry). Keyed by the name React selects with
 /// `style={{ cursor: name }}`; the app owns the asset, React references it by name.
+#[cfg(feature = "custom_cursor")]
 #[derive(Resource, Default)]
 pub struct CustomCursors(pub HashMap<String, CustomCursorImage>);
+
+/// Without the `custom_cursor` feature there are no custom cursors (bevy's
+/// `CustomCursor` is compiled out and `ReactUiPlugin::cursor` with it): an
+/// empty stand-in keeps the drive's one signature.
+#[cfg(not(feature = "custom_cursor"))]
+#[derive(Resource, Default)]
+pub struct CustomCursors;
 
 /// Resolve a `cursor` name to the [`CursorIcon`] to write on the window. The
 /// [`CustomCursors`] registry is checked **first**, so a custom cursor registered under
 /// a system-keyword name (e.g. `"pointer"`) *overrides* that built-in; otherwise the
 /// name is matched against the system keywords, and finally an unknown name warns and
 /// falls back to the default arrow (mirroring an unknown `fontFamily`).
+#[cfg_attr(not(feature = "custom_cursor"), allow(unused_variables))]
 fn resolve_cursor(name: &str, custom: &CustomCursors) -> CursorIcon {
+    #[cfg(feature = "custom_cursor")]
     if let Some(image) = custom.0.get(name) {
-        CursorIcon::Custom(CustomCursor::Image(image.clone()))
-    } else if let Some(icon) = system_cursor_keyword(name) {
+        return CursorIcon::Custom(CustomCursor::Image(image.clone()));
+    }
+    if let Some(icon) = system_cursor_keyword(name) {
         CursorIcon::from(icon)
     } else {
+        #[cfg(feature = "custom_cursor")]
         let msg = format!("unknown cursor {name:?}");
+        #[cfg(not(feature = "custom_cursor"))]
+        let msg = format!(
+            "unknown cursor {name:?} (custom cursors need bevy-react's `custom_cursor` feature)"
+        );
         crate::diag::report("cursor", name, &msg);
         CursorIcon::from(SystemCursorIcon::Default)
     }
@@ -304,6 +323,7 @@ mod tests {
     /// A custom cursor registered under `"default"` becomes the app-wide base cursor:
     /// with no cursor-bearing node under the pointer, the window shows it (not the
     /// hardcoded system arrow).
+    #[cfg(feature = "custom_cursor")]
     #[test]
     fn registered_default_becomes_app_cursor() {
         let mut world = World::new();
@@ -387,6 +407,7 @@ mod tests {
 
     /// Resolution order: the registry wins first (so a custom cursor named after a
     /// system keyword *overrides* it), then system keywords, then a warn + default.
+    #[cfg(feature = "custom_cursor")]
     #[test]
     fn custom_cursor_overrides_and_resolves() {
         let mut registry = CustomCursors::default();

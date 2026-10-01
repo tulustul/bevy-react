@@ -18,9 +18,9 @@ use std::time::{Duration, Instant};
 
 use crossbeam_channel::{Receiver, RecvTimeoutError};
 
-use bevy_react_core::js_thread::spawn_js_thread;
-use bevy_react_core::protocol::{op::Op, outbound::Outbound, outbound::UiEvent};
-use bevy_react_core::{RawRequest, ReactMessage};
+use bevy_react::js_thread::spawn_js_thread;
+use bevy_react::protocol::{op::Op, outbound::Outbound, outbound::UiEvent};
+use bevy_react::{RawRequest, ReactMessage};
 
 mod common;
 
@@ -206,7 +206,7 @@ fn tile_expand_and_collapse_each_pair_in_one_commit() {
 
     let vendor = bundle.with_file_name("vendor.js");
     spawn_js_thread(
-        bevy_react_core::ext::ExtRegistrySlot::ready(common::ext_registry()),
+        bevy_react::ext::ExtRegistrySlot::ready(common::ext_registry()),
         vendor,
         bundle,
         ops_tx,

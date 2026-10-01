@@ -13,7 +13,6 @@ use std::cell::{Cell, RefCell};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
-use bevy::log::{debug, error, info, warn};
 use crossbeam_channel::Sender;
 use deno_core::{Extension, JsRuntime, OpDecl, OpState, RuntimeOptions, op2};
 use deno_error::JsErrorBox;
@@ -136,10 +135,10 @@ fn op_emit(state: &mut OpState, #[string] name: String, #[serde] value: serde_js
 #[op2(fast)]
 fn op_log(#[string] level: String, #[string] msg: String) {
     match level.as_str() {
-        "error" => error!(target: "bevy_react_core::js", "{msg}"),
-        "warn" => warn!(target: "bevy_react_core::js", "{msg}"),
-        "debug" => debug!(target: "bevy_react_core::js", "{msg}"),
-        _ => info!(target: "bevy_react_core::js", "{msg}"),
+        "error" => tracing::error!(target: "bevy_react_core::js", "{msg}"),
+        "warn" => tracing::warn!(target: "bevy_react_core::js", "{msg}"),
+        "debug" => tracing::debug!(target: "bevy_react_core::js", "{msg}"),
+        _ => tracing::info!(target: "bevy_react_core::js", "{msg}"),
     }
     // Mirror into the devtools console ring (dev builds only; no-op stub
     // otherwise) — this single op is the funnel for ALL JS console output,
@@ -372,7 +371,7 @@ pub fn spawn_js_thread(
                 let mut last_good_app = match read_app(&app_path) {
                     Ok(code) => code,
                     Err(e) => {
-                        error!(target: "bevy_react_core::js", "reading app failed: {e:?}");
+                        tracing::error!(target: "bevy_react_core::js", "reading app failed: {e:?}");
                         return;
                     }
                 };
@@ -388,7 +387,7 @@ pub fn spawn_js_thread(
                 ) {
                     Ok(rt) => rt,
                     Err(e) => {
-                        error!(target: "bevy_react_core::js", "initial runtime build failed: {e:?}");
+                        tracing::error!(target: "bevy_react_core::js", "initial runtime build failed: {e:?}");
                         return;
                     }
                 };
@@ -406,7 +405,7 @@ pub fn spawn_js_thread(
                             let new_code = match read_app(&app_path) {
                                 Ok(code) => code,
                                 Err(e) => {
-                                    warn!(target: "bevy_react_core::js", "reading rebuilt app failed ({e}); keeping the previous working version");
+                                    tracing::warn!(target: "bevy_react_core::js", "reading rebuilt app failed ({e}); keeping the previous working version");
                                     continue;
                                 }
                             };
@@ -420,7 +419,7 @@ pub fn spawn_js_thread(
                                     // broken code: re-run the last working bundle so
                                     // its `mount()` re-parks the event loop and the
                                     // UI stays live. The next good edit applies.
-                                    warn!(target: "bevy_react_core::js", "update rejected ({e}); keeping the previous working version");
+                                    tracing::warn!(target: "bevy_react_core::js", "update rejected ({e}); keeping the previous working version");
                                     crate::console_log::push(
                                         crate::console_log::Source::Rust,
                                         crate::console_log::Level::Error,
@@ -432,7 +431,7 @@ pub fn spawn_js_thread(
                                         // The known-good bundle failed to re-run
                                         // (should not happen — it ran moments ago).
                                         // Log and keep pumping rather than wedge.
-                                        error!(target: "bevy_react_core::js", "restoring previous app failed: {e:?}");
+                                        tracing::error!(target: "bevy_react_core::js", "restoring previous app failed: {e:?}");
                                         crate::console_log::push(
                                             crate::console_log::Source::Rust,
                                             crate::console_log::Level::Error,
@@ -556,7 +555,7 @@ async fn pump(
                 // is rare; treat it like a reload so we rebuild rather than wedge.
                 // (Unhandled promise rejections used to land here too — the
                 // prelude's rejection handler now logs them instead.)
-                error!(target: "bevy_react_core::js", "event loop error: {e}");
+                tracing::error!(target: "bevy_react_core::js", "event loop error: {e}");
                 crate::console_log::push(
                     crate::console_log::Source::Rust,
                     crate::console_log::Level::Error,

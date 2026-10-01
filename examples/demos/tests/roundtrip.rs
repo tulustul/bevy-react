@@ -12,10 +12,10 @@ use std::time::{Duration, Instant};
 
 use crossbeam_channel::{Receiver, RecvTimeoutError};
 
-use bevy_react_core::animations::AnimationCommand;
-use bevy_react_core::js_thread::spawn_js_thread;
-use bevy_react_core::protocol::{op::Op, outbound::Outbound, outbound::UiEvent};
-use bevy_react_core::{RawRequest, ReactMessage};
+use bevy_react::animations::AnimationCommand;
+use bevy_react::js_thread::spawn_js_thread;
+use bevy_react::protocol::{op::Op, outbound::Outbound, outbound::UiEvent};
+use bevy_react::{RawRequest, ReactMessage};
 
 mod common;
 
@@ -141,7 +141,7 @@ fn bridge_round_trip() {
 
     let vendor = bundle.with_file_name("vendor.js");
     spawn_js_thread(
-        bevy_react_core::ext::ExtRegistrySlot::ready(common::ext_registry()),
+        bevy_react::ext::ExtRegistrySlot::ready(common::ext_registry()),
         vendor,
         bundle,
         ops_tx,
@@ -300,7 +300,7 @@ fn animation_callback_round_trip() {
 
     let vendor = bundle.with_file_name("vendor.js");
     spawn_js_thread(
-        bevy_react_core::ext::ExtRegistrySlot::ready(common::ext_registry()),
+        bevy_react::ext::ExtRegistrySlot::ready(common::ext_registry()),
         vendor,
         bundle,
         ops_tx,
@@ -423,7 +423,7 @@ fn animation_callback_round_trip() {
 /// change freely.
 #[test]
 fn canvas_resize_replay_round_trip() {
-    use bevy_react_canvas::{DRAW_APPEND, DrawCmd};
+    use bevy_react::canvas::{DRAW_APPEND, DrawCmd};
 
     let bundle = example_bundle();
     if !bundle.exists() {
@@ -450,7 +450,7 @@ fn canvas_resize_replay_round_trip() {
 
     let vendor = bundle.with_file_name("vendor.js");
     spawn_js_thread(
-        bevy_react_core::ext::ExtRegistrySlot::ready(common::ext_registry()),
+        bevy_react::ext::ExtRegistrySlot::ready(common::ext_registry()),
         vendor,
         bundle,
         ops_tx,
@@ -577,7 +577,7 @@ fn root_demo_modal_round_trip() {
 
     let vendor = bundle.with_file_name("vendor.js");
     spawn_js_thread(
-        bevy_react_core::ext::ExtRegistrySlot::ready(common::ext_registry()),
+        bevy_react::ext::ExtRegistrySlot::ready(common::ext_registry()),
         vendor,
         bundle,
         ops_tx,
@@ -687,7 +687,7 @@ fn root_demo_modal_round_trip() {
 /// empty update ops** (the delta-diff invariant, end-to-end).
 #[test]
 fn svg_jsx_render_round_trip() {
-    use bevy_react_core::protocol::props::Props;
+    use bevy_react::protocol::props::Props;
 
     let bundle = example_bundle();
     if !bundle.exists() {
@@ -714,7 +714,7 @@ fn svg_jsx_render_round_trip() {
 
     let vendor = bundle.with_file_name("vendor.js");
     spawn_js_thread(
-        bevy_react_core::ext::ExtRegistrySlot::ready(common::ext_registry()),
+        bevy_react::ext::ExtRegistrySlot::ready(common::ext_registry()),
         vendor,
         bundle,
         ops_tx,
@@ -878,7 +878,7 @@ fn svg_shape_click_round_trip() {
 
     let vendor = bundle.with_file_name("vendor.js");
     spawn_js_thread(
-        bevy_react_core::ext::ExtRegistrySlot::ready(common::ext_registry()),
+        bevy_react::ext::ExtRegistrySlot::ready(common::ext_registry()),
         vendor,
         bundle,
         ops_tx,
@@ -1040,7 +1040,7 @@ fn named_nodes_round_trip() {
 
     let vendor = bundle.with_file_name("vendor.js");
     spawn_js_thread(
-        bevy_react_core::ext::ExtRegistrySlot::ready(common::ext_registry()),
+        bevy_react::ext::ExtRegistrySlot::ready(common::ext_registry()),
         vendor,
         bundle,
         ops_tx,

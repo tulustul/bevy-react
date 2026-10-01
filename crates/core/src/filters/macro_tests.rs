@@ -339,6 +339,39 @@ fn add_react_filter_dedups_same_type_and_replaces_different_type() {
     assert_eq!((reg.ts_name)(), "ImposterGlow");
 }
 
+/// A custom filter named like a built-in shadows it whichever registers
+/// first — the plugin's built-ins never displace a custom, and a custom
+/// replaces a built-in — so the app's registration order relative to
+/// `ReactUiPlugin` doesn't matter (and the exporter types the same winner).
+#[test]
+fn custom_filter_shadows_builtin_in_either_order() {
+    use crate::ReactAppExt;
+
+    #[react_filter(name = "blur", shader = "my_blur.wgsl")]
+    struct MyBlur {
+        #[serde(default)]
+        amount: f32,
+    }
+
+    // Custom first, then the plugin's built-ins.
+    let mut app = App::new();
+    app.add_react_filter::<MyBlur>();
+    register_builtin_filters(&mut app);
+    let registry = app.world().resource::<FilterRegistry>();
+    assert_eq!((registry.entries["blur"].ts_name)(), "MyBlur");
+    assert!(!registry.entries["blur"].builtin);
+    assert_eq!(registry.entries.len(), 17);
+
+    // Built-ins first, then the custom.
+    let mut app = App::new();
+    register_builtin_filters(&mut app);
+    app.add_react_filter::<MyBlur>();
+    let registry = app.world().resource::<FilterRegistry>();
+    assert_eq!((registry.entries["blur"].ts_name)(), "MyBlur");
+    assert!(!registry.entries["blur"].builtin);
+    assert_eq!(registry.entries.len(), 17);
+}
+
 /// Registering a built-in type again through the App extension is a
 /// same-TypeId no-op, so a user's `register_bindings` can safely list
 /// built-ins alongside the plugin's own registration.

@@ -33,8 +33,8 @@
 use bevy::picking::Pickable;
 use bevy::prelude::*;
 use bevy::ui::{ComputedNode, UiGlobalTransform, UiTransform, Val2};
-use bevy_react_core::style::{StyleProperty, StyleValue};
-use bevy_react_core::{ReactAppExt, ReactApplySet, ReactNode};
+use bevy_react::style::{StyleProperty, StyleValue};
+use bevy_react::{ReactAppExt, ReactApplySet, ReactNode};
 use serde::Deserialize;
 use ts_rs::TS;
 
@@ -341,10 +341,10 @@ fn particle_color(sparkle: &Sparkle, rnode: Option<&ReactNode>) -> Srgba {
     let Some(input) = sparkle.color.as_deref() else {
         return DEFAULT_COLOR;
     };
-    bevy_react_core::raster::parse_css_color(input).unwrap_or_else(|| {
-        let _diag = rnode.map(|r| bevy_react_core::diag::node_scope(r.0));
+    bevy_react::raster::parse_css_color(input).unwrap_or_else(|| {
+        let _diag = rnode.map(|r| bevy_react::diag::node_scope(r.0));
         let msg = format!("sparkle: unrecognized color {input:?}");
-        bevy_react_core::diag::report("color", input, &msg);
+        bevy_react::diag::report("color", input, &msg);
         DEFAULT_COLOR
     })
 }

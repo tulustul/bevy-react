@@ -32,13 +32,14 @@ impl AnchorScaling {
             .iter()
             .all(|v| v.is_finite())
         {
-            warn!("non-finite anchor scale config {self:?}; disabling distance scaling");
+            tracing::warn!("non-finite anchor scale config {self:?}; disabling distance scaling");
             return None;
         }
         if self.min > self.max {
-            warn!(
+            tracing::warn!(
                 "anchor scale min {} > max {}; swapping the bounds",
-                self.min, self.max
+                self.min,
+                self.max
             );
             return Some(Self {
                 min: self.max,

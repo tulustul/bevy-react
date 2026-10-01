@@ -647,7 +647,7 @@ pub fn backdrop_gate(
                     },
                 );
             if let Some(err) = compile_error {
-                warn!(
+                tracing::warn!(
                     "UI layer {main_entity:?}: a backdropFilter pass shader failed to \
                      compile — the region shows the UNFILTERED frame until fixed (the \
                      backdrop gate is graceful; the node's own content still draws). \
@@ -655,7 +655,7 @@ pub fn backdrop_gate(
                 );
                 backdrop.gate_warned = true;
             } else if backdrop.gated_frames == STUCK_GATE_HANG_FRAMES {
-                warn!(
+                tracing::warn!(
                     "UI layer {main_entity:?}: backdrop quad withheld for {} consecutive \
                      frames and its pipeline is still not ready (no compile error \
                      reported). The region shows the unfiltered frame until it resolves.",

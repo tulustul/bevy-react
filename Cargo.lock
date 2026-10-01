@@ -398,6 +398,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "bevy-react"
+version = "0.6.0"
+dependencies = [
+ "bevy",
+ "bevy_react_anchor",
+ "bevy_react_canvas",
+ "bevy_react_core",
+ "bevy_react_portal",
+ "bevy_react_surface",
+ "bevy_react_svg",
+]
+
+[[package]]
 name = "bevy_a11y"
 version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1331,6 +1344,7 @@ dependencies = [
  "crossbeam-channel",
  "serde",
  "serde_json",
+ "tracing",
 ]
 
 [[package]]
@@ -1343,6 +1357,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tiny-skia 0.12.0",
+ "tracing",
  "ts-rs",
 ]
 
@@ -1383,6 +1398,7 @@ dependencies = [
 name = "bevy_react_macros"
 version = "0.6.0"
 dependencies = [
+ "proc-macro-crate",
  "proc-macro2",
  "quote",
  "syn",
@@ -1396,6 +1412,7 @@ dependencies = [
  "bevy_react_core",
  "crossbeam-channel",
  "serde_json",
+ "tracing",
 ]
 
 [[package]]
@@ -1406,6 +1423,7 @@ dependencies = [
  "bevy_react_core",
  "crossbeam-channel",
  "serde_json",
+ "tracing",
 ]
 
 [[package]]
@@ -1422,6 +1440,7 @@ dependencies = [
  "svgtypes",
  "tiny-skia 0.12.0",
  "tokio",
+ "tracing",
  "uuid",
 ]
 
@@ -2536,12 +2555,8 @@ name = "demos"
 version = "0.6.0"
 dependencies = [
  "bevy",
- "bevy_react_anchor",
- "bevy_react_canvas",
+ "bevy-react",
  "bevy_react_core",
- "bevy_react_portal",
- "bevy_react_surface",
- "bevy_react_svg",
  "crossbeam-channel",
  "naga",
  "serde",
@@ -3884,9 +3899,7 @@ name = "layers-stress"
 version = "0.6.0"
 dependencies = [
  "bevy",
- "bevy_react_core",
- "serde",
- "ts-rs",
+ "bevy-react",
 ]
 
 [[package]]
@@ -4033,7 +4046,7 @@ name = "minimal"
 version = "0.6.0"
 dependencies = [
  "bevy",
- "bevy_react_core",
+ "bevy-react",
 ]
 
 [[package]]
@@ -5619,7 +5632,7 @@ name = "stress"
 version = "0.6.0"
 dependencies = [
  "bevy",
- "bevy_react_core",
+ "bevy-react",
  "serde",
  "serde_json",
  "ts-rs",

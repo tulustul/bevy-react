@@ -80,6 +80,16 @@ jobs:
       - name: Clippy
         run: cargo clippy --workspace --all-targets
 
+      # Each `bevy-react` cargo feature on its own (plus none, the defaults,
+      # and all), resolved in the facade's own dependency graph — so neither a
+      # broken `cfg` combination nor a bevy feature a library forgot to list
+      # can hide behind the examples' full bevy. `bevy/x11` gives winit (which
+      # `custom_cursor` pulls in) the backend every windowed app has.
+      - uses: taiki-e/install-action@cargo-hack
+
+      - name: Feature combinations
+        run: cargo hack check -p bevy-react --each-feature --no-dev-deps --features bevy/x11
+
       # The heavy Bevy links below OOM'd the 7 GB runner with the default linker.
       # `mold -run` swaps in the low-memory linker for the child cargo across the
       # whole process tree (debug info is already dropped job-wide above), keeping

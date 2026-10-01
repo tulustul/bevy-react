@@ -4,7 +4,7 @@ use bevy::camera::ScalingMode;
 use bevy::camera::visibility::RenderLayers;
 use bevy::image::Image;
 use bevy::prelude::*;
-use bevy_react_core::{
+use bevy_react::{
     PortalCamera, ReactAppExt, ReactEvents, RenderMode, RenderTargetSpec, RenderTargets,
     Resolution, react_event, react_message,
 };

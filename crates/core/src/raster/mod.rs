@@ -89,8 +89,10 @@ pub fn write_straight_alpha(pixmap: &Pixmap, out: &mut Vec<u8>) {
     out.reserve(bytes.len());
     for (i, chunk) in bytes.chunks(BLOCK * 4).enumerate() {
         let (and, or) = chunk
-            .chunks_exact(4)
-            .map(|px| u32::from_ne_bytes([px[0], px[1], px[2], px[3]]))
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .map(|px| u32::from_ne_bytes(*px))
             .fold((u32::MAX, 0u32), |(and, or), w| (and & w, or | w));
         if and & ALPHA == ALPHA {
             out.extend_from_slice(chunk); // all opaque: premultiplied == straight

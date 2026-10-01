@@ -34,7 +34,7 @@ pub use path::{PathData, PathSeg};
 /// (Its `Deserialize` decodes the same flat object through the same
 /// per-field decoders — the protocol tests' form.)
 ///
-/// The **numeric** attrs (the [`NUMERIC_ATTRS`] set) accept the inline
+/// The **numeric** attrs (the crate's `NUMERIC_ATTRS` set) accept the inline
 /// `{ animated: …, seed? }` wrapper ([`Animatable`], the style-field wire
 /// form): the binding derives an
 /// [`AnimatableProperty::ShapeAttr`](bevy_react_core::animations::protocol::AnimatableProperty)
@@ -95,8 +95,8 @@ pub struct ShapeAttrs {
 
     /// Declarative easing for the **numeric** attrs: when a static numeric
     /// attr changes, the transition engine eases the painted value instead of
-    /// snapping (see [`crate::transition`]'s shape channel). Config, not a
-    /// value: deliberately **outside** [`NUMERIC_ATTRS`], so the binding
+    /// snapping (see `crate::transition`'s shape channel). Config, not a
+    /// value: deliberately **outside** `NUMERIC_ATTRS`, so the binding
     /// deriver / paint / hit never see it — but it participates in
     /// `PartialEq` like every field (a spec-only change is a real attrs
     /// change). Boxed: the spec's inline
@@ -108,7 +108,7 @@ pub struct ShapeAttrs {
 }
 
 /// Read accessor for one numeric attr of a [`ShapeAttrs`] (a
-/// [`NUMERIC_ATTRS`] row).
+/// `NUMERIC_ATTRS` row).
 pub(crate) type NumericAttrAccessor = fn(&ShapeAttrs) -> &Option<Animatable<f32>>;
 
 /// Mutable accessor twin of [`NumericAttrAccessor`] (the row's third column),
@@ -143,7 +143,7 @@ pub(crate) const NUMERIC_ATTRS: [(&str, NumericAttrAccessor, NumericAttrAccessor
     ("opacity", |a| &a.opacity, |a| &mut a.opacity),
 ];
 
-/// The mutable slot of one numeric attr by **wire name** ([`NUMERIC_ATTRS`],
+/// The mutable slot of one numeric attr by **wire name** (`NUMERIC_ATTRS`,
 /// the one table — never a parallel name→field match), or `None` for a name
 /// outside the numeric set (a stale binding; the apply stage warns).
 pub(crate) fn numeric_attr_mut<'a>(
@@ -177,10 +177,10 @@ pub(crate) fn st(v: f32) -> Option<Animatable<f32>> {
 }
 
 /// The shape `transition` spec: per-attr easing timing, keyed by the
-/// [`NUMERIC_ATTRS`] wire names (shapes have no `style`, so the spec is the
+/// `NUMERIC_ATTRS` wire names (shapes have no `style`, so the spec is the
 /// shape's own `transition` attribute — explicit entries only, no
 /// non-numeric channels).
-/// Entries are stored positionally in [`NUMERIC_ATTRS`] order; reuse of
+/// Entries are stored positionally in `NUMERIC_ATTRS` order; reuse of
 /// [`ChannelTransition`](bevy_react_core::transition::ChannelTransition) (the
 /// style-transition timing type) is verbatim —
 /// same wire shape (`duration`/`easing`/`delay`/springs), same driver.
@@ -199,7 +199,7 @@ impl ShapeTransitionSpec {
             .and_then(|i| self.entries[i].as_ref())
     }
 
-    /// The timing at one [`NUMERIC_ATTRS`] index (the engine's positional
+    /// The timing at one `NUMERIC_ATTRS` index (the engine's positional
     /// twin of [`Self::for_attr`]).
     pub(crate) fn at(
         &self,
@@ -433,7 +433,7 @@ pub(crate) fn de_number<'de, D: Deserializer<'de>>(
 
 impl ShapeAttrs {
     /// The `{ animated }` wrappers among the numeric attrs, by wire name
-    /// ([`NUMERIC_ATTRS`], the one wire-name table) — what the animation
+    /// (`NUMERIC_ATTRS`, the one wire-name table) — what the animation
     /// engine drives (each numeric attribute publishes its own binding —
     /// [`crate::attrs`]).
     pub fn animated_bindings(
@@ -525,8 +525,10 @@ pub(crate) fn de_points<'de, D: Deserializer<'de>>(d: D) -> Result<Option<Vec<Ve
                 return Ok(None);
             }
             Ok(Some(
-                nums.chunks_exact(2)
-                    .map(|p| Vec2::new(p[0], p[1]))
+                nums.as_chunks::<2>()
+                    .0
+                    .iter()
+                    .map(|&[x, y]| Vec2::new(x, y))
                     .collect(),
             ))
         }

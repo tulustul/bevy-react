@@ -3,6 +3,10 @@
 //! camera drawing into a GPU texture — so the React UI can embed a minimap, a
 //! picture-in-picture, or a per-item 3D preview.
 //!
+//! Apps normally get this crate through `bevy-react`'s `portal` cargo feature
+//! (on by default): `bevy_react::portal`, with [`PortalPlugin`] a `ReactPlugins`
+//! member; depending on it directly, add [`PortalPlugin`] beside `ReactUiPlugin`.
+//!
 //! The element is thin, and that is the design: the named render-target
 //! registry stays in the core ([`RenderTargets`], [`PortalCamera`], the
 //! binding and the camera gate), because the core's own `backgroundImage:
@@ -78,7 +82,7 @@ impl Plugin for PortalPlugin {
 
     fn finish(&self, app: &mut App) {
         if !app.is_plugin_added::<bevy_react_core::ReactUiPlugin>() {
-            warn!(
+            tracing::warn!(
                 target: "bevy_react",
                 "bevy_react_portal::PortalPlugin is added but ReactUiPlugin is not: \
                  the <portal> element has nothing to mount into"

@@ -126,7 +126,7 @@ impl<R: Serialize> Responder<R> {
     /// double-respond can't settle the JS promise twice.
     fn claim(&self) -> bool {
         if self.done.swap(true, Ordering::SeqCst) {
-            warn!(
+            tracing::warn!(
                 "react request {} responded to more than once; ignoring",
                 self.id
             );

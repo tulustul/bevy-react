@@ -6,7 +6,10 @@
 //! pointer events carrying user-space coordinates, `{ animated }` numeric
 //! attrs, and a per-attr `transition`.
 //!
-//! Add [`SvgPlugin`] to an app that also has `ReactUiPlugin` (any order):
+//! Apps normally get this crate through `bevy-react`'s `svg` cargo feature
+//! (on by default): `bevy_react::svg`, with [`SvgPlugin`] a `ReactPlugins`
+//! member. Depending on this crate directly, add [`SvgPlugin`] to an app that
+//! also has `ReactUiPlugin` (any order):
 //!
 //! ```no_run
 //! use bevy::prelude::*;
@@ -20,8 +23,8 @@
 //! ```
 //!
 //! Without the plugin an `<svg>` (or a shape) in the React tree mounts as a
-//! plain node and the bridge reports a `featureMissing` warning naming this
-//! crate. Rendering an `.svg` *file* is the core's `<image src="x.svg">`.
+//! plain node and the bridge reports a `featureMissing` warning naming its
+//! feature and plugin. Rendering an `.svg` *file* is the core's `<image src="x.svg">`.
 //!
 //! Everything here plugs into the core through its element registry
 //! ([`bevy_react_core::element`]) and extension contract
@@ -86,7 +89,7 @@ impl Plugin for SvgPlugin {
 
     fn finish(&self, app: &mut App) {
         if !app.is_plugin_added::<bevy_react_core::ReactUiPlugin>() {
-            warn!(
+            tracing::warn!(
                 target: "bevy_react",
                 "bevy_react_svg::SvgPlugin is added but ReactUiPlugin is not: \
                  the <svg> element has nothing to mount into"

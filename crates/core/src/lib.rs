@@ -23,6 +23,11 @@
 //!
 //! The `protocol` and `js_thread` modules are exposed for advanced use (custom
 //! integrations, headless tests); most users only need [`ReactUiPlugin`].
+//!
+//! Apps normally depend on the `bevy-react` crate instead: it re-exports this
+//! crate at its root (every path here is `bevy_react::<same path>`) and adds
+//! the element feature crates and the `ReactPlugins` group behind cargo
+//! features.
 
 // Let the `#[react_message]` macro's generated `::bevy_react_core::…` paths resolve
 // inside this crate too (e.g. in our own tests and examples).
@@ -102,15 +107,25 @@ pub mod render_target;
 // The SVG subsystem (parse + CPU rasterization via resvg/tiny-skia).
 pub mod svg;
 
+/// The dependencies the `#[react_*]` macros' expansions name, so a caller
+/// needs only bevy-react (the facade re-exports this module unchanged). Not
+/// an API.
+#[doc(hidden)]
+pub mod __private {
+    pub use bevy;
+    pub use serde;
+    pub use ts_rs;
+}
+
 pub use animations::ReactUiAnimationsPlugin;
 pub use bevy_react_macros::{
     react_event, react_filter, react_message, react_morph_filter, react_request,
 };
 
-/// The headless op harness for a feature crate's own tests (`test-util`
+/// The headless op harness for a feature crate's own tests (`test_util`
 /// feature): the op app, op builders, the bridge, and the engine hooks the
 /// core's own tests use. Unstable — a dev-dependency surface, not an API.
-#[cfg(any(test, feature = "test-util"))]
+#[cfg(any(test, feature = "test_util"))]
 #[doc(hidden)]
 pub mod test_util {
     pub use crate::bridge::{JsBridge, PointerHandlers};

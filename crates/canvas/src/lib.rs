@@ -31,7 +31,10 @@
 //! one documented kind-aware exception (a function-valued `draw` prop and an
 //! imperative handle can't ride the generic prop wire).
 //!
-//! Add [`CanvasPlugin`] to an app that also has `ReactUiPlugin` (any order):
+//! Apps normally get this crate through `bevy-react`'s `canvas` cargo feature
+//! (on by default): `bevy_react::canvas`, with [`CanvasPlugin`] a `ReactPlugins`
+//! member. Depending on this crate directly, add [`CanvasPlugin`] to an app that
+//! also has `ReactUiPlugin` (any order):
 //!
 //! ```no_run
 //! use bevy::prelude::*;
@@ -45,7 +48,7 @@
 //! ```
 //!
 //! Without the plugin a `<canvas>` in the React tree mounts as a plain node
-//! and the bridge reports a `featureMissing` warning naming this crate.
+//! and the bridge reports a `featureMissing` warning naming its feature and plugin.
 //!
 //! Everything here plugs into the core through its element registry
 //! ([`bevy_react_core::element`]) and extension contract
@@ -93,7 +96,7 @@ impl Plugin for CanvasPlugin {
 
     fn finish(&self, app: &mut App) {
         if !app.is_plugin_added::<bevy_react_core::ReactUiPlugin>() {
-            warn!(
+            tracing::warn!(
                 target: "bevy_react",
                 "bevy_react_canvas::CanvasPlugin is added but ReactUiPlugin is not: \
                  the <canvas> element has nothing to mount into"
