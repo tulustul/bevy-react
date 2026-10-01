@@ -3,7 +3,7 @@
 
 use std::fmt;
 
-use bevy::ui::{GridPlacement, GridTrack, RepeatedGridTrack};
+use bevy::ui::{GridPlacement, GridTrack, GridTrackRepetition, RepeatedGridTrack};
 use serde::de::{self, Deserializer, Visitor};
 
 use super::decode_warn;
@@ -60,29 +60,6 @@ fn single_track(token: &str) -> Option<GridTrack> {
     }
 }
 
-/// Build a repeated track (`repeat(count, token)`), dispatching on the unit.
-fn repeated_track(count: u16, token: &str) -> Option<RepeatedGridTrack> {
-    let t = token.trim();
-    match t {
-        "auto" => return Some(RepeatedGridTrack::auto(count)),
-        "min-content" => return Some(RepeatedGridTrack::min_content(count)),
-        "max-content" => return Some(RepeatedGridTrack::max_content(count)),
-        _ => {}
-    }
-    let parse = |num: &str| num.trim().parse::<f32>().ok();
-    if let Some(v) = t.strip_suffix("fr").and_then(parse) {
-        Some(RepeatedGridTrack::fr(count, v))
-    } else if let Some(v) = t.strip_suffix("flex").and_then(parse) {
-        Some(RepeatedGridTrack::flex(count, v))
-    } else if let Some(v) = t.strip_suffix("px").and_then(parse) {
-        Some(RepeatedGridTrack::px(count as usize, v))
-    } else {
-        t.strip_suffix('%')
-            .and_then(parse)
-            .map(|v| RepeatedGridTrack::percent(count as usize, v))
-    }
-}
-
 /// Parse a CSS grid template (`"repeat(3, 1fr)"`, `"1fr 2fr 100px"`, `"auto"`).
 /// An unparsable token warns and is skipped; the rest of the template survives.
 fn parse_template(s: &str) -> Vec<RepeatedGridTrack> {
@@ -95,7 +72,8 @@ fn parse_template(s: &str) -> Vec<RepeatedGridTrack> {
                     .and_then(|t| t.strip_suffix(')'))
                 {
                     let (count, track) = inner.split_once(',')?;
-                    repeated_track(count.trim().parse().ok()?, track)
+                    let count = GridTrackRepetition::Count(count.trim().parse().ok()?);
+                    single_track(track).map(|t| RepeatedGridTrack::repeat_many(count, [t]))
                 } else {
                     single_track(&tok).map(Into::into)
                 }
