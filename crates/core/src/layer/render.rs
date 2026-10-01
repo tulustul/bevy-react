@@ -1902,6 +1902,91 @@ pub(super) fn set_image_viewport(pass: &mut TrackedRenderPass, image: UVec2) {
     pass.set_scissor_rect(0, 0, image.x, image.y);
 }
 
+/// Begin a pass writing `target`, cleared to transparent — every layer pass
+/// replace-writes the texels it keeps, so `Clear` vs `Load` is
+/// content-equivalent and `Clear` skips loading stale contents on tiled
+/// GPUs. `viewport` restricts it to a bucket-allocated target's image
+/// ([`set_image_viewport`]).
+pub(super) fn clear_pass<'a>(
+    ctx: &'a mut RenderContext,
+    label: &'static str,
+    target: &TextureView,
+    viewport: Option<UVec2>,
+) -> TrackedRenderPass<'a> {
+    let mut pass = ctx.begin_tracked_render_pass(RenderPassDescriptor {
+        label: Some(label),
+        color_attachments: &[Some(RenderPassColorAttachment {
+            view: target,
+            depth_slice: None,
+            resolve_target: None,
+            ops: Operations {
+                load: LoadOp::Clear(LinearRgba::NONE.into()),
+                store: StoreOp::Store,
+            },
+        })],
+        depth_stencil_attachment: None,
+        timestamp_writes: None,
+        occlusion_query_set: None,
+        multiview_mask: None,
+    });
+    if let Some(image) = viewport {
+        set_image_viewport(&mut pass, image);
+    }
+    pass
+}
+
+/// One fullscreen-triangle pass: `pipeline` with `bind_group` (and its
+/// dynamic `offsets`) over a [`clear_pass`] into `target`.
+pub(super) fn fullscreen_pass(
+    ctx: &mut RenderContext,
+    label: &'static str,
+    target: &TextureView,
+    viewport: Option<UVec2>,
+    pipeline: &RenderPipeline,
+    bind_group: &BindGroup,
+    offsets: &[u32],
+) {
+    let mut pass = clear_pass(ctx, label, target, viewport);
+    pass.set_render_pipeline(pipeline);
+    pass.set_bind_group(0, bind_group, offsets);
+    pass.draw(0..3, 0..1);
+}
+
+/// Every pass pipeline of a staged run, or `None` while any is still
+/// compiling: a run executes whole or not at all, never a partial chain
+/// (its gate's `output_valid` stayed false at prepare, so the composite is
+/// gated this frame and the layer restages + retries next frame).
+pub(super) fn run_pipelines<'a>(
+    run: &LayerFilterRun,
+    pipeline_cache: &'a PipelineCache,
+) -> Option<Vec<&'a RenderPipeline>> {
+    run.passes
+        .iter()
+        .map(|pass| pipeline_cache.get_render_pipeline(pass.pipeline))
+        .collect()
+}
+
+/// Execute a staged run's passes in order, with the pipelines
+/// [`run_pipelines`] resolved.
+pub(super) fn replay_run(
+    ctx: &mut RenderContext,
+    label: &'static str,
+    run: &LayerFilterRun,
+    pipelines: Vec<&RenderPipeline>,
+) {
+    for (pass, pipeline) in run.passes.iter().zip(pipelines) {
+        fullscreen_pass(
+            ctx,
+            label,
+            &pass.target,
+            run.viewport,
+            pipeline,
+            &pass.bind_group,
+            &[pass.uniform_offset],
+        );
+    }
+}
+
 /// Per-frame filter staging: the uniform buffer (one entry per staged pass)
 /// and the replay list, index-aligned with [`ExtractedUiLayers::layers`].
 /// `runs[idx] = None` means "no filter work this frame" — either the layer
@@ -2194,30 +2279,17 @@ pub fn ui_layer_capture_pass(
             && let Some(texture) = atlases.textures.get(idx)
             && let Some(phase) = phases.get(&layer.retained)
         {
-            let mut pass = ctx.begin_tracked_render_pass(RenderPassDescriptor {
-                label: Some("ui_layer_capture"),
-                color_attachments: &[Some(RenderPassColorAttachment {
-                    view: &texture.default_view,
-                    depth_slice: None,
-                    resolve_target: None,
-                    ops: Operations {
-                        load: LoadOp::Clear(LinearRgba::NONE.into()),
-                        store: StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: None,
-                timestamp_writes: None,
-                occlusion_query_set: None,
-                multiview_mask: None,
-            });
             // A bucket-allocated texture: the synthetic view's ortho maps the
             // capture rect onto clip space, so the viewport places the image
-            // 1:1 in the texture's top-left `size` texels (the clear above
-            // still wipes the whole attachment — the padding stays
-            // transparent).
-            if let Some(image) = atlases.viewports.get(idx).copied().flatten() {
-                set_image_viewport(&mut pass, image);
-            }
+            // 1:1 in the texture's top-left `size` texels (the clear still
+            // wipes the whole attachment — the padding stays transparent).
+            let viewport = atlases.viewports.get(idx).copied().flatten();
+            let mut pass = clear_pass(
+                &mut ctx,
+                "ui_layer_capture",
+                &texture.default_view,
+                viewport,
+            );
             if let Err(err) = phase.render(&mut pass, world, layer.view_entity) {
                 tracing::error!("layer capture pass failed: {err:?}");
             }
@@ -2230,49 +2302,10 @@ pub fn ui_layer_capture_pass(
         // Filter replay — also when the capture above was skipped as cached:
         // a staged run over a clean capture is a params-only change (slider
         // move, time tick) re-filtering last frame's pixels.
-        if let Some(run) = filter_meta.runs.get(idx).and_then(Option::as_ref) {
-            // Resolve every pass pipeline up front: a `None` is a
-            // still-compiling pipeline — abort the whole run, never execute a
-            // partial chain. `output_valid` was only set by
-            // `prepare_layer_filters` if all of these resolved back in
-            // prepare (compiled pipelines don't regress), so an abort here
-            // means it stayed false: the quad is gated this frame and the
-            // layer restages + retries next frame.
-            let pipelines: Option<Vec<_>> = run
-                .passes
-                .iter()
-                .map(|pass| pipeline_cache.get_render_pipeline(pass.pipeline))
-                .collect();
-            if let Some(pipelines) = pipelines {
-                for (pass_data, pipeline) in run.passes.iter().zip(pipelines) {
-                    let mut pass = ctx.begin_tracked_render_pass(RenderPassDescriptor {
-                        label: Some("ui_layer_filter"),
-                        color_attachments: &[Some(RenderPassColorAttachment {
-                            view: &pass_data.target,
-                            depth_slice: None,
-                            resolve_target: None,
-                            ops: Operations {
-                                // The fullscreen triangle replace-writes every
-                                // texel, so `Clear` vs `Load` is
-                                // content-equivalent; `Clear` skips loading
-                                // stale contents on tiled GPUs.
-                                load: LoadOp::Clear(LinearRgba::NONE.into()),
-                                store: StoreOp::Store,
-                            },
-                        })],
-                        depth_stencil_attachment: None,
-                        timestamp_writes: None,
-                        occlusion_query_set: None,
-                        multiview_mask: None,
-                    });
-                    if let Some(image) = run.viewport {
-                        set_image_viewport(&mut pass, image);
-                    }
-                    pass.set_render_pipeline(pipeline);
-                    pass.set_bind_group(0, &pass_data.bind_group, &[pass_data.uniform_offset]);
-                    pass.draw(0..3, 0..1);
-                }
-            }
+        if let Some(run) = filter_meta.runs.get(idx).and_then(Option::as_ref)
+            && let Some(pipelines) = run_pipelines(run, &pipeline_cache)
+        {
+            replay_run(&mut ctx, "ui_layer_filter", run, pipelines);
         }
 
         // Mip downsample replay — after capture AND filter, so the chain
@@ -2285,25 +2318,15 @@ pub fn ui_layer_capture_pass(
             && let Some(pipeline) = pipeline_cache.get_render_pipeline(run.pipeline)
         {
             for level in &run.levels {
-                let mut pass = ctx.begin_tracked_render_pass(RenderPassDescriptor {
-                    label: Some("ui_layer_mip_blit"),
-                    color_attachments: &[Some(RenderPassColorAttachment {
-                        view: &level.target,
-                        depth_slice: None,
-                        resolve_target: None,
-                        ops: Operations {
-                            load: LoadOp::Clear(LinearRgba::NONE.into()),
-                            store: StoreOp::Store,
-                        },
-                    })],
-                    depth_stencil_attachment: None,
-                    timestamp_writes: None,
-                    occlusion_query_set: None,
-                    multiview_mask: None,
-                });
-                pass.set_render_pipeline(pipeline);
-                pass.set_bind_group(0, &level.bind_group, &[]);
-                pass.draw(0..3, 0..1);
+                fullscreen_pass(
+                    &mut ctx,
+                    "ui_layer_mip_blit",
+                    &level.target,
+                    None,
+                    pipeline,
+                    &level.bind_group,
+                    &[],
+                );
             }
         }
     }

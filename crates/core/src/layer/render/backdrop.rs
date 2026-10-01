@@ -495,12 +495,7 @@ pub fn run_backdrop_passes(
     let Some(blit_compiled) = pipeline_cache.get_render_pipeline(blit.pipeline) else {
         return;
     };
-    let chain_compiled: Option<Vec<_>> = run
-        .passes
-        .iter()
-        .map(|pass| pipeline_cache.get_render_pipeline(pass.pipeline))
-        .collect();
-    let Some(chain_compiled) = chain_compiled else {
+    let Some(chain_compiled) = super::run_pipelines(run, pipeline_cache) else {
         return;
     };
     let Some(blit_binding) = meta.blit_uniforms.binding() else {
@@ -515,58 +510,18 @@ pub fn run_backdrop_passes(
         &pipeline_cache.get_bind_group_layout(&blit_pipeline_res.layout),
         &BindGroupEntries::sequential((main_texture, &blit_pipeline_res.sampler, blit_binding)),
     );
-    {
-        let mut pass = ctx.begin_tracked_render_pass(RenderPassDescriptor {
-            label: Some("ui_layer_backdrop_blit"),
-            color_attachments: &[Some(RenderPassColorAttachment {
-                view: &blit.target,
-                depth_slice: None,
-                resolve_target: None,
-                ops: Operations {
-                    // Replace-write of every texel; Clear skips loading stale
-                    // contents on tiled GPUs.
-                    load: LoadOp::Clear(LinearRgba::NONE.into()),
-                    store: StoreOp::Store,
-                },
-            })],
-            depth_stencil_attachment: None,
-            timestamp_writes: None,
-            occlusion_query_set: None,
-            multiview_mask: None,
-        });
-        // Bucket-allocated snapshot: blit into its image sub-rect only (the
-        // triangle's `uv` then spans the image, as the crop math assumes).
-        if let Some(image) = blit.viewport {
-            super::set_image_viewport(&mut pass, image);
-        }
-        pass.set_render_pipeline(blit_compiled);
-        pass.set_bind_group(0, &blit_bind_group, &[blit.uniform_offset]);
-        pass.draw(0..3, 0..1);
-    }
-    for (pass_data, pipeline) in run.passes.iter().zip(chain_compiled) {
-        let mut pass = ctx.begin_tracked_render_pass(RenderPassDescriptor {
-            label: Some("ui_layer_backdrop_filter"),
-            color_attachments: &[Some(RenderPassColorAttachment {
-                view: &pass_data.target,
-                depth_slice: None,
-                resolve_target: None,
-                ops: Operations {
-                    load: LoadOp::Clear(LinearRgba::NONE.into()),
-                    store: StoreOp::Store,
-                },
-            })],
-            depth_stencil_attachment: None,
-            timestamp_writes: None,
-            occlusion_query_set: None,
-            multiview_mask: None,
-        });
-        if let Some(image) = run.viewport {
-            super::set_image_viewport(&mut pass, image);
-        }
-        pass.set_render_pipeline(pipeline);
-        pass.set_bind_group(0, &pass_data.bind_group, &[pass_data.uniform_offset]);
-        pass.draw(0..3, 0..1);
-    }
+    // Bucket-allocated snapshot: blit into its image sub-rect only (the
+    // triangle's `uv` then spans the image, as the crop math assumes).
+    super::fullscreen_pass(
+        ctx,
+        "ui_layer_backdrop_blit",
+        &blit.target,
+        blit.viewport,
+        blit_compiled,
+        &blit_bind_group,
+        &[blit.uniform_offset],
+    );
+    super::replay_run(ctx, "ui_layer_backdrop_filter", run, chain_compiled);
 }
 
 /// Fetch the camera's current main-texture view for [`run_backdrop_passes`].

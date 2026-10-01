@@ -455,37 +455,10 @@ pub fn run_morph_passes(
     pipeline_cache: &PipelineCache,
     ctx: &mut RenderContext,
 ) {
-    let Some(run) = meta.runs.get(idx).and_then(Option::as_ref) else {
-        return;
-    };
-    for pass_data in &run.passes {
-        let Some(pipeline) = pipeline_cache.get_render_pipeline(pass_data.pipeline) else {
-            // Still compiling: `output_valid` stayed false at prepare, the
-            // composite is gated, and the layer restages next frame.
-            return;
-        };
-        let mut pass = ctx.begin_tracked_render_pass(RenderPassDescriptor {
-            label: Some("ui_layer_morph"),
-            color_attachments: &[Some(RenderPassColorAttachment {
-                view: &pass_data.target,
-                depth_slice: None,
-                resolve_target: None,
-                ops: Operations {
-                    load: LoadOp::Clear(LinearRgba::NONE.into()),
-                    store: StoreOp::Store,
-                },
-            })],
-            depth_stencil_attachment: None,
-            timestamp_writes: None,
-            occlusion_query_set: None,
-            multiview_mask: None,
-        });
-        if let Some(image) = run.viewport {
-            super::set_image_viewport(&mut pass, image);
-        }
-        pass.set_render_pipeline(pipeline);
-        pass.set_bind_group(0, &pass_data.bind_group, &[pass_data.uniform_offset]);
-        pass.draw(0..3, 0..1);
+    if let Some(run) = meta.runs.get(idx).and_then(Option::as_ref)
+        && let Some(pipelines) = super::run_pipelines(run, pipeline_cache)
+    {
+        super::replay_run(ctx, "ui_layer_morph", run, pipelines);
     }
 }
 
