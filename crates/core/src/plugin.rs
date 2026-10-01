@@ -648,10 +648,9 @@ impl Plugin for ReactUiPlugin {
         // resolution-independent asset, rasterized per node at laid-out size.
         .init_asset::<crate::svg::SvgDocument>()
         .register_asset_loader(crate::svg::SvgAssetLoader)
-        // The offscreen render-target ("portal") registry and its shared blank
-        // placeholder texture, created before the first portal can mount.
+        // The offscreen render-target ("portal") registry, created before the
+        // first portal can mount.
         .init_resource::<crate::render_target::RenderTargets>()
-        .add_systems(Startup, crate::render_target::init_target_placeholder)
         .add_systems(Startup, crate::layer::pick3d::init_transform3d_pointer)
         .add_systems(Startup, setup)
         .add_systems(

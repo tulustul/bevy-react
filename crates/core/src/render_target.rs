@@ -34,7 +34,7 @@
 
 use bevy::camera::visibility::InheritedVisibility;
 use bevy::camera::{ImageRenderTarget, RenderTarget as BevyRenderTarget};
-use bevy::image::Image;
+use bevy::image::{Image, TRANSPARENT_IMAGE_HANDLE};
 use bevy::platform::collections::HashMap;
 use bevy::platform::collections::HashSet;
 use bevy::prelude::*;
@@ -235,19 +235,8 @@ pub struct PortalCamera(pub String);
 #[derive(Component, Clone, Debug)]
 pub struct TargetView(pub String);
 
-/// A shared 1×1 transparent texture a portal shows until (and after) it is bound
-/// to a live target. Held in a resource so every unbound portal shares one image.
-#[derive(Resource)]
-pub struct TargetPlaceholder(pub Handle<Image>);
-
-/// Create the shared [`TargetPlaceholder`] image at startup.
-pub fn init_target_placeholder(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
-    let handle = images.add(crate::raster::blank_image());
-    commands.insert_resource(TargetPlaceholder(handle));
-}
-
 /// Point every `<portal>`'s [`ImageNode`] at the texture for its target name (or
-/// the placeholder when the name isn't registered), and record the portal as the
+/// bevy's 1×1 transparent image when the name isn't registered), and record the portal as the
 /// target's binder for [`Resolution::Auto`] sizing. Only writes `image` when it
 /// actually changes, so it doesn't needlessly re-extract the node every frame.
 ///
@@ -256,7 +245,6 @@ pub fn init_target_placeholder(mut commands: Commands, mut images: ResMut<Assets
 /// [`remove`](RenderTargets::remove)).
 pub fn bind_target_views(
     mut targets: ResMut<RenderTargets>,
-    placeholder: Res<TargetPlaceholder>,
     mut portals: Query<(Entity, &TargetView, &mut ImageNode)>,
 ) {
     for (entity, portal, mut node) in &mut portals {
@@ -264,7 +252,7 @@ pub fn bind_target_views(
             .entries
             .get(&portal.0)
             .map(|e| e.handle.clone())
-            .unwrap_or_else(|| placeholder.0.clone());
+            .unwrap_or(TRANSPARENT_IMAGE_HANDLE);
         if node.image != desired {
             node.image = desired;
         }
@@ -504,9 +492,7 @@ mod tests {
     #[test]
     fn bind_portals_binds_and_reverts() {
         let mut app = test_app();
-        app.add_systems(Startup, init_target_placeholder);
         app.add_systems(Update, bind_target_views);
-        app.update(); // run startup → placeholder exists
 
         let target_handle =
             app.world_mut()
@@ -516,7 +502,7 @@ mod tests {
                         .create(&mut images, "follow", RenderTargetSpec::default())
                         .handle
                 });
-        let placeholder = app.world().resource::<TargetPlaceholder>().0.clone();
+        let placeholder = TRANSPARENT_IMAGE_HANDLE;
         let portal = app
             .world_mut()
             .spawn((
