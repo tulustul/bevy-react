@@ -40,19 +40,9 @@ fn apply_stamps(ctx: &WriterCtx, s: &Style, ec: &mut EntityCommands) {
 pub(super) fn stamp<T: PropertyValue>(value: Option<&T>, ec: &mut EntityCommands, fresh: bool) {
     match value {
         Some(value) => {
-            let value = value.clone();
-            ec.queue(
-                move |mut entity: EntityWorldMut| match entity.get_mut::<StyleValue<T>>() {
-                    Some(mut current) => {
-                        if current.0 != value {
-                            current.0 = value;
-                        }
-                    }
-                    None => {
-                        entity.insert(StyleValue(value));
-                    }
-                },
-            );
+            ec.queue(crate::ui_map::set_if_neq_or_insert(StyleValue(
+                value.clone(),
+            )));
         }
         None if fresh => {}
         None => {

@@ -7,7 +7,7 @@ use crate::scrollbar::ScrollbarConfig;
 use crate::style::Style;
 use crate::style::props::*;
 use crate::style::{Writer, WriterCtx, owns};
-use crate::ui_map::{node_from, remove_unless_fresh, set_if_neq_or_insert, set_node_if_changed};
+use crate::ui_map::{node_from, remove_unless_fresh, set_if_neq_or_insert};
 
 /// `Node` from every layout property. A guarded in-place update, not a
 /// re-insert: re-inserting `Node` marks it changed and relays out the
@@ -65,7 +65,7 @@ pub static LAYOUT_WRITER: Writer = Writer {
 };
 
 fn apply_layout(_ctx: &WriterCtx, s: &Style, ec: &mut EntityCommands) {
-    ec.queue(set_node_if_changed(node_from(Some(s))));
+    ec.queue(set_if_neq_or_insert(node_from(Some(s))));
 }
 
 /// `ZIndex` — `Node`-required: never removed; absent writes the default.

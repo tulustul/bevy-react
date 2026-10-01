@@ -272,27 +272,13 @@ pub(crate) fn node_from(style: Option<&Style>) -> Node {
     node
 }
 
-/// Update an entity's `Node` in place, marking it changed (→ a `bevy_ui` relayout)
-/// only when the freshly built value actually differs — so a paint-only restyle
-/// (e.g. `backgroundColor`) no longer forces a spurious relayout. Falls back to
-/// insert when the entity has no `Node` yet (a fresh spawn whose `Node` hasn't been
-/// added at command-apply time). Runs as a queued `EntityCommand`, so it needs no
-/// `&mut Node` query in the caller and applies in command order (correct when a node
-/// is updated more than once in one drained batch — sequential `set_if_neq`s converge).
-pub(crate) fn set_node_if_changed(node: Node) -> impl EntityCommand {
-    move |mut entity: EntityWorldMut| match entity.get_mut::<Node>() {
-        Some(mut current) => {
-            current.set_if_neq(node);
-        }
-        None => {
-            entity.insert(node);
-        }
-    }
-}
-
-/// Queued compare-before-write for any `PartialEq` component (the
-/// [`set_node_if_changed`] pattern generalized): `set_if_neq` when present, insert
-/// when absent. Used for the components bevy's `Node` **requires**
+/// Queued compare-before-write for any `PartialEq` component: `set_if_neq`
+/// when present (marking it changed only when the value differs — a `Node`
+/// rewrite is a `bevy_ui` relayout, so a paint-only restyle must not touch
+/// it), insert when absent (a fresh spawn). Runs as a queued `EntityCommand`,
+/// so it needs no `&mut` query in the caller and applies in command order
+/// (sequential `set_if_neq`s in one drained batch converge). Also used for
+/// the components bevy's `Node` **requires**
 /// (`BackgroundColor`/`BorderColor`/`ZIndex`): they are always present on a
 /// node, so "absent in the style" writes the default value instead of removing
 /// the component — a removal is a real table move on every create and every

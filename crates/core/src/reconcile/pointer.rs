@@ -9,7 +9,6 @@ use bevy::ui::{ComputedNode, ComputedStackIndex, RelativeCursorPosition, UiGloba
 use super::events::normalized_01;
 use crate::bridge::{JsBridge, PointerHandlers, ReactNode};
 use crate::ext::EventLocalPos;
-use crate::protocol::{outbound::Outbound, outbound::UiEvent};
 
 /// Event x/y for a node: an SVG shape's **user-space** cursor when its
 /// [`EventLocalPos`] slot carries one (written by the shape synthesis while
@@ -136,18 +135,7 @@ pub fn collect_pointer_events(
     touch_scroll: Res<crate::touch_scroll::TouchScrollState>,
 ) {
     let emit = |rnode: &ReactNode, kind: &str, pos: Vec2, abs: Vec2, button: u8| {
-        let _ = bridge.outbound_tx.send(Outbound::UiEvent {
-            event: UiEvent {
-                id: rnode.0,
-                kind: kind.to_string(),
-                x: Some(pos.x),
-                y: Some(pos.y),
-                client_x: Some(abs.x),
-                client_y: Some(abs.y),
-                button: Some(button),
-                ..default()
-            },
-        });
+        super::events::send_ui_event(&bridge, rnode.0, kind, Some(pos), Some(abs), Some(button));
     };
 
     // Absolute cursor position in window logical pixels; `None` when the cursor
@@ -356,7 +344,7 @@ mod tests {
     use bevy::picking::events::{Click, Pointer};
 
     use super::*;
-    use crate::protocol::{op::Op, outbound::UiEvent};
+    use crate::protocol::{op::Op, outbound::Outbound, outbound::UiEvent};
 
     /// A minimal app wired for the picking-based click collectors: a `JsBridge`
     /// (with its outbound receiver kept alive) + `Pointer<Click>` messages.

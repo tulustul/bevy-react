@@ -15,6 +15,7 @@ use crate::style::{Writer, WriterCtx, owns};
 use crate::transition::{
     ScrollTransitionInput, ScrollTransitionState, TransitionInput, TransitionState,
 };
+use crate::ui_map::set_if_neq_or_insert;
 use crate::ui_map::{length_to_val, remove_unless_fresh};
 
 /// A promoted layer root's group alpha (the value the opacity fold would
@@ -29,16 +30,7 @@ pub static GROUP_ALPHA_WRITER: Writer = Writer {
             return;
         }
         let alpha = s.get(&OPACITY).static_val().unwrap_or(1.0);
-        ec.queue(
-            move |mut entity: EntityWorldMut| match entity.get_mut::<LayerGroupAlpha>() {
-                Some(mut current) => {
-                    current.set_if_neq(LayerGroupAlpha(alpha));
-                }
-                None => {
-                    entity.insert(LayerGroupAlpha(alpha));
-                }
-            },
-        );
+        ec.queue(set_if_neq_or_insert(LayerGroupAlpha(alpha)));
     },
 };
 
@@ -73,16 +65,7 @@ pub static TRANSFORM3D_WRITER: Writer = Writer {
     writes: &[owns::<LayerTransform3d>],
     apply: |_, s, ec| {
         if let Some(t) = s.get(&TRANSFORM3D).cloned() {
-            ec.queue(move |mut entity: EntityWorldMut| {
-                match entity.get_mut::<LayerTransform3d>() {
-                    Some(mut current) => {
-                        current.set_if_neq(LayerTransform3d(t));
-                    }
-                    None => {
-                        entity.insert(LayerTransform3d(t));
-                    }
-                }
-            });
+            ec.queue(set_if_neq_or_insert(LayerTransform3d(t)));
         }
     },
 };

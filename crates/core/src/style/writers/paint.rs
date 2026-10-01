@@ -122,20 +122,11 @@ fn apply_gradient_targets(ctx: &WriterCtx, s: &Style, ec: &mut EntityCommands) {
     if ctx.fresh && gradient_less {
         return;
     }
-    ec.queue(move |mut entity: EntityWorldMut| {
-        if gradient_less {
-            entity.remove::<GradientTargets>();
-        } else {
-            match entity.get_mut::<GradientTargets>() {
-                Some(mut current) => {
-                    current.set_if_neq(targets);
-                }
-                None => {
-                    entity.insert(targets);
-                }
-            }
-        }
-    });
+    if gradient_less {
+        ec.remove::<GradientTargets>();
+    } else {
+        ec.queue(set_if_neq_or_insert(targets));
+    }
 }
 
 /// `imageRendering`: an explicit mode stamps the marker the binding systems
