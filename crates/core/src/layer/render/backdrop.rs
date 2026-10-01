@@ -28,7 +28,7 @@
 //!    nothing and the region shows the real (unfiltered) frame already in
 //!    the target, never an invisible subtree.
 
-use bevy::math::{Rect, UVec2, Vec2};
+use bevy::math::{UVec2, Vec2};
 use bevy::prelude::*;
 use bevy::render::camera::ExtractedCamera;
 use bevy::render::render_resource::binding_types::{sampler, texture_2d, uniform_buffer};
@@ -38,7 +38,6 @@ use bevy::render::texture::CachedTexture;
 use bevy::render::view::ViewTarget;
 use bevy::shader::Shader;
 
-use super::clip::ClippedQuad;
 use super::store::{PassBindGroups, PassBindKey, alloc_capture_texture};
 use super::{
     ExtractedUiLayers, FilterUniforms, LayerFilterPass, LayerFilterPipeline,
@@ -512,36 +511,6 @@ pub fn camera_main_texture(world: &World, camera: Option<Entity>) -> Option<Text
     Some(target.main_texture_view().clone())
 }
 
-/// The backdrop quad's clipped geometry: the UN-inflated border box
-/// (`min + outset .. min + size − outset`) with UVs relative to the
-/// INFLATED snapshot — frost never paints in the outset ring, but its blur
-/// was computed with real neighborhood. `None` = fully clipped away (or a
-/// degenerate box), draw nothing.
-pub fn backdrop_quad(
-    min: Vec2,
-    size: UVec2,
-    outset: u32,
-    clip: Option<Rect>,
-) -> Option<ClippedQuad> {
-    let size = size.as_vec2();
-    let inset = Vec2::splat(outset as f32);
-    let box_min = min + inset;
-    let box_max = min + size - inset;
-    let (pos_min, pos_max) = match clip {
-        None => (box_min, box_max),
-        Some(c) => (box_min.max(c.min), box_max.min(c.max)),
-    };
-    if pos_min.x >= pos_max.x || pos_min.y >= pos_max.y {
-        return None;
-    }
-    Some(ClippedQuad {
-        pos_min,
-        pos_max,
-        uv_min: (pos_min - min) / size,
-        uv_max: (pos_max - min) / size,
-    })
-}
-
 /// Whether this layer's backdrop composite may draw this frame, maintaining
 /// the gate-warn bookkeeping. Returns the bind group to sample when ready.
 /// Mirrors the content-filter gate in `prepare_layer_composites`, with a
@@ -608,9 +577,10 @@ pub const BACKDROP_UNDERLAY_EPSILON: f32 = 0.005;
 /// the pure helpers; see the tests below.
 #[cfg(test)]
 mod tests {
+    use super::super::clip::clip_quad;
     use super::*;
 
-    /// `backdrop_quad` shrink+UV table: the quad covers the un-inflated
+    /// The backdrop quad (`clip_quad` inset by the outset): it covers the un-inflated
     /// border box with UVs mapping the box's position inside the inflated
     /// snapshot; clips clamp position and UVs together; degenerate boxes
     /// (outset ≥ half the rect) draw nothing.
@@ -618,31 +588,31 @@ mod tests {
     fn backdrop_quad_shrinks_to_border_box_with_inflated_uvs() {
         let min = Vec2::new(100.0, 200.0);
         let size = UVec2::new(132, 96); // border box 100×64 + outset 16
-        let q = backdrop_quad(min, size, 16, None).expect("quad");
+        let q = clip_quad(min, size, 16.0, None).expect("quad");
         assert_eq!(q.pos_min, Vec2::new(116.0, 216.0));
         assert_eq!(q.pos_max, Vec2::new(216.0, 280.0));
         assert_eq!(q.uv_min, Vec2::new(16.0 / 132.0, 16.0 / 96.0));
         assert_eq!(q.uv_max, Vec2::new(116.0 / 132.0, 80.0 / 96.0));
 
         // Zero outset: the border box IS the rect, full UV window.
-        let q = backdrop_quad(min, size, 0, None).expect("quad");
+        let q = clip_quad(min, size, 0.0, None).expect("quad");
         assert_eq!(q.pos_min, min);
         assert_eq!(q.uv_min, Vec2::ZERO);
         assert_eq!(q.uv_max, Vec2::ONE);
 
         // An ancestor clip clamps position and UVs proportionally.
         let clip = Rect::new(150.0, 216.0, 400.0, 400.0);
-        let q = backdrop_quad(min, size, 16, Some(clip)).expect("quad");
+        let q = clip_quad(min, size, 16.0, Some(clip)).expect("quad");
         assert_eq!(q.pos_min, Vec2::new(150.0, 216.0));
         assert_eq!(q.pos_max, Vec2::new(216.0, 280.0));
         assert_eq!(q.uv_min, Vec2::new(50.0 / 132.0, 16.0 / 96.0));
 
         // Fully clipped away → None.
         let far = Rect::new(1000.0, 1000.0, 2000.0, 2000.0);
-        assert!(backdrop_quad(min, size, 16, Some(far)).is_none());
+        assert!(clip_quad(min, size, 16.0, Some(far)).is_none());
 
         // Degenerate: outset eats the whole box.
-        assert!(backdrop_quad(min, UVec2::new(20, 20), 16, None).is_none());
+        assert!(clip_quad(min, UVec2::new(20, 20), 16.0, None).is_none());
     }
 
     /// The underlay epsilon sorts strictly under the content quad for

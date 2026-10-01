@@ -1057,20 +1057,6 @@ pub struct LayerCompositeBatch {
 /// outside half lands on the inflated ring, the inside half on real content.
 const EDGE_AA_INFLATE_PX: f32 = 1.0;
 
-/// The transformed quad's geometry, inflated by `inset` local px on every
-/// side with UVs extended proportionally — `uv ∈ [0, 1]` still maps exactly
-/// the true rect, which is what the shader's coverage term measures against.
-fn inflated_transform_quad(min: Vec2, size: UVec2, inset: f32) -> clip::ClippedQuad {
-    let size = size.as_vec2().max(Vec2::ONE);
-    let uv_inset = inset / size;
-    clip::ClippedQuad {
-        pos_min: min - inset,
-        pos_max: min + size + inset,
-        uv_min: -uv_inset,
-        uv_max: Vec2::ONE + uv_inset,
-    }
-}
-
 /// A quad that staged vertices this frame, pending its
 /// [`LayerCompositeBatch`] write once the uniform offsets are known.
 struct StagedQuad {
@@ -1297,13 +1283,14 @@ pub fn prepare_layer_composites(
         // the shader stays single-path and pixel-identical for them.
         let (q, model, clip_rect, feather) = match layer.transform3d {
             Some(model) => (
-                inflated_transform_quad(layer.min, layer.size, EDGE_AA_INFLATE_PX),
+                clip::clip_quad(layer.min, layer.size, -EDGE_AA_INFLATE_PX, None)
+                    .expect("a grown quad is never empty"),
                 model,
                 layer.quad_clip,
                 EDGE_AA_INFLATE_PX,
             ),
             None => {
-                let Some(q) = clip::clip_quad(layer.min, layer.size, layer.quad_clip) else {
+                let Some(q) = clip::clip_quad(layer.min, layer.size, 0.0, layer.quad_clip) else {
                     continue;
                 };
                 (q, Mat4::IDENTITY, None, 0.0)
@@ -1374,7 +1361,7 @@ pub fn prepare_layer_composites(
         ) else {
             continue;
         };
-        let Some(q) = backdrop::backdrop_quad(layer.min, layer.size, layer.outset, layer.quad_clip)
+        let Some(q) = clip::clip_quad(layer.min, layer.size, layer.outset as f32, layer.quad_clip)
         else {
             continue;
         };
@@ -2589,12 +2576,13 @@ mod tests {
     /// `uv ∈ [0, 1]` still maps exactly the true rect; a degenerate size
     /// doesn't divide by zero.
     #[test]
-    fn inflated_transform_quad_extends_uvs_proportionally() {
-        let q = inflated_transform_quad(Vec2::new(100.0, 50.0), UVec2::new(200, 100), 1.0);
+    fn grown_transform_quad_extends_uvs_proportionally() {
+        let q = clip::clip_quad(Vec2::new(100.0, 50.0), UVec2::new(200, 100), -1.0, None).unwrap();
         assert_eq!(q.pos_min, Vec2::new(99.0, 49.0));
         assert_eq!(q.pos_max, Vec2::new(301.0, 151.0));
         assert_eq!(q.uv_min, Vec2::new(-1.0 / 200.0, -1.0 / 100.0));
-        assert_eq!(q.uv_max, Vec2::new(1.0 + 1.0 / 200.0, 1.0 + 1.0 / 100.0));
+        let uv_max = Vec2::new(1.0 + 1.0 / 200.0, 1.0 + 1.0 / 100.0);
+        assert!(q.uv_max.abs_diff_eq(uv_max, 1e-6));
         // uv=0 must still land on the true rect min: interpolating position
         // by the uv fraction of the true edge recovers `min`.
         let span = q.pos_max - q.pos_min;
@@ -2602,7 +2590,7 @@ mod tests {
         let at_uv_zero = q.pos_min + span * (Vec2::ZERO - q.uv_min) / uv_span;
         assert!(at_uv_zero.abs_diff_eq(Vec2::new(100.0, 50.0), 1e-4));
 
-        let degenerate = inflated_transform_quad(Vec2::ZERO, UVec2::ZERO, 1.0);
+        let degenerate = clip::clip_quad(Vec2::ZERO, UVec2::ZERO, -1.0, None).unwrap();
         assert!(degenerate.uv_min.is_finite());
     }
 }

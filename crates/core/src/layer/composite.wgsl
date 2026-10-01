@@ -111,7 +111,7 @@ fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
     // rasterize without MSAA, so coverage feathers over ~edge_feather px
     // centered on the TRUE rect edge (uv 0/1 — the quad geometry is inflated
     // by the same width, providing the outside half; see
-    // `inflated_transform_quad`). Derivatives convert uv distance to screen
+    // `clip_quad` with a negative inset). Derivatives convert uv distance to screen
     // px per axis BEFORE the min — correct under anisotropic compression —
     // and must be computed before the clip discard (uniform control flow).
     // `edge_feather == 0` hard-disables the term: untransformed quads are

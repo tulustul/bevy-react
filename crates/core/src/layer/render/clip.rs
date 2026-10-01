@@ -127,26 +127,32 @@ pub struct ClippedQuad {
     pub uv_max: Vec2,
 }
 
-/// Clamp a layer's composite quad (`min`, `size` — the capture rect) to its
-/// quad clip. `None` clip = the full quad; an empty or degenerate
-/// intersection returns `None` (draw nothing). UVs shift proportionally on
-/// clamped sides only, so the visible part of the capture stays put on
-/// screen.
-pub fn clip_quad(min: Vec2, size: UVec2, clip: Option<Rect>) -> Option<ClippedQuad> {
+/// A layer's composite quad over its capture rect (`min`, `size`): the rect
+/// shrunk by `inset` on every side (negative grows it), clamped to `clip`,
+/// with UVs relative to the WHOLE capture rect — so the visible part of the
+/// capture stays put on screen. The content quad insets nothing, the
+/// backdrop quad its blur outset (frost never paints in the outset ring),
+/// a transformed quad `-EDGE_AA_INFLATE_PX` (UVs run past `[0, 1]`, the
+/// shader feathers the true edge). `None` = an empty or degenerate result
+/// (draw nothing).
+pub fn clip_quad(min: Vec2, size: UVec2, inset: f32, clip: Option<Rect>) -> Option<ClippedQuad> {
     let size = size.as_vec2();
-    let max = min + size;
+    let (box_min, box_max) = (min + inset, min + size - inset);
     let (pos_min, pos_max) = match clip {
-        None => (min, max),
-        Some(c) => (min.max(c.min), max.min(c.max)),
+        None => (box_min, box_max),
+        Some(c) => (box_min.max(c.min), box_max.min(c.max)),
     };
     if pos_min.x >= pos_max.x || pos_min.y >= pos_max.y {
         return None;
     }
+    // `max(ONE)`: a zero-size rect grown by the edge feather still maps
+    // finite UVs.
+    let uv_size = size.max(Vec2::ONE);
     Some(ClippedQuad {
         pos_min,
         pos_max,
-        uv_min: (pos_min - min) / size,
-        uv_max: (pos_max - min) / size,
+        uv_min: (pos_min - min) / uv_size,
+        uv_max: (pos_max - min) / uv_size,
     })
 }
 
@@ -163,14 +169,14 @@ mod tests {
         let size = UVec2::new(100, 50);
 
         // No clip: full quad, full UV window.
-        let full = clip_quad(min, size, None).expect("unclipped quad");
+        let full = clip_quad(min, size, 0.0, None).expect("unclipped quad");
         assert_eq!(full.pos_min, min);
         assert_eq!(full.pos_max, Vec2::new(110.0, 70.0));
         assert_eq!(full.uv_min, Vec2::ZERO);
         assert_eq!(full.uv_max, Vec2::ONE);
 
         // Left half clipped away: UV window starts at 0.5 horizontally.
-        let q = clip_quad(min, size, Some(Rect::new(60.0, 0.0, 300.0, 300.0)))
+        let q = clip_quad(min, size, 0.0, Some(Rect::new(60.0, 0.0, 300.0, 300.0)))
             .expect("partial overlap");
         assert_eq!(q.pos_min, Vec2::new(60.0, 20.0));
         assert_eq!(q.pos_max, Vec2::new(110.0, 70.0));
@@ -178,30 +184,30 @@ mod tests {
         assert_eq!(q.uv_max, Vec2::ONE);
 
         // Bottom 40% clipped away: UV max shrinks to 0.6 vertically.
-        let q =
-            clip_quad(min, size, Some(Rect::new(0.0, 0.0, 300.0, 50.0))).expect("partial overlap");
+        let q = clip_quad(min, size, 0.0, Some(Rect::new(0.0, 0.0, 300.0, 50.0)))
+            .expect("partial overlap");
         assert_eq!(q.pos_min, min);
         assert_eq!(q.pos_max, Vec2::new(110.0, 50.0));
         assert_eq!(q.uv_min, Vec2::ZERO);
         assert_eq!(q.uv_max, Vec2::new(1.0, 0.6));
 
         // Containing clip: identity.
-        let q =
-            clip_quad(min, size, Some(Rect::new(0.0, 0.0, 500.0, 500.0))).expect("containing clip");
+        let q = clip_quad(min, size, 0.0, Some(Rect::new(0.0, 0.0, 500.0, 500.0)))
+            .expect("containing clip");
         assert_eq!(q, full);
 
         // Disjoint clip: nothing to draw.
         assert_eq!(
-            clip_quad(min, size, Some(Rect::new(200.0, 0.0, 300.0, 300.0))),
+            clip_quad(min, size, 0.0, Some(Rect::new(200.0, 0.0, 300.0, 300.0))),
             None
         );
         // Degenerate touch (shared edge): still nothing.
         assert_eq!(
-            clip_quad(min, size, Some(Rect::new(110.0, 0.0, 300.0, 300.0))),
+            clip_quad(min, size, 0.0, Some(Rect::new(110.0, 0.0, 300.0, 300.0))),
             None
         );
         // Empty clip rect (Display::None subtree): nothing.
-        assert_eq!(clip_quad(min, size, Some(Rect::default())), None);
+        assert_eq!(clip_quad(min, size, 0.0, Some(Rect::default())), None);
     }
 
     /// The swap overwrites members' `CalculatedClip` with interior values
