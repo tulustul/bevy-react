@@ -274,7 +274,19 @@ pub(crate) fn apply_animated_nodes(
             &mut dirt,
             &mut t,
         );
-        stage_opacity(entity, opacity_alpha, promoted, &mut dirt, &mut t);
+        // Stage 3 — opacity owns the final alpha.
+        if let Some(alpha) = opacity_alpha {
+            write_final_alpha(
+                entity,
+                alpha,
+                promoted,
+                t.layer_alpha.as_mut(),
+                t.bg.as_mut(),
+                t.text.as_mut(),
+                t.image.as_mut(),
+                &mut dirt,
+            );
+        }
         stage_filter_params(
             entity,
             anim.is_changed(),
@@ -320,6 +332,57 @@ pub(crate) fn push_transform_dirt(
     if promoted && translate_only {
         dirt.composite_only.push(entity);
     } else {
+        dirt.nodes.push(entity);
+    }
+}
+
+/// Land the final opacity `alpha`: the group alpha on a promoted layer root
+/// (composite-only dirt — it multiplies the cached texture at composite time;
+/// it IS content of an enclosing layer, if any), else the alpha of the
+/// background/text/image colors (content dirt). Compare-before-write through
+/// `Deref`, so a settled alpha marks nothing changed. Shared by stage 3 here
+/// and the transition engine's opacity channel: the two final-alpha writers
+/// must agree.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn write_final_alpha(
+    entity: Entity,
+    alpha: f32,
+    promoted: bool,
+    layer_alpha: Option<&mut Mut<crate::layer::LayerGroupAlpha>>,
+    bg: Option<&mut Mut<BackgroundColor>>,
+    text: Option<&mut Mut<TextColor>>,
+    image: Option<&mut Mut<ImageNode>>,
+    dirt: &mut crate::layer::LayerContentDirt,
+) {
+    if promoted {
+        if let Some(la) = layer_alpha
+            && la.0 != alpha
+        {
+            la.0 = alpha;
+            dirt.composite_only.push(entity);
+        }
+        return;
+    }
+    let mut wrote = false;
+    if let Some(c) = bg
+        && c.0.alpha() != alpha
+    {
+        c.0 = c.0.with_alpha(alpha);
+        wrote = true;
+    }
+    if let Some(tc) = text
+        && tc.0.alpha() != alpha
+    {
+        tc.0 = tc.0.with_alpha(alpha);
+        wrote = true;
+    }
+    if let Some(img) = image
+        && img.color.alpha() != alpha
+    {
+        img.color = img.color.with_alpha(alpha);
+        wrote = true;
+    }
+    if wrote {
         dirt.nodes.push(entity);
     }
 }
@@ -437,60 +500,6 @@ fn stage_transform3d(b: &AnimatedBindings, values: &SharedValues, t: &mut AnimTa
     }
     if t3d.0 != new {
         t3d.0 = new;
-    }
-}
-
-/// Stage 3 — opacity owns the final alpha: the group alpha on a
-/// promoted layer root, else across background/text/image.
-fn stage_opacity(
-    entity: Entity,
-    opacity_alpha: Option<f32>,
-    promoted: bool,
-    dirt: &mut crate::layer::LayerContentDirt,
-    t: &mut AnimTargetsItem,
-) {
-    if let Some(alpha) = opacity_alpha
-        && promoted
-    {
-        if let Some(la) = &mut t.layer_alpha
-            && la.0 != alpha
-        {
-            la.0 = alpha;
-            // Composite-only: the group alpha multiplies the cached
-            // texture at composite time; the captured pixels are
-            // unchanged. (It IS content of an enclosing layer, if any.)
-            dirt.composite_only.push(entity);
-        }
-    } else if let Some(alpha) = opacity_alpha {
-        let with_alpha = |color: Color| -> Option<Color> {
-            let mut s = color.to_srgba();
-            (s.alpha != alpha).then(|| {
-                s.alpha = alpha;
-                Color::Srgba(s)
-            })
-        };
-        let mut wrote = false;
-        if let Some(c) = &mut t.bg
-            && let Some(new) = with_alpha(c.0)
-        {
-            c.0 = new;
-            wrote = true;
-        }
-        if let Some(tc) = &mut t.text
-            && let Some(new) = with_alpha(tc.0)
-        {
-            tc.0 = new;
-            wrote = true;
-        }
-        if let Some(img) = &mut t.image
-            && let Some(new) = with_alpha(img.color)
-        {
-            img.color = new;
-            wrote = true;
-        }
-        if wrote {
-            dirt.nodes.push(entity);
-        }
     }
 }
 

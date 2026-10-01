@@ -29,7 +29,7 @@ pub mod protocol;
 mod runner;
 
 pub(crate) use apply::apply_animated_nodes;
-pub(crate) use apply::push_transform_dirt;
+pub(crate) use apply::{push_transform_dirt, write_final_alpha};
 pub use eval::{Lerp, build_ui_transform};
 use eval::{eval_color, eval_scalar};
 

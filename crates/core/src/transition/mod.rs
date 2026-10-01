@@ -582,40 +582,17 @@ pub fn drive_transitions(
         // Opacity always applies when set (even with no opacity transition: it then
         // snaps), so a transitioning background color doesn't clobber the alpha.
         // Promoted → the group alpha is the single target instead.
-        if let Some(alpha) = alpha
-            && promoted
-        {
-            if let Some(la) = &mut targets.layer_alpha
-                && la.0 != alpha
-            {
-                la.0 = alpha;
-                // Composite-only: applied to the cached texture at composite
-                // time (content of the *enclosing* layer, if any).
-                dirt.composite_only.push(entity);
-            }
-        } else if let Some(alpha) = alpha {
-            let mut wrote = false;
-            if let Some(c) = &mut targets.bg
-                && c.0.alpha() != alpha
-            {
-                c.0 = c.0.with_alpha(alpha);
-                wrote = true;
-            }
-            if let Some(tc) = &mut targets.text
-                && tc.0.alpha() != alpha
-            {
-                tc.0 = tc.0.with_alpha(alpha);
-                wrote = true;
-            }
-            if let Some(img) = &mut targets.image
-                && img.color.alpha() != alpha
-            {
-                img.color = img.color.with_alpha(alpha);
-                wrote = true;
-            }
-            if wrote {
-                dirt.nodes.push(entity);
-            }
+        if let Some(alpha) = alpha {
+            crate::animations::write_final_alpha(
+                entity,
+                alpha,
+                promoted,
+                targets.layer_alpha.as_mut(),
+                targets.bg.as_mut(),
+                targets.text.as_mut(),
+                targets.image.as_mut(),
+                &mut dirt,
+            );
         }
 
         // Size (layout): ease the specified `Node` dimensions. Writing `Node`
