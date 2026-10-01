@@ -99,37 +99,21 @@ fn step_ball(transform: &mut Transform, velocity: &mut Velocity, dt: f32) -> Opt
 
     let max = PLAY_HALF - BALL_RADIUS;
     let mut wall = None;
-
-    if transform.translation.x > max {
-        transform.translation.x = max;
-        velocity.0.x = -velocity.0.x.abs();
-        wall = Some(Wall::Right);
-    } else if transform.translation.x < -max {
-        transform.translation.x = -max;
-        velocity.0.x = velocity.0.x.abs();
-        wall = Some(Wall::Left);
+    // Per axis (x, y, z): the wall at `+max`, then the one at `-max`; a later
+    // axis's hit wins.
+    let walls = [
+        (Wall::Right, Wall::Left),
+        (Wall::Top, Wall::Bottom),
+        (Wall::Front, Wall::Back),
+    ];
+    for (axis, (plus, minus)) in walls.into_iter().enumerate() {
+        let (pos, vel) = (&mut transform.translation[axis], &mut velocity.0[axis]);
+        if *pos > max {
+            (*pos, *vel, wall) = (max, -vel.abs(), Some(plus));
+        } else if *pos < -max {
+            (*pos, *vel, wall) = (-max, vel.abs(), Some(minus));
+        }
     }
-
-    if transform.translation.y > max {
-        transform.translation.y = max;
-        velocity.0.y = -velocity.0.y.abs();
-        wall = Some(Wall::Top);
-    } else if transform.translation.y < -max {
-        transform.translation.y = -max;
-        velocity.0.y = velocity.0.y.abs();
-        wall = Some(Wall::Bottom);
-    }
-
-    if transform.translation.z > max {
-        transform.translation.z = max;
-        velocity.0.z = -velocity.0.z.abs();
-        wall = Some(Wall::Front);
-    } else if transform.translation.z < -max {
-        transform.translation.z = -max;
-        velocity.0.z = velocity.0.z.abs();
-        wall = Some(Wall::Back);
-    }
-
     wall
 }
 
@@ -382,5 +366,25 @@ fn report_ball(req: On<Request<GetBall>>, balls: Query<(&Transform, &Velocity)>)
             vy: velocity.0.y,
         }),
         Err(_) => req.respond_err("ball not active"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Crossing a wall clamps the ball onto it and reflects that axis inward;
+    /// with two hits in one step the later axis names the wall.
+    #[test]
+    fn step_ball_bounces_off_walls() {
+        let max = PLAY_HALF - BALL_RADIUS;
+        let mut t = Transform::from_xyz(max - 0.5, 0.0, 0.5 - max);
+        let mut v = Velocity(Vec3::new(1.0, 0.0, -1.0));
+        assert!(matches!(step_ball(&mut t, &mut v, 1.0), Some(Wall::Back)));
+        assert_eq!(t.translation, Vec3::new(max, 0.0, -max));
+        assert_eq!(v.0, Vec3::new(-1.0, 0.0, 1.0));
+        // Inside the box: free flight, no wall.
+        assert!(step_ball(&mut t, &mut v, 0.25).is_none());
+        assert_eq!(t.translation, Vec3::new(max - 0.25, 0.0, 0.25 - max));
     }
 }
