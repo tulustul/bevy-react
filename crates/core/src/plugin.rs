@@ -96,7 +96,6 @@ pub struct ReactApplySet;
 pub struct ReactUiPlugin {
     bundle: PathBuf,
     hot_reload: bool,
-    animations: bool,
     default_font: Option<PathBuf>,
     named_fonts: Vec<(String, PathBuf)>,
     #[cfg(feature = "custom_cursor")]
@@ -140,7 +139,7 @@ impl ReactUiPlugin {
     /// Create the plugin for the given built app bundle (`app.js`). The build
     /// emits a `vendor.js` beside it (react + the bevy-react runtime, loaded once);
     /// both must exist. Hot reload (React Fast Refresh — edits preserve component
-    /// state) and the Reanimated-style animations engine are enabled by default.
+    /// state) is enabled by default.
     ///
     /// The plugin does **not** spawn a camera — `bevy_ui` needs one to render, so
     /// your app must provide it (a `Camera2d`, or any camera that renders UI).
@@ -148,7 +147,6 @@ impl ReactUiPlugin {
         Self {
             bundle: bundle.into(),
             hot_reload: true,
-            animations: true,
             default_font: None,
             named_fonts: Vec::new(),
             #[cfg(feature = "custom_cursor")]
@@ -239,14 +237,6 @@ impl ReactUiPlugin {
     /// Enable/disable watching the bundle and hot reloading on change.
     pub fn hot_reload(mut self, yes: bool) -> Self {
         self.hot_reload = yes;
-        self
-    }
-
-    /// Enable/disable the bundled [`ReactUiAnimationsPlugin`] (the `Animated.node`
-    /// / shared-value engine). On by default; disable to drop it entirely — the
-    /// `op_animate` op stays registered but its commands are discarded.
-    pub fn with_animations(mut self, yes: bool) -> Self {
-        self.animations = yes;
         self
     }
 
@@ -793,8 +783,7 @@ impl Plugin for ReactUiPlugin {
                     // `SvgShape` seeds, and the raster must read them the same
                     // frame or a driven animation paints one frame late
                     // (pinned by `driven_shape_attr_repaints_same_frame`).
-                    // With animations disabled the set is empty and the edge
-                    // is vacuous. Also after `drive_transitions`: the shape
+                    // Also after `drive_transitions`: the shape
                     // transition channel writes eased `SvgShape` attrs and the
                     // raster must paint them the SAME frame (pinned by
                     // `eased_shape_attr_repaints_same_frame`).
@@ -959,8 +948,7 @@ impl Plugin for ReactUiPlugin {
         // flushed queued writes visible), the animation appliers (driven
         // seeds), and the transition drive (eased values), so nothing paints
         // a frame late (pinned by `driven_shape_attr_repaints_same_frame` /
-        // `eased_shape_attr_repaints_same_frame`). With animations disabled
-        // the set is empty and that edge is vacuous.
+        // `eased_shape_attr_repaints_same_frame`).
         app.configure_sets(
             Update,
             crate::ext::ElementRasterSet
@@ -1099,18 +1087,13 @@ impl Plugin for ReactUiPlugin {
             (apply_pending_selections, sync_editable_a11y).after(bevy::text::EditableTextSystems),
         );
 
-        // The animations engine is a separate plugin (its crate can't depend on
-        // this one). We add it and, as the only crate that sees both sides, order
-        // its `Apply` set after `apply_js_ops` so per-frame animation writes win
-        // over this frame's static style. Disabled → `anim_rx` drops here and
-        // `op_animate` sends are discarded.
-        if self.animations {
-            app.add_plugins(ReactUiAnimationsPlugin::new(anim_rx))
-                .configure_sets(Update, AnimationSet::Apply.after(apply_js_ops))
-                // Completion callbacks: settlements the engine reports (once per
-                // token-tagged driver, not per frame) go out to JS.
-                .add_systems(Update, forward_animation_settled.after(AnimationSet::Tick));
-        }
+        // The animations engine, its `Apply` set ordered after `apply_js_ops`
+        // so per-frame animation writes win over this frame's static style.
+        app.add_plugins(ReactUiAnimationsPlugin::new(anim_rx))
+            .configure_sets(Update, AnimationSet::Apply.after(apply_js_ops))
+            // Completion callbacks: settlements the engine reports (once per
+            // token-tagged driver, not per frame) go out to JS.
+            .add_systems(Update, forward_animation_settled.after(AnimationSet::Tick));
 
         // The devtools inspector rides along by default (see `Self::devtools`).
         // Registration is the only gate needed here: the plugin itself registers

@@ -42,10 +42,9 @@ pub use runner::{Runner, build_runner};
 /// Adds the animation orchestration: the [`SharedValues`] table, the per-frame
 /// driver/apply systems, and the [`AnimationInbox`] that feeds commands in.
 ///
-/// Added automatically by `bevy_react_core::ReactUiPlugin` unless
-/// `.with_animations(false)`. The integrator is responsible for ordering
-/// [`AnimationSet::Apply`] after the reconciler's op-apply so per-frame animation
-/// writes win over this frame's static style.
+/// Added by `bevy_react_core::ReactUiPlugin`, which orders
+/// [`AnimationSet::Apply`] after the reconciler's op-apply so per-frame
+/// animation writes win over this frame's static style.
 pub struct ReactUiAnimationsPlugin {
     inbox: Receiver<AnimationCommand>,
 }
