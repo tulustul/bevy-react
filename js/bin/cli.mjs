@@ -24,6 +24,7 @@ import {
 import { join, resolve, dirname, basename } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
+import { parseArgs } from "node:util";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const TEMPLATES = join(HERE, "..", "templates");
@@ -34,45 +35,25 @@ function fail(msg) {
   process.exit(1);
 }
 
-function parseArgs(argv) {
-  const opts = {
-    positionals: [],
-    install: false,
-    force: false,
-    watch: false,
-    prod: false,
-  };
-  for (let i = 0; i < argv.length; i++) {
-    const a = argv[i];
-    switch (a) {
-      case "--install":
-        opts.install = true;
-        break;
-      case "--force":
-        opts.force = true;
-        break;
-      case "--watch":
-        opts.watch = true;
-        break;
-      case "--prod":
-        opts.prod = true;
-        break;
-      case "--name":
-        opts.name = argv[++i];
-        break;
-      case "--local":
-        opts.local = argv[++i];
-        break;
-      case "-h":
-      case "--help":
-        opts.help = true;
-        break;
-      default:
-        if (a.startsWith("-")) fail(`unknown flag: ${a}`);
-        opts.positionals.push(a);
-    }
+function parseCli(argv) {
+  try {
+    const { values, positionals } = parseArgs({
+      args: argv,
+      allowPositionals: true,
+      options: {
+        name: { type: "string" },
+        local: { type: "string" },
+        install: { type: "boolean" },
+        force: { type: "boolean" },
+        watch: { type: "boolean" },
+        prod: { type: "boolean" },
+        help: { type: "boolean", short: "h" },
+      },
+    });
+    return { ...values, positionals };
+  } catch (e) {
+    fail(e.message);
   }
-  return opts;
 }
 
 function usage() {
@@ -172,7 +153,7 @@ async function build(opts) {
   }
 }
 
-const opts = parseArgs(process.argv.slice(2));
+const opts = parseCli(process.argv.slice(2));
 const cmd = opts.positionals.shift();
 
 if (opts.help || !cmd || cmd === "help") {
