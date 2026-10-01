@@ -4,7 +4,6 @@ export const Colors = {
   primary300: "#5071c0",
   primary400: "#2b4685",
   primary500: "#213563",
-  primary600: "#111b33",
   primaryOverlay: "#7aa2f733",
 
   textColor100: "#cdd6f4",
@@ -22,7 +21,6 @@ export const Colors = {
 
   green100: "#9ece6a",
   green200: "#79a84e",
-  green300: "#5c8438",
   green400: "#405f25ff",
   red100: "#f7768e",
   red200: "#ff8fa3",
@@ -56,11 +54,6 @@ const cardBase = linear(
   Colors.surface200 + "cc",
   Colors.surface100 + "cc",
 );
-const cardLift = linear(
-  160,
-  Colors.surface300 + "cc",
-  Colors.surface200 + "cc",
-);
 
 export const Gradients = {
   // accent — active nav item, radio "selected", progress fill, primary buttons
@@ -84,30 +77,18 @@ export const Gradients = {
   // the top-down direction and just lifts the shade a step
   success: linear(180, Colors.green200, Colors.green400),
   successHover: linear(180, Colors.green100, Colors.green400),
-  // card / panel depth; hover lifts one surface step, selected adds a primary
-  // tint on top of the lift so it reads clearly stronger than hover
+  // card / panel depth
   card: cardBase,
-  cardHover: cardLift,
-  cardSelected: [
-    linear(160, Colors.surface200 + "ee", Colors.surface100 + "ee"),
-  ] satisfies Gradient[],
   track: linear(180, Colors.surface500, Colors.surface500),
   trackFilled: linear(180, Colors.primary300, Colors.primary400),
   // showy multi-hue border for cards (borderGradient)
   accentBorder: linear(135, Colors.primary300, Colors.sky100, Colors.purple100),
-  // resting Example cards; hover brightens partway, full accentBorder marks
-  // the selected one
+  // resting Example cards
   accentBorderDim: linear(
     135,
     Colors.primary300 + "44",
     Colors.sky100 + "44",
     Colors.purple100 + "44",
-  ),
-  accentBorderHover: linear(
-    135,
-    Colors.primary300 + "ff",
-    Colors.sky100 + "ff",
-    Colors.purple100 + "ff",
   ),
   // immersive nav backdrop: dark vertical base + faint primary glow at top
   navBackdrop: [
@@ -170,6 +151,6 @@ export const Responsiveness = {
    * `Navigation` because pages that size themselves against the content area
    * (the home page's tile grid) need it too — and `Navigation` renders from
    * `DEMOS`, which imports those pages, so importing it from one would close a
-   * cycle (the same hazard `demoNavigation.ts` exists to avoid). */
+   * cycle. */
   navWidth: 220,
 };

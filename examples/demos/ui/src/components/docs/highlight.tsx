@@ -96,15 +96,13 @@ function renderNode(node: HastNode, key: number): ReactNode {
 export function HighlightedCode({
   lang,
   code,
-  style,
 }: {
   lang: CodeLang;
   code: string;
-  style?: BevyStyle;
 }) {
   const tree = refractor.highlight(code, REFRACTOR_LANG[lang]) as HastNode;
   return (
-    <text style={{ ...codeTextStyle, ...style }}>
+    <text style={codeTextStyle}>
       {tree.type === "root" ? tree.children.map(renderNode) : code}
     </text>
   );

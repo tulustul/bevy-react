@@ -28,8 +28,6 @@ export type SliderSpec = {
   decimals?: number;
   /** Appended to the label with no space — `"px"`, `"°"`, `"ms"`. */
   unit?: string;
-  /** Overrides the key as the label's name. */
-  label?: string;
 };
 
 export type CheckboxSpec = {
@@ -92,12 +90,11 @@ export function ParamControls<T extends ParamSpecs>({
     <>
       {Object.keys(specs).map((key) => {
         const spec = specs[key];
-        const name = spec.label ?? key;
         if (spec.kind === "checkbox") {
           return (
             <Checkbox
               key={key}
-              label={name}
+              label={spec.label ?? key}
               enabled={values[key] as boolean}
               onChange={(on) => onChange(key, on as ParamValues<T>[typeof key])}
             />
@@ -109,7 +106,7 @@ export function ParamControls<T extends ParamSpecs>({
             value={values[key] as number}
             min={spec.min}
             max={spec.max}
-            name={name}
+            name={key}
             decimals={spec.decimals}
             unit={spec.unit}
             onChange={(v) => onChange(key, v as ParamValues<T>[typeof key])}

@@ -17,7 +17,7 @@ import { CustomElementsDemo } from "./demos/elements/CustomElementsDemo";
 import { SvgDemo } from "./demos/elements/SvgDemo";
 import { PortalDemo } from "./demos/elements/PortalDemo";
 import { SurfaceDemo } from "./demos/elements/surfaceDemo";
-import { OverflowDemo } from "./demos/styling/OverflowDemo";
+import { OverflowDemo } from "./demos/styling/overflowDemo/OverflowDemo";
 import { EditableTextDemo } from "./demos/elements/EditableTextDemo";
 import { NodeDemo } from "./demos/elements/NodeDemo";
 import { RootDemo } from "./demos/elements/RootDemo";

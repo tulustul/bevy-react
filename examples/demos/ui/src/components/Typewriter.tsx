@@ -5,8 +5,6 @@ export type TypewriterProps = {
   /** Full text to reveal. Changing it restarts the reveal from the start. */
   text: string;
   style?: BevyStyle;
-  /** Characters revealed per tick (default 1). Raise to type long text faster. */
-  charsPerTick?: number;
   /** Milliseconds between ticks (default 28). */
   tickMs?: number;
   /** Milliseconds to wait before typing begins (default 0). A blinking cursor
@@ -20,11 +18,10 @@ export type TypewriterProps = {
 
 const CURSOR = "▋";
 
-/** Reveals `text` one chunk at a time, like a terminal typing it out. */
+/** Reveals `text` one character at a time, like a terminal typing it out. */
 export function Typewriter({
   text,
   style,
-  charsPerTick = 1,
   tickMs = 28,
   startDelay = 0,
   cursor = false,
@@ -45,7 +42,7 @@ export function Typewriter({
     const start = setTimeout(() => {
       timer = setInterval(() => {
         setCount((c) => {
-          const next = Math.min(text.length, c + charsPerTick);
+          const next = Math.min(text.length, c + 1);
           if (next >= text.length) clearInterval(timer);
           return next;
         });
@@ -55,7 +52,7 @@ export function Typewriter({
       clearTimeout(start);
       clearInterval(timer);
     };
-  }, [text, charsPerTick, tickMs, startDelay]);
+  }, [text, tickMs, startDelay]);
 
   // Fire `onDone` once, from an effect (not the updater above) so we never set
   // parent state mid-render of this component.

@@ -9,7 +9,6 @@ import { ExampleModal } from "./ExampleModal";
 import { TopBar } from "./TopBar";
 import { useWindowSize } from "./hooks/useWindowSize";
 import { useDemosStore } from "./demosStore";
-import { setNavigate } from "./demoNavigation";
 import type { MorphUse } from "./demos/styling/morphFilterDemo/params";
 import { useIsMobile } from "./hooks";
 
@@ -66,14 +65,14 @@ function Shell() {
     bevy.selectScene(selectedDemo.scene ?? null);
   }, [selectedDemo]);
 
-  useEffect(() => {
-    const byLabel = (label: string) => {
-      const demo = findDemoByLabel(DEMOS, label);
-      if (demo) setSelectedDemo(demo);
-    };
-    setNavigate(byLabel);
-    return bevy.on("debug.selectDemo", ({ label }) => byLabel(label));
-  }, [setSelectedDemo]);
+  useEffect(
+    () =>
+      bevy.on("debug.selectDemo", ({ label }) => {
+        const demo = findDemoByLabel(DEMOS, label);
+        if (demo) setSelectedDemo(demo);
+      }),
+    [setSelectedDemo],
+  );
 
   return (
     <node style={isMobile ? rootCompactStyle : rootStyle}>

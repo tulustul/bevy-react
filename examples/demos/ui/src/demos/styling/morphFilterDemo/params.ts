@@ -1,4 +1,4 @@
-import type { BevyMorphFilters } from "bevy-react";
+import type { BevyMorphFilters, EasingName } from "bevy-react";
 import {
   checkbox,
   slider,
@@ -17,14 +17,12 @@ export type MorphUse = {
   };
 }[keyof BevyMorphFilters];
 
-export type MorphEasing = "linear" | "easeIn" | "easeOut" | "easeInOut";
-
 export type FilterEntry = {
   label: string;
   /** Each tile owns its timing — hand-tuned per filter, tweak freely.
    * `duration` (ms) seeds the tile's duration slider. */
   duration: number;
-  easing: MorphEasing;
+  easing: EasingName;
   /** The tile's knobs, keyed by name — rendered by `<ParamControls>`. */
   controls: ParamSpecs;
   /** Builds the tile's `{ name, params }` from the control values. Params the
@@ -37,7 +35,7 @@ export type FilterEntry = {
 const entry = <T extends ParamSpecs>(e: {
   label: string;
   duration: number;
-  easing: MorphEasing;
+  easing: EasingName;
   controls: T;
   use: (values: ParamValues<T>) => MorphUse;
 }): FilterEntry => e as unknown as FilterEntry;
