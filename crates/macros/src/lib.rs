@@ -45,26 +45,22 @@ pub fn react_message(attr: TokenStream, item: TokenStream) -> TokenStream {
     };
 
     let input = parse_macro_input!(item as DeriveInput);
-    let PayloadParts {
-        ident,
-        impl_generics,
-        ty_generics,
-        where_clause,
-        name,
-    } = payload_parts(&input, name_override);
+    let name = wire_name(&input, name_override);
     let krate = Krate::resolve();
     let (core, bevy) = (krate.root(), krate.private("bevy"));
     let derive = krate.derive_serde_ts("Deserialize");
+    let event = impl_for(&input, quote!(#bevy::ecs::event::Event));
+    let payload = impl_for(&input, quote!(#core::ReactPayload));
 
     quote! {
         #derive
         #input
 
-        impl #impl_generics #bevy::ecs::event::Event for #ident #ty_generics #where_clause {
+        #event {
             type Trigger<'a> = #bevy::ecs::event::GlobalTrigger;
         }
 
-        impl #impl_generics #core::ReactPayload for #ident #ty_generics #where_clause {
+        #payload {
             const NAME: &'static str = #name;
         }
     }
@@ -122,22 +118,17 @@ pub fn react_request(attr: TokenStream, item: TokenStream) -> TokenStream {
     };
 
     let input = parse_macro_input!(item as DeriveInput);
-    let PayloadParts {
-        ident,
-        impl_generics,
-        ty_generics,
-        where_clause,
-        name,
-    } = payload_parts(&input, name_override);
+    let name = wire_name(&input, name_override);
     let krate = Krate::resolve();
     let core = krate.root();
     let derive = krate.derive_serde_ts("Deserialize");
+    let request = impl_for(&input, quote!(#core::ReactRequest));
 
     quote! {
         #derive
         #input
 
-        impl #impl_generics #core::ReactRequest for #ident #ty_generics #where_clause {
+        #request {
             const NAME: &'static str = #name;
             type Response = #response;
         }
@@ -166,22 +157,17 @@ pub fn react_event(attr: TokenStream, item: TokenStream) -> TokenStream {
     };
 
     let input = parse_macro_input!(item as DeriveInput);
-    let PayloadParts {
-        ident,
-        impl_generics,
-        ty_generics,
-        where_clause,
-        name,
-    } = payload_parts(&input, name_override);
+    let name = wire_name(&input, name_override);
     let krate = Krate::resolve();
     let core = krate.root();
     let derive = krate.derive_serde_ts("Serialize");
+    let event = impl_for(&input, quote!(#core::ReactEvent));
 
     quote! {
         #derive
         #input
 
-        impl #impl_generics #core::ReactEvent for #ident #ty_generics #where_clause {
+        #event {
             const NAME: &'static str = #name;
         }
     }
@@ -700,26 +686,18 @@ fn parse_name_only_attr(attr: TokenStream, macro_name: &str) -> syn::Result<Opti
 }
 
 /// The pieces every `react_*` macro pulls off the annotated struct.
-struct PayloadParts<'a> {
-    ident: &'a syn::Ident,
-    impl_generics: syn::ImplGenerics<'a>,
-    ty_generics: syn::TypeGenerics<'a>,
-    where_clause: Option<&'a syn::WhereClause>,
-    /// The wire name: the `name = "..."` override, or the struct ident with its
-    /// first letter lowercased (`Count` → `"count"`).
-    name: String,
+/// The wire name: the `name = "..."` override, or the struct ident with its
+/// first letter lowercased (`Count` → `"count"`).
+fn wire_name(input: &DeriveInput, name_override: Option<String>) -> String {
+    name_override.unwrap_or_else(|| lower_first(&input.ident.to_string()))
 }
 
-fn payload_parts<'a>(input: &'a DeriveInput, name_override: Option<String>) -> PayloadParts<'a> {
+/// `impl<generics> #trait_ for Ident<generics> where …` — the header of a
+/// payload trait impl, generics carried through.
+fn impl_for(input: &DeriveInput, trait_: TokenStream2) -> TokenStream2 {
     let ident = &input.ident;
     let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
-    PayloadParts {
-        ident,
-        impl_generics,
-        ty_generics,
-        where_clause,
-        name: name_override.unwrap_or_else(|| lower_first(&ident.to_string())),
-    }
+    quote!(impl #impl_generics #trait_ for #ident #ty_generics #where_clause)
 }
 
 /// Lowercase only the first character of `s` (`Count` → `count`).
