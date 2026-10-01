@@ -1,7 +1,8 @@
 //! Props → component stamping: the helpers that mirror a node's wire props
 //! into ECS components, shared by the create path (`create.rs`) and the
 //! delta-update path (`update.rs`). Each "stamps (or clears)" its component so
-//! a re-render converges on exactly the declared props.
+//! a re-render converges on exactly the declared props; `fresh` (the create
+//! path) skips the clears — a freshly spawned entity has nothing to remove.
 
 use bevy::platform::collections::HashSet;
 use bevy::prelude::*;
@@ -40,6 +41,7 @@ pub(crate) fn apply_animated(
     animated: &mut HashSet<NodeId>,
     id: NodeId,
     props: &Props,
+    fresh: bool,
 ) {
     crate::style_bindings::warn_variant_bindings(props);
     let bindings = crate::style_bindings::derive_props_bindings(props);
@@ -50,14 +52,14 @@ pub(crate) fn apply_animated(
             // the stamp (see `crate::ext::DrivenExtValues`).
             if bindings.has_ext() {
                 ec.insert_if_new(crate::ext::DrivenExtValues::default());
-            } else {
+            } else if !fresh {
                 ec.remove::<crate::ext::DrivenExtValues>();
             }
             ec.insert(AnimatedNode(bindings));
             animated.insert(id);
         }
         None => {
-            if !animated.is_empty() && animated.remove(&id) {
+            if !fresh && !animated.is_empty() && animated.remove(&id) {
                 ec.remove::<(AnimatedNode, crate::ext::DrivenExtValues)>();
             }
         }
@@ -70,7 +72,12 @@ pub(crate) fn apply_animated(
 /// `Interaction` untouched (a `button`'s, or a node already mid-hover) so we
 /// never reset its state on a re-render. `base` is the node's effective
 /// style (its element's default style overlaid by the user's).
-pub(super) fn apply_style_variants(ec: &mut EntityCommands, props: &Props, base: &Option<Style>) {
+pub(super) fn apply_style_variants(
+    ec: &mut EntityCommands,
+    props: &Props,
+    base: &Option<Style>,
+    fresh: bool,
+) {
     if props.hover_style.is_some() || props.press_style.is_some() || props.focus_style.is_some() {
         ec.insert(StyleVariants {
             base: base.clone(),
@@ -87,12 +94,11 @@ pub(super) fn apply_style_variants(ec: &mut EntityCommands, props: &Props, base:
         }
         if props.focus_style.is_some() {
             ec.insert_if_new(FocusState::default());
-        } else {
+        } else if !fresh {
             ec.remove::<FocusState>();
         }
-    } else {
-        ec.remove::<StyleVariants>();
-        ec.remove::<FocusState>();
+    } else if !fresh {
+        ec.remove::<(StyleVariants, FocusState)>();
     }
 }
 
@@ -113,7 +119,7 @@ pub(super) fn apply_style_variants_delta(
         return;
     }
     if dirty.hover_style || dirty.press_style || dirty.focus_style {
-        apply_style_variants(ec, props, base);
+        apply_style_variants(ec, props, base, false);
         return;
     }
     // Only base properties changed. The component exists exactly when a variant
@@ -151,6 +157,7 @@ pub(crate) fn apply_pointer_handlers(
     ec: &mut EntityCommands,
     props: &Props,
     flags: crate::ext::ElementFlags,
+    fresh: bool,
 ) {
     let any_pointer = props.on_pointer_down
         || props.on_pointer_move
@@ -158,37 +165,41 @@ pub(crate) fn apply_pointer_handlers(
         || props.on_pointer_enter
         || props.on_pointer_leave;
     if any_pointer {
-        ec.insert(PointerHandlers {
+        let handlers = PointerHandlers {
             down: props.on_pointer_down,
             moved: props.on_pointer_move,
             up: props.on_pointer_up,
             enter: props.on_pointer_enter,
             leave: props.on_pointer_leave,
-        });
-        // `RelativeCursorPosition` supplies the `x`/`y` carried by drag and hover
-        // events; the drag-capture and hover systems both read it.
-        ec.insert_if_new(RelativeCursorPosition::default());
-    } else {
-        ec.remove::<PointerHandlers>();
-        ec.remove::<RelativeCursorPosition>();
+        };
+        // `RelativeCursorPosition` supplies the `x`/`y` carried by drag and
+        // hover events; the drag-capture and hover systems both read it. An
+        // update keeps a live one; a fresh entity takes both in one insert.
+        if fresh {
+            ec.insert((handlers, RelativeCursorPosition::default()));
+        } else {
+            ec.insert(handlers)
+                .insert_if_new(RelativeCursorPosition::default());
+        }
+    } else if !fresh {
+        ec.remove::<(PointerHandlers, RelativeCursorPosition)>();
     }
     // `pointerEnter`/`pointerLeave` are derived from `Interaction` transitions, so
     // the node tracks its "inside" state in `HoverState`; add/remove it in step.
     if props.on_pointer_enter || props.on_pointer_leave {
         ec.insert_if_new(HoverState::default());
-    } else {
+    } else if !fresh {
         ec.remove::<HoverState>();
     }
     if props.on_click || any_pointer {
-        ec.insert_if_new(Interaction::default());
-        ec.insert_if_new(ClickOwner);
-    } else {
+        ec.insert_if_new((Interaction::default(), ClickOwner));
+    } else if !fresh {
         // Safe to remove unconditionally: `<button>`/`editableText` own clicks
         // by element type in the collectors, not through this marker.
         ec.remove::<ClickOwner>();
     }
     if flags.node_less {
-        node_less_pointer_slot(ec, props.on_click || any_pointer, false);
+        node_less_pointer_slot(ec, props.on_click || any_pointer, fresh);
     }
 }
 
@@ -287,10 +298,10 @@ pub(super) fn warn_ignored_styles(
 /// [`collect_scroll_events`](crate::reconcile::collect_scroll_events) reports
 /// this node's `ScrollPosition` changes only while an `onScroll` handler is
 /// declared.
-pub(super) fn apply_scroll_listener(ec: &mut EntityCommands, props: &Props) {
+pub(super) fn apply_scroll_listener(ec: &mut EntityCommands, props: &Props, fresh: bool) {
     if props.on_scroll {
         ec.insert_if_new(ScrollListener);
-    } else {
+    } else if !fresh {
         ec.remove::<ScrollListener>();
     }
 }
@@ -298,23 +309,24 @@ pub(super) fn apply_scroll_listener(ec: &mut EntityCommands, props: &Props) {
 /// Toggle the [`WheelListener`] marker so [`crate::scroll::collect_wheel_events`]
 /// reports raw wheel deltas over this node only while an `onWheel` handler is
 /// declared. Independent of `overflow: scroll` — any node can receive the wheel.
-pub(super) fn apply_wheel_listener(ec: &mut EntityCommands, props: &Props) {
+pub(super) fn apply_wheel_listener(ec: &mut EntityCommands, props: &Props, fresh: bool) {
     if props.on_wheel {
         ec.insert_if_new(WheelListener);
-    } else {
+    } else if !fresh {
         ec.remove::<WheelListener>();
     }
 }
 
 /// Stamp (or clear) the per-node [`ScrollStep`] wheel step from `scrollStep`.
-pub(super) fn apply_scroll_step(ec: &mut EntityCommands, props: &Props) {
+pub(super) fn apply_scroll_step(ec: &mut EntityCommands, props: &Props, fresh: bool) {
     match props.scroll_step {
         Some(step) => {
             ec.insert(ScrollStep(step));
         }
-        None => {
+        None if !fresh => {
             ec.remove::<ScrollStep>();
         }
+        None => {}
     }
 }
 
@@ -323,10 +335,8 @@ pub(super) fn apply_scroll_step(ec: &mut EntityCommands, props: &Props) {
 /// the pointer handlers, and the `{ animated }` bindings (always — style and
 /// attribute bindings alike).
 ///
-/// **Create only** — the entity is freshly spawned, so this is the insert-only
-/// mirror of the stamp/clear helpers above: every "absent → remove" arm is
-/// skipped (nothing to remove), and the components a prop set implies land as
-/// one insert each. The update path keeps using the stamp/clear helpers.
+/// **Create only** — the stamp/clear helpers above with `fresh` set: the entity
+/// is freshly spawned, so every "absent → remove" arm is skipped.
 pub(crate) fn stamp_common(
     ec: &mut EntityCommands,
     animated: &mut HashSet<NodeId>,
@@ -338,12 +348,12 @@ pub(crate) fn stamp_common(
 ) {
     use crate::element::Common;
     if common.contains(Common::VARIANTS) {
-        apply_style_variants_fresh(ec, props, base);
+        apply_style_variants(ec, props, base, true);
     }
     if common.contains(Common::POINTER) {
-        apply_pointer_handlers_fresh(ec, props, flags);
+        apply_pointer_handlers(ec, props, flags, true);
     }
-    apply_animated_fresh(ec, animated, id, props);
+    apply_animated(ec, animated, id, props, true);
 }
 
 /// The properties a node's hover/press/focus variants set.
@@ -354,103 +364,6 @@ fn variant_keys(props: &Props) -> crate::style::StyleDirty {
         .fold(crate::style::StyleDirty::NONE, |keys, s| {
             keys.union(s.keys())
         })
-}
-
-/// [`apply_style_variants`] for a **freshly spawned** entity: stamp the
-/// variants (and the `Interaction`/`FocusState` they need) when present, never
-/// remove.
-pub(super) fn apply_style_variants_fresh(
-    ec: &mut EntityCommands,
-    props: &Props,
-    base: &Option<Style>,
-) {
-    if props.hover_style.is_some() || props.press_style.is_some() || props.focus_style.is_some() {
-        ec.insert(StyleVariants {
-            base: base.clone(),
-            hover: props.hover_style.clone(),
-            press: props.press_style.clone(),
-            focus: props.focus_style.clone(),
-            keys: variant_keys(props),
-            restyle: Restyle::Full,
-        });
-        if props.hover_style.is_some() || props.press_style.is_some() {
-            ec.insert_if_new(Interaction::default());
-        }
-        if props.focus_style.is_some() {
-            ec.insert(FocusState::default());
-        }
-    }
-}
-
-/// [`apply_pointer_handlers`] for a **freshly spawned** entity: the same
-/// components, inserted in prop-implied groups, no removes. `insert_if_new` for
-/// the `Interaction` pair keeps a `<button>`'s (required) or a hover/press
-/// variant's `Interaction` untouched, exactly like the update-path helper.
-pub(super) fn apply_pointer_handlers_fresh(
-    ec: &mut EntityCommands,
-    props: &Props,
-    flags: crate::ext::ElementFlags,
-) {
-    let any_pointer = props.on_pointer_down
-        || props.on_pointer_move
-        || props.on_pointer_up
-        || props.on_pointer_enter
-        || props.on_pointer_leave;
-    if any_pointer {
-        ec.insert((
-            PointerHandlers {
-                down: props.on_pointer_down,
-                moved: props.on_pointer_move,
-                up: props.on_pointer_up,
-                enter: props.on_pointer_enter,
-                leave: props.on_pointer_leave,
-            },
-            RelativeCursorPosition::default(),
-        ));
-    }
-    if props.on_pointer_enter || props.on_pointer_leave {
-        ec.insert(HoverState::default());
-    }
-    if props.on_click || any_pointer {
-        ec.insert_if_new((Interaction::default(), ClickOwner));
-        if flags.node_less {
-            node_less_pointer_slot(ec, true, true);
-        }
-    }
-}
-
-/// [`apply_animated`] for a **freshly spawned** entity: stamp the bindings when
-/// there are any (recording the node in `animated`), never remove.
-pub(crate) fn apply_animated_fresh(
-    ec: &mut EntityCommands,
-    animated: &mut HashSet<NodeId>,
-    id: NodeId,
-    props: &Props,
-) {
-    crate::style_bindings::warn_variant_bindings(props);
-    let bindings = crate::style_bindings::derive_props_bindings(props);
-    crate::style_bindings::warn_gradient_transition_mix(props, bindings.as_ref());
-    if let Some(bindings) = bindings {
-        if bindings.has_ext() {
-            ec.insert(crate::ext::DrivenExtValues::default());
-        }
-        ec.insert(AnimatedNode(bindings));
-        animated.insert(id);
-    }
-}
-
-/// [`apply_scroll_listener`] + [`apply_wheel_listener`] + [`apply_scroll_step`]
-/// for a **freshly spawned** entity: inserts only.
-pub(super) fn apply_scroll_props_fresh(ec: &mut EntityCommands, props: &Props) {
-    if props.on_scroll {
-        ec.insert(ScrollListener);
-    }
-    if props.on_wheel {
-        ec.insert(WheelListener);
-    }
-    if let Some(step) = props.scroll_step {
-        ec.insert(ScrollStep(step));
-    }
 }
 
 /// Apply a controlled `scrollTop`/`scrollLeft` on **create**: insert the offset

@@ -182,24 +182,24 @@ pub(super) fn apply_update(
         apply_style_variants_delta(&mut ec, &props, style, &dirty);
     }
     if common.contains(Common::POINTER) && dirty.pointer {
-        apply_pointer_handlers(&mut ec, &props, flags);
+        apply_pointer_handlers(&mut ec, &props, flags, false);
     }
     if common.contains(Common::SCROLL) {
         if dirty.scroll_listener {
-            apply_scroll_listener(&mut ec, &props);
+            apply_scroll_listener(&mut ec, &props, false);
         }
         if dirty.scroll_step {
-            apply_scroll_step(&mut ec, &props);
+            apply_scroll_step(&mut ec, &props, false);
         }
     }
     if common.contains(Common::WHEEL) && dirty.wheel {
-        apply_wheel_listener(&mut ec, &props);
+        apply_wheel_listener(&mut ec, &props, false);
     }
     // Bindings are derived from the merged style and attributes, so any
     // change to either may add/remove/retarget them (bind/unbind is an
     // ordinary field delta).
     if dirty.style.any() || dirty.attrs != AttrDirty::NONE {
-        apply_animated(&mut ec, &mut bridge.animated, id, &props);
+        apply_animated(&mut ec, &mut bridge.animated, id, &props, false);
     }
     if dirty.handlers {
         let events = props.handler_events(info);

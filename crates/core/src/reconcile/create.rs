@@ -7,7 +7,10 @@
 use bevy::image::Image;
 use bevy::prelude::*;
 
-use super::stamps::{apply_scroll_props_fresh, create_controlled_scroll, stamp_common};
+use super::stamps::{
+    apply_scroll_listener, apply_scroll_step, apply_wheel_listener, create_controlled_scroll,
+    stamp_common,
+};
 use crate::bridge::{JsBridge, SpanKind};
 use crate::element::SpawnCtx;
 use crate::ext::TextRole;
@@ -104,7 +107,9 @@ pub(super) fn apply_create(
         flags,
     );
     if info.decl.common.contains(crate::element::Common::SCROLL) {
-        apply_scroll_props_fresh(&mut ec, &props);
+        apply_scroll_listener(&mut ec, &props, true);
+        apply_wheel_listener(&mut ec, &props, true);
+        apply_scroll_step(&mut ec, &props, true);
         create_controlled_scroll(bridge, &mut ec, id, &props, &events);
     } else if info.decl.common.contains(crate::element::Common::WHEEL) && props.on_wheel {
         ec.insert(crate::bridge::WheelListener);
