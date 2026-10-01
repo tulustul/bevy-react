@@ -386,12 +386,13 @@ fn drawing_after_close_restarts_the_subpath_for_fill() {
     assert!(!hit(ShapeKind::Path, &a, 50.0, 25.0), "outside both");
 }
 
-/// Machine-check of the two-builder mirror: rasterize via the REAL painter
-/// and assert `hit_shape` agrees with pixel coverage on a sampled grid,
+/// Machine-check of hit semantics against the REAL painter: rasterize and
+/// assert `hit_shape` agrees with pixel coverage on a sampled grid,
 /// excluding the anti-aliased edge band. Each sample's 3×3 pixel block must
 /// be uniformly opaque (expect hit) or uniformly blank (expect miss); mixed
-/// blocks are the excluded ~1px band. This catches STRUCTURAL drift between
-/// the builders that the shared constants cannot.
+/// blocks are the excluded ~1px band. The outline is shared, so this pins
+/// what hit-testing does with it — winding/fill rules, implicit closes, and
+/// the stroke-distance test — against the rasterizer.
 fn assert_raster_hit_parity(kind: ShapeKind, attrs: &ShapeAttrs, name: &str) {
     let mut pixmap = tiny_skia::Pixmap::new(64, 64).expect("pixmap");
     crate::paint::paint_shape(
