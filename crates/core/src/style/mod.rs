@@ -19,6 +19,9 @@ pub mod writers;
 
 pub use codec::{Codec, DecodeFn, KeywordTable};
 pub use dirty::StyleDirty;
+/// The erased-serde crate a [`DecodeFn`] is written against — a custom codec
+/// names its `Deserializer`/`Error` from here, version-matched to the core.
+pub use erased_serde;
 pub use invalidation::{Invalidate, Invalidation, NodeCtx};
 pub use property::{AnyStyleProperty, PropertyValue, StyleProperty};
 pub(crate) use registry::core_id;

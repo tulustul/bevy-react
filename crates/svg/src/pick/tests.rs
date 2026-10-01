@@ -165,7 +165,7 @@ fn cursor_maps_to_logical_px_without_view_box_at_dpr2() {
 
 // --- system-level: the pick_clip harness pattern ---
 
-const POINTER: PointerId = PointerId::Custom(uuid::Uuid::from_u128(0x51C5));
+const POINTER: PointerId = PointerId::Custom(bevy::asset::uuid::Uuid::from_u128(0x51C5));
 
 /// A world with one pointer at `position` (scale-1 image target, so logical
 /// == physical), one bare camera, and the refinement's resources.

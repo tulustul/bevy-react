@@ -21,7 +21,6 @@ bevy_react_core = { workspace = true }
 serde = { workspace = true }
 tiny-skia = { workspace = true }
 # The `onResize` payload's TypeScript type (the generated JSX typing).
-ts-rs = { workspace = true }
 
 [dev-dependencies]
 bevy_react_core = { workspace = true, features = ["test_util"] }

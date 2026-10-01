@@ -25,8 +25,8 @@ use crate::protocol::{
 macro_rules! erased {
     ($f:path => $t:ty) => {{
         fn decode(
-            d: &mut dyn erased_serde::Deserializer<'_>,
-        ) -> Result<Option<$t>, erased_serde::Error> {
+            d: &mut dyn bevy_react_core::style::erased_serde::Deserializer<'_>,
+        ) -> Result<Option<$t>, bevy_react_core::style::erased_serde::Error> {
             $f(d)
         }
         decode

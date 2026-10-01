@@ -25,7 +25,6 @@ homepage = "https://github.com/tulustul/bevy-react"
 
 [workspace.dependencies]
 accesskit = "0.24"
-anyhow = "1.0.102"
 # Libraries take bevy with its defaults OFF and list exactly the features
 # their code needs (each crate's own manifest) — a library that leaves bevy's
 # defaults on forces audio/gltf/pbr/winit/… onto every app. The examples are
@@ -65,7 +64,6 @@ kurbo = "0.13.1"
 tracing = "0.1"
 tokio = { version = "1.52.3", features = ["rt", "macros", "sync"] }
 ts-rs = "10"
-uuid = "1"
 proc-macro2 = "1"
 # The macros resolve the path of the crate they expand against from the
 # caller's manifest (`bevy-react` or `bevy_react_core`).

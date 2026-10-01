@@ -32,7 +32,6 @@ bevy_react_core = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 # The attribute codecs' decode signature (type-erased serde).
-erased-serde = { workspace = true }
 tiny-skia = { workspace = true }
 # SVG micro-grammar parsers (path `d`, transform lists, viewBox).
 svgtypes = { workspace = true }
@@ -43,4 +42,3 @@ kurbo = { workspace = true }
 bevy_react_core = { workspace = true, features = ["test_util"] }
 crossbeam-channel = { workspace = true }
 tokio = { workspace = true }
-uuid = { workspace = true }

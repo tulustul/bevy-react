@@ -43,7 +43,8 @@ use super::{LayerMembership, PromotedLayer};
 
 /// The transform3d virtual pointer's fixed id (the pattern
 /// `bevy_react_surface`'s in-world pointer uses too).
-pub const TRANSFORM3D_POINTER_UUID: uuid::Uuid = uuid::Uuid::from_u128(0x7D3D_D001);
+pub const TRANSFORM3D_POINTER_UUID: bevy::asset::uuid::Uuid =
+    bevy::asset::uuid::Uuid::from_u128(0x7D3D_D001);
 
 /// The single virtual pointer remapping cursor input into transformed layers
 /// (topmost-wins, like the one surface pointer serving every surface), plus

@@ -47,7 +47,6 @@ test_util = []
 
 [dependencies]
 accesskit = { workspace = true }
-anyhow = { workspace = true }
 # Exactly what the code references (no transitive shortcuts: the list
 # documents what the crate touches and survives bevy reshuffling its feature
 # graph). Cargo unifies features, so each of these also decides what the
@@ -101,7 +100,6 @@ tracing = { workspace = true }
 # dependency), and ts-rs 10's serde-compat parser warns on that key at every
 # expansion. ts-rs 12 parses it silently — drop the feature on upgrade.
 ts-rs = { workspace = true, features = ["no-serde-warnings"] }
-uuid = { workspace = true }
 
 # Native host: the embedded V8 isolate (deno_core) on a dedicated thread, driven by
 # a tokio current-thread runtime. Neither builds for wasm.
@@ -123,7 +121,6 @@ console_error_panic_hook = { workspace = true }
 getrandom = { workspace = true, features = ["wasm_js"] }
 
 [dev-dependencies]
-crossbeam-channel = { workspace = true }
 # Parse/validate the crate's WGSL in unit tests. Already in the dependency
 # tree via bevy's wgpu; the version requirement must keep resolving to that
 # same copy.

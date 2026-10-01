@@ -1357,7 +1357,6 @@ dependencies = [
  "serde",
  "serde_json",
  "tiny-skia 0.12.0",
- "ts-rs",
 ]
 
 [[package]]
@@ -1365,7 +1364,6 @@ name = "bevy_react_core"
 version = "0.6.0"
 dependencies = [
  "accesskit",
- "anyhow",
  "bevy",
  "bevy_react_macros",
  "bytemuck",
@@ -1387,7 +1385,6 @@ dependencies = [
  "tracing",
  "ts-rs",
  "usvg",
- "uuid",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
@@ -1409,7 +1406,6 @@ version = "0.6.0"
 dependencies = [
  "bevy",
  "bevy_react_core",
- "crossbeam-channel",
  "serde_json",
 ]
 
@@ -1419,7 +1415,6 @@ version = "0.6.0"
 dependencies = [
  "bevy",
  "bevy_react_core",
- "crossbeam-channel",
  "serde_json",
 ]
 
@@ -1430,7 +1425,6 @@ dependencies = [
  "bevy",
  "bevy_react_core",
  "crossbeam-channel",
- "erased-serde",
  "kurbo",
  "serde",
  "serde_json",
@@ -1438,7 +1432,6 @@ dependencies = [
  "tiny-skia 0.12.0",
  "tokio",
  "tracing",
- "uuid",
 ]
 
 [[package]]

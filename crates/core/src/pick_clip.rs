@@ -105,7 +105,7 @@ mod tests {
     use bevy::picking::backend::HitData;
     use bevy::picking::pointer::Location;
 
-    const POINTER: PointerId = PointerId::Custom(uuid::Uuid::from_u128(0xC11B));
+    const POINTER: PointerId = PointerId::Custom(bevy::asset::uuid::Uuid::from_u128(0xC11B));
 
     /// A world with one pointer at `position` (scale-1 image target, so
     /// logical == physical) and one bare camera; returns the camera entity.

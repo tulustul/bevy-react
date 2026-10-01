@@ -31,7 +31,7 @@ use bevy_react_core::protocol::outbound::Outbound;
 use bevy_react_core::test_util::JsBridge;
 use bevy_react_core::test_util::collect_ui_events;
 
-const POINTER: PointerId = PointerId::Custom(uuid::Uuid::from_u128(0x51C6));
+const POINTER: PointerId = PointerId::Custom(bevy::asset::uuid::Uuid::from_u128(0x51C6));
 
 /// Scale-1 image target: logical == physical. Over the circle's center.
 fn location() -> Location {

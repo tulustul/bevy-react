@@ -35,7 +35,8 @@ pub static DRAW_APPEND: Attribute<Vec<DrawCmd>> = Attribute {
 };
 
 /// The payload of `onResize`: the canvas's new laid-out size (logical px).
-#[derive(Debug, Clone, Copy, Serialize, ts_rs::TS)]
+#[derive(Debug, Clone, Copy, Serialize, bevy_react_core::__private::ts_rs::TS)]
+#[ts(crate = "bevy_react_core::__private::ts_rs")]
 pub struct CanvasSize {
     pub width: f32,
     pub height: f32,

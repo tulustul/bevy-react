@@ -396,7 +396,7 @@ fn build_runtime(
     registry: &crate::ext::ExtRegistrySlot,
     senders: &HostSenders,
     event_loop: &EventLoop,
-) -> anyhow::Result<JsRuntime> {
+) -> Result<JsRuntime, Box<dyn std::error::Error>> {
     const FLUSH: OpDecl = op_flush();
     const TAKE_WARNINGS: OpDecl = op_take_decode_warnings();
     const EMIT: OpDecl = op_emit();
@@ -438,7 +438,7 @@ fn build_runtime(
     runtime.execute_script("[prelude]", PRELUDE)?;
 
     let vendor_code = std::fs::read_to_string(vendor_path)
-        .map_err(|e| anyhow::anyhow!("reading vendor {}: {e}", vendor_path.display()))?;
+        .map_err(|e| format!("reading vendor {}: {e}", vendor_path.display()))?;
     runtime.execute_script("[vendor]", vendor_code)?;
 
     runtime.execute_script("[app]", app_code.to_owned())?;
@@ -505,7 +505,7 @@ async fn pump(runtime: &mut JsRuntime, event_loop: &EventLoop) -> Pumped {
 /// reload) is what drives Fast Refresh: the app IIFE re-registers its components
 /// and calls `mount()`, which — seeing the isolate already mounted — triggers
 /// `performReactRefresh()` and re-parks the event loop on `op_next_event`.
-fn read_app(app_path: &Path) -> anyhow::Result<String> {
+fn read_app(app_path: &Path) -> Result<String, String> {
     std::fs::read_to_string(app_path)
-        .map_err(|e| anyhow::anyhow!("reading app {}: {e}", app_path.display()))
+        .map_err(|e| format!("reading app {}: {e}", app_path.display()))
 }
