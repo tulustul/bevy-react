@@ -9,8 +9,6 @@ export * from "./BoxLabel";
 export * from "./Caption";
 export * from "./CardTitle";
 export * from "./H2";
-export * from "./H3";
-export * from "./HeaderText";
 export * from "./InlineCode";
 export * from "./ListItem";
 export * from "./Paragraph";
