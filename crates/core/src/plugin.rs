@@ -406,7 +406,6 @@ impl Plugin for ReactUiPlugin {
 
                 render_app
                     .init_resource::<lr::ExtractedUiLayers>()
-                    .init_resource::<lr::LayerAtlases>()
                     .init_resource::<lr::LayerTextureStore>()
                     .init_gpu_resource::<SpecializedRenderPipelines<lr::LayerCompositePipeline>>()
                     .init_gpu_resource::<lr::LayerCompositeMeta>()

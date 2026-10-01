@@ -399,7 +399,7 @@ impl ExtractedLayer {
 }
 
 /// Per-frame extraction output. `layers` is index-aligned with
-/// [`LayerAtlases::textures`] and [`LayerCompositeMeta::atlas_bind_groups`].
+/// [`LayerCompositeMeta::atlas_bind_groups`].
 #[derive(Resource, Default)]
 pub struct ExtractedUiLayers {
     pub layers: Vec<ExtractedLayer>,
@@ -936,11 +936,6 @@ pub fn redistribute_ui_layers(
         }
     }
 
-    // SPIKE diagnostics: `BEVY_REACT_LAYER_SPIKE_MODE=steal` skips quad
-    // injection to isolate steal-side from composite-side effects.
-    if std::env::var("BEVY_REACT_LAYER_SPIKE_MODE").as_deref() == Ok("steal") {
-        return;
-    }
     // Inject composite quads — inner layers' quads land in their enclosing
     // layer's phase (they are content of the outer capture); top-level quads
     // land in the camera phase at the subtree's stacking position.
@@ -1125,9 +1120,6 @@ pub fn prepare_layer_composites(
         return;
     }
 
-    // The quads were injected with `index = layer index`; find each again in
-    // its (post-sort) phase to write the batch range.
-    let mut ranges: Vec<Option<Range<u32>>> = vec![None; extracted.layers.len()];
     // Membership set for the post-sort batch-range pass at the bottom: the
     // render entities of every quad that actually staged vertices this frame.
     let mut drawable: HashSet<Entity> = HashSet::default();
@@ -1272,7 +1264,7 @@ pub fn prepare_layer_composites(
         // only — see `clip::swap_interior_clips_in`), so the quad is where
         // scroll/viewport clipping applies, with UVs shifted proportionally
         // on clamped sides. A fully clipped-away layer draws no quad at all
-        // (`ranges[idx]` stays `None`, the item's batch_range stays `0..0`).
+        // (the item's batch_range stays `0..0`).
         //
         // A 3D-transformed quad can't be CPU-clamped (the clip rect is
         // axis-aligned in screen space; the transformed quad isn't): it keeps
@@ -1299,10 +1291,8 @@ pub fn prepare_layer_composites(
         };
         let (min, max) = (q.pos_min, q.pos_max);
         let (uv_min, uv_max) = (q.uv_min, q.uv_max);
-        // UVs are quad-relative (spike: texture == rect; slot-relative UVs
-        // arrive with the shared atlas).
+        // UVs are quad-relative.
         push_quad_vertices(&mut meta.vertices, min, max, uv_min, uv_max, layer.alpha);
-        ranges[idx] = Some(start..start + 6);
         drawable.insert(layer.quad_entity);
         let atlas_index = meta.atlas_bind_groups.len();
         meta.atlas_bind_groups.push(bind_group);
@@ -1338,7 +1328,6 @@ pub fn prepare_layer_composites(
     // nothing — the region shows the real frame, graceful by construction,
     // and no enclosing invalidation is needed (extraction already forces
     // enclosing re-capture every frame for backdrop layers).
-    let mut backdrop_ranges: Vec<Option<Range<u32>>> = vec![None; extracted.layers.len()];
     for (idx, layer) in extracted.layers.iter().enumerate() {
         let Some(backdrop_quad_entity) = layer.backdrop_quad_entity else {
             continue;
@@ -1375,11 +1364,10 @@ pub fn prepare_layer_composites(
             q.uv_max,
             layer.alpha,
         );
-        backdrop_ranges[idx] = Some(start..start + 6);
         drawable.insert(backdrop_quad_entity);
         let atlas_index = meta.atlas_bind_groups.len();
         meta.atlas_bind_groups.push(bind_group);
-        // The UNCLIPPED border box (the same shrink `backdrop_quad` applies)
+        // The UNCLIPPED border box (the same shrink the backdrop `clip_quad` inset applies)
         // for the rounded-corner mask: the CPU clip may have clamped the
         // quad's geometry above, but the SDF must measure the true box.
         let box_min = layer.min + Vec2::splat(layer.outset as f32);
@@ -2236,7 +2224,7 @@ pub fn ui_layer_capture_pass(
     world: &World,
     view: ViewQuery<Entity>,
     extracted: Res<ExtractedUiLayers>,
-    atlases: Res<LayerAtlases>,
+    store: Res<LayerTextureStore>,
     phases: Res<ViewSortedRenderPhases<TransparentUi>>,
     filter_meta: Res<LayerFilterMeta>,
     mip_meta: Res<mips::LayerMipMeta>,
@@ -2281,19 +2269,18 @@ pub fn ui_layer_capture_pass(
         // transparent texture — the correct content of a subtree that paints
         // nothing (an empty morph carrier freezes from / blends to it).
         if layer.needs_capture
-            && let Some(texture) = atlases.textures.get(idx)
+            && let Some(slot) = store.slots.get(&layer.main_entity)
             && let Some(phase) = phases.get(&layer.retained)
         {
             // A bucket-allocated texture: the synthetic view's ortho maps the
             // capture rect onto clip space, so the viewport places the image
             // 1:1 in the texture's top-left `size` texels (the clear still
             // wipes the whole attachment — the padding stays transparent).
-            let viewport = atlases.viewports.get(idx).copied().flatten();
             let mut pass = clear_pass(
                 &mut ctx,
                 "ui_layer_capture",
-                &texture.default_view,
-                viewport,
+                &slot.texture.default_view,
+                slot.image_viewport(),
             );
             if let Err(err) = phase.render(&mut pass, world, layer.view_entity) {
                 tracing::error!("layer capture pass failed: {err:?}");

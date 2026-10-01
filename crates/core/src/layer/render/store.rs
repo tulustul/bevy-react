@@ -18,18 +18,6 @@ use bevy::ui_render::TransparentUi;
 
 use super::{ExtractedUiLayers, mips};
 
-/// The per-layer offscreen capture textures (spike: one texture per layer;
-/// the planned per-depth shared atlas swaps in behind the same indices).
-/// Index-aligned with [`ExtractedUiLayers::layers`]; entries are clones of the
-/// persistent [`LayerTextureStore`] slots.
-#[derive(Resource, Default)]
-pub struct LayerAtlases {
-    pub textures: Vec<CachedTexture>,
-    /// Index-aligned with `textures`: the viewport the capture pass must set
-    /// for a bucket-allocated texture ([`LayerSlot::image_viewport`]).
-    pub viewports: Vec<Option<UVec2>>,
-}
-
 /// One layer's persistent capture texture. Unlike Bevy's `TextureCache`
 /// (descriptor-keyed pool — same-size layers can swap textures between frames,
 /// and nothing pins content), a slot is keyed by the layer root's `MainEntity`,
@@ -306,8 +294,7 @@ pub struct LayerTextureStore {
 /// Maintains the persistent per-layer capture textures (camera target format —
 /// stolen pipelines were specialized against it; sample count 1 — `ui_pass`
 /// renders unsampled): get-or-(re)allocate each live layer's
-/// [`LayerTextureStore`] slot, mirror it into the index-aligned
-/// [`LayerAtlases`], and evict slots whose layer is gone. Also owns the
+/// [`LayerTextureStore`] slot and evict slots whose layer is gone. Also owns the
 /// [`FilterSlot`] lifecycle: ping-pong textures allocated while the layer has
 /// a chain, cleared (with their version bookkeeping — load-bearing, see the
 /// in-body comment) when it doesn't. Deliberately not Bevy's `TextureCache` —
@@ -319,10 +306,7 @@ pub fn prepare_layer_textures(
     pipeline_cache: Res<PipelineCache>,
     phases: Res<ViewSortedRenderPhases<TransparentUi>>,
     mut store: ResMut<LayerTextureStore>,
-    mut atlases: ResMut<LayerAtlases>,
 ) {
-    atlases.textures.clear();
-    atlases.viewports.clear();
     let store = &mut *store;
     store.frame += 1;
     let frame = store.frame;
@@ -443,8 +427,6 @@ pub fn prepare_layer_textures(
             slot.mips_valid = false;
         }
         slot.last_seen = frame;
-        atlases.textures.push(slot.texture.clone());
-        atlases.viewports.push(slot.image_viewport());
     }
     // Demoted/despawned layers: keep the slot for a short grace (cheap
     // re-promotion churn), then free the texture memory.
