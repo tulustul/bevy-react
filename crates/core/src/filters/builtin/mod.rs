@@ -335,6 +335,38 @@ mod tests {
             &["vertex", "fragment"],
         );
 
+        // The demos' app-side passes (every `examples/assets/shaders` WGSL
+        // that imports the prelude) get the same check — their only pre-GPU
+        // coverage: at runtime a broken pass only gates its layer and warns.
+        // Skipped when the examples tree isn't present (a packaged crate).
+        let examples =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../examples/assets/shaders");
+        let mut dirs = vec![examples.clone()];
+        let mut checked = 0;
+        while let Some(dir) = dirs.pop() {
+            for path in std::fs::read_dir(&dir)
+                .into_iter()
+                .flatten()
+                .flatten()
+                .map(|e| e.path())
+            {
+                if path.is_dir() {
+                    dirs.push(path);
+                } else if path.extension().is_some_and(|e| e == "wgsl")
+                    && let Ok(src) = std::fs::read_to_string(&path)
+                    && src.contains("#import bevy_react::filter")
+                {
+                    let name = path.display().to_string();
+                    validate(&name, &splice(&prelude_body, &src), &["vertex", "fragment"]);
+                    checked += 1;
+                }
+            }
+        }
+        assert!(
+            !examples.is_dir() || checked >= 3,
+            "expected at least ripple/glitch/dissolve, checked {checked}"
+        );
+
         // The prelude's params array must track `MAX_FILTER_PARAM_VECS`; a
         // mismatch would otherwise surface only at pipeline creation on a
         // live GPU (the filter-pass bind group in `layer/render.rs` vs. the

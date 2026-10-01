@@ -39,7 +39,7 @@ cargo test -p bevy-react --features bevy/x11   # the facade (group + KNOWN_FEATU
 cargo test -p demos --test roundtrip   # headless end-to-end bridge test (real JS runtime)
 ```
 
-The `roundtrip` test (and the other bundle-driven tests under `examples/demos/tests/`: `demo_switch`, `devtools_roundtrip`, `home_shared_flight`, `example_shaders`) drives the JS thread directly and asserts an initial render + click round trip. **It requires the bundle to be built first** (`npm run build -w demos`); if the bundle is missing it skips (passes) with a notice. The synthetic-bundle tests (`decode_warnings`, `hot_reload`, …) stay under `crates/core/tests/`.
+The `roundtrip` test (and the other bundle-driven tests under `examples/demos/tests/`: `demo_switch`, `devtools_roundtrip`, `home_shared_flight`) drives the JS thread directly and asserts an initial render + click round trip. **It requires the bundle to be built first** (`npm run build -w demos`); if the bundle is missing it skips (passes) with a notice. The synthetic-bundle tests (`decode_warnings`, `hot_reload`, …) stay under `crates/core/tests/`.
 
 Lint / format / typecheck (run from repo root):
 

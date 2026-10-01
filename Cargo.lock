@@ -2558,7 +2558,6 @@ dependencies = [
  "bevy-react",
  "bevy_react_core",
  "crossbeam-channel",
- "naga",
  "serde",
  "serde_json",
  "tokio",

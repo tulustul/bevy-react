@@ -20,5 +20,3 @@ bevy_react_core = { workspace = true, features = ["test_util"] }
 crossbeam-channel = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
-# Parse/validate the example WGSL in tests (the same copy bevy's wgpu uses).
-naga = { version = "29.0", features = ["wgsl-in"] }
