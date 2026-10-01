@@ -12,45 +12,30 @@
 //!
 //!   * **Interactive** (no flags) — opens the table with control buttons
 //!     and a live timing readout, for manual exploration / profiling.
-//!     `cargo run -p bevy-react --example stress`
+//!     `cargo run -p stress`
 //!
 //!   * **Capture** — drives the operation set automatically, one op at a time,
 //!     records per-op timing (p50/p99 over N iterations), writes JSON, and exits:
-//!     `cargo run -p bevy-react --example stress -- --run table-ops --out results.json [--iterations N]`
+//!     `cargo run -p stress -- --run table-ops --out results.json [--iterations N]`
 //!
 //! Like `--shoot` in the demos app, capture still needs an X11 display present.
 //!
 //! Build the bundle first: `npm run build -w stress-app`.
 
+#[path = "../bench_app.rs"]
+mod bench_app;
 mod table_ops;
 
 use std::path::PathBuf;
 
 use bevy::prelude::*;
-use bevy::ui::IsDefaultUiCamera;
 use bevy::window::PresentMode;
-use bevy_react::ReactUiPlugin;
 
 use table_ops::TableOpsPlugin;
 
 fn main() {
-    use bevy_react::ReactAppExt;
-
     let args: Vec<String> = std::env::args().skip(1).collect();
-
-    // `--export-bindings <path>` writes the TypeScript message types instead of
-    // running the app, keeping `ui/src/bevy.ts` in sync with the Rust `#[react_*]`
-    // structs. It needs only the handler registrations, so it skips
-    // DefaultPlugins/ReactUiPlugin (no window, no JS runtime).
-    if args.first().map(String::as_str) == Some("--export-bindings") {
-        let path = args
-            .get(1)
-            .expect("--export-bindings requires an output path");
-        let mut app = App::new();
-        register_react_bindings(&mut app);
-        app.export_react_typescript(path)
-            .expect("failed to write TypeScript bindings");
-        println!("wrote React bindings to {path}");
+    if bench_app::export_bindings(&args, table_ops::register_bindings) {
         return;
     }
 
@@ -95,54 +80,9 @@ fn flag_value<'a>(args: &'a [String], flag: &str) -> Option<&'a str> {
         .map(String::as_str)
 }
 
-/// Build the stress `App`: DefaultPlugins + the React UI layer + a 2D UI camera +
-/// the benchmark plugin. Pure UI — no 3D scene or orbit camera.
+/// The stress `App`: the bench shell plus the benchmark plugin.
 fn build_app(hot_reload: bool, present_mode: PresentMode) -> App {
-    // CARGO_MANIFEST_DIR is the `bevy-react` crate (crates/core); the example and
-    // its bundle live at the repo root, two levels up.
-    let bundle =
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../examples/stress/ui/dist/app.js");
-
-    let react_plugin = ReactUiPlugin::new(bundle)
-        .hot_reload(hot_reload)
-        .default_font("fonts/NotoSans-VariableFont_wdth,wght.ttf")
-        .font(
-            "Noto Sans Mono",
-            "fonts/NotoSansMono-VariableFont_wdth,wght.ttf",
-        );
-
-    let mut app = App::new();
-    app.add_plugins(
-        DefaultPlugins
-            .set(WindowPlugin {
-                primary_window: Some(Window {
-                    title: "bevy-react · stress".to_string(),
-                    present_mode,
-                    ..default()
-                }),
-                ..default()
-            })
-            .set(bevy::asset::AssetPlugin {
-                file_path: "../assets".into(),
-                ..default()
-            }),
-    )
-    .add_plugins(react_plugin)
-    .add_systems(Startup, spawn_ui_camera)
-    .add_plugins(TableOpsPlugin);
+    let mut app = bench_app::build_app("bevy-react · stress", hot_reload, present_mode);
+    app.add_plugins(TableOpsPlugin);
     app
-}
-
-/// `bevy_ui` needs a camera to render; the stress app has no 3D scene, so a plain
-/// 2D camera marked as the default UI camera suffices.
-fn spawn_ui_camera(mut commands: Commands) {
-    commands.spawn((Camera2d, IsDefaultUiCamera));
-}
-
-/// Register every React binding. Used **only** by the `--export-bindings`
-/// exporter (which doesn't add the plugins that would register them live), so it
-/// must list the exact same set the plugins do — keeping the generated TypeScript
-/// from drifting from the runtime.
-fn register_react_bindings(app: &mut App) {
-    table_ops::register_bindings(app);
 }
