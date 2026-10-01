@@ -52,10 +52,7 @@ mod spec;
 mod tests;
 mod transform3d;
 
-pub use scroll::{
-    ScrollTransitionState, apply_scroll_transition, apply_scroll_transition_fresh,
-    drive_scroll_transition,
-};
+pub use scroll::{ScrollTransitionState, drive_scroll_transition};
 // Reached as `crate::transition::ScrollTransitionInput` only from the
 // scrollbar test harness — the lib target alone doesn't see that use.
 #[allow(unused_imports)]

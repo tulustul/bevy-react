@@ -6,8 +6,6 @@ use bevy::ui::ScrollPosition;
 
 use super::channels::Channel;
 use super::spec::ChannelTransition;
-use crate::style::Style;
-use crate::style::props::TRANSITION;
 
 /// The scroll-easing **spec** input: the `transition.scroll` timing, reinserted
 /// fresh on every render (like [`TransitionInput`](super::TransitionInput))
@@ -42,43 +40,6 @@ impl ScrollTransitionState {
         self.y.init(value.y);
         self.initialized = true;
     }
-}
-
-/// Stamp (or clear) the scroll-ease components from `transition.scroll`. Called
-/// from the reconciler's generic node paths (scroll containers are plain `<node>`s),
-/// alongside `apply_scroll_listener`/`apply_scroll_step`. The spec input is always
-/// reinserted (so a spec change lands); the state is created once and persists.
-pub fn apply_scroll_transition(ec: &mut EntityCommands, style: &Option<Style>) {
-    match scroll_spec(style) {
-        Some(spec) => {
-            ec.insert(ScrollTransitionInput(spec.clone()));
-            ec.insert_if_new(ScrollTransitionState::default());
-        }
-        None => {
-            ec.remove::<ScrollTransitionInput>();
-            ec.remove::<ScrollTransitionState>();
-        }
-    }
-}
-
-/// [`apply_scroll_transition`] for a **freshly spawned** node: one insert when
-/// the style has a scroll transition, nothing at all otherwise (nothing to
-/// remove on a fresh entity).
-pub fn apply_scroll_transition_fresh(ec: &mut EntityCommands, style: &Option<Style>) {
-    if let Some(spec) = scroll_spec(style) {
-        ec.insert((
-            ScrollTransitionInput(spec.clone()),
-            ScrollTransitionState::default(),
-        ));
-    }
-}
-
-/// The style's scroll-channel transition spec, if any.
-fn scroll_spec(style: &Option<Style>) -> Option<&ChannelTransition> {
-    style
-        .as_ref()
-        .and_then(|s| s.get(&TRANSITION))
-        .and_then(|t| t.scroll.as_ref())
 }
 
 /// Ease each `ScrollTransitionState` node's `ScrollPosition` toward its `target`
