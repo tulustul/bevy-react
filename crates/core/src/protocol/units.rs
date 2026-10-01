@@ -29,60 +29,105 @@ impl Default for Length {
 
 /// Parse a CSS-ish length token (`"auto"`, `"10px"`, `"50%"`, `"100vw"`, `"5"`).
 fn parse_length(s: &str) -> Result<Length, String> {
-    let s = s.trim();
-    if s.eq_ignore_ascii_case("auto") {
+    if s.trim().eq_ignore_ascii_case("auto") {
         return Ok(Length::Auto);
     }
-    // `vmin`/`vmax` before `vw`/`vh` is unnecessary (suffixes are distinct), but
-    // `%` is checked last so numeric parsing handles the bare-number case.
-    type LengthCtor = fn(f32) -> Length;
-    let units: [(&str, LengthCtor); 6] = [
-        ("px", Length::Px),
-        ("vmin", Length::VMin),
-        ("vmax", Length::VMax),
-        ("vw", Length::Vw),
-        ("vh", Length::Vh),
-        ("%", Length::Percent),
-    ];
-    for (suffix, ctor) in units {
-        if let Some(num) = s.strip_suffix(suffix) {
-            let v: f32 = num
-                .trim()
-                .parse()
-                .map_err(|_| format!("invalid length {s:?}"))?;
-            return Ok(ctor(v));
+    parse_suffixed(
+        s,
+        "length",
+        &[
+            ("px", Length::Px),
+            ("vmin", Length::VMin),
+            ("vmax", Length::VMax),
+            ("vw", Length::Vw),
+            ("vh", Length::Vh),
+            ("%", Length::Percent),
+        ],
+        Length::Px,
+    )
+}
+
+/// A unit's constructor from the parsed number.
+type UnitCtor<T> = fn(f32) -> T;
+
+/// Parse a number with one of `units`' suffixes (tried in order, so a
+/// suffix another one ends with must come after it — `grad` before `rad`,
+/// `ms` before `s`), or a bare number through `bare`.
+fn parse_suffixed<T>(
+    s: &str,
+    kind: &str,
+    units: &[(&str, UnitCtor<T>)],
+    bare: UnitCtor<T>,
+) -> Result<T, String> {
+    let s = s.trim();
+    let (num, ctor) = units
+        .iter()
+        .find_map(|&(suffix, ctor)| s.strip_suffix(suffix).map(|num| (num, ctor)))
+        .unwrap_or((s, bare));
+    num.trim()
+        .parse::<f32>()
+        .map(ctor)
+        .map_err(|_| format!("invalid {kind} {s:?}"))
+}
+
+/// Deserialize a number-or-unit-string wire value: a number maps through
+/// `from_number`, a string through `parse` — an unparseable one warns `kind`
+/// and decodes as `fallback()` (never failing the batch).
+fn de_unit<'de, D: Deserializer<'de>, T>(
+    d: D,
+    expecting: &'static str,
+    kind: &'static str,
+    from_number: fn(f32) -> T,
+    parse: fn(&str) -> Result<T, String>,
+    fallback: fn() -> T,
+) -> Result<T, D::Error> {
+    struct UnitVisitor<T> {
+        expecting: &'static str,
+        kind: &'static str,
+        from_number: fn(f32) -> T,
+        parse: fn(&str) -> Result<T, String>,
+        fallback: fn() -> T,
+    }
+    impl<T> Visitor<'_> for UnitVisitor<T> {
+        type Value = T;
+        fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            f.write_str(self.expecting)
+        }
+        fn visit_f64<E: de::Error>(self, v: f64) -> Result<T, E> {
+            Ok((self.from_number)(v as f32))
+        }
+        fn visit_i64<E: de::Error>(self, v: i64) -> Result<T, E> {
+            Ok((self.from_number)(v as f32))
+        }
+        fn visit_u64<E: de::Error>(self, v: u64) -> Result<T, E> {
+            Ok((self.from_number)(v as f32))
+        }
+        fn visit_str<E: de::Error>(self, s: &str) -> Result<T, E> {
+            Ok((self.parse)(s).unwrap_or_else(|e| {
+                decode_warn(self.kind, s, &e);
+                (self.fallback)()
+            }))
         }
     }
-    s.parse::<f32>()
-        .map(Length::Px)
-        .map_err(|_| format!("invalid length {s:?}"))
+    d.deserialize_any(UnitVisitor {
+        expecting,
+        kind,
+        from_number,
+        parse,
+        fallback,
+    })
 }
 
 impl<'de> Deserialize<'de> for Length {
     fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
-        struct LengthVisitor;
-        impl<'de> Visitor<'de> for LengthVisitor {
-            type Value = Length;
-            fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
-                f.write_str("a number (logical pixels) or a CSS length string")
-            }
-            fn visit_f64<E: de::Error>(self, v: f64) -> Result<Length, E> {
-                Ok(Length::Px(v as f32))
-            }
-            fn visit_i64<E: de::Error>(self, v: i64) -> Result<Length, E> {
-                Ok(Length::Px(v as f32))
-            }
-            fn visit_u64<E: de::Error>(self, v: u64) -> Result<Length, E> {
-                Ok(Length::Px(v as f32))
-            }
-            fn visit_str<E: de::Error>(self, s: &str) -> Result<Length, E> {
-                Ok(parse_length(s).unwrap_or_else(|e| {
-                    decode_warn("length", s, &e);
-                    Length::default()
-                }))
-            }
-        }
-        d.deserialize_any(LengthVisitor)
+        de_unit(
+            d,
+            "a number (logical pixels) or a CSS length string",
+            "length",
+            Length::Px,
+            parse_length,
+            Length::default,
+        )
     }
 }
 
@@ -108,55 +153,31 @@ impl Angle {
 /// Parse a CSS angle token into radians. A bare number is degrees; a suffix of
 /// `deg`/`grad`/`turn`/`rad` selects the unit (`grad` is matched before `rad`
 /// since `"100grad"` also ends in `"rad"`).
-fn parse_angle(s: &str) -> Result<f32, String> {
+fn parse_angle(s: &str) -> Result<Angle, String> {
     use std::f32::consts::{PI, TAU};
-    let s = s.trim();
-    type AngleConv = fn(f32) -> f32;
-    let units: [(&str, AngleConv); 4] = [
-        ("deg", f32::to_radians),
-        ("grad", |v| v * PI / 200.0),
-        ("turn", |v| v * TAU),
-        ("rad", |v| v),
-    ];
-    for (suffix, conv) in units {
-        if let Some(num) = s.strip_suffix(suffix) {
-            let v: f32 = num
-                .trim()
-                .parse()
-                .map_err(|_| format!("invalid angle {s:?}"))?;
-            return Ok(conv(v));
-        }
-    }
-    s.parse::<f32>()
-        .map(f32::to_radians)
-        .map_err(|_| format!("invalid angle {s:?}"))
+    parse_suffixed(
+        s,
+        "angle",
+        &[
+            ("deg", |v| Angle(v.to_radians())),
+            ("grad", |v| Angle(v * PI / 200.0)),
+            ("turn", |v| Angle(v * TAU)),
+            ("rad", Angle),
+        ],
+        |v| Angle(v.to_radians()),
+    )
 }
 
 impl<'de> Deserialize<'de> for Angle {
     fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
-        struct AngleVisitor;
-        impl Visitor<'_> for AngleVisitor {
-            type Value = Angle;
-            fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
-                f.write_str("a number (degrees) or a CSS angle string")
-            }
-            fn visit_f64<E: de::Error>(self, v: f64) -> Result<Angle, E> {
-                Ok(Angle((v as f32).to_radians()))
-            }
-            fn visit_i64<E: de::Error>(self, v: i64) -> Result<Angle, E> {
-                Ok(Angle((v as f32).to_radians()))
-            }
-            fn visit_u64<E: de::Error>(self, v: u64) -> Result<Angle, E> {
-                Ok(Angle((v as f32).to_radians()))
-            }
-            fn visit_str<E: de::Error>(self, s: &str) -> Result<Angle, E> {
-                Ok(parse_angle(s).map(Angle).unwrap_or_else(|e| {
-                    decode_warn("angle", s, &e);
-                    Angle::default()
-                }))
-            }
-        }
-        d.deserialize_any(AngleVisitor)
+        de_unit(
+            d,
+            "a number (degrees) or a CSS angle string",
+            "angle",
+            |v| Angle(v.to_radians()),
+            parse_angle,
+            Angle::default,
+        )
     }
 }
 
@@ -180,51 +201,25 @@ impl Time {
 /// Parse a CSS time token into seconds. A bare number is milliseconds; a suffix of
 /// `ms`/`s` selects the unit (`ms` is matched before `s` since `"200ms"` also ends
 /// in `"s"`).
-fn parse_time(s: &str) -> Result<f32, String> {
-    let s = s.trim();
-    if let Some(num) = s.strip_suffix("ms") {
-        return num
-            .trim()
-            .parse::<f32>()
-            .map(|v| v / 1000.0)
-            .map_err(|_| format!("invalid time {s:?}"));
-    }
-    if let Some(num) = s.strip_suffix('s') {
-        return num
-            .trim()
-            .parse::<f32>()
-            .map_err(|_| format!("invalid time {s:?}"));
-    }
-    s.parse::<f32>()
-        .map(|v| v / 1000.0)
-        .map_err(|_| format!("invalid time {s:?}"))
+fn parse_time(s: &str) -> Result<Time, String> {
+    parse_suffixed(
+        s,
+        "time",
+        &[("ms", |v| Time(v / 1000.0)), ("s", Time)],
+        |v| Time(v / 1000.0),
+    )
 }
 
 impl<'de> Deserialize<'de> for Time {
     fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
-        struct TimeVisitor;
-        impl Visitor<'_> for TimeVisitor {
-            type Value = Time;
-            fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
-                f.write_str("a number (milliseconds) or a CSS time string")
-            }
-            fn visit_f64<E: de::Error>(self, v: f64) -> Result<Time, E> {
-                Ok(Time(v as f32 / 1000.0))
-            }
-            fn visit_i64<E: de::Error>(self, v: i64) -> Result<Time, E> {
-                Ok(Time(v as f32 / 1000.0))
-            }
-            fn visit_u64<E: de::Error>(self, v: u64) -> Result<Time, E> {
-                Ok(Time(v as f32 / 1000.0))
-            }
-            fn visit_str<E: de::Error>(self, s: &str) -> Result<Time, E> {
-                Ok(parse_time(s).map(Time).unwrap_or_else(|e| {
-                    decode_warn("time", s, &e);
-                    Time::default()
-                }))
-            }
-        }
-        d.deserialize_any(TimeVisitor)
+        de_unit(
+            d,
+            "a number (milliseconds) or a CSS time string",
+            "time",
+            |v| Time(v / 1000.0),
+            parse_time,
+            Time::default,
+        )
     }
 }
 
@@ -243,58 +238,33 @@ pub enum FontSize {
 }
 
 /// Parse a font-size token (`"24px"`, `"100vw"`, `"1.5rem"`, or a bare number read
-/// as pixels). Suffixes are checked longest-first where they'd otherwise alias
-/// (`vmin`/`vmax` before `vw`/`vh`).
+/// as pixels).
 fn parse_font_size(s: &str) -> Result<FontSize, String> {
-    let s = s.trim();
-    type FsCtor = fn(f32) -> FontSize;
-    let units: [(&str, FsCtor); 6] = [
-        ("px", FontSize::Px),
-        ("rem", FontSize::Rem),
-        ("vmin", FontSize::VMin),
-        ("vmax", FontSize::VMax),
-        ("vw", FontSize::Vw),
-        ("vh", FontSize::Vh),
-    ];
-    for (suffix, ctor) in units {
-        if let Some(num) = s.strip_suffix(suffix) {
-            let v: f32 = num
-                .trim()
-                .parse()
-                .map_err(|_| format!("invalid fontSize {s:?}"))?;
-            return Ok(ctor(v));
-        }
-    }
-    s.parse::<f32>()
-        .map(FontSize::Px)
-        .map_err(|_| format!("invalid fontSize {s:?}"))
+    parse_suffixed(
+        s,
+        "fontSize",
+        &[
+            ("px", FontSize::Px),
+            ("rem", FontSize::Rem),
+            ("vmin", FontSize::VMin),
+            ("vmax", FontSize::VMax),
+            ("vw", FontSize::Vw),
+            ("vh", FontSize::Vh),
+        ],
+        FontSize::Px,
+    )
 }
 
 impl<'de> Deserialize<'de> for FontSize {
     fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
-        struct FontSizeVisitor;
-        impl Visitor<'_> for FontSizeVisitor {
-            type Value = FontSize;
-            fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
-                f.write_str("a number (logical pixels) or a font-size unit string")
-            }
-            fn visit_f64<E: de::Error>(self, v: f64) -> Result<FontSize, E> {
-                Ok(FontSize::Px(v as f32))
-            }
-            fn visit_i64<E: de::Error>(self, v: i64) -> Result<FontSize, E> {
-                Ok(FontSize::Px(v as f32))
-            }
-            fn visit_u64<E: de::Error>(self, v: u64) -> Result<FontSize, E> {
-                Ok(FontSize::Px(v as f32))
-            }
-            fn visit_str<E: de::Error>(self, s: &str) -> Result<FontSize, E> {
-                Ok(parse_font_size(s).unwrap_or_else(|e| {
-                    decode_warn("fontSize", s, &e);
-                    FontSize::Px(0.0)
-                }))
-            }
-        }
-        d.deserialize_any(FontSizeVisitor)
+        de_unit(
+            d,
+            "a number (logical pixels) or a font-size unit string",
+            "fontSize",
+            FontSize::Px,
+            parse_font_size,
+            || FontSize::Px(0.0),
+        )
     }
 }
 
