@@ -66,7 +66,7 @@ cargo run -p layers-stress -- --measure 15
 
 - `STRESS_PRESET` (a JSON object; unknown keys, wrong-typed values, and
   invalid `filterMode` variants are rejected at build time) is baked into the
-  bundle by `ui/build.mjs` as `src/preset.ts` — the UI's startup state. Keys:
+  bundle by `ui/build.mjs` as `src/preset.json` — the UI's startup state. Keys:
   `n`, `animate`, `groupAlpha`, `filterMode` (`"off" | "half" | "all"`),
   `blur`, `animateFilter`, `animateSize`. Unset, the committed defaults regenerate
   byte-identical. Rebuild without it to restore the interactive defaults.
