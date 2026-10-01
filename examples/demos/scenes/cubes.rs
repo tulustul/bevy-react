@@ -7,6 +7,18 @@ use crate::scene::Scene;
 const MAX_CUBES: usize = 8;
 const CUBE_SPACING: f32 = 2.25;
 
+/// The cube hues every cube scene shares, so the gallery reads as one family.
+pub(crate) const PALETTE: [Color; 8] = [
+    Color::srgb(0.48, 0.64, 0.97),
+    Color::srgb(0.97, 0.46, 0.56),
+    Color::srgb(0.62, 0.80, 0.42),
+    Color::srgb(0.97, 0.79, 0.36),
+    Color::srgb(0.73, 0.55, 0.93),
+    Color::srgb(0.40, 0.85, 0.84),
+    Color::srgb(0.95, 0.60, 0.40),
+    Color::srgb(0.80, 0.80, 0.85),
+];
+
 pub struct CubesScenePlugin;
 
 impl Plugin for CubesScenePlugin {
@@ -42,11 +54,12 @@ struct CubeAssets {
     materials: Vec<Handle<StandardMaterial>>,
 }
 
-/// A cube that rotates every frame (also the marker we count/rebuild).
+/// A cube tumbling around its own X and Y axes, rad/s (also the marker the
+/// cubes scene counts/rebuilds).
 #[derive(Component)]
-struct Spinner {
-    x_speed: f32,
-    y_speed: f32,
+pub(crate) struct Spinner {
+    pub(crate) x_speed: f32,
+    pub(crate) y_speed: f32,
 }
 
 /// Update the desired cube count when a typed `SetCount` is triggered.
@@ -61,19 +74,9 @@ fn setup_cube_assets(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    let palette = [
-        Color::srgb(0.48, 0.64, 0.97),
-        Color::srgb(0.97, 0.46, 0.56),
-        Color::srgb(0.62, 0.80, 0.42),
-        Color::srgb(0.97, 0.79, 0.36),
-        Color::srgb(0.73, 0.55, 0.93),
-        Color::srgb(0.40, 0.85, 0.84),
-        Color::srgb(0.95, 0.60, 0.40),
-        Color::srgb(0.80, 0.80, 0.85),
-    ];
     commands.insert_resource(CubeAssets {
         mesh: meshes.add(Cuboid::new(1.5, 1.5, 1.5)),
-        materials: palette
+        materials: PALETTE
             .into_iter()
             .map(|c| {
                 materials.add(StandardMaterial {
@@ -122,7 +125,7 @@ fn sync_cubes(
     }
 }
 
-fn spin(time: Res<Time>, mut query: Query<(&mut Transform, &Spinner)>) {
+pub(crate) fn spin(time: Res<Time>, mut query: Query<(&mut Transform, &Spinner)>) {
     let dt = time.delta_secs();
     for (mut transform, spinner) in &mut query {
         transform.rotate_x(spinner.x_speed * dt);

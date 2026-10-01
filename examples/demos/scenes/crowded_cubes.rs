@@ -11,6 +11,7 @@ use bevy_react::{
 use serde::Serialize;
 use ts_rs::TS;
 
+use super::cubes::PALETTE;
 use crate::scene::Scene;
 
 /// The two render-target names this scene drives. React displays them with
@@ -202,19 +203,9 @@ fn setup_cube_assets(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    let palette = [
-        Color::srgb(0.48, 0.64, 0.97),
-        Color::srgb(0.97, 0.46, 0.56),
-        Color::srgb(0.62, 0.80, 0.42),
-        Color::srgb(0.97, 0.79, 0.36),
-        Color::srgb(0.73, 0.55, 0.93),
-        Color::srgb(0.40, 0.85, 0.84),
-        Color::srgb(0.95, 0.60, 0.40),
-        Color::srgb(0.80, 0.80, 0.85),
-    ];
     commands.insert_resource(CubeAssets {
         mesh: meshes.add(Cuboid::new(CUBE_SIZE, CUBE_SIZE, CUBE_SIZE)),
-        materials: palette
+        materials: PALETTE
             .iter()
             .map(|&c| {
                 materials.add(StandardMaterial {
@@ -223,7 +214,7 @@ fn setup_cube_assets(
                 })
             })
             .collect(),
-        emissive: palette
+        emissive: PALETTE
             .iter()
             .map(|&c| {
                 materials.add(StandardMaterial {
@@ -233,7 +224,7 @@ fn setup_cube_assets(
                 })
             })
             .collect(),
-        colors: palette.to_vec(),
+        colors: PALETTE.to_vec(),
         ground: meshes.add(
             Plane3d::default()
                 .mesh()

@@ -6,6 +6,7 @@
 
 use bevy::prelude::*;
 
+use super::cubes::{PALETTE, Spinner, spin};
 use crate::scene::Scene;
 
 pub struct SpaceCubesScenePlugin;
@@ -16,7 +17,7 @@ impl Plugin for SpaceCubesScenePlugin {
         // `init_resource` keeps a config the app inserted before this plugin.
         app.init_resource::<SpaceCubesConfig>()
             .add_systems(OnEnter(Scene::SpaceCubes), spawn_cubes)
-            .add_systems(Update, (orbit, tumble).run_if(in_state(Scene::SpaceCubes)));
+            .add_systems(Update, (orbit, spin).run_if(in_state(Scene::SpaceCubes)));
     }
 }
 
@@ -53,18 +54,6 @@ impl Default for SpaceCubesConfig {
     }
 }
 
-/// The cube color palette (same hues as the basic cubes scene, so the gallery
-/// reads as one family).
-const PALETTE: [Color; 7] = [
-    Color::srgb(0.48, 0.64, 0.97),
-    Color::srgb(0.97, 0.46, 0.56),
-    Color::srgb(0.62, 0.80, 0.42),
-    Color::srgb(0.97, 0.79, 0.36),
-    Color::srgb(0.73, 0.55, 0.93),
-    Color::srgb(0.40, 0.85, 0.84),
-    Color::srgb(0.95, 0.60, 0.40),
-];
-
 /// A cube looping on a tilted circular orbit around the origin. The orbit
 /// plane is the XZ plane rotated by `tilt`; position is fully parametric in
 /// absolute time, so paths are frame-rate independent and re-entry safe.
@@ -81,13 +70,6 @@ struct Orbiter {
     bob_rate: f32,
 }
 
-/// Per-cube tumble rates around its own axes (rad/s).
-#[derive(Component)]
-struct Tumbler {
-    x_speed: f32,
-    y_speed: f32,
-}
-
 /// Spawn the swarm. All parameters derive deterministically from the cube
 /// index — spread with golden-ratio-ish multipliers so orbits interleave
 /// without any two cubes moving in lockstep.
@@ -98,9 +80,10 @@ fn spawn_cubes(
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     let mesh = meshes.add(Cuboid::new(1.0, 1.0, 1.0));
-    let materials: Vec<_> = PALETTE
-        .into_iter()
-        .map(|c| {
+    // The shared hues minus the gray.
+    let materials: Vec<_> = PALETTE[..7]
+        .iter()
+        .map(|&c| {
             materials.add(StandardMaterial {
                 base_color: c,
                 // HDR emissive feeds the camera's bloom, like the cubes scene.
@@ -146,7 +129,7 @@ fn spawn_cubes(
                 bob_amp,
                 bob_rate: (0.5 + 0.3 * ((f * 1.7).cos().abs())) * config.speed,
             },
-            Tumbler {
+            Spinner {
                 x_speed: (0.6 + 0.25 * (f * 0.77).sin()) * config.speed,
                 y_speed: (1.1 - 0.35 * (f * 0.53).cos()) * config.speed,
             },
@@ -167,14 +150,5 @@ fn orbit(time: Res<Time>, mut cubes: Query<(&Orbiter, &mut Transform)>) {
             angle.sin() * orbiter.radius,
         );
         transform.translation = orbiter.tilt * flat;
-    }
-}
-
-/// Tumble each cube around its own axes.
-fn tumble(time: Res<Time>, mut cubes: Query<(&Tumbler, &mut Transform)>) {
-    let dt = time.delta_secs();
-    for (tumbler, mut transform) in &mut cubes {
-        transform.rotate_x(tumbler.x_speed * dt);
-        transform.rotate_y(tumbler.y_speed * dt);
     }
 }
