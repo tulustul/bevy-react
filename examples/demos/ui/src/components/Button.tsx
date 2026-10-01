@@ -39,21 +39,17 @@ export function Button({
   // surface behind it. Without a pinch there is no wrapper: the button keeps
   // its own policy.
   const pinched = isPinchEnabled(pinch);
-  const baseStyle = { ...buttonStyle, ...(style ?? {}) };
+  const baseStyle = { ...buttonStyle, ...style };
   return (
     <Pinchable params={pinch} focusPolicy={style?.focusPolicy ?? "block"}>
       <button
         onClick={onClick}
         style={{ ...baseStyle, ...(pinched ? { focusPolicy: "pass" } : {}) }}
-        hoverStyle={{ ...buttonHoverStyle, ...(hoverStyle ?? {}) }}
-        pressStyle={{
-          ...(pressStyle ?? {}),
-        }}
+        hoverStyle={{ ...buttonHoverStyle, ...hoverStyle }}
+        pressStyle={{ ...pressStyle }}
       >
         {isTextChild ? (
-          <text style={{ ...buttonLabelStyle, ...(labelStyle ?? {}) }}>
-            {children}
-          </text>
+          <text style={{ ...buttonLabelStyle, ...labelStyle }}>{children}</text>
         ) : (
           children
         )}

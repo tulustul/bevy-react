@@ -27,7 +27,13 @@ export type ExampleProps = PropsWithChildren & {
   demo?: ComponentType;
 };
 
-export function Example({ children, style, title, info, demo }: ExampleProps) {
+export function Example({
+  children,
+  style,
+  title,
+  info,
+  demo: Demo,
+}: ExampleProps) {
   // Stable per-instance identity for the selection (survives hot reload).
   const key = useRef({}).current;
   const select = useExplanationStore((s) => s.select);
@@ -53,7 +59,7 @@ export function Example({ children, style, title, info, demo }: ExampleProps) {
               style={detailsButtonStyle}
               labelStyle={detailsLabelStyle}
               onClick={() =>
-                select(key, { title, info, demo, cache: style?.cache })
+                select(key, { title, info, demo: Demo, cache: style?.cache })
               }
             >
               Details
@@ -61,14 +67,10 @@ export function Example({ children, style, title, info, demo }: ExampleProps) {
           }
         />
       )}
-      {demo !== undefined && <Demo demo={demo} />}
+      {Demo !== undefined && <Demo />}
       {children}
     </Card>
   );
-}
-
-function Demo({ demo: D }: { demo: ComponentType }) {
-  return <D />;
 }
 
 const detailsButtonStyle: BevyStyle = {

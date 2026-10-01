@@ -9,10 +9,6 @@ export type CheckboxProps = {
 };
 
 export function Checkbox({ label, enabled, onChange }: CheckboxProps) {
-  function _onChange() {
-    onChange(!enabled);
-  }
-
   return (
     <Button
       pinch={{
@@ -21,7 +17,7 @@ export function Checkbox({ label, enabled, onChange }: CheckboxProps) {
       }}
       style={wrapper}
       hoverStyle={wrapperHovered}
-      onClick={_onChange}
+      onClick={() => onChange(!enabled)}
     >
       <node style={box}>
         <node
