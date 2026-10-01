@@ -2,7 +2,23 @@ import { BevyStyle } from "bevy-react/jsx";
 import { TextMono } from "@/components/typography";
 import { Typewriter } from "@/components";
 import { Colors, FontSizes } from "@/theme";
-import { RUST, TSX } from "./source";
+
+// The code samples the viewer types out.
+const TSX = `<surface target="monitor">
+  <MonitorApp />
+</surface>`;
+
+const RUST = `// register the surface → Handle<Image>
+let screen = surfaces.create(
+    &mut images, "monitor", spec,
+);
+// drape it on the glTF screen mesh and
+// make it clickable in 3D
+material.base_color_texture =
+    Some(screen);
+commands.entity(screen_mesh).insert(
+    SurfacePointer("monitor".into()),
+);`;
 
 /** The source viewer: the surface's own code, revealed with the typewriter. */
 export function CodeViewer() {
