@@ -151,7 +151,7 @@ pub static SCROLL_TRANSITION_WRITER: Writer = Writer {
 };
 
 fn apply_scroll_transition(ctx: &WriterCtx, s: &Style, ec: &mut EntityCommands) {
-    match s.get(&TRANSITION).and_then(|t| t.for_scroll()) {
+    match s.get(&TRANSITION).and_then(|t| t.scroll.as_ref()) {
         Some(spec) if ctx.fresh => {
             ec.insert((
                 ScrollTransitionInput(spec.clone()),

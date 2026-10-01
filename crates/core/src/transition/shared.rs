@@ -354,7 +354,7 @@ pub(crate) fn stamp_pending(world: &mut World, incoming: NodeId, entity: Entity)
     };
     if em
         .get::<TransitionInput>()
-        .is_some_and(|i| i.spec.for_shared_element().is_some())
+        .is_some_and(|i| i.spec.shared_element.is_some())
     {
         em.insert(seed);
     }

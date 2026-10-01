@@ -1,5 +1,5 @@
 //! The transition **spec**: the wire-facing [`Transition`] declaration, its
-//! per-channel resolution (`transition_channels!`), the per-channel timing
+//! per-channel resolution ([`Transition::resolve`]), the per-channel timing
 //! ([`ChannelTransition`]), and the per-render target input
 //! ([`TransitionInput`]).
 
@@ -110,67 +110,27 @@ pub struct Transition {
     pub shared_element: Option<ChannelTransition>,
 }
 
-/// One row per spec channel of [`Transition`]: `(accessor, field, doc
-/// phrase)`. Generates the `for_*` accessors — one explicit-only lookup for
-/// every channel, instead of a hand-kept copy per channel.
-/// (The [`Transition`] struct fields stay hand-written: their docs carry the
-/// wire contract.)
-macro_rules! transition_channels {
-    ($cb:ident) => {
-        $cb! {
-            (for_transform, transform, "the transform channels"),
-            (for_opacity, opacity, "opacity"),
-            (for_background, background_color, "background color"),
-            (for_size, size, "the size channels"),
-            (for_border_radius, border_radius, "the corner radii"),
-            (for_scroll, scroll, "the scroll offset"),
-            (for_filter, filter, "the filter chain"),
-            (for_backdrop_filter, backdrop_filter, "the backdrop-filter chain"),
-            (for_transform3d, transform3d, "the transform3d channels"),
-            (for_morph_filter, morph_filter, "the morph progress"),
-            (for_background_gradient, background_gradient, "the background gradient"),
-            (for_border_gradient, border_gradient, "the border gradient"),
-            (for_layout, layout, "the laid-out rect"),
-            (for_shared_element, shared_element, "a shared-element flight"),
-        }
-    };
-}
-
-macro_rules! spec_accessors {
-    ($(($accessor:ident, $field:ident, $doc:literal),)*) => {
-        impl Transition {
-            $(
-                #[doc = concat!("The transition for ", $doc, " (explicit only).")]
-                pub fn $accessor(&self) -> Option<&ChannelTransition> {
-                    self.$field.as_ref()
-                }
-            )*
-        }
-    };
-}
-transition_channels!(spec_accessors);
-
 impl Transition {
     /// The spec for a parkable channel, keyed by the same
     /// [`ChannelId`](crate::animations::props::ChannelId) the park predicates
     /// use — so a drive site pairs its `parked(id)` gate and its spec lookup
     /// on one key. (Size and scroll have no `ChannelId` — nothing parks them —
-    /// and keep their named accessors only.)
+    /// and are read by field.)
     pub(crate) fn resolve(
         &self,
         channel: crate::animations::props::ChannelId,
     ) -> Option<&ChannelTransition> {
         use crate::animations::props::ChannelId as C;
         match channel {
-            C::Transform => self.for_transform(),
-            C::Opacity => self.for_opacity(),
-            C::Background => self.for_background(),
-            C::BorderRadius => self.for_border_radius(),
-            C::Filter => self.for_filter(),
-            C::Backdrop => self.for_backdrop_filter(),
-            C::Transform3d => self.for_transform3d(),
-            C::BackgroundGradient => self.for_background_gradient(),
-            C::BorderGradient => self.for_border_gradient(),
+            C::Transform => self.transform.as_ref(),
+            C::Opacity => self.opacity.as_ref(),
+            C::Background => self.background_color.as_ref(),
+            C::BorderRadius => self.border_radius.as_ref(),
+            C::Filter => self.filter.as_ref(),
+            C::Backdrop => self.backdrop_filter.as_ref(),
+            C::Transform3d => self.transform3d.as_ref(),
+            C::BackgroundGradient => self.background_gradient.as_ref(),
+            C::BorderGradient => self.border_gradient.as_ref(),
         }
     }
 }

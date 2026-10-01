@@ -69,12 +69,12 @@ fn shared_element_channel_is_explicit_only() {
     let t: Transition = parse(serde_json::json!({
         "sharedElement": { "duration": 400, "easing": "easeOut" },
     }));
-    let spec = t.for_shared_element().expect("sharedElement spec");
+    let spec = t.shared_element.as_ref().expect("sharedElement spec");
     assert_eq!(spec.duration.map(WireTime::seconds), Some(0.4));
     assert_eq!(spec.easing, Easing::EaseOut);
-    assert!(t.for_layout().is_none(), "no fallback into other channels");
+    assert!(t.layout.is_none(), "no fallback into other channels");
     let none: Transition = parse(serde_json::json!({ "layout": { "duration": 100 } }));
-    assert!(none.for_shared_element().is_none());
+    assert!(none.shared_element.is_none());
 }
 
 #[test]
@@ -87,20 +87,20 @@ fn channel_resolution_is_explicit_only() {
     // Every channel reads its own entry — there is no fallback key.
     // The wire numbers are milliseconds → seconds (200ms → 0.2s, 100ms → 0.1s).
     let secs = |c: &ChannelTransition| c.duration.map(WireTime::seconds);
-    assert!(t.for_opacity().is_some());
-    assert_eq!(secs(t.for_opacity().unwrap()), Some(0.2));
-    assert_eq!(secs(t.for_transform().unwrap()), Some(0.1));
-    assert_eq!(secs(t.for_background().unwrap()), Some(0.1));
+    assert!(t.opacity.is_some());
+    assert_eq!(secs(t.opacity.as_ref().unwrap()), Some(0.2));
+    assert_eq!(secs(t.transform.as_ref().unwrap()), Some(0.1));
+    assert_eq!(secs(t.background_color.as_ref().unwrap()), Some(0.1));
 
     // An unspecified channel has no transition.
     let t: Transition = parse(serde_json::json!({ "opacity": { "duration": 50 } }));
-    assert!(t.for_transform().is_none());
-    assert!(t.for_opacity().is_some());
-    assert!(t.for_border_radius().is_none());
+    assert!(t.transform.is_none());
+    assert!(t.opacity.is_some());
+    assert!(t.border_radius.is_none());
     let t: Transition = parse(serde_json::json!({ "borderRadius": { "duration": 50 } }));
-    assert!(t.for_border_radius().is_some());
+    assert!(t.border_radius.is_some());
     assert!(
-        t.for_size().is_none(),
+        t.size.is_none(),
         "borderRadius is its own channel, not size"
     );
 }
@@ -114,13 +114,13 @@ fn filter_channel_resolves_explicit_only() {
         "opacity": { "duration": 100 },
         "filter": { "duration": 400 },
     }));
-    assert_eq!(secs(t.for_filter().unwrap()), Some(0.4));
+    assert_eq!(secs(t.filter.as_ref().unwrap()), Some(0.4));
 
     let t: Transition = parse(serde_json::json!({ "filter": { "duration": 100 } }));
-    assert_eq!(secs(t.for_filter().unwrap()), Some(0.1));
+    assert_eq!(secs(t.filter.as_ref().unwrap()), Some(0.1));
 
     let t: Transition = parse(serde_json::json!({ "opacity": { "duration": 50 } }));
-    assert!(t.for_filter().is_none());
+    assert!(t.filter.is_none());
 }
 
 /// The layout channel resolves like its siblings: explicit entry or none.
@@ -131,11 +131,11 @@ fn layout_channel_resolves_explicit_only() {
     let t: Transition = parse(serde_json::json!({
         "layout": { "duration": 250, "easing": "easeOut" },
     }));
-    assert_eq!(secs(t.for_layout().unwrap()), Some(0.25));
-    assert_eq!(t.for_layout().unwrap().easing, Easing::EaseOut);
+    assert_eq!(secs(t.layout.as_ref().unwrap()), Some(0.25));
+    assert_eq!(t.layout.as_ref().unwrap().easing, Easing::EaseOut);
 
     let t: Transition = parse(serde_json::json!({ "size": { "duration": 50 } }));
-    assert!(t.for_layout().is_none(), "size is not layout");
+    assert!(t.layout.is_none(), "size is not layout");
 }
 
 #[test]

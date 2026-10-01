@@ -78,7 +78,7 @@ fn scroll_spec(style: &Option<Style>) -> Option<&ChannelTransition> {
     style
         .as_ref()
         .and_then(|s| s.get(&TRANSITION))
-        .and_then(|t| t.for_scroll())
+        .and_then(|t| t.scroll.as_ref())
 }
 
 /// Ease each `ScrollTransitionState` node's `ScrollPosition` toward its `target`

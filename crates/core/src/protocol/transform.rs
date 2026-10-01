@@ -157,8 +157,8 @@ mod tests {
         assert_eq!(t.scale_x, None);
         assert_eq!(s.get(&OPACITY).static_val(), Some(0.5));
         let transition = s.get(&TRANSITION).expect("transition present");
-        assert!(transition.for_transform().is_some());
-        assert!(transition.for_opacity().is_none());
+        assert!(transition.transform.is_some());
+        assert!(transition.opacity.is_none());
     }
 
     /// `transform3d` decodes its full field set (degrees and rad-string angles,

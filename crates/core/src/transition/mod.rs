@@ -387,7 +387,7 @@ pub fn drive_transitions(
             // there with the `sharedElement` spec), park the rect for the
             // layout drive, and drop the seed.
             if let Some(seed) = targets.shared_seed {
-                if let Some(spec) = input.spec.for_shared_element() {
+                if let Some(spec) = input.spec.shared_element.as_ref() {
                     state.seed_from(seed, spec.clone());
                 }
                 commands.entity(entity).remove::<shared::SharedSeed>();
@@ -470,8 +470,8 @@ pub fn drive_transitions(
         // branch still re-seeds the channels — see `sync_row`). Only
         // specified channels are written (passing `None` keeps
         // `build_ui_transform`'s scale precedence intact).
-        if or_shared(input.spec.for_transform(), shared_spec).is_some() && !skip_transform {
-            let s = arm_spec(seed_frame, input.spec.for_transform(), shared_spec);
+        if or_shared(input.spec.transform.as_ref(), shared_spec).is_some() && !skip_transform {
+            let s = arm_spec(seed_frame, input.spec.transform.as_ref(), shared_spec);
             let tx = input
                 .translate_x
                 .map(|t| length_to_val(state.translate_x.drive(t, s, dt)));
@@ -508,14 +508,14 @@ pub fn drive_transitions(
         // demoted/never-promoted entity has no component — nothing to drive.
         // Mid-ease unset removes the component with the promotion (snap
         // semantics, like filter's ease-to-empty).
-        if or_shared(input.spec.for_transform3d(), shared_spec).is_some()
+        if or_shared(input.spec.transform3d.as_ref(), shared_spec).is_some()
             && !skip_transform3d
             && let Some(target) = &input.transform3d
             && let Some(t3d) = &mut targets.transform3d
         {
             let new = state.transform3d.drive(
                 target,
-                arm_spec(seed_frame, input.spec.for_transform3d(), shared_spec),
+                arm_spec(seed_frame, input.spec.transform3d.as_ref(), shared_spec),
                 dt,
             );
             // Compare-before-write: a settled ease must not re-trigger the
@@ -536,7 +536,7 @@ pub fn drive_transitions(
         let alpha = if !skip_opacity && let Some(target) = input.opacity {
             Some(state.opacity.drive(
                 target,
-                arm_spec(seed_frame, input.spec.for_opacity(), shared_spec),
+                arm_spec(seed_frame, input.spec.opacity.as_ref(), shared_spec),
                 dt,
             ))
         } else {
@@ -557,7 +557,11 @@ pub fn drive_transitions(
             }
             let mut rgba = state.color.drive(
                 target,
-                arm_spec(seed_frame, input.spec.for_background(), shared_spec),
+                arm_spec(
+                    seed_frame,
+                    input.spec.background_color.as_ref(),
+                    shared_spec,
+                ),
                 dt,
             );
             if let Some(a) = alpha
@@ -611,10 +615,10 @@ pub fn drive_transitions(
             state.drive_shared_size(node, input, dt);
         }
         let flying = state.shared.size.unwrap_or_default();
-        if input.spec.for_size().is_some()
+        if input.spec.size.is_some()
             && let Some(node) = targets.node.as_mut()
         {
-            let s = input.spec.for_size();
+            let s = input.spec.size.as_ref();
             // One drive per `size` row of the channel table: ease toward the
             // input target and compare-write the same-named `Node` field —
             // except an axis the shared size flight is flying right now.
@@ -663,14 +667,14 @@ pub fn drive_transitions(
         // is not in the layer geometry hash (`fold_member_geometry` folds
         // translation/matrix/size only), so a cached enclosing layer would
         // otherwise never re-capture the changing corners.
-        if or_shared(input.spec.for_border_radius(), shared_spec).is_some()
+        if or_shared(input.spec.border_radius.as_ref(), shared_spec).is_some()
             && !skip_radius
             && let Some(node) = targets.node.as_mut()
         {
             let target = input.border_radius.unwrap_or_default();
             let r = rect_to_border_radius(state.border_radius.drive(
                 target,
-                arm_spec(seed_frame, input.spec.for_border_radius(), shared_spec),
+                arm_spec(seed_frame, input.spec.border_radius.as_ref(), shared_spec),
                 dt,
             ));
             if node.border_radius != r {
@@ -788,7 +792,8 @@ pub fn drive_transitions(
             use channels::MorphAction;
             let morph_spec = input
                 .spec
-                .for_morph_filter()
+                .morph_filter
+                .as_ref()
                 .unwrap_or_else(|| spec::morph_default());
             match state.morph.drive(
                 targets.morph_input,

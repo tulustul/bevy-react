@@ -570,7 +570,7 @@ pub fn drive_layout_transitions(
         // stands.
         let shared_spec = state.shared.spec.clone();
         let shared_spec = shared_spec.as_ref();
-        let spec = input.spec.for_layout().or_else(|| {
+        let spec = input.spec.layout.as_ref().or_else(|| {
             (state.shared.rect.is_some() || state.layout.shared_active())
                 .then_some(shared_spec)
                 .flatten()
