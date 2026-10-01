@@ -342,23 +342,18 @@ fn transform_scale_and_empty() {
     assert_eq!(a.transform, Some(ShapeTransform::default()));
 }
 
-/// Unsupported transform functions (`skewX`, `matrix`) warn
-/// (`shapeTransform`) and drop the field whole.
+/// `matrix`/`skewX` resolve like the rest of the list; a parse error warns
+/// (`shapeTransform`) and drops the field whole.
 #[test]
-fn unsupported_transform_warns_and_drops() {
+fn matrix_and_skew_resolve_bad_transform_warns_and_drops() {
     #[cfg(all(feature = "devtools", debug_assertions))]
     let _ = bevy_react_core::diag::take_decode_warnings();
-    let a = attrs(serde_json::json!({ "transform": "skewX(3)" }));
-    assert_eq!(a.transform, None);
-    let b = attrs(serde_json::json!({ "transform": "matrix(1 0 0 1 0 0)" }));
-    assert_eq!(b.transform, None);
+    let a = attrs(serde_json::json!({ "transform": "matrix(1 2 3 4 5 6) skewX(45)" }));
+    assert_mat_approx(a.transform.unwrap(), [1.0, 2.0, 4.0, 6.0, 5.0, 6.0]);
     let c = attrs(serde_json::json!({ "transform": "translate(nope)" }));
     assert_eq!(c.transform, None);
     #[cfg(all(feature = "devtools", debug_assertions))]
-    assert_eq!(
-        drain_warn_kinds(),
-        vec!["shapeTransform", "shapeTransform", "shapeTransform"]
-    );
+    assert_eq!(drain_warn_kinds(), vec!["shapeTransform"]);
 }
 
 /// `ViewBox` parses both whitespace- and comma-separated forms; a

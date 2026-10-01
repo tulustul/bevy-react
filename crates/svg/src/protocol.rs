@@ -295,9 +295,9 @@ pub enum LinejoinKind {
 /// backend); the painter's `From<&ShapeTransform>` impl (in `svg::paint`)
 /// converts via `Transform::from_row` — the same field order.
 ///
-/// v1 scope: `translate(x [y])`, `scale(s [sy])`, `rotate(deg [cx cy])`,
-/// composed in list order. Anything else (`matrix`/`skewX`/`skewY`, or a
-/// parse error) warns with kind `"shapeTransform"` and drops the field.
+/// The whole SVG transform list (`matrix`, `translate`, `scale`,
+/// `rotate(deg [cx cy])`, `skewX`, `skewY`), composed in list order; a parse
+/// error warns with kind `"shapeTransform"` and drops the field.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ShapeTransform(pub [f32; 6]);
 
@@ -307,47 +307,15 @@ impl Default for ShapeTransform {
     }
 }
 
-const IDENTITY: [f64; 6] = [1.0, 0.0, 0.0, 1.0, 0.0, 0.0];
-
-/// Affine concat `a · b` (apply `b` first, then `a`) — transform-list order
-/// is left-to-right, so the running matrix post-multiplies each new function.
-fn mul(a: [f64; 6], b: [f64; 6]) -> [f64; 6] {
-    [
-        a[0] * b[0] + a[2] * b[1],
-        a[1] * b[0] + a[3] * b[1],
-        a[0] * b[2] + a[2] * b[3],
-        a[1] * b[2] + a[3] * b[3],
-        a[0] * b[4] + a[2] * b[5] + a[4],
-        a[1] * b[4] + a[3] * b[5] + a[5],
-    ]
-}
-
 impl ShapeTransform {
-    /// Parse an SVG transform-list string into a resolved affine. `svgtypes`
-    /// splits `rotate(a cx cy)` into translate·rotate·translate tokens, so
-    /// the rotate-about-a-point form arrives here as supported primitives.
+    /// Parse an SVG transform-list string into a resolved affine.
     pub(crate) fn parse(s: &str) -> Result<ShapeTransform, String> {
-        use svgtypes::{TransformListParser, TransformListToken as T};
-        let mut m = IDENTITY;
-        for token in TransformListParser::from(s) {
-            let token = token.map_err(|e| format!("invalid transform {s:?}: {e}"))?;
-            let t = match token {
-                T::Translate { tx, ty } => [1.0, 0.0, 0.0, 1.0, tx, ty],
-                T::Scale { sx, sy } => [sx, 0.0, 0.0, sy, 0.0, 0.0],
-                T::Rotate { angle } => {
-                    let (sin, cos) = angle.to_radians().sin_cos();
-                    [cos, sin, -sin, cos, 0.0, 0.0]
-                }
-                T::Matrix { .. } | T::SkewX { .. } | T::SkewY { .. } => {
-                    return Err(format!(
-                        "unsupported transform function in {s:?} \
-                         (v1 supports translate/scale/rotate)"
-                    ));
-                }
-            };
-            m = mul(m, t);
-        }
-        Ok(ShapeTransform(m.map(|v| v as f32)))
+        let t: svgtypes::Transform = s
+            .parse()
+            .map_err(|e| format!("invalid transform {s:?}: {e}"))?;
+        Ok(ShapeTransform(
+            [t.a, t.b, t.c, t.d, t.e, t.f].map(|v| v as f32),
+        ))
     }
 }
 
