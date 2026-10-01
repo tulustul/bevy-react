@@ -44,124 +44,32 @@ const fn shape(name: &'static str, attrs: &'static [&'static dyn AnyAttribute]) 
     }
 }
 
-pub static CIRCLE: Element = shape(
-    "circle",
-    &[
-        &CX,
-        &CY,
-        &R,
-        &FILL,
-        &STROKE,
-        &STROKE_WIDTH,
-        &OPACITY,
-        &FILL_RULE,
-        &STROKE_LINECAP,
-        &STROKE_LINEJOIN,
-        &TRANSFORM,
-        &TRANSITION,
-    ],
-);
-pub static RECT: Element = shape(
-    "rect",
-    &[
-        &X,
-        &Y,
-        &WIDTH,
-        &HEIGHT,
-        &RX,
-        &RY,
-        &FILL,
-        &STROKE,
-        &STROKE_WIDTH,
-        &OPACITY,
-        &FILL_RULE,
-        &STROKE_LINECAP,
-        &STROKE_LINEJOIN,
-        &TRANSFORM,
-        &TRANSITION,
-    ],
-);
-pub static ELLIPSE: Element = shape(
-    "ellipse",
-    &[
-        &CX,
-        &CY,
-        &RX,
-        &RY,
-        &FILL,
-        &STROKE,
-        &STROKE_WIDTH,
-        &OPACITY,
-        &FILL_RULE,
-        &STROKE_LINECAP,
-        &STROKE_LINEJOIN,
-        &TRANSFORM,
-        &TRANSITION,
-    ],
-);
-pub static LINE: Element = shape(
-    "line",
-    &[
-        &X1,
-        &Y1,
-        &X2,
-        &Y2,
-        &FILL,
-        &STROKE,
-        &STROKE_WIDTH,
-        &OPACITY,
-        &FILL_RULE,
-        &STROKE_LINECAP,
-        &STROKE_LINEJOIN,
-        &TRANSFORM,
-        &TRANSITION,
-    ],
-);
-pub static POLYLINE: Element = shape(
-    "polyline",
-    &[
-        &POINTS,
-        &FILL,
-        &STROKE,
-        &STROKE_WIDTH,
-        &OPACITY,
-        &FILL_RULE,
-        &STROKE_LINECAP,
-        &STROKE_LINEJOIN,
-        &TRANSFORM,
-        &TRANSITION,
-    ],
-);
-pub static POLYGON: Element = shape(
-    "polygon",
-    &[
-        &POINTS,
-        &FILL,
-        &STROKE,
-        &STROKE_WIDTH,
-        &OPACITY,
-        &FILL_RULE,
-        &STROKE_LINECAP,
-        &STROKE_LINEJOIN,
-        &TRANSFORM,
-        &TRANSITION,
-    ],
-);
-pub static PATH: Element = shape(
-    "path",
-    &[
-        &D,
-        &FILL,
-        &STROKE,
-        &STROKE_WIDTH,
-        &OPACITY,
-        &FILL_RULE,
-        &STROKE_LINECAP,
-        &STROKE_LINEJOIN,
-        &TRANSFORM,
-        &TRANSITION,
-    ],
-);
+/// A shape's attribute list: its own geometry attributes, then the
+/// paint/transform tail every drawable shape shares.
+macro_rules! shape_attrs {
+    ($($geometry:ident),*) => {
+        &[
+            $(&$geometry,)*
+            &FILL,
+            &STROKE,
+            &STROKE_WIDTH,
+            &OPACITY,
+            &FILL_RULE,
+            &STROKE_LINECAP,
+            &STROKE_LINEJOIN,
+            &TRANSFORM,
+            &TRANSITION,
+        ]
+    };
+}
+
+pub static CIRCLE: Element = shape("circle", shape_attrs![CX, CY, R]);
+pub static RECT: Element = shape("rect", shape_attrs![X, Y, WIDTH, HEIGHT, RX, RY]);
+pub static ELLIPSE: Element = shape("ellipse", shape_attrs![CX, CY, RX, RY]);
+pub static LINE: Element = shape("line", shape_attrs![X1, Y1, X2, Y2]);
+pub static POLYLINE: Element = shape("polyline", shape_attrs![POINTS]);
+pub static POLYGON: Element = shape("polygon", shape_attrs![POINTS]);
+pub static PATH: Element = shape("path", shape_attrs![D]);
 /// `<g>`: a group — its `transform` and `opacity` apply to every
 /// descendant shape. Groups are never hit (no geometry), so they take no
 /// pointer handlers.
