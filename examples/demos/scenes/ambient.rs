@@ -52,35 +52,9 @@ pub fn register_bindings(app: &mut App) {
     app.add_react_handler(start_burst);
 }
 
-/// The live burst, if any. `progress` runs 0→1 over [`BURST_SECS`] and then
-/// parks at 1.0, which the shader reads as "no burst" — so the decay needs no
-/// cancel path and no lifecycle beyond this one float.
-#[derive(Resource)]
-struct Burst {
-    hue: f32,
-    progress: f32,
-}
-
-/// Idle, not mid-burst. A derived `Default` would give `progress: 0.0`, which
-/// reads as "a burst is playing" — and the app would fire a full shockwave at
-/// hue 0 on every launch before anyone had clicked anything.
-impl Default for Burst {
-    fn default() -> Self {
-        Self {
-            hue: 0.0,
-            progress: Self::IDLE,
-        }
-    }
-}
-
-impl Burst {
-    /// Progress parked at (or past) 1.0 — the shader contributes nothing.
-    const IDLE: f32 = 1.0;
-
-    fn is_active(&self) -> bool {
-        self.progress < Self::IDLE
-    }
-}
+/// Where a burst's progress parks once it has played out: at (or past) 1.0
+/// the shader contributes nothing, so the decay needs no cancel path.
+const IDLE: f32 = 1.0;
 
 pub struct AmbientScenePlugin;
 
@@ -95,7 +69,6 @@ impl Plugin for AmbientScenePlugin {
         // and `spawn_backdrop`'s `Single` camera param would silently skip the
         // system if it ran first.
         app.add_plugins(MaterialPlugin::<AmbientMaterial>::default())
-            .init_resource::<Burst>()
             .add_systems(PostStartup, spawn_backdrop)
             .add_systems(Update, drive_burst);
     }
@@ -114,7 +87,7 @@ struct AmbientMaterial {
 impl Default for AmbientMaterial {
     fn default() -> Self {
         Self {
-            burst: Vec4::new(0.0, Burst::IDLE, 0.0, 0.0),
+            burst: Vec4::new(0.0, IDLE, 0.0, 0.0),
         }
     }
 }
@@ -148,27 +121,30 @@ fn spawn_backdrop(
 /// A click on the home page's "Typed messages" tile: restart the shockwave at
 /// the requested hue. Re-firing mid-burst restarts rather than stacking — one
 /// burst at a time keeps the backdrop a backdrop.
-fn start_burst(on: On<NebulaBurst>, mut burst: ResMut<Burst>) {
-    burst.hue = on.event().hue;
-    burst.progress = 0.0;
-}
-
-/// Advance the live burst and push it into the material. Writes nothing once
-/// the burst has parked, so an idle backdrop is back to zero per-frame work.
-fn drive_burst(
-    time: Res<Time>,
-    mut burst: ResMut<Burst>,
-    materials_q: Query<&MeshMaterial3d<AmbientMaterial>>,
+fn start_burst(
+    on: On<NebulaBurst>,
+    quads: Query<&MeshMaterial3d<AmbientMaterial>>,
     mut materials: ResMut<Assets<AmbientMaterial>>,
 ) {
-    if !burst.is_active() {
-        return;
-    }
-    burst.progress = (burst.progress + time.delta_secs() / BURST_SECS).min(Burst::IDLE);
-    let value = Vec4::new(burst.hue, burst.progress, 0.0, 0.0);
-    for handle in &materials_q {
+    for handle in &quads {
         if let Some(mut material) = materials.get_mut(&handle.0) {
-            material.burst = value;
+            material.burst = Vec4::new(on.event().hue, 0.0, 0.0, 0.0);
+        }
+    }
+}
+
+/// Advance a live burst. A parked one is only read (`AssetMut` marks the
+/// material modified on a write), so an idle backdrop does no per-frame work.
+fn drive_burst(
+    time: Res<Time>,
+    quads: Query<&MeshMaterial3d<AmbientMaterial>>,
+    mut materials: ResMut<Assets<AmbientMaterial>>,
+) {
+    for handle in &quads {
+        if let Some(mut material) = materials.get_mut(&handle.0)
+            && material.burst.y < IDLE
+        {
+            material.burst.y = (material.burst.y + time.delta_secs() / BURST_SECS).min(IDLE);
         }
     }
 }
@@ -177,31 +153,10 @@ fn drive_burst(
 mod tests {
     use super::*;
 
-    /// A fresh burst runs 0→1 and then parks: the shader's "no burst" state is
-    /// reachable without anything cancelling it.
-    #[test]
-    fn burst_decays_to_idle_and_parks() {
-        let mut burst = Burst {
-            hue: 0.25,
-            progress: 0.0,
-        };
-        assert!(burst.is_active());
-
-        // Half the burst's lifetime.
-        burst.progress = (burst.progress + 1.0 / BURST_SECS).min(Burst::IDLE);
-        assert!(burst.is_active(), "still mid-flight at 1s of {BURST_SECS}s");
-
-        // Overshooting the end clamps instead of running past it.
-        burst.progress = (burst.progress + 10.0 / BURST_SECS).min(Burst::IDLE);
-        assert_eq!(burst.progress, Burst::IDLE);
-        assert!(!burst.is_active());
-    }
-
-    /// Nothing bursts until something asks for it: both the resource and the
-    /// material start parked, so the app never flashes on launch.
+    /// Nothing bursts until something asks for it: the material starts
+    /// parked, so the app never flashes on launch.
     #[test]
     fn nothing_bursts_until_asked() {
-        assert!(!Burst::default().is_active());
-        assert_eq!(AmbientMaterial::default().burst.y, Burst::IDLE);
+        assert_eq!(AmbientMaterial::default().burst.y, IDLE);
     }
 }
