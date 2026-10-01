@@ -167,25 +167,15 @@ fn garbage_path_warns_and_drops() {
     assert_eq!(drain_warn_kinds(), vec!["shapePath"]);
 }
 
-/// Arcs are unsupported in v1: the whole path drops with the `shapePath`
-/// warning naming the limitation.
+/// Arcs decode (as cubics) — no warning, no drop.
 #[test]
-fn arc_path_warns_and_drops() {
+fn arc_path_decodes() {
     #[cfg(all(feature = "devtools", debug_assertions))]
     let _ = bevy_react_core::diag::take_decode_warnings();
     let a = attrs(serde_json::json!({ "d": "M0 0 A5 5 0 0 1 10 10" }));
-    assert_eq!(a.d, None);
+    assert!(a.d.is_some_and(|d| d.0.len() > 1));
     #[cfg(all(feature = "devtools", debug_assertions))]
-    {
-        let warns = bevy_react_core::diag::take_decode_warnings();
-        assert_eq!(warns.len(), 1);
-        assert_eq!(warns[0].kind, "shapePath");
-        assert!(
-            warns[0].message.contains("arc segments unsupported"),
-            "{}",
-            warns[0].message
-        );
-    }
+    assert!(drain_warn_kinds().is_empty());
 }
 
 /// A numeric attr accepts the inline `{ animated: …, seed? }` wrapper (the

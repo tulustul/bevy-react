@@ -3,17 +3,13 @@
 //! **absolute-coordinate** segments, so replaying the path at paint time is a
 //! plain loop — no re-parsing, no relative/shorthand bookkeeping downstream.
 //!
-//! The grammar work is done by `svgtypes`' [`PathParser`] (the resvg-family
-//! parser); this module normalizes what it yields: relative segments become
-//! absolute, `H`/`V` become full `LineTo`s, and the smooth shorthands (`S`/`T`)
-//! are expanded to full curves via the SVG control-point reflection rule.
-//!
-//! Elliptical arcs (`A`/`a`) are **unsupported in v1**: `svgtypes` offers no
-//! arc→cubic conversion helper, and hand-rolling the endpoint-to-center math
-//! is out of scope, so a path containing an arc fails as a whole (the caller
-//! warns with kind `"shapePath"` and drops the field — never a partial path).
+//! `svgtypes`' [`SimplifyingPathParser`] (the resvg-family parser) does the
+//! normalizing: relative segments become absolute, `H`/`V` full `LineTo`s,
+//! the smooth shorthands (`S`/`T`) full curves via the SVG control-point
+//! reflection rule, elliptical arcs (`A`/`a`) cubics, and a segment drawn
+//! after a `Z` gets the implicit `MoveTo` back to its subpath start.
 
-use svgtypes::{PathParser, PathSegment};
+use svgtypes::{SimplePathSegment, SimplifyingPathParser};
 
 /// One normalized path segment. Coordinates are always absolute, in the SVG
 /// user-unit space of the enclosing `<svg>`'s `viewBox`.
@@ -58,142 +54,40 @@ impl PathData {
     /// warn message; the whole path is dropped on any error (a half-parsed
     /// path would silently paint the wrong shape).
     pub(crate) fn parse(d: &str) -> Result<PathData, String> {
-        let mut segs = Vec::new();
-        // Normalization state, kept in f64 (the parser's unit) so long chains
-        // of relative segments don't accumulate f32 rounding.
-        let (mut cx, mut cy) = (0.0f64, 0.0f64); // current point
-        let (mut sx, mut sy) = (0.0f64, 0.0f64); // current subpath start
-        // The reflection sources for the smooth shorthands: the previous
-        // segment's last control point, `Some` only when that segment was of
-        // the matching family (SVG's "if the previous command was not a
-        // C/S (resp. Q/T), the control point is the current point" rule).
-        let mut prev_cubic: Option<(f64, f64)> = None;
-        let mut prev_quad: Option<(f64, f64)> = None;
-        for seg in PathParser::from(d) {
-            let seg = seg.map_err(|e| format!("invalid path data {d:?}: {e}"))?;
-            // Resolve a possibly-relative endpoint against the current point.
-            let abs = |is_abs: bool, x: f64, y: f64| {
-                if is_abs { (x, y) } else { (cx + x, cy + y) }
-            };
-            match seg {
-                PathSegment::MoveTo { abs: a, x, y } => {
-                    (cx, cy) = abs(a, x, y);
-                    (sx, sy) = (cx, cy);
-                    (prev_cubic, prev_quad) = (None, None);
-                    segs.push(PathSeg::MoveTo {
-                        x: cx as f32,
-                        y: cy as f32,
-                    });
-                }
-                PathSegment::LineTo { abs: a, x, y } => {
-                    (cx, cy) = abs(a, x, y);
-                    (prev_cubic, prev_quad) = (None, None);
-                    segs.push(PathSeg::LineTo {
-                        x: cx as f32,
-                        y: cy as f32,
-                    });
-                }
-                PathSegment::HorizontalLineTo { abs: a, x } => {
-                    cx = if a { x } else { cx + x };
-                    (prev_cubic, prev_quad) = (None, None);
-                    segs.push(PathSeg::LineTo {
-                        x: cx as f32,
-                        y: cy as f32,
-                    });
-                }
-                PathSegment::VerticalLineTo { abs: a, y } => {
-                    cy = if a { y } else { cy + y };
-                    (prev_cubic, prev_quad) = (None, None);
-                    segs.push(PathSeg::LineTo {
-                        x: cx as f32,
-                        y: cy as f32,
-                    });
-                }
-                PathSegment::CurveTo {
-                    abs: a,
-                    x1,
-                    y1,
-                    x2,
-                    y2,
-                    x,
-                    y,
-                } => {
-                    let (c1x, c1y) = abs(a, x1, y1);
-                    let (c2x, c2y) = abs(a, x2, y2);
-                    (cx, cy) = abs(a, x, y);
-                    (prev_cubic, prev_quad) = (Some((c2x, c2y)), None);
-                    segs.push(PathSeg::CubicTo {
-                        c1x: c1x as f32,
-                        c1y: c1y as f32,
-                        c2x: c2x as f32,
-                        c2y: c2y as f32,
-                        x: cx as f32,
-                        y: cy as f32,
-                    });
-                }
-                PathSegment::SmoothCurveTo {
-                    abs: a,
-                    x2,
-                    y2,
-                    x,
-                    y,
-                } => {
-                    // First control = reflection of the previous cubic's
-                    // second control about the current point.
-                    let (px, py) = prev_cubic.unwrap_or((cx, cy));
-                    let (c1x, c1y) = (2.0 * cx - px, 2.0 * cy - py);
-                    let (c2x, c2y) = abs(a, x2, y2);
-                    (cx, cy) = abs(a, x, y);
-                    (prev_cubic, prev_quad) = (Some((c2x, c2y)), None);
-                    segs.push(PathSeg::CubicTo {
-                        c1x: c1x as f32,
-                        c1y: c1y as f32,
-                        c2x: c2x as f32,
-                        c2y: c2y as f32,
-                        x: cx as f32,
-                        y: cy as f32,
-                    });
-                }
-                PathSegment::Quadratic {
-                    abs: a,
-                    x1,
-                    y1,
-                    x,
-                    y,
-                } => {
-                    let (qx, qy) = abs(a, x1, y1);
-                    (cx, cy) = abs(a, x, y);
-                    (prev_cubic, prev_quad) = (None, Some((qx, qy)));
-                    segs.push(PathSeg::QuadTo {
-                        c1x: qx as f32,
-                        c1y: qy as f32,
-                        x: cx as f32,
-                        y: cy as f32,
-                    });
-                }
-                PathSegment::SmoothQuadratic { abs: a, x, y } => {
-                    let (px, py) = prev_quad.unwrap_or((cx, cy));
-                    let (qx, qy) = (2.0 * cx - px, 2.0 * cy - py);
-                    (cx, cy) = abs(a, x, y);
-                    (prev_cubic, prev_quad) = (None, Some((qx, qy)));
-                    segs.push(PathSeg::QuadTo {
-                        c1x: qx as f32,
-                        c1y: qy as f32,
-                        x: cx as f32,
-                        y: cy as f32,
-                    });
-                }
-                PathSegment::EllipticalArc { .. } => {
-                    return Err(format!("arc segments unsupported in v1 in path data {d:?}"));
-                }
-                PathSegment::ClosePath { .. } => {
-                    (cx, cy) = (sx, sy);
-                    (prev_cubic, prev_quad) = (None, None);
-                    segs.push(PathSeg::Close);
-                }
-            }
-        }
-        Ok(PathData(segs))
+        let f = |v: f64| v as f32;
+        SimplifyingPathParser::from(d)
+            .map(|seg| {
+                Ok(
+                    match seg.map_err(|e| format!("invalid path data {d:?}: {e}"))? {
+                        SimplePathSegment::MoveTo { x, y } => PathSeg::MoveTo { x: f(x), y: f(y) },
+                        SimplePathSegment::LineTo { x, y } => PathSeg::LineTo { x: f(x), y: f(y) },
+                        SimplePathSegment::Quadratic { x1, y1, x, y } => PathSeg::QuadTo {
+                            c1x: f(x1),
+                            c1y: f(y1),
+                            x: f(x),
+                            y: f(y),
+                        },
+                        SimplePathSegment::CurveTo {
+                            x1,
+                            y1,
+                            x2,
+                            y2,
+                            x,
+                            y,
+                        } => PathSeg::CubicTo {
+                            c1x: f(x1),
+                            c1y: f(y1),
+                            c2x: f(x2),
+                            c2y: f(y2),
+                            x: f(x),
+                            y: f(y),
+                        },
+                        SimplePathSegment::ClosePath => PathSeg::Close,
+                    },
+                )
+            })
+            .collect::<Result<_, String>>()
+            .map(PathData)
     }
 }
 
@@ -231,8 +125,8 @@ mod tests {
         );
     }
 
-    /// `H`/`V` (and their relative forms) become full `LineTo`s; the segment
-    /// after a `z` continues from the subpath start.
+    /// `H`/`V` (and their relative forms) become full `LineTo`s; a segment
+    /// after a `z` restarts at the subpath start with an explicit `MoveTo`.
     #[test]
     fn h_v_and_close_normalize() {
         let d = PathData::parse("M1 2 H5 v3 h-2 Z l1 1").expect("valid path");
@@ -245,6 +139,7 @@ mod tests {
                 PathSeg::LineTo { x: 3.0, y: 5.0 },
                 PathSeg::Close,
                 // After Close the current point is the subpath start (1, 2).
+                PathSeg::MoveTo { x: 1.0, y: 2.0 },
                 PathSeg::LineTo { x: 2.0, y: 3.0 },
             ]
         );
@@ -301,12 +196,24 @@ mod tests {
         assert!(PathData::parse("L10 10").is_err());
     }
 
-    /// Arcs are unsupported in v1: the whole path is rejected, with a message
-    /// naming the limitation.
+    /// Elliptical arcs convert to cubics ending at the arc's endpoint.
     #[test]
-    fn arcs_are_rejected_whole() {
-        let err = PathData::parse("M0 0 A5 5 0 0 1 10 10").expect_err("arc must be rejected");
-        assert!(err.contains("arc segments unsupported"), "{err}");
+    fn arcs_become_cubics() {
+        let d = PathData::parse("M0 0 A5 5 0 0 1 10 10").expect("arcs are supported");
+        assert_eq!(d.0[0], PathSeg::MoveTo { x: 0.0, y: 0.0 });
+        assert!(
+            d.0[1..]
+                .iter()
+                .all(|s| matches!(s, PathSeg::CubicTo { .. }))
+        );
+        let Some(PathSeg::CubicTo { x, y, .. }) = d.0.last() else {
+            panic!("no cubic in {:?}", d.0);
+        };
+        assert!(
+            (x - 10.0).abs() < 1e-4 && (y - 10.0).abs() < 1e-4,
+            "{:?}",
+            d.0
+        );
     }
 
     /// An empty `d` is a valid, paint-nothing path (not an error).
