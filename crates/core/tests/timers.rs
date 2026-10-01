@@ -6,70 +6,31 @@
 //! `setTimeout(_, 300)`, so the measured gap is the timer delay alone — runtime
 //! build / module-load cost is excluded (it precedes both emits).
 
-use std::io::Write;
 use std::time::{Duration, Instant};
 
-use bevy_react_core::js_thread::spawn_js_thread;
-use bevy_react_core::protocol::{op::Op, outbound::Outbound};
-use bevy_react_core::{RawRequest, ReactMessage};
+mod common;
+use common::Js;
 
 #[test]
 fn set_timeout_honors_delay() {
     // Emit "early" synchronously, schedule "late" 300ms out, then park on
     // op_next_event so the runtime's event loop stays alive to pump the timer.
     // The app bundle is a classic script (no top-level await), so the body runs
-    // in an async IIFE. An empty vendor script stands in for the react bundle.
-    let vendor = std::env::temp_dir().join("bevy_react_timer_vendor.js");
-    std::fs::write(&vendor, b"").expect("write temp vendor");
-    let bundle = std::env::temp_dir().join("bevy_react_timer_test.js");
-    std::fs::File::create(&bundle)
-        .expect("create temp bundle")
-        .write_all(
-            br#"
-            (async () => {
-              Deno.core.ops.op_emit("early", null);
-              setTimeout(() => { Deno.core.ops.op_emit("late", null); }, 300);
-              for (;;) { const m = await Deno.core.ops.op_next_event(); if (m == null) break; }
-            })();
-            "#,
-        )
-        .expect("write temp bundle");
-
-    let (ops_tx, _ops_rx) = crossbeam_channel::unbounded::<Vec<Op>>();
-    // Send-instant stamps (devtools pre-apply timing); unread here, held open.
-    let (flush_stamps_tx, _flush_stamps_rx) = crossbeam_channel::unbounded();
-    let (flush_devtools_tx, _flush_devtools_rx) = crossbeam_channel::unbounded();
-    let (emit_tx, emit_rx) = crossbeam_channel::unbounded::<ReactMessage>();
-    let (request_tx, _request_rx) = crossbeam_channel::unbounded::<RawRequest>();
-    let (anim_tx, _anim_rx) = crossbeam_channel::unbounded();
-    let (_outbound_tx, outbound_rx) = tokio::sync::mpsc::unbounded_channel::<Outbound>();
-    // Held for the duration: dropping the reload sender would look like shutdown.
-    let (_reload_tx, reload_rx) = tokio::sync::mpsc::unbounded_channel::<()>();
-
-    spawn_js_thread(
-        bevy_react_core::ext::ExtRegistrySlot::ready(bevy_react_core::ext::builtin_registry()),
-        vendor,
-        bundle,
-        ops_tx,
-        flush_stamps_tx,
-        flush_devtools_tx,
-        emit_tx,
-        request_tx,
-        anim_tx,
-        outbound_rx,
-        reload_rx,
+    // in an async IIFE.
+    let js = Js::spawn(
+        "timers",
+        r#"
+        (async () => {
+          Deno.core.ops.op_emit("early", null);
+          setTimeout(() => { Deno.core.ops.op_emit("late", null); }, 300);
+          for (;;) { const m = await Deno.core.ops.op_next_event(); if (m == null) break; }
+        })();
+        "#,
     );
 
-    let early = emit_rx
-        .recv_timeout(Duration::from_secs(10))
-        .expect("immediate emit never arrived");
-    assert_eq!(early.name, "early");
+    js.emitted("early", Duration::from_secs(10));
     let after_early = Instant::now();
-
-    let late = emit_rx
-        .recv_timeout(Duration::from_secs(10))
-        .expect("setTimeout callback never emitted");
-    assert_eq!(late.name, "late");
+    js.emitted("late", Duration::from_secs(10));
 
     let gap = after_early.elapsed();
     // The old microtask shim fired the callback in well under 50ms; a real 300ms

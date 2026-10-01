@@ -8,223 +8,52 @@
 //! Run with `--nocapture` to see the real `[js]` error + bridge instrumentation:
 //!   cargo test --test demo_switch -- --nocapture
 
-use std::collections::{HashMap, HashSet};
-use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
-use crossbeam_channel::{Receiver, RecvTimeoutError};
-
-use bevy_react::js_thread::spawn_js_thread;
-use bevy_react::protocol::{op::Op, outbound::Outbound, outbound::UiEvent};
-use bevy_react::{RawRequest, ReactMessage};
-
 mod common;
+use common::Harness;
 
-fn example_bundle() -> PathBuf {
-    // CARGO_MANIFEST_DIR is examples/demos; the bundle is the package's own `ui/dist`.
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("ui/dist/app.js")
-}
-
-/// Fold one op into the lookup maps we use to locate nav buttons by their label.
-fn accumulate(
-    op: &Op,
-    buttons: &mut HashSet<u32>,
-    parent_of: &mut HashMap<u32, u32>,
-    text_of: &mut HashMap<u32, String>,
-) {
-    match op {
-        Op::Create { id, kind, text, .. } => {
-            if kind == "button" {
-                buttons.insert(*id);
-            }
-            // A single-string `<text>` rides its label inline on the create op
-            // (the `shouldSetTextContent` fast path) rather than as a child run.
-            if let Some(text) = text {
-                text_of.insert(*id, text.clone());
-            }
-        }
-        Op::CreateTextSpan { id, text } | Op::CreateText { id, text } => {
-            text_of.insert(*id, text.clone());
-        }
-        Op::Append { parent, child } => {
-            parent_of.insert(*child, *parent);
-        }
-        Op::Insert { parent, child, .. } => {
-            parent_of.insert(*child, *parent);
-        }
-        _ => {}
-    }
-}
-
-/// A nav entry renders `<button>…<text>{label}</text>…</button>`, where the label
-/// `<text>` is nested under one or more wrapper `<node>`s, so walk up from the label's
-/// text run until we reach the enclosing button.
-fn find_button(
-    label: &str,
-    buttons: &HashSet<u32>,
-    parent_of: &HashMap<u32, u32>,
-    text_of: &HashMap<u32, String>,
-) -> Option<u32> {
-    for (span, text) in text_of {
-        if text.trim() != label {
-            continue;
-        }
-        // Bound the walk so a malformed parent map can't loop forever.
-        let mut current = *span;
-        for _ in 0..8 {
-            let Some(&parent) = parent_of.get(&current) else {
-                break;
-            };
-            if buttons.contains(&parent) {
-                return Some(parent);
-            }
-            current = parent;
-        }
-    }
-    None
-}
-
-/// Drain ops for `dur`, keeping the lookup maps current. Panics if the JS thread
-/// dies (channel disconnects) — that's the crash we're hunting.
-fn pump(
-    ops_rx: &Receiver<Vec<Op>>,
-    dur: Duration,
-    buttons: &mut HashSet<u32>,
-    parent_of: &mut HashMap<u32, u32>,
-    text_of: &mut HashMap<u32, String>,
-) {
-    let deadline = Instant::now() + dur;
-    while Instant::now() < deadline {
-        match ops_rx.recv_timeout(Duration::from_millis(25)) {
-            Ok(batch) => {
-                for op in &batch {
-                    accumulate(op, buttons, parent_of, text_of);
-                }
-            }
-            Err(RecvTimeoutError::Timeout) => {}
-            Err(RecvTimeoutError::Disconnected) => {
-                panic!("JS thread died (runtime crashed) — see the `[js] runtime error` above");
-            }
-        }
-    }
-}
-
-fn send_cubes_spawned(outbound_tx: &tokio::sync::mpsc::UnboundedSender<Outbound>) {
-    let value = serde_json::json!({
-        "cubes": [
-            { "entity": 4_294_967_297u64, "label": "#0" },
-            { "entity": 4_294_967_298u64, "label": "#1" },
-            { "entity": 4_294_967_299u64, "label": "#2" },
-        ]
-    });
-    outbound_tx
-        .send(Outbound::Event {
-            name: "crowdedCubes.spawned".into(),
-            value,
-        })
-        .expect("JS thread gone before event");
+fn send_cubes_spawned(h: &Harness) {
+    h.event(
+        "crowdedCubes.spawned",
+        serde_json::json!({
+            "cubes": [
+                { "entity": 4_294_967_297u64, "label": "#0" },
+                { "entity": 4_294_967_298u64, "label": "#1" },
+                { "entity": 4_294_967_299u64, "label": "#2" },
+            ]
+        }),
+    );
 }
 
 #[test]
 fn demo_switch_anchored_survives() {
-    let bundle = example_bundle();
-    if !bundle.exists() {
-        eprintln!(
-            "skipping demo_switch_anchored_survives: bundle not built at {}\n  run: npm run build -w demos",
-            bundle.display()
-        );
+    let Some(mut h) = Harness::start("demo_switch_anchored_survives") else {
         return;
-    }
-
-    let (ops_tx, ops_rx) = crossbeam_channel::unbounded::<Vec<Op>>();
-    // Send-instant stamps (devtools pre-apply timing); unread here, held open.
-    let (flush_stamps_tx, _flush_stamps_rx) = crossbeam_channel::unbounded();
-    let (flush_devtools_tx, _flush_devtools_rx) = crossbeam_channel::unbounded();
-    let (emit_tx, _emit_rx) = crossbeam_channel::unbounded::<ReactMessage>();
-    let (request_tx, request_rx) = crossbeam_channel::unbounded::<RawRequest>();
-    let (anim_tx, _anim_rx) = crossbeam_channel::unbounded();
-    let (outbound_tx, outbound_rx) = tokio::sync::mpsc::unbounded_channel::<Outbound>();
-    common::answer_window_size(request_rx, outbound_tx.clone());
-    let (_reload_tx, reload_rx) = tokio::sync::mpsc::unbounded_channel::<()>();
-
-    let vendor = bundle.with_file_name("vendor.js");
-    spawn_js_thread(
-        bevy_react::ext::ExtRegistrySlot::ready(common::ext_registry()),
-        vendor,
-        bundle,
-        ops_tx,
-        flush_stamps_tx,
-        flush_devtools_tx,
-        emit_tx,
-        request_tx,
-        anim_tx,
-        outbound_rx,
-        reload_rx,
-    );
-
-    let mut buttons: HashSet<u32> = HashSet::new();
-    let mut parent_of: HashMap<u32, u32> = HashMap::new();
-    let mut text_of: HashMap<u32, String> = HashMap::new();
+    };
 
     // Wait for the initial render and locate the two top-level nav buttons we'll
     // toggle (both render immediately, unlike the collapsed submenu entries).
-    let mut anchored_btn = None;
-    let mut other_btn = None;
-    let deadline = Instant::now() + Duration::from_secs(20);
-    while Instant::now() < deadline && (anchored_btn.is_none() || other_btn.is_none()) {
-        match ops_rx.recv_timeout(Duration::from_millis(500)) {
-            Ok(batch) => {
-                for op in &batch {
-                    accumulate(op, &mut buttons, &mut parent_of, &mut text_of);
-                }
-                anchored_btn = anchored_btn
-                    .or_else(|| find_button("<anchor>", &buttons, &parent_of, &text_of));
-                other_btn =
-                    other_btn.or_else(|| find_button("Events", &buttons, &parent_of, &text_of));
-            }
-            Err(RecvTimeoutError::Timeout) => {}
-            Err(RecvTimeoutError::Disconnected) => panic!("JS thread died during initial render"),
-        }
-    }
-
-    let anchored_btn = anchored_btn.expect("no '<anchor>' nav button in initial render");
-    let other_btn = other_btn.expect("no 'Events' nav button in initial render");
+    let anchored_btn = h
+        .wait_button("<anchor>", Duration::from_secs(20))
+        .expect("no '<anchor>' nav button in initial render");
+    let other_btn = h
+        .wait_button("Events", Duration::from_secs(20))
+        .expect("no 'Events' nav button in initial render");
     eprintln!("OK   nav buttons: anchored={anchored_btn}, other={other_btn}");
 
-    let click = |id: u32| {
-        outbound_tx
-            .send(Outbound::UiEvent {
-                event: UiEvent {
-                    id,
-                    kind: "click".into(),
-                    ..Default::default()
-                },
-            })
-            .expect("JS thread gone before click");
-    };
-
     // The failing user flow, repeated a few times to shake out timing races.
+    // A crashed runtime surfaces as a panic in `pump` (the ops channel
+    // disconnects).
     for round in 0..3 {
         eprintln!("--- round {round}: -> <anchor>");
-        click(anchored_btn);
-        send_cubes_spawned(&outbound_tx);
-        pump(
-            &ops_rx,
-            Duration::from_millis(200),
-            &mut buttons,
-            &mut parent_of,
-            &mut text_of,
-        );
+        h.click(anchored_btn);
+        send_cubes_spawned(&h);
+        h.pump(Duration::from_millis(200));
 
         eprintln!("--- round {round}: -> Events");
-        click(other_btn);
-        pump(
-            &ops_rx,
-            Duration::from_millis(200),
-            &mut buttons,
-            &mut parent_of,
-            &mut text_of,
-        );
+        h.click(other_btn);
+        h.pump(Duration::from_millis(200));
     }
 
     // Final liveness check: a live runtime keeps emitting ops for a click.
@@ -233,21 +62,12 @@ fn demo_switch_anchored_survives() {
     // correctly emits ZERO ops now that updates are diffed — silence there is
     // the delta optimization, not a dead runtime.
     eprintln!("--- final liveness probe");
-    click(other_btn);
-    let saw_ops = {
-        let deadline = Instant::now() + Duration::from_secs(2);
-        let mut any = false;
-        while Instant::now() < deadline && !any {
-            match ops_rx.recv_timeout(Duration::from_millis(100)) {
-                Ok(_) => any = true,
-                Err(RecvTimeoutError::Timeout) => {}
-                Err(RecvTimeoutError::Disconnected) => {
-                    panic!("JS thread crashed during demo switching (#327)")
-                }
-            }
-        }
-        any
-    };
+    h.click(other_btn);
+    let deadline = Instant::now() + Duration::from_secs(2);
+    let mut saw_ops = false;
+    while !saw_ops && Instant::now() < deadline {
+        saw_ops = h.recv(Duration::from_millis(100)).is_some();
+    }
     assert!(saw_ops, "runtime stopped responding after demo switching");
     eprintln!("PASS demo switching survived");
 }

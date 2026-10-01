@@ -15,9 +15,9 @@
 use std::time::{Duration, Instant};
 
 use bevy_react_core::console_log::{self, Level, Source};
-use bevy_react_core::js_thread::spawn_js_thread;
-use bevy_react_core::protocol::{op::Op, outbound::Outbound};
-use bevy_react_core::{RawRequest, ReactMessage};
+
+mod common;
+use common::Js;
 
 /// Exercise every console level plus an unhandled rejection, then park on
 /// `op_next_event` so the event loop stays alive to process the rejection.
@@ -32,37 +32,8 @@ Deno.core.ops.op_next_event();
 
 #[test]
 fn console_capture_round_trip() {
-    let dir =
-        std::env::temp_dir().join(format!("bevy-react-console-capture-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).expect("create temp bundle dir");
-    let vendor = dir.join("vendor.js");
-    let app = dir.join("app.js");
-    std::fs::write(&vendor, "// empty vendor\n").expect("write vendor");
-    std::fs::write(&app, APP).expect("write app");
-
-    let (ops_tx, _ops_rx) = crossbeam_channel::unbounded::<Vec<Op>>();
-    let (flush_stamps_tx, _flush_stamps_rx) = crossbeam_channel::unbounded();
-    let (flush_devtools_tx, _flush_devtools_rx) = crossbeam_channel::unbounded();
-    let (emit_tx, _emit_rx) = crossbeam_channel::unbounded::<ReactMessage>();
-    let (request_tx, _request_rx) = crossbeam_channel::unbounded::<RawRequest>();
-    let (anim_tx, _anim_rx) = crossbeam_channel::unbounded();
-    // Held open so the parked `op_next_event` keeps the runtime alive.
-    let (_outbound_tx, outbound_rx) = tokio::sync::mpsc::unbounded_channel::<Outbound>();
-    let (_reload_tx, reload_rx) = tokio::sync::mpsc::unbounded_channel::<()>();
-
-    spawn_js_thread(
-        bevy_react_core::ext::ExtRegistrySlot::ready(bevy_react_core::ext::builtin_registry()),
-        vendor,
-        app,
-        ops_tx,
-        flush_stamps_tx,
-        flush_devtools_tx,
-        emit_tx,
-        request_tx,
-        anim_tx,
-        outbound_rx,
-        reload_rx,
-    );
+    // Held for the test: the parked `op_next_event` keeps the runtime alive.
+    let _js = Js::spawn("console_capture", APP);
 
     // Poll the ring until every expected entry landed (the rejection is
     // processed asynchronously by the event loop, so it can trail the

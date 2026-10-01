@@ -11,9 +11,8 @@
 
 use std::time::Duration;
 
-use bevy_react_core::js_thread::spawn_js_thread;
-use bevy_react_core::protocol::{op::Op, outbound::Outbound, outbound::UiEvent};
-use bevy_react_core::{RawRequest, ReactMessage};
+mod common;
+use common::Js;
 
 const APP: &[u8] = br#"
 (function () {
@@ -43,54 +42,11 @@ const APP: &[u8] = br#"
 })();
 "#;
 
-fn click(tx: &tokio::sync::mpsc::UnboundedSender<Outbound>) {
-    tx.send(Outbound::UiEvent {
-        event: UiEvent {
-            id: 1,
-            kind: "click".into(),
-            ..Default::default()
-        },
-    })
-    .expect("JS thread gone");
-}
-
 #[test]
 fn hot_reload_preserves_isolate_state() {
-    let dir = std::env::temp_dir().join("bevy_react_hot_reload_test");
-    std::fs::create_dir_all(&dir).expect("mkdir");
-    std::fs::write(dir.join("vendor.js"), b"// no-op vendor\n").expect("write vendor");
-    let app = dir.join("app.js");
-    std::fs::write(&app, APP).expect("write app");
-
-    let (ops_tx, _ops_rx) = crossbeam_channel::unbounded::<Vec<Op>>();
-    // Send-instant stamps (devtools pre-apply timing); unread here, held open.
-    let (flush_stamps_tx, _flush_stamps_rx) = crossbeam_channel::unbounded();
-    let (flush_devtools_tx, _flush_devtools_rx) = crossbeam_channel::unbounded();
-    let (emit_tx, emit_rx) = crossbeam_channel::unbounded::<ReactMessage>();
-    let (request_tx, _request_rx) = crossbeam_channel::unbounded::<RawRequest>();
-    let (anim_tx, _anim_rx) = crossbeam_channel::unbounded();
-    let (outbound_tx, outbound_rx) = tokio::sync::mpsc::unbounded_channel::<Outbound>();
-    let (reload_tx, reload_rx) = tokio::sync::mpsc::unbounded_channel::<()>();
-
-    spawn_js_thread(
-        bevy_react_core::ext::ExtRegistrySlot::ready(bevy_react_core::ext::builtin_registry()),
-        dir.join("vendor.js"),
-        app,
-        ops_tx,
-        flush_stamps_tx,
-        flush_devtools_tx,
-        emit_tx,
-        request_tx,
-        anim_tx,
-        outbound_rx,
-        reload_rx,
-    );
-
+    let js = Js::spawn("hot_reload", APP);
     let recv = || {
-        emit_rx
-            .recv_timeout(Duration::from_secs(10))
-            .expect("no emit")
-            .value
+        js.emitted("phase", Duration::from_secs(10))
             .as_str()
             .unwrap()
             .to_string()
@@ -100,12 +56,12 @@ fn hot_reload_preserves_isolate_state() {
     assert_eq!(recv(), "init:41");
 
     // A click bumps the counter — proves the cold event loop works.
-    click(&outbound_tx);
+    js.click();
     assert_eq!(recv(), "click:42");
 
     // Hot reload: the live isolate re-executes the app. __n (42) must survive,
     // and the re-execution reports it via the "update:" phase.
-    reload_tx.send(()).expect("send reload");
+    js.reload.send(()).expect("send reload");
     assert_eq!(
         recv(),
         "update:42",
@@ -113,7 +69,7 @@ fn hot_reload_preserves_isolate_state() {
     );
 
     // A click AFTER the reload proves the event loop re-parked and still works.
-    click(&outbound_tx);
+    js.click();
     assert_eq!(
         recv(),
         "click:43",

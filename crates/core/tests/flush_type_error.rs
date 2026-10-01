@@ -12,11 +12,12 @@
 //! slip past the reporting path. Self-contained: drives `spawn_js_thread` with
 //! a tiny synthetic bundle written to a temp dir, no demos build needed.
 
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
-use bevy_react_core::js_thread::spawn_js_thread;
-use bevy_react_core::protocol::{op::Op, outbound::Outbound};
-use bevy_react_core::{RawRequest, ReactMessage};
+use bevy_react_core::protocol::op::Op;
+
+mod common;
+use common::Js;
 
 /// Flush a batch that is not even an array, then one whose op tag is unknown
 /// (each must throw a `TypeError` and ship nothing), then a valid two-op batch
@@ -46,53 +47,10 @@ ops.op_emit("flushErrors", { notArray, badTag });
 
 #[test]
 fn invalid_batch_throws_type_error_and_next_batch_arrives() {
-    let dir = std::env::temp_dir().join(format!(
-        "bevy-react-flush-type-error-{}",
-        std::process::id()
-    ));
-    std::fs::create_dir_all(&dir).expect("create temp bundle dir");
-    let vendor = dir.join("vendor.js");
-    let app = dir.join("app.js");
-    std::fs::write(&vendor, "// empty vendor\n").expect("write vendor");
-    std::fs::write(&app, APP).expect("write app");
-
-    let (ops_tx, ops_rx) = crossbeam_channel::unbounded::<Vec<Op>>();
-    let (flush_stamps_tx, flush_stamps_rx) = crossbeam_channel::unbounded();
-    let (flush_devtools_tx, flush_devtools_rx) = crossbeam_channel::unbounded();
-    let (emit_tx, emit_rx) = crossbeam_channel::unbounded::<ReactMessage>();
-    let (request_tx, _request_rx) = crossbeam_channel::unbounded::<RawRequest>();
-    let (anim_tx, _anim_rx) = crossbeam_channel::unbounded();
-    let (_outbound_tx, outbound_rx) = tokio::sync::mpsc::unbounded_channel::<Outbound>();
-    let (_reload_tx, reload_rx) = tokio::sync::mpsc::unbounded_channel::<()>();
-
-    spawn_js_thread(
-        bevy_react_core::ext::ExtRegistrySlot::ready(bevy_react_core::ext::builtin_registry()),
-        vendor,
-        app,
-        ops_tx,
-        flush_stamps_tx,
-        flush_devtools_tx,
-        emit_tx,
-        request_tx,
-        anim_tx,
-        outbound_rx,
-        reload_rx,
-    );
+    let js = Js::spawn("flush_type_error", APP);
 
     // The observations arrive after all three flushes ran on the JS thread.
-    let deadline = Instant::now() + Duration::from_secs(15);
-    let report = loop {
-        match emit_rx.recv_timeout(Duration::from_millis(200)) {
-            Ok(msg) if msg.name == "flushErrors" => break msg.value,
-            Ok(_) => {}
-            Err(crossbeam_channel::RecvTimeoutError::Timeout) => {
-                assert!(Instant::now() < deadline, "no flushErrors emit");
-            }
-            Err(crossbeam_channel::RecvTimeoutError::Disconnected) => {
-                panic!("JS thread died before emitting the report")
-            }
-        }
-    };
+    let report = js.emitted("flushErrors", Duration::from_secs(15));
 
     for case in ["notArray", "badTag"] {
         let obs = &report[case];
@@ -110,7 +68,8 @@ fn invalid_batch_throws_type_error_and_next_batch_arrives() {
     // Only the valid batch crossed — the two invalid ones shipped nothing,
     // and their side-channel stamps/flags were never sent either (the decode
     // fails before the stamp), so the FIFOs stay aligned one-to-one.
-    let batch = ops_rx
+    let batch = js
+        .ops
         .recv_timeout(Duration::from_secs(5))
         .expect("the valid batch after the failed ones must arrive");
     assert_eq!(
@@ -124,16 +83,16 @@ fn invalid_batch_throws_type_error_and_next_batch_arrives() {
         batch[0]
     );
     assert!(
-        ops_rx.try_recv().is_err(),
+        js.ops.try_recv().is_err(),
         "invalid batches must ship nothing to Bevy"
     );
     assert_eq!(
-        flush_stamps_rx.try_iter().count(),
+        js.flush_stamps.try_iter().count(),
         1,
         "one stamp per shipped batch"
     );
     assert_eq!(
-        flush_devtools_rx.try_iter().count(),
+        js.flush_flags.try_iter().count(),
         1,
         "one devtools flag per shipped batch"
     );

@@ -12,11 +12,10 @@
 //! legitimately return `[]` there.
 #![cfg(all(feature = "devtools", debug_assertions))]
 
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
-use bevy_react_core::js_thread::spawn_js_thread;
-use bevy_react_core::protocol::{op::Op, outbound::Outbound};
-use bevy_react_core::{RawRequest, ReactMessage};
+mod common;
+use common::Js;
 
 /// Flush one batch with invalid values (a bad length, a bad keyword, a bad
 /// rect token, a bad backgroundImage mode — each after the first on a
@@ -39,57 +38,17 @@ ops.op_emit("decodeWarnings", ops.op_take_decode_warnings());
 
 #[test]
 fn decode_warnings_round_trip() {
-    let dir =
-        std::env::temp_dir().join(format!("bevy-react-decode-warnings-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).expect("create temp bundle dir");
-    let vendor = dir.join("vendor.js");
-    let app = dir.join("app.js");
-    std::fs::write(&vendor, "// empty vendor\n").expect("write vendor");
-    std::fs::write(&app, APP).expect("write app");
-
-    let (ops_tx, ops_rx) = crossbeam_channel::unbounded::<Vec<Op>>();
-    let (flush_stamps_tx, _flush_stamps_rx) = crossbeam_channel::unbounded();
-    let (flush_devtools_tx, _flush_devtools_rx) = crossbeam_channel::unbounded();
-    let (emit_tx, emit_rx) = crossbeam_channel::unbounded::<ReactMessage>();
-    let (request_tx, _request_rx) = crossbeam_channel::unbounded::<RawRequest>();
-    let (anim_tx, _anim_rx) = crossbeam_channel::unbounded();
-    let (_outbound_tx, outbound_rx) = tokio::sync::mpsc::unbounded_channel::<Outbound>();
-    let (_reload_tx, reload_rx) = tokio::sync::mpsc::unbounded_channel::<()>();
-
-    spawn_js_thread(
-        bevy_react_core::ext::ExtRegistrySlot::ready(bevy_react_core::ext::builtin_registry()),
-        vendor,
-        app,
-        ops_tx,
-        flush_stamps_tx,
-        flush_devtools_tx,
-        emit_tx,
-        request_tx,
-        anim_tx,
-        outbound_rx,
-        reload_rx,
-    );
+    let js = Js::spawn("decode_warnings", APP);
 
     // The invalid values must not cost any ops: the whole batch arrives.
-    let batch = ops_rx
+    let batch = js
+        .ops
         .recv_timeout(Duration::from_secs(15))
         .expect("no op batch from the JS thread");
     assert_eq!(batch.len(), 6, "fallback decoding must not drop ops");
 
     // The drained warnings come back over the emit channel.
-    let deadline = Instant::now() + Duration::from_secs(15);
-    let warnings = loop {
-        match emit_rx.recv_timeout(Duration::from_millis(200)) {
-            Ok(msg) if msg.name == "decodeWarnings" => break msg.value,
-            Ok(_) => {}
-            Err(crossbeam_channel::RecvTimeoutError::Timeout) => {
-                assert!(Instant::now() < deadline, "no decodeWarnings emit");
-            }
-            Err(crossbeam_channel::RecvTimeoutError::Disconnected) => {
-                panic!("JS thread died before emitting warnings")
-            }
-        }
-    };
+    let warnings = js.emitted("decodeWarnings", Duration::from_secs(15));
 
     let brief: Vec<(Option<u64>, &str, &str)> = warnings
         .as_array()

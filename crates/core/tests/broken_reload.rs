@@ -13,9 +13,8 @@
 
 use std::time::Duration;
 
-use bevy_react_core::js_thread::spawn_js_thread;
-use bevy_react_core::protocol::{op::Op, outbound::Outbound, outbound::UiEvent};
-use bevy_react_core::{RawRequest, ReactMessage};
+mod common;
+use common::Js;
 
 // A working bundle: cold start parks the event loop; re-execution (hot update)
 // preserves `__n` and re-parks. Mirrors tests/hot_reload.rs's APP.
@@ -48,48 +47,9 @@ const GOOD_APP: &[u8] = br#"
 // `execute_script` throws synchronously — exactly the `padding: aa16` shape.
 const BROKEN_APP: &[u8] = b"aa16;\n";
 
-fn click(tx: &tokio::sync::mpsc::UnboundedSender<Outbound>) {
-    tx.send(Outbound::UiEvent {
-        event: UiEvent {
-            id: 1,
-            kind: "click".into(),
-            ..Default::default()
-        },
-    })
-    .expect("JS thread gone");
-}
-
 #[test]
 fn broken_reload_is_rejected_and_recovers() {
-    let dir = std::env::temp_dir().join("bevy_react_broken_reload_test");
-    std::fs::create_dir_all(&dir).expect("mkdir");
-    std::fs::write(dir.join("vendor.js"), b"// no-op vendor\n").expect("write vendor");
-    let app = dir.join("app.js");
-    std::fs::write(&app, GOOD_APP).expect("write app");
-
-    let (ops_tx, _ops_rx) = crossbeam_channel::unbounded::<Vec<Op>>();
-    // Send-instant stamps (devtools pre-apply timing); unread here, held open.
-    let (flush_stamps_tx, _flush_stamps_rx) = crossbeam_channel::unbounded();
-    let (flush_devtools_tx, _flush_devtools_rx) = crossbeam_channel::unbounded();
-    let (emit_tx, emit_rx) = crossbeam_channel::unbounded::<ReactMessage>();
-    let (request_tx, _request_rx) = crossbeam_channel::unbounded::<RawRequest>();
-    let (anim_tx, _anim_rx) = crossbeam_channel::unbounded();
-    let (outbound_tx, outbound_rx) = tokio::sync::mpsc::unbounded_channel::<Outbound>();
-    let (reload_tx, reload_rx) = tokio::sync::mpsc::unbounded_channel::<()>();
-
-    spawn_js_thread(
-        bevy_react_core::ext::ExtRegistrySlot::ready(bevy_react_core::ext::builtin_registry()),
-        dir.join("vendor.js"),
-        app.clone(),
-        ops_tx,
-        flush_stamps_tx,
-        flush_devtools_tx,
-        emit_tx,
-        request_tx,
-        anim_tx,
-        outbound_rx,
-        reload_rx,
-    );
+    let js = Js::spawn("broken_reload", GOOD_APP);
 
     // Receive the next emit whose phase has `prefix`, skipping any others. A real
     // wedge surfaces as a 10s timeout ("no emit"); we drain duplicate `update:`
@@ -98,10 +58,8 @@ fn broken_reload_is_rejected_and_recovers() {
     // one restore per reject). Returns the counter value after the prefix.
     let recv_prefix = |prefix: &str| -> u32 {
         loop {
-            let phase = emit_rx
-                .recv_timeout(Duration::from_secs(10))
-                .expect("no emit — UI wedged?")
-                .value
+            let phase = js
+                .emitted("phase", Duration::from_secs(10))
                 .as_str()
                 .unwrap()
                 .to_string();
@@ -113,14 +71,14 @@ fn broken_reload_is_rejected_and_recovers() {
 
     // Cold start + a click prove the working baseline.
     assert_eq!(recv_prefix("init:"), 41);
-    click(&outbound_tx);
+    js.click();
     assert_eq!(recv_prefix("click:"), 42);
 
     // Push a BROKEN bundle and reload. The update throws out of `execute_script`;
     // the loop must reject it and re-run the last-good bundle, which re-parks the
     // event loop and reports the preserved counter (42 — isolate NOT torn down).
-    std::fs::write(&app, BROKEN_APP).expect("write broken app");
-    reload_tx.send(()).expect("send reload");
+    std::fs::write(&js.app, BROKEN_APP).expect("write broken app");
+    js.reload.send(()).expect("send reload");
     assert_eq!(
         recv_prefix("update:"),
         42,
@@ -130,17 +88,17 @@ fn broken_reload_is_rejected_and_recovers() {
     // The key regression assertion: a click AFTER the rejected update still works.
     // Previously the JS thread had `break`ed here and the UI was frozen forever
     // (this would now time out in `recv_prefix` rather than return).
-    click(&outbound_tx);
+    js.click();
     assert!(
         recv_prefix("click:") > 42,
         "event loop did not survive a rejected (broken) hot reload"
     );
 
     // Fixing the code (a good bundle again) applies on the next reload — recovery.
-    std::fs::write(&app, GOOD_APP).expect("rewrite good app");
-    reload_tx.send(()).expect("send reload");
+    std::fs::write(&js.app, GOOD_APP).expect("rewrite good app");
+    js.reload.send(()).expect("send reload");
     recv_prefix("update:"); // next good edit applied
-    click(&outbound_tx);
+    js.click();
     assert!(
         recv_prefix("click:") > 42,
         "event loop broken after recovery"
