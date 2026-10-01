@@ -342,85 +342,63 @@ fn register_react_bindings(app: &mut App) {
 mod tests {
     use super::*;
 
-    fn args(list: &[&str]) -> impl Iterator<Item = String> {
-        list.iter()
-            .map(|s| s.to_string())
-            .collect::<Vec<_>>()
-            .into_iter()
+    fn parse(list: &[&str]) -> Option<screenshot::ShootConfig> {
+        parse_shoot_args(list.iter().map(|s| s.to_string()))
     }
 
     #[test]
-    fn shoot_defaults_to_desktop_size() {
-        let cfg = parse_shoot_args(args(&["--shoot", "Layers", "out.png"])).unwrap();
-        assert_eq!(cfg.label, "Layers");
-        assert_eq!(cfg.out, PathBuf::from("out.png"));
-        assert_eq!(cfg.settle_secs, 3.0);
-        assert_eq!(cfg.size, screenshot::DEFAULT_SIZE);
-    }
-
-    #[test]
-    #[should_panic(expected = "unknown --shoot option")]
-    fn shoot_rejects_unknown_flags() {
-        parse_shoot_args(args(&["--shoot", "Home", "o.png", "--size=390x844"]));
-    }
-
-    #[test]
-    #[should_panic(expected = "settle-secs must be a number")]
-    fn shoot_rejects_bad_settle() {
-        parse_shoot_args(args(&["--shoot", "Home", "o.png", "soon"]));
-    }
-
-    #[test]
-    #[should_panic(expected = "unexpected --shoot argument")]
-    fn shoot_rejects_extra_positionals() {
-        parse_shoot_args(args(&["--shoot", "Home", "o.png", "2", "extra"]));
-    }
-
-    #[test]
-    fn shoot_size_flag_anywhere_after_shoot() {
-        let cfg = parse_shoot_args(args(&[
-            "--shoot", "--size", "390x844", "Home", "o.png", "1.5",
-        ]))
-        .unwrap();
-        assert_eq!(cfg.size, (390, 844));
-        assert_eq!(cfg.settle_secs, 1.5);
-        let cfg =
-            parse_shoot_args(args(&["--shoot", "Home", "o.png", "--size", "844X390"])).unwrap();
-        assert_eq!(cfg.size, (844, 390));
-        assert_eq!(cfg.settle_secs, 3.0);
-    }
-
-    #[test]
-    fn shoot_from_hops_via_another_demo() {
-        let cfg = parse_shoot_args(args(&[
-            "--shoot",
-            "<portal>",
-            "o.png",
-            "--from",
-            "<surface>",
-        ]))
-        .unwrap();
-        assert_eq!(cfg.label, "<portal>");
-        assert_eq!(cfg.from.as_deref(), Some("<surface>"));
-        assert_eq!(
-            parse_shoot_args(args(&["--shoot", "Home", "o.png"]))
-                .unwrap()
-                .from,
-            None
-        );
-    }
-
-    #[test]
-    fn not_a_shoot_invocation() {
-        assert!(parse_shoot_args(args(&[])).is_none());
-        assert!(parse_shoot_args(args(&["--export-bindings", "x.ts"])).is_none());
-    }
-
-    #[test]
-    fn size_spec_parsing() {
+    fn shoot_args() {
+        let d = screenshot::DEFAULT_SIZE;
+        // `--size`/`--from` go anywhere after `--shoot`; settle defaults to 3s.
+        for (list, settle, size, from) in [
+            (&["--shoot", "Home", "o.png"][..], 3.0, d, None),
+            (
+                &["--shoot", "--size", "390x844", "Home", "o.png", "1.5"],
+                1.5,
+                (390, 844),
+                None,
+            ),
+            (
+                &["--shoot", "Home", "o.png", "--size", "844X390"],
+                3.0,
+                (844, 390),
+                None,
+            ),
+            (
+                &["--shoot", "Home", "o.png", "--from", "<surface>"],
+                3.0,
+                d,
+                Some("<surface>"),
+            ),
+        ] {
+            let cfg = parse(list).unwrap();
+            let got = (cfg.label.as_str(), cfg.out, cfg.settle_secs, cfg.size);
+            assert_eq!(got, ("Home", "o.png".into(), settle, size), "{list:?}");
+            assert_eq!(cfg.from.as_deref(), from, "{list:?}");
+        }
+        assert!(parse(&[]).is_none());
+        assert!(parse(&["--export-bindings", "x.ts"]).is_none());
+        for (list, expected) in [
+            (
+                &["--shoot", "Home", "o.png", "--size=390x844"][..],
+                "unknown --shoot option",
+            ),
+            (
+                &["--shoot", "Home", "o.png", "soon"],
+                "settle-secs must be a number",
+            ),
+            (
+                &["--shoot", "Home", "o.png", "2", "extra"],
+                "unexpected --shoot argument",
+            ),
+        ] {
+            let err = std::panic::catch_unwind(|| drop(parse(list))).unwrap_err();
+            let msg = err.downcast_ref::<String>().unwrap();
+            assert!(msg.contains(expected), "{list:?}: {msg}");
+        }
         assert_eq!(parse_size("360x640"), Some((360, 640)));
-        assert_eq!(parse_size("0x640"), None);
-        assert_eq!(parse_size("360"), None);
-        assert_eq!(parse_size("ax640"), None);
+        for bad in ["0x640", "360", "ax640"] {
+            assert_eq!(parse_size(bad), None, "{bad}");
+        }
     }
 }
