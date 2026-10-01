@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useRef } from "react";
 import { BevyStyle, PointerEventData } from "bevy-react/jsx";
 import { CircularButton } from "@/components";
 import type { MorphUse } from "@/demos/styling/morphFilterDemo/params";
@@ -10,6 +10,7 @@ import {
   Spacing,
   vignetteStyle,
   type VignetteProps,
+  useAutoStep,
 } from "../shared";
 import { useVignetteState } from "../store";
 
@@ -53,18 +54,14 @@ export function MorphingVignette({ expanded, grown }: VignetteProps) {
   const [pick, setPick] = useVignetteState("morphing.pick", 0);
   const pressX = useRef<number | null>(null);
 
-  useEffect(() => {
-    if (expanded) return;
-    const id = setInterval(() => {
-      setFace((f) => (f + 1) % FACES.length);
-      setPick(
-        (p) =>
-          (p + 1 + Math.floor(Math.random() * (TRANSITIONS.length - 1))) %
-          TRANSITIONS.length,
-      );
-    }, AUTO_MS);
-    return () => clearInterval(id);
-  }, [expanded, setFace, setPick]);
+  useAutoStep(expanded, AUTO_MS, () => {
+    setFace((f) => (f + 1) % FACES.length);
+    setPick(
+      (p) =>
+        (p + 1 + Math.floor(Math.random() * (TRANSITIONS.length - 1))) %
+        TRANSITIONS.length,
+    );
+  });
 
   const transition = TRANSITIONS[pick];
   const size = grown ? PANEL_SIZE : TILE_SIZE;

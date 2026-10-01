@@ -1,4 +1,3 @@
-import { useEffect } from "react";
 import { BevyStyle } from "bevy-react/jsx";
 import { Radio, type RadioOption } from "@/components";
 import { Colors } from "@/theme";
@@ -10,6 +9,7 @@ import {
   Spacing,
   vignetteStyle,
   type VignetteProps,
+  useAutoStep,
 } from "../shared";
 import { useVignetteState } from "../store";
 
@@ -61,14 +61,9 @@ export function LayoutVignette({ expanded, grown }: VignetteProps) {
   const { direction, align } = arrangement;
 
   // Steps from wherever the panel left it (an arrangement outside `LOOP` steps to the start).
-  useEffect(() => {
-    if (expanded) return;
-    const id = setInterval(
-      () => setArrangement((a) => LOOP[(LOOP.indexOf(a) + 1) % LOOP.length]),
-      AUTO_MS,
-    );
-    return () => clearInterval(id);
-  }, [expanded, setArrangement]);
+  useAutoStep(expanded, AUTO_MS, () =>
+    setArrangement((a) => LOOP[(LOOP.indexOf(a) + 1) % LOOP.length]),
+  );
 
   const long = grown ? 230 : 110;
   const thick = grown ? 70 : 30;

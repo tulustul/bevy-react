@@ -1,8 +1,7 @@
-import { useEffect } from "react";
 import { BevyStyle } from "bevy-react/jsx";
 import { Colors } from "@/theme";
 import { FLIGHT_MS } from "../beats";
-import { vignetteStyle, type VignetteProps } from "../shared";
+import { vignetteStyle, type VignetteProps, useAutoStep } from "../shared";
 import { useVignetteState } from "../store";
 
 const SLOTS = [0, 1] as const;
@@ -19,14 +18,7 @@ export function SharedElementsVignette({ expanded, grown }: VignetteProps) {
   // and two live nodes sharing a tag is the pairing ambiguity.
   const tag = `home-shared-card-${expanded ? "large" : "small"}`;
 
-  useEffect(() => {
-    if (expanded) return;
-    const id = setInterval(
-      () => setSlot((s) => (s + 1) % SLOTS.length),
-      AUTO_MS,
-    );
-    return () => clearInterval(id);
-  }, [expanded, setSlot]);
+  useAutoStep(expanded, AUTO_MS, () => setSlot((s) => (s + 1) % SLOTS.length));
 
   const size = grown ? 120 : 54;
   const box = size + 16;

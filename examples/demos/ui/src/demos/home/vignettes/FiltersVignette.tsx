@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import {
   type FilterUse,
   type SharedValue,
@@ -12,7 +12,12 @@ import { Colors } from "@/theme";
 import { useIsMobile } from "@/hooks";
 import { growTransition } from "../beats";
 import { Extra } from "../Extra";
-import { controlsStyle, vignetteStyle, type VignetteProps } from "../shared";
+import {
+  controlsStyle,
+  vignetteStyle,
+  type VignetteProps,
+  useAutoStep,
+} from "../shared";
 import { useVignetteState } from "../store";
 
 /** The pack: each entry maps a fade amount (0 = identity, 1 = the look) onto
@@ -98,8 +103,6 @@ export function FiltersVignette({ expanded, grown }: VignetteProps) {
   const amounts = useAmounts(active);
   // The active filter plus any still fading out. Local: a mount starts clean.
   const [live, setLive] = useState<string[]>(() => [active]);
-  const activeRef = useRef(active);
-  activeRef.current = active;
   const isMobile = useIsMobile();
 
   const select = (name: string) => {
@@ -119,17 +122,10 @@ export function FiltersVignette({ expanded, grown }: VignetteProps) {
       });
     });
   };
-  const selectRef = useRef(select);
-  selectRef.current = select;
-
-  useEffect(() => {
-    if (expanded) return;
-    const id = setInterval(() => {
-      const i = FILTERS.findIndex((f) => f.name === activeRef.current);
-      selectRef.current(FILTERS[(i + 1) % FILTERS.length].name);
-    }, AUTO_MS);
-    return () => clearInterval(id);
-  }, [expanded]);
+  useAutoStep(expanded, AUTO_MS, () => {
+    const i = FILTERS.findIndex((f) => f.name === active);
+    select(FILTERS[(i + 1) % FILTERS.length].name);
+  });
 
   const chain = FILTERS.flatMap((f, i) =>
     live.includes(f.name) ? [f.use(amounts[i])] : [],

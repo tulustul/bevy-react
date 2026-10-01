@@ -1,4 +1,4 @@
-import type { PropsWithChildren } from "react";
+import { useEffect, useRef, type PropsWithChildren } from "react";
 import { BevyStyle } from "bevy-react/jsx";
 import { Caption } from "@/components/typography";
 import { FontSizes, Responsiveness } from "@/theme";
@@ -76,4 +76,16 @@ export function useCardContentWidth(): number | undefined {
     (Responsiveness.contentPaddingMobile + PAGE_PADDING_MOBILE + CARD_PADDING) *
     2;
   return isMobile ? Math.max(0, win.width - inset) : undefined;
+}
+
+/** Call `step` every `ms` while the vignette is a tile (not `expanded`). The
+ *  latest `step` is read through a ref, so it needn't be stable. */
+export function useAutoStep(expanded: boolean, ms: number, step: () => void) {
+  const latest = useRef(step);
+  latest.current = step;
+  useEffect(() => {
+    if (expanded) return;
+    const id = setInterval(() => latest.current(), ms);
+    return () => clearInterval(id);
+  }, [expanded, ms]);
 }

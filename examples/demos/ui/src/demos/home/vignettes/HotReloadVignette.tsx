@@ -1,4 +1,3 @@
-import { useEffect } from "react";
 import { BevyStyle } from "bevy-react/jsx";
 import { Radio } from "@/components";
 import { HighlightedCode } from "@/components/docs";
@@ -10,6 +9,7 @@ import {
   Spacing,
   vignetteStyle,
   type VignetteProps,
+  useAutoStep,
 } from "../shared";
 import { useVignetteState } from "../store";
 
@@ -34,11 +34,7 @@ export function HotReloadVignette({ expanded, grown }: VignetteProps) {
   const [i, setI] = useVignetteState("hotreload.color", 0);
   const color = COLORS[i];
 
-  useEffect(() => {
-    if (expanded) return;
-    const id = setInterval(() => setI((n) => (n + 1) % COLORS.length), AUTO_MS);
-    return () => clearInterval(id);
-  }, [expanded, setI]);
+  useAutoStep(expanded, AUTO_MS, () => setI((n) => (n + 1) % COLORS.length));
 
   const box = grown ? PANEL_BOX : TILE_BOX;
 
