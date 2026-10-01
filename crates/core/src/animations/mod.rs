@@ -18,6 +18,21 @@
 
 use std::collections::HashMap;
 
+/// `fn any(&mut self) -> bool` over a `SystemParam`'s listed
+/// `RemovedComponents` fields: whether any tracked component was removed
+/// since the last run. Reads (and thereby consumes) every stream, so a
+/// removal is seen once.
+macro_rules! removed_any {
+    ($($f:ident),* $(,)?) => {
+        fn any(&mut self) -> bool {
+            let mut any = false;
+            $(any |= self.$f.read().next().is_some(); self.$f.clear();)*
+            any
+        }
+    };
+}
+pub(crate) use removed_any;
+
 use bevy::prelude::*;
 use bevy::ui::UiTransform;
 use crossbeam_channel::Receiver;

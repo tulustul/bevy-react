@@ -121,35 +121,24 @@ pub(crate) struct RemovedTargets<'w, 's> {
 }
 
 impl RemovedTargets<'_, '_> {
-    /// Whether any tracked component was removed since the last run. Reads
-    /// (and thereby consumes) every stream, so a removal is seen once.
-    fn any(&mut self) -> bool {
-        let mut any = false;
-        macro_rules! drain {
-            ($($f:ident),*) => {
-                $(any |= self.$f.read().next().is_some(); self.$f.clear();)*
-            };
-        }
-        drain!(
-            anim,
-            bg,
-            border,
-            text,
-            image,
-            node,
-            promoted,
-            layer_alpha,
-            resolved_filter,
-            resolved_backdrop,
-            resolved_morph,
-            transform3d,
-            ext,
-            gradient_input,
-            bg_gradient,
-            border_gradient
-        );
-        any
-    }
+    super::removed_any!(
+        anim,
+        bg,
+        border,
+        text,
+        image,
+        node,
+        promoted,
+        layer_alpha,
+        resolved_filter,
+        resolved_backdrop,
+        resolved_morph,
+        transform3d,
+        ext,
+        gradient_input,
+        bg_gradient,
+        border_gradient
+    );
 }
 
 /// Bind-time validation memory for a warn-once stage: which entities'

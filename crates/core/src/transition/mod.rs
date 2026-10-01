@@ -229,38 +229,27 @@ pub struct RemovedTargets<'w, 's> {
 }
 
 impl RemovedTargets<'_, '_> {
-    /// Whether any tracked component was removed since the last run. Reads
-    /// (and thereby consumes) every stream, so a removal is seen once.
-    fn any(&mut self) -> bool {
-        let mut any = false;
-        macro_rules! drain {
-            ($($f:ident),*) => {
-                $(any |= self.$f.read().next().is_some(); self.$f.clear();)*
-            };
-        }
-        drain!(
-            bg,
-            text,
-            image,
-            node,
-            anim,
-            promoted,
-            layer_alpha,
-            filter_input,
-            resolved_filter,
-            backdrop_input,
-            resolved_backdrop,
-            morph_input,
-            resolved_morph,
-            morph_state,
-            capture_rect,
-            transform3d,
-            gradient_input,
-            bg_gradient,
-            border_gradient
-        );
-        any
-    }
+    crate::animations::removed_any!(
+        bg,
+        text,
+        image,
+        node,
+        anim,
+        promoted,
+        layer_alpha,
+        filter_input,
+        resolved_filter,
+        backdrop_input,
+        resolved_backdrop,
+        morph_input,
+        resolved_morph,
+        morph_state,
+        capture_rect,
+        transform3d,
+        gradient_input,
+        bg_gradient,
+        border_gradient
+    );
 }
 
 /// Advance every transitioning entity toward its [`TransitionInput`] target and
