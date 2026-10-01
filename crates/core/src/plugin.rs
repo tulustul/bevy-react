@@ -564,13 +564,9 @@ impl Plugin for ReactUiPlugin {
         // the outbound queue without bound. Consider bounded channels with an explicit
         // drop/coalesce policy before this is "production".
         let (ops_tx, ops_rx) = crossbeam_channel::unbounded::<Vec<Op>>();
-        // Side channel of per-batch send instants (see `FlushStamps`): feeds the
-        // devtools "pre-apply" timing leg. Stays empty on web (no `Instant`).
-        let (flush_stamps_tx, flush_stamps_rx) =
-            crossbeam_channel::unbounded::<std::time::Instant>();
-        // Side channel of per-batch devtools-origin flags (see `FlushFlags`):
-        // lets applies be attributed to the panel vs the app on every target.
-        let (flush_devtools_tx, flush_devtools_rx) = crossbeam_channel::unbounded::<bool>();
+        // Side channel of per-batch send stamps + devtools-origin flags (see
+        // `host::FlushInfo`).
+        let (flush_tx, flush_rx) = crossbeam_channel::unbounded();
         let (emit_tx, emit_rx) = crossbeam_channel::unbounded::<ReactMessage>();
         let (request_tx, request_rx) = crossbeam_channel::unbounded::<RawRequest>();
         let (anim_tx, anim_rx) = crossbeam_channel::unbounded::<AnimationCommand>();
@@ -601,15 +597,13 @@ impl Plugin for ReactUiPlugin {
             },
             HostSenders {
                 ops: ops_tx,
-                flush_stamps: flush_stamps_tx,
-                flush_devtools: flush_devtools_tx,
+                flush: flush_tx,
                 emit: emit_tx,
                 request: request_tx,
                 anim: anim_tx,
             },
         );
-        app.insert_resource(crate::reconcile::FlushStamps(flush_stamps_rx));
-        app.insert_resource(crate::reconcile::FlushFlags(flush_devtools_rx));
+        app.insert_resource(crate::reconcile::FlushInfos(flush_rx));
 
         app.insert_resource(BridgeChannels {
             ops_rx: Some(ops_rx),

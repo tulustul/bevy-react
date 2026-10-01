@@ -41,7 +41,7 @@ pub use pointer::collect_pointer_events;
 pub(crate) use pointer::DragSource;
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) use stats::mark_frame_start;
-pub use stats::{FlushFlags, FlushStamps, FrameStamp, OpApplyStats};
+pub use stats::{FlushInfos, FrameStamp, OpApplyStats};
 pub(crate) use update::reapply_opacity_outputs;
 pub use virtual_events::{
     apply_virtual_interaction_styles, collect_virtual_clicks, collect_virtual_hover_events,

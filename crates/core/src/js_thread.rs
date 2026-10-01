@@ -20,7 +20,7 @@ use tokio::sync::Notify;
 use tokio::sync::mpsc::UnboundedReceiver;
 
 use crate::animations::AnimationCommand;
-pub use crate::host::HostSenders;
+pub use crate::host::{FlushInfo, HostSenders};
 use crate::message::ReactMessage;
 use crate::protocol::{op::OpBatch, outbound::Outbound};
 use crate::request::RawRequest;
@@ -50,7 +50,7 @@ struct EventLoop {
 /// v8 API traffic (key interning, `Get`s, type probes) a serde_v8 decode of the
 /// same tree pays — measured 60-75% off the boundary cost of every batch op.
 /// `devtools` marks batches from the panel's own React container (see
-/// [`HostSenders::flush_devtools`]). The [`OpBatch`] wrapper decodes exactly like a
+/// [`FlushInfo::devtools`]). The [`OpBatch`] wrapper decodes exactly like a
 /// `Vec<Op>` but stamps any decode-fallback warnings with their op's node id
 /// (see [`crate::diag`]); [`op_take_decode_warnings`] drains them. Those are
 /// value-level fallbacks; a *structurally* invalid batch is a `TypeError`
@@ -67,11 +67,13 @@ fn op_flush(state: &mut OpState, #[string] json: &str, devtools: bool) -> Result
     }
     let ops: OpBatch =
         serde_json::from_str(json).map_err(|e| JsErrorBox::type_error(e.to_string()))?;
-    // Stamp + flag first (see `HostSenders::flush_stamps`): the decode of
-    // `ops` already happened, so the stamp marks pure channel-entry time.
+    // The info goes first (see `HostSenders::flush`): the decode of `ops`
+    // already happened, so the stamp marks pure channel-entry time.
     let senders = state.borrow::<HostSenders>();
-    let _ = senders.flush_stamps.send(std::time::Instant::now());
-    let _ = senders.flush_devtools.send(devtools);
+    let _ = senders.flush.send(FlushInfo {
+        sent: Some(std::time::Instant::now()),
+        devtools,
+    });
     let _ = senders.ops.send(ops.0);
     Ok(())
 }

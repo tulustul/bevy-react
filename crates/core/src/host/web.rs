@@ -24,7 +24,7 @@ use crate::message::ReactMessage;
 use crate::protocol::{op::Op, op::OpBatch, outbound::Outbound};
 use crate::request::RawRequest;
 
-use super::{HostConfig, HostSenders};
+use super::{FlushInfo, HostConfig, HostSenders};
 
 /// Singleton host state. wasm is single-threaded, so a thread-local is the natural
 /// home: the op closures (called from JS) and the drain system (a Bevy system on
@@ -32,7 +32,7 @@ use super::{HostConfig, HostSenders};
 struct WebHost {
     // JS → Bevy: the same crossbeam senders every target uses.
     ops: Sender<Vec<Op>>,
-    flush_devtools: Sender<bool>,
+    flush: Sender<FlushInfo>,
     emit: Sender<ReactMessage>,
     request: Sender<RawRequest>,
     anim: Sender<AnimationCommand>,
@@ -68,7 +68,7 @@ pub(crate) fn spawn(app: &mut App, config: HostConfig, senders: HostSenders) -> 
     HOST.with(|h| {
         *h.borrow_mut() = Some(WebHost {
             ops: senders.ops,
-            flush_devtools: senders.flush_devtools,
+            flush: senders.flush,
             emit: senders.emit,
             request: senders.request,
             anim: senders.anim,
@@ -101,7 +101,7 @@ fn install_host_object() -> Object {
     // ONE `JSON.stringify`ed batch (same wire as the native host — see
     // `js_thread::op_flush`), flagged with its origin (the panel's own container
     // vs the app). The flag is sent first so the aligned FIFOs never desync
-    // (see `FlushFlags`). A structurally invalid batch throws into the JS call
+    // (see `HostSenders::flush`). A structurally invalid batch throws into the JS call
     // (native semantics: `bridge.ts` isolates hand-built devtools edits on it);
     // value-level fallbacks only warn (see `crate::diag`).
     let flush = Closure::<dyn Fn(JsValue, JsValue)>::new(|json: JsValue, devtools: JsValue| {
@@ -202,7 +202,10 @@ fn decode_and_send(json: &str, devtools: bool) -> Result<(), String> {
     let batch =
         serde_json::from_str::<OpBatch>(json).map_err(|e| format!("op_flush decode: {e}"))?;
     with_host(|h| {
-        let _ = h.flush_devtools.send(devtools);
+        let _ = h.flush.send(FlushInfo {
+            sent: None,
+            devtools,
+        });
         let _ = h.ops.send(batch.0);
     });
     Ok(())

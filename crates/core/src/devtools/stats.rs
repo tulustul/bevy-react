@@ -96,7 +96,7 @@ fn split_legs(
 /// and neither do applies of the panel's OWN commits (`app_applied_count`
 /// unchanged): stats for those would make the panel repaint, producing the
 /// next batch, whose stats repaint it again… a self-observation loop at frame
-/// rate. The per-batch origin flags ([`crate::reconcile::FlushFlags`]) are
+/// rate. The per-batch origin flags ([`crate::reconcile::FlushInfos`]) are
 /// what makes the distinction possible.
 pub(super) fn emit_batch_stats(
     state: Res<DevtoolsState>,

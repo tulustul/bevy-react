@@ -12,7 +12,7 @@ use std::time::{Duration, Instant};
 use bevy_react::RawRequest;
 use bevy_react::ReactMessage;
 use bevy_react::animations::AnimationCommand;
-use bevy_react::js_thread::{HostSenders, spawn_js_thread};
+use bevy_react::js_thread::{FlushInfo, HostSenders, spawn_js_thread};
 use bevy_react::protocol::op::Op;
 use bevy_react::protocol::outbound::{Outbound, ResponseResult, UiEvent};
 use crossbeam_channel::{Receiver, RecvTimeoutError};
@@ -121,14 +121,12 @@ pub struct Harness {
     pub ops: Receiver<Vec<Op>>,
     pub emits: Receiver<ReactMessage>,
     pub anims: Receiver<AnimationCommand>,
-    /// Per-batch devtools-origin flags (`true` = the panel's own flush).
-    pub flush_flags: Receiver<bool>,
+    /// Per-batch side data (`devtools` = the panel's own flush).
+    pub flushes: Receiver<FlushInfo>,
     pub tree: Tree,
     outbound: UnboundedSender<Outbound>,
-    // Held open: dropping the reload sender would look like shutdown, and
-    // the stamp channel's sends must find a live receiver.
+    // Held open: dropping the reload sender would look like shutdown.
     _reload: UnboundedSender<()>,
-    _flush_stamps: Receiver<Instant>,
 }
 
 impl Harness {
@@ -144,8 +142,7 @@ impl Harness {
             return None;
         }
         let (ops_tx, ops) = crossbeam_channel::unbounded();
-        let (flush_stamps_tx, _flush_stamps) = crossbeam_channel::unbounded();
-        let (flush_devtools_tx, flush_flags) = crossbeam_channel::unbounded();
+        let (flush_tx, flushes) = crossbeam_channel::unbounded();
         let (emit_tx, emits) = crossbeam_channel::unbounded();
         let (request_tx, request_rx) = crossbeam_channel::unbounded();
         let (anim_tx, anims) = crossbeam_channel::unbounded();
@@ -154,8 +151,7 @@ impl Harness {
         answer_window_size(request_rx, outbound.clone());
         let senders = HostSenders {
             ops: ops_tx,
-            flush_stamps: flush_stamps_tx,
-            flush_devtools: flush_devtools_tx,
+            flush: flush_tx,
             emit: emit_tx,
             request: request_tx,
             anim: anim_tx,
@@ -172,11 +168,10 @@ impl Harness {
             ops,
             emits,
             anims,
-            flush_flags,
+            flushes,
             tree: Tree::default(),
             outbound,
             _reload,
-            _flush_stamps,
         })
     }
 

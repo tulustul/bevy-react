@@ -40,8 +40,8 @@ pub fn apply_js_ops(
         Option<&mut ScrollTransitionState>,
     )>,
     mut stats: ResMut<OpApplyStats>,
-    // The stamp + origin-flag side channels; absent in headless unit tests
-    // (stamps also stay empty on web). See [`FlushMeta`].
+    // The per-batch flush infos; absent in headless unit tests (stamps also
+    // stay empty on web). See [`FlushMeta`].
     #[cfg_attr(target_arch = "wasm32", allow(unused_variables))] meta: FlushMeta,
 ) {
     // Drain all pending batches first so we don't hold an immutable borrow of
@@ -59,33 +59,22 @@ pub fn apply_js_ops(
     let op_count = ops.len();
     #[cfg(not(target_arch = "wasm32"))]
     let started = std::time::Instant::now();
-    // One stamp per received batch (aligned FIFOs — see `FlushStamps`); the
-    // OLDEST is when the earliest coalesced batch entered the channel.
-    #[cfg(not(target_arch = "wasm32"))]
-    let first_stamp = meta.stamps.as_ref().and_then(|stamps| {
-        let mut first = None;
-        for _ in 0..batches {
-            if let Ok(stamp) = stamps.0.try_recv() {
-                first.get_or_insert(stamp);
+    // One info per received batch (aligned FIFOs — see [`FlushInfos`]): the
+    // OLDEST send stamp is when the earliest coalesced batch entered the
+    // channel, and any non-devtools flush makes this an APP apply. A missing
+    // channel (headless tests) or a missing info counts as app.
+    #[cfg_attr(target_arch = "wasm32", allow(unused_variables))]
+    let (first_stamp, any_app) = match &meta.flushes {
+        None => (None, true),
+        Some(flushes) => {
+            let (mut first, mut any_app, mut received) = (None, false, 0);
+            for info in flushes.0.try_iter().take(batches) {
+                first = first.or(info.sent);
+                any_app |= !info.devtools;
+                received += 1;
             }
+            (first, any_app || received < batches)
         }
-        first
-    });
-    // One origin flag per received batch (aligned FIFOs — see [`FlushFlags`]);
-    // any non-devtools flush makes this an APP apply. A missing channel
-    // (headless tests) or a missing flag counts as app.
-    let any_app = match &meta.flags {
-        Some(flags) => {
-            let mut any_app = false;
-            for _ in 0..batches {
-                match flags.0.try_recv() {
-                    Ok(devtools) => any_app |= !devtools,
-                    Err(_) => any_app = true,
-                }
-            }
-            any_app
-        }
-        None => true,
     };
     tracing::debug!("applying {op_count} reconciler op(s)");
 

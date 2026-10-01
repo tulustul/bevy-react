@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use bevy_react_core::animations::AnimationCommand;
-use bevy_react_core::js_thread::{HostSenders, spawn_js_thread};
+use bevy_react_core::js_thread::{FlushInfo, HostSenders, spawn_js_thread};
 use bevy_react_core::protocol::op::Op;
 use bevy_react_core::protocol::outbound::{Outbound, UiEvent};
 use bevy_react_core::{RawRequest, ReactMessage};
@@ -19,8 +19,7 @@ use tokio::sync::mpsc::UnboundedSender;
 pub struct Js {
     pub ops: Receiver<Vec<Op>>,
     pub emits: Receiver<ReactMessage>,
-    pub flush_stamps: Receiver<Instant>,
-    pub flush_flags: Receiver<bool>,
+    pub flushes: Receiver<FlushInfo>,
     pub reload: UnboundedSender<()>,
     /// The app script: rewrite it, then signal [`Self::reload`].
     pub app: PathBuf,
@@ -43,8 +42,7 @@ impl Js {
         std::fs::write(&app_path, app).expect("write app");
 
         let (ops_tx, ops) = crossbeam_channel::unbounded();
-        let (flush_stamps_tx, flush_stamps) = crossbeam_channel::unbounded();
-        let (flush_devtools_tx, flush_flags) = crossbeam_channel::unbounded();
+        let (flush_tx, flushes) = crossbeam_channel::unbounded();
         let (emit_tx, emits) = crossbeam_channel::unbounded();
         let (request_tx, _requests) = crossbeam_channel::unbounded();
         let (anim_tx, _anims) = crossbeam_channel::unbounded();
@@ -52,8 +50,7 @@ impl Js {
         let (reload, reload_rx) = tokio::sync::mpsc::unbounded_channel();
         let senders = HostSenders {
             ops: ops_tx,
-            flush_stamps: flush_stamps_tx,
-            flush_devtools: flush_devtools_tx,
+            flush: flush_tx,
             emit: emit_tx,
             request: request_tx,
             anim: anim_tx,
@@ -69,8 +66,7 @@ impl Js {
         Self {
             ops,
             emits,
-            flush_stamps,
-            flush_flags,
+            flushes,
             reload,
             app: app_path,
             outbound,

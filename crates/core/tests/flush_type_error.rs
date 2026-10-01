@@ -66,8 +66,8 @@ fn invalid_batch_throws_type_error_and_next_batch_arrives() {
     }
 
     // Only the valid batch crossed — the two invalid ones shipped nothing,
-    // and their side-channel stamps/flags were never sent either (the decode
-    // fails before the stamp), so the FIFOs stay aligned one-to-one.
+    // and their side-channel infos were never sent either (the decode fails
+    // before the info), so the FIFOs stay aligned one-to-one.
     let batch = js
         .ops
         .recv_timeout(Duration::from_secs(5))
@@ -87,14 +87,9 @@ fn invalid_batch_throws_type_error_and_next_batch_arrives() {
         "invalid batches must ship nothing to Bevy"
     );
     assert_eq!(
-        js.flush_stamps.try_iter().count(),
+        js.flushes.try_iter().count(),
         1,
-        "one stamp per shipped batch"
-    );
-    assert_eq!(
-        js.flush_flags.try_iter().count(),
-        1,
-        "one devtools flag per shipped batch"
+        "one flush info per shipped batch"
     );
     eprintln!("PASS invalid op batches throw TypeError, runtime stays healthy: {report}");
 }

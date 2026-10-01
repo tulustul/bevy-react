@@ -31,25 +31,30 @@ use crate::request::RawRequest;
 pub struct HostSenders {
     /// One commit's ops per batch (`op_flush`).
     pub ops: Sender<Vec<Op>>,
-    /// Per-batch send instants for the devtools "pre-apply" leg (send →
-    /// `apply_js_ops` start: channel wait + frame latency). A side channel, so
-    /// the op hot path's type stays `Vec<Op>`; each stamp is sent BEFORE its
-    /// batch, so a received batch always finds its stamp queued and the FIFOs
-    /// stay aligned. Native only — `Instant::now` is unavailable on wasm, so
-    /// the web host drops it and the receiver simply stays empty there.
-    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
-    pub flush_stamps: Sender<std::time::Instant>,
-    /// Per-batch devtools-origin flags (`true` = the devtools panel's own React
-    /// container flushed), same aligned discipline as `flush_stamps` (flag sent
-    /// first). Lets applies be attributed, so devtools batch stats skip the
-    /// panel's own repaints — see `reconcile::FlushFlags`.
-    pub flush_devtools: Sender<bool>,
+    /// One [`FlushInfo`] per batch, sent right BEFORE the batch itself, so a
+    /// received batch always finds its info queued and the two FIFOs stay
+    /// aligned. A side channel, so the op hot path's type stays `Vec<Op>`.
+    pub flush: Sender<FlushInfo>,
     /// App messages (`op_emit`).
     pub emit: Sender<ReactMessage>,
     /// Correlated requests (`op_request`).
     pub request: Sender<RawRequest>,
     /// Shared-value animation commands (`op_animate`).
     pub anim: Sender<AnimationCommand>,
+}
+
+/// One op batch's side data (see [`HostSenders::flush`]).
+#[derive(Clone, Copy, Debug)]
+pub struct FlushInfo {
+    /// When the batch entered the channel — feeds the devtools "pre-apply"
+    /// leg (send → `apply_js_ops` start: channel wait + frame latency).
+    /// `None` on web, where `Instant::now` is unavailable.
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
+    pub sent: Option<std::time::Instant>,
+    /// `true` = the devtools panel's own React container flushed the batch.
+    /// Lets applies be attributed, so devtools batch stats skip the panel's
+    /// own repaints (see `OpApplyStats::app_applied_count`).
+    pub devtools: bool,
 }
 
 /// Host configuration carried over from [`ReactUiPlugin`](crate::ReactUiPlugin).

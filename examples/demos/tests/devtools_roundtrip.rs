@@ -64,7 +64,7 @@ fn devtools_panel_round_trip() {
 
     // The origin flags must attribute the flushes: the app mount crossed as
     // app batches (first flag false), the panel mount as devtools batches.
-    let flags: Vec<bool> = h.flush_flags.try_iter().collect();
+    let flags: Vec<bool> = h.flushes.try_iter().map(|f| f.devtools).collect();
     assert_eq!(
         flags.first(),
         Some(&false),
