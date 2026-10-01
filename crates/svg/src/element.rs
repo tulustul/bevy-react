@@ -127,11 +127,11 @@ pub static SHAPE_WRITER: Writer = Writer {
             // The spawn assembled the attrs; only the transition stamp is
             // left to add.
             if attrs.transition.is_some() {
-                super::transition::apply_shape_transition(ec, Some(&attrs));
+                super::transition::apply_shape_transition(ec, &attrs);
             }
             return;
         }
-        super::transition::apply_shape_transition(ec, Some(&attrs));
+        super::transition::apply_shape_transition(ec, &attrs);
         ec.queue(move |mut entity: EntityWorldMut| {
             if entity.get::<SvgShape>().is_some_and(|s| s.attrs != attrs)
                 && let Some(mut shape) = entity.get_mut::<SvgShape>()

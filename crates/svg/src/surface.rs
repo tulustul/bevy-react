@@ -176,86 +176,70 @@ pub fn update_jsx_svg_surfaces(
         }
     }
 
+    // Per root: paint its shape children (depth-first, groups composed —
+    // see [`walk_shapes`]) through the viewBox fit into a fresh pixmap and
+    // upload it. A root repaints on derived dirt (`jsx_dirty`), the mount
+    // state and `viewBox` writes (`surface.dirty`), or a size change. Same
+    // discipline as the file branch: clean roots take zero mutable derefs,
+    // and derived-dirt repaints never touch `SvgJsxSurface` at all.
     for (entity, node, image_node, children, mut surface) in &mut query {
-        raster_jsx_surface(
+        let (w, h) = clamp_physical_size(node.size);
+        if w == 0 || h == 0 {
+            // Not laid out (fresh node) or hidden (`display: none`). Derived dirt
+            // is a one-shot `Changed<…>` signal — persist it into `dirty` so a
+            // re-show at the *same* size still repaints. Compare-before-write
+            // keeps the plain zero-size skip deref-free.
+            if jsx_dirty.contains(&entity) && !surface.dirty {
+                surface.dirty = true;
+            }
+            continue;
+        }
+        let size = UVec2::new(w, h);
+        if !surface.dirty && surface.last_size == size && !jsx_dirty.contains(&entity) {
+            continue; // clean: not a single mutable deref taken
+        }
+        // `contains` (not `get_mut`) so a skipped raster below never flags the
+        // asset changed — and thus re-uploaded — for nothing.
+        if !images.contains(&image_node.image) {
+            continue;
+        }
+        let scale_factor = if node.inverse_scale_factor > 0.0 {
+            node.inverse_scale_factor.recip()
+        } else {
+            1.0
+        };
+        let transform =
+            super::paint::view_box_transform(surface.view_box.as_ref(), w, h, scale_factor);
+        // The buffers are a cache: written past change detection, so a derived-dirt
+        // repaint still leaves `SvgJsxSurface` untouched (pinned by
+        // `shape_delta_rerasters_same_frame`).
+        let raster = &mut surface.bypass_change_detection().raster;
+        let Some(mut pixmap) = raster.take_pixmap(w, h) else {
+            continue;
+        };
+        if let Some(children) = children {
+            walk_shapes(children, &shapes, transform, 1.0, &mut |_, shape, t, o| {
+                super::paint::paint_shape(&mut pixmap, shape.kind, &shape.attrs, t, o);
+            });
+        }
+        upload_pixmap(
             entity,
-            node,
             image_node,
-            children,
-            &mut surface,
-            jsx_dirty.contains(&entity),
-            &shapes,
             &mut images,
             &mut dirt,
+            w,
+            h,
+            &pixmap,
+            raster,
         );
-    }
-}
-
-/// The per-root raster of [`update_jsx_svg_surfaces`]: paint the root's [`SvgShape`]
-/// children (depth-first, groups composed — see [`walk_shapes`]) through the
-/// viewBox fit into a fresh pixmap and upload it. `derived_dirty` is the
-/// walked `Changed<SvgShape>`/`Changed<Children>` signal for this root;
-/// `surface.dirty` covers the mount state and `viewBox` writes. Same
-/// discipline as the file branch: clean roots take zero mutable derefs, and
-/// derived-dirt repaints never touch `SvgJsxSurface` at all.
-#[allow(clippy::too_many_arguments)] // a private per-entity slice of the system's params
-fn raster_jsx_surface(
-    entity: Entity,
-    node: &ComputedNode,
-    image_node: &ImageNode,
-    children: Option<&Children>,
-    surface: &mut Mut<SvgJsxSurface>,
-    derived_dirty: bool,
-    shapes: &ShapeQuery,
-    images: &mut Assets<Image>,
-    dirt: &mut bevy_react_core::layer::LayerContentDirt,
-) {
-    let (w, h) = clamp_physical_size(node.size);
-    if w == 0 || h == 0 {
-        // Not laid out (fresh node) or hidden (`display: none`). Derived dirt
-        // is a one-shot `Changed<…>` signal — persist it into `dirty` so a
-        // re-show at the *same* size still repaints. Compare-before-write
-        // keeps the plain zero-size skip deref-free.
-        if derived_dirty && !surface.dirty {
-            surface.dirty = true;
+        raster.keep_pixmap(pixmap);
+        // Compare-before-write: any `deref_mut` ticks `Changed<SvgSurface>`, so
+        // touch only the fields that are actually stale.
+        if surface.last_size != size {
+            surface.last_size = size;
         }
-        return;
-    }
-    let size = UVec2::new(w, h);
-    if !surface.dirty && surface.last_size == size && !derived_dirty {
-        return; // clean: not a single mutable deref taken
-    }
-    // `contains` (not `get_mut`) so a skipped raster below never flags the
-    // asset changed — and thus re-uploaded — for nothing.
-    if !images.contains(&image_node.image) {
-        return;
-    }
-    let scale_factor = if node.inverse_scale_factor > 0.0 {
-        node.inverse_scale_factor.recip()
-    } else {
-        1.0
-    };
-    let transform = super::paint::view_box_transform(surface.view_box.as_ref(), w, h, scale_factor);
-    // The buffers are a cache: written past change detection, so a derived-dirt
-    // repaint still leaves `SvgJsxSurface` untouched (pinned by
-    // `shape_delta_rerasters_same_frame`).
-    let raster = &mut surface.bypass_change_detection().raster;
-    let Some(mut pixmap) = raster.take_pixmap(w, h) else {
-        return;
-    };
-    if let Some(children) = children {
-        walk_shapes(children, shapes, transform, 1.0, &mut |_, shape, t, o| {
-            super::paint::paint_shape(&mut pixmap, shape.kind, &shape.attrs, t, o);
-        });
-    }
-    upload_pixmap(entity, image_node, images, dirt, w, h, &pixmap, raster);
-    raster.keep_pixmap(pixmap);
-    // Compare-before-write: any `deref_mut` ticks `Changed<SvgSurface>`, so
-    // touch only the fields that are actually stale.
-    if surface.last_size != size {
-        surface.last_size = size;
-    }
-    if surface.dirty {
-        surface.dirty = false;
+        if surface.dirty {
+            surface.dirty = false;
+        }
     }
 }

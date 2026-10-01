@@ -53,8 +53,8 @@ pub struct ShapeTransitionState {
 /// attrs: present exactly while `attrs.transition` is. Persists across
 /// re-sends (the state carries the in-flight channels). Called by the
 /// shapes' writer ([`crate::SHAPE_WRITER`]).
-pub fn apply_shape_transition(ec: &mut EntityCommands, attrs: Option<&ShapeAttrs>) {
-    if attrs.is_some_and(|a| a.transition.is_some()) {
+pub fn apply_shape_transition(ec: &mut EntityCommands, attrs: &ShapeAttrs) {
+    if attrs.transition.is_some() {
         ec.insert_if_new(ShapeTransitionState::default());
     } else {
         ec.remove::<ShapeTransitionState>();

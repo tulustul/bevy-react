@@ -84,7 +84,37 @@ pub struct SvgPlugin;
 
 impl Plugin for SvgPlugin {
     fn build(&self, app: &mut App) {
-        register(app);
+        register_bindings(app);
+        // The per-frame systems and their resources, ordered by the
+        // contract's sets. Need the core plugin's resources
+        // (`LayerContentDirt`, picking's `PointerHits`) at run time.
+        use bevy_react_core::ext::{ElementRasterSet, InteractionSyncSet, PickRefineSet};
+
+        // Per-pointer refined svg shape hits — the picking refinement's
+        // handoff to the Interaction/event synthesis.
+        app.init_resource::<pick::SvgPointerShapeHits>();
+        app.add_systems(
+            PreUpdate,
+            pick::refine_svg_pointer_hits.in_set(PickRefineSet),
+        );
+        // The crate's per-frame systems, ordered by the contract's sets: the
+        // shape transition drive (after the op drain snapped the targets), the
+        // driven-attr consumer (after the engine's publish), both before the
+        // raster so a moving attr paints the same frame; the interaction
+        // synthesis in its slot before styling and the event collectors.
+        app.add_systems(
+            Update,
+            (
+                transition::drive_shape_transitions
+                    .after(bevy_react_core::ReactApplySet)
+                    .before(ElementRasterSet),
+                animate::apply_driven_shape_attrs
+                    .after(bevy_react_core::animations::AnimationSet::Apply)
+                    .before(ElementRasterSet),
+                surface::update_jsx_svg_surfaces.in_set(ElementRasterSet),
+                interact::sync_shape_interactions.in_set(InteractionSyncSet),
+            ),
+        );
     }
 
     fn finish(&self, app: &mut App) {
@@ -98,51 +128,11 @@ impl Plugin for SvgPlugin {
     }
 }
 
-/// The plugin's registrations: the bindings ([`register_bindings`]) plus
-/// the per-frame systems ([`register_systems`]).
-pub fn register(app: &mut App) {
-    register_bindings(app);
-    register_systems(app);
-}
-
 /// The elements alone — what a headless op harness (and the TypeScript
 /// exporter) needs to mount an `<svg>` through the real op path (the systems
 /// are added per test, against the harness's own schedule).
 pub fn register_bindings(app: &mut App) {
     app.add_react_elements(SVG_ELEMENTS);
-}
-
-/// The crate's per-frame systems and their resources, ordered by the
-/// contract's sets. Needs the core plugin's resources (`LayerContentDirt`,
-/// picking's `PointerHits` messages) at run time.
-pub fn register_systems(app: &mut App) {
-    use bevy_react_core::ext::{ElementRasterSet, InteractionSyncSet, PickRefineSet};
-
-    // Per-pointer refined svg shape hits — the picking refinement's
-    // handoff to the Interaction/event synthesis.
-    app.init_resource::<pick::SvgPointerShapeHits>();
-    app.add_systems(
-        PreUpdate,
-        pick::refine_svg_pointer_hits.in_set(PickRefineSet),
-    );
-    // The crate's per-frame systems, ordered by the contract's sets: the
-    // shape transition drive (after the op drain snapped the targets), the
-    // driven-attr consumer (after the engine's publish), both before the
-    // raster so a moving attr paints the same frame; the interaction
-    // synthesis in its slot before styling and the event collectors.
-    app.add_systems(
-        Update,
-        (
-            transition::drive_shape_transitions
-                .after(bevy_react_core::ReactApplySet)
-                .before(ElementRasterSet),
-            animate::apply_driven_shape_attrs
-                .after(bevy_react_core::animations::AnimationSet::Apply)
-                .before(ElementRasterSet),
-            surface::update_jsx_svg_surfaces.in_set(ElementRasterSet),
-            interact::sync_shape_interactions.in_set(InteractionSyncSet),
-        ),
-    );
 }
 
 /// The core's headless op app with this crate registered — what a JSX
