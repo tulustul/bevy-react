@@ -1090,7 +1090,6 @@ impl Plugin for ReactUiPlugin {
 
 /// Forward the animation engine's [`AnimationSettled`] messages to JS as
 /// [`Outbound::AnimationFinished`], resolving each to its completion callback.
-/// The engine crate can't depend on this one, so the bridging happens here.
 fn forward_animation_settled(
     mut settled: MessageReader<AnimationSettled>,
     outbound: Res<OutboundResource>,

@@ -114,9 +114,9 @@ impl ShapeChannel {
     /// channel is parked (any `ShapeAttr` binding on the entity): unparking
     /// must re-seed at the live values, not ease from stale ones. This
     /// reset-while-parked rule is unique to the shape channel — every
-    /// `ChannelId` channel retains its state instead; see
-    /// [`ChannelId`](bevy_react_core::animations::props::ChannelId), the authoritative
-    /// park-semantics reference.
+    /// `ChannelId` channel retains its state instead; see the core's
+    /// `animations::props::ChannelId`, the authoritative park-semantics
+    /// reference.
     fn reset(&mut self) {
         self.slots = Default::default();
     }

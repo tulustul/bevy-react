@@ -88,7 +88,6 @@ pub fn apply_transition(ec: &mut EntityCommands, style: Option<&Style>, fresh: b
     }
 }
 
-/// Stamp (or clear) the transition components on an SVG **shape** entity from
 /// The components a transition can drive, plus the read-only inputs that gate how
 /// it drives them. A `QueryData` struct (rather than a tuple) so a new transition
 /// target component is one field, not a tuple-arity problem — the filter

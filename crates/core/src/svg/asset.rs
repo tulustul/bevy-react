@@ -4,7 +4,7 @@
 //! without an `AssetServer`; [`SvgAssetLoader`] is just the IO glue that reads
 //! the file bytes and delegates. The asset wraps the parsed [`usvg::Tree`]
 //! (immutable, `Send + Sync`) plus the document's intrinsic size in logical px
-//! — stored now because it will feed layout when `<image src="x.svg">` lands.
+//! (what layout measures an `<image src="x.svg">` by).
 
 use bevy::asset::{Asset, AssetLoader, LoadContext, io::Reader};
 use bevy::math::Vec2;

@@ -13,10 +13,10 @@
 //!
 //! The **dynamic domains** — [`FilterParam`], [`BackdropParam`],
 //! [`MorphParam`], [`BackgroundGradientParam`], [`BorderGradientParam`],
-//! [`ShapeAttr`] — are runtime-keyed and walk-derived (chains in
+//! [`Ext`] — are runtime-keyed and walk-derived (chains in
 //! `crate::style_bindings::chain_bindings`, gradient leaves in
-//! `crate::style_bindings::gradient_bindings`, shape attrs from
-//! `crate::svg::NUMERIC_ATTRS`, the one wire-name table), so they have no
+//! `crate::style_bindings::gradient_bindings`, `Ext` bindings from an
+//! element's animated attributes), so they have no
 //! rows; every generated consumer handles them in explicit arms the callback
 //! writes itself.
 //!
@@ -73,7 +73,7 @@
 //! [`MorphParam`]: super::protocol::AnimatableProperty::MorphParam
 //! [`BackgroundGradientParam`]: super::protocol::AnimatableProperty::BackgroundGradientParam
 //! [`BorderGradientParam`]: super::protocol::AnimatableProperty::BorderGradientParam
-//! [`ShapeAttr`]: super::protocol::AnimatableProperty::ShapeAttr
+//! [`Ext`]: super::protocol::AnimatableProperty::Ext
 //! [`Style`]: crate::style::Style
 
 /// Invoke `$cb!` with every static property row (see the module doc for the
@@ -176,19 +176,12 @@ pub(crate) enum PropStage {
 /// to merge an imperative writer into. While parked, these channels
 /// **RETAIN** their state (`current` keeps the last eased value; unparking
 /// retargets from there like any other target change — the bound property's
-/// live value re-enters through the next drive's compare). The SVG **shape
-/// channel is the exception**: it has its own coarse park (any `ShapeAttr`
-/// binding — outside this enum, applied in `drive_transitions`' shape arm)
-/// and **RESETS** while parked (`ShapeChannel::reset` in
-/// `crate::transition`'s shape channel) — its state-owned-current design has
-/// no other way to re-seed at the live post-binding values on unpark,
-/// easing from stale ones would visibly jump. The apply engine's stages 4/5
-/// are the writers these parks yield to (`crate::animations`' apply module,
-/// filter-params and shape stages).
+/// live value re-enters through the next drive's compare). A feature's own
+/// channel parks itself and is not a variant here (the svg crate's shape
+/// channel parks on any of its `Ext` bindings, via
+/// `AnimatedBindings::has_ext_domain`).
 ///
-/// Identifies the nine parkable channels of `drive_transitions`; the shape
-/// park is deliberately not a variant here (it is keyed per-entity by the
-/// dynamic `ShapeAttr` domain, not a static property row).
+/// Identifies the nine parkable channels of `drive_transitions`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ChannelId {
     /// The `UiTransform` channel group — parked by ANY transform binding.

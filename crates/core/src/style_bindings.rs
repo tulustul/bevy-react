@@ -19,7 +19,7 @@
 //! chain like any other param binding. Gradient leaves are the other dynamic
 //! walk ([`gradient_bindings`]): each `{ animated }` wrapper in a
 //! `backgroundGradient`/`borderGradient` list derives a binding addressed by
-//! (surface, gradient index, [`GradientLeaf`](crate::animations::protocol::GradientLeaf)).
+//! (surface, gradient index, [`GradientLeaf`]).
 //!
 //! [`AnimatedNode`]: crate::animations::AnimatedNode
 

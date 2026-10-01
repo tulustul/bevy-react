@@ -9,7 +9,7 @@
 //! `PointerHits` for it) plus the pointer's [`PointerPress`] — mirroring
 //! [`bevy_react_core::layer::pick3d::correct_transformed_interactions`]. The refined
 //! hit's user-space cursor lands in [`EventLocalPos`], which the event
-//! collectors ([`crate::reconcile`]'s pointer/hover systems) read to report
+//! collectors (the core's pointer/hover systems) read to report
 //! `x`/`y` in SVG **user units** instead of the node-normalized values.
 //!
 //! Only handler-bearing shapes participate: the core's pointer stamps give a

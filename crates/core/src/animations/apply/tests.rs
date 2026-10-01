@@ -365,7 +365,7 @@ fn validation_memory_prunes_and_revalidates() {
     m.prune(&[]);
     assert!(m.should_validate(e, &v2), "pruned entity re-validates");
 
-    // The `S = ()` degenerate form (stage 5): stamp-iff-validated.
+    // The `S = ()` degenerate form (the gradient stage): stamp-iff-validated.
     let mut s = ValidationMemory::<()>::default();
     assert!(s.should_validate(e, &()));
     s.stamp(e, true, &(), ());

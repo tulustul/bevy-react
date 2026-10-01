@@ -204,8 +204,7 @@ fn viewport_physical_size(
 /// [`crate::layer::LayersRegistry`] row — while the panel is open on the
 /// Layers tab. Runs in `PostUpdate` after
 /// [`crate::layer::sync_layer_geometry`] so the rects are this frame's
-/// layout. Diffed against a `Local` snapshot (the
-/// [`super::panel::send_window_size`] pattern): idle apps send nothing, and
+/// layout. Diffed against a `Local` snapshot: idle apps send nothing, and
 /// the snapshot resets while the tab is hidden so a re-shown tab always gets
 /// a fresh full payload. Rows under the panel's own `<root>` are skipped — a
 /// promoted panel node would otherwise repaint the panel with its own

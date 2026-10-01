@@ -240,7 +240,7 @@ fn lerp_color(a: bevy::color::Color, b: bevy::color::Color, t: f32) -> bevy::col
 
 /// Pairwise interpolation of two ALIGNABLE lists (caller classified).
 /// `t == 0.0` / `1.0` return the endpoints bit-exactly.
-/// `t` may lie outside [0,1] (spring overshoot): numeric leaves extrapolate
+/// `t` may lie outside `[0, 1]` (spring overshoot): numeric leaves extrapolate
 /// linearly, snapped leaves stay snapped.
 pub(super) fn lerp_gradients(from: &[Gradient], to: &[Gradient], t: f32) -> Vec<Gradient> {
     debug_assert!(t.is_finite(), "gradient lerp t must be finite, got {t}");

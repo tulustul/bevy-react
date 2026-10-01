@@ -7,7 +7,8 @@
 //!
 //! **viewBox fitting is `xMidYMid meet` only** in v1: there is no
 //! `preserveAspectRatio` wire prop, so no stretch/slice modes exist here. The
-//! math intentionally mirrors [`rasterize_document`](super::rasterize_document)
+//! math intentionally mirrors
+//! [`rasterize_document`](bevy_react_core::svg::rasterize_document)
 //! (file mode) — both call the shared [`meet_transform`].
 //!
 //! Geometry rules (documented here because the hit-tester must mirror them

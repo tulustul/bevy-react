@@ -145,7 +145,7 @@ impl RemovedTargets<'_, '_> {
 /// bindings have been validated, each with a stamp of per-entity stage state
 /// `S` whose drift re-triggers validation. Stage 4 stamps the chains'
 /// POST-apply version pair (a re-resolve mismatches and re-validates; its own
-/// bump doesn't — see the stamp call); stage 5 needs no state (`S = ()`,
+/// bump doesn't — see the stamp call); the gradient stage needs no state (`S = ()`,
 /// where "stamp drifted" degenerates to "not yet stamped"). One type, one
 /// prune idiom, two stages.
 pub(crate) struct ValidationMemory<S>(HashMap<Entity, S>);

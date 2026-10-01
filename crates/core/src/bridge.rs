@@ -69,7 +69,7 @@ pub struct ReactNode(pub NodeId);
 /// Marks a `<root>` host element: the screen-space twin of `<surface>` — a
 /// detached top-level UI tree rendered on the default UI camera, used for
 /// overlays that must float above (and stay out of) the app's own tree, like
-/// the devtools panel. Tracked in [`JsBridge::roots`].
+/// the devtools panel. Tracked in [`JsBridge::detached`].
 #[derive(Component, Debug, Clone, Copy)]
 pub struct RRoot;
 

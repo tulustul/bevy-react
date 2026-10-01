@@ -3,8 +3,8 @@
 //! visiting paintable leaves in ECS child order — which IS paint order, the
 //! hierarchy sync guarantees it) and the `ChildOf` climb that attributes a
 //! changed shape to its enclosing `<svg>` root. Pure functions over query
-//! params — no systems here; [`super::raster::update_svg_surfaces`] drives
-//! both.
+//! params — no systems here; [`super::surface::update_jsx_svg_surfaces`]
+//! drives both.
 
 use bevy::prelude::*;
 use tiny_skia::Transform;

@@ -1,10 +1,9 @@
 //! The stateful driver runtime: [`Runner`] evaluates a [`Driver`] over time.
 //!
-//! Split out of `lib.rs` so the crate root keeps only the ECS orchestration
-//! (systems, `SharedValues`, binding evaluation) while the pure time-stepping
-//! machinery lives here. Shared with `bevy-react`'s CSS-like `transition`
-//! engine, which holds a `Runner` per channel rather than re-implementing
-//! easing/spring integration.
+//! The pure time-stepping machinery, kept apart from the module root's ECS
+//! orchestration (systems, `SharedValues`, binding evaluation). Shared with
+//! the CSS-like `transition` engine, which holds a `Runner` per channel rather
+//! than re-implementing easing/spring integration.
 
 use super::protocol::{Driver, Easing};
 
