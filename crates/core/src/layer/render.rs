@@ -398,6 +398,13 @@ impl ExtractedLayer {
     }
 }
 
+/// `bevy_ui_render`'s item-extraction sets (every `RenderUiSystems` set but
+/// the camera views) as one set: bevy has no umbrella of its own, and the
+/// layer extract-window systems (the clip swap, cached-member hiding) bracket
+/// all of them.
+#[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ExtractUiItems;
+
 /// Per-frame extraction output. `layers` is index-aligned with
 /// [`LayerCompositeMeta::atlas_bind_groups`].
 #[derive(Resource, Default)]

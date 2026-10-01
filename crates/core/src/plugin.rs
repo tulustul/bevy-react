@@ -438,6 +438,24 @@ impl Plugin for ReactUiPlugin {
                         Render,
                         lr::warm::warm_layer_pipelines.in_set(RenderSystems::PrepareResources),
                     )
+                    .configure_sets(
+                        ExtractSchedule,
+                        (
+                            RenderUiSystems::ExtractBoxShadows,
+                            RenderUiSystems::ExtractBackgrounds,
+                            RenderUiSystems::ExtractImages,
+                            RenderUiSystems::ExtractTextureSlice,
+                            RenderUiSystems::ExtractBorders,
+                            RenderUiSystems::ExtractViewportNodes,
+                            RenderUiSystems::ExtractTextBackgrounds,
+                            RenderUiSystems::ExtractTextShadows,
+                            RenderUiSystems::ExtractText,
+                            RenderUiSystems::ExtractCursor,
+                            RenderUiSystems::ExtractDebug,
+                            RenderUiSystems::ExtractGradient,
+                        )
+                            .in_set(lr::ExtractUiItems),
+                    )
                     .add_systems(
                         ExtractSchedule,
                         (
@@ -447,36 +465,14 @@ impl Plugin for ReactUiPlugin {
                             // exactly the span of the stock UI extraction
                             // sets (the main world is exclusively borrowed
                             // here, so nothing main-world can observe it).
-                            // Explicitly bracket every RenderUiSystems set —
-                            // there is no umbrella set to hang onto.
+                            // Bracket every RenderUiSystems set (camera views
+                            // + the `ExtractUiItems` umbrella).
                             lr::clip::swap_interior_clips_in
                                 .before(RenderUiSystems::ExtractCameraViews)
-                                .before(RenderUiSystems::ExtractBoxShadows)
-                                .before(RenderUiSystems::ExtractBackgrounds)
-                                .before(RenderUiSystems::ExtractImages)
-                                .before(RenderUiSystems::ExtractTextureSlice)
-                                .before(RenderUiSystems::ExtractBorders)
-                                .before(RenderUiSystems::ExtractViewportNodes)
-                                .before(RenderUiSystems::ExtractTextBackgrounds)
-                                .before(RenderUiSystems::ExtractTextShadows)
-                                .before(RenderUiSystems::ExtractText)
-                                .before(RenderUiSystems::ExtractCursor)
-                                .before(RenderUiSystems::ExtractDebug)
-                                .before(RenderUiSystems::ExtractGradient),
+                                .before(lr::ExtractUiItems),
                             lr::clip::swap_interior_clips_out
                                 .after(RenderUiSystems::ExtractCameraViews)
-                                .after(RenderUiSystems::ExtractBoxShadows)
-                                .after(RenderUiSystems::ExtractBackgrounds)
-                                .after(RenderUiSystems::ExtractImages)
-                                .after(RenderUiSystems::ExtractTextureSlice)
-                                .after(RenderUiSystems::ExtractBorders)
-                                .after(RenderUiSystems::ExtractViewportNodes)
-                                .after(RenderUiSystems::ExtractTextBackgrounds)
-                                .after(RenderUiSystems::ExtractTextShadows)
-                                .after(RenderUiSystems::ExtractText)
-                                .after(RenderUiSystems::ExtractCursor)
-                                .after(RenderUiSystems::ExtractDebug)
-                                .after(RenderUiSystems::ExtractGradient),
+                                .after(lr::ExtractUiItems),
                             // The cached-layer extraction skip: members of
                             // layers served from cache are HIDDEN for the
                             // span of the stock item extractors (same
@@ -486,18 +482,7 @@ impl Plugin for ReactUiPlugin {
                             // view set) and precedes every item set.
                             lr::cached::hide_cached_layer_members
                                 .after(lr::extract_ui_layers)
-                                .before(RenderUiSystems::ExtractBoxShadows)
-                                .before(RenderUiSystems::ExtractBackgrounds)
-                                .before(RenderUiSystems::ExtractImages)
-                                .before(RenderUiSystems::ExtractTextureSlice)
-                                .before(RenderUiSystems::ExtractBorders)
-                                .before(RenderUiSystems::ExtractViewportNodes)
-                                .before(RenderUiSystems::ExtractTextBackgrounds)
-                                .before(RenderUiSystems::ExtractTextShadows)
-                                .before(RenderUiSystems::ExtractText)
-                                .before(RenderUiSystems::ExtractCursor)
-                                .before(RenderUiSystems::ExtractDebug)
-                                .before(RenderUiSystems::ExtractGradient),
+                                .before(lr::ExtractUiItems),
                             // Restore after every item set — the clip
                             // swap-out already sits after all of them.
                             lr::cached::restore_cached_layer_members
