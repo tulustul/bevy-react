@@ -32,7 +32,7 @@ use bevy::input::mouse::MouseButton;
 use bevy::picking::backend::PointerHits;
 use bevy::picking::hover::HoverMap;
 use bevy::picking::pointer::{
-    Location, PointerAction, PointerButton, PointerId, PointerInput, PointerLocation, PointerPress,
+    Location, PointerAction, PointerId, PointerInput, PointerLocation, PointerPress,
 };
 use bevy::prelude::*;
 use bevy::ui::{ComputedNode, UiGlobalTransform, UiStack};
@@ -44,23 +44,6 @@ use super::{LayerMembership, PromotedLayer};
 /// The transform3d virtual pointer's fixed id (the pattern
 /// `bevy_react_surface`'s in-world pointer uses too).
 pub const TRANSFORM3D_POINTER_UUID: uuid::Uuid = uuid::Uuid::from_u128(0x7D3D_D001);
-
-/// The mouse buttons forwarded to the virtual pointer — the same set the
-/// surface pointer forwards.
-const FORWARDED_BUTTONS: [(MouseButton, PointerButton); 3] = [
-    (MouseButton::Left, PointerButton::Primary),
-    (MouseButton::Right, PointerButton::Secondary),
-    (MouseButton::Middle, PointerButton::Middle),
-];
-
-/// Index of a forwarded button in [`Transform3dPointer::pressed`].
-fn button_index(button: PointerButton) -> usize {
-    match button {
-        PointerButton::Primary => 0,
-        PointerButton::Secondary => 1,
-        PointerButton::Middle => 2,
-    }
-}
 
 /// The single virtual pointer remapping cursor input into transformed layers
 /// (topmost-wins, like the one surface pointer serving every surface), plus
@@ -79,8 +62,8 @@ pub struct Transform3dPointer {
     /// The window target last driven to (kept for the park move once the
     /// cursor — and with it the mouse pointer's live location — leaves).
     last_target: Option<bevy::camera::NormalizedRenderTarget>,
-    /// Per-button owed-release flags, indexed by [`button_index`].
-    pressed: [bool; FORWARDED_BUTTONS.len()],
+    /// Press bookkeeping (owed releases).
+    buttons: crate::ext::VirtualButtons,
 }
 
 /// Spawn the virtual pointer at startup and publish its id.
@@ -93,7 +76,7 @@ pub fn init_transform3d_pointer(mut commands: Commands) {
         over_layer: None,
         last_pos: Vec2::ZERO,
         last_target: None,
-        pressed: [false; FORWARDED_BUTTONS.len()],
+        buttons: Default::default(),
     });
 }
 
@@ -269,24 +252,9 @@ pub fn drive_transform3d_pointer(
         state.last_target = Some(target);
         state.over_layer = Some(root);
 
-        for (mb, pb) in FORWARDED_BUTTONS {
-            if buttons.just_pressed(mb) {
-                input.write(PointerInput::new(
-                    pointer_id,
-                    location.clone(),
-                    PointerAction::Press(pb),
-                ));
-                state.pressed[button_index(pb)] = true;
-            }
-            if buttons.just_released(mb) && state.pressed[button_index(pb)] {
-                input.write(PointerInput::new(
-                    pointer_id,
-                    location.clone(),
-                    PointerAction::Release(pb),
-                ));
-                state.pressed[button_index(pb)] = false;
-            }
-        }
+        state
+            .buttons
+            .forward(pointer_id, &location, &buttons, &mut input);
         return;
     }
 
@@ -299,21 +267,7 @@ pub fn drive_transform3d_pointer(
             target,
             position: Vec2::splat(-1.0),
         };
-        for (_, pb) in FORWARDED_BUTTONS {
-            if state.pressed[button_index(pb)] {
-                input.write(PointerInput::new(
-                    pointer_id,
-                    location.clone(),
-                    PointerAction::Release(pb),
-                ));
-                state.pressed[button_index(pb)] = false;
-            }
-        }
-        input.write(PointerInput::new(
-            pointer_id,
-            location,
-            PointerAction::Move { delta: Vec2::ZERO },
-        ));
+        state.buttons.leave(pointer_id, location, &mut input);
         state.over_layer = None;
         state.last_pos = Vec2::splat(-1.0);
     }
@@ -590,7 +544,7 @@ mod tests {
             over_layer: Some(transformed_root),
             last_pos: Vec2::ZERO,
             last_target: None,
-            pressed: [false; 3],
+            buttons: Default::default(),
         });
 
         let send = |world: &mut World, pointer: PointerId, entities: &[Entity]| {
@@ -664,7 +618,7 @@ mod tests {
             over_layer: Some(root),
             last_pos: Vec2::ZERO,
             last_target: None,
-            pressed: [false; 3],
+            buttons: Default::default(),
         });
 
         // Virtual pointer hovers the member → Hovered.

@@ -171,6 +171,86 @@ impl VirtualPointers {
     }
 }
 
+/// A virtual pointer's mouse-button bookkeeping: forwards the window's
+/// left/right/middle buttons — the set bevy_picking itself forwards for the
+/// window pointer — as presses/releases at the pointer's location, and owes a
+/// release for every press it sent, so a pointer that leaves never leaves a
+/// control stuck pressed.
+#[derive(Debug, Default)]
+pub struct VirtualButtons {
+    pressed: [bool; 3],
+}
+
+impl VirtualButtons {
+    const FORWARDED: [(MouseButton, bevy::picking::pointer::PointerButton); 3] = [
+        (
+            MouseButton::Left,
+            bevy::picking::pointer::PointerButton::Primary,
+        ),
+        (
+            MouseButton::Right,
+            bevy::picking::pointer::PointerButton::Secondary,
+        ),
+        (
+            MouseButton::Middle,
+            bevy::picking::pointer::PointerButton::Middle,
+        ),
+    ];
+
+    /// Forward this frame's presses and owed releases at `location`.
+    pub fn forward(
+        &mut self,
+        id: bevy::picking::pointer::PointerId,
+        location: &bevy::picking::pointer::Location,
+        buttons: &ButtonInput<MouseButton>,
+        input: &mut MessageWriter<bevy::picking::pointer::PointerInput>,
+    ) {
+        use bevy::picking::pointer::{PointerAction, PointerInput};
+        for (i, (mouse, button)) in Self::FORWARDED.into_iter().enumerate() {
+            if buttons.just_pressed(mouse) {
+                input.write(PointerInput::new(
+                    id,
+                    location.clone(),
+                    PointerAction::Press(button),
+                ));
+                self.pressed[i] = true;
+            }
+            if buttons.just_released(mouse) && std::mem::take(&mut self.pressed[i]) {
+                input.write(PointerInput::new(
+                    id,
+                    location.clone(),
+                    PointerAction::Release(button),
+                ));
+            }
+        }
+    }
+
+    /// The pointer left every target: release every owed press at
+    /// `location` (off-bounds) and move there, so picking fires `Out`.
+    pub fn leave(
+        &mut self,
+        id: bevy::picking::pointer::PointerId,
+        location: bevy::picking::pointer::Location,
+        input: &mut MessageWriter<bevy::picking::pointer::PointerInput>,
+    ) {
+        use bevy::picking::pointer::{PointerAction, PointerInput};
+        for (i, (_, button)) in Self::FORWARDED.into_iter().enumerate() {
+            if std::mem::take(&mut self.pressed[i]) {
+                input.write(PointerInput::new(
+                    id,
+                    location.clone(),
+                    PointerAction::Release(button),
+                ));
+            }
+        }
+        input.write(PointerInput::new(
+            id,
+            location,
+            PointerAction::Move { delta: Vec2::ZERO },
+        ));
+    }
+}
+
 /// This frame's value of one evaluated binding. The binding decides the
 /// kind: `interpolateColor` evaluates to a [`Color`](Self::Color), a bare
 /// shared value or an `interpolate` to a [`Scalar`](Self::Scalar).

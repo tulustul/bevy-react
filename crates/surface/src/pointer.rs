@@ -11,9 +11,9 @@
 use bevy::camera::{ImageRenderTarget, NormalizedRenderTarget, RenderTarget as BevyRenderTarget};
 use bevy::mesh::{Indices, VertexAttributeValues};
 use bevy::picking::mesh_picking::ray_cast::{MeshRayCast, MeshRayCastSettings, RayMeshHit};
-use bevy::picking::pointer::{Location, PointerAction, PointerButton, PointerId, PointerInput};
+use bevy::picking::pointer::{Location, PointerAction, PointerId, PointerInput};
 use bevy::prelude::*;
-use bevy_react_core::ext::VirtualPointers;
+use bevy_react_core::ext::{VirtualButtons, VirtualPointers};
 
 use crate::registry::Surfaces;
 
@@ -76,27 +76,8 @@ pub struct SurfaceVirtualPointer {
     /// cursor), so we can move it off-bounds to generate `Out`/release when the
     /// cursor leaves every surface mesh.
     over_target: Option<Handle<Image>>,
-    /// Per-button "we have emitted a press the matching release is still owed
-    /// for", indexed by [`button_index`].
-    pressed: [bool; FORWARDED_BUTTONS.len()],
-}
-
-/// The mouse buttons forwarded to the virtual pointer, with their picking
-/// analogues — the same left/middle/right set bevy_picking itself forwards for
-/// the window pointer (Back/Forward/Other are ignored there too).
-const FORWARDED_BUTTONS: [(MouseButton, PointerButton); 3] = [
-    (MouseButton::Left, PointerButton::Primary),
-    (MouseButton::Right, PointerButton::Secondary),
-    (MouseButton::Middle, PointerButton::Middle),
-];
-
-/// Index of a forwarded button in [`SurfaceVirtualPointer::pressed`].
-fn button_index(button: PointerButton) -> usize {
-    match button {
-        PointerButton::Primary => 0,
-        PointerButton::Secondary => 1,
-        PointerButton::Middle => 2,
-    }
+    /// Press bookkeeping (owed releases).
+    buttons: VirtualButtons,
 }
 
 /// Spawn the virtual surface pointer at startup and register it with the
@@ -112,7 +93,7 @@ pub fn init_surface_pointer(mut commands: Commands, mut pointers: ResMut<Virtual
         id,
         last_pos: Vec2::ZERO,
         over_target: None,
-        pressed: [false; FORWARDED_BUTTONS.len()],
+        buttons: VirtualButtons::default(),
     });
 }
 
@@ -171,24 +152,9 @@ pub fn drive_surface_pointer(
         state.last_pos = position;
         state.over_target = Some(handle);
 
-        for (mb, pb) in FORWARDED_BUTTONS {
-            if buttons.just_pressed(mb) {
-                input.write(PointerInput::new(
-                    pointer_id,
-                    location.clone(),
-                    PointerAction::Press(pb),
-                ));
-                state.pressed[button_index(pb)] = true;
-            }
-            if buttons.just_released(mb) && state.pressed[button_index(pb)] {
-                input.write(PointerInput::new(
-                    pointer_id,
-                    location.clone(),
-                    PointerAction::Release(pb),
-                ));
-                state.pressed[button_index(pb)] = false;
-            }
-        }
+        state
+            .buttons
+            .forward(pointer_id, &location, &buttons, &mut input);
         return;
     }
 
@@ -196,21 +162,7 @@ pub fn drive_surface_pointer(
     // `Out`, and release every press we still owe so a control never sticks.
     if let Some(handle) = state.over_target.clone() {
         let location = image_location(&handle, Vec2::splat(-1.0));
-        for (_, pb) in FORWARDED_BUTTONS {
-            if state.pressed[button_index(pb)] {
-                input.write(PointerInput::new(
-                    pointer_id,
-                    location.clone(),
-                    PointerAction::Release(pb),
-                ));
-                state.pressed[button_index(pb)] = false;
-            }
-        }
-        input.write(PointerInput::new(
-            pointer_id,
-            location,
-            PointerAction::Move { delta: Vec2::ZERO },
-        ));
+        state.buttons.leave(pointer_id, location, &mut input);
         state.over_target = None;
     }
 }
