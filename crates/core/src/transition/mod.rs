@@ -470,7 +470,7 @@ pub fn drive_transitions(
         // branch still re-seeds the channels — see `sync_row`). Only
         // specified channels are written (passing `None` keeps
         // `build_ui_transform`'s scale precedence intact).
-        if or_shared(input.spec.transform.as_ref(), shared_spec).is_some() && !skip_transform {
+        if input.spec.transform.as_ref().or(shared_spec).is_some() && !skip_transform {
             let s = arm_spec(seed_frame, input.spec.transform.as_ref(), shared_spec);
             let tx = input
                 .translate_x
@@ -508,7 +508,7 @@ pub fn drive_transitions(
         // demoted/never-promoted entity has no component — nothing to drive.
         // Mid-ease unset removes the component with the promotion (snap
         // semantics, like filter's ease-to-empty).
-        if or_shared(input.spec.transform3d.as_ref(), shared_spec).is_some()
+        if input.spec.transform3d.as_ref().or(shared_spec).is_some()
             && !skip_transform3d
             && let Some(target) = &input.transform3d
             && let Some(t3d) = &mut targets.transform3d
@@ -667,7 +667,7 @@ pub fn drive_transitions(
         // is not in the layer geometry hash (`fold_member_geometry` folds
         // translation/matrix/size only), so a cached enclosing layer would
         // otherwise never re-capture the changing corners.
-        if or_shared(input.spec.border_radius.as_ref(), shared_spec).is_some()
+        if input.spec.border_radius.as_ref().or(shared_spec).is_some()
             && !skip_radius
             && let Some(node) = targets.node.as_mut()
         {
@@ -860,29 +860,16 @@ pub(super) fn color_to_rgba(color: Color) -> [f32; 4] {
     [s.red, s.green, s.blue, s.alpha]
 }
 
-/// A channel's own spec, else the shared-flight fallback (see
-/// [`shared`]): during a seeded flight every channel eases with the
-/// `sharedElement` spec unless it names its own.
-/// The spec a channel ARMS with: on the seed frame of a shared flight the
-/// `sharedElement` spec stands in for a missing own spec; afterwards only
-/// the channel's own spec counts (a spec-less retarget snaps, as always).
+/// The spec a channel ARMS with: on the seed frame of a shared flight (see
+/// [`shared`]) the `sharedElement` spec stands in for a missing own spec;
+/// afterwards only the channel's own spec counts (a spec-less retarget
+/// snaps, as always).
 fn arm_spec<'a>(
     seed_frame: bool,
     own: Option<&'a ChannelTransition>,
     shared: Option<&'a ChannelTransition>,
 ) -> Option<&'a ChannelTransition> {
-    if seed_frame {
-        or_shared(own, shared)
-    } else {
-        own
-    }
-}
-
-fn or_shared<'a>(
-    own: Option<&'a ChannelTransition>,
-    shared: Option<&'a ChannelTransition>,
-) -> Option<&'a ChannelTransition> {
-    own.or(shared)
+    if seed_frame { own.or(shared) } else { own }
 }
 
 fn rgba_to_color(rgba: [f32; 4]) -> Color {
