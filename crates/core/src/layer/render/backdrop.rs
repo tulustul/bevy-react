@@ -42,8 +42,8 @@ use super::clip::ClippedQuad;
 use super::store::{PassBindGroups, PassBindKey, alloc_capture_texture};
 use super::{
     ExtractedUiLayers, FilterUniforms, LayerFilterPass, LayerFilterPipeline,
-    LayerFilterPipelineKey, LayerFilterRun, LayerTextureStore, STUCK_GATE_HANG_FRAMES,
-    filter_output_index, filter_source_index, filter_target_index,
+    LayerFilterPipelineKey, LayerFilterRun, LayerTextureStore, filter_output_index,
+    filter_source_index, filter_target_index,
 };
 
 /// A layer's persistent backdrop resources: the snapshot texture (blit
@@ -61,19 +61,12 @@ pub struct BackdropSlot {
     /// The chain's ping-pong targets (pass 0 samples the snapshot and writes
     /// `textures[0]`, and so on).
     pub textures: [CachedTexture; 2],
-    /// The staged chain version (`0` = never staged; versions start at 1).
-    /// Backdrop runs restage every frame regardless — this only re-arms the
-    /// stuck-gate warn on chain edits.
-    pub params_version: u32,
-    /// Whether `textures[output_index]` holds a complete filtered backdrop.
-    /// Predicted at prepare (blit pipeline AND every chain pipeline
-    /// compiled); while false the backdrop quad is withheld — the region
-    /// shows the unfiltered frame.
-    pub output_valid: bool,
-    /// Consecutive withheld frames; drives the stuck-gate warn.
-    pub gated_frames: u32,
-    /// Once-per-episode warn latch (see [`super::FilterSlot::gate_warned`]).
-    pub gate_warned: bool,
+    /// The run's readiness gate: valid when `textures[output_index]` holds
+    /// a complete filtered backdrop (blit pipeline AND every chain pipeline
+    /// compiled); while invalid the backdrop quad is withheld — the region
+    /// shows the unfiltered frame. Backdrop runs restage every frame
+    /// regardless, so its version only re-arms the stuck-gate warn.
+    pub gate: super::GateState,
     /// Which ping-pong texture the final pass writes.
     pub output_index: usize,
     /// Composite bind group over `textures[.0]`, index-invalidated on
@@ -98,10 +91,7 @@ pub fn alloc_backdrop_slot(
             alloc("ui_layer_backdrop_ping"),
             alloc("ui_layer_backdrop_pong"),
         ],
-        params_version: 0,
-        output_valid: false,
-        gated_frames: 0,
-        gate_warned: false,
+        gate: super::GateState::default(),
         output_index: 0,
         composite_bind_group: None,
         pass_bind_groups: PassBindGroups::default(),
@@ -302,16 +292,9 @@ pub fn prepare_layer_backdrops(
         let Some(backdrop) = slot.backdrop.as_mut() else {
             continue;
         };
-        // A chain edit may swap in different shaders — re-arm the warn so a
-        // new failure gets its own report (same rule as the content filter).
-        if backdrop.params_version != chain.version {
-            backdrop.gated_frames = 0;
-            backdrop.gate_warned = false;
-        }
-        backdrop.params_version = chain.version;
         // The run supersedes whatever the outputs hold; phase 3 re-marks
         // valid iff blit + passes will all execute.
-        backdrop.output_valid = false;
+        backdrop.gate.restage(chain.version);
         backdrop.output_index = filter_output_index(chain.passes.len());
 
         let blit_id = specialized_blits.specialize(
@@ -461,9 +444,7 @@ pub fn prepare_layer_backdrops(
                 .iter()
                 .all(|pass| pipeline_cache.get_render_pipeline(pass.pipeline).is_some());
         if ready && let Some(backdrop) = slot.backdrop.as_mut() {
-            backdrop.output_valid = true;
-            backdrop.gated_frames = 0;
-            backdrop.gate_warned = false;
+            backdrop.gate.ready();
         }
     }
 }
@@ -577,48 +558,25 @@ pub fn backdrop_gate(
     atlas_layout: &BindGroupLayoutDescriptor,
     sampler: &Sampler,
 ) -> Option<BindGroup> {
-    if !backdrop.output_valid {
-        backdrop.gated_frames = backdrop.gated_frames.saturating_add(1);
-        if !backdrop.gate_warned {
-            let compile_error = meta
-                .runs
+    if !backdrop.gate.output_valid {
+        backdrop.gate.on_gated(
+            meta.runs
                 .get(idx)
-                .and_then(|run| run.as_ref())
+                .and_then(Option::as_ref)
                 .into_iter()
                 .flat_map(|run| run.passes.iter().map(|p| p.pipeline))
                 .chain(
                     meta.blits
                         .get(idx)
-                        .and_then(|b| b.as_ref())
+                        .and_then(Option::as_ref)
                         .map(|b| b.pipeline),
-                )
-                .find_map(
-                    |pipeline| match pipeline_cache.get_render_pipeline_state(pipeline) {
-                        CachedPipelineState::Err(
-                            e @ (bevy::shader::ShaderCacheError::ProcessShaderError(_)
-                            | bevy::shader::ShaderCacheError::CreateShaderModule(_)),
-                        ) => Some(e.to_string()),
-                        _ => None,
-                    },
-                );
-            if let Some(err) = compile_error {
-                tracing::warn!(
-                    "UI layer {main_entity:?}: a backdropFilter pass shader failed to \
-                     compile — the region shows the UNFILTERED frame until fixed (the \
-                     backdrop gate is graceful; the node's own content still draws). \
-                     Error: {err}",
-                );
-                backdrop.gate_warned = true;
-            } else if backdrop.gated_frames == STUCK_GATE_HANG_FRAMES {
-                tracing::warn!(
-                    "UI layer {main_entity:?}: backdrop quad withheld for {} consecutive \
-                     frames and its pipeline is still not ready (no compile error \
-                     reported). The region shows the unfiltered frame until it resolves.",
-                    STUCK_GATE_HANG_FRAMES,
-                );
-                backdrop.gate_warned = true;
-            }
-        }
+                ),
+            pipeline_cache,
+            main_entity,
+            "a backdropFilter pass",
+            "the region shows the UNFILTERED frame until it resolves (the backdrop gate is \
+             graceful; the node's own content still draws)",
+        );
         return None;
     }
     let output = backdrop.output_index;

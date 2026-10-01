@@ -162,31 +162,12 @@ pub fn alloc_for(wanted: UVec2, bucketable: bool) -> UVec2 {
 pub struct FilterSlot {
     /// The ping-pong targets (`RENDER_ATTACHMENT | TEXTURE_BINDING`).
     pub textures: [CachedTexture; 2],
-    /// The [`ExtractedChain::version`](super::ExtractedChain::version) the
-    /// last staged run used; `0` = never staged (versions start at 1).
-    pub params_version: u32,
-    /// Whether `textures[output_index]` holds a *complete* filter output.
-    /// Staging a run resets it; [`prepare_layer_filters`](super::prepare_layer_filters)
-    /// sets it back only when the whole staged chain is certain to execute
-    /// this frame (every pass pipeline already compiled AND the source
-    /// capture valid — the same conservative discipline as
-    /// [`LayerSlot::content_valid`]). While false,
-    /// [`prepare_layer_composites`](super::prepare_layer_composites) withholds
-    /// the quad's batch (draws nothing — never a flash of unfiltered content)
-    /// and the layer restages every frame until the run goes through.
-    pub output_valid: bool,
-    /// Consecutive frames the composite gate has withheld this layer's quad
-    /// (no complete filtered output to sample); reset to 0 when
-    /// [`Self::output_valid`] flips true. Drives the stuck-gate warning (see
-    /// [`Self::gate_warned`]) — a pipeline that never compiles (user WGSL
-    /// error) would otherwise leave the subtree invisible forever with no
-    /// log from this module.
-    pub gated_frames: u32,
-    /// Whether this stuck episode already warned (once per episode; reset
-    /// with [`Self::gated_frames`]). An errored pass pipeline warns
-    /// immediately with the compile error; a still-compiling one only after
-    /// [`STUCK_GATE_HANG_FRAMES`](super::STUCK_GATE_HANG_FRAMES).
-    pub gate_warned: bool,
+    /// The run's readiness gate. While its output is invalid,
+    /// [`prepare_layer_composites`](super::prepare_layer_composites)
+    /// withholds the quad's batch (draws nothing — never a flash of
+    /// unfiltered content) and the layer restages every frame until the run
+    /// goes through.
+    pub gate: super::GateState,
     /// Which ping-pong texture the final pass writes: `(len - 1) % 2`.
     pub output_index: usize,
     /// Composite bind group sampling `textures[.0]` — built by
@@ -561,10 +542,7 @@ fn alloc_filter_slot(
     let (pong, pong_mips) = alloc_one("ui_layer_filter_pong");
     FilterSlot {
         textures: [ping, pong],
-        params_version: 0,
-        output_valid: false,
-        gated_frames: 0,
-        gate_warned: false,
+        gate: super::GateState::default(),
         output_index: 0,
         composite_bind_group: None,
         mips: [ping_mips, pong_mips],

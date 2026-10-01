@@ -108,7 +108,7 @@ const UI_LAYER_CAPTURE_SUBVIEW: u32 = 2;
 /// so a chain longer than this is a bug, not a real hierarchy — walks stop
 /// rather than spin.
 const MAX_LAYER_DEPTH: usize = 64;
-/// Consecutive gated frames ([`FilterSlot::gated_frames`]) before the stuck
+/// Consecutive gated frames ([`GateState::gated_frames`]) before the stuck
 /// composite gate warns about a pipeline that is *still compiling*. A shader
 /// that outright FAILED warns immediately (the gate inspects
 /// [`CachedPipelineState`] each gated frame), so this threshold only covers
@@ -116,6 +116,96 @@ const MAX_LAYER_DEPTH: usize = 64;
 /// is FPS-relative — at an uncapped 300 fps, startup compiles legitimately
 /// take hundreds of gated frames (~2 s here; ~10 s at 60 fps).
 const STUCK_GATE_HANG_FRAMES: u32 = 600;
+
+/// A staged run's readiness gate — the filter, backdrop, and morph slots
+/// each keep one. Staging a run invalidates its output ([`Self::restage`]);
+/// prepare marks it valid again only when the whole run is certain to
+/// execute this frame ([`Self::ready`]: every pass pipeline compiled, the
+/// source valid). While invalid the composite is withheld — never a flash of
+/// unfiltered/unblended content — and a stuck episode warns once
+/// ([`Self::on_gated`]).
+#[derive(Default, Debug)]
+pub struct GateState {
+    /// The chain version the last staged run used; `0` = never staged
+    /// (versions start at 1).
+    pub params_version: u32,
+    /// Whether the run's output holds a complete result.
+    pub output_valid: bool,
+    /// Consecutive frames the composite was withheld; reset when the output
+    /// goes valid. A pipeline that never compiles (a user WGSL error) would
+    /// otherwise leave the subtree withheld forever with no log.
+    pub gated_frames: u32,
+    /// Whether this stuck episode already warned (once per episode).
+    pub gate_warned: bool,
+}
+
+impl GateState {
+    /// Stage a run for chain `version`: the output is invalid until
+    /// [`Self::ready`]. A CHAIN CHANGE (vs a plain retry) re-arms the
+    /// stuck-gate warn — the edit may swap in different shaders, and their
+    /// failure deserves its own report.
+    pub fn restage(&mut self, version: u32) {
+        if self.params_version != version {
+            self.gated_frames = 0;
+            self.gate_warned = false;
+        }
+        self.params_version = version;
+        self.output_valid = false;
+    }
+
+    /// The whole staged run will execute: the output is valid and any stuck
+    /// episode ends.
+    pub fn ready(&mut self) {
+        self.output_valid = true;
+        self.gated_frames = 0;
+        self.gate_warned = false;
+    }
+
+    /// Count one withheld frame and warn once per stuck episode: immediately
+    /// when one of the run's `pipelines` failed to compile (naming the
+    /// error), else after [`STUCK_GATE_HANG_FRAMES`] — a still-compiling
+    /// pipeline is normal startup latency. `what` names the pass family,
+    /// `effect` what the user sees meanwhile.
+    pub fn on_gated(
+        &mut self,
+        pipelines: impl IntoIterator<Item = CachedRenderPipelineId>,
+        pipeline_cache: &PipelineCache,
+        layer: MainEntity,
+        what: &str,
+        effect: &str,
+    ) {
+        self.gated_frames = self.gated_frames.saturating_add(1);
+        if self.gate_warned {
+            return;
+        }
+        // Only PERMANENT failures warn immediately. `ShaderNotLoaded` /
+        // `ShaderImportNotYetAvailable` are transient (the cache re-queues
+        // them while an asset-path shader streams in at startup) and fall
+        // through to the hang threshold.
+        let compile_error = pipelines.into_iter().find_map(|pipeline| {
+            match pipeline_cache.get_render_pipeline_state(pipeline) {
+                CachedPipelineState::Err(
+                    e @ (ShaderCacheError::ProcessShaderError(_)
+                    | ShaderCacheError::CreateShaderModule(_)),
+                ) => Some(e.to_string()),
+                _ => None,
+            }
+        });
+        if let Some(err) = compile_error {
+            tracing::warn!(
+                "UI layer {layer:?}: {what} shader failed to compile — {effect}. Error: {err}"
+            );
+            self.gate_warned = true;
+        } else if self.gated_frames == STUCK_GATE_HANG_FRAMES {
+            tracing::warn!(
+                "UI layer {layer:?}: composite withheld for {STUCK_GATE_HANG_FRAMES} \
+                 consecutive frames and {what} pipeline is still not ready (no compile \
+                 error reported — a hung/queued compile?) — {effect}."
+            );
+            self.gate_warned = true;
+        }
+    }
+}
 
 /// One filter pass of an extracted chain: the pass shader plus its packed
 /// uniform params.
@@ -1080,55 +1170,20 @@ pub fn prepare_layer_composites(
             // item keeps `batch_range 0..0` and draws nothing. Never fall
             // back to the raw capture: a frame of unfiltered content is
             // exactly the flash this gate exists to prevent.
-            if !filter.output_valid {
-                filter.gated_frames = filter.gated_frames.saturating_add(1);
-                // Once per stuck episode: an errored pass pipeline (user WGSL
-                // that failed to compile) warns immediately with the error;
-                // a still-compiling one is normal startup latency and only
-                // warns after the FPS-generous hang threshold.
-                if !filter.gate_warned {
-                    let compile_error = filter_meta
+            if !filter.gate.output_valid {
+                filter.gate.on_gated(
+                    filter_meta
                         .runs
                         .get(idx)
-                        .and_then(|run| run.as_ref())
-                        .and_then(|run| {
-                            run.passes.iter().find_map(|pass| {
-                                // Only PERMANENT failures warn immediately.
-                                // `ShaderNotLoaded` / `ShaderImportNotYetAvailable`
-                                // are transient (the cache re-queues them while
-                                // an asset-path shader streams in at startup)
-                                // and fall through to the hang threshold.
-                                match pipeline_cache.get_render_pipeline_state(pass.pipeline) {
-                                    CachedPipelineState::Err(
-                                        e @ (ShaderCacheError::ProcessShaderError(_)
-                                        | ShaderCacheError::CreateShaderModule(_)),
-                                    ) => Some(e.to_string()),
-                                    _ => None,
-                                }
-                            })
-                        });
-                    if let Some(err) = compile_error {
-                        tracing::warn!(
-                            "UI layer {:?}: a filter pass shader failed to compile — the \
-                             layer's subtree is invisible (the composite gate never falls \
-                             back to unfiltered content) and its filter run restages every \
-                             frame. Error: {err}",
-                            layer.main_entity,
-                        );
-                        filter.gate_warned = true;
-                    } else if filter.gated_frames == STUCK_GATE_HANG_FRAMES {
-                        tracing::warn!(
-                            "UI layer {:?}: composite quad withheld for {} consecutive \
-                             frames and its filter pipeline is still not ready (no compile \
-                             error reported — a hung/queued compile?). Until it resolves, \
-                             the layer's subtree is invisible and its filter run restages \
-                             every frame.",
-                            layer.main_entity,
-                            STUCK_GATE_HANG_FRAMES,
-                        );
-                        filter.gate_warned = true;
-                    }
-                }
+                        .and_then(Option::as_ref)
+                        .into_iter()
+                        .flat_map(|run| run.passes.iter().map(|pass| pass.pipeline)),
+                    &pipeline_cache,
+                    layer.main_entity,
+                    "a filter pass",
+                    "the layer's subtree is invisible (the composite gate never falls back \
+                     to unfiltered content) and its filter run restages every frame",
+                );
                 gated.push(idx);
                 continue;
             }
@@ -2063,24 +2118,16 @@ pub fn prepare_layer_filters(
         if !needs_filter_run(
             layer.needs_capture,
             chain.version,
-            filter.params_version,
+            filter.gate.params_version,
             chain.always_dirty,
-            filter.output_valid,
+            filter.gate.output_valid,
         ) && layer.morph.is_none()
         {
             continue;
         }
         // The staged run supersedes whatever the output textures hold; phase 3
         // below marks the output valid again iff the passes will execute.
-        // A CHAIN CHANGE (vs a plain retry) also re-arms the stuck-gate warn:
-        // the edit may swap in different shaders, and their failure deserves
-        // its own once-per-episode report.
-        if filter.params_version != chain.version {
-            filter.gated_frames = 0;
-            filter.gate_warned = false;
-        }
-        filter.params_version = chain.version;
-        filter.output_valid = false;
+        filter.gate.restage(chain.version);
         // The run rewrites the output's level 0 — its mip chain goes stale
         // until `prepare_layer_mips` (ordered after this system) restages it.
         filter.mips_valid = false;
@@ -2209,15 +2256,13 @@ pub fn prepare_layer_filters(
         // A morphing layer's chain sources the blend, so its output is only
         // as valid as the morph pass that writes it (`prepare_layer_morphs`
         // runs before this system and decided already).
-        let morph_ok = slot.morph.as_ref().is_none_or(|m| m.output_valid);
+        let morph_ok = slot.morph.as_ref().is_none_or(|m| m.gate.output_valid);
         if ready
             && slot.content_valid
             && morph_ok
             && let Some(filter) = slot.filter.as_mut()
         {
-            filter.output_valid = true;
-            filter.gated_frames = 0;
-            filter.gate_warned = false;
+            filter.gate.ready();
         }
     }
 }

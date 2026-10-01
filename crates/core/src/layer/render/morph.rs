@@ -44,13 +44,11 @@ use bevy::prelude::*;
 use bevy::render::render_resource::*;
 use bevy::render::renderer::{RenderContext, RenderDevice, RenderQueue};
 use bevy::render::texture::CachedTexture;
-use bevy::shader::ShaderCacheError;
 
 use super::store::{PassBindGroups, PassBindKey, alloc_capture_texture};
 use super::{
     ExtractedFilterPass, ExtractedLayer, ExtractedUiLayers, FilterUniforms, LayerFilterPass,
     LayerFilterPipeline, LayerFilterPipelineKey, LayerFilterRun, LayerSlot, LayerTextureStore,
-    STUCK_GATE_HANG_FRAMES,
 };
 
 /// A layer's morph, as seen by the render world this frame. Present iff the
@@ -93,18 +91,12 @@ pub struct MorphSlot {
     pub blend_image: UVec2,
     /// The last consumed [`ExtractedMorph::freeze_seq`].
     pub seen_seq: u64,
-    /// The staged chain version (warn re-arm only; see
-    /// [`ExtractedMorph::version`]).
-    pub params_version: u32,
-    /// Whether `blend` holds a complete morph output. Predicted at prepare
-    /// (pipeline compiled AND the live capture valid); while false a
-    /// morph-only composite is withheld ([`morph_gate`]) and a downstream
-    /// regular chain keeps its own output invalid.
-    pub output_valid: bool,
-    /// Consecutive withheld frames; drives the stuck-gate warn.
-    pub gated_frames: u32,
-    /// Once-per-episode warn latch (see `FilterSlot::gate_warned`).
-    pub gate_warned: bool,
+    /// The run's readiness gate: valid when `blend` holds a complete morph
+    /// output (pipeline compiled AND the live capture valid); while invalid
+    /// a morph-only composite is withheld ([`morph_gate`]) and a downstream
+    /// regular chain keeps its own output invalid. Its version (see
+    /// [`ExtractedMorph::version`]) only re-arms the warn.
+    pub gate: super::GateState,
     /// Composite bind group over `blend` (morph-only layers); dies with the
     /// blend realloc.
     pub composite_bind_group: Option<BindGroup>,
@@ -148,7 +140,7 @@ pub fn freeze_morph_snapshot(
     let snapshot = match slot.morph.take() {
         // Interrupt: the previous blend holds the in-flight mix that is on
         // screen right now — exactly what the restarted morph eases FROM.
-        Some(prev) if prev.output_valid => Some(MorphSnapshot {
+        Some(prev) if prev.gate.output_valid => Some(MorphSnapshot {
             texture: prev.blend,
             image: prev.blend_image,
         }),
@@ -194,10 +186,7 @@ pub fn freeze_morph_snapshot(
         blend_alloc: alloc,
         blend_image: wanted,
         seen_seq: morph.freeze_seq,
-        params_version: 0,
-        output_valid: false,
-        gated_frames: 0,
-        gate_warned: false,
+        gate: super::GateState::default(),
         composite_bind_group: None,
         pass_bind_group: PassBindGroups::default(),
     });
@@ -230,7 +219,7 @@ pub fn maintain_morph_blend(
         );
         morph.blend = blend;
         morph.blend_alloc = slot.alloc;
-        morph.output_valid = false;
+        morph.gate.output_valid = false;
         morph.composite_bind_group = None;
     }
     morph.blend_image = slot.size;
@@ -324,15 +313,9 @@ pub fn prepare_layer_morphs(
         let Some(morph) = slot.morph.as_mut() else {
             continue;
         };
-        // A param/shader edit gets its own once-per-episode gate warn.
-        if morph.params_version != extracted_morph.version {
-            morph.gated_frames = 0;
-            morph.gate_warned = false;
-        }
-        morph.params_version = extracted_morph.version;
         // The run supersedes whatever the blend holds; phase 3 re-marks
         // valid iff the pass will execute over a valid capture.
-        morph.output_valid = false;
+        morph.gate.restage(extracted_morph.version);
 
         let id = specialized.specialize(
             &pipeline_cache,
@@ -438,9 +421,7 @@ pub fn prepare_layer_morphs(
             && slot.content_valid
             && let Some(morph) = slot.morph.as_mut()
         {
-            morph.output_valid = true;
-            morph.gated_frames = 0;
-            morph.gate_warned = false;
+            morph.gate.ready();
         }
     }
 }
@@ -477,42 +458,19 @@ pub fn morph_gate(
     atlas_layout: &BindGroupLayoutDescriptor,
     sampler: &Sampler,
 ) -> Option<BindGroup> {
-    if !morph.output_valid {
-        morph.gated_frames = morph.gated_frames.saturating_add(1);
-        if !morph.gate_warned {
-            let compile_error = meta
-                .runs
+    if !morph.gate.output_valid {
+        morph.gate.on_gated(
+            meta.runs
                 .get(idx)
-                .and_then(|run| run.as_ref())
-                .and_then(|run| {
-                    run.passes.iter().find_map(|pass| {
-                        match pipeline_cache.get_render_pipeline_state(pass.pipeline) {
-                            CachedPipelineState::Err(
-                                e @ (ShaderCacheError::ProcessShaderError(_)
-                                | ShaderCacheError::CreateShaderModule(_)),
-                            ) => Some(e.to_string()),
-                            _ => None,
-                        }
-                    })
-                });
-            if let Some(err) = compile_error {
-                tracing::warn!(
-                    "UI layer {main_entity:?}: the morphFilter pass shader failed to \
-                     compile — the layer's subtree is invisible while the morph is in \
-                     flight (the composite gate never falls back to unblended content). \
-                     Error: {err}",
-                );
-                morph.gate_warned = true;
-            } else if morph.gated_frames == STUCK_GATE_HANG_FRAMES {
-                tracing::warn!(
-                    "UI layer {main_entity:?}: morph composite withheld for {} consecutive \
-                     frames and its pipeline is still not ready (no compile error \
-                     reported). The layer's subtree is invisible until it resolves.",
-                    STUCK_GATE_HANG_FRAMES,
-                );
-                morph.gate_warned = true;
-            }
-        }
+                .and_then(Option::as_ref)
+                .into_iter()
+                .flat_map(|run| run.passes.iter().map(|pass| pass.pipeline)),
+            pipeline_cache,
+            main_entity,
+            "the morphFilter pass",
+            "the layer's subtree is invisible while the morph is in flight (the composite \
+             gate never falls back to unblended content)",
+        );
         return None;
     }
     if morph.composite_bind_group.is_none() {

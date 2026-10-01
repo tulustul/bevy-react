@@ -222,13 +222,13 @@ pub fn prepare_layer_mips(
                 mips,
                 mips_valid,
                 output_index,
-                output_valid,
+                gate,
                 ..
             } = filter;
             let Some(chain) = mips[*output_index].as_mut() else {
                 continue;
             };
-            (chain, mips_valid, *output_valid)
+            (chain, mips_valid, gate.output_valid)
         } else {
             let Some(chain) = slot.mips.as_mut() else {
                 continue;
