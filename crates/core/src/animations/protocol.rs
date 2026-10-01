@@ -299,15 +299,6 @@ pub enum GradientLeaf {
     ShapeY,
 }
 
-impl AnimatableProperty {
-    /// Whether this property feeds the `UiTransform` (built from all transform
-    /// channels together), so the apply layer can rebuild the transform once.
-    /// The channel set is the table's `Transform` stage (`crate::animations::props`).
-    pub fn is_transform(&self) -> bool {
-        self.stage() == crate::animations::props::PropStage::Transform
-    }
-}
-
 /// How an animated value resolves and where it lands. Pure metadata shared by the
 /// imperative apply layer and (for identity/precedence) the CSS-`transition`
 /// engine in `core`.

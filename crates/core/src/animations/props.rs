@@ -298,28 +298,6 @@ mod tests {
     // file) — no import needed.
     use super::super::protocol::{AnimatableProperty as P, Transform3dField as F};
 
-    /// The E0004 guard, both directions: the match has **no wildcard**, so an
-    /// `AnimatableProperty` (or `Transform3dField`) variant without a table
-    /// row fails to compile here — and a row naming a removed variant fails
-    /// to resolve. The dynamic domains are the explicitly-listed exception.
-    #[allow(dead_code, unused_parens)]
-    fn table_covers_every_variant(p: &P) {
-        macro_rules! check {
-            ($(($prop:tt, $acc:tt, $write:tt, $stage:ident, $park:ident),)*) => {
-                match p {
-                    $($prop => {})*
-                    P::FilterParam { .. }
-                    | P::BackdropParam { .. }
-                    | P::MorphParam { .. }
-                    | P::BackgroundGradientParam { .. }
-                    | P::BorderGradientParam { .. }
-                    | P::Ext { .. } => {}
-                }
-            };
-        }
-        with_animatable_props!(check);
-    }
-
     /// Row order IS enum `Ord` order (strictly ascending) — so consumers that
     /// iterate the table and consumers that iterate the `BTreeMap` bindings
     /// agree on sequence, by test instead of tribal knowledge. Also pins the

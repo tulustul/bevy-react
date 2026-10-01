@@ -158,11 +158,6 @@ impl SharedValues {
         self.values.get(&id).map(|s| s.current)
     }
 
-    /// Number of live shared values (handy in tests).
-    pub fn len(&self) -> usize {
-        self.values.len()
-    }
-
     /// Whether the table is empty.
     pub fn is_empty(&self) -> bool {
         self.values.is_empty()
