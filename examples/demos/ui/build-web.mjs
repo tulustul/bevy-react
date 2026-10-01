@@ -19,13 +19,7 @@
 // in which case install the version this build hints at.
 
 import { execFileSync } from "node:child_process";
-import {
-  cpSync,
-  mkdirSync,
-  existsSync,
-  readFileSync,
-  writeFileSync,
-} from "node:fs";
+import { cpSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -95,9 +89,6 @@ const wasm = resolve(
   repoRoot,
   `target/wasm32-unknown-unknown/${profile}/demos.wasm`,
 );
-if (!existsSync(wasm)) {
-  throw new Error(`wasm artifact not found at ${wasm}`);
-}
 
 // wasm-bindgen emits dist/demos.js (the `init` loader) + dist/demos_bg.wasm.
 run(wasmBindgen.bin, [
