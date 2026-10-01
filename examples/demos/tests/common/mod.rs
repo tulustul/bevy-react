@@ -12,7 +12,7 @@ use std::time::{Duration, Instant};
 use bevy_react::RawRequest;
 use bevy_react::ReactMessage;
 use bevy_react::animations::AnimationCommand;
-use bevy_react::js_thread::spawn_js_thread;
+use bevy_react::js_thread::{HostSenders, spawn_js_thread};
 use bevy_react::protocol::op::Op;
 use bevy_react::protocol::outbound::{Outbound, ResponseResult, UiEvent};
 use crossbeam_channel::{Receiver, RecvTimeoutError};
@@ -152,16 +152,19 @@ impl Harness {
         let (outbound, outbound_rx) = tokio::sync::mpsc::unbounded_channel();
         let (_reload, reload_rx) = tokio::sync::mpsc::unbounded_channel();
         answer_window_size(request_rx, outbound.clone());
+        let senders = HostSenders {
+            ops: ops_tx,
+            flush_stamps: flush_stamps_tx,
+            flush_devtools: flush_devtools_tx,
+            emit: emit_tx,
+            request: request_tx,
+            anim: anim_tx,
+        };
         spawn_js_thread(
             bevy_react::ext::ExtRegistrySlot::ready(ext_registry()),
             bundle.with_file_name("vendor.js"),
             bundle,
-            ops_tx,
-            flush_stamps_tx,
-            flush_devtools_tx,
-            emit_tx,
-            request_tx,
-            anim_tx,
+            senders,
             outbound_rx,
             reload_rx,
         );

@@ -41,12 +41,7 @@ pub(crate) fn spawn(app: &mut App, config: HostConfig, senders: HostSenders) -> 
         config.ext,
         vendor,
         bundle.clone(),
-        senders.ops,
-        senders.flush_stamps,
-        senders.flush_devtools,
-        senders.emit,
-        senders.request,
-        senders.anim,
+        senders,
         outbound_rx,
         reload_rx,
     );

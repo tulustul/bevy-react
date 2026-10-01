@@ -23,20 +23,32 @@ use crate::message::ReactMessage;
 use crate::protocol::op::Op;
 use crate::request::RawRequest;
 
-/// The JS→Bevy channel senders the host hands to the JS runtime. These are the
-/// same crossbeam channels on every target; only the Bevy→JS direction differs.
-pub(crate) struct HostSenders {
+/// The JS→Bevy channel senders the host hands to the JS runtime (on native,
+/// `spawn_js_thread` stores one clone in each runtime's `OpState`). These are
+/// the same crossbeam channels on every target; only the Bevy→JS direction
+/// differs.
+#[derive(Clone)]
+pub struct HostSenders {
+    /// One commit's ops per batch (`op_flush`).
     pub ops: Sender<Vec<Op>>,
-    /// Per-batch send instants for the devtools "pre-apply" leg. Native only —
-    /// `Instant::now` is unavailable on wasm, so the web host drops it and the
-    /// receiver simply stays empty there.
+    /// Per-batch send instants for the devtools "pre-apply" leg (send →
+    /// `apply_js_ops` start: channel wait + frame latency). A side channel, so
+    /// the op hot path's type stays `Vec<Op>`; each stamp is sent BEFORE its
+    /// batch, so a received batch always finds its stamp queued and the FIFOs
+    /// stay aligned. Native only — `Instant::now` is unavailable on wasm, so
+    /// the web host drops it and the receiver simply stays empty there.
     #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     pub flush_stamps: Sender<std::time::Instant>,
-    /// Per-batch devtools-origin flags (aligned FIFO with `ops`, flag sent
-    /// first), so applies can be attributed — see `reconcile::FlushFlags`.
+    /// Per-batch devtools-origin flags (`true` = the devtools panel's own React
+    /// container flushed), same aligned discipline as `flush_stamps` (flag sent
+    /// first). Lets applies be attributed, so devtools batch stats skip the
+    /// panel's own repaints — see `reconcile::FlushFlags`.
     pub flush_devtools: Sender<bool>,
+    /// App messages (`op_emit`).
     pub emit: Sender<ReactMessage>,
+    /// Correlated requests (`op_request`).
     pub request: Sender<RawRequest>,
+    /// Shared-value animation commands (`op_animate`).
     pub anim: Sender<AnimationCommand>,
 }
 

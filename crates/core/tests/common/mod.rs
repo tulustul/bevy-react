@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use bevy_react_core::animations::AnimationCommand;
-use bevy_react_core::js_thread::spawn_js_thread;
+use bevy_react_core::js_thread::{HostSenders, spawn_js_thread};
 use bevy_react_core::protocol::op::Op;
 use bevy_react_core::protocol::outbound::{Outbound, UiEvent};
 use bevy_react_core::{RawRequest, ReactMessage};
@@ -50,16 +50,19 @@ impl Js {
         let (anim_tx, _anims) = crossbeam_channel::unbounded();
         let (outbound, outbound_rx) = tokio::sync::mpsc::unbounded_channel();
         let (reload, reload_rx) = tokio::sync::mpsc::unbounded_channel();
+        let senders = HostSenders {
+            ops: ops_tx,
+            flush_stamps: flush_stamps_tx,
+            flush_devtools: flush_devtools_tx,
+            emit: emit_tx,
+            request: request_tx,
+            anim: anim_tx,
+        };
         spawn_js_thread(
             bevy_react_core::ext::ExtRegistrySlot::ready(bevy_react_core::ext::builtin_registry()),
             vendor,
             app_path.clone(),
-            ops_tx,
-            flush_stamps_tx,
-            flush_devtools_tx,
-            emit_tx,
-            request_tx,
-            anim_tx,
+            senders,
             outbound_rx,
             reload_rx,
         );

@@ -13,7 +13,6 @@ use std::cell::{Cell, RefCell};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
-use crossbeam_channel::Sender;
 use deno_core::{Extension, JsRuntime, OpDecl, OpState, RuntimeOptions, op2};
 use deno_error::JsErrorBox;
 use tokio::sync::Mutex;
@@ -21,53 +20,27 @@ use tokio::sync::Notify;
 use tokio::sync::mpsc::UnboundedReceiver;
 
 use crate::animations::AnimationCommand;
-
+pub use crate::host::HostSenders;
 use crate::message::ReactMessage;
-use crate::protocol::{op::Op, op::OpBatch, outbound::Outbound};
+use crate::protocol::{op::OpBatch, outbound::Outbound};
 use crate::request::RawRequest;
 
-/// Sender half stored in `OpState` so `op_flush` can hand op batches to Bevy.
-struct OpSender(Sender<Vec<Op>>);
-
-/// Sender half stored in `OpState` so `op_flush` can stamp each batch's send
-/// instant for the devtools "pre-apply" leg (send → `apply_js_ops` start:
-/// channel wait + frame latency). A side channel rather than a payload change,
-/// so the op hot path's type stays `Vec<Op>`. Stamps are sent BEFORE the batch,
-/// so a received batch always finds its stamp queued and the FIFOs stay aligned.
-struct FlushStampSender(Sender<std::time::Instant>);
-
-/// Sender half stored in `OpState` so `op_flush` can mark each batch's origin:
-/// `true` = the devtools panel's own React container produced it. Same aligned
-/// side-channel discipline as [`FlushStampSender`] (flag sent BEFORE the
-/// batch). Lets `apply_js_ops` attribute applies, so devtools batch-stats skip
-/// the panel's own repaints (otherwise stats → panel repaint → new batch →
-/// stats… self-observes at frame rate).
-struct FlushDevtoolsSender(Sender<bool>);
-
-/// Sender half stored in `OpState` so `op_emit` can hand app messages to Bevy.
-struct EmitSender(Sender<ReactMessage>);
-
-/// Sender half stored in `OpState` so `op_request` can hand requests to Bevy.
-struct RequestSender(Sender<RawRequest>);
-
-/// Sender half stored in `OpState` so `op_animate` can hand animation commands to
-/// the animations plugin. Always present; if animations are disabled the receiver
-/// is dropped and sends are silently discarded.
-struct AnimSender(Sender<AnimationCommand>);
-
-/// Receivers shared (by `Rc`) into each runtime's `OpState`. The async op clones
-/// the `Rc` out and awaits without holding the `OpState` borrow.
-struct OutboundReceiver(Rc<Mutex<UnboundedReceiver<Outbound>>>);
-struct ReloadReceiver(Rc<Mutex<UnboundedReceiver<()>>>);
-
-/// Set true when a reload was requested, so the outer loop rebuilds rather than
-/// exits. One per runtime instance.
-struct ReloadFlag(Rc<Cell<bool>>);
-
-/// Woken by `op_next_event` when it hands the JS loop the reload sentinel, so
-/// `pump` can break out of `run_event_loop` even when perpetual timers (e.g. a
-/// `setInterval` clock) keep the event loop from ever going idle on its own.
-struct ReloadNotify(Rc<Notify>);
+/// The Bevy→JS ends `op_next_event` waits on, stored in each runtime's
+/// `OpState`. They outlive individual runtimes (shared by `Rc`), so events and
+/// reload signals survive a full-reload rebuild; the async op clones them out
+/// and awaits without holding the `OpState` borrow.
+#[derive(Clone)]
+struct EventLoop {
+    outbound: Rc<Mutex<UnboundedReceiver<Outbound>>>,
+    reload: Rc<Mutex<UnboundedReceiver<()>>>,
+    /// Set when a reload was requested, so the outer loop rebuilds rather than
+    /// exits.
+    reload_flag: Rc<Cell<bool>>,
+    /// Woken by `op_next_event` when it hands the JS loop the reload sentinel,
+    /// so `pump` can break out of `run_event_loop` even when perpetual timers
+    /// (e.g. a `setInterval` clock) keep the event loop from ever going idle.
+    reload_notify: Rc<Notify>,
+}
 
 /// JS -> Bevy: ship one commit's worth of mutation ops. Synchronous.
 ///
@@ -77,7 +50,7 @@ struct ReloadNotify(Rc<Notify>);
 /// v8 API traffic (key interning, `Get`s, type probes) a serde_v8 decode of the
 /// same tree pays — measured 60-75% off the boundary cost of every batch op.
 /// `devtools` marks batches from the panel's own React container (see
-/// [`FlushDevtoolsSender`]). The [`OpBatch`] wrapper decodes exactly like a
+/// [`HostSenders::flush_devtools`]). The [`OpBatch`] wrapper decodes exactly like a
 /// `Vec<Op>` but stamps any decode-fallback warnings with their op's node id
 /// (see [`crate::diag`]); [`op_take_decode_warnings`] drains them. Those are
 /// value-level fallbacks; a *structurally* invalid batch is a `TypeError`
@@ -94,14 +67,12 @@ fn op_flush(state: &mut OpState, #[string] json: &str, devtools: bool) -> Result
     }
     let ops: OpBatch =
         serde_json::from_str(json).map_err(|e| JsErrorBox::type_error(e.to_string()))?;
-    // Stamp + flag first (see `FlushStampSender`): the decode of `ops` already
-    // happened, so the stamp marks pure channel-entry time.
-    let stamp = state.borrow::<FlushStampSender>();
-    let _ = stamp.0.send(std::time::Instant::now());
-    let flag = state.borrow::<FlushDevtoolsSender>();
-    let _ = flag.0.send(devtools);
-    let sender = state.borrow::<OpSender>();
-    let _ = sender.0.send(ops.0);
+    // Stamp + flag first (see `HostSenders::flush_stamps`): the decode of
+    // `ops` already happened, so the stamp marks pure channel-entry time.
+    let senders = state.borrow::<HostSenders>();
+    let _ = senders.flush_stamps.send(std::time::Instant::now());
+    let _ = senders.flush_devtools.send(devtools);
+    let _ = senders.ops.send(ops.0);
     Ok(())
 }
 
@@ -123,8 +94,10 @@ fn op_take_decode_warnings() -> Vec<crate::diag::DecodeWarning> {
 // Routing-by-name needs the type erased, but high-frequency events still pay for it.
 #[op2]
 fn op_emit(state: &mut OpState, #[string] name: String, #[serde] value: serde_json::Value) {
-    let sender = state.borrow::<EmitSender>();
-    let _ = sender.0.send(ReactMessage { name, value });
+    let _ = state
+        .borrow::<HostSenders>()
+        .emit
+        .send(ReactMessage { name, value });
 }
 
 /// JS -> Bevy: surface a `console.*` call in the Bevy log. `level` is one of
@@ -155,8 +128,7 @@ fn op_log(#[string] level: String, #[string] msg: String) {
 /// drives the value each frame, so per-frame interpolation never crosses back.
 #[op2]
 fn op_animate(state: &mut OpState, #[serde] cmd: AnimationCommand) {
-    let sender = state.borrow::<AnimSender>();
-    let _ = sender.0.send(cmd);
+    let _ = state.borrow::<HostSenders>().anim.send(cmd);
 }
 
 /// JS -> Bevy: send a correlated request. The reply comes back asynchronously as
@@ -170,8 +142,10 @@ fn op_request(
     #[string] name: String,
     #[serde] value: serde_json::Value,
 ) {
-    let sender = state.borrow::<RequestSender>();
-    let _ = sender.0.send(RawRequest { id, name, value });
+    let _ = state
+        .borrow::<HostSenders>()
+        .request
+        .send(RawRequest { id, name, value });
 }
 
 /// Bevy -> JS: resolve with the next outbound message (UI event, app event,
@@ -180,25 +154,17 @@ fn op_request(
 #[op2]
 #[serde]
 async fn op_next_event(state: Rc<RefCell<OpState>>) -> Option<Outbound> {
-    let (events, reload, flag, notify) = {
-        let state = state.borrow();
-        (
-            state.borrow::<OutboundReceiver>().0.clone(),
-            state.borrow::<ReloadReceiver>().0.clone(),
-            state.borrow::<ReloadFlag>().0.clone(),
-            state.borrow::<ReloadNotify>().0.clone(),
-        )
-    };
-    let mut events = events.lock().await;
-    let mut reload = reload.lock().await;
+    let handles = state.borrow().borrow::<EventLoop>().clone();
+    let mut events = handles.outbound.lock().await;
+    let mut reload = handles.reload.lock().await;
     tokio::select! {
         ev = events.recv() => ev, // Some(outbound), or None on shutdown
         r = reload.recv() => match r {
             Some(()) => {
-                flag.set(true);
+                handles.reload_flag.set(true);
                 // Wake `pump`: timers may be keeping `run_event_loop` from
                 // returning, so it can't notice the reload on its own.
-                notify.notify_one();
+                handles.reload_notify.notify_one();
                 Some(Outbound::Reload)
             }
             None => None, // reload sender dropped => shutdown
@@ -307,34 +273,16 @@ enum Pumped {
     Shutdown,
 }
 
-/// The senders the runtime needs; cloned into each (re)build of the isolate.
-#[derive(Clone)]
 /// The feature-registry handoff stored in `OpState` (see `op_flush`).
 struct ExtSlot(crate::ext::ExtRegistrySlot);
 
-struct Senders {
-    ext: crate::ext::ExtRegistrySlot,
-    ops: Sender<Vec<Op>>,
-    flush_stamps: Sender<std::time::Instant>,
-    flush_devtools: Sender<bool>,
-    emit: Sender<ReactMessage>,
-    request: Sender<RawRequest>,
-    anim: Sender<AnimationCommand>,
-}
-
 /// Spawn the JS thread. Builds the isolate once and keeps it alive across hot
 /// reloads (re-executing only the app bundle); runs until shutdown.
-#[allow(clippy::too_many_arguments)]
 pub fn spawn_js_thread(
     ext: crate::ext::ExtRegistrySlot,
     vendor_path: PathBuf,
     app_path: PathBuf,
-    ops_tx: Sender<Vec<Op>>,
-    flush_stamps_tx: Sender<std::time::Instant>,
-    flush_devtools_tx: Sender<bool>,
-    emit_tx: Sender<ReactMessage>,
-    request_tx: Sender<RawRequest>,
-    anim_tx: Sender<AnimationCommand>,
+    senders: HostSenders,
     outbound_rx: UnboundedReceiver<Outbound>,
     reload_rx: UnboundedReceiver<()>,
 ) {
@@ -347,21 +295,12 @@ pub fn spawn_js_thread(
                 .expect("build current-thread tokio runtime");
 
             rt.block_on(async move {
-                let senders = Senders {
-                    ext,
-                    ops: ops_tx,
-                    flush_stamps: flush_stamps_tx,
-                    flush_devtools: flush_devtools_tx,
-                    emit: emit_tx,
-                    request: request_tx,
-                    anim: anim_tx,
+                let event_loop = EventLoop {
+                    outbound: Rc::new(Mutex::new(outbound_rx)),
+                    reload: Rc::new(Mutex::new(reload_rx)),
+                    reload_flag: Rc::new(Cell::new(false)),
+                    reload_notify: Rc::new(Notify::new()),
                 };
-                // These outlive individual runtimes so events/reload signals
-                // survive across a full-reload rebuild.
-                let outbound_rx = Rc::new(Mutex::new(outbound_rx));
-                let reload_rx = Rc::new(Mutex::new(reload_rx));
-                let reload_flag = Rc::new(Cell::new(false));
-                let reload_notify = Rc::new(Notify::new());
 
                 // The last app bundle that executed WITHOUT throwing. A reload that
                 // throws (syntax error or a runtime error like an undefined
@@ -379,11 +318,9 @@ pub fn spawn_js_thread(
                 let mut runtime = match build_runtime(
                     &vendor_path,
                     &last_good_app,
+                    &ext,
                     &senders,
-                    outbound_rx.clone(),
-                    reload_rx.clone(),
-                    reload_flag.clone(),
-                    reload_notify.clone(),
+                    &event_loop,
                 ) {
                     Ok(rt) => rt,
                     Err(e) => {
@@ -393,11 +330,11 @@ pub fn spawn_js_thread(
                 };
 
                 loop {
-                    reload_flag.set(false);
+                    event_loop.reload_flag.set(false);
                     // `pump` drives the JS event loop: the initial/refreshed
                     // render commits, then it parks on `op_next_event` until a
                     // reload or shutdown.
-                    match pump(&mut runtime, &reload_flag, &reload_notify).await {
+                    match pump(&mut runtime, &event_loop).await {
                         Pumped::Shutdown => break,
                         Pumped::Reload => {
                             // Re-execute the rebuilt app in the LIVE isolate. The
@@ -454,11 +391,9 @@ pub fn spawn_js_thread(
 fn build_runtime(
     vendor_path: &Path,
     app_code: &str,
-    senders: &Senders,
-    outbound_rx: Rc<Mutex<UnboundedReceiver<Outbound>>>,
-    reload_rx: Rc<Mutex<UnboundedReceiver<()>>>,
-    reload_flag: Rc<Cell<bool>>,
-    reload_notify: Rc<Notify>,
+    registry: &crate::ext::ExtRegistrySlot,
+    senders: &HostSenders,
+    event_loop: &EventLoop,
 ) -> anyhow::Result<JsRuntime> {
     const FLUSH: OpDecl = op_flush();
     const TAKE_WARNINGS: OpDecl = op_take_decode_warnings();
@@ -493,17 +428,9 @@ fn build_runtime(
     {
         let op_state = runtime.op_state();
         let mut op_state = op_state.borrow_mut();
-        op_state.put(ExtSlot(senders.ext.clone()));
-        op_state.put(OpSender(senders.ops.clone()));
-        op_state.put(FlushStampSender(senders.flush_stamps.clone()));
-        op_state.put(FlushDevtoolsSender(senders.flush_devtools.clone()));
-        op_state.put(EmitSender(senders.emit.clone()));
-        op_state.put(RequestSender(senders.request.clone()));
-        op_state.put(AnimSender(senders.anim.clone()));
-        op_state.put(OutboundReceiver(outbound_rx));
-        op_state.put(ReloadReceiver(reload_rx));
-        op_state.put(ReloadFlag(reload_flag));
-        op_state.put(ReloadNotify(reload_notify));
+        op_state.put(ExtSlot(registry.clone()));
+        op_state.put(senders.clone());
+        op_state.put(event_loop.clone());
     }
 
     runtime.execute_script("[prelude]", PRELUDE)?;
@@ -520,11 +447,8 @@ fn build_runtime(
 /// Drive the JS event loop until it yields control back to Rust: either a reload
 /// was signalled (`op_next_event` returned the reload sentinel, so the JS event
 /// loop returned) or all senders dropped (shutdown).
-async fn pump(
-    runtime: &mut JsRuntime,
-    reload_flag: &Rc<Cell<bool>>,
-    reload_notify: &Notify,
-) -> Pumped {
+async fn pump(runtime: &mut JsRuntime, event_loop: &EventLoop) -> Pumped {
+    let reload_flag = &event_loop.reload_flag;
     // Race the event loop against the reload signal. `run_event_loop` only
     // resolves when the loop goes idle, but an app with a perpetual timer
     // (e.g. a `setInterval` clock) never does — so without this the reload
@@ -536,7 +460,7 @@ async fn pump(
         let loop_result = tokio::select! {
             biased;
             res = runtime.run_event_loop(Default::default()) => Some(res),
-            _ = reload_notify.notified() => None,
+            _ = event_loop.reload_notify.notified() => None,
         };
         match loop_result {
             // Woken by the reload notify (a real reload sets `reload_flag` before
