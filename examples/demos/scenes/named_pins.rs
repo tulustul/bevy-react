@@ -57,7 +57,6 @@ impl Plugin for NamedPinsScenePlugin {
         // No `register_bindings`: this scene has no React messages of its own —
         // that is the point of the demo.
         app.add_systems(Startup, setup_pin_assets)
-            .add_systems(OnEnter(Scene::NamedNodes), reset_counter)
             .add_systems(
                 Update,
                 // See this frame's mounts/unmounts (`ReactNodes` is updated in
@@ -116,10 +115,6 @@ struct Pin {
 #[derive(Component)]
 struct PinPart;
 
-/// Counts pins spawned in this scene run, to rotate through the ball palette.
-#[derive(Resource, Default)]
-struct PinCounter(usize);
-
 fn setup_pin_assets(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
@@ -142,26 +137,26 @@ fn setup_pin_assets(
         }),
         palette: palette.to_vec(),
     });
-    commands.init_resource::<PinCounter>();
-}
-
-/// Fresh scene run, fresh palette rotation. (There is no ground mesh: pins
-/// stand on the invisible `y = 0` plane over the ambient backdrop.)
-fn reset_counter(mut counter: ResMut<PinCounter>) {
-    counter.0 = 0;
 }
 
 /// Keep exactly one pin per live React node named `"pin"`: spawn for new
 /// cards, despawn for unmounted ones. `ReactNodes::all` lists the cards in
-/// mount order — no React-side bookkeeping, no ids over the wire.
+/// mount order — no React-side bookkeeping, no ids over the wire. (There is
+/// no ground mesh: pins stand on the invisible `y = 0` plane over the aurora
+/// backdrop.)
 fn sync_pins(
     mut commands: Commands,
     nodes: ReactNodes,
     assets: Res<PinAssets>,
     mut materials: ResMut<Assets<StandardMaterial>>,
-    mut counter: ResMut<PinCounter>,
+    // Pins spawned this scene run, to rotate through the ball palette.
+    mut spawned: Local<usize>,
     pins: Query<(Entity, &Pin)>,
 ) {
+    // A fresh scene run (no pins yet) restarts the palette rotation.
+    if pins.is_empty() {
+        *spawned = 0;
+    }
     let wanted = nodes.all(PIN_NAME);
     for (entity, pin) in &pins {
         if !wanted.contains(&pin.node) {
@@ -172,8 +167,8 @@ fn sync_pins(
         if pins.iter().any(|(_, p)| p.node == node) {
             continue;
         }
-        let color = assets.palette[counter.0 % assets.palette.len()].to_linear();
-        counter.0 += 1;
+        let color = assets.palette[*spawned % assets.palette.len()].to_linear();
+        *spawned += 1;
         let material = materials.add(StandardMaterial {
             base_color: color.into(),
             emissive: color * GLOW,
