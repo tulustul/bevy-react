@@ -14,6 +14,7 @@ use serde::de::{self, Deserializer, Visitor};
 use super::background_image::BackgroundImageMode;
 use super::decode_warn;
 use crate::image_rendering::ImageRendering;
+use crate::scrollbar::{HorizontalEdge, ScrollbarPosition, VerticalEdge};
 use crate::style::KeywordTable;
 use crate::style::props::LayerCache;
 
@@ -171,6 +172,17 @@ keyword_fields! {
     fn de_bg_image_mode("backgroundImage") -> BackgroundImageMode {
         "stretch" => Stretch, "repeat" => Repeat,
         "repeatX" => RepeatX, "repeatY" => RepeatY,
+    }
+    // The sub-fields of a styled `scrollbar` object (decoded inside its own
+    // visitor, hence no table).
+    fn de_scrollbar_position("scrollbar") -> ScrollbarPosition {
+        "gutter" => Gutter, "float" => Float,
+    }
+    fn de_scrollbar_vertical_side("scrollbar") -> HorizontalEdge {
+        "left" => Left, "right" => Right,
+    }
+    fn de_scrollbar_horizontal_side("scrollbar") -> VerticalEdge {
+        "top" => Top, "bottom" => Bottom,
     }
     // GPU sampling vocabulary on purpose (no CSS `smooth`/`pixelated`
     // aliases); unknown → `auto`, which never touches the asset.

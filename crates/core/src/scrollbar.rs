@@ -33,9 +33,13 @@ use bevy::ui::{
 use bevy::ui_widgets::{ControlOrientation, Scrollbar, ScrollbarDragState, ScrollbarThumb};
 
 use serde::Deserialize;
+use serde::de::value::StringDeserializer;
 use serde::de::{self, Deserializer, MapAccess, Visitor};
 
 use crate::plugin::PointerCapture;
+use crate::protocol::keywords::{
+    de_scrollbar_horizontal_side, de_scrollbar_position, de_scrollbar_vertical_side,
+};
 use crate::protocol::{units::Rect, visual::BorderColorSpec};
 use crate::transition::ScrollTransitionState;
 use crate::ui_map::{parse_color, rect_to_border_radius, rect_to_uirect};
@@ -291,53 +295,12 @@ impl<'de> Deserialize<'de> for ScrollbarSpec {
                         "thumb" => thumb = map.next_value()?,
                         "thickness" => thickness = map.next_value()?,
                         "minThumbLength" => min_thumb_length = map.next_value()?,
-                        "position" => {
-                            position = match map.next_value::<String>()?.as_str() {
-                                "float" => ScrollbarPosition::Float,
-                                "gutter" => ScrollbarPosition::Gutter,
-                                other => {
-                                    crate::protocol::decode_warn(
-                                        "scrollbar",
-                                        other,
-                                        &format!(
-                                            "unknown scrollbar position {other:?}; using \"gutter\""
-                                        ),
-                                    );
-                                    ScrollbarPosition::Gutter
-                                }
-                            }
-                        }
+                        "position" => position = next_keyword(&mut map, de_scrollbar_position)?,
                         "verticalSide" => {
-                            vertical_side = match map.next_value::<String>()?.as_str() {
-                                "left" => HorizontalEdge::Left,
-                                "right" => HorizontalEdge::Right,
-                                other => {
-                                    crate::protocol::decode_warn(
-                                        "scrollbar",
-                                        other,
-                                        &format!(
-                                            "unknown scrollbar verticalSide {other:?}; using \"right\""
-                                        ),
-                                    );
-                                    HorizontalEdge::Right
-                                }
-                            }
+                            vertical_side = next_keyword(&mut map, de_scrollbar_vertical_side)?
                         }
                         "horizontalSide" => {
-                            horizontal_side = match map.next_value::<String>()?.as_str() {
-                                "top" => VerticalEdge::Top,
-                                "bottom" => VerticalEdge::Bottom,
-                                other => {
-                                    crate::protocol::decode_warn(
-                                        "scrollbar",
-                                        other,
-                                        &format!(
-                                            "unknown scrollbar horizontalSide {other:?}; using \"bottom\""
-                                        ),
-                                    );
-                                    VerticalEdge::Bottom
-                                }
-                            }
+                            horizontal_side = next_keyword(&mut map, de_scrollbar_horizontal_side)?
                         }
                         _ => {
                             let _ = map.next_value::<de::IgnoredAny>()?;
@@ -362,6 +325,17 @@ impl<'de> Deserialize<'de> for ScrollbarSpec {
         }
         d.deserialize_any(SpecVisitor)
     }
+}
+
+/// Decode one keyword sub-field through its `keyword_fields!` decoder (an
+/// unknown keyword warns and falls back to the default).
+fn next_keyword<'de, A, T, F>(map: &mut A, decode: F) -> Result<T, A::Error>
+where
+    A: MapAccess<'de>,
+    T: Default,
+    F: FnOnce(StringDeserializer<A::Error>) -> Result<Option<T>, A::Error>,
+{
+    Ok(decode(StringDeserializer::new(map.next_value()?))?.unwrap_or_default())
 }
 
 /// Stamped on a scroll container (from its `scrollbar` style field) when the spec
@@ -893,6 +867,14 @@ mod tests {
         let style: Style = serde_json::from_value(serde_json::json!({ "scrollbar": "wat" }))
             .expect("must not error on a bad keyword");
         assert_eq!(style.get(&SCROLLBAR), Some(&ScrollbarSpec::None));
+        let style: Style = serde_json::from_value(serde_json::json!({
+            "scrollbar": { "position": "x", "verticalSide": "x", "horizontalSide": "x" }
+        }))
+        .expect("must not error on bad sub-keywords");
+        let spec = style.get(&SCROLLBAR).expect("present");
+        assert_eq!(spec.position(), ScrollbarPosition::Gutter);
+        assert_eq!(spec.vertical_side(), HorizontalEdge::Right);
+        assert_eq!(spec.horizontal_side(), VerticalEdge::Bottom);
     }
 
     #[test]
