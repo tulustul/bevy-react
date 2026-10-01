@@ -20,22 +20,17 @@ use crate::protocol::units::Length;
 /// `(0,1)`. Only the radius is a named (layout-exposed) param — the direction
 /// components are pass-internal.
 #[derive(Debug, Clone, Copy, PartialEq, Deserialize, ts_rs::TS)]
-#[serde(deny_unknown_fields)]
+#[serde(default, deny_unknown_fields)]
 pub struct BlurParams {
     // Mirrors `#[react_filter]`'s override for a `Length` field.
-    #[serde(default = "default_blur_radius")]
     #[ts(type = "number | string")]
     pub radius: Length,
-}
-
-fn default_blur_radius() -> Length {
-    Length::Px(20.0)
 }
 
 impl Default for BlurParams {
     fn default() -> Self {
         Self {
-            radius: default_blur_radius(),
+            radius: Length::Px(20.0),
         }
     }
 }

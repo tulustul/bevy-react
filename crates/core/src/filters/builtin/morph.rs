@@ -22,18 +22,6 @@ use crate::filters::registry::{
 };
 use crate::protocol::{units::Angle, units::Length};
 
-fn default_spread() -> f32 {
-    0.6
-}
-
-fn default_scale() -> Length {
-    Length::Px(56.0)
-}
-
-fn default_crossfade_softness() -> f32 {
-    0.5
-}
-
 /// `crossfade`: a noise-staggered two-input blend. A smooth fbm value-noise
 /// field gives each pixel a stagger offset (`n * spread`) so blob-shaped
 /// regions cross-dissolve earlier than others; each pixel then fades linearly
@@ -45,29 +33,25 @@ fn default_crossfade_softness() -> f32 {
 /// seed)`; `resolve` prepends the `Length` px validation for `scale` before
 /// delegating to [`resolve_single_pass`] (the default would skip it).
 #[derive(Debug, Clone, Copy, PartialEq, Deserialize, ts_rs::TS)]
-#[serde(deny_unknown_fields)]
+#[serde(default, deny_unknown_fields)]
 pub struct CrossfadeParams {
     /// 0..1 stagger amount; 0 is the plain uniform crossfade.
-    #[serde(default = "default_spread")]
     pub spread: f32,
     /// Noise feature size in logical px.
-    #[serde(default = "default_scale")]
     #[ts(type = "number | string")]
     pub scale: Length,
     /// 0..1 local fade window (fraction of the progress range).
-    #[serde(default = "default_crossfade_softness")]
     pub softness: f32,
     /// Re-rolls the noise pattern (domain offset).
-    #[serde(default)]
     pub seed: f32,
 }
 
 impl Default for CrossfadeParams {
     fn default() -> Self {
         Self {
-            spread: default_spread(),
-            scale: default_scale(),
-            softness: default_crossfade_softness(),
+            spread: 0.6,
+            scale: Length::Px(56.0),
+            softness: 0.5,
             seed: 0.0,
         }
     }
@@ -89,10 +73,6 @@ impl ReactFilter for CrossfadeParams {
 
     fn shader(assets: &AssetServer) -> Handle<Shader> {
         load_embedded_asset!(assets, "crossfade.wgsl")
-    }
-
-    fn outset(&self) -> Result<f32, String> {
-        Ok(0.0)
     }
 
     fn pack(&self) -> (Vec<Vec4>, Arc<[ParamSlot]>) {
@@ -117,10 +97,6 @@ impl ReactFilter for CrossfadeParams {
 
 impl ReactMorphFilter for CrossfadeParams {}
 
-fn default_softness() -> Length {
-    Length::Px(0.0)
-}
-
 /// `linearWipe`: the "to" image sweeps in along `angle` (degrees, clockwise
 /// from +X in screen space, like every angle in the system; 0 wipes
 /// left-to-right, 90 top-to-bottom), with a `softness`-px eased band around
@@ -132,12 +108,10 @@ fn default_softness() -> Length {
 /// 0, 0)`; `resolve` prepends the `Length` px validation before delegating to
 /// [`resolve_single_pass`] (the default would skip it).
 #[derive(Debug, Clone, Copy, PartialEq, Deserialize, ts_rs::TS)]
-#[serde(deny_unknown_fields)]
+#[serde(default, deny_unknown_fields)]
 pub struct LinearWipeParams {
-    #[serde(default)]
     #[ts(type = "number | string")]
     pub angle: Angle,
-    #[serde(default = "default_softness")]
     #[ts(type = "number | string")]
     pub softness: Length,
 }
@@ -146,7 +120,7 @@ impl Default for LinearWipeParams {
     fn default() -> Self {
         Self {
             angle: Angle::default(),
-            softness: default_softness(),
+            softness: Length::Px(0.0),
         }
     }
 }
@@ -162,11 +136,6 @@ impl ReactFilter for LinearWipeParams {
 
     fn shader(assets: &AssetServer) -> Handle<Shader> {
         load_embedded_asset!(assets, "linear_wipe.wgsl")
-    }
-
-    /// The wipe never paints outside the box.
-    fn outset(&self) -> Result<f32, String> {
-        Ok(0.0)
     }
 
     fn pack(&self) -> (Vec<Vec4>, Arc<[ParamSlot]>) {

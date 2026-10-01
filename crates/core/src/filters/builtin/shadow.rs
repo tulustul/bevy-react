@@ -18,19 +18,6 @@ const MODE_PREP: f32 = 0.0;
 /// Combine mode marker in `params[0].w`.
 const MODE_COMBINE: f32 = 1.0;
 
-fn default_offset_y() -> Length {
-    Length::Px(4.0)
-}
-
-fn default_spread() -> Length {
-    Length::Px(6.0)
-}
-
-fn default_shadow_color() -> FilterColor {
-    // Black at 60% alpha — a soft, visible shorthand default.
-    FilterColor([0.0, 0.0, 0.0, 0.6])
-}
-
 /// `shadow`: a CSS-`drop-shadow`-style shadow — the content's alpha
 /// silhouette, tinted `color`, shifted by `offsetX`/`offsetY` px (positive =
 /// right/down), Gaussian-blurred by `spread`, composited UNDER the content.
@@ -49,19 +36,15 @@ fn default_shadow_color() -> FilterColor {
 /// are `{ animated }`-drivable); the mode switch is pass-internal in
 /// `params[0].w`, like blur's direction.
 #[derive(Debug, Clone, Copy, PartialEq, Deserialize, ts_rs::TS)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
+#[serde(default, deny_unknown_fields, rename_all = "camelCase")]
 pub struct ShadowParams {
-    #[serde(default = "default_shadow_color")]
     pub color: FilterColor,
     // Mirror `#[react_filter]`'s override for `Length` fields; offsets may be
     // negative (left/up).
-    #[serde(default)]
     #[ts(type = "number | string")]
     pub offset_x: Length,
-    #[serde(default = "default_offset_y")]
     #[ts(type = "number | string")]
     pub offset_y: Length,
-    #[serde(default = "default_spread")]
     #[ts(type = "number | string")]
     pub spread: Length,
 }
@@ -69,10 +52,11 @@ pub struct ShadowParams {
 impl Default for ShadowParams {
     fn default() -> Self {
         Self {
-            color: default_shadow_color(),
+            // Black at 60% alpha — a soft, visible shorthand default.
+            color: FilterColor([0.0, 0.0, 0.0, 0.6]),
             offset_x: Length::Px(0.0),
-            offset_y: default_offset_y(),
-            spread: default_spread(),
+            offset_y: Length::Px(4.0),
+            spread: Length::Px(6.0),
         }
     }
 }

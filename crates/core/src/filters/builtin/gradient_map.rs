@@ -17,31 +17,12 @@ use crate::protocol::units::Angle;
 /// [`MAX_FILTER_PARAM_VECS`](crate::filters::params::MAX_FILTER_PARAM_VECS).
 pub const MAX_GRADIENT_STOPS: usize = 6;
 
-fn default_amount() -> f32 {
-    1.0
-}
-
 /// A builtin default color, parsed once at pack/default time (infallible for
 /// the literals used here).
 fn css(color: &str) -> FilterColor {
     let srgba = crate::raster::parse_css_color(color).expect("valid builtin color literal");
     let lin = bevy::color::LinearRgba::from(srgba);
     FilterColor([lin.red, lin.green, lin.blue, lin.alpha])
-}
-
-/// Shorthand-default stops: a visible sky-blue → violet sweep (the
-/// shorthand-default convention — `{ name: "gradientMap" }` shows something).
-fn default_stops() -> Vec<GradientMapStop> {
-    vec![
-        GradientMapStop {
-            color: css("#38bdf8"),
-            position: None,
-        },
-        GradientMapStop {
-            color: css("#a78bfa"),
-            position: None,
-        },
-    ]
 }
 
 /// One gradient stop: a CSS color and an optional position as a **fraction**
@@ -92,15 +73,12 @@ pub struct GradientMapStop {
 /// a nested `stops[i].color` is bindable (v1 limitation). Whole-chain
 /// `transition: {{ filter }}` easing of stop colors/positions works.
 #[derive(Debug, Clone, PartialEq, Deserialize, ts_rs::TS)]
-#[serde(deny_unknown_fields)]
+#[serde(default, deny_unknown_fields)]
 pub struct GradientMapParams {
     // Mirrors `#[react_filter]`'s override for an `Angle` field.
-    #[serde(default)]
     #[ts(type = "number | string")]
     pub angle: Angle,
-    #[serde(default = "default_stops")]
     pub stops: Vec<GradientMapStop>,
-    #[serde(default = "default_amount")]
     pub amount: f32,
 }
 
@@ -108,8 +86,19 @@ impl Default for GradientMapParams {
     fn default() -> Self {
         Self {
             angle: Angle::default(),
-            stops: default_stops(),
-            amount: default_amount(),
+            // A visible sky-blue → violet sweep (the shorthand-default
+            // convention — `{ name: "gradientMap" }` shows something).
+            stops: vec![
+                GradientMapStop {
+                    color: css("#38bdf8"),
+                    position: None,
+                },
+                GradientMapStop {
+                    color: css("#a78bfa"),
+                    position: None,
+                },
+            ],
+            amount: 1.0,
         }
     }
 }

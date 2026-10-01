@@ -12,35 +12,6 @@ use crate::filters::params::{ParamSlot, static_layout};
 use crate::filters::registry::ReactFilter;
 use crate::protocol::units::Angle;
 
-fn default_center() -> f32 {
-    0.5
-}
-
-fn default_strength() -> f32 {
-    0.5
-}
-
-fn default_radius() -> f32 {
-    0.8
-}
-
-/// Top-left, the usual UI light convention (clockwise from +X, y-down:
-/// -90 is straight up, so -135 is up-and-left).
-fn default_light_angle() -> Angle {
-    Angle::from_radians((-135f32).to_radians())
-}
-
-/// A tight-ish button highlight (a Blinn-Phong exponent of ~32).
-fn default_gloss_size() -> f32 {
-    0.3
-}
-
-/// Rim/center softness 0.5 each is the classic-feeling falloff (a `u^2` onset
-/// into a rounded bowl, within a hair of smoothstep).
-fn default_softness() -> f32 {
-    0.5
-}
-
 /// Extra logical px the bulge (or a press-spring overshoot) may poke past the
 /// node's box. A constant: the params are normalized, so a px reach cannot be
 /// derived from them at resolve time — a bulge displacing further than this
@@ -69,66 +40,61 @@ const PINCH_OUTSET: f32 = 16.0;
 /// `params[1] = (light, lightAngle_radians, gloss, glossSize)` and
 /// `params[2] = (outerSoftness, innerSoftness, 0, 0)`.
 #[derive(Debug, Clone, Copy, PartialEq, Deserialize, ts_rs::TS)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
+#[serde(default, deny_unknown_fields, rename_all = "camelCase")]
 pub struct PinchParams {
     /// Pinch center, 0..1 across the node rect (0 = left edge).
-    #[serde(default = "default_center")]
     pub x: f32,
     /// Pinch center, 0..1 across the node rect (0 = top edge).
-    #[serde(default = "default_center")]
     pub y: f32,
     /// -1 (full bulge) ..= 1 (full pinch); 0 is identity.
-    #[serde(default = "default_strength")]
     pub strength: f32,
     /// Effect radius as a fraction of the node's larger dimension.
-    #[serde(default = "default_radius")]
     pub radius: f32,
     /// Diffuse shading intensity: 0 (unlit, the default), 1 nominal; larger
     /// values overdrive, like `brightness`.
-    #[serde(default)]
     pub light: f32,
     /// Direction the light comes FROM: degrees clockwise from +X in screen
     /// space (bare number = degrees, `"0.25turn"` etc. accepted). Default
     /// -135 = top-left.
     // Mirrors `#[react_filter]`'s override for an `Angle` field.
-    #[serde(default = "default_light_angle")]
     #[ts(type = "number | string")]
     pub light_angle: Angle,
     /// Specular (white) highlight intensity: 0 (off, the default), 1
     /// nominal; larger values overdrive.
-    #[serde(default)]
     pub gloss: f32,
     /// Size of the specular highlight, 0 (a pinpoint) ..= 1 (a broad sheen);
     /// default 0.3. Mapped log-wise onto a Blinn-Phong exponent in the shader
     /// (128 at 0, ~32 at 0.3, 1 at 1).
-    #[serde(default = "default_gloss_size")]
     pub gloss_size: f32,
     /// How the effect meets its rim, 0..=1: 0 is a linear onset (a visible
     /// crease, like a pressed coin edge), 0.5 (the default) the classic `u^2`
     /// smoothstep-like fade, 1 an imperceptible `u^4` fade-in.
-    #[serde(default = "default_softness")]
     pub outer_softness: f32,
     /// How the effect peaks at its center, 0..=1: 0 is a cone tip (a pointed
     /// pit/peak the lighting shows as a point), 0.5 (the default) a rounded
     /// bowl, 1 a broad flat floor. Independent of `outerSoftness`: the
     /// profile is `1 - (1 - u^a)^b` with `a`/`b` from the two knobs.
-    #[serde(default = "default_softness")]
     pub inner_softness: f32,
 }
 
 impl Default for PinchParams {
     fn default() -> Self {
         Self {
-            x: default_center(),
-            y: default_center(),
-            strength: default_strength(),
-            radius: default_radius(),
+            x: 0.5,
+            y: 0.5,
+            strength: 0.5,
+            radius: 0.8,
             light: 0.0,
-            light_angle: default_light_angle(),
+            // Top-left, the usual UI light convention (clockwise from +X,
+            // y-down: -90 is straight up, so -135 is up-and-left).
+            light_angle: Angle::from_radians((-135f32).to_radians()),
             gloss: 0.0,
-            gloss_size: default_gloss_size(),
-            outer_softness: default_softness(),
-            inner_softness: default_softness(),
+            // A tight-ish button highlight (a Blinn-Phong exponent of ~32).
+            gloss_size: 0.3,
+            // Rim/center softness 0.5 each is the classic-feeling falloff (a
+            // `u^2` onset into a rounded bowl, within a hair of smoothstep).
+            outer_softness: 0.5,
+            inner_softness: 0.5,
         }
     }
 }

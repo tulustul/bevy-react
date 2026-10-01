@@ -12,15 +12,6 @@ use crate::filters::params::{FilterColor, ParamSlot, length_logical_px, static_l
 use crate::filters::registry::{ReactFilter, ResolvedFilterPass, resolve_single_pass};
 use crate::protocol::units::Length;
 
-fn default_width() -> Length {
-    Length::Px(2.0)
-}
-
-fn default_outline_color() -> FilterColor {
-    // Opaque black (linear == sRGB at the extremes).
-    FilterColor([0.0, 0.0, 0.0, 1.0])
-}
-
 /// `outline`: paint a `color` ring of `width` px around the content's alpha
 /// silhouette, UNDER the content (source-over) — text outlines (wrap the
 /// `<text>` in a `<node>`), sticker-style icon rings. `softness` feathers
@@ -43,15 +34,12 @@ fn default_outline_color() -> FilterColor {
 /// `outline.wgsl`): the dilation is crisp up to a reach of ~12 physical px;
 /// practical text outlines are 1–6 logical px.
 #[derive(Debug, Clone, Copy, PartialEq, Deserialize, ts_rs::TS)]
-#[serde(deny_unknown_fields)]
+#[serde(default, deny_unknown_fields)]
 pub struct OutlineParams {
     // Mirrors `#[react_filter]`'s override for a `Length` field.
-    #[serde(default = "default_width")]
     #[ts(type = "number | string")]
     pub width: Length,
-    #[serde(default = "default_outline_color")]
     pub color: FilterColor,
-    #[serde(default)]
     #[ts(type = "number | string")]
     pub softness: Length,
 }
@@ -59,8 +47,9 @@ pub struct OutlineParams {
 impl Default for OutlineParams {
     fn default() -> Self {
         Self {
-            width: default_width(),
-            color: default_outline_color(),
+            width: Length::Px(2.0),
+            // Opaque black (linear == sRGB at the extremes).
+            color: FilterColor([0.0, 0.0, 0.0, 1.0]),
             softness: Length::Px(0.0),
         }
     }

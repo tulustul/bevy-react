@@ -18,18 +18,6 @@ const MODE_BRIGHT: f32 = 0.0;
 /// Combine mode marker in `params[0].w`.
 const MODE_COMBINE: f32 = 1.0;
 
-fn default_radius() -> Length {
-    Length::Px(12.0)
-}
-
-fn default_threshold() -> f32 {
-    0.7
-}
-
-fn default_intensity() -> f32 {
-    1.0
-}
-
 /// `bloom`: glow where bright areas bleed light — a bright-pass thresholded
 /// at `threshold`, blurred by `radius`, and added back onto the original
 /// scaled by `intensity`. `{ name: "bloom" }` with no params is a visible
@@ -47,24 +35,21 @@ fn default_intensity() -> f32 {
 /// (which write all passes of a wire entry) stay uniform; the mode switch is
 /// pass-internal in `params[0].w`, like blur's direction.
 #[derive(Debug, Clone, Copy, PartialEq, Deserialize, ts_rs::TS)]
-#[serde(deny_unknown_fields)]
+#[serde(default, deny_unknown_fields)]
 pub struct BloomParams {
     // Mirrors `#[react_filter]`'s override for a `Length` field.
-    #[serde(default = "default_radius")]
     #[ts(type = "number | string")]
     pub radius: Length,
-    #[serde(default = "default_threshold")]
     pub threshold: f32,
-    #[serde(default = "default_intensity")]
     pub intensity: f32,
 }
 
 impl Default for BloomParams {
     fn default() -> Self {
         Self {
-            radius: default_radius(),
-            threshold: default_threshold(),
-            intensity: default_intensity(),
+            radius: Length::Px(12.0),
+            threshold: 0.7,
+            intensity: 1.0,
         }
     }
 }

@@ -12,10 +12,6 @@ use crate::filters::params::{ParamSlot, length_logical_px, static_layout};
 use crate::filters::registry::{ReactFilter, ResolvedFilterPass, resolve_single_pass};
 use crate::protocol::{units::Angle, units::Length};
 
-fn default_offset() -> Length {
-    Length::Px(4.0)
-}
-
 /// Extra logical px the swirled fringes may poke past the node's box when
 /// `rotation != 0`. A constant: the rotational reach scales with node size
 /// (~ `2·corner_distance·sin(rotation/2)`), which resolve time can't see —
@@ -36,28 +32,25 @@ const ROTATION_OUTSET: f32 = 16.0;
 /// rotation_degrees, 0)`; `resolve` only prepends the `Length` px validation
 /// before delegating to the canonical [`resolve_single_pass`] body.
 #[derive(Debug, Clone, Copy, PartialEq, Deserialize, ts_rs::TS)]
-#[serde(deny_unknown_fields)]
+#[serde(default, deny_unknown_fields)]
 pub struct ChromaticAberrationParams {
     // Mirrors `#[react_filter]`'s override for a `Length` field.
-    #[serde(default = "default_offset")]
     #[ts(type = "number | string")]
     pub offset: Length,
     // Mirrors `#[react_filter]`'s override for an `Angle` field.
-    #[serde(default)]
     #[ts(type = "number | string")]
     pub angle: Angle,
     /// Tangential swirl: the R image rotates by `+rotation` degrees
     /// (clockwise, y-down) around the node's center, B by `-rotation`.
     /// Plain number in degrees — a scalar magnitude, so transitions unwind
     /// linearly through every turn. 0 = purely directional split.
-    #[serde(default)]
     pub rotation: f32,
 }
 
 impl Default for ChromaticAberrationParams {
     fn default() -> Self {
         Self {
-            offset: default_offset(),
+            offset: Length::Px(4.0),
             angle: Angle::default(),
             rotation: 0.0,
         }

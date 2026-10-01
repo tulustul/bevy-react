@@ -14,14 +14,6 @@ use serde::Deserialize;
 use crate::filters::params::{ParamSlot, static_layout};
 use crate::filters::registry::{ReactFilter, ReactMorphFilter};
 
-fn default_squares_min() -> [f32; 2] {
-    [20.0, 20.0]
-}
-
-fn default_steps() -> f32 {
-    50.0
-}
-
 /// `pixelize`: both images sample the center of a shared mosaic cell whose
 /// size peaks mid-transition, over a plain progress crossfade. Upstream
 /// uniforms map 1:1 — `squaresMin` (ivec2, the cell count when the mosaic is
@@ -30,21 +22,20 @@ fn default_steps() -> f32 {
 ///
 /// Packed as `params[0] = (squaresMin.x, squaresMin.y, steps, 0)`.
 #[derive(Debug, Clone, Copy, PartialEq, Deserialize, ts_rs::TS)]
-#[serde(deny_unknown_fields)]
+#[serde(default, deny_unknown_fields)]
 pub struct PixelizeParams {
     /// Cells across x/y at the mosaic's coarsest (upstream `squaresMin`).
-    #[serde(default = "default_squares_min", rename = "squaresMin")]
+    #[serde(rename = "squaresMin")]
     pub squares_min: [f32; 2],
     /// Discrete cell-size levels; `<= 0` for a continuous ramp.
-    #[serde(default = "default_steps")]
     pub steps: f32,
 }
 
 impl Default for PixelizeParams {
     fn default() -> Self {
         Self {
-            squares_min: default_squares_min(),
-            steps: default_steps(),
+            squares_min: [20.0, 20.0],
+            steps: 50.0,
         }
     }
 }
@@ -60,11 +51,6 @@ impl ReactFilter for PixelizeParams {
 
     fn shader(assets: &AssetServer) -> Handle<Shader> {
         load_embedded_asset!(assets, "pixelize.wgsl")
-    }
-
-    /// The mosaic never paints outside the box.
-    fn outset(&self) -> Result<f32, String> {
-        Ok(0.0)
     }
 
     fn pack(&self) -> (Vec<Vec4>, Arc<[ParamSlot]>) {

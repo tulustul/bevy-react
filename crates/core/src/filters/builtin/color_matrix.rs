@@ -94,11 +94,10 @@ color_matrix_filters! {
 /// value omitted means `0deg` (identity). Packs radians at `params[1].z` of
 /// the shared color-matrix packing.
 #[derive(Debug, Clone, Copy, PartialEq, Default, Deserialize, ts_rs::TS)]
-#[serde(deny_unknown_fields)]
+#[serde(default, deny_unknown_fields)]
 pub struct HueRotateParams {
     // The `#[ts(type)]` override mirrors what `#[react_filter]` emits for an
     // `Angle` field (no `TS` impl on the wire-flexible type itself).
-    #[serde(default)]
     #[ts(type = "number | string")]
     pub angle: Angle,
 }
