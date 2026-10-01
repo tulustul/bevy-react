@@ -49,13 +49,11 @@ impl CameraCandidate {
 /// it has a layer, else a window-target camera, else the first candidate.
 /// Ties keep the first seen. `None` for no candidates.
 pub fn pick_stock_camera(candidates: impl IntoIterator<Item = CameraCandidate>) -> Option<Entity> {
-    let mut best: Option<CameraCandidate> = None;
-    for candidate in candidates {
-        if best.is_none_or(|b| candidate.rank() > b.rank()) {
-            best = Some(candidate);
-        }
-    }
-    best.map(|c| c.entity)
+    // `min_by_key` keeps the FIRST of equal keys (`max_by_key` the last).
+    candidates
+        .into_iter()
+        .min_by_key(|c| std::cmp::Reverse(c.rank()))
+        .map(|c| c.entity)
 }
 
 /// Report a skipped layer's camera through the diag logger (deduped per
