@@ -120,68 +120,40 @@ impl Props {
         );
 
         // --- unset: wire names reset to their defaults ---
+        // `field = value => dirty flag` rows for the plain resets; the special
+        // arms follow the `;`.
+        macro_rules! unset_match {
+            ($name:expr; $($wire:literal => $field:ident = $value:expr => $flag:ident,)* ; $($rest:tt)*) => {
+                match $name {
+                    $($wire => {
+                        self.$field = $value;
+                        dirty.$flag = true;
+                    })*
+                    $($rest)*
+                }
+            };
+        }
         for name in unset {
-            match name.as_str() {
+            unset_match!(name.as_str();
+                "hoverStyle" => hover_style = None => hover_style,
+                "pressStyle" => press_style = None => press_style,
+                "focusStyle" => focus_style = None => focus_style,
+                "onClick" => on_click = false => pointer,
+                "onPointerDown" => on_pointer_down = false => pointer,
+                "onPointerMove" => on_pointer_move = false => pointer,
+                "onPointerUp" => on_pointer_up = false => pointer,
+                "onPointerEnter" => on_pointer_enter = false => pointer,
+                "onPointerLeave" => on_pointer_leave = false => pointer,
+                "onScroll" => on_scroll = false => scroll_listener,
+                "onWheel" => on_wheel = false => wheel,
+                "scrollStep" => scroll_step = None => scroll_step,
+                "name" => name = None => name,
+                "sharedTag" => shared_tag = None => shared_tag,
+                ;
                 "style" => {
                     // Back to the element's default style (none for most).
                     self.style = element.default_style().cloned();
                     dirty.style = StyleDirty::ALL;
-                }
-                "hoverStyle" => {
-                    self.hover_style = None;
-                    dirty.hover_style = true;
-                }
-                "pressStyle" => {
-                    self.press_style = None;
-                    dirty.press_style = true;
-                }
-                "focusStyle" => {
-                    self.focus_style = None;
-                    dirty.focus_style = true;
-                }
-                "onClick" => {
-                    self.on_click = false;
-                    dirty.pointer = true;
-                }
-                "onPointerDown" => {
-                    self.on_pointer_down = false;
-                    dirty.pointer = true;
-                }
-                "onPointerMove" => {
-                    self.on_pointer_move = false;
-                    dirty.pointer = true;
-                }
-                "onPointerUp" => {
-                    self.on_pointer_up = false;
-                    dirty.pointer = true;
-                }
-                "onPointerEnter" => {
-                    self.on_pointer_enter = false;
-                    dirty.pointer = true;
-                }
-                "onPointerLeave" => {
-                    self.on_pointer_leave = false;
-                    dirty.pointer = true;
-                }
-                "onScroll" => {
-                    self.on_scroll = false;
-                    dirty.scroll_listener = true;
-                }
-                "onWheel" => {
-                    self.on_wheel = false;
-                    dirty.wheel = true;
-                }
-                "scrollStep" => {
-                    self.scroll_step = None;
-                    dirty.scroll_step = true;
-                }
-                "name" => {
-                    self.name = None;
-                    dirty.name = true;
-                }
-                "sharedTag" => {
-                    self.shared_tag = None;
-                    dirty.shared_tag = true;
                 }
                 // Event-like props have no retained state to unset.
                 "scrollTop" | "scrollLeft" => {}
@@ -203,7 +175,7 @@ impl Props {
                         );
                     }
                 }
-            }
+            );
         }
 
         // --- style_unset: after the overlay, so a (never-emitted) set+unset of

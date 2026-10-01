@@ -13,32 +13,10 @@ use super::store::AttrDirty;
 use crate::ext::TextRole;
 use crate::style::{Invalidation, Style, StyleDirty, StyleRegistry, Writer, WriterMask};
 
-/// The props every element shares, fixed on `Props` — never an attribute
-/// name (see [`Common`](super::Common)).
-pub(crate) const COMMON_PROPS: &[&str] = &[
-    "style",
-    "hoverStyle",
-    "pressStyle",
-    "focusStyle",
-    "name",
-    "sharedTag",
-    "onClick",
-    "onPointerDown",
-    "onPointerMove",
-    "onPointerUp",
-    "onPointerEnter",
-    "onPointerLeave",
-    "onScroll",
-    "onWheel",
-    "scrollTop",
-    "scrollLeft",
-    "scrollStep",
-];
-
 /// Names no attribute may take: the common props, React's own, and the
 /// handler space (`on` + an uppercase letter — JS routes a function there).
 fn reserved(name: &str) -> bool {
-    COMMON_PROPS.contains(&name)
+    crate::protocol::props::is_common_prop(name)
         || matches!(name, "children" | "key" | "ref")
         || name
             .strip_prefix("on")
@@ -114,7 +92,7 @@ impl ElementInfo {
         for (i, event) in decl.events.iter().enumerate() {
             let prop = handler_prop(event.name());
             assert!(
-                !COMMON_PROPS.contains(&prop.as_str()),
+                !crate::protocol::props::is_common_prop(&prop),
                 "bevy-react: element <{kind}> event {:?} collides with the common prop {prop:?}",
                 event.name()
             );

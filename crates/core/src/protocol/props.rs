@@ -183,29 +183,35 @@ enum Key {
     Skip,
 }
 
-impl Key {
-    /// The common group a fixed key belongs to.
-    fn group(&self) -> Option<(Common, &'static str)> {
-        Some(match self {
-            Key::HoverStyle => (Common::VARIANTS, "hoverStyle"),
-            Key::PressStyle => (Common::VARIANTS, "pressStyle"),
-            Key::FocusStyle => (Common::VARIANTS, "focusStyle"),
-            Key::OnClick => (Common::POINTER, "onClick"),
-            Key::OnPointerDown => (Common::POINTER, "onPointerDown"),
-            Key::OnPointerMove => (Common::POINTER, "onPointerMove"),
-            Key::OnPointerUp => (Common::POINTER, "onPointerUp"),
-            Key::OnPointerEnter => (Common::POINTER, "onPointerEnter"),
-            Key::OnPointerLeave => (Common::POINTER, "onPointerLeave"),
-            Key::OnScroll => (Common::SCROLL, "onScroll"),
-            Key::ScrollTop => (Common::SCROLL, "scrollTop"),
-            Key::ScrollLeft => (Common::SCROLL, "scrollLeft"),
-            Key::ScrollStep => (Common::SCROLL, "scrollStep"),
-            Key::OnWheel => (Common::WHEEL, "onWheel"),
-            Key::Name => (Common::IDENTITY, "name"),
-            Key::SharedTag => (Common::IDENTITY, "sharedTag"),
-            _ => return None,
-        })
-    }
+/// A common prop's key and the [`Common`] group an element must declare for
+/// it to apply (`None`: every element), or `None` for any other name.
+fn common_key(name: &str) -> Option<(Key, Option<Common>)> {
+    Some(match name {
+        "style" => (Key::Style, None),
+        "hoverStyle" => (Key::HoverStyle, Some(Common::VARIANTS)),
+        "pressStyle" => (Key::PressStyle, Some(Common::VARIANTS)),
+        "focusStyle" => (Key::FocusStyle, Some(Common::VARIANTS)),
+        "onClick" => (Key::OnClick, Some(Common::POINTER)),
+        "onPointerDown" => (Key::OnPointerDown, Some(Common::POINTER)),
+        "onPointerMove" => (Key::OnPointerMove, Some(Common::POINTER)),
+        "onPointerUp" => (Key::OnPointerUp, Some(Common::POINTER)),
+        "onPointerEnter" => (Key::OnPointerEnter, Some(Common::POINTER)),
+        "onPointerLeave" => (Key::OnPointerLeave, Some(Common::POINTER)),
+        "onScroll" => (Key::OnScroll, Some(Common::SCROLL)),
+        "scrollTop" => (Key::ScrollTop, Some(Common::SCROLL)),
+        "scrollLeft" => (Key::ScrollLeft, Some(Common::SCROLL)),
+        "scrollStep" => (Key::ScrollStep, Some(Common::SCROLL)),
+        "onWheel" => (Key::OnWheel, Some(Common::WHEEL)),
+        "name" => (Key::Name, Some(Common::IDENTITY)),
+        "sharedTag" => (Key::SharedTag, Some(Common::IDENTITY)),
+        _ => return None,
+    })
+}
+
+/// Whether `name` is a common prop (one every element shares, grouped by
+/// [`Common`]) — reserved, so no attribute may take it.
+pub(crate) fn is_common_prop(name: &str) -> bool {
+    common_key(name).is_some()
 }
 
 /// Resolves one props key (borrowing the key string — no allocation for a
@@ -225,34 +231,17 @@ impl<'de> Visitor<'de> for KeySeed<'_> {
         f.write_str("a prop name")
     }
     fn visit_str<E: de::Error>(self, name: &str) -> Result<Key, E> {
-        let fixed = match name {
-            "style" => Key::Style,
-            "hoverStyle" => Key::HoverStyle,
-            "pressStyle" => Key::PressStyle,
-            "focusStyle" => Key::FocusStyle,
-            "onClick" => Key::OnClick,
-            "onPointerDown" => Key::OnPointerDown,
-            "onPointerMove" => Key::OnPointerMove,
-            "onPointerUp" => Key::OnPointerUp,
-            "onPointerEnter" => Key::OnPointerEnter,
-            "onPointerLeave" => Key::OnPointerLeave,
-            "onScroll" => Key::OnScroll,
-            "onWheel" => Key::OnWheel,
-            "scrollTop" => Key::ScrollTop,
-            "scrollLeft" => Key::ScrollLeft,
-            "scrollStep" => Key::ScrollStep,
-            "name" => Key::Name,
-            "sharedTag" => Key::SharedTag,
-            _ => return Ok(element_key(self.0, name)),
+        let Some((fixed, group)) = common_key(name) else {
+            return Ok(element_key(self.0, name));
         };
         // A common prop outside the element's groups is dropped.
-        if let (Some(DecodeElement::Known(info)), Some((group, prop))) = (self.0, fixed.group())
+        if let (Some(DecodeElement::Known(info)), Some(group)) = (self.0, group)
             && !info.decl.common.contains(group)
         {
             super::decode_warn(
                 "propIgnored",
-                prop,
-                &format!("`{prop}` has no effect on <{}>", info.name()),
+                name,
+                &format!("`{name}` has no effect on <{}>", info.name()),
             );
             return Ok(Key::Skip);
         }
