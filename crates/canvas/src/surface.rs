@@ -130,11 +130,7 @@ pub fn update_canvas_surfaces(
         // Draw commands are in logical (CSS) pixels matching the node's layout
         // size; the texture is physical-pixel sized for HiDPI crispness, so scale
         // the drawing up by the device pixel ratio (`1 / inverse_scale_factor`).
-        let scale = if node.inverse_scale_factor > 0.0 {
-            node.inverse_scale_factor.recip()
-        } else {
-            1.0
-        };
+        let scale = bevy_react_core::raster::node_scale_factor(node);
         let Some(data) = surface.sync(w, h, scale) else {
             continue;
         };

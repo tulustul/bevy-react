@@ -137,7 +137,7 @@ pub(crate) fn refine_svg_pointer_hits(
                 continue;
             };
             let local = (normalized + Vec2::splat(0.5)) * node.size;
-            let scale_factor = super::node_scale_factor(node);
+            let scale_factor = bevy_react_core::raster::node_scale_factor(node);
             let Some(user_pos) =
                 cursor_to_user_space(surface.view_box.as_ref(), node.size, scale_factor, local)
             else {

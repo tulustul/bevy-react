@@ -252,11 +252,8 @@ fn push_arc(
 /// Parse a CSS color string (see [`parse_css_color`]) into straight-alpha RGBA
 /// bytes. Anything unparseable falls back to opaque black.
 pub(crate) fn parse_rgba8(s: &str) -> [u8; 4] {
-    let c = parse_css_color(s).unwrap_or(bevy::color::Srgba::new(0.0, 0.0, 0.0, 1.0));
-    [
-        (c.red.clamp(0.0, 1.0) * 255.0).round() as u8,
-        (c.green.clamp(0.0, 1.0) * 255.0).round() as u8,
-        (c.blue.clamp(0.0, 1.0) * 255.0).round() as u8,
-        (c.alpha.clamp(0.0, 1.0) * 255.0).round() as u8,
-    ]
+    use bevy::color::ColorToPacked;
+    parse_css_color(s)
+        .unwrap_or(bevy::color::Srgba::new(0.0, 0.0, 0.0, 1.0))
+        .to_u8_array()
 }

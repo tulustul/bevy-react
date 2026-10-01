@@ -102,18 +102,6 @@ impl SvgJsxSurface {
     }
 }
 
-/// The node's physical-per-logical scale factor, guarded against the zero
-/// `inverse_scale_factor` of a never-laid-out `ComputedNode` (fall back to
-/// `1.0` rather than an inf/NaN recip). Shared by the pick refinement and the
-/// interaction synthesis — both feed it into `paint::view_box_transform`.
-pub fn node_scale_factor(node: &ComputedNode) -> f32 {
-    if node.inverse_scale_factor > 0.0 {
-        node.inverse_scale_factor.recip()
-    } else {
-        1.0
-    }
-}
-
 /// Repaint every JSX `<svg>` root whose raster is stale — a repaint request
 /// (`dirty`), a layout resize, or a shape/child-list change (derived below)
 /// — and upload the result into the backing image. Reads the node's size
@@ -203,11 +191,7 @@ pub fn update_jsx_svg_surfaces(
         if !images.contains(&image_node.image) {
             continue;
         }
-        let scale_factor = if node.inverse_scale_factor > 0.0 {
-            node.inverse_scale_factor.recip()
-        } else {
-            1.0
-        };
+        let scale_factor = bevy_react_core::raster::node_scale_factor(node);
         let transform =
             super::paint::view_box_transform(surface.view_box.as_ref(), w, h, scale_factor);
         // The buffers are a cache: written past change detection, so a derived-dirt

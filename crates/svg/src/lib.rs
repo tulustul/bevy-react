@@ -73,7 +73,7 @@ pub use protocol::{
     ShapeTransform, ShapeTransitionSpec, ViewBox,
 };
 pub(crate) use protocol::{NUMERIC_ATTR_COUNT, NUMERIC_ATTRS, numeric_attr, numeric_attr_mut};
-pub use surface::{ShapeKind, SvgJsxSurface, SvgShape, node_scale_factor, update_jsx_svg_surfaces};
+pub use surface::{ShapeKind, SvgJsxSurface, SvgShape, update_jsx_svg_surfaces};
 pub use transition::{ShapeTransitionState, apply_shape_transition, drive_shape_transitions};
 
 /// Registers the `<svg>` element and its shape intrinsics (with their

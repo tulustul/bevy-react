@@ -169,11 +169,7 @@ pub fn update_svg_surfaces(
         // event this same frame, in PostUpdate — so `doc_touched` deliberately
         // does not re-stamp here (no double stamp).
         if surface.last_size == UVec2::ZERO {
-            let scale_factor = if node.inverse_scale_factor > 0.0 {
-                node.inverse_scale_factor.recip()
-            } else {
-                1.0
-            };
+            let scale_factor = crate::raster::node_scale_factor(node);
             stamp_intrinsic_measure(
                 &mut content_size,
                 doc.size,

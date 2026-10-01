@@ -207,29 +207,18 @@ pub(super) fn position_highlight(
         });
     // Write only on change: a `Node` mutation forces a bevy_ui relayout, so an
     // idle overlay must not dirty itself every frame.
+    let mut next = node.clone();
     match rect {
         Some((pos, size)) => {
-            let (left, top) = (Val::Px(pos.x), Val::Px(pos.y));
-            let (width, height) = (Val::Px(size.x), Val::Px(size.y));
-            if node.display != Display::Flex
-                || node.left != left
-                || node.top != top
-                || node.width != width
-                || node.height != height
-            {
-                node.display = Display::Flex;
-                node.left = left;
-                node.top = top;
-                node.width = width;
-                node.height = height;
-            }
+            next.display = Display::Flex;
+            next.left = Val::Px(pos.x);
+            next.top = Val::Px(pos.y);
+            next.width = Val::Px(size.x);
+            next.height = Val::Px(size.y);
         }
-        None => {
-            if node.display != Display::None {
-                node.display = Display::None;
-            }
-        }
+        None => next.display = Display::None,
     }
+    node.set_if_neq(next);
 }
 
 /// A node's window-space logical rect from its computed (physical) geometry:

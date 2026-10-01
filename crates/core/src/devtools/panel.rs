@@ -143,9 +143,13 @@ pub(super) fn apply_dock_reservation(
         Some(DockSide::Right) => (Val::ZERO, Val::Px(width)),
         None => (Val::ZERO, Val::ZERO),
     };
-    if node.margin.left != left || node.margin.right != right {
-        node.margin.left = left;
-        node.margin.right = right;
+    let margin = UiRect {
+        left,
+        right,
+        ..node.margin
+    };
+    if node.margin != margin {
+        node.margin = margin;
     }
 }
 

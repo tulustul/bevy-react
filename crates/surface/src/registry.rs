@@ -208,17 +208,13 @@ pub fn bind_surfaces(
                 if target_cam.map(|t| t.0) != Some(camera) {
                     commands.entity(entity).insert(UiTargetCamera(camera));
                 }
-                if *visibility != Visibility::Inherited {
-                    *visibility = Visibility::Inherited;
-                }
+                visibility.set_if_neq(Visibility::Inherited);
             }
             None => {
                 if target_cam.is_some() {
                     commands.entity(entity).remove::<UiTargetCamera>();
                 }
-                if *visibility != Visibility::Hidden {
-                    *visibility = Visibility::Hidden;
-                }
+                visibility.set_if_neq(Visibility::Hidden);
             }
         }
     }

@@ -99,13 +99,10 @@ pub(crate) fn sync_shape_interactions(
                     .ok()
                     .and_then(|(surface, node)| user_to_root_normalized(surface, node, h.user_pos))
             });
-            let next = RelativeCursorPosition {
+            rel.set_if_neq(RelativeCursorPosition {
                 cursor_over: hovering.is_some(),
                 normalized,
-            };
-            if rel.cursor_over != next.cursor_over || rel.normalized != next.normalized {
-                *rel = next;
-            }
+            });
         }
         if let Some(mut user) = user {
             user.set_if_neq(EventLocalPos(hit.map(|h| h.user_pos)));
@@ -127,7 +124,7 @@ fn user_to_root_normalized(
     if w == 0 || h == 0 {
         return None;
     }
-    let scale_factor = super::node_scale_factor(node);
+    let scale_factor = bevy_react_core::raster::node_scale_factor(node);
     let local = map_point(
         view_box_transform(surface.view_box.as_ref(), w, h, scale_factor),
         user_pos,

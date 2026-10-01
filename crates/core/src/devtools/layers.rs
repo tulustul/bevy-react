@@ -102,26 +102,19 @@ pub(super) fn on_layers_open_message(
 /// keep in sync); extend this when a new promotion rule lands in
 /// [`crate::layer::PromotionReasons`].
 fn reason_labels(reasons: crate::layer::PromotionReasons) -> Vec<String> {
-    let mut out = Vec::new();
-    if reasons.0 & crate::layer::PromotionReasons::OPACITY != 0 {
-        out.push("opacity".to_string());
-    }
-    if reasons.0 & crate::layer::PromotionReasons::FILTER != 0 {
-        out.push("filter".to_string());
-    }
-    if reasons.0 & crate::layer::PromotionReasons::TRANSFORM3D != 0 {
-        out.push("transform3d".to_string());
-    }
-    if reasons.0 & crate::layer::PromotionReasons::BACKDROP != 0 {
-        out.push("backdrop".to_string());
-    }
-    if reasons.0 & crate::layer::PromotionReasons::MORPH != 0 {
-        out.push("morph".to_string());
-    }
-    if reasons.0 & crate::layer::PromotionReasons::FORCED != 0 {
-        out.push("cache".to_string());
-    }
-    out
+    use crate::layer::PromotionReasons as R;
+    [
+        (R::OPACITY, "opacity"),
+        (R::FILTER, "filter"),
+        (R::TRANSFORM3D, "transform3d"),
+        (R::BACKDROP, "backdrop"),
+        (R::MORPH, "morph"),
+        (R::FORCED, "cache"),
+    ]
+    .into_iter()
+    .filter(|&(bit, _)| reasons.0 & bit != 0)
+    .map(|(_, label)| label.to_string())
+    .collect()
 }
 
 /// Round to 3 decimals for display. Load-bearing twice over: the diff gate in

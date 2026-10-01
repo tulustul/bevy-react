@@ -205,24 +205,24 @@ pub fn position_anchored_nodes(
         // hidden one frame rather than flash uncentered at a stale position. By the
         // next frame the size is real and the transforms have settled.
         let Ok((computed, _)) = ui_nodes.get(entity) else {
-            set_visibility(&mut visibility, Visibility::Hidden);
+            visibility.set_if_neq(Visibility::Hidden);
             continue;
         };
         if computed.size().x <= 0.0 {
-            set_visibility(&mut visibility, Visibility::Hidden);
+            visibility.set_if_neq(Visibility::Hidden);
             continue;
         }
 
         // The target may have despawned (or not exist yet): hide until it returns.
         let Ok(target_tf) = targets.get(anchor.target) else {
-            set_visibility(&mut visibility, Visibility::Hidden);
+            visibility.set_if_neq(Visibility::Hidden);
             continue;
         };
 
         let world = target_tf.translation() + anchor.offset;
         let Ok(viewport) = cam.world_to_viewport(cam_tf, world) else {
             // Behind the camera / outside the viewport: hide rather than clamp.
-            set_visibility(&mut visibility, Visibility::Hidden);
+            visibility.set_if_neq(Visibility::Hidden);
             continue;
         };
 
@@ -249,14 +249,6 @@ pub fn position_anchored_nodes(
         if transform.translation != translation {
             transform.translation = translation;
         }
-        set_visibility(&mut visibility, Visibility::Inherited);
-    }
-}
-
-/// Assign `visibility` only when it actually changes, so we don't trip change
-/// detection (and re-propagate visibility) every frame for a stationary overlay.
-fn set_visibility(visibility: &mut Mut<Visibility>, next: Visibility) {
-    if **visibility != next {
-        **visibility = next;
+        visibility.set_if_neq(Visibility::Inherited);
     }
 }

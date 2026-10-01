@@ -21,6 +21,17 @@ use tiny_skia::Pixmap;
 /// against a degenerate layout asking for an enormous buffer.
 pub const MAX_DIM: u32 = 4096;
 
+/// A node's physical-per-logical scale factor, guarded against the zero
+/// `inverse_scale_factor` of a never-laid-out `ComputedNode` (`1.0` rather
+/// than an inf/NaN recip).
+pub fn node_scale_factor(node: &bevy::ui::ComputedNode) -> f32 {
+    if node.inverse_scale_factor > 0.0 {
+        node.inverse_scale_factor.recip()
+    } else {
+        1.0
+    }
+}
+
 /// Round + clamp a laid-out physical size (a `ComputedNode.size`) to the
 /// rasterizable range. A `0` component means "not laid out yet". Shared by
 /// every raster element and the canvas resize event, so the size reported to
