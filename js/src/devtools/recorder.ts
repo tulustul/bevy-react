@@ -21,6 +21,7 @@
 import type { Op, Outbound } from "../bridge";
 import type { DevtoolsBatchStats } from "./api";
 import { mirror } from "./mirror";
+import { versionStore } from "./store";
 
 export type LogKind =
   | "ops"
@@ -81,14 +82,13 @@ const CAPACITY = 500;
 
 const entries: LogEntry[] = [];
 let seq = 1;
-let version = 0;
+const store = versionStore();
+const scheduleNotify = store.notify;
 // Armed at install so a restored-open panel captures the initial mount; the
 // session's one `devtools.restore` (or any later toggle/close) settles it.
 let enabled = true;
 let paused = false;
 let includeDevtools = false;
-const subscribers = new Set<() => void>();
-let notifyQueued = false;
 
 // Recorded "ops" entries still awaiting their Rust-side render timings
 // (`devtools.batchStats` arrives after the batch was applied + laid out).
@@ -116,16 +116,6 @@ let wrapOps: LogEntry[] | null = null;
 declare const globalThis: {
   __bevyReactFlush?: { ms: number; ops: number };
 };
-
-function scheduleNotify(): void {
-  version++;
-  if (notifyQueued) return;
-  notifyQueued = true;
-  queueMicrotask(() => {
-    notifyQueued = false;
-    for (const cb of subscribers) cb();
-  });
-}
 
 function record(entry: Omit<LogEntry, "seq" | "t">): LogEntry | null {
   if (!enabled || paused) return null;
@@ -348,11 +338,6 @@ export const recorder = {
     scheduleNotify();
   },
 
-  subscribe(cb: () => void): () => void {
-    subscribers.add(cb);
-    return () => subscribers.delete(cb);
-  },
-  getVersion(): number {
-    return version;
-  },
+  subscribe: store.subscribe,
+  getVersion: store.getVersion,
 };

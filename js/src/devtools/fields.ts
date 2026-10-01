@@ -7,6 +7,8 @@
 // registry (core elements and every feature/app one) `devtools.elements` — see
 // `installStyleFields` / `installElements`.
 
+import { versionStore } from "./store";
+
 /** Coarse wire-value shapes, checked before an edit crosses the bridge. The
  *  Rust deserializers degrade malformed *strings* gracefully (warn + default),
  *  so these only need to catch structurally wrong values (which would throw a
@@ -25,26 +27,19 @@ export type FieldCategory =
  *  the `devtools.styleFields` response lands (right after install). */
 export const STYLE_FIELDS: Record<string, FieldCategory> = {};
 
-let styleFieldsVersion = 0;
-const styleFieldsListeners = new Set<() => void>();
+const styleFields = versionStore();
 
 /** Fill `STYLE_FIELDS` from the registry's answer and notify subscribers. */
 export function installStyleFields(
   fields: readonly { name: string; category: FieldCategory }[],
 ): void {
   for (const { name, category } of fields) STYLE_FIELDS[name] = category;
-  styleFieldsVersion++;
-  for (const cb of styleFieldsListeners) cb();
+  styleFields.notify();
 }
 
 /** `useSyncExternalStore` pair: re-render once the table lands. */
-export function subscribeStyleFields(cb: () => void): () => void {
-  styleFieldsListeners.add(cb);
-  return () => styleFieldsListeners.delete(cb);
-}
-export function getStyleFieldsVersion(): number {
-  return styleFieldsVersion;
-}
+export const subscribeStyleFields = styleFields.subscribe;
+export const getStyleFieldsVersion = styleFields.getVersion;
 
 /** One element's props as the devtools see them — the registry's answer to
  *  `devtools.elements` (see `api.ts`'s `DevtoolsElement`). */

@@ -20,6 +20,7 @@
 import type { DecodeWarning, Op } from "../bridge";
 import { isActNow } from "./fields";
 import { clearOwners, takeOwner } from "./owners";
+import { versionStore } from "./store";
 import { matchWarning } from "./warnings";
 
 export interface MirrorNode {
@@ -49,9 +50,7 @@ export interface MirrorNode {
 }
 
 const nodes = new Map<number, MirrorNode>();
-let version = 0;
-const subscribers = new Set<() => void>();
-let notifyQueued = false;
+const store = versionStore();
 
 function makeNode(id: number, kind: string, devtools: boolean): MirrorNode {
   const node: MirrorNode = {
@@ -80,18 +79,7 @@ function ensureRoot(): MirrorNode {
 }
 ensureRoot();
 
-// Notify on a microtask: `apply` runs inside React's commit (the flush tap), and
-// many flushes can land per frame — one deferred notification re-renders the
-// panel once, outside the app container's commit.
-function scheduleNotify(): void {
-  version++;
-  if (notifyQueued) return;
-  notifyQueued = true;
-  queueMicrotask(() => {
-    notifyQueued = false;
-    for (const cb of subscribers) cb();
-  });
-}
+const scheduleNotify = store.notify;
 
 function detach(child: MirrorNode): void {
   if (child.parent === null) return;
@@ -316,11 +304,6 @@ export const mirror = {
   },
 
   // `useSyncExternalStore` surface.
-  subscribe(cb: () => void): () => void {
-    subscribers.add(cb);
-    return () => subscribers.delete(cb);
-  },
-  getVersion(): number {
-    return version;
-  },
+  subscribe: store.subscribe,
+  getVersion: store.getVersion,
 };
