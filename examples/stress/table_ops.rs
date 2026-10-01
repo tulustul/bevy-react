@@ -88,26 +88,12 @@ pub enum BenchOp {
 }
 
 impl BenchOp {
-    /// Stable lower-camel key used to group samples in the JSON report.
-    fn key(self) -> &'static str {
-        match self {
-            BenchOp::Create => "create",
-            BenchOp::Append1 => "append1",
-            BenchOp::Append1k => "append1k",
-            BenchOp::Insert1 => "insert1",
-            BenchOp::InsertEvery2nd => "insertEvery2nd",
-            BenchOp::UpdateText1 => "updateText1",
-            BenchOp::UpdateTextEvery2nd => "updateTextEvery2nd",
-            BenchOp::UpdateColor1 => "updateColor1",
-            BenchOp::UpdateColorEvery2nd => "updateColorEvery2nd",
-            BenchOp::UpdateTextColor1 => "updateTextColor1",
-            BenchOp::UpdateTextColorEvery2nd => "updateTextColorEvery2nd",
-            BenchOp::Swap1 => "swap1",
-            BenchOp::SwapEvery2nd => "swapEvery2nd",
-            BenchOp::Remove1 => "remove1",
-            BenchOp::RemoveEvery2nd => "removeEvery2nd",
-            BenchOp::Clear => "clear",
-        }
+    /// Stable lower-camel key used to group samples in the JSON report: the
+    /// variant name with its first letter lowercased (`InsertEvery2nd` →
+    /// `insertEvery2nd`).
+    fn key(self) -> String {
+        let name = format!("{self:?}");
+        name[..1].to_lowercase() + &name[1..]
     }
 }
 
@@ -167,6 +153,7 @@ pub struct BenchStep {
 /// The op count is read Bevy-side from
 /// [`OpApplyStats`] (React doesn't see the flushed batch size).
 #[react_message(name = "bench.stepDone")]
+#[derive(Clone, Copy)]
 pub struct StepDone {
     js_ms: f64,
     flush_ms: f64,
@@ -176,22 +163,11 @@ pub struct StepDone {
 /// capture driver. Present in every run (the interactive mode just ignores it).
 #[derive(Resource, Default)]
 struct BenchInbox {
-    last: Option<StepReport>,
-}
-
-/// The React-reported half of a step's measurement.
-#[derive(Clone, Copy)]
-struct StepReport {
-    js_ms: f64,
-    flush_ms: f64,
+    last: Option<StepDone>,
 }
 
 fn on_step_done(on: On<StepDone>, mut inbox: ResMut<BenchInbox>) {
-    let e = on.event();
-    inbox.last = Some(StepReport {
-        js_ms: e.js_ms,
-        flush_ms: e.flush_ms,
-    });
+    inbox.last = Some(*on.event());
 }
 
 // --- Capture mode (automated driver) ---
@@ -597,7 +573,7 @@ struct Report {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct OpReport {
-    op: &'static str,
+    op: String,
     /// Scale label the samples belong to (`"1k"` / `"10k"`).
     scale: String,
     /// Table row count when the op ran (its precondition).
@@ -680,6 +656,32 @@ fn finalize(driver: &BenchDriver) {
     }
 }
 
+/// The report's legend: every column, all timings median (p50) ms.
+const LEGEND: &str = "\
+### Legend
+
+All timings are the **median (p50)** over the samples, in **milliseconds**.
+
+| Column | Meaning |
+| --- | --- |
+| **Op** | The operation under test (create, swap1, removeEvery2nd, …). |
+| **Rows** | Table row count when the op ran (its precondition). |
+| **Ops Emitted** | Size of the flushed op batch React produced for one occurrence of this op. |
+| **Total** | End-to-end wall time, event trigger → post-layout on the frame the batch applied. Equals `Pre-apply + Translate + Bevy`. |
+| **Pre-apply** | Trigger → Bevy starts applying the batch. Covers the JS round-trip + inter-thread scheduling. Contains **JS**. |
+| **JS** | React reconcile + build the op batch + the `op_flush` call (measured on the JS thread). Subset of **Pre-apply**; contains **Flush**. |
+| **Flush** | The `op_flush` native call alone = `JSON.stringify` of the batch + its `serde_json` decode. Subset of **JS**. |
+| **Translate** | `apply_js_ops` walks the op batch → queues ECS commands (Bevy side). |
+| **Command** | Execute the queued ECS commands + UI prepare/content, before layout. |
+| **Layout** | `bevy_ui` layout: taffy solve + transform/clip propagation. |
+| **Bevy** | Apply done → post-layout, same frame. Full post-translate Bevy wall time; ≈ `Command + Layout`. |
+
+Nesting: `Total = Pre-apply (⊇ JS ⊇ Flush) + Translate + Bevy (≈ Command + Layout)`.
+
+For the surgical (`*1`) ops, **JS**/**Flush** are sub-millisecond and the isolate's clock may only have 1 ms resolution (`Date.now()`), so those two columns can read as 0/1 ms noise — the Rust-side columns carry the signal. Bump `--iterations` for stable surgical p50s.
+
+";
+
 /// Render a `Report` as a human-readable GitHub-flavored Markdown document: a
 /// single table (one row per op, `p50` per timing phase) plus a legend that
 /// explains every column and how the phases nest into the end-to-end total.
@@ -731,75 +733,7 @@ fn render_markdown(report: &Report) -> String {
         let _ = writeln!(out);
     }
 
-    // Legend: explain every column. All timings are median (p50) milliseconds.
-    let _ = writeln!(out, "### Legend");
-    let _ = writeln!(out);
-    let _ = writeln!(
-        out,
-        "All timings are the **median (p50)** over the samples, in **milliseconds**."
-    );
-    let _ = writeln!(out);
-    let _ = writeln!(out, "| Column | Meaning |");
-    let _ = writeln!(out, "| --- | --- |");
-    let _ = writeln!(
-        out,
-        "| **Op** | The operation under test (create, swap1, removeEvery2nd, …). |"
-    );
-    let _ = writeln!(
-        out,
-        "| **Rows** | Table row count when the op ran (its precondition). |"
-    );
-    let _ = writeln!(
-        out,
-        "| **Ops Emitted** | Size of the flushed op batch React produced for one occurrence of this op. |"
-    );
-    let _ = writeln!(
-        out,
-        "| **Total** | End-to-end wall time, event trigger → post-layout on the frame the batch applied. Equals `Pre-apply + Translate + Bevy`. |"
-    );
-    let _ = writeln!(
-        out,
-        "| **Pre-apply** | Trigger → Bevy starts applying the batch. Covers the JS round-trip + inter-thread scheduling. Contains **JS**. |"
-    );
-    let _ = writeln!(
-        out,
-        "| **JS** | React reconcile + build the op batch + the `op_flush` call (measured on the JS thread). Subset of **Pre-apply**; contains **Flush**. |"
-    );
-    let _ = writeln!(
-        out,
-        "| **Flush** | The `op_flush` native call alone = `JSON.stringify` of the batch + its `serde_json` decode. Subset of **JS**. |"
-    );
-    let _ = writeln!(
-        out,
-        "| **Translate** | `apply_js_ops` walks the op batch → queues ECS commands (Bevy side). |"
-    );
-    let _ = writeln!(
-        out,
-        "| **Command** | Execute the queued ECS commands + UI prepare/content, before layout. |"
-    );
-    let _ = writeln!(
-        out,
-        "| **Layout** | `bevy_ui` layout: taffy solve + transform/clip propagation. |"
-    );
-    let _ = writeln!(
-        out,
-        "| **Bevy** | Apply done → post-layout, same frame. Full post-translate Bevy wall time; ≈ `Command + Layout`. |"
-    );
-    let _ = writeln!(out);
-    let _ = writeln!(
-        out,
-        "Nesting: `Total = Pre-apply (⊇ JS ⊇ Flush) + Translate + Bevy (≈ Command + Layout)`."
-    );
-    let _ = writeln!(out);
-    let _ = writeln!(
-        out,
-        "For the surgical (`*1`) ops, **JS**/**Flush** are sub-millisecond and the \
-         isolate's clock may only have 1 ms resolution (`Date.now()`), so those two \
-         columns can read as 0/1 ms noise — the Rust-side columns carry the signal. \
-         Bump `--iterations` for stable surgical p50s."
-    );
-    let _ = writeln!(out);
-
+    out.push_str(LEGEND);
     out
 }
 
@@ -827,11 +761,8 @@ impl Stat {
     }
 }
 
-/// Nearest-rank percentile over an ascending-sorted slice.
+/// Nearest-rank percentile over a non-empty ascending-sorted slice.
 fn percentile(sorted: &[f64], p: f64) -> f64 {
-    if sorted.is_empty() {
-        return f64::NAN;
-    }
     let idx = ((p / 100.0) * (sorted.len() as f64 - 1.0)).round() as usize;
     sorted[idx.min(sorted.len() - 1)]
 }
