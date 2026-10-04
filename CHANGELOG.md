@@ -5,38 +5,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-10-05
+
 ### Added
 
-- **`ReactPlugins` and cargo features.** `bevy-react` is now a facade over
-  `bevy_react_core` and the element crates (`bevy_react_svg`, `_anchor`,
-  `_canvas`, `_portal`, `_surface`), one cargo feature each, all on by
-  default. `ReactPlugins` is bevy-react's `DefaultPlugins`: `ReactUiPlugin`
-  (loading `ui/dist/app.js` unless `.set(..)` overrides it) plus every
-  compiled-in element plugin; `.disable::<P>()` drops one. A disabled
-  feature isn't compiled, and its elements warn (`featureMissing`) naming
-  the feature and plugin. `ReactPlugins::register_bindings` registers the
-  compiled-in elements for the TypeScript exporter. `bevy_react::prelude`
-  carries the plugins, the `#[react_*]` macros, and the messaging APIs.
-- **`custom_cursor` feature** (default) gates `ReactUiPlugin::cursor`; it is
-  the one feature that pulls in `bevy_winit`.
+- **Custom elements.** Register your own JSX intrinsics with
+  `app.add_react_element(&ELEMENT)`: a static `Element` declaring its typed
+  attributes, writers, events and spawn hook — a UI node or any ECS entity
+  (e.g. a 3D mesh). The core elements and the feature crates use the same
+  API. Attributes accept `{ animated }` bindings; JSX props are generated
+  into `bevy.ts`.
+- **Custom style properties.** A static `StyleProperty<T>` registered with
+  `app.add_react_style(&PROP)`, applied by your own writer
+  (`add_react_style_writer`) or auto-stamped on the entity as
+  `StyleValue<T>`. `style` typing is generated into `bevy.ts`.
+- **Crate split, `ReactPlugins` and cargo features.** `bevy-react` is now a
+  facade over `bevy_react_core` and the element crates (`bevy_react_svg`,
+  `_anchor`, `_canvas`, `_portal`, `_surface`), one cargo feature each, all
+  on by default. `ReactPlugins` adds `ReactUiPlugin` plus every compiled-in
+  element plugin (`.disable::<P>()` drops one); a disabled feature's
+  elements warn `featureMissing`. `bevy_react::prelude` carries the
+  plugins, macros and messaging APIs. `custom_cursor` (default) is the one
+  feature that pulls in `bevy_winit`.
+- **`bevy-react build` CLI command** — builds the vendor + app bundles
+  (`--watch`, `--prod`), replacing the `build.mjs` every app copied.
+- **Docs site:** <https://tulustul.github.io/bevy-react/> — a guide plus a
+  generated reference, with the live wasm demo under `/demo/`.
+- **Demos:** new "Lumen" design, plus pages for custom elements and custom
+  styles.
 
 ### Changed
 
-- **bevy-react no longer forces Bevy's default features.** Every crate
-  depends on `bevy` with `default-features = false` and lists what it uses
-  (UI, its renderer, text, picking, …, plus `ui_picking`, `default_font`,
-  and `system_clipboard`, which bevy-react needs at runtime) — no more
-  audio, glTF, PBR, gilrs, or `LogPlugin` pulled into every app. Logging
-  goes through `tracing` directly.
-- **The `#[react_*]` macros need no `serde`/`ts-rs` dependency in the
-  caller.** Expansions name the bevy-react crate found in the caller's
-  manifest (`bevy-react`, else `bevy_react_core`) and reach serde, ts-rs,
-  and bevy through its re-exports. Nested payload types you derive
-  `Serialize`/`TS` on yourself still need those crates.
-- **Custom filters shadow built-ins in any registration order.** A custom
-  filter named like a built-in wins whether it registers before or after
-  `ReactUiPlugin`; registering after the plugin is no longer required.
-- **Renamed cargo features:** `svg-text` → `svg_text` (Bevy's naming).
+- **Performance.** Op batches cross the bridge as one JSON string, decoded
+  in one pass; transitions and animations cost nothing while idle; cheaper
+  mount/remove/reorder paths; text color changes no longer re-shape;
+  cached layers skip stock extraction, keep persistent render entities and
+  bucketed textures; Live `<portal>` targets render only while visible.
+- **bevy-react no longer forces Bevy's default features.** Every crate uses
+  `default-features = false` and lists what it needs — no more audio, glTF,
+  PBR, gilrs or `LogPlugin` pulled into your app.
+- **The `#[react_*]` macros need no `serde`/`ts-rs` dependency** in the
+  caller.
+- Custom filters shadow built-ins in any registration order.
+- **Breaking:** `svg-text` feature renamed to `svg_text`;
+  `ReactUiPlugin::with_animations` removed (the engine is always on); the
+  wire protocol changed — upgrade the crates and the `bevy-react` npm
+  package together.
 
 ## [0.6.0] - 2026-08-30
 
@@ -329,6 +343,8 @@ No behavior change, but worth knowing when reading or patching the crate:
 
 Last release before this changelog was introduced.
 
+[Unreleased]: https://github.com/tulustul/bevy-react/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/tulustul/bevy-react/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/tulustul/bevy-react/compare/v0.5.1...v0.6.0
 [0.5.1]: https://github.com/tulustul/bevy-react/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/tulustul/bevy-react/compare/v0.4.0...v0.5.0

@@ -50,15 +50,19 @@ cargo run -p layers-stress --release
 ### 8. Dry-run both publishes
 
 ```sh
-cargo publish --workspace --dry-run
+cargo publish --workspace --dry-run --features bevy/x11
 npm publish --dry-run -w bevy-react
 ```
 
 ### 9. Publish to crates.io
 
 ```sh
-cargo publish --workspace
+cargo publish --workspace --features bevy/x11
 ```
+
+`--features bevy/x11` is for the verify build only (it is not baked into the
+published crates): the facade's default `custom_cursor` pulls in `bevy_winit`,
+which won't compile on Linux without a windowing backend.
 
 Cargo publishes in dependency order: `bevy_react_macros` → `bevy_react_core` →
 the feature crates → `bevy-react` (the facade apps depend on).

@@ -399,7 +399,7 @@ dependencies = [
 
 [[package]]
 name = "bevy-react"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "bevy",
  "bevy_react_anchor",
@@ -1337,7 +1337,7 @@ checksum = "b511e89f7078fd21fdea77061a0ca3e737297c7011bb10c073e0aecb17c9fea6"
 
 [[package]]
 name = "bevy_react_anchor"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "bevy",
  "bevy_react_core",
@@ -1349,7 +1349,7 @@ dependencies = [
 
 [[package]]
 name = "bevy_react_canvas"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "bevy",
  "bevy_react_core",
@@ -1361,7 +1361,7 @@ dependencies = [
 
 [[package]]
 name = "bevy_react_core"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "accesskit",
  "bevy",
@@ -1392,7 +1392,7 @@ dependencies = [
 
 [[package]]
 name = "bevy_react_macros"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "proc-macro-crate",
  "proc-macro2",
@@ -1402,7 +1402,7 @@ dependencies = [
 
 [[package]]
 name = "bevy_react_portal"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "bevy",
  "bevy_react_core",
@@ -1411,7 +1411,7 @@ dependencies = [
 
 [[package]]
 name = "bevy_react_surface"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "bevy",
  "bevy_react_core",
@@ -1420,7 +1420,7 @@ dependencies = [
 
 [[package]]
 name = "bevy_react_svg"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "bevy",
  "bevy_react_core",
@@ -2542,7 +2542,7 @@ dependencies = [
 
 [[package]]
 name = "demos"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "bevy",
  "bevy-react",
@@ -3885,7 +3885,7 @@ dependencies = [
 
 [[package]]
 name = "layers-stress"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "bevy",
  "bevy-react",
@@ -4032,7 +4032,7 @@ dependencies = [
 
 [[package]]
 name = "minimal"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "bevy",
  "bevy-react",
@@ -5618,7 +5618,7 @@ dependencies = [
 
 [[package]]
 name = "stress"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "bevy",
  "bevy-react",

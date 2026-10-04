@@ -79,51 +79,6 @@ fn main() {
 The [Getting started](https://tulustul.github.io/bevy-react/getting-started/)
 guide covers configuration, cargo features, and the typed client.
 
-## Features
-
-- **Elements:** [`<node>`](https://tulustul.github.io/bevy-react/elements/node/),
-  [`<button>`](https://tulustul.github.io/bevy-react/elements/button/),
-  [`<text>`](https://tulustul.github.io/bevy-react/elements/text/),
-  [`<editableText>`](https://tulustul.github.io/bevy-react/elements/editable-text/),
-  [`<image>`](https://tulustul.github.io/bevy-react/elements/image/),
-  [`<canvas>`](https://tulustul.github.io/bevy-react/elements/canvas/),
-  [`<svg>`](https://tulustul.github.io/bevy-react/elements/svg/),
-  [`<portal>`](https://tulustul.github.io/bevy-react/elements/portal/),
-  [`<surface>`](https://tulustul.github.io/bevy-react/elements/surface/) (UI on a
-  3D mesh), [`<root>`](https://tulustul.github.io/bevy-react/elements/root/),
-  [`<anchor>`](https://tulustul.github.io/bevy-react/elements/anchor/)
-  (world-anchored overlays)
-- **Layout:** [flexbox](https://tulustul.github.io/bevy-react/layout/flexbox/),
-  [grid](https://tulustul.github.io/bevy-react/layout/grid/),
-  [positioning](https://tulustul.github.io/bevy-react/layout/positioning/)
-- **Styling:** a CSS-like `style` prop with
-  [hover, press and focus states](https://tulustul.github.io/bevy-react/elements/node/),
-  [gradients](https://tulustul.github.io/bevy-react/styling/gradients/),
-  [shadows](https://tulustul.github.io/bevy-react/styling/shadows/),
-  [transforms](https://tulustul.github.io/bevy-react/styling/transforms/) and
-  [3D transforms](https://tulustul.github.io/bevy-react/styling/3d-transforms/)
-- **Effects:** GPU [filters](https://tulustul.github.io/bevy-react/styling/filters/),
-  [backdrop filters](https://tulustul.github.io/bevy-react/styling/backdrop-filters/)
-  (frosted glass), [morph filters](https://tulustul.github.io/bevy-react/styling/morph-filters/)
-  (view transitions), all on cached [composited layers](https://tulustul.github.io/bevy-react/styling/layers/)
-- **Animation:** [style transitions](https://tulustul.github.io/bevy-react/animations/style-transitions/)
-  including layout (FLIP) animations,
-  [animated values](https://tulustul.github.io/bevy-react/animations/animated-values/)
-  driven in Bevy, not JS, and
-  [shared elements](https://tulustul.github.io/bevy-react/animations/shared-elements/)
-- **Talking to Bevy:** typed [messages](https://tulustul.github.io/bevy-react/communication/react-to-bevy/),
-  [events](https://tulustul.github.io/bevy-react/communication/bevy-to-react/),
-  [requests](https://tulustul.github.io/bevy-react/communication/request-response/)
-  and [named nodes](https://tulustul.github.io/bevy-react/communication/named-nodes/),
-  with [generated TypeScript](https://tulustul.github.io/bevy-react/tooling/ts-codegen/)
-- **Extensible:** your own [elements](https://tulustul.github.io/bevy-react/extending/custom-elements/)
-  (UI nodes, or any ECS entity such as a 3D mesh),
-  [style properties](https://tulustul.github.io/bevy-react/extending/custom-styles/)
-  and [WGSL filters](https://tulustul.github.io/bevy-react/extending/custom-filters/)
-- **Tooling:** [devtools](https://tulustul.github.io/bevy-react/tooling/devtools/),
-  [hot reload](https://tulustul.github.io/bevy-react/tooling/hot-reload/) that keeps
-  state, [web builds](https://tulustul.github.io/bevy-react/tooling/web/)
-
 ## Project status
 
 Currently, the project is a **quick, vibecoded proof of concept** demonstrating the idea. The API is very unstable and will change, the code quality is not satisfying.
