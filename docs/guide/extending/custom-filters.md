@@ -287,7 +287,7 @@ transitions this way; their shaders, in
 are worked examples, registered in
 [`examples/demos/filters.rs`](../../../examples/demos/filters.rs).
 
-![The demos' custom morph pack animating on live UI cards: window slices, a radial sweep, a polka-dot curtain, a circle crop, a burn, a tile wave, a grid flip, a doorway, a book flip, a kaleidoscope, a datamosh glitch, a film burn and a page curl.](../../../screenshots/morphs-custom.webp)
+![The demos' custom morph pack swapping live UI cards: window slices, a radial sweep, a polka-dot curtain, a circle crop, a curtain, a burn, a tile wave, a grid flip, a doorway, a book flip, a kaleidoscope, a datamosh glitch, a film burn, a page curl and a dust-off.](../../../screenshots/morphs-custom.webp)
 
 ## Two families
 
@@ -370,7 +370,7 @@ whose params do not all have defaults precompiles its first shader only.
 - Custom filters cannot fade in or out through an identity value (see
   above), and vector params cannot be animated.
 
-![Custom WGSL filters running on live UI: a ripple distortion, a glitch effect and an animated dissolve.](../../../screenshots/customFilters.gif)
+![Custom WGSL filters running on live UI: a ripple distortion, a glitch effect and an animated dissolve.](../../../screenshots/custom-filters.webp)
 
 See the [filter reference](../reference/filters.md) for the built-ins' params,
 and [`filter`](../reference/style-properties.md#filter),

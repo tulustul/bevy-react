@@ -181,7 +181,7 @@ function Glass() {
   second UI camera, the node renders without its backdrop filter and a
   `layerCamera` warning is reported.
 
-![A frosted-glass panel with a backdrop blur over a live 3D scene: the moving cubes behind it soften into shapes while the panel's own text stays sharp.](../../../screenshots/backdropFilter.gif)
+![Four backdrop-filtered cards over a live 3D scene: a frosted-glass blur, a hue rotation, a filter combined with a backdrop filter, and a custom backdrop filter, each re-filtering the moving cubes behind it.](../../../screenshots/backdrop-filter.webp)
 
 See [`backdropFilter`](../reference/style-properties.md#backdropFilter) in the
 style reference.

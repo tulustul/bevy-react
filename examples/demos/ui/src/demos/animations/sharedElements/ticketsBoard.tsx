@@ -68,7 +68,7 @@ function TicketsBoard() {
           style={{
             ...kanbanItem,
             width: "100%",
-            backgroundColor: side === "todo" ? Colors.cyan : Colors.mint,
+            backgroundColor: side === "todo" ? Colors.cyan : Colors.ember,
             globalZIndex: 1,
             transition: {
               sharedElement: { duration: 400, easing: "easeOut" },

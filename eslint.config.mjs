@@ -64,12 +64,14 @@ export default tseslint.config(
     },
   },
   {
-    // Node-run scripts: build pipeline (esbuild + SWC) and the scaffolding CLI.
+    // Node-run scripts: build pipeline (esbuild + SWC), the scaffolding CLI,
+    // and the docs screenshot runner.
     files: [
       "**/build.mjs",
       "**/build-web.mjs",
       "**/build-lib.mjs",
       "**/bin/*.mjs",
+      "screenshots/*.mjs",
     ],
     languageOptions: {
       globals: {

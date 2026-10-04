@@ -80,7 +80,7 @@ is a fuller example, combining gradients, a `pinch`
 [animated value](../animations/animated-values.md), and a shadow that
 flattens while pressed.
 
-![The demo app's Button component: a "Click me" button that squeezes under the cursor on press and springs back with a wobble.](../../../screenshots/button.webp)
+![The demo app's Button component in its example card: a "Click me" button that squeezes under the cursor on press and springs back, counting the clicks.](../../../screenshots/button.webp)
 
 ## Limits
 

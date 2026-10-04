@@ -16,7 +16,7 @@ Try the [live demo](https://tulustul.github.io/bevy-react/demo/). It is the
 web (wasm) build of the demos gallery and runs in your browser. The UI there
 is still `bevy_ui`, not DOM.
 
-![The bevy-react demos home page over an aurora backdrop: the React and Bevy logos above six live demo cards (shared elements, layout animations, filters, morphing, hot reload and typed messages).](../../screenshots/home.webp)
+![The bevy-react demos home page: the React and Bevy logos above six live demo cards (shared elements, layout animations, filters, morphing, hot reload and typed messages).](../../screenshots/home.webp)
 
 ```tsx
 import { mount } from "bevy-react";

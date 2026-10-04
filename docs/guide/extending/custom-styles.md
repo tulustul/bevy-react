@@ -74,6 +74,14 @@ Then regenerate `bevy.ts` (see [Typing](#typing)) so `sparkle` type-checks.
 The complete property, particles included, is
 [`examples/demos/sparkle`](../../../examples/demos/sparkle/mod.rs).
 
+The light along the edge of every card in the demos app is a custom style
+too: `spotlight` is stamped the same way, and a system copies it into a
+`UiMaterial` together with the pointer position, so the light follows the
+cursor without a single React render
+([`examples/demos/spotlight.rs`](../../../examples/demos/spotlight.rs)).
+
+![The cursor gliding slowly across the button page: the edges of the docs card and of the two example cards catch a cyan light as it passes, and fade back to dark behind it.](../../../screenshots/button-spotlight.webp)
+
 ## Declaring a property
 
 A property is a `static StyleProperty<T>`. The static is the declaration and

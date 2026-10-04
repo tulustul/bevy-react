@@ -35,7 +35,13 @@ const CYAN: Srgba = Srgba::rgb(0.361, 0.851, 1.0);
 /// How far the light reaches by default, logical px.
 const DEFAULT_REACH: f32 = 260.0;
 /// Where an unlit node's pointer sits: far outside any reach.
-const DARK: Vec2 = Vec2::splat(-1.0e6);
+pub const DARK: Vec2 = Vec2::splat(-1.0e6);
+
+/// Where the light comes from when set (physical px of the UI's render
+/// target), instead of the window cursor — the `--shoot` recorder points it
+/// at its scripted pointer (its UI renders to an image, not the window).
+#[derive(Resource, Default)]
+pub struct SpotlightPointer(pub Option<Vec2>);
 
 /// The `spotlight` style value. Lengths are logical px.
 #[derive(Debug, Clone, PartialEq, Deserialize, TS)]
@@ -123,7 +129,8 @@ pub struct SpotlightPlugin;
 impl Plugin for SpotlightPlugin {
     fn build(&self, app: &mut App) {
         register_bindings(app);
-        app.add_plugins(UiMaterialPlugin::<SpotlightMaterial>::default())
+        app.init_resource::<SpotlightPointer>()
+            .add_plugins(UiMaterialPlugin::<SpotlightMaterial>::default())
             .add_systems(
                 PostUpdate,
                 // This frame's rects (a scroll moves the node under a resting
@@ -163,11 +170,12 @@ fn pointer_in_node(
 }
 
 /// Mirror each node's stamped `spotlight` and the pointer into its material.
-#[allow(clippy::type_complexity)]
+#[allow(clippy::type_complexity, clippy::too_many_arguments)]
 fn sync_spotlights(
     mut commands: Commands,
     mut materials: ResMut<Assets<SpotlightMaterial>>,
     window: Option<Single<&Window, With<PrimaryWindow>>>,
+    pointer: Res<SpotlightPointer>,
     nodes: Query<(
         Entity,
         &StyleValue<Spotlight>,
@@ -179,7 +187,9 @@ fn sync_spotlights(
     drawn: Query<(), With<MaterialNode<SpotlightMaterial>>>,
     mut dirt: ResMut<LayerContentDirt>,
 ) {
-    let cursor = window.and_then(|w| w.physical_cursor_position());
+    let cursor = pointer
+        .0
+        .or_else(|| window.and_then(|w| w.physical_cursor_position()));
     for (entity, spotlight, computed, global, material) in &nodes {
         let scale = computed.inverse_scale_factor().recip();
         let pointer = pointer_in_node(cursor, global, computed.size, reach(&spotlight.0) * scale);

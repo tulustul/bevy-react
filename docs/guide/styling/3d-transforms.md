@@ -166,7 +166,7 @@ function FlipCard() {
   cut off, and inside a `<surface>` the node renders untransformed. See
   [Layers](layers.md).
 
-![A gallery of 3D-transformed banners: a card tilted with perspective, the same tilt orthographic, a door swinging on its hinge and a card flipping to its mirrored back.](../../../screenshots/transform3d.gif)
+![A gallery of 3D-transformed banners: a card tilted with perspective, the same tilt orthographic, a door swinging on its hinge, a card flipping to its mirrored back and a spinning card.](../../../screenshots/transform3d.webp)
 
 See [`transform3d`](../reference/style-properties.md#transform3d) in the
 style reference.

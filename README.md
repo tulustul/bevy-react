@@ -24,7 +24,7 @@ component state.
 **[Live demo](https://tulustul.github.io/bevy-react/demo/)** (the web build of the
 demos gallery, running in your browser)
 
-![The bevy-react demos home page over an aurora backdrop: the React and Bevy logos above six live demo cards (shared elements, layout animations, filters, morphing, hot reload and typed messages).](https://raw.githubusercontent.com/tulustul/bevy-react/main/screenshots/home.webp)
+![The bevy-react demos home page: the React and Bevy logos above six live demo cards (shared elements, layout animations, filters, morphing, hot reload and typed messages).](https://raw.githubusercontent.com/tulustul/bevy-react/main/screenshots/home.webp)
 
 ```tsx
 import { mount } from "bevy-react";

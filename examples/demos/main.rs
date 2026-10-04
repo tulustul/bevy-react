@@ -83,12 +83,14 @@ fn main() {
         return;
     }
 
-    // `--shoot <demo-label> <out.png> [settle-secs] [--size WxH] [--from <label>]`
+    // `--shoot <demo-label> <out.png> [settle-secs] [--size WxH] [--from <label>]
+    // [--scale F] [--record SECS [--input "<secs> move X Y|press|release"]…]`
     // navigates the gallery to a demo, lets it settle, captures the Bevy framebuffer
     // to a PNG, and exits (see `screenshot`). A fixed window size + no hot reload
     // keep the shot deterministic; `--size` (default 1280x832) picks the logical
     // resolution — the way to look at the app at phone sizes without a phone;
-    // `--from` shows another demo first, to exercise the transition.
+    // `--from` shows another demo first, to exercise the transition; `--record`
+    // writes a frame sequence instead of one PNG, driving a scripted pointer.
     let shoot = parse_shoot_args(std::env::args().skip(1));
 
     let Some(cfg) = shoot else {
@@ -103,7 +105,8 @@ fn main() {
     app.run();
 }
 
-/// Parse `--shoot <label> <out.png> [settle-secs] [--size WxH] [--from <label>]`;
+/// Parse `--shoot <label> <out.png> [settle-secs] [--size WxH] [--from <label>]
+/// [--scale F] [--record SECS] [--input STEP]…`;
 /// `None` when the first argument isn't `--shoot`. The `--` options may sit
 /// anywhere after `--shoot`.
 /// Anything unrecognized panics rather than being absorbed: a mistyped
@@ -116,15 +119,34 @@ fn parse_shoot_args(mut args: impl Iterator<Item = String>) -> Option<screenshot
     let mut positional: Vec<String> = Vec::new();
     let mut size = screenshot::DEFAULT_SIZE;
     let mut from = None;
+    let mut scale = 1.0;
+    let mut record = None;
+    let mut steps = Vec::new();
+    let number = |s: Option<String>, flag: &str| -> f32 {
+        let s = s.unwrap_or_else(|| panic!("{flag} requires a number"));
+        s.parse()
+            .unwrap_or_else(|_| panic!("{flag} expects a number, got {s:?}"))
+    };
     while let Some(arg) = args.next() {
-        if arg == "--size" {
+        if arg == "--scale" {
+            scale = number(args.next(), "--scale");
+        } else if arg == "--record" {
+            record = Some(number(args.next(), "--record"));
+        } else if arg == "--input" {
+            let spec = args.next().expect("--input requires a step");
+            steps.push(screenshot::PointerStep::parse(&spec).unwrap_or_else(|| {
+                panic!("--input expects \"<secs> move <x> <y> [glide-secs]|press|release\", got {spec:?}")
+            }));
+        } else if arg == "--size" {
             let spec = args.next().expect("--size requires a WxH value");
             size = parse_size(&spec)
                 .unwrap_or_else(|| panic!("--size expects WxH (e.g. 390x844), got {spec:?}"));
         } else if arg == "--from" {
             from = Some(args.next().expect("--from requires a <demo-label>"));
         } else if arg.starts_with("--") {
-            panic!("unknown --shoot option {arg:?} (expected `--size WxH` or `--from <label>`)");
+            panic!(
+                "unknown --shoot option {arg:?} (expected --size/--from/--scale/--record/--input)"
+            );
         } else {
             positional.push(arg);
         }
@@ -148,6 +170,9 @@ fn parse_shoot_args(mut args: impl Iterator<Item = String>) -> Option<screenshot
         settle_secs,
         size,
         from,
+        scale,
+        record,
+        steps,
     })
 }
 
@@ -382,6 +407,34 @@ mod tests {
             assert_eq!(got, ("Home", "o.png".into(), settle, size), "{list:?}");
             assert_eq!(cfg.from.as_deref(), from, "{list:?}");
         }
+        // `--record`/`--scale`/`--input` (repeatable) for frame-sequence captures.
+        let cfg = parse(&[
+            "--shoot",
+            "Home",
+            "dir",
+            "--record",
+            "2",
+            "--scale",
+            "1.5",
+            "--input",
+            "0.5 move 10 20",
+            "--input",
+            "1 press",
+            "--input",
+            "2 move 0 0 3",
+        ])
+        .unwrap();
+        assert_eq!(
+            (cfg.record, cfg.scale, cfg.steps.len()),
+            (Some(2.0), 1.5, 3)
+        );
+        assert!(
+            matches!(cfg.steps[0].action, screenshot::StepAction::Move { to, secs } if to == Vec2::new(10.0, 20.0) && secs == 0.225)
+        );
+        assert!(matches!(cfg.steps[1].action, screenshot::StepAction::Press));
+        assert!(
+            matches!(cfg.steps[2].action, screenshot::StepAction::Move { secs, .. } if secs == 3.0)
+        );
         assert!(parse(&[]).is_none());
         assert!(parse(&["--export-bindings", "x.ts"]).is_none());
         for (list, expected) in [
@@ -396,6 +449,10 @@ mod tests {
             (
                 &["--shoot", "Home", "o.png", "2", "extra"],
                 "unexpected --shoot argument",
+            ),
+            (
+                &["--shoot", "Home", "o.png", "--input", "1 click"],
+                "--input expects",
             ),
         ] {
             let err = std::panic::catch_unwind(|| drop(parse(list))).unwrap_err();

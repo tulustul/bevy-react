@@ -144,6 +144,6 @@ UvChannel::Uv1`), match it with
 - A live surface without a tagged mesh renders every frame, visible or not.
 - Textures are capped at 4096 pixels per side.
 
-![A 3D monitor model whose screen is a live React "OS" — menu bar, taskbar, status line, and a code viewer — rendered into an offscreen texture and clickable in 3D.](../../../screenshots/monitor-screen.png)
+![A 3D monitor model whose screen is a live React "OS" — a menu bar, a CRT-effect toggle, a status line and a taskbar — rendered into an offscreen texture and clickable in 3D.](../../../screenshots/monitor-screen.png)
 
 See [`<surface>`](../reference/elements.md#surface) in the element reference.

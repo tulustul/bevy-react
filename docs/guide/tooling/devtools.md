@@ -178,6 +178,6 @@ panel is open.
 - Edits are transient and per node. There is no undo beyond re-enabling a
   disabled declaration.
 
-![The devtools panel docked over the demos app: the Nodes tab shows the element tree with component names such as Card and Pinchable, a selected text node, and its style in the inspector below.](../../../screenshots/devtools-nodes.png)
+![The devtools panel docked over the demos app: the Nodes tab shows the expanded element tree with component names such as Navigation2 and Pinchable, a selected text node, and its style in the inspector below.](../../../screenshots/devtools-nodes.png)
 
 ![The Bridge tab: a live log of ops, UI events and messages, with one op batch expanded to its timing breakdown and its JSON payload.](../../../screenshots/devtools-bridge.png)

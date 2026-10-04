@@ -190,7 +190,7 @@ compilation finishes draws nothing for a few frames, a visible blink.
   node's border box is cut off, and inside a `<surface>` the content
   switches without a blend.
 
-![The three built-in morphs on live UI cards: a crossfade between artworks, a linearWipe sweeping across a logo card and a pixelize swap on a stats panel.](../../../screenshots/morphs-builtin.webp)
+![The three built-in morphs on live UI cards, each swapping between content variants on its own schedule: crossfade, linearWipe and pixelize.](../../../screenshots/morphs-builtin.webp)
 
 See [`morphFilter`](../reference/style-properties.md#morphFilter) in the
 style reference, and

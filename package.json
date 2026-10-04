@@ -20,6 +20,7 @@
     "reference:generate": "UPDATE_LIBRARY_TS=1 cargo test --workspace --test library_ts",
     "generate": "npm run style:generate && npm run elements:generate && npm run reference:generate",
     "docs": "tsx docs/src/build.ts",
+    "screenshots": "node screenshots/capture.mjs",
     "deploy:site": "tsx docs/src/build.ts && npm run build:web:prod -w demos -- --build-only && cp -r examples/demos/ui/dist docs/dist/demo && gh-pages -d docs/dist --dotfiles --no-history -b gh-pages"
   },
   "devDependencies": {
