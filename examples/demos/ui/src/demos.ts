@@ -166,15 +166,32 @@ export const DEMOS: DemoItem[] = [
   { label: "Layers", scene: "CrowdedCubes", component: LayersDemo },
 ];
 
-/** Find the first selectable demo (a leaf with a `component`) by its nav label. */
-export function findDemoByLabel(
+/** Find the first selectable demo (a leaf with a `component`) matching `test`. */
+export function findDemo(
   items: DemoItem[],
-  label: string,
+  test: (item: DemoItem) => boolean,
 ): DemoItem | undefined {
   for (const item of items) {
-    if (item.label === label && item.component) return item;
-    const found = item.children && findDemoByLabel(item.children, label);
+    if (item.component && test(item)) return item;
+    const found = item.children && findDemo(item.children, test);
     if (found) return found;
   }
   return undefined;
+}
+
+/** A nav label as a URL slug (`"3D transforms"` → `"3d-transforms"`): the web
+ *  build's `?page=` deep link, which the docs site links to — keep in step
+ *  with `slugify` in docs/src/pages.ts. */
+export function demoSlug(label: string): string {
+  return label
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
+/** The demo a web build's `?page=<slug>` asks for (none natively). */
+export function demoFromUrl(): DemoItem | undefined {
+  if (typeof location === "undefined") return undefined;
+  const slug = new URLSearchParams(location.search).get("page");
+  return slug ? findDemo(DEMOS, (d) => demoSlug(d.label) === slug) : undefined;
 }

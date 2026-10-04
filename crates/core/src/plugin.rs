@@ -157,7 +157,7 @@ impl ReactUiPlugin {
         }
     }
 
-    /// The bundle [`Default`] loads: what the `create` template's `ui/`
+    /// The bundle [`Default`] loads: what the `init` template's `ui/`
     /// package builds, relative to the working directory.
     pub const DEFAULT_BUNDLE: &'static str = "ui/dist/app.js";
 

@@ -16,7 +16,7 @@
 //!     .run();
 //! ```
 //!
-//! `ReactPlugins` alone loads `ui/dist/app.js` (what the `create` template
+//! `ReactPlugins` alone loads `ui/dist/app.js` (what the `init` template
 //! builds). Like any plugin group it takes `.set(..)` to configure a member
 //! and `.disable::<P>()` to leave one out.
 //!

@@ -6,7 +6,8 @@
     "examples/demos/ui",
     "examples/minimal/ui",
     "examples/stress/ui",
-    "examples/layers-stress/ui"
+    "examples/layers-stress/ui",
+    "docs"
   ],
   "scripts": {
     "lint": "eslint . && npm run typecheck && npm run format:check",
@@ -16,7 +17,10 @@
     "format:check": "prettier --check . && cargo fmt --check",
     "style:generate": "UPDATE_STYLE_TS=1 cargo test -p bevy_react_core --lib style::ts::tests::core_style_ts_is_current",
     "elements:generate": "UPDATE_ELEMENT_TS=1 cargo test -p bevy_react_core --lib element::ts::tests::core_element_ts_is_current",
-    "generate": "npm run style:generate && npm run elements:generate"
+    "reference:generate": "UPDATE_LIBRARY_TS=1 cargo test --workspace --test library_ts",
+    "generate": "npm run style:generate && npm run elements:generate && npm run reference:generate",
+    "docs": "tsx docs/src/build.ts",
+    "deploy:site": "tsx docs/src/build.ts && npm run build:web:prod -w demos -- --build-only && cp -r examples/demos/ui/dist docs/dist/demo && gh-pages -d docs/dist --dotfiles --no-history -b gh-pages"
   },
   "devDependencies": {
     "@eslint/js": "^9.18.0",

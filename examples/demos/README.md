@@ -22,12 +22,13 @@ cargo install wasm-bindgen-cli                # once, for web (need not be on PA
 | Native · watch   | `npm run watch -w demos`            | `cargo run -p demos`           |
 | Web · dev        | `npm run build:web -w demos` ¹      | N/A                            |
 | Web · release    | `npm run build:web:prod -w demos` ¹ | N/A                            |
-| Web · deploy     | `npm run deploy:web -w demos`       | N/A                            |
 
 ¹ **`build:web`** does it all in one command: bundles the React app (esbuild), compiles
 the Bevy app to wasm (`wasm-bindgen`), writes a static site to `ui/dist/`, and serves it
 with `npx serve`. Add `-- --build-only` to build without serving. wasm builds are
 disk-heavy — keep tens of GB free (`cargo clean --target wasm32-unknown-unknown` reclaims it).
+The web build is deployed together with the docs site (`npm run deploy:site` from the repo
+root), under `/demo/`; `?page=<slug>` opens a demo directly (`?page=backdrop-filters`).
 
 ## Other
 

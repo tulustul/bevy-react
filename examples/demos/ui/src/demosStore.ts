@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { hmrSingleton } from "@/hmr";
-import { DEMOS, type DemoItem } from "./demos";
+import { DEMOS, demoFromUrl, type DemoItem } from "./demos";
 
 type DemosState = {
   selectedDemo: DemoItem;
@@ -9,7 +9,7 @@ type DemosState = {
 
 const createDemosStore = () =>
   create<DemosState>((set) => ({
-    selectedDemo: DEMOS[0],
+    selectedDemo: demoFromUrl() ?? DEMOS[0],
     setSelectedDemo: (demo) => set({ selectedDemo: demo }),
   }));
 

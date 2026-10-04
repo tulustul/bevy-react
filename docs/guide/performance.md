@@ -1,4 +1,8 @@
-# Benchmarks
+---
+description: Benchmark results for bevy-react — op throughput, layout, and layer workloads — with the commands to reproduce them.
+---
+
+# Performance
 
 Executed against commit 9643efacc87bbdbeeefaf86741d716a2c4273032
 

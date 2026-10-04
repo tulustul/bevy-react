@@ -30,6 +30,10 @@ jobs:
       - name: JS unit tests
         run: npm test -w bevy-react
 
+      # Fails on broken links/images, unknown demo labels, and stale `covers`.
+      - name: Docs site
+        run: npm run docs
+
   rust:
     name: Rust checks
     runs-on: ubuntu-latest

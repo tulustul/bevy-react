@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BevyStyle } from "bevy-react/jsx";
 import { bevy } from "@/bevy";
 import { Responsiveness, Scrollbar } from "@/theme";
-import { DEMOS, findDemoByLabel } from "./demos";
+import { DEMOS, demoSlug, findDemo } from "./demos";
 import { Navigation } from "./Navigation";
 import { HeaderCard } from "./HeaderCard";
 import { ExampleModal } from "./ExampleModal";
@@ -65,10 +65,19 @@ function Shell() {
     bevy.selectScene(selectedDemo.scene ?? null);
   }, [selectedDemo]);
 
+  // Web: mirror the demo into `?page=<slug>`, so the address bar is always a
+  // link to it (the docs site deep-links the same way).
+  useEffect(() => {
+    if (typeof history === "undefined") return;
+    const search =
+      selectedDemo === DEMOS[0] ? "" : `?page=${demoSlug(selectedDemo.label)}`;
+    history.replaceState(null, "", location.pathname + search);
+  }, [selectedDemo]);
+
   useEffect(
     () =>
       bevy.on("debug.selectDemo", ({ label }) => {
-        const demo = findDemoByLabel(DEMOS, label);
+        const demo = findDemo(DEMOS, (d) => d.label === label);
         if (demo) setSelectedDemo(demo);
       }),
     [setSelectedDemo],

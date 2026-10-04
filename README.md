@@ -890,7 +890,7 @@ contain the code at all, leave out the `devtools` feature
 
 ## Performance
 
-[docs/BENCHMARKS.md](https://github.com/tulustul/bevy-react/blob/main/docs/BENCHMARKS.md).
+[docs/guide/performance.md](https://github.com/tulustul/bevy-react/blob/main/docs/guide/performance.md).
 
 ## License
 

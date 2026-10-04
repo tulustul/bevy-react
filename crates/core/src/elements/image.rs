@@ -54,8 +54,8 @@ pub static ATLAS: Attribute<AtlasSpec> = Attribute {
     invalidate: Invalidation::PAINT,
     ..Attribute::with_codec("atlas", Codec::serde_as("AtlasSpec"))
 };
-/// Which box of the node the image fills: `"content"` | `"padding"`
-/// (default) | `"border"` (`ImageNode.visual_box`).
+/// Which box of the node the image fills: `"content"` (default) |
+/// `"padding"` | `"border"` (`ImageNode.visual_box`).
 pub static VISUAL_BOX: Attribute<String> = Attribute {
     invalidate: Invalidation::PAINT,
     ..Attribute::with_codec(

@@ -8,7 +8,7 @@
 // declaration merging —
 // `declare module "bevy-react" { interface BevyFilters { blur: BlurParams; … } }`
 // — with one entry per filter the Rust registry knows, split by family: the
-// ten regular built-ins plus every `add_react_filter` custom land in
+// regular built-ins plus every `add_react_filter` custom land in
 // `BevyFilters`; the three morph built-ins (crossfade, linearWipe, pixelize)
 // plus every `add_react_morph_filter` custom land in `BevyMorphFilters`.
 // `FilterUse`/`MorphFilterValue` map their interface into a discriminated
