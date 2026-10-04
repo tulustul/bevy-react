@@ -2,6 +2,7 @@
 // progressive enhancement — every page reads fine without it:
 //  - TSX/Rust code pairs become ARIA tabs. The chosen language applies to
 //    every group on the page and is remembered across pages.
+//  - The separately scrolling nav opens scrolled to the current page.
 //  - On phones the nav menu starts collapsed (it renders open for no-JS).
 (() => {
   const KEY = "bevy-react-docs-lang";
@@ -78,6 +79,13 @@
   select("tsx");
   const saved = read();
   if (saved) select(saved);
+
+  // The nav scrolls on its own: start it with the current page in view.
+  const sidebar = document.querySelector<HTMLElement>(".sidebar");
+  const current = sidebar?.querySelector<HTMLElement>('[aria-current="page"]');
+  if (sidebar && current) {
+    sidebar.scrollTop = current.offsetTop - sidebar.clientHeight / 2;
+  }
 
   const menu = document.querySelector<HTMLDetailsElement>(".nav-menu");
   const phone = matchMedia("(max-width: 719px)");

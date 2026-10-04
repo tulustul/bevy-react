@@ -9,6 +9,7 @@
 //   npm run docs                   build
 //   npm run docs -- --serve        build, then serve docs/dist/
 //   npm run docs -- --uncovered    also list reference keys no page covers
+//   npm run docs -- --out <dir>    build into <dir> instead of docs/dist/
 //
 // Deploying (`npm run deploy:site`) adds the wasm demo under docs/dist/demo/.
 
@@ -21,7 +22,7 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { dirname, join, relative } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
 
@@ -49,7 +50,9 @@ const srcDir = dirname(fileURLToPath(import.meta.url));
 const docsDir = join(srcDir, "..");
 const repoRoot = join(docsDir, "..");
 const guideDir = join(docsDir, "guide");
-const dist = join(docsDir, "dist");
+const outArg = process.argv.indexOf("--out");
+const dist =
+  outArg > 0 ? resolve(process.argv[outArg + 1]) : join(docsDir, "dist");
 const cargoToml = readFileSync(join(repoRoot, "Cargo.toml"), "utf8");
 const version = /\nversion = "([^"]+)"/.exec(cargoToml)?.[1] ?? "0.0.0";
 

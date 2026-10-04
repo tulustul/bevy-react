@@ -92,7 +92,11 @@ export function flattenNav(
   ]);
 }
 
-/** Split `---`-fenced `key: value` frontmatter off a page (`[a, b]` = list). */
+/**
+ * Split `---`-fenced frontmatter off a page: `key: value` lines, where a value
+ * may continue on indented lines and `[a, b]` is a list — the subset of YAML
+ * the pages use, including prettier's wrapped form of a long list.
+ */
 export function parseFrontmatter(
   src: string,
   file: string,
@@ -100,14 +104,14 @@ export function parseFrontmatter(
   const m = /^---\n([\s\S]*?)\n---\n/.exec(src);
   if (!m) return { meta: {}, body: src };
   const meta: Meta = {};
-  for (const line of m[1].split("\n")) {
-    if (!line.trim()) continue;
-    const kv = /^(\w+):\s*(.*)$/.exec(line.trim());
-    const value = kv?.[2].trim().replace(/^"(.*)"$/, "$1") ?? "";
+  for (const entry of m[1].split(/\n(?=\S)/)) {
+    if (!entry.trim()) continue;
+    const kv = /^(\w+):([\s\S]*)$/.exec(entry);
+    const value = kv?.[2].replace(/\s+/g, " ").trim() ?? "";
     switch (kv?.[1]) {
       case "description":
       case "demo":
-        meta[kv[1]] = value;
+        meta[kv[1]] = value.replace(/^"(.*)"$/, "$1");
         break;
       case "covers":
         meta.covers = value
@@ -117,7 +121,7 @@ export function parseFrontmatter(
           .filter(Boolean);
         break;
       default:
-        throw new Error(`${file}: unknown frontmatter line "${line}"`);
+        throw new Error(`${file}: unknown frontmatter entry "${entry}"`);
     }
   }
   return { meta, body: src.slice(m[0].length) };

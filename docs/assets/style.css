@@ -16,6 +16,7 @@
 
 :root {
   color-scheme: light dark;
+  --header-h: 3.5rem;
   --bg: #eff1f5;
   --surface: #e6e9ef;
   --code-bg: #f6f7fa;
@@ -60,7 +61,7 @@
   box-sizing: border-box;
 }
 html {
-  scroll-padding-top: 1rem;
+  scroll-padding-top: calc(var(--header-h) + 1rem);
 }
 body {
   margin: 0;
@@ -93,11 +94,15 @@ a {
 }
 
 .site-header {
+  position: sticky;
+  top: 0;
+  z-index: 2;
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 0.5rem 1rem;
-  padding: 0.75rem 1.5rem;
+  height: var(--header-h);
+  padding: 0 1.5rem;
   border-bottom: 1px solid var(--border);
   background: var(--surface);
 }
@@ -127,7 +132,14 @@ a {
   max-width: 76rem;
   margin: 0 auto;
 }
+/* The nav scrolls on its own, pinned under the header. */
 .sidebar {
+  position: sticky;
+  top: var(--header-h);
+  align-self: start;
+  max-height: calc(100vh - var(--header-h));
+  overflow-y: auto;
+  overscroll-behavior: contain;
   border-right: 1px solid var(--border);
   padding: 1.25rem 1rem;
 }
@@ -378,7 +390,12 @@ blockquote {
 }
 
 @media (max-width: 719px) {
+  html {
+    scroll-padding-top: 1rem;
+  }
   .site-header {
+    position: static;
+    height: auto;
     padding: 0.75rem 1rem;
   }
   .site-links {
@@ -389,6 +406,9 @@ blockquote {
     display: block;
   }
   .sidebar {
+    position: static;
+    max-height: none;
+    overflow: visible;
     border-right: none;
     border-bottom: 1px solid var(--border);
     padding: 0.5rem 1rem;

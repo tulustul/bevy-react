@@ -56,6 +56,9 @@ To set up a project, see [Getting started](getting-started.md).
   live and keeps its hook state and running animations.
 - **Typed, two-way messaging.** React and the ECS talk over typed channels
   generated from your Rust types.
+- **Not only UI.** [Custom elements](extending/custom-elements.md) put any
+  ECS entity under React's control, such as a 3D mesh whose attributes come
+  from component state.
 
 ## Project status
 
