@@ -130,7 +130,7 @@ fn spawn_monitor(
         MONITOR,
         SurfaceSpec {
             size: SCREEN_PX,
-            clear_color: Color::srgb(0.02, 0.02, 0.05),
+            clear_color: Color::srgb_u8(0x0b, 0x0c, 0x10),
             ..default()
         },
     );

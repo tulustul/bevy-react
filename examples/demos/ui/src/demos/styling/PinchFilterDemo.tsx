@@ -1,4 +1,6 @@
+import { BevyStyle } from "bevy-react/jsx";
 import { CardTitle, InlineCode, Paragraph } from "@/components/typography";
+import { useIsMobile } from "@/hooks";
 import {
   Example,
   ParamControls,
@@ -69,10 +71,12 @@ export function PinchDemo() {
   );
 }
 
+// The subject beside its knobs, laid out in two columns (stacked on phones).
 function PinchCard() {
   const [params, controls] = useParams(PINCH);
+  const isMobile = useIsMobile();
   return (
-    <>
+    <node style={isMobile ? pinchMobileStyle : pinchStyle}>
       <ProductCard style={{ filter: { name: "pinch", params } }}>
         <image
           src="images/parrot.png"
@@ -80,10 +84,38 @@ function PinchCard() {
         />
         <CardTitle>Squeezed!</CardTitle>
       </ProductCard>
-      <ParamControls {...controls} />
-    </>
+      <node style={isMobile ? knobsMobileStyle : knobsStyle}>
+        <ParamControls {...controls} />
+      </node>
+    </node>
   );
 }
+
+const pinchStyle: BevyStyle = {
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 40,
+};
+
+const pinchMobileStyle: BevyStyle = {
+  flexDirection: "column",
+  alignItems: "center",
+  gap: 16,
+  width: "100%",
+};
+
+const knobsStyle: BevyStyle = {
+  display: "grid",
+  gridTemplateColumns: "repeat(2, 220px)",
+  columnGap: 28,
+  rowGap: 12,
+};
+
+const knobsMobileStyle: BevyStyle = {
+  flexDirection: "column",
+  gap: 12,
+  width: "100%",
+};
 
 const PINCH = {
   x: slider(0, 1, 0.5),

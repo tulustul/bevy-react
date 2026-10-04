@@ -1,5 +1,10 @@
 import { useState } from "react";
-import { Caption, InlineCode, Paragraph } from "@/components/typography";
+import {
+  BoxLabel,
+  Caption,
+  InlineCode,
+  Paragraph,
+} from "@/components/typography";
 import { BevyStyle, ScrollbarStyle } from "bevy-react/jsx";
 import { Button, ControlColumn, Example, Stage, stage } from "@/components";
 import { Code } from "@/components/docs";
@@ -35,9 +40,7 @@ function WheelScrollCard() {
     <Stage style={listStyle}>
       {ITEMS.map((item) => (
         <node key={item} style={rowStyle}>
-          <text style={{ color: Colors.textColor100, fontSize: FontSizes.sm }}>
-            {item}
-          </text>
+          <text style={rowLabel}>{item}</text>
         </node>
       ))}
     </Stage>
@@ -92,18 +95,14 @@ function ControlledScrollCard() {
       >
         {ITEMS.map((item) => (
           <node key={item} style={rowStyle}>
-            <text
-              style={{ color: Colors.textColor100, fontSize: FontSizes.sm }}
-            >
-              {item}
-            </text>
+            <text style={rowLabel}>{item}</text>
           </node>
         ))}
       </node>
       <node style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
         <Button onClick={() => setScrollTop(0)}>Top</Button>
         <Button onClick={() => setScrollTop(10_000)}>Bottom</Button>
-        <Caption>{`scrollTop: ${Math.round(scrollTop)}`}</Caption>
+        <Caption mono>{`scrollTop: ${Math.round(scrollTop)}`}</Caption>
       </node>
     </ControlColumn>
   );
@@ -141,8 +140,11 @@ export function SmoothScrollDemo() {
 function SmoothScrollCard() {
   return (
     <ControlColumn>
+      {/* `scrollStep` is a node prop Stage doesn't forward: stage chrome by
+          hand, as in the controlled list. */}
       <node
         style={{
+          ...stage,
           ...listStyle,
           transition: { scroll: { duration: 200, easing: "easeOut" } },
         }}
@@ -150,11 +152,7 @@ function SmoothScrollCard() {
       >
         {ITEMS.map((item) => (
           <node key={item} style={rowStyle}>
-            <text
-              style={{ color: Colors.textColor100, fontSize: FontSizes.sm }}
-            >
-              {item}
-            </text>
+            <text style={rowLabel}>{item}</text>
           </node>
         ))}
       </node>
@@ -203,7 +201,7 @@ export function ScrollbarStyledDemo() {
           </Paragraph>
           <Code lang="tsx">{`scrollbar: {
   track: { backgroundColor: "#00000088", borderRadius: 8 },
-  thumb: { backgroundColor: "#7aa2f7", borderRadius: 8 },
+  thumb: { backgroundColor: "#5cd9ff", borderRadius: 8 },
   thickness: 20,
 }`}</Code>
         </>
@@ -231,7 +229,7 @@ export function ScrollbarFloatDemo() {
           </Paragraph>
           <Code lang="tsx">{`scrollbar: {
   track: { backgroundColor: "#00000088", borderRadius: 8 },
-  thumb: { backgroundColor: "#7aa2f7", borderRadius: 8 },
+  thumb: { backgroundColor: "#5cd9ff", borderRadius: 8 },
   thickness: 20,
   position: "float",
 }`}</Code>
@@ -259,7 +257,7 @@ export function ScrollbarLeftDemo() {
           </Paragraph>
           <Code lang="tsx">{`scrollbar: {
   track: { backgroundColor: "#00000088", borderRadius: 8 },
-  thumb: { backgroundColor: "#7aa2f7", borderRadius: 8 },
+  thumb: { backgroundColor: "#5cd9ff", borderRadius: 8 },
   thickness: 20,
   verticalSide: "left",
 }`}</Code>
@@ -283,15 +281,15 @@ export function ScrollbarStatesDemo() {
           <Paragraph>
             <InlineCode>hover</InlineCode> and <InlineCode>pressed</InlineCode>{" "}
             styles nest inside <InlineCode>thumb</InlineCode>: this one
-            brightens on hover and turns blue while dragging (pressed wins over
+            brightens on hover and turns cyan while dragging (pressed wins over
             hover).
           </Paragraph>
           <Code lang="tsx">{`scrollbar: {
   thumb: {
-    backgroundColor: "#313244",
+    backgroundColor: "#4a4f5f",
     borderRadius: 8,
-    hover: { backgroundColor: "#a6adc8" },
-    pressed: { backgroundColor: "#7aa2f7" },
+    hover: { backgroundColor: "#b6bcc8" },
+    pressed: { backgroundColor: "#5cd9ff" },
   },
   thickness: 10,
 }`}</Code>
@@ -315,9 +313,7 @@ function ScrollList({
     <Stage style={{ ...showcaseList, scrollbar }}>
       {ITEMS.map((item) => (
         <node key={item} style={rowStyle}>
-          <text style={{ color: Colors.textColor100, fontSize: FontSizes.sm }}>
-            {item}
-          </text>
+          <text style={rowLabel}>{item}</text>
         </node>
       ))}
     </Stage>
@@ -345,7 +341,7 @@ export function HorizontalScrollbarDemo() {
     width: 360,
     overflowX: "scroll",
     scrollbar: {
-      thumb: { backgroundColor: "#7aa2f7", borderRadius: 8 },
+      thumb: { backgroundColor: "#5cd9ff", borderRadius: 8 },
       thickness: 10,
       horizontalSide: "bottom", // or "top"
     },
@@ -380,15 +376,7 @@ function HScrollList({
       <Stage style={{ ...hScrollRow, scrollbar }}>
         {HTILES.map((n) => (
           <node key={n} style={hTileStyle}>
-            <text
-              style={{
-                color: Colors.textColor400,
-                fontSize: FontSizes.base,
-                fontWeight: "bold",
-              }}
-            >
-              {n}
-            </text>
+            <BoxLabel style={{ fontSize: FontSizes.base }}>{n}</BoxLabel>
           </node>
         ))}
       </Stage>
@@ -412,7 +400,14 @@ const listStyle: BevyStyle = {
 const rowStyle: BevyStyle = {
   padding: "10px 12px",
   borderRadius: 6,
-  backgroundColor: Colors.surface400,
+  border: 1,
+  borderColor: Colors.line,
+  backgroundColor: Colors.raised,
+};
+
+const rowLabel: BevyStyle = {
+  color: Colors.textBody,
+  fontSize: FontSizes.sm,
 };
 
 // Base for the visible-scrollbar showcase lists — no `scrollbarWidth`, so the
@@ -425,10 +420,10 @@ const showcaseList: BevyStyle = {
   overflowY: "scroll",
 };
 
-// A fully-styled bar: translucent rounded track, violet rounded thumb.
+// A fully-styled bar: a dark translucent rounded track, a cyan rounded thumb.
 const customBar: ScrollbarStyle = {
   track: { backgroundColor: "#00000088", borderRadius: 8 },
-  thumb: { backgroundColor: Colors.primary100, borderRadius: 8 },
+  thumb: { backgroundColor: Colors.cyan, borderRadius: 8 },
   thickness: 20,
 };
 
@@ -444,14 +439,14 @@ const leftBar: ScrollbarStyle = {
   verticalSide: "left",
 };
 
-// The thumb brightens on hover and turns blue while dragging (pressed > hover).
+// The thumb brightens on hover and turns cyan while dragging (pressed > hover).
 const statesBar: ScrollbarStyle = {
   track: { backgroundColor: "#00000022", borderRadius: 8 },
   thumb: {
-    backgroundColor: Colors.surface400,
+    backgroundColor: Colors.controlStrong,
     borderRadius: 8,
-    hover: { backgroundColor: Colors.textColor200 },
-    pressed: { backgroundColor: Colors.primary100 },
+    hover: { backgroundColor: Colors.textBody },
+    pressed: { backgroundColor: Colors.cyan },
   },
   thickness: 10,
 };
@@ -476,16 +471,16 @@ const hTileStyle: BevyStyle = {
   alignItems: "center",
   justifyContent: "center",
   borderRadius: 6,
-  backgroundColor: Colors.primary100,
+  backgroundColor: Colors.cyan,
 };
 
 // Bottom bar (reserves a gutter, so content shifts up).
 const hBottomBar: ScrollbarStyle = {
   track: { backgroundColor: "#00000088", borderRadius: 8 },
   thumb: {
-    backgroundColor: Colors.primary100,
+    backgroundColor: Colors.cyan,
     borderRadius: 8,
-    hover: { backgroundColor: Colors.sky100 },
+    hover: { backgroundColor: Colors.cyanBright },
   },
   thickness: 10,
   horizontalSide: "bottom",

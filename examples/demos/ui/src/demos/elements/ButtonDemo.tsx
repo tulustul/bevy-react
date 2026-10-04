@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Bold, BoxLabel, InlineCode, Paragraph } from "@/components/typography";
 import { BevyStyle } from "bevy-react/jsx";
-import { Button, DemoRow, Example } from "@/components";
+import { Button, DemoRow, Example, Readout } from "@/components";
 import { Code } from "@/components/docs";
 import { Colors, FontSizes } from "@/theme";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
@@ -25,8 +25,8 @@ const PAGE: ExplanationData = {
       </Paragraph>
       <Code lang="tsx">{`<button
   onClick={() => setCount((c) => c + 1)}
-  hoverStyle={{ backgroundColor: "#89b4fa" }}
-  pressStyle={{ backgroundColor: "#5a7fd6" }}
+  hoverStyle={{ backgroundColor: "#dea350" }}
+  pressStyle={{ backgroundColor: "#b9782a" }}
 >
   <text>Click me</text>
 </button>`}</Code>
@@ -79,8 +79,8 @@ function BasicButtonExample() {
 <button
   onClick={() => setCount((c) => c + 1)}
   style={{ borderRadius: 8, /* … */ }}
-  hoverStyle={{ backgroundColor: "#89b4fa" }}
-  pressStyle={{ backgroundColor: "#5a7fd6" }}
+  hoverStyle={{ backgroundColor: "#dea350" }}
+  pressStyle={{ backgroundColor: "#b9782a" }}
 >
   <text>Click me</text>
 </button>`}</Code>
@@ -95,14 +95,14 @@ function BasicButtonCard() {
   const [count, setCount] = useState(0);
   return (
     <>
-      <ClickCount count={count} />
+      <Readout label="Clicks" value={count} />
       <button
         onClick={() => setCount((c) => c + 1)}
         style={basicButtonStyle}
-        hoverStyle={{ backgroundColor: Colors.primary200 }}
-        pressStyle={{ backgroundColor: Colors.primary300 }}
+        hoverStyle={{ backgroundColor: Colors.brassBright }}
+        pressStyle={{ backgroundColor: Colors.brassDeep }}
       >
-        <BoxLabel style={{ fontSize: FontSizes.base }}>Click me</BoxLabel>
+        <BoxLabel style={{ fontSize: FontSizes.sm }}>Click me</BoxLabel>
       </button>
     </>
   );
@@ -142,49 +142,25 @@ function RichButtonCard() {
   const [count, setCount] = useState(0);
   return (
     <>
-      <ClickCount count={count} />
-      <Button
-        onClick={() => setCount((c) => c + 1)}
-        style={richButtonStyle}
-        labelStyle={{ fontSize: FontSizes.base }}
-      >
+      <Readout label="Clicks" value={count} />
+      <Button onClick={() => setCount((c) => c + 1)} style={richButtonStyle}>
         Click me
       </Button>
     </>
   );
 }
 
-function ClickCount({ count }: { count: number }) {
-  return (
-    <text style={countStyle}>
-      Clicks: <text style={countValueStyle}>{count}</text>
-    </text>
-  );
-}
-
-const countStyle: BevyStyle = {
-  color: Colors.textColor100,
-  fontSize: FontSizes.lg,
-  textAlign: "center",
-};
-
-// Spans take element defaults for unset fields — restate the size.
-const countValueStyle: BevyStyle = {
-  color: Colors.primary100,
-  fontSize: FontSizes.lg,
-};
-
+// The bare host element, hand-styled: a flat fill, no glow, no press effect.
 const basicButtonStyle: BevyStyle = {
   width: 160,
-  height: 30,
+  height: 36,
   justifyContent: "center",
   alignItems: "center",
-  borderRadius: 8,
-  backgroundColor: Colors.primary100,
+  borderRadius: 10,
+  backgroundColor: Colors.brass,
   cursor: "pointer",
 };
 
 const richButtonStyle: BevyStyle = {
   width: 160,
-  height: 30,
 };

@@ -3,7 +3,8 @@ import { InlineCode, Paragraph, TextMono } from "@/components/typography";
 import { bevy, type KeyboardEventData } from "@/bevy";
 import { Example } from "@/components";
 import { Code } from "@/components/docs";
-import { Colors, FontSizes } from "@/theme";
+import { BevyStyle } from "bevy-react/jsx";
+import { Colors, Fonts, FontSizes } from "@/theme";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
 
 const TYPESCRIPT = `import { bevy } from "@/bevy";
@@ -104,28 +105,60 @@ function KeyboardCard() {
 
   return (
     <>
-      <text style={{ fontSize: FontSizes.sm, color: Colors.textColor100 }}>
-        Press the keys to test the events
-      </text>
-      <text
-        style={{
-          fontSize: FontSizes.xl,
-          fontWeight: "bold",
-          color: Colors.yellow100,
-          textAlign: "center",
-        }}
-      >
-        {held.join("+")}
-      </text>
-      <TextMono
-        style={{
-          fontSize: FontSizes.sm,
-          color: Colors.textColor200,
-          textAlign: "center",
-        }}
-      >
+      <text style={promptStyle}>Press the keys to test the events</text>
+      {/* The held keys as keycaps: input arriving from Bevy, so they carry
+          the engine's ember. The row keeps its height while empty. */}
+      <node style={keysStyle}>
+        {held.map((key, i) => (
+          <node key={`${key}-${i}`} style={keycapStyle}>
+            <text style={keycapLabelStyle}>{key}</text>
+          </node>
+        ))}
+      </node>
+      <TextMono style={modifiersStyle}>
         {`modifiers: ${modifierLabel(lastEvent) || "-"}`}
       </TextMono>
     </>
   );
 }
+
+const promptStyle: BevyStyle = {
+  fontSize: FontSizes.sm,
+  color: Colors.textBody,
+};
+
+const KEYCAP = 44;
+
+const keysStyle: BevyStyle = {
+  flexDirection: "row",
+  flexWrap: "wrap",
+  justifyContent: "center",
+  gap: 8,
+  minHeight: KEYCAP,
+};
+
+// A keycap: a raised chip, its thicker bottom rim the key's depth.
+const keycapStyle: BevyStyle = {
+  minWidth: KEYCAP,
+  height: KEYCAP,
+  padding: { horizontal: 12 },
+  justifyContent: "center",
+  alignItems: "center",
+  borderRadius: 8,
+  border: { top: 1, left: 1, right: 1, bottom: 3 },
+  borderColor: Colors.lineStrong,
+  backgroundColor: Colors.raised,
+  boxShadow: { blurRadius: 6, color: Colors.emberGlow },
+};
+
+const keycapLabelStyle: BevyStyle = {
+  fontFamily: Fonts.mono,
+  fontSize: FontSizes.base,
+  fontWeight: "semibold",
+  color: Colors.ember,
+};
+
+const modifiersStyle: BevyStyle = {
+  fontSize: FontSizes.xs,
+  color: Colors.textDim,
+};

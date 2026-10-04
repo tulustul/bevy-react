@@ -1,7 +1,7 @@
 import { Colors, FontSizes } from "@/theme";
 import { BevyStyle } from "bevy-react/jsx";
 import { PropsWithChildren } from "react";
-import { paragraphStyle } from "./Paragraph";
+import { PROSE_LINE, paragraphStyle } from "./Paragraph";
 
 export function ListItem({ children }: PropsWithChildren) {
   return (
@@ -19,9 +19,9 @@ export const itemStyle: BevyStyle = {
 };
 
 const bulletStyle: BevyStyle = {
-  color: Colors.primary100,
-  fontSize: FontSizes.sm,
-  lineHeight: 1.55,
+  color: Colors.cyan,
+  fontSize: FontSizes.body,
+  lineHeight: PROSE_LINE,
 };
 
 const liTextStyle: BevyStyle = {

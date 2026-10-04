@@ -117,6 +117,7 @@ function FollowCamCard() {
   return (
     <node style={column}>
       <portal target="follow" style={portalView} />
+      {/* Re-aims a camera in the 3D world: a Bevy-side action, so ember. */}
       <Button onClick={() => bevy.crowdedCubes.followRandom(null)}>
         Pick another cube
       </Button>
@@ -177,14 +178,16 @@ function MinimapCard() {
 const column: BevyStyle = {
   flexDirection: "column",
   alignItems: "center",
-  gap: 8,
+  gap: 14,
 };
 
+// A window onto Bevy's render, set in a hairline bezel; the stage's own black
+// shows until the target's first frame lands.
 const portalView: BevyStyle = {
   width: 160,
   height: 160,
-  borderRadius: 8,
-  border: 2,
-  borderColor: Colors.surface500,
-  backgroundColor: Colors.surface100,
+  borderRadius: 12,
+  border: 1,
+  borderColor: Colors.lineStrong,
+  backgroundColor: Colors.stage,
 };

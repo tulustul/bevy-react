@@ -13,7 +13,7 @@ import { GamepadDemo } from "./demos/events/gamepadDemo/GamepadDemo";
 import { KeyboardDemo } from "./demos/events/KeyboardDemo";
 import { WindowDemo } from "./demos/events/WindowDemo";
 import { CanvasDemo } from "./demos/elements/CanvasDemo";
-import { CustomElementsDemo } from "./demos/elements/CustomElementsDemo";
+import { CustomElementsDemo } from "./demos/extending/CustomElementsDemo";
 import { SvgDemo } from "./demos/elements/SvgDemo";
 import { PortalDemo } from "./demos/elements/PortalDemo";
 import { SurfaceDemo } from "./demos/elements/surfaceDemo/SurfaceDemo";
@@ -23,6 +23,7 @@ import { NodeDemo } from "./demos/elements/NodeDemo";
 import { RootDemo } from "./demos/elements/RootDemo";
 import { FlexDemo } from "./demos/layout/FlexDemo";
 import { GridDemo } from "./demos/layout/GridDemo";
+import { PositioningDemo } from "./demos/layout/PositioningDemo";
 import { ButtonDemo } from "./demos/elements/ButtonDemo";
 import { TextDemo } from "./demos/elements/TextDemo";
 import { ImageDemo } from "./demos/elements/ImageDemo";
@@ -42,8 +43,8 @@ import { Transform3dDemo } from "./demos/styling/Transform3dDemo";
 import { ShadowDemo } from "./demos/styling/ShadowDemo";
 import { FilterDemo } from "./demos/styling/FilterDemo";
 import { BackdropFilterDemo } from "./demos/styling/BackdropFilterDemo";
-import { CustomFiltersDemo } from "./demos/styling/CustomFiltersDemo";
-import { CustomStylesDemo } from "./demos/styling/CustomStylesDemo";
+import { CustomFiltersDemo } from "./demos/extending/CustomFiltersDemo";
+import { CustomStylesDemo } from "./demos/extending/CustomStylesDemo";
 import { BackgroundImageDemo } from "./demos/styling/BackgroundImageDemo";
 import { ImageRenderingDemo } from "./demos/styling/ImageRenderingDemo";
 import { GradientsDemo } from "./demos/styling/GradientsDemo";
@@ -87,7 +88,6 @@ export const DEMOS: DemoItem[] = [
       { label: "<surface>", scene: "Surface", component: SurfaceDemo },
       { label: "<root>", component: RootDemo },
       { label: "<anchor>", scene: "CrowdedCubes", component: AnchorDemo },
-      { label: "Custom elements", component: CustomElementsDemo },
     ],
   },
   {
@@ -95,6 +95,7 @@ export const DEMOS: DemoItem[] = [
     children: [
       { label: "Flexbox", component: FlexDemo },
       { label: "Grid", component: GridDemo },
+      { label: "Positioning", component: PositioningDemo },
     ],
   },
   {
@@ -117,8 +118,6 @@ export const DEMOS: DemoItem[] = [
         component: BackdropFilterDemo,
       },
       { label: "Morph filters", component: MorphFilterDemo },
-      { label: "Custom filters", component: CustomFiltersDemo },
-      { label: "Custom styles", component: CustomStylesDemo },
       { label: "Gradients", component: GradientsDemo },
       { label: "Background images", component: BackgroundImageDemo },
       { label: "Image rendering", component: ImageRenderingDemo },
@@ -126,23 +125,6 @@ export const DEMOS: DemoItem[] = [
       { label: "Z-index", component: ZIndexDemo },
       { label: "Focus policy", component: FocusPolicyDemo },
       { label: "Cursors", component: CursorDemo },
-    ],
-  },
-  {
-    label: "Communication",
-    children: [
-      {
-        label: "Bevy to React",
-        scene: "BouncingBall",
-        component: BevyToReactDemo,
-      },
-      { label: "React to Bevy", scene: "Cubes", component: ReactToBevyDemo },
-      {
-        label: "Request / response",
-        scene: "BouncingBall",
-        component: BidirectionCommunicationDemo,
-      },
-      { label: "Named nodes", scene: "NamedNodes", component: NamedNodesDemo },
     ],
   },
   {
@@ -155,12 +137,37 @@ export const DEMOS: DemoItem[] = [
     ],
   },
   {
+    label: "Communication",
+    children: [
+      { label: "React to Bevy", scene: "Cubes", component: ReactToBevyDemo },
+      {
+        label: "Bevy to React",
+        scene: "BouncingBall",
+        component: BevyToReactDemo,
+      },
+      {
+        label: "Request / response",
+        scene: "BouncingBall",
+        component: BidirectionCommunicationDemo,
+      },
+      { label: "Named nodes", scene: "NamedNodes", component: NamedNodesDemo },
+    ],
+  },
+  {
     label: "Events",
     children: [
       { label: "Mouse", component: MouseDemo },
       { label: "Keyboard", component: KeyboardDemo },
       { label: "Gamepad", component: GamepadDemo },
       { label: "Window", component: WindowDemo },
+    ],
+  },
+  {
+    label: "Extending",
+    children: [
+      { label: "Custom elements", component: CustomElementsDemo },
+      { label: "Custom styles", component: CustomStylesDemo },
+      { label: "Custom filters", component: CustomFiltersDemo },
     ],
   },
   { label: "Layers", scene: "CrowdedCubes", component: LayersDemo },
@@ -195,3 +202,14 @@ export function demoFromUrl(): DemoItem | undefined {
   const slug = new URLSearchParams(location.search).get("page");
   return slug ? findDemo(DEMOS, (d) => demoSlug(d.label) === slug) : undefined;
 }
+
+/** The nav section a demo sits in (`"Elements"`), or `undefined` for a
+ *  top-level page. */
+export function sectionOf(demo: DemoItem): string | undefined {
+  return DEMOS.find((item) => item.children?.includes(demo))?.label;
+}
+
+/** Every selectable demo, in nav order. */
+export const DEMO_ORDER: DemoItem[] = DEMOS.flatMap(
+  (item) => item.children ?? [item],
+);

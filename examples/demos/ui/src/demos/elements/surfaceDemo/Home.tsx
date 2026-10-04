@@ -1,6 +1,6 @@
 import { BevyStyle } from "bevy-react/jsx";
 import { Checkbox } from "@/components";
-import { Colors, FontSizes } from "@/theme";
+import { Colors, Fonts, FontSizes } from "@/theme";
 
 type Props = {
   crt: boolean;
@@ -31,13 +31,15 @@ const home: BevyStyle = {
 };
 
 const brand: BevyStyle = {
-  color: Colors.textColor100,
-  fontSize: FontSizes.xxxl,
-  fontWeight: "bold",
+  fontFamily: Fonts.display,
+  color: Colors.text,
+  fontSize: FontSizes.display,
+  fontWeight: "semibold",
+  letterSpacing: -0.5,
 };
 
 const brandSub: BevyStyle = {
-  color: Colors.textColor200,
+  color: Colors.textBody,
   fontSize: FontSizes.lg,
 };
 

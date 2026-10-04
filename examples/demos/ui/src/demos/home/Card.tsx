@@ -1,16 +1,17 @@
 import { useEffect, useRef, useState } from "react";
-import { BevyStyle, BevyTransition } from "bevy-react/jsx";
-import { ChevronLeftIcon, SecondaryButton } from "@/components";
-import { Colors, FontSizes } from "@/theme";
-import { useIsMobile } from "@/hooks";
+import { BevyStyle } from "bevy-react/jsx";
 import {
-  flightTransition,
-  GROW_DELAY_MS,
-  GROW_MS,
-  growTransition,
-} from "./beats";
+  CARD_RADIUS,
+  ChevronLeftIcon,
+  SecondaryButton,
+  Spotlight,
+} from "@/components";
+import { Colors, Fonts, FontSizes } from "@/theme";
+import { useIsMobile } from "@/hooks";
+import { flightTransition, GROW_DELAY_MS, GROW_MS } from "./beats";
 import { type ExpandPhase, ExpandPhaseProvider, Extra } from "./Extra";
 import {
+  CARD_BORDER,
   CARD_PADDING,
   PanelCaption,
   Spacing,
@@ -32,8 +33,10 @@ const FOOTER_PADDING_X = 5;
  * On a phone there is no flight: the wall's own card grows in place.
  *
  * The box flies on `sharedElement`; everything inside rides `growTransition`
- * (sizes as real layout, extras as `Extra`s). Not frosted: six always-dirty
- * `backdropFilter` chains at rest is a bill this wall does not need to pay. */
+ * (sizes as real layout, extras as `Extra`s). Both ends wear the gallery's
+ * card surface, so nothing but the box changes under the flight. Not frosted:
+ * six always-dirty `backdropFilter` chains at rest is a bill this wall does
+ * not need to pay. */
 export function Card({
   tile,
   expanded,
@@ -73,17 +76,19 @@ export function Card({
           ...cardStyle,
           ...box,
           transition: {
-            ...(isMobile ? inPlaceTransition : flightTransition),
+            // A phone grows the card in place: nothing flies.
+            ...(!isMobile && flightTransition),
             transform: { duration: 300, easing: "easeOut" },
           },
           layoutRounding: !phase,
         }}
         hoverStyle={expanded ? undefined : hoverStyle}
       >
+        <Spotlight radius={CARD_RADIUS} outset={CARD_BORDER} edge={1} />
         <node style={isMobile ? contentsMobileStyle : contentsStyle}>
-          <text style={{ ...labelStyle, color: tile.accent }}>
-            {tile.label}
-          </text>
+          <node style={labelRowStyle}>
+            <text style={labelStyle}>{tile.label}</text>
+          </node>
           <node style={stageStyle}>
             <Vignette expanded={expanded} grown={grown} />
           </node>
@@ -96,12 +101,13 @@ export function Card({
             >
               <node style={footerStyle}>
                 <PanelCaption
-                  style={
-                    isMobile
+                  style={{
+                    ...blurbStyle,
+                    ...(isMobile
                       ? // Explicit px width: see `useCardContentWidth`.
                         { width: contentWidth! - FOOTER_PADDING_X * 2 }
-                      : blurbStyle
-                  }
+                      : { lineBreak: "noWrap" }),
+                  }}
                 >
                   {tile.blurb}
                 </PanelCaption>
@@ -110,7 +116,7 @@ export function Card({
                   onClick={expanded ? deselect : undefined}
                 >
                   <node style={backLabelStyle}>
-                    <ChevronLeftIcon size={14} color={Colors.textColor100} />
+                    <ChevronLeftIcon size={14} color={Colors.text} />
                     <text style={backTextStyle}>Back</text>
                   </node>
                 </SecondaryButton>
@@ -153,16 +159,21 @@ function useGrown(expanded: boolean, returning: boolean) {
   return { grown, phase };
 }
 
+/** The gallery card's surface (`components/Card`): graphite, a hairline rim
+ * that catches the cursor light. No drop shadow — the wall's slots are layer
+ * roots exactly the card's size, and a capture would cut it off square. */
 const cardStyle: BevyStyle = {
   flexDirection: "column",
   alignItems: "stretch",
-  borderRadius: 16,
   padding: CARD_PADDING,
+  borderRadius: CARD_RADIUS,
+  border: CARD_BORDER,
+  borderColor: Colors.line,
+  backgroundColor: Colors.card,
 };
 
 const tileStyle: BevyStyle = {
   width: "100%",
-  backgroundColor: "rgba(26, 27, 38, 0.85)",
   transform: { scale: 1 },
 };
 
@@ -170,7 +181,6 @@ const tileStyle: BevyStyle = {
  * CHILD shadows the card's own hover. */
 const panelStyle: BevyStyle = {
   width: "100%",
-  backgroundColor: "rgba(17, 17, 27, 0.72)",
   focusPolicy: "block",
 };
 
@@ -178,11 +188,6 @@ const panelDesktopStyle: BevyStyle = {
   maxHeight: 450,
   globalZIndex: 10,
 };
-
-/** What eases on the in-place phone toggle, in place of the flight. */
-const inPlaceTransition = {
-  backgroundColor: growTransition,
-} satisfies BevyTransition;
 
 const hoverStyle: BevyStyle = {
   transform: { scale: 0.95 },
@@ -201,16 +206,23 @@ const contentsStyle: BevyStyle = {
  * against the card's `minHeight` and pin the contents while the footer opens. */
 const contentsMobileStyle: BevyStyle = {
   width: "100%",
-  minHeight: TILE_HEIGHT - CARD_PADDING * 2,
+  minHeight: TILE_HEIGHT - (CARD_PADDING + CARD_BORDER) * 2,
   flexDirection: "column",
   alignItems: "stretch",
 };
 
-const labelStyle: BevyStyle = {
-  fontSize: FontSizes.xl,
-  fontWeight: "bold",
-  textAlign: "center",
+const labelRowStyle: BevyStyle = {
+  flexDirection: "row",
+  alignItems: "center",
+  justifyContent: "center",
   margin: { bottom: Spacing.label },
+};
+
+const labelStyle: BevyStyle = {
+  fontFamily: Fonts.display,
+  fontSize: FontSizes.lg,
+  fontWeight: "semibold",
+  color: Colors.text,
 };
 
 /** Plain node, no `layout` channel: its rect is driven by the card's size
@@ -228,8 +240,10 @@ const footerStyle: BevyStyle = {
   padding: { top: Spacing.footer, bottom: 4, horizontal: FOOTER_PADDING_X },
 };
 
+/** The blurb is prose, not a caption: body size and colour. */
 const blurbStyle: BevyStyle = {
-  lineBreak: "noWrap",
+  fontSize: FontSizes.body,
+  color: Colors.textBody,
 };
 
 const backStyle: BevyStyle = {
@@ -245,5 +259,6 @@ const backLabelStyle: BevyStyle = {
 
 const backTextStyle: BevyStyle = {
   fontSize: FontSizes.sm,
-  fontWeight: "bold",
+  fontWeight: "semibold",
+  color: Colors.text,
 };

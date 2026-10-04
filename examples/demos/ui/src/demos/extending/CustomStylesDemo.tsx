@@ -75,6 +75,13 @@ const PAGE: ExplanationData = {
         <InlineCode>add_react_style_writer</InlineCode> instead; it runs
         whenever the property changes, like the core's own writers.
       </Paragraph>
+      <Paragraph>
+        The cursor light along the edge of every card in this app is a custom
+        style too: <InlineCode>spotlight</InlineCode> is stamped the same way,
+        and a system copies it into a <InlineCode>UiMaterial</InlineCode>{" "}
+        together with the pointer position, so the light follows the cursor
+        without a single React render.
+      </Paragraph>
     </>
   ),
 };
@@ -211,13 +218,21 @@ const stageStyle: BevyStyle = {
   height: 160,
 };
 
+// The house button's recipe (`components/Button.tsx`) in gold: a fill lit
+// from above, a specular top rim, and Pinchable's black drop shadow under it.
 const buttonStyle: BevyStyle = {
   padding: { horizontal: 28, vertical: 14 },
   borderRadius: 999,
+  border: { top: 1 },
+  borderColor: "#ffffffa6",
   backgroundGradient: {
     type: "linear",
     angle: 180,
-    stops: [{ color: Colors.amber100 }, { color: Colors.yellow100 }],
+    stops: [
+      { color: "#ffdc8f" },
+      { color: Colors.amber },
+      { color: "#f2b440" },
+    ],
   },
   cursor: "pointer",
   // Pinchable's press surface behind the button takes the press, so the
@@ -231,7 +246,7 @@ const buttonPressStyle: BevyStyle = {
 };
 
 const labelStyle: BevyStyle = {
-  color: Colors.textColor400,
+  color: Colors.ink,
   fontSize: FontSizes.lg,
-  fontWeight: "bold",
+  fontWeight: "semibold",
 };

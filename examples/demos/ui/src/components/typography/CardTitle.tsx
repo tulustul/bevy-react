@@ -1,4 +1,4 @@
-import { Colors, FontSizes } from "@/theme";
+import { Colors, Fonts, FontSizes } from "@/theme";
 import { BevyStyle } from "bevy-react/jsx";
 import { PropsWithChildren } from "react";
 
@@ -13,7 +13,8 @@ export function CardTitle({ children, style }: Props) {
 }
 
 export const cardTitle: BevyStyle = {
-  color: Colors.textColor100,
+  fontFamily: Fonts.display,
+  color: Colors.text,
   fontSize: FontSizes.base,
-  fontWeight: "bold",
+  fontWeight: "semibold",
 };

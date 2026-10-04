@@ -17,6 +17,8 @@ export const productCard: BevyStyle = {
   alignItems: "center",
   gap: 8,
   padding: 14,
-  borderRadius: 12,
-  backgroundColor: Colors.surface300,
+  borderRadius: 14,
+  border: 1,
+  borderColor: Colors.line,
+  backgroundColor: Colors.raised,
 };

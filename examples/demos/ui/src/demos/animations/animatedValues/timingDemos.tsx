@@ -11,7 +11,7 @@ import {
 import { BevyStyle } from "bevy-react/jsx";
 import { Button, Column, Example, Slider, Stage } from "@/components";
 import { Code } from "@/components/docs";
-import { Colors, FontSizes } from "@/theme";
+import { Colors, Fonts, FontSizes } from "@/theme";
 
 // The withTiming-driven cards: an endless opacity ping-pong, the four easing
 // curves raced side by side, and a layout/color loop through interpolate.
@@ -76,7 +76,7 @@ const fadeSquareStyle: BevyStyle = {
   width: 88,
   height: 88,
   borderRadius: 16,
-  backgroundColor: Colors.primary100,
+  backgroundColor: Colors.cyan,
 };
 
 // The four easing curves, raced side by side over the same distance/duration so
@@ -86,10 +86,10 @@ const TRAVEL = 200;
 const DOT = 24;
 
 const LANES: { name: string; easing: EasingName; color: string }[] = [
-  { name: "linear", easing: "linear", color: Colors.primary100 },
-  { name: "easeIn", easing: "easeIn", color: Colors.green100 },
-  { name: "easeOut", easing: "easeOut", color: Colors.red100 },
-  { name: "easeInOut", easing: "easeInOut", color: Colors.purple100 },
+  { name: "linear", easing: "linear", color: Colors.cyan },
+  { name: "easeIn", easing: "easeIn", color: Colors.mint },
+  { name: "easeOut", easing: "easeOut", color: Colors.rose },
+  { name: "easeInOut", easing: "easeInOut", color: Colors.violet },
 ];
 
 const EASING_TSX = `const x = useSharedValue(0);
@@ -187,9 +187,11 @@ const lane: BevyStyle = {
   gap: 10,
 };
 
+// The easing's name, as written in code.
 const laneLabel: BevyStyle = {
   width: 76,
-  color: Colors.textColor200,
+  fontFamily: Fonts.mono,
+  color: Colors.textDim,
   fontSize: FontSizes.xs,
   textAlign: "right",
 };
@@ -226,7 +228,7 @@ t.value = withRepeat(withTiming(1, { duration: 900 }), {
     width: { animated: interpolate(t, [0, 1], [88, 200]) },
     height: { animated: interpolate(t, [0, 1], [88, 120]) },
     borderColor: {
-      animated: interpolateColor(t, [0, 1], ["#3b82f6", "#ec4899"]),
+      animated: interpolateColor(t, [0, 1], ["#a88bff", "#ff6b8b"]),
     },
   }}
 />`;
@@ -273,11 +275,7 @@ function LayoutColorCard() {
           width: { animated: interpolate(t, [0, 1], [88, 200]) },
           height: { animated: interpolate(t, [0, 1], [88, 120]) },
           borderColor: {
-            animated: interpolateColor(
-              t,
-              [0, 1],
-              [Colors.sky100, Colors.purple100],
-            ),
+            animated: interpolateColor(t, [0, 1], [Colors.violet, Colors.rose]),
           },
         }}
       />
@@ -297,6 +295,6 @@ const layoutBoxStyle: BevyStyle = {
   height: 88,
   border: 4,
   borderRadius: 16,
-  borderColor: Colors.sky100,
-  backgroundColor: Colors.primary100,
+  borderColor: Colors.violet,
+  backgroundColor: Colors.cyan,
 };

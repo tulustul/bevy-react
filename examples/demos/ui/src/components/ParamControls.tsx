@@ -1,4 +1,5 @@
 import { useCallback, useState } from "react";
+import { BevyStyle } from "bevy-react/jsx";
 import { Checkbox } from "./Checkbox";
 import { Slider } from "./Slider";
 
@@ -86,20 +87,13 @@ export function ParamControls<T extends ParamSpecs>({
   values,
   onChange,
 }: ParamControlsProps<T>) {
+  const keys = Object.keys(specs);
+  const sliders = keys.filter((key) => specs[key].kind === "slider");
+  const checkboxes = keys.filter((key) => specs[key].kind === "checkbox");
   return (
     <>
-      {Object.keys(specs).map((key) => {
-        const spec = specs[key];
-        if (spec.kind === "checkbox") {
-          return (
-            <Checkbox
-              key={key}
-              label={spec.label ?? key}
-              enabled={values[key] as boolean}
-              onChange={(on) => onChange(key, on as ParamValues<T>[typeof key])}
-            />
-          );
-        }
+      {sliders.map((key) => {
+        const spec = specs[key] as SliderSpec;
         return (
           <Slider
             key={key}
@@ -113,6 +107,32 @@ export function ParamControls<T extends ParamSpecs>({
           />
         );
       })}
+      {/* One left-aligned list, so the boxes line up instead of each
+          centring on its own label. */}
+      {checkboxes.length > 0 && (
+        <node style={checkboxListStyle}>
+          {checkboxes.map((key) => {
+            const spec = specs[key] as CheckboxSpec;
+            return (
+              <Checkbox
+                key={key}
+                label={spec.label ?? key}
+                enabled={values[key] as boolean}
+                onChange={(on) =>
+                  onChange(key, on as ParamValues<T>[typeof key])
+                }
+              />
+            );
+          })}
+        </node>
+      )}
     </>
   );
 }
+
+const checkboxListStyle: BevyStyle = {
+  flexDirection: "column",
+  alignItems: "flexStart",
+  alignSelf: "stretch",
+  gap: 2,
+};

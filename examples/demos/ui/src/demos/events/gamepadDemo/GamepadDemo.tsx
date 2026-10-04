@@ -203,15 +203,32 @@ export function GamepadDemo() {
     };
   }, []);
 
+  // The menu's state lives here (the gamepad edge detection feeds it), so its
+  // card takes it as children: the modal shows the docs, not a second menu.
   return (
-    <node style={{ flexDirection: "column", gap: 20, alignItems: "center" }}>
-      <GameMenu
-        nav={nav}
-        pulseKey={pulseKey}
-        dispatch={(action) => applyAndCommit(action)}
-      />
+    <>
+      <Example
+        title="Game menu"
+        info={
+          <>
+            <Paragraph>
+              LB/RB switch pages, the d-pad or either stick moves the focus
+              (hold to auto-repeat), and A selects — with a rumble on the acting
+              pad. The mouse drives the same actions: hover focuses, click
+              selects.
+            </Paragraph>
+            <Code lang="tsx">{TYPESCRIPT}</Code>
+          </>
+        }
+      >
+        <GameMenu
+          nav={nav}
+          pulseKey={pulseKey}
+          dispatch={(action) => applyAndCommit(action)}
+        />
+      </Example>
       <DetectedControllersExample />
-    </node>
+    </>
   );
 }
 

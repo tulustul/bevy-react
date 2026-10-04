@@ -44,8 +44,9 @@ pub fn register_bindings(app: &mut App) {
 const PLAY_HALF: f32 = 3.0;
 /// Ball radius, used both for the mesh and to keep it inside the walls.
 const BALL_RADIUS: f32 = 0.3;
-/// The ball's warm yellow. Shared with the bounce ripple so the two can't drift.
-const BALL_COLOR: Srgba = Srgba::rgb(0.97, 0.79, 0.36);
+/// The ball's ember — it is the Bevy side of the demo, talking to React.
+/// Shared with the bounce ripple so the two can't drift.
+const BALL_COLOR: Srgba = Srgba::rgb(1.0, 0.541, 0.298);
 
 /// How long a bounce ripple lives, in seconds.
 const RIPPLE_LIFETIME: f32 = 0.9;
@@ -302,7 +303,7 @@ fn spawn_ball(
     commands.spawn((
         Mesh3d(meshes.add(Cuboid::new(side, side, side))),
         MeshMaterial3d(materials.add(StandardMaterial {
-            base_color: Color::srgba(0.48, 0.64, 0.97, 0.4),
+            base_color: Color::srgba(0.43, 0.66, 1.0, 0.12),
             alpha_mode: AlphaMode::Blend,
             cull_mode: None,
             double_sided: true,

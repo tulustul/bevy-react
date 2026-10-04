@@ -2,12 +2,19 @@ import { memo, useEffect, useRef, useState } from "react";
 import { BevyStyle, BevyTransition } from "bevy-react/jsx";
 import {
   Colors,
+  Fonts,
   FontSizes,
   Gradients,
+  PageSwitch,
   Responsiveness,
   Scrollbar,
 } from "@/theme";
-import { Button, CircularButton, CloseIcon } from "@/components";
+import {
+  ChevronDownIcon,
+  CircularButton,
+  CloseIcon,
+  Pinchable,
+} from "@/components";
 import { Title } from "./Title";
 import { DEMOS, type DemoItem } from "./demos";
 import { useDemosStore } from "./demosStore";
@@ -24,6 +31,13 @@ type NavigationProps = {
  * until the top bar's menu button opens it, closed by the × button, the
  * scrim (in `App`), or selecting a page (the page switches at once and the
  * drawer slides out over it).
+ *
+ * The active row's highlight is ONE pill that flies from row to row: each
+ * row mounts its own pill only while active, and the shared `sharedTag`
+ * pairs the unmounting pill with the mounting one in the same commit — the
+ * engine's shared-element flight does the rest. Nothing it flies through may
+ * clip it: the pill sits beside the row's press layer (a layer only paints
+ * within its own bounds), and an expanded section stops clipping its rows.
  */
 export const Navigation = memo(function Navigation({
   open,
@@ -77,17 +91,31 @@ export const Navigation = memo(function Navigation({
           </CircularButton>
         </node>
       )}
-      <image src="bevy-react-logo.png" style={{ width: 150 }} />
-      {!isMobile && <Title style={{ margin: { bottom: 12 } }} />}
+      {/* The logo with the wordmark under it. The compact shell's top bar
+          carries the wordmark, so the drawer shows the logo alone — one
+          wordmark mount, one morph. */}
+      <node style={brandStyle}>
+        <image src="bevy-react-logo.png" style={logoStyle} />
+        {!isMobile && <Title />}
+      </node>
       <node style={itemsStyle} scrollStep={40}>
-        {DEMOS.map((demo, index) => (
-          <Item
-            key={index}
-            item={demo}
-            selectedItem={selectedDemo}
-            onSelected={select}
-          />
-        ))}
+        {DEMOS.map((item) =>
+          item.children ? (
+            <Section
+              key={item.label}
+              item={item}
+              selected={selectedDemo}
+              onSelect={select}
+            />
+          ) : (
+            <Row
+              key={item.label}
+              label={item.label}
+              active={item === selectedDemo}
+              onPress={() => select(item)}
+            />
+          ),
+        )}
       </node>
     </node>
   );
@@ -112,148 +140,137 @@ const NAV_WIDTH = Responsiveness.navWidth;
 const NAV_SLIDE_PX = NAV_WIDTH + 40;
 // Drawer open/close slide (compact shell); the 800ms is the desktop entrance.
 const DRAWER_MS = 250;
+// One row's height, and the gap between rows: a section's expanded height.
+const ROW_PX = 32;
+const ROW_GAP = 2;
+// A section's fold/unfold ease.
+const FOLD_MS = 300;
 
-type ItemProps = {
+type SectionProps = {
   item: DemoItem;
-  selectedItem: DemoItem;
-  isChild?: boolean;
-  onSelected: (item: DemoItem) => void;
+  selected: DemoItem;
+  onSelect: (item: DemoItem) => void;
 };
 
-function Item({ item, selectedItem, isChild, onSelected }: ItemProps) {
+/** A nav group: a small label that folds its rows away. */
+function Section({ item, selected, onSelect }: SectionProps) {
   const [expanded, setExpanded] = useState(item.expandedByDefault ?? false);
+  const children = item.children ?? [];
+  const holdsActive = children.includes(selected);
 
-  function onPress() {
-    if (item.children?.length) {
-      setExpanded(!expanded);
-    } else if (item.component) {
-      onSelected(item);
+  // The fold animates `maxHeight`, which needs the rows clipped — but a
+  // clipping section would also cut the nav pill off as it flies in from
+  // another section. So it clips while folded or folding, and lets go once
+  // an unfold has finished.
+  const [unfolded, setUnfolded] = useState(expanded);
+  useEffect(() => {
+    if (!expanded) {
+      setUnfolded(false);
+      return;
     }
-  }
-
-  function onChildSelected(item: DemoItem) {
-    if (expanded) {
-      onSelected(item);
-    }
-  }
+    const id = setTimeout(() => setUnfolded(true), FOLD_MS);
+    return () => clearTimeout(id);
+  }, [expanded]);
 
   return (
-    <node style={{ flexDirection: "column" }}>
-      <ItemButton
-        isActive={item.label === selectedItem.label}
-        isExpanded={expanded}
-        label={item.label}
-        onPress={onPress}
-        isChild={isChild ?? false}
-        hasChildren={!!item.children?.length}
-      />
-
-      {item.children?.length ? (
-        <node
-          style={{
-            flexDirection: "column",
-            gap: 8,
-            margin: { left: 15 },
-            overflowY: "clip",
-            maxHeight: expanded ? item.children.length * NAV_ITEM_PX : 0,
-            transition: {
-              size: { duration: 300, easing: "easeOut" },
-            },
-          }}
+    <node style={{ flexDirection: "column", margin: { top: 10 } }}>
+      <Pinchable params={ROW_PINCH} shadow={null}>
+        <button
+          onClick={() => setExpanded(!expanded)}
+          style={sectionStyle}
+          hoverStyle={sectionHoverStyle}
         >
-          <node />
-          {item.children.map((child, index) => (
-            <Item
-              key={index}
-              item={child}
-              isChild={true}
-              onSelected={onChildSelected}
-              selectedItem={selectedItem}
-            />
-          ))}
-        </node>
-      ) : null}
+          <text
+            style={{
+              ...sectionLabelStyle,
+              color: holdsActive ? Colors.text : Colors.textDim,
+            }}
+          >
+            {item.label}
+          </text>
+          <node
+            style={{
+              transform: { rotate: expanded ? 0 : -90 },
+              transition: { transform: { duration: 200, easing: "easeOut" } },
+            }}
+          >
+            <ChevronDownIcon size={14} color={Colors.textDim} />
+          </node>
+        </button>
+      </Pinchable>
+      <node
+        style={{
+          ...sectionRowsStyle,
+          maxHeight: expanded ? children.length * (ROW_PX + ROW_GAP) + 4 : 0,
+          overflowY: expanded && unfolded ? "visible" : "clip",
+        }}
+      >
+        {children.map((child) => (
+          <Row
+            key={child.label}
+            label={child.label}
+            active={child === selected}
+            // A row folded away can't be chosen mid-collapse.
+            onPress={() => expanded && onSelect(child)}
+          />
+        ))}
+      </node>
     </node>
   );
 }
 
-// Estimated height of one (leaf) submenu row — child button plus the column gap.
-// A slight overshoot is fine (hidden by `overflowY: clip`); undershoot would clip
-// the last row, so round up.
-const NAV_ITEM_PX = 42;
-
-type ItemButtonProps = {
+type RowProps = {
   label: string;
-  isActive: boolean;
-  isExpanded: boolean;
-  isChild: boolean;
-  hasChildren: boolean;
+  active: boolean;
   onPress: () => void;
 };
-function ItemButton({
-  isActive,
-  isExpanded,
-  isChild,
-  hasChildren,
-  label,
-  onPress,
-}: ItemButtonProps) {
+
+/** One page link. Element pages (`<node>`) set in the mono face. The pill
+ *  is the row's first child, BESIDE the press layer, so it paints under the
+ *  label and flies unclipped. */
+function Row({ label, active, onPress }: RowProps) {
+  const isTag = label.startsWith("<");
   return (
-    <Button
-      onClick={onPress}
-      style={{
-        ...navButtonStyle,
-        padding: isChild ? 6 : 12,
-        backgroundGradient: isActive ? Gradients.primary : Gradients.surface,
-      }}
-      hoverStyle={{
-        backgroundGradient: isActive
-          ? Gradients.primary
-          : Gradients.surfaceHover,
-      }}
-    >
-      <node
-        style={{
-          justifyContent: "spaceBetween",
-          alignItems: "center",
-          width: "100%",
-        }}
-      >
-        <text
-          style={{
-            color: isActive ? Colors.textColor400 : Colors.textColor100,
-            fontSize: isChild ? FontSizes.sm : FontSizes.base,
-            fontWeight: "bold",
-            margin: { right: 10 },
-          }}
+    <node style={rowWrapStyle}>
+      {active && (
+        <node sharedTag="nav-active" style={pillStyle}>
+          <node style={pillBarStyle} />
+        </node>
+      )}
+      <Pinchable params={ROW_PINCH} shadow={null}>
+        <button
+          onClick={onPress}
+          style={rowStyle}
+          hoverStyle={active ? undefined : rowHoverStyle}
         >
-          {label}
-        </text>
-        {hasChildren && (
           <text
             style={{
-              fontFamily: "Noto Sans Mono",
+              ...(isTag ? rowTagLabelStyle : rowLabelStyle),
+              color: active ? Colors.text : ROW_TEXT,
             }}
           >
-            {isExpanded ? "-" : "+"}
+            {label}
           </text>
-        )}
-      </node>
-    </Button>
+        </button>
+      </Pinchable>
+    </node>
   );
 }
 
+const ROW_TEXT = "#a3a9b6";
+const ROW_PINCH = { strength: 0.18, radius: 0.5 };
+
 const navStyle: BevyStyle = {
   flexDirection: "column",
-  alignItems: "center",
+  alignItems: "stretch",
   width: NAV_WIDTH,
   height: "100%",
-  gap: 8,
-  padding: 10,
-  backgroundColor: Colors.surface100,
+  backgroundColor: "#0c0d11",
   backgroundGradient: Gradients.navBackdrop,
+  border: { right: 1 },
+  borderColor: Colors.line,
   zIndex: 100,
-  boxShadow: { blurRadius: 15, spreadRadius: 0, color: Colors.shadow100 },
+  boxShadow: { blurRadius: 30, color: "#00000099" },
 };
 
 // Compact: out of the row flow, pinned to the left edge over the content.
@@ -266,28 +283,125 @@ const drawerStyle: BevyStyle = {
 
 const closeStyle: BevyStyle = {
   positionType: "absolute",
-  top: 6,
-  right: 6,
+  top: 14,
+  right: 10,
+  zIndex: 1,
+};
+
+const brandStyle: BevyStyle = {
+  flexDirection: "column",
+  alignItems: "center",
+  gap: 8,
+  padding: { horizontal: 16, top: 22, bottom: 18 },
+  border: { bottom: 1 },
+  borderColor: Colors.line,
+};
+
+// The composite logo pair is 450×250.
+const logoStyle: BevyStyle = {
+  width: 150,
+  height: 83,
 };
 
 const itemsStyle: BevyStyle = {
   flexDirection: "column",
   alignItems: "stretch",
-  width: "100%",
-  height: "100%",
-  gap: 8,
+  flexGrow: 1,
+  minHeight: 0,
+  gap: ROW_GAP,
+  padding: { left: 12, right: 14, top: 12, bottom: 24 },
   overflowY: "scroll",
   scrollbar: Scrollbar,
   transition: { scroll: { duration: 200, easing: "easeOut" } },
-  padding: { right: 10 },
+  globalZIndex: 20,
 };
 
-const navButtonStyle: BevyStyle = {
-  flexDirection: "column",
-  alignItems: "start",
-  gap: 2,
-  padding: 12,
-  borderRadius: 8,
+const sectionStyle: BevyStyle = {
+  flexDirection: "row",
+  alignItems: "center",
+  justifyContent: "spaceBetween",
   width: "100%",
+  height: 30,
+  padding: { horizontal: 10 },
+  borderRadius: 8,
   cursor: "pointer",
+  focusPolicy: "pass",
+};
+
+const sectionHoverStyle: BevyStyle = {
+  backgroundColor: Colors.hover,
+};
+
+const sectionLabelStyle: BevyStyle = {
+  fontSize: FontSizes.xs,
+  fontWeight: "semibold",
+  letterSpacing: 0.8,
+};
+
+// The guide line down the left of a section's rows.
+const sectionRowsStyle: BevyStyle = {
+  flexDirection: "column",
+  alignItems: "stretch",
+  gap: ROW_GAP,
+  margin: { left: 12 },
+  padding: { left: 6 },
+  border: { left: 1 },
+  borderColor: Colors.line,
+  transition: { size: { duration: FOLD_MS, easing: "easeOut" } },
+};
+
+const rowWrapStyle: BevyStyle = {
+  flexDirection: "column",
+  alignItems: "stretch",
+};
+
+const rowStyle: BevyStyle = {
+  flexDirection: "row",
+  alignItems: "center",
+  width: "100%",
+  height: ROW_PX,
+  padding: { horizontal: 12 },
+  borderRadius: 8,
+  cursor: "pointer",
+  focusPolicy: "pass",
+};
+
+const rowHoverStyle: BevyStyle = {
+  backgroundColor: Colors.hover,
+};
+
+const rowLabelStyle: BevyStyle = {
+  fontSize: FontSizes.sm,
+  fontWeight: "medium",
+};
+
+const rowTagLabelStyle: BevyStyle = {
+  fontFamily: Fonts.mono,
+  fontSize: FontSizes.code - 0.5,
+};
+
+// The active row's lit pill: a cyan wash with a glowing bar at its left
+// edge. It fills the row behind the label and flies between rows (see
+// `Navigation`) in step with the page's light sweep; the bar rides along.
+const pillStyle: BevyStyle = {
+  positionType: "absolute",
+  top: 0,
+  left: 0,
+  right: 0,
+  bottom: 0,
+  borderRadius: 8,
+  backgroundColor: "#122029",
+  transition: { sharedElement: PageSwitch },
+  globalZIndex: 1,
+};
+
+const pillBarStyle: BevyStyle = {
+  positionType: "absolute",
+  left: 0,
+  top: 2,
+  bottom: 2,
+  width: 3,
+  borderRadius: 2,
+  backgroundColor: Colors.cyan,
+  boxShadow: { blurRadius: 10, color: Colors.cyanGlow },
 };

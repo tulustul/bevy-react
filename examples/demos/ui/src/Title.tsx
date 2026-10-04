@@ -1,25 +1,26 @@
 import { useEffect, useState } from "react";
 import { BevyStyle } from "bevy-react/jsx";
-import { Colors } from "@/theme";
+import { Colors, Fonts } from "@/theme";
 import { Pinchable } from "@/components";
 
 const title = "bevy-react";
 const titleDelay = 7000;
 
 type TitleProps = {
-  /** Merged over the wrapper's own style (its place in the parent's flow). */
+  /** Merged over the wordmark's own style (its place in the parent's flow). */
   style?: BevyStyle;
 };
 
 /**
- * The library wordmark: it dusts away from time to time — or on click — and
- * blows back in. Lives in the nav column on the regular shell and in the top
- * bar on the compact one (never both — one mount, one morph).
+ * The library wordmark — "bevy" in Bevy's ember, "react" in React's cyan. It
+ * dusts away from time to time — or on click — and blows back in. Lives in
+ * the nav column (under the logo) on the regular shell and in the top bar on
+ * the compact one (never both — one mount, one morph).
  *
- * The text stays mounted (opacity toggle) so the wrapper keeps its layout
- * size — a morph snapshot is layout-anchored, and a collapsing wrapper would
- * stretch the frozen image; the key flip freezes the old appearance and
- * `dustify` blends it with the (now invisible / visible) live content.
+ * The text stays mounted (its wrapper keeps its layout size) — a morph
+ * snapshot is layout-anchored, and a collapsing wrapper would stretch the
+ * frozen image; the key flip freezes the old appearance and `dustify` blends
+ * it with the new live content.
  */
 export function Title({ style }: TitleProps) {
   const [text, setText] = useState(title);
@@ -38,48 +39,58 @@ export function Title({ style }: TitleProps) {
 
   return (
     <Pinchable
-      style={{ width: "100%", ...style }}
       params={{ strength: 0.28, radius: 0.4 }}
-      filters={[
-        {
-          name: "gradientMap",
-          params: {
-            stops: [{ color: "#caf9afff" }, { color: "#c72e00ff" }],
-          },
-        },
-      ]}
+      shadow={null}
+      style={style}
     >
       <node
         onClick={toggle}
         style={{
-          cursor: "pointer",
+          ...wordmarkBoxStyle,
           morphFilter: {
             key: text,
             name: "dustify",
             params: {
               direction: 0,
-              softness: 180,
+              softness: 120,
               turbulence: 0.6,
               wind: 0,
-              drift: 30,
-              grain: 4,
+              drift: 24,
+              grain: 3,
             },
           },
           transition: { morphFilter: { duration: 2000, easing: "linear" } },
-          width: "100%",
         }}
       >
-        <text style={{ ...titleStyle }}>{text}</text>
+        <Wordmark text={text} />
       </node>
     </Pinchable>
   );
 }
 
-const titleStyle: BevyStyle = {
-  fontFamily: "MetalMania",
-  fontSize: 40,
-  color: Colors.primary100,
+function Wordmark({ text }: { text: string }) {
+  if (text !== title) return <text style={wordStyle}>{text}</text>;
+  // Spans take element defaults for unset fields — each restates the face.
+  return (
+    <text style={wordStyle}>
+      <text style={{ ...wordStyle, color: Colors.ember }}>bevy</text>
+      <text style={{ ...wordStyle, color: Colors.textFaint }}>-</text>
+      <text style={{ ...wordStyle, color: Colors.cyan }}>react</text>
+    </text>
+  );
+}
+
+// Wide enough for either word, so the morph's capture never changes size.
+const wordmarkBoxStyle: BevyStyle = {
+  width: 156,
+  justifyContent: "center",
+  cursor: "pointer",
+};
+
+const wordStyle: BevyStyle = {
+  fontFamily: Fonts.display,
+  fontSize: 24,
   fontWeight: "bold",
-  width: "100%",
-  textAlign: "center",
+  letterSpacing: -0.4,
+  color: Colors.text,
 };

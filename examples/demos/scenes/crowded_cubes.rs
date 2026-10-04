@@ -231,7 +231,7 @@ fn setup_cube_assets(
                 .size(2.0 * PLANE_HALF + 4.0, 2.0 * PLANE_HALF + 4.0),
         ),
         ground_material: materials.add(StandardMaterial {
-            base_color: Color::srgb(0.14, 0.14, 0.19),
+            base_color: Color::srgb(0.09, 0.095, 0.12),
             ..default()
         }),
     });
@@ -330,7 +330,7 @@ fn spawn_portal_cameras(
     commands.spawn((
         Camera3d::default(),
         Camera {
-            clear_color: ClearColorConfig::Custom(Color::srgb(0.10, 0.11, 0.16)),
+            clear_color: ClearColorConfig::Custom(Color::srgb_u8(0x11, 0x12, 0x18)),
             ..default()
         },
         follow.camera_target(),
@@ -358,7 +358,7 @@ fn spawn_portal_cameras(
     commands.spawn((
         Camera2d,
         Camera {
-            clear_color: ClearColorConfig::Custom(Color::srgb(0.08, 0.08, 0.11)),
+            clear_color: ClearColorConfig::Custom(Color::srgb_u8(0x0b, 0x0c, 0x10)),
             ..default()
         },
         minimap.camera_target(),

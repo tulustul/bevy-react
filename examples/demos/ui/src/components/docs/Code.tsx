@@ -1,13 +1,20 @@
 import { useEffect, useRef, useState } from "react";
 import { BevyStyle } from "bevy-react/jsx";
 import { bevy } from "@/bevy";
-import { Colors, FontSizes } from "@/theme";
+import { Colors, Fonts, FontSizes } from "@/theme";
 import { CodeLang, HighlightedCode } from "./highlight";
 
 const LANG_LABEL: Record<CodeLang, string> = {
   tsx: "TSX",
   rust: "Rust",
   sh: "shell",
+};
+
+/** Each side's light: React's code cyan, Bevy's ember, the shell neutral. */
+const LANG_ACCENT: Record<CodeLang, string> = {
+  tsx: Colors.cyan,
+  rust: Colors.ember,
+  sh: Colors.textDim,
 };
 
 /**
@@ -27,7 +34,9 @@ export function Code({
   return (
     <node style={blockStyle}>
       <node style={headerStyle}>
-        <text style={langLabelStyle}>{title ?? LANG_LABEL[lang]}</text>
+        <text style={{ ...langLabelStyle, color: LANG_ACCENT[lang] }}>
+          {title ?? LANG_LABEL[lang]}
+        </text>
         <CopyButton text={children} />
       </node>
       <node style={bodyStyle}>
@@ -48,14 +57,16 @@ export function CodeTabs({ tsx, rust }: { tsx: string; rust: string }) {
   return (
     <node style={blockStyle}>
       <node style={headerStyle}>
-        <node style={{ flexDirection: "row", gap: 4 }}>
+        <node style={tabsStyle}>
           <TabButton
             label="TSX"
+            accent={Colors.cyan}
             active={active === "tsx"}
             onClick={() => setActive("tsx")}
           />
           <TabButton
             label="Rust"
+            accent={Colors.ember}
             active={active === "rust"}
             onClick={() => setActive("rust")}
           />
@@ -69,26 +80,30 @@ export function CodeTabs({ tsx, rust }: { tsx: string; rust: string }) {
   );
 }
 
+/** A language tab: the active one is lit in its side's color (TSX cyan,
+ *  Rust ember) and underlined. */
 function TabButton({
   label,
+  accent,
   active,
   onClick,
 }: {
   label: string;
+  accent: string;
   active: boolean;
   onClick: () => void;
 }) {
   return (
     <node
-      style={{ ...tabStyle, ...(active ? tabActiveStyle : null) }}
+      style={{
+        ...tabStyle,
+        borderColor: active ? accent : Colors.transparent,
+      }}
       hoverStyle={active ? undefined : tabHoverStyle}
       onClick={onClick}
     >
       <text
-        style={{
-          fontSize: FontSizes.xs,
-          color: active ? Colors.textColor100 : Colors.textColor300,
-        }}
+        style={{ ...langLabelStyle, color: active ? accent : Colors.textDim }}
       >
         {label}
       </text>
@@ -112,8 +127,8 @@ function CopyButton({ text }: { text: string }) {
     <node style={copyStyle} hoverStyle={copyHoverStyle} onClick={copy}>
       <text
         style={{
-          fontSize: FontSizes.xs,
-          color: copied ? Colors.green100 : Colors.textColor200,
+          ...langLabelStyle,
+          color: copied ? Colors.mint : Colors.textBody,
         }}
       >
         {copied ? "Copied" : "Copy"}
@@ -124,10 +139,10 @@ function CopyButton({ text }: { text: string }) {
 
 const blockStyle: BevyStyle = {
   flexDirection: "column",
-  backgroundColor: Colors.surface100,
-  borderRadius: 10,
+  backgroundColor: Colors.stage,
+  borderRadius: 12,
   border: 1,
-  borderColor: Colors.surface400,
+  borderColor: Colors.line,
   alignItems: "stretch",
 };
 
@@ -135,41 +150,51 @@ const headerStyle: BevyStyle = {
   flexDirection: "row",
   justifyContent: "spaceBetween",
   alignItems: "center",
-  padding: { top: 4, bottom: 4, left: 10, right: 4 },
+  minHeight: 34,
+  padding: { left: 14, right: 6 },
   border: { bottom: 1 },
-  borderColor: Colors.surface300,
+  borderColor: Colors.line,
 };
 
 const langLabelStyle: BevyStyle = {
-  fontSize: FontSizes.xs,
-  color: Colors.textColor300,
+  fontFamily: Fonts.mono,
+  fontSize: FontSizes.xxs,
+  fontWeight: "medium",
+  letterSpacing: 0.6,
+  color: Colors.textDim,
 };
 
 const bodyStyle: BevyStyle = {
-  padding: 10,
+  padding: { vertical: 14, horizontal: 16 },
   overflowX: "scroll",
 };
 
+// Full header height, so each tab's underline sits on the header's hairline.
+const tabsStyle: BevyStyle = {
+  flexDirection: "row",
+  alignSelf: "stretch",
+  gap: 4,
+  margin: { left: -8 },
+};
+
 const tabStyle: BevyStyle = {
-  padding: { vertical: 2, horizontal: 8 },
-  borderRadius: 6,
+  justifyContent: "center",
+  alignItems: "center",
+  padding: { top: 2, horizontal: 8 },
+  border: { bottom: 2 },
   cursor: "pointer",
 };
 
-const tabActiveStyle: BevyStyle = {
-  backgroundColor: Colors.surface300,
-};
-
 const tabHoverStyle: BevyStyle = {
-  backgroundColor: Colors.surface200,
+  borderColor: Colors.lineStrong,
 };
 
 const copyStyle: BevyStyle = {
-  padding: { horizontal: 10, vertical: 3 },
+  padding: { horizontal: 10, vertical: 4 },
   borderRadius: 6,
   cursor: "pointer",
 };
 
 const copyHoverStyle: BevyStyle = {
-  backgroundColor: Colors.surface300,
+  backgroundColor: Colors.raised,
 };

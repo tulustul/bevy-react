@@ -11,7 +11,7 @@ import {
 import { BevyStyle } from "bevy-react/jsx";
 import { bevy } from "@/bevy";
 import { Button } from "@/components";
-import { Colors, FontSizes } from "@/theme";
+import { Colors } from "@/theme";
 import { growTransition } from "../beats";
 import { Extra } from "../Extra";
 import {
@@ -40,8 +40,9 @@ const PANEL_SCALE = 1.6;
 const CONTROLS_HEIGHT = 140;
 
 /** A mark's arrival glow, peaking when the pulse touches its end of the wire
- * (`at` = 0 for React, 1 for Bevy). The `seed` matters: `spread` feeds the
- * capture outset, sized from the seed — seeding 0 would clip the glow. */
+ * (`at` = 0 for React, 1 for Bevy), each in its side's light: React's cyan,
+ * Bevy's ember. The `seed` matters: `spread` feeds the capture outset, sized
+ * from the seed — seeding 0 would clip the glow. */
 function arrivalGlow(travel: SharedValue, at: 0 | 1): FilterUse {
   return {
     name: "shadow",
@@ -52,12 +53,12 @@ function arrivalGlow(travel: SharedValue, at: 0 | 1): FilterUse {
             ? interpolateColor(
                 travel,
                 [0.75, 1],
-                [Colors.sky100 + "FF", Colors.sky100 + "00"],
+                [Colors.cyan + "FF", Colors.cyan + "00"],
               )
             : interpolateColor(
                 travel,
                 [0.75, 1.0],
-                [Colors.sky100 + "00", Colors.sky100 + "FF"],
+                [Colors.ember + "00", Colors.ember + "FF"],
               ),
       },
       offsetX: 0,
@@ -75,7 +76,8 @@ function arrivalGlow(travel: SharedValue, at: 0 | 1): FilterUse {
 
 /** Typed messages: the tile is a pulse running React → Bevy; the panel's
  * button emits `bevy.nebula.burst`, a `#[react_message]` a Bevy system answers
- * by lighting the aurora behind the app (it decays on its own, ~2s).
+ * with a shockwave across the backdrop behind the app (it decays on its own,
+ * ~2s). The button is a Bevy-side action, so it wears ember.
  *
  * The diagram grows by ONE `transform.scale` on the whole wire: the pulse's
  * travel is a px range from the rail's width, and a rail easing in real layout
@@ -140,8 +142,7 @@ export function TypedMessagesVignette({ grown }: VignetteProps) {
       <Extra grown={grown} maxHeight={CONTROLS_HEIGHT}>
         <node style={controlsStyle}>
           <Button
-            style={buttonStyle}
-            labelStyle={{ fontSize: FontSizes.lg }}
+            tone="ember"
             onClick={() => bevy.nebula.burst({ hue: Math.random() })}
           >
             Light up the sky
@@ -151,7 +152,7 @@ export function TypedMessagesVignette({ grown }: VignetteProps) {
               contentWidth === undefined ? undefined : { width: contentWidth }
             }
           >
-            The aurora behind this page is a Bevy system
+            The light behind this page is a Bevy system
           </PanelCaption>
         </node>
       </Extra>
@@ -194,27 +195,16 @@ const railStyle: BevyStyle = {
   width: "100%",
   height: 2,
   borderRadius: 1,
-  backgroundColor: Colors.surface500,
+  backgroundColor: Colors.control,
 };
 
 const pulseStyle: BevyStyle = {
   width: DOT,
   height: DOT,
   borderRadius: DOT / 2,
-  backgroundColor: Colors.sky100,
+  backgroundColor: Colors.cyan,
   filter: {
     name: "bloom",
     params: { radius: 6, threshold: 0.2, intensity: 1.6 },
   },
-};
-
-const buttonStyle: BevyStyle = {
-  padding: { horizontal: 18, vertical: 9 },
-  borderRadius: 8,
-  backgroundGradient: {
-    type: "linear",
-    angle: 180,
-    stops: [{ color: Colors.primary200 }, { color: Colors.primary300 }],
-  },
-  cursor: "pointer",
 };

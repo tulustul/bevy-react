@@ -122,7 +122,7 @@ function PercentTranslateCard() {
       <Stage style={stage}>
         <Box
           style={{
-            backgroundColor: Colors.amber100,
+            backgroundColor: Colors.amber,
             transform: { translateX: on ? "50%" : "0%" },
             transition: { transform: { duration: 250, easing: "easeOut" } },
           }}
@@ -159,7 +159,7 @@ function ScaleCard() {
     <ControlColumn>
       <Stage style={stage}>
         <Box
-          style={{ backgroundColor: Colors.green100, transform: { scale: s } }}
+          style={{ backgroundColor: Colors.mint, transform: { scale: s } }}
         />
       </Stage>
       <Slider value={s} min={0.3} max={1.8} onChange={setS} name="scale" />
@@ -193,7 +193,7 @@ function RotateCard() {
       <Stage style={stage}>
         <Box
           style={{
-            backgroundColor: Colors.purple100,
+            backgroundColor: Colors.violet,
             transform: { rotate: r },
           }}
         />

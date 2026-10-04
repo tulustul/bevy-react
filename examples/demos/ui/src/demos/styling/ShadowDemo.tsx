@@ -24,7 +24,7 @@ const PAGE: ExplanationData = {
         <InlineCode>xOffset/yOffset</InlineCode> to imply a light direction.
       </Paragraph>
       <Code lang="tsx">{`boxShadow: {
-  color: "#FFFFFF33",
+  color: "#5cd9ff59",
   xOffset: 8,
   yOffset: 8,
   blurRadius: 12,
@@ -56,12 +56,12 @@ function StackedShadowsDemo() {
       info={
         <>
           <Paragraph>
-            An array of shadows stacks back-to-front — here a tight red drop
-            plus a wide soft glow.
+            An array of shadows stacks back-to-front — here a tight ember drop
+            plus a wide soft cyan glow.
           </Paragraph>
           <Code lang="tsx">{`boxShadow: [
-  { color: "#FF000066", yOffset: 4, blurRadius: 6 },
-  { color: "#4F8CFF55", blurRadius: 28, spreadRadius: 6 },
+  { color: "#ff8a4c59", yOffset: 4, blurRadius: 6 },
+  { color: "#5cd9ff59", blurRadius: 28, spreadRadius: 6 },
 ]`}</Code>
         </>
       }
@@ -76,10 +76,10 @@ function StackedShadowsCard() {
       <Stage style={stage}>
         <Box
           style={{
-            backgroundColor: Colors.surface100,
+            backgroundColor: Colors.stage,
             boxShadow: [
-              { color: "#FF000066", yOffset: 4, blurRadius: 6 },
-              { color: "#4F8CFF55", blurRadius: 28, spreadRadius: 6 },
+              { color: Colors.emberGlow, yOffset: 4, blurRadius: 6 },
+              { color: Colors.cyanGlow, blurRadius: 28, spreadRadius: 6 },
             ],
           }}
         />
@@ -99,7 +99,7 @@ function BlurDemo() {
             <InlineCode>spreadRadius</InlineCode> grows it outward from the box
             before blurring. Drag both to shape the halo.
           </Paragraph>
-          <Code lang="tsx">{`boxShadow: { color: "#FFFFFF33", blurRadius: 12, spreadRadius: 3 }`}</Code>
+          <Code lang="tsx">{`boxShadow: { color: "#5cd9ff59", blurRadius: 12, spreadRadius: 3 }`}</Code>
         </>
       }
       demo={BlurCard}
@@ -116,7 +116,7 @@ function BlurCard() {
         <Box
           style={{
             boxShadow: {
-              color: Colors.shadow200,
+              color: Colors.cyanGlow,
               blurRadius: blur,
               spreadRadius: spread,
             },
@@ -168,9 +168,9 @@ function OffsetCard() {
       <Stage style={stage}>
         <Box
           style={{
-            backgroundColor: Colors.red100,
+            backgroundColor: Colors.ember,
             boxShadow: {
-              color: Colors.shadow200,
+              color: Colors.emberGlow,
               xOffset: x,
               yOffset: y,
               blurRadius: 6,

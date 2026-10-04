@@ -10,7 +10,14 @@ import {
   withTiming,
 } from "bevy-react";
 import { BevyStyle } from "bevy-react/jsx";
-import { Button, Column, Example, Slider, Stage } from "@/components";
+import {
+  Button,
+  Column,
+  Example,
+  SecondaryButton,
+  Slider,
+  Stage,
+} from "@/components";
 import { Code } from "@/components/docs";
 import { Colors, FontSizes, Gradients } from "@/theme";
 
@@ -96,7 +103,7 @@ const springSquare: BevyStyle = {
   width: 40,
   height: 40,
   borderRadius: 10,
-  backgroundColor: Colors.primary100,
+  backgroundColor: Colors.cyan,
   backgroundGradient: Gradients.primary,
 };
 
@@ -179,7 +186,7 @@ const sequenceSquare: BevyStyle = {
   width: 40,
   height: 40,
   borderRadius: 10,
-  backgroundColor: Colors.green100,
+  backgroundColor: Colors.mint,
 };
 
 // withRepeat loops a driver forever unless a count is given; cancelAnimation
@@ -242,7 +249,7 @@ function SpinCard() {
       </Stage>
       <node style={{ flexDirection: "row", gap: 10 }}>
         <Button onClick={start}>{spinning ? "Restart" : "Start"}</Button>
-        <Button onClick={stop}>Stop</Button>
+        <SecondaryButton onClick={stop}>Stop</SecondaryButton>
       </node>
     </Column>
   );
@@ -259,7 +266,7 @@ const spinSquare: BevyStyle = {
   width: 64,
   height: 64,
   borderRadius: 12,
-  backgroundColor: Colors.purple100,
+  backgroundColor: Colors.violet,
   justifyContent: "center",
   alignItems: "center",
 };

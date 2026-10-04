@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { Bold, InlineCode, Paragraph } from "@/components/typography";
 import { BevyStyle } from "bevy-react/jsx";
-import { Example, Slider, Stage } from "@/components";
+import { ControlColumn, Example, Slider, Stage } from "@/components";
 import { Code } from "@/components/docs";
-import { Colors } from "@/theme";
+import { Gradients } from "@/theme";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
 
 // The `<node>` host element: a styleable, nestable box — the building block every
@@ -61,14 +61,14 @@ export function NodeDemo() {
 function BoxesCard() {
   const [gap, setGap] = useState(12);
   return (
-    <>
+    <ControlColumn style={{ maxWidth: 360 }}>
       <Stage style={{ ...panelStyle, gap }}>
-        <node style={{ ...boxStyle, backgroundColor: Colors.primary100 }} />
-        <node style={{ ...boxStyle, backgroundColor: Colors.green100 }} />
-        <node style={{ ...boxStyle, backgroundColor: Colors.red100 }} />
+        {Gradients.spectrum.slice(0, 3).map((fill, i) => (
+          <node key={i} style={{ ...boxStyle, backgroundGradient: fill }} />
+        ))}
       </Stage>
       <Slider value={gap} min={0} max={32} onChange={setGap} name="gap" />
-    </>
+    </ControlColumn>
   );
 }
 

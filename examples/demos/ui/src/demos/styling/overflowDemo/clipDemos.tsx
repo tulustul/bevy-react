@@ -1,5 +1,10 @@
 import { useState } from "react";
-import { Caption, InlineCode, Paragraph } from "@/components/typography";
+import {
+  BoxLabel,
+  Caption,
+  InlineCode,
+  Paragraph,
+} from "@/components/typography";
 import { BevyStyle } from "bevy-react/jsx";
 import {
   ControlColumn,
@@ -65,7 +70,7 @@ function OverflowModesCard() {
         }}
       >
         <node style={oversizedStyle}>
-          <text style={{ color: Colors.textColor100, fontSize: FontSizes.sm }}>
+          <text style={{ color: Colors.ink, fontSize: FontSizes.sm }}>
             This block is wider and taller than its 220×140 box. Switch the
             overflow value to watch it spill out, get clipped, or scroll.
           </text>
@@ -130,17 +135,11 @@ function SqueezeRow({ mode }: { mode: "clip" | "hidden" }) {
       <Stage style={squeezeContainer}>
         <node style={{ ...subjectStyle, overflowX: mode }}>
           <node style={wideChildStyle}>
-            <text
-              style={{ color: Colors.textColor100, fontSize: FontSizes.xs }}
-            >
-              220px child
-            </text>
+            <BoxLabel>220px child</BoxLabel>
           </node>
         </node>
         <node style={siblingStyle}>
-          <text style={{ color: Colors.textColor100, fontSize: FontSizes.xs }}>
-            sibling
-          </text>
+          <BoxLabel>sibling</BoxLabel>
         </node>
       </Stage>
     </node>
@@ -157,7 +156,7 @@ const oversizedStyle: BevyStyle = {
   height: 220,
   padding: 12,
   borderRadius: 8,
-  backgroundColor: Colors.primary100,
+  backgroundColor: Colors.cyan,
 };
 
 // Fixed-width row that clips, so an overflowing subject visibly pushes the
@@ -171,13 +170,16 @@ const squeezeContainer: BevyStyle = {
 };
 
 // Flexible subject: no fixed width, so flexbox sizes it — and the overflow value
-// decides whether its 220px content acts as a minimum.
+// decides whether its 220px content acts as a minimum. A well with a hairline
+// rim, so its clipped edge reads against the plate.
 const subjectStyle: BevyStyle = {
   height: 56,
   alignItems: "center",
   padding: 8,
   borderRadius: 8,
-  backgroundColor: Colors.surface400,
+  border: 1,
+  borderColor: Colors.line,
+  backgroundColor: Colors.well,
 };
 
 const wideChildStyle: BevyStyle = {
@@ -186,7 +188,7 @@ const wideChildStyle: BevyStyle = {
   alignItems: "center",
   justifyContent: "center",
   borderRadius: 6,
-  backgroundColor: Colors.primary100,
+  backgroundColor: Colors.cyan,
 };
 
 // Fixed-size sibling that refuses to shrink, so it competes with the subject for
@@ -198,5 +200,5 @@ const siblingStyle: BevyStyle = {
   alignItems: "center",
   justifyContent: "center",
   borderRadius: 8,
-  backgroundColor: Colors.red100,
+  backgroundColor: Colors.rose,
 };

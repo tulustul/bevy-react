@@ -142,7 +142,7 @@ const panel: BevyStyle = {
 const growBox: BevyStyle = {
   width: 72,
   borderRadius: 6,
-  backgroundColor: Colors.primary100,
+  backgroundColor: Colors.cyan,
   transition: { size: { duration: 3000, easing: "easeInOut" } },
 };
 
@@ -150,10 +150,10 @@ const followBox: BevyStyle = {
   width: 72,
   height: 24,
   borderRadius: 6,
-  backgroundColor: Colors.green100,
+  backgroundColor: Colors.mint,
 };
 
 const label: BevyStyle = {
-  color: Colors.textColor100,
+  color: Colors.text,
   fontSize: FontSizes.sm,
 };

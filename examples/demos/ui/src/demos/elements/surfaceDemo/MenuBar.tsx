@@ -2,7 +2,7 @@ import { BevyStyle } from "bevy-react/jsx";
 import { TextMono } from "@/components/typography";
 
 import { Colors, FontSizes } from "@/theme";
-import { MenuItem, MenuList, Popup } from "./menu";
+import { MenuItem, MenuList, Popup, WASH } from "./menu";
 
 export type MenuId = "system" | "view" | "help";
 
@@ -62,12 +62,20 @@ export function MenuBar({
       <node style={menuRow}>
         {menus.map((menu) => (
           <node key={menu.id} style={menuAnchor}>
+            {/* An open menu's label keeps its wash under the pointer too. */}
             <button
               style={open === menu.id ? menuLabelActive : menuLabel}
-              hoverStyle={menuLabelHover}
+              hoverStyle={open === menu.id ? undefined : menuLabelHover}
               onClick={() => onToggle(menu.id)}
             >
-              <text style={menuLabelText}>{menu.label}</text>
+              <text
+                style={{
+                  ...menuLabelText,
+                  color: open === menu.id ? Colors.cyanBright : Colors.textBody,
+                }}
+              >
+                {menu.label}
+              </text>
             </button>
             {open === menu.id ? (
               <Popup style={dropdown} from="top">
@@ -83,14 +91,15 @@ export function MenuBar({
   );
 }
 
+// A graphite strip over the wallpaper, closed by a hairline.
 const bar: BevyStyle = {
   flexDirection: "row",
   alignItems: "center",
   justifyContent: "spaceBetween",
   padding: { top: 20, right: 18, bottom: 6, left: 10 },
-  backgroundColor: Colors.surface100,
-  borderColor: Colors.primary100,
-  border: { top: 0, right: 0, bottom: 3, left: 0 },
+  backgroundColor: Colors.raised,
+  borderColor: Colors.lineStrong,
+  border: { top: 0, right: 0, bottom: 1, left: 0 },
   width: "100%",
 };
 
@@ -104,24 +113,21 @@ const menuAnchor: BevyStyle = {
 
 const menuLabel: BevyStyle = {
   padding: { horizontal: 14, vertical: 8 },
-  borderRadius: 7,
+  borderRadius: 8,
   backgroundColor: Colors.transparent,
   cursor: "pointer",
 };
 
-const menuLabelHover: BevyStyle = { backgroundColor: Colors.surface300 };
+const menuLabelHover: BevyStyle = { backgroundColor: Colors.control };
 
 const menuLabelActive: BevyStyle = {
-  padding: { horizontal: 14, vertical: 8 },
-  borderRadius: 7,
-  backgroundColor: Colors.primary300,
-  cursor: "pointer",
+  ...menuLabel,
+  backgroundColor: WASH,
 };
 
 const menuLabelText: BevyStyle = {
-  color: Colors.textColor100,
   fontSize: FontSizes.base,
-  fontWeight: "semibold",
+  fontWeight: "medium",
 };
 
 // Floats below the label, on top of the body (the menu bar carries a high zIndex).
@@ -132,8 +138,10 @@ const dropdown: BevyStyle = {
   margin: { top: 6 },
 };
 
+// The surface's Rust-side name: Bevy's ember, like the gallery's eyebrows.
 const title: BevyStyle = {
-  color: Colors.primary100,
-  fontSize: FontSizes.base,
-  fontWeight: "bold",
+  color: Colors.ember,
+  fontSize: FontSizes.sm,
+  fontWeight: "medium",
+  letterSpacing: 0.6,
 };

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { BevyStyle } from "bevy-react/jsx";
-import { Colors, FontSizes } from "@/theme";
+import { Colors, Fonts, FontSizes } from "@/theme";
 import { MenuBar, MenuId } from "./MenuBar";
 import { Taskbar } from "./Taskbar";
 import { Home } from "./Home";
@@ -65,7 +65,12 @@ export function Desktop({ crt, setCrt, onReboot }: Props) {
         <text style={statusText}>
           {view === "code" ? "Viewing source" : "Ready"}
         </text>
-        <text style={statusText}>{crt ? "CRT: on" : "CRT: off"}</text>
+        {/* The CRT is a Bevy-side material: lit ember while it runs. */}
+        <text
+          style={{ ...statusText, color: crt ? Colors.ember : Colors.textDim }}
+        >
+          {crt ? "CRT: on" : "CRT: off"}
+        </text>
       </node>
 
       <node style={taskLayer}>
@@ -103,20 +108,21 @@ const bodyWrap: BevyStyle = {
   zIndex: 0,
 };
 
+// A thin readout line above the taskbar.
 const statusBar: BevyStyle = {
   flexDirection: "row",
   alignItems: "center",
   justifyContent: "spaceBetween",
   padding: { horizontal: 16, vertical: 6 },
-  backgroundColor: Colors.surface100,
-  borderColor: Colors.surface400,
-  border: { top: 2, right: 0, bottom: 0, left: 0 },
+  backgroundColor: Colors.card,
+  borderColor: Colors.line,
+  border: { top: 1, right: 0, bottom: 0, left: 0 },
 };
 
 const statusText: BevyStyle = {
-  color: Colors.textColor300,
+  color: Colors.textDim,
   fontSize: FontSizes.xs,
-  fontFamily: "Noto Sans Mono",
+  fontFamily: Fonts.mono,
 };
 
 // Click-catcher that closes any open menu; sits above the body, below the menus.

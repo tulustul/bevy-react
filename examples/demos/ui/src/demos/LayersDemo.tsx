@@ -192,27 +192,33 @@ function PromotionCard() {
   return (
     <ControlColumn>
       <node style={{ ...overlapStage, ...promoting }}>
-        <node style={{ ...chip, backgroundColor: Colors.primary100 }} />
+        <node style={{ ...chip, backgroundColor: Colors.cyan }} />
         <node
           style={{
             ...chip,
-            backgroundColor: Colors.green100,
+            backgroundColor: Colors.mint,
             margin: { left: -28 },
           }}
         />
       </node>
-      <Checkbox label="opacity: 0.6" enabled={opacity} onChange={setOpacity} />
-      <Checkbox
-        label="filter: grayscale"
-        enabled={filter}
-        onChange={setFilter}
-      />
-      <Checkbox
-        label="transform3d"
-        enabled={transform3d}
-        onChange={setTransform3d}
-      />
-      <Checkbox label='cache: "always"' enabled={cache} onChange={setCache} />
+      <node style={checkList}>
+        <Checkbox
+          label="opacity: 0.6"
+          enabled={opacity}
+          onChange={setOpacity}
+        />
+        <Checkbox
+          label="filter: grayscale"
+          enabled={filter}
+          onChange={setFilter}
+        />
+        <Checkbox
+          label="transform3d"
+          enabled={transform3d}
+          onChange={setTransform3d}
+        />
+        <Checkbox label='cache: "always"' enabled={cache} onChange={setCache} />
+      </node>
     </ControlColumn>
   );
 }
@@ -278,6 +284,7 @@ function StaleCacheCard() {
       <Row>
         <Figure
           style={{ gap: 12 }}
+          mono
           caption={
             never ? 'cache: "never"' : warmingUp ? "warming up…" : "cached"
           }
@@ -291,7 +298,7 @@ function StaleCacheCard() {
             <portal target="minimap" style={portalView} />
           </node>
         </Figure>
-        <Figure style={{ gap: 12 }} caption={'cache: "never"'}>
+        <Figure style={{ gap: 12 }} mono caption={'cache: "never"'}>
           <node style={{ opacity: 0.9, cache: "never" }}>
             <portal target="minimap" style={portalView} />
           </node>
@@ -313,6 +320,13 @@ const overlapStage: BevyStyle = {
   padding: 14,
 };
 
+// The checkboxes as one left-aligned list, so their boxes line up.
+const checkList: BevyStyle = {
+  flexDirection: "column",
+  alignItems: "flexStart",
+  gap: 2,
+};
+
 const chip: BevyStyle = {
   width: 64,
   height: 64,
@@ -322,8 +336,8 @@ const chip: BevyStyle = {
 const portalView: BevyStyle = {
   width: 120,
   height: 120,
-  borderRadius: 8,
-  border: 2,
-  borderColor: Colors.surface500,
-  backgroundColor: Colors.surface100,
+  borderRadius: 10,
+  border: 1,
+  borderColor: Colors.lineStrong,
+  backgroundColor: Colors.stage,
 };

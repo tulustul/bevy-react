@@ -11,11 +11,11 @@ export function TestBanner({ style }: Props) {
       style={{
         ...style,
         width: 180,
-        backgroundColor: Colors.surface300,
-        border: 2,
-        borderColor: "white",
+        backgroundColor: Colors.raised,
+        border: 1,
+        borderColor: Colors.lineStrong,
         padding: 15,
-        borderRadius: 12,
+        borderRadius: 14,
         flexDirection: "column",
         justifyContent: "spaceAround",
         alignItems: "center",
@@ -23,11 +23,11 @@ export function TestBanner({ style }: Props) {
       }}
     >
       <image src="bevy-react-logo.png" style={{ width: 60 }} />
-      <text style={{ fontSize: 12 }}>Test Banner</text>
+      <text style={{ fontSize: 12, color: Colors.textBody }}>Test Banner</text>
       <node style={{ gap: 10 }}>
-        <node style={{ ...dotStyle, backgroundColor: Colors.red100 }} />
-        <node style={{ ...dotStyle, backgroundColor: Colors.green100 }} />
-        <node style={{ ...dotStyle, backgroundColor: Colors.purple100 }} />
+        <node style={{ ...dotStyle, backgroundColor: Colors.rose }} />
+        <node style={{ ...dotStyle, backgroundColor: Colors.mint }} />
+        <node style={{ ...dotStyle, backgroundColor: Colors.violet }} />
       </node>
     </node>
   );

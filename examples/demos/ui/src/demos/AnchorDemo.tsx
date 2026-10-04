@@ -4,9 +4,9 @@ import { AnchorScaling } from "bevy-react";
 import { BevyStyle } from "bevy-react/jsx";
 import { bevy } from "@/bevy";
 import type { CubeInfo } from "@/bevy";
-import { Checkbox, Example, Slider } from "@/components";
+import { Checkbox, ControlColumn, Example, Slider } from "@/components";
 import { Code } from "@/components/docs";
-import { Colors, FontSizes } from "@/theme";
+import { Colors, Fonts, FontSizes } from "@/theme";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
 
 const TYPESCRIPT = `<anchor
@@ -114,32 +114,34 @@ export function AnchorDemo() {
           </>
         }
       >
-        <Checkbox
-          label="Scale with distance"
-          enabled={scalingEnabled}
-          onChange={setScalingEnabled}
-        />
+        <ControlColumn style={{ maxWidth: 420 }}>
+          <Checkbox
+            label="Scale with distance"
+            enabled={scalingEnabled}
+            onChange={setScalingEnabled}
+          />
 
-        {scalingEnabled && (
-          <>
-            <Slider
-              value={scaleFactor}
-              onChange={setScaleFactor}
-              name="Scale factor"
-              decimals={1}
-              min={0}
-              max={3}
-            />
-            <Slider
-              value={baseDistance}
-              onChange={setBaseDistance}
-              name="Base distance"
-              decimals={1}
-              min={1}
-              max={50}
-            />
-          </>
-        )}
+          {scalingEnabled && (
+            <>
+              <Slider
+                value={scaleFactor}
+                onChange={setScaleFactor}
+                name="Scale factor"
+                decimals={1}
+                min={0}
+                max={3}
+              />
+              <Slider
+                value={baseDistance}
+                onChange={setBaseDistance}
+                name="Base distance"
+                decimals={1}
+                min={1}
+                max={50}
+              />
+            </>
+          )}
+        </ControlColumn>
       </Example>
 
       {cubes.map((cube) => (
@@ -203,29 +205,27 @@ function Badge({ cube, scaling, selected, onSelect }: BadgeProps) {
   );
 }
 
-// A dark HUD nameplate: neutral plate + the cube's palette color as an accent
-// dot, so the crowd stays calm while each badge still pairs with its cube.
+// A dark HUD nameplate: a raised graphite pill with a hairline rim, and the
+// cube's palette color as an accent dot — the crowd stays calm while each
+// badge still pairs with its cube. Opaque, so the 3D scene never bleeds
+// through the label.
 const badgeStyle: BevyStyle = {
   flexDirection: "row",
   alignItems: "center",
   justifyContent: "center",
   gap: 5,
   padding: { top: 3, right: 9, bottom: 3, left: 7 },
-  backgroundColor: Colors.surface200 + "e6",
+  backgroundColor: Colors.raised,
   border: 1,
-  borderColor: "#ffffff1f",
+  borderColor: Colors.lineStrong,
   borderRadius: 999,
-  boxShadow: {
-    color: Colors.shadow100,
-    blurRadius: 4,
-    spreadRadius: 1,
-  },
+  boxShadow: { color: Colors.shadow, yOffset: 2, blurRadius: 6 },
   cursor: "pointer",
 };
 
 const badgeHover: BevyStyle = {
-  backgroundColor: Colors.surface400 + "f2",
-  borderColor: "#ffffff47",
+  backgroundColor: Colors.well,
+  borderColor: Colors.controlStrong,
 };
 
 const dotStyle: BevyStyle = {
@@ -234,8 +234,10 @@ const dotStyle: BevyStyle = {
   borderRadius: 999,
 };
 
+// The cube's id, read like any identifier: mono.
 const badgeText: BevyStyle = {
-  color: Colors.textColor100,
+  fontFamily: Fonts.mono,
+  color: Colors.text,
   fontSize: FontSizes.xs,
-  fontWeight: "bold",
+  fontWeight: "semibold",
 };

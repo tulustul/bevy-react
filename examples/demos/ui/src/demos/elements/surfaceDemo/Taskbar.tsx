@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
-import { CardTitle, TextMono } from "@/components/typography";
+import { TextMono } from "@/components/typography";
 import { BevyStyle } from "bevy-react/jsx";
 
-import { Colors, FontSizes } from "@/theme";
-import { MenuList, Popup } from "./menu";
+import { Colors, Fonts, FontSizes } from "@/theme";
+import { MenuList, Popup, WASH } from "./menu";
 
 type Props = {
   startOpen: boolean;
@@ -43,10 +43,16 @@ export function Taskbar({
         ) : null}
         <button
           style={startOpen ? startButtonActive : startButton}
-          hoverStyle={startButtonHover}
+          hoverStyle={startOpen ? undefined : startButtonHover}
           onClick={onStart}
         >
-          <CardTitle>bevy-react</CardTitle>
+          {/* The gallery's wordmark: Bevy's ember, React's cyan. Spans take
+              element defaults for unset fields — each restates the face. */}
+          <text style={wordmark}>
+            <text style={{ ...wordmark, color: Colors.ember }}>bevy</text>
+            <text style={{ ...wordmark, color: Colors.textDim }}>-</text>
+            <text style={{ ...wordmark, color: Colors.cyan }}>react</text>
+          </text>
         </button>
       </node>
 
@@ -78,14 +84,15 @@ function formatTime() {
   return `${h}:${m} ${ampm}`;
 }
 
+// The menu bar's twin at the bottom edge: graphite, opened by a hairline.
 const bar: BevyStyle = {
   flexDirection: "row",
   alignItems: "center",
   justifyContent: "spaceBetween",
-  padding: { top: 6, right: 10, bottom: 20, left: 8 },
-  backgroundColor: Colors.surface100,
-  borderColor: Colors.surface500,
-  border: { top: 3, right: 0, bottom: 0, left: 0 },
+  padding: { top: 8, right: 10, bottom: 20, left: 8 },
+  backgroundColor: Colors.raised,
+  borderColor: Colors.lineStrong,
+  border: { top: 1, right: 0, bottom: 0, left: 0 },
   width: "100%",
 };
 
@@ -94,26 +101,36 @@ const startAnchor: BevyStyle = {
   flexDirection: "column",
 };
 
+// A chip with a hairline rim; the open Start menu lights it cyan.
 const startButton: BevyStyle = {
   flexDirection: "row",
   alignItems: "center",
   gap: 8,
-  padding: { top: 8, bottom: 8, left: 12, right: 16 },
-  borderRadius: 8,
-  backgroundColor: Colors.surface300,
+  padding: { top: 6, bottom: 6, left: 12, right: 14 },
+  borderRadius: 10,
+  border: 1,
+  borderColor: Colors.lineStrong,
+  backgroundColor: Colors.well,
   cursor: "pointer",
 };
 
-const startButtonHover: BevyStyle = { backgroundColor: Colors.surface500 };
+const startButtonHover: BevyStyle = {
+  backgroundColor: Colors.control,
+  borderColor: Colors.controlStrong,
+};
 
 const startButtonActive: BevyStyle = {
-  flexDirection: "row",
-  alignItems: "center",
-  gap: 8,
-  padding: { top: 8, bottom: 8, left: 12, right: 16 },
-  borderRadius: 8,
-  backgroundColor: Colors.primary300,
-  cursor: "pointer",
+  ...startButton,
+  borderColor: Colors.cyanDeep,
+  backgroundColor: WASH,
+};
+
+const wordmark: BevyStyle = {
+  fontFamily: Fonts.display,
+  fontSize: FontSizes.lg,
+  fontWeight: "bold",
+  letterSpacing: -0.3,
+  color: Colors.text,
 };
 
 // Anchored just above the Start button.
@@ -124,15 +141,16 @@ const startPopup: BevyStyle = {
   margin: { bottom: 8 },
 };
 
+// A recessed readout chip.
 const clock: BevyStyle = {
-  padding: { horizontal: 14, vertical: 6 },
-  borderRadius: 7,
-  borderColor: Colors.surface500,
-  border: 2,
-  backgroundColor: Colors.surface200,
+  padding: { horizontal: 12, vertical: 6 },
+  borderRadius: 8,
+  borderColor: Colors.line,
+  border: 1,
+  backgroundColor: Colors.stage,
 };
 
 const clockText: BevyStyle = {
-  color: Colors.textColor200,
+  color: Colors.textBody,
   fontSize: FontSizes.sm,
 };

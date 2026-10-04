@@ -375,6 +375,68 @@ fn shared_seed_frame_shows_the_seed_corner_radius_through_the_flip_scale() {
     );
 }
 
+/// On the seed frame a child pinned to an edge sits on the SHOWN edge: its
+/// offset from the center scales with the FLIP scale (the child itself does
+/// not). At its natural offset it would sit half the size change off the
+/// edge for that one frame, then jump back once layout has the seed size —
+/// the nav pill's left bar, flying between rows of different widths.
+#[test]
+fn shared_seed_frame_keeps_an_edge_pinned_child_on_the_shown_edge() {
+    let mut app = shared_app();
+    let root = app.world_mut().spawn(root_row()).id();
+    let pill = app
+        .world_mut()
+        .spawn((
+            Node {
+                width: Val::Px(200.0),
+                height: Val::Px(50.0),
+                ..Default::default()
+            },
+            ChildOf(root),
+            shared_spec(1.0),
+            TransitionState::default(),
+            seed(Vec2::new(300.0, 50.0), Vec2::new(100.0, 50.0)),
+        ))
+        .id();
+    let bar = app
+        .world_mut()
+        .spawn((
+            Node {
+                position_type: PositionType::Absolute,
+                left: Val::Px(0.0),
+                width: Val::Px(4.0),
+                height: Val::Px(50.0),
+                ..Default::default()
+            },
+            ChildOf(pill),
+        ))
+        .id();
+    step(&mut app, 0.0);
+    // Shown pill: 100 wide centered at 300 → left edge 250. The bar's natural
+    // offset (-98) scaled by 0.5 puts its center at 251, 2px wide each side.
+    let g = global(&app, bar);
+    assert_eq!(
+        g.translation,
+        Vec2::new(251.0, 50.0),
+        "seed frame: on the shown left edge"
+    );
+    assert_eq!(
+        g.matrix2,
+        Mat2::IDENTITY,
+        "seed frame: the child itself unscaled"
+    );
+
+    step(&mut app, 0.5);
+    // Real layout owns the size now (150 wide) and the pill flies translate-
+    // only, centered at x = 200 → left edge 125, bar center 127.
+    let g = global(&app, bar);
+    assert!(
+        (g.translation.x - 127.0).abs() < 1e-3,
+        "halfway: the bar rides the pill's laid-out left edge, got {:?}",
+        g.translation
+    );
+}
+
 /// A node whose authored size is a PERCENTAGE of its parent — the shape the
 /// demos' home page uses on both ends of its tile ↔ panel flight — flies the
 /// same way a pixel-sized one does, and settles back onto the percentage

@@ -24,7 +24,7 @@ const PAGE: ExplanationData = {
         <InlineCode>fontFamily</InlineCode> on the span if they should match.
       </Paragraph>
       <Code lang="tsx">{`<text style={{ fontSize: 18 }}>
-  Nested <text style={{ color: "#7aa2f7", fontSize: 18 }}>spans</text> restyle
+  Nested <text style={{ color: "#5cd9ff", fontSize: 18 }}>spans</text> restyle
   part of a sentence.
 </text>`}</Code>
       <Paragraph>
@@ -101,9 +101,15 @@ function FontSizeCard() {
         width: "100%",
       }}
     >
-      <text style={{ fontSize: size, fontWeight: "thin" }}>thin</text>
-      <text style={{ fontSize: size, fontWeight: "normal" }}>normal</text>
-      <text style={{ fontSize: size, fontWeight: "bold" }}>bold</text>
+      <text style={{ ...sampleStyle, fontSize: size, fontWeight: "thin" }}>
+        thin
+      </text>
+      <text style={{ ...sampleStyle, fontSize: size, fontWeight: "normal" }}>
+        normal
+      </text>
+      <text style={{ ...sampleStyle, fontSize: size, fontWeight: "bold" }}>
+        bold
+      </text>
 
       <Slider
         value={size}
@@ -136,10 +142,10 @@ function FontFamilyDemo() {
 
 <text style={{ fontSize: 18 }}>
   Nested texts color{" "}
-  <text style={{ color: "#7aa2f7", fontSize: 18 }}>part</text> of a sentence.
+  <text style={{ color: "#5cd9ff", fontSize: 18 }}>part</text> of a sentence.
 </text>`}
             rust={`ReactUiPlugin::new(bundle)
-    .default_font("fonts/NotoSans.ttf")
+    .default_font("fonts/Inter.ttf")
     .font("DancingScript", "fonts/DancingScript.ttf")`}
           />
         </>
@@ -156,19 +162,23 @@ function FontFamilyCard() {
         style={{
           fontFamily: "DancingScript",
           fontSize: FontSizes.xxl,
-          color: Colors.amber100,
+          color: Colors.amber,
         }}
       >
         Styled with a custom font family
       </text>
 
-      <text style={{ fontSize: FontSizes.lg, color: Colors.textColor100 }}>
+      <text style={sampleStyle}>
         Nested texts color{" "}
-        <text style={{ color: Colors.primary100, fontWeight: "bold" }}>
+        <text
+          style={{ ...sampleStyle, color: Colors.cyan, fontWeight: "bold" }}
+        >
           part
         </text>{" "}
         of a{" "}
-        <text style={{ color: Colors.red100, fontWeight: "bold" }}>
+        <text
+          style={{ ...sampleStyle, color: Colors.rose, fontWeight: "bold" }}
+        >
           sentence
         </text>
         .
@@ -216,7 +226,7 @@ function TypographyCard() {
       <text
         style={{
           fontSize: FontSizes.base,
-          color: Colors.textColor100,
+          color: Colors.text,
           lineHeight,
           letterSpacing,
           textShadow: shadow
@@ -277,7 +287,7 @@ function LineBreakCard() {
         <text
           style={{
             fontSize: FontSizes.sm,
-            color: Colors.textColor200,
+            color: Colors.textBody,
             lineBreak: mode,
           }}
         >
@@ -285,7 +295,14 @@ function LineBreakCard() {
           mode.
         </text>
       </Stage>
-      <Radio value={mode} options={LINE_BREAKS} onChange={setMode} />
+      <Radio wrap value={mode} options={LINE_BREAKS} onChange={setMode} />
     </node>
   );
 }
+
+// The demo's sample text. Spans restate it — they don't inherit the run's
+// size or color.
+const sampleStyle: BevyStyle = {
+  fontSize: FontSizes.lg,
+  color: Colors.text,
+};

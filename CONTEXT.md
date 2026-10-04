@@ -75,7 +75,9 @@ Domain glossary for `bevy-react`. Use these terms as written; the code, the
   node's flex sizing meanwhile, or a smaller container shrinks the flown px
   straight back), styles per channel. The seed frame shows the seed rect
   through the FLIP scale (corner radii compensated on `ComputedNode` for that
-  frame, so a seeded circle reads as a circle) — never an empty frame.
+  frame, so a seeded circle reads as a circle; the children's offsets from
+  its center scaled by it, the children themselves not, so an edge-pinned
+  child sits on the shown edge) — never an empty frame.
 - **Root-space anchored** — both ends of the flight are root-space rects
   re-expressed in the parent's frame every flight frame: the take-off point,
   so a parent the size flight re-flows (a centered container) doesn't move

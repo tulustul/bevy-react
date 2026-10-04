@@ -1,5 +1,6 @@
 ---
 description: Take a node out of the layout flow with positionType absolute, offset it with left, right, top and bottom, and know what the offsets are relative to.
+demo: Positioning
 covers: [style.positionType, style.left, style.right, style.top, style.bottom]
 ---
 

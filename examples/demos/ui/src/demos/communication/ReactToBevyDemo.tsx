@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { InlineCode, Paragraph } from "@/components/typography";
 import { bevy } from "@/bevy";
-import { Button, Example } from "@/components";
+import { Button, Example, Readout, SecondaryButton } from "@/components";
 import { CodeTabs } from "@/components/docs";
 import { BevyStyle } from "bevy-react/jsx";
 import { Colors, FontSizes } from "@/theme";
@@ -95,63 +95,42 @@ function CubeCounterCard() {
 
   return (
     <>
-      <text style={countStyle}>
-        Cubes: <text style={{ color: Colors.primary100 }}>{count}</text>
-      </text>
+      {/* The count is React state — the value React sends — so it carries
+          React's cyan. It stays its own `<text>` (the roundtrip test reads
+          it), and `+` stays the bare text child of its `<button>`. */}
+      <Readout label="Cubes" value={count} color={Colors.cyan} />
 
       <node style={{ flexDirection: "row", gap: 12 }}>
         <Button
           onClick={() => setCount((c) => Math.min(MAX, c + 1))}
           pinch={{ radius: 0.8 }}
-          style={{
-            ...buttonStyle,
-            backgroundColor: Colors.primary100,
-            backgroundGradient: undefined,
-          }}
-          hoverStyle={{
-            backgroundColor: Colors.primary200,
-            backgroundGradient: undefined,
-          }}
-          pressStyle={{
-            backgroundColor: Colors.primary300,
-            backgroundGradient: undefined,
-          }}
-          labelStyle={{ fontSize: FontSizes.xxxl, color: Colors.textColor100 }}
+          style={stepButtonStyle}
+          labelStyle={stepLabelStyle}
         >
           +
         </Button>
-        <Button
+        <SecondaryButton
           onClick={() => setCount((c) => Math.max(0, c - 1))}
           pinch={{ radius: 0.8 }}
-          style={{
-            ...buttonStyle,
-            backgroundColor: Colors.red100,
-            backgroundGradient: undefined,
-          }}
-          hoverStyle={{
-            backgroundColor: Colors.red200,
-            backgroundGradient: undefined,
-          }}
-          pressStyle={{
-            backgroundColor: Colors.red300,
-            backgroundGradient: undefined,
-          }}
-          labelStyle={{ fontSize: FontSizes.xxxl, color: Colors.textColor100 }}
+          style={stepButtonStyle}
+          labelStyle={stepLabelStyle}
         >
-          -
-        </Button>
+          −
+        </SecondaryButton>
       </node>
     </>
   );
 }
 
-const countStyle: BevyStyle = {
-  color: Colors.textColor100,
-  fontSize: FontSizes.xl,
-  fontWeight: "bold",
+// Square steppers: `minWidth: 0` lifts Button's base minimum width.
+const stepButtonStyle: BevyStyle = {
+  width: 52,
+  height: 52,
+  minWidth: 0,
+  padding: 0,
 };
 
-const buttonStyle: BevyStyle = {
-  width: 60,
-  height: 60,
+const stepLabelStyle: BevyStyle = {
+  fontSize: FontSizes.xxl,
+  fontWeight: "semibold",
 };

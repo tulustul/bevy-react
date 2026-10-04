@@ -63,8 +63,7 @@ const track: BevyStyle = {
   width: "100%",
   height: 20,
   borderRadius: 6,
-  backgroundColor: Colors.surface500,
-  backgroundGradient: Gradients.track,
+  backgroundColor: Colors.control,
   cursor: "pointer",
   focusPolicy: "block",
 };
@@ -89,7 +88,7 @@ const labelWrap: BevyStyle = {
 };
 
 const labelText: BevyStyle = {
-  color: Colors.textColor100,
+  color: Colors.text,
   fontSize: FontSizes.xs,
   fontWeight: "semibold",
   textAlign: "center",

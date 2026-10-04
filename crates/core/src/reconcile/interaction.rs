@@ -186,7 +186,7 @@ pub fn apply_interaction_styles(
 
 #[cfg(test)]
 mod tests {
-    use super::super::test_util::op_app;
+    use super::super::test_util::{op_app, update_delta};
     use super::*;
     use crate::bridge::JsBridge;
     use crate::protocol::op::Op;
@@ -337,5 +337,47 @@ mod tests {
             app.world().entity(e2).get::<ImageNode>().is_none(),
             "hover-out removes the image when the base has no spec"
         );
+    }
+
+    /// Unsetting the last variant while it shows (a hovered nav row turning
+    /// active drops its `hoverStyle`) restores the base: `StyleVariants` goes
+    /// with it, so no hover-out restyle would ever clear the overlay.
+    #[test]
+    fn dropping_a_shown_variant_restores_the_base() {
+        let (mut app, ops_tx) = op_app();
+        app.add_systems(
+            Update,
+            apply_interaction_styles.after(crate::reconcile::apply_js_ops),
+        );
+        ops_tx
+            .send(vec![Op::Create {
+                id: 1,
+                kind: "button".into(),
+                props: serde_json::from_value(serde_json::json!({
+                    "hoverStyle": { "backgroundColor": "blue" },
+                }))
+                .unwrap(),
+                text: None,
+            }])
+            .unwrap();
+        app.update();
+        let e = app.world().resource::<JsBridge>().nodes[&1];
+        let bg = |app: &App| app.world().entity(e).get::<BackgroundColor>().map(|c| c.0);
+        let base = bg(&app);
+
+        app.world_mut().entity_mut(e).insert(Interaction::Hovered);
+        app.update();
+        assert_eq!(bg(&app), Some(crate::ui_map::parse_color("blue")));
+
+        ops_tx
+            .send(vec![update_delta(
+                1,
+                Default::default(),
+                &["hoverStyle"],
+                &[],
+            )])
+            .unwrap();
+        app.update();
+        assert_eq!(bg(&app), base, "the hover background is cleared");
     }
 }

@@ -8,7 +8,7 @@ import {
 } from "bevy-react";
 import {
   Box,
-  controlColumn,
+  ControlColumn,
   DemoRow,
   Example,
   Slider,
@@ -32,7 +32,7 @@ const PAGE: ExplanationData = {
   src: "images/parrot.png", // or { texture: "checker" }
   mode: "repeat",
   scale: 0.25,
-  tint: "#7aa2f7",
+  tint: "#6ea8ff",
 }`}</Code>
       <List>
         <ListItem>
@@ -141,20 +141,22 @@ function RepeatDemo() {
 function RepeatCard() {
   const [scale, setScale] = useState(0.25);
   return (
-    <Stage style={controlColumn}>
-      <node
-        style={{
-          backgroundColor: Colors.transparent,
-          width: 220,
-          height: 110,
-          borderRadius: 10,
-          backgroundImage: {
-            src: "bevy-react-logo.png",
-            mode: "repeat",
-            scale,
-          },
-        }}
-      />
+    <ControlColumn>
+      <Stage>
+        <node
+          style={{
+            backgroundColor: Colors.transparent,
+            width: 220,
+            height: 110,
+            borderRadius: 10,
+            backgroundImage: {
+              src: "bevy-react-logo.png",
+              mode: "repeat",
+              scale,
+            },
+          }}
+        />
+      </Stage>
       <Slider
         value={scale}
         min={0.1}
@@ -162,7 +164,7 @@ function RepeatCard() {
         name="scale"
         onChange={setScale}
       />
-    </Stage>
+    </ControlColumn>
   );
 }
 
@@ -193,7 +195,7 @@ useEffect(() => {
     backgroundImage: {
       src: "images/parrot.png",
       tint: {
-        animated: interpolateColor(t, [0, 1], ["#7aa2f7", "#f7768e"]),
+        animated: interpolateColor(t, [0, 1], ["#6ea8ff", "#ff6b8b"]),
       },
     },
   }}
@@ -228,7 +230,7 @@ function TintHoverCard() {
           backgroundImage: {
             src: "images/parrot.png",
             tint: {
-              animated: interpolateColor(t, [0, 1], ["#7aa2f7", "#f7768e"]),
+              animated: interpolateColor(t, [0, 1], [Colors.sky, Colors.rose]),
             },
           },
         }}
@@ -297,7 +299,7 @@ function HostTextureCard() {
           width: 190,
           height: 130,
           borderRadius: 12,
-          backgroundColor: Colors.surface400,
+          backgroundColor: Colors.well,
           backgroundImage: {
             src: { texture: "checker" },
             mode: "repeat",

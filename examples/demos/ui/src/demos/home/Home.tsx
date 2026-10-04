@@ -1,7 +1,7 @@
 import { useEffect, useState, type PropsWithChildren } from "react";
 import { interpolate, useSharedValue, withDelay, withTiming } from "bevy-react";
 import { BevyStyle } from "bevy-react/jsx";
-import { Colors, Filters, FontSizes, Responsiveness } from "@/theme";
+import { Colors, Filters, Fonts, FontSizes, Responsiveness } from "@/theme";
 import { useDemoPage } from "@/explanationStore";
 import { useIsMobile, useWindowSize } from "@/hooks";
 import { Beats, FLIGHT_MS, GROW_DELAY_MS } from "./beats";
@@ -20,6 +20,8 @@ const ROUNDING_SETTLE_MS = 90;
 const MAX_COLUMNS = 3;
 const GRID_GAP = 16;
 const PAGE_PADDING = 28;
+/** The page card's hairline rim (desktop), inside its box like its padding. */
+const PAGE_BORDER = 1;
 
 type Grid = { columns: number; width: number; height: number };
 
@@ -55,7 +57,9 @@ export function Home() {
 
   const contentPadding = Responsiveness.contentPadding;
   const grid = gridGeometry(
-    win.width - Responsiveness.navWidth - (contentPadding + PAGE_PADDING) * 2,
+    win.width -
+      Responsiveness.navWidth -
+      (contentPadding + PAGE_PADDING + PAGE_BORDER) * 2,
   );
   const tile = TILES.find((t) => t.id === selectedItem) ?? null;
 
@@ -90,21 +94,19 @@ export function Home() {
           ...pageStyle,
           ...(isMobile
             ? pageMobileStyle
-            : // Desktop only: the frost is an always-dirty chain (its source
-              // is the live 3D frame), which a phone has no budget for.
-              {
-                width: grid.width + PAGE_PADDING * 2,
-                backdropFilter: Filters.backdrop,
+            : {
+                ...pageDesktopStyle,
+                width: grid.width + (PAGE_PADDING + PAGE_BORDER) * 2,
               }),
         }}
       >
         <Logos />
         <Title />
         <Reveal delay={Beats.tagline}>
+          {/* Each side in its own light: Bevy's ember, React's cyan. */}
           <text style={taglineStyle}>
-            Build <text style={taglineAccentStyle}>bevy_ui</text> interfaces
-            with <text style={taglineAccentStyle}>React</text> — no web view, no
-            DOM.
+            Build <text style={taglineBevyStyle}>bevy_ui</text> interfaces with{" "}
+            <text style={taglineReactStyle}>React</text> — no web view, no DOM.
           </text>
         </Reveal>
 
@@ -122,7 +124,7 @@ export function Home() {
         </node>
 
         <Reveal delay={Beats.hint}>
-          <PanelCaption style={hintStyle}>
+          <PanelCaption>
             {isMobile
               ? "Browse the demos from the menu for more."
               : "Browse the demos in the sidebar for more."}
@@ -229,6 +231,14 @@ const pageStyle: BevyStyle = {
   backgroundColor: "rgba(0, 0, 0, 0.3)",
 };
 
+/** Desktop only: the frost is an always-dirty chain (its source is the live
+ * 3D frame), which a phone has no budget for. */
+const pageDesktopStyle: BevyStyle = {
+  border: PAGE_BORDER,
+  borderColor: Colors.line,
+  backdropFilter: Filters.backdrop,
+};
+
 const pageMobileStyle: BevyStyle = {
   width: "100%",
   padding: PAGE_PADDING_MOBILE,
@@ -274,15 +284,23 @@ const overlayStyle: BevyStyle = {
 };
 
 const taglineStyle: BevyStyle = {
-  color: Colors.textColor100,
-  fontSize: 20,
-  fontWeight: "bold",
+  color: Colors.textBody,
+  fontSize: FontSizes.lg,
+  fontWeight: "medium",
   textAlign: "center",
 };
 
-const taglineAccentStyle: BevyStyle = { ...taglineStyle, color: Colors.sky100 };
-
-const hintStyle: BevyStyle = {
+// Spans take element defaults for unset fields — each restates its face.
+const taglineReactStyle: BevyStyle = {
   fontSize: FontSizes.lg,
-  color: Colors.textColor100,
+  fontWeight: "semibold",
+  color: Colors.cyan,
+};
+
+/** An identifier: the mono face, a step smaller (it reads larger than Inter). */
+const taglineBevyStyle: BevyStyle = {
+  fontFamily: Fonts.mono,
+  fontSize: FontSizes.base,
+  fontWeight: "medium",
+  color: Colors.ember,
 };

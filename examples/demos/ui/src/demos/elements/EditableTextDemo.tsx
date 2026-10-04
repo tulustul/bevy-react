@@ -3,7 +3,7 @@ import { InlineCode, ListItem, Paragraph, List } from "@/components/typography";
 import { BevyStyle } from "bevy-react/jsx";
 import { Example } from "@/components";
 import { Code } from "@/components/docs";
-import { Colors, FontSizes } from "@/theme";
+import { Colors, Fonts, FontSizes } from "@/theme";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
 
 const PAGE: ExplanationData = {
@@ -23,7 +23,7 @@ const PAGE: ExplanationData = {
   autofocus
   maxLength={40}
   style={inputStyle}
-  focusStyle={{ borderColor: "#89b4fa" }}
+  focusStyle={{ borderColor: "#5cd9ff" }}
 />`}</Code>
       <List>
         <ListItem>
@@ -76,7 +76,7 @@ export function EditableTextDemo() {
   onSelect={(s) => setSel(s)}
   autofocus
   style={inputStyle}
-  focusStyle={{ borderColor: "#89b4fa" }}
+  focusStyle={{ borderColor: "#5cd9ff" }}
 />`}</Code>
         </>
       }
@@ -110,37 +110,39 @@ function NameFormCard() {
     });
 
   return (
-    <>
-      <text>What's your first name?</text>
-      <editableText
-        value={first}
-        onChange={setFirst}
-        onFocus={() => setFocused("First name")}
-        onBlur={() => blur("First name")}
-        onSelect={select}
-        autofocus
-        ariaLabel="First name"
-        maxLength={40}
-        style={inputStyle}
-        focusStyle={focusStyle}
-      />
+    <node style={formStyle}>
+      <node style={fieldStyle}>
+        <text style={labelStyle}>What's your first name?</text>
+        <editableText
+          value={first}
+          onChange={setFirst}
+          onFocus={() => setFocused("First name")}
+          onBlur={() => blur("First name")}
+          onSelect={select}
+          autofocus
+          ariaLabel="First name"
+          maxLength={40}
+          style={inputStyle}
+          focusStyle={focusStyle}
+        />
+      </node>
 
-      <text>What's your last name?</text>
-      <editableText
-        value={last}
-        onChange={setLast}
-        onFocus={() => setFocused("Last name")}
-        onBlur={() => blur("Last name")}
-        onSelect={select}
-        ariaLabel="Last name"
-        maxLength={40}
-        style={inputStyle}
-        focusStyle={focusStyle}
-      />
+      <node style={fieldStyle}>
+        <text style={labelStyle}>What's your last name?</text>
+        <editableText
+          value={last}
+          onChange={setLast}
+          onFocus={() => setFocused("Last name")}
+          onBlur={() => blur("Last name")}
+          onSelect={select}
+          ariaLabel="Last name"
+          maxLength={40}
+          style={inputStyle}
+          focusStyle={focusStyle}
+        />
+      </node>
 
-      <text style={{ fontSize: FontSizes.xxl }}>
-        {name ? `Hello ${name}` : " "}
-      </text>
+      <text style={greetingStyle}>{name ? `Hello ${name}` : " "}</text>
 
       <node style={statusBoxStyle}>
         <text style={statusLineStyle}>Focused: {focused ?? "none"}</text>
@@ -153,41 +155,71 @@ function NameFormCard() {
           {sel?.composing ? " · composing" : ""}
         </text>
       </node>
-    </>
+    </node>
   );
 }
 
+// The form's column: labels sit flush over their fields.
+const formStyle: BevyStyle = {
+  width: 280,
+  flexDirection: "column",
+  gap: 16,
+};
+
+const fieldStyle: BevyStyle = {
+  flexDirection: "column",
+  gap: 6,
+};
+
+const labelStyle: BevyStyle = {
+  fontSize: FontSizes.sm,
+  fontWeight: "medium",
+  color: Colors.textBody,
+};
+
+// The house input: a recessed well with a hairline rim. The caret follows
+// `color`.
 const inputStyle: BevyStyle = {
   width: 280,
   height: 40,
   justifyContent: "center",
   padding: { horizontal: 12, vertical: 8 },
-  backgroundColor: Colors.surface100,
-  borderRadius: 8,
+  backgroundColor: Colors.well,
+  borderRadius: 10,
   border: 1,
-  borderColor: Colors.surface500,
-  color: Colors.textColor100,
+  borderColor: Colors.line,
+  color: Colors.text,
   fontSize: FontSizes.base,
 };
 
 // Overlaid on `inputStyle` while the field is focused — applied entirely on the
-// Bevy side, so no `onFocus`/`onBlur` round-trip or React state is needed.
+// Bevy side, so no `onFocus`/`onBlur` round-trip or React state is needed. The
+// focused field lights up: a cyan rim and its glow.
 const focusStyle: BevyStyle = {
-  borderColor: Colors.primary200,
+  borderColor: Colors.cyan,
+  boxShadow: { blurRadius: 3, color: Colors.cyanGlow },
 };
 
+const greetingStyle: BevyStyle = {
+  fontFamily: Fonts.display,
+  fontSize: FontSizes.xxl,
+  fontWeight: "semibold",
+  color: Colors.text,
+};
+
+// What the element reports, as a readout.
 const statusBoxStyle: BevyStyle = {
-  width: 280,
   flexDirection: "column",
   gap: 4,
   padding: { horizontal: 12, vertical: 8 },
-  backgroundColor: Colors.surface200,
-  borderRadius: 8,
+  backgroundColor: Colors.raised,
+  borderRadius: 10,
   border: 1,
-  borderColor: Colors.surface400,
+  borderColor: Colors.line,
 };
 
 const statusLineStyle: BevyStyle = {
-  fontSize: FontSizes.sm,
-  color: Colors.textColor200,
+  fontFamily: Fonts.mono,
+  fontSize: FontSizes.xs,
+  color: Colors.textBody,
 };

@@ -4,6 +4,7 @@ import { ExplanationData, useDemoPage } from "@/explanationStore";
 
 const PAGE: ExplanationData = {
   title: "Getting started",
+  docsOnly: true,
   info: (
     <>
       <Paragraph>

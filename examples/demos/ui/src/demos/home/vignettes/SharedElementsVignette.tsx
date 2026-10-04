@@ -1,5 +1,5 @@
 import { BevyStyle } from "bevy-react/jsx";
-import { Colors } from "@/theme";
+import { Colors, Gradients } from "@/theme";
 import { FLIGHT_MS } from "../beats";
 import { vignetteStyle, type VignetteProps, useAutoStep } from "../shared";
 import { useVignetteState } from "../store";
@@ -72,23 +72,20 @@ const rowStyle: BevyStyle = {
   width: "100%",
 };
 
+/** A socket sunk into the card: the stage's dark, a control rim. */
 const slotStyle: BevyStyle = {
   alignItems: "center",
   justifyContent: "center",
   border: 1,
-  borderColor: Colors.surface500,
-  backgroundColor: Colors.surface100 + "66",
+  borderColor: Colors.control,
+  backgroundColor: Colors.stage,
 };
 
 const slotHoverStyle: BevyStyle = {
-  borderColor: Colors.primary100,
+  borderColor: Colors.cyan,
   cursor: "pointer",
 };
 
 const cardStyle: BevyStyle = {
-  backgroundGradient: {
-    type: "linear",
-    angle: 135,
-    stops: [{ color: Colors.sky100 }, { color: Colors.purple100 }],
-  },
+  backgroundGradient: Gradients.spectrum[2],
 };

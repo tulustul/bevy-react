@@ -1,21 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { useSharedValue, withDelay, withTiming } from "bevy-react";
 import { BevyStyle } from "bevy-react/jsx";
-import { Colors } from "@/theme";
+import { Colors, Fonts } from "@/theme";
 import { useIsMobile, useWindowSize } from "@/hooks";
 import { Beats } from "./beats";
 
 /** The tag words the headline cycles; the last is the library's own name. Every
  * entry must fit the fixed morph rect (see `Title`). */
-const TAG_WORDS = [
-  { text: "Fast", stops: ["#c8ecff", Colors.sky100, "#3a78d6"] },
-  { text: "Reactive", stops: ["#ffc9d4", Colors.red200, Colors.red300] },
-  {
-    text: "Hot reloaded",
-    stops: ["#b7ccff", Colors.primary100, Colors.purple100],
-  },
-  { text: "bevy-react", stops: [Colors.amber100, Colors.orange100] },
-] as const;
+const BRAND = "bevy-react";
+const TAG_WORDS = ["Fast", "Reactive", "Hot reloaded", BRAND] as const;
 
 const STEP_MS = 1500;
 const MORPH_MS = 2000;
@@ -50,8 +43,6 @@ export function Title() {
   }, [step]);
 
   return (
-    // The morph owns the outer node; the recolor lives on a NESTED layer — a
-    // `gradientMap` chained after the morph would blend two recolored images.
     <node
       style={{
         ...lineStyle,
@@ -62,7 +53,7 @@ export function Title() {
         height: isMobile ? 56 : 78,
         opacity: { animated: appear },
         morphFilter: {
-          key: word.text,
+          key: word,
           name: "dustify",
           params: {
             direction: 0,
@@ -78,23 +69,23 @@ export function Title() {
         transition: { morphFilter: { duration: MORPH_MS, easing: "linear" } },
       }}
     >
-      <node
-        style={{
-          ...lineInnerStyle,
-          filter: {
-            name: "gradientMap",
-            params: {
-              angle: 180,
-              stops: word.stops.map((color) => ({ color })),
-            },
-          },
-        }}
-      >
-        <text style={{ ...lineTextStyle, ...(isMobile && { fontSize: 40 }) }}>
-          {word.text}
-        </text>
-      </node>
+      <Word text={word} font={isMobile ? wordFontMobile : wordFont} />
     </node>
+  );
+}
+
+/** A tag word in display type; the brand name lit like the nav's wordmark —
+ * "bevy" in Bevy's ember, "react" in React's cyan. */
+function Word({ text, font }: { text: string; font: BevyStyle }) {
+  const root: BevyStyle = { ...font, lineBreak: "noWrap" };
+  if (text !== BRAND) return <text style={root}>{text}</text>;
+  // Spans take element defaults for unset fields — each restates the face.
+  return (
+    <text style={root}>
+      <text style={{ ...font, color: Colors.ember }}>bevy</text>
+      <text style={{ ...font, color: Colors.textFaint }}>-</text>
+      <text style={{ ...font, color: Colors.cyan }}>react</text>
+    </text>
   );
 }
 
@@ -103,16 +94,16 @@ const lineStyle: BevyStyle = {
   justifyContent: "center",
 };
 
-const lineInnerStyle: BevyStyle = {
-  width: "100%",
-  height: "100%",
-  alignItems: "center",
-  justifyContent: "center",
+const wordFont: BevyStyle = {
+  fontFamily: Fonts.display,
+  fontSize: 56,
+  fontWeight: "semibold",
+  letterSpacing: -1.2,
+  color: Colors.text,
 };
 
-const lineTextStyle: BevyStyle = {
-  color: Colors.textColor100,
-  fontFamily: "MetalMania",
-  fontSize: 58,
-  lineBreak: "noWrap",
+const wordFontMobile: BevyStyle = {
+  ...wordFont,
+  fontSize: 40,
+  letterSpacing: -0.8,
 };

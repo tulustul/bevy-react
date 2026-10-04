@@ -1,29 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BevyStyle } from "bevy-react/jsx";
 import { bevy } from "@/bevy";
-import { Responsiveness, Scrollbar } from "@/theme";
-import { DEMOS, demoSlug, findDemo } from "./demos";
+import { DocsFold, PageSwitch, Responsiveness, Scrollbar } from "@/theme";
+import { DEMO_ORDER, DEMOS, demoSlug, findDemo } from "./demos";
 import { Navigation } from "./Navigation";
 import { HeaderCard } from "./HeaderCard";
 import { ExampleModal } from "./ExampleModal";
 import { TopBar } from "./TopBar";
 import { useWindowSize } from "./hooks/useWindowSize";
 import { useDemosStore } from "./demosStore";
-import type { MorphUse } from "./demos/styling/morphFilterDemo/params";
-import { useIsMobile } from "./hooks";
-
-// The page-transition morphs: each demo switch picks one at random.
-const PAGE_MORPHS: MorphUse[] = [
-  { name: "stripDatamoshGlitch", params: { strength: 0.45, tear: 0.1 } },
-  {
-    name: "gridFlip",
-    params: { divider: 0, size: [10, 10], color: "transparent" },
-  },
-  { name: "bookFlip" },
-  { name: "pixelize", params: { squaresMin: [50, 50] } },
-  { name: "windowslice", params: { count: 30 } },
-  { name: "crossfade", params: { scale: 100 } },
-];
+import { useExplanationStore } from "./explanationStore";
+import { useContentWidth, useIsMobile } from "./hooks";
 
 export function App() {
   const win = useWindowSize();
@@ -40,6 +27,8 @@ export function App() {
 
 function Shell() {
   const { selectedDemo, setSelectedDemo } = useDemosStore();
+  const columnWidth = useContentWidth();
+  const headerTitle = useExplanationStore((s) => s.pageDefault?.title);
 
   const isMobile = useIsMobile();
 
@@ -49,16 +38,15 @@ function Shell() {
   useEffect(() => setNavOpen(false), [isMobile]);
   const closeNav = useCallback(() => setNavOpen(false), []);
 
-  // Re-rolled exactly when the demo changes — same commit as the morph key
-  // change, so the freeze blends with the freshly picked filter. Each pick is
-  // drawn from a shrinking pool (refilled from PAGE_MORPHS once empty), so
-  // the filters cycle through the whole list before any repeats.
-  const morphPool = useRef<MorphUse[]>([]);
-  const pageMorph = useMemo(() => {
-    if (morphPool.current.length === 0) morphPool.current = [...PAGE_MORPHS];
-    const i = Math.floor(Math.random() * morphPool.current.length);
-    return morphPool.current.splice(i, 1)[0];
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- the demo IS the re-roll trigger
+  // The page switch is a sweep of light in the direction the nav moved:
+  // down the list sweeps down, up sweeps up. Decided in the same commit as
+  // the morph key change, so the freeze blends with the right direction.
+  const prevDemo = useRef(selectedDemo);
+  const sweepAngle = useMemo(() => {
+    const down =
+      DEMO_ORDER.indexOf(selectedDemo) >= DEMO_ORDER.indexOf(prevDemo.current);
+    prevDemo.current = selectedDemo;
+    return down ? 180 : 0;
   }, [selectedDemo]);
 
   useEffect(() => {
@@ -95,7 +83,11 @@ function Shell() {
           ...contentStyle,
           // A column child: take what the bar leaves, never the bar's share.
           ...(isMobile ? { height: undefined, minHeight: 0 } : {}),
-          morphFilter: { key: selectedDemo.label, ...pageMorph },
+          morphFilter: {
+            key: selectedDemo.label,
+            name: "lightSweep",
+            params: { angle: sweepAngle },
+          },
         }}
         scrollStep={100}
       >
@@ -103,10 +95,29 @@ function Shell() {
           style={{
             ...contentInnerStyle,
             ...(isMobile && contentInnerMobileStyle),
+            width: columnWidth,
           }}
         >
           <HeaderCard />
-          {selectedDemo.component && <selectedDemo.component />}
+          {selectedDemo.component && (
+            // The examples glide when the docs above them fold. Never on a
+            // page switch: the wrapper is fresh per page (a first layout is
+            // adopted silently), and the glide arms only once the header
+            // shows this page — it registers a commit after the page mounts,
+            // possibly a Bevy frame later.
+            <node
+              key={selectedDemo.label}
+              style={{
+                ...bodyStyle,
+                ...(isMobile && bodyMobileStyle),
+                ...(headerTitle === selectedDemo.label && {
+                  transition: { layout: DocsFold },
+                }),
+              }}
+            >
+              <selectedDemo.component />
+            </node>
+          )}
         </node>
       </node>
 
@@ -143,28 +154,49 @@ const scrimStyle: BevyStyle = {
   backgroundColor: "rgba(0, 0, 0, 0.55)",
 };
 
+// The scroll area; the column inside is centred and padded on its own, so
+// the padding scrolls with the content.
 const contentStyle: BevyStyle = {
   flexGrow: 1,
   height: "100%",
   flexDirection: "column",
-  alignItems: "flexStart",
+  alignItems: "center",
   overflowY: "scroll",
   scrollbar: Scrollbar,
   transition: {
     scroll: { duration: 200, easing: "easeOut" },
-    morphFilter: { duration: 300, easing: "linear" },
+    morphFilter: PageSwitch,
   },
 };
 
+// Centred: the docs and the examples below them share one centre line.
 const contentInnerStyle: BevyStyle = {
   flexDirection: "column",
   alignItems: "center",
-  gap: 20,
-  width: "100%",
-  padding: Responsiveness.contentPadding,
+  gap: 28,
+  boxSizing: "contentBox",
+  padding: {
+    horizontal: Responsiveness.contentPadding,
+    top: Responsiveness.contentPadding + 8,
+    bottom: Responsiveness.contentPadding * 2,
+  },
 };
 
 const contentInnerMobileStyle: BevyStyle = {
-  padding: Responsiveness.contentPaddingMobile,
-  gap: 10,
+  padding: {
+    horizontal: Responsiveness.contentPaddingMobile,
+    top: 20,
+    bottom: 40,
+  },
+  gap: 16,
 };
+
+// The page's own content, laid out as if straight in the column above.
+const bodyStyle: BevyStyle = {
+  flexDirection: "column",
+  alignItems: "center",
+  alignSelf: "stretch",
+  gap: contentInnerStyle.gap,
+};
+
+const bodyMobileStyle: BevyStyle = { gap: contentInnerMobileStyle.gap };

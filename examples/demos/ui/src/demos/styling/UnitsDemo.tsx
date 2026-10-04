@@ -7,7 +7,7 @@ import {
   List,
 } from "@/components/typography";
 import { BevyStyle } from "bevy-react/jsx";
-import { Box, DemoRow, Example, Figure, Row, Stage } from "@/components";
+import { Box, DemoRow, Example, Figure, Row, Stage, stage } from "@/components";
 import { Code } from "@/components/docs";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
 import { Colors } from "@/theme";
@@ -89,7 +89,7 @@ function LengthCard() {
               width: w,
               height: 28,
               borderRadius: 6,
-              backgroundColor: Colors.primary100,
+              backgroundColor: Colors.cyan,
             }}
           />
         </node>
@@ -135,7 +135,7 @@ function FontSizeCard() {
           <text
             style={{
               fontSize: size,
-              color: Colors.textColor100,
+              color: Colors.text,
               fontWeight: "bold",
             }}
           >
@@ -181,7 +181,7 @@ function AngleCard() {
               style={{
                 width: 40,
                 height: 40,
-                backgroundColor: Colors.purple100,
+                backgroundColor: Colors.violet,
                 transform: { rotate: angle },
               }}
             />
@@ -248,7 +248,7 @@ function TimeBox({ label, duration, on, onToggle }: TimeBoxProps) {
           style={{
             width: 40,
             height: 40,
-            backgroundColor: Colors.green100,
+            backgroundColor: Colors.mint,
             transform: { translateX: on ? 70 : 0 },
             transition: { transform: { duration, easing: "easeOut" } },
           }}
@@ -259,12 +259,11 @@ function TimeBox({ label, duration, on, onToggle }: TimeBoxProps) {
   );
 }
 
+// The plate the box slides along: Stage's chrome on the clickable button.
 const timeTrack: BevyStyle = {
+  ...stage,
   width: 130,
   height: 64,
-  borderRadius: 12,
-  padding: 10,
   justifyContent: "start",
   alignItems: "center",
-  backgroundColor: Colors.surface100,
 };

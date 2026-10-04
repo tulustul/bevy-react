@@ -3,7 +3,8 @@ import { Caption, InlineCode, Paragraph } from "@/components/typography";
 import { DemoRow, Example } from "@/components";
 import { Code, CodeTabs } from "@/components/docs";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
-import { Colors, FontSizes } from "@/theme";
+import { Colors, Fonts, FontSizes } from "@/theme";
+import { useContentWidth } from "@/hooks";
 
 const PAGE: ExplanationData = {
   title: "Cursors",
@@ -84,9 +85,13 @@ function CursorKeywordsDemo() {
 }
 
 function CursorKeywordsCard() {
+  // A px width, not `"100%"` + `maxWidth`: that pair under-measures a wrapping
+  // row, and the swatches spill out of the card. 50 = the example stage's
+  // padding plus the card's rim.
+  const width = Math.min(GRID_WIDTH, useContentWidth() - 50);
   return (
     <>
-      <node style={grid}>
+      <node style={{ ...grid, width }}>
         {CURSORS.map((cursor) => (
           <node key={cursor} style={{ ...swatch, cursor }}>
             <text style={label}>{cursor}</text>
@@ -129,18 +134,19 @@ function CustomCursorDemo() {
 
 function CustomCursorCard() {
   return (
-    <node style={{ ...swatch, width: 200, cursor: "hand" }}>
+    <node style={{ ...swatch, width: 240, cursor: "hand" }}>
       <text style={label}>cursor: "hand" (custom PNG)</text>
     </node>
   );
 }
 
+// Four swatches a row at most.
+const GRID_WIDTH = 420;
+
 const grid: BevyStyle = {
   flexDirection: "row",
   flexWrap: "wrap",
   gap: 10,
-  width: "100%",
-  maxWidth: 420,
   justifyContent: "center",
 };
 
@@ -150,14 +156,15 @@ const swatch: BevyStyle = {
   borderRadius: 8,
   justifyContent: "center",
   alignItems: "center",
-  backgroundColor: Colors.surface200,
+  backgroundColor: Colors.raised,
   border: 1,
-  borderColor: Colors.surface400,
+  borderColor: Colors.line,
 };
 
+// Cursor names are identifiers: the mono face.
 const label: BevyStyle = {
-  color: Colors.textColor100,
+  color: Colors.textBody,
+  fontFamily: Fonts.mono,
   fontSize: FontSizes.xs,
-  fontWeight: "bold",
   textAlign: "center",
 };

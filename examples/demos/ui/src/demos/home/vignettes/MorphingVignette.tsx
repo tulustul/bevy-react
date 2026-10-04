@@ -1,6 +1,7 @@
 import { useRef } from "react";
 import { BevyStyle, PointerEventData } from "bevy-react/jsx";
 import { CircularButton } from "@/components";
+import { Fonts } from "@/theme";
 import type { MorphUse } from "@/demos/styling/morphFilterDemo/params";
 import { growTransition } from "../beats";
 import { Extra } from "../Extra";
@@ -125,12 +126,17 @@ export function MorphingVignette({ expanded, grown }: VignetteProps) {
               </CircularButton>
             ))}
           </node>
-          <PanelCaption>{transition.label}</PanelCaption>
+          <PanelCaption style={labelStyle}>{transition.label}</PanelCaption>
         </node>
       </Extra>
     </node>
   );
 }
+
+/** The transition's name is an identifier: the mono face. */
+const labelStyle: BevyStyle = {
+  fontFamily: Fonts.mono,
+};
 
 const packStyle: BevyStyle = {
   width: "100%",

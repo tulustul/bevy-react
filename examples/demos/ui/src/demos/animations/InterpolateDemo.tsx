@@ -27,7 +27,7 @@ const PAGE: ExplanationData = {
     scale: { animated: interpolate(t, [0, 1], [0.6, 1.4]) },
   },
   backgroundColor: {
-    animated: interpolateColor(t, [0, 1], ["#7aa2f7", "#f7768e"]),
+    animated: interpolateColor(t, [0, 1], ["#5cd9ff", "#ff6b8b"]),
   },
 }}`}</Code>
       <Paragraph>
@@ -59,7 +59,7 @@ const SCALE_COLOR_TSX = `const t = useSharedValue(0);
       scale: { animated: interpolate(t, [0, 1], [0.6, 1.4]) },
     },
     backgroundColor: {
-      animated: interpolateColor(t, [0, 1], ["#7aa2f7", "#f7768e"]),
+      animated: interpolateColor(t, [0, 1], ["#5cd9ff", "#ff6b8b"]),
     },
   }}
 />;
@@ -107,11 +107,7 @@ function ScaleColorCard() {
               scale: { animated: interpolate(t, [0, 1], [0.6, 1.4]) },
             },
             backgroundColor: {
-              animated: interpolateColor(
-                t,
-                [0, 1],
-                [Colors.primary100, Colors.red100],
-              ),
+              animated: interpolateColor(t, [0, 1], [Colors.cyan, Colors.rose]),
             },
           }}
         />
@@ -132,7 +128,7 @@ const scaleSquare: BevyStyle = {
   width: 64,
   height: 64,
   borderRadius: 12,
-  backgroundColor: Colors.primary100,
+  backgroundColor: Colors.cyan,
 };
 
 const MULTI_STOP_TSX = `style={{
@@ -213,15 +209,15 @@ const zigDot: BevyStyle = {
   width: 20,
   height: 20,
   borderRadius: 10,
-  backgroundColor: Colors.green100,
+  backgroundColor: Colors.mint,
 };
 
 const BAR_COLORS = [
-  Colors.primary100,
-  Colors.green100,
-  Colors.yellow100,
-  Colors.orange100,
-  Colors.red100,
+  Colors.cyan,
+  Colors.mint,
+  Colors.amber,
+  Colors.ember,
+  Colors.rose,
 ];
 
 const CLAMPED_TSX = `// bar i only moves inside its own window of t

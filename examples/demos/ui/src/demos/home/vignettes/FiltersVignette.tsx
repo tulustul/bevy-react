@@ -8,7 +8,7 @@ import {
 } from "bevy-react";
 import { BevyStyle } from "bevy-react/jsx";
 import { Pinchable, Radio } from "@/components";
-import { Colors } from "@/theme";
+import { Colors, Fonts } from "@/theme";
 import { useIsMobile } from "@/hooks";
 import { growTransition } from "../beats";
 import { Extra } from "../Extra";
@@ -172,6 +172,7 @@ export function FiltersVignette({ expanded, grown }: VignetteProps) {
       <Extra grown={grown} maxHeight={PILLS_HEIGHT}>
         <node style={controlsStyle}>
           <Radio
+            wrap
             pinch={{ radius: 0.7 }}
             options={FILTERS.map((f) => ({ value: f.name, label: f.label }))}
             value={active}
@@ -197,6 +198,7 @@ function useAmounts(active: string): SharedValue[] {
   ];
 }
 
+/** A raised plate on the tile: one step up from the card, hairline rim. */
 const cardStyle: BevyStyle = {
   flexDirection: "row",
   alignItems: "center",
@@ -207,15 +209,16 @@ const cardStyle: BevyStyle = {
     right: CARD_PADDING + 6,
   },
   borderRadius: 12,
-  backgroundColor: Colors.surface200,
+  backgroundColor: Colors.raised,
   border: 1,
-  borderColor: Colors.surface400,
+  borderColor: Colors.line,
 };
 
 const wordSmallStyle: BevyStyle = {
-  fontFamily: "MetalMania",
+  fontFamily: Fonts.display,
   fontSize: 26,
-  color: Colors.textColor100,
+  fontWeight: "semibold",
+  color: Colors.text,
 };
 
 const wordLargeStyle: BevyStyle = {

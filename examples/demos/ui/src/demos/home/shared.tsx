@@ -17,6 +17,8 @@ export type VignetteProps = {
 
 /** The card's padding, identical at both ends of the flight (it does not ease). */
 export const CARD_PADDING = 16;
+/** The card's hairline rim, inside its box like its padding. */
+export const CARD_BORDER = 1;
 /** The page card's padding on a phone. */
 export const PAGE_PADDING_MOBILE = 12;
 
@@ -53,7 +55,8 @@ export const controlsStyle: BevyStyle = {
   padding: { top: Spacing.extra, bottom: 4, horizontal: 5 },
 };
 
-/** The panel's caption: one step up from the gallery `Caption`. */
+/** The panel's caption: one step up from the gallery `Caption` (still dim —
+ * prose that should read as prose overrides the colour). */
 export function PanelCaption({
   children,
   style,
@@ -62,7 +65,7 @@ export function PanelCaption({
 }
 
 const panelCaption: BevyStyle = {
-  fontSize: FontSizes.base,
+  fontSize: FontSizes.sm,
   textAlign: "center",
 };
 
@@ -73,7 +76,10 @@ export function useCardContentWidth(): number | undefined {
   const isMobile = useIsMobile();
   const win = useWindowSize();
   const inset =
-    (Responsiveness.contentPaddingMobile + PAGE_PADDING_MOBILE + CARD_PADDING) *
+    (Responsiveness.contentPaddingMobile +
+      PAGE_PADDING_MOBILE +
+      CARD_BORDER +
+      CARD_PADDING) *
     2;
   return isMobile ? Math.max(0, win.width - inset) : undefined;
 }

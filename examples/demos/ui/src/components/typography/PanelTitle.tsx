@@ -1,4 +1,4 @@
-import { Colors, FontSizes } from "@/theme";
+import { Colors, Fonts, FontSizes } from "@/theme";
 import { BevyStyle } from "bevy-react/jsx";
 import { PropsWithChildren } from "react";
 
@@ -6,47 +6,15 @@ type Props = PropsWithChildren & {
   style?: BevyStyle;
 };
 
-/** The title of a page header card or a modal — the largest text on screen
- *  after the brand, in the gallery's display treatment: a warm gradient
- *  recolour with a dark outline, over a soft drop shadow. For titles, not
- *  body text — it promotes the node to a composited layer. */
+/** The title of a card, a page or a modal: the display face, plain white —
+ *  the hierarchy comes from size and weight, not effects. */
 export function PanelTitle({ children, style }: Props) {
-  return (
-    <node
-      style={{
-        filter: {
-          name: "shadow",
-          params: { color: "black", offsetY: 3, spread: 5 },
-        },
-      }}
-    >
-      <text
-        style={{
-          ...panelTitle,
-          ...style,
-          filter: [
-            {
-              name: "gradientMap",
-              params: {
-                stops: [{ color: "red" }, { color: "yellow" }],
-                amount: 0.6,
-              },
-            },
-            {
-              name: "outline",
-              params: { color: "black", width: 1.5 },
-            },
-          ],
-        }}
-      >
-        {children}
-      </text>
-    </node>
-  );
+  return <text style={{ ...panelTitle, ...style }}>{children}</text>;
 }
 
 export const panelTitle: BevyStyle = {
-  color: Colors.textColor100,
+  fontFamily: Fonts.display,
+  color: Colors.text,
   fontSize: FontSizes.xl,
   fontWeight: "semibold",
 };

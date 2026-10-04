@@ -16,11 +16,19 @@ export const PAD_CANVAS_H = 180;
 
 const TAU = Math.PI * 2;
 
+// The schematic's tones over its `card` plate: the body a step up, idle
+// parts a control step above it, hairline strokes; a pressed part lights
+// cyan (the face buttons their own colours).
+const BODY = Colors.well;
+const IDLE = Colors.control;
+const STROKE = Colors.controlHover;
+const LIT = Colors.cyan;
+
 const ABXY_COLORS: Record<string, string> = {
-  south: Colors.green100,
-  east: Colors.red100,
-  west: Colors.sky100,
-  north: Colors.yellow100,
+  south: Colors.mint,
+  east: Colors.rose,
+  west: Colors.sky,
+  north: Colors.amber,
 };
 
 export function makePadPainter(pad: PadState): (ctx: CanvasContext) => void {
@@ -29,10 +37,10 @@ export function makePadPainter(pad: PadState): (ctx: CanvasContext) => void {
   const axis = (name: string) => pad.axes[name] ?? 0;
 
   return (ctx) => {
-    const detail = (on: boolean, onColor: string = Colors.primary100) => {
-      ctx.fillStyle = on ? onColor : Colors.surface400;
+    const detail = (on: boolean, onColor: string = LIT) => {
+      ctx.fillStyle = on ? onColor : IDLE;
       ctx.fill();
-      ctx.strokeStyle = Colors.surface600;
+      ctx.strokeStyle = STROKE;
       ctx.lineWidth = 1;
       ctx.stroke();
     };
@@ -51,15 +59,15 @@ export function makePadPainter(pad: PadState): (ctx: CanvasContext) => void {
       ["rightTrigger2", 206],
     ] as const) {
       box(x, 4, 44, 9);
-      ctx.fillStyle = Colors.surface200;
+      ctx.fillStyle = BODY;
       ctx.fill();
-      ctx.strokeStyle = Colors.surface600;
+      ctx.strokeStyle = STROKE;
       ctx.lineWidth = 1;
       ctx.stroke();
       const fill = value(name);
       if (fill > 0) {
         box(x + 1, 5, fill * 42, 7);
-        ctx.fillStyle = Colors.primary100;
+        ctx.fillStyle = LIT;
         ctx.fill();
       }
     }
@@ -82,9 +90,9 @@ export function makePadPainter(pad: PadState): (ctx: CanvasContext) => void {
     ctx.quadraticCurveTo(36, 172, 28, 155);
     ctx.bezierCurveTo(18, 120, 35, 40, 70, 34);
     ctx.closePath();
-    ctx.fillStyle = Colors.surface200;
+    ctx.fillStyle = BODY;
     ctx.fill();
-    ctx.strokeStyle = Colors.surface600;
+    ctx.strokeStyle = STROKE;
     ctx.lineWidth = 2;
     ctx.stroke();
 
@@ -119,15 +127,15 @@ export function makePadPainter(pad: PadState): (ctx: CanvasContext) => void {
     ] as const) {
       const cy = 108;
       circle(cx, cy, 15);
-      ctx.strokeStyle = Colors.surface600;
+      ctx.strokeStyle = STROKE;
       ctx.lineWidth = 1;
       ctx.stroke();
       circle(cx + axis(xName) * 8, cy - axis(yName) * 8, 6);
-      detail(pressed(thumb), Colors.primary100);
+      detail(pressed(thumb));
       if (!pressed(thumb)) {
         // Idle dot reads better slightly brighter than other idle details.
         circle(cx + axis(xName) * 8, cy - axis(yName) * 8, 3);
-        ctx.fillStyle = Colors.textColor300;
+        ctx.fillStyle = Colors.textDim;
         ctx.fill();
       }
     }

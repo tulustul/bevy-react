@@ -1,7 +1,7 @@
 import { BevyStyle } from "bevy-react/jsx";
 import { Radio } from "@/components";
 import { HighlightedCode } from "@/components/docs";
-import { Colors, FontSizes } from "@/theme";
+import { Colors, Fonts, FontSizes } from "@/theme";
 import { growTransition } from "../beats";
 import { Extra } from "../Extra";
 import {
@@ -77,19 +77,21 @@ export function HotReloadVignette({ expanded, grown }: VignetteProps) {
 const source = (color: string) =>
   `<node style={{\n  backgroundColor: "${color}",\n}} />`;
 
-/** Matches the docs highlighter's string colour. */
+/** A string literal: mint, the docs highlighter's string hue. */
 const literalStyle: BevyStyle = {
-  fontFamily: "Noto Sans Mono",
+  fontFamily: Fonts.mono,
   fontSize: FontSizes.lg,
-  color: Colors.green100,
-  fontWeight: "bold",
+  color: Colors.mint,
+  fontWeight: "semibold",
   margin: { top: Spacing.label },
 };
 
 /** The docs' `<Code>` body, without its header. */
 const codeBlockStyle: BevyStyle = {
   margin: { top: Spacing.extra },
-  padding: 10,
-  backgroundColor: Colors.surface100,
+  padding: { vertical: 10, horizontal: 14 },
+  backgroundColor: Colors.stage,
+  border: 1,
+  borderColor: Colors.line,
   borderRadius: 10,
 };

@@ -53,18 +53,18 @@ const RETARGET_MS = 280; // glide back to the loop start on a mode change
 
 // Each square pulses from its cool base color to a warm partner.
 const COOL = [
-  Colors.primary100,
-  Colors.red100,
-  Colors.green100,
-  Colors.yellow100,
-  Colors.purple100,
+  Colors.cyan,
+  Colors.rose,
+  Colors.mint,
+  Colors.amber,
+  Colors.violet,
 ];
 const WARM = [
-  Colors.purple100,
-  Colors.orange100,
-  Colors.teal100,
-  Colors.red100,
-  Colors.sky100,
+  Colors.violet,
+  Colors.ember,
+  Colors.cyan,
+  Colors.rose,
+  Colors.sky,
 ];
 
 const MODES: Mode[] = ["linear", "easeInOut", "spring"];
@@ -201,5 +201,5 @@ const squareStyle: BevyStyle = {
   width: SQUARE,
   height: SQUARE,
   borderRadius: 10,
-  backgroundColor: Colors.primary100,
+  backgroundColor: Colors.cyan,
 };

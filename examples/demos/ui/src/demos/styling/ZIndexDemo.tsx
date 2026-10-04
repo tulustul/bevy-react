@@ -89,7 +89,7 @@ function LocalZIndexCard() {
             ...chip,
             left: 18,
             top: 14,
-            backgroundColor: Colors.primary100,
+            backgroundColor: Colors.sky,
             zIndex: front === "blue" ? 2 : 1,
           }}
         />
@@ -98,7 +98,7 @@ function LocalZIndexCard() {
             ...chip,
             left: 50,
             top: 30,
-            backgroundColor: Colors.red100,
+            backgroundColor: Colors.rose,
             zIndex: front === "red" ? 2 : 1,
           }}
         />
@@ -158,14 +158,14 @@ function GlobalZIndexCard() {
     <ControlColumn>
       <Stage style={cardRow}>
         {/* Back card (painted first) — owns the overhanging popover. */}
-        <node style={{ ...card, backgroundColor: Colors.primary100 }}>
+        <node style={{ ...card, backgroundColor: Colors.cyan }}>
           <BoxLabel>back</BoxLabel>
           <node style={{ ...popover, ...popoverZ }}>
             <BoxLabel>popover</BoxLabel>
           </node>
         </node>
         {/* Front card (painted second) — covers anything below it in the stack. */}
-        <node style={{ ...card, backgroundColor: Colors.red100 }}>
+        <node style={{ ...card, backgroundColor: Colors.rose }}>
           <BoxLabel>front</BoxLabel>
         </node>
       </Stage>
@@ -211,7 +211,7 @@ const popover: BevyStyle = {
   width: 90,
   height: 56,
   borderRadius: 8,
-  backgroundColor: Colors.amber100,
+  backgroundColor: Colors.amber,
   alignItems: "center",
   justifyContent: "center",
 };

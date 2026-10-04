@@ -455,6 +455,48 @@ fn default_dustify_raggedness() -> f32 {
     0.6
 }
 
+// ---------------------------------------------------------------------------
+// The gallery's own page transition (not part of the gl-transitions pack).
+// ---------------------------------------------------------------------------
+
+/// A soft band of light sweeps across the box, leaving the new image in its
+/// wake — the gallery's page switch, swept in the direction the nav moved.
+#[react_morph_filter(shader = "shaders/morphs/light_sweep.wgsl")]
+struct LightSweep {
+    /// Travel direction, the gradient convention: `0` toward the top,
+    /// clockwise (`180` sweeps downward).
+    #[serde(default = "default_sweep_angle")]
+    angle: Angle,
+    /// Width of the soft reveal edge, as a fraction of the travel.
+    #[serde(default = "default_sweep_softness")]
+    softness: f32,
+    /// Width of the light band, as a fraction of the travel.
+    #[serde(default = "default_sweep_band")]
+    band: f32,
+    /// Peak light added in the band (`0` = a plain soft wipe).
+    #[serde(default = "default_one")]
+    intensity: f32,
+    /// The light's color.
+    #[serde(default = "default_sweep_color")]
+    color: FilterColor,
+}
+
+fn default_sweep_angle() -> Angle {
+    Angle::from_radians(std::f32::consts::PI)
+}
+
+fn default_sweep_softness() -> f32 {
+    0.08
+}
+
+fn default_sweep_band() -> f32 {
+    0.035
+}
+
+fn default_sweep_color() -> FilterColor {
+    srgb(0.361, 0.851, 1.0)
+}
+
 /// Register the custom filters. Called from **both** paths — the live app
 /// (`build_app`, after `ReactUiPlugin` so a custom name could never be
 /// clobbered by the plugin's built-in registration) and the
@@ -478,5 +520,6 @@ pub fn register_bindings(app: &mut App) {
         .add_react_morph_filter::<StripDatamoshGlitch>()
         .add_react_morph_filter::<FilmBurn>()
         .add_react_morph_filter::<InvertedPageCurl>()
-        .add_react_morph_filter::<Dustify>();
+        .add_react_morph_filter::<Dustify>()
+        .add_react_morph_filter::<LightSweep>();
 }

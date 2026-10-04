@@ -109,7 +109,7 @@ function AxisPaddingCard() {
   return (
     <ControlColumn>
       <Stage style={{ ...wrap, padding: { horizontal: h, vertical: v } }}>
-        <node style={{ ...inner, backgroundColor: Colors.yellow100 }} />
+        <node style={{ ...inner, backgroundColor: Colors.amber }} />
       </Stage>
       <Slider
         value={h}
@@ -154,8 +154,8 @@ function GapCard() {
     <ControlColumn>
       <Stage style={{ ...wrap, flexDirection: "row", gap: g }}>
         <node style={inner} />
-        <node style={{ ...inner, backgroundColor: Colors.purple100 }} />
-        <node style={{ ...inner, backgroundColor: Colors.yellow100 }} />
+        <node style={{ ...inner, backgroundColor: Colors.violet }} />
+        <node style={{ ...inner, backgroundColor: Colors.amber }} />
       </Stage>
       <Slider value={g} min={0} max={32} onChange={setG} name="gap" />
     </ControlColumn>
@@ -188,7 +188,7 @@ function MarginCard() {
         <node
           style={{
             ...inner,
-            backgroundColor: Colors.green100,
+            backgroundColor: Colors.mint,
             margin: { left: m },
           }}
         />
@@ -207,5 +207,5 @@ const inner: BevyStyle = {
   width: 36,
   height: 36,
   borderRadius: 6,
-  backgroundColor: Colors.primary100,
+  backgroundColor: Colors.cyan,
 };

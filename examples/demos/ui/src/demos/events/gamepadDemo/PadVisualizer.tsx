@@ -14,7 +14,7 @@ export function PadVisualizer({ pads }: { pads: Record<number, PadState> }) {
     <node style={{ flexDirection: "row", flexWrap: "wrap", gap: 16 }}>
       {entries.length === 0 ? (
         <node style={boxStyle}>
-          <text style={{ fontSize: FontSizes.sm, color: Colors.textColor300 }}>
+          <text style={{ fontSize: FontSizes.sm, color: Colors.textDim }}>
             No controllers detected
           </text>
         </node>
@@ -34,8 +34,8 @@ function PadBox({ id, pad }: { id: number; pad: PadState }) {
       <text
         style={{
           fontSize: FontSizes.sm,
-          fontWeight: "bold",
-          color: Colors.textColor100,
+          fontWeight: "semibold",
+          color: Colors.text,
         }}
       >
         {`#${id} ${pad.info.name}`}
@@ -48,6 +48,7 @@ function PadBox({ id, pad }: { id: number; pad: PadState }) {
   );
 }
 
+// A plate on the example's stage (the `Stage` look).
 const boxStyle: BevyStyle = {
   flexDirection: "column",
   alignItems: "center",
@@ -55,8 +56,8 @@ const boxStyle: BevyStyle = {
   padding: 12,
   borderRadius: 12,
   border: 1,
-  borderColor: Colors.surface500,
-  backgroundColor: Colors.surface100,
+  borderColor: Colors.line,
+  backgroundColor: Colors.card,
   minWidth: PAD_CANVAS_W + 24,
   minHeight: 80,
   justifyContent: "center",

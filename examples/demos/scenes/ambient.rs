@@ -1,6 +1,7 @@
-//! The permanent full-screen backdrop: a gentle aurora — soft light curtains
-//! waving over a starry night sky (see `examples/assets/shaders/ambient.wgsl`,
-//! which owns all the motion/color logic). It sits behind **every** scene
+//! The permanent full-screen backdrop: a dark studio lit by two slowly
+//! drifting gel lights — React's cyan and Bevy's ember — with dust in the
+//! beams (see `examples/assets/shaders/ambient.wgsl`, which owns all the
+//! motion/color logic). It sits behind **every** scene
 //! (including the empty viewport `selectScene(null)` lands on), so each demo
 //! gets living, colorful pixels behind it — which is what makes
 //! `backdropFilter` frost (and layer demos in general) worth looking at.
@@ -9,7 +10,7 @@
 //! the frustum, shaded by a binding-less material. The shader reads time and
 //! the camera orientation from the view uniforms, so there is zero per-frame
 //! CPU work; dragging the (otherwise unused) orbit camera still slides the
-//! field via a fake-parallax term.
+//! dust via a fake-parallax term.
 
 use bevy::camera::visibility::RenderLayers;
 use bevy::prelude::*;
@@ -26,18 +27,18 @@ use bevy_react::{ReactAppExt, react_message};
 const QUAD_DISTANCE: f32 = 30.0;
 const QUAD_SIZE: f32 = 200.0;
 
-/// The aurora quad's dedicated render layer: only the main camera renders it.
+/// The backdrop quad's dedicated render layer: only the main camera renders it.
 /// Extra world cameras (the CrowdedCubes `FollowCam` portal camera on layer 0)
 /// must not see a 200×200 quad floating at the main camera's position. Layer 1
 /// is the CrowdedCubes minimap.
-pub const AURORA_LAYER: usize = 2;
+pub const BACKDROP_LAYER: usize = 2;
 
 /// How long one burst takes to play out, in seconds. The burst decays on its
 /// own, so nothing has to cancel it: the home page fires and forgets, and a
 /// burst you trigger just before navigating finishes over the next page.
 const BURST_SECS: f32 = 2.0;
 
-/// React → Bevy: set the aurora alight (`bevy.nebula.burst({ hue })`). The
+/// React → Bevy: send a shockwave across the backdrop (`bevy.nebula.burst({ hue })`). The
 /// home page's "Typed messages" tile fires this on click — the sky changing
 /// **is** the message arriving. Fire-and-forget: there is no reply.
 #[react_message(name = "nebula.burst")]
@@ -74,7 +75,7 @@ impl Plugin for AmbientScenePlugin {
     }
 }
 
-/// The aurora itself needs no bindings — the fragment shader gets time,
+/// The backdrop itself needs no bindings — the fragment shader gets time,
 /// viewport and camera orientation from the view uniforms every mesh pass
 /// already has. The one uniform is the burst: `(hue, progress, 0, 0)`, written
 /// only while a burst is playing.
@@ -112,7 +113,7 @@ fn spawn_backdrop(
             Mesh3d(meshes.add(Rectangle::new(QUAD_SIZE, QUAD_SIZE))),
             MeshMaterial3d(materials.add(AmbientMaterial::default())),
             Transform::from_xyz(0.0, 0.0, -QUAD_DISTANCE),
-            RenderLayers::layer(AURORA_LAYER),
+            RenderLayers::layer(BACKDROP_LAYER),
         ))
         .id();
     commands.entity(*camera).add_child(quad);

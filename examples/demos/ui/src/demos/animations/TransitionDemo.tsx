@@ -7,9 +7,16 @@ import {
   Paragraph,
 } from "@/components/typography";
 import { BevyStyle } from "bevy-react/jsx";
-import { Button, Column, DemoRow, Example, Stage } from "@/components";
+import {
+  Button,
+  Column,
+  DemoRow,
+  Example,
+  SecondaryButton,
+  Stage,
+} from "@/components";
 import { Code } from "@/components/docs";
-import { Colors, FontSizes } from "@/theme";
+import { Colors, Fonts, FontSizes } from "@/theme";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
 
 // A pure-UI demo of CSS-like `transition`: a style change (hover/press, or React
@@ -89,7 +96,7 @@ function HoverPressDemo() {
       backgroundColor: { duration: 180 },
     },
   }}
-  hoverStyle={{ backgroundColor: "#89b4fa" }}
+  hoverStyle={{ backgroundColor: "#8ae6ff" }}
   pressStyle={{ transform: { scale: 0.92 } }}
 />`}</Code>
         </>
@@ -104,17 +111,17 @@ function HoverPressCard() {
     <button
       style={{
         ...pillStyle,
-        backgroundColor: Colors.primary100,
+        backgroundColor: Colors.cyan,
         transform: { scale: 1 },
         transition: {
           transform: { duration: 120, easing: "easeOut" },
           backgroundColor: { duration: 180 },
         },
       }}
-      hoverStyle={{ backgroundColor: Colors.primary200 }}
+      hoverStyle={{ backgroundColor: Colors.cyanBright }}
       pressStyle={{
         transform: { scale: 0.92 },
-        backgroundColor: Colors.primary300,
+        backgroundColor: Colors.cyanDeep,
       }}
     >
       <BoxLabel style={{ fontSize: FontSizes.base, textAlign: "center" }}>
@@ -142,7 +149,7 @@ function ToggleSwitchDemo() {
 <button // the track
   onClick={() => setOn((v) => !v)}
   style={{
-    backgroundColor: on ? "#9ece6a" : "#42425e",
+    backgroundColor: on ? "#5cd9ff" : "#2a2d38",
     transition: { backgroundColor: { duration: 200 } },
   }}
 >
@@ -169,7 +176,7 @@ function ToggleSwitchCard() {
         onClick={() => setOn((v) => !v)}
         style={{
           ...switchTrack,
-          backgroundColor: on ? Colors.green100 : Colors.surface500,
+          backgroundColor: on ? Colors.cyan : Colors.control,
           transition: { backgroundColor: { duration: 200 } },
         }}
       >
@@ -181,7 +188,14 @@ function ToggleSwitchCard() {
           }}
         />
       </button>
-      <text style={switchLabel}>{on ? "ON" : "OFF"}</text>
+      <text
+        style={{
+          ...switchLabel,
+          color: on ? Colors.cyanBright : Colors.textDim,
+        }}
+      >
+        {on ? "ON" : "OFF"}
+      </text>
     </node>
   );
 }
@@ -285,7 +299,7 @@ function TimingVsSpringCard() {
           <node
             style={{
               ...vsDot,
-              backgroundColor: Colors.primary100,
+              backgroundColor: Colors.cyan,
               transform: { translateX: x },
               transition: {
                 transform: { duration: 450, easing: "easeInOut" },
@@ -300,7 +314,7 @@ function TimingVsSpringCard() {
           <node
             style={{
               ...vsDot,
-              backgroundColor: Colors.green100,
+              backgroundColor: Colors.mint,
               transform: { translateX: x },
               transition: { transform: { stiffness: 120, damping: 9 } },
             }}
@@ -387,8 +401,8 @@ function DelayDemo() {
       translateY: up ? -18 : 18,
     },
     backgroundColor: up
-      ? "#bb9af7"
-      : "#7aa2f7",
+      ? "#a88bff"
+      : "#5cd9ff",
     transition: {
       transform: spec,
       backgroundColor: spec,
@@ -419,7 +433,7 @@ function DelayCard() {
               key={i}
               style={{
                 ...waveDot,
-                backgroundColor: up ? Colors.purple100 : Colors.primary100,
+                backgroundColor: up ? Colors.violet : Colors.cyan,
                 transform: { translateY: up ? -18 : 18 },
                 transition: { transform: spec, backgroundColor: spec },
               }}
@@ -472,8 +486,8 @@ function LayoutDemo() {
 const LAYOUT_IDS = [0, 1, 2, 3, 4, 5];
 // Explicit container heights: the `size` channel eases real layout, so the
 // buttons below (and the card) re-flow live — `auto` heights would snap.
-const ROW_HEIGHT = 56; // 8 + 40 + 8
-const GRID_HEIGHT = 152; // 8 + 3 × 40 + 2 × 8 + 8
+const ROW_HEIGHT = 58; // 1 + 8 + 40 + 8 + 1 (rim + padding + box)
+const GRID_HEIGHT = 154; // 1 + 8 + 3 × 40 + 2 × 8 + 8 + 1
 
 function LayoutCard() {
   const [order, setOrder] = useState(LAYOUT_IDS);
@@ -491,7 +505,7 @@ function LayoutCard() {
 
   return (
     <Column style={{ gap: 16 }}>
-      <node
+      <Stage
         style={{
           ...(grid ? layoutGrid : layoutRow),
           height: grid ? GRID_HEIGHT : ROW_HEIGHT,
@@ -506,30 +520,30 @@ function LayoutCard() {
               width: id === 2 && wide ? 120 : 40,
             }}
           >
-            <text style={layoutLabel}>{String(id)}</text>
+            <BoxLabel style={{ fontSize: FontSizes.sm }}>{String(id)}</BoxLabel>
           </node>
         ))}
-      </node>
+      </Stage>
       <node style={{ flexDirection: "row", gap: 8 }}>
         <Button onClick={shuffle}>Shuffle</Button>
-        <Button onClick={() => setWide((v) => !v)}>
+        <SecondaryButton onClick={() => setWide((v) => !v)}>
           {wide ? "Shrink 2" : "Widen 2"}
-        </Button>
-        <Button onClick={() => setGrid((v) => !v)}>
+        </SecondaryButton>
+        <SecondaryButton onClick={() => setGrid((v) => !v)}>
           {grid ? "Flex" : "Grid"}
-        </Button>
+        </SecondaryButton>
       </node>
     </Column>
   );
 }
 
 const LAYOUT_COLORS = [
-  Colors.primary100,
-  Colors.green100,
-  Colors.yellow100,
-  Colors.red100,
-  Colors.primary300,
-  Colors.textColor200,
+  Colors.cyan,
+  Colors.mint,
+  Colors.amber,
+  Colors.rose,
+  Colors.violet,
+  Colors.sky,
 ];
 
 // The container eases its HEIGHT through the real-layout `size` channel,
@@ -537,15 +551,13 @@ const LAYOUT_COLORS = [
 // and the card snap to the final layout (overlap mid-flight). Children sit
 // at the top so their local rects hold still while the height eases —
 // their own `layout` channel then glides them between grid cells and the
-// row without re-arming every frame.
+// row without re-arming every frame. Laid over the `Stage` plate's chrome.
 const layoutRow: BevyStyle = {
   flexDirection: "row",
   alignItems: "flexStart",
   gap: 8,
   width: 300,
   padding: 8,
-  borderRadius: 8,
-  backgroundColor: Colors.surface100,
   transition: { size: { duration: 400, easing: "easeInOut" } },
 };
 
@@ -566,18 +578,12 @@ const layoutBox: BevyStyle = {
   transition: { layout: { duration: 400, easing: "easeInOut" } },
 };
 
-const layoutLabel: BevyStyle = {
-  color: Colors.surface100,
-  fontSize: FontSizes.sm,
-  fontWeight: "bold",
-};
-
 const pillStyle: BevyStyle = {
   width: 160,
   height: 56,
   justifyContent: "center",
   alignItems: "center",
-  borderRadius: 8,
+  borderRadius: 10,
 };
 
 const switchRow: BevyStyle = {
@@ -588,7 +594,8 @@ const switchRow: BevyStyle = {
 };
 
 // The pill-shaped track: the knob slides inside its padding, and the click
-// target is the whole pill.
+// target is the whole pill. Off it rests as a quiet control; on, it takes the
+// cyan light and its glow.
 const switchTrack: BevyStyle = {
   flexDirection: "row",
   justifyContent: "flexStart",
@@ -605,15 +612,16 @@ const switchKnob: BevyStyle = {
   width: 32,
   height: 32,
   borderRadius: 999,
-  backgroundColor: Colors.textColor100,
-  boxShadow: { blurRadius: 4, spreadRadius: 1, color: Colors.shadow100 },
+  backgroundColor: Colors.text,
+  boxShadow: { blurRadius: 4, spreadRadius: 1, color: Colors.shadow },
 };
 
+// The state as a readout; its color follows the switch.
 const switchLabel: BevyStyle = {
   width: 36,
-  color: Colors.textColor200,
+  fontFamily: Fonts.mono,
   fontSize: FontSizes.sm,
-  fontWeight: "bold",
+  fontWeight: "medium",
 };
 
 const vsLane: BevyStyle = {
@@ -624,7 +632,8 @@ const vsLane: BevyStyle = {
 
 const vsLabel: BevyStyle = {
   width: 48,
-  color: Colors.textColor200,
+  fontFamily: Fonts.mono,
+  color: Colors.textDim,
   fontSize: FontSizes.xs,
   textAlign: "right",
 };
@@ -694,6 +703,6 @@ const radiusPill: BevyStyle = {
   justifyContent: "center",
   alignItems: "center",
   borderRadius: 4,
-  backgroundColor: Colors.primary100,
+  backgroundColor: Colors.cyan,
   transition: { borderRadius: { duration: 300, easing: "easeOut" } },
 };

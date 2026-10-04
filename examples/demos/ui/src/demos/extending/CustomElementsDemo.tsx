@@ -8,9 +8,8 @@ import {
   withSpring,
   withTiming,
 } from "bevy-react";
-import { BevyStyle } from "bevy-react/jsx";
 import { InlineCode, Paragraph } from "@/components/typography";
-import { ControlColumn, DemoRow, Example, Slider } from "@/components";
+import { ControlColumn, DemoRow, Example, Readout, Slider } from "@/components";
 import { Code, CodeTabs } from "@/components/docs";
 import { Colors, FontSizes } from "@/theme";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
@@ -198,13 +197,14 @@ function LatticeExample({
 
 const RING_RADIUS = 6;
 
+// Each cube breathes between two hues of the subject palette.
 const RING: [string, string][] = [
-  [Colors.primary100, Colors.red100],
-  [Colors.teal100, Colors.purple100],
-  [Colors.orange100, Colors.sky100],
-  [Colors.green100, Colors.red200],
-  [Colors.yellow100, Colors.primary300],
-  [Colors.red100, Colors.teal100],
+  [Colors.cyan, Colors.rose],
+  [Colors.mint, Colors.violet],
+  [Colors.ember, Colors.sky],
+  [Colors.violet, Colors.amber],
+  [Colors.amber, Colors.cyan],
+  [Colors.rose, Colors.mint],
 ];
 
 const RING_TSX = `const t = useSharedValue(0);
@@ -252,12 +252,12 @@ function RingExample({ clicked }: { clicked: number | null }) {
         </>
       }
     >
-      <text style={clickedStyle}>
-        Last clicked:{" "}
-        <text style={{ color: Colors.primary100 }}>
-          {clicked === null ? "none" : `cube #${clicked + 1}`}
-        </text>
-      </text>
+      <Readout
+        label="Last clicked"
+        value={clicked === null ? "none" : `cube #${clicked + 1}`}
+        color={clicked === null ? Colors.textDim : Colors.cyan}
+        size={FontSizes.xxl}
+      />
     </Example>
   );
 }
@@ -303,8 +303,3 @@ function RingCube({
     />
   );
 }
-
-const clickedStyle: BevyStyle = {
-  color: Colors.textColor100,
-  fontSize: FontSizes.lg,
-};

@@ -8,7 +8,7 @@ import {
 } from "@/components/typography";
 import { ControlColumn, DemoRow, Example, Slider } from "@/components";
 import { Code } from "@/components/docs";
-import { Colors, FontSizes } from "@/theme";
+import { Colors, Fonts, FontSizes } from "@/theme";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
 
 const PAGE: ExplanationData = {
@@ -25,7 +25,7 @@ const PAGE: ExplanationData = {
       </Paragraph>
       <Code lang="tsx">{`<node
   style={{
-    backgroundColor: "rgba(26, 27, 38, 0.35)",
+    backgroundColor: "rgba(11, 12, 16, 0.35)",
     backdropFilter: { name: "blur", params: { radius: 8 } },
   }}
 >
@@ -78,7 +78,14 @@ const glass = {
   justifyContent: "center" as const,
   alignItems: "center" as const,
   gap: 6,
-  backgroundColor: "rgba(26, 27, 38, 0.35)",
+  backgroundColor: "rgba(11, 12, 16, 0.35)",
+};
+
+const glassLabel = {
+  color: Colors.text,
+  fontFamily: Fonts.display,
+  fontSize: FontSizes.xl,
+  fontWeight: "semibold" as const,
 };
 
 function GlassCardDemo() {
@@ -98,7 +105,7 @@ function GlassCardDemo() {
           </Paragraph>
           <Code lang="tsx">{`<node
   style={{
-    backgroundColor: "rgba(26, 27, 38, 0.35)",
+    backgroundColor: "rgba(11, 12, 16, 0.35)",
     backdropFilter: { name: "blur", params: { radius: 8 } },
   }}
 >
@@ -121,15 +128,7 @@ function GlassCard() {
           backdropFilter: { name: "blur", params: { radius } },
         }}
       >
-        <text
-          style={{
-            color: Colors.textColor100,
-            fontSize: FontSizes.xl,
-            fontWeight: "bold",
-          }}
-        >
-          FROSTED GLASS
-        </text>
+        <text style={glassLabel}>FROSTED GLASS</text>
       </node>
       <Slider
         value={radius}
@@ -186,7 +185,7 @@ function HueCard() {
         max={360}
         onChange={setHue}
         name="hue"
-        decimals={1}
+        unit="°"
       />
     </ControlColumn>
   );
@@ -245,15 +244,7 @@ function BothChainsCard() {
           ],
         }}
       >
-        <text
-          style={{
-            color: Colors.textColor100,
-            fontSize: FontSizes.xl,
-            fontWeight: "bold",
-          }}
-        >
-          FILTERED CONTENT
-        </text>
+        <text style={glassLabel}>FILTERED CONTENT</text>
       </node>
     </ControlColumn>
   );

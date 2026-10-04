@@ -258,6 +258,28 @@ repeat: boolean, ctrlKey: boolean, shiftKey: boolean, altKey: boolean,
  * The "Meta"/"Super" key (Windows/Command).
  */
 metaKey: boolean, };
+export type LightSweep = { 
+/**
+ * Travel direction, the gradient convention: `0` toward the top,
+ * clockwise (`180` sweeps downward).
+ */
+angle: number | string, 
+/**
+ * Width of the soft reveal edge, as a fraction of the travel.
+ */
+softness: number, 
+/**
+ * Width of the light band, as a fraction of the travel.
+ */
+band: number, 
+/**
+ * Peak light added in the band (`0` = a plain soft wipe).
+ */
+intensity: number, 
+/**
+ * The light's color.
+ */
+color: string, };
 export type LinearWipeParams = { angle: number | string, softness: number | string, };
 export type NebulaBurst = { 
 /**
@@ -391,6 +413,25 @@ color?: string,
  */
 size?: number, };
 export type SparkleBurst = number;
+export type Spotlight = { 
+/**
+ * Light color, any CSS color (default: the theme's cyan).
+ */
+color?: string, 
+/**
+ * How far from the pointer the light reaches (default `260`).
+ */
+reach?: number, 
+/**
+ * Width of the lit edge ring along the node's rounded border
+ * (default `0` = no edge).
+ */
+edge?: number, 
+/**
+ * Strength of the soft light pool on the node's surface, `0..1`
+ * (default `0`).
+ */
+wash?: number, };
 export type StripDatamoshGlitch = { 
 /**
  * Overall glitch intensity.
@@ -523,6 +564,7 @@ declare module "bevy-react" {
     filmBurn: FilmBurn;
     gridFlip: GridFlip;
     invertedPageCurl: InvertedPageCurl;
+    lightSweep: LightSweep;
     linearWipe: LinearWipeParams;
     pixelize: PixelizeParams;
     polkaDotsCurtain: PolkaDotsCurtain;
@@ -541,6 +583,7 @@ declare module "bevy-react" {
   interface BevyStyle {
     sparkle?: Sparkle;
     sparkleBurst?: SparkleBurst;
+    spotlight?: Spotlight;
   }
 }
 

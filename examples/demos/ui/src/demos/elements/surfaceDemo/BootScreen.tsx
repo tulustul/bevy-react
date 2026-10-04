@@ -1,7 +1,7 @@
 import { BevyStyle } from "bevy-react/jsx";
 import { TextMono } from "@/components/typography";
 import { Typewriter } from "@/components";
-import { Colors, FontSizes } from "@/theme";
+import { Colors, Fonts, FontSizes } from "@/theme";
 import type { Phase } from "./MonitorApp";
 import { useEffect, useState } from "react";
 
@@ -76,27 +76,13 @@ function ProgressBar({ onDone }: ProgressBarProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [progress]);
 
+  // A segmented meter in a recessed well: each strip lights cyan in turn.
   return (
-    <node
-      style={{
-        width: 350,
-        height: 50,
-        border: 2,
-        borderColor: Colors.surface600,
-        borderRadius: 8,
-        flexDirection: "row",
-        gap: 7,
-        padding: 5,
-      }}
-    >
+    <node style={meter}>
       {STRIPS.map((_, index) => (
         <node
           key={index}
-          style={{
-            width: 20,
-            backgroundColor:
-              progress > index ? Colors.surface600 : Colors.transparent,
-          }}
+          style={progress > index ? { ...strip, ...stripLit } : strip}
         />
       ))}
     </node>
@@ -112,12 +98,38 @@ const bootScreen: BevyStyle = {
 };
 
 const bootBrand: BevyStyle = {
-  color: Colors.textColor100,
+  fontFamily: Fonts.display,
+  color: Colors.text,
   fontSize: FontSizes.xxl,
-  fontWeight: "bold",
+  fontWeight: "semibold",
 };
 
 const bootStatus: BevyStyle = {
-  color: Colors.primary100,
-  fontSize: FontSizes.lg,
+  color: Colors.textDim,
+  fontSize: FontSizes.sm,
+  letterSpacing: 1.2,
+};
+
+const meter: BevyStyle = {
+  width: 360,
+  height: 22,
+  flexDirection: "row",
+  gap: 3,
+  padding: 4,
+  border: 1,
+  borderColor: Colors.line,
+  borderRadius: 8,
+  backgroundColor: Colors.well,
+};
+
+const strip: BevyStyle = {
+  flexGrow: 1,
+  flexBasis: 0,
+  borderRadius: 3,
+  backgroundColor: Colors.control,
+};
+
+const stripLit: BevyStyle = {
+  backgroundColor: Colors.cyan,
+  boxShadow: { blurRadius: 8, color: Colors.cyanGlow },
 };

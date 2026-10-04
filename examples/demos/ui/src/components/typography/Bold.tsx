@@ -1,6 +1,7 @@
 import { Colors, FontSizes } from "@/theme";
 import { BevyStyle } from "bevy-react/jsx";
 import { PropsWithChildren } from "react";
+import { PROSE_LINE } from "./Paragraph";
 
 /** Bold inline run (use inside `<P>`). */
 export function Bold({ children }: PropsWithChildren) {
@@ -11,6 +12,7 @@ export function Bold({ children }: PropsWithChildren) {
 // (its realistic host — inside a heading, restate the size inline).
 export const boldStyle: BevyStyle = {
   fontWeight: "semibold",
-  fontSize: FontSizes.sm,
-  color: Colors.textColor100,
+  fontSize: FontSizes.body,
+  lineHeight: PROSE_LINE,
+  color: Colors.text,
 };

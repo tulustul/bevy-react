@@ -12,6 +12,7 @@ import {
 } from "@/components";
 import { Code } from "@/components/docs";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
+import { Colors } from "@/theme";
 
 const PAGE: ExplanationData = {
   title: "Gradients",
@@ -27,7 +28,7 @@ const PAGE: ExplanationData = {
       <Code lang="tsx">{`backgroundGradient: {
   type: "linear", // or "radial" | "conic"
   angle: 90,
-  stops: [{ color: "#f7768e" }, { color: "#7aa2f7" }],
+  stops: [{ color: "#ff6b8b" }, { color: "#5cd9ff" }],
 }`}</Code>
       <Paragraph>
         An array layers multiple gradients back-to-front, and gradients merge
@@ -72,7 +73,7 @@ function BackgroundGradientDemo() {
     backgroundGradient: {
       type: "linear", // or "radial" | "conic"
       angle: 90,
-      stops: [{ color: "#f7768e" }, { color: "#7aa2f7" }],
+      stops: [{ color: "#ff6b8b" }, { color: "#5cd9ff" }],
     },
   }}
 />`}</Code>
@@ -91,16 +92,16 @@ function BackgroundGradientCard() {
           backgroundGradient: {
             type: "linear",
             angle: 90,
-            stops: [{ color: "#f7768e" }, { color: "#7aa2f7" }],
+            stops: [{ color: "#ff6b8b" }, { color: "#5cd9ff" }],
           },
         }}
       />
       <Box
         style={{
-          backgroundColor: undefined,
+          backgroundColor: Colors.transparent,
           backgroundGradient: {
             type: "radial",
-            stops: [{ color: "#e0af68" }, { color: "#1a1b26" }],
+            stops: [{ color: "#ffc857" }, { color: "#111218" }],
           },
         }}
       />
@@ -109,10 +110,10 @@ function BackgroundGradientCard() {
           backgroundGradient: {
             type: "conic",
             stops: [
-              { color: "#f7768e" },
-              { color: "#9ece6a" },
-              { color: "#7aa2f7" },
-              { color: "#f7768e" },
+              { color: "#ff6b8b" },
+              { color: "#5ee6a8" },
+              { color: "#5cd9ff" },
+              { color: "#ff6b8b" },
             ],
           },
         }}
@@ -135,14 +136,14 @@ function BorderGradientDemo() {
           <Code lang="tsx">{`<node
   style={{
     border: 6,
-    backgroundColor: "#1a1b26",
+    backgroundColor: "#111218",
     borderGradient: {
       type: "conic",
       stops: [
-        { color: "#f7768e" },
-        { color: "#7aa2f7" },
-        { color: "#9ece6a" },
-        { color: "#f7768e" },
+        { color: "#ff6b8b" },
+        { color: "#5cd9ff" },
+        { color: "#5ee6a8" },
+        { color: "#ff6b8b" },
       ],
     },
   }}
@@ -160,14 +161,14 @@ function BorderGradientCard() {
       <Box
         style={{
           border: 6,
-          backgroundColor: "#1a1b26",
+          backgroundColor: "#111218",
           borderGradient: {
             type: "conic",
             stops: [
-              { color: "#f7768e" },
-              { color: "#7aa2f7" },
-              { color: "#9ece6a" },
-              { color: "#f7768e" },
+              { color: "#ff6b8b" },
+              { color: "#5cd9ff" },
+              { color: "#5ee6a8" },
+              { color: "#ff6b8b" },
             ],
           },
         }}
@@ -175,11 +176,11 @@ function BorderGradientCard() {
       <Box
         style={{
           border: 6,
-          backgroundColor: "#1a1b26",
+          backgroundColor: "#111218",
           borderGradient: {
             type: "linear",
             angle: 90,
-            stops: [{ color: "#e0af68" }, { color: "#bb9af7" }],
+            stops: [{ color: "#ffc857" }, { color: "#a88bff" }],
           },
         }}
       />
@@ -202,12 +203,12 @@ function LayeredGradientsDemo() {
   {
     type: "linear",
     angle: 45,
-    stops: [{ color: "#f7768e80" }, { color: "#00000000" }],
+    stops: [{ color: "#ff6b8b80" }, { color: "#00000000" }],
   },
   {
     type: "linear",
     angle: 135,
-    stops: [{ color: "#7aa2f780" }, { color: "#00000000" }],
+    stops: [{ color: "#5cd9ff80" }, { color: "#00000000" }],
   },
 ]`}</Code>
         </>
@@ -221,7 +222,7 @@ function LayeredGradientsCard() {
   return (
     <Stage>
       <Box
-        style={{ backgroundColor: "#1a1b26", backgroundGradient: layered }}
+        style={{ backgroundColor: "#111218", backgroundGradient: layered }}
         hoverStyle={{ backgroundGradient: hovered }}
       />
     </Stage>
@@ -232,18 +233,18 @@ const layered: BevyStyle["backgroundGradient"] = [
   {
     type: "linear",
     angle: 45,
-    stops: [{ color: "#f7768e80" }, { color: "#00000000" }],
+    stops: [{ color: "#ff6b8b80" }, { color: "#00000000" }],
   },
   {
     type: "linear",
     angle: 135,
-    stops: [{ color: "#7aa2f780" }, { color: "#00000000" }],
+    stops: [{ color: "#5cd9ff80" }, { color: "#00000000" }],
   },
 ];
 
 const hovered: BevyStyle["backgroundGradient"] = {
   type: "conic",
-  stops: [{ color: "#9ece6a" }, { color: "#7aa2f7" }, { color: "#9ece6a" }],
+  stops: [{ color: "#5ee6a8" }, { color: "#5cd9ff" }, { color: "#5ee6a8" }],
 };
 
 const TRANSITION_TSX = `<node
@@ -253,16 +254,16 @@ const TRANSITION_TSX = `<node
           type: "linear",
           angle: 200,
           stops: [
-            { color: "#9ece6a" },
-            { color: "#e0af68" },
+            { color: "#5ee6a8" },
+            { color: "#ffc857" },
           ],
         }
       : {
           type: "linear",
           angle: 20,
           stops: [
-            { color: "#f7768e" },
-            { color: "#7aa2f7" },
+            { color: "#ff6b8b" },
+            { color: "#5cd9ff" },
           ],
         },
     transition: {
@@ -299,13 +300,13 @@ function GradientTransitionDemo() {
 const coolGradient: BevyStyle["backgroundGradient"] = {
   type: "linear",
   angle: 20,
-  stops: [{ color: "#f7768e" }, { color: "#7aa2f7" }],
+  stops: [{ color: "#ff6b8b" }, { color: "#5cd9ff" }],
 };
 
 const warmGradient: BevyStyle["backgroundGradient"] = {
   type: "linear",
   angle: 200,
-  stops: [{ color: "#9ece6a" }, { color: "#e0af68" }],
+  stops: [{ color: "#5ee6a8" }, { color: "#ffc857" }],
 };
 
 function GradientTransitionCard() {
@@ -344,8 +345,8 @@ backgroundGradient: {
     seed: 0, // degrees
   },
   stops: [
-    { color: "#bb9af7" },
-    { color: "#7dcfff" },
+    { color: "#a88bff" },
+    { color: "#6ea8ff" },
   ],
 }`;
 
@@ -386,7 +387,7 @@ function AnimatedGradientCard() {
           backgroundGradient: {
             type: "linear",
             angle: { animated: angle, seed: 0 },
-            stops: [{ color: "#bb9af7" }, { color: "#7dcfff" }],
+            stops: [{ color: "#a88bff" }, { color: "#6ea8ff" }],
           },
         }}
       />

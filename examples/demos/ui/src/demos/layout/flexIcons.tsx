@@ -25,10 +25,10 @@ export type AlignItems =
 
 type IconProps = { selected: boolean; direction: FlexDirection };
 
-// Selected pills are filled with the accent, so the glyph flips to the dark
-// text color the text labels use there.
+// The glyph takes the Radio's label colors: cyan on the selected pill's wash,
+// body text on the rest.
 function tint(selected: boolean): string {
-  return selected ? Colors.textColor400 : Colors.textColor100;
+  return selected ? Colors.cyanBright : Colors.textBody;
 }
 
 const SIZE = 22;

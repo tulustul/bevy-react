@@ -4,7 +4,7 @@ import langTsx from "refractor/tsx";
 import langRust from "refractor/rust";
 import langBash from "refractor/bash";
 import { BevyStyle } from "bevy-react/jsx";
-import { Colors, FontSizes } from "@/theme";
+import { Fonts, FontSizes } from "@/theme";
 
 refractor.register(langTsx);
 refractor.register(langRust);
@@ -18,36 +18,53 @@ const REFRACTOR_LANG: Record<CodeLang, string> = {
   sh: "bash",
 };
 
-// Prism token type → span color, Tokyo-night-ish from the shared palette.
-// The innermost token wins (spans nest); anything unlisted inherits the
-// root's default code color.
+// Prism token type → span color: the two lights again — cyan for the
+// React-side structure (tags, calls), ember for keywords and macros — with
+// violet types, mint strings and amber literals between them. The innermost
+// token wins (spans nest); anything unlisted inherits the root's code color.
+const SYNTAX = {
+  text: "#d5d9e2",
+  keyword: "#ff9f6b",
+  literal: "#ffc98b",
+  string: "#9ee6b8",
+  comment: "#5f6677",
+  call: "#7fd6ff",
+  type: "#c3a8ff",
+  tag: "#5cd9ff",
+  attr: "#a9b8ff",
+  macro: "#ff8a4c",
+  lifetime: "#ff7a9a",
+  operator: "#9aa3b5",
+  punctuation: "#7f8697",
+};
+
 const TOKEN_COLORS: Record<string, string> = {
-  keyword: Colors.purple100,
-  boolean: Colors.orange100,
-  number: Colors.orange100,
-  constant: Colors.orange100,
-  string: Colors.green100,
-  char: Colors.green100,
-  "template-string": Colors.green100,
-  "attr-value": Colors.green100,
-  comment: Colors.textColor300,
-  doc: Colors.textColor300,
-  prolog: Colors.textColor300,
-  function: Colors.primary200,
-  "function-definition": Colors.primary200,
-  "class-name": Colors.teal100,
-  "type-definition": Colors.teal100,
-  builtin: Colors.teal100,
-  namespace: Colors.teal100,
-  tag: Colors.primary100,
-  "attr-name": Colors.yellow100,
-  attribute: Colors.yellow100,
-  macro: Colors.yellow100,
-  "macro-name": Colors.yellow100,
-  lifetime: Colors.red100,
-  operator: Colors.sky100,
-  punctuation: Colors.textColor200,
-  "punctuation-definition": Colors.textColor200,
+  keyword: SYNTAX.keyword,
+  boolean: SYNTAX.literal,
+  number: SYNTAX.literal,
+  constant: SYNTAX.literal,
+  string: SYNTAX.string,
+  char: SYNTAX.string,
+  "template-string": SYNTAX.string,
+  "attr-value": SYNTAX.string,
+  comment: SYNTAX.comment,
+  doc: SYNTAX.comment,
+  prolog: SYNTAX.comment,
+  function: SYNTAX.call,
+  "function-definition": SYNTAX.call,
+  "class-name": SYNTAX.type,
+  "type-definition": SYNTAX.type,
+  builtin: SYNTAX.type,
+  namespace: SYNTAX.type,
+  tag: SYNTAX.tag,
+  "attr-name": SYNTAX.attr,
+  attribute: SYNTAX.attr,
+  macro: SYNTAX.macro,
+  "macro-name": SYNTAX.macro,
+  lifetime: SYNTAX.lifetime,
+  operator: SYNTAX.operator,
+  punctuation: SYNTAX.punctuation,
+  "punctuation-definition": SYNTAX.punctuation,
 };
 
 type HastNode =
@@ -109,12 +126,12 @@ export function HighlightedCode({
 }
 
 const spanFontStyle: BevyStyle = {
-  fontFamily: "Noto Sans Mono",
-  fontSize: FontSizes.xs,
+  fontFamily: Fonts.mono,
+  fontSize: FontSizes.code,
 };
 
 const codeTextStyle: BevyStyle = {
   ...spanFontStyle,
-  color: Colors.textColor100,
-  lineHeight: 1.5,
+  color: SYNTAX.text,
+  lineHeight: 1.6,
 };

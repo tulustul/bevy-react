@@ -6,10 +6,7 @@ type IconProps = { size?: number; color?: string };
 // (they render as tofu), so nothing here rides on a text glyph.
 
 /** Three bars — the compact shell's "open the nav drawer" button. */
-export function MenuIcon({
-  size = 24,
-  color = Colors.textColor100,
-}: IconProps) {
+export function MenuIcon({ size = 24, color = Colors.text }: IconProps) {
   return (
     <svg viewBox="0 0 24 24" style={{ width: size, height: size }}>
       <rect x={3} y={5} width={18} height={2} rx={1} fill={color} />
@@ -20,10 +17,7 @@ export function MenuIcon({
 }
 
 /** A cross — the drawer's close button. */
-export function CloseIcon({
-  size = 24,
-  color = Colors.textColor100,
-}: IconProps) {
+export function CloseIcon({ size = 24, color = Colors.text }: IconProps) {
   return (
     <svg viewBox="0 0 24 24" style={{ width: size, height: size }}>
       <line
@@ -51,16 +45,46 @@ export function CloseIcon({
 /** A left-pointing chevron — the home page's "back to the wall" control. The
  * font has no arrow glyph (it renders as tofu), so every arrow in this app is
  * drawn. */
-export function ChevronLeftIcon({
-  size = 16,
-  color = Colors.textColor100,
-}: IconProps) {
+export function ChevronLeftIcon({ size = 16, color = Colors.text }: IconProps) {
   return (
     <svg viewBox="0 0 24 24" style={{ width: size, height: size }}>
       <path
         d="M15 5 L8 12 L15 19"
         stroke={color}
         strokeWidth={2.4}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        fill="none"
+      />
+    </svg>
+  );
+}
+
+/** A downward chevron — the nav's section toggle and the docs toggle; rotate
+ * it (`transform: { rotate }`) to point elsewhere. */
+export function ChevronDownIcon({ size = 16, color = Colors.text }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" style={{ width: size, height: size }}>
+      <path
+        d="M6 9 L12 15 L18 9"
+        stroke={color}
+        strokeWidth={2.2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        fill="none"
+      />
+    </svg>
+  );
+}
+
+/** A check mark — the checkbox's tick. */
+export function CheckIcon({ size = 16, color = Colors.ink }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" style={{ width: size, height: size }}>
+      <path
+        d="M5 12.5 L10 17.5 L19 7.5"
+        stroke={color}
+        strokeWidth={3}
         strokeLinecap="round"
         strokeLinejoin="round"
         fill="none"

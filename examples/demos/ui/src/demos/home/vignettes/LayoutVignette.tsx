@@ -18,9 +18,9 @@ type Align = "flexStart" | "flexEnd" | "center" | "stretch";
 type Arrangement = { direction: Direction; align: Align };
 
 const ITEMS = [
-  { id: "a", color: Colors.sky100 },
-  { id: "b", color: Colors.teal100 },
-  { id: "c", color: Colors.amber100 },
+  { id: "a", color: Colors.sky },
+  { id: "b", color: Colors.mint },
+  { id: "c", color: Colors.amber },
 ] as const;
 
 const FLIP_MS = 520;

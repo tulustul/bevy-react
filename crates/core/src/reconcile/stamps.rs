@@ -357,7 +357,7 @@ pub(crate) fn stamp_common(
 }
 
 /// The properties a node's hover/press/focus variants set.
-fn variant_keys(props: &Props) -> crate::style::StyleDirty {
+pub(super) fn variant_keys(props: &Props) -> crate::style::StyleDirty {
     [&props.hover_style, &props.press_style, &props.focus_style]
         .into_iter()
         .flatten()

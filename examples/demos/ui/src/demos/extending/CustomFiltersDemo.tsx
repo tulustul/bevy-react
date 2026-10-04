@@ -13,12 +13,12 @@ import {
   withSequence,
   withTiming,
 } from "bevy-react";
-import { BevyStyle } from "bevy-react/jsx";
 import {
   ControlColumn,
   DemoRow,
   Example,
   ParamControls,
+  ProductCard,
   Slider,
   slider,
   useParams,
@@ -131,13 +131,13 @@ function RippleCard() {
   const [params, controls] = useParams(RIPPLE);
   return (
     <ControlColumn>
-      <node style={{ ...card, filter: { name: "ripple", params } }}>
+      <ProductCard style={{ filter: { name: "ripple", params } }}>
         <image
           src="images/parrot.png"
           style={{ width: 130, borderRadius: 8 }}
         />
         <CardTitle>Making waves</CardTitle>
-      </node>
+      </ProductCard>
       <ParamControls {...controls} />
     </ControlColumn>
   );
@@ -185,18 +185,15 @@ function GlitchCard() {
   const [intensity, setIntensity] = useState(0.5);
   return (
     <ControlColumn>
-      <node
-        style={{
-          ...card,
-          filter: { name: "glitch", params: { intensity } },
-        }}
+      <ProductCard
+        style={{ filter: { name: "glitch", params: { intensity } } }}
       >
         <image
           src="images/parrot.png"
           style={{ width: 130, borderRadius: 8 }}
         />
         <CardTitle>SIGNAL LOST</CardTitle>
-      </node>
+      </ProductCard>
       <Slider
         value={intensity}
         min={0}
@@ -243,18 +240,15 @@ function DissolveCard() {
   const [progress, setProgress] = useState(0.4);
   return (
     <ControlColumn>
-      <node
-        style={{
-          ...card,
-          filter: { name: "dissolve", params: { progress } },
-        }}
+      <ProductCard
+        style={{ filter: { name: "dissolve", params: { progress } } }}
       >
         <image
           src="images/parrot.png"
           style={{ width: 130, borderRadius: 8 }}
         />
         <CardTitle>Burning!!!</CardTitle>
-      </node>
+      </ProductCard>
       <Slider
         value={progress}
         min={0}
@@ -317,9 +311,8 @@ function BurnCard() {
   }, [progress]);
   return (
     <ControlColumn>
-      <node
+      <ProductCard
         style={{
-          ...card,
           filter: {
             name: "dissolve",
             params: { progress: { animated: progress } },
@@ -331,7 +324,7 @@ function BurnCard() {
           style={{ width: 130, borderRadius: 8 }}
         />
         <CardTitle>Burning!!!</CardTitle>
-      </node>
+      </ProductCard>
     </ControlColumn>
   );
 }
@@ -434,15 +427,15 @@ function CyberpunkKeybinding({
       }}
       hoverStyle={{
         transform: { scale: 1.1 },
-        backgroundColor: Colors.surface100,
+        backgroundColor: Colors.hover,
       }}
     >
-      <text style={{ color: Colors.red100 }}>{label}</text>
+      <text style={{ color: Colors.rose }}>{label}</text>
       <text
         style={{
-          color: Colors.sky100,
+          color: Colors.cyan,
           border: 2,
-          borderColor: Colors.sky100,
+          borderColor: Colors.cyan,
           borderRadius: 5,
           padding: 5,
           width: 30,
@@ -457,12 +450,3 @@ function CyberpunkKeybinding({
     </node>
   );
 }
-
-const card: BevyStyle = {
-  flexDirection: "column",
-  alignItems: "center",
-  gap: 8,
-  padding: 14,
-  borderRadius: 12,
-  backgroundColor: Colors.surface300,
-};

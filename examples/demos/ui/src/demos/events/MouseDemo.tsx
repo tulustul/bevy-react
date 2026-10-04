@@ -9,12 +9,14 @@ import {
 import { BevyStyle, PointerEventData, WheelEventData } from "bevy-react/jsx";
 import { DemoRow, Example, Stage } from "@/components";
 import { Code } from "@/components/docs";
-import { Colors, FontSizes } from "@/theme";
+import { Colors, Fonts, FontSizes } from "@/theme";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
 
 const STAGE_W = 240;
 const STAGE_H = 240;
 const BOX = 100;
+/** The event log's width: one line of the mono log fits unwrapped. */
+const LOG_W = 420;
 
 const clamp = (v: number, lo: number, hi: number) =>
   Math.max(lo, Math.min(hi, v));
@@ -172,7 +174,7 @@ function DragCard() {
             positionType: "absolute",
             left: pos.left,
             top: pos.top,
-            backgroundColor: pressed ? Colors.purple100 : Colors.primary100,
+            backgroundColor: pressed ? Colors.violet : Colors.cyan,
             border: 2,
           }}
           onClick={() => record("click")}
@@ -186,23 +188,22 @@ function DragCard() {
         </node>
       </Stage>
 
-      <text
-        style={{
-          color: Colors.primary100,
-          fontSize: FontSizes.sm,
-          fontWeight: "bold",
-        }}
-      >
-        {last}
-      </text>
+      <text style={lastStyle}>{last}</text>
 
-      <node style={logStyle}>
-        {log.map((l) => (
-          <text key={l.id} style={logLineStyle}>
+      {/* Newest first; the latest line reads brightest. */}
+      <Stage style={logStyle}>
+        {log.map((l, i) => (
+          <text
+            key={l.id}
+            style={{
+              ...logLineStyle,
+              color: i === 0 ? Colors.textBody : Colors.textDim,
+            }}
+          >
             {l.text}
           </text>
         ))}
-      </node>
+      </Stage>
     </>
   );
 }
@@ -307,7 +308,7 @@ function WheelCard() {
   const side = Math.round(BOX * zoom);
 
   return (
-    <node
+    <Stage
       style={{
         ...stageStyle,
         justifyContent: "center",
@@ -321,7 +322,7 @@ function WheelCard() {
           borderRadius: 12,
           justifyContent: "center",
           alignItems: "center",
-          backgroundColor: Colors.primary100,
+          backgroundColor: Colors.cyan,
           flexDirection: "column",
           padding: 10,
         }}
@@ -334,16 +335,15 @@ function WheelCard() {
           style={{ fontSize: FontSizes.sm, textAlign: "center" }}
         >{`${zoom.toFixed(2)}×`}</BoxLabel>
       </node>
-    </node>
+    </Stage>
   );
 }
 
+// On top of the `Stage` plate (fill, hairline rim, corner).
 const stageStyle: BevyStyle = {
   width: STAGE_W,
   height: STAGE_H,
   positionType: "relative",
-  border: 1,
-  borderColor: Colors.surface400,
   overflowX: "hidden",
   overflowY: "hidden",
   // absolutely-positioned subjects measure from the box edge
@@ -356,18 +356,30 @@ const boxStyle: BevyStyle = {
   borderRadius: 12,
   justifyContent: "center",
   alignItems: "center",
-  backgroundColor: Colors.amber100,
+  backgroundColor: Colors.amber,
 };
 
+const lastStyle: BevyStyle = {
+  fontFamily: Fonts.mono,
+  fontSize: FontSizes.xs,
+  color: Colors.cyan,
+};
+
+// Room for the six lines; a narrower screen clips them (they never wrap).
 const logStyle: BevyStyle = {
   flexDirection: "column",
   alignItems: "start",
   gap: 2,
-  width: STAGE_W,
-  height: 110,
+  width: LOG_W,
+  maxWidth: "100%",
+  height: 124,
+  padding: { horizontal: 12, vertical: 10 },
+  overflowX: "hidden",
+  overflowY: "hidden",
 };
 
 const logLineStyle: BevyStyle = {
-  color: Colors.textColor300,
+  fontFamily: Fonts.mono,
   fontSize: FontSizes.xs,
+  lineBreak: "noWrap",
 };

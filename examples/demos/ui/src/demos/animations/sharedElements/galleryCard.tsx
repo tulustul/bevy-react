@@ -307,10 +307,17 @@ const detail: BevyStyle = {
   gap: 12,
 };
 
+// The fade promotes this node to a layer, and a layer clips its content to
+// its border box: the padding grows the box to hold the Back button's glow,
+// the matching negative margin keeps the layout where it was.
+const GLOW_ROOM = 20;
+
 const detailChrome: BevyStyle = {
   flexDirection: "column",
   alignItems: "center",
   gap: 12,
+  padding: { horizontal: GLOW_ROOM, bottom: GLOW_ROOM },
+  margin: { horizontal: -GLOW_ROOM, bottom: -GLOW_ROOM },
 };
 
 const hero: BevyStyle = {

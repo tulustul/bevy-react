@@ -105,7 +105,7 @@ function AspectRatioCard() {
           height: 50,
           aspectRatio: ar,
           borderRadius: 10,
-          backgroundColor: Colors.red100,
+          backgroundColor: Colors.rose,
         }}
       />
       <Slider
@@ -148,7 +148,7 @@ function MaxWidthCard() {
             ...bar,
             width: "100%",
             maxWidth: max,
-            backgroundColor: Colors.yellow100,
+            backgroundColor: Colors.amber,
           }}
         />
       </Stage>
@@ -171,5 +171,5 @@ const track: BevyStyle = {
 const bar: BevyStyle = {
   height: 26,
   borderRadius: 6,
-  backgroundColor: Colors.primary100,
+  backgroundColor: Colors.cyan,
 };

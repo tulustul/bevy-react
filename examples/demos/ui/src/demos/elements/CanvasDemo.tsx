@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Bold, InlineCode, Paragraph } from "@/components/typography";
+import { Bold, Caption, InlineCode, Paragraph } from "@/components/typography";
 import type {
   BevyCanvasElement,
   CanvasContext,
   RetainedCanvasContext,
 } from "bevy-react";
 import { BevyStyle } from "bevy-react/jsx";
-import { Button, DemoRow, Example } from "@/components";
+import { DemoRow, Example, SecondaryButton } from "@/components";
 import { Code } from "@/components/docs";
 import { Colors } from "@/theme";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
@@ -57,12 +57,13 @@ const PERIOD_MS = 1500; // auto-shuffle cadence
 const DURATION_MS = 500; // tween length
 const FRAME_MS = 16; // ~60fps; the runtime has no Date.now, so we accumulate this
 
+// One ink per stroke, cycling through the demo-subject hues.
 const PALETTE = [
-  Colors.primary100,
-  Colors.green100,
-  Colors.red100,
-  Colors.yellow100,
-  Colors.purple100,
+  Colors.cyan,
+  Colors.mint,
+  Colors.rose,
+  Colors.amber,
+  Colors.violet,
 ];
 
 type Pt = { x: number; y: number };
@@ -107,7 +108,7 @@ function GraphDemo() {
           </Paragraph>
           <Code lang="tsx">{`<canvas
   draw={(ctx) => {
-    ctx.strokeStyle = "#7aa2f7";
+    ctx.strokeStyle = "#5cd9ff";
     ctx.bezierCurveTo(/* … */);
     ctx.stroke();
   }}
@@ -172,13 +173,13 @@ function GraphCard() {
   const draw = (ctx: CanvasContext) => {
     const w = Math.min(window.width - 40, W);
 
-    // Background panel.
-    ctx.fillStyle = Colors.surface100;
+    // Background panel: the plate the chart is drawn on.
+    ctx.fillStyle = Colors.card;
     ctx.rect(0, 0, w, H);
     ctx.fill();
 
     // Horizontal gridlines.
-    ctx.strokeStyle = Colors.surface400;
+    ctx.strokeStyle = Colors.line;
     ctx.lineWidth = 1;
     for (let i = 0; i <= 4; i++) {
       const y = PAD + ((H - 2 * PAD) * i) / 4;
@@ -194,8 +195,10 @@ function GraphCard() {
       y: H - PAD - v * (H - 2 * PAD),
     }));
 
-    // Translucent area under the smooth curve.
-    ctx.fillStyle = Colors.primaryOverlay;
+    // Translucent area under the smooth curve: cyan at 20%. The canvas blends
+    // in sRGB like the web (not in bevy's linear light), so the alpha means
+    // what it says — and the gridlines show through.
+    ctx.fillStyle = Colors.cyan + "33";
     smoothPath(ctx, pts);
     ctx.lineTo(pts[pts.length - 1].x, H - PAD);
     ctx.lineTo(pts[0].x, H - PAD);
@@ -203,17 +206,19 @@ function GraphCard() {
     ctx.fill();
 
     // The smooth curve itself.
-    ctx.strokeStyle = Colors.primary100;
+    ctx.strokeStyle = Colors.cyan;
     ctx.lineWidth = 3;
     smoothPath(ctx, pts);
     ctx.stroke();
 
-    // Point markers.
-    ctx.fillStyle = Colors.purple100;
+    // Point markers: cyan rings, hollowed out of the plate.
+    ctx.fillStyle = Colors.card;
+    ctx.lineWidth = 2;
     for (const p of pts) {
       ctx.beginPath();
       ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
       ctx.fill();
+      ctx.stroke();
     }
   };
 
@@ -264,7 +269,7 @@ function PaintCard() {
 
   const paintBackground = useCallback((el: BevyCanvasElement) => {
     const ctx = el.getContext();
-    ctx.fillStyle = Colors.surface100;
+    ctx.fillStyle = Colors.card;
     ctx.beginPath();
     ctx.rect(0, 0, el.width, el.height);
     ctx.fill();
@@ -316,7 +321,7 @@ function PaintCard() {
 
   return (
     <node style={columnStyle}>
-      <text>Use mouse to draw on the canvas</text>
+      <Caption>Use mouse to draw on the canvas</Caption>
       <canvas
         ref={ref}
         style={canvasStyle}
@@ -325,7 +330,7 @@ function PaintCard() {
         onPointerMove={drawFromMouse}
         onPointerUp={() => (last.current = null)}
       />
-      <Button onClick={clear}>Clear</Button>
+      <SecondaryButton onClick={clear}>Clear</SecondaryButton>
     </node>
   );
 }
@@ -370,5 +375,5 @@ const canvasStyle: BevyStyle = {
   maxWidth: "100%",
   borderRadius: 12,
   border: 1,
-  borderColor: Colors.surface400,
+  borderColor: Colors.line,
 };

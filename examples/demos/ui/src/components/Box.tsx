@@ -21,7 +21,7 @@ export const box: BevyStyle = {
   width: 72,
   height: 72,
   borderRadius: 10,
-  backgroundColor: Colors.primary100,
+  backgroundColor: Colors.cyan,
   justifyContent: "center",
   alignItems: "center",
 };

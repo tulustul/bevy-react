@@ -21,6 +21,6 @@ export function Caption({ children, style, mono }: Props) {
 }
 
 export const caption: BevyStyle = {
-  color: Colors.textColor200,
+  color: Colors.textDim,
   fontSize: FontSizes.xs,
 };

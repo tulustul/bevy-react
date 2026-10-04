@@ -35,7 +35,7 @@ const PAGE: ExplanationData = {
         with the element's laid-out size while staying pixel-crisp.
       </Paragraph>
       <Code lang="tsx">{`<svg viewBox="0 0 40 40" style={{ width: 56 }}>
-  <circle cx={20} cy={20} r={13} fill="#7dcfff" />
+  <circle cx={20} cy={20} r={13} fill="#6ea8ff" />
 </svg>`}</Code>
       <List>
         <ListItem>
@@ -88,7 +88,7 @@ const PRIMS_TSX = `// One cell per intrinsic, each
 <rect
   x={6} y={10}
   width={28} height={20}
-  rx={4} fill={blue}
+  rx={4} fill={cyan}
 />
 <circle cx={20} cy={20} r={13} />
 <ellipse
@@ -104,7 +104,7 @@ const PRIMS_TSX = `// One cell per intrinsic, each
 <polyline
   points={[6,28, 16,12,
            24,22, 34,8]}
-  fill="none" stroke={green}
+  fill="none" stroke={mint}
   strokeWidth={3}
 />
 <polygon points={star} />
@@ -160,20 +160,13 @@ function PrimitivesCard() {
     <node style={gridStyle}>
       <node style={gridRowStyle}>
         <Prim label="rect">
-          <rect
-            x={6}
-            y={10}
-            width={28}
-            height={20}
-            rx={4}
-            fill={Colors.primary100}
-          />
+          <rect x={6} y={10} width={28} height={20} rx={4} fill={Colors.cyan} />
         </Prim>
         <Prim label="circle">
-          <circle cx={20} cy={20} r={13} fill={Colors.sky100} />
+          <circle cx={20} cy={20} r={13} fill={Colors.sky} />
         </Prim>
         <Prim label="ellipse">
-          <ellipse cx={20} cy={20} rx={15} ry={9} fill={Colors.teal100} />
+          <ellipse cx={20} cy={20} rx={15} ry={9} fill={Colors.mint} />
         </Prim>
         <Prim label="line">
           <line
@@ -181,7 +174,7 @@ function PrimitivesCard() {
             y1={30}
             x2={34}
             y2={10}
-            stroke={Colors.amber100}
+            stroke={Colors.amber}
             strokeWidth={3}
             strokeLinecap="round"
           />
@@ -192,17 +185,17 @@ function PrimitivesCard() {
           <polyline
             points={[6, 28, 16, 12, 24, 22, 34, 8]}
             fill="none"
-            stroke={Colors.green100}
+            stroke={Colors.mint}
             strokeWidth={3}
             strokeLinejoin="round"
             strokeLinecap="round"
           />
         </Prim>
         <Prim label="polygon">
-          <polygon points={STAR_POINTS} fill={Colors.purple100} />
+          <polygon points={STAR_POINTS} fill={Colors.violet} />
         </Prim>
         <Prim label="path">
-          <path d={HEART_D} fill={Colors.red100} />
+          <path d={HEART_D} fill={Colors.rose} />
         </Prim>
         <Prim label="g">
           <g transform="translate(20 22) rotate(-14)">
@@ -212,7 +205,7 @@ function PrimitivesCard() {
               width={12}
               height={18}
               rx={3}
-              fill={Colors.orange100}
+              fill={Colors.ember}
             />
             <rect
               x={1}
@@ -220,7 +213,7 @@ function PrimitivesCard() {
               width={12}
               height={18}
               rx={3}
-              fill={Colors.primary100}
+              fill={Colors.cyan}
             />
           </g>
         </Prim>
@@ -232,12 +225,18 @@ function PrimitivesCard() {
 // --- JSX shapes card: a static bar chart drawn from shape children ---------
 
 const BARS = [
-  { v: 34, fill: Colors.primary100 },
-  { v: 58, fill: Colors.sky100 },
-  { v: 42, fill: Colors.teal100 },
-  { v: 76, fill: Colors.purple100 },
-  { v: 62, fill: Colors.green100 },
+  { v: 34, fill: Colors.mint },
+  { v: 58, fill: Colors.cyan },
+  { v: 42, fill: Colors.sky },
+  { v: 76, fill: Colors.violet },
+  { v: 62, fill: Colors.rose },
 ];
+
+// The area's wash: cyan at 20%, pre-mixed opaque over the stage. A
+// translucent fill would land far brighter than on the web (bevy composites
+// the drawing's texture in linear light), so it is painted first, under the
+// gridlines.
+const AREA_FILL = "#1b3540";
 
 // Trend markers ride 8 user units above each bar top, at the bar's center.
 const TREND = BARS.flatMap(({ v }, i) => [i * 36 + 12, 100 - v - 8]);
@@ -260,7 +259,7 @@ const CHART_TSX = `<svg
   <g transform="translate(28 14)">
     <path
       d="M 12 58 L 48 34 (etc.) Z"
-      fill="#7aa2f71a"
+      fill="#1b3540"
     />
     {bars.map(({ v, fill }, i) => (
       <rect
@@ -276,7 +275,7 @@ const CHART_TSX = `<svg
     <polyline
       points={trend}
       fill="none"
-      stroke="#f9e2af"
+      stroke="#ffc857"
       strokeWidth={2}
       strokeLinejoin="round"
       strokeLinecap="round"
@@ -287,7 +286,7 @@ const CHART_TSX = `<svg
         cx={i * 36 + 12}
         cy={100 - v - 8}
         r={3.5}
-        fill="#f9e2af"
+        fill="#ffc857"
       />
     ))}
   </g>
@@ -322,6 +321,7 @@ function ShapesChartCard() {
     <node style={rowStyle}>
       <svg viewBox="0 0 220 130" style={{ width: 264, height: 156 }}>
         <g transform="translate(28 14)">
+          <path d={AREA_D} fill={AREA_FILL} />
           {[0, 33, 66].map((y) => (
             <line
               key={y}
@@ -329,7 +329,7 @@ function ShapesChartCard() {
               y1={y}
               x2={180}
               y2={y}
-              stroke={Colors.surface400}
+              stroke={Colors.line}
               strokeWidth={1}
             />
           ))}
@@ -338,10 +338,9 @@ function ShapesChartCard() {
             y1={100}
             x2={180}
             y2={100}
-            stroke={Colors.surface500}
+            stroke={Colors.lineStrong}
             strokeWidth={1.5}
           />
-          <path d={AREA_D} fill={Colors.primary100 + "1a"} />
           {BARS.map(({ v, fill }, i) => (
             <rect
               key={i}
@@ -356,7 +355,7 @@ function ShapesChartCard() {
           <polyline
             points={TREND}
             fill="none"
-            stroke={Colors.amber100}
+            stroke={Colors.amber}
             strokeWidth={2}
             strokeLinejoin="round"
             strokeLinecap="round"
@@ -367,8 +366,8 @@ function ShapesChartCard() {
               cx={i * 36 + 12}
               cy={100 - v - 8}
               r={3.5}
-              fill={Colors.amber100}
-              stroke={Colors.surface200}
+              fill={Colors.amber}
+              stroke={Colors.card}
               strokeWidth={1.5}
             />
           ))}
@@ -391,7 +390,7 @@ const [at, setAt] = useState("");
     width={196}
     height={116}
     rx={10}
-    fill="#2a2a3c"
+    fill="#111218"
     onPointerDown={(e) =>
       // e.x / e.y are user-space
       // (viewBox) coordinates
@@ -402,7 +401,7 @@ const [at, setAt] = useState("");
     cx={100}
     cy={60}
     r={34}
-    fill={hot ? amber : blue}
+    fill={hot ? cyanBright : cyan}
     onClick={() =>
       setN((n) => n + 1)
     }
@@ -453,9 +452,9 @@ function InteractiveShapesCard() {
           width={196}
           height={116}
           rx={10}
-          fill={Colors.surface300}
-          stroke={Colors.surface500}
-          strokeWidth={1.5}
+          fill={Colors.card}
+          stroke={Colors.line}
+          strokeWidth={1}
           onPointerDown={(e) =>
             setDownAt(`${Math.round(e.x)}, ${Math.round(e.y)}`)
           }
@@ -464,16 +463,16 @@ function InteractiveShapesCard() {
           cx={100}
           cy={60}
           r={34}
-          fill={hovered ? Colors.amber100 : Colors.primary100}
-          stroke={Colors.surface200}
+          fill={hovered ? Colors.cyanBright : Colors.cyan}
+          stroke={Colors.card}
           strokeWidth={2}
           onClick={() => setClicks((c) => c + 1)}
           onPointerEnter={() => setHovered(true)}
           onPointerLeave={() => setHovered(false)}
         />
       </svg>
-      <Caption>{`clicks: ${clicks}`}</Caption>
-      <Caption>
+      <Caption mono>{`clicks: ${clicks}`}</Caption>
+      <Caption mono>
         {downAt === null
           ? "press the pad to read coords"
           : `pad pressed at ${downAt}`}
@@ -553,9 +552,7 @@ function SharedValueShapesCard() {
           cx={60}
           cy={60}
           r={{ animated: pulse, seed: PULSE_MIN }}
-          fill={Colors.amber100 + "cc"}
-          stroke={Colors.amber100}
-          strokeWidth={2}
+          fill={Colors.amber}
         />
       </svg>
     </node>
@@ -567,7 +564,7 @@ function SharedValueShapesCard() {
 // Two datasets the spring bars retarget between every second.
 const BARS_A = [34, 66, 46];
 const BARS_B = [72, 38, 58];
-const BAR_FILLS = [Colors.primary100, Colors.teal100, Colors.purple100];
+const BAR_FILLS = [Colors.cyan, Colors.mint, Colors.violet];
 
 const TRANSITION_TSX = `// Every second the data
 // retargets; springs ease the
@@ -638,7 +635,7 @@ function TransitionShapesCard() {
           y1={100}
           x2={122}
           y2={100}
-          stroke={Colors.surface500}
+          stroke={Colors.lineStrong}
           strokeWidth={1.5}
         />
         {values.map((v, i) => (

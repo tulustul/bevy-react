@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 
 import { ParamControls, Slider, useParams } from "@/components";
-import { Colors, FontSizes } from "@/theme";
+import { Caption } from "@/components/typography";
+import { Colors } from "@/theme";
 import type { FilterEntry } from "./params";
 import { TILE, TileContent, VARIANT_COUNT, nextVariant } from "./variants";
 
@@ -87,15 +88,9 @@ export function MorphTile({
       >
         <TileContent variant={variant} />
       </node>
-      <text
-        style={{
-          color: Colors.textColor200,
-          fontSize: FontSizes.sm,
-          textAlign: "center",
-        }}
-      >
+      <Caption mono style={{ color: Colors.textBody, textAlign: "center" }}>
         {entry.label}
-      </text>
+      </Caption>
       {showParams && (
         <Slider
           value={duration}

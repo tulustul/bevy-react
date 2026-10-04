@@ -1,9 +1,9 @@
 import { useState } from "react";
-import { InlineCode, Paragraph } from "@/components/typography";
+import { InlineCode, PanelTitle, Paragraph } from "@/components/typography";
 import { BevyStyle } from "bevy-react/jsx";
 import { Button, Example } from "@/components";
 import { Code } from "@/components/docs";
-import { Colors } from "@/theme";
+import { Colors, FontSizes } from "@/theme";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
 
 // The `<root>` host element: a **detached, screen-space top-level tree** — the
@@ -87,14 +87,16 @@ function DetachedModalCard() {
       {open && (
         <root name="modal" style={backdropStyle}>
           <node style={dialogStyle}>
-            <text style={titleStyle}>Detached modal</text>
-            <text style={bodyStyle}>
-              This dialog lives in a {"<root>"}: a detached, screen-space tree
-              that fills the window and floats above everything — the left nav,
-              the demo card, all of it — even though the component sits inside
-              the card.
-            </text>
-            <Button onClick={() => setOpen(false)}>Close</Button>
+            <PanelTitle>Detached modal</PanelTitle>
+            <Paragraph>
+              This dialog lives in a <InlineCode>{"<root>"}</InlineCode>: a
+              detached, screen-space tree that fills the window and floats above
+              everything — the left nav, the demo card, all of it — even though
+              the component sits inside the card.
+            </Paragraph>
+            <node style={actionsStyle}>
+              <Button onClick={() => setOpen(false)}>Close</Button>
+            </node>
           </node>
         </root>
       )}
@@ -103,8 +105,8 @@ function DetachedModalCard() {
 }
 
 const hintStyle: BevyStyle = {
-  color: Colors.textColor200,
-  fontSize: 14,
+  color: Colors.textBody,
+  fontSize: FontSizes.sm,
 };
 
 // The `<root>` already fills the window (a centered column by default); the
@@ -115,24 +117,25 @@ const backdropStyle: BevyStyle = {
   backgroundColor: "#000000aa",
 };
 
+// The gallery's own modal look: a graphite panel with a strong hairline rim,
+// lifted off the dimmed page by a soft shadow.
 const dialogStyle: BevyStyle = {
   flexDirection: "column",
   alignItems: "flexStart",
   gap: 12,
   maxWidth: 420,
-  padding: 20,
-  backgroundColor: Colors.surface200,
+  padding: 24,
+  backgroundColor: Colors.card,
   border: 1,
-  borderColor: Colors.surface400,
-  borderRadius: 12,
+  borderColor: Colors.lineStrong,
+  borderRadius: 16,
+  boxShadow: { yOffset: 24, blurRadius: 64, color: "#000000c0" },
 };
 
-const titleStyle: BevyStyle = {
-  color: Colors.textColor100,
-  fontSize: 20,
-};
-
-const bodyStyle: BevyStyle = {
-  color: Colors.textColor200,
-  fontSize: 14,
+// The dialog's action, at its bottom-right corner.
+const actionsStyle: BevyStyle = {
+  alignSelf: "stretch",
+  flexDirection: "row",
+  justifyContent: "flexEnd",
+  margin: { top: 4 },
 };

@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
-import { InlineCode, Paragraph } from "@/components/typography";
+import { Caption, InlineCode, Paragraph } from "@/components/typography";
 import { bevy } from "@/bevy";
 import type { BallState } from "@/bevy";
-import { Example } from "@/components";
+import { Example, Stage } from "@/components";
 import { CodeTabs } from "@/components/docs";
-import { Colors, FontSizes } from "@/theme";
+import { BevyStyle } from "bevy-react/jsx";
+import { Colors, Fonts, FontSizes } from "@/theme";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
 
 const REQUEST_TSX = `// A unit request payload becomes a zero-arg proxy method;
@@ -142,38 +143,65 @@ function BallTelemetryCard() {
   }, []);
 
   return state ? (
-    <node style={{ flexDirection: "column", gap: 8, alignItems: "start" }}>
+    <Stage style={telemetryStyle}>
       <Row label="position" x={state.x} y={state.y} />
       <Row label="velocity" x={state.vx} y={state.vy} />
-    </node>
+    </Stage>
   ) : (
-    <text style={{ color: Colors.textColor300, fontSize: FontSizes.sm }}>
-      waiting for the ball...
+    <Caption>waiting for the ball...</Caption>
+  );
+}
+
+// Fixed-width columns in the mono face, so the digits don't jitter as the
+// signs flip (the pad's leading space parts the number from its axis).
+const fmt = (v: number) => v.toFixed(2).padStart(7);
+
+function Row({ label, x, y }: { label: string; x: number; y: number }) {
+  return (
+    <node style={rowStyle}>
+      <text style={labelStyle}>{label}</text>
+      <Value axis="x" value={x} />
+      <Value axis="y" value={y} />
+    </node>
+  );
+}
+
+// The numbers are Bevy's reply, so they carry the engine's ember; the axis
+// letter stays dim. Spans don't inherit, so the letter restates the face.
+function Value({ axis, value }: { axis: string; value: number }) {
+  return (
+    <text style={valueStyle}>
+      <text style={axisStyle}>{axis}</text>
+      {fmt(value)}
     </text>
   );
 }
 
-function Row({ label, x, y }: { label: string; x: number; y: number }) {
-  return (
-    <node style={{ flexDirection: "row", gap: 8 }}>
-      <text
-        style={{
-          color: Colors.textColor200,
-          fontSize: FontSizes.base,
-          width: 80,
-        }}
-      >
-        {label}
-      </text>
-      <text
-        style={{
-          color: Colors.primary100,
-          fontSize: FontSizes.base,
-          fontWeight: "bold",
-        }}
-      >
-        x {x.toFixed(2)}, y {y.toFixed(2)}
-      </text>
-    </node>
-  );
-}
+const telemetryStyle: BevyStyle = {
+  flexDirection: "column",
+  gap: 8,
+  padding: { horizontal: 20, vertical: 14 },
+};
+
+const rowStyle: BevyStyle = {
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 16,
+};
+
+const labelStyle: BevyStyle = {
+  width: 64,
+  fontSize: FontSizes.xs,
+  color: Colors.textDim,
+};
+
+const valueStyle: BevyStyle = {
+  fontFamily: Fonts.mono,
+  fontSize: FontSizes.base,
+  color: Colors.ember,
+};
+
+const axisStyle: BevyStyle = {
+  ...valueStyle,
+  color: Colors.textDim,
+};

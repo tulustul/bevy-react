@@ -6,11 +6,11 @@ import {
   useRef,
 } from "react";
 import { BevyStyle } from "bevy-react/jsx";
-import { FontSizes } from "@/theme";
+import { Colors, FontSizes } from "@/theme";
 import { useExplanationStore } from "@/explanationStore";
 
 import { SecondaryButton } from "./SecondaryButton";
-import { Card } from "./Card";
+import { Card, CARD_RADIUS } from "./Card";
 import { CardHeader } from "./CardHeader";
 
 export type ExampleProps = PropsWithChildren & {
@@ -27,6 +27,8 @@ export type ExampleProps = PropsWithChildren & {
   demo?: ComponentType;
 };
 
+/** One example: a title bar over a **stage** — the lit floor the live demo
+ *  stands on. As wide as its content needs (`DemoRow` centres the cards). */
 export function Example({
   children,
   style,
@@ -51,8 +53,8 @@ export function Example({
         // button only, so clicks anywhere else land on the live demo inside.
         <CardHeader
           title={title}
-          titleStyle={{ fontSize: FontSizes.xl }}
-          style={{ gap: 35, width: "100%" }}
+          titleStyle={titleStyle}
+          style={headerStyle}
           action={
             <SecondaryButton
               pinch={{ radius: 0.6 }}
@@ -67,19 +69,74 @@ export function Example({
           }
         />
       )}
-      {Demo !== undefined && <Demo />}
-      {children}
+      <ExampleStage rounded={title === undefined ? "all" : "bottom"}>
+        {Demo !== undefined && <Demo />}
+        {children}
+      </ExampleStage>
     </Card>
   );
 }
 
+type ExampleStageProps = PropsWithChildren & {
+  /** Which corners meet the enclosing card's rounded edge. */
+  rounded: "all" | "bottom";
+  style?: BevyStyle;
+};
+
+/** The floor a live demo stands on: a recessed panel lit softly from above.
+ *  Lays its content out centred in a column; `style` overrides. */
+export function ExampleStage({ rounded, style, children }: ExampleStageProps) {
+  const r = CARD_RADIUS - 1;
+  const radius =
+    rounded === "all" ? r : { top: 0, right: 0, bottom: r, left: r };
+  return (
+    <node style={{ ...stageStyle, borderRadius: radius, ...style }}>
+      {children}
+    </node>
+  );
+}
+
+const headerStyle: BevyStyle = {
+  alignItems: "center",
+  gap: 16,
+  padding: { left: 18, right: 10, vertical: 10 },
+  border: { bottom: 1 },
+  borderColor: Colors.line,
+};
+
+const titleStyle: BevyStyle = {
+  fontSize: FontSizes.base,
+};
+
+// Lit from above like an exhibit: a soft pool of light falls from the top.
+const stageStyle: BevyStyle = {
+  flexGrow: 1,
+  flexDirection: "column",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: 14,
+  minHeight: 150,
+  padding: 24,
+  backgroundColor: "#00000055",
+  backgroundGradient: {
+    type: "radial",
+    position: "top",
+    stops: [
+      { color: "#262e3f88", position: "0%", hint: 0.8 },
+      { color: "transparent", position: "100%" },
+    ],
+  },
+};
+
 const detailsButtonStyle: BevyStyle = {
   minWidth: 0,
   padding: { horizontal: 10, vertical: 4 },
-  borderRadius: 6,
+  borderRadius: 8,
   flexShrink: 0,
 };
 
 const detailsLabelStyle: BevyStyle = {
   fontSize: FontSizes.xs,
+  fontWeight: "medium",
+  color: Colors.textBody,
 };

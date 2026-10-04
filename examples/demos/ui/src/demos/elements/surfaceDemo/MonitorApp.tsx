@@ -71,10 +71,30 @@ export function MonitorApp() {
 }
 
 // The whole visible screen. Carries the screen background and scales/fades as one
-// during the reboot power-cycle.
+// during the reboot power-cycle. The wallpaper is the gallery's own studio: dark
+// graphite lit by React's cyan from the top-left and Bevy's ember from the
+// bottom-right (translucent on purpose — these are glows).
 const powerWrap: BevyStyle = {
   width: "100%",
   height: "100%",
   flexDirection: "column",
-  backgroundColor: Colors.surface200,
+  backgroundColor: Colors.stage,
+  backgroundGradient: [
+    {
+      type: "radial",
+      position: "topLeft",
+      stops: [
+        { color: "#5cd9ff1a" },
+        { color: Colors.transparent, position: 520 },
+      ],
+    },
+    {
+      type: "radial",
+      position: "bottomRight",
+      stops: [
+        { color: "#ff8a4c14" },
+        { color: Colors.transparent, position: 520 },
+      ],
+    },
+  ],
 };

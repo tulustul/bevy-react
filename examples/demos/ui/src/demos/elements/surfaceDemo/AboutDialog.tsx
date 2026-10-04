@@ -1,7 +1,7 @@
 import { BevyStyle } from "bevy-react/jsx";
 import { CardTitle, TextMono } from "@/components/typography";
-import { Button } from "@/components";
-import { Colors, FontSizes } from "@/theme";
+import { Button, CircularButton, CloseIcon } from "@/components";
+import { Colors, Fonts, FontSizes } from "@/theme";
 import { useEffect, useState } from "react";
 
 /** A centered "About" dialog over a dimming scrim; closes on OK or scrim click. */
@@ -19,9 +19,9 @@ export function AboutDialog({ onClose }: { onClose: () => void }) {
       <node style={panel}>
         <node style={titleBar}>
           <CardTitle>About</CardTitle>
-          <Button hoverStyle={closeButtonHover} onClick={onClose}>
-            ×
-          </Button>
+          <CircularButton size={28} onClick={onClose}>
+            <CloseIcon size={16} />
+          </CircularButton>
         </node>
         <node style={panelBody}>
           <text style={brand}>bevy-react OS</text>
@@ -49,25 +49,26 @@ const scrim: BevyStyle = {
   transition: { transform: { duration: 200 } },
 };
 
+// A graphite window like the gallery's own modal: a strong hairline rim and a
+// soft shadow lifting it off the desktop; the title bar is closed by a hairline.
 const panel: BevyStyle = {
   width: "70%",
   flexDirection: "column",
-  borderRadius: 12,
-  borderColor: Colors.primary100,
-  border: 2,
-  backgroundColor: Colors.surface200,
+  borderRadius: 16,
+  borderColor: Colors.lineStrong,
+  border: 1,
+  backgroundColor: Colors.card,
+  boxShadow: { yOffset: 24, blurRadius: 64, color: "#000000c0" },
 };
 
 const titleBar: BevyStyle = {
   flexDirection: "row",
   alignItems: "center",
   justifyContent: "spaceBetween",
-  padding: { top: 10, bottom: 10, left: 16, right: 10 },
-  backgroundColor: Colors.primary300,
-  borderRadius: { top: 10, right: 10, bottom: 0, left: 0 },
+  padding: { top: 10, bottom: 10, left: 18, right: 10 },
+  borderColor: Colors.line,
+  border: { bottom: 1 },
 };
-
-const closeButtonHover: BevyStyle = { backgroundColor: Colors.red300 };
 
 const panelBody: BevyStyle = {
   flexDirection: "column",
@@ -77,18 +78,20 @@ const panelBody: BevyStyle = {
 };
 
 const brand: BevyStyle = {
-  color: Colors.textColor100,
+  fontFamily: Fonts.display,
+  color: Colors.text,
   fontSize: FontSizes.xxl,
-  fontWeight: "bold",
+  fontWeight: "semibold",
 };
 
 const version: BevyStyle = {
-  color: Colors.textColor300,
-  fontSize: FontSizes.sm,
+  color: Colors.textDim,
+  fontSize: FontSizes.xs,
 };
 
 const blurb: BevyStyle = {
-  color: Colors.textColor200,
-  fontSize: FontSizes.base,
+  color: Colors.textBody,
+  fontSize: FontSizes.body,
+  lineHeight: 1.5,
   textAlign: "center",
 };

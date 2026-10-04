@@ -1,6 +1,7 @@
 import { BevyStyle } from "bevy-react/jsx";
 import { Colors, FontSizes, Gradients } from "@/theme";
 import { Button } from "./Button";
+import { CheckIcon } from "./Icons";
 
 export type CheckboxProps = {
   label: string;
@@ -8,33 +9,35 @@ export type CheckboxProps = {
   onChange: (enabled: boolean) => void;
 };
 
+/** A labelled checkbox: a rounded box that fills with the cyan light and
+ *  pops its tick in when checked. The whole row is the hit target. */
 export function Checkbox({ label, enabled, onChange }: CheckboxProps) {
   return (
     <Button
-      pinch={{
-        light: 0.1,
-        gloss: 0.05,
-      }}
+      pinch={{ light: 0.1, gloss: 0.05 }}
+      shadow={null}
       style={wrapper}
       hoverStyle={wrapperHovered}
       onClick={() => onChange(!enabled)}
     >
-      <node style={box}>
+      <node style={{ ...box, ...(enabled ? boxOn : null) }}>
         <node
           style={{
-            backgroundColor: Colors.textColor100,
-            backgroundGradient: Gradients.primary,
-            width: 21,
-            height: 21,
-            borderRadius: 5,
             transform: { scale: enabled ? 1 : 0 },
-            transition: {
-              transform: { duration: 150 },
-            },
+            transition: { transform: { stiffness: 500, damping: 22 } },
           }}
-        />
+        >
+          <CheckIcon size={14} />
+        </node>
       </node>
-      <text style={checkboxLabel}>{label}</text>
+      <text
+        style={{
+          ...checkboxLabel,
+          color: enabled ? Colors.text : Colors.textBody,
+        }}
+      >
+        {label}
+      </text>
     </Button>
   );
 }
@@ -42,29 +45,38 @@ export function Checkbox({ label, enabled, onChange }: CheckboxProps) {
 const wrapper: BevyStyle = {
   flexDirection: "row",
   alignItems: "center",
-  gap: 8,
-  padding: { horizontal: 12, vertical: 8 },
+  gap: 10,
+  minWidth: 0,
+  padding: { horizontal: 10, vertical: 6 },
   borderRadius: 8,
+  border: 0,
   backgroundGradient: Gradients.transparent,
   cursor: "pointer",
 };
 
 const wrapperHovered: BevyStyle = {
-  backgroundGradient: Gradients.surface,
+  backgroundGradient: Gradients.transparent,
+  backgroundColor: Colors.hover,
 };
 
 const box: BevyStyle = {
-  width: 30,
-  height: 30,
-  borderRadius: 7,
-  borderColor: Colors.surface600,
-  borderGradient: Gradients.accentBorder,
-  border: 2,
+  width: 20,
+  height: 20,
+  borderRadius: 6,
+  border: 1.5,
+  borderColor: Colors.controlStrong,
+  backgroundColor: Colors.transparent,
   alignItems: "center",
   justifyContent: "center",
+  transition: { backgroundColor: { duration: 150 } },
+};
+
+const boxOn: BevyStyle = {
+  borderColor: Colors.brass,
+  backgroundColor: Colors.brass,
+  boxShadow: { blurRadius: 4, color: Colors.emberGlow },
 };
 
 const checkboxLabel: BevyStyle = {
-  color: Colors.textColor100,
   fontSize: FontSizes.sm,
 };

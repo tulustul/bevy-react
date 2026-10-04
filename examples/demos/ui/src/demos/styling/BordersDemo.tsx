@@ -18,7 +18,7 @@ const PAGE: ExplanationData = {
       <Code lang="tsx">{`<node
   style={{
     border: 2,
-    borderColor: "#7aa2f7",
+    borderColor: "#5cd9ff",
     borderRadius: { top: 0, right: 10, bottom: 20, left: 60 },
   }}
 />`}</Code>
@@ -92,7 +92,7 @@ function BorderWidthDemo() {
             painted by <InlineCode>borderColor</InlineCode>. The width is part
             of layout, so growing it shrinks the content box.
           </Paragraph>
-          <Code lang="tsx">{`<node style={{ border: 2, borderColor: "#7aa2f7" }} />`}</Code>
+          <Code lang="tsx">{`<node style={{ border: 2, borderColor: "#5cd9ff" }} />`}</Code>
         </>
       }
       demo={BorderWidthCard}
@@ -106,9 +106,9 @@ function BorderWidthCard() {
     <ControlColumn>
       <Box
         style={{
-          backgroundColor: Colors.surface200,
+          backgroundColor: Colors.card,
           border: w,
-          borderColor: Colors.primary100,
+          borderColor: Colors.cyan,
         }}
       />
       <Slider value={w} min={0} max={12} onChange={setW} name="border" />
@@ -136,10 +136,10 @@ function PerSideDemo() {
     borderRadius: { top: 0, right: 10, bottom: 20, left: 60 },
     border: { top: 3, right: 6, bottom: 9, left: 12 },
     borderColor: {
-      top: "#7aa2f7",
-      right: "#f9e2af",
-      bottom: "#f7768e",
-      left: "#9ece6a",
+      top: "#5cd9ff",
+      right: "#ffc857",
+      bottom: "#ff6b8b",
+      left: "#5ee6a8",
     },
   }}
 />`}</Code>
@@ -155,7 +155,7 @@ function PerSideCard() {
     <ControlColumn>
       <Box
         style={{
-          backgroundColor: Colors.surface200,
+          backgroundColor: Colors.card,
           borderRadius: {
             top: 0,
             right: 10,
@@ -169,10 +169,10 @@ function PerSideCard() {
             left: 12,
           },
           borderColor: {
-            top: Colors.primary100,
-            right: Colors.amber100,
-            bottom: Colors.red100,
-            left: Colors.green100,
+            top: Colors.cyan,
+            right: Colors.amber,
+            bottom: Colors.rose,
+            left: Colors.mint,
           },
         }}
       />
@@ -192,7 +192,7 @@ function OutlineDemo() {
             anything. Drag the offset to float the ring away from the edge.
           </Paragraph>
           <Code lang="tsx">{`<node
-  style={{ outline: { width: 3, offset: 4, color: "#f9e2af" } }}
+  style={{ outline: { width: 3, offset: 4, color: "#ffc857" } }}
 />`}</Code>
         </>
       }
@@ -205,7 +205,7 @@ function OutlineCard() {
   const [offset, setOffset] = useState(4);
   return (
     <ControlColumn>
-      <Box style={{ outline: { width: 3, offset, color: Colors.amber100 } }} />
+      <Box style={{ outline: { width: 3, offset, color: Colors.amber } }} />
       <Slider
         value={offset}
         min={0}

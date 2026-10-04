@@ -3,7 +3,8 @@ import { InlineCode, Paragraph } from "@/components/typography";
 import { bevy, type WindowSize } from "@/bevy";
 import { Example } from "@/components";
 import { Code } from "@/components/docs";
-import { Colors, FontSizes } from "@/theme";
+import { BevyStyle } from "bevy-react/jsx";
+import { Colors, Fonts, FontSizes } from "@/theme";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
 
 const RESIZE_TYPESCRIPT = `const [size, setSize] = useState<WindowSize | null>(null);
@@ -65,21 +66,26 @@ function WindowSizeCard() {
     return bevy.on("resize", setSize);
   }, []);
 
+  // The size arrives from Bevy, so it carries the engine's ember.
   return (
     <>
-      <text style={{ fontSize: FontSizes.sm, color: Colors.textColor100 }}>
-        Resize the window to read the resolution
-      </text>
-      <text
-        style={{
-          fontSize: FontSizes.xxxl,
-          fontWeight: "bold",
-          color: Colors.yellow100,
-          textAlign: "center",
-        }}
-      >
+      <text style={promptStyle}>Resize the window to read the resolution</text>
+      <text style={sizeStyle}>
         {size ? `${Math.round(size.width)} x ${Math.round(size.height)}` : "-"}
       </text>
     </>
   );
 }
+
+const promptStyle: BevyStyle = {
+  fontSize: FontSizes.sm,
+  color: Colors.textBody,
+};
+
+const sizeStyle: BevyStyle = {
+  fontFamily: Fonts.display,
+  fontSize: 40,
+  fontWeight: "semibold",
+  color: Colors.ember,
+  textAlign: "center",
+};

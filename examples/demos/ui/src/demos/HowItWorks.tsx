@@ -10,6 +10,7 @@ import { ExplanationData, useDemoPage } from "@/explanationStore";
 
 const PAGE: ExplanationData = {
   title: "How it works?",
+  docsOnly: true,
   info: (
     <>
       <H2>The big picture</H2>
@@ -48,14 +49,18 @@ const PAGE: ExplanationData = {
       </Paragraph>
       <List>
         <ListItem>
-          Fire-and-forget, React to Bevy: #[react_message] + emit(name, value)
+          Fire-and-forget, React to Bevy:{" "}
+          <InlineCode>#[react_message]</InlineCode> +{" "}
+          <InlineCode>emit(name, value)</InlineCode>
         </ListItem>
         <ListItem>
-          Request / response, React to Bevy: #[react_request] + await
-          bevy.some.request()
+          Request / response, React to Bevy:{" "}
+          <InlineCode>#[react_request]</InlineCode> +{" "}
+          <InlineCode>await bevy.some.request()</InlineCode>
         </ListItem>
         <ListItem>
-          Bevy to React events: #[react_event] + bevy.on(name, callback)
+          Bevy to React events: <InlineCode>#[react_event]</InlineCode> +{" "}
+          <InlineCode>bevy.on(name, callback)</InlineCode>
         </ListItem>
       </List>
       <CodeTabs

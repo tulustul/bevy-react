@@ -10,7 +10,7 @@ use bevy::prelude::*;
 use bevy::ui::IsDefaultUiCamera;
 
 use crate::scene::Scene;
-use crate::scenes::ambient::AURORA_LAYER;
+use crate::scenes::ambient::BACKDROP_LAYER;
 
 /// Owns the shared camera: spawns it (+ light) at startup and runs the orbit/zoom
 /// controller and the per-scene reframe.
@@ -40,15 +40,21 @@ impl Plugin for CameraPlugin {
 fn setup_camera_and_light(mut commands: Commands) {
     commands.spawn((
         Camera3d::default(),
+        // The backdrop's own base (`STUDIO_TOP` in ambient.wgsl), so the
+        // frames before its shader compiles don't flash Bevy's default gray.
+        Camera {
+            clear_color: ClearColorConfig::Custom(Color::srgb_u8(9, 10, 13)),
+            ..default()
+        },
         // Bloom glows bright/emissive pixels. It `#[require(Hdr)]`s, so adding it
         // also flips the camera into HDR rendering (the prerequisite for bloom);
         // tonemapping still writes the final LDR image to the target.
         Bloom::NATURAL,
         Transform::from_xyz(0.0, 4.0, DEFAULT_RADIUS).looking_at(Vec3::ZERO, Vec3::Y),
         IsDefaultUiCamera,
-        // Layer 0 (scene content) plus the aurora backdrop's dedicated layer —
+        // Layer 0 (scene content) plus the backdrop's dedicated layer —
         // extra world cameras (portals, minimap) never see the backdrop quad.
-        RenderLayers::from_layers(&[0, AURORA_LAYER]),
+        RenderLayers::from_layers(&[0, BACKDROP_LAYER]),
         // Mesh picking runs with `require_markers` (see `crate::cube`): only
         // this camera ray-casts, and only `Pickable` meshes are hit.
         MeshPickingCamera,
@@ -193,7 +199,7 @@ fn orbit_camera(
 /// origin-centered scenes. The user can zoom from there.
 fn reframe_camera(state: Res<State<Scene>>, mut rig: ResMut<CameraRig>) {
     match state.get() {
-        // `None` (the aurora alone — its quad is camera-locked, so the orbit
+        // `None` (the backdrop alone — its quad is camera-locked, so the orbit
         // radius is irrelevant) falls through to the default arm.
         Scene::CrowdedCubes => rig.radius = 24.0,
         // Frame the whole configured swarm volume; sitting inside it (radius

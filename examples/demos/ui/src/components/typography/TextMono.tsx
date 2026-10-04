@@ -1,4 +1,5 @@
 import { BevyStyle } from "bevy-react/jsx";
+import { Fonts } from "@/theme";
 import { PropsWithChildren } from "react";
 
 type Props = PropsWithChildren & {
@@ -11,4 +12,4 @@ export function TextMono({ children, style }: Props) {
   return <text style={{ ...style, ...textMono }}>{children}</text>;
 }
 
-export const textMono: BevyStyle = { fontFamily: "Noto Sans Mono" };
+export const textMono: BevyStyle = { fontFamily: Fonts.mono };

@@ -37,8 +37,12 @@ export function Popup({
   );
 }
 
+/** The OS's "active" light: cyan pre-mixed over its graphite — an open
+ *  menu's label, the pressed Start button, the row under the pointer. */
+export const WASH = "#1f3642";
+
 // A single dropdown menu item. `separator` draws a divider line instead of a row;
-// `checked` shows a ✓ to the left (for toggles like the CRT effect).
+// `checked` shows a ✓ at the row's end (for toggles like the CRT effect).
 export type MenuItem =
   | { separator: true }
   | {
@@ -72,6 +76,7 @@ export function MenuList({ items }: { items: MenuItem[] }) {
             onClick={item.onClick}
           >
             <text style={label}>{item.label}</text>
+            {item.checked ? <text style={check}>✓</text> : null}
           </button>
         );
       })}
@@ -79,15 +84,18 @@ export function MenuList({ items }: { items: MenuItem[] }) {
   );
 }
 
+// A graphite sheet a step above the bars, with a hairline rim, floating on a
+// soft shadow.
 const list: BevyStyle = {
   flexDirection: "column",
   minWidth: 200,
   padding: 6,
-  backgroundColor: Colors.surface300,
-  borderColor: Colors.surface500,
-  border: 2,
+  backgroundColor: Colors.well,
+  borderColor: Colors.lineStrong,
+  border: 1,
   borderRadius: 10,
   gap: 2,
+  boxShadow: { yOffset: 10, blurRadius: 28, color: Colors.shadow },
   transition: { transform: { duration: 100 } },
 };
 
@@ -95,20 +103,27 @@ const row: BevyStyle = {
   flexDirection: "row",
   alignItems: "center",
   gap: 10,
-  padding: { top: 8, bottom: 8, left: 10, right: 18 },
+  padding: { top: 8, bottom: 8, left: 10, right: 14 },
   borderRadius: 7,
   backgroundColor: Colors.transparent,
+  cursor: "pointer",
 };
 
-const rowHover: BevyStyle = { backgroundColor: Colors.primary300 };
+const rowHover: BevyStyle = { backgroundColor: WASH };
 
 const label: BevyStyle = {
-  color: Colors.textColor100,
+  flexGrow: 1,
+  color: Colors.text,
+  fontSize: FontSizes.base,
+};
+
+const check: BevyStyle = {
+  color: Colors.cyan,
   fontSize: FontSizes.base,
 };
 
 const separator: BevyStyle = {
-  height: 2,
+  height: 1,
   margin: { horizontal: 6, vertical: 4 },
-  backgroundColor: Colors.surface500,
+  backgroundColor: Colors.lineStrong,
 };

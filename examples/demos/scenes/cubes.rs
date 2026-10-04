@@ -7,16 +7,18 @@ use crate::scene::Scene;
 const MAX_CUBES: usize = 8;
 const CUBE_SPACING: f32 = 2.25;
 
-/// The cube hues every cube scene shares, so the gallery reads as one family.
+/// The cube hues every cube scene shares, so the gallery reads as one family:
+/// the UI's demo-subject palette (`Colors` in `ui/src/theme.ts` — cyan, rose,
+/// mint, amber, violet, sky, ember) plus a neutral.
 pub(crate) const PALETTE: [Color; 8] = [
-    Color::srgb(0.48, 0.64, 0.97),
-    Color::srgb(0.97, 0.46, 0.56),
-    Color::srgb(0.62, 0.80, 0.42),
-    Color::srgb(0.97, 0.79, 0.36),
-    Color::srgb(0.73, 0.55, 0.93),
-    Color::srgb(0.40, 0.85, 0.84),
-    Color::srgb(0.95, 0.60, 0.40),
-    Color::srgb(0.80, 0.80, 0.85),
+    Color::srgb_u8(0x5c, 0xd9, 0xff),
+    Color::srgb_u8(0xff, 0x6b, 0x8b),
+    Color::srgb_u8(0x5e, 0xe6, 0xa8),
+    Color::srgb_u8(0xff, 0xc8, 0x57),
+    Color::srgb_u8(0xa8, 0x8b, 0xff),
+    Color::srgb_u8(0x6e, 0xa8, 0xff),
+    Color::srgb_u8(0xff, 0x8a, 0x4c),
+    Color::srgb_u8(0xcc, 0xd1, 0xdb),
 ];
 
 pub struct CubesScenePlugin;

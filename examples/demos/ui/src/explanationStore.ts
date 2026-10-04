@@ -11,6 +11,9 @@ export type ExplanationData = {
   /** Render the header card collapsed to its title row until expanded — for
    * pages whose content sits behind/under the card (3D scenes, surfaces). */
   startCollapsed?: boolean;
+  /** The page IS its docs (no examples below), so there is nothing to hide
+   *  them for: the card shows no "Hide docs" toggle. */
+  docsOnly?: boolean;
 };
 
 /** What a clicked `<Example>` contributes: its docs plus the demo

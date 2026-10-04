@@ -3,8 +3,8 @@
 //! demos; React drives the active 3D scene with `bevy.selectScene(id)` (or
 //! `null` for the ambient backdrop). Each scene is its own plugin:
 //!
-//!   * Ambient       — the default full-screen shader backdrop (gentle aurora)
-//!     behind scene-less demos.
+//!   * Ambient       — the permanent full-screen shader backdrop (a dark studio
+//!     lit by two gel lights) behind every scene.
 //!   * Space cubes   — glowing cubes orbiting and tumbling in space (the
 //!     backdrop-filter demo's scene).
 //!   * Cubes         — React `bevy.basicDemo.setCount(n)` → that many spinning cubes.
@@ -31,6 +31,7 @@ mod filters;
 mod scene;
 mod scenes;
 mod sparkle;
+mod spotlight;
 // Framebuffer capture (`--shoot`) drives Bevy's `Screenshot` + `save_to_disk`, both
 // native-only; the whole module is excluded on web.
 #[cfg(not(target_arch = "wasm32"))]
@@ -171,10 +172,11 @@ fn register_host_textures(
 
     const SIZE: u32 = 64;
     const CELL: u32 = 8;
-    // Tokyo-night plaid: two checker tones + an accent grid line per band.
-    const DARK: [u8; 4] = [0x24, 0x28, 0x3b, 0xff];
-    const LIGHT: [u8; 4] = [0x41, 0x48, 0x68, 0xff];
-    const ACCENT: [u8; 4] = [0x7a, 0xa2, 0xf7, 0xff];
+    // A Lumen plaid (`ui/src/theme.ts`): two graphite checker tones + a cyan
+    // grid line per band.
+    const DARK: [u8; 4] = [0x11, 0x12, 0x18, 0xff];
+    const LIGHT: [u8; 4] = [0x2a, 0x2d, 0x38, 0xff];
+    const ACCENT: [u8; 4] = [0x5c, 0xd9, 0xff, 0xff];
 
     let mut data = Vec::with_capacity((SIZE * SIZE * 4) as usize);
     for y in 0..SIZE {
@@ -222,17 +224,18 @@ fn build_app(window: Window, hot_reload: bool) -> App {
     let bundle = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("ui/dist/app.js");
 
     // Our `CameraPlugin` (added below) provides the 3D camera that also renders the
-    // UI. NotoSans is the app-wide default font; DancingScript / Noto Sans Mono are
-    // named families the UI selects per element via `style={{ fontFamily: … }}`.
+    // UI. Inter is the app-wide default font; the rest are named families the UI
+    // selects per element via `style={{ fontFamily: … }}` (Space Grotesk for
+    // display type, JetBrains Mono for code — see `Fonts` in `ui/src/theme.ts`).
     let react_plugin = ReactUiPlugin::new(bundle)
         .hot_reload(hot_reload)
-        .default_font("fonts/NotoSans-VariableFont_wdth,wght.ttf")
-        .font("DancingScript", "fonts/DancingScript-VariableFont_wght.ttf")
+        .default_font("fonts/Inter-VariableFont_opsz,wght.ttf")
+        .font("Space Grotesk", "fonts/SpaceGrotesk-VariableFont_wght.ttf")
         .font(
-            "Noto Sans Mono",
-            "fonts/NotoSansMono-VariableFont_wdth,wght.ttf",
+            "JetBrains Mono",
+            "fonts/JetBrainsMonoNL-VariableFont_wght.ttf",
         )
-        .font("MetalMania", "fonts/MetalMania-Regular.ttf")
+        .font("DancingScript", "fonts/DancingScript-VariableFont_wght.ttf")
         .cursor("hand", "cursor-hand.png", (0, 0));
 
     // On web, make the canvas track its parent (`<body>`, full-height via index.html)
@@ -274,6 +277,8 @@ fn build_app(window: Window, hot_reload: bool) -> App {
         .add_plugins(cube::CubePlugin)
         // The app-registered `sparkle` style (the "Custom styles" demo).
         .add_plugins(sparkle::SparklePlugin)
+        // The app-registered `spotlight` style: the gallery chrome's cursor light.
+        .add_plugins(spotlight::SpotlightPlugin)
         .add_plugins((
             AmbientScenePlugin,
             CubesScenePlugin,
@@ -323,8 +328,9 @@ fn register_react_bindings(app: &mut App) {
     ReactPlugins::register_bindings(app);
     // The app's own `<cube>` element.
     cube::register_bindings(app);
-    // The app's own `sparkle` style property.
+    // The app's own `sparkle` and `spotlight` style properties.
     sparkle::register_bindings(app);
+    spotlight::register_bindings(app);
     scene::register_bindings(app);
     screenshot::register_bindings(app);
     filters::register_bindings(app);

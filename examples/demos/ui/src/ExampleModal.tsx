@@ -1,8 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import { BevyStyle, PointerEventData } from "bevy-react/jsx";
 import { bevy } from "@/bevy";
-import { Button, CardHeader, CircularButton, CloseIcon } from "@/components";
-import { Colors, FontSizes, Gradients, Scrollbar } from "@/theme";
+import {
+  CardHeader,
+  CircularButton,
+  CloseIcon,
+  ExampleStage,
+  SecondaryButton,
+  Spotlight,
+} from "@/components";
+import { Colors, Fonts, FontSizes, Scrollbar } from "@/theme";
 import { useExplanationStore } from "./explanationStore";
 import { useIsMobile, useWindowSize } from "./hooks";
 
@@ -138,8 +145,10 @@ export function ExampleModal() {
               onPointerDown={onPointerDown}
               onPointerMove={onPointerMove}
             >
+              <Spotlight radius={PANEL_RADIUS} outset={1} edge={1} />
               <CardHeader
                 title={selected.title}
+                titleStyle={titleStyle}
                 style={titleBarStyle}
                 action={
                   <CircularButton size={28} onClick={() => deselect()}>
@@ -150,25 +159,26 @@ export function ExampleModal() {
               <node style={bodyStyle} scrollStep={60}>
                 {selected.info}
                 {selected.demo !== undefined && (
-                  // The demo wrap mirrors the card's `cache` style: a live-content
-                  // demo (portal) must force every-frame capture dirt through the
-                  // modal's own morph layer or it renders frozen in here.
-                  <node style={{ ...demoWrapStyle, cache: selected.cache }}>
+                  <>
                     <text style={demoCaptionStyle}>Live example</text>
-                    <selected.demo />
-                  </node>
+                    {/* The stage mirrors the card's `cache` style: a
+                        live-content demo (portal) must force every-frame
+                        capture dirt through the modal's own morph layer or
+                        it renders frozen in here. */}
+                    <ExampleStage
+                      rounded="all"
+                      style={{ ...demoStageStyle, cache: selected.cache }}
+                    >
+                      <selected.demo />
+                    </ExampleStage>
+                  </>
                 )}
               </node>
 
-              <node style={{ justifyContent: "center" }}>
-                <Button
-                  style={closeButtonStyle}
-                  hoverStyle={{ backgroundGradient: Gradients.successHover }}
-                  labelStyle={{ color: "white" }}
-                  onClick={() => deselect()}
-                >
+              <node style={footerStyle}>
+                <SecondaryButton onClick={() => deselect()}>
                   Close
-                </Button>
+                </SecondaryButton>
               </node>
             </node>
           )}
@@ -210,54 +220,58 @@ const carrierStyle: BevyStyle = {
   transition: { morphFilter: { duration: CLOSE_BLEND_MS } },
 };
 
+const PANEL_RADIUS = 18;
+
 const panelStyle: BevyStyle = {
   positionType: "absolute",
   flexDirection: "column",
   alignItems: "stretch",
-  backgroundColor: Colors.surface200,
-  borderRadius: 14,
-  border: 2,
-  borderGradient: Gradients.accentBorder,
-  boxShadow: { blurRadius: 30, spreadRadius: 8, color: Colors.shadow100 },
+  backgroundColor: "#13141b",
+  borderRadius: PANEL_RADIUS,
+  border: 1,
+  borderColor: Colors.lineStrong,
+  boxShadow: { yOffset: 24, blurRadius: 64, color: "#000000c0" },
 };
 
 const titleBarStyle: BevyStyle = {
   alignItems: "center",
-  padding: { top: 8, bottom: 8, left: 16, right: 8 },
+  padding: { top: 10, bottom: 10, left: 22, right: 10 },
   border: { bottom: 1 },
-  borderColor: Colors.surface400,
+  borderColor: Colors.line,
 };
 
-const closeButtonStyle: BevyStyle = {
-  margin: { top: 15, bottom: 12 },
-  padding: { horizontal: 40, vertical: 7 },
-  backgroundColor: Colors.green200,
-  backgroundGradient: Gradients.success,
+const titleStyle: BevyStyle = {
+  fontSize: FontSizes.lg,
 };
 
 const bodyStyle: BevyStyle = {
   flexDirection: "column",
   alignItems: "stretch",
-  gap: 10,
-  padding: 16,
+  gap: 14,
+  padding: { horizontal: 22, vertical: 20 },
   maxHeight: "70vh",
   overflowY: "scroll",
   scrollbar: Scrollbar,
 };
 
-const demoWrapStyle: BevyStyle = {
-  flexDirection: "column",
-  alignItems: "center",
-  gap: 8,
-  padding: 12,
-  borderRadius: 12,
-  border: 1,
-  borderColor: Colors.surface400,
-  backgroundGradient: Gradients.card,
+const demoCaptionStyle: BevyStyle = {
+  fontFamily: Fonts.mono,
+  fontSize: FontSizes.xxs,
+  fontWeight: "medium",
+  letterSpacing: 1.2,
+  color: Colors.ember,
+  margin: { top: 6 },
 };
 
-const demoCaptionStyle: BevyStyle = {
-  fontSize: FontSizes.xs,
-  color: Colors.textColor300,
-  alignSelf: "flexStart",
+const demoStageStyle: BevyStyle = {
+  border: 1,
+  borderColor: Colors.line,
+};
+
+const footerStyle: BevyStyle = {
+  flexDirection: "row",
+  justifyContent: "flexEnd",
+  padding: { horizontal: 22, vertical: 14 },
+  border: { top: 1 },
+  borderColor: Colors.line,
 };

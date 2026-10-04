@@ -23,7 +23,7 @@ import {
   useParams,
 } from "@/components";
 import { Code } from "@/components/docs";
-import { Colors, FontSizes } from "@/theme";
+import { Colors, Fonts, FontSizes } from "@/theme";
 import { PinchDemo } from "./PinchFilterDemo";
 import { TestBanner } from "@/components/TestBanner";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
@@ -315,7 +315,7 @@ function MultipleFiltersCard() {
     <ControlColumn>
       <ProductCard
         style={{
-          backgroundColor: Colors.surface500,
+          backgroundColor: Colors.control,
           filter: [
             { name: "blur", params: { radius } },
             { name: "sepia", params: { amount: sepia } },
@@ -387,7 +387,7 @@ function BloomCard() {
     <ControlColumn>
       <node style={{ ...neonCard, filter: { name: "bloom", params } }}>
         <text style={neonText}>NEON</text>
-        <Caption style={{ color: Colors.textColor300 }}>dim text</Caption>
+        <Caption>dim text</Caption>
       </node>
       <ParamControls {...controls} />
     </ControlColumn>
@@ -472,9 +472,9 @@ function GradientTextDemo() {
       params: {
         angle: 120,
         stops: [
-          { color: "#38bdf8" },
-          { color: "#a78bfa", position: 0.6 },
-          { color: "#f472b6" },
+          { color: "#5cd9ff" },
+          { color: "#a88bff", position: 0.6 },
+          { color: "#ff6b8b" },
         ],
       },
     },
@@ -502,9 +502,9 @@ function GradientTextCard() {
               angle,
               amount,
               stops: [
-                { color: "#38bdf8" },
-                { color: "#a78bfa", position: 0.6 },
-                { color: "#f472b6" },
+                { color: Colors.cyan },
+                { color: Colors.violet, position: 0.6 },
+                { color: Colors.rose },
               ],
             },
           },
@@ -549,7 +549,7 @@ function OutlineTextDemo() {
   style={{
     filter: {
       name: "outline",
-      params: { width: 2, color: "#7aa2f7", softness: 0 },
+      params: { width: 2, color: "#ff6b8b", softness: 0 },
     },
   }}
 >
@@ -573,7 +573,7 @@ function OutlineTextCard() {
             params: {
               width,
               softness,
-              color: accent ? Colors.red300 : "#000000",
+              color: accent ? Colors.rose : "#000000",
             },
           },
         }}
@@ -609,7 +609,7 @@ function DropShadowDemo() {
   style={{
     filter: {
       name: "shadow",
-      params: { color: "#000000aa", offsetX: 0, offsetY: 6, spread: 6 },
+      params: { color: "#2fb4e6", offsetX: 0, offsetY: 6, spread: 6 },
     },
   }}
 >
@@ -626,9 +626,13 @@ function DropShadowCard() {
   const [params, controls] = useParams(DROP_SHADOW);
   return (
     <ControlColumn>
+      {/* A black shadow would vanish into the dark stage: cast cyan light. */}
       <node
         style={{
-          filter: { name: "shadow", params: { color: "#000000aa", ...params } },
+          filter: {
+            name: "shadow",
+            params: { color: Colors.cyanDeep, ...params },
+          },
         }}
       >
         <text style={effectText}>Shadow</text>
@@ -687,10 +691,10 @@ function GradientOutlineCard() {
               name: "gradientMap",
               params: {
                 angle: 160,
-                stops: [{ color: "#caf9afff" }, { color: "#c72e00ff" }],
+                stops: [{ color: Colors.amber }, { color: Colors.rose }],
               },
             },
-            { name: "outline", params: { width, color: "#0051ffff" } },
+            { name: "outline", params: { width, color: Colors.cyanDeep } },
           ],
         }}
       >
@@ -728,21 +732,23 @@ const neonCard: BevyStyle = {
   gap: 6,
   padding: 20,
   borderRadius: 12,
-  backgroundColor: Colors.surface100,
+  backgroundColor: Colors.stage,
   border: 2,
-  borderColor: Colors.purple100,
+  borderColor: Colors.violet,
 };
 
 const neonText: BevyStyle = {
-  color: Colors.red100,
+  color: Colors.rose,
+  fontFamily: Fonts.display,
   fontSize: FontSizes.xl,
   fontWeight: "bold",
 };
 
-// Big flat-white type for the text-effect cards — the filters supply the
-// color.
+// Big flat-white display type for the text-effect cards — the filters supply
+// the color.
 const effectText: BevyStyle = {
-  color: Colors.textColor100,
+  color: Colors.text,
+  fontFamily: Fonts.display,
   fontSize: FontSizes.xl,
-  fontWeight: "black",
+  fontWeight: "bold",
 };

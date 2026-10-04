@@ -12,7 +12,9 @@
         /* Phones: follow the browser chrome as the URL bar collapses
            (dvh), and keep pull-to-refresh / rubber-banding off the page. */
         height: 100dvh;
-        background: #14151a;
+        /* The studio backdrop's base (ambient.wgsl), so the page never
+           flashes a different dark before the first frame. */
+        background: #090a0d;
         overflow: hidden;
         overscroll-behavior: none;
       }

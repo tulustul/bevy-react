@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { BevyStyle } from "bevy-react/jsx";
 
-import { Colors, FontSizes } from "@/theme";
+import { Colors, Fonts, FontSizes } from "@/theme";
 
 export const TILE = 220;
 export const VARIANT_COUNT = 4;
@@ -35,13 +35,13 @@ const PHOTOS = [
   {
     image: "images/parrot.png",
     tag: "tropical",
-    accent: Colors.green100,
+    accent: Colors.mint,
     title: "Parrot",
   },
   {
     image: "images/wheat.png",
     tag: "harvest",
-    accent: Colors.yellow100,
+    accent: Colors.amber,
     title: "Wheat",
   },
 ] as const;
@@ -80,7 +80,7 @@ function PhotoCard({ page }: { page: (typeof PHOTOS)[number] }) {
         >
           <text
             style={{
-              color: Colors.textColor400,
+              color: Colors.ink,
               fontSize: FontSizes.xxs,
               fontWeight: "bold",
             }}
@@ -96,7 +96,7 @@ function PhotoCard({ page }: { page: (typeof PHOTOS)[number] }) {
                 width: 8,
                 height: 8,
                 borderRadius: 999,
-                backgroundColor: "rgba(255, 255, 255, 0.75)",
+                backgroundColor: Colors.text,
               }}
             />
           ))}
@@ -112,9 +112,10 @@ function PhotoCard({ page }: { page: (typeof PHOTOS)[number] }) {
         <text
           style={{
             textAlign: "center",
-            color: Colors.textColor100,
+            color: Colors.text,
+            fontFamily: Fonts.display,
             fontSize: FontSizes.lg,
-            fontWeight: "bold",
+            fontWeight: "semibold",
             textShadow: { color: "black", offsetX: 1, offsetY: 1 },
           }}
         >
@@ -122,7 +123,7 @@ function PhotoCard({ page }: { page: (typeof PHOTOS)[number] }) {
         </text>
         <text
           style={{
-            color: Colors.textColor100,
+            color: Colors.textBody,
             fontSize: FontSizes.xxs,
             textAlign: "center",
           }}
@@ -135,9 +136,9 @@ function PhotoCard({ page }: { page: (typeof PHOTOS)[number] }) {
 }
 
 const DOTS = [
-  { color: Colors.red100, label: "red" },
-  { color: Colors.green100, label: "green" },
-  { color: Colors.purple100, label: "purple" },
+  { color: Colors.rose, label: "red" },
+  { color: Colors.mint, label: "green" },
+  { color: Colors.violet, label: "purple" },
 ] as const;
 
 /** Demo-local test-banner variant (the shared `components/TestBanner` stays
@@ -151,9 +152,9 @@ function Banner() {
     <node
       style={{
         ...fillStyle,
-        backgroundColor: Colors.surface300,
-        border: 2,
-        borderColor: "white",
+        backgroundColor: Colors.raised,
+        border: 1,
+        borderColor: Colors.lineStrong,
         flexDirection: "column",
         justifyContent: "center",
         alignItems: "center",
@@ -174,7 +175,7 @@ function Banner() {
               borderRadius: 999,
               backgroundColor: dot.color,
               border: i === selected ? 3 : 0,
-              borderColor: "white",
+              borderColor: Colors.cyan,
               cursor: "pointer",
               transition: { size: { duration: 150, easing: "easeOut" } },
             }}
@@ -188,11 +189,11 @@ function Banner() {
 }
 
 const BAR_COLORS = [
-  Colors.primary100,
-  Colors.sky100,
-  Colors.teal100,
-  Colors.green100,
-  Colors.yellow100,
+  Colors.cyan,
+  Colors.sky,
+  Colors.violet,
+  Colors.mint,
+  Colors.amber,
 ] as const;
 
 const INITIAL_BARS = [34, 58, 26, 70, 46];
@@ -222,7 +223,9 @@ function StatsCard() {
     <node
       style={{
         ...fillStyle,
-        backgroundColor: Colors.surface100,
+        backgroundColor: Colors.card,
+        border: 1,
+        borderColor: Colors.line,
         flexDirection: "column",
         alignItems: "stretch",
         padding: 12,
@@ -236,7 +239,7 @@ function StatsCard() {
           alignItems: "center",
         }}
       >
-        <text style={{ fontSize: FontSizes.xs, color: Colors.textColor200 }}>
+        <text style={{ fontSize: FontSizes.xs, color: Colors.textBody }}>
           Weekly stats
         </text>
         <node
@@ -244,7 +247,7 @@ function StatsCard() {
             width: 10,
             height: 10,
             borderRadius: 999,
-            backgroundColor: live ? Colors.green100 : Colors.red100,
+            backgroundColor: live ? Colors.mint : Colors.rose,
             transition: { backgroundColor: { duration: 200 } },
           }}
         />
@@ -252,17 +255,19 @@ function StatsCard() {
       <node style={{ flexDirection: "row", alignItems: "flexEnd", gap: 6 }}>
         <text
           style={{
+            fontFamily: Fonts.display,
             fontSize: FontSizes.xxl,
-            fontWeight: "bold",
-            color: Colors.textColor100,
+            fontWeight: "semibold",
+            color: Colors.text,
           }}
         >
           {formatMetric(total)}
         </text>
         <text
           style={{
+            fontFamily: Fonts.mono,
             fontSize: FontSizes.xxs,
-            color: delta >= 0 ? Colors.green100 : Colors.red100,
+            color: delta >= 0 ? Colors.mint : Colors.rose,
             margin: { bottom: 5 },
           }}
         >
@@ -295,36 +300,46 @@ function StatsCard() {
         <node
           style={{
             flexGrow: 1,
-            backgroundColor: Colors.primary400,
+            backgroundColor: Colors.cyan,
             borderRadius: 999,
             padding: { vertical: 4 },
             justifyContent: "center",
+            alignItems: "center",
             cursor: "pointer",
             transition: { backgroundColor: { duration: 120 } },
           }}
-          hoverStyle={{ backgroundColor: Colors.primary300 }}
-          pressStyle={{ backgroundColor: Colors.primary500 }}
+          hoverStyle={{ backgroundColor: Colors.cyanBright }}
+          pressStyle={{ backgroundColor: Colors.cyanDeep }}
           onClick={() => setBars(randomBars())}
         >
-          <text style={{ fontSize: FontSizes.xxs, color: Colors.textColor100 }}>
+          <text
+            style={{
+              fontSize: FontSizes.xxs,
+              fontWeight: "semibold",
+              color: Colors.ink,
+            }}
+          >
             Refresh
           </text>
         </node>
         <node
           style={{
             flexGrow: 1,
-            backgroundColor: Colors.surface400,
+            backgroundColor: Colors.well,
+            border: 1,
+            borderColor: Colors.lineStrong,
             borderRadius: 999,
             padding: { vertical: 4 },
             justifyContent: "center",
+            alignItems: "center",
             cursor: "pointer",
             transition: { backgroundColor: { duration: 120 } },
           }}
-          hoverStyle={{ backgroundColor: Colors.surface500 }}
-          pressStyle={{ backgroundColor: Colors.surface600 }}
+          hoverStyle={{ backgroundColor: Colors.control }}
+          pressStyle={{ backgroundColor: Colors.controlHover }}
           onClick={() => setLive((v) => !v)}
         >
-          <text style={{ fontSize: FontSizes.xxs, color: Colors.textColor200 }}>
+          <text style={{ fontSize: FontSizes.xxs, color: Colors.text }}>
             Export
           </text>
         </node>

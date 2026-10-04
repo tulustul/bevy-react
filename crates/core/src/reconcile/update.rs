@@ -12,7 +12,7 @@ use bevy::ui::{ComputedNode, ScrollPosition};
 use super::apply::resolve;
 use super::stamps::{
     apply_animated, apply_pointer_handlers, apply_scroll_listener, apply_scroll_step,
-    apply_style_variants_delta, apply_wheel_listener, update_controlled_scroll,
+    apply_style_variants_delta, apply_wheel_listener, update_controlled_scroll, variant_keys,
 };
 use crate::bridge::{JsBridge, ReactNode, SpanKind, StyleVariants};
 use crate::element::{AttrDirty, Common};
@@ -79,6 +79,7 @@ pub(super) fn apply_update(
     // The pre-merge name, so a `name` change can leave its old index bucket.
     let old_name = dirty_name(&props, &unset).then(|| cached.name.clone());
     let old_tag = dirty_shared_tag(&props, &unset).then(|| cached.shared_tag.clone());
+    let old_variant_keys = variant_keys(&cached);
     let (dirty, ev) = cached.merge_delta(props, &unset, &style_unset, info);
     let props = cached;
     if let Some(old_name) = old_name {
@@ -97,6 +98,17 @@ pub(super) fn apply_update(
     // The retained style already carries the element's defaults.
     let style = &props.style;
     let styles = registry.styles();
+    // Dropping the last variant removes `StyleVariants`, so no interaction
+    // restyle will ever clear an overlay still showing (a hovered row losing
+    // its `hoverStyle`): re-apply the base for every key the variants set.
+    let touched = if props.hover_style.is_some()
+        || props.press_style.is_some()
+        || props.focus_style.is_some()
+    {
+        dirty.style
+    } else {
+        dirty.style.union(old_variant_keys)
+    };
     // A delta that can flip layer promotion (`opacity`/`groupAlpha`/
     // `filter`/… declare `PROMOTION` — an `{ animated }` opacity is presence
     // like any other) or a variant style swap (variants can carry them too)
@@ -104,7 +116,7 @@ pub(super) fn apply_update(
     let promoted = bridge.promoted_layers.contains(&id);
     let invalidation = styles
         .invalidation(
-            &dirty.style,
+            &touched,
             &dirty.style_old,
             style.as_ref().unwrap_or(Style::empty()),
             &NodeCtx { promoted, kind },
@@ -120,8 +132,8 @@ pub(super) fn apply_update(
     // The writers this delta re-runs: the global ones reading a touched
     // property, the element's own reading a touched property or attribute
     // (an act-now attribute in the delta counts as touched).
-    let global = styles.writers_for(&dirty.style);
-    let own = info.writers_for(&dirty.style, dirty.attrs.union(ev.attrs.keys()));
+    let global = styles.writers_for(&touched);
+    let own = info.writers_for(&touched, dirty.attrs.union(ev.attrs.keys()));
     // A promoted text root suppresses the glyph opacity fold — the layer's
     // group alpha owns the fade (see `resolved_text_style`).
     let is_text_block = matches!(flags.text, TextRole::Block | TextRole::Span);

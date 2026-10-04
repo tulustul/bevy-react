@@ -1,7 +1,7 @@
 import { BevyStyle } from "bevy-react/jsx";
 import { PropsWithChildren } from "react";
 import { Colors, FontSizes, Gradients } from "@/theme";
-import { isPinchEnabled, Pinchable } from "./Pinchable";
+import { isPinchEnabled, Pinchable, type PinchShadow } from "./Pinchable";
 import type { PinchParams } from "@/bevy";
 
 export type ButtonProps = PropsWithChildren & {
@@ -16,7 +16,28 @@ export type ButtonProps = PropsWithChildren & {
    *  press surface: the inner `<button>` must pass interaction through for
    *  the surface to see the press. */
   pinch?: Partial<PinchParams>;
+  /** Which fill the button takes: the warm primary (default), or ember
+   *  for one that acts on the Bevy side (the 3D world). Sets the fill and
+   *  its hover; `style`/`hoverStyle` still override. */
+  tone?: Tone;
+  /** The drop shadow under the button — see `Pinchable`'s `shadow`
+   *  (default: its black drop shadow, which flattens as the button presses
+   *  down). */
+  shadow?: PinchShadow | null;
   onClick?: () => void;
+};
+
+type Tone = "primary" | "ember";
+
+const TONES: Record<Tone, { fill: BevyStyle; hover: BevyStyle }> = {
+  primary: {
+    fill: { backgroundGradient: Gradients.primary },
+    hover: { backgroundGradient: Gradients.primaryHover },
+  },
+  ember: {
+    fill: { backgroundGradient: Gradients.ember },
+    hover: { backgroundGradient: Gradients.emberHover },
+  },
 };
 
 export function Button({
@@ -26,6 +47,8 @@ export function Button({
   pressStyle,
   labelStyle,
   pinch,
+  tone = "primary",
+  shadow,
   children,
 }: ButtonProps) {
   // String/number children get the label treatment; element children (switch
@@ -39,13 +62,17 @@ export function Button({
   // surface behind it. Without a pinch there is no wrapper: the button keeps
   // its own policy.
   const pinched = isPinchEnabled(pinch);
-  const baseStyle = { ...buttonStyle, ...style };
+  const baseStyle = { ...buttonStyle, ...TONES[tone].fill, ...style };
   return (
-    <Pinchable params={pinch} focusPolicy={style?.focusPolicy ?? "block"}>
+    <Pinchable
+      params={pinch}
+      shadow={shadow}
+      focusPolicy={style?.focusPolicy ?? "block"}
+    >
       <button
         onClick={onClick}
         style={{ ...baseStyle, ...(pinched ? { focusPolicy: "pass" } : {}) }}
-        hoverStyle={{ ...buttonHoverStyle, ...hoverStyle }}
+        hoverStyle={{ ...TONES[tone].hover, ...hoverStyle }}
         pressStyle={{ ...pressStyle }}
       >
         {isTextChild ? (
@@ -58,25 +85,24 @@ export function Button({
   );
 }
 
+// Lit from above: the fill brightens toward the top, and a top-only border
+// (thinning out along the rounded corners) reads as a specular rim.
 const buttonStyle: BevyStyle = {
   justifyContent: "center",
   alignItems: "center",
-  padding: { horizontal: 12, vertical: 8 },
-  borderRadius: 8,
-  backgroundGradient: Gradients.primary,
+  padding: { horizontal: 18, vertical: 9 },
+  borderRadius: 10,
+  border: { top: 1 },
+  borderColor: "#ffffffa6",
   transition: {
-    backgroundGradient: { duration: 250 },
+    backgroundGradient: { duration: 200 },
   },
   cursor: "pointer",
   minWidth: 100,
 };
 
-const buttonHoverStyle: BevyStyle = {
-  backgroundGradient: Gradients.primaryHover,
-};
-
 const buttonLabelStyle: BevyStyle = {
-  color: Colors.surface100,
+  color: Colors.ink,
   fontSize: FontSizes.sm,
-  fontWeight: "bold",
+  fontWeight: "semibold",
 };

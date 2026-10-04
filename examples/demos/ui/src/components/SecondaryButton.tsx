@@ -2,20 +2,25 @@ import { BevyStyle } from "bevy-react/jsx";
 import { Button, ButtonProps } from "./Button";
 import { Colors, Gradients } from "@/theme";
 
+/** The quiet button: a graphite fill with a hairline rim — for everything
+ *  that isn't the one primary action. */
 export function SecondaryButton(props: ButtonProps) {
   const style: BevyStyle = {
-    ...props.style,
     backgroundGradient: Gradients.surface,
+    borderColor: Colors.lineStrong,
+    border: 1,
+    ...props.style,
   };
 
   const hoverStyle: BevyStyle = {
-    ...props.hoverStyle,
     backgroundGradient: Gradients.surfaceHover,
+    borderColor: "#474a54",
+    ...props.hoverStyle,
   };
 
   const labelStyle: BevyStyle = {
     ...props.labelStyle,
-    color: Colors.textColor100,
+    color: props.labelStyle?.color ?? Colors.text,
   };
 
   return (

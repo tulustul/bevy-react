@@ -1,9 +1,17 @@
 import { useState } from "react";
 import { InlineCode, ListItem, Paragraph, List } from "@/components/typography";
 import { BevyStyle } from "bevy-react/jsx";
-import { Button, DemoRow, Example, Figure, Slider } from "@/components";
+import {
+  Button,
+  Checkbox,
+  DemoRow,
+  Example,
+  Figure,
+  Slider,
+  Stage,
+} from "@/components";
 import { Code } from "@/components/docs";
-import { Colors, Gradients } from "@/theme";
+import { Colors } from "@/theme";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
 
 const PAGE: ExplanationData = {
@@ -72,7 +80,7 @@ function FlipDemo() {
           </Paragraph>
           <Code lang="tsx">{`<image
   src="bevy-react-logo.png"
-  tint="#7aa2f7"
+  tint="#5cd9ff"
   flipX
   flipY
 />`}</Code>
@@ -99,19 +107,15 @@ function FlipCard() {
         <image
           src="bevy-react-logo.png"
           style={logoStyle}
-          tint={Colors.primary100}
+          tint={Colors.cyan}
           flipX={flipX}
           flipY={flipY}
         />
       </node>
 
       <node style={{ flexDirection: "row", gap: 12 }}>
-        <Button onClick={() => setFlipX((f) => !f)}>
-          {`flipX: ${flipX ? "on" : "off"}`}
-        </Button>
-        <Button onClick={() => setFlipY((f) => !f)}>
-          {`flipY: ${flipY ? "on" : "off"}`}
-        </Button>
+        <Checkbox label="flipX" enabled={flipX} onChange={setFlipX} />
+        <Checkbox label="flipY" enabled={flipY} onChange={setFlipY} />
       </node>
     </>
   );
@@ -201,13 +205,13 @@ function SourceRectCard() {
 
   return (
     <node style={{ flexDirection: "column", alignItems: "center", gap: 12 }}>
-      <node style={cellBox}>
+      <Stage style={cellBox}>
         <image
           src="bevy-react-logo.png"
           style={{ width: 200, height: 110 }}
           sourceRect={{ x, y, width: 200, height: 110 }}
         />
-      </node>
+      </Stage>
 
       <Slider
         value={x}
@@ -262,7 +266,7 @@ function AtlasCard() {
 
   return (
     <node style={{ flexDirection: "column", alignItems: "center", gap: 12 }}>
-      <node style={cellBox}>
+      <Stage style={cellBox}>
         <image
           src="bevy-react-logo.png"
           style={{ width: 200, height: 110 }}
@@ -274,7 +278,7 @@ function AtlasCard() {
             index,
           }}
         />
-      </node>
+      </Stage>
 
       <Button onClick={() => setIndex((i) => (i + 1) % 4)}>
         {`cell ${index} of 4 — next`}
@@ -318,7 +322,7 @@ function SvgFileCard() {
         <image src="gear.svg" />
       </Figure>
       {SIZES.map((size) => (
-        <Figure key={size} caption={`${size}px`}>
+        <Figure key={size} caption={`${size}px`} mono>
           <image src="gear.svg" style={{ width: size }} />
         </Figure>
       ))}
@@ -339,21 +343,21 @@ const logoStyle: BevyStyle = {
   height: 120,
 };
 
-// A fixed 200×110 viewport so the cropped/atlas cell sits in a stable box.
+// A fixed 200×110 window (plus its 1px rim) so the cropped/atlas cell sits in
+// a stable plate; the logo's transparent areas show the plate through.
 const cellBox: BevyStyle = {
-  width: 200,
-  height: 110,
+  width: 202,
+  height: 112,
+  padding: 0,
   alignItems: "center",
   justifyContent: "center",
-  backgroundGradient: Gradients.spectrum,
-  borderRadius: 12,
 };
 
-// A fixed box so the frame's box can grow/shrink within it without shifting the
-// surrounding layout (sliders stay put).
+// The frame's body: a quiet panel behind the texture's transparent center.
+// The large radius keeps it tucked inside the ornate corners.
 const frameBox: BevyStyle = {
   alignItems: "center",
   justifyContent: "center",
-  backgroundGradient: Gradients.spectrum,
+  backgroundColor: Colors.well,
   borderRadius: 100,
 };

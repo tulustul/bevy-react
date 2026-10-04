@@ -19,3 +19,5 @@ export * from "./ProductCard";
 export * from "./ParamControls";
 export * from "./CardHeader";
 export * from "./Figure";
+export * from "./Spotlight";
+export * from "./Readout";

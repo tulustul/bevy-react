@@ -7,8 +7,8 @@ type Props = PropsWithChildren & {
 };
 
 /**
- * The recessed panel a demo subject sits on — a dark inset that separates the
- * thing being demonstrated from the card around it.
+ * A plate on the example's stage — a container the demo's subjects sit in
+ * (a scroll area, a flex box, a grid), set apart by a hairline rim.
  *
  * The base is chrome only (fill, corner, inset): layout is deliberately left
  * to the call site, because half the stages centre a single subject and half
@@ -21,6 +21,8 @@ export function Stage({ children, style }: Props) {
 
 export const stage: BevyStyle = {
   padding: 10,
-  backgroundColor: Colors.surface100,
+  backgroundColor: Colors.card,
+  border: 1,
+  borderColor: Colors.line,
   borderRadius: 12,
 };

@@ -14,7 +14,7 @@ export function BoxLabel({ children, style }: Props) {
 }
 
 export const boxLabel: BevyStyle = {
-  color: Colors.textColor400,
+  color: Colors.ink,
   fontSize: FontSizes.xs,
   fontWeight: "bold",
 };

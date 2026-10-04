@@ -164,11 +164,11 @@ function DisplayNoneCard() {
         <Box />
         <Box
           style={{
-            backgroundColor: Colors.green100,
+            backgroundColor: Colors.mint,
             display: hidden ? "none" : "flex",
           }}
         />
-        <Box style={{ backgroundColor: Colors.purple100 }} />
+        <Box style={{ backgroundColor: Colors.violet }} />
       </Row>
       <Checkbox label="Hide middle box" enabled={hidden} onChange={setHidden} />
     </ControlColumn>

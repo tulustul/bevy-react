@@ -1,5 +1,4 @@
 import { ComponentType } from "react";
-import { Colors } from "@/theme";
 import type { VignetteProps } from "./shared";
 import { SharedElementsVignette } from "./vignettes/SharedElementsVignette";
 import { LayoutVignette } from "./vignettes/LayoutVignette";
@@ -17,7 +16,6 @@ export type Tile = {
   label: string;
   /** One sentence, shown only in the expanded panel. */
   blurb: string;
-  accent: string;
   vignette: ComponentType<VignetteProps>;
 };
 
@@ -26,7 +24,6 @@ export const TILES: Tile[] = [
     id: "shared",
     label: "Shared elements",
     blurb: "A node that changes parent flies there instead of reappearing.",
-    accent: Colors.sky100,
     vignette: SharedElementsVignette,
   },
   {
@@ -34,28 +31,24 @@ export const TILES: Tile[] = [
     label: "Layout animations",
     blurb:
       "Real flexbox re-flows, eased away after layout instead of snapping.",
-    accent: Colors.teal100,
     vignette: LayoutVignette,
   },
   {
     id: "filters",
     label: "Filters",
     blurb: "Chains of WGSL passes over any subtree, composed and animatable.",
-    accent: Colors.purple100,
     vignette: FiltersVignette,
   },
   {
     id: "morphing",
     label: "Morphing",
     blurb: "Contents swap through a named transition rather than cutting.",
-    accent: Colors.red200,
     vignette: MorphingVignette,
   },
   {
     id: "hotreload",
     label: "Hot reload",
     blurb: "Edit a component and it re-renders live, hook state intact.",
-    accent: Colors.amber100,
     vignette: HotReloadVignette,
   },
   {
@@ -63,7 +56,6 @@ export const TILES: Tile[] = [
     label: "Typed messages",
     blurb:
       "React and the ECS talk over channels generated from your Rust types.",
-    accent: Colors.green100,
     vignette: TypedMessagesVignette,
   },
 ];

@@ -432,6 +432,13 @@ pub struct LayoutDelta {
     /// stack the ancestors' shown deltas on top: the node composes against
     /// its parent's pristine frame, its own children still ride it.
     pub root_anchored: bool,
+    /// A shared flight's seed frame: the FLIP scale stands in for the size
+    /// real layout can't have yet, so the children — still unscaled — sit at
+    /// their offsets from the center scaled by it, an edge-pinned child on the
+    /// shown edge (at the natural offset it would sit up to half the size
+    /// change off it, and jump back the next frame, once layout has the seed
+    /// size).
+    pub seed_frame: bool,
 }
 
 impl LayoutDelta {
@@ -447,6 +454,7 @@ impl LayoutDelta {
                 shown[3].max(MIN_SHOWN_PX) / laid_out[3],
             ),
             root_anchored: false,
+            seed_frame: false,
         }
     }
 }
@@ -524,7 +532,10 @@ type LayoutNodeQuery = (
 /// frame, the scale is applied last so it affects only the node's own paint;
 /// its children compose from `P' · T(Δ) · P⁻¹ · G` (translated, unscaled).
 /// A plain descendant is `G' = P' · P⁻¹ · G`. A settled node writes nothing —
-/// bevy's own value stands and change detection stays quiet.
+/// bevy's own value stands and change detection stays quiet. On a shared
+/// flight's seed frame the children's offsets from the node's center (the
+/// translation of `G⁻¹ · G_child`) are scaled by `s` too — the children
+/// themselves are not ([`LayoutDelta::seed_frame`]).
 ///
 /// A shared flight is **root-anchored** ([`LayoutDelta::root_anchored`]): its
 /// `Δ` already encodes a root-space path re-derived through `P` every frame,
@@ -724,6 +735,7 @@ pub fn drive_layout_transitions(
         if let Some(shown) = state.layout.drive(measured, destination, spec, writer, dt) {
             let mut delta = LayoutDelta::between(shown, measured);
             delta.root_anchored = shared_flight;
+            delta.seed_frame = seed_frame;
             if seed_frame && let Some(computed) = computed.as_mut() {
                 compensate_seed_frame_radius(computed, delta.scale);
             }
@@ -752,8 +764,9 @@ pub fn drive_layout_transitions(
         .collect();
 
     // (entity, parent pristine global INVERSE, parent pristine global,
-    // parent composed global)
-    let mut stack: Vec<(Entity, Affine2, Affine2, Affine2)> = Vec::new();
+    // parent composed global, scale of the entity's offset from the parent's
+    // center — the parent's FLIP scale on its seed frame, else one)
+    let mut stack: Vec<(Entity, Affine2, Affine2, Affine2, Vec2)> = Vec::new();
     for root in roots {
         let parent = parents
             .get(root)
@@ -762,45 +775,53 @@ pub fn drive_layout_transitions(
             .map(|g| **g)
             .unwrap_or(Affine2::IDENTITY);
         if let Some(inv) = inverse(parent) {
-            stack.push((root, inv, parent, parent));
+            stack.push((root, inv, parent, parent, Vec2::ONE));
         }
     }
-    while let Some((entity, parent_inverse, parent_pristine, parent_composed)) = stack.pop() {
+    while let Some((entity, parent_inverse, parent_pristine, parent_composed, offset_scale)) =
+        stack.pop()
+    {
         let Ok(mut global) = globals.get_mut(entity) else {
             continue;
         };
         // Read through `Deref` — pristine, and no change mark on a no-op.
         let pristine = **global;
         let local = parent_inverse * pristine;
+        let mut placed = local;
+        placed.translation *= offset_scale;
         // The scale is the node's OWN (its box eases); children compose
         // from the translated-but-unscaled frame, so content stays crisp
         // and sits at its final offset while the container resizes.
-        let (composed, for_children) = match deltas.get(&entity) {
+        let delta = deltas.get(&entity);
+        let (composed, for_children) = match delta {
             Some(d) => {
                 // A shared flight's translation is a root-space path in the
                 // parent's PRISTINE frame: composing it under the parent's
                 // shown frame would apply the ancestors' deltas twice.
-                let base = if d.root_anchored {
-                    parent_pristine
+                let (base, local) = if d.root_anchored {
+                    (parent_pristine, local)
                 } else {
-                    parent_composed
+                    (parent_composed, placed)
                 };
                 let unscaled = base * Affine2::from_translation(d.translation) * local;
                 (unscaled * Affine2::from_scale(d.scale), unscaled)
             }
             None => {
-                let c = parent_composed * local;
+                let c = parent_composed * placed;
                 (c, c)
             }
         };
         if composed != pristine {
             *global = composed.into();
         }
+        let child_offsets = delta
+            .filter(|d| d.seed_frame)
+            .map_or(Vec2::ONE, |d| d.scale);
         if let Ok(kids) = children.get(entity)
             && let Some(inv) = inverse(pristine)
         {
             for &child in kids {
-                stack.push((child, inv, pristine, for_children));
+                stack.push((child, inv, pristine, for_children, child_offsets));
             }
         }
     }

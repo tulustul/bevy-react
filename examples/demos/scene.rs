@@ -11,7 +11,7 @@ use ts_rs::TS;
 /// scene's plugin gates its systems on this state and tags its entities with
 /// `DespawnOnExit(Scene::…)` so they vanish on switch. `None` (the startup
 /// state, and what `selectScene(null)` selects) runs no scene: the permanent
-/// aurora backdrop (`scenes::ambient`) shows alone. A fieldless enum
+/// studio backdrop (`scenes::ambient`) shows alone. A fieldless enum
 /// serializes as a plain string, so the generated TS is a `"None" | "Cubes" |
 /// …` union.
 #[derive(States, Default, Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize, TS)]

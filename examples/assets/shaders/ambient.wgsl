@@ -1,75 +1,84 @@
-// Full-screen backdrop for the ambient scene (see
-// `examples/demos/scenes/ambient.rs`): a gentle aurora — three soft light
-// curtains waving across a starry night sky. The aurora itself is computed
-// here from `globals.time` + the view uniform, so the CPU does nothing per
-// frame for it; the material's one uniform is the burst below.
+// Full-screen backdrop for every scene (see `examples/demos/scenes/ambient.rs`):
+// a dark studio lit by two coloured gel lights — React's cyan from the upper
+// left, Bevy's ember from the lower right — with dust drifting through the
+// beams. Everything is computed here from `globals.time` + the view uniform,
+// so the CPU does nothing per frame for it; the material's one uniform is the
+// burst below.
 //
-//   * Curtain ribbons are fbm-warped curves across the screen; each has a
-//     bright core with haze that bleeds mostly upward (real curtains glow at
-//     the bottom edge and fade up) plus slow vertical shimmer streaks.
-//   * The whole field sweeps continuously in one direction (leftward): every
-//     x-dependent noise sample reads from `p.x + t·speed`, with higher layers
-//     sweeping slightly faster for depth; the shape morphing on top is much
-//     slower than the sweep, so the translation always dominates.
-//   * The palette is a classic aurora ramp (teal-green low, cyan mid, violet
-//     high) with a very slow hue breathing, deliberately muted — this is a
-//     backdrop, not the star of the show.
-//   * The camera's forward vector slides the sky (fake parallax): dragging or
-//     auto-orbiting the otherwise unused 3D camera moves the field, stars
-//     less than curtains.
-//   * A ±1/255 animated hash dither hides banding on the dark sky gradients.
-//   * On top of all that sits the **burst**: a one-shot shockwave fired from
-//     React (`bevy.nebula.burst({ hue })`, see the home page's "Typed
-//     messages" tile). The material's single uniform carries `(hue, progress)`
-//     and the CPU only writes it while a burst is playing — `progress >= 1`
-//     means "no burst", and every term below folds to zero there.
+//   * The studio is a near-black vertical gradient with a soft vignette — the
+//     UI's surfaces sit one step above it.
+//   * Each gel light is a wide soft pool that drifts and breathes very slowly
+//     (periods of tens of seconds), its body broken up by slowly churning
+//     haze so it reads as light in air, not a flat gradient.
+//   * Dust motes: two depth layers of soft specks rising slowly, visible only
+//     where a light falls on them and tinted by it — near specks larger,
+//     blurrier and faster. The camera's forward vector slides them (fake
+//     parallax), so the orbiting 3D camera gives the air a little depth.
+//   * A ±1/255 animated hash dither hides banding on the dark gradients.
+//   * On top sits the **burst**: a one-shot shockwave fired from React
+//     (`bevy.nebula.burst({ hue })`, see the home page's "Typed messages"
+//     tile). The material's single uniform carries `(hue, progress)` and the
+//     CPU only writes it while a burst is playing — `progress >= 1` means "no
+//     burst", and every term below folds to zero there.
 
 #import bevy_pbr::{
     forward_io::VertexOutput,
     mesh_view_bindings::{globals, view},
 }
 
-// `(hue, progress, 0, 0)` — see `Burst` in `examples/demos/scenes/ambient.rs`.
-// `progress` runs 0→1 over the burst and parks at 1.0 when there is none.
+// `(hue, progress, 0, 0)` — see `AmbientMaterial` in
+// `examples/demos/scenes/ambient.rs`. `progress` runs 0→1 over the burst and
+// parks at 1.0 when there is none.
 @group(#{MATERIAL_BIND_GROUP}) @binding(0) var<uniform> burst: vec4<f32>;
 
-// Overall brightness of the curtains ("gentle" knob).
-const INTENSITY: f32 = 0.55;
-// How fast the field sweeps across the sky (pattern units per second — the
-// visible screen is ~1.5 units wide) and how fast shapes morph while sweeping.
-const SWEEP_SPEED: f32 = 0.045;
-const MORPH_SPEED: f32 = 0.012;
-// How far the camera forward vector slides the sky, in pattern units.
-const PARALLAX_STRENGTH: f32 = 0.18;
-// How far the burst's shockwave ring travels (pattern units) and how wide the
-// ring is at its brightest. The ring both expands and thins as it goes.
+// Studio gradient endpoints (top → bottom of the screen), linear RGB.
+const STUDIO_TOP: vec3<f32> = vec3<f32>(0.0036, 0.0040, 0.0056);
+const STUDIO_BOTTOM: vec3<f32> = vec3<f32>(0.0060, 0.0064, 0.0084);
+// How much the corners darken (0 = no vignette).
+const VIGNETTE: f32 = 0.55;
+// The two gels, linear RGB at full strength (cyan #5cd9ff, ember #ff8a4c).
+const CYAN: vec3<f32> = vec3<f32>(0.105, 0.694, 1.0);
+const EMBER: vec3<f32> = vec3<f32>(1.0, 0.254, 0.072);
+// Peak pool brightness of each gel ("how lit is the studio" knob), and of
+// its hot core — the bright leak right at the light's corner that makes the
+// pool read as light, not fog.
+const CYAN_GAIN: f32 = 0.050;
+const EMBER_GAIN: f32 = 0.034;
+const CYAN_CORE: f32 = 0.10;
+const EMBER_CORE: f32 = 0.09;
+const CORE_FALLOFF: f32 = 3.2;
+// Pool centres, as offsets from the top-left (cyan) and bottom-right (ember)
+// screen corners in aspect-corrected uv, and radii.
+const CYAN_AT: vec2<f32> = vec2<f32>(0.05, -0.05);
+const EMBER_AT: vec2<f32> = vec2<f32>(0.0, 0.08);
+const CYAN_RADIUS: f32 = 0.95;
+const EMBER_RADIUS: f32 = 0.90;
+// How far the pools wander, and how fast (radians per second).
+const DRIFT: f32 = 0.10;
+const DRIFT_SPEED: f32 = 0.045;
+// Haze: how strongly it breaks up the pools, its scale and churn speed.
+const HAZE: f32 = 0.45;
+const HAZE_SCALE: f32 = 2.2;
+const HAZE_SPEED: f32 = 0.018;
+// Dust: brightness, rise speed (uv per second) of the far layer, and how
+// strongly the camera slides the layers.
+const DUST_GAIN: f32 = 0.55;
+const DUST_RISE: f32 = 0.008;
+const PARALLAX_STRENGTH: f32 = 0.06;
+// The burst's shockwave: reach (uv), ring width, ring/trail gains, decay.
 const BURST_REACH: f32 = 1.5;
 const BURST_RING_WIDTH: f32 = 0.20;
-// Peak brightness of the ring, and of the glow trailing behind it. The trail
-// is deliberately much weaker: this is a wave crossing the sky, not a flash.
-const BURST_RING_GAIN: f32 = 2.4;
-const BURST_TRAIL_GAIN: f32 = 0.55;
-// How fast the trailing glow decays inward from the wavefront (per pattern
-// unit). Higher = a tighter wake, more of the aurora left visible.
+const BURST_RING_GAIN: f32 = 1.6;
+const BURST_TRAIL_GAIN: f32 = 0.35;
 const BURST_TRAIL_DECAY: f32 = 2.6;
-// Night-sky gradient endpoints (top → bottom of the screen).
-const SKY_TOP: vec3<f32> = vec3<f32>(0.008, 0.010, 0.030);
-const SKY_BOTTOM: vec3<f32> = vec3<f32>(0.030, 0.022, 0.060);
-// Curtain colors, low → high layer (teal-green, cyan, violet).
-const CURTAIN_COLORS: array<vec3<f32>, 3> = array<vec3<f32>, 3>(
-    vec3<f32>(0.10, 0.85, 0.45),
-    vec3<f32>(0.15, 0.55, 0.85),
-    vec3<f32>(0.55, 0.25, 0.85),
-);
 
 // A saturated color for a 0..1 hue, as a cheap cosine palette (Inigo Quilez).
-// Deliberately vivid: the burst is the one moment this backdrop is allowed to
-// stop being a backdrop.
 fn hue_color(h: f32) -> vec3<f32> {
     return 0.55 + 0.45 * cos(6.28318 * (h + vec3<f32>(0.0, 0.33, 0.67)));
 }
 
-// Cheap 2D→1D hash (Dave Hoskins' hash12) — noise lattice, stars, dither.
+// Cheap 2D→1D hash (Dave Hoskins' hash12) — only ever fed exact integer
+// lattice coords (or a pixel position, for the dither).
 fn hash12(p: vec2<f32>) -> f32 {
     var p3 = fract(vec3<f32>(p.x, p.y, p.x) * 0.1031);
     p3 += dot(p3, p3.yzx + 33.33);
@@ -93,6 +102,27 @@ fn fbm(p: vec2<f32>) -> f32 {
     return 0.533 * vnoise(p) + 0.267 * vnoise(p * 2.03 + 17.3) + 0.133 * vnoise(p * 4.01 + 41.7);
 }
 
+// A soft light pool: 1 at the centre, a long gaussian tail.
+fn pool(p: vec2<f32>, center: vec2<f32>, radius: f32) -> f32 {
+    let d = (p - center) / radius;
+    return exp(-dot(d, d) * 2.2);
+}
+
+// One layer of dust: soft specks on a jittered grid of `cells` per uv unit,
+// most cells empty. Returns coverage 0..1.
+fn dust(p: vec2<f32>, cells: f32, size: f32, blur: f32, seed: f32) -> f32 {
+    let g = p * cells;
+    let cell = floor(g);
+    let rnd = hash12(cell + seed);
+    if rnd < 0.82 {
+        return 0.0;
+    }
+    let jitter = vec2<f32>(hash12(cell + seed + 3.1), hash12(cell + seed + 5.2)) * 0.7 + 0.15;
+    let d = length(fract(g) - jitter);
+    let twinkle = 0.6 + 0.4 * sin(globals.time * (0.4 + rnd * 0.9) + rnd * 50.0);
+    return (1.0 - smoothstep(size, size + blur, d)) * twinkle;
+}
+
 struct FragmentOutput {
     @location(0) color: vec4<f32>,
     // Pinned to the reverse-Z far plane: the backdrop always loses the depth
@@ -106,89 +136,60 @@ struct FragmentOutput {
 fn fragment(in: VertexOutput) -> FragmentOutput {
     let uv = (in.position.xy - view.viewport.xy) / view.viewport.zw;
     let aspect = view.viewport.z / view.viewport.w;
-    let sweep = globals.time * SWEEP_SPEED;
-    let morph = globals.time * MORPH_SPEED;
+    let t = globals.time;
+    // Aspect-corrected screen coordinates; y runs down the screen.
+    let p = vec2<f32>(uv.x * aspect, uv.y);
 
-    // Camera forward in world space; its x/y sway with orbit yaw/pitch and
-    // feed the fake parallax (continuous — no wrap jump, unlike raw angles).
+    // The studio: dark gradient, darker corners.
+    var rgb = mix(STUDIO_TOP, STUDIO_BOTTOM, uv.y);
+    let v = (uv - 0.5) * vec2<f32>(1.0, 1.15);
+    rgb *= 1.0 - VIGNETTE * dot(v, v);
+
+    // The gels: slow drift + breathing, broken up by churning haze.
+    let wander = vec2<f32>(sin(t * DRIFT_SPEED), cos(t * DRIFT_SPEED * 0.73));
+    let cyan_at = CYAN_AT + DRIFT * wander;
+    let ember_at = vec2<f32>(aspect, 1.0) + EMBER_AT - DRIFT * wander.yx;
+    let haze = mix(1.0 - HAZE, 1.0, fbm(p * HAZE_SCALE + vec2<f32>(t * HAZE_SPEED, -t * HAZE_SPEED * 0.6)));
+    let breathe_c = 0.88 + 0.12 * sin(t * 0.07);
+    let breathe_e = 0.88 + 0.12 * sin(t * 0.059 + 2.0);
+    let cyan = pool(p, cyan_at, CYAN_RADIUS) * breathe_c * haze;
+    let ember = pool(p, ember_at, EMBER_RADIUS) * breathe_e * haze;
+    let cyan_core = exp(-distance(p, cyan_at) * CORE_FALLOFF) * breathe_c;
+    let ember_core = exp(-distance(p, ember_at) * CORE_FALLOFF) * breathe_e;
+    rgb += CYAN * (cyan * CYAN_GAIN + cyan_core * CYAN_CORE);
+    rgb += EMBER * (ember * EMBER_GAIN + ember_core * EMBER_CORE);
+
+    // Dust in the beams: lit (and tinted) by whichever gel reaches it.
     let forward = -view.world_from_view[2].xyz;
     let par = forward.xy * PARALLAX_STRENGTH;
+    let rise = vec2<f32>(0.0, t * DUST_RISE);
+    let far = dust(p + par * 0.5 + rise, 34.0, 0.035, 0.06, 1.7);
+    let near = dust(p + par + rise * 2.2 + vec2<f32>(0.37, 0.0), 13.0, 0.03, 0.14, 9.4) * 0.8;
+    let speck = far + near;
+    rgb += (CYAN * cyan + EMBER * ember) * speck * DUST_GAIN * 0.12;
 
-    // Aspect-corrected sky coordinates; y runs down the screen.
-    let p = vec2<f32>(uv.x * aspect, uv.y) + par;
-
-    // Night-sky gradient, darkest at the top where the curtains live.
-    var rgb = mix(SKY_TOP, SKY_BOTTOM, uv.y);
-
-    // Stars: sparse jittered points on a coarse grid, slow twinkle. They get
-    // the full parallax offset, sitting "behind" the curtains.
-    let sgrid = (p + par * 0.5) * 28.0;
-    let scell = floor(sgrid);
-    let srnd = hash12(scell + 7.7);
-    if srnd > 0.93 {
-        let jitter = vec2<f32>(hash12(scell + 3.1), hash12(scell + 5.2)) * 0.6 + 0.2;
-        let sd = length(fract(sgrid) - jitter);
-        let twinkle = 0.55 + 0.45 * sin(globals.time * (0.6 + srnd * 1.8) + srnd * 40.0);
-        rgb += vec3<f32>(0.85, 0.9, 1.0) * exp(-sd * sd * 220.0) * 0.5 * twinkle;
-    }
-
-    // Three curtain layers, low/bright to high/faint.
-    var curtains = CURTAIN_COLORS;
-    for (var i = 0u; i < 3u; i++) {
-        let fi = f32(i);
-        // The layer's continuously-swept x coordinate: one direction, always;
-        // higher layers sweep a touch faster for depth parallax.
-        let xs = p.x + sweep * (1.0 + 0.35 * fi);
-        // The ribbon's height across the screen: an fbm-warped curve that
-        // translates with the sweep and only slowly changes shape.
-        let warp = fbm(vec2<f32>(xs * 1.3 + fi * 9.0, morph + fi * 23.0));
-        let yc = 0.20 + 0.16 * fi + (warp - 0.5) * 0.55;
-        let d = p.y - yc;
-        // Bright core at the ribbon; haze bleeding mostly upward (d < 0).
-        var glow = exp(-d * d * 160.0) * 0.9;
-        glow += exp(-abs(d) * 5.0) * select(0.18, 0.42, d < 0.0);
-        // Vertical shimmer columns riding along with the same sweep.
-        let streak = 0.55 + 0.45 * fbm(vec2<f32>(xs * 5.0 + fi * 31.0 + warp * 1.5, morph * 3.0));
-        // Faint slow color breathing so the curtain never looks frozen.
-        let breathe = 0.85 + 0.15 * sin(globals.time * 0.11 + fi * 2.1);
-        rgb += curtains[i] * glow * streak * breathe * INTENSITY * (1.0 - 0.22 * fi);
-    }
-
-    // The burst: a shockwave ring racing outward from the middle of the sky,
-    // trailing a broad wash of the same hue. `p01 >= 1` (the parked state)
-    // makes `fade` zero, so an idle backdrop pays only this branch.
+    // The burst: a shockwave ring racing outward from the middle of the
+    // screen, trailing a broad wash of the same hue. `p01 >= 1` (the parked
+    // state) makes `fade` zero, so an idle backdrop pays only this branch.
     let p01 = burst.y;
     if p01 < 1.0 {
         let tint = hue_color(burst.x);
-        // Ease the radius out so the wave leaves fast and coasts to a stop —
-        // gently enough that the ring is on screen for most of the burst
-        // rather than off the edge in the first few frames.
         let eased = 1.0 - pow(1.0 - p01, 2.2);
         let radius = eased * BURST_REACH;
-        // Everything the burst does dies off together, quadratically.
         let fade = (1.0 - p01) * (1.0 - p01);
-        // Distance from the burst's origin (screen center, aspect-corrected)
-        // ignores the parallax offset: the shockwave belongs to the screen,
-        // not to the sky behind it.
         let d = length(vec2<f32>((uv.x - 0.5) * aspect, uv.y - 0.5));
-        // The ring thins as it expands, so it reads as a wave rather than a
-        // growing blob.
         let width = BURST_RING_WIDTH * (1.0 - 0.6 * eased);
-        // Squared by multiplication, not `pow`: the base is negative for every
-        // pixel inside the ring, and WGSL's `pow` is `exp2(y * log2(x))`, which
-        // is out of domain there.
+        // Squared by multiplication, not `pow`: the base is negative inside
+        // the ring, and WGSL's `pow` is out of domain there.
         let front = (d - radius) / width;
         let ring = exp(-front * front);
-        // The wake: brightest just behind the wavefront, decaying inward, and
-        // nothing at all ahead of it. Filling the whole disc instead would
-        // repaint the sky rather than cross it.
         let inside = max(0.0, radius - d);
         let trail = select(0.0, exp(-inside * BURST_TRAIL_DECAY), d < radius);
-        rgb += tint * (ring * BURST_RING_GAIN + trail * BURST_TRAIL_GAIN) * fade;
+        rgb += tint * (ring * BURST_RING_GAIN + trail * BURST_TRAIL_GAIN) * fade * 0.25;
     }
 
-    // Animated ±1/255 dither so the dark sky doesn't band.
-    rgb += (hash12(in.position.xy + fract(globals.time) * 289.0) - 0.5) * (2.0 / 255.0);
+    // Animated ±1/255 dither so the dark gradients don't band.
+    rgb += (hash12(in.position.xy + fract(t) * 289.0) - 0.5) * (2.0 / 255.0);
 
-    return FragmentOutput(vec4<f32>(rgb, 1.0), 0.0);
+    return FragmentOutput(vec4<f32>(max(rgb, vec3<f32>(0.0)), 1.0), 0.0);
 }

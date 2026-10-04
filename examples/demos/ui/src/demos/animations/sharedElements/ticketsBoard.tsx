@@ -1,10 +1,10 @@
 import { useState } from "react";
-import { InlineCode, Paragraph } from "@/components/typography";
+import { BoxLabel, InlineCode, Paragraph } from "@/components/typography";
 import { BevyStyle } from "bevy-react/jsx";
 
-import { Example } from "@/components";
+import { Example, Stage } from "@/components";
 import { Code } from "@/components/docs";
-import { Colors, FontSizes } from "@/theme";
+import { Colors, Fonts, FontSizes } from "@/theme";
 import { useIsMobile } from "@/hooks";
 
 export function MoveBetweenCards() {
@@ -53,7 +53,7 @@ function TicketsBoard() {
   }
 
   const column = (side: "todo" | "done", ids: string[]) => (
-    <node
+    <Stage
       style={{
         ...kanbanColumn,
         ...(isMobile && { width: 140 }),
@@ -68,8 +68,7 @@ function TicketsBoard() {
           style={{
             ...kanbanItem,
             width: "100%",
-            backgroundColor:
-              side === "todo" ? Colors.primary100 : Colors.green100,
+            backgroundColor: side === "todo" ? Colors.cyan : Colors.mint,
             globalZIndex: 1,
             transition: {
               sharedElement: { duration: 400, easing: "easeOut" },
@@ -77,10 +76,10 @@ function TicketsBoard() {
             },
           }}
         >
-          <text style={kanbanLabel}>{id}</text>
+          <BoxLabel style={{ fontSize: FontSizes.sm }}>{id}</BoxLabel>
         </button>
       ))}
-    </node>
+    </Stage>
   );
 
   return (
@@ -96,21 +95,21 @@ const kanbanStage: BevyStyle = {
   gap: 16,
 };
 
+// Laid over the `Stage` plate's chrome.
 const kanbanColumn: BevyStyle = {
   flexDirection: "column",
   width: 170,
   minHeight: 250,
   padding: 10,
   gap: 8,
-  borderRadius: 8,
-  backgroundColor: Colors.surface100,
   transition: { layout: { duration: 300 } },
 };
 
 const kanbanTitle: BevyStyle = {
-  color: Colors.textColor200,
+  fontFamily: Fonts.display,
+  color: Colors.textBody,
   fontSize: FontSizes.sm,
-  fontWeight: "bold",
+  fontWeight: "semibold",
   margin: { bottom: 4 },
 };
 
@@ -126,10 +125,4 @@ const kanbanItem: BevyStyle = {
     sharedElement: { duration: 400, easing: "easeOut" },
     layout: { duration: 400, easing: "easeOut" },
   },
-};
-
-const kanbanLabel: BevyStyle = {
-  color: Colors.surface100,
-  fontSize: FontSizes.sm,
-  fontWeight: "bold",
 };

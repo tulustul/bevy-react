@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { InlineCode, Paragraph } from "@/components/typography";
+import { BoxLabel, InlineCode, Paragraph } from "@/components/typography";
+import { BevyStyle } from "bevy-react/jsx";
 import {
   Box,
   ControlColumn,
@@ -11,7 +12,7 @@ import {
 } from "@/components";
 import { Code } from "@/components/docs";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
-import { Colors, FontSizes } from "@/theme";
+import { Colors, Fonts, FontSizes } from "@/theme";
 import { useIsMobile } from "@/hooks";
 
 const PAGE: ExplanationData = {
@@ -25,7 +26,7 @@ const PAGE: ExplanationData = {
         <InlineCode>color</InlineCode> sets text color (inheriting into
         bare-string children).
       </Paragraph>
-      <Code lang="tsx">{`backgroundColor: "#7aa2f7"
+      <Code lang="tsx">{`backgroundColor: "#5cd9ff"
 backgroundColor: "tomato"
 backgroundColor: "rgb(255 255 255 / 5%)"
 backgroundColor: "hsl(140 70% 45%)"
@@ -60,12 +61,12 @@ export function ColorsDemo() {
 
 const COLOR_FORMATS: string[] = [
   "tomato",
-  "rgb(122 162 247)",
+  "rgb(92 217 255)",
   "rgb(122, 62, 247)",
   "rgb(255 255 255 / 5%)",
   "hsl(140 70% 45%)",
   "oklch(0.7 0.15 30)",
-  "#bb9af7",
+  "#a88bff",
 ];
 
 function ColorFormatsDemo() {
@@ -113,15 +114,7 @@ function ColorFormatsCard() {
             justifyContent: "center",
           }}
         >
-          <text
-            style={{
-              color: Colors.textColor400,
-              fontSize: FontSizes.xs,
-              fontWeight: "bold",
-            }}
-          >
-            {color}
-          </text>
+          <BoxLabel style={swatchLabel}>{color}</BoxLabel>
         </node>
       ))}
     </node>
@@ -155,15 +148,7 @@ function BackgroundColorCard() {
   return (
     <ControlColumn>
       <Box style={{ width: 110, height: 72, backgroundColor: color }}>
-        <text
-          style={{
-            color: Colors.textColor400,
-            fontSize: FontSizes.xs,
-            fontWeight: "bold",
-          }}
-        >
-          {color}
-        </text>
+        <BoxLabel style={swatchLabel}>{color}</BoxLabel>
       </Box>
 
       <Slider value={r} min={0} max={255} onChange={setR} name="R" />
@@ -174,10 +159,10 @@ function BackgroundColorCard() {
 }
 
 const BORDER_OPTIONS: RadioOption<string>[] = [
-  { label: "blue", value: Colors.primary100 },
-  { label: "green", value: Colors.green100 },
-  { label: "red", value: Colors.red100 },
-  { label: "purple", value: Colors.purple100 },
+  { label: "blue", value: Colors.sky },
+  { label: "green", value: Colors.mint },
+  { label: "red", value: Colors.rose },
+  { label: "purple", value: Colors.violet },
 ];
 
 function BorderColorDemo() {
@@ -191,7 +176,7 @@ function BorderColorDemo() {
             <InlineCode>borderColor</InlineCode> paints it. See the Borders page
             for per-side widths and radius.
           </Paragraph>
-          <Code lang="tsx">{`<node style={{ border: 4, borderColor: "#bb9af7" }} />`}</Code>
+          <Code lang="tsx">{`<node style={{ border: 4, borderColor: "#a88bff" }} />`}</Code>
         </>
       }
       demo={BorderColorCard}
@@ -200,12 +185,12 @@ function BorderColorDemo() {
 }
 
 function BorderColorCard() {
-  const [c, setC] = useState<string>(Colors.purple100);
+  const [c, setC] = useState<string>(Colors.violet);
   return (
     <ControlColumn>
       <Box
         style={{
-          backgroundColor: Colors.surface200,
+          backgroundColor: Colors.card,
           border: 4,
           borderColor: c,
         }}
@@ -216,10 +201,10 @@ function BorderColorCard() {
 }
 
 const TEXT_OPTIONS: RadioOption<string>[] = [
-  { label: "amber", value: Colors.amber100 },
-  { label: "sky", value: Colors.sky100 },
-  { label: "green", value: Colors.green100 },
-  { label: "red", value: Colors.red100 },
+  { label: "amber", value: Colors.amber },
+  { label: "sky", value: Colors.sky },
+  { label: "green", value: Colors.mint },
+  { label: "red", value: Colors.rose },
 ];
 
 function TextColorDemo() {
@@ -233,7 +218,7 @@ function TextColorDemo() {
             <InlineCode>{"<text>"}</InlineCode> spans can override it for inline
             runs.
           </Paragraph>
-          <Code lang="tsx">{`<text style={{ color: "#f9e2af" }}>Colored text</text>`}</Code>
+          <Code lang="tsx">{`<text style={{ color: "#ffc857" }}>Colored text</text>`}</Code>
         </>
       }
       demo={TextColorCard}
@@ -242,13 +227,23 @@ function TextColorDemo() {
 }
 
 function TextColorCard() {
-  const [c, setC] = useState<string>(Colors.amber100);
+  const [c, setC] = useState<string>(Colors.amber);
   return (
     <ControlColumn>
-      <text style={{ color: c, fontSize: FontSizes.xxl, fontWeight: "bold" }}>
-        Colored text
-      </text>
+      <text style={{ ...coloredText, color: c }}>Colored text</text>
       <Radio options={TEXT_OPTIONS} value={c} onChange={setC} />
     </ControlColumn>
   );
 }
+
+// A swatch's label is the color value itself, so it takes the mono face.
+const swatchLabel: BevyStyle = {
+  fontFamily: Fonts.mono,
+  fontSize: FontSizes.xxs,
+};
+
+const coloredText: BevyStyle = {
+  fontFamily: Fonts.display,
+  fontSize: FontSizes.xxl,
+  fontWeight: "semibold",
+};

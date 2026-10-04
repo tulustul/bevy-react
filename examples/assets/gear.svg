@@ -2,7 +2,7 @@
   <!-- A gear/cog: eight rounded tooth stubs around an evenodd ring (the hub is
        a real hole, so any background shows through). Pure vector - paths,
        rects, and circles only. -->
-  <g fill="#a9c1fa">
+  <g fill="#8ae6ff">
     <rect x="10.6" y="1.6" width="2.8" height="5" rx="1" />
     <rect x="10.6" y="1.6" width="2.8" height="5" rx="1" transform="rotate(45 12 12)" />
     <rect x="10.6" y="1.6" width="2.8" height="5" rx="1" transform="rotate(90 12 12)" />
@@ -13,5 +13,5 @@
     <rect x="10.6" y="1.6" width="2.8" height="5" rx="1" transform="rotate(315 12 12)" />
     <path fill-rule="evenodd" d="M12 4.4a7.6 7.6 0 1 0 0 15.2a7.6 7.6 0 1 0 0-15.2Zm0 4.3a3.3 3.3 0 1 1 0 6.6a3.3 3.3 0 1 1 0-6.6Z" />
   </g>
-  <circle cx="12" cy="12" r="1.1" fill="#7aa2f7" />
+  <circle cx="12" cy="12" r="1.1" fill="#5cd9ff" />
 </svg>

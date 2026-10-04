@@ -1,4 +1,4 @@
-import { Colors, FontSizes } from "@/theme";
+import { Colors, Fonts, FontSizes } from "@/theme";
 import { BevyStyle } from "bevy-react/jsx";
 import { PropsWithChildren } from "react";
 
@@ -8,8 +8,9 @@ export function H2({ children }: PropsWithChildren) {
 }
 
 export const h2Style: BevyStyle = {
+  fontFamily: Fonts.display,
   fontSize: FontSizes.lg,
   fontWeight: "semibold",
-  color: Colors.textColor100,
-  margin: { top: 8 },
+  color: Colors.text,
+  margin: { top: 10 },
 };

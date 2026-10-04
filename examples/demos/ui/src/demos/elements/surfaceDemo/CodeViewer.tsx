@@ -1,7 +1,7 @@
 import { BevyStyle } from "bevy-react/jsx";
 import { TextMono } from "@/components/typography";
 import { Typewriter } from "@/components";
-import { Colors, FontSizes } from "@/theme";
+import { Colors, Fonts, FontSizes } from "@/theme";
 
 // The code samples the viewer types out.
 const TSX = `<surface target="monitor">
@@ -31,11 +31,23 @@ export function CodeViewer() {
   );
 }
 
-function CodeBlock({ lang, code }: { lang: string; code: string }) {
+/** Each side's light, as in the gallery's code blocks: Rust ember, TSX cyan. */
+function CodeBlock({ lang, code }: { lang: "rust" | "tsx"; code: string }) {
   return (
     <node style={block}>
-      <TextMono style={langLabel}>{lang}</TextMono>
-      <Typewriter style={codeText} text={code} cursor />
+      <node style={blockHeader}>
+        <TextMono
+          style={{
+            ...langLabel,
+            color: lang === "rust" ? Colors.ember : Colors.cyan,
+          }}
+        >
+          {lang}
+        </TextMono>
+      </node>
+      <node style={blockBody}>
+        <Typewriter style={codeText} text={code} cursor />
+      </node>
     </node>
   );
 }
@@ -47,28 +59,44 @@ const body: BevyStyle = {
   padding: 24,
 };
 
+// An eyebrow, like the gallery's section labels.
 const heading: BevyStyle = {
-  color: Colors.textColor300,
-  fontSize: FontSizes.sm,
-  fontWeight: "bold",
+  color: Colors.textDim,
+  fontSize: FontSizes.xs,
+  fontWeight: "medium",
+  letterSpacing: 1.2,
 };
 
+// The gallery's code block: a recessed panel with a hairline rim, its language
+// in a header row closed by a hairline.
 const block: BevyStyle = {
   flexDirection: "column",
-  backgroundColor: Colors.surface100,
-  borderRadius: 8,
-  padding: { top: 12, right: 16, bottom: 14, left: 16 },
+  alignItems: "stretch",
+  backgroundColor: Colors.stage,
+  border: 1,
+  borderColor: Colors.line,
+  borderRadius: 12,
+};
+
+const blockHeader: BevyStyle = {
+  padding: { horizontal: 16, vertical: 8 },
+  border: { bottom: 1 },
+  borderColor: Colors.line,
+};
+
+const blockBody: BevyStyle = {
+  padding: { horizontal: 16, vertical: 12 },
 };
 
 const langLabel: BevyStyle = {
-  color: Colors.primary100,
-  fontSize: FontSizes.sm,
-  fontWeight: "bold",
-  padding: { bottom: 6 },
+  fontSize: FontSizes.xs,
+  fontWeight: "medium",
+  letterSpacing: 0.6,
 };
 
 const codeText: BevyStyle = {
-  color: Colors.textColor100,
-  fontSize: FontSizes.base,
-  fontFamily: "Noto Sans Mono",
+  color: Colors.text,
+  fontSize: FontSizes.sm,
+  lineHeight: 1.45,
+  fontFamily: Fonts.mono,
 };

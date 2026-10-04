@@ -7,8 +7,13 @@ export function Paragraph({ children }: PropsWithChildren) {
   return <text style={paragraphStyle}>{children}</text>;
 }
 
+/** One absolute line height for a paragraph AND every inline span in it
+ *  (`Bold`, `InlineCode`): spans don't inherit it, and a span left on its own
+ *  default pulls its lines tighter than the rest of the paragraph. */
+export const PROSE_LINE = { px: 25 };
+
 export const paragraphStyle: BevyStyle = {
-  fontSize: FontSizes.sm,
-  color: Colors.textColor200,
-  lineHeight: 1.55,
+  fontSize: FontSizes.body,
+  color: Colors.textBody,
+  lineHeight: PROSE_LINE,
 };

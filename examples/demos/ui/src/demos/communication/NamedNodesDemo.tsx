@@ -128,7 +128,7 @@ export function NamedNodesDemo() {
           ball with inertia swing after it.
         </text>
 
-        <text style={{ textAlign: "center" }}>Drag the cards</text>
+        <text style={hint}>Drag the cards</text>
 
         <node style={controls}>
           <Button onClick={() => setOffsets({})}>Reset positions</Button>
@@ -198,8 +198,14 @@ function DraggableCard({ id, offset, onMove }: DraggableCardProps) {
 }
 
 const blurb: BevyStyle = {
-  color: Colors.textColor200,
+  color: Colors.textBody,
   fontSize: FontSizes.sm,
+};
+
+const hint: BevyStyle = {
+  color: Colors.textDim,
+  fontSize: FontSizes.xs,
+  textAlign: "center",
 };
 
 const controls: BevyStyle = {
@@ -230,14 +236,15 @@ const card: BevyStyle = {
   justifyContent: "center",
   borderRadius: 12,
   border: 1,
-  borderColor: "#ffffff1f",
-  backgroundColor: Colors.surface300,
-  boxShadow: { blurRadius: 10, spreadRadius: 1, color: Colors.shadow100 },
+  borderColor: Colors.lineStrong,
+  backgroundColor: Colors.raised,
+  boxShadow: { yOffset: 6, blurRadius: 16, color: Colors.shadow },
   // Own the press so a drag never starts anything behind the card.
   focusPolicy: "block",
 };
 
+// Under the pointer the card lifts a step and its rim takes the cyan light.
 const cardHover: BevyStyle = {
-  backgroundColor: Colors.surface500,
-  borderColor: Colors.primary100,
+  backgroundColor: Colors.well,
+  borderColor: Colors.cyan,
 };

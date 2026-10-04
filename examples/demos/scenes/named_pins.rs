@@ -120,19 +120,20 @@ fn setup_pin_assets(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
+    // The UI's demo-subject hues (`Colors` in `ui/src/theme.ts`).
     let palette = [
-        Color::srgb_u8(0x7a, 0xa2, 0xf7),
-        Color::srgb_u8(0xf7, 0x76, 0x8e),
-        Color::srgb_u8(0x9e, 0xce, 0x6a),
-        Color::srgb_u8(0xe0, 0xaf, 0x68),
-        Color::srgb_u8(0xbb, 0x9a, 0xf7),
-        Color::srgb_u8(0x7d, 0xcf, 0xff),
+        Color::srgb_u8(0x5c, 0xd9, 0xff),
+        Color::srgb_u8(0xff, 0x6b, 0x8b),
+        Color::srgb_u8(0x5e, 0xe6, 0xa8),
+        Color::srgb_u8(0xff, 0xc8, 0x57),
+        Color::srgb_u8(0xa8, 0x8b, 0xff),
+        Color::srgb_u8(0x6e, 0xa8, 0xff),
     ];
     commands.insert_resource(PinAssets {
         ball: meshes.add(Sphere::new(BALL_RADIUS)),
         tube: meshes.add(Cylinder::new(TUBE_RADIUS, 1.0)),
         tube_material: materials.add(StandardMaterial {
-            base_color: Color::srgb(0.85, 0.87, 0.95),
+            base_color: Color::srgb_u8(0xcc, 0xd1, 0xdb),
             ..default()
         }),
         palette: palette.to_vec(),
@@ -142,7 +143,7 @@ fn setup_pin_assets(
 /// Keep exactly one pin per live React node named `"pin"`: spawn for new
 /// cards, despawn for unmounted ones. `ReactNodes::all` lists the cards in
 /// mount order — no React-side bookkeeping, no ids over the wire. (There is
-/// no ground mesh: pins stand on the invisible `y = 0` plane over the aurora
+/// no ground mesh: pins stand on the invisible `y = 0` plane over the studio
 /// backdrop.)
 fn sync_pins(
     mut commands: Commands,

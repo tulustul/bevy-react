@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import { Bold, InlineCode, Paragraph } from "@/components/typography";
 import { bevy } from "@/bevy";
-import { Example } from "@/components";
+import { Example, Readout } from "@/components";
 import { CodeTabs } from "@/components/docs";
-import { Colors, FontSizes } from "@/theme";
+import { Colors } from "@/theme";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
 
 const EVENT_TSX = `import { bevy } from "./bevy"; // generated
@@ -90,17 +90,6 @@ function BounceCard() {
     });
   }, []);
 
-  return (
-    <node style={{ flexDirection: "column", alignItems: "center" }}>
-      <text
-        style={{
-          fontSize: FontSizes.xxxl,
-          fontWeight: "bold",
-          color: Colors.yellow100,
-        }}
-      >
-        {bounces}
-      </text>
-    </node>
-  );
+  // The count arrives from Bevy, so it carries the engine's ember.
+  return <Readout label="Bounces" value={bounces} color={Colors.ember} />;
 }

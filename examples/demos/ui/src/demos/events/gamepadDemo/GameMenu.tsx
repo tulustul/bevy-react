@@ -1,13 +1,13 @@
-// The game-like menu, styled as a bold solid console panel: segmented tab
-// strip flanked by LB/RB badges, a big page header, chunky item rows with a
-// hard accent bar on focus, and a footer legend of the pad controls. Built
-// from raw <node>/<text> only (no shared demo components); theme color and
-// font tokens keep it on the app's palette. All interaction flows through
-// the dispatch callback — gamepad input arrives there from the demo's edge
-// detection, and the mouse handlers here feed the very same actions.
+// The game-like menu: a plate on the example's stage with a segmented tab
+// strip flanked by LB/RB badges, item rows that take a cyan accent bar under
+// focus and the selection's cyan wash, and a footer legend of the pad
+// controls. Built from raw <node>/<text> only (no shared demo components);
+// the theme's tokens keep it on the gallery's look. All interaction flows
+// through the dispatch callback — gamepad input arrives there from the demo's
+// edge detection, and the mouse handlers here feed the very same actions.
 
 import { BevyStyle } from "bevy-react/jsx";
-import { Colors, FontSizes } from "@/theme";
+import { Colors, Fonts, FontSizes } from "@/theme";
 import { MENU_PAGES } from "./menuData";
 import type { NavAction, NavState } from "./menuNav";
 
@@ -18,44 +18,53 @@ type Props = {
   dispatch: (action: NavAction) => void;
 };
 
+/** The active tab's and the selected item's wash: cyan pre-mixed over the
+ *  well (the shared `Radio`'s selected pill). */
+
 export function GameMenu({ nav, pulseKey, dispatch }: Props) {
   const page = MENU_PAGES[nav.page];
   return (
     <node style={panelStyle}>
       <node style={tabRowStyle}>
         <ShoulderBadge label="LB" />
-        {MENU_PAGES.map((p, index) => {
-          const active = index === nav.page;
-          return (
-            <node
-              key={p.name}
-              style={{
-                ...tabStyle,
-                backgroundColor: active ? Colors.primary100 : Colors.surface200,
-              }}
-              onClick={() => dispatch({ kind: "gotoPage", index })}
-            >
-              <text
+        <node style={tabGroupStyle}>
+          {MENU_PAGES.map((p, index) => {
+            const active = index === nav.page;
+            return (
+              <node
+                key={p.name}
                 style={{
-                  fontSize: FontSizes.sm,
-                  fontWeight: "bold",
-                  color: active ? Colors.textColor400 : Colors.textColor300,
+                  ...tabStyle,
+                  backgroundColor: active
+                    ? Colors.cyanWash
+                    : Colors.transparent,
                 }}
+                hoverStyle={{
+                  backgroundColor: active
+                    ? Colors.cyanWash
+                    : Colors.controlHover,
+                }}
+                onClick={() => dispatch({ kind: "gotoPage", index })}
               >
-                {p.name.toUpperCase()}
-              </text>
-            </node>
-          );
-        })}
+                <text
+                  style={{
+                    ...tabLabelStyle,
+                    color: active ? Colors.cyanBright : Colors.textDim,
+                  }}
+                >
+                  {p.name.toUpperCase()}
+                </text>
+              </node>
+            );
+          })}
+        </node>
         <ShoulderBadge label="RB" />
       </node>
 
       <node style={columnsRowStyle}>
         {page.columns.map((column, col) => (
           <node key={column.title} style={columnStyle}>
-            <text style={columnTitleStyle}>
-              {`- ${column.title.toUpperCase()} -`}
-            </text>
+            <text style={columnTitleStyle}>{column.title.toUpperCase()}</text>
             {column.items.map((label, row) => (
               <MenuItem
                 key={label}
@@ -100,10 +109,11 @@ function MenuItem({
       style={{
         ...itemStyle,
         backgroundColor: selected
-          ? Colors.primary100
+          ? Colors.cyanWash
           : focused
-            ? Colors.surface400
-            : Colors.surface200,
+            ? Colors.well
+            : Colors.raised,
+        borderColor: focused ? Colors.lineStrong : Colors.line,
         transform: {
           translateX: focused ? 6 : 0,
           scale: pulsing ? 1.06 : 1,
@@ -115,18 +125,21 @@ function MenuItem({
       <node
         style={{
           ...accentBarStyle,
-          backgroundColor: focused
-            ? selected
-              ? Colors.textColor400
-              : Colors.primary100
-            : Colors.transparent,
+          backgroundColor: focused ? Colors.cyan : Colors.transparent,
+          boxShadow: {
+            blurRadius: 8,
+            color: focused ? Colors.cyanGlow : Colors.transparent,
+          },
         }}
       />
       <text
         style={{
-          fontSize: FontSizes.base,
-          fontWeight: "bold",
-          color: selected ? Colors.textColor400 : Colors.textColor100,
+          ...itemLabelStyle,
+          color: selected
+            ? Colors.cyanBright
+            : focused
+              ? Colors.text
+              : Colors.textBody,
         }}
       >
         {label}
@@ -139,15 +152,7 @@ function MenuItem({
 function ShoulderBadge({ label }: { label: string }) {
   return (
     <node style={shoulderBadgeStyle}>
-      <text
-        style={{
-          fontSize: FontSizes.xs,
-          fontWeight: "bold",
-          color: Colors.textColor200,
-        }}
-      >
-        {label}
-      </text>
+      <text style={shoulderLabelStyle}>{label}</text>
     </node>
   );
 }
@@ -156,33 +161,24 @@ function Legend({ badge, label }: { badge: string; label: string }) {
   return (
     <node style={{ flexDirection: "row", gap: 6, alignItems: "center" }}>
       <node style={legendBadgeStyle}>
-        <text
-          style={{
-            fontSize: FontSizes.xxs,
-            fontWeight: "bold",
-            color: Colors.textColor100,
-          }}
-        >
-          {badge}
-        </text>
+        <text style={legendBadgeLabelStyle}>{badge}</text>
       </node>
-      <text style={{ fontSize: FontSizes.xxs, color: Colors.textColor300 }}>
-        {label}
-      </text>
+      <text style={legendLabelStyle}>{label}</text>
     </node>
   );
 }
 
+// The plate: the example stage's container look (`Stage`).
 const panelStyle: BevyStyle = {
   flexDirection: "column",
   alignItems: "center",
   gap: 12,
   width: 640,
   padding: { top: 18, bottom: 14, left: 22, right: 22 },
-  backgroundColor: Colors.surface100,
-  border: 3,
-  borderColor: Colors.primary400,
-  borderRadius: 6,
+  backgroundColor: Colors.card,
+  border: 1,
+  borderColor: Colors.line,
+  borderRadius: 12,
 };
 
 const tabRowStyle: BevyStyle = {
@@ -191,19 +187,45 @@ const tabRowStyle: BevyStyle = {
   alignItems: "center",
 };
 
+// A segmented control: the tabs share one recessed well.
+const tabGroupStyle: BevyStyle = {
+  flexDirection: "row",
+  gap: 2,
+  padding: 3,
+  borderRadius: 10,
+  border: 1,
+  borderColor: Colors.line,
+  backgroundColor: Colors.well,
+};
+
 const tabStyle: BevyStyle = {
-  padding: { horizontal: 16, vertical: 17 },
-  borderRadius: 4,
+  padding: { horizontal: 16, vertical: 8 },
+  borderRadius: 7,
   cursor: "pointer",
   transition: { backgroundColor: { duration: 120 } },
 };
 
+const tabLabelStyle: BevyStyle = {
+  fontSize: FontSizes.sm,
+  fontWeight: "semibold",
+  letterSpacing: 1,
+};
+
+// A chip: raised, with a hairline rim.
 const shoulderBadgeStyle: BevyStyle = {
   padding: { horizontal: 8, vertical: 4 },
-  border: 2,
-  borderColor: Colors.surface600,
-  borderRadius: 4,
+  border: 1,
+  borderColor: Colors.lineStrong,
+  borderRadius: 6,
+  backgroundColor: Colors.raised,
   margin: { horizontal: 6 },
+};
+
+const shoulderLabelStyle: BevyStyle = {
+  fontFamily: Fonts.mono,
+  fontSize: FontSizes.xs,
+  fontWeight: "semibold",
+  color: Colors.textBody,
 };
 
 const columnsRowStyle: BevyStyle = {
@@ -220,9 +242,11 @@ const columnStyle: BevyStyle = {
 };
 
 const columnTitleStyle: BevyStyle = {
-  fontSize: FontSizes.xs,
-  fontWeight: "bold",
-  color: Colors.textColor300,
+  fontFamily: Fonts.mono,
+  fontSize: FontSizes.xxs,
+  fontWeight: "medium",
+  letterSpacing: 1.2,
+  color: Colors.textDim,
   textAlign: "center",
 };
 
@@ -231,7 +255,8 @@ const itemStyle: BevyStyle = {
   alignItems: "center",
   gap: 10,
   padding: { top: 9, bottom: 9, left: 10, right: 12 },
-  borderRadius: 3,
+  borderRadius: 8,
+  border: 1,
   cursor: "pointer",
   transition: {
     transform: { duration: 150, easing: "easeOut" },
@@ -239,17 +264,23 @@ const itemStyle: BevyStyle = {
   },
 };
 
+const itemLabelStyle: BevyStyle = {
+  fontSize: FontSizes.base,
+  fontWeight: "medium",
+};
+
 const accentBarStyle: BevyStyle = {
-  width: 4,
+  width: 3,
   height: 18,
-  borderRadius: 1,
+  borderRadius: 2,
 };
 
 const selectedMarkStyle: BevyStyle = {
   width: 8,
   height: 8,
   borderRadius: 4,
-  backgroundColor: Colors.textColor400,
+  backgroundColor: Colors.cyan,
+  boxShadow: { blurRadius: 8, color: Colors.cyanGlow },
   margin: { left: "auto" },
 };
 
@@ -260,14 +291,27 @@ const footerStyle: BevyStyle = {
   margin: { top: 4 },
   padding: { top: 10 },
   border: { top: 1, bottom: 0, left: 0, right: 0 },
-  borderColor: Colors.surface300,
+  borderColor: Colors.line,
   width: "100%",
 };
 
 const legendBadgeStyle: BevyStyle = {
   padding: { horizontal: 7, vertical: 2 },
   border: 1,
-  borderColor: Colors.surface600,
-  borderRadius: 3,
-  backgroundColor: Colors.surface200,
+  borderColor: Colors.line,
+  borderRadius: 6,
+  backgroundColor: Colors.raised,
+};
+
+const legendBadgeLabelStyle: BevyStyle = {
+  fontFamily: Fonts.mono,
+  fontSize: FontSizes.xxs,
+  fontWeight: "semibold",
+  color: Colors.textBody,
+};
+
+const legendLabelStyle: BevyStyle = {
+  fontSize: FontSizes.xxs,
+  letterSpacing: 0.6,
+  color: Colors.textDim,
 };

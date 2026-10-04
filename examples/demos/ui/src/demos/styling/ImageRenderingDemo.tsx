@@ -7,7 +7,14 @@ import {
   List,
 } from "@/components/typography";
 import { BevyStyle } from "bevy-react/jsx";
-import { DemoRow, Example, Figure, Radio, stage } from "@/components";
+import {
+  ControlColumn,
+  DemoRow,
+  Example,
+  Figure,
+  Radio,
+  Stage,
+} from "@/components";
 import { Code } from "@/components/docs";
 import { useDemoPage, type ExplanationData } from "@/explanationStore";
 import { Colors } from "@/theme";
@@ -110,10 +117,8 @@ export function ImageRenderingDemo() {
   );
 }
 
-/** The card body stacks the sizes row over the controls (a native 486px
+/** The card body stacks the sizes plate over the controls (a native 486px
  *  column beside the radios would overrun the page). */
-const body: BevyStyle = { ...stage, flexDirection: "column" };
-
 const sizesRow: BevyStyle = {
   flexDirection: "row",
   flexWrap: "wrap",
@@ -150,7 +155,7 @@ function useControls() {
     <node style={controls}>
       <Caption>rendering</Caption>
       <Radio options={MODE_OPTIONS} value={mode} onChange={setMode} />
-      <Caption>image</Caption>
+      <Caption style={{ margin: { top: 6 } }}>image</Caption>
       <Radio options={PIC_OPTIONS} value={pic} onChange={setPic} />
     </node>
   );
@@ -194,10 +199,10 @@ function ImageElementDemo() {
 function ImageElementCard() {
   const { mode, picture, sizeOf, label, panel } = useControls();
   return (
-    <node style={body}>
-      <node style={sizesRow}>
+    <ControlColumn>
+      <Stage style={sizesRow}>
         {picture.sizes.map((width) => (
-          <Figure key={width} style={{ gap: 6 }} caption={label(width)}>
+          <Figure key={width} style={{ gap: 6 }} caption={label(width)} mono>
             <image
               src={picture.src}
               style={{
@@ -210,9 +215,9 @@ function ImageElementCard() {
             />
           </Figure>
         ))}
-      </node>
+      </Stage>
       {panel}
-    </node>
+    </ControlColumn>
   );
 }
 
@@ -254,15 +259,15 @@ function BackgroundImageDemo() {
 function BackgroundImageCard() {
   const { mode, picture, sizeOf, label, panel } = useControls();
   return (
-    <node style={body}>
-      <node style={sizesRow}>
+    <ControlColumn>
+      <Stage style={sizesRow}>
         {picture.sizes.map((width) => (
-          <Figure key={width} style={{ gap: 6 }} caption={label(width)}>
+          <Figure key={width} style={{ gap: 6 }} caption={label(width)} mono>
             <node
               style={{
                 ...sizeOf(width),
                 borderRadius: 6,
-                backgroundColor: Colors.surface300,
+                backgroundColor: Colors.raised,
                 backgroundImage: { src: picture.src },
                 imageRendering: mode,
                 transform: { scale: 1 },
@@ -272,8 +277,8 @@ function BackgroundImageCard() {
             />
           </Figure>
         ))}
-      </node>
+      </Stage>
       {panel}
-    </node>
+    </ControlColumn>
   );
 }

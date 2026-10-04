@@ -18,6 +18,9 @@ export type PinchableProps = {
    *  is behind it (`"block"`, the default — it is a button-shaped thing) or
    *  lets it through (`"pass"`). */
   focusPolicy?: "block" | "pass";
+  /** The drop shadow (or glow) under the surface at rest — it flattens
+   *  while pressed. `null` drops the shadow layer entirely (flat rows). */
+  shadow?: PinchShadow | null;
   /** Called when the press starts (`true`) and ends (`false`) — the press
    *  surface owns the gesture, so a child can't observe it with its own
    *  pointer handlers (see `children`). */
@@ -33,6 +36,12 @@ export type PinchableProps = {
    *  observe the press). */
   children: ReactNode;
 };
+
+/** The `shadow` filter's look at rest, in px. A colored, offset-free one is a
+ *  glow. */
+export type PinchShadow = { color: string; offsetY: number; spread: number };
+
+const DEFAULT_SHADOW: PinchShadow = { color: "black", offsetY: 4, spread: 5 };
 
 /** The press feel: pressed-state magnitudes for the built-in `pinch` filter
  *  (normalized params — see `crates/core/src/filters/builtin/pinch.rs`). */
@@ -59,8 +68,9 @@ export function isPinchEnabled(params?: Partial<PinchParams>): boolean {
  *  Two wrapper nodes, both owned by Pinchable — the children are rendered
  *  as-is, never cloned:
  *
- *  - the **shadow layer** (outer): a drop shadow that flattens while pressed,
- *    eased through `transition: { filter }`. It has to be its own layer: the
+ *  - the **shadow layer** (outer): a drop shadow (or glow, see `shadow`) that
+ *    flattens while pressed, eased through `transition: { filter }`. It has
+ *    to be its own layer: the
  *    pinch chain below carries an `{ animated }` binding, and ANY filter
  *    binding parks a node's whole filter transition channel;
  *  - the **press surface** (inner): the pinch chain, the pressed translate,
@@ -78,6 +88,7 @@ export function Pinchable({
   children,
   filters,
   focusPolicy = "block",
+  shadow = DEFAULT_SHADOW,
   onPressedChange,
 }: PinchableProps) {
   const strength = useSharedValue(0);
@@ -122,17 +133,19 @@ export function Pinchable({
     strength.value = withSpring(0, { stiffness: 700, damping: 10 });
   };
 
-  const shadowStyle: BevyStyle = {
-    filter: {
-      name: "shadow",
-      params: {
-        color: "black",
-        offsetY: pressed ? 0 : 4,
-        spread: pressed ? 2 : 5,
-      },
-    },
-    transition: { filter: { duration: 150 } },
-  };
+  const shadowStyle: BevyStyle = shadow
+    ? {
+        filter: {
+          name: "shadow",
+          params: {
+            color: shadow.color,
+            offsetY: pressed ? 0 : shadow.offsetY,
+            spread: pressed ? shadow.spread * 0.4 : shadow.spread,
+          },
+        },
+        transition: { filter: { duration: 150 } },
+      }
+    : {};
 
   const surfaceStyle: BevyStyle = {
     // Fill the shadow wrapper along its (row) main axis so a child's
