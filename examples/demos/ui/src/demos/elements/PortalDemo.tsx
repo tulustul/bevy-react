@@ -101,17 +101,19 @@ fn on_set_follow_mode(ev: On<SetFollowMode>, mut targets: ResMut<RenderTargets>)
 function FollowCamCard() {
   const [continuous, setContinuous] = useState(true);
 
-  // Keep Bevy's "follow" render mode in sync with the checkbox. We emit on every
-  // change AND re-emit whenever the scene (re)spawns its targets: the "follow"
-  // target is created (in Snapshot mode) only when the CrowdedCubes scene's
-  // OnEnter runs, which is *after* this component's first render — so a mount-time
-  // emit alone would hit a not-yet-registered target and be dropped, leaving the
-  // initial "continuous" state ignored until the box was toggled.
+  // Keep Bevy's "follow" render mode in sync with the checkbox, once the
+  // target exists: it is created (in Snapshot mode) only when the CrowdedCubes
+  // scene spawns — possibly *after* this component's first render (a scene
+  // switch flips at its midpoint), when an emit would hit a not-yet-registered
+  // target and be dropped. The cubes request answers once the scene is live.
   useEffect(() => {
-    bevy.crowdedCubes.setFollowMode(continuous);
-    return bevy.on("crowdedCubes.spawned", () =>
-      bevy.crowdedCubes.setFollowMode(continuous),
-    );
+    let mounted = true;
+    void bevy.crowdedCubes.cubes().then(() => {
+      if (mounted) bevy.crowdedCubes.setFollowMode(continuous);
+    });
+    return () => {
+      mounted = false;
+    };
   }, [continuous]);
 
   return (

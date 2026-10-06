@@ -1,7 +1,8 @@
 //! Example consumer of the `bevy_react` library: one Bevy app whose UI is a React
 //! app (see `ui/`), overlaid on a live 3D scene. A left-nav switches between the
-//! demos; React drives the active 3D scene with `bevy.selectScene(id)` (or
-//! `null` for the ambient backdrop). Each scene is its own plugin:
+//! demos; React drives the active 3D scene with `bevy.selectScene({ scene })`
+//! (`null` for the ambient backdrop; a `transition` dips through it — see
+//! `scene.rs`). Each scene is its own plugin:
 //!
 //!   * Ambient       — the permanent full-screen shader backdrop (a dark studio
 //!     lit by two gel lights) behind every scene.
@@ -43,7 +44,6 @@ use bevy::prelude::*;
 use bevy_react::prelude::*;
 
 use camera::CameraPlugin;
-use scene::Scene;
 use scenes::ambient::AmbientScenePlugin;
 use scenes::bouncing_ball::BouncingBallScenePlugin;
 use scenes::crowded_cubes::CrowdedCubesScenePlugin;
@@ -294,8 +294,8 @@ fn build_app(window: Window, hot_reload: bool) -> App {
         // Every bevy-react plugin this build compiles in (all of them: the
         // `bevy-react` default features), with our configured bridge.
         .add_plugins(ReactPlugins.set(react_plugin))
-        // State must be registered after DefaultPlugins (which brings StatesPlugin).
-        .init_state::<Scene>()
+        // The scene state + its dip; after DefaultPlugins (which brings StatesPlugin).
+        .add_plugins(scene::ScenePlugin)
         // The shared 3D camera (auto-orbit + mouse-drag + wheel-zoom + per-scene reframe).
         .add_plugins(CameraPlugin)
         // The app-authored `<cube>` element (the "Custom elements" demo).
@@ -322,10 +322,9 @@ fn build_app(window: Window, hot_reload: bool) -> App {
     // rendering belongs to `<portal>`).
     app.add_systems(Startup, register_host_textures);
 
-    // Each scene's plugin registers its own bindings in `build`; only the global
-    // scene-selection + debug-navigation + clipboard handlers are left to
-    // register here.
-    scene::register_bindings(&mut app);
+    // Each scene's plugin registers its own bindings in `build` (as does
+    // `ScenePlugin`); only the debug-navigation + clipboard handlers are left
+    // to register here.
     clipboard::register_bindings(&mut app);
     filters::register_bindings(&mut app);
     // Screenshot navigation rides a `#[react_event]`; native-only (the module is too).

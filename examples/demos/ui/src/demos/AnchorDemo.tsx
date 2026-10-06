@@ -32,11 +32,11 @@ const PAGE: ExplanationData = {
       </Paragraph>
       <Code lang="tsx">{TYPESCRIPT}</Code>
       <Paragraph>
-        The entity id comes from the Bevy side — here the CrowdedCubes scene
-        reports its cubes over a typed{" "}
-        <InlineCode>bevy.on("crowdedCubes.spawned")</InlineCode> event, and the
-        page maps each one to a badge whose accent dot matches the cube's
-        palette color. Orbit the camera and watch the badges track their cubes.
+        The entity id comes from the Bevy side — here the page asks the
+        CrowdedCubes scene for its cubes with a typed{" "}
+        <InlineCode>bevy.crowdedCubes.cubes()</InlineCode> request, and maps
+        each one to a badge whose accent dot matches the cube's palette color.
+        Orbit the camera and watch the badges track their cubes.
       </Paragraph>
       <Paragraph>
         Anchored subtrees are ordinary, interactive UI: every badge here has a
@@ -58,15 +58,15 @@ export function AnchorDemo() {
   const [baseDistance, setBaseDistance] = useState(24);
   const [scaleFactor, setScaleFactor] = useState(1);
 
+  // Answered once the scene is live: at once, or when a scene switch
+  // spawns it (this page mounts before the switch's midpoint).
   useEffect(() => {
-    const off = bevy.on("crowdedCubes.spawned", (e) => {
-      setCubes(e.cubes);
-      // Fresh entities: whatever was selected no longer exists.
-      setSelected(null);
+    let mounted = true;
+    void bevy.crowdedCubes.cubes().then((field) => {
+      if (mounted) setCubes(field.cubes);
     });
-
     return () => {
-      off();
+      mounted = false;
     };
   }, []);
 

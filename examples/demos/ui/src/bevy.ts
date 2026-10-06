@@ -66,8 +66,8 @@ softness: number,
  * Re-rolls the noise pattern (domain offset).
  */
 seed: number, };
+export type CubeField = { cubes: Array<CubeInfo>, };
 export type CubeInfo = { entity: bigint, label: string, };
-export type CubesSpawned = { cubes: Array<CubeInfo>, };
 export type CurtainOpen = { 
 /**
  * 0 = horizontal split (band grows along y), 1 = vertical.
@@ -393,7 +393,7 @@ export type SaturateParams = { amount: number, };
 export type SceneId = "None" | "Cubes" | "BouncingBall" | "CrowdedCubes" | "SpaceCubes" | "Surface" | "NamedNodes";
 export type SelectCube = number | null;
 export type SelectDemo = { label: string, };
-export type SelectScene = SceneId | null;
+export type SelectScene = { scene: SceneId | null, transition?: import("bevy-react").BevyTransitionSpec, };
 export type SepiaParams = { amount: number, };
 export type SetCount = number;
 export type SetCrt = boolean;
@@ -510,6 +510,7 @@ export interface ReactMessages {
 
 /** Every `request` name and its request/response types. */
 export interface ReactRequests {
+  "crowdedCubes.cubes": { request: null; response: CubeField };
   "gamepad.getAll": { request: null; response: Array<GamepadConnectedData> };
   "pollingDemo.getBall": { request: null; response: BallState };
   "window.size": { request: null; response: WindowSize };
@@ -518,7 +519,6 @@ export interface ReactRequests {
 /** Every Bevy → React event name and the payload it carries. */
 export interface ReactEvents {
   "bevyEventsDemo.ballBounced": BallBounced;
-  "crowdedCubes.spawned": CubesSpawned;
   "debug.selectDemo": SelectDemo;
   gamepadConnected: GamepadConnected;
   gamepadDisconnected: GamepadDisconnected;
@@ -816,6 +816,7 @@ export const bevy = {
     copy(value: CopyToClipboard): void { emit("clipboard.copy", value); },
   },
   crowdedCubes: {
+    cubes(): Promise<CubeField> { return request("crowdedCubes.cubes", null); },
     followRandom(value: FollowRandom): void { emit("crowdedCubes.followRandom", value); },
     select(value: SelectCube): void { emit("crowdedCubes.select", value); },
     setFollowMode(value: SetFollowMode): void { emit("crowdedCubes.setFollowMode", value); },

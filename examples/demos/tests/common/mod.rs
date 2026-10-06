@@ -148,7 +148,7 @@ impl Harness {
         let (anim_tx, anims) = crossbeam_channel::unbounded();
         let (outbound, outbound_rx) = tokio::sync::mpsc::unbounded_channel();
         let (_reload, reload_rx) = tokio::sync::mpsc::unbounded_channel();
-        answer_window_size(request_rx, outbound.clone());
+        answer_requests(request_rx, outbound.clone());
         let senders = HostSenders {
             ops: ops_tx,
             flush: flush_tx,
@@ -268,17 +268,26 @@ impl Harness {
     }
 }
 
-/// Answer the demos shell's `window.size` bootstrap request with [`WINDOW`]:
-/// the shell renders nothing until it knows the viewport, so a harness that
-/// dropped the request would never see the nav. Every other request is
-/// dropped. Runs until the JS thread drops its sender.
-fn answer_window_size(request_rx: Receiver<RawRequest>, outbound_tx: UnboundedSender<Outbound>) {
+/// Answer the requests the bundle can't run without: the demos shell's
+/// `window.size` bootstrap with [`WINDOW`] (the shell renders nothing until
+/// it knows the viewport, so a harness that dropped it would never see the
+/// nav), and `crowdedCubes.cubes` with three fake cubes (the `<anchor>`
+/// page's badges). Every other request is dropped. Runs until the JS thread
+/// drops its sender.
+fn answer_requests(request_rx: Receiver<RawRequest>, outbound_tx: UnboundedSender<Outbound>) {
     std::thread::spawn(move || {
         for req in request_rx {
-            if req.name != "window.size" {
-                continue;
-            }
-            let value = serde_json::json!({ "width": WINDOW.0, "height": WINDOW.1 });
+            let value = match req.name.as_str() {
+                "window.size" => serde_json::json!({ "width": WINDOW.0, "height": WINDOW.1 }),
+                "crowdedCubes.cubes" => serde_json::json!({
+                    "cubes": [
+                        { "entity": 4_294_967_297u64, "label": "#0" },
+                        { "entity": 4_294_967_298u64, "label": "#1" },
+                        { "entity": 4_294_967_299u64, "label": "#2" },
+                    ]
+                }),
+                _ => continue,
+            };
             if outbound_tx
                 .send(Outbound::Response {
                     id: req.id,

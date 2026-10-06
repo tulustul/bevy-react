@@ -30,6 +30,10 @@
 // `examples/demos/scenes/ambient.rs`. `progress` runs 0→1 over the burst and
 // parks at 1.0 when there is none.
 @group(#{MATERIAL_BIND_GROUP}) @binding(0) var<uniform> burst: vec4<f32>;
+// `(alpha, depth, 0, 0)`: the backdrop is `(1, 0)` — opaque, far plane; the
+// scene switch's dip overlay is `(cover, 1)` — the same pixels blended over
+// everything at the near plane.
+@group(#{MATERIAL_BIND_GROUP}) @binding(1) var<uniform> layer: vec4<f32>;
 
 // Studio gradient endpoints (top → bottom of the screen), linear RGB.
 const STUDIO_TOP: vec3<f32> = vec3<f32>(0.0036, 0.0040, 0.0056);
@@ -128,12 +132,16 @@ struct FragmentOutput {
     // Pinned to the reverse-Z far plane: the backdrop always loses the depth
     // test to real scene geometry, so it can never clip anything regardless of
     // camera zoom or scene extents. The quad's world placement only provides
-    // pixel coverage.
+    // pixel coverage. (The dip overlay pins the near plane instead: it wins.)
     @builtin(frag_depth) depth: f32,
 }
 
 @fragment
 fn fragment(in: VertexOutput) -> FragmentOutput {
+    // The dip overlay between switches: nothing to cover.
+    if layer.x <= 0.0 {
+        discard;
+    }
     let uv = (in.position.xy - view.viewport.xy) / view.viewport.zw;
     let aspect = view.viewport.z / view.viewport.w;
     let t = globals.time;
@@ -191,5 +199,5 @@ fn fragment(in: VertexOutput) -> FragmentOutput {
     // Animated ±1/255 dither so the dark gradients don't band.
     rgb += (hash12(in.position.xy + fract(t) * 289.0) - 0.5) * (2.0 / 255.0);
 
-    return FragmentOutput(vec4<f32>(max(rgb, vec3<f32>(0.0)), 1.0), 0.0);
+    return FragmentOutput(vec4<f32>(max(rgb, vec3<f32>(0.0)), layer.x), layer.y);
 }

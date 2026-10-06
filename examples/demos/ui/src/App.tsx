@@ -49,8 +49,16 @@ function Shell() {
     return down ? 180 : 0;
   }, [selectedDemo]);
 
+  // The 3D scene dips through the backdrop on the page switch's own timing,
+  // so world and page land together. The first selection snaps, like the
+  // morph's first mount: there is nothing to dip from.
+  const sceneSelected = useRef(false);
   useEffect(() => {
-    bevy.selectScene(selectedDemo.scene ?? null);
+    bevy.selectScene({
+      scene: selectedDemo.scene ?? null,
+      transition: sceneSelected.current ? PageSwitch : undefined,
+    });
+    sceneSelected.current = true;
   }, [selectedDemo]);
 
   // Web: mirror the demo into `?page=<slug>`, so the address bar is always a

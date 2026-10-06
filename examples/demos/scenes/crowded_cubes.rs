@@ -5,8 +5,8 @@ use bevy::camera::visibility::RenderLayers;
 use bevy::image::Image;
 use bevy::prelude::*;
 use bevy_react::{
-    PortalCamera, ReactAppExt, ReactEvents, RenderMode, RenderTargetSpec, RenderTargets,
-    Resolution, react_event, react_message,
+    PortalCamera, ReactAppExt, RenderMode, RenderTargetSpec, RenderTargets, Request, Resolution,
+    Responder, react_message, react_request,
 };
 use serde::Serialize;
 use ts_rs::TS;
@@ -40,6 +40,7 @@ impl Plugin for CrowdedCubesScenePlugin {
         app.init_resource::<FollowTarget>()
             .init_resource::<Cubes>()
             .init_resource::<SelectedCube>()
+            .init_resource::<WaitingForCubes>()
             .add_systems(Startup, setup_cube_assets)
             .add_systems(OnEnter(Scene::CrowdedCubes), spawn_cubes)
             .add_systems(
@@ -51,8 +52,8 @@ impl Plugin for CrowdedCubesScenePlugin {
 
 /// Register this demo's React bindings (shared with the `--export-bindings` path).
 pub fn register_bindings(app: &mut App) {
-    // Bevy -> React event: hands React every cube's entity so it can anchor a badge.
-    app.add_react_event::<CubesSpawned>();
+    // React -> Bevy request: every cube's entity, so React can anchor a badge.
+    app.add_react_request_handler(on_get_cubes);
     // React -> Bevy controls for the follow portal.
     app.add_react_handler(on_follow_random);
     app.add_react_handler(on_set_follow_mode);
@@ -155,17 +156,54 @@ fn on_set_follow_mode(ev: On<SetFollowMode>, mut targets: ResMut<RenderTargets>)
     targets.set_mode(FOLLOW, mode);
 }
 
-#[react_event(name = "crowdedCubes.spawned")]
-struct CubesSpawned {
+/// React asks for the live cube field: `await bevy.crowdedCubes.cubes()`.
+/// Answered at once while the scene is live; asked while a scene switch is
+/// still bringing it in (a page mounts before the dip's midpoint), the reply
+/// waits for [`spawn_cubes`] — so it doubles as "the scene's targets exist".
+#[react_request(name = "crowdedCubes.cubes", response = CubeField)]
+struct GetCubes;
+
+/// The reply to [`GetCubes`].
+#[derive(Serialize, TS)]
+struct CubeField {
     cubes: Vec<CubeInfo>,
 }
 
-/// One cube in [`CubesSpawned`]: its `Entity` (as bits, for `<anchor>`) and a
+/// One cube in [`CubeField`]: its `Entity` (as bits, for `<anchor>`) and a
 /// short label to show in the badge.
 #[derive(Serialize, TS)]
 struct CubeInfo {
     entity: u64,
     label: String,
+}
+
+/// [`GetCubes`] replies held until the scene spawns.
+#[derive(Resource, Default)]
+struct WaitingForCubes(Vec<Responder<CubeField>>);
+
+fn cube_field(pool: &[Entity]) -> CubeField {
+    let cubes = pool
+        .iter()
+        .enumerate()
+        .map(|(i, entity)| CubeInfo {
+            entity: entity.to_bits(),
+            label: format!("#{i}"),
+        })
+        .collect();
+    CubeField { cubes }
+}
+
+fn on_get_cubes(
+    req: On<Request<GetCubes>>,
+    state: Res<State<Scene>>,
+    pool: Res<Cubes>,
+    mut waiting: ResMut<WaitingForCubes>,
+) {
+    if *state.get() == Scene::CrowdedCubes {
+        req.respond(cube_field(&pool.0));
+    } else {
+        waiting.0.push(req.responder());
+    }
 }
 
 /// Per-cube random-walk state: a heading that gently wobbles over time.
@@ -246,7 +284,7 @@ fn spawn_cubes(
     mut follow: ResMut<FollowTarget>,
     mut cube_pool: ResMut<Cubes>,
     mut selected: ResMut<SelectedCube>,
-    events: ReactEvents,
+    mut waiting: ResMut<WaitingForCubes>,
 ) {
     // Fresh cubes, fresh (empty) selection — the old entities are gone.
     selected.0 = None;
@@ -257,7 +295,6 @@ fn spawn_cubes(
         DespawnOnExit(Scene::CrowdedCubes),
     ));
 
-    let mut cubes = Vec::with_capacity(CUBE_COUNT);
     let mut entities = Vec::with_capacity(CUBE_COUNT);
     for i in 0..CUBE_COUNT {
         let seed = i as u32;
@@ -281,10 +318,6 @@ fn spawn_cubes(
             ))
             .id();
         entities.push(entity);
-        cubes.push(CubeInfo {
-            entity: entity.to_bits(),
-            label: format!("#{i}"),
-        });
 
         // A flat square on the 2D minimap, on its own render layer so only the
         // minimap's 2D camera sees it. `sync_minimap_markers` keeps it on top of
@@ -306,7 +339,9 @@ fn spawn_cubes(
 
     spawn_portal_cameras(&mut commands, &mut render_targets, &mut images);
 
-    events.send(&CubesSpawned { cubes });
+    for reply in waiting.0.drain(..) {
+        reply.respond(cube_field(&cube_pool.0));
+    }
 }
 
 /// Create the two render targets and the cameras that draw into them. Both

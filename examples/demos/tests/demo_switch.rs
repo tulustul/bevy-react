@@ -13,19 +13,6 @@ use std::time::{Duration, Instant};
 mod common;
 use common::Harness;
 
-fn send_cubes_spawned(h: &Harness) {
-    h.event(
-        "crowdedCubes.spawned",
-        serde_json::json!({
-            "cubes": [
-                { "entity": 4_294_967_297u64, "label": "#0" },
-                { "entity": 4_294_967_298u64, "label": "#1" },
-                { "entity": 4_294_967_299u64, "label": "#2" },
-            ]
-        }),
-    );
-}
-
 #[test]
 fn demo_switch_anchored_survives() {
     let Some(mut h) = Harness::start("demo_switch_anchored_survives") else {
@@ -47,8 +34,8 @@ fn demo_switch_anchored_survives() {
     // disconnects).
     for round in 0..3 {
         eprintln!("--- round {round}: -> <anchor>");
+        // The page's `crowdedCubes.cubes` request is answered by the harness.
         h.click(anchored_btn);
-        send_cubes_spawned(&h);
         h.pump(Duration::from_millis(200));
 
         eprintln!("--- round {round}: -> Events");

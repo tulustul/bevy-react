@@ -17,7 +17,7 @@ use bevy::transform::TransformSystems;
 use bevy::ui::{CalculatedClip, ComputedNode, IsDefaultUiCamera, UiGlobalTransform, UiSystems};
 use bevy_react::{ReactApplySet, ReactNodes};
 
-use crate::scene::Scene;
+use crate::scene::{self, Scene};
 
 /// The `name` the demo's cards carry — group semantics: every card shares it.
 const PIN_NAME: &str = "pin";
@@ -60,10 +60,12 @@ impl Plugin for NamedPinsScenePlugin {
             .add_systems(
                 Update,
                 // See this frame's mounts/unmounts (`ReactNodes` is updated in
-                // `ReactApplySet`), not last frame's.
+                // `ReactApplySet`), not last frame's. Paused while the scene
+                // dissolves out: the page's cards unmount at the switch, and
+                // their orphaned pins should fade with the scene, not pop.
                 sync_pins
                     .after(ReactApplySet)
-                    .run_if(in_state(Scene::NamedNodes)),
+                    .run_if(in_state(Scene::NamedNodes).and_then(not(scene::leaving))),
             )
             .add_systems(
                 PostUpdate,

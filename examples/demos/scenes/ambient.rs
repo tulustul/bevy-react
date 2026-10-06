@@ -11,6 +11,11 @@
 //! the camera orientation from the view uniforms, so there is zero per-frame
 //! CPU work; dragging the (otherwise unused) orbit camera still slides the
 //! dust via a fake-parallax term.
+//!
+//! A second copy of the quad is the scene switch's **dip overlay**: the same
+//! screen-space pixels, drawn over everything at [`SceneDip::cover`] alpha.
+//! At cover 1 it is indistinguishable from an empty viewport — the old scene
+//! dissolves into the studio and the next condenses out of it.
 
 use bevy::camera::visibility::RenderLayers;
 use bevy::prelude::*;
@@ -19,6 +24,8 @@ use bevy::shader::ShaderRef;
 use bevy::ui::IsDefaultUiCamera;
 use bevy_react::{ReactAppExt, react_message};
 
+use crate::scene::SceneDip;
+
 /// How far in front of the camera the backdrop quad sits, and its size. At
 /// distance 30 the default 45° vertical fov needs ~25 world units of height;
 /// 200 covers any reasonable aspect with a wide margin. The distance only
@@ -26,6 +33,10 @@ use bevy_react::{ReactAppExt, react_message};
 /// to the far plane, so scene geometry beyond 30 units still draws in front.
 const QUAD_DISTANCE: f32 = 30.0;
 const QUAD_SIZE: f32 = 200.0;
+/// The overlay's distance: in front of (so sorted after) every transparent
+/// mesh in any scene, still past the camera's 0.1 near plane. Its depth is
+/// pinned to the near plane, so this only orders the blend.
+const OVERLAY_DISTANCE: f32 = 0.5;
 
 /// The backdrop quad's dedicated render layer: only the main camera renders it.
 /// Extra world cameras (the CrowdedCubes `FollowCam` portal camera on layer 0)
@@ -71,25 +82,41 @@ impl Plugin for AmbientScenePlugin {
         // system if it ran first.
         app.add_plugins(MaterialPlugin::<AmbientMaterial>::default())
             .add_systems(PostStartup, spawn_backdrop)
-            .add_systems(Update, drive_burst);
+            .add_systems(
+                Update,
+                (
+                    drive_burst,
+                    sync_overlay.run_if(resource_changed::<SceneDip>),
+                ),
+            );
     }
 }
 
 /// The backdrop itself needs no bindings — the fragment shader gets time,
 /// viewport and camera orientation from the view uniforms every mesh pass
-/// already has. The one uniform is the burst: `(hue, progress, 0, 0)`, written
-/// only while a burst is playing.
+/// already has. The uniforms are the burst, `(hue, progress, 0, 0)`, written
+/// only while a burst is playing, and the copy's `(alpha, depth, 0, 0)`: the
+/// backdrop is opaque at the far plane, the dip overlay blends at the near one.
 #[derive(Asset, AsBindGroup, Reflect, Clone)]
 struct AmbientMaterial {
     #[uniform(0)]
     burst: Vec4,
+    #[uniform(1)]
+    layer: Vec4,
 }
 
 impl Default for AmbientMaterial {
     fn default() -> Self {
         Self {
             burst: Vec4::new(0.0, IDLE, 0.0, 0.0),
+            layer: Vec4::new(1.0, 0.0, 0.0, 0.0),
         }
+    }
+}
+
+impl AmbientMaterial {
+    fn is_overlay(&self) -> bool {
+        self.layer.y > 0.0
     }
 }
 
@@ -97,7 +124,19 @@ impl Material for AmbientMaterial {
     fn fragment_shader() -> ShaderRef {
         "shaders/ambient.wgsl".into()
     }
+
+    fn alpha_mode(&self) -> AlphaMode {
+        if self.is_overlay() {
+            AlphaMode::Blend
+        } else {
+            AlphaMode::Opaque
+        }
+    }
 }
+
+/// Marks the dip overlay quad.
+#[derive(Component)]
+struct DipOverlay;
 
 /// Spawn the backdrop quad as a child of the main camera so it always fills
 /// the frame regardless of orbit/drag/zoom. The shader shades by screen
@@ -116,7 +155,34 @@ fn spawn_backdrop(
             RenderLayers::layer(BACKDROP_LAYER),
         ))
         .id();
-    commands.entity(*camera).add_child(quad);
+    // Same frustum coverage, nearer. Always drawn — at cover 0 the shader
+    // discards up front — so its blend pipeline compiles at startup, not
+    // mid-way through the first dip (whose midpoint flip it must hide).
+    let overlay_size = QUAD_SIZE * OVERLAY_DISTANCE / QUAD_DISTANCE;
+    let overlay = commands
+        .spawn((
+            Mesh3d(meshes.add(Rectangle::new(overlay_size, overlay_size))),
+            MeshMaterial3d(materials.add(AmbientMaterial {
+                layer: Vec4::new(0.0, 1.0, 0.0, 0.0),
+                ..default()
+            })),
+            Transform::from_xyz(0.0, 0.0, -OVERLAY_DISTANCE),
+            RenderLayers::layer(BACKDROP_LAYER),
+            DipOverlay,
+        ))
+        .id();
+    commands.entity(*camera).add_children(&[quad, overlay]);
+}
+
+/// Fade the overlay with the dip's cover.
+fn sync_overlay(
+    dip: Res<SceneDip>,
+    overlay: Single<&MeshMaterial3d<AmbientMaterial>, With<DipOverlay>>,
+    mut materials: ResMut<Assets<AmbientMaterial>>,
+) {
+    if let Some(mut material) = materials.get_mut(&overlay.0) {
+        material.layer.x = dip.cover;
+    }
 }
 
 /// A click on the home page's "Typed messages" tile: restart the shockwave at
