@@ -76,7 +76,7 @@ ${head}
 <body>
 <a class="skip-link" href="#main">Skip to content</a>
 <header class="site-header">
-<a class="brand" href="${rootRel || "./"}"><img src="${rootRel}logo.png" alt="" width="28" height="28"> bevy-react</a>
+<a class="brand" href="${rootRel || "./"}"><img src="${rootRel}logo.png" alt="" width="74" height="74"> bevy-react</a>
 <span class="version">v${site.version}</span>
 <nav class="site-links" aria-label="Project">
 <a href="${rootRel}demo/">Live demo</a>

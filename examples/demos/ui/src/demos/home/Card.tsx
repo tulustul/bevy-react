@@ -84,7 +84,12 @@ export function Card({
         }}
         hoverStyle={expanded ? undefined : hoverStyle}
       >
-        <Spotlight radius={CARD_RADIUS} outset={CARD_BORDER} edge={1} />
+        <Spotlight
+          radius={CARD_RADIUS}
+          outset={CARD_BORDER}
+          edge={1}
+          wash={0.2}
+        />
         <node style={isMobile ? contentsMobileStyle : contentsStyle}>
           <node style={labelRowStyle}>
             <text style={labelStyle}>{tile.label}</text>
