@@ -79,16 +79,11 @@ fn main() {
 The [Getting started](https://tulustul.github.io/bevy-react/getting-started/)
 guide covers configuration, cargo features, and the typed client.
 
-## Project status
-
-Currently, the project is a **quick, vibecoded proof of concept** demonstrating the idea. The API is very unstable and will change, the code quality is not satisfying.
-**Do not use it in production**.
-
 ## Bevy compatibility
 
 | bevy | bevy-react |
 | ---- | ---------- |
-| 0.19 | 0.1 – 0.6  |
+| 0.19 | 0.1 – 0.7  |
 
 ## License
 
