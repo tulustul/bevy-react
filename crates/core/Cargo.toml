@@ -84,7 +84,7 @@ bevy = { workspace = true, features = [
     "default_font",
     "system_clipboard",
 ] }
-bevy_react_macros = { workspace = true }
+bevy-react-macros = { workspace = true }
 bytemuck = { workspace = true }
 crossbeam-channel = { workspace = true }
 resvg = { workspace = true }

@@ -411,6 +411,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "bevy-react-macros"
+version = "0.7.0"
+dependencies = [
+ "proc-macro-crate",
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "bevy_a11y"
 version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1365,7 +1375,7 @@ version = "0.7.0"
 dependencies = [
  "accesskit",
  "bevy",
- "bevy_react_macros",
+ "bevy-react-macros",
  "bytemuck",
  "console_error_panic_hook",
  "crossbeam-channel",
@@ -1388,16 +1398,6 @@ dependencies = [
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
-]
-
-[[package]]
-name = "bevy_react_macros"
-version = "0.7.0"
-dependencies = [
- "proc-macro-crate",
- "proc-macro2",
- "quote",
- "syn",
 ]
 
 [[package]]

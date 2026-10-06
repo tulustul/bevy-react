@@ -4,7 +4,7 @@
 
 Rust side — one command (needs `cargo install cargo-edit` once). It updates
 `[workspace.package] version` **and** the workspace's own entries in
-`[workspace.dependencies]` (`bevy_react_macros`, `bevy_react_core`, the five
+`[workspace.dependencies]` (`bevy-react-macros`, `bevy_react_core`, the five
 feature crates, and the `bevy-react` facade) together — every crate is
 released in lock-step:
 
@@ -64,7 +64,7 @@ cargo publish --workspace --features bevy/x11
 published crates): the facade's default `custom_cursor` pulls in `bevy_winit`,
 which won't compile on Linux without a windowing backend.
 
-Cargo publishes in dependency order: `bevy_react_macros` → `bevy_react_core` →
+Cargo publishes in dependency order: `bevy-react-macros` → `bevy_react_core` →
 the feature crates → `bevy-react` (the facade apps depend on).
 
 ### 10. Publish to npm
