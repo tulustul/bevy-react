@@ -269,3 +269,6 @@ elements, styles or filters should depend on `bevy-react` with
 - [`examples/demos`](https://github.com/tulustul/bevy-react/tree/main/examples/demos):
   the gallery behind the [live demo](https://tulustul.github.io/bevy-react/demo/).
   Each demo is a small component you can copy from.
+- [`examples/arcana`](https://github.com/tulustul/bevy-react/tree/main/examples/arcana):
+  the showcase — a card-pack game that combines custom filters, live `<portal>`
+  art, `transform3d` and a `<surface>` card you can turn over in 3D.

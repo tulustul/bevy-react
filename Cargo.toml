@@ -13,6 +13,7 @@ members = [
     "examples/minimal",
     "examples/stress",
     "examples/layers-stress",
+    "examples/arcana",
 ]
 
 [workspace.package]

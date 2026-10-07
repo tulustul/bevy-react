@@ -52,6 +52,16 @@ That's a real component - `<node>` and `<button>` render to actual `bevy_ui`
 nodes, `useState` works as you'd expect, and saving the file updates the running
 app without losing the count.
 
+## Showcase
+
+[**Arcana**](https://github.com/tulustul/bevy-react/tree/main/examples/arcana)
+opens packs of living tarot cards: holographic foil that is a WGSL shader running
+over React components, card art that is a live 3D scene, glass buttons that refract
+the world behind them, and a card that leaves the UI to become a real 3D object you
+can turn over — still React, still clickable.
+
+![A tarot card held as a real 3D object: turned in perspective, its foil running in rainbow bands, a live black hole spinning in its art window.](https://raw.githubusercontent.com/tulustul/bevy-react/main/screenshots/arcana-card.webp)
+
 ## Getting started
 
 ```sh

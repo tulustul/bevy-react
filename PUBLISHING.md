@@ -28,6 +28,9 @@ cargo run --release -p demos
 
 npm run build:prod -w minimal
 cargo run --release -p minimal
+
+npm run build:prod -w arcana
+cargo run --release -p arcana
 ```
 
 ### 4. Verify the web build works

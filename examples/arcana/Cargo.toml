@@ -1,0 +1,15 @@
+[package]
+name = "arcana"
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[[bin]]
+name = "arcana"
+path = "main.rs"
+
+[dependencies]
+bevy = { workspace = true, features = ["default"] }
+# Every bevy-react feature (the defaults): `<portal>` for the live card art,
+# `<surface>` for the inspected card, `<svg>` for the card-back sigil.
+bevy-react = { workspace = true, features = ["default"] }

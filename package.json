@@ -7,6 +7,7 @@
     "examples/minimal/ui",
     "examples/stress/ui",
     "examples/layers-stress/ui",
+    "examples/arcana/ui",
     "docs"
   ],
   "scripts": {
