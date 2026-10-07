@@ -1,0 +1,19 @@
+[package]
+name = "cyberpunk"
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[[bin]]
+name = "cyberpunk"
+path = "main.rs"
+
+[dependencies]
+bevy = { workspace = true, features = ["default"] }
+# Every bevy-react feature (the defaults): `<svg>` for the wordmark, the
+# icons and the ID card, `<portal>` for the dioramas and the world, the
+# custom cursor.
+bevy-react = { workspace = true, features = ["default"] }
+# For the nested payload types the macros don't derive themselves.
+serde = { workspace = true }
+ts-rs = { workspace = true }

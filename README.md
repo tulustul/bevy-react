@@ -79,6 +79,15 @@ every civilization. Every panel is React; the numbers come from the map.
 
 ![A hex map of forests, farms and snowy mountains under a strategy-game interface: city banners over the towns, research and civic trackers, rival leaders, a minimap and the next-turn button.](https://raw.githubusercontent.com/tulustul/bevy-react/main/screenshots/epoch-map.webp)
 
+[**Cyberpunk**](https://github.com/tulustul/bevy-react/tree/main/examples/cyberpunk)
+is a homage to the front end of a famous open-world RPG: the title screen,
+the main menu, a six-step character creation, saves, eight tabs of settings
+that really change the camera, the window and the sound, and the pause
+menu over your lifepath's world. Every screen is React and glitches into the
+next through a custom morph shader; the worlds on the cards are live 3D.
+
+![The main menu of the homage: a slashed yellow CYBERPUNK wordmark and five menu items on a translucent red band, glowing cyan and red bars and walls of magenta data blurred behind it.](https://raw.githubusercontent.com/tulustul/bevy-react/main/screenshots/cyberpunk-menu.webp)
+
 ## Getting started
 
 ```sh

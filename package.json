@@ -10,6 +10,7 @@
     "examples/arcana/ui",
     "examples/atrium/ui",
     "examples/epoch/ui",
+    "examples/cyberpunk/ui",
     "docs"
   ],
   "scripts": {

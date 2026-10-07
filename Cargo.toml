@@ -16,6 +16,7 @@ members = [
     "examples/arcana",
     "examples/atrium",
     "examples/epoch",
+    "examples/cyberpunk",
 ]
 
 [workspace.package]

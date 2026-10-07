@@ -192,3 +192,23 @@ fn element_events_follow_subscriptions() {
     assert!(app.world().get::<EventSubscriptions>(input).is_none());
     assert!(!app.world_mut().run_system_once(send_change).unwrap());
 }
+
+/// An input's act-now `value` seeds it at create: the spawn sees the
+/// create's act-now attributes before they are split off.
+#[test]
+fn editable_value_seeds_on_create() {
+    let (mut app, tx) = op_app();
+    tx.send(vec![create(
+        1,
+        "editableText",
+        serde_json::json!({ "value": "NYX" }),
+    )])
+    .unwrap();
+    app.update();
+    let input = ent(&app, 1);
+    let editable = app
+        .world()
+        .get::<bevy::text::EditableText>(input)
+        .expect("an input");
+    assert_eq!(editable.value().to_string(), "NYX");
+}

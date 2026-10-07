@@ -52,12 +52,10 @@ pub(super) fn apply_create(
     }
     let info = registry.element_or_fallback(&kind);
     let flags = info.decl.flags;
-    // The act-now props act once, here, and are never retained.
-    let events = props.split_events();
     // The retained style carries the element's defaults (see
     // `ElementInfo::fill_default_style`).
     info.fill_default_style(&mut props.style);
-    let style = &props.style;
+    // The spawn sees the act-now props too (an input's `value` seeds it).
     let entity = {
         let mut ctx = SpawnCtx {
             commands,
@@ -67,7 +65,7 @@ pub(super) fn apply_create(
             id,
             kind: &kind,
             props: &props,
-            style,
+            style: &props.style,
             text: text.as_deref(),
             flags,
         };
@@ -76,6 +74,9 @@ pub(super) fn apply_create(
             None => ctx.spawn(()),
         }
     };
+    // The act-now props act once, here, and are never retained.
+    let events = props.split_events();
+    let style = &props.style;
     // What the writers see of this node: fresh (nothing to remove), never
     // promoted at create (promotion is evaluated after the drain).
     let wctx = WriterCtx {

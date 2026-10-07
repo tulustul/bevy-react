@@ -280,3 +280,7 @@ elements, styles or filters should depend on `bevy-react` with
   a 4X strategy game's interface over a generated hex map — `<anchor>` city
   banners and tooltips, a `<portal>` minimap, a technology tree, and `<svg>`
   history graphs.
+- [`examples/cyberpunk`](https://github.com/tulustul/bevy-react/tree/main/examples/cyberpunk):
+  a homage to an open-world RPG's front end — every menu screen, live 3D
+  `<portal>` cards, settings that drive the camera and the window, custom
+  glitch filters and a glitch morph between screens.

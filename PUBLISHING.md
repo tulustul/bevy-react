@@ -66,12 +66,7 @@ npm publish --dry-run -w bevy-react
 cargo publish --workspace --features bevy/x11
 ```
 
-`--features bevy/x11` is for the verify build only (it is not baked into the
-published crates): the facade's default `custom_cursor` pulls in `bevy_winit`,
-which won't compile on Linux without a windowing backend.
-
-Cargo publishes in dependency order: `bevy-react-macros` → `bevy_react_core` →
-the feature crates → `bevy-react` (the facade apps depend on).
+`--features bevy/x11` is for the verify build only (it is not baked into the published crates): the facade's default `custom_cursor` pulls in `bevy_winit`, which won't compile on Linux without a windowing backend.
 
 ### 10. Publish to npm
 
