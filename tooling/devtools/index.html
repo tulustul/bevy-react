@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Devtools · bevy-react</title>
+<meta name="description" content="The built-in devtools inspector, toggled with F12 in debug builds, with a node tree, live style editing, layers, console and bridge log.">
+<link rel="canonical" href="https://tulustul.github.io/bevy-react/tooling/devtools/">
+<link rel="alternate" type="text/markdown" href="../../tooling/devtools.md">
+<meta property="og:title" content="Devtools · bevy-react">
+<meta property="og:description" content="The built-in devtools inspector, toggled with F12 in debug builds, with a node tree, live style editing, layers, console and bridge log.">
+<link rel="icon" href="../../logo.png">
+<link rel="stylesheet" href="../../style.css">
+<script src="../../docs.js" defer></script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="site-header">
+<a class="brand" href="../../"><img src="../../logo.png" alt="" width="74" height="74"> bevy-react</a>
+<span class="version">v0.7.0</span>
+<nav class="site-links" aria-label="Project">
+<a href="../../demo/">Live demo</a>
+<a href="https://github.com/tulustul/bevy-react">GitHub</a>
+<a href="https://docs.rs/bevy-react">docs.rs</a>
+<a href="https://www.npmjs.com/package/bevy-react">npm</a>
+</nav>
+</header>
+<div class="layout">
+<nav class="sidebar" aria-label="Documentation">
+<details class="nav-menu" open>
+<summary>Menu</summary>
+<ul><li><a href="../../">Introduction</a></li><li><a href="../../getting-started/">Getting started</a></li><li><a href="../../how-it-works/">How it works</a></li><li class="nav-section"><span>Elements</span><ul><li><a href="../../elements/node/">&lt;node&gt;</a></li><li><a href="../../elements/button/">&lt;button&gt;</a></li><li><a href="../../elements/text/">&lt;text&gt;</a></li><li><a href="../../elements/editable-text/">&lt;editableText&gt;</a></li><li><a href="../../elements/image/">&lt;image&gt;</a></li><li><a href="../../elements/canvas/">&lt;canvas&gt;</a></li><li><a href="../../elements/svg/">&lt;svg&gt;</a></li><li><a href="../../elements/portal/">&lt;portal&gt;</a></li><li><a href="../../elements/surface/">&lt;surface&gt;</a></li><li><a href="../../elements/root/">&lt;root&gt;</a></li><li><a href="../../elements/anchor/">&lt;anchor&gt;</a></li></ul></li><li class="nav-section"><span>Layout</span><ul><li><a href="../../layout/flexbox/">Flexbox</a></li><li><a href="../../layout/grid/">Grid</a></li><li><a href="../../layout/positioning/">Positioning</a></li></ul></li><li class="nav-section"><span>Styling</span><ul><li><a href="../../styling/units/">Units</a></li><li><a href="../../styling/colors/">Colors</a></li><li><a href="../../styling/borders/">Borders</a></li><li><a href="../../styling/spacing/">Spacing</a></li><li><a href="../../styling/sizing/">Sizing</a></li><li><a href="../../styling/layout-rounding/">Layout rounding</a></li><li><a href="../../styling/overflow/">Overflow</a></li><li><a href="../../styling/transforms/">Transforms</a></li><li><a href="../../styling/3d-transforms/">3D transforms</a></li><li><a href="../../styling/shadows/">Shadows</a></li><li><a href="../../styling/filters/">Filters</a></li><li><a href="../../styling/backdrop-filters/">Backdrop filters</a></li><li><a href="../../styling/morph-filters/">Morph filters</a></li><li><a href="../../styling/gradients/">Gradients</a></li><li><a href="../../styling/background-images/">Background images</a></li><li><a href="../../styling/image-rendering/">Image rendering</a></li><li><a href="../../styling/opacity/">Opacity</a></li><li><a href="../../styling/z-index/">Z-index</a></li><li><a href="../../styling/focus-policy/">Focus policy</a></li><li><a href="../../styling/cursors/">Cursors</a></li><li><a href="../../styling/layers/">Layers</a></li></ul></li><li class="nav-section"><span>Animations</span><ul><li><a href="../../animations/style-transitions/">Style transitions</a></li><li><a href="../../animations/animated-values/">Animated values</a></li><li><a href="../../animations/interpolation/">Interpolation</a></li><li><a href="../../animations/shared-elements/">Shared elements</a></li></ul></li><li class="nav-section"><span>Communication</span><ul><li><a href="../../communication/react-to-bevy/">React to Bevy</a></li><li><a href="../../communication/bevy-to-react/">Bevy to React</a></li><li><a href="../../communication/request-response/">Request / response</a></li><li><a href="../../communication/named-nodes/">Named nodes</a></li></ul></li><li class="nav-section"><span>Events</span><ul><li><a href="../../events/mouse/">Mouse</a></li><li><a href="../../events/keyboard/">Keyboard</a></li><li><a href="../../events/gamepad/">Gamepad</a></li><li><a href="../../events/window/">Window</a></li></ul></li><li class="nav-section"><span>Extending</span><ul><li><a href="../../extending/custom-elements/">Custom elements</a></li><li><a href="../../extending/custom-styles/">Custom styles</a></li><li><a href="../../extending/custom-filters/">Custom filters</a></li></ul></li><li class="nav-section"><span>Tooling</span><ul><li><a href="../../tooling/devtools/" aria-current="page">Devtools</a></li><li><a href="../../tooling/hot-reload/">Hot reload</a></li><li><a href="../../tooling/web/">Web builds</a></li><li><a href="../../tooling/ts-codegen/">TypeScript codegen</a></li></ul></li><li class="nav-section"><span>Reference</span><ul><li><a href="../../reference/style-properties/">Style properties</a></li><li><a href="../../reference/elements/">Elements</a></li><li><a href="../../reference/filters/">Filters</a></li></ul></li><li><a href="../../performance/">Performance</a></li></ul>
+</details>
+</nav>
+<main id="main">
+<article>
+<h1 id="devtools">Devtools</h1>
+<p>The devtools are an inspector for the live UI, drawn with bevy-react itself
+in an overlay above your app. They show the node tree as React built it,
+let you edit styles and props in place, list the composited layers, collect
+console output and warnings, and log every message that crosses the bridge.
+They run in debug builds only.</p>
+<h2 id="usage"><a class="anchor" href="#usage" aria-hidden="true">#</a>Usage</h2>
+<p>There is nothing to set up. With the <code>devtools</code> cargo feature (on by
+default) and a development bundle, <code>ReactUiPlugin</code> adds the inspector:</p>
+<pre><code class="language-sh"><span class="token function">cargo</span> run             <span class="token comment"># debug build: F12 toggles the panel</span>
+<span class="token function">cargo</span> run <span class="token parameter variable">--release</span>   <span class="token comment"># release build: no devtools</span></code></pre><p>Press <strong>F12</strong> to open or close the panel. It reopens where you left it: open
+or closed, docked or floating, and at the same size.</p>
+<h2 id="configuration"><a class="anchor" href="#configuration" aria-hidden="true">#</a>Configuration</h2>
+<p><code>ReactUiPlugin::devtools</code> takes a <code>DevtoolsConfig</code>. Every field has a
+default, so override only what you need:</p>
+<pre><code class="language-rust"><span class="token keyword">use</span> <span class="token namespace">bevy<span class="token punctuation">::</span>prelude<span class="token punctuation">::</span></span><span class="token operator">*</span><span class="token punctuation">;</span>
+<span class="token keyword">use</span> <span class="token namespace">bevy_react<span class="token punctuation">::</span></span><span class="token punctuation">{</span><span class="token namespace">prelude<span class="token punctuation">::</span></span><span class="token operator">*</span><span class="token punctuation">,</span> <span class="token class-name">DevtoolsConfig</span><span class="token punctuation">}</span><span class="token punctuation">;</span>
+
+app<span class="token punctuation">.</span><span class="token function">add_plugins</span><span class="token punctuation">(</span><span class="token class-name">ReactPlugins</span><span class="token punctuation">.</span><span class="token function">set</span><span class="token punctuation">(</span>
+    <span class="token class-name">ReactUiPlugin</span><span class="token punctuation">::</span><span class="token function">default</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">devtools</span><span class="token punctuation">(</span><span class="token class-name">DevtoolsConfig</span> <span class="token punctuation">{</span>
+        toggle_key<span class="token punctuation">:</span> <span class="token class-name">KeyCode</span><span class="token punctuation">::</span><span class="token constant">F1</span><span class="token punctuation">,</span>
+        settings_path<span class="token punctuation">:</span> <span class="token class-name">Some</span><span class="token punctuation">(</span><span class="token string">&quot;.config/devtools.json&quot;</span><span class="token punctuation">.</span><span class="token function">into</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+        <span class="token punctuation">..</span><span class="token function">default</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+    <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span></code></pre><div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Default</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>enabled</code></td>
+<td><code>true</code></td>
+<td><code>false</code> leaves the inspector out entirely</td>
+</tr>
+<tr>
+<td><code>toggle_key</code></td>
+<td><code>KeyCode::F12</code></td>
+<td>The key that opens and closes the panel</td>
+</tr>
+<tr>
+<td><code>settings_path</code></td>
+<td><code>.bevy-react-devtools.json</code></td>
+<td>Where the panel layout persists; <code>None</code> = off</td>
+</tr>
+</tbody></table></div>
+<p>The settings file is relative to the working directory and holds only the
+panel&#39;s layout (dock side, size, toggles, whether it was open). Add it to
+your <code>.gitignore</code>. Persistence is native only: in a web build the file is
+neither read nor written.</p>
+<h2 id="release-builds"><a class="anchor" href="#release-builds" aria-hidden="true">#</a>Release builds</h2>
+<p>The inspector never runs in a release build, even when the feature is
+compiled in: the plugin registers nothing without <code>debug_assertions</code>. Its
+JavaScript half is left out of production bundles (<code>bevy-react build --prod</code>). Both halves are needed: a debug binary with a production bundle,
+or a release binary with a development bundle, shows no panel.</p>
+<p>Cargo features can&#39;t depend on the build profile, so the inactive Rust code
+is still compiled into release binaries. If a shipping build must not
+contain it, turn off default features and list the ones you use without
+<code>devtools</code> (see <a href="../../getting-started/#cargo-features">Cargo features</a>).</p>
+<h2 id="the-panel"><a class="anchor" href="#the-panel" aria-hidden="true">#</a>The panel</h2>
+<p>The header holds the layout and mode controls:</p>
+<ul>
+<li><strong>L</strong>, <strong>R</strong>, <strong>F</strong>: dock the panel to the left or right window edge, or
+float it. A docked panel resizes from its inner edge; a floating one moves
+by its header and resizes from its bottom-right corner.</li>
+<li><strong>push</strong> (docked only): reserve the panel&#39;s width so the app&#39;s UI reflows
+beside it instead of underneath.</li>
+<li><strong>pick</strong>: click a node on screen to select it in the tree. Hovering
+highlights what you would pick. Escape leaves pick mode.</li>
+<li><strong>overlay</strong>: show or hide the outline drawn around the selected node.</li>
+<li><strong>x</strong>: close the panel.</li>
+</ul>
+<p>The footer shows the app&#39;s node count and the last op batch: its number, op
+count and Rust-side apply time.</p>
+<p>The panel blocks pointer input to the app beneath it. Its own nodes and ops
+are left out of the tree, the counts and the bridge log.</p>
+<h2 id="nodes"><a class="anchor" href="#nodes" aria-hidden="true">#</a>Nodes</h2>
+<p>The Nodes tab is the node tree and an inspector for the selected node.</p>
+<ul>
+<li>Each row shows the element, with its <code>name</code> prop when it has one (see
+<a href="../../communication/named-nodes/">Named nodes</a>). Where a React component
+starts emitting nodes, the row leads with that component&#39;s name, such as
+<code>&lt;Card&gt;</code>. Text rows show their content.</li>
+<li>Chips above the tree switch between the main UI tree and each <code>&lt;root&gt;</code>,
+labelled by the root&#39;s <code>name</code>. <strong>expand</strong> and <strong>collapse</strong> apply to the
+whole tree.</li>
+<li>Hovering a row outlines its node on screen. Clicking a row selects it.</li>
+</ul>
+<p>The inspector lists the selected node&#39;s <code>style</code> and props as raw wire
+values, exactly what React sent:</p>
+<ul>
+<li>Click a value to edit it. Enter applies, Escape cancels. An invalid value
+stays in the editor with an error and is never sent.</li>
+<li>The <code>[x]</code> box next to a style declaration disables it; ticking it again
+restores the value.</li>
+<li><strong>+ add style</strong> takes a <code>field: value</code> declaration.</li>
+<li>Edits are transient. They go through the same path as a React update, and
+the next React render that changes the same field overwrites them. Nothing
+is written back to your source.</li>
+</ul>
+<h2 id="warnings"><a class="anchor" href="#warnings" aria-hidden="true">#</a>Warnings</h2>
+<p>An invalid value (an unknown color name, a malformed length, a style
+property the element ignores, an unknown prop) never stops rendering: it
+falls back to a default and reports a warning. Every warning goes to the
+terminal log once per distinct message, in every build. With the devtools
+running, it also flags the offending row in the inspector with <code>(!)</code> and the
+warning text, and appears in the Console tab. An unknown style field is
+flagged even before Bevy reports it.</p>
+<h2 id="layers"><a class="anchor" href="#layers" aria-hidden="true">#</a>Layers</h2>
+<p>The Layers tab lists the composited layers (see
+<a href="../../styling/layers/">Layers</a>): a wireframe map of their rectangles over a
+list with, for each layer:</p>
+<ul>
+<li>the element and node id, and why it was promoted: <code>opacity</code>, <code>filter</code>,
+<code>transform3d</code>, <code>backdrop</code>, <code>morph</code> or <code>cache</code>;</li>
+<li>how many times it has repainted, how many nodes it holds, its size and its
+estimated texture memory;</li>
+<li>its <code>filter</code>, <code>backdropFilter</code> and <code>morphFilter</code> chains with live param
+values, including animated ones.</li>
+</ul>
+<p>A layer whose node is not currently rendered is marked <code>inactive</code>. Hovering
+a row outlines its node on screen. The tab streams data only while it is
+shown.</p>
+<h2 id="console"><a class="anchor" href="#console" aria-hidden="true">#</a>Console</h2>
+<p>The Console tab collects JavaScript <code>console</code> output, bevy-react&#39;s warnings
+and JS runtime failures, such as a rejected hot reload. Each entry shows its
+time, its source (<code>js</code> or <code>rust</code>) and its level; level chips filter the
+list, and <strong>clear</strong> empties it. It keeps the last 500 entries, collected
+from startup whether or not the panel is open. Everything here is also in
+the terminal log.</p>
+<p>In a web build the Console tab stays empty: <code>console</code> output goes to the
+browser&#39;s own console.</p>
+<h2 id="bridge"><a class="anchor" href="#bridge" aria-hidden="true">#</a>Bridge</h2>
+<p>The Bridge tab is a network log of the bridge: op batches sent by React,
+<code>emit</code> messages, requests and their responses, Bevy events, and UI events
+such as clicks. Each row shows the time, direction (<code>out</code> to Bevy, <code>in</code> to
+React), kind and a summary. Clicking a row expands its JSON payload.</p>
+<p>Op batches carry their cost. The row shows the total, and the expanded row
+breaks it down: your event handler plus React&#39;s render and commit (<code>js</code>),
+serializing and decoding the batch (<code>flush</code>), translating ops into ECS
+commands (<code>translate</code>), running those commands (<code>command</code>) and laying out
+the UI (<code>layout</code>). <code>wait</code>, the time a
+batch queued until the next frame started, is shown but not counted in the
+total. See <a href="../../performance/">Performance</a> for what these numbers mean.</p>
+<p><strong>pause</strong> freezes the log and <strong>clear</strong> empties it. The kind chips filter
+it, and the <code>devtools</code> chip includes the panel&#39;s own messages, hidden by
+default. The log keeps the last 500 entries and records only while the
+panel is open.</p>
+<h2 id="limits"><a class="anchor" href="#limits" aria-hidden="true">#</a>Limits</h2>
+<ul>
+<li>Pick mode doesn&#39;t swallow the click: the picked node&#39;s own <code>onClick</code> and
+other handlers fire as usual.</li>
+<li>Pick mode only sees the window&#39;s UI. Nodes inside a <code>&lt;surface&gt;</code> can&#39;t be
+picked on screen; select them in the tree.</li>
+<li>Edits are transient and per node. There is no undo beyond re-enabling a
+disabled declaration.</li>
+</ul>
+<p><img src="../../screenshots/devtools-nodes.png" alt="The devtools panel docked over the demos app: the Nodes tab shows the expanded element tree with component names such as Navigation2 and Pinchable, a selected text node, and its style in the inspector below." loading="lazy"></p>
+<p><img src="../../screenshots/devtools-bridge.png" alt="The Bridge tab: a live log of ops, UI events and messages, with one op batch expanded to its timing breakdown and its JSON payload." loading="lazy"></p>
+
+</article>
+<footer class="page-links"><a href="https://github.com/tulustul/bevy-react/edit/main/docs/guide/tooling/devtools.md">Edit this page</a></footer>
+</main>
+</div>
+<footer class="site-footer">
+<p>bevy-react is dual-licensed under MIT or Apache-2.0. <a href="https://github.com/tulustul/bevy-react">Source on GitHub</a>.</p>
+</footer>
+</body>
+</html>

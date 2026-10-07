@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>&lt;canvas&gt; · bevy-react</title>
+<meta name="description" content="The &lt;canvas&gt; element is a retained drawing surface with an HTML-canvas-like path API, painted declaratively with draw or imperatively through a ref.">
+<link rel="canonical" href="https://tulustul.github.io/bevy-react/elements/canvas/">
+<link rel="alternate" type="text/markdown" href="../../elements/canvas.md">
+<meta property="og:title" content="&lt;canvas&gt; · bevy-react">
+<meta property="og:description" content="The &lt;canvas&gt; element is a retained drawing surface with an HTML-canvas-like path API, painted declaratively with draw or imperatively through a ref.">
+<link rel="icon" href="../../logo.png">
+<link rel="stylesheet" href="../../style.css">
+<script src="../../docs.js" defer></script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="site-header">
+<a class="brand" href="../../"><img src="../../logo.png" alt="" width="74" height="74"> bevy-react</a>
+<span class="version">v0.7.0</span>
+<nav class="site-links" aria-label="Project">
+<a href="../../demo/">Live demo</a>
+<a href="https://github.com/tulustul/bevy-react">GitHub</a>
+<a href="https://docs.rs/bevy-react">docs.rs</a>
+<a href="https://www.npmjs.com/package/bevy-react">npm</a>
+</nav>
+</header>
+<div class="layout">
+<nav class="sidebar" aria-label="Documentation">
+<details class="nav-menu" open>
+<summary>Menu</summary>
+<ul><li><a href="../../">Introduction</a></li><li><a href="../../getting-started/">Getting started</a></li><li><a href="../../how-it-works/">How it works</a></li><li class="nav-section"><span>Elements</span><ul><li><a href="../../elements/node/">&lt;node&gt;</a></li><li><a href="../../elements/button/">&lt;button&gt;</a></li><li><a href="../../elements/text/">&lt;text&gt;</a></li><li><a href="../../elements/editable-text/">&lt;editableText&gt;</a></li><li><a href="../../elements/image/">&lt;image&gt;</a></li><li><a href="../../elements/canvas/" aria-current="page">&lt;canvas&gt;</a></li><li><a href="../../elements/svg/">&lt;svg&gt;</a></li><li><a href="../../elements/portal/">&lt;portal&gt;</a></li><li><a href="../../elements/surface/">&lt;surface&gt;</a></li><li><a href="../../elements/root/">&lt;root&gt;</a></li><li><a href="../../elements/anchor/">&lt;anchor&gt;</a></li></ul></li><li class="nav-section"><span>Layout</span><ul><li><a href="../../layout/flexbox/">Flexbox</a></li><li><a href="../../layout/grid/">Grid</a></li><li><a href="../../layout/positioning/">Positioning</a></li></ul></li><li class="nav-section"><span>Styling</span><ul><li><a href="../../styling/units/">Units</a></li><li><a href="../../styling/colors/">Colors</a></li><li><a href="../../styling/borders/">Borders</a></li><li><a href="../../styling/spacing/">Spacing</a></li><li><a href="../../styling/sizing/">Sizing</a></li><li><a href="../../styling/layout-rounding/">Layout rounding</a></li><li><a href="../../styling/overflow/">Overflow</a></li><li><a href="../../styling/transforms/">Transforms</a></li><li><a href="../../styling/3d-transforms/">3D transforms</a></li><li><a href="../../styling/shadows/">Shadows</a></li><li><a href="../../styling/filters/">Filters</a></li><li><a href="../../styling/backdrop-filters/">Backdrop filters</a></li><li><a href="../../styling/morph-filters/">Morph filters</a></li><li><a href="../../styling/gradients/">Gradients</a></li><li><a href="../../styling/background-images/">Background images</a></li><li><a href="../../styling/image-rendering/">Image rendering</a></li><li><a href="../../styling/opacity/">Opacity</a></li><li><a href="../../styling/z-index/">Z-index</a></li><li><a href="../../styling/focus-policy/">Focus policy</a></li><li><a href="../../styling/cursors/">Cursors</a></li><li><a href="../../styling/layers/">Layers</a></li></ul></li><li class="nav-section"><span>Animations</span><ul><li><a href="../../animations/style-transitions/">Style transitions</a></li><li><a href="../../animations/animated-values/">Animated values</a></li><li><a href="../../animations/interpolation/">Interpolation</a></li><li><a href="../../animations/shared-elements/">Shared elements</a></li></ul></li><li class="nav-section"><span>Communication</span><ul><li><a href="../../communication/react-to-bevy/">React to Bevy</a></li><li><a href="../../communication/bevy-to-react/">Bevy to React</a></li><li><a href="../../communication/request-response/">Request / response</a></li><li><a href="../../communication/named-nodes/">Named nodes</a></li></ul></li><li class="nav-section"><span>Events</span><ul><li><a href="../../events/mouse/">Mouse</a></li><li><a href="../../events/keyboard/">Keyboard</a></li><li><a href="../../events/gamepad/">Gamepad</a></li><li><a href="../../events/window/">Window</a></li></ul></li><li class="nav-section"><span>Extending</span><ul><li><a href="../../extending/custom-elements/">Custom elements</a></li><li><a href="../../extending/custom-styles/">Custom styles</a></li><li><a href="../../extending/custom-filters/">Custom filters</a></li></ul></li><li class="nav-section"><span>Tooling</span><ul><li><a href="../../tooling/devtools/">Devtools</a></li><li><a href="../../tooling/hot-reload/">Hot reload</a></li><li><a href="../../tooling/web/">Web builds</a></li><li><a href="../../tooling/ts-codegen/">TypeScript codegen</a></li></ul></li><li class="nav-section"><span>Reference</span><ul><li><a href="../../reference/style-properties/">Style properties</a></li><li><a href="../../reference/elements/">Elements</a></li><li><a href="../../reference/filters/">Filters</a></li></ul></li><li><a href="../../performance/">Performance</a></li></ul>
+</details>
+</nav>
+<main id="main">
+<article>
+<h1 id="canvas"><code>&lt;canvas&gt;</code></h1>
+<p><code>&lt;canvas&gt;</code> is a pixel surface you draw on with a subset of the HTML
+<code>CanvasRenderingContext2D</code> path API. It is a styled node like <code>&lt;node&gt;</code>
+(layout, background, border, pointer handlers) whose texture the element
+owns. Drawing calls are recorded in JS and rasterized on the Bevy side, on the
+CPU and anti-aliased, at the node&#39;s laid-out size times the display&#39;s scale
+factor. Like an HTML canvas, the surface is retained: paint accumulates until
+something clears it.</p>
+<h2 id="usage"><a class="anchor" href="#usage" aria-hidden="true">#</a>Usage</h2>
+<pre><code class="language-tsx"><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>canvas</span>
+  <span class="token attr-name">style</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span> width<span class="token operator">:</span> <span class="token number">300</span><span class="token punctuation">,</span> height<span class="token operator">:</span> <span class="token number">150</span> <span class="token punctuation">}</span><span class="token punctuation">}</span></span>
+  <span class="token attr-name">draw</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">(</span>ctx<span class="token punctuation">)</span> <span class="token operator">=&gt;</span> <span class="token punctuation">{</span>
+    ctx<span class="token punctuation">.</span>strokeStyle <span class="token operator">=</span> <span class="token string">&quot;#7aa2f7&quot;</span><span class="token punctuation">;</span>
+    ctx<span class="token punctuation">.</span>lineWidth <span class="token operator">=</span> <span class="token number">2</span><span class="token punctuation">;</span>
+    ctx<span class="token punctuation">.</span><span class="token function">beginPath</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    ctx<span class="token punctuation">.</span><span class="token function">moveTo</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">,</span> <span class="token number">150</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    ctx<span class="token punctuation">.</span><span class="token function">bezierCurveTo</span><span class="token punctuation">(</span><span class="token number">100</span><span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">,</span> <span class="token number">200</span><span class="token punctuation">,</span> <span class="token number">150</span><span class="token punctuation">,</span> <span class="token number">300</span><span class="token punctuation">,</span> <span class="token number">20</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    ctx<span class="token punctuation">.</span><span class="token function">stroke</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token punctuation">}</span><span class="token punctuation">}</span></span>
+<span class="token punctuation">/&gt;</span></span></code></pre><p>Coordinates are logical pixels from the node&#39;s top-left corner, the same
+units as <code>style</code>. The canvas has no intrinsic size: give it a width and a
+height, or let flex layout size it.</p>
+<p><code>&lt;canvas&gt;</code> comes from the <code>canvas</code> cargo feature, which is on by default and
+adds <code>CanvasPlugin</code> to <code>ReactPlugins</code>. Without it, a <code>&lt;canvas&gt;</code> mounts as a
+plain node and reports a <code>featureMissing</code> warning (see
+<a href="../../getting-started/#cargo-features">Cargo features</a>).</p>
+<p>There are two ways to draw, and one canvas can use both:</p>
+<ul>
+<li><strong>Declarative</strong>: a <code>draw</code> painter that describes the whole picture. The
+canvas is cleared and the painter replayed whenever <code>draw</code> changes.</li>
+<li><strong>Imperative</strong>: a <code>ref</code> handle whose context draws at any time, outside
+React rendering. Each batch paints on top of what is already there.</li>
+</ul>
+<h2 id="declarative-drawing"><a class="anchor" href="#declarative-drawing" aria-hidden="true">#</a>Declarative drawing</h2>
+<p><code>draw</code> takes a painter function, called with a fresh <code>CanvasContext</code> that
+records every call into a display list. The list crosses to Bevy, which clears
+the surface, resets the drawing state and replays it.</p>
+<ul>
+<li>The painter runs whenever the <code>draw</code> prop changes. A function compares by
+identity, so an inline arrow re-records on every render of the component.
+Wrap the painter in <code>useCallback</code>, with the data it reads as
+dependencies, to skip repaints when nothing changed.</li>
+<li><code>draw</code> also accepts a prebuilt <code>DrawCmd[]</code> list (the <code>DrawCmd</code> type is
+exported from <code>bevy-react</code>). A list compares by value.</li>
+<li>After a resize, the runtime replays the latest painter for you.</li>
+<li>The painter does not receive the canvas size. Draw at a size you set in
+<code>style</code>, or keep the size from <code>onResize</code> in state.</li>
+<li><code>draw={[]}</code> clears the canvas. Removing the <code>draw</code> prop keeps the last
+picture but stops the replays on resize.</li>
+</ul>
+<h2 id="imperative-drawing"><a class="anchor" href="#imperative-drawing" aria-hidden="true">#</a>Imperative drawing</h2>
+<p>A <code>ref</code> on a <code>&lt;canvas&gt;</code> resolves to a <code>BevyCanvasElement</code> handle.
+<code>getContext()</code> returns its long-lived context, with the same drawing API:</p>
+<pre><code class="language-tsx"><span class="token keyword">import</span> <span class="token punctuation">{</span> useRef <span class="token punctuation">}</span> <span class="token keyword">from</span> <span class="token string">&quot;react&quot;</span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token keyword">type</span> <span class="token punctuation">{</span> BevyCanvasElement <span class="token punctuation">}</span> <span class="token keyword">from</span> <span class="token string">&quot;bevy-react&quot;</span><span class="token punctuation">;</span>
+
+<span class="token keyword">function</span> <span class="token function">Sketchpad</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+  <span class="token keyword">const</span> ref <span class="token operator">=</span> <span class="token generic-function"><span class="token function">useRef</span><span class="token generic class-name"><span class="token operator">&lt;</span>BevyCanvasElement<span class="token operator">&gt;</span></span></span><span class="token punctuation">(</span><span class="token keyword">null</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token keyword">const</span> last <span class="token operator">=</span> <span class="token generic-function"><span class="token function">useRef</span><span class="token generic class-name"><span class="token operator">&lt;</span><span class="token punctuation">{</span> x<span class="token operator">:</span> <span class="token builtin">number</span><span class="token punctuation">;</span> y<span class="token operator">:</span> <span class="token builtin">number</span> <span class="token punctuation">}</span> <span class="token operator">|</span> <span class="token keyword">null</span><span class="token operator">&gt;</span></span></span><span class="token punctuation">(</span><span class="token keyword">null</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token comment">// Pointer x/y are normalized 0..1 within the element.</span>
+  <span class="token keyword">const</span> <span class="token function-variable function">at</span> <span class="token operator">=</span> <span class="token punctuation">(</span>e<span class="token operator">:</span> <span class="token punctuation">{</span> x<span class="token operator">:</span> <span class="token builtin">number</span><span class="token punctuation">;</span> y<span class="token operator">:</span> <span class="token builtin">number</span> <span class="token punctuation">}</span><span class="token punctuation">)</span> <span class="token operator">=&gt;</span> <span class="token punctuation">(</span><span class="token punctuation">{</span>
+    x<span class="token operator">:</span> e<span class="token punctuation">.</span>x <span class="token operator">*</span> ref<span class="token punctuation">.</span>current<span class="token operator">!</span><span class="token punctuation">.</span>width<span class="token punctuation">,</span>
+    y<span class="token operator">:</span> e<span class="token punctuation">.</span>y <span class="token operator">*</span> ref<span class="token punctuation">.</span>current<span class="token operator">!</span><span class="token punctuation">.</span>height<span class="token punctuation">,</span>
+  <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+  <span class="token keyword">return</span> <span class="token punctuation">(</span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>canvas</span>
+      <span class="token attr-name">ref</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span>ref<span class="token punctuation">}</span></span>
+      <span class="token attr-name">style</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span> width<span class="token operator">:</span> <span class="token number">400</span><span class="token punctuation">,</span> height<span class="token operator">:</span> <span class="token number">300</span> <span class="token punctuation">}</span><span class="token punctuation">}</span></span>
+      <span class="token attr-name">onResize</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">(</span><span class="token punctuation">{</span> width<span class="token punctuation">,</span> height <span class="token punctuation">}</span><span class="token punctuation">)</span> <span class="token operator">=&gt;</span> <span class="token punctuation">{</span>
+        <span class="token keyword">const</span> ctx <span class="token operator">=</span> ref<span class="token punctuation">.</span>current<span class="token operator">!</span><span class="token punctuation">.</span><span class="token function">getContext</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        ctx<span class="token punctuation">.</span>fillStyle <span class="token operator">=</span> <span class="token string">&quot;#1a1b26&quot;</span><span class="token punctuation">;</span>
+        ctx<span class="token punctuation">.</span><span class="token function">beginPath</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        ctx<span class="token punctuation">.</span><span class="token function">rect</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">,</span> width<span class="token punctuation">,</span> height<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        ctx<span class="token punctuation">.</span><span class="token function">fill</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+      <span class="token punctuation">}</span><span class="token punctuation">}</span></span>
+      <span class="token attr-name">onPointerDown</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">(</span>e<span class="token punctuation">)</span> <span class="token operator">=&gt;</span> <span class="token punctuation">(</span>last<span class="token punctuation">.</span>current <span class="token operator">=</span> <span class="token function">at</span><span class="token punctuation">(</span>e<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">}</span></span>
+      <span class="token attr-name">onPointerMove</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">(</span>e<span class="token punctuation">)</span> <span class="token operator">=&gt;</span> <span class="token punctuation">{</span>
+        <span class="token keyword">const</span> from <span class="token operator">=</span> last<span class="token punctuation">.</span>current<span class="token punctuation">;</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span>from<span class="token punctuation">)</span> <span class="token keyword">return</span><span class="token punctuation">;</span>
+        <span class="token keyword">const</span> to <span class="token operator">=</span> <span class="token function">at</span><span class="token punctuation">(</span>e<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">const</span> ctx <span class="token operator">=</span> ref<span class="token punctuation">.</span>current<span class="token operator">!</span><span class="token punctuation">.</span><span class="token function">getContext</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        ctx<span class="token punctuation">.</span>strokeStyle <span class="token operator">=</span> <span class="token string">&quot;#7aa2f7&quot;</span><span class="token punctuation">;</span>
+        ctx<span class="token punctuation">.</span>lineWidth <span class="token operator">=</span> <span class="token number">3</span><span class="token punctuation">;</span>
+        ctx<span class="token punctuation">.</span><span class="token function">beginPath</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        ctx<span class="token punctuation">.</span><span class="token function">moveTo</span><span class="token punctuation">(</span>from<span class="token punctuation">.</span>x<span class="token punctuation">,</span> from<span class="token punctuation">.</span>y<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        ctx<span class="token punctuation">.</span><span class="token function">lineTo</span><span class="token punctuation">(</span>to<span class="token punctuation">.</span>x<span class="token punctuation">,</span> to<span class="token punctuation">.</span>y<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        ctx<span class="token punctuation">.</span><span class="token function">stroke</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        last<span class="token punctuation">.</span>current <span class="token operator">=</span> to<span class="token punctuation">;</span>
+      <span class="token punctuation">}</span><span class="token punctuation">}</span></span>
+      <span class="token attr-name">onPointerUp</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">=&gt;</span> <span class="token punctuation">(</span>last<span class="token punctuation">.</span>current <span class="token operator">=</span> <span class="token keyword">null</span><span class="token punctuation">)</span><span class="token punctuation">}</span></span>
+    <span class="token punctuation">/&gt;</span></span>
+  <span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span></code></pre><ul>
+<li>Calls made in one synchronous burst are batched and sent to Bevy as one
+update on a microtask. No React render is involved, so drawing at pointer
+rate costs no re-renders.</li>
+<li><code>width</code> and <code>height</code> are the laid-out size in logical pixels, <code>0</code> before
+the first layout.</li>
+<li>The handle survives re-renders and Fast Refresh. Drawing through a handle
+whose canvas has unmounted does nothing.</li>
+<li>Draw content that must survive a resize from <code>onResize</code>, which also fires
+on the first layout.</li>
+</ul>
+<h2 id="retained-pixels-and-resizing"><a class="anchor" href="#retained-pixels-and-resizing" aria-hidden="true">#</a>Retained pixels and resizing</h2>
+<p>Paint accumulates on the canvas until one of these clears it:</p>
+<ul>
+<li><code>clear()</code> or <code>clearRect(x, y, w, h)</code>;</li>
+<li>a change of the <code>draw</code> prop (clear, then replay);</li>
+<li>a resize.</li>
+</ul>
+<p>The drawing state (<code>fillStyle</code>, <code>strokeStyle</code>, <code>lineWidth</code> and the current
+path) also persists between batches, as on the web. A <code>draw</code> replay or a
+resize resets it to the defaults.</p>
+<p>A resize is any change of the canvas&#39;s laid-out size in physical pixels,
+including its first layout and a display scale-factor change at the same
+logical size. It clears the surface (HTML canvas <code>width</code>/<code>height</code> semantics),
+then replays the declarative painter if there is one, then calls <code>onResize</code>
+with the new <code>{ width, height }</code> in logical pixels.</p>
+<p>Imperative drawing is erased by the next resize and, on a canvas that also
+has a <code>draw</code> painter, by the next <code>draw</code> change.</p>
+<h2 id="drawing-api"><a class="anchor" href="#drawing-api" aria-hidden="true">#</a>Drawing API</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Member</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>fillStyle</code>, <code>strokeStyle</code></td>
+<td>Fill and stroke color, any CSS color string</td>
+</tr>
+<tr>
+<td><code>lineWidth</code></td>
+<td>Stroke width in logical pixels; 0, negative or non-finite values are ignored</td>
+</tr>
+<tr>
+<td><code>beginPath()</code></td>
+<td>Start a new, empty path</td>
+</tr>
+<tr>
+<td><code>moveTo(x, y)</code></td>
+<td>Start a subpath at a point</td>
+</tr>
+<tr>
+<td><code>lineTo(x, y)</code></td>
+<td>Add a line; without a current point it starts the subpath there</td>
+</tr>
+<tr>
+<td><code>quadraticCurveTo(cx, cy, x, y)</code></td>
+<td>Add a quadratic Bézier; ignored without a current point</td>
+</tr>
+<tr>
+<td><code>bezierCurveTo(c1x, c1y, c2x, c2y, x, y)</code></td>
+<td>Add a cubic Bézier; ignored without a current point</td>
+</tr>
+<tr>
+<td><code>arc(x, y, r, start, end)</code></td>
+<td>Add a circular arc, angles in radians, drawn clockwise; joins the current point by line</td>
+</tr>
+<tr>
+<td><code>rect(x, y, w, h)</code></td>
+<td>Add a rectangle subpath</td>
+</tr>
+<tr>
+<td><code>closePath()</code></td>
+<td>Close the current subpath</td>
+</tr>
+<tr>
+<td><code>fill()</code></td>
+<td>Fill the current path (nonzero winding rule)</td>
+</tr>
+<tr>
+<td><code>stroke()</code></td>
+<td>Stroke the current path (butt caps, miter joins)</td>
+</tr>
+<tr>
+<td><code>clearRect(x, y, w, h)</code></td>
+<td>Erase a rectangle to transparent; path and styles are kept</td>
+</tr>
+<tr>
+<td><code>clear()</code></td>
+<td>Erase the whole surface (not in the web API); path and styles are kept</td>
+</tr>
+</tbody></table></div>
+<ul>
+<li>Colors take the same strings as styles: hex, named colors, <code>rgb()</code>,
+<code>hsl()</code> and the other functional forms, alpha included. A color that
+doesn&#39;t parse paints opaque black, without a warning.</li>
+<li>The starting fill color is white and the starting stroke color black, with
+a 1px line. On the web the fill starts black, so set <code>fillStyle</code> before the
+first <code>fill()</code>.</li>
+<li>Every method returns the context, so calls chain.</li>
+</ul>
+<h2 id="styles-and-events"><a class="anchor" href="#styles-and-events" aria-hidden="true">#</a>Styles and events</h2>
+<ul>
+<li><code>&lt;canvas&gt;</code> takes everything <code>&lt;node&gt;</code> does: <code>style</code>, <code>hoverStyle</code>,
+<code>pressStyle</code>, <code>focusStyle</code>, pointer handlers, <code>onWheel</code> and the scroll
+props.</li>
+<li>Pointer events report <code>x</code>/<code>y</code> normalized to <code>0..1</code>. Multiply by the
+handle&#39;s <code>width</code>/<code>height</code> to get canvas coordinates, as above.</li>
+<li><code>backgroundColor</code> shows through transparent pixels. <code>backgroundImage</code> is
+ignored (the element owns its image) with a <code>styleIgnored</code> warning.</li>
+</ul>
+<h2 id="limits"><a class="anchor" href="#limits" aria-hidden="true">#</a>Limits</h2>
+<ul>
+<li>Only the path API above. There are no transforms (<code>translate</code>, <code>rotate</code>,
+<code>setTransform</code>), no text, images, gradients or patterns, no line caps,
+joins or dashes, no <code>globalAlpha</code>, no <code>save</code>/<code>restore</code>, no <code>ellipse</code>,
+<code>arcTo</code>, <code>fillRect</code> or <code>strokeRect</code>, no counter-clockwise arcs, and no
+<code>isPointInPath</code>.</li>
+<li>Rasterization runs on the CPU, and every painted batch re-uploads the whole
+texture. A large canvas redrawn every frame costs CPU time and upload
+bandwidth.</li>
+<li>The backing texture is capped at 4096 pixels per side.</li>
+<li><code>imageRendering</code> modes other than <code>&quot;auto&quot;</code> are not available on a canvas
+and report an <code>imageRendering</code> warning.</li>
+</ul>
+<p>See <a href="../../reference/elements/#canvas"><code>&lt;canvas&gt;</code></a> in the element reference.</p>
+
+</article>
+<footer class="page-links"><a href="../../demo/?page=canvas">Open live demo</a>
+<a href="https://github.com/tulustul/bevy-react/blob/v0.7.0/examples/demos/ui/src/demos/elements/CanvasDemo.tsx">Demo source</a>
+<a href="https://github.com/tulustul/bevy-react/edit/main/docs/guide/elements/canvas.md">Edit this page</a></footer>
+</main>
+</div>
+<footer class="site-footer">
+<p>bevy-react is dual-licensed under MIT or Apache-2.0. <a href="https://github.com/tulustul/bevy-react">Source on GitHub</a>.</p>
+</footer>
+</body>
+</html>

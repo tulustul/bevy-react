@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>&lt;surface&gt; · bevy-react</title>
+<meta name="description" content="The &lt;surface&gt; element renders a React subtree into an offscreen texture for a 3D mesh, clickable in the world through SurfacePointer.">
+<link rel="canonical" href="https://tulustul.github.io/bevy-react/elements/surface/">
+<link rel="alternate" type="text/markdown" href="../../elements/surface.md">
+<meta property="og:title" content="&lt;surface&gt; · bevy-react">
+<meta property="og:description" content="The &lt;surface&gt; element renders a React subtree into an offscreen texture for a 3D mesh, clickable in the world through SurfacePointer.">
+<link rel="icon" href="../../logo.png">
+<link rel="stylesheet" href="../../style.css">
+<script src="../../docs.js" defer></script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="site-header">
+<a class="brand" href="../../"><img src="../../logo.png" alt="" width="74" height="74"> bevy-react</a>
+<span class="version">v0.7.0</span>
+<nav class="site-links" aria-label="Project">
+<a href="../../demo/">Live demo</a>
+<a href="https://github.com/tulustul/bevy-react">GitHub</a>
+<a href="https://docs.rs/bevy-react">docs.rs</a>
+<a href="https://www.npmjs.com/package/bevy-react">npm</a>
+</nav>
+</header>
+<div class="layout">
+<nav class="sidebar" aria-label="Documentation">
+<details class="nav-menu" open>
+<summary>Menu</summary>
+<ul><li><a href="../../">Introduction</a></li><li><a href="../../getting-started/">Getting started</a></li><li><a href="../../how-it-works/">How it works</a></li><li class="nav-section"><span>Elements</span><ul><li><a href="../../elements/node/">&lt;node&gt;</a></li><li><a href="../../elements/button/">&lt;button&gt;</a></li><li><a href="../../elements/text/">&lt;text&gt;</a></li><li><a href="../../elements/editable-text/">&lt;editableText&gt;</a></li><li><a href="../../elements/image/">&lt;image&gt;</a></li><li><a href="../../elements/canvas/">&lt;canvas&gt;</a></li><li><a href="../../elements/svg/">&lt;svg&gt;</a></li><li><a href="../../elements/portal/">&lt;portal&gt;</a></li><li><a href="../../elements/surface/" aria-current="page">&lt;surface&gt;</a></li><li><a href="../../elements/root/">&lt;root&gt;</a></li><li><a href="../../elements/anchor/">&lt;anchor&gt;</a></li></ul></li><li class="nav-section"><span>Layout</span><ul><li><a href="../../layout/flexbox/">Flexbox</a></li><li><a href="../../layout/grid/">Grid</a></li><li><a href="../../layout/positioning/">Positioning</a></li></ul></li><li class="nav-section"><span>Styling</span><ul><li><a href="../../styling/units/">Units</a></li><li><a href="../../styling/colors/">Colors</a></li><li><a href="../../styling/borders/">Borders</a></li><li><a href="../../styling/spacing/">Spacing</a></li><li><a href="../../styling/sizing/">Sizing</a></li><li><a href="../../styling/layout-rounding/">Layout rounding</a></li><li><a href="../../styling/overflow/">Overflow</a></li><li><a href="../../styling/transforms/">Transforms</a></li><li><a href="../../styling/3d-transforms/">3D transforms</a></li><li><a href="../../styling/shadows/">Shadows</a></li><li><a href="../../styling/filters/">Filters</a></li><li><a href="../../styling/backdrop-filters/">Backdrop filters</a></li><li><a href="../../styling/morph-filters/">Morph filters</a></li><li><a href="../../styling/gradients/">Gradients</a></li><li><a href="../../styling/background-images/">Background images</a></li><li><a href="../../styling/image-rendering/">Image rendering</a></li><li><a href="../../styling/opacity/">Opacity</a></li><li><a href="../../styling/z-index/">Z-index</a></li><li><a href="../../styling/focus-policy/">Focus policy</a></li><li><a href="../../styling/cursors/">Cursors</a></li><li><a href="../../styling/layers/">Layers</a></li></ul></li><li class="nav-section"><span>Animations</span><ul><li><a href="../../animations/style-transitions/">Style transitions</a></li><li><a href="../../animations/animated-values/">Animated values</a></li><li><a href="../../animations/interpolation/">Interpolation</a></li><li><a href="../../animations/shared-elements/">Shared elements</a></li></ul></li><li class="nav-section"><span>Communication</span><ul><li><a href="../../communication/react-to-bevy/">React to Bevy</a></li><li><a href="../../communication/bevy-to-react/">Bevy to React</a></li><li><a href="../../communication/request-response/">Request / response</a></li><li><a href="../../communication/named-nodes/">Named nodes</a></li></ul></li><li class="nav-section"><span>Events</span><ul><li><a href="../../events/mouse/">Mouse</a></li><li><a href="../../events/keyboard/">Keyboard</a></li><li><a href="../../events/gamepad/">Gamepad</a></li><li><a href="../../events/window/">Window</a></li></ul></li><li class="nav-section"><span>Extending</span><ul><li><a href="../../extending/custom-elements/">Custom elements</a></li><li><a href="../../extending/custom-styles/">Custom styles</a></li><li><a href="../../extending/custom-filters/">Custom filters</a></li></ul></li><li class="nav-section"><span>Tooling</span><ul><li><a href="../../tooling/devtools/">Devtools</a></li><li><a href="../../tooling/hot-reload/">Hot reload</a></li><li><a href="../../tooling/web/">Web builds</a></li><li><a href="../../tooling/ts-codegen/">TypeScript codegen</a></li></ul></li><li class="nav-section"><span>Reference</span><ul><li><a href="../../reference/style-properties/">Style properties</a></li><li><a href="../../reference/elements/">Elements</a></li><li><a href="../../reference/filters/">Filters</a></li></ul></li><li><a href="../../performance/">Performance</a></li></ul>
+</details>
+</nav>
+<main id="main">
+<article>
+<h1 id="surface"><code>&lt;surface&gt;</code></h1>
+<p><code>&lt;surface&gt;</code> renders a React subtree into an offscreen texture instead of onto
+the screen. Your Bevy app puts that texture on any material: an in-world
+monitor, a control panel, a hologram with your own shader on top. It is the
+inverse of <a href="../../elements/portal/"><code>&lt;portal&gt;</code></a>, which shows a camera&#39;s texture inside the
+UI. Tag the mesh that displays the texture with <code>SurfacePointer</code> and the UI
+on it is clickable in 3D.</p>
+<h2 id="usage"><a class="anchor" href="#usage" aria-hidden="true">#</a>Usage</h2>
+<div class="tabs"><div class="tab-panel" data-lang="tsx"><p class="tab-label">TSX</p><pre><code class="language-tsx"><span class="token keyword">function</span> <span class="token function">Monitor</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+  <span class="token keyword">const</span> <span class="token punctuation">[</span>count<span class="token punctuation">,</span> setCount<span class="token punctuation">]</span> <span class="token operator">=</span> <span class="token function">useState</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token keyword">return</span> <span class="token punctuation">(</span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>surface</span> <span class="token attr-name">target</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">&quot;</span>monitor<span class="token punctuation">&quot;</span></span> <span class="token attr-name">style</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span> backgroundColor<span class="token operator">:</span> <span class="token string">&quot;#1a1b26&quot;</span> <span class="token punctuation">}</span><span class="token punctuation">}</span></span><span class="token punctuation">&gt;</span></span><span class="token plain-text">
+      </span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>button</span> <span class="token attr-name">onClick</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">=&gt;</span> <span class="token function">setCount</span><span class="token punctuation">(</span><span class="token punctuation">(</span>n<span class="token punctuation">)</span> <span class="token operator">=&gt;</span> n <span class="token operator">+</span> <span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">}</span></span><span class="token punctuation">&gt;</span></span><span class="token plain-text">
+        </span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>text</span><span class="token punctuation">&gt;</span></span><span class="token punctuation">{</span><span class="token template-string"><span class="token template-punctuation string">`</span><span class="token string">Clicked </span><span class="token interpolation"><span class="token interpolation-punctuation punctuation">${</span>count<span class="token interpolation-punctuation punctuation">}</span></span><span class="token string"> times</span><span class="token template-punctuation string">`</span></span><span class="token punctuation">}</span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>text</span><span class="token punctuation">&gt;</span></span><span class="token plain-text">
+      </span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>button</span><span class="token punctuation">&gt;</span></span><span class="token plain-text">
+    </span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>surface</span><span class="token punctuation">&gt;</span></span>
+  <span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span></code></pre></div><div class="tab-panel" data-lang="rust"><p class="tab-label">Rust</p><pre><code class="language-rust"><span class="token keyword">use</span> <span class="token namespace">bevy<span class="token punctuation">::</span>prelude<span class="token punctuation">::</span></span><span class="token operator">*</span><span class="token punctuation">;</span>
+<span class="token keyword">use</span> <span class="token namespace">bevy_react<span class="token punctuation">::</span>surface<span class="token punctuation">::</span></span><span class="token punctuation">{</span><span class="token class-name">SurfacePointer</span><span class="token punctuation">,</span> <span class="token class-name">SurfaceSpec</span><span class="token punctuation">,</span> <span class="token class-name">Surfaces</span><span class="token punctuation">}</span><span class="token punctuation">;</span>
+
+<span class="token keyword">fn</span> <span class="token function-definition function">setup</span><span class="token punctuation">(</span>
+    <span class="token keyword">mut</span> commands<span class="token punctuation">:</span> <span class="token class-name">Commands</span><span class="token punctuation">,</span>
+    <span class="token keyword">mut</span> surfaces<span class="token punctuation">:</span> <span class="token class-name">ResMut</span><span class="token operator">&lt;</span><span class="token class-name">Surfaces</span><span class="token operator">&gt;</span><span class="token punctuation">,</span>
+    <span class="token keyword">mut</span> images<span class="token punctuation">:</span> <span class="token class-name">ResMut</span><span class="token operator">&lt;</span><span class="token class-name">Assets</span><span class="token operator">&lt;</span><span class="token class-name">Image</span><span class="token operator">&gt;&gt;</span><span class="token punctuation">,</span>
+    <span class="token keyword">mut</span> meshes<span class="token punctuation">:</span> <span class="token class-name">ResMut</span><span class="token operator">&lt;</span><span class="token class-name">Assets</span><span class="token operator">&lt;</span><span class="token class-name">Mesh</span><span class="token operator">&gt;&gt;</span><span class="token punctuation">,</span>
+    <span class="token keyword">mut</span> materials<span class="token punctuation">:</span> <span class="token class-name">ResMut</span><span class="token operator">&lt;</span><span class="token class-name">Assets</span><span class="token operator">&lt;</span><span class="token class-name">StandardMaterial</span><span class="token operator">&gt;&gt;</span><span class="token punctuation">,</span>
+<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token keyword">let</span> screen <span class="token operator">=</span> surfaces<span class="token punctuation">.</span><span class="token function">create</span><span class="token punctuation">(</span>
+        <span class="token operator">&amp;</span><span class="token keyword">mut</span> images<span class="token punctuation">,</span>
+        <span class="token string">&quot;monitor&quot;</span><span class="token punctuation">,</span>
+        <span class="token class-name">SurfaceSpec</span> <span class="token punctuation">{</span>
+            size<span class="token punctuation">:</span> <span class="token class-name">UVec2</span><span class="token punctuation">::</span><span class="token function">new</span><span class="token punctuation">(</span><span class="token number">800</span><span class="token punctuation">,</span> <span class="token number">600</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+            <span class="token punctuation">..</span><span class="token function">default</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+        <span class="token punctuation">}</span><span class="token punctuation">,</span>
+    <span class="token punctuation">)</span><span class="token punctuation">;</span>
+    commands<span class="token punctuation">.</span><span class="token function">spawn</span><span class="token punctuation">(</span><span class="token punctuation">(</span>
+        <span class="token class-name">Mesh3d</span><span class="token punctuation">(</span>meshes<span class="token punctuation">.</span><span class="token function">add</span><span class="token punctuation">(</span><span class="token class-name">Rectangle</span><span class="token punctuation">::</span><span class="token function">new</span><span class="token punctuation">(</span><span class="token number">4.0</span><span class="token punctuation">,</span> <span class="token number">3.0</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+        <span class="token class-name">MeshMaterial3d</span><span class="token punctuation">(</span>materials<span class="token punctuation">.</span><span class="token function">add</span><span class="token punctuation">(</span><span class="token class-name">StandardMaterial</span> <span class="token punctuation">{</span>
+            base_color_texture<span class="token punctuation">:</span> <span class="token class-name">Some</span><span class="token punctuation">(</span>screen<span class="token punctuation">)</span><span class="token punctuation">,</span>
+            unlit<span class="token punctuation">:</span> <span class="token boolean">true</span><span class="token punctuation">,</span>
+            <span class="token punctuation">..</span><span class="token function">default</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+        <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+        <span class="token class-name">SurfacePointer</span><span class="token punctuation">::</span><span class="token function">new</span><span class="token punctuation">(</span><span class="token string">&quot;monitor&quot;</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+    <span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span></code></pre></div></div>
+<p><code>&lt;surface&gt;</code> comes from the <code>surface</code> cargo feature, which is on by default
+and adds <code>SurfacePlugin</code> to <code>ReactPlugins</code>. Without it, a <code>&lt;surface&gt;</code> mounts
+as a plain node and reports a <code>featureMissing</code> warning (see
+<a href="../../getting-started/#cargo-features">Cargo features</a>).</p>
+<h2 id="surfaces"><a class="anchor" href="#surfaces" aria-hidden="true">#</a>Surfaces</h2>
+<p><code>Surfaces::create(&amp;mut images, name, spec)</code> allocates a texture, registers it
+under <code>name</code> and returns its <code>Handle&lt;Image&gt;</code> for your materials. bevy-react
+spawns a UI camera for each surface that renders the matching <code>&lt;surface&gt;</code>
+subtree into the texture, before the main camera draws, so the texture is
+never a frame behind. Creating an existing name again replaces the surface.</p>
+<p><code>SurfaceSpec</code> configures it:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Default</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>size</code></td>
+<td>512 × 512</td>
+<td>Texture size in pixels, at most 4096 per side</td>
+</tr>
+<tr>
+<td><code>clear_color</code></td>
+<td><code>Color::BLACK</code></td>
+<td>Fills the texture under the UI; transparent for a decal</td>
+</tr>
+<tr>
+<td><code>mode</code></td>
+<td><code>RenderMode::Live</code></td>
+<td>When the UI renders (see &quot;Render modes&quot;)</td>
+</tr>
+</tbody></table></div>
+<p><code>get(name)</code> returns the texture handle, and <code>invalidate</code>, <code>set_mode</code> and
+<code>remove</code> work as on render targets. <code>remove(name)</code> despawns the surface&#39;s
+camera and hides its <code>&lt;surface&gt;</code> subtrees until the name is created again.</p>
+<p>On the React side, <code>target</code> names the surface. A <code>&lt;surface&gt;</code> whose name isn&#39;t
+registered yet renders nothing, and appears as soon as the app creates it.
+Changing <code>target</code> moves the subtree to another surface.</p>
+<h2 id="layout"><a class="anchor" href="#layout" aria-hidden="true">#</a>Layout</h2>
+<ul>
+<li>The subtree lays out in the texture&#39;s pixel space: one logical pixel is
+one texture pixel, whatever the window&#39;s scale factor.</li>
+<li>The <code>&lt;surface&gt;</code> element fills the texture by default (<code>width</code> and <code>height</code>
+<code>&quot;100%&quot;</code>). Its <code>style</code> overrides that and styles the root like a node.</li>
+<li>The <code>&lt;surface&gt;</code> takes no space where you write it in the React tree. Put it
+anywhere, for example beside the screen UI that controls it; unmounting it
+or an ancestor removes it.</li>
+<li>It is a UI root of its own, like <a href="../../elements/root/"><code>&lt;root&gt;</code></a>. Layout, <code>overflow</code>
+clipping, <code>layoutRounding</code> and shared-element pairing don&#39;t cross its
+boundary.</li>
+<li>The <code>&lt;surface&gt;</code> element itself takes only <code>target</code>, <code>style</code>, <code>name</code> and
+<code>key</code>: no pointer handlers or hover styles. Put those on its children.</li>
+</ul>
+<h2 id="clicking-in-the-world"><a class="anchor" href="#clicking-in-the-world" aria-hidden="true">#</a>Clicking in the world</h2>
+<p><code>SurfacePointer::new(name)</code> on the entity with the mesh makes the UI on it
+interactive. bevy-react casts a ray from the active window camera through the
+cursor, finds the nearest <code>SurfacePointer</code> mesh, reads the texture coordinate
+at the hit, and moves a virtual pointer to that pixel of the surface.</p>
+<ul>
+<li>Children get <code>onClick</code>, the <code>onPointer*</code> handlers, <code>hoverStyle</code> and
+<code>pressStyle</code>, and the <code>cursor</code> style sets the OS cursor, as on screen.</li>
+<li>The mesh needs UVs, with <code>(0, 0)</code> at the texture&#39;s top-left. If your
+material maps the surface to the second UV set (<code>base_color_channel: UvChannel::Uv1</code>), match it with
+<code>SurfacePointer::new(name).with_uv_channel(UvChannel::Uv1)</code> so clicks land
+on the right pixel.</li>
+<li>Several meshes can display and pick the same surface.</li>
+<li>Only <code>SurfacePointer</code> meshes are ray-cast: another mesh in front of the
+screen doesn&#39;t block clicks.</li>
+</ul>
+<h2 id="render-modes"><a class="anchor" href="#render-modes" aria-hidden="true">#</a>Render modes</h2>
+<ul>
+<li><code>RenderMode::Live</code> (the default): the UI renders every frame while at
+least one <code>SurfacePointer</code> mesh naming the surface is visible to a camera.
+When every tagged mesh is culled, it renders nothing. A surface with no
+tagged mesh renders every frame, since bevy-react can&#39;t tell which
+materials use it, so tag every mesh that shows a surface.</li>
+<li><code>RenderMode::Snapshot</code>: the UI renders once when the surface is created,
+when you call <code>invalidate(name)</code> and when its mode changes, then the
+texture keeps that frame. Call <code>invalidate</code> after the UI changes; good for
+static panels.</li>
+</ul>
+<h2 id="limits"><a class="anchor" href="#limits" aria-hidden="true">#</a>Limits</h2>
+<ul>
+<li>Composited-layer styles have no effect inside a surface: <code>opacity</code> on a
+node with children, <code>filter</code>, <code>backdropFilter</code>, <code>transform3d</code>,
+<code>morphFilter</code> and <code>cache</code> render as if unset, with a <code>layerCamera</code> warning.
+See <a href="../../styling/layers/">Layers</a>.</li>
+<li>The mouse wheel doesn&#39;t reach surface UI: no wheel scrolling and no
+<code>onWheel</code> inside a surface.</li>
+<li>A live surface without a tagged mesh renders every frame, visible or not.</li>
+<li>Textures are capped at 4096 pixels per side.</li>
+</ul>
+<p><img src="../../screenshots/monitor-screen.png" alt="A 3D monitor model whose screen is a live React &quot;OS&quot; — a menu bar, a CRT-effect toggle, a status line and a taskbar — rendered into an offscreen texture and clickable in 3D." loading="lazy"></p>
+<p>See <a href="../../reference/elements/#surface"><code>&lt;surface&gt;</code></a> in the element reference.</p>
+
+</article>
+<footer class="page-links"><a href="../../demo/?page=surface">Open live demo</a>
+<a href="https://github.com/tulustul/bevy-react/blob/v0.7.0/examples/demos/ui/src/demos/elements/surfaceDemo/SurfaceDemo.tsx">Demo source</a>
+<a href="https://github.com/tulustul/bevy-react/edit/main/docs/guide/elements/surface.md">Edit this page</a></footer>
+</main>
+</div>
+<footer class="site-footer">
+<p>bevy-react is dual-licensed under MIT or Apache-2.0. <a href="https://github.com/tulustul/bevy-react">Source on GitHub</a>.</p>
+</footer>
+</body>
+</html>

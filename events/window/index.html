@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Window · bevy-react</title>
+<meta name="description" content="Read the UI viewport's logical size in React with the built-in resize event and the bevy.window.size() request, for responsive layouts.">
+<link rel="canonical" href="https://tulustul.github.io/bevy-react/events/window/">
+<link rel="alternate" type="text/markdown" href="../../events/window.md">
+<meta property="og:title" content="Window · bevy-react">
+<meta property="og:description" content="Read the UI viewport's logical size in React with the built-in resize event and the bevy.window.size() request, for responsive layouts.">
+<link rel="icon" href="../../logo.png">
+<link rel="stylesheet" href="../../style.css">
+<script src="../../docs.js" defer></script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="site-header">
+<a class="brand" href="../../"><img src="../../logo.png" alt="" width="74" height="74"> bevy-react</a>
+<span class="version">v0.7.0</span>
+<nav class="site-links" aria-label="Project">
+<a href="../../demo/">Live demo</a>
+<a href="https://github.com/tulustul/bevy-react">GitHub</a>
+<a href="https://docs.rs/bevy-react">docs.rs</a>
+<a href="https://www.npmjs.com/package/bevy-react">npm</a>
+</nav>
+</header>
+<div class="layout">
+<nav class="sidebar" aria-label="Documentation">
+<details class="nav-menu" open>
+<summary>Menu</summary>
+<ul><li><a href="../../">Introduction</a></li><li><a href="../../getting-started/">Getting started</a></li><li><a href="../../how-it-works/">How it works</a></li><li class="nav-section"><span>Elements</span><ul><li><a href="../../elements/node/">&lt;node&gt;</a></li><li><a href="../../elements/button/">&lt;button&gt;</a></li><li><a href="../../elements/text/">&lt;text&gt;</a></li><li><a href="../../elements/editable-text/">&lt;editableText&gt;</a></li><li><a href="../../elements/image/">&lt;image&gt;</a></li><li><a href="../../elements/canvas/">&lt;canvas&gt;</a></li><li><a href="../../elements/svg/">&lt;svg&gt;</a></li><li><a href="../../elements/portal/">&lt;portal&gt;</a></li><li><a href="../../elements/surface/">&lt;surface&gt;</a></li><li><a href="../../elements/root/">&lt;root&gt;</a></li><li><a href="../../elements/anchor/">&lt;anchor&gt;</a></li></ul></li><li class="nav-section"><span>Layout</span><ul><li><a href="../../layout/flexbox/">Flexbox</a></li><li><a href="../../layout/grid/">Grid</a></li><li><a href="../../layout/positioning/">Positioning</a></li></ul></li><li class="nav-section"><span>Styling</span><ul><li><a href="../../styling/units/">Units</a></li><li><a href="../../styling/colors/">Colors</a></li><li><a href="../../styling/borders/">Borders</a></li><li><a href="../../styling/spacing/">Spacing</a></li><li><a href="../../styling/sizing/">Sizing</a></li><li><a href="../../styling/layout-rounding/">Layout rounding</a></li><li><a href="../../styling/overflow/">Overflow</a></li><li><a href="../../styling/transforms/">Transforms</a></li><li><a href="../../styling/3d-transforms/">3D transforms</a></li><li><a href="../../styling/shadows/">Shadows</a></li><li><a href="../../styling/filters/">Filters</a></li><li><a href="../../styling/backdrop-filters/">Backdrop filters</a></li><li><a href="../../styling/morph-filters/">Morph filters</a></li><li><a href="../../styling/gradients/">Gradients</a></li><li><a href="../../styling/background-images/">Background images</a></li><li><a href="../../styling/image-rendering/">Image rendering</a></li><li><a href="../../styling/opacity/">Opacity</a></li><li><a href="../../styling/z-index/">Z-index</a></li><li><a href="../../styling/focus-policy/">Focus policy</a></li><li><a href="../../styling/cursors/">Cursors</a></li><li><a href="../../styling/layers/">Layers</a></li></ul></li><li class="nav-section"><span>Animations</span><ul><li><a href="../../animations/style-transitions/">Style transitions</a></li><li><a href="../../animations/animated-values/">Animated values</a></li><li><a href="../../animations/interpolation/">Interpolation</a></li><li><a href="../../animations/shared-elements/">Shared elements</a></li></ul></li><li class="nav-section"><span>Communication</span><ul><li><a href="../../communication/react-to-bevy/">React to Bevy</a></li><li><a href="../../communication/bevy-to-react/">Bevy to React</a></li><li><a href="../../communication/request-response/">Request / response</a></li><li><a href="../../communication/named-nodes/">Named nodes</a></li></ul></li><li class="nav-section"><span>Events</span><ul><li><a href="../../events/mouse/">Mouse</a></li><li><a href="../../events/keyboard/">Keyboard</a></li><li><a href="../../events/gamepad/">Gamepad</a></li><li><a href="../../events/window/" aria-current="page">Window</a></li></ul></li><li class="nav-section"><span>Extending</span><ul><li><a href="../../extending/custom-elements/">Custom elements</a></li><li><a href="../../extending/custom-styles/">Custom styles</a></li><li><a href="../../extending/custom-filters/">Custom filters</a></li></ul></li><li class="nav-section"><span>Tooling</span><ul><li><a href="../../tooling/devtools/">Devtools</a></li><li><a href="../../tooling/hot-reload/">Hot reload</a></li><li><a href="../../tooling/web/">Web builds</a></li><li><a href="../../tooling/ts-codegen/">TypeScript codegen</a></li></ul></li><li class="nav-section"><span>Reference</span><ul><li><a href="../../reference/style-properties/">Style properties</a></li><li><a href="../../reference/elements/">Elements</a></li><li><a href="../../reference/filters/">Filters</a></li></ul></li><li><a href="../../performance/">Performance</a></li></ul>
+</details>
+</nav>
+<main id="main">
+<article>
+<h1 id="window">Window</h1>
+<p>The UI viewport&#39;s size reaches React through two built-ins: the <code>resize</code>
+<a href="../../communication/bevy-to-react/">event</a> and the <code>bevy.window.size()</code>
+<a href="../../communication/request-response/">request</a>, the bevy-react counterparts
+of the browser&#39;s <code>resize</code> event and <code>window.innerWidth</code>/<code>innerHeight</code>. Both
+are typed in every generated <code>bevy.ts</code>, with no Rust code or registration.</p>
+<h2 id="usage"><a class="anchor" href="#usage" aria-hidden="true">#</a>Usage</h2>
+<p>Seed the value with the request on mount, then follow the event:</p>
+<pre><code class="language-tsx"><span class="token keyword">import</span> <span class="token punctuation">{</span> useEffect<span class="token punctuation">,</span> useState <span class="token punctuation">}</span> <span class="token keyword">from</span> <span class="token string">&quot;react&quot;</span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token punctuation">{</span> bevy<span class="token punctuation">,</span> <span class="token keyword">type</span> <span class="token class-name">WindowSize</span> <span class="token punctuation">}</span> <span class="token keyword">from</span> <span class="token string">&quot;./bevy&quot;</span><span class="token punctuation">;</span> <span class="token comment">// generated</span>
+
+<span class="token keyword">function</span> <span class="token function">useWindowSize</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token operator">:</span> WindowSize <span class="token operator">|</span> <span class="token keyword">null</span> <span class="token punctuation">{</span>
+  <span class="token keyword">const</span> <span class="token punctuation">[</span>size<span class="token punctuation">,</span> setSize<span class="token punctuation">]</span> <span class="token operator">=</span> <span class="token generic-function"><span class="token function">useState</span><span class="token generic class-name"><span class="token operator">&lt;</span>WindowSize <span class="token operator">|</span> <span class="token keyword">null</span><span class="token operator">&gt;</span></span></span><span class="token punctuation">(</span><span class="token keyword">null</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token function">useEffect</span><span class="token punctuation">(</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">=&gt;</span> <span class="token punctuation">{</span>
+    bevy<span class="token punctuation">.</span>window<span class="token punctuation">.</span><span class="token function">size</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">then</span><span class="token punctuation">(</span>setSize<span class="token punctuation">,</span> <span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">=&gt;</span> <span class="token punctuation">{</span><span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">return</span> bevy<span class="token punctuation">.</span><span class="token function">on</span><span class="token punctuation">(</span><span class="token string">&quot;resize&quot;</span><span class="token punctuation">,</span> setSize<span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token punctuation">}</span><span class="token punctuation">,</span> <span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token keyword">return</span> size<span class="token punctuation">;</span>
+<span class="token punctuation">}</span></code></pre><h2 id="what-is-measured"><a class="anchor" href="#what-is-measured" aria-hidden="true">#</a>What is measured</h2>
+<p>Both report a <code>WindowSize</code>, <code>{ width, height }</code>, in logical pixels: the same
+unit as plain numbers in styles.</p>
+<ul>
+<li>The size is the viewport of the default UI camera, the camera <code>bevy_ui</code>
+lays the UI out against (the one marked <code>IsDefaultUiCamera</code>). It stays
+correct when that camera renders to a viewport or an offscreen texture.</li>
+<li>Without a camera marked <code>IsDefaultUiCamera</code>, the size of the app&#39;s window
+is used. With several windows and no such camera, there is no size.</li>
+<li>Logical pixels depend on the display&#39;s scale factor, so moving the window
+to a display with another scale factor changes the size too.</li>
+</ul>
+<h2 id="the-resize-event"><a class="anchor" href="#the-resize-event" aria-hidden="true">#</a>The resize event</h2>
+<ul>
+<li>The first <code>resize</code> is sent once React&#39;s first render has been applied to
+the world, so listeners subscribed in the effects of your initial tree
+receive the starting size.</li>
+<li>After that, one <code>resize</code> is sent per frame in which the size changed, and
+never for an unchanged size. A window being dragged larger sends one per
+frame.</li>
+<li>A component that mounts later has missed the earlier events: call the
+request on mount, as in the usage example. The answer and the events
+travel in one ordered channel, so the newest value always lands last.</li>
+</ul>
+<h2 id="the-size-request"><a class="anchor" href="#the-size-request" aria-hidden="true">#</a>The size request</h2>
+<p><code>bevy.window.size()</code> resolves with the current size at any time. It rejects
+with <code>no UI viewport available</code> when there is no viewport to measure, such as
+before a window exists or in a headless app, so always pass a rejection
+handler.</p>
+<h2 id="responsive-layout"><a class="anchor" href="#responsive-layout" aria-hidden="true">#</a>Responsive layout</h2>
+<p>Sizes that only depend on the viewport need no events: the <code>vw</code>, <code>vh</code>,
+<code>vmin</code> and <code>vmax</code> units re-resolve on every resize without a React render
+(see <a href="../../styling/units/">Units</a>). Read the size when the tree itself has to
+change, such as a compact layout under a breakpoint:</p>
+<pre><code class="language-tsx"><span class="token keyword">function</span> <span class="token function">Shell</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+  <span class="token keyword">const</span> size <span class="token operator">=</span> <span class="token function">useWindowSize</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span>size<span class="token punctuation">)</span> <span class="token keyword">return</span> <span class="token keyword">null</span><span class="token punctuation">;</span> <span class="token comment">// nothing until the size is known</span>
+  <span class="token keyword">return</span> size<span class="token punctuation">.</span>width <span class="token operator">&lt;</span> <span class="token number">720</span> <span class="token operator">?</span> <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span><span class="token class-name">CompactShell</span></span> <span class="token punctuation">/&gt;</span></span> <span class="token operator">:</span> <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span><span class="token class-name">WideShell</span></span> <span class="token punctuation">/&gt;</span></span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span></code></pre><p>Rendering nothing until the first size arrives avoids a first frame in the
+wrong layout. Each <code>resize</code> re-renders every subscribed component, so keep
+the subscription near the top and pass the derived value down, or share it
+through a React context.</p>
+<h2 id="limits"><a class="anchor" href="#limits" aria-hidden="true">#</a>Limits</h2>
+<ul>
+<li>Only the size is reported: no window position, focus, or scale factor.</li>
+<li>In a multi-window app, mark the UI camera with <code>IsDefaultUiCamera</code>, or no
+size is reported.</li>
+<li>A <a href="../../elements/canvas/"><code>&lt;canvas&gt;</code></a>&#39;s own <code>onResize</code> reports that
+element&#39;s size, not the viewport&#39;s.</li>
+</ul>
+<p>The built-in types are listed in the generated
+<a href="https://github.com/tulustul/bevy-react/blob/main/docs/reference/bevy.ts"><code>bevy.ts</code></a> reference.</p>
+
+</article>
+<footer class="page-links"><a href="../../demo/?page=window">Open live demo</a>
+<a href="https://github.com/tulustul/bevy-react/blob/v0.7.0/examples/demos/ui/src/demos/events/WindowDemo.tsx">Demo source</a>
+<a href="https://github.com/tulustul/bevy-react/edit/main/docs/guide/events/window.md">Edit this page</a></footer>
+</main>
+</div>
+<footer class="site-footer">
+<p>bevy-react is dual-licensed under MIT or Apache-2.0. <a href="https://github.com/tulustul/bevy-react">Source on GitHub</a>.</p>
+</footer>
+</body>
+</html>

@@ -1,0 +1,927 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Style properties · bevy-react</title>
+<meta name="description" content="Every style property bevy-react accepts, with its type and whether it can be animated. Generated from the code.">
+<link rel="canonical" href="https://tulustul.github.io/bevy-react/reference/style-properties/">
+<link rel="alternate" type="text/markdown" href="../../reference/style-properties.md">
+<meta property="og:title" content="Style properties · bevy-react">
+<meta property="og:description" content="Every style property bevy-react accepts, with its type and whether it can be animated. Generated from the code.">
+<link rel="icon" href="../../logo.png">
+<link rel="stylesheet" href="../../style.css">
+<script src="../../docs.js" defer></script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="site-header">
+<a class="brand" href="../../"><img src="../../logo.png" alt="" width="74" height="74"> bevy-react</a>
+<span class="version">v0.7.0</span>
+<nav class="site-links" aria-label="Project">
+<a href="../../demo/">Live demo</a>
+<a href="https://github.com/tulustul/bevy-react">GitHub</a>
+<a href="https://docs.rs/bevy-react">docs.rs</a>
+<a href="https://www.npmjs.com/package/bevy-react">npm</a>
+</nav>
+</header>
+<div class="layout">
+<nav class="sidebar" aria-label="Documentation">
+<details class="nav-menu" open>
+<summary>Menu</summary>
+<ul><li><a href="../../">Introduction</a></li><li><a href="../../getting-started/">Getting started</a></li><li><a href="../../how-it-works/">How it works</a></li><li class="nav-section"><span>Elements</span><ul><li><a href="../../elements/node/">&lt;node&gt;</a></li><li><a href="../../elements/button/">&lt;button&gt;</a></li><li><a href="../../elements/text/">&lt;text&gt;</a></li><li><a href="../../elements/editable-text/">&lt;editableText&gt;</a></li><li><a href="../../elements/image/">&lt;image&gt;</a></li><li><a href="../../elements/canvas/">&lt;canvas&gt;</a></li><li><a href="../../elements/svg/">&lt;svg&gt;</a></li><li><a href="../../elements/portal/">&lt;portal&gt;</a></li><li><a href="../../elements/surface/">&lt;surface&gt;</a></li><li><a href="../../elements/root/">&lt;root&gt;</a></li><li><a href="../../elements/anchor/">&lt;anchor&gt;</a></li></ul></li><li class="nav-section"><span>Layout</span><ul><li><a href="../../layout/flexbox/">Flexbox</a></li><li><a href="../../layout/grid/">Grid</a></li><li><a href="../../layout/positioning/">Positioning</a></li></ul></li><li class="nav-section"><span>Styling</span><ul><li><a href="../../styling/units/">Units</a></li><li><a href="../../styling/colors/">Colors</a></li><li><a href="../../styling/borders/">Borders</a></li><li><a href="../../styling/spacing/">Spacing</a></li><li><a href="../../styling/sizing/">Sizing</a></li><li><a href="../../styling/layout-rounding/">Layout rounding</a></li><li><a href="../../styling/overflow/">Overflow</a></li><li><a href="../../styling/transforms/">Transforms</a></li><li><a href="../../styling/3d-transforms/">3D transforms</a></li><li><a href="../../styling/shadows/">Shadows</a></li><li><a href="../../styling/filters/">Filters</a></li><li><a href="../../styling/backdrop-filters/">Backdrop filters</a></li><li><a href="../../styling/morph-filters/">Morph filters</a></li><li><a href="../../styling/gradients/">Gradients</a></li><li><a href="../../styling/background-images/">Background images</a></li><li><a href="../../styling/image-rendering/">Image rendering</a></li><li><a href="../../styling/opacity/">Opacity</a></li><li><a href="../../styling/z-index/">Z-index</a></li><li><a href="../../styling/focus-policy/">Focus policy</a></li><li><a href="../../styling/cursors/">Cursors</a></li><li><a href="../../styling/layers/">Layers</a></li></ul></li><li class="nav-section"><span>Animations</span><ul><li><a href="../../animations/style-transitions/">Style transitions</a></li><li><a href="../../animations/animated-values/">Animated values</a></li><li><a href="../../animations/interpolation/">Interpolation</a></li><li><a href="../../animations/shared-elements/">Shared elements</a></li></ul></li><li class="nav-section"><span>Communication</span><ul><li><a href="../../communication/react-to-bevy/">React to Bevy</a></li><li><a href="../../communication/bevy-to-react/">Bevy to React</a></li><li><a href="../../communication/request-response/">Request / response</a></li><li><a href="../../communication/named-nodes/">Named nodes</a></li></ul></li><li class="nav-section"><span>Events</span><ul><li><a href="../../events/mouse/">Mouse</a></li><li><a href="../../events/keyboard/">Keyboard</a></li><li><a href="../../events/gamepad/">Gamepad</a></li><li><a href="../../events/window/">Window</a></li></ul></li><li class="nav-section"><span>Extending</span><ul><li><a href="../../extending/custom-elements/">Custom elements</a></li><li><a href="../../extending/custom-styles/">Custom styles</a></li><li><a href="../../extending/custom-filters/">Custom filters</a></li></ul></li><li class="nav-section"><span>Tooling</span><ul><li><a href="../../tooling/devtools/">Devtools</a></li><li><a href="../../tooling/hot-reload/">Hot reload</a></li><li><a href="../../tooling/web/">Web builds</a></li><li><a href="../../tooling/ts-codegen/">TypeScript codegen</a></li></ul></li><li class="nav-section"><span>Reference</span><ul><li><a href="../../reference/style-properties/" aria-current="page">Style properties</a></li><li><a href="../../reference/elements/">Elements</a></li><li><a href="../../reference/filters/">Filters</a></li></ul></li><li><a href="../../performance/">Performance</a></li></ul>
+</details>
+</nav>
+<main id="main">
+<article>
+<h1 id="style-properties">Style properties</h1>
+<p>Every property the <code>style</code> prop (and the <code>hoverStyle</code>/<code>pressStyle</code>/<code>focusStyle</code>
+state styles) accepts, generated from the library&#39;s style registry. An app
+can register its own properties on top of these.</p>
+<p><strong>Animatable</strong> properties accept an inline <code>{ animated: sharedValue }</code>
+binding in place of the value; &quot;per field&quot; means the value is an object whose
+individual fields accept one.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Property</th>
+<th>Type</th>
+<th>Animatable</th>
+<th>Guide</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><span id="display"></span><code>display</code></td>
+<td><code>&quot;flex&quot; | &quot;grid&quot; | &quot;block&quot; | &quot;none&quot;</code></td>
+<td></td>
+<td><a href="../../layout/flexbox/">Flexbox</a></td>
+</tr>
+<tr>
+<td><span id="boxSizing"></span><code>boxSizing</code></td>
+<td><code>&quot;borderBox&quot; | &quot;border-box&quot; | &quot;contentBox&quot; | &quot;content-box&quot;</code></td>
+<td></td>
+<td><a href="../../styling/sizing/">Sizing</a></td>
+</tr>
+<tr>
+<td><span id="positionType"></span><code>positionType</code></td>
+<td><code>&quot;absolute&quot; | &quot;relative&quot;</code></td>
+<td></td>
+<td><a href="../../layout/positioning/">Positioning</a></td>
+</tr>
+<tr>
+<td><span id="overflowX"></span><code>overflowX</code></td>
+<td><code>&quot;visible&quot; | &quot;clip&quot; | &quot;hidden&quot; | &quot;scroll&quot;</code></td>
+<td></td>
+<td><a href="../../styling/overflow/">Overflow</a></td>
+</tr>
+<tr>
+<td><span id="overflowY"></span><code>overflowY</code></td>
+<td><code>&quot;visible&quot; | &quot;clip&quot; | &quot;hidden&quot; | &quot;scroll&quot;</code></td>
+<td></td>
+<td><a href="../../styling/overflow/">Overflow</a></td>
+</tr>
+<tr>
+<td><span id="scrollbarWidth"></span><code>scrollbarWidth</code></td>
+<td><code>number</code></td>
+<td></td>
+<td><a href="../../styling/overflow/">Overflow</a></td>
+</tr>
+<tr>
+<td><span id="left"></span><code>left</code></td>
+<td><code>Length</code></td>
+<td>yes</td>
+<td><a href="../../layout/positioning/">Positioning</a></td>
+</tr>
+<tr>
+<td><span id="right"></span><code>right</code></td>
+<td><code>Length</code></td>
+<td>yes</td>
+<td><a href="../../layout/positioning/">Positioning</a></td>
+</tr>
+<tr>
+<td><span id="top"></span><code>top</code></td>
+<td><code>Length</code></td>
+<td>yes</td>
+<td><a href="../../layout/positioning/">Positioning</a></td>
+</tr>
+<tr>
+<td><span id="bottom"></span><code>bottom</code></td>
+<td><code>Length</code></td>
+<td>yes</td>
+<td><a href="../../layout/positioning/">Positioning</a></td>
+</tr>
+<tr>
+<td><span id="width"></span><code>width</code></td>
+<td><code>Length</code></td>
+<td>yes</td>
+<td><a href="../../styling/sizing/">Sizing</a></td>
+</tr>
+<tr>
+<td><span id="height"></span><code>height</code></td>
+<td><code>Length</code></td>
+<td>yes</td>
+<td><a href="../../styling/sizing/">Sizing</a></td>
+</tr>
+<tr>
+<td><span id="minWidth"></span><code>minWidth</code></td>
+<td><code>Length</code></td>
+<td>yes</td>
+<td><a href="../../styling/sizing/">Sizing</a></td>
+</tr>
+<tr>
+<td><span id="minHeight"></span><code>minHeight</code></td>
+<td><code>Length</code></td>
+<td>yes</td>
+<td><a href="../../styling/sizing/">Sizing</a></td>
+</tr>
+<tr>
+<td><span id="maxWidth"></span><code>maxWidth</code></td>
+<td><code>Length</code></td>
+<td>yes</td>
+<td><a href="../../styling/sizing/">Sizing</a></td>
+</tr>
+<tr>
+<td><span id="maxHeight"></span><code>maxHeight</code></td>
+<td><code>Length</code></td>
+<td>yes</td>
+<td><a href="../../styling/sizing/">Sizing</a></td>
+</tr>
+<tr>
+<td><span id="aspectRatio"></span><code>aspectRatio</code></td>
+<td><code>number</code></td>
+<td>yes</td>
+<td><a href="../../styling/sizing/">Sizing</a></td>
+</tr>
+<tr>
+<td><span id="alignItems"></span><code>alignItems</code></td>
+<td><code>&quot;start&quot; | &quot;end&quot; | &quot;flexStart&quot; | &quot;flexEnd&quot; | &quot;center&quot; | &quot;baseline&quot; | &quot;stretch&quot;</code></td>
+<td></td>
+<td><a href="../../layout/flexbox/">Flexbox</a></td>
+</tr>
+<tr>
+<td><span id="justifyItems"></span><code>justifyItems</code></td>
+<td><code>&quot;start&quot; | &quot;end&quot; | &quot;center&quot; | &quot;baseline&quot; | &quot;stretch&quot;</code></td>
+<td></td>
+<td><a href="../../layout/grid/">Grid</a></td>
+</tr>
+<tr>
+<td><span id="alignSelf"></span><code>alignSelf</code></td>
+<td><code>&quot;auto&quot; | &quot;start&quot; | &quot;end&quot; | &quot;flexStart&quot; | &quot;flexEnd&quot; | &quot;center&quot; | &quot;baseline&quot; | &quot;stretch&quot;</code></td>
+<td></td>
+<td><a href="../../layout/flexbox/">Flexbox</a></td>
+</tr>
+<tr>
+<td><span id="justifySelf"></span><code>justifySelf</code></td>
+<td><code>&quot;auto&quot; | &quot;start&quot; | &quot;end&quot; | &quot;center&quot; | &quot;baseline&quot; | &quot;stretch&quot;</code></td>
+<td></td>
+<td><a href="../../layout/grid/">Grid</a></td>
+</tr>
+<tr>
+<td><span id="alignContent"></span><code>alignContent</code></td>
+<td><code>&quot;start&quot; | &quot;end&quot; | &quot;flexStart&quot; | &quot;flexEnd&quot; | &quot;center&quot; | &quot;stretch&quot; | &quot;spaceBetween&quot; | &quot;spaceEvenly&quot; | &quot;spaceAround&quot;</code></td>
+<td></td>
+<td><a href="../../layout/flexbox/">Flexbox</a></td>
+</tr>
+<tr>
+<td><span id="justifyContent"></span><code>justifyContent</code></td>
+<td><code>&quot;start&quot; | &quot;end&quot; | &quot;flexStart&quot; | &quot;flexEnd&quot; | &quot;center&quot; | &quot;stretch&quot; | &quot;spaceBetween&quot; | &quot;spaceEvenly&quot; | &quot;spaceAround&quot;</code></td>
+<td></td>
+<td><a href="../../layout/flexbox/">Flexbox</a></td>
+</tr>
+<tr>
+<td><span id="margin"></span><code>margin</code></td>
+<td><code>Rect</code></td>
+<td></td>
+<td><a href="../../styling/spacing/">Spacing</a></td>
+</tr>
+<tr>
+<td><span id="padding"></span><code>padding</code></td>
+<td><code>Rect</code></td>
+<td></td>
+<td><a href="../../styling/spacing/">Spacing</a></td>
+</tr>
+<tr>
+<td><span id="border"></span><code>border</code></td>
+<td><code>Rect</code></td>
+<td></td>
+<td><a href="../../styling/borders/">Borders</a></td>
+</tr>
+<tr>
+<td><span id="flexDirection"></span><code>flexDirection</code></td>
+<td><code>&quot;row&quot; | &quot;column&quot; | &quot;rowReverse&quot; | &quot;columnReverse&quot;</code></td>
+<td></td>
+<td><a href="../../layout/flexbox/">Flexbox</a></td>
+</tr>
+<tr>
+<td><span id="flexWrap"></span><code>flexWrap</code></td>
+<td><code>&quot;nowrap&quot; | &quot;noWrap&quot; | &quot;wrap&quot; | &quot;wrapReverse&quot;</code></td>
+<td></td>
+<td><a href="../../layout/flexbox/">Flexbox</a></td>
+</tr>
+<tr>
+<td><span id="flexGrow"></span><code>flexGrow</code></td>
+<td><code>number</code></td>
+<td></td>
+<td><a href="../../layout/flexbox/">Flexbox</a></td>
+</tr>
+<tr>
+<td><span id="flexShrink"></span><code>flexShrink</code></td>
+<td><code>number</code></td>
+<td></td>
+<td><a href="../../layout/flexbox/">Flexbox</a></td>
+</tr>
+<tr>
+<td><span id="flexBasis"></span><code>flexBasis</code></td>
+<td><code>Length</code></td>
+<td>yes</td>
+<td><a href="../../layout/flexbox/">Flexbox</a></td>
+</tr>
+<tr>
+<td><span id="gap"></span><code>gap</code></td>
+<td><code>Length</code></td>
+<td>yes</td>
+<td><a href="../../layout/flexbox/">Flexbox</a></td>
+</tr>
+<tr>
+<td><span id="rowGap"></span><code>rowGap</code></td>
+<td><code>Length</code></td>
+<td>yes</td>
+<td><a href="../../layout/flexbox/">Flexbox</a></td>
+</tr>
+<tr>
+<td><span id="columnGap"></span><code>columnGap</code></td>
+<td><code>Length</code></td>
+<td>yes</td>
+<td><a href="../../layout/flexbox/">Flexbox</a></td>
+</tr>
+<tr>
+<td><span id="gridAutoFlow"></span><code>gridAutoFlow</code></td>
+<td><code>&quot;row&quot; | &quot;column&quot; | &quot;rowDense&quot; | &quot;columnDense&quot;</code></td>
+<td></td>
+<td><a href="../../layout/grid/">Grid</a></td>
+</tr>
+<tr>
+<td><span id="gridTemplateRows"></span><code>gridTemplateRows</code></td>
+<td><code>string</code></td>
+<td></td>
+<td><a href="../../layout/grid/">Grid</a></td>
+</tr>
+<tr>
+<td><span id="gridTemplateColumns"></span><code>gridTemplateColumns</code></td>
+<td><code>string</code></td>
+<td></td>
+<td><a href="../../layout/grid/">Grid</a></td>
+</tr>
+<tr>
+<td><span id="gridAutoRows"></span><code>gridAutoRows</code></td>
+<td><code>string</code></td>
+<td></td>
+<td><a href="../../layout/grid/">Grid</a></td>
+</tr>
+<tr>
+<td><span id="gridAutoColumns"></span><code>gridAutoColumns</code></td>
+<td><code>string</code></td>
+<td></td>
+<td><a href="../../layout/grid/">Grid</a></td>
+</tr>
+<tr>
+<td><span id="gridRow"></span><code>gridRow</code></td>
+<td><code>string</code></td>
+<td></td>
+<td><a href="../../layout/grid/">Grid</a></td>
+</tr>
+<tr>
+<td><span id="gridColumn"></span><code>gridColumn</code></td>
+<td><code>string</code></td>
+<td></td>
+<td><a href="../../layout/grid/">Grid</a></td>
+</tr>
+<tr>
+<td><span id="backgroundColor"></span><code>backgroundColor</code></td>
+<td><code>Color</code></td>
+<td>yes</td>
+<td><a href="../../styling/colors/">Colors</a></td>
+</tr>
+<tr>
+<td><span id="borderColor"></span><code>borderColor</code></td>
+<td><code>Animatable&lt;Color&gt; | { top?: Color; right?: Color; bottom?: Color; left?: Color }</code></td>
+<td></td>
+<td><a href="../../styling/borders/">Borders</a></td>
+</tr>
+<tr>
+<td><span id="borderRadius"></span><code>borderRadius</code></td>
+<td><code>Rect</code></td>
+<td>yes</td>
+<td><a href="../../styling/borders/">Borders</a></td>
+</tr>
+<tr>
+<td><span id="outline"></span><code>outline</code></td>
+<td><code>{ width?: Length; offset?: Length; color?: Color }</code></td>
+<td></td>
+<td><a href="../../styling/borders/">Borders</a></td>
+</tr>
+<tr>
+<td><span id="boxShadow"></span><code>boxShadow</code></td>
+<td><code>BoxShadow | BoxShadow[]</code></td>
+<td></td>
+<td><a href="../../styling/shadows/">Shadows</a></td>
+</tr>
+<tr>
+<td><span id="filter"></span><code>filter</code></td>
+<td><code>FilterChainValue</code></td>
+<td>per field</td>
+<td><a href="../../styling/filters/">Filters</a></td>
+</tr>
+<tr>
+<td><span id="backdropFilter"></span><code>backdropFilter</code></td>
+<td><code>FilterChainValue</code></td>
+<td>per field</td>
+<td><a href="../../styling/backdrop-filters/">Backdrop filters</a></td>
+</tr>
+<tr>
+<td><span id="morphFilter"></span><code>morphFilter</code></td>
+<td><code>MorphFilterValue</code></td>
+<td>per field</td>
+<td><a href="../../styling/morph-filters/">Morph filters</a></td>
+</tr>
+<tr>
+<td><span id="backgroundGradient"></span><code>backgroundGradient</code></td>
+<td><code>Gradient | Gradient[]</code></td>
+<td>per field</td>
+<td><a href="../../styling/gradients/">Gradients</a></td>
+</tr>
+<tr>
+<td><span id="borderGradient"></span><code>borderGradient</code></td>
+<td><code>Gradient | Gradient[]</code></td>
+<td>per field</td>
+<td><a href="../../styling/gradients/">Gradients</a></td>
+</tr>
+<tr>
+<td><span id="backgroundImage"></span><code>backgroundImage</code></td>
+<td><code>BackgroundImage</code></td>
+<td>per field</td>
+<td><a href="../../styling/background-images/">Background images</a></td>
+</tr>
+<tr>
+<td><span id="imageRendering"></span><code>imageRendering</code></td>
+<td><code>&quot;auto&quot; | &quot;bilinear&quot; | &quot;trilinear&quot; | &quot;nearest&quot;</code></td>
+<td></td>
+<td><a href="../../styling/image-rendering/">Image rendering</a></td>
+</tr>
+<tr>
+<td><span id="layoutRounding"></span><code>layoutRounding</code></td>
+<td><code>boolean</code></td>
+<td></td>
+<td><a href="../../styling/layout-rounding/">Layout rounding</a></td>
+</tr>
+<tr>
+<td><span id="zIndex"></span><code>zIndex</code></td>
+<td><code>number</code></td>
+<td></td>
+<td><a href="../../styling/z-index/">Z-index</a></td>
+</tr>
+<tr>
+<td><span id="globalZIndex"></span><code>globalZIndex</code></td>
+<td><code>number</code></td>
+<td></td>
+<td><a href="../../styling/z-index/">Z-index</a></td>
+</tr>
+<tr>
+<td><span id="focusPolicy"></span><code>focusPolicy</code></td>
+<td><code>&quot;block&quot; | &quot;pass&quot;</code></td>
+<td></td>
+<td><a href="../../styling/focus-policy/">Focus policy</a></td>
+</tr>
+<tr>
+<td><span id="cursor"></span><code>cursor</code></td>
+<td><code>SystemCursor | (string &amp; {})</code></td>
+<td></td>
+<td><a href="../../styling/cursors/">Cursors</a></td>
+</tr>
+<tr>
+<td><span id="scrollbar"></span><code>scrollbar</code></td>
+<td><code>&quot;none&quot; | &quot;default&quot; | ScrollbarStyle</code></td>
+<td></td>
+<td><a href="../../styling/overflow/">Overflow</a></td>
+</tr>
+<tr>
+<td><span id="transform"></span><code>transform</code></td>
+<td><code>BevyTransform</code></td>
+<td>per field</td>
+<td><a href="../../styling/transforms/">Transforms</a></td>
+</tr>
+<tr>
+<td><span id="transform3d"></span><code>transform3d</code></td>
+<td><code>BevyTransform3d</code></td>
+<td>per field</td>
+<td><a href="../../styling/3d-transforms/">3D transforms</a></td>
+</tr>
+<tr>
+<td><span id="opacity"></span><code>opacity</code></td>
+<td><code>number</code></td>
+<td>yes</td>
+<td><a href="../../styling/opacity/">Opacity</a></td>
+</tr>
+<tr>
+<td><span id="groupAlpha"></span><code>groupAlpha</code></td>
+<td><code>boolean</code></td>
+<td></td>
+<td><a href="../../styling/opacity/">Opacity</a></td>
+</tr>
+<tr>
+<td><span id="cache"></span><code>cache</code></td>
+<td><code>&quot;auto&quot; | &quot;always&quot; | &quot;never&quot;</code></td>
+<td></td>
+<td><a href="../../styling/layers/">Layers</a></td>
+</tr>
+<tr>
+<td><span id="transition"></span><code>transition</code></td>
+<td><code>BevyTransition</code></td>
+<td></td>
+<td><a href="../../animations/style-transitions/">Style transitions</a></td>
+</tr>
+<tr>
+<td><span id="color"></span><code>color</code></td>
+<td><code>Color</code></td>
+<td>yes</td>
+<td><a href="../../elements/text/"><text></a></td>
+</tr>
+<tr>
+<td><span id="fontSize"></span><code>fontSize</code></td>
+<td><code>FontSize</code></td>
+<td></td>
+<td><a href="../../elements/text/"><text></a></td>
+</tr>
+<tr>
+<td><span id="fontWeight"></span><code>fontWeight</code></td>
+<td><code>&quot;thin&quot; | &quot;light&quot; | &quot;normal&quot; | &quot;medium&quot; | &quot;semibold&quot; | &quot;bold&quot; | &quot;black&quot; | (string &amp; {})</code></td>
+<td></td>
+<td><a href="../../elements/text/"><text></a></td>
+</tr>
+<tr>
+<td><span id="fontFamily"></span><code>fontFamily</code></td>
+<td><code>string</code></td>
+<td></td>
+<td><a href="../../elements/text/"><text></a></td>
+</tr>
+<tr>
+<td><span id="textAlign"></span><code>textAlign</code></td>
+<td><code>&quot;left&quot; | &quot;center&quot; | &quot;right&quot; | &quot;justify&quot; | &quot;start&quot; | &quot;end&quot;</code></td>
+<td></td>
+<td><a href="../../elements/text/"><text></a></td>
+</tr>
+<tr>
+<td><span id="lineHeight"></span><code>lineHeight</code></td>
+<td><code>number | string | { px: number }</code></td>
+<td></td>
+<td><a href="../../elements/text/"><text></a></td>
+</tr>
+<tr>
+<td><span id="letterSpacing"></span><code>letterSpacing</code></td>
+<td><code>number | string | { rem: number }</code></td>
+<td></td>
+<td><a href="../../elements/text/"><text></a></td>
+</tr>
+<tr>
+<td><span id="textShadow"></span><code>textShadow</code></td>
+<td><code>{ color?: Color; offsetX?: number; offsetY?: number }</code></td>
+<td></td>
+<td><a href="../../elements/text/"><text></a></td>
+</tr>
+<tr>
+<td><span id="lineBreak"></span><code>lineBreak</code></td>
+<td><code>&quot;wordBoundary&quot; | &quot;anyCharacter&quot; | &quot;wordOrCharacter&quot; | &quot;noWrap&quot;</code></td>
+<td></td>
+<td><a href="../../elements/text/"><text></a></td>
+</tr>
+</tbody></table></div>
+<h2 id="value-types"><a class="anchor" href="#value-types" aria-hidden="true">#</a>Value types</h2>
+<p>The named types used above, as declared in the <code>bevy-react</code> package.</p>
+<h3 id="length"><a class="anchor" href="#length" aria-hidden="true">#</a><code>Length</code></h3>
+<pre><code class="language-ts"><span class="token comment">/** A length: a bare number is logical pixels; a string carries a unit
+ *  (`&quot;50%&quot;`, `&quot;100vw&quot;`, `&quot;100vh&quot;`, `&quot;50vmin&quot;`, `&quot;50vmax&quot;`, `&quot;10px&quot;`, `&quot;auto&quot;`). */</span>
+<span class="token keyword">export</span> <span class="token keyword">type</span> <span class="token class-name">Length</span> <span class="token operator">=</span> <span class="token builtin">number</span> <span class="token operator">|</span> <span class="token builtin">string</span><span class="token punctuation">;</span></code></pre><h3 id="rect"><a class="anchor" href="#rect" aria-hidden="true">#</a><code>Rect</code></h3>
+<pre><code class="language-ts"><span class="token comment">/** Four sides/corners: a number (uniform), a CSS shorthand string
+ *  (`&quot;8px&quot;`, `&quot;8px 16px&quot;`, `&quot;1px 2px 3px 4px&quot;`), an explicit per-side object, or
+ *  an axis pair — `horizontal` sets left + right, `vertical` sets top + bottom.
+ *  On `borderRadius` the sides name the four corners, so `horizontal` is the
+ *  top-right + bottom-left pair. */</span>
+<span class="token keyword">export</span> <span class="token keyword">type</span> <span class="token class-name">Rect</span> <span class="token operator">=</span>
+  <span class="token operator">|</span> <span class="token builtin">number</span>
+  <span class="token operator">|</span> <span class="token builtin">string</span>
+  <span class="token operator">|</span> <span class="token punctuation">{</span> top<span class="token operator">?</span><span class="token operator">:</span> Length<span class="token punctuation">;</span> right<span class="token operator">?</span><span class="token operator">:</span> Length<span class="token punctuation">;</span> bottom<span class="token operator">?</span><span class="token operator">:</span> Length<span class="token punctuation">;</span> left<span class="token operator">?</span><span class="token operator">:</span> Length <span class="token punctuation">}</span>
+  <span class="token operator">|</span> <span class="token punctuation">{</span> horizontal<span class="token operator">?</span><span class="token operator">:</span> Length<span class="token punctuation">;</span> vertical<span class="token operator">?</span><span class="token operator">:</span> Length <span class="token punctuation">}</span><span class="token punctuation">;</span></code></pre><h3 id="color"><a class="anchor" href="#color" aria-hidden="true">#</a><code>Color</code></h3>
+<pre><code class="language-ts"><span class="token comment">/** A CSS color string. Accepts hex (`&quot;#f00&quot;`, `&quot;#1e1e2e&quot;`, `&quot;#1e1e2eaa&quot;`), a
+ *  named color (`&quot;red&quot;`, `&quot;rebeccapurple&quot;`), `&quot;transparent&quot;`, or functional
+ *  notation: `&quot;rgb(255 0 0 / 50%)&quot;` / `&quot;rgba(255,0,0,.5)&quot;`, `&quot;hsl(0 100% 50%)&quot;`,
+ *  `&quot;hwb(0 0% 0%)&quot;`, `&quot;oklab(0.7 0.1 0.05)&quot;`, `&quot;oklch(0.7 0.1 30)&quot;`. An
+ *  unrecognized value renders as a loud magenta (and logs a warning). */</span>
+<span class="token keyword">export</span> <span class="token keyword">type</span> <span class="token class-name">Color</span> <span class="token operator">=</span> <span class="token builtin">string</span><span class="token punctuation">;</span></code></pre><h3 id="boxshadow"><a class="anchor" href="#boxshadow" aria-hidden="true">#</a><code>BoxShadow</code></h3>
+<pre><code class="language-ts"><span class="token comment">/** One drop shadow. Offsets/radii are [`Length`]s (bare number = px). */</span>
+<span class="token keyword">export</span> <span class="token keyword">type</span> <span class="token class-name">BoxShadow</span> <span class="token operator">=</span> <span class="token punctuation">{</span>
+  color<span class="token operator">?</span><span class="token operator">:</span> Color<span class="token punctuation">;</span>
+  xOffset<span class="token operator">?</span><span class="token operator">:</span> Length<span class="token punctuation">;</span>
+  yOffset<span class="token operator">?</span><span class="token operator">:</span> Length<span class="token punctuation">;</span>
+  spreadRadius<span class="token operator">?</span><span class="token operator">:</span> Length<span class="token punctuation">;</span>
+  blurRadius<span class="token operator">?</span><span class="token operator">:</span> Length<span class="token punctuation">;</span>
+<span class="token punctuation">}</span><span class="token punctuation">;</span></code></pre><h3 id="filterchainvalue"><a class="anchor" href="#filterchainvalue" aria-hidden="true">#</a><code>FilterChainValue</code></h3>
+<pre><code class="language-ts"><span class="token comment">/** The `filter` style value: one [`FilterUse`] (a 1-element chain) or an
+ *  ordered array of them — chain order is pass order. */</span>
+<span class="token keyword">export</span> <span class="token keyword">type</span> <span class="token class-name">FilterChainValue</span> <span class="token operator">=</span> FilterUse <span class="token operator">|</span> FilterUse<span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token punctuation">;</span></code></pre><h3 id="morphfiltervalue"><a class="anchor" href="#morphfiltervalue" aria-hidden="true">#</a><code>MorphFilterValue</code></h3>
+<pre><code class="language-ts"><span class="token comment">/** The `morphFilter` style value: a morph filter name from the separate
+ *  [`BevyMorphFilters`] registry, its params, and the morph identity `key`.
+ *  When `key` changes, the node's previous rendered appearance is frozen and
+ *  the named two-input filter blends it into the live content, driven by an
+ *  engine-owned progress eased over a built-in 300ms default (override with
+ *  `transition: { morphFilter }`). The built-in morphs are `crossfade`,
+ *  `linearWipe`, and `pixelize`; register customs with
+ *  `#[react_morph_filter]` + `add_react_morph_filter` (the `morph_*` prelude
+ *  helpers give the shader the two inputs + progress). Regular filters are
+ *  not accepted here — the families are separate, in typing and at resolve
+ *  time. Every param is individually optional (an omitted param takes the
+ *  filter's Rust-side default). Expressed as its own mapped union so
+ *  `params` narrows by `name`. */</span>
+<span class="token keyword">export</span> <span class="token keyword">type</span> <span class="token class-name">MorphFilterValue</span> <span class="token operator">=</span> <span class="token punctuation">{</span>
+  <span class="token punctuation">[</span><span class="token constant">K</span> <span class="token keyword">in</span> <span class="token keyword">keyof</span> BevyMorphFilters<span class="token punctuation">]</span><span class="token operator">:</span> <span class="token punctuation">{</span>
+    <span class="token comment">/** Morph identity: a change (and only a change) triggers the morph. */</span>
+    key<span class="token operator">:</span> <span class="token builtin">string</span> <span class="token operator">|</span> <span class="token builtin">number</span><span class="token punctuation">;</span>
+    name<span class="token operator">:</span> <span class="token constant">K</span><span class="token punctuation">;</span>
+    params<span class="token operator">?</span><span class="token operator">:</span> <span class="token punctuation">{</span>
+      <span class="token punctuation">[</span><span class="token constant">P</span> <span class="token keyword">in</span> <span class="token keyword">keyof</span> BevyMorphFilters<span class="token punctuation">[</span><span class="token constant">K</span><span class="token punctuation">]</span><span class="token punctuation">]</span><span class="token operator">?</span><span class="token operator">:</span> Animatable<span class="token operator">&lt;</span>BevyMorphFilters<span class="token punctuation">[</span><span class="token constant">K</span><span class="token punctuation">]</span><span class="token punctuation">[</span><span class="token constant">P</span><span class="token punctuation">]</span><span class="token operator">&gt;</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span><span class="token punctuation">;</span>
+  <span class="token punctuation">}</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span><span class="token punctuation">[</span><span class="token keyword">keyof</span> BevyMorphFilters<span class="token punctuation">]</span><span class="token punctuation">;</span></code></pre><h3 id="gradient"><a class="anchor" href="#gradient" aria-hidden="true">#</a><code>Gradient</code></h3>
+<pre><code class="language-ts"><span class="token comment">/** One gradient. `angle`/`start` are [`Angle`]s (bare number = degrees; `0` = to
+ *  top, clockwise). Every numeric/color leaf accepts an `{ animated }` binding
+ *  (degrees / px / raw `0..1` wire units; a binding parks that surface's
+ *  `transition` channel). */</span>
+<span class="token keyword">export</span> <span class="token keyword">type</span> <span class="token class-name">Gradient</span> <span class="token operator">=</span>
+  <span class="token operator">|</span> <span class="token punctuation">{</span>
+      type<span class="token operator">:</span> <span class="token string">&quot;linear&quot;</span><span class="token punctuation">;</span>
+      angle<span class="token operator">?</span><span class="token operator">:</span> Animatable<span class="token operator">&lt;</span>Angle<span class="token operator">&gt;</span><span class="token punctuation">;</span>
+      stops<span class="token operator">:</span> GradientStop<span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token punctuation">;</span>
+      colorSpace<span class="token operator">?</span><span class="token operator">:</span> ColorSpace<span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+  <span class="token operator">|</span> <span class="token punctuation">{</span>
+      type<span class="token operator">:</span> <span class="token string">&quot;radial&quot;</span><span class="token punctuation">;</span>
+      position<span class="token operator">?</span><span class="token operator">:</span> GradientPosition<span class="token punctuation">;</span>
+      shape<span class="token operator">?</span><span class="token operator">:</span> RadialShape<span class="token punctuation">;</span>
+      stops<span class="token operator">:</span> GradientStop<span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token punctuation">;</span>
+      colorSpace<span class="token operator">?</span><span class="token operator">:</span> ColorSpace<span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+  <span class="token operator">|</span> <span class="token punctuation">{</span>
+      type<span class="token operator">:</span> <span class="token string">&quot;conic&quot;</span><span class="token punctuation">;</span>
+      start<span class="token operator">?</span><span class="token operator">:</span> Animatable<span class="token operator">&lt;</span>Angle<span class="token operator">&gt;</span><span class="token punctuation">;</span>
+      position<span class="token operator">?</span><span class="token operator">:</span> GradientPosition<span class="token punctuation">;</span>
+      stops<span class="token operator">:</span> AngularStop<span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token punctuation">;</span>
+      colorSpace<span class="token operator">?</span><span class="token operator">:</span> ColorSpace<span class="token punctuation">;</span>
+    <span class="token punctuation">}</span><span class="token punctuation">;</span></code></pre><h3 id="backgroundimage"><a class="anchor" href="#backgroundimage" aria-hidden="true">#</a><code>BackgroundImage</code></h3>
+<pre><code class="language-ts"><span class="token comment">/** A `backgroundImage` style value. `src` is an asset path (like an `&lt;image&gt;`'s
+ *  `src`), or `{ texture }` naming a render target the app registered in
+ *  `RenderTargets` — it binds late (transparent until registered; prefer
+ *  fixed-resolution targets: a background never drives an auto target's size). */</span>
+<span class="token keyword">export</span> <span class="token keyword">type</span> <span class="token class-name">BackgroundImage</span> <span class="token operator">=</span> <span class="token punctuation">{</span>
+  <span class="token comment">/** Asset path, or `{ texture }` naming an app-registered texture
+   *  (`RenderTargets::register`) — **static** content that binds late
+   *  (transparent until registered). For live/continuously-updating content
+   *  use a `&lt;portal&gt;` element instead; backgrounds don't participate in
+   *  live-repaint tracking. */</span>
+  src<span class="token operator">:</span> <span class="token builtin">string</span> <span class="token operator">|</span> <span class="token punctuation">{</span> texture<span class="token operator">:</span> <span class="token builtin">string</span> <span class="token punctuation">}</span><span class="token punctuation">;</span>
+  <span class="token comment">/** Tint multiplied with the texture; `opacity` fades it like a background
+   *  color. Animatable via an `interpolateColor` binding — in the base style
+   *  only (variant styles ignore bindings). */</span>
+  tint<span class="token operator">?</span><span class="token operator">:</span> Animatable<span class="token operator">&lt;</span>Color<span class="token operator">&gt;</span><span class="token punctuation">;</span>
+  <span class="token comment">/** Fit/repeat mode (default `&quot;stretch&quot;`). */</span>
+  mode<span class="token operator">?</span><span class="token operator">:</span> BackgroundImageMode<span class="token punctuation">;</span>
+  <span class="token comment">/** Tile scale for the repeat modes, in logical px (`1` = the texture's own
+   *  size at 1× DPI, on every display). Ignored — with a devtools warning —
+   *  under `&quot;stretch&quot;`. An `{ animated }` wrapper decodes but does not drive
+   *  the value yet. */</span>
+  scale<span class="token operator">?</span><span class="token operator">:</span> <span class="token builtin">number</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span><span class="token punctuation">;</span></code></pre><h3 id="systemcursor"><a class="anchor" href="#systemcursor" aria-hidden="true">#</a><code>SystemCursor</code></h3>
+<pre><code class="language-ts"><span class="token comment">/** The built-in system cursor keywords (winit's `SystemCursorIcon`, camelCase or CSS
+ *  kebab-case). Used by the `cursor` style prop; a custom-cursor name (registered on
+ *  the Rust side via `add_custom_cursor`) is any other string. */</span>
+<span class="token keyword">export</span> <span class="token keyword">type</span> <span class="token class-name">SystemCursor</span> <span class="token operator">=</span>
+  <span class="token operator">|</span> <span class="token string">&quot;default&quot;</span>
+  <span class="token operator">|</span> <span class="token string">&quot;contextMenu&quot;</span>
+  <span class="token operator">|</span> <span class="token string">&quot;help&quot;</span>
+  <span class="token operator">|</span> <span class="token string">&quot;pointer&quot;</span>
+  <span class="token operator">|</span> <span class="token string">&quot;progress&quot;</span>
+  <span class="token operator">|</span> <span class="token string">&quot;wait&quot;</span>
+  <span class="token operator">|</span> <span class="token string">&quot;cell&quot;</span>
+  <span class="token operator">|</span> <span class="token string">&quot;crosshair&quot;</span>
+  <span class="token operator">|</span> <span class="token string">&quot;text&quot;</span>
+  <span class="token operator">|</span> <span class="token string">&quot;verticalText&quot;</span>
+  <span class="token operator">|</span> <span class="token string">&quot;alias&quot;</span>
+  <span class="token operator">|</span> <span class="token string">&quot;copy&quot;</span>
+  <span class="token operator">|</span> <span class="token string">&quot;move&quot;</span>
+  <span class="token operator">|</span> <span class="token string">&quot;noDrop&quot;</span>
+  <span class="token operator">|</span> <span class="token string">&quot;notAllowed&quot;</span>
+  <span class="token operator">|</span> <span class="token string">&quot;grab&quot;</span>
+  <span class="token operator">|</span> <span class="token string">&quot;grabbing&quot;</span>
+  <span class="token operator">|</span> <span class="token string">&quot;eResize&quot;</span>
+  <span class="token operator">|</span> <span class="token string">&quot;nResize&quot;</span>
+  <span class="token operator">|</span> <span class="token string">&quot;neResize&quot;</span>
+  <span class="token operator">|</span> <span class="token string">&quot;nwResize&quot;</span>
+  <span class="token operator">|</span> <span class="token string">&quot;sResize&quot;</span>
+  <span class="token operator">|</span> <span class="token string">&quot;seResize&quot;</span>
+  <span class="token operator">|</span> <span class="token string">&quot;swResize&quot;</span>
+  <span class="token operator">|</span> <span class="token string">&quot;wResize&quot;</span>
+  <span class="token operator">|</span> <span class="token string">&quot;ewResize&quot;</span>
+  <span class="token operator">|</span> <span class="token string">&quot;nsResize&quot;</span>
+  <span class="token operator">|</span> <span class="token string">&quot;neswResize&quot;</span>
+  <span class="token operator">|</span> <span class="token string">&quot;nwseResize&quot;</span>
+  <span class="token operator">|</span> <span class="token string">&quot;colResize&quot;</span>
+  <span class="token operator">|</span> <span class="token string">&quot;rowResize&quot;</span>
+  <span class="token operator">|</span> <span class="token string">&quot;allScroll&quot;</span>
+  <span class="token operator">|</span> <span class="token string">&quot;zoomIn&quot;</span>
+  <span class="token operator">|</span> <span class="token string">&quot;zoomOut&quot;</span><span class="token punctuation">;</span></code></pre><h3 id="scrollbarstyle"><a class="anchor" href="#scrollbarstyle" aria-hidden="true">#</a><code>ScrollbarStyle</code></h3>
+<pre><code class="language-ts"><span class="token comment">/** Configures a node's visible scrollbar (the object form of `style.scrollbar`).
+ *  A bar appears per axis that is `overflow: scroll` **and** overflows, and
+ *  auto-hides when its content fits. */</span>
+<span class="token keyword">export</span> <span class="token keyword">interface</span> <span class="token class-name">ScrollbarStyle</span> <span class="token punctuation">{</span>
+  <span class="token comment">/** Styles the track (the groove behind the thumb). */</span>
+  track<span class="token operator">?</span><span class="token operator">:</span> ScrollbarPartStyle<span class="token punctuation">;</span>
+  <span class="token comment">/** Styles the thumb (the draggable handle). */</span>
+  thumb<span class="token operator">?</span><span class="token operator">:</span> ScrollbarPartStyle<span class="token punctuation">;</span>
+  <span class="token comment">/** Bar cross-axis size in logical px (default `12`). */</span>
+  thickness<span class="token operator">?</span><span class="token operator">:</span> <span class="token builtin">number</span><span class="token punctuation">;</span>
+  <span class="token comment">/** Minimum thumb length in logical px, so it stays grabbable on long content
+   *  (default `24`). */</span>
+  minThumbLength<span class="token operator">?</span><span class="token operator">:</span> <span class="token builtin">number</span><span class="token punctuation">;</span>
+  <span class="token comment">/** `&quot;gutter&quot;` (default) reserves space so content shrinks and the bar sits in
+   *  its own track; `&quot;float&quot;` reserves nothing and floats the bar over content. */</span>
+  position<span class="token operator">?</span><span class="token operator">:</span> <span class="token string">&quot;gutter&quot;</span> <span class="token operator">|</span> <span class="token string">&quot;float&quot;</span><span class="token punctuation">;</span>
+  <span class="token comment">/** Which edge the vertical bar sits on (default `&quot;right&quot;`). */</span>
+  verticalSide<span class="token operator">?</span><span class="token operator">:</span> <span class="token string">&quot;left&quot;</span> <span class="token operator">|</span> <span class="token string">&quot;right&quot;</span><span class="token punctuation">;</span>
+  <span class="token comment">/** Which edge the horizontal bar sits on (default `&quot;bottom&quot;`). */</span>
+  horizontalSide<span class="token operator">?</span><span class="token operator">:</span> <span class="token string">&quot;top&quot;</span> <span class="token operator">|</span> <span class="token string">&quot;bottom&quot;</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span></code></pre><h3 id="bevytransform"><a class="anchor" href="#bevytransform" aria-hidden="true">#</a><code>BevyTransform</code></h3>
+<pre><code class="language-ts"><span class="token comment">/** A static 2D transform (`style.transform`). With `transition` a change
+ *  eases instead of snapping. `translateX`/`translateY` are [`Length`]s (bare
+ *  number = logical pixels, or a unit string like `&quot;50%&quot;`/`&quot;10vw&quot;`, resolved
+ *  against the node's own size). `scale` is uniform; `scaleX`/`scaleY`
+ *  override one axis. `rotate` is an [`Angle`] (bare number = degrees, e.g.
+ *  `45`, or `&quot;1.5rad&quot;`). */</span>
+<span class="token keyword">export</span> <span class="token keyword">interface</span> <span class="token class-name">BevyTransform</span> <span class="token punctuation">{</span>
+  translateX<span class="token operator">?</span><span class="token operator">:</span> Animatable<span class="token operator">&lt;</span>Length<span class="token operator">&gt;</span><span class="token punctuation">;</span>
+  translateY<span class="token operator">?</span><span class="token operator">:</span> Animatable<span class="token operator">&lt;</span>Length<span class="token operator">&gt;</span><span class="token punctuation">;</span>
+  scale<span class="token operator">?</span><span class="token operator">:</span> Animatable<span class="token operator">&lt;</span><span class="token builtin">number</span><span class="token operator">&gt;</span><span class="token punctuation">;</span>
+  scaleX<span class="token operator">?</span><span class="token operator">:</span> Animatable<span class="token operator">&lt;</span><span class="token builtin">number</span><span class="token operator">&gt;</span><span class="token punctuation">;</span>
+  scaleY<span class="token operator">?</span><span class="token operator">:</span> Animatable<span class="token operator">&lt;</span><span class="token builtin">number</span><span class="token operator">&gt;</span><span class="token punctuation">;</span>
+  <span class="token comment">/** Bound values are **degrees**, like the static [`Angle`] form. */</span>
+  rotate<span class="token operator">?</span><span class="token operator">:</span> Animatable<span class="token operator">&lt;</span>Angle<span class="token operator">&gt;</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span></code></pre><h3 id="bevytransform3d"><a class="anchor" href="#bevytransform3d" aria-hidden="true">#</a><code>BevyTransform3d</code></h3>
+<pre><code class="language-ts"><span class="token comment">/** A 3D perspective transform (`style.transform3d`), applied to the
+ *  subtree's *rendered result* at composite time (group semantics, like
+ *  `opacity`/`filter`). Its presence — even an empty `{}` — promotes the
+ *  subtree to a composited layer; animating it never re-captures
+ *  (composite-time cost, like translation). Picking, hover, and cursor follow
+ *  the transformed visual. Field order is fixed: scale → rotateX → rotateY →
+ *  rotateZ → translate, then the self `perspective` projection, all around
+ *  `origin`.
+ *
+ *  Units: translations and `perspective` are logical px; rotations are
+ *  [`Angle`]s (bare number = degrees); `origin` is per-axis px-or-percent of
+ *  the border box (default `&quot;50%&quot;`/`&quot;50%&quot;` = center). `translateZ` is only
+ *  visible with `perspective` (positive = toward the viewer = magnify).
+ *  Backfaces render mirrored and stay clickable.
+ *
+ *  With `transition: { transform3d }` changes ease field-wise (perspective
+ *  snaps when either endpoint is orthographic). Unsetting the whole field
+ *  demotes the layer and **snaps** — keep an identity `{}` in the base style
+ *  when removal should ease. Avoid hover-triggered transforms that move the
+ *  element out from under the cursor (hover flips off → moves back →
+ *  oscillates, as in CSS). */</span>
+<span class="token keyword">export</span> <span class="token keyword">interface</span> <span class="token class-name">BevyTransform3d</span> <span class="token punctuation">{</span>
+  <span class="token comment">/** Focal distance in logical px (CSS `perspective(d)`); unset = orthographic. */</span>
+  perspective<span class="token operator">?</span><span class="token operator">:</span> Animatable<span class="token operator">&lt;</span><span class="token builtin">number</span><span class="token operator">&gt;</span><span class="token punctuation">;</span>
+  translateX<span class="token operator">?</span><span class="token operator">:</span> Animatable<span class="token operator">&lt;</span><span class="token builtin">number</span><span class="token operator">&gt;</span><span class="token punctuation">;</span>
+  translateY<span class="token operator">?</span><span class="token operator">:</span> Animatable<span class="token operator">&lt;</span><span class="token builtin">number</span><span class="token operator">&gt;</span><span class="token punctuation">;</span>
+  translateZ<span class="token operator">?</span><span class="token operator">:</span> Animatable<span class="token operator">&lt;</span><span class="token builtin">number</span><span class="token operator">&gt;</span><span class="token punctuation">;</span>
+  rotateX<span class="token operator">?</span><span class="token operator">:</span> Animatable<span class="token operator">&lt;</span>Angle<span class="token operator">&gt;</span><span class="token punctuation">;</span>
+  rotateY<span class="token operator">?</span><span class="token operator">:</span> Animatable<span class="token operator">&lt;</span>Angle<span class="token operator">&gt;</span><span class="token punctuation">;</span>
+  rotateZ<span class="token operator">?</span><span class="token operator">:</span> Animatable<span class="token operator">&lt;</span>Angle<span class="token operator">&gt;</span><span class="token punctuation">;</span>
+  scale<span class="token operator">?</span><span class="token operator">:</span> Animatable<span class="token operator">&lt;</span><span class="token builtin">number</span><span class="token operator">&gt;</span><span class="token punctuation">;</span>
+  scaleX<span class="token operator">?</span><span class="token operator">:</span> Animatable<span class="token operator">&lt;</span><span class="token builtin">number</span><span class="token operator">&gt;</span><span class="token punctuation">;</span>
+  scaleY<span class="token operator">?</span><span class="token operator">:</span> Animatable<span class="token operator">&lt;</span><span class="token builtin">number</span><span class="token operator">&gt;</span><span class="token punctuation">;</span>
+  <span class="token comment">/** Pivot + vanishing point, relative to the border box (bound axes in px). */</span>
+  origin<span class="token operator">?</span><span class="token operator">:</span> <span class="token punctuation">{</span> x<span class="token operator">:</span> Animatable<span class="token operator">&lt;</span>Length<span class="token operator">&gt;</span><span class="token punctuation">;</span> y<span class="token operator">:</span> Animatable<span class="token operator">&lt;</span>Length<span class="token operator">&gt;</span> <span class="token punctuation">}</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span></code></pre><h3 id="bevytransition"><a class="anchor" href="#bevytransition" aria-hidden="true">#</a><code>BevyTransition</code></h3>
+<pre><code class="language-ts"><span class="token comment">/** Per-channel transition timing. Every channel is explicit — there is no
+ *  fallback key; `transform` covers all transform channels together. */</span>
+<span class="token keyword">export</span> <span class="token keyword">interface</span> <span class="token class-name">BevyTransition</span> <span class="token punctuation">{</span>
+  transform<span class="token operator">?</span><span class="token operator">:</span> BevyTransitionSpec<span class="token punctuation">;</span>
+  opacity<span class="token operator">?</span><span class="token operator">:</span> BevyTransitionSpec<span class="token punctuation">;</span>
+  backgroundColor<span class="token operator">?</span><span class="token operator">:</span> BevyTransitionSpec<span class="token punctuation">;</span>
+  <span class="token comment">/** Eases `backgroundGradient` between style states, whole-value. Structures
+   * must match STRICTLY (same kind, stop count, colorSpace, position, shape
+   * variant) — any mismatch snaps immediately with a devtools warning. Setting
+   * or unsetting the gradient always snaps: fade via a transparent-stops
+   * gradient in the base style instead. Stop colors ease in sRGB (the
+   * backgroundColor space); angles ease numerically (350 to 10 goes the long
+   * way, like CSS). */</span>
+  backgroundGradient<span class="token operator">?</span><span class="token operator">:</span> BevyTransitionSpec<span class="token punctuation">;</span>
+  <span class="token comment">/** The `borderGradient` twin of `backgroundGradient`, independent of it. */</span>
+  borderGradient<span class="token operator">?</span><span class="token operator">:</span> BevyTransitionSpec<span class="token punctuation">;</span>
+  <span class="token comment">/** Covers the size channels (`width`/`height`/`maxWidth`/`maxHeight`). These are
+   * layout properties, so easing one re-flows surrounding content — a real
+   * accordion. Needs an explicit pixel target (e.g. `maxHeight: open ? 300 : 0`);
+   * `auto`/unknown heights snap. Pair with `overflowY: &quot;clip&quot;`. */</span>
+  size<span class="token operator">?</span><span class="token operator">:</span> BevyTransitionSpec<span class="token punctuation">;</span>
+  <span class="token comment">/** Eases `borderRadius` per corner between style states — every wire form
+   * (uniform, shorthand, per-corner object), so uniform-to-per-corner eases too.
+   * Same-unit corners interpolate; a corner that changes unit (or hits `auto`)
+   * snaps on its own. Unsetting the field eases to square corners. The radius
+   * is a layout property (it lives on the node), so like `size` every eased
+   * frame is a relayout. An `{ animated }` binding on `borderRadius` parks it. */</span>
+  borderRadius<span class="token operator">?</span><span class="token operator">:</span> BevyTransitionSpec<span class="token punctuation">;</span>
+  <span class="token comment">/** Eases the scroll offset (`ScrollPosition`) of an `overflow: scroll` node
+   * toward its target — a controlled `scrollTop`/`scrollLeft` change or accumulated
+   * wheel input — instead of snapping (smooth scroll). Covers both axes. Direct
+   * scrollbar manipulation (thumb drag, track click) bypasses the ease and snaps.
+   * Don't also feed `onScroll` back into the same controlled axis, or the round-trip
+   * fights the ease (drive the target from buttons/state; read `onScroll` into
+   * separate state). */</span>
+  scroll<span class="token operator">?</span><span class="token operator">:</span> BevyTransitionSpec<span class="token punctuation">;</span>
+  <span class="token comment">/** Eases the layer-based `filter` chain between style states: same-name chains
+   * interpolate their params; a chain extended/truncated at the end over built-in
+   * filters fades through identity values (hover-adds-blur fades in); anything
+   * else swaps wholesale at the midpoint. */</span>
+  filter<span class="token operator">?</span><span class="token operator">:</span> BevyTransitionSpec<span class="token punctuation">;</span>
+  <span class="token comment">/** Eases the `backdropFilter` chain — the second, independent instance of the
+   * `filter` channel (same whole-value strategy and ease-to-empty snap: unsetting
+   * `backdropFilter` demotes and snaps, so keep an identity entry — e.g.
+   * `{ name: &quot;blur&quot;, params: { radius: 0 } }` — when removal should ease). */</span>
+  backdropFilter<span class="token operator">?</span><span class="token operator">:</span> BevyTransitionSpec<span class="token punctuation">;</span>
+  <span class="token comment">/** Eases the `transform3d` fields together (composite-time — animating never
+   * re-captures the layer). `perspective` snaps when either endpoint is
+   * orthographic; unsetting the whole `transform3d` style demotes and snaps —
+   * keep an identity `{}` in the base style when removal should ease. */</span>
+  transform3d<span class="token operator">?</span><span class="token operator">:</span> BevyTransitionSpec<span class="token punctuation">;</span>
+  <span class="token comment">/** Times the `morphFilter` progress (the engine-owned 0→1 blend from the
+   * frozen old appearance to the live content on a `key` change). Unlike every
+   * other channel it has a BUILT-IN default (300ms ease-in-out) — a key change
+   * animates even with no `transition` at all; this entry overrides the
+   * timing. */</span>
+  morphFilter<span class="token operator">?</span><span class="token operator">:</span> BevyTransitionSpec<span class="token punctuation">;</span>
+  <span class="token comment">/** Eases the node's LAID-OUT rect (position + size together) whenever layout
+   * moves or resizes it, whatever the cause — a sibling insert/remove/reorder,
+   * a parent resize, a re-wrap, a window resize (FLIP). The real layout still
+   * snaps (no relayout, no layer); the node glides from its old rect, children
+   * ride the translation (not the scale), picking follows. A size change scales
+   * only the node's OWN paint — children stay crisp at their final offsets —
+   * but nothing laid out AROUND the node eases (siblings snap to the final
+   * layout): a container whose size must re-flow its surroundings wants the
+   * real-layout `size` channel instead, with `layout` on its children. The
+   * first layout adopts silently (no enter animation;
+   * unmount can't animate) and `display: none` → shown grows in place. The
+   * node's own `size` channel or a `{ animated }` binding on a layout field
+   * owns its rect (the layout channel adopts, they compose); a rect moved every
+   * frame by anything else (an ancestor's `size` ease) lags, then catches up. */</span>
+  layout<span class="token operator">?</span><span class="token operator">:</span> BevyTransitionSpec<span class="token punctuation">;</span>
+  <span class="token comment">/** Times a shared-element flight (see the `sharedTag` prop): when this node
+   * mounts as the incoming half of a tag pair, every channel seeded from the
+   * outgoing node — its rect (position via translation, size in measured px
+   * through real layout), background color, opacity, transforms, filters,
+   * gradients — eases with THIS one spec, overriding the per-channel specs
+   * for the flight only (ordinary later changes use their own). Required for
+   * the flight; explicit-only like every channel (no built-in default). */</span>
+  sharedElement<span class="token operator">?</span><span class="token operator">:</span> BevyTransitionSpec<span class="token punctuation">;</span>
+<span class="token punctuation">}</span></code></pre><h3 id="fontsize"><a class="anchor" href="#fontsize" aria-hidden="true">#</a><code>FontSize</code></h3>
+<pre><code class="language-ts"><span class="token comment">/** A font size: a bare number is logical pixels, or a unit string — `&quot;24px&quot;`,
+ *  `&quot;2vw&quot;`/`&quot;2vh&quot;`/`&quot;2vmin&quot;`/`&quot;2vmax&quot;`, or `&quot;1.5rem&quot;` (relative to Bevy's `RemSize`,
+ *  default 20px). CSS `em` is not supported (no Bevy equivalent). */</span>
+<span class="token keyword">export</span> <span class="token keyword">type</span> <span class="token class-name">FontSize</span> <span class="token operator">=</span> <span class="token builtin">number</span> <span class="token operator">|</span> <span class="token builtin">string</span><span class="token punctuation">;</span></code></pre><h3 id="filteruse"><a class="anchor" href="#filteruse" aria-hidden="true">#</a><code>FilterUse</code></h3>
+<pre><code class="language-ts"><span class="token comment">/** One filter invocation in a chain: a registered filter name (e.g. `&quot;blur&quot;`,
+ *  `&quot;hueRotate&quot;`) plus its parameters, typed per name via [`BevyFilters`].
+ *  Every param is individually optional: an omitted param takes the filter's
+ *  Rust-side default (for built-ins the shorthand-default convention: a
+ *  *visible* effect — `{ name: &quot;grayscale&quot; }` is *full* grayscale like CSS
+ *  `grayscale()`, and a bare `blur` is a visible 20px blur unlike CSS's 0 —
+ *  and the field's `#[serde(default)]` for customs).
+ *
+ *  Every param position is [`Animatable`]: `params: { radius: { animated:
+ *  sv } }` binds it to a shared value (chain position = binding address, so
+ *  reordering the chain keeps bindings attached). The wrapper's optional
+ *  `seed` is the static value the resolver decodes in its place — size it
+ *  for the animation's range when the param feeds a resolve-time derivation
+ *  (a blur radius's capture outset). */</span>
+<span class="token keyword">export</span> <span class="token keyword">type</span> <span class="token class-name">FilterUse</span> <span class="token operator">=</span> <span class="token punctuation">{</span>
+  <span class="token punctuation">[</span><span class="token constant">K</span> <span class="token keyword">in</span> <span class="token keyword">keyof</span> BevyFilters<span class="token punctuation">]</span><span class="token operator">:</span> <span class="token punctuation">{</span>
+    name<span class="token operator">:</span> <span class="token constant">K</span><span class="token punctuation">;</span>
+    params<span class="token operator">?</span><span class="token operator">:</span> <span class="token punctuation">{</span> <span class="token punctuation">[</span><span class="token constant">P</span> <span class="token keyword">in</span> <span class="token keyword">keyof</span> BevyFilters<span class="token punctuation">[</span><span class="token constant">K</span><span class="token punctuation">]</span><span class="token punctuation">]</span><span class="token operator">?</span><span class="token operator">:</span> Animatable<span class="token operator">&lt;</span>BevyFilters<span class="token punctuation">[</span><span class="token constant">K</span><span class="token punctuation">]</span><span class="token punctuation">[</span><span class="token constant">P</span><span class="token punctuation">]</span><span class="token operator">&gt;</span> <span class="token punctuation">}</span><span class="token punctuation">;</span>
+  <span class="token punctuation">}</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span><span class="token punctuation">[</span><span class="token keyword">keyof</span> BevyFilters<span class="token punctuation">]</span><span class="token punctuation">;</span></code></pre><h3 id="angle"><a class="anchor" href="#angle" aria-hidden="true">#</a><code>Angle</code></h3>
+<pre><code class="language-ts"><span class="token comment">/** A CSS angle: a bare number is **degrees**, or a unit string (`&quot;45deg&quot;`,
+ *  `&quot;1.5rad&quot;`, `&quot;0.25turn&quot;`, `&quot;100grad&quot;`). */</span>
+<span class="token keyword">export</span> <span class="token keyword">type</span> <span class="token class-name">Angle</span> <span class="token operator">=</span> <span class="token builtin">number</span> <span class="token operator">|</span> <span class="token builtin">string</span><span class="token punctuation">;</span></code></pre><h3 id="gradientstop"><a class="anchor" href="#gradientstop" aria-hidden="true">#</a><code>GradientStop</code></h3>
+<pre><code class="language-ts"><span class="token comment">/** A linear/radial color stop. `position` places it along the gradient line
+ *  (absent → auto-spaced); `hint` is the `0..1` interpolation midpoint to the
+ *  next stop (default `0.5`). All three leaves are animatable — `color` via an
+ *  `interpolateColor` binding, `position` in logical px, `hint` raw `0..1`
+ *  (base-style only). */</span>
+<span class="token keyword">export</span> <span class="token keyword">type</span> <span class="token class-name">GradientStop</span> <span class="token operator">=</span> <span class="token punctuation">{</span>
+  color<span class="token operator">:</span> Animatable<span class="token operator">&lt;</span>Color<span class="token operator">&gt;</span><span class="token punctuation">;</span>
+  position<span class="token operator">?</span><span class="token operator">:</span> Animatable<span class="token operator">&lt;</span>Length<span class="token operator">&gt;</span><span class="token punctuation">;</span>
+  hint<span class="token operator">?</span><span class="token operator">:</span> Animatable<span class="token operator">&lt;</span><span class="token builtin">number</span><span class="token operator">&gt;</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span><span class="token punctuation">;</span></code></pre><h3 id="colorspace"><a class="anchor" href="#colorspace" aria-hidden="true">#</a><code>ColorSpace</code></h3>
+<pre><code class="language-ts"><span class="token comment">/** Color space a gradient interpolates in (default `&quot;oklab&quot;`). */</span>
+<span class="token keyword">export</span> <span class="token keyword">type</span> <span class="token class-name">ColorSpace</span> <span class="token operator">=</span>
+  <span class="token operator">|</span> <span class="token string">&quot;oklab&quot;</span>
+  <span class="token operator">|</span> <span class="token string">&quot;oklch&quot;</span>
+  <span class="token operator">|</span> <span class="token string">&quot;oklchLong&quot;</span>
+  <span class="token operator">|</span> <span class="token string">&quot;srgb&quot;</span>
+  <span class="token operator">|</span> <span class="token string">&quot;linearRgb&quot;</span>
+  <span class="token operator">|</span> <span class="token string">&quot;hsl&quot;</span>
+  <span class="token operator">|</span> <span class="token string">&quot;hslLong&quot;</span>
+  <span class="token operator">|</span> <span class="token string">&quot;hsv&quot;</span>
+  <span class="token operator">|</span> <span class="token string">&quot;hsvLong&quot;</span><span class="token punctuation">;</span></code></pre><h3 id="gradientposition"><a class="anchor" href="#gradientposition" aria-hidden="true">#</a><code>GradientPosition</code></h3>
+<pre><code class="language-ts"><span class="token comment">/** Named center anchor for a radial/conic gradient (default `&quot;center&quot;`). */</span>
+<span class="token keyword">export</span> <span class="token keyword">type</span> <span class="token class-name">GradientPosition</span> <span class="token operator">=</span>
+  <span class="token operator">|</span> <span class="token string">&quot;center&quot;</span>
+  <span class="token operator">|</span> <span class="token string">&quot;top&quot;</span>
+  <span class="token operator">|</span> <span class="token string">&quot;bottom&quot;</span>
+  <span class="token operator">|</span> <span class="token string">&quot;left&quot;</span>
+  <span class="token operator">|</span> <span class="token string">&quot;right&quot;</span>
+  <span class="token operator">|</span> <span class="token string">&quot;topLeft&quot;</span>
+  <span class="token operator">|</span> <span class="token string">&quot;topRight&quot;</span>
+  <span class="token operator">|</span> <span class="token string">&quot;bottomLeft&quot;</span>
+  <span class="token operator">|</span> <span class="token string">&quot;bottomRight&quot;</span><span class="token punctuation">;</span></code></pre><h3 id="radialshape"><a class="anchor" href="#radialshape" aria-hidden="true">#</a><code>RadialShape</code></h3>
+<pre><code class="language-ts"><span class="token comment">/** Size/shape of a radial gradient (default `&quot;closestCorner&quot;`). The explicit
+ *  radii are animatable (a bound radius animates in logical px; base-style
+ *  only). */</span>
+<span class="token keyword">export</span> <span class="token keyword">type</span> <span class="token class-name">RadialShape</span> <span class="token operator">=</span>
+  <span class="token operator">|</span> <span class="token string">&quot;closestSide&quot;</span>
+  <span class="token operator">|</span> <span class="token string">&quot;farthestSide&quot;</span>
+  <span class="token operator">|</span> <span class="token string">&quot;closestCorner&quot;</span>
+  <span class="token operator">|</span> <span class="token string">&quot;farthestCorner&quot;</span>
+  <span class="token operator">|</span> <span class="token punctuation">{</span> circle<span class="token operator">:</span> Animatable<span class="token operator">&lt;</span>Length<span class="token operator">&gt;</span> <span class="token punctuation">}</span>
+  <span class="token operator">|</span> <span class="token punctuation">{</span> ellipse<span class="token operator">:</span> <span class="token punctuation">[</span>Animatable<span class="token operator">&lt;</span>Length<span class="token operator">&gt;</span><span class="token punctuation">,</span> Animatable<span class="token operator">&lt;</span>Length<span class="token operator">&gt;</span><span class="token punctuation">]</span> <span class="token punctuation">}</span><span class="token punctuation">;</span></code></pre><h3 id="angularstop"><a class="anchor" href="#angularstop" aria-hidden="true">#</a><code>AngularStop</code></h3>
+<pre><code class="language-ts"><span class="token comment">/** A conic color stop. `angle` is an [`Angle`] (bare number = degrees; absent →
+ *  auto-spaced). All three leaves are animatable — `color` via an
+ *  `interpolateColor` binding, `angle` in degrees, `hint` raw `0..1`
+ *  (base-style only). */</span>
+<span class="token keyword">export</span> <span class="token keyword">type</span> <span class="token class-name">AngularStop</span> <span class="token operator">=</span> <span class="token punctuation">{</span>
+  color<span class="token operator">:</span> Animatable<span class="token operator">&lt;</span>Color<span class="token operator">&gt;</span><span class="token punctuation">;</span>
+  angle<span class="token operator">?</span><span class="token operator">:</span> Animatable<span class="token operator">&lt;</span>Angle<span class="token operator">&gt;</span><span class="token punctuation">;</span>
+  hint<span class="token operator">?</span><span class="token operator">:</span> Animatable<span class="token operator">&lt;</span><span class="token builtin">number</span><span class="token operator">&gt;</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span><span class="token punctuation">;</span></code></pre><h3 id="backgroundimagemode"><a class="anchor" href="#backgroundimagemode" aria-hidden="true">#</a><code>BackgroundImageMode</code></h3>
+<pre><code class="language-ts"><span class="token comment">/** How a `backgroundImage` fits its node: `&quot;stretch&quot;` (default — fill the box
+ *  exactly, aspect ignored) or the repeat modes (tile at the texture's logical
+ *  size × `scale`). Unlike an `&lt;image&gt;`'s [`ImageMode`] there is no `&quot;auto&quot;` —
+ *  a background never affects layout. */</span>
+<span class="token keyword">export</span> <span class="token keyword">type</span> <span class="token class-name">BackgroundImageMode</span> <span class="token operator">=</span> <span class="token string">&quot;stretch&quot;</span> <span class="token operator">|</span> <span class="token string">&quot;repeat&quot;</span> <span class="token operator">|</span> <span class="token string">&quot;repeatX&quot;</span> <span class="token operator">|</span> <span class="token string">&quot;repeatY&quot;</span><span class="token punctuation">;</span></code></pre><h3 id="scrollbarpartstyle"><a class="anchor" href="#scrollbarpartstyle" aria-hidden="true">#</a><code>ScrollbarPartStyle</code></h3>
+<pre><code class="language-ts"><span class="token comment">/** Styling for one scrollbar part (the `track` groove or the draggable `thumb`),
+ *  with optional interaction-state overlays. `pressed` wins over `hover`, which
+ *  overlays the base. (Scrollbars take no keyboard focus, so there is no `focused`
+ *  state.) */</span>
+<span class="token keyword">export</span> <span class="token keyword">interface</span> <span class="token class-name">ScrollbarPartStyle</span> <span class="token keyword">extends</span> <span class="token class-name">ScrollbarPartVisual</span> <span class="token punctuation">{</span>
+  <span class="token comment">/** Overlaid while the pointer is over this part. */</span>
+  hover<span class="token operator">?</span><span class="token operator">:</span> ScrollbarPartVisual<span class="token punctuation">;</span>
+  <span class="token comment">/** Overlaid while the bar is being dragged (wins over `hover`). */</span>
+  pressed<span class="token operator">?</span><span class="token operator">:</span> ScrollbarPartVisual<span class="token punctuation">;</span>
+<span class="token punctuation">}</span></code></pre><h3 id="bevytransitionspec"><a class="anchor" href="#bevytransitionspec" aria-hidden="true">#</a><code>BevyTransitionSpec</code></h3>
+<pre><code class="language-ts"><span class="token comment">/** Timing for one transition channel: a timing curve (default) or, if `stiffness`
+ *  or `damping` is given, a spring. `duration`/`delay` are [`Time`]s — a bare
+ *  number is **milliseconds**, or a unit string (`&quot;0.2s&quot;`). */</span>
+<span class="token keyword">export</span> <span class="token keyword">type</span> <span class="token class-name">BevyTransitionSpec</span> <span class="token operator">=</span> <span class="token punctuation">{</span>
+  <span class="token comment">/** Timing duration (default `300` ms). Ignored for a spring. */</span>
+  duration<span class="token operator">?</span><span class="token operator">:</span> Time<span class="token punctuation">;</span>
+  easing<span class="token operator">?</span><span class="token operator">:</span> <span class="token string">&quot;linear&quot;</span> <span class="token operator">|</span> <span class="token string">&quot;easeIn&quot;</span> <span class="token operator">|</span> <span class="token string">&quot;easeOut&quot;</span> <span class="token operator">|</span> <span class="token string">&quot;easeInOut&quot;</span><span class="token punctuation">;</span>
+  <span class="token comment">/** Hold this long before easing (default `0`). */</span>
+  delay<span class="token operator">?</span><span class="token operator">:</span> Time<span class="token punctuation">;</span>
+  <span class="token comment">/** Spring stiffness; its presence (with/without `damping`) selects a spring. */</span>
+  stiffness<span class="token operator">?</span><span class="token operator">:</span> <span class="token builtin">number</span><span class="token punctuation">;</span>
+  damping<span class="token operator">?</span><span class="token operator">:</span> <span class="token builtin">number</span><span class="token punctuation">;</span>
+  mass<span class="token operator">?</span><span class="token operator">:</span> <span class="token builtin">number</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span><span class="token punctuation">;</span></code></pre><h3 id="scrollbarpartvisual"><a class="anchor" href="#scrollbarpartvisual" aria-hidden="true">#</a><code>ScrollbarPartVisual</code></h3>
+<pre><code class="language-ts"><span class="token comment">/** The paint properties of one scrollbar part in one interaction state.
+ *  Deliberately **not** a full [`BevyStyle`]: the thumb is a headless Bevy widget
+ *  with no layout node, so only these apply. Size/placement come from the parent
+ *  [`ScrollbarStyle`] (`thickness`) — a part never sets its own width/height. */</span>
+<span class="token keyword">export</span> <span class="token keyword">interface</span> <span class="token class-name">ScrollbarPartVisual</span> <span class="token punctuation">{</span>
+  <span class="token comment">/** Fill color (any CSS [`Color`]). */</span>
+  backgroundColor<span class="token operator">?</span><span class="token operator">:</span> Color<span class="token punctuation">;</span>
+  <span class="token comment">/** Border color: one CSS [`Color`] for all sides, or a per-side object. */</span>
+  borderColor<span class="token operator">?</span><span class="token operator">:</span>
+    <span class="token operator">|</span> Color
+    <span class="token operator">|</span> <span class="token punctuation">{</span> top<span class="token operator">?</span><span class="token operator">:</span> Color<span class="token punctuation">;</span> right<span class="token operator">?</span><span class="token operator">:</span> Color<span class="token punctuation">;</span> bottom<span class="token operator">?</span><span class="token operator">:</span> Color<span class="token punctuation">;</span> left<span class="token operator">?</span><span class="token operator">:</span> Color <span class="token punctuation">}</span><span class="token punctuation">;</span>
+  <span class="token comment">/** Corner radii (same forms as any [`Rect`]). */</span>
+  borderRadius<span class="token operator">?</span><span class="token operator">:</span> Rect<span class="token punctuation">;</span>
+  <span class="token comment">/** Border thickness (same forms as any [`Rect`]). */</span>
+  border<span class="token operator">?</span><span class="token operator">:</span> Rect<span class="token punctuation">;</span>
+<span class="token punctuation">}</span></code></pre><h3 id="time"><a class="anchor" href="#time" aria-hidden="true">#</a><code>Time</code></h3>
+<pre><code class="language-ts"><span class="token comment">/** A CSS time/duration: a bare number is **milliseconds**, or a unit string
+ *  (`&quot;200ms&quot;`, `&quot;0.2s&quot;`). */</span>
+<span class="token keyword">export</span> <span class="token keyword">type</span> <span class="token class-name">Time</span> <span class="token operator">=</span> <span class="token builtin">number</span> <span class="token operator">|</span> <span class="token builtin">string</span><span class="token punctuation">;</span></code></pre>
+</article>
+<footer class="page-links"><span>Generated from the code</span></footer>
+</main>
+</div>
+<footer class="site-footer">
+<p>bevy-react is dual-licensed under MIT or Apache-2.0. <a href="https://github.com/tulustul/bevy-react">Source on GitHub</a>.</p>
+</footer>
+</body>
+</html>

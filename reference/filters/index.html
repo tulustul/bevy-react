@@ -1,0 +1,416 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Filters · bevy-react</title>
+<meta name="description" content="The built-in filters and morph filters with their params. Generated from the code.">
+<link rel="canonical" href="https://tulustul.github.io/bevy-react/reference/filters/">
+<link rel="alternate" type="text/markdown" href="../../reference/filters.md">
+<meta property="og:title" content="Filters · bevy-react">
+<meta property="og:description" content="The built-in filters and morph filters with their params. Generated from the code.">
+<link rel="icon" href="../../logo.png">
+<link rel="stylesheet" href="../../style.css">
+<script src="../../docs.js" defer></script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="site-header">
+<a class="brand" href="../../"><img src="../../logo.png" alt="" width="74" height="74"> bevy-react</a>
+<span class="version">v0.7.0</span>
+<nav class="site-links" aria-label="Project">
+<a href="../../demo/">Live demo</a>
+<a href="https://github.com/tulustul/bevy-react">GitHub</a>
+<a href="https://docs.rs/bevy-react">docs.rs</a>
+<a href="https://www.npmjs.com/package/bevy-react">npm</a>
+</nav>
+</header>
+<div class="layout">
+<nav class="sidebar" aria-label="Documentation">
+<details class="nav-menu" open>
+<summary>Menu</summary>
+<ul><li><a href="../../">Introduction</a></li><li><a href="../../getting-started/">Getting started</a></li><li><a href="../../how-it-works/">How it works</a></li><li class="nav-section"><span>Elements</span><ul><li><a href="../../elements/node/">&lt;node&gt;</a></li><li><a href="../../elements/button/">&lt;button&gt;</a></li><li><a href="../../elements/text/">&lt;text&gt;</a></li><li><a href="../../elements/editable-text/">&lt;editableText&gt;</a></li><li><a href="../../elements/image/">&lt;image&gt;</a></li><li><a href="../../elements/canvas/">&lt;canvas&gt;</a></li><li><a href="../../elements/svg/">&lt;svg&gt;</a></li><li><a href="../../elements/portal/">&lt;portal&gt;</a></li><li><a href="../../elements/surface/">&lt;surface&gt;</a></li><li><a href="../../elements/root/">&lt;root&gt;</a></li><li><a href="../../elements/anchor/">&lt;anchor&gt;</a></li></ul></li><li class="nav-section"><span>Layout</span><ul><li><a href="../../layout/flexbox/">Flexbox</a></li><li><a href="../../layout/grid/">Grid</a></li><li><a href="../../layout/positioning/">Positioning</a></li></ul></li><li class="nav-section"><span>Styling</span><ul><li><a href="../../styling/units/">Units</a></li><li><a href="../../styling/colors/">Colors</a></li><li><a href="../../styling/borders/">Borders</a></li><li><a href="../../styling/spacing/">Spacing</a></li><li><a href="../../styling/sizing/">Sizing</a></li><li><a href="../../styling/layout-rounding/">Layout rounding</a></li><li><a href="../../styling/overflow/">Overflow</a></li><li><a href="../../styling/transforms/">Transforms</a></li><li><a href="../../styling/3d-transforms/">3D transforms</a></li><li><a href="../../styling/shadows/">Shadows</a></li><li><a href="../../styling/filters/">Filters</a></li><li><a href="../../styling/backdrop-filters/">Backdrop filters</a></li><li><a href="../../styling/morph-filters/">Morph filters</a></li><li><a href="../../styling/gradients/">Gradients</a></li><li><a href="../../styling/background-images/">Background images</a></li><li><a href="../../styling/image-rendering/">Image rendering</a></li><li><a href="../../styling/opacity/">Opacity</a></li><li><a href="../../styling/z-index/">Z-index</a></li><li><a href="../../styling/focus-policy/">Focus policy</a></li><li><a href="../../styling/cursors/">Cursors</a></li><li><a href="../../styling/layers/">Layers</a></li></ul></li><li class="nav-section"><span>Animations</span><ul><li><a href="../../animations/style-transitions/">Style transitions</a></li><li><a href="../../animations/animated-values/">Animated values</a></li><li><a href="../../animations/interpolation/">Interpolation</a></li><li><a href="../../animations/shared-elements/">Shared elements</a></li></ul></li><li class="nav-section"><span>Communication</span><ul><li><a href="../../communication/react-to-bevy/">React to Bevy</a></li><li><a href="../../communication/bevy-to-react/">Bevy to React</a></li><li><a href="../../communication/request-response/">Request / response</a></li><li><a href="../../communication/named-nodes/">Named nodes</a></li></ul></li><li class="nav-section"><span>Events</span><ul><li><a href="../../events/mouse/">Mouse</a></li><li><a href="../../events/keyboard/">Keyboard</a></li><li><a href="../../events/gamepad/">Gamepad</a></li><li><a href="../../events/window/">Window</a></li></ul></li><li class="nav-section"><span>Extending</span><ul><li><a href="../../extending/custom-elements/">Custom elements</a></li><li><a href="../../extending/custom-styles/">Custom styles</a></li><li><a href="../../extending/custom-filters/">Custom filters</a></li></ul></li><li class="nav-section"><span>Tooling</span><ul><li><a href="../../tooling/devtools/">Devtools</a></li><li><a href="../../tooling/hot-reload/">Hot reload</a></li><li><a href="../../tooling/web/">Web builds</a></li><li><a href="../../tooling/ts-codegen/">TypeScript codegen</a></li></ul></li><li class="nav-section"><span>Reference</span><ul><li><a href="../../reference/style-properties/">Style properties</a></li><li><a href="../../reference/elements/">Elements</a></li><li><a href="../../reference/filters/" aria-current="page">Filters</a></li></ul></li><li><a href="../../performance/">Performance</a></li></ul>
+</details>
+</nav>
+<main id="main">
+<article>
+<h1 id="filters">Filters</h1>
+<p>The filters the library ships, generated from its filter registry. Every param
+is optional (an omitted param takes the filter&#39;s default) and accepts an inline
+<code>{ animated: sharedValue }</code> binding. Apps register their own filters on top
+of these.</p>
+<h2 id="filters-1"><a class="anchor" href="#filters-1" aria-hidden="true">#</a>Filters</h2>
+<p>Usable in <code>filter</code> and <code>backdropFilter</code> chains.</p>
+<h3 id="bloom"><a class="anchor" href="#bloom" aria-hidden="true">#</a><code>bloom</code></h3>
+<p>Guide: <a href="../../styling/filters/">Filters</a>.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Param</th>
+<th>Type</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>radius</code></td>
+<td><code>number | string</code></td>
+</tr>
+<tr>
+<td><code>threshold</code></td>
+<td><code>number</code></td>
+</tr>
+<tr>
+<td><code>intensity</code></td>
+<td><code>number</code></td>
+</tr>
+</tbody></table></div>
+<h3 id="blur"><a class="anchor" href="#blur" aria-hidden="true">#</a><code>blur</code></h3>
+<p>Guide: <a href="../../styling/filters/">Filters</a>.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Param</th>
+<th>Type</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>radius</code></td>
+<td><code>number | string</code></td>
+</tr>
+</tbody></table></div>
+<h3 id="brightness"><a class="anchor" href="#brightness" aria-hidden="true">#</a><code>brightness</code></h3>
+<p>Guide: <a href="../../styling/filters/">Filters</a>.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Param</th>
+<th>Type</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>amount</code></td>
+<td><code>number</code></td>
+</tr>
+</tbody></table></div>
+<h3 id="chromaticaberration"><a class="anchor" href="#chromaticaberration" aria-hidden="true">#</a><a id="chromaticAberration"></a><code>chromaticAberration</code></h3>
+<p>Guide: <a href="../../styling/filters/">Filters</a>.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Param</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>offset</code></td>
+<td><code>number | string</code></td>
+<td></td>
+</tr>
+<tr>
+<td><code>angle</code></td>
+<td><code>number | string</code></td>
+<td></td>
+</tr>
+<tr>
+<td><code>rotation</code></td>
+<td><code>number</code></td>
+<td>Tangential swirl: the R image rotates by <code>+rotation</code> degrees (clockwise, y-down) around the node&#39;s center, B by <code>-rotation</code>. Plain number in degrees — a scalar magnitude, so transitions unwind linearly through every turn. 0 = purely directional split.</td>
+</tr>
+</tbody></table></div>
+<h3 id="contrast"><a class="anchor" href="#contrast" aria-hidden="true">#</a><code>contrast</code></h3>
+<p>Guide: <a href="../../styling/filters/">Filters</a>.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Param</th>
+<th>Type</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>amount</code></td>
+<td><code>number</code></td>
+</tr>
+</tbody></table></div>
+<h3 id="gradientmap"><a class="anchor" href="#gradientmap" aria-hidden="true">#</a><a id="gradientMap"></a><code>gradientMap</code></h3>
+<p>Guide: <a href="../../styling/filters/">Filters</a>.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Param</th>
+<th>Type</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>angle</code></td>
+<td><code>number | string</code></td>
+</tr>
+<tr>
+<td><code>stops</code></td>
+<td><code>Array&lt;GradientMapStop&gt;</code></td>
+</tr>
+<tr>
+<td><code>amount</code></td>
+<td><code>number</code></td>
+</tr>
+</tbody></table></div>
+<h3 id="grayscale"><a class="anchor" href="#grayscale" aria-hidden="true">#</a><code>grayscale</code></h3>
+<p>Guide: <a href="../../styling/filters/">Filters</a>.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Param</th>
+<th>Type</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>amount</code></td>
+<td><code>number</code></td>
+</tr>
+</tbody></table></div>
+<h3 id="huerotate"><a class="anchor" href="#huerotate" aria-hidden="true">#</a><a id="hueRotate"></a><code>hueRotate</code></h3>
+<p>Guide: <a href="../../styling/filters/">Filters</a>.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Param</th>
+<th>Type</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>angle</code></td>
+<td><code>number | string</code></td>
+</tr>
+</tbody></table></div>
+<h3 id="invert"><a class="anchor" href="#invert" aria-hidden="true">#</a><code>invert</code></h3>
+<p>Guide: <a href="../../styling/filters/">Filters</a>.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Param</th>
+<th>Type</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>amount</code></td>
+<td><code>number</code></td>
+</tr>
+</tbody></table></div>
+<h3 id="outline"><a class="anchor" href="#outline" aria-hidden="true">#</a><code>outline</code></h3>
+<p>Guide: <a href="../../styling/filters/">Filters</a>.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Param</th>
+<th>Type</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>width</code></td>
+<td><code>number | string</code></td>
+</tr>
+<tr>
+<td><code>color</code></td>
+<td><code>string</code></td>
+</tr>
+<tr>
+<td><code>softness</code></td>
+<td><code>number | string</code></td>
+</tr>
+</tbody></table></div>
+<h3 id="pinch"><a class="anchor" href="#pinch" aria-hidden="true">#</a><code>pinch</code></h3>
+<p>Guide: <a href="../../styling/filters/">Filters</a>.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Param</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>x</code></td>
+<td><code>number</code></td>
+<td>Pinch center, 0..1 across the node rect (0 = left edge).</td>
+</tr>
+<tr>
+<td><code>y</code></td>
+<td><code>number</code></td>
+<td>Pinch center, 0..1 across the node rect (0 = top edge).</td>
+</tr>
+<tr>
+<td><code>strength</code></td>
+<td><code>number</code></td>
+<td>-1 (full bulge) ..= 1 (full pinch); 0 is identity.</td>
+</tr>
+<tr>
+<td><code>radius</code></td>
+<td><code>number</code></td>
+<td>Effect radius as a fraction of the node&#39;s larger dimension.</td>
+</tr>
+<tr>
+<td><code>light</code></td>
+<td><code>number</code></td>
+<td>Diffuse shading intensity: 0 (unlit, the default), 1 nominal; larger values overdrive, like <code>brightness</code>.</td>
+</tr>
+<tr>
+<td><code>lightAngle</code></td>
+<td><code>number | string</code></td>
+<td>Direction the light comes FROM: degrees clockwise from +X in screen space (bare number = degrees, <code>&quot;0.25turn&quot;</code> etc. accepted). Default -135 = top-left.</td>
+</tr>
+<tr>
+<td><code>gloss</code></td>
+<td><code>number</code></td>
+<td>Specular (white) highlight intensity: 0 (off, the default), 1 nominal; larger values overdrive.</td>
+</tr>
+<tr>
+<td><code>glossSize</code></td>
+<td><code>number</code></td>
+<td>Size of the specular highlight, 0 (a pinpoint) ..= 1 (a broad sheen); default 0.3. Mapped log-wise onto a Blinn-Phong exponent in the shader (128 at 0, ~32 at 0.3, 1 at 1).</td>
+</tr>
+<tr>
+<td><code>outerSoftness</code></td>
+<td><code>number</code></td>
+<td>How the effect meets its rim, 0..=1: 0 is a linear onset (a visible crease, like a pressed coin edge), 0.5 (the default) the classic <code>u^2</code> smoothstep-like fade, 1 an imperceptible <code>u^4</code> fade-in.</td>
+</tr>
+<tr>
+<td><code>innerSoftness</code></td>
+<td><code>number</code></td>
+<td>How the effect peaks at its center, 0..=1: 0 is a cone tip (a pointed pit/peak the lighting shows as a point), 0.5 (the default) a rounded bowl, 1 a broad flat floor. Independent of <code>outerSoftness</code>: the profile is <code>1 - (1 - u^a)^b</code> with <code>a</code>/<code>b</code> from the two knobs.</td>
+</tr>
+</tbody></table></div>
+<h3 id="saturate"><a class="anchor" href="#saturate" aria-hidden="true">#</a><code>saturate</code></h3>
+<p>Guide: <a href="../../styling/filters/">Filters</a>.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Param</th>
+<th>Type</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>amount</code></td>
+<td><code>number</code></td>
+</tr>
+</tbody></table></div>
+<h3 id="sepia"><a class="anchor" href="#sepia" aria-hidden="true">#</a><code>sepia</code></h3>
+<p>Guide: <a href="../../styling/filters/">Filters</a>.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Param</th>
+<th>Type</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>amount</code></td>
+<td><code>number</code></td>
+</tr>
+</tbody></table></div>
+<h3 id="shadow"><a class="anchor" href="#shadow" aria-hidden="true">#</a><code>shadow</code></h3>
+<p>Guide: <a href="../../styling/filters/">Filters</a>.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Param</th>
+<th>Type</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>color</code></td>
+<td><code>string</code></td>
+</tr>
+<tr>
+<td><code>offsetX</code></td>
+<td><code>number | string</code></td>
+</tr>
+<tr>
+<td><code>offsetY</code></td>
+<td><code>number | string</code></td>
+</tr>
+<tr>
+<td><code>spread</code></td>
+<td><code>number | string</code></td>
+</tr>
+</tbody></table></div>
+<h2 id="morph-filters"><a class="anchor" href="#morph-filters" aria-hidden="true">#</a>Morph filters</h2>
+<p>Usable in <code>morphFilter</code>.</p>
+<h3 id="crossfade"><a class="anchor" href="#crossfade" aria-hidden="true">#</a><code>crossfade</code></h3>
+<p>Guide: <a href="../../styling/morph-filters/">Morph filters</a>.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Param</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>spread</code></td>
+<td><code>number</code></td>
+<td>0..1 stagger amount; 0 is the plain uniform crossfade.</td>
+</tr>
+<tr>
+<td><code>scale</code></td>
+<td><code>number | string</code></td>
+<td>Noise feature size in logical px.</td>
+</tr>
+<tr>
+<td><code>softness</code></td>
+<td><code>number</code></td>
+<td>0..1 local fade window (fraction of the progress range).</td>
+</tr>
+<tr>
+<td><code>seed</code></td>
+<td><code>number</code></td>
+<td>Re-rolls the noise pattern (domain offset).</td>
+</tr>
+</tbody></table></div>
+<h3 id="linearwipe"><a class="anchor" href="#linearwipe" aria-hidden="true">#</a><a id="linearWipe"></a><code>linearWipe</code></h3>
+<p>Guide: <a href="../../styling/morph-filters/">Morph filters</a>.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Param</th>
+<th>Type</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>angle</code></td>
+<td><code>number | string</code></td>
+</tr>
+<tr>
+<td><code>softness</code></td>
+<td><code>number | string</code></td>
+</tr>
+</tbody></table></div>
+<h3 id="pixelize"><a class="anchor" href="#pixelize" aria-hidden="true">#</a><code>pixelize</code></h3>
+<p>Guide: <a href="../../styling/morph-filters/">Morph filters</a>.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Param</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>squaresMin</code></td>
+<td><code>[number, number]</code></td>
+<td>Cells across x/y at the mosaic&#39;s coarsest (upstream <code>squaresMin</code>).</td>
+</tr>
+<tr>
+<td><code>steps</code></td>
+<td><code>number</code></td>
+<td>Discrete cell-size levels; <code>&lt;= 0</code> for a continuous ramp.</td>
+</tr>
+</tbody></table></div>
+
+</article>
+<footer class="page-links"><span>Generated from the code</span></footer>
+</main>
+</div>
+<footer class="site-footer">
+<p>bevy-react is dual-licensed under MIT or Apache-2.0. <a href="https://github.com/tulustul/bevy-react">Source on GitHub</a>.</p>
+</footer>
+</body>
+</html>

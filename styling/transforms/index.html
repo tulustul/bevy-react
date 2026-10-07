@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Transforms · bevy-react</title>
+<meta name="description" content="Move, scale and rotate a node and its subtree after layout with the transform style, with transitions and animated fields.">
+<link rel="canonical" href="https://tulustul.github.io/bevy-react/styling/transforms/">
+<link rel="alternate" type="text/markdown" href="../../styling/transforms.md">
+<meta property="og:title" content="Transforms · bevy-react">
+<meta property="og:description" content="Move, scale and rotate a node and its subtree after layout with the transform style, with transitions and animated fields.">
+<link rel="icon" href="../../logo.png">
+<link rel="stylesheet" href="../../style.css">
+<script src="../../docs.js" defer></script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="site-header">
+<a class="brand" href="../../"><img src="../../logo.png" alt="" width="74" height="74"> bevy-react</a>
+<span class="version">v0.7.0</span>
+<nav class="site-links" aria-label="Project">
+<a href="../../demo/">Live demo</a>
+<a href="https://github.com/tulustul/bevy-react">GitHub</a>
+<a href="https://docs.rs/bevy-react">docs.rs</a>
+<a href="https://www.npmjs.com/package/bevy-react">npm</a>
+</nav>
+</header>
+<div class="layout">
+<nav class="sidebar" aria-label="Documentation">
+<details class="nav-menu" open>
+<summary>Menu</summary>
+<ul><li><a href="../../">Introduction</a></li><li><a href="../../getting-started/">Getting started</a></li><li><a href="../../how-it-works/">How it works</a></li><li class="nav-section"><span>Elements</span><ul><li><a href="../../elements/node/">&lt;node&gt;</a></li><li><a href="../../elements/button/">&lt;button&gt;</a></li><li><a href="../../elements/text/">&lt;text&gt;</a></li><li><a href="../../elements/editable-text/">&lt;editableText&gt;</a></li><li><a href="../../elements/image/">&lt;image&gt;</a></li><li><a href="../../elements/canvas/">&lt;canvas&gt;</a></li><li><a href="../../elements/svg/">&lt;svg&gt;</a></li><li><a href="../../elements/portal/">&lt;portal&gt;</a></li><li><a href="../../elements/surface/">&lt;surface&gt;</a></li><li><a href="../../elements/root/">&lt;root&gt;</a></li><li><a href="../../elements/anchor/">&lt;anchor&gt;</a></li></ul></li><li class="nav-section"><span>Layout</span><ul><li><a href="../../layout/flexbox/">Flexbox</a></li><li><a href="../../layout/grid/">Grid</a></li><li><a href="../../layout/positioning/">Positioning</a></li></ul></li><li class="nav-section"><span>Styling</span><ul><li><a href="../../styling/units/">Units</a></li><li><a href="../../styling/colors/">Colors</a></li><li><a href="../../styling/borders/">Borders</a></li><li><a href="../../styling/spacing/">Spacing</a></li><li><a href="../../styling/sizing/">Sizing</a></li><li><a href="../../styling/layout-rounding/">Layout rounding</a></li><li><a href="../../styling/overflow/">Overflow</a></li><li><a href="../../styling/transforms/" aria-current="page">Transforms</a></li><li><a href="../../styling/3d-transforms/">3D transforms</a></li><li><a href="../../styling/shadows/">Shadows</a></li><li><a href="../../styling/filters/">Filters</a></li><li><a href="../../styling/backdrop-filters/">Backdrop filters</a></li><li><a href="../../styling/morph-filters/">Morph filters</a></li><li><a href="../../styling/gradients/">Gradients</a></li><li><a href="../../styling/background-images/">Background images</a></li><li><a href="../../styling/image-rendering/">Image rendering</a></li><li><a href="../../styling/opacity/">Opacity</a></li><li><a href="../../styling/z-index/">Z-index</a></li><li><a href="../../styling/focus-policy/">Focus policy</a></li><li><a href="../../styling/cursors/">Cursors</a></li><li><a href="../../styling/layers/">Layers</a></li></ul></li><li class="nav-section"><span>Animations</span><ul><li><a href="../../animations/style-transitions/">Style transitions</a></li><li><a href="../../animations/animated-values/">Animated values</a></li><li><a href="../../animations/interpolation/">Interpolation</a></li><li><a href="../../animations/shared-elements/">Shared elements</a></li></ul></li><li class="nav-section"><span>Communication</span><ul><li><a href="../../communication/react-to-bevy/">React to Bevy</a></li><li><a href="../../communication/bevy-to-react/">Bevy to React</a></li><li><a href="../../communication/request-response/">Request / response</a></li><li><a href="../../communication/named-nodes/">Named nodes</a></li></ul></li><li class="nav-section"><span>Events</span><ul><li><a href="../../events/mouse/">Mouse</a></li><li><a href="../../events/keyboard/">Keyboard</a></li><li><a href="../../events/gamepad/">Gamepad</a></li><li><a href="../../events/window/">Window</a></li></ul></li><li class="nav-section"><span>Extending</span><ul><li><a href="../../extending/custom-elements/">Custom elements</a></li><li><a href="../../extending/custom-styles/">Custom styles</a></li><li><a href="../../extending/custom-filters/">Custom filters</a></li></ul></li><li class="nav-section"><span>Tooling</span><ul><li><a href="../../tooling/devtools/">Devtools</a></li><li><a href="../../tooling/hot-reload/">Hot reload</a></li><li><a href="../../tooling/web/">Web builds</a></li><li><a href="../../tooling/ts-codegen/">TypeScript codegen</a></li></ul></li><li class="nav-section"><span>Reference</span><ul><li><a href="../../reference/style-properties/">Style properties</a></li><li><a href="../../reference/elements/">Elements</a></li><li><a href="../../reference/filters/">Filters</a></li></ul></li><li><a href="../../performance/">Performance</a></li></ul>
+</details>
+</nav>
+<main id="main">
+<article>
+<h1 id="transforms">Transforms</h1>
+<p>The <code>transform</code> style moves, scales and rotates a node after layout, at
+render time. The node&#39;s children move with it, while its siblings, its
+parent and the layout itself are unaffected. It maps to Bevy&#39;s
+<code>UiTransform</code>.</p>
+<h2 id="usage"><a class="anchor" href="#usage" aria-hidden="true">#</a>Usage</h2>
+<pre><code class="language-tsx"><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>node</span> <span class="token attr-name">style</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span> transform<span class="token operator">:</span> <span class="token punctuation">{</span> translateX<span class="token operator">:</span> <span class="token number">16</span><span class="token punctuation">,</span> scale<span class="token operator">:</span> <span class="token number">1.2</span><span class="token punctuation">,</span> rotate<span class="token operator">:</span> <span class="token number">45</span> <span class="token punctuation">}</span> <span class="token punctuation">}</span><span class="token punctuation">}</span></span> <span class="token punctuation">/&gt;</span></span></code></pre><h2 id="fields"><a class="anchor" href="#fields" aria-hidden="true">#</a>Fields</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Default</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>translateX</code></td>
+<td>number (px) or a unit string</td>
+<td><code>0</code></td>
+<td>Horizontal shift</td>
+</tr>
+<tr>
+<td><code>translateY</code></td>
+<td>number (px) or a unit string</td>
+<td><code>0</code></td>
+<td>Vertical shift</td>
+</tr>
+<tr>
+<td><code>scale</code></td>
+<td>number</td>
+<td><code>1</code></td>
+<td>Uniform scale of both axes</td>
+</tr>
+<tr>
+<td><code>scaleX</code></td>
+<td>number</td>
+<td><code>scale</code></td>
+<td>Horizontal scale; overrides <code>scale</code></td>
+</tr>
+<tr>
+<td><code>scaleY</code></td>
+<td>number</td>
+<td><code>scale</code></td>
+<td>Vertical scale; overrides <code>scale</code></td>
+</tr>
+<tr>
+<td><code>rotate</code></td>
+<td>number (degrees) or a unit string</td>
+<td><code>0</code></td>
+<td>Clockwise rotation</td>
+</tr>
+</tbody></table></div>
+<p>Every field is optional; an omitted field stays at its identity value.</p>
+<ul>
+<li>Translations are <a href="../../styling/units/">lengths</a>: a bare number is logical pixels, and
+a unit string such as <code>&quot;50%&quot;</code> or <code>&quot;10vw&quot;</code> is also accepted. Percentages
+resolve against the node&#39;s own size, so <code>translateX: &quot;50%&quot;</code> shifts it by
+half its width.</li>
+<li><code>rotate</code> is an angle: a bare number is degrees, and <code>&quot;45deg&quot;</code>,
+<code>&quot;1.5rad&quot;</code>, <code>&quot;0.25turn&quot;</code> and <code>&quot;100grad&quot;</code> are also accepted.</li>
+<li>Scale and rotation pivot on the node&#39;s center. There is no origin setting;
+to pivot elsewhere, use <a href="../../styling/3d-transforms/"><code>transform3d</code></a> and its <code>origin</code>.</li>
+<li>The translation is applied after scale and rotation, along the parent&#39;s
+axes: a rotated node still moves horizontally for <code>translateX</code>.</li>
+</ul>
+<h2 id="layout-and-hit-testing"><a class="anchor" href="#layout-and-hit-testing" aria-hidden="true">#</a>Layout and hit testing</h2>
+<p>A transform never triggers a relayout. Siblings keep their positions, the
+parent keeps its size, and scroll ranges do not grow, even when the
+transformed node visually overflows its box. Pointer hit testing follows
+the transformed box, so a scaled-up button is clickable over its whole
+visible area.</p>
+<h2 id="state-styles-and-transitions"><a class="anchor" href="#state-styles-and-transitions" aria-hidden="true">#</a>State styles and transitions</h2>
+<p><code>transition: { transform }</code> eases all six fields together:</p>
+<pre><code class="language-tsx"><span class="token operator">&lt;</span>button
+  style<span class="token operator">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span>
+    transform<span class="token operator">:</span> <span class="token punctuation">{</span> scale<span class="token operator">:</span> <span class="token number">1</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+    transition<span class="token operator">:</span> <span class="token punctuation">{</span> transform<span class="token operator">:</span> <span class="token punctuation">{</span> duration<span class="token operator">:</span> <span class="token number">120</span><span class="token punctuation">,</span> easing<span class="token operator">:</span> <span class="token string">&quot;easeOut&quot;</span> <span class="token punctuation">}</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+  <span class="token punctuation">}</span><span class="token punctuation">}</span>
+  pressStyle<span class="token operator">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span> transform<span class="token operator">:</span> <span class="token punctuation">{</span> scale<span class="token operator">:</span> <span class="token number">0.92</span> <span class="token punctuation">}</span> <span class="token punctuation">}</span><span class="token punctuation">}</span>
+<span class="token operator">/</span><span class="token operator">&gt;</span></code></pre><ul>
+<li>A <code>transform</code> in <code>hoverStyle</code>, <code>pressStyle</code> or <code>focusStyle</code> replaces the
+base <code>transform</code> as a whole. Repeat the fields you want to keep.</li>
+<li>Put the resting value of every field a state style changes into the base
+style, as <code>scale: 1</code> above. A field missing from the active style is not
+eased back to its identity.</li>
+<li>A translation eases only between values of the same unit. <code>&quot;0%&quot;</code> to
+<code>&quot;50%&quot;</code> eases, but an omitted translation counts as <code>0</code> pixels, so
+omitted to <code>&quot;50%&quot;</code> snaps. Write <code>translateX: &quot;0%&quot;</code> in the base style
+instead.</li>
+<li>Rotation eases numerically, the long way round: <code>350</code> to <code>10</code> turns back
+through 340 degrees. Use <code>370</code> to take the short way.</li>
+</ul>
+<p>See <a href="../../animations/style-transitions/">Style transitions</a> for timing and
+springs.</p>
+<h2 id="animated-fields"><a class="anchor" href="#animated-fields" aria-hidden="true">#</a>Animated fields</h2>
+<p>Every field accepts an inline <code>{ animated }</code> binding to a shared value,
+driven on the Bevy side every frame without re-rendering React:</p>
+<pre><code class="language-tsx"><span class="token keyword">import</span> <span class="token punctuation">{</span> useEffect <span class="token punctuation">}</span> <span class="token keyword">from</span> <span class="token string">&quot;react&quot;</span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token punctuation">{</span> useSharedValue<span class="token punctuation">,</span> withRepeat<span class="token punctuation">,</span> withTiming <span class="token punctuation">}</span> <span class="token keyword">from</span> <span class="token string">&quot;bevy-react&quot;</span><span class="token punctuation">;</span>
+
+<span class="token keyword">function</span> <span class="token function">Spinner</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+  <span class="token keyword">const</span> angle <span class="token operator">=</span> <span class="token function">useSharedValue</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token function">useEffect</span><span class="token punctuation">(</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">=&gt;</span> <span class="token punctuation">{</span>
+    angle<span class="token punctuation">.</span>value <span class="token operator">=</span> <span class="token function">withRepeat</span><span class="token punctuation">(</span><span class="token function">withTiming</span><span class="token punctuation">(</span><span class="token number">360</span><span class="token punctuation">,</span> <span class="token punctuation">{</span> duration<span class="token operator">:</span> <span class="token number">1000</span> <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token punctuation">}</span><span class="token punctuation">,</span> <span class="token punctuation">[</span>angle<span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token keyword">return</span> <span class="token operator">&lt;</span>node style<span class="token operator">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span> transform<span class="token operator">:</span> <span class="token punctuation">{</span> rotate<span class="token operator">:</span> <span class="token punctuation">{</span> animated<span class="token operator">:</span> angle <span class="token punctuation">}</span> <span class="token punctuation">}</span> <span class="token punctuation">}</span><span class="token punctuation">}</span> <span class="token operator">/</span><span class="token operator">&gt;</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span></code></pre><ul>
+<li>Bound translations are pixels and bound rotations are degrees.</li>
+<li>While any field is bound, the fields left static in the same <code>transform</code>
+stay at identity. Bind every field you need, or put the static part on a
+wrapping node.</li>
+<li>A binding parks <code>transition: { transform }</code> on that node.</li>
+<li>Bindings work in the base <code>style</code> only.</li>
+</ul>
+<p>See <a href="../../animations/animated-values/">Animated values</a> for the drivers.</p>
+<h2 id="on-composited-layers"><a class="anchor" href="#on-composited-layers" aria-hidden="true">#</a>On composited layers</h2>
+<p>When the node is a <a href="../../styling/layers/">composited layer</a> (it has a <code>filter</code>,
+<code>opacity</code> with children, <code>transform3d</code>, and so on), translating it only
+moves the cached image. Scaling or rotating it re-renders the layer&#39;s
+content every frame of the animation. To animate the scale or rotation of a
+filtered or otherwise promoted node cheaply, use
+<a href="../../styling/3d-transforms/"><code>transform3d</code></a>, which never re-renders the content.</p>
+<h2 id="limits"><a class="anchor" href="#limits" aria-hidden="true">#</a>Limits</h2>
+<ul>
+<li>2D only, with no skew and no custom pivot. For perspective, 3D rotations
+or a pivot, use <a href="../../styling/3d-transforms/"><code>transform3d</code></a>.</li>
+<li>A transformed node does not move its neighbours. To animate a change that
+should push other nodes around, animate a layout property such as <code>width</code>
+or use <a href="../../animations/style-transitions/"><code>transition: { layout }</code></a>.</li>
+</ul>
+<p>See <a href="../../reference/style-properties/#transform"><code>transform</code></a> in the style
+reference.</p>
+
+</article>
+<footer class="page-links"><a href="../../demo/?page=transforms">Open live demo</a>
+<a href="https://github.com/tulustul/bevy-react/blob/v0.7.0/examples/demos/ui/src/demos/styling/TransformDemo.tsx">Demo source</a>
+<a href="https://github.com/tulustul/bevy-react/edit/main/docs/guide/styling/transforms.md">Edit this page</a></footer>
+</main>
+</div>
+<footer class="site-footer">
+<p>bevy-react is dual-licensed under MIT or Apache-2.0. <a href="https://github.com/tulustul/bevy-react">Source on GitHub</a>.</p>
+</footer>
+</body>
+</html>

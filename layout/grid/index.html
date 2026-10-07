@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Grid · bevy-react</title>
+<meta name="description" content="Lay out children on CSS grid tracks with display grid, the track and placement syntax bevy-react accepts, auto flow and item alignment.">
+<link rel="canonical" href="https://tulustul.github.io/bevy-react/layout/grid/">
+<link rel="alternate" type="text/markdown" href="../../layout/grid.md">
+<meta property="og:title" content="Grid · bevy-react">
+<meta property="og:description" content="Lay out children on CSS grid tracks with display grid, the track and placement syntax bevy-react accepts, auto flow and item alignment.">
+<link rel="icon" href="../../logo.png">
+<link rel="stylesheet" href="../../style.css">
+<script src="../../docs.js" defer></script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="site-header">
+<a class="brand" href="../../"><img src="../../logo.png" alt="" width="74" height="74"> bevy-react</a>
+<span class="version">v0.7.0</span>
+<nav class="site-links" aria-label="Project">
+<a href="../../demo/">Live demo</a>
+<a href="https://github.com/tulustul/bevy-react">GitHub</a>
+<a href="https://docs.rs/bevy-react">docs.rs</a>
+<a href="https://www.npmjs.com/package/bevy-react">npm</a>
+</nav>
+</header>
+<div class="layout">
+<nav class="sidebar" aria-label="Documentation">
+<details class="nav-menu" open>
+<summary>Menu</summary>
+<ul><li><a href="../../">Introduction</a></li><li><a href="../../getting-started/">Getting started</a></li><li><a href="../../how-it-works/">How it works</a></li><li class="nav-section"><span>Elements</span><ul><li><a href="../../elements/node/">&lt;node&gt;</a></li><li><a href="../../elements/button/">&lt;button&gt;</a></li><li><a href="../../elements/text/">&lt;text&gt;</a></li><li><a href="../../elements/editable-text/">&lt;editableText&gt;</a></li><li><a href="../../elements/image/">&lt;image&gt;</a></li><li><a href="../../elements/canvas/">&lt;canvas&gt;</a></li><li><a href="../../elements/svg/">&lt;svg&gt;</a></li><li><a href="../../elements/portal/">&lt;portal&gt;</a></li><li><a href="../../elements/surface/">&lt;surface&gt;</a></li><li><a href="../../elements/root/">&lt;root&gt;</a></li><li><a href="../../elements/anchor/">&lt;anchor&gt;</a></li></ul></li><li class="nav-section"><span>Layout</span><ul><li><a href="../../layout/flexbox/">Flexbox</a></li><li><a href="../../layout/grid/" aria-current="page">Grid</a></li><li><a href="../../layout/positioning/">Positioning</a></li></ul></li><li class="nav-section"><span>Styling</span><ul><li><a href="../../styling/units/">Units</a></li><li><a href="../../styling/colors/">Colors</a></li><li><a href="../../styling/borders/">Borders</a></li><li><a href="../../styling/spacing/">Spacing</a></li><li><a href="../../styling/sizing/">Sizing</a></li><li><a href="../../styling/layout-rounding/">Layout rounding</a></li><li><a href="../../styling/overflow/">Overflow</a></li><li><a href="../../styling/transforms/">Transforms</a></li><li><a href="../../styling/3d-transforms/">3D transforms</a></li><li><a href="../../styling/shadows/">Shadows</a></li><li><a href="../../styling/filters/">Filters</a></li><li><a href="../../styling/backdrop-filters/">Backdrop filters</a></li><li><a href="../../styling/morph-filters/">Morph filters</a></li><li><a href="../../styling/gradients/">Gradients</a></li><li><a href="../../styling/background-images/">Background images</a></li><li><a href="../../styling/image-rendering/">Image rendering</a></li><li><a href="../../styling/opacity/">Opacity</a></li><li><a href="../../styling/z-index/">Z-index</a></li><li><a href="../../styling/focus-policy/">Focus policy</a></li><li><a href="../../styling/cursors/">Cursors</a></li><li><a href="../../styling/layers/">Layers</a></li></ul></li><li class="nav-section"><span>Animations</span><ul><li><a href="../../animations/style-transitions/">Style transitions</a></li><li><a href="../../animations/animated-values/">Animated values</a></li><li><a href="../../animations/interpolation/">Interpolation</a></li><li><a href="../../animations/shared-elements/">Shared elements</a></li></ul></li><li class="nav-section"><span>Communication</span><ul><li><a href="../../communication/react-to-bevy/">React to Bevy</a></li><li><a href="../../communication/bevy-to-react/">Bevy to React</a></li><li><a href="../../communication/request-response/">Request / response</a></li><li><a href="../../communication/named-nodes/">Named nodes</a></li></ul></li><li class="nav-section"><span>Events</span><ul><li><a href="../../events/mouse/">Mouse</a></li><li><a href="../../events/keyboard/">Keyboard</a></li><li><a href="../../events/gamepad/">Gamepad</a></li><li><a href="../../events/window/">Window</a></li></ul></li><li class="nav-section"><span>Extending</span><ul><li><a href="../../extending/custom-elements/">Custom elements</a></li><li><a href="../../extending/custom-styles/">Custom styles</a></li><li><a href="../../extending/custom-filters/">Custom filters</a></li></ul></li><li class="nav-section"><span>Tooling</span><ul><li><a href="../../tooling/devtools/">Devtools</a></li><li><a href="../../tooling/hot-reload/">Hot reload</a></li><li><a href="../../tooling/web/">Web builds</a></li><li><a href="../../tooling/ts-codegen/">TypeScript codegen</a></li></ul></li><li class="nav-section"><span>Reference</span><ul><li><a href="../../reference/style-properties/">Style properties</a></li><li><a href="../../reference/elements/">Elements</a></li><li><a href="../../reference/filters/">Filters</a></li></ul></li><li><a href="../../performance/">Performance</a></li></ul>
+</details>
+</nav>
+<main id="main">
+<article>
+<h1 id="grid">Grid</h1>
+<p><code>display: &quot;grid&quot;</code> lays out a node&#39;s children on rows and columns of tracks,
+following the CSS grid spec. Track lists and placements are CSS-style
+strings; bevy-react parses them when the style crosses to Bevy and accepts a
+subset of the CSS syntax, listed on this page.</p>
+<h2 id="usage"><a class="anchor" href="#usage" aria-hidden="true">#</a>Usage</h2>
+<pre><code class="language-tsx"><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>node</span>
+  <span class="token attr-name">style</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span>
+    display<span class="token operator">:</span> <span class="token string">&quot;grid&quot;</span><span class="token punctuation">,</span>
+    gridTemplateColumns<span class="token operator">:</span> <span class="token string">&quot;repeat(3, 1fr)&quot;</span><span class="token punctuation">,</span>
+    gridAutoRows<span class="token operator">:</span> <span class="token string">&quot;48px&quot;</span><span class="token punctuation">,</span>
+    gap<span class="token operator">:</span> <span class="token number">8</span><span class="token punctuation">,</span>
+  <span class="token punctuation">}</span><span class="token punctuation">}</span></span>
+<span class="token punctuation">&gt;</span></span><span class="token plain-text">
+  </span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>node</span> <span class="token attr-name">style</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span> gridColumn<span class="token operator">:</span> <span class="token string">&quot;span 2&quot;</span><span class="token punctuation">,</span> backgroundColor<span class="token operator">:</span> <span class="token string">&quot;#7aa2f7&quot;</span> <span class="token punctuation">}</span><span class="token punctuation">}</span></span> <span class="token punctuation">/&gt;</span></span><span class="token plain-text">
+  </span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>node</span> <span class="token attr-name">style</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span> backgroundColor<span class="token operator">:</span> <span class="token string">&quot;#9ece6a&quot;</span> <span class="token punctuation">}</span><span class="token punctuation">}</span></span> <span class="token punctuation">/&gt;</span></span><span class="token plain-text">
+  </span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>node</span> <span class="token attr-name">style</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span> backgroundColor<span class="token operator">:</span> <span class="token string">&quot;#e0af68&quot;</span> <span class="token punctuation">}</span><span class="token punctuation">}</span></span> <span class="token punctuation">/&gt;</span></span><span class="token plain-text">
+</span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>node</span><span class="token punctuation">&gt;</span></span></code></pre><h2 id="track-lists"><a class="anchor" href="#track-lists" aria-hidden="true">#</a>Track lists</h2>
+<p><code>gridTemplateColumns</code> and <code>gridTemplateRows</code> define the explicit grid as a
+space-separated list of tracks. Unset, there are no explicit tracks and
+every item lands in implicit ones.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Token</th>
+<th>Track size</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>100px</code></td>
+<td>Fixed, in logical pixels</td>
+</tr>
+<tr>
+<td><code>25%</code></td>
+<td>A percentage of the container&#39;s content box</td>
+</tr>
+<tr>
+<td><code>1fr</code></td>
+<td>A share of the free space, never below the content</td>
+</tr>
+<tr>
+<td><code>1flex</code></td>
+<td>A share of the free space that may go below it</td>
+</tr>
+<tr>
+<td><code>auto</code></td>
+<td>Fits the content, then grows into leftover space</td>
+</tr>
+<tr>
+<td><code>min-content</code></td>
+<td>The content&#39;s smallest size</td>
+</tr>
+<tr>
+<td><code>max-content</code></td>
+<td>The content&#39;s largest size</td>
+</tr>
+<tr>
+<td><code>repeat(3, 1fr)</code></td>
+<td>The track repeated a fixed number of times</td>
+</tr>
+</tbody></table></div>
+<pre><code class="language-tsx"><span class="token keyword">const</span> shell<span class="token operator">:</span> BevyStyle <span class="token operator">=</span> <span class="token punctuation">{</span>
+  display<span class="token operator">:</span> <span class="token string">&quot;grid&quot;</span><span class="token punctuation">,</span>
+  gridTemplateColumns<span class="token operator">:</span> <span class="token string">&quot;80px 1fr&quot;</span><span class="token punctuation">,</span>
+  gridTemplateRows<span class="token operator">:</span> <span class="token string">&quot;auto 1fr auto&quot;</span><span class="token punctuation">,</span>
+<span class="token punctuation">}</span><span class="token punctuation">;</span></code></pre><p><code>fr</code> behaves like CSS: a <code>1fr</code> track is <code>minmax(auto, 1fr)</code>, so a column
+with wide content stays wider than its share. <code>flex</code> is a bevy-react unit
+for <code>minmax(0, 1fr)</code>: <code>&quot;repeat(3, 1flex)&quot;</code> gives three strictly equal
+columns whatever they hold.</p>
+<p>Not accepted: <code>minmax()</code>, <code>fit-content()</code>, <code>repeat(auto-fill, …)</code> and
+<code>repeat(auto-fit, …)</code>, a <code>repeat()</code> of several tracks, named lines, bare
+numbers and viewport units. Tokens are case-sensitive. A token that doesn&#39;t
+parse is dropped with a <code>gridTrack</code> devtools warning, and the rest of the
+list still applies.</p>
+<h2 id="implicit-tracks-and-auto-flow"><a class="anchor" href="#implicit-tracks-and-auto-flow" aria-hidden="true">#</a>Implicit tracks and auto flow</h2>
+<p>Items placed outside the explicit grid, or auto-placed past its end, get
+implicit tracks:</p>
+<ul>
+<li><code>gridAutoRows</code> and <code>gridAutoColumns</code> size them. They take the same tokens
+as a template, without <code>repeat()</code>. A list cycles: <code>&quot;40px 80px&quot;</code> alternates
+short and tall rows. Unset, implicit tracks are <code>auto</code>.</li>
+<li><code>gridAutoFlow</code> sets the direction auto-placed items fill: <code>&quot;row&quot;</code> (the
+default) fills each row and adds rows, <code>&quot;column&quot;</code> fills each column and
+adds columns. <code>&quot;rowDense&quot;</code> and <code>&quot;columnDense&quot;</code> also backfill holes left by
+earlier spanning items, which can reorder items visually.</li>
+</ul>
+<h2 id="placement"><a class="anchor" href="#placement" aria-hidden="true">#</a>Placement</h2>
+<p><code>gridRow</code> and <code>gridColumn</code> place an item on grid lines, numbered from 1:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Value</th>
+<th>Placement</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>&quot;auto&quot;</code></td>
+<td>Auto-placed, one track (the default)</td>
+</tr>
+<tr>
+<td><code>&quot;2&quot;</code></td>
+<td>Starts at line 2, spans one track</td>
+</tr>
+<tr>
+<td><code>&quot;span 2&quot;</code></td>
+<td>Auto-placed, spans two tracks</td>
+</tr>
+<tr>
+<td><code>&quot;1 / 3&quot;</code></td>
+<td>From line 1 to line 3</td>
+</tr>
+<tr>
+<td><code>&quot;2 / span 3&quot;</code></td>
+<td>Starts at line 2, spans three tracks</td>
+</tr>
+<tr>
+<td><code>&quot;auto / 3&quot;</code></td>
+<td>Ends at line 3</td>
+</tr>
+<tr>
+<td><code>&quot;auto / span 2&quot;</code></td>
+<td>Same as <code>&quot;span 2&quot;</code></td>
+</tr>
+<tr>
+<td><code>&quot;2 / auto&quot;</code></td>
+<td>Same as <code>&quot;2&quot;</code></td>
+</tr>
+</tbody></table></div>
+<p>A negative line counts from the end of the explicit grid: <code>&quot;1 / -1&quot;</code> spans
+every explicit column. A line or span of <code>0</code>, a span before the slash
+(<code>&quot;span 2 / 4&quot;</code>), or anything else falls back to <code>&quot;auto&quot;</code> with a
+<code>gridPlacement</code> devtools warning.</p>
+<pre><code class="language-tsx"><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>node</span>
+  <span class="token attr-name">style</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span>
+    display<span class="token operator">:</span> <span class="token string">&quot;grid&quot;</span><span class="token punctuation">,</span>
+    gridTemplateColumns<span class="token operator">:</span> <span class="token string">&quot;repeat(3, 1fr)&quot;</span><span class="token punctuation">,</span>
+    gridTemplateRows<span class="token operator">:</span> <span class="token string">&quot;repeat(2, 48px)&quot;</span><span class="token punctuation">,</span>
+  <span class="token punctuation">}</span><span class="token punctuation">}</span></span>
+<span class="token punctuation">&gt;</span></span><span class="token plain-text">
+  </span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>node</span> <span class="token attr-name">style</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span> gridRow<span class="token operator">:</span> <span class="token string">&quot;span 2&quot;</span> <span class="token punctuation">}</span><span class="token punctuation">}</span></span> <span class="token punctuation">/&gt;</span></span><span class="token plain-text">
+  </span><span class="token punctuation">{</span>cells<span class="token punctuation">}</span><span class="token plain-text">
+</span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>node</span><span class="token punctuation">&gt;</span></span></code></pre><h2 id="alignment"><a class="anchor" href="#alignment" aria-hidden="true">#</a>Alignment</h2>
+<p>Inside its grid area, an item aligns on both axes:</p>
+<ul>
+<li>Horizontally with <code>justifyItems</code> on the container (<code>&quot;start&quot;</code>, <code>&quot;end&quot;</code>,
+<code>&quot;center&quot;</code>, <code>&quot;baseline&quot;</code>, <code>&quot;stretch&quot;</code>), overridden per item by
+<code>justifySelf</code> (<code>&quot;auto&quot;</code>, the default, uses the container&#39;s value, plus the
+same keywords).</li>
+<li>Vertically with <code>alignItems</code> on the container and <code>alignSelf</code> on the item,
+the keys described on <a href="../../layout/flexbox/#alignment">Flexbox</a>.</li>
+</ul>
+<p>Unset, an item stretches to fill its area on each axis, except on an axis
+where it has its own size (or vertically, an <code>aspectRatio</code>): there it sits at
+the start.</p>
+<p><code>justifyContent</code> (columns) and <code>alignContent</code> (rows) position the tracks
+when they don&#39;t fill the container, with the keywords listed on
+<a href="../../layout/flexbox/">Flexbox</a>. Their default in a grid is <code>&quot;stretch&quot;</code>, which grows
+<code>auto</code> tracks into the free space.</p>
+<p><code>justifyItems</code> and <code>justifySelf</code> only apply in a grid; they have no effect
+on flex items. An unrecognized keyword falls back to the default and reports
+a devtools warning.</p>
+<h2 id="gaps"><a class="anchor" href="#gaps" aria-hidden="true">#</a>Gaps</h2>
+<p><code>gap</code>, <code>rowGap</code> and <code>columnGap</code> space the tracks, between them only. See
+<a href="../../layout/flexbox/#gaps">Flexbox</a> for their values.</p>
+<h2 id="limits"><a class="anchor" href="#limits" aria-hidden="true">#</a>Limits</h2>
+<ul>
+<li>The syntax subset above: no <code>minmax()</code>, <code>fit-content()</code>, auto-fill,
+named lines or areas, and no <code>grid-area</code> shorthand or subgrid.</li>
+<li>Track lists and placements don&#39;t animate. <code>transition: { layout }</code> on the
+items eases them to their new cells when the grid changes (see
+<a href="../../animations/style-transitions/">Style transitions</a>).</li>
+</ul>
+<p>See <a href="../../reference/style-properties/#gridTemplateColumns"><code>gridTemplateColumns</code></a>,
+<a href="../../reference/style-properties/#gridTemplateRows"><code>gridTemplateRows</code></a>,
+<a href="../../reference/style-properties/#gridAutoColumns"><code>gridAutoColumns</code></a>,
+<a href="../../reference/style-properties/#gridAutoRows"><code>gridAutoRows</code></a>,
+<a href="../../reference/style-properties/#gridAutoFlow"><code>gridAutoFlow</code></a>,
+<a href="../../reference/style-properties/#gridRow"><code>gridRow</code></a>,
+<a href="../../reference/style-properties/#gridColumn"><code>gridColumn</code></a>,
+<a href="../../reference/style-properties/#justifyItems"><code>justifyItems</code></a> and
+<a href="../../reference/style-properties/#justifySelf"><code>justifySelf</code></a> in the style
+reference.</p>
+
+</article>
+<footer class="page-links"><a href="../../demo/?page=grid">Open live demo</a>
+<a href="https://github.com/tulustul/bevy-react/blob/v0.7.0/examples/demos/ui/src/demos/layout/GridDemo.tsx">Demo source</a>
+<a href="https://github.com/tulustul/bevy-react/edit/main/docs/guide/layout/grid.md">Edit this page</a></footer>
+</main>
+</div>
+<footer class="site-footer">
+<p>bevy-react is dual-licensed under MIT or Apache-2.0. <a href="https://github.com/tulustul/bevy-react">Source on GitHub</a>.</p>
+</footer>
+</body>
+</html>

@@ -1,0 +1,271 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>&lt;text&gt; · bevy-react</title>
+<meta name="description" content="The &lt;text&gt; element renders text, with inline spans, fonts registered on the Rust side, and the color, font, spacing, alignment, wrapping and shadow styles.">
+<link rel="canonical" href="https://tulustul.github.io/bevy-react/elements/text/">
+<link rel="alternate" type="text/markdown" href="../../elements/text.md">
+<meta property="og:title" content="&lt;text&gt; · bevy-react">
+<meta property="og:description" content="The &lt;text&gt; element renders text, with inline spans, fonts registered on the Rust side, and the color, font, spacing, alignment, wrapping and shadow styles.">
+<link rel="icon" href="../../logo.png">
+<link rel="stylesheet" href="../../style.css">
+<script src="../../docs.js" defer></script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="site-header">
+<a class="brand" href="../../"><img src="../../logo.png" alt="" width="74" height="74"> bevy-react</a>
+<span class="version">v0.7.0</span>
+<nav class="site-links" aria-label="Project">
+<a href="../../demo/">Live demo</a>
+<a href="https://github.com/tulustul/bevy-react">GitHub</a>
+<a href="https://docs.rs/bevy-react">docs.rs</a>
+<a href="https://www.npmjs.com/package/bevy-react">npm</a>
+</nav>
+</header>
+<div class="layout">
+<nav class="sidebar" aria-label="Documentation">
+<details class="nav-menu" open>
+<summary>Menu</summary>
+<ul><li><a href="../../">Introduction</a></li><li><a href="../../getting-started/">Getting started</a></li><li><a href="../../how-it-works/">How it works</a></li><li class="nav-section"><span>Elements</span><ul><li><a href="../../elements/node/">&lt;node&gt;</a></li><li><a href="../../elements/button/">&lt;button&gt;</a></li><li><a href="../../elements/text/" aria-current="page">&lt;text&gt;</a></li><li><a href="../../elements/editable-text/">&lt;editableText&gt;</a></li><li><a href="../../elements/image/">&lt;image&gt;</a></li><li><a href="../../elements/canvas/">&lt;canvas&gt;</a></li><li><a href="../../elements/svg/">&lt;svg&gt;</a></li><li><a href="../../elements/portal/">&lt;portal&gt;</a></li><li><a href="../../elements/surface/">&lt;surface&gt;</a></li><li><a href="../../elements/root/">&lt;root&gt;</a></li><li><a href="../../elements/anchor/">&lt;anchor&gt;</a></li></ul></li><li class="nav-section"><span>Layout</span><ul><li><a href="../../layout/flexbox/">Flexbox</a></li><li><a href="../../layout/grid/">Grid</a></li><li><a href="../../layout/positioning/">Positioning</a></li></ul></li><li class="nav-section"><span>Styling</span><ul><li><a href="../../styling/units/">Units</a></li><li><a href="../../styling/colors/">Colors</a></li><li><a href="../../styling/borders/">Borders</a></li><li><a href="../../styling/spacing/">Spacing</a></li><li><a href="../../styling/sizing/">Sizing</a></li><li><a href="../../styling/layout-rounding/">Layout rounding</a></li><li><a href="../../styling/overflow/">Overflow</a></li><li><a href="../../styling/transforms/">Transforms</a></li><li><a href="../../styling/3d-transforms/">3D transforms</a></li><li><a href="../../styling/shadows/">Shadows</a></li><li><a href="../../styling/filters/">Filters</a></li><li><a href="../../styling/backdrop-filters/">Backdrop filters</a></li><li><a href="../../styling/morph-filters/">Morph filters</a></li><li><a href="../../styling/gradients/">Gradients</a></li><li><a href="../../styling/background-images/">Background images</a></li><li><a href="../../styling/image-rendering/">Image rendering</a></li><li><a href="../../styling/opacity/">Opacity</a></li><li><a href="../../styling/z-index/">Z-index</a></li><li><a href="../../styling/focus-policy/">Focus policy</a></li><li><a href="../../styling/cursors/">Cursors</a></li><li><a href="../../styling/layers/">Layers</a></li></ul></li><li class="nav-section"><span>Animations</span><ul><li><a href="../../animations/style-transitions/">Style transitions</a></li><li><a href="../../animations/animated-values/">Animated values</a></li><li><a href="../../animations/interpolation/">Interpolation</a></li><li><a href="../../animations/shared-elements/">Shared elements</a></li></ul></li><li class="nav-section"><span>Communication</span><ul><li><a href="../../communication/react-to-bevy/">React to Bevy</a></li><li><a href="../../communication/bevy-to-react/">Bevy to React</a></li><li><a href="../../communication/request-response/">Request / response</a></li><li><a href="../../communication/named-nodes/">Named nodes</a></li></ul></li><li class="nav-section"><span>Events</span><ul><li><a href="../../events/mouse/">Mouse</a></li><li><a href="../../events/keyboard/">Keyboard</a></li><li><a href="../../events/gamepad/">Gamepad</a></li><li><a href="../../events/window/">Window</a></li></ul></li><li class="nav-section"><span>Extending</span><ul><li><a href="../../extending/custom-elements/">Custom elements</a></li><li><a href="../../extending/custom-styles/">Custom styles</a></li><li><a href="../../extending/custom-filters/">Custom filters</a></li></ul></li><li class="nav-section"><span>Tooling</span><ul><li><a href="../../tooling/devtools/">Devtools</a></li><li><a href="../../tooling/hot-reload/">Hot reload</a></li><li><a href="../../tooling/web/">Web builds</a></li><li><a href="../../tooling/ts-codegen/">TypeScript codegen</a></li></ul></li><li class="nav-section"><span>Reference</span><ul><li><a href="../../reference/style-properties/">Style properties</a></li><li><a href="../../reference/elements/">Elements</a></li><li><a href="../../reference/filters/">Filters</a></li></ul></li><li><a href="../../performance/">Performance</a></li></ul>
+</details>
+</nav>
+<main id="main">
+<article>
+<h1 id="text"><code>&lt;text&gt;</code></h1>
+<p><code>&lt;text&gt;</code> renders a block of text. It is a full styled node, like a
+<a href="../../elements/node/"><code>&lt;node&gt;</code></a>, with layout, background, border, pointer events, state
+styles and layer styles, whose content is its string children. A <code>&lt;text&gt;</code>
+nested inside another <code>&lt;text&gt;</code> is an inline span that restyles part of the
+block.</p>
+<h2 id="usage"><a class="anchor" href="#usage" aria-hidden="true">#</a>Usage</h2>
+<pre><code class="language-tsx"><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>text</span> <span class="token attr-name">style</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span> fontSize<span class="token operator">:</span> <span class="token number">18</span><span class="token punctuation">,</span> color<span class="token operator">:</span> <span class="token string">&quot;#c0caf5&quot;</span> <span class="token punctuation">}</span><span class="token punctuation">}</span></span><span class="token punctuation">&gt;</span></span><span class="token plain-text">
+  Hello, </span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>text</span> <span class="token attr-name">style</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span> fontSize<span class="token operator">:</span> <span class="token number">18</span><span class="token punctuation">,</span> color<span class="token operator">:</span> <span class="token string">&quot;#7aa2f7&quot;</span> <span class="token punctuation">}</span><span class="token punctuation">}</span></span><span class="token punctuation">&gt;</span></span><span class="token plain-text">world</span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>text</span><span class="token punctuation">&gt;</span></span><span class="token plain-text">!
+</span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>text</span><span class="token punctuation">&gt;</span></span></code></pre><h2 id="content"><a class="anchor" href="#content" aria-hidden="true">#</a>Content</h2>
+<ul>
+<li>Children are strings, numbers and nested <code>&lt;text&gt;</code> spans:
+<code>&lt;text&gt;Score: {score}&lt;/text&gt;</code> works as in the DOM.</li>
+<li>A <code>&quot;\n&quot;</code> in a string starts a new line, whatever the <code>lineBreak</code> mode.</li>
+<li>JSX whitespace rules apply: a line break between text and a tag is
+dropped, so write <code>{&quot; &quot;}</code> where a span needs a space beside it.</li>
+<li>There are no inline elements. Put images and boxes next to the text in a
+<code>&lt;node&gt;</code>, not inside the <code>&lt;text&gt;</code>.</li>
+<li>A bare string outside any <code>&lt;text&gt;</code> still renders, but as unstyled text:
+white, 20px, in Bevy&#39;s built-in font rather than your default font. Always
+wrap text in <code>&lt;text&gt;</code>.</li>
+</ul>
+<h2 id="spans"><a class="anchor" href="#spans" aria-hidden="true">#</a>Spans</h2>
+<p>A nested <code>&lt;text&gt;</code> is a span: a styled run inside its block. It takes
+<code>style</code>, <code>name</code>, <code>sharedTag</code> and <code>key</code>.</p>
+<ul>
+<li><strong>Spans don&#39;t inherit.</strong> A span&#39;s unset properties take the defaults
+(white, 20px, the default font), not the parent&#39;s values. Restate
+<code>fontSize</code> and <code>fontFamily</code> on every span, for example by spreading a
+shared style object.</li>
+<li>Bare strings do inherit: a string run takes the style of the <code>&lt;text&gt;</code>
+directly around it, block or span.</li>
+<li>On a span, <code>color</code>, <code>fontSize</code>, <code>fontWeight</code>, <code>fontFamily</code>, <code>lineHeight</code>,
+<code>letterSpacing</code> and <code>opacity</code> (which fades the span&#39;s glyphs) apply.
+<code>textAlign</code>, <code>lineBreak</code> and <code>textShadow</code> belong to the block, and box
+styles (size, padding, background, border) have no effect: a span has no
+box.</li>
+<li><code>filter</code>, <code>backdropFilter</code>, <code>morphFilter</code>, <code>transform3d</code> and <code>cache</code> on a
+span are ignored with a <code>spanLayerStyle</code> warning. Put them on the block.</li>
+<li>Spans take no event handlers or state styles (a <code>propIgnored</code> warning).
+A click on a span goes to its block.</li>
+</ul>
+<pre><code class="language-tsx"><span class="token keyword">const</span> body<span class="token operator">:</span> BevyStyle <span class="token operator">=</span> <span class="token punctuation">{</span> fontSize<span class="token operator">:</span> <span class="token number">16</span><span class="token punctuation">,</span> fontFamily<span class="token operator">:</span> <span class="token string">&quot;Inter&quot;</span> <span class="token punctuation">}</span><span class="token punctuation">;</span>
+
+<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>text</span> <span class="token attr-name">style</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span> <span class="token operator">...</span>body<span class="token punctuation">,</span> color<span class="token operator">:</span> <span class="token string">&quot;#c0caf5&quot;</span> <span class="token punctuation">}</span><span class="token punctuation">}</span></span><span class="token punctuation">&gt;</span></span><span class="token plain-text">
+  Status: </span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>text</span> <span class="token attr-name">style</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span> <span class="token operator">...</span>body<span class="token punctuation">,</span> color<span class="token operator">:</span> <span class="token string">&quot;#9ece6a&quot;</span> <span class="token punctuation">}</span><span class="token punctuation">}</span></span><span class="token punctuation">&gt;</span></span><span class="token plain-text">online</span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>text</span><span class="token punctuation">&gt;</span></span><span class="token plain-text">
+</span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>text</span><span class="token punctuation">&gt;</span></span><span class="token punctuation">;</span></code></pre><h2 id="text-styles"><a class="anchor" href="#text-styles" aria-hidden="true">#</a>Text styles</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Property</th>
+<th>Value</th>
+<th>Default</th>
+<th>Applies to</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>color</code></td>
+<td>CSS color, or an <code>{ animated }</code> color binding</td>
+<td>white</td>
+<td>block, span</td>
+</tr>
+<tr>
+<td><code>fontSize</code></td>
+<td>px number, or <code>&quot;px&quot;</code>, <code>&quot;vw&quot;</code>, <code>&quot;vh&quot;</code>, <code>&quot;vmin&quot;</code>, <code>&quot;vmax&quot;</code>, <code>&quot;rem&quot;</code> string</td>
+<td>20px</td>
+<td>block, span</td>
+</tr>
+<tr>
+<td><code>fontWeight</code></td>
+<td>keyword, or a numeric string <code>&quot;1&quot;</code> to <code>&quot;1000&quot;</code></td>
+<td><code>&quot;normal&quot;</code> (400)</td>
+<td>block, span</td>
+</tr>
+<tr>
+<td><code>fontFamily</code></td>
+<td>a registered family name</td>
+<td>the default font</td>
+<td>block, span</td>
+</tr>
+<tr>
+<td><code>lineHeight</code></td>
+<td>multiple of the font size, px string, or <code>{ px }</code></td>
+<td><code>1.2</code></td>
+<td>block, span</td>
+</tr>
+<tr>
+<td><code>letterSpacing</code></td>
+<td>px number, <code>&quot;px&quot;</code>/<code>&quot;rem&quot;</code>/<code>&quot;em&quot;</code> string, or <code>{ rem }</code></td>
+<td><code>0</code></td>
+<td>block, span</td>
+</tr>
+<tr>
+<td><code>textAlign</code></td>
+<td><code>&quot;left&quot;</code>, <code>&quot;center&quot;</code>, <code>&quot;right&quot;</code>, <code>&quot;justify&quot;</code>, <code>&quot;start&quot;</code>, <code>&quot;end&quot;</code></td>
+<td><code>&quot;left&quot;</code></td>
+<td>block</td>
+</tr>
+<tr>
+<td><code>lineBreak</code></td>
+<td><code>&quot;wordBoundary&quot;</code>, <code>&quot;anyCharacter&quot;</code>, <code>&quot;wordOrCharacter&quot;</code>, <code>&quot;noWrap&quot;</code></td>
+<td><code>&quot;wordBoundary&quot;</code></td>
+<td>block</td>
+</tr>
+<tr>
+<td><code>textShadow</code></td>
+<td><code>{ color?, offsetX?, offsetY? }</code></td>
+<td>none</td>
+<td>block</td>
+</tr>
+</tbody></table></div>
+<p><code>&lt;editableText&gt;</code> uses the same <code>color</code> and font properties.</p>
+<h3 id="color"><a class="anchor" href="#color" aria-hidden="true">#</a>Color</h3>
+<p><code>color</code> takes any <a href="../../styling/colors/">CSS color</a>; an invalid one renders
+magenta with a warning. <code>opacity</code> on the element multiplies it. There is no
+<code>transition</code> channel for <code>color</code>: to animate it, bind it to a shared value
+with <code>interpolateColor</code> (see <a href="../../animations/interpolation/">Interpolation</a>):</p>
+<pre><code class="language-tsx"><span class="token keyword">const</span> t <span class="token operator">=</span> <span class="token function">useSharedValue</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>text</span>
+  <span class="token attr-name">style</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span>
+    color<span class="token operator">:</span> <span class="token punctuation">{</span> animated<span class="token operator">:</span> <span class="token function">interpolateColor</span><span class="token punctuation">(</span>t<span class="token punctuation">,</span> <span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">]</span><span class="token punctuation">,</span> <span class="token punctuation">[</span><span class="token string">&quot;#c0caf5&quot;</span><span class="token punctuation">,</span> <span class="token string">&quot;#f7768e&quot;</span><span class="token punctuation">]</span><span class="token punctuation">)</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+  <span class="token punctuation">}</span><span class="token punctuation">}</span></span>
+<span class="token punctuation">&gt;</span></span><span class="token plain-text">
+  Alert
+</span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>text</span><span class="token punctuation">&gt;</span></span><span class="token punctuation">;</span></code></pre><h3 id="size-and-weight"><a class="anchor" href="#size-and-weight" aria-hidden="true">#</a>Size and weight</h3>
+<ul>
+<li><code>fontSize</code>: a bare number is logical pixels. <code>&quot;rem&quot;</code> is relative to Bevy&#39;s
+<code>RemSize</code> resource (20px by default); viewport units follow the window
+size. CSS <code>em</code> is not supported. An unparsable string becomes <code>0</code> (the text
+disappears) and reports a <code>fontSize</code> warning.</li>
+<li><code>fontWeight</code>: <code>&quot;thin&quot;</code> (100), <code>&quot;light&quot;</code> (300), <code>&quot;normal&quot;</code> (400),
+<code>&quot;medium&quot;</code> (500), <code>&quot;semibold&quot;</code> (600), <code>&quot;bold&quot;</code> (700), <code>&quot;black&quot;</code> (900), or
+any weight as a string, such as <code>&quot;800&quot;</code>. A JSON number is rejected, which
+the TypeScript type prevents. An unknown keyword falls back to <code>&quot;normal&quot;</code>
+with a <code>fontWeight</code> warning.</li>
+<li>Weights render only as far as the font provides them. A variable font
+covers every weight; a static font file has its own weight only, and Bevy
+does not synthesize bold.</li>
+</ul>
+<h3 id="line-height-and-letter-spacing"><a class="anchor" href="#line-height-and-letter-spacing" aria-hidden="true">#</a>Line height and letter spacing</h3>
+<ul>
+<li><code>lineHeight</code>: a number is a multiple of the font size. As a string, <code>&quot;px&quot;</code>
+is absolute, and a unitless, <code>&quot;em&quot;</code> or <code>&quot;rem&quot;</code> value is a multiple of the
+font size. <code>{ px: 24 }</code> is absolute. An invalid string falls back to <code>1.2</code>
+with a <code>lineHeight</code> warning.</li>
+<li><code>letterSpacing</code>: a number, a numeric string or a <code>&quot;px&quot;</code> string is logical
+pixels. <code>&quot;rem&quot;</code>, <code>&quot;em&quot;</code> and <code>{ rem }</code> are multiples of Bevy&#39;s <code>RemSize</code>
+(20px by default), not of the font size. <code>&quot;normal&quot;</code> is <code>0</code>. An invalid
+string falls back to <code>0</code> with a <code>letterSpacing</code> warning.</li>
+</ul>
+<h3 id="alignment-and-wrapping"><a class="anchor" href="#alignment-and-wrapping" aria-hidden="true">#</a>Alignment and wrapping</h3>
+<ul>
+<li><code>textAlign</code> aligns the lines within the block&#39;s width. A content-sized
+block is exactly as wide as its longest line, so give it a <code>width</code> (or let
+its parent stretch it) to center or right-align a single line. <code>&quot;start&quot;</code>
+and <code>&quot;end&quot;</code> follow the text direction.</li>
+<li><code>lineBreak</code> chooses where text wraps when it is wider than the block:
+<code>&quot;wordBoundary&quot;</code> breaks between words, <code>&quot;anyCharacter&quot;</code> anywhere,
+<code>&quot;wordOrCharacter&quot;</code> between words and inside words that don&#39;t fit a line
+alone, and <code>&quot;noWrap&quot;</code> never wraps (a <code>&quot;\n&quot;</code> still breaks).</li>
+<li>Text wraps against the block&#39;s own width or, without one, the width its
+parent allows.</li>
+</ul>
+<h3 id="shadow"><a class="anchor" href="#shadow" aria-hidden="true">#</a>Shadow</h3>
+<p><code>textShadow</code> draws one hard-edged copy of the text behind it: <code>offsetX</code> and
+<code>offsetY</code> in logical pixels (default <code>4</code> each) and a <code>color</code> (default black
+at 75% opacity). There is no blur. The element&#39;s <code>opacity</code> fades the shadow
+with the text.</p>
+<pre><code class="language-tsx"><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>text</span> <span class="token attr-name">style</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span> textShadow<span class="token operator">:</span> <span class="token punctuation">{</span> color<span class="token operator">:</span> <span class="token string">&quot;#000000cc&quot;</span><span class="token punctuation">,</span> offsetX<span class="token operator">:</span> <span class="token number">2</span><span class="token punctuation">,</span> offsetY<span class="token operator">:</span> <span class="token number">2</span> <span class="token punctuation">}</span> <span class="token punctuation">}</span><span class="token punctuation">}</span></span><span class="token punctuation">&gt;</span></span><span class="token plain-text">
+  Game over
+</span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>text</span><span class="token punctuation">&gt;</span></span></code></pre><h2 id="fonts"><a class="anchor" href="#fonts" aria-hidden="true">#</a>Fonts</h2>
+<p>Fonts are registered on the Rust side and selected by name from React:</p>
+<div class="tabs"><div class="tab-panel" data-lang="tsx"><p class="tab-label">TSX</p><pre><code class="language-tsx"><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>text</span> <span class="token attr-name">style</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span> fontFamily<span class="token operator">:</span> <span class="token string">&quot;Mono&quot;</span><span class="token punctuation">,</span> fontSize<span class="token operator">:</span> <span class="token number">14</span> <span class="token punctuation">}</span><span class="token punctuation">}</span></span><span class="token punctuation">&gt;</span></span><span class="token plain-text">let x = 1;</span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>text</span><span class="token punctuation">&gt;</span></span></code></pre></div><div class="tab-panel" data-lang="rust"><p class="tab-label">Rust</p><pre><code class="language-rust">app<span class="token punctuation">.</span><span class="token function">add_plugins</span><span class="token punctuation">(</span>
+    <span class="token class-name">ReactPlugins</span><span class="token punctuation">.</span><span class="token function">set</span><span class="token punctuation">(</span>
+        <span class="token class-name">ReactUiPlugin</span><span class="token punctuation">::</span><span class="token function">default</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+            <span class="token punctuation">.</span><span class="token function">default_font</span><span class="token punctuation">(</span><span class="token string">&quot;fonts/Inter-Variable.ttf&quot;</span><span class="token punctuation">)</span>
+            <span class="token punctuation">.</span><span class="token function">font</span><span class="token punctuation">(</span><span class="token string">&quot;Mono&quot;</span><span class="token punctuation">,</span> <span class="token string">&quot;fonts/JetBrainsMono.ttf&quot;</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+    <span class="token punctuation">)</span><span class="token punctuation">,</span>
+<span class="token punctuation">)</span><span class="token punctuation">;</span></code></pre></div></div>
+<ul>
+<li>Paths are asset paths, relative to the app&#39;s asset folder, loaded through
+the <code>AssetServer</code> at startup.</li>
+<li><code>default_font</code> applies to every <code>&lt;text&gt;</code>, span and <code>&lt;editableText&gt;</code>
+without a <code>fontFamily</code>. Without it, text uses Bevy&#39;s built-in font.</li>
+<li><code>fontFamily</code> names are exact and case-sensitive. An unknown name falls back
+to the default font with a <code>fontFamily</code> warning. Registering a name twice
+keeps the last path.</li>
+<li>Each family is one font file. Register a variable font to get every
+weight, or register each static weight under its own name
+(<code>&quot;Inter Bold&quot;</code>).</li>
+<li>React cannot load fonts at runtime: every family must be registered up
+front.</li>
+</ul>
+<h2 id="interaction-and-layers"><a class="anchor" href="#interaction-and-layers" aria-hidden="true">#</a>Interaction and layers</h2>
+<p>A <code>&lt;text&gt;</code> block is a full element: it takes pointer handlers, state styles
+(a <code>hoverStyle</code> color for links), scroll props, and layer styles such as
+<code>filter</code> and <code>transform3d</code>. See <a href="../../elements/node/"><code>&lt;node&gt;</code></a> for the shared props and
+<a href="../../styling/layers/">Layers</a> for what promotes a block.</p>
+<h2 id="limits"><a class="anchor" href="#limits" aria-hidden="true">#</a>Limits</h2>
+<ul>
+<li>Spans don&#39;t inherit their parent&#39;s style, and they have no box, events or
+layer styles.</li>
+<li>Unsetting both <code>textAlign</code> and <code>lineBreak</code>, including when a state style
+that set them ends, keeps the last alignment and wrapping. Set
+<code>textAlign: &quot;left&quot;</code> and <code>lineBreak: &quot;wordBoundary&quot;</code> explicitly instead.</li>
+<li>Wrapped text inside a node that combines a percentage <code>width</code> with
+<code>maxWidth</code> can be measured at the unclamped width, so the node reserves
+too little height and overlaps what follows. Size such a container in
+pixels.</li>
+<li>One shadow per block, without blur.</li>
+</ul>
+<p>See <a href="../../reference/elements/#text"><code>&lt;text&gt;</code></a> in the element reference, and
+<a href="../../reference/style-properties/#color"><code>color</code></a>,
+<a href="../../reference/style-properties/#fontSize"><code>fontSize</code></a>,
+<a href="../../reference/style-properties/#fontWeight"><code>fontWeight</code></a>,
+<a href="../../reference/style-properties/#fontFamily"><code>fontFamily</code></a>,
+<a href="../../reference/style-properties/#lineHeight"><code>lineHeight</code></a>,
+<a href="../../reference/style-properties/#letterSpacing"><code>letterSpacing</code></a>,
+<a href="../../reference/style-properties/#textAlign"><code>textAlign</code></a>,
+<a href="../../reference/style-properties/#lineBreak"><code>lineBreak</code></a> and
+<a href="../../reference/style-properties/#textShadow"><code>textShadow</code></a> in the style
+reference.</p>
+
+</article>
+<footer class="page-links"><a href="../../demo/?page=text">Open live demo</a>
+<a href="https://github.com/tulustul/bevy-react/blob/v0.7.0/examples/demos/ui/src/demos/elements/TextDemo.tsx">Demo source</a>
+<a href="https://github.com/tulustul/bevy-react/edit/main/docs/guide/elements/text.md">Edit this page</a></footer>
+</main>
+</div>
+<footer class="site-footer">
+<p>bevy-react is dual-licensed under MIT or Apache-2.0. <a href="https://github.com/tulustul/bevy-react">Source on GitHub</a>.</p>
+</footer>
+</body>
+</html>

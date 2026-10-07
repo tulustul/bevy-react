@@ -1,0 +1,556 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Filters · bevy-react</title>
+<meta name="description" content="Run GPU filter chains over a node and its subtree with the filter style - blur, color ops, bloom, shadows, outlines, gradient text and pinch.">
+<link rel="canonical" href="https://tulustul.github.io/bevy-react/styling/filters/">
+<link rel="alternate" type="text/markdown" href="../../styling/filters.md">
+<meta property="og:title" content="Filters · bevy-react">
+<meta property="og:description" content="Run GPU filter chains over a node and its subtree with the filter style - blur, color ops, bloom, shadows, outlines, gradient text and pinch.">
+<link rel="icon" href="../../logo.png">
+<link rel="stylesheet" href="../../style.css">
+<script src="../../docs.js" defer></script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="site-header">
+<a class="brand" href="../../"><img src="../../logo.png" alt="" width="74" height="74"> bevy-react</a>
+<span class="version">v0.7.0</span>
+<nav class="site-links" aria-label="Project">
+<a href="../../demo/">Live demo</a>
+<a href="https://github.com/tulustul/bevy-react">GitHub</a>
+<a href="https://docs.rs/bevy-react">docs.rs</a>
+<a href="https://www.npmjs.com/package/bevy-react">npm</a>
+</nav>
+</header>
+<div class="layout">
+<nav class="sidebar" aria-label="Documentation">
+<details class="nav-menu" open>
+<summary>Menu</summary>
+<ul><li><a href="../../">Introduction</a></li><li><a href="../../getting-started/">Getting started</a></li><li><a href="../../how-it-works/">How it works</a></li><li class="nav-section"><span>Elements</span><ul><li><a href="../../elements/node/">&lt;node&gt;</a></li><li><a href="../../elements/button/">&lt;button&gt;</a></li><li><a href="../../elements/text/">&lt;text&gt;</a></li><li><a href="../../elements/editable-text/">&lt;editableText&gt;</a></li><li><a href="../../elements/image/">&lt;image&gt;</a></li><li><a href="../../elements/canvas/">&lt;canvas&gt;</a></li><li><a href="../../elements/svg/">&lt;svg&gt;</a></li><li><a href="../../elements/portal/">&lt;portal&gt;</a></li><li><a href="../../elements/surface/">&lt;surface&gt;</a></li><li><a href="../../elements/root/">&lt;root&gt;</a></li><li><a href="../../elements/anchor/">&lt;anchor&gt;</a></li></ul></li><li class="nav-section"><span>Layout</span><ul><li><a href="../../layout/flexbox/">Flexbox</a></li><li><a href="../../layout/grid/">Grid</a></li><li><a href="../../layout/positioning/">Positioning</a></li></ul></li><li class="nav-section"><span>Styling</span><ul><li><a href="../../styling/units/">Units</a></li><li><a href="../../styling/colors/">Colors</a></li><li><a href="../../styling/borders/">Borders</a></li><li><a href="../../styling/spacing/">Spacing</a></li><li><a href="../../styling/sizing/">Sizing</a></li><li><a href="../../styling/layout-rounding/">Layout rounding</a></li><li><a href="../../styling/overflow/">Overflow</a></li><li><a href="../../styling/transforms/">Transforms</a></li><li><a href="../../styling/3d-transforms/">3D transforms</a></li><li><a href="../../styling/shadows/">Shadows</a></li><li><a href="../../styling/filters/" aria-current="page">Filters</a></li><li><a href="../../styling/backdrop-filters/">Backdrop filters</a></li><li><a href="../../styling/morph-filters/">Morph filters</a></li><li><a href="../../styling/gradients/">Gradients</a></li><li><a href="../../styling/background-images/">Background images</a></li><li><a href="../../styling/image-rendering/">Image rendering</a></li><li><a href="../../styling/opacity/">Opacity</a></li><li><a href="../../styling/z-index/">Z-index</a></li><li><a href="../../styling/focus-policy/">Focus policy</a></li><li><a href="../../styling/cursors/">Cursors</a></li><li><a href="../../styling/layers/">Layers</a></li></ul></li><li class="nav-section"><span>Animations</span><ul><li><a href="../../animations/style-transitions/">Style transitions</a></li><li><a href="../../animations/animated-values/">Animated values</a></li><li><a href="../../animations/interpolation/">Interpolation</a></li><li><a href="../../animations/shared-elements/">Shared elements</a></li></ul></li><li class="nav-section"><span>Communication</span><ul><li><a href="../../communication/react-to-bevy/">React to Bevy</a></li><li><a href="../../communication/bevy-to-react/">Bevy to React</a></li><li><a href="../../communication/request-response/">Request / response</a></li><li><a href="../../communication/named-nodes/">Named nodes</a></li></ul></li><li class="nav-section"><span>Events</span><ul><li><a href="../../events/mouse/">Mouse</a></li><li><a href="../../events/keyboard/">Keyboard</a></li><li><a href="../../events/gamepad/">Gamepad</a></li><li><a href="../../events/window/">Window</a></li></ul></li><li class="nav-section"><span>Extending</span><ul><li><a href="../../extending/custom-elements/">Custom elements</a></li><li><a href="../../extending/custom-styles/">Custom styles</a></li><li><a href="../../extending/custom-filters/">Custom filters</a></li></ul></li><li class="nav-section"><span>Tooling</span><ul><li><a href="../../tooling/devtools/">Devtools</a></li><li><a href="../../tooling/hot-reload/">Hot reload</a></li><li><a href="../../tooling/web/">Web builds</a></li><li><a href="../../tooling/ts-codegen/">TypeScript codegen</a></li></ul></li><li class="nav-section"><span>Reference</span><ul><li><a href="../../reference/style-properties/">Style properties</a></li><li><a href="../../reference/elements/">Elements</a></li><li><a href="../../reference/filters/">Filters</a></li></ul></li><li><a href="../../performance/">Performance</a></li></ul>
+</details>
+</nav>
+<main id="main">
+<article>
+<h1 id="filters">Filters</h1>
+<p>The <code>filter</code> style runs a chain of GPU shader passes over a node&#39;s rendered
+result: the node itself and its whole subtree, as one image. bevy-react
+ships fourteen filters (blur, color adjustments, bloom, drop shadows,
+outlines, gradient recolors and a pinch distortion), and apps can register
+their own.</p>
+<h2 id="usage"><a class="anchor" href="#usage" aria-hidden="true">#</a>Usage</h2>
+<pre><code class="language-tsx"><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>image</span> <span class="token attr-name">src</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">&quot;</span>images/parrot.png<span class="token punctuation">&quot;</span></span> <span class="token attr-name">style</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span> filter<span class="token operator">:</span> <span class="token punctuation">{</span> name<span class="token operator">:</span> <span class="token string">&quot;grayscale&quot;</span> <span class="token punctuation">}</span> <span class="token punctuation">}</span><span class="token punctuation">}</span></span> <span class="token punctuation">/&gt;</span></span></code></pre><p>A chain runs its entries in array order, each one over the previous one&#39;s
+output:</p>
+<pre><code class="language-tsx"><span class="token operator">&lt;</span>node
+  style<span class="token operator">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span>
+    filter<span class="token operator">:</span> <span class="token punctuation">[</span><span class="token punctuation">{</span> name<span class="token operator">:</span> <span class="token string">&quot;blur&quot;</span><span class="token punctuation">,</span> params<span class="token operator">:</span> <span class="token punctuation">{</span> radius<span class="token operator">:</span> <span class="token number">4</span> <span class="token punctuation">}</span> <span class="token punctuation">}</span><span class="token punctuation">,</span> <span class="token punctuation">{</span> name<span class="token operator">:</span> <span class="token string">&quot;sepia&quot;</span> <span class="token punctuation">}</span><span class="token punctuation">]</span><span class="token punctuation">,</span>
+  <span class="token punctuation">}</span><span class="token punctuation">}</span>
+<span class="token operator">&gt;</span>
+  <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>text</span><span class="token punctuation">&gt;</span></span><span class="token plain-text">Old photo</span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>text</span><span class="token punctuation">&gt;</span></span>
+<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>node</span><span class="token punctuation">&gt;</span></span></code></pre><h2 id="chains"><a class="anchor" href="#chains" aria-hidden="true">#</a>Chains</h2>
+<p>The value is one <code>{ name, params }</code> entry or an ordered array of entries.</p>
+<ul>
+<li><code>params</code> and every param in it are optional. An omitted param takes the
+filter&#39;s default, which for built-ins is a visible effect, unlike CSS: a
+bare <code>{ name: &quot;blur&quot; }</code> is a 20px blur, and a bare <code>{ name: &quot;grayscale&quot; }</code>
+is full grayscale.</li>
+<li>Names and params are typed from your generated <code>bevy.ts</code>, which lists the
+built-ins and your own filters (see
+<a href="../../tooling/ts-codegen/">TypeScript codegen</a>). Without generated
+bindings the field accepts no value.</li>
+<li>Length params take a number of logical pixels or a string like <code>&quot;12px&quot;</code>. Angle
+params take degrees, or a string such as <code>&quot;0.5turn&quot;</code> or <code>&quot;1rad&quot;</code>. Color
+params take a CSS color string.</li>
+<li>An entry with an unknown name is skipped with a <code>filterUnknown</code> devtools
+warning, and an entry with invalid params (an unknown param, a <code>%</code> blur
+radius) with a <code>filterParams</code> warning. The rest of the chain still runs.</li>
+<li>Morph filters (<code>crossfade</code>, <code>linearWipe</code>, <code>pixelize</code>) belong to
+<a href="../../styling/morph-filters/"><code>morphFilter</code></a> and are rejected here the same way.</li>
+<li>An empty array is the same as no filter.</li>
+</ul>
+<h2 id="what-gets-filtered"><a class="anchor" href="#what-gets-filtered" aria-hidden="true">#</a>What gets filtered</h2>
+<ul>
+<li>A non-empty <code>filter</code> promotes the node to a
+<a href="../../styling/layers/">composited layer</a>: the subtree is rendered into a texture
+once, and the chain runs over that texture. Changing a param re-runs only
+the filter passes, not the content, so animating params is cheap.</li>
+<li>The image includes the node&#39;s own background and border. It works on a
+leaf too: an <code>&lt;image&gt;</code>, a <code>&lt;text&gt;</code> or an empty colored <code>&lt;node&gt;</code>.</li>
+<li>Filters that reach outside the content (a blur, a glow, a shadow, an
+outline) enlarge the layer by their reach on every side, so their effect
+is not cut off at the node&#39;s edge. The reach of a chain is the sum of its
+entries&#39; reaches.</li>
+<li>An ancestor&#39;s <code>overflow</code> clipping clips the filtered result, as on the
+web.</li>
+<li><code>opacity</code> on the same node fades the filtered result as a whole.</li>
+<li><code>filter</code> and <a href="../../styling/backdrop-filters/"><code>backdropFilter</code></a> are independent and
+can be combined on one node.</li>
+</ul>
+<h2 id="built-in-filters"><a class="anchor" href="#built-in-filters" aria-hidden="true">#</a>Built-in filters</h2>
+<p>Each table lists the params and their defaults. Lengths are logical pixels
+and angles are degrees.</p>
+<h3 id="color-adjustments"><a class="anchor" href="#color-adjustments" aria-hidden="true">#</a>Color adjustments</h3>
+<p>Each takes one param and recolors every pixel, keeping its alpha:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Filter</th>
+<th>Param</th>
+<th>Default</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>brightness</code></td>
+<td><code>amount</code></td>
+<td><code>1</code></td>
+<td>Multiplies the color: <code>0</code> is black, above <code>1</code> brightens</td>
+</tr>
+<tr>
+<td><code>contrast</code></td>
+<td><code>amount</code></td>
+<td><code>1</code></td>
+<td>Scales the distance from mid-gray: <code>0</code> is flat gray</td>
+</tr>
+<tr>
+<td><code>saturate</code></td>
+<td><code>amount</code></td>
+<td><code>1</code></td>
+<td><code>0</code> is grayscale, above <code>1</code> oversaturates</td>
+</tr>
+<tr>
+<td><code>grayscale</code></td>
+<td><code>amount</code></td>
+<td><code>1</code></td>
+<td>Mix toward grayscale: <code>0</code> none, <code>1</code> full</td>
+</tr>
+<tr>
+<td><code>sepia</code></td>
+<td><code>amount</code></td>
+<td><code>1</code></td>
+<td>Mix toward sepia: <code>0</code> none, <code>1</code> full</td>
+</tr>
+<tr>
+<td><code>invert</code></td>
+<td><code>amount</code></td>
+<td><code>1</code></td>
+<td>Mix toward the inverted color: <code>0</code> none, <code>1</code> full</td>
+</tr>
+<tr>
+<td><code>hueRotate</code></td>
+<td><code>angle</code></td>
+<td><code>0</code></td>
+<td>Rotates the hue around the color wheel</td>
+</tr>
+</tbody></table></div>
+<p>The defaults follow CSS: <code>brightness</code>, <code>contrast</code> and <code>saturate</code> default to
+no change, <code>grayscale</code>, <code>sepia</code> and <code>invert</code> to the full effect.</p>
+<h3 id="blur"><a class="anchor" href="#blur" aria-hidden="true">#</a><code>blur</code></h3>
+<p>A Gaussian blur.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Param</th>
+<th>Default</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>radius</code></td>
+<td><code>20</code></td>
+<td>Blur radius; the blur reaches three times this far.</td>
+</tr>
+</tbody></table></div>
+<h3 id="bloom"><a class="anchor" href="#bloom" aria-hidden="true">#</a><code>bloom</code></h3>
+<p>A glow: bright areas bleed light over their surroundings.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Param</th>
+<th>Default</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>radius</code></td>
+<td><code>12</code></td>
+<td>How far the glow spreads (it reaches three times this far)</td>
+</tr>
+<tr>
+<td><code>threshold</code></td>
+<td><code>0.7</code></td>
+<td>Brightness (<code>0</code> to <code>1</code>) above which pixels glow</td>
+</tr>
+<tr>
+<td><code>intensity</code></td>
+<td><code>1</code></td>
+<td>Strength of the glow added on top; <code>0</code> is no effect</td>
+</tr>
+</tbody></table></div>
+<p><code>threshold</code> is perceived brightness: <code>1</code> makes nothing glow, <code>0</code> makes
+everything glow.</p>
+<h3 id="chromaticaberration"><a class="anchor" href="#chromaticaberration" aria-hidden="true">#</a><code>chromaticAberration</code></h3>
+<p>Color fringing: the red channel shifts one way, blue the opposite way, and
+green stays.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Param</th>
+<th>Default</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>offset</code></td>
+<td><code>4</code></td>
+<td>Shift distance of the red and blue channels</td>
+</tr>
+<tr>
+<td><code>angle</code></td>
+<td><code>0</code></td>
+<td>Shift direction, clockwise from the +x axis (<code>0</code> is right)</td>
+</tr>
+<tr>
+<td><code>rotation</code></td>
+<td><code>0</code></td>
+<td>Swirl: red turns this many degrees about the center, blue the other way</td>
+</tr>
+</tbody></table></div>
+<p><code>rotation</code> is a plain number of degrees (no unit strings). The swirl grows
+toward the edges and leaves the center clean.</p>
+<h3 id="gradientmap"><a class="anchor" href="#gradientmap" aria-hidden="true">#</a><code>gradientMap</code></h3>
+<p>Recolors the content with a linear gradient laid across the node, keeping
+the content&#39;s alpha. On text, this is gradient text.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Param</th>
+<th>Default</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>angle</code></td>
+<td><code>0</code></td>
+<td>Gradient direction: <code>0</code> points up, clockwise, like <code>backgroundGradient</code></td>
+</tr>
+<tr>
+<td><code>stops</code></td>
+<td><code>#38bdf8</code> to <code>#a78bfa</code></td>
+<td>Up to six <code>{ color, position? }</code> stops</td>
+</tr>
+<tr>
+<td><code>amount</code></td>
+<td><code>1</code></td>
+<td>Mix from the original color (<code>0</code>) to the gradient (<code>1</code>)</td>
+</tr>
+</tbody></table></div>
+<pre><code class="language-tsx"><span class="token operator">&lt;</span>text
+  style<span class="token operator">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span>
+    fontSize<span class="token operator">:</span> <span class="token number">48</span><span class="token punctuation">,</span>
+    filter<span class="token operator">:</span> <span class="token punctuation">{</span>
+      name<span class="token operator">:</span> <span class="token string">&quot;gradientMap&quot;</span><span class="token punctuation">,</span>
+      params<span class="token operator">:</span> <span class="token punctuation">{</span>
+        angle<span class="token operator">:</span> <span class="token number">120</span><span class="token punctuation">,</span>
+        stops<span class="token operator">:</span> <span class="token punctuation">[</span>
+          <span class="token punctuation">{</span> color<span class="token operator">:</span> <span class="token string">&quot;#38bdf8&quot;</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+          <span class="token punctuation">{</span> color<span class="token operator">:</span> <span class="token string">&quot;#a78bfa&quot;</span><span class="token punctuation">,</span> position<span class="token operator">:</span> <span class="token number">0.6</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+          <span class="token punctuation">{</span> color<span class="token operator">:</span> <span class="token string">&quot;#f472b6&quot;</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+        <span class="token punctuation">]</span><span class="token punctuation">,</span>
+      <span class="token punctuation">}</span><span class="token punctuation">,</span>
+    <span class="token punctuation">}</span><span class="token punctuation">,</span>
+  <span class="token punctuation">}</span><span class="token punctuation">}</span>
+<span class="token operator">&gt;</span>
+  Gradient
+<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>text</span><span class="token punctuation">&gt;</span></span></code></pre><ul>
+<li><code>position</code> is a fraction from <code>0</code> to <code>1</code> along the gradient line, not a
+percentage. Missing positions are spread evenly, as in CSS.</li>
+<li>The gradient spans the node&#39;s border box; the reach of other filters in
+the chain does not stretch it.</li>
+<li>A stop&#39;s alpha scales the mix locally: a transparent stop leaves the
+original color.</li>
+<li>Colors interpolate in linear RGB, which can differ slightly from the same
+stops in <code>backgroundGradient</code>.</li>
+</ul>
+<h3 id="outline"><a class="anchor" href="#outline" aria-hidden="true">#</a><code>outline</code></h3>
+<p>A ring of color around the content&#39;s silhouette, drawn under the content:
+outlined text, sticker-style icons.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Param</th>
+<th>Default</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>width</code></td>
+<td><code>2</code></td>
+<td>Ring width</td>
+</tr>
+<tr>
+<td><code>color</code></td>
+<td><code>&quot;black&quot;</code></td>
+<td>Ring color</td>
+</tr>
+<tr>
+<td><code>softness</code></td>
+<td><code>0</code></td>
+<td>Feathers the outer edge over this many more pixels, like a glow</td>
+</tr>
+</tbody></table></div>
+<p>The outline follows whatever the chain has produced so far:
+<code>[gradientMap, outline]</code> outlines the recolored glyphs.</p>
+<h3 id="shadow"><a class="anchor" href="#shadow" aria-hidden="true">#</a><code>shadow</code></h3>
+<p>A drop shadow of the content&#39;s silhouette, like CSS <code>drop-shadow()</code>, drawn
+under the content.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Param</th>
+<th>Default</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>color</code></td>
+<td><code>rgba(0,0,0,0.6)</code></td>
+<td>Shadow color</td>
+</tr>
+<tr>
+<td><code>offsetX</code></td>
+<td><code>0</code></td>
+<td>Horizontal offset; positive moves right</td>
+</tr>
+<tr>
+<td><code>offsetY</code></td>
+<td><code>4</code></td>
+<td>Vertical offset; positive moves down</td>
+</tr>
+<tr>
+<td><code>spread</code></td>
+<td><code>6</code></td>
+<td>Blur radius of the shadow (not a CSS spread)</td>
+</tr>
+</tbody></table></div>
+<p>Unlike <code>boxShadow</code>, which shadows the node&#39;s box, <code>shadow</code> follows the
+shape of what is drawn: glyphs, transparent images, rounded children.</p>
+<h3 id="pinch"><a class="anchor" href="#pinch" aria-hidden="true">#</a><code>pinch</code></h3>
+<p>Squeezes the content toward a point, or bulges it away, with optional
+lighting that shades the distortion like a dented surface.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Param</th>
+<th>Default</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>x</code>, <code>y</code></td>
+<td><code>0.5</code></td>
+<td>Center of the effect, <code>0</code> to <code>1</code> across the node</td>
+</tr>
+<tr>
+<td><code>strength</code></td>
+<td><code>0.5</code></td>
+<td><code>1</code> is a full pinch, <code>-1</code> a full bulge, <code>0</code> no effect</td>
+</tr>
+<tr>
+<td><code>radius</code></td>
+<td><code>0.8</code></td>
+<td>Size of the effect, as a fraction of the node&#39;s larger side</td>
+</tr>
+<tr>
+<td><code>light</code></td>
+<td><code>0</code></td>
+<td>Diffuse shading; <code>1</code> is nominal, more overdrives</td>
+</tr>
+<tr>
+<td><code>lightAngle</code></td>
+<td><code>-135</code></td>
+<td>Where the light comes from, clockwise from +x (<code>-135</code> is top-left)</td>
+</tr>
+<tr>
+<td><code>gloss</code></td>
+<td><code>0</code></td>
+<td>White specular highlight; <code>1</code> is nominal</td>
+</tr>
+<tr>
+<td><code>glossSize</code></td>
+<td><code>0.3</code></td>
+<td>Highlight size, from <code>0</code> (a pinpoint) to <code>1</code> (a broad sheen)</td>
+</tr>
+<tr>
+<td><code>outerSoftness</code></td>
+<td><code>0.5</code></td>
+<td>How the effect meets its rim: <code>0</code> a crease, <code>1</code> imperceptible</td>
+</tr>
+<tr>
+<td><code>innerSoftness</code></td>
+<td><code>0.5</code></td>
+<td>How it peaks at its center: <code>0</code> a point, <code>1</code> a flat floor</td>
+</tr>
+</tbody></table></div>
+<p>Every param is relative to the node, so the effect scales with it. <code>x</code> and
+<code>y</code> use the same <code>0</code> to <code>1</code> coordinates as pointer events, so a pinch can
+follow the cursor directly:</p>
+<pre><code class="language-tsx"><span class="token keyword">import</span> <span class="token punctuation">{</span> useSharedValue<span class="token punctuation">,</span> withSpring<span class="token punctuation">,</span> withTiming <span class="token punctuation">}</span> <span class="token keyword">from</span> <span class="token string">&quot;bevy-react&quot;</span><span class="token punctuation">;</span>
+
+<span class="token keyword">function</span> <span class="token function">PinchCard</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+  <span class="token keyword">const</span> strength <span class="token operator">=</span> <span class="token function">useSharedValue</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token keyword">const</span> x <span class="token operator">=</span> <span class="token function">useSharedValue</span><span class="token punctuation">(</span><span class="token number">0.5</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token keyword">const</span> y <span class="token operator">=</span> <span class="token function">useSharedValue</span><span class="token punctuation">(</span><span class="token number">0.5</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token keyword">return</span> <span class="token punctuation">(</span>
+    <span class="token operator">&lt;</span>node
+      onPointerDown<span class="token operator">=</span><span class="token punctuation">{</span><span class="token punctuation">(</span>e<span class="token punctuation">)</span> <span class="token operator">=&gt;</span> <span class="token punctuation">{</span>
+        x<span class="token punctuation">.</span>value <span class="token operator">=</span> e<span class="token punctuation">.</span>x<span class="token punctuation">;</span>
+        y<span class="token punctuation">.</span>value <span class="token operator">=</span> e<span class="token punctuation">.</span>y<span class="token punctuation">;</span>
+        strength<span class="token punctuation">.</span>value <span class="token operator">=</span> <span class="token function">withTiming</span><span class="token punctuation">(</span><span class="token number">0.6</span><span class="token punctuation">,</span> <span class="token punctuation">{</span> duration<span class="token operator">:</span> <span class="token number">120</span> <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+      <span class="token punctuation">}</span><span class="token punctuation">}</span>
+      onPointerUp<span class="token operator">=</span><span class="token punctuation">{</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">=&gt;</span> <span class="token punctuation">{</span>
+        strength<span class="token punctuation">.</span>value <span class="token operator">=</span> <span class="token function">withSpring</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+      <span class="token punctuation">}</span><span class="token punctuation">}</span>
+      style<span class="token operator">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span>
+        filter<span class="token operator">:</span> <span class="token punctuation">{</span>
+          name<span class="token operator">:</span> <span class="token string">&quot;pinch&quot;</span><span class="token punctuation">,</span>
+          params<span class="token operator">:</span> <span class="token punctuation">{</span>
+            x<span class="token operator">:</span> <span class="token punctuation">{</span> animated<span class="token operator">:</span> x <span class="token punctuation">}</span><span class="token punctuation">,</span>
+            y<span class="token operator">:</span> <span class="token punctuation">{</span> animated<span class="token operator">:</span> y <span class="token punctuation">}</span><span class="token punctuation">,</span>
+            strength<span class="token operator">:</span> <span class="token punctuation">{</span> animated<span class="token operator">:</span> strength <span class="token punctuation">}</span><span class="token punctuation">,</span>
+            radius<span class="token operator">:</span> <span class="token number">0.6</span><span class="token punctuation">,</span>
+          <span class="token punctuation">}</span><span class="token punctuation">,</span>
+        <span class="token punctuation">}</span><span class="token punctuation">,</span>
+      <span class="token punctuation">}</span><span class="token punctuation">}</span>
+    <span class="token operator">&gt;</span>
+      <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>text</span><span class="token punctuation">&gt;</span></span><span class="token plain-text">Press me</span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>text</span><span class="token punctuation">&gt;</span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>node</span><span class="token punctuation">&gt;</span></span>
+  <span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span></code></pre><p>The <a href="../../reference/filters/">filter reference</a> lists the same params
+with their types.</p>
+<h2 id="transitions"><a class="anchor" href="#transitions" aria-hidden="true">#</a>Transitions</h2>
+<p><code>transition: { filter }</code> eases the chain between style states (the base
+<code>style</code>, <code>hoverStyle</code>, <code>pressStyle</code>, <code>focusStyle</code>):</p>
+<ul>
+<li>Same names in the same order: every param interpolates. Colors ease in
+linear RGB, and angles numerically (<code>350</code> to <code>10</code> goes the long way).</li>
+<li>One chain extends the other at the end, built-in filters only: the extra
+entries fade through their no-effect values, such as a blur from radius
+<code>0</code> or a shadow from transparent. They do not start from the defaults.</li>
+<li>Anything else (different names, a reordered chain, a custom filter added)
+swaps at the halfway point.</li>
+<li>Easing to no chain at all, by removing <code>filter</code> or setting <code>[]</code>, snaps:
+the filter disappears at once.</li>
+</ul>
+<p>Keep a no-effect entry in the base style when the filter should fade out as
+well as in:</p>
+<pre><code class="language-tsx"><span class="token operator">&lt;</span>node
+  style<span class="token operator">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span>
+    filter<span class="token operator">:</span> <span class="token punctuation">{</span> name<span class="token operator">:</span> <span class="token string">&quot;blur&quot;</span><span class="token punctuation">,</span> params<span class="token operator">:</span> <span class="token punctuation">{</span> radius<span class="token operator">:</span> <span class="token number">0</span> <span class="token punctuation">}</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+    transition<span class="token operator">:</span> <span class="token punctuation">{</span> filter<span class="token operator">:</span> <span class="token punctuation">{</span> duration<span class="token operator">:</span> <span class="token number">250</span> <span class="token punctuation">}</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+  <span class="token punctuation">}</span><span class="token punctuation">}</span>
+  hoverStyle<span class="token operator">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span> filter<span class="token operator">:</span> <span class="token punctuation">{</span> name<span class="token operator">:</span> <span class="token string">&quot;blur&quot;</span><span class="token punctuation">,</span> params<span class="token operator">:</span> <span class="token punctuation">{</span> radius<span class="token operator">:</span> <span class="token number">6</span> <span class="token punctuation">}</span> <span class="token punctuation">}</span> <span class="token punctuation">}</span><span class="token punctuation">}</span>
+<span class="token operator">/</span><span class="token operator">&gt;</span></code></pre><p>A <code>filter</code> in a state style replaces the base chain as a whole. A
+no-effect entry still keeps the node a composited layer, with its memory
+and capture cost (see <a href="../../styling/layers/">Layers</a>).</p>
+<h2 id="animated-params"><a class="anchor" href="#animated-params" aria-hidden="true">#</a>Animated params</h2>
+<p>Any param accepts an inline <code>{ animated }</code> binding to a shared value,
+driven every frame on the Bevy side without re-rendering React:</p>
+<pre><code class="language-tsx"><span class="token keyword">import</span> <span class="token punctuation">{</span> useSharedValue<span class="token punctuation">,</span> withTiming <span class="token punctuation">}</span> <span class="token keyword">from</span> <span class="token string">&quot;bevy-react&quot;</span><span class="token punctuation">;</span>
+
+<span class="token keyword">function</span> <span class="token function">Reveal</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+  <span class="token keyword">const</span> radius <span class="token operator">=</span> <span class="token function">useSharedValue</span><span class="token punctuation">(</span><span class="token number">12</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token keyword">return</span> <span class="token punctuation">(</span>
+    <span class="token operator">&lt;</span>node
+      onPointerEnter<span class="token operator">=</span><span class="token punctuation">{</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">=&gt;</span> <span class="token punctuation">{</span>
+        radius<span class="token punctuation">.</span>value <span class="token operator">=</span> <span class="token function">withTiming</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+      <span class="token punctuation">}</span><span class="token punctuation">}</span>
+      style<span class="token operator">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span>
+        filter<span class="token operator">:</span> <span class="token punctuation">{</span>
+          name<span class="token operator">:</span> <span class="token string">&quot;blur&quot;</span><span class="token punctuation">,</span>
+          params<span class="token operator">:</span> <span class="token punctuation">{</span> radius<span class="token operator">:</span> <span class="token punctuation">{</span> animated<span class="token operator">:</span> radius<span class="token punctuation">,</span> seed<span class="token operator">:</span> <span class="token number">12</span> <span class="token punctuation">}</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+        <span class="token punctuation">}</span><span class="token punctuation">,</span>
+      <span class="token punctuation">}</span><span class="token punctuation">}</span>
+    <span class="token operator">/</span><span class="token operator">&gt;</span>
+  <span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span></code></pre><ul>
+<li>Values are in the param&#39;s units: pixels for lengths, degrees for angles.
+Color params take an <code>interpolateColor</code> binding.</li>
+<li><code>gradientMap</code> stops cannot be bound; its <code>angle</code> and <code>amount</code> can.</li>
+<li>Bindings work in the base <code>style</code> only. A binding in <code>hoverStyle</code>,
+<code>pressStyle</code> or <code>focusStyle</code> is ignored with a warning.</li>
+<li>Any binding on a <code>filter</code> param parks <code>transition: { filter }</code> for that
+node: the binding wins.</li>
+<li><code>seed</code> is the static value used in the binding&#39;s place for what is
+computed up front, such as how far a blur reaches outside the node. Size
+it for the largest value the animation reaches. Without a seed the
+filter&#39;s default is used (20px for <code>blur</code>).</li>
+</ul>
+<p>See <a href="../../animations/animated-values/">Animated values</a> for the drivers.</p>
+<h2 id="shader-compilation"><a class="anchor" href="#shader-compilation" aria-hidden="true">#</a>Shader compilation</h2>
+<p>Each filter is a GPU pipeline, compiled in the background before its first
+use. While a node&#39;s filters are compiling, the node is not drawn at all,
+rather than flashing unfiltered. By default every built-in and registered
+filter is compiled at startup, so this normally only shows if you narrow
+it with <code>precompile_filters</code>:</p>
+<pre><code class="language-rust"><span class="token keyword">use</span> <span class="token namespace">bevy_react<span class="token punctuation">::</span></span><span class="token punctuation">{</span><span class="token class-name">FilterSelection</span><span class="token punctuation">,</span> <span class="token class-name">PrecompileFilters</span><span class="token punctuation">}</span><span class="token punctuation">;</span>
+
+app<span class="token punctuation">.</span><span class="token function">add_plugins</span><span class="token punctuation">(</span><span class="token class-name">ReactPlugins</span><span class="token punctuation">.</span><span class="token function">set</span><span class="token punctuation">(</span>
+    <span class="token class-name">ReactUiPlugin</span><span class="token punctuation">::</span><span class="token function">default</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">precompile_filters</span><span class="token punctuation">(</span><span class="token class-name">PrecompileFilters</span> <span class="token punctuation">{</span>
+        builtins<span class="token punctuation">:</span> <span class="token class-name">FilterSelection</span><span class="token punctuation">::</span><span class="token class-name">Names</span><span class="token punctuation">(</span><span class="token macro property">vec!</span><span class="token punctuation">[</span><span class="token string">&quot;blur&quot;</span><span class="token punctuation">.</span><span class="token function">into</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+        <span class="token punctuation">..</span><span class="token function">default</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+    <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span></code></pre><p><code>builtins</code>, <code>filters</code> (your <code>add_react_filter</code> filters) and <code>morphs</code> (your
+morph filters) each take <code>All</code> (the default), <code>Names(..)</code> or <code>Off</code>. A
+shader that fails to compile keeps the node invisible and logs the error to
+the terminal, naming the layer.</p>
+<h2 id="limits"><a class="anchor" href="#limits" aria-hidden="true">#</a>Limits</h2>
+<ul>
+<li><code>bloom</code> and <code>shadow</code> draw their effect over the node&#39;s unfiltered
+content, so every filter before them in the chain is lost: <code>[blur, bloom]</code>
+shows no blur. Put them first in the chain; the filters after them apply
+normally.</li>
+<li>A <code>pinch</code> bulge, and a <code>chromaticAberration</code> swirl (<code>rotation</code>), can only
+spill about 16px outside the node; beyond that they are cut off at a
+straight edge. Keep a margin inside the node, or a smaller strength.</li>
+<li><code>outline</code> stays crisp up to about 12 physical pixels of width plus
+softness; typical text outlines are 1 to 6 pixels.</li>
+<li><code>gradientMap</code> takes at most six stops.</li>
+<li>A nested <code>&lt;text&gt;</code> span cannot take a filter (<code>spanLayerStyle</code> warning);
+put it on the outer <code>&lt;text&gt;</code> or a wrapping <code>&lt;node&gt;</code>.</li>
+<li>The <a href="../../styling/layers/#limits">layer limits</a> apply: content painted outside the
+node&#39;s border box (plus the chain&#39;s reach) is cut off, and inside a
+<code>&lt;surface&gt;</code> the node renders unfiltered.</li>
+</ul>
+<p><img src="../../screenshots/filters.png" alt="A gallery of built-in filters: grayscale, sepia, invert and hue-rotate parrots, a grayscaled product card, a blur and sepia chain, bloom on neon text and chromatic aberration." loading="lazy"></p>
+<p>To write your own filters in WGSL, see
+<a href="../../extending/custom-filters/">Custom filters</a>.</p>
+<p>See <a href="../../reference/style-properties/#filter"><code>filter</code></a> in the style
+reference, and <a href="../../reference/filters/#bloom"><code>bloom</code></a>,
+<a href="../../reference/filters/#blur"><code>blur</code></a>,
+<a href="../../reference/filters/#brightness"><code>brightness</code></a>,
+<a href="../../reference/filters/#chromaticAberration"><code>chromaticAberration</code></a>,
+<a href="../../reference/filters/#contrast"><code>contrast</code></a>,
+<a href="../../reference/filters/#gradientMap"><code>gradientMap</code></a>,
+<a href="../../reference/filters/#grayscale"><code>grayscale</code></a>,
+<a href="../../reference/filters/#hueRotate"><code>hueRotate</code></a>,
+<a href="../../reference/filters/#invert"><code>invert</code></a>,
+<a href="../../reference/filters/#outline"><code>outline</code></a>,
+<a href="../../reference/filters/#pinch"><code>pinch</code></a>,
+<a href="../../reference/filters/#saturate"><code>saturate</code></a>,
+<a href="../../reference/filters/#sepia"><code>sepia</code></a> and
+<a href="../../reference/filters/#shadow"><code>shadow</code></a> in the filter reference.</p>
+
+</article>
+<footer class="page-links"><a href="../../demo/?page=filters">Open live demo</a>
+<a href="https://github.com/tulustul/bevy-react/blob/v0.7.0/examples/demos/ui/src/demos/styling/FilterDemo.tsx">Demo source</a>
+<a href="https://github.com/tulustul/bevy-react/edit/main/docs/guide/styling/filters.md">Edit this page</a></footer>
+</main>
+</div>
+<footer class="site-footer">
+<p>bevy-react is dual-licensed under MIT or Apache-2.0. <a href="https://github.com/tulustul/bevy-react">Source on GitHub</a>.</p>
+</footer>
+</body>
+</html>

@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Request / response · bevy-react</title>
+<meta name="description" content="Call Bevy from React and await a typed reply with #[react_request], Request&lt;T&gt; observers, deferred Responders and the nested bevy proxy.">
+<link rel="canonical" href="https://tulustul.github.io/bevy-react/communication/request-response/">
+<link rel="alternate" type="text/markdown" href="../../communication/request-response.md">
+<meta property="og:title" content="Request / response · bevy-react">
+<meta property="og:description" content="Call Bevy from React and await a typed reply with #[react_request], Request&lt;T&gt; observers, deferred Responders and the nested bevy proxy.">
+<link rel="icon" href="../../logo.png">
+<link rel="stylesheet" href="../../style.css">
+<script src="../../docs.js" defer></script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="site-header">
+<a class="brand" href="../../"><img src="../../logo.png" alt="" width="74" height="74"> bevy-react</a>
+<span class="version">v0.7.0</span>
+<nav class="site-links" aria-label="Project">
+<a href="../../demo/">Live demo</a>
+<a href="https://github.com/tulustul/bevy-react">GitHub</a>
+<a href="https://docs.rs/bevy-react">docs.rs</a>
+<a href="https://www.npmjs.com/package/bevy-react">npm</a>
+</nav>
+</header>
+<div class="layout">
+<nav class="sidebar" aria-label="Documentation">
+<details class="nav-menu" open>
+<summary>Menu</summary>
+<ul><li><a href="../../">Introduction</a></li><li><a href="../../getting-started/">Getting started</a></li><li><a href="../../how-it-works/">How it works</a></li><li class="nav-section"><span>Elements</span><ul><li><a href="../../elements/node/">&lt;node&gt;</a></li><li><a href="../../elements/button/">&lt;button&gt;</a></li><li><a href="../../elements/text/">&lt;text&gt;</a></li><li><a href="../../elements/editable-text/">&lt;editableText&gt;</a></li><li><a href="../../elements/image/">&lt;image&gt;</a></li><li><a href="../../elements/canvas/">&lt;canvas&gt;</a></li><li><a href="../../elements/svg/">&lt;svg&gt;</a></li><li><a href="../../elements/portal/">&lt;portal&gt;</a></li><li><a href="../../elements/surface/">&lt;surface&gt;</a></li><li><a href="../../elements/root/">&lt;root&gt;</a></li><li><a href="../../elements/anchor/">&lt;anchor&gt;</a></li></ul></li><li class="nav-section"><span>Layout</span><ul><li><a href="../../layout/flexbox/">Flexbox</a></li><li><a href="../../layout/grid/">Grid</a></li><li><a href="../../layout/positioning/">Positioning</a></li></ul></li><li class="nav-section"><span>Styling</span><ul><li><a href="../../styling/units/">Units</a></li><li><a href="../../styling/colors/">Colors</a></li><li><a href="../../styling/borders/">Borders</a></li><li><a href="../../styling/spacing/">Spacing</a></li><li><a href="../../styling/sizing/">Sizing</a></li><li><a href="../../styling/layout-rounding/">Layout rounding</a></li><li><a href="../../styling/overflow/">Overflow</a></li><li><a href="../../styling/transforms/">Transforms</a></li><li><a href="../../styling/3d-transforms/">3D transforms</a></li><li><a href="../../styling/shadows/">Shadows</a></li><li><a href="../../styling/filters/">Filters</a></li><li><a href="../../styling/backdrop-filters/">Backdrop filters</a></li><li><a href="../../styling/morph-filters/">Morph filters</a></li><li><a href="../../styling/gradients/">Gradients</a></li><li><a href="../../styling/background-images/">Background images</a></li><li><a href="../../styling/image-rendering/">Image rendering</a></li><li><a href="../../styling/opacity/">Opacity</a></li><li><a href="../../styling/z-index/">Z-index</a></li><li><a href="../../styling/focus-policy/">Focus policy</a></li><li><a href="../../styling/cursors/">Cursors</a></li><li><a href="../../styling/layers/">Layers</a></li></ul></li><li class="nav-section"><span>Animations</span><ul><li><a href="../../animations/style-transitions/">Style transitions</a></li><li><a href="../../animations/animated-values/">Animated values</a></li><li><a href="../../animations/interpolation/">Interpolation</a></li><li><a href="../../animations/shared-elements/">Shared elements</a></li></ul></li><li class="nav-section"><span>Communication</span><ul><li><a href="../../communication/react-to-bevy/">React to Bevy</a></li><li><a href="../../communication/bevy-to-react/">Bevy to React</a></li><li><a href="../../communication/request-response/" aria-current="page">Request / response</a></li><li><a href="../../communication/named-nodes/">Named nodes</a></li></ul></li><li class="nav-section"><span>Events</span><ul><li><a href="../../events/mouse/">Mouse</a></li><li><a href="../../events/keyboard/">Keyboard</a></li><li><a href="../../events/gamepad/">Gamepad</a></li><li><a href="../../events/window/">Window</a></li></ul></li><li class="nav-section"><span>Extending</span><ul><li><a href="../../extending/custom-elements/">Custom elements</a></li><li><a href="../../extending/custom-styles/">Custom styles</a></li><li><a href="../../extending/custom-filters/">Custom filters</a></li></ul></li><li class="nav-section"><span>Tooling</span><ul><li><a href="../../tooling/devtools/">Devtools</a></li><li><a href="../../tooling/hot-reload/">Hot reload</a></li><li><a href="../../tooling/web/">Web builds</a></li><li><a href="../../tooling/ts-codegen/">TypeScript codegen</a></li></ul></li><li class="nav-section"><span>Reference</span><ul><li><a href="../../reference/style-properties/">Style properties</a></li><li><a href="../../reference/elements/">Elements</a></li><li><a href="../../reference/filters/">Filters</a></li></ul></li><li><a href="../../performance/">Performance</a></li></ul>
+</details>
+</nav>
+<main id="main">
+<article>
+<h1 id="request--response">Request / response</h1>
+<p>A request is a call from React to Bevy that returns a promise. You declare the
+request payload as a Rust struct with <code>#[react_request]</code>, naming the response
+type; a Bevy observer receives it as <code>Request&lt;T&gt;</code> and answers with
+<code>respond</code>. The promise resolves with the typed reply, or rejects with an
+error.</p>
+<h2 id="usage"><a class="anchor" href="#usage" aria-hidden="true">#</a>Usage</h2>
+<div class="tabs"><div class="tab-panel" data-lang="tsx"><p class="tab-label">TSX</p><pre><code class="language-tsx"><span class="token keyword">import</span> <span class="token punctuation">{</span> useEffect<span class="token punctuation">,</span> useState <span class="token punctuation">}</span> <span class="token keyword">from</span> <span class="token string">&quot;react&quot;</span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token punctuation">{</span> bevy <span class="token punctuation">}</span> <span class="token keyword">from</span> <span class="token string">&quot;./bevy&quot;</span><span class="token punctuation">;</span> <span class="token comment">// generated</span>
+
+<span class="token keyword">function</span> <span class="token function">Health</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+  <span class="token keyword">const</span> <span class="token punctuation">[</span>hp<span class="token punctuation">,</span> setHp<span class="token punctuation">]</span> <span class="token operator">=</span> <span class="token generic-function"><span class="token function">useState</span><span class="token generic class-name"><span class="token operator">&lt;</span><span class="token builtin">number</span> <span class="token operator">|</span> <span class="token keyword">null</span><span class="token operator">&gt;</span></span></span><span class="token punctuation">(</span><span class="token keyword">null</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token function">useEffect</span><span class="token punctuation">(</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">=&gt;</span> <span class="token punctuation">{</span>
+    bevy<span class="token punctuation">.</span>player<span class="token punctuation">.</span><span class="token function">stats</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">then</span><span class="token punctuation">(</span>
+      <span class="token punctuation">(</span>s<span class="token punctuation">)</span> <span class="token operator">=&gt;</span> <span class="token function">setHp</span><span class="token punctuation">(</span>s<span class="token punctuation">.</span>health<span class="token punctuation">)</span><span class="token punctuation">,</span>
+      <span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">=&gt;</span> <span class="token function">setHp</span><span class="token punctuation">(</span><span class="token keyword">null</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+    <span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token punctuation">}</span><span class="token punctuation">,</span> <span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token keyword">return</span> <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>text</span><span class="token punctuation">&gt;</span></span><span class="token punctuation">{</span>hp <span class="token operator">===</span> <span class="token keyword">null</span> <span class="token operator">?</span> <span class="token string">&quot;No player&quot;</span> <span class="token operator">:</span> <span class="token template-string"><span class="token template-punctuation string">`</span><span class="token string">HP </span><span class="token interpolation"><span class="token interpolation-punctuation punctuation">${</span>hp<span class="token interpolation-punctuation punctuation">}</span></span><span class="token template-punctuation string">`</span></span><span class="token punctuation">}</span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>text</span><span class="token punctuation">&gt;</span></span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span></code></pre></div><div class="tab-panel" data-lang="rust"><p class="tab-label">Rust</p><pre><code class="language-rust"><span class="token keyword">use</span> <span class="token namespace">bevy<span class="token punctuation">::</span>prelude<span class="token punctuation">::</span></span><span class="token operator">*</span><span class="token punctuation">;</span>
+<span class="token keyword">use</span> <span class="token namespace">bevy_react<span class="token punctuation">::</span>prelude<span class="token punctuation">::</span></span><span class="token operator">*</span><span class="token punctuation">;</span>
+<span class="token keyword">use</span> <span class="token namespace">serde<span class="token punctuation">::</span></span><span class="token class-name">Serialize</span><span class="token punctuation">;</span>
+<span class="token keyword">use</span> <span class="token namespace">ts_rs<span class="token punctuation">::</span></span><span class="token constant">TS</span><span class="token punctuation">;</span>
+
+<span class="token attribute attr-name">#[react_request(name = <span class="token string">&quot;player.stats&quot;</span>, response = PlayerStats)]</span>
+<span class="token keyword">struct</span> <span class="token type-definition class-name">GetPlayerStats</span><span class="token punctuation">;</span>
+
+<span class="token attribute attr-name">#[derive(Serialize, TS)]</span>
+<span class="token keyword">struct</span> <span class="token type-definition class-name">PlayerStats</span> <span class="token punctuation">{</span>
+    health<span class="token punctuation">:</span> <span class="token keyword">u32</span><span class="token punctuation">,</span>
+<span class="token punctuation">}</span>
+
+<span class="token keyword">fn</span> <span class="token function-definition function">player_stats</span><span class="token punctuation">(</span>
+    req<span class="token punctuation">:</span> <span class="token class-name">On</span><span class="token operator">&lt;</span><span class="token class-name">Request</span><span class="token operator">&lt;</span><span class="token class-name">GetPlayerStats</span><span class="token operator">&gt;&gt;</span><span class="token punctuation">,</span>
+    players<span class="token punctuation">:</span> <span class="token class-name">Query</span><span class="token operator">&lt;</span><span class="token operator">&amp;</span><span class="token class-name">Health</span><span class="token punctuation">,</span> <span class="token class-name">With</span><span class="token operator">&lt;</span><span class="token class-name">Player</span><span class="token operator">&gt;&gt;</span><span class="token punctuation">,</span>
+<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token keyword">match</span> players<span class="token punctuation">.</span><span class="token function">single</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token class-name">Ok</span><span class="token punctuation">(</span>health<span class="token punctuation">)</span> <span class="token operator">=&gt;</span> req<span class="token punctuation">.</span><span class="token function">respond</span><span class="token punctuation">(</span><span class="token class-name">PlayerStats</span> <span class="token punctuation">{</span> health<span class="token punctuation">:</span> health<span class="token number">.0</span> <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+        <span class="token class-name">Err</span><span class="token punctuation">(</span>_<span class="token punctuation">)</span> <span class="token operator">=&gt;</span> req<span class="token punctuation">.</span><span class="token function">respond_err</span><span class="token punctuation">(</span><span class="token string">&quot;no player&quot;</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+
+app<span class="token punctuation">.</span><span class="token function">add_react_request_handler</span><span class="token punctuation">(</span>player_stats<span class="token punctuation">)</span><span class="token punctuation">;</span></code></pre></div></div>
+<h2 id="defining-a-request"><a class="anchor" href="#defining-a-request" aria-hidden="true">#</a>Defining a request</h2>
+<p><code>#[react_request(name = &quot;...&quot;, response = Type)]</code> derives
+<code>serde::Deserialize</code> and <code>ts_rs::TS</code> on the payload struct. <code>response</code> is
+required; <code>name</code> is optional and defaults to the struct&#39;s name with its first
+letter lowercased (<code>GetPlayerStats</code> is <code>&quot;getPlayerStats&quot;</code>).</p>
+<ul>
+<li>The response is any type that implements <code>serde::Serialize</code> and
+<code>ts_rs::TS</code>: your own struct deriving both (your crate then needs the
+<code>serde</code> and <code>ts-rs</code> dependencies), a primitive, or a collection such as
+<code>Vec&lt;T&gt;</code> or <code>Option&lt;T&gt;</code>.</li>
+<li>A unit-struct payload makes a zero-argument method:
+<code>bevy.player.stats()</code>. Any other payload is the method&#39;s one argument,
+typed from the struct: <code>bevy.board.move({ piece: &quot;e2&quot;, to: &quot;e4&quot; })</code>.</li>
+<li>Field naming and integer precision follow the same rules as
+<a href="../../communication/react-to-bevy/#defining-a-message">messages</a>, for the payload and the
+response alike.</li>
+</ul>
+<h2 id="calling-from-react"><a class="anchor" href="#calling-from-react" aria-hidden="true">#</a>Calling from React</h2>
+<p>A dotted name nests the proxy method: <code>&quot;player.stats&quot;</code> becomes
+<code>bevy.player.stats()</code>, <code>&quot;board.move&quot;</code> becomes <code>bevy.board.move(value)</code>. The
+generated <code>request</code> function is the same call by name:</p>
+<pre><code class="language-tsx"><span class="token keyword">import</span> <span class="token punctuation">{</span> bevy<span class="token punctuation">,</span> request <span class="token punctuation">}</span> <span class="token keyword">from</span> <span class="token string">&quot;./bevy&quot;</span><span class="token punctuation">;</span>
+
+<span class="token keyword">const</span> stats <span class="token operator">=</span> <span class="token keyword">await</span> bevy<span class="token punctuation">.</span>player<span class="token punctuation">.</span><span class="token function">stats</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token keyword">const</span> same <span class="token operator">=</span> <span class="token keyword">await</span> <span class="token function">request</span><span class="token punctuation">(</span><span class="token string">&quot;player.stats&quot;</span><span class="token punctuation">,</span> <span class="token keyword">null</span><span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token comment">// unit payload: null</span></code></pre><p>Requests share the proxy tree with <a href="../../communication/react-to-bevy/#names">messages</a>: a name
+used both as a method and as a namespace, or a top-level <code>emit</code>, <code>request</code>,
+<code>on</code>, <code>addEventListener</code> or <code>removeEventListener</code>, makes the TypeScript export
+panic. <code>bevy-react</code> also exports an untyped <code>request(name, value)</code>; prefer the
+generated one.</p>
+<h2 id="answering"><a class="anchor" href="#answering" aria-hidden="true">#</a>Answering</h2>
+<p>The observer receives <code>On&lt;Request&lt;T&gt;&gt;</code>:</p>
+<ul>
+<li><code>req.payload()</code> is the deserialized payload <code>&amp;T</code>.</li>
+<li><code>req.respond(value)</code> resolves the promise with <code>value</code>.</li>
+<li><code>req.respond_err(message)</code> rejects it with an <code>Error</code> whose message is
+<code>message</code>.</li>
+<li>Only the first answer counts. Later calls are ignored with a warning, so
+when several observers handle one request, the first to answer wins.</li>
+<li><code>app.add_react_request_handler(observer)</code> registers the request type
+(inferred from the observer&#39;s parameter) and adds the observer;
+<code>app.add_react_request::&lt;T&gt;()</code> registers the type alone. Keep these calls
+in your shared <code>register_bindings</code> function (see
+<a href="../../communication/react-to-bevy/#registering-in-the-app-and-the-exporter">registering in the app and the exporter</a>).</li>
+</ul>
+<p>Every request must be answered. A promise whose request no observer answers
+stays pending forever. That includes an observer that doesn&#39;t run because a
+parameter fails validation, such as a <code>Single</code> with no match: query with
+<code>Query</code> and reject explicitly instead, as in the usage example.</p>
+<h2 id="deferred-replies"><a class="anchor" href="#deferred-replies" aria-hidden="true">#</a>Deferred replies</h2>
+<p><code>req.responder()</code> returns a <code>Responder</code> (exported by <code>bevy_react</code>) for the
+same request. It is <code>Clone + Send + Sync</code>, so you can store it in a resource
+or component, or move it into a task, and answer on a later frame:</p>
+<pre><code class="language-rust"><span class="token keyword">use</span> <span class="token namespace">bevy_react<span class="token punctuation">::</span></span><span class="token class-name">Responder</span><span class="token punctuation">;</span>
+
+<span class="token attribute attr-name">#[derive(Resource, Default)]</span>
+<span class="token keyword">struct</span> <span class="token type-definition class-name">WaitingForLevel</span><span class="token punctuation">(</span><span class="token class-name">Vec</span><span class="token operator">&lt;</span><span class="token class-name">Responder</span><span class="token operator">&lt;</span><span class="token class-name">LevelInfo</span><span class="token operator">&gt;&gt;</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token keyword">fn</span> <span class="token function-definition function">level_info</span><span class="token punctuation">(</span>
+    req<span class="token punctuation">:</span> <span class="token class-name">On</span><span class="token operator">&lt;</span><span class="token class-name">Request</span><span class="token operator">&lt;</span><span class="token class-name">GetLevelInfo</span><span class="token operator">&gt;&gt;</span><span class="token punctuation">,</span>
+    <span class="token keyword">mut</span> waiting<span class="token punctuation">:</span> <span class="token class-name">ResMut</span><span class="token operator">&lt;</span><span class="token class-name">WaitingForLevel</span><span class="token operator">&gt;</span><span class="token punctuation">,</span>
+<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    waiting<span class="token number">.0</span><span class="token punctuation">.</span><span class="token function">push</span><span class="token punctuation">(</span>req<span class="token punctuation">.</span><span class="token function">responder</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+<span class="token keyword">fn</span> <span class="token function-definition function">answer_when_loaded</span><span class="token punctuation">(</span>
+    level<span class="token punctuation">:</span> <span class="token class-name">Option</span><span class="token operator">&lt;</span><span class="token class-name">Res</span><span class="token operator">&lt;</span><span class="token class-name">Level</span><span class="token operator">&gt;&gt;</span><span class="token punctuation">,</span>
+    <span class="token keyword">mut</span> waiting<span class="token punctuation">:</span> <span class="token class-name">ResMut</span><span class="token operator">&lt;</span><span class="token class-name">WaitingForLevel</span><span class="token operator">&gt;</span><span class="token punctuation">,</span>
+<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token keyword">let</span> <span class="token class-name">Some</span><span class="token punctuation">(</span>level<span class="token punctuation">)</span> <span class="token operator">=</span> level <span class="token keyword">else</span> <span class="token punctuation">{</span> <span class="token keyword">return</span> <span class="token punctuation">}</span><span class="token punctuation">;</span>
+    <span class="token keyword">for</span> responder <span class="token keyword">in</span> waiting<span class="token number">.0</span><span class="token punctuation">.</span><span class="token function">drain</span><span class="token punctuation">(</span><span class="token punctuation">..</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        responder<span class="token punctuation">.</span><span class="token function">respond</span><span class="token punctuation">(</span><span class="token class-name">LevelInfo</span> <span class="token punctuation">{</span> name<span class="token punctuation">:</span> level<span class="token punctuation">.</span>name<span class="token punctuation">.</span><span class="token function">clone</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span></code></pre><p>A <code>Responder</code> has the same <code>respond</code> and <code>respond_err</code> methods and the same
+answer-once rule, shared by all its clones. Dropping every clone without
+answering leaves the promise pending.</p>
+<h2 id="rejections"><a class="anchor" href="#rejections" aria-hidden="true">#</a>Rejections</h2>
+<p>The promise rejects, and never hangs, when:</p>
+<ul>
+<li>no request type is registered under the name (<code>no handler registered for request &quot;...&quot;</code>);</li>
+<li>the payload doesn&#39;t deserialize into the request type (<code>malformed request &quot;...&quot;</code>);</li>
+<li>the response fails to serialize (<code>serialize response: ...</code>);</li>
+<li>the observer calls <code>respond_err</code>.</li>
+</ul>
+<p>Handle rejections: data that may be missing on the Bevy side, a scene that
+was switched away, a stale <code>bevy.ts</code>.</p>
+<h2 id="timing"><a class="anchor" href="#timing" aria-hidden="true">#</a>Timing</h2>
+<p>Bevy collects requests once per frame, in <code>PreUpdate</code>, and an
+immediate answer is sent from there. The promise therefore resolves at the
+earliest about a frame after the call. A polling loop gains nothing from
+asking faster than the frame rate, and continuous data is cheaper as an
+<a href="../../communication/bevy-to-react/">event</a>. Requests can&#39;t be cancelled: if the component that
+asked may unmount first, ignore the late result:</p>
+<pre><code class="language-tsx"><span class="token function">useEffect</span><span class="token punctuation">(</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">=&gt;</span> <span class="token punctuation">{</span>
+  <span class="token keyword">let</span> alive <span class="token operator">=</span> <span class="token boolean">true</span><span class="token punctuation">;</span>
+  bevy<span class="token punctuation">.</span>player<span class="token punctuation">.</span><span class="token function">stats</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">then</span><span class="token punctuation">(</span>
+    <span class="token punctuation">(</span>s<span class="token punctuation">)</span> <span class="token operator">=&gt;</span> alive <span class="token operator">&amp;&amp;</span> <span class="token function">setHp</span><span class="token punctuation">(</span>s<span class="token punctuation">.</span>health<span class="token punctuation">)</span><span class="token punctuation">,</span>
+    <span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">=&gt;</span> <span class="token punctuation">{</span><span class="token punctuation">}</span><span class="token punctuation">,</span>
+  <span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token keyword">return</span> <span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">=&gt;</span> <span class="token punctuation">{</span>
+    alive <span class="token operator">=</span> <span class="token boolean">false</span><span class="token punctuation">;</span>
+  <span class="token punctuation">}</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span><span class="token punctuation">,</span> <span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span></code></pre><h2 id="built-in-requests"><a class="anchor" href="#built-in-requests" aria-hidden="true">#</a>Built-in requests</h2>
+<p>Two requests are built in and typed in every generated <code>bevy.ts</code>; their names
+are reserved:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Call</th>
+<th>Resolves with</th>
+<th>Page</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>bevy.window.size()</code></td>
+<td><code>WindowSize</code>: the UI viewport size</td>
+<td><a href="../../events/window/">Window</a></td>
+</tr>
+<tr>
+<td><code>bevy.gamepad.getAll()</code></td>
+<td><code>GamepadConnectedData[]</code></td>
+<td><a href="../../events/gamepad/">Gamepad</a></td>
+</tr>
+</tbody></table></div>
+<h2 id="limits"><a class="anchor" href="#limits" aria-hidden="true">#</a>Limits</h2>
+<ul>
+<li>No cancellation and no timeout. Race the promise in JavaScript if you need
+one.</li>
+<li>An unanswered request leaks its pending promise.</li>
+<li>Each call is one round trip through Bevy&#39;s frame loop.</li>
+</ul>
+
+</article>
+<footer class="page-links"><a href="../../demo/?page=request-response">Open live demo</a>
+<a href="https://github.com/tulustul/bevy-react/blob/v0.7.0/examples/demos/ui/src/demos/communication/BidirectionCommunicationDemo.tsx">Demo source</a>
+<a href="https://github.com/tulustul/bevy-react/edit/main/docs/guide/communication/request-response.md">Edit this page</a></footer>
+</main>
+</div>
+<footer class="site-footer">
+<p>bevy-react is dual-licensed under MIT or Apache-2.0. <a href="https://github.com/tulustul/bevy-react">Source on GitHub</a>.</p>
+</footer>
+</body>
+</html>

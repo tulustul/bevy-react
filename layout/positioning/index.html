@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Positioning · bevy-react</title>
+<meta name="description" content="Take a node out of the layout flow with positionType absolute, offset it with left, right, top and bottom, and know what the offsets are relative to.">
+<link rel="canonical" href="https://tulustul.github.io/bevy-react/layout/positioning/">
+<link rel="alternate" type="text/markdown" href="../../layout/positioning.md">
+<meta property="og:title" content="Positioning · bevy-react">
+<meta property="og:description" content="Take a node out of the layout flow with positionType absolute, offset it with left, right, top and bottom, and know what the offsets are relative to.">
+<link rel="icon" href="../../logo.png">
+<link rel="stylesheet" href="../../style.css">
+<script src="../../docs.js" defer></script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="site-header">
+<a class="brand" href="../../"><img src="../../logo.png" alt="" width="74" height="74"> bevy-react</a>
+<span class="version">v0.7.0</span>
+<nav class="site-links" aria-label="Project">
+<a href="../../demo/">Live demo</a>
+<a href="https://github.com/tulustul/bevy-react">GitHub</a>
+<a href="https://docs.rs/bevy-react">docs.rs</a>
+<a href="https://www.npmjs.com/package/bevy-react">npm</a>
+</nav>
+</header>
+<div class="layout">
+<nav class="sidebar" aria-label="Documentation">
+<details class="nav-menu" open>
+<summary>Menu</summary>
+<ul><li><a href="../../">Introduction</a></li><li><a href="../../getting-started/">Getting started</a></li><li><a href="../../how-it-works/">How it works</a></li><li class="nav-section"><span>Elements</span><ul><li><a href="../../elements/node/">&lt;node&gt;</a></li><li><a href="../../elements/button/">&lt;button&gt;</a></li><li><a href="../../elements/text/">&lt;text&gt;</a></li><li><a href="../../elements/editable-text/">&lt;editableText&gt;</a></li><li><a href="../../elements/image/">&lt;image&gt;</a></li><li><a href="../../elements/canvas/">&lt;canvas&gt;</a></li><li><a href="../../elements/svg/">&lt;svg&gt;</a></li><li><a href="../../elements/portal/">&lt;portal&gt;</a></li><li><a href="../../elements/surface/">&lt;surface&gt;</a></li><li><a href="../../elements/root/">&lt;root&gt;</a></li><li><a href="../../elements/anchor/">&lt;anchor&gt;</a></li></ul></li><li class="nav-section"><span>Layout</span><ul><li><a href="../../layout/flexbox/">Flexbox</a></li><li><a href="../../layout/grid/">Grid</a></li><li><a href="../../layout/positioning/" aria-current="page">Positioning</a></li></ul></li><li class="nav-section"><span>Styling</span><ul><li><a href="../../styling/units/">Units</a></li><li><a href="../../styling/colors/">Colors</a></li><li><a href="../../styling/borders/">Borders</a></li><li><a href="../../styling/spacing/">Spacing</a></li><li><a href="../../styling/sizing/">Sizing</a></li><li><a href="../../styling/layout-rounding/">Layout rounding</a></li><li><a href="../../styling/overflow/">Overflow</a></li><li><a href="../../styling/transforms/">Transforms</a></li><li><a href="../../styling/3d-transforms/">3D transforms</a></li><li><a href="../../styling/shadows/">Shadows</a></li><li><a href="../../styling/filters/">Filters</a></li><li><a href="../../styling/backdrop-filters/">Backdrop filters</a></li><li><a href="../../styling/morph-filters/">Morph filters</a></li><li><a href="../../styling/gradients/">Gradients</a></li><li><a href="../../styling/background-images/">Background images</a></li><li><a href="../../styling/image-rendering/">Image rendering</a></li><li><a href="../../styling/opacity/">Opacity</a></li><li><a href="../../styling/z-index/">Z-index</a></li><li><a href="../../styling/focus-policy/">Focus policy</a></li><li><a href="../../styling/cursors/">Cursors</a></li><li><a href="../../styling/layers/">Layers</a></li></ul></li><li class="nav-section"><span>Animations</span><ul><li><a href="../../animations/style-transitions/">Style transitions</a></li><li><a href="../../animations/animated-values/">Animated values</a></li><li><a href="../../animations/interpolation/">Interpolation</a></li><li><a href="../../animations/shared-elements/">Shared elements</a></li></ul></li><li class="nav-section"><span>Communication</span><ul><li><a href="../../communication/react-to-bevy/">React to Bevy</a></li><li><a href="../../communication/bevy-to-react/">Bevy to React</a></li><li><a href="../../communication/request-response/">Request / response</a></li><li><a href="../../communication/named-nodes/">Named nodes</a></li></ul></li><li class="nav-section"><span>Events</span><ul><li><a href="../../events/mouse/">Mouse</a></li><li><a href="../../events/keyboard/">Keyboard</a></li><li><a href="../../events/gamepad/">Gamepad</a></li><li><a href="../../events/window/">Window</a></li></ul></li><li class="nav-section"><span>Extending</span><ul><li><a href="../../extending/custom-elements/">Custom elements</a></li><li><a href="../../extending/custom-styles/">Custom styles</a></li><li><a href="../../extending/custom-filters/">Custom filters</a></li></ul></li><li class="nav-section"><span>Tooling</span><ul><li><a href="../../tooling/devtools/">Devtools</a></li><li><a href="../../tooling/hot-reload/">Hot reload</a></li><li><a href="../../tooling/web/">Web builds</a></li><li><a href="../../tooling/ts-codegen/">TypeScript codegen</a></li></ul></li><li class="nav-section"><span>Reference</span><ul><li><a href="../../reference/style-properties/">Style properties</a></li><li><a href="../../reference/elements/">Elements</a></li><li><a href="../../reference/filters/">Filters</a></li></ul></li><li><a href="../../performance/">Performance</a></li></ul>
+</details>
+</nav>
+<main id="main">
+<article>
+<h1 id="positioning">Positioning</h1>
+<p><code>positionType</code> decides whether a node takes part in its parent&#39;s flex or
+grid layout, and the inset keys <code>left</code>, <code>right</code>, <code>top</code> and <code>bottom</code> offset
+it. A <code>&quot;relative&quot;</code> node (the default) stays in the flow and is nudged from
+its laid-out spot; an <code>&quot;absolute&quot;</code> node leaves the flow and is placed
+against its parent&#39;s box.</p>
+<h2 id="usage"><a class="anchor" href="#usage" aria-hidden="true">#</a>Usage</h2>
+<pre><code class="language-tsx"><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>node</span> <span class="token attr-name">style</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span> width<span class="token operator">:</span> <span class="token number">200</span><span class="token punctuation">,</span> height<span class="token operator">:</span> <span class="token number">120</span><span class="token punctuation">,</span> backgroundColor<span class="token operator">:</span> <span class="token string">&quot;#24283b&quot;</span> <span class="token punctuation">}</span><span class="token punctuation">}</span></span><span class="token punctuation">&gt;</span></span><span class="token plain-text">
+  </span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>node</span>
+    <span class="token attr-name">style</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span>
+      positionType<span class="token operator">:</span> <span class="token string">&quot;absolute&quot;</span><span class="token punctuation">,</span>
+      top<span class="token operator">:</span> <span class="token number">8</span><span class="token punctuation">,</span>
+      right<span class="token operator">:</span> <span class="token number">8</span><span class="token punctuation">,</span>
+      width<span class="token operator">:</span> <span class="token number">16</span><span class="token punctuation">,</span>
+      height<span class="token operator">:</span> <span class="token number">16</span><span class="token punctuation">,</span>
+      borderRadius<span class="token operator">:</span> <span class="token number">8</span><span class="token punctuation">,</span>
+      backgroundColor<span class="token operator">:</span> <span class="token string">&quot;#f7768e&quot;</span><span class="token punctuation">,</span>
+    <span class="token punctuation">}</span><span class="token punctuation">}</span></span>
+  <span class="token punctuation">/&gt;</span></span><span class="token plain-text">
+</span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>node</span><span class="token punctuation">&gt;</span></span></code></pre><h2 id="insets"><a class="anchor" href="#insets" aria-hidden="true">#</a>Insets</h2>
+<p><code>left</code>, <code>right</code>, <code>top</code> and <code>bottom</code> are lengths (see
+<a href="../../styling/units/">Units</a>): a number is logical pixels, and <code>&quot;auto&quot;</code> (the
+default) means not set. A percentage is of the parent&#39;s width (<code>left</code>,
+<code>right</code>) or height (<code>top</code>, <code>bottom</code>).</p>
+<h2 id="relative"><a class="anchor" href="#relative" aria-hidden="true">#</a>Relative</h2>
+<p>A <code>&quot;relative&quot;</code> node is laid out in the flow like any flex or grid item, then
+moved by its insets. The move affects the node and its subtree only:
+siblings keep their places as if it hadn&#39;t moved.</p>
+<ul>
+<li><code>left: 10</code> moves it 10px right, <code>right: 10</code> moves it 10px left; <code>top</code> and
+<code>bottom</code> work the same way vertically.</li>
+<li>When both are set on one axis, <code>left</code> wins over <code>right</code> and <code>top</code> over
+<code>bottom</code>.</li>
+<li>For a purely visual offset that never touches layout, <code>transform</code> is the
+cheaper tool (see <a href="../../styling/transforms/">Transforms</a>).</li>
+</ul>
+<h2 id="absolute"><a class="anchor" href="#absolute" aria-hidden="true">#</a>Absolute</h2>
+<p>An <code>&quot;absolute&quot;</code> node is removed from the flow: its siblings lay out as if it
+weren&#39;t there, and it takes up no space in its parent.</p>
+<ul>
+<li><p>The reference box is always the direct parent, whatever the parent&#39;s own
+<code>positionType</code>; there is no search for a positioned ancestor. Insets are
+measured from the parent&#39;s padding box: inside its border, excluding a
+reserved scrollbar gutter. Percentages are of that box.</p>
+</li>
+<li><p>Insets on opposite sides with no size on that axis stretch the node
+between them. <code>left: 0</code> and <code>right: 0</code> make it as wide as the parent; all
+four at <code>0</code> cover the parent:</p>
+<pre><code class="language-tsx"><span class="token keyword">const</span> overlay<span class="token operator">:</span> BevyStyle <span class="token operator">=</span> <span class="token punctuation">{</span>
+  positionType<span class="token operator">:</span> <span class="token string">&quot;absolute&quot;</span><span class="token punctuation">,</span>
+  left<span class="token operator">:</span> <span class="token number">0</span><span class="token punctuation">,</span>
+  right<span class="token operator">:</span> <span class="token number">0</span><span class="token punctuation">,</span>
+  top<span class="token operator">:</span> <span class="token number">0</span><span class="token punctuation">,</span>
+  bottom<span class="token operator">:</span> <span class="token number">0</span><span class="token punctuation">,</span>
+<span class="token punctuation">}</span><span class="token punctuation">;</span></code></pre></li>
+<li><p>With a size and both opposite insets, <code>left</code> and <code>top</code> win. <code>&quot;auto&quot;</code>
+margins then split the leftover space, which centers a fixed-size node
+between <code>left: 0</code> and <code>right: 0</code>.</p>
+</li>
+<li><p>With no inset on an axis, the node is placed by the parent&#39;s alignment on
+that axis (<code>justifyContent</code> on the main axis, <code>alignItems</code> or its own
+<code>alignSelf</code> on the cross axis). A parent with <code>justifyContent: &quot;center&quot;</code>
+and <code>alignItems: &quot;center&quot;</code> centers an inset-less absolute child.</p>
+</li>
+<li><p>Margins still apply, as an extra offset from the insets.</p>
+</li>
+</ul>
+<p>An absolute node is still part of the tree for everything that isn&#39;t
+layout:</p>
+<ul>
+<li>It paints in tree order among its siblings; being absolute doesn&#39;t raise
+it. Use <code>zIndex</code> or <code>globalZIndex</code> (see <a href="../../styling/z-index/">Z-index</a>).</li>
+<li>An ancestor&#39;s <code>overflow</code> clipping still clips it, and inside a scroll
+container it scrolls with the content (see
+<a href="../../styling/overflow/">Overflow</a>).</li>
+</ul>
+<h2 id="overlays-outside-the-tree"><a class="anchor" href="#overlays-outside-the-tree" aria-hidden="true">#</a>Overlays outside the tree</h2>
+<p>There is no <code>&quot;fixed&quot;</code>, <code>&quot;sticky&quot;</code> or <code>&quot;static&quot;</code> position. For UI that must
+stay put relative to the window or a 3D object, use an element made for it:</p>
+<ul>
+<li><a href="../../elements/root/"><code>&lt;root&gt;</code></a> is a separate window-filling root that
+floats above your app&#39;s tree, for modals, toasts and panels.</li>
+<li><a href="../../elements/anchor/"><code>&lt;anchor&gt;</code></a> follows a 3D entity&#39;s projected
+position on screen.</li>
+</ul>
+<h2 id="animating"><a class="anchor" href="#animating" aria-hidden="true">#</a>Animating</h2>
+<ul>
+<li>The insets accept an <code>{ animated }</code> binding, driven in pixels every frame
+without re-rendering React. See
+<a href="../../animations/animated-values/">Animated values</a>.</li>
+<li>The insets have no transition channel of their own;
+<code>transition: { layout }</code> eases the move when a static inset changes. See
+<a href="../../animations/style-transitions/">Style transitions</a>.</li>
+</ul>
+<h2 id="limits"><a class="anchor" href="#limits" aria-hidden="true">#</a>Limits</h2>
+<ul>
+<li>The containing block is always the parent: an absolute node can&#39;t escape
+to a grandparent&#39;s box. Restructure the tree, or use <code>&lt;root&gt;</code>.</li>
+<li><code>positionType</code> takes only <code>&quot;relative&quot;</code> and <code>&quot;absolute&quot;</code>; anything else
+falls back to <code>&quot;relative&quot;</code> with a devtools warning.</li>
+</ul>
+<p>See <a href="../../reference/style-properties/#positionType"><code>positionType</code></a>,
+<a href="../../reference/style-properties/#left"><code>left</code></a>,
+<a href="../../reference/style-properties/#right"><code>right</code></a>,
+<a href="../../reference/style-properties/#top"><code>top</code></a> and
+<a href="../../reference/style-properties/#bottom"><code>bottom</code></a> in the style reference.</p>
+
+</article>
+<footer class="page-links"><a href="../../demo/?page=positioning">Open live demo</a>
+<a href="https://github.com/tulustul/bevy-react/blob/v0.7.0/examples/demos/ui/src/demos/layout/PositioningDemo.tsx">Demo source</a>
+<a href="https://github.com/tulustul/bevy-react/edit/main/docs/guide/layout/positioning.md">Edit this page</a></footer>
+</main>
+</div>
+<footer class="site-footer">
+<p>bevy-react is dual-licensed under MIT or Apache-2.0. <a href="https://github.com/tulustul/bevy-react">Source on GitHub</a>.</p>
+</footer>
+</body>
+</html>

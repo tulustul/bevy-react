@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Layers · bevy-react</title>
+<meta name="description" content="How styles promote a subtree to a cached composited layer, what re-renders it, the cache style, clipping, costs and the devtools Layers tab.">
+<link rel="canonical" href="https://tulustul.github.io/bevy-react/styling/layers/">
+<link rel="alternate" type="text/markdown" href="../../styling/layers.md">
+<meta property="og:title" content="Layers · bevy-react">
+<meta property="og:description" content="How styles promote a subtree to a cached composited layer, what re-renders it, the cache style, clipping, costs and the devtools Layers tab.">
+<link rel="icon" href="../../logo.png">
+<link rel="stylesheet" href="../../style.css">
+<script src="../../docs.js" defer></script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="site-header">
+<a class="brand" href="../../"><img src="../../logo.png" alt="" width="74" height="74"> bevy-react</a>
+<span class="version">v0.7.0</span>
+<nav class="site-links" aria-label="Project">
+<a href="../../demo/">Live demo</a>
+<a href="https://github.com/tulustul/bevy-react">GitHub</a>
+<a href="https://docs.rs/bevy-react">docs.rs</a>
+<a href="https://www.npmjs.com/package/bevy-react">npm</a>
+</nav>
+</header>
+<div class="layout">
+<nav class="sidebar" aria-label="Documentation">
+<details class="nav-menu" open>
+<summary>Menu</summary>
+<ul><li><a href="../../">Introduction</a></li><li><a href="../../getting-started/">Getting started</a></li><li><a href="../../how-it-works/">How it works</a></li><li class="nav-section"><span>Elements</span><ul><li><a href="../../elements/node/">&lt;node&gt;</a></li><li><a href="../../elements/button/">&lt;button&gt;</a></li><li><a href="../../elements/text/">&lt;text&gt;</a></li><li><a href="../../elements/editable-text/">&lt;editableText&gt;</a></li><li><a href="../../elements/image/">&lt;image&gt;</a></li><li><a href="../../elements/canvas/">&lt;canvas&gt;</a></li><li><a href="../../elements/svg/">&lt;svg&gt;</a></li><li><a href="../../elements/portal/">&lt;portal&gt;</a></li><li><a href="../../elements/surface/">&lt;surface&gt;</a></li><li><a href="../../elements/root/">&lt;root&gt;</a></li><li><a href="../../elements/anchor/">&lt;anchor&gt;</a></li></ul></li><li class="nav-section"><span>Layout</span><ul><li><a href="../../layout/flexbox/">Flexbox</a></li><li><a href="../../layout/grid/">Grid</a></li><li><a href="../../layout/positioning/">Positioning</a></li></ul></li><li class="nav-section"><span>Styling</span><ul><li><a href="../../styling/units/">Units</a></li><li><a href="../../styling/colors/">Colors</a></li><li><a href="../../styling/borders/">Borders</a></li><li><a href="../../styling/spacing/">Spacing</a></li><li><a href="../../styling/sizing/">Sizing</a></li><li><a href="../../styling/layout-rounding/">Layout rounding</a></li><li><a href="../../styling/overflow/">Overflow</a></li><li><a href="../../styling/transforms/">Transforms</a></li><li><a href="../../styling/3d-transforms/">3D transforms</a></li><li><a href="../../styling/shadows/">Shadows</a></li><li><a href="../../styling/filters/">Filters</a></li><li><a href="../../styling/backdrop-filters/">Backdrop filters</a></li><li><a href="../../styling/morph-filters/">Morph filters</a></li><li><a href="../../styling/gradients/">Gradients</a></li><li><a href="../../styling/background-images/">Background images</a></li><li><a href="../../styling/image-rendering/">Image rendering</a></li><li><a href="../../styling/opacity/">Opacity</a></li><li><a href="../../styling/z-index/">Z-index</a></li><li><a href="../../styling/focus-policy/">Focus policy</a></li><li><a href="../../styling/cursors/">Cursors</a></li><li><a href="../../styling/layers/" aria-current="page">Layers</a></li></ul></li><li class="nav-section"><span>Animations</span><ul><li><a href="../../animations/style-transitions/">Style transitions</a></li><li><a href="../../animations/animated-values/">Animated values</a></li><li><a href="../../animations/interpolation/">Interpolation</a></li><li><a href="../../animations/shared-elements/">Shared elements</a></li></ul></li><li class="nav-section"><span>Communication</span><ul><li><a href="../../communication/react-to-bevy/">React to Bevy</a></li><li><a href="../../communication/bevy-to-react/">Bevy to React</a></li><li><a href="../../communication/request-response/">Request / response</a></li><li><a href="../../communication/named-nodes/">Named nodes</a></li></ul></li><li class="nav-section"><span>Events</span><ul><li><a href="../../events/mouse/">Mouse</a></li><li><a href="../../events/keyboard/">Keyboard</a></li><li><a href="../../events/gamepad/">Gamepad</a></li><li><a href="../../events/window/">Window</a></li></ul></li><li class="nav-section"><span>Extending</span><ul><li><a href="../../extending/custom-elements/">Custom elements</a></li><li><a href="../../extending/custom-styles/">Custom styles</a></li><li><a href="../../extending/custom-filters/">Custom filters</a></li></ul></li><li class="nav-section"><span>Tooling</span><ul><li><a href="../../tooling/devtools/">Devtools</a></li><li><a href="../../tooling/hot-reload/">Hot reload</a></li><li><a href="../../tooling/web/">Web builds</a></li><li><a href="../../tooling/ts-codegen/">TypeScript codegen</a></li></ul></li><li class="nav-section"><span>Reference</span><ul><li><a href="../../reference/style-properties/">Style properties</a></li><li><a href="../../reference/elements/">Elements</a></li><li><a href="../../reference/filters/">Filters</a></li></ul></li><li><a href="../../performance/">Performance</a></li></ul>
+</details>
+</nav>
+<main id="main">
+<article>
+<h1 id="layers">Layers</h1>
+<p>Normally the whole UI is drawn directly to the screen every frame. Some
+styles instead promote a node to a <strong>composited layer</strong>: the node and its
+subtree are rendered into an offscreen texture, and that texture is drawn
+back as one image at the node&#39;s place in the stacking order. Layers are
+what make group opacity, filters, morphs and 3D transforms possible, and
+their textures are cached between frames. Promotion is automatic; the
+<code>cache</code> style forces it.</p>
+<h2 id="usage"><a class="anchor" href="#usage" aria-hidden="true">#</a>Usage</h2>
+<pre><code class="language-tsx"><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>node</span> <span class="token attr-name">style</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span> cache<span class="token operator">:</span> <span class="token string">&quot;always&quot;</span> <span class="token punctuation">}</span><span class="token punctuation">}</span></span><span class="token punctuation">&gt;</span></span><span class="token plain-text">
+  </span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span><span class="token class-name">Chart</span></span> <span class="token attr-name">data</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span>data<span class="token punctuation">}</span></span> <span class="token punctuation">/&gt;</span></span><span class="token plain-text">
+</span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>node</span><span class="token punctuation">&gt;</span></span></code></pre><p>The chart is rendered once into a texture and redrawn from it until
+something inside it changes.</p>
+<h2 id="what-promotes-a-node"><a class="anchor" href="#what-promotes-a-node" aria-hidden="true">#</a>What promotes a node</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Style</th>
+<th>Promotes when</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><a href="../../styling/opacity/"><code>opacity</code></a></td>
+<td>Set on a node with children, unless <code>groupAlpha: false</code></td>
+</tr>
+<tr>
+<td><a href="../../styling/filters/"><code>filter</code></a></td>
+<td>The chain is not empty</td>
+</tr>
+<tr>
+<td><a href="../../styling/backdrop-filters/"><code>backdropFilter</code></a></td>
+<td>The chain is not empty</td>
+</tr>
+<tr>
+<td><a href="../../styling/morph-filters/"><code>morphFilter</code></a></td>
+<td>Set</td>
+</tr>
+<tr>
+<td><a href="../../styling/3d-transforms/"><code>transform3d</code></a></td>
+<td>Set, even as an empty <code>{}</code></td>
+</tr>
+<tr>
+<td><code>cache</code></td>
+<td><code>&quot;always&quot;</code> or <code>&quot;never&quot;</code></td>
+</tr>
+</tbody></table></div>
+<ul>
+<li>Promotion looks at the base <code>style</code> and every state style together. A
+<code>filter</code> that only appears in <code>hoverStyle</code> keeps the node promoted while
+it is not hovered, so hovering never switches a node between the two
+modes.</li>
+<li>Removing the last promoting style turns the node back into ordinary UI.</li>
+<li><code>&lt;root&gt;</code>, <code>&lt;surface&gt;</code>, SVG shapes and nested <code>&lt;text&gt;</code> spans cannot be
+layers. A layer style on a nested span is ignored with a
+<code>spanLayerStyle</code> warning; put it on the outer <code>&lt;text&gt;</code> or on a wrapping
+<code>&lt;node&gt;</code>.</li>
+</ul>
+<h2 id="what-changes-and-what-does-not"><a class="anchor" href="#what-changes-and-what-does-not" aria-hidden="true">#</a>What changes and what does not</h2>
+<p>Promotion only changes how the subtree is drawn:</p>
+<ul>
+<li>Layout, hit testing, refs, events and animations work as before (a
+<code>transform3d</code> additionally moves hit testing to the transformed image).</li>
+<li>The subtree is drawn as one image at the node&#39;s stacking position, so
+<code>opacity</code> fades it as a group: overlapping children no longer show
+through each other.</li>
+<li>The texture covers the node&#39;s border box, grown by the reach of its
+filters (a blur, a glow, a shadow). Anything painted outside that area is
+cut off: children that overflow the node, and the node&#39;s own <code>boxShadow</code>
+and <code>outline</code>. Give a promoted node room for its content, or promote an
+inner node instead.</li>
+</ul>
+<h2 id="caching"><a class="anchor" href="#caching" aria-hidden="true">#</a>Caching</h2>
+<p>A layer is re-rendered only when its content changes. Between changes, the
+cached texture is drawn again, which costs one textured quad however large
+the subtree is.</p>
+<p>Re-renders the layer:</p>
+<ul>
+<li>a prop or style change of any node inside it, including the root (except
+those listed below);</li>
+<li>text changes, images loading or changing, <code>&lt;canvas&gt;</code> and <code>&lt;svg&gt;</code>
+repaints;</li>
+<li>nodes inside it being added, removed, moved or resized;</li>
+<li>animations and transitions of nodes inside it;</li>
+<li>a focused <code>editableText</code> inside it, every frame while its caret blinks;</li>
+<li>a change in a nested layer, which re-renders every layer around it.</li>
+</ul>
+<p>Does not re-render the layer, because it is applied when the texture is
+drawn:</p>
+<ul>
+<li>moving the root: a <code>transform</code> translation, a layout move, scrolling;</li>
+<li>the root&#39;s <code>opacity</code>;</li>
+<li><code>filter</code> and <code>backdropFilter</code> params (only the filter passes re-run);</li>
+<li><code>transform3d</code> and morph progress.</li>
+</ul>
+<p>Scaling or rotating the root with the 2D <code>transform</code> does re-render it.
+For a scale or rotation animation on a promoted node, prefer
+<code>transform3d</code>.</p>
+<h2 id="the-cache-style"><a class="anchor" href="#the-cache-style" aria-hidden="true">#</a>The cache style</h2>
+<p><code>cache</code> takes <code>&quot;auto&quot;</code> (the default), <code>&quot;always&quot;</code> or <code>&quot;never&quot;</code>:</p>
+<ul>
+<li><code>&quot;auto&quot;</code> leaves promotion to the other styles.</li>
+<li><code>&quot;always&quot;</code> promotes the node and caches it. Use it for a large subtree
+that rarely changes, so that it is drawn as one quad instead of node by
+node.</li>
+<li><code>&quot;never&quot;</code> promotes the node but re-renders it every frame, and every
+layer around it too.</li>
+</ul>
+<p>Use <code>&quot;never&quot;</code> when pixels inside the node change without bevy-react
+knowing, which would otherwise freeze in a cached layer:</p>
+<ul>
+<li>a <a href="../../elements/portal/"><code>&lt;portal&gt;</code></a>, or a <code>backgroundImage</code> with a
+<code>{ texture }</code> source, showing a render target that a camera draws into;</li>
+<li>a texture your app writes on the GPU;</li>
+<li>a time-driven custom filter (<code>time = true</code>) inside another layer.</li>
+</ul>
+<pre><code class="language-tsx"><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>node</span> <span class="token attr-name">style</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span> opacity<span class="token operator">:</span> <span class="token number">0.9</span> <span class="token punctuation">}</span><span class="token punctuation">}</span></span><span class="token punctuation">&gt;</span></span><span class="token plain-text">
+  </span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>node</span> <span class="token attr-name">style</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span> cache<span class="token operator">:</span> <span class="token string">&quot;never&quot;</span> <span class="token punctuation">}</span><span class="token punctuation">}</span></span><span class="token punctuation">&gt;</span></span><span class="token plain-text">
+    </span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>portal</span> <span class="token attr-name">target</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">&quot;</span>minimap<span class="token punctuation">&quot;</span></span> <span class="token punctuation">/&gt;</span></span><span class="token plain-text">
+  </span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>node</span><span class="token punctuation">&gt;</span></span><span class="token plain-text">
+</span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>node</span><span class="token punctuation">&gt;</span></span></code></pre><p>Engine-driven changes never need it: transitions, morphs and <code>{ animated }</code>
+bindings tell the cache themselves. Opting out of opacity promotion is
+<code>groupAlpha: false</code> (see <a href="../../styling/opacity/">Opacity</a>), not <code>cache</code>.</p>
+<h2 id="clipping-and-scrolling"><a class="anchor" href="#clipping-and-scrolling" aria-hidden="true">#</a>Clipping and scrolling</h2>
+<p>A layer&#39;s texture is never clipped by its ancestors. An ancestor&#39;s
+<code>overflow</code> clip, or the window edge, clips the drawn result instead, as on
+the web: a blur inside a scroll view stops at the scroll view&#39;s edge.
+Scrolling a layer in or out of view only moves its image and never
+re-renders it.</p>
+<h2 id="costs"><a class="anchor" href="#costs" aria-hidden="true">#</a>Costs</h2>
+<ul>
+<li>Each layer holds a texture the size of its node (plus filter reach) at
+physical resolution; filters, backdrops and morphs add work textures.</li>
+<li>Every re-render is an extra render pass. A layer with content that
+changes every frame pays it every frame, even while offscreen.</li>
+<li><code>cache: &quot;never&quot;</code> re-renders its layer every frame. It and a
+<a href="../../styling/backdrop-filters/"><code>backdropFilter</code></a> (whose chain re-runs every frame)
+also make every layer around them re-render every frame.</li>
+<li>A no-effect entry kept for transitions (a blur of radius 0, a
+<code>transform3d: {}</code>) keeps the node a layer.</li>
+</ul>
+<h2 id="inspecting-layers"><a class="anchor" href="#inspecting-layers" aria-hidden="true">#</a>Inspecting layers</h2>
+<p>The devtools <a href="../../tooling/devtools/#layers">Layers tab</a> lists every layer
+with the reason it was promoted, its size and estimated texture memory, its
+filter chains with live values, and a repaint counter. A counter that keeps
+climbing while nothing visibly changes points at a layer that re-renders
+every frame.</p>
+<h2 id="limits"><a class="anchor" href="#limits" aria-hidden="true">#</a>Limits</h2>
+<ul>
+<li>Content outside the node&#39;s border box (plus filter reach) is cut off
+while the node is a layer, unlike CSS opacity.</li>
+<li>Layers are drawn by the main UI camera only. Inside a <code>&lt;surface&gt;</code>, or
+under a second UI camera, a promoted node renders as ordinary UI without
+its filters, morphs, 3D transform or group opacity, and a <code>layerCamera</code>
+warning is reported.</li>
+<li>Pixels written behind bevy-react&#39;s back freeze in a cached layer until
+something else re-renders it; use <code>cache: &quot;never&quot;</code>.</li>
+<li>A filter&#39;s shader may need to compile before its first use, and the
+layer is not drawn meanwhile. See
+<a href="../../styling/filters/#shader-compilation">Filters</a>.</li>
+</ul>
+<p>See <a href="../../reference/style-properties/#cache"><code>cache</code></a> in the style
+reference.</p>
+
+</article>
+<footer class="page-links"><a href="../../demo/?page=layers">Open live demo</a>
+<a href="https://github.com/tulustul/bevy-react/blob/v0.7.0/examples/demos/ui/src/demos/LayersDemo.tsx">Demo source</a>
+<a href="https://github.com/tulustul/bevy-react/edit/main/docs/guide/styling/layers.md">Edit this page</a></footer>
+</main>
+</div>
+<footer class="site-footer">
+<p>bevy-react is dual-licensed under MIT or Apache-2.0. <a href="https://github.com/tulustul/bevy-react">Source on GitHub</a>.</p>
+</footer>
+</body>
+</html>

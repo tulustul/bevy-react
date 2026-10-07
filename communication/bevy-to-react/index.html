@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bevy to React · bevy-react</title>
+<meta name="description" content="Push typed events from any Bevy system to React listeners with #[react_event], the ReactEvents system param and bevy.on.">
+<link rel="canonical" href="https://tulustul.github.io/bevy-react/communication/bevy-to-react/">
+<link rel="alternate" type="text/markdown" href="../../communication/bevy-to-react.md">
+<meta property="og:title" content="Bevy to React · bevy-react">
+<meta property="og:description" content="Push typed events from any Bevy system to React listeners with #[react_event], the ReactEvents system param and bevy.on.">
+<link rel="icon" href="../../logo.png">
+<link rel="stylesheet" href="../../style.css">
+<script src="../../docs.js" defer></script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="site-header">
+<a class="brand" href="../../"><img src="../../logo.png" alt="" width="74" height="74"> bevy-react</a>
+<span class="version">v0.7.0</span>
+<nav class="site-links" aria-label="Project">
+<a href="../../demo/">Live demo</a>
+<a href="https://github.com/tulustul/bevy-react">GitHub</a>
+<a href="https://docs.rs/bevy-react">docs.rs</a>
+<a href="https://www.npmjs.com/package/bevy-react">npm</a>
+</nav>
+</header>
+<div class="layout">
+<nav class="sidebar" aria-label="Documentation">
+<details class="nav-menu" open>
+<summary>Menu</summary>
+<ul><li><a href="../../">Introduction</a></li><li><a href="../../getting-started/">Getting started</a></li><li><a href="../../how-it-works/">How it works</a></li><li class="nav-section"><span>Elements</span><ul><li><a href="../../elements/node/">&lt;node&gt;</a></li><li><a href="../../elements/button/">&lt;button&gt;</a></li><li><a href="../../elements/text/">&lt;text&gt;</a></li><li><a href="../../elements/editable-text/">&lt;editableText&gt;</a></li><li><a href="../../elements/image/">&lt;image&gt;</a></li><li><a href="../../elements/canvas/">&lt;canvas&gt;</a></li><li><a href="../../elements/svg/">&lt;svg&gt;</a></li><li><a href="../../elements/portal/">&lt;portal&gt;</a></li><li><a href="../../elements/surface/">&lt;surface&gt;</a></li><li><a href="../../elements/root/">&lt;root&gt;</a></li><li><a href="../../elements/anchor/">&lt;anchor&gt;</a></li></ul></li><li class="nav-section"><span>Layout</span><ul><li><a href="../../layout/flexbox/">Flexbox</a></li><li><a href="../../layout/grid/">Grid</a></li><li><a href="../../layout/positioning/">Positioning</a></li></ul></li><li class="nav-section"><span>Styling</span><ul><li><a href="../../styling/units/">Units</a></li><li><a href="../../styling/colors/">Colors</a></li><li><a href="../../styling/borders/">Borders</a></li><li><a href="../../styling/spacing/">Spacing</a></li><li><a href="../../styling/sizing/">Sizing</a></li><li><a href="../../styling/layout-rounding/">Layout rounding</a></li><li><a href="../../styling/overflow/">Overflow</a></li><li><a href="../../styling/transforms/">Transforms</a></li><li><a href="../../styling/3d-transforms/">3D transforms</a></li><li><a href="../../styling/shadows/">Shadows</a></li><li><a href="../../styling/filters/">Filters</a></li><li><a href="../../styling/backdrop-filters/">Backdrop filters</a></li><li><a href="../../styling/morph-filters/">Morph filters</a></li><li><a href="../../styling/gradients/">Gradients</a></li><li><a href="../../styling/background-images/">Background images</a></li><li><a href="../../styling/image-rendering/">Image rendering</a></li><li><a href="../../styling/opacity/">Opacity</a></li><li><a href="../../styling/z-index/">Z-index</a></li><li><a href="../../styling/focus-policy/">Focus policy</a></li><li><a href="../../styling/cursors/">Cursors</a></li><li><a href="../../styling/layers/">Layers</a></li></ul></li><li class="nav-section"><span>Animations</span><ul><li><a href="../../animations/style-transitions/">Style transitions</a></li><li><a href="../../animations/animated-values/">Animated values</a></li><li><a href="../../animations/interpolation/">Interpolation</a></li><li><a href="../../animations/shared-elements/">Shared elements</a></li></ul></li><li class="nav-section"><span>Communication</span><ul><li><a href="../../communication/react-to-bevy/">React to Bevy</a></li><li><a href="../../communication/bevy-to-react/" aria-current="page">Bevy to React</a></li><li><a href="../../communication/request-response/">Request / response</a></li><li><a href="../../communication/named-nodes/">Named nodes</a></li></ul></li><li class="nav-section"><span>Events</span><ul><li><a href="../../events/mouse/">Mouse</a></li><li><a href="../../events/keyboard/">Keyboard</a></li><li><a href="../../events/gamepad/">Gamepad</a></li><li><a href="../../events/window/">Window</a></li></ul></li><li class="nav-section"><span>Extending</span><ul><li><a href="../../extending/custom-elements/">Custom elements</a></li><li><a href="../../extending/custom-styles/">Custom styles</a></li><li><a href="../../extending/custom-filters/">Custom filters</a></li></ul></li><li class="nav-section"><span>Tooling</span><ul><li><a href="../../tooling/devtools/">Devtools</a></li><li><a href="../../tooling/hot-reload/">Hot reload</a></li><li><a href="../../tooling/web/">Web builds</a></li><li><a href="../../tooling/ts-codegen/">TypeScript codegen</a></li></ul></li><li class="nav-section"><span>Reference</span><ul><li><a href="../../reference/style-properties/">Style properties</a></li><li><a href="../../reference/elements/">Elements</a></li><li><a href="../../reference/filters/">Filters</a></li></ul></li><li><a href="../../performance/">Performance</a></li></ul>
+</details>
+</nav>
+<main id="main">
+<article>
+<h1 id="bevy-to-react">Bevy to React</h1>
+<p>An event is a typed, named broadcast from the Bevy world to the React app.
+You declare it as a Rust struct with <code>#[react_event]</code>, send it from any system
+with the <code>ReactEvents</code> system param, and React listens with <code>bevy.on(name, callback)</code>. Every listener registered for the name receives the payload.</p>
+<h2 id="usage"><a class="anchor" href="#usage" aria-hidden="true">#</a>Usage</h2>
+<div class="tabs"><div class="tab-panel" data-lang="tsx"><p class="tab-label">TSX</p><pre><code class="language-tsx"><span class="token keyword">import</span> <span class="token punctuation">{</span> useEffect<span class="token punctuation">,</span> useState <span class="token punctuation">}</span> <span class="token keyword">from</span> <span class="token string">&quot;react&quot;</span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token punctuation">{</span> bevy <span class="token punctuation">}</span> <span class="token keyword">from</span> <span class="token string">&quot;./bevy&quot;</span><span class="token punctuation">;</span> <span class="token comment">// generated</span>
+
+<span class="token keyword">function</span> <span class="token function">Score</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+  <span class="token keyword">const</span> <span class="token punctuation">[</span>score<span class="token punctuation">,</span> setScore<span class="token punctuation">]</span> <span class="token operator">=</span> <span class="token function">useState</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token function">useEffect</span><span class="token punctuation">(</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">=&gt;</span> bevy<span class="token punctuation">.</span><span class="token function">on</span><span class="token punctuation">(</span><span class="token string">&quot;game.scored&quot;</span><span class="token punctuation">,</span> <span class="token punctuation">(</span>e<span class="token punctuation">)</span> <span class="token operator">=&gt;</span> <span class="token function">setScore</span><span class="token punctuation">(</span>e<span class="token punctuation">.</span>total<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">,</span> <span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token keyword">return</span> <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>text</span><span class="token punctuation">&gt;</span></span><span class="token punctuation">{</span><span class="token template-string"><span class="token template-punctuation string">`</span><span class="token string">Score: </span><span class="token interpolation"><span class="token interpolation-punctuation punctuation">${</span>score<span class="token interpolation-punctuation punctuation">}</span></span><span class="token template-punctuation string">`</span></span><span class="token punctuation">}</span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>text</span><span class="token punctuation">&gt;</span></span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span></code></pre></div><div class="tab-panel" data-lang="rust"><p class="tab-label">Rust</p><pre><code class="language-rust"><span class="token keyword">use</span> <span class="token namespace">bevy<span class="token punctuation">::</span>prelude<span class="token punctuation">::</span></span><span class="token operator">*</span><span class="token punctuation">;</span>
+<span class="token keyword">use</span> <span class="token namespace">bevy_react<span class="token punctuation">::</span>prelude<span class="token punctuation">::</span></span><span class="token operator">*</span><span class="token punctuation">;</span>
+
+<span class="token attribute attr-name">#[react_event(name = <span class="token string">&quot;game.scored&quot;</span>)]</span>
+<span class="token keyword">struct</span> <span class="token type-definition class-name">Scored</span> <span class="token punctuation">{</span>
+    total<span class="token punctuation">:</span> <span class="token keyword">u32</span><span class="token punctuation">,</span>
+<span class="token punctuation">}</span>
+
+<span class="token keyword">fn</span> <span class="token function-definition function">award_points</span><span class="token punctuation">(</span>
+    goals<span class="token punctuation">:</span> <span class="token class-name">Query</span><span class="token operator">&lt;</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> <span class="token class-name">Added</span><span class="token operator">&lt;</span><span class="token class-name">Goal</span><span class="token operator">&gt;&gt;</span><span class="token punctuation">,</span>
+    <span class="token keyword">mut</span> score<span class="token punctuation">:</span> <span class="token class-name">ResMut</span><span class="token operator">&lt;</span><span class="token class-name">Score</span><span class="token operator">&gt;</span><span class="token punctuation">,</span>
+    events<span class="token punctuation">:</span> <span class="token class-name">ReactEvents</span><span class="token punctuation">,</span>
+<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token keyword">for</span> _ <span class="token keyword">in</span> <span class="token operator">&amp;</span>goals <span class="token punctuation">{</span>
+        score<span class="token number">.0</span> <span class="token operator">+=</span> <span class="token number">1</span><span class="token punctuation">;</span>
+        events<span class="token punctuation">.</span><span class="token function">send</span><span class="token punctuation">(</span><span class="token operator">&amp;</span><span class="token class-name">Scored</span> <span class="token punctuation">{</span> total<span class="token punctuation">:</span> score<span class="token number">.0</span> <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+
+app<span class="token punctuation">.</span><span class="token function">add_react_event</span><span class="token punctuation">::</span><span class="token operator">&lt;</span><span class="token class-name">Scored</span><span class="token operator">&gt;</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span></code></pre></div></div>
+<h2 id="defining-an-event"><a class="anchor" href="#defining-an-event" aria-hidden="true">#</a>Defining an event</h2>
+<p><code>#[react_event]</code> derives <code>serde::Serialize</code> and <code>ts_rs::TS</code> on the struct.
+The payload crosses as JSON, so the struct&#39;s serde shape is what the callback
+receives: an object for named fields, the inner value for a newtype, <code>null</code>
+for a unit struct.</p>
+<ul>
+<li>The name defaults to the struct&#39;s name with its first letter lowercased
+(<code>Scored</code> is <code>&quot;scored&quot;</code>). Override it with <code>#[react_event(name = &quot;...&quot;)]</code>.
+Dotted names are allowed; they are plain keys of <code>bevy.on</code> and don&#39;t nest.</li>
+<li>Field naming, nested types and integer precision follow the same rules as
+<a href="../../communication/react-to-bevy/#defining-a-message">messages</a>: add
+<code>#[serde(rename_all = &quot;camelCase&quot;)]</code> and <code>#[ts(rename_all = &quot;camelCase&quot;)]</code>
+together for camelCase fields, and derive <code>Serialize</code> and <code>TS</code> on nested
+types you define.</li>
+<li>The built-in event names <code>resize</code>, <code>keyDown</code>, <code>keyUp</code>, <code>gamepadConnected</code>,
+<code>gamepadDisconnected</code> and <code>gamepadInput</code> are reserved: an app event using
+one is left out of the generated file.</li>
+</ul>
+<h2 id="sending"><a class="anchor" href="#sending" aria-hidden="true">#</a>Sending</h2>
+<p><code>ReactEvents</code> is a system param; <code>events.send(&amp;event)</code> pushes one event and
+works from any system or observer, in any schedule. A payload that fails to
+serialize logs an error and is not sent.</p>
+<p><code>app.add_react_event::&lt;E&gt;()</code> only feeds the TypeScript exporter. Sending works
+without it, but the event is then missing from <code>bevy.ts</code>, and <code>bevy.on</code> won&#39;t
+accept its name. Put the call in the same <code>register_bindings</code> function as your
+other bindings (see
+<a href="../../communication/react-to-bevy/#registering-in-the-app-and-the-exporter">registering in the app and the exporter</a>).</p>
+<h2 id="listening"><a class="anchor" href="#listening" aria-hidden="true">#</a>Listening</h2>
+<p><code>bevy.on(name, callback)</code> subscribes and returns an unsubscribe function.
+Return it from <code>useEffect</code> so the listener goes away with the component:</p>
+<pre><code class="language-tsx"><span class="token function">useEffect</span><span class="token punctuation">(</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">=&gt;</span> <span class="token punctuation">{</span>
+  <span class="token keyword">const</span> offScored <span class="token operator">=</span> bevy<span class="token punctuation">.</span><span class="token function">on</span><span class="token punctuation">(</span><span class="token string">&quot;game.scored&quot;</span><span class="token punctuation">,</span> onScored<span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token keyword">const</span> offOver <span class="token operator">=</span> bevy<span class="token punctuation">.</span><span class="token function">on</span><span class="token punctuation">(</span><span class="token string">&quot;game.over&quot;</span><span class="token punctuation">,</span> onGameOver<span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token keyword">return</span> <span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">=&gt;</span> <span class="token punctuation">{</span>
+    <span class="token function">offScored</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token function">offOver</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token punctuation">}</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span><span class="token punctuation">,</span> <span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span></code></pre><ul>
+<li>The callback&#39;s parameter is typed from the Rust struct.</li>
+<li>Any number of listeners can share a name; they run in subscription order.
+An exception thrown by one is logged to the console and the others still
+run.</li>
+<li><code>bevy.removeEventListener(name, callback)</code> unsubscribes as well, and
+<code>bevy.addEventListener</code> is an alias of <code>bevy.on</code>.</li>
+<li>Listeners are global, not owned by a component: one you never unsubscribe
+keeps firing after its component unmounts.</li>
+<li>State updates made by the listeners of one event commit as one synchronous
+React render.</li>
+</ul>
+<h2 id="delivery-and-timing"><a class="anchor" href="#delivery-and-timing" aria-hidden="true">#</a>Delivery and timing</h2>
+<ul>
+<li>Everything Bevy sends to React (events, UI events, request responses)
+travels in one ordered channel, so events arrive in the order they were
+sent.</li>
+<li>Events are not buffered. An event that arrives while nobody listens to its
+name is dropped, including events sent before the React app mounted. A
+component that mounts later has missed everything sent before. Pair such
+state with a <a href="../../communication/request-response/">request</a> that returns the current value,
+and call it on mount; the built-ins do this (<code>resize</code> with
+<a href="../../events/window/"><code>bevy.window.size()</code></a>, <code>gamepadConnected</code> with
+<a href="../../events/gamepad/"><code>bevy.gamepad.getAll()</code></a>).</li>
+<li>A system that sends at startup can wait for the first applied UI batch, as
+the built-ins do: <code>.run_if(|s: Res&lt;OpApplyStats&gt;| s.applied_count &gt; 0)</code>
+(<code>OpApplyStats</code> is exported by <code>bevy_react</code>).</li>
+<li>React handles events on its own thread, after Bevy sends them. The render a
+listener causes reaches Bevy a frame or more later.</li>
+<li>Each event costs a JSON round trip and, usually, a React render. Sending one
+every frame works, but UI that has to follow something in the 3D scene
+frame by frame is better served by <a href="../../elements/anchor/"><code>&lt;anchor&gt;</code></a>, and
+per-frame visuals by <a href="../../animations/animated-values/">animated values</a>.</li>
+</ul>
+<h2 id="limits"><a class="anchor" href="#limits" aria-hidden="true">#</a>Limits</h2>
+<ul>
+<li>No replay and no buffering: listeners must exist when the event arrives.</li>
+<li>Events are broadcasts by name. To reach a specific UI node from Bevy, use a
+<a href="../../communication/named-nodes/">named node</a>.</li>
+</ul>
+<p>The built-in events are documented with their topics:
+<a href="../../events/keyboard/">keyboard</a>, <a href="../../events/gamepad/">gamepad</a> and
+<a href="../../events/window/">window</a>.</p>
+
+</article>
+<footer class="page-links"><a href="../../demo/?page=bevy-to-react">Open live demo</a>
+<a href="https://github.com/tulustul/bevy-react/blob/v0.7.0/examples/demos/ui/src/demos/communication/BevyToReactDemo.tsx">Demo source</a>
+<a href="https://github.com/tulustul/bevy-react/edit/main/docs/guide/communication/bevy-to-react.md">Edit this page</a></footer>
+</main>
+</div>
+<footer class="site-footer">
+<p>bevy-react is dual-licensed under MIT or Apache-2.0. <a href="https://github.com/tulustul/bevy-react">Source on GitHub</a>.</p>
+</footer>
+</body>
+</html>

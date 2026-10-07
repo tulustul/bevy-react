@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Named nodes · bevy-react</title>
+<meta name="description" content="Give React nodes a Bevy Name with the name prop and find them from Rust through ReactNodes or ReactNode queries to read layout or add components.">
+<link rel="canonical" href="https://tulustul.github.io/bevy-react/communication/named-nodes/">
+<link rel="alternate" type="text/markdown" href="../../communication/named-nodes.md">
+<meta property="og:title" content="Named nodes · bevy-react">
+<meta property="og:description" content="Give React nodes a Bevy Name with the name prop and find them from Rust through ReactNodes or ReactNode queries to read layout or add components.">
+<link rel="icon" href="../../logo.png">
+<link rel="stylesheet" href="../../style.css">
+<script src="../../docs.js" defer></script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="site-header">
+<a class="brand" href="../../"><img src="../../logo.png" alt="" width="74" height="74"> bevy-react</a>
+<span class="version">v0.7.0</span>
+<nav class="site-links" aria-label="Project">
+<a href="../../demo/">Live demo</a>
+<a href="https://github.com/tulustul/bevy-react">GitHub</a>
+<a href="https://docs.rs/bevy-react">docs.rs</a>
+<a href="https://www.npmjs.com/package/bevy-react">npm</a>
+</nav>
+</header>
+<div class="layout">
+<nav class="sidebar" aria-label="Documentation">
+<details class="nav-menu" open>
+<summary>Menu</summary>
+<ul><li><a href="../../">Introduction</a></li><li><a href="../../getting-started/">Getting started</a></li><li><a href="../../how-it-works/">How it works</a></li><li class="nav-section"><span>Elements</span><ul><li><a href="../../elements/node/">&lt;node&gt;</a></li><li><a href="../../elements/button/">&lt;button&gt;</a></li><li><a href="../../elements/text/">&lt;text&gt;</a></li><li><a href="../../elements/editable-text/">&lt;editableText&gt;</a></li><li><a href="../../elements/image/">&lt;image&gt;</a></li><li><a href="../../elements/canvas/">&lt;canvas&gt;</a></li><li><a href="../../elements/svg/">&lt;svg&gt;</a></li><li><a href="../../elements/portal/">&lt;portal&gt;</a></li><li><a href="../../elements/surface/">&lt;surface&gt;</a></li><li><a href="../../elements/root/">&lt;root&gt;</a></li><li><a href="../../elements/anchor/">&lt;anchor&gt;</a></li></ul></li><li class="nav-section"><span>Layout</span><ul><li><a href="../../layout/flexbox/">Flexbox</a></li><li><a href="../../layout/grid/">Grid</a></li><li><a href="../../layout/positioning/">Positioning</a></li></ul></li><li class="nav-section"><span>Styling</span><ul><li><a href="../../styling/units/">Units</a></li><li><a href="../../styling/colors/">Colors</a></li><li><a href="../../styling/borders/">Borders</a></li><li><a href="../../styling/spacing/">Spacing</a></li><li><a href="../../styling/sizing/">Sizing</a></li><li><a href="../../styling/layout-rounding/">Layout rounding</a></li><li><a href="../../styling/overflow/">Overflow</a></li><li><a href="../../styling/transforms/">Transforms</a></li><li><a href="../../styling/3d-transforms/">3D transforms</a></li><li><a href="../../styling/shadows/">Shadows</a></li><li><a href="../../styling/filters/">Filters</a></li><li><a href="../../styling/backdrop-filters/">Backdrop filters</a></li><li><a href="../../styling/morph-filters/">Morph filters</a></li><li><a href="../../styling/gradients/">Gradients</a></li><li><a href="../../styling/background-images/">Background images</a></li><li><a href="../../styling/image-rendering/">Image rendering</a></li><li><a href="../../styling/opacity/">Opacity</a></li><li><a href="../../styling/z-index/">Z-index</a></li><li><a href="../../styling/focus-policy/">Focus policy</a></li><li><a href="../../styling/cursors/">Cursors</a></li><li><a href="../../styling/layers/">Layers</a></li></ul></li><li class="nav-section"><span>Animations</span><ul><li><a href="../../animations/style-transitions/">Style transitions</a></li><li><a href="../../animations/animated-values/">Animated values</a></li><li><a href="../../animations/interpolation/">Interpolation</a></li><li><a href="../../animations/shared-elements/">Shared elements</a></li></ul></li><li class="nav-section"><span>Communication</span><ul><li><a href="../../communication/react-to-bevy/">React to Bevy</a></li><li><a href="../../communication/bevy-to-react/">Bevy to React</a></li><li><a href="../../communication/request-response/">Request / response</a></li><li><a href="../../communication/named-nodes/" aria-current="page">Named nodes</a></li></ul></li><li class="nav-section"><span>Events</span><ul><li><a href="../../events/mouse/">Mouse</a></li><li><a href="../../events/keyboard/">Keyboard</a></li><li><a href="../../events/gamepad/">Gamepad</a></li><li><a href="../../events/window/">Window</a></li></ul></li><li class="nav-section"><span>Extending</span><ul><li><a href="../../extending/custom-elements/">Custom elements</a></li><li><a href="../../extending/custom-styles/">Custom styles</a></li><li><a href="../../extending/custom-filters/">Custom filters</a></li></ul></li><li class="nav-section"><span>Tooling</span><ul><li><a href="../../tooling/devtools/">Devtools</a></li><li><a href="../../tooling/hot-reload/">Hot reload</a></li><li><a href="../../tooling/web/">Web builds</a></li><li><a href="../../tooling/ts-codegen/">TypeScript codegen</a></li></ul></li><li class="nav-section"><span>Reference</span><ul><li><a href="../../reference/style-properties/">Style properties</a></li><li><a href="../../reference/elements/">Elements</a></li><li><a href="../../reference/filters/">Filters</a></li></ul></li><li><a href="../../performance/">Performance</a></li></ul>
+</details>
+</nav>
+<main id="main">
+<article>
+<h1 id="named-nodes">Named nodes</h1>
+<p>The <code>name</code> prop puts a Bevy <code>Name</code> on the entity a React element creates, so
+Rust systems can find React-created UI and work with it directly: read its
+layout or hover state, add their own components, or spawn 3D things that
+follow it. Nothing but the name crosses from React; there are no messages and
+no entity ids to pass around.</p>
+<h2 id="usage"><a class="anchor" href="#usage" aria-hidden="true">#</a>Usage</h2>
+<div class="tabs"><div class="tab-panel" data-lang="tsx"><p class="tab-label">TSX</p><pre><code class="language-tsx"><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>node</span> <span class="token attr-name">name</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">&quot;</span>minimap<span class="token punctuation">&quot;</span></span> <span class="token attr-name">style</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span> width<span class="token operator">:</span> <span class="token number">200</span><span class="token punctuation">,</span> height<span class="token operator">:</span> <span class="token number">200</span> <span class="token punctuation">}</span><span class="token punctuation">}</span></span> <span class="token punctuation">/&gt;</span></span></code></pre></div><div class="tab-panel" data-lang="rust"><p class="tab-label">Rust</p><pre><code class="language-rust"><span class="token keyword">use</span> <span class="token namespace">bevy<span class="token punctuation">::</span>prelude<span class="token punctuation">::</span></span><span class="token operator">*</span><span class="token punctuation">;</span>
+<span class="token keyword">use</span> <span class="token namespace">bevy<span class="token punctuation">::</span>ui<span class="token punctuation">::</span></span><span class="token punctuation">{</span><span class="token class-name">ComputedNode</span><span class="token punctuation">,</span> <span class="token class-name">UiGlobalTransform</span><span class="token punctuation">}</span><span class="token punctuation">;</span>
+<span class="token keyword">use</span> <span class="token namespace">bevy_react<span class="token punctuation">::</span></span><span class="token punctuation">{</span><span class="token class-name">ReactApplySet</span><span class="token punctuation">,</span> <span class="token class-name">ReactNodes</span><span class="token punctuation">}</span><span class="token punctuation">;</span>
+
+<span class="token keyword">fn</span> <span class="token function-definition function">track_minimap</span><span class="token punctuation">(</span>
+    nodes<span class="token punctuation">:</span> <span class="token class-name">ReactNodes</span><span class="token punctuation">,</span>
+    layout<span class="token punctuation">:</span> <span class="token class-name">Query</span><span class="token operator">&lt;</span><span class="token punctuation">(</span><span class="token operator">&amp;</span><span class="token class-name">ComputedNode</span><span class="token punctuation">,</span> <span class="token operator">&amp;</span><span class="token class-name">UiGlobalTransform</span><span class="token punctuation">)</span><span class="token operator">&gt;</span><span class="token punctuation">,</span>
+<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token keyword">let</span> <span class="token class-name">Some</span><span class="token punctuation">(</span>minimap<span class="token punctuation">)</span> <span class="token operator">=</span> nodes<span class="token punctuation">.</span><span class="token function">get</span><span class="token punctuation">(</span><span class="token string">&quot;minimap&quot;</span><span class="token punctuation">)</span> <span class="token keyword">else</span> <span class="token punctuation">{</span> <span class="token keyword">return</span> <span class="token punctuation">}</span><span class="token punctuation">;</span>
+    <span class="token keyword">let</span> <span class="token class-name">Ok</span><span class="token punctuation">(</span><span class="token punctuation">(</span>node<span class="token punctuation">,</span> transform<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token operator">=</span> layout<span class="token punctuation">.</span><span class="token function">get</span><span class="token punctuation">(</span>minimap<span class="token punctuation">)</span> <span class="token keyword">else</span> <span class="token punctuation">{</span> <span class="token keyword">return</span> <span class="token punctuation">}</span><span class="token punctuation">;</span>
+    <span class="token comment">// node.size() and transform.translation are in physical pixels</span>
+<span class="token punctuation">}</span>
+
+app<span class="token punctuation">.</span><span class="token function">add_systems</span><span class="token punctuation">(</span><span class="token class-name">Update</span><span class="token punctuation">,</span> track_minimap<span class="token punctuation">.</span><span class="token function">after</span><span class="token punctuation">(</span><span class="token class-name">ReactApplySet</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span></code></pre></div></div>
+<h2 id="the-name-prop"><a class="anchor" href="#the-name-prop" aria-hidden="true">#</a>The name prop</h2>
+<p>Every element accepts <code>name</code>, a string.</p>
+<ul>
+<li>It lands on the entity as a Bevy <code>Name</code> and in the <code>ReactNodes</code> index.</li>
+<li>It is dynamic: changing it renames the entity; <code>&quot;&quot;</code> or removing the prop
+removes the <code>Name</code>.</li>
+<li>Names are not unique. A list can give every item the same name, and Bevy
+reads them as a group.</li>
+</ul>
+<h2 id="finding-nodes"><a class="anchor" href="#finding-nodes" aria-hidden="true">#</a>Finding nodes</h2>
+<h3 id="reactnodes"><a class="anchor" href="#reactnodes" aria-hidden="true">#</a><code>ReactNodes</code></h3>
+<p><code>ReactNodes</code> is a read-only system param that looks entities up by name:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Returns</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>get(name)</code></td>
+<td><code>Option&lt;Entity&gt;</code>: the first mounted entity with the name</td>
+</tr>
+<tr>
+<td><code>all(name)</code></td>
+<td><code>&amp;[Entity]</code>: every entity with the name, in mount order</td>
+</tr>
+<tr>
+<td><code>contains(name)</code></td>
+<td><code>bool</code>: whether any mounted entity has the name</td>
+</tr>
+<tr>
+<td><code>iter()</code></td>
+<td>every <code>(name, &amp;[Entity])</code> group, in no particular order</td>
+</tr>
+</tbody></table></div>
+<p>When several entities share a name, <code>get</code> returns the first mounted one and
+reports a <code>nameAmbiguous</code> warning (in the Bevy log and in
+<a href="../../tooling/devtools/">devtools</a>). Use <code>all</code> for groups. This system reads
+each card&#39;s hover state; a node has an <code>Interaction</code> when it declares a
+pointer handler, <code>onClick</code>, <code>hoverStyle</code> or <code>pressStyle</code>:</p>
+<pre><code class="language-rust"><span class="token keyword">fn</span> <span class="token function-definition function">glow_hovered_cards</span><span class="token punctuation">(</span>
+    nodes<span class="token punctuation">:</span> <span class="token class-name">ReactNodes</span><span class="token punctuation">,</span>
+    cards<span class="token punctuation">:</span> <span class="token class-name">Query</span><span class="token operator">&lt;</span><span class="token operator">&amp;</span><span class="token class-name">Interaction</span><span class="token operator">&gt;</span><span class="token punctuation">,</span>
+<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token keyword">for</span> <span class="token operator">&amp;</span>card <span class="token keyword">in</span> nodes<span class="token punctuation">.</span><span class="token function">all</span><span class="token punctuation">(</span><span class="token string">&quot;card&quot;</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">if</span> <span class="token keyword">let</span> <span class="token class-name">Ok</span><span class="token punctuation">(</span><span class="token class-name">Interaction</span><span class="token punctuation">::</span><span class="token class-name">Hovered</span><span class="token punctuation">)</span> <span class="token operator">=</span> cards<span class="token punctuation">.</span><span class="token function">get</span><span class="token punctuation">(</span>card<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token comment">// …</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span></code></pre><h3 id="queries"><a class="anchor" href="#queries" aria-hidden="true">#</a>Queries</h3>
+<p>Every entity the React renderer creates (nodes, text, SVG shapes, portals,
+surfaces, roots) carries the <code>ReactNode</code> marker component. Filter with it, so
+the query skips the other named entities in your app, such as glTF nodes:</p>
+<pre><code class="language-rust"><span class="token keyword">fn</span> <span class="token function-definition function">on_mount</span><span class="token punctuation">(</span>added<span class="token punctuation">:</span> <span class="token class-name">Query</span><span class="token operator">&lt;</span><span class="token punctuation">(</span><span class="token class-name">Entity</span><span class="token punctuation">,</span> <span class="token operator">&amp;</span><span class="token class-name">Name</span><span class="token punctuation">)</span><span class="token punctuation">,</span> <span class="token class-name">Added</span><span class="token operator">&lt;</span><span class="token class-name">ReactNode</span><span class="token operator">&gt;&gt;</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token keyword">for</span> <span class="token punctuation">(</span>entity<span class="token punctuation">,</span> name<span class="token punctuation">)</span> <span class="token keyword">in</span> <span class="token operator">&amp;</span>added <span class="token punctuation">{</span>
+        <span class="token macro property">info!</span><span class="token punctuation">(</span><span class="token string">&quot;mounted {name} as {entity}&quot;</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span></code></pre><p><code>Added&lt;ReactNode&gt;</code> and <code>RemovedComponents&lt;ReactNode&gt;</code> are the mount and
+unmount signals. <code>ReactNode</code> holds the node&#39;s renderer id.</p>
+<h2 id="ordering"><a class="anchor" href="#ordering" aria-hidden="true">#</a>Ordering</h2>
+<p>React&#39;s changes are applied to the world in <code>ReactApplySet</code>, in <code>Update</code>;
+that is where entities spawn and despawn and where <code>Name</code> and the
+<code>ReactNodes</code> index change. Order your systems <code>.after(ReactApplySet)</code> to see
+the current frame&#39;s mounts, or they run a frame behind.</p>
+<p>Layout is computed later, in <code>PostUpdate</code>. For the current frame&#39;s
+<code>ComputedNode</code> and <code>UiGlobalTransform</code>, run in <code>PostUpdate</code> after
+<code>UiSystems::Layout</code>; to move 3D entities with the node in the same frame,
+also run before <code>TransformSystems::Propagate</code>, as the
+<a href="https://github.com/tulustul/bevy-react/blob/main/examples/demos/scenes/named_pins.rs">demo scene</a> does.</p>
+<p>An <code>Entity</code> is only valid while its React node is mounted. React despawns it
+on unmount without telling anyone who kept the handle, and a full hot reload
+rebuilds the whole tree. Look nodes up again each frame, or watch
+<code>RemovedComponents&lt;ReactNode&gt;</code>.</p>
+<h2 id="what-you-may-change"><a class="anchor" href="#what-you-may-change" aria-hidden="true">#</a>What you may change</h2>
+<p>The renderer re-applies the components it owns whenever React updates the
+node, so your writes to them are overwritten, sometimes only much later (only
+what a change touches is re-applied). Read them freely; don&#39;t write them:</p>
+<ul>
+<li><code>Node</code>, <code>BackgroundColor</code>, <code>BorderColor</code>, <code>Outline</code>, <code>BoxShadow</code>,
+<code>ZIndex</code>, <code>GlobalZIndex</code>, <code>LayoutConfig</code>, <code>Visibility</code>, <code>UiTransform</code>,
+<code>ImageNode</code></li>
+<li><code>Text</code>, <code>TextSpan</code>, <code>TextFont</code>, <code>TextColor</code>, <code>TextLayout</code></li>
+<li><code>ScrollPosition</code>, <code>Interaction</code>, <code>FocusPolicy</code>, <code>Pickable</code></li>
+<li><code>Name</code>, <code>Children</code>, <code>ChildOf</code></li>
+</ul>
+<p>Every other component is yours: your own components and markers,
+<code>MaterialNode&lt;M&gt;</code>, <code>TabIndex</code>, audio. In particular, don&#39;t insert a <code>Name</code> on
+a React node yourself: the index doesn&#39;t see it, and the next <code>name</code> change
+overwrites it.</p>
+<h2 id="children-you-spawn"><a class="anchor" href="#children-you-spawn" aria-hidden="true">#</a>Children you spawn</h2>
+<p>Entities you parent under a React node are despawned with it. But whenever
+React changes that node&#39;s children (a child mounts, unmounts or moves), the
+node&#39;s child list is rebuilt from the React tree and your children lose their
+parent; an orphaned UI <code>Node</code> then renders as a top-level UI root. Only parent
+your entities under nodes whose React children never change, or keep them
+separate and follow the node&#39;s layout instead.</p>
+<h2 id="limits"><a class="anchor" href="#limits" aria-hidden="true">#</a>Limits</h2>
+<ul>
+<li>The index is read-only, and a name can&#39;t select a single node out of a
+group.</li>
+<li>Entity handles go stale when React unmounts the node.</li>
+<li>The bridge-owned components above can&#39;t be driven from Rust; drive those
+from React (or with <a href="../../animations/animated-values/">animated values</a>).</li>
+</ul>
+<p>See <a href="../../reference/elements/#identity">Identity</a> in the element reference.</p>
+
+</article>
+<footer class="page-links"><a href="../../demo/?page=named-nodes">Open live demo</a>
+<a href="https://github.com/tulustul/bevy-react/blob/v0.7.0/examples/demos/ui/src/demos/communication/NamedNodesDemo.tsx">Demo source</a>
+<a href="https://github.com/tulustul/bevy-react/edit/main/docs/guide/communication/named-nodes.md">Edit this page</a></footer>
+</main>
+</div>
+<footer class="site-footer">
+<p>bevy-react is dual-licensed under MIT or Apache-2.0. <a href="https://github.com/tulustul/bevy-react">Source on GitHub</a>.</p>
+</footer>
+</body>
+</html>

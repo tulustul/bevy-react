@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Animated values · bevy-react</title>
+<meta name="description" content="Drive styles every frame from Bevy with Reanimated-style shared values, timing, spring, repeat, sequence and delay drivers, and inline animated bindings.">
+<link rel="canonical" href="https://tulustul.github.io/bevy-react/animations/animated-values/">
+<link rel="alternate" type="text/markdown" href="../../animations/animated-values.md">
+<meta property="og:title" content="Animated values · bevy-react">
+<meta property="og:description" content="Drive styles every frame from Bevy with Reanimated-style shared values, timing, spring, repeat, sequence and delay drivers, and inline animated bindings.">
+<link rel="icon" href="../../logo.png">
+<link rel="stylesheet" href="../../style.css">
+<script src="../../docs.js" defer></script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="site-header">
+<a class="brand" href="../../"><img src="../../logo.png" alt="" width="74" height="74"> bevy-react</a>
+<span class="version">v0.7.0</span>
+<nav class="site-links" aria-label="Project">
+<a href="../../demo/">Live demo</a>
+<a href="https://github.com/tulustul/bevy-react">GitHub</a>
+<a href="https://docs.rs/bevy-react">docs.rs</a>
+<a href="https://www.npmjs.com/package/bevy-react">npm</a>
+</nav>
+</header>
+<div class="layout">
+<nav class="sidebar" aria-label="Documentation">
+<details class="nav-menu" open>
+<summary>Menu</summary>
+<ul><li><a href="../../">Introduction</a></li><li><a href="../../getting-started/">Getting started</a></li><li><a href="../../how-it-works/">How it works</a></li><li class="nav-section"><span>Elements</span><ul><li><a href="../../elements/node/">&lt;node&gt;</a></li><li><a href="../../elements/button/">&lt;button&gt;</a></li><li><a href="../../elements/text/">&lt;text&gt;</a></li><li><a href="../../elements/editable-text/">&lt;editableText&gt;</a></li><li><a href="../../elements/image/">&lt;image&gt;</a></li><li><a href="../../elements/canvas/">&lt;canvas&gt;</a></li><li><a href="../../elements/svg/">&lt;svg&gt;</a></li><li><a href="../../elements/portal/">&lt;portal&gt;</a></li><li><a href="../../elements/surface/">&lt;surface&gt;</a></li><li><a href="../../elements/root/">&lt;root&gt;</a></li><li><a href="../../elements/anchor/">&lt;anchor&gt;</a></li></ul></li><li class="nav-section"><span>Layout</span><ul><li><a href="../../layout/flexbox/">Flexbox</a></li><li><a href="../../layout/grid/">Grid</a></li><li><a href="../../layout/positioning/">Positioning</a></li></ul></li><li class="nav-section"><span>Styling</span><ul><li><a href="../../styling/units/">Units</a></li><li><a href="../../styling/colors/">Colors</a></li><li><a href="../../styling/borders/">Borders</a></li><li><a href="../../styling/spacing/">Spacing</a></li><li><a href="../../styling/sizing/">Sizing</a></li><li><a href="../../styling/layout-rounding/">Layout rounding</a></li><li><a href="../../styling/overflow/">Overflow</a></li><li><a href="../../styling/transforms/">Transforms</a></li><li><a href="../../styling/3d-transforms/">3D transforms</a></li><li><a href="../../styling/shadows/">Shadows</a></li><li><a href="../../styling/filters/">Filters</a></li><li><a href="../../styling/backdrop-filters/">Backdrop filters</a></li><li><a href="../../styling/morph-filters/">Morph filters</a></li><li><a href="../../styling/gradients/">Gradients</a></li><li><a href="../../styling/background-images/">Background images</a></li><li><a href="../../styling/image-rendering/">Image rendering</a></li><li><a href="../../styling/opacity/">Opacity</a></li><li><a href="../../styling/z-index/">Z-index</a></li><li><a href="../../styling/focus-policy/">Focus policy</a></li><li><a href="../../styling/cursors/">Cursors</a></li><li><a href="../../styling/layers/">Layers</a></li></ul></li><li class="nav-section"><span>Animations</span><ul><li><a href="../../animations/style-transitions/">Style transitions</a></li><li><a href="../../animations/animated-values/" aria-current="page">Animated values</a></li><li><a href="../../animations/interpolation/">Interpolation</a></li><li><a href="../../animations/shared-elements/">Shared elements</a></li></ul></li><li class="nav-section"><span>Communication</span><ul><li><a href="../../communication/react-to-bevy/">React to Bevy</a></li><li><a href="../../communication/bevy-to-react/">Bevy to React</a></li><li><a href="../../communication/request-response/">Request / response</a></li><li><a href="../../communication/named-nodes/">Named nodes</a></li></ul></li><li class="nav-section"><span>Events</span><ul><li><a href="../../events/mouse/">Mouse</a></li><li><a href="../../events/keyboard/">Keyboard</a></li><li><a href="../../events/gamepad/">Gamepad</a></li><li><a href="../../events/window/">Window</a></li></ul></li><li class="nav-section"><span>Extending</span><ul><li><a href="../../extending/custom-elements/">Custom elements</a></li><li><a href="../../extending/custom-styles/">Custom styles</a></li><li><a href="../../extending/custom-filters/">Custom filters</a></li></ul></li><li class="nav-section"><span>Tooling</span><ul><li><a href="../../tooling/devtools/">Devtools</a></li><li><a href="../../tooling/hot-reload/">Hot reload</a></li><li><a href="../../tooling/web/">Web builds</a></li><li><a href="../../tooling/ts-codegen/">TypeScript codegen</a></li></ul></li><li class="nav-section"><span>Reference</span><ul><li><a href="../../reference/style-properties/">Style properties</a></li><li><a href="../../reference/elements/">Elements</a></li><li><a href="../../reference/filters/">Filters</a></li></ul></li><li><a href="../../performance/">Performance</a></li></ul>
+</details>
+</nav>
+<main id="main">
+<article>
+<h1 id="animated-values">Animated values</h1>
+<p>Animated values are a Reanimated-style animation API. <code>useSharedValue</code>
+creates a number that lives on the Bevy side, drivers such as <code>withTiming</code>
+and <code>withSpring</code> describe how it moves, and an inline <code>{ animated }</code> wrapper
+binds it to a style property. React renders once; every frame after that is
+computed and applied by Bevy, with no re-renders and no per-frame traffic
+from JS.</p>
+<h2 id="usage"><a class="anchor" href="#usage" aria-hidden="true">#</a>Usage</h2>
+<pre><code class="language-tsx"><span class="token keyword">import</span> <span class="token punctuation">{</span> useSharedValue<span class="token punctuation">,</span> withTiming <span class="token punctuation">}</span> <span class="token keyword">from</span> <span class="token string">&quot;bevy-react&quot;</span><span class="token punctuation">;</span>
+
+<span class="token keyword">function</span> <span class="token function">Slide</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+  <span class="token keyword">const</span> x <span class="token operator">=</span> <span class="token function">useSharedValue</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token keyword">return</span> <span class="token punctuation">(</span>
+    <span class="token operator">&lt;</span>button
+      onClick<span class="token operator">=</span><span class="token punctuation">{</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">=&gt;</span> <span class="token punctuation">{</span>
+        x<span class="token punctuation">.</span>value <span class="token operator">=</span> <span class="token function">withTiming</span><span class="token punctuation">(</span><span class="token number">200</span><span class="token punctuation">,</span> <span class="token punctuation">{</span> duration<span class="token operator">:</span> <span class="token number">800</span><span class="token punctuation">,</span> easing<span class="token operator">:</span> <span class="token string">&quot;easeInOut&quot;</span> <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+      <span class="token punctuation">}</span><span class="token punctuation">}</span>
+      style<span class="token operator">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span> transform<span class="token operator">:</span> <span class="token punctuation">{</span> translateX<span class="token operator">:</span> <span class="token punctuation">{</span> animated<span class="token operator">:</span> x <span class="token punctuation">}</span> <span class="token punctuation">}</span> <span class="token punctuation">}</span><span class="token punctuation">}</span>
+    <span class="token operator">&gt;</span>
+      <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>text</span><span class="token punctuation">&gt;</span></span><span class="token plain-text">Slide</span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>text</span><span class="token punctuation">&gt;</span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>button</span><span class="token punctuation">&gt;</span></span>
+  <span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span></code></pre><h2 id="shared-values"><a class="anchor" href="#shared-values" aria-hidden="true">#</a>Shared values</h2>
+<p><code>useSharedValue(initial)</code> returns a handle that is stable across re-renders,
+one per component instance. <code>initial</code> is used only on the first render.</p>
+<ul>
+<li>Assigning a number (<code>x.value = 0</code>) sets the value at once and stops any
+running driver.</li>
+<li>Assigning a driver (<code>x.value = withSpring(1)</code>) starts an animation from the
+value&#39;s current reading on the Bevy side, so interrupting a running
+animation never jumps.</li>
+<li><code>cancelAnimation(x)</code> stops the running driver and freezes the value where
+it is.</li>
+<li>Reading <code>x.value</code> returns the last number assigned from JS, not the
+animated reading: per-frame values never travel back to JS. Use a
+<a href="#completion-callbacks">completion callback</a> to learn when an animation
+ends.</li>
+<li>One shared value can drive any number of properties on any number of
+nodes, and you can pass it to other components as a prop.</li>
+<li>Assign drivers in event handlers and effects. An assignment during render
+restarts the animation on every render.</li>
+</ul>
+<p>Shared values and their running animations survive a
+<a href="../../tooling/hot-reload/">hot reload</a> that keeps component state. A full
+reload clears them.</p>
+<h2 id="drivers"><a class="anchor" href="#drivers" aria-hidden="true">#</a>Drivers</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Driver</th>
+<th>Moves the value</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>withTiming(to, config?)</code></td>
+<td>Along an easing curve over a fixed duration</td>
+</tr>
+<tr>
+<td><code>withSpring(to, config?)</code></td>
+<td>With a damped spring until it rests on <code>to</code></td>
+</tr>
+<tr>
+<td><code>withRepeat(driver, config?)</code></td>
+<td>Runs <code>driver</code> again, forever or <code>count</code> times</td>
+</tr>
+<tr>
+<td><code>withSequence(...drivers, callback?)</code></td>
+<td>Runs each driver in turn, from where the previous ended</td>
+</tr>
+<tr>
+<td><code>withDelay(ms, driver, callback?)</code></td>
+<td>Holds the current value for <code>ms</code>, then runs <code>driver</code></td>
+</tr>
+</tbody></table></div>
+<p>Configs, all fields optional:</p>
+<ul>
+<li><code>withTiming</code>: <code>duration</code> in milliseconds (default <code>300</code>), <code>easing</code>
+(default <code>&quot;linear&quot;</code>), <code>onComplete</code>. The easings are <code>&quot;linear&quot;</code>, <code>&quot;easeIn&quot;</code>,
+<code>&quot;easeOut&quot;</code> and <code>&quot;easeInOut&quot;</code> (cubic), also exported as <code>Easing.easeInOut</code>
+and so on.</li>
+<li><code>withSpring</code>: <code>stiffness</code> (default <code>100</code>), <code>damping</code> (default <code>10</code>),
+<code>mass</code> (default <code>1</code>), <code>onComplete</code>. A spring has no duration; a low
+<code>damping</code> overshoots and wobbles before it settles.</li>
+<li><code>withRepeat</code>: <code>count</code> (omit it to repeat forever), <code>reverse</code> (default
+<code>false</code>), <code>onComplete</code>.</li>
+</ul>
+<p>Drivers compose:</p>
+<pre><code class="language-tsx">x<span class="token punctuation">.</span>value <span class="token operator">=</span> <span class="token function">withSequence</span><span class="token punctuation">(</span>
+  <span class="token function">withTiming</span><span class="token punctuation">(</span><span class="token number">110</span><span class="token punctuation">,</span> <span class="token punctuation">{</span> duration<span class="token operator">:</span> <span class="token number">450</span><span class="token punctuation">,</span> easing<span class="token operator">:</span> <span class="token string">&quot;easeOut&quot;</span> <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+  <span class="token function">withDelay</span><span class="token punctuation">(</span><span class="token number">250</span><span class="token punctuation">,</span> <span class="token function">withTiming</span><span class="token punctuation">(</span><span class="token operator">-</span><span class="token number">110</span><span class="token punctuation">,</span> <span class="token punctuation">{</span> duration<span class="token operator">:</span> <span class="token number">450</span> <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+  <span class="token function">withDelay</span><span class="token punctuation">(</span><span class="token number">250</span><span class="token punctuation">,</span> <span class="token function">withSpring</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+<span class="token punctuation">)</span><span class="token punctuation">;</span></code></pre><p><code>withRepeat</code> details:</p>
+<ul>
+<li>Without <code>reverse</code>, every run starts again from the value the repeat began
+at, so the value jumps back at the end of each run. That is what makes
+<code>withRepeat(withTiming(360, { duration: 1200 }))</code> from <code>0</code> spin forever.</li>
+<li>With <code>reverse: true</code>, runs alternate direction (there and back), and
+<code>count</code> counts each direction as a run: <code>count: 2</code> goes there and back
+once. <code>reverse</code> applies to a <code>withTiming</code> or <code>withSpring</code> inside; any other
+driver repeats as written.</li>
+</ul>
+<pre><code class="language-tsx"><span class="token keyword">const</span> opacity <span class="token operator">=</span> <span class="token function">useSharedValue</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token function">useEffect</span><span class="token punctuation">(</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">=&gt;</span> <span class="token punctuation">{</span>
+  opacity<span class="token punctuation">.</span>value <span class="token operator">=</span> <span class="token function">withRepeat</span><span class="token punctuation">(</span>
+    <span class="token function">withTiming</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">,</span> <span class="token punctuation">{</span> duration<span class="token operator">:</span> <span class="token number">500</span><span class="token punctuation">,</span> easing<span class="token operator">:</span> <span class="token string">&quot;easeInOut&quot;</span> <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+    <span class="token punctuation">{</span> reverse<span class="token operator">:</span> <span class="token boolean">true</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+  <span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span><span class="token punctuation">,</span> <span class="token punctuation">[</span>opacity<span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span></code></pre><h2 id="completion-callbacks"><a class="anchor" href="#completion-callbacks" aria-hidden="true">#</a>Completion callbacks</h2>
+<p>A driver can report when it settles. <code>withTiming</code>, <code>withSpring</code> and
+<code>withRepeat</code> take <code>onComplete</code> in their config; <code>withSequence</code> takes a
+trailing function and <code>withDelay</code> a third argument:</p>
+<pre><code class="language-tsx">x<span class="token punctuation">.</span>value <span class="token operator">=</span> <span class="token function">withSequence</span><span class="token punctuation">(</span>
+  <span class="token function">withTiming</span><span class="token punctuation">(</span><span class="token number">110</span><span class="token punctuation">,</span> <span class="token punctuation">{</span> duration<span class="token operator">:</span> <span class="token number">450</span> <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+  <span class="token function">withTiming</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">,</span> <span class="token punctuation">{</span> duration<span class="token operator">:</span> <span class="token number">350</span> <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+  <span class="token punctuation">(</span>finished<span class="token punctuation">)</span> <span class="token operator">=&gt;</span> <span class="token function">setRunning</span><span class="token punctuation">(</span><span class="token boolean">false</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+<span class="token punctuation">)</span><span class="token punctuation">;</span></code></pre><ul>
+<li>The callback runs once, with <code>finished</code> <code>true</code> when the animation ran to
+its end and <code>false</code> when it was interrupted: by assigning a number or a new
+driver, or by <code>cancelAnimation</code>.</li>
+<li>Only the driver assigned to <code>.value</code> reports. A callback on a driver nested
+inside <code>withRepeat</code>, <code>withSequence</code> or <code>withDelay</code> is ignored, with a
+console warning.</li>
+<li>A <code>withRepeat</code> without <code>count</code> calls back only when it is interrupted.</li>
+<li>The callback arrives through the event loop like any event from Bevy, so
+it may set state.</li>
+</ul>
+<h2 id="bindings"><a class="anchor" href="#bindings" aria-hidden="true">#</a>Bindings</h2>
+<p>Write <code>{ animated: value }</code> in place of a style value. The value is a shared
+value, or an <code>interpolate</code> or <code>interpolateColor</code> result that maps it through a
+curve (see <a href="../../animations/interpolation/">Interpolation</a>):</p>
+<pre><code class="language-tsx"><span class="token operator">&lt;</span>node
+  style<span class="token operator">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span>
+    width<span class="token operator">:</span> <span class="token punctuation">{</span> animated<span class="token operator">:</span> w <span class="token punctuation">}</span><span class="token punctuation">,</span>
+    opacity<span class="token operator">:</span> <span class="token punctuation">{</span> animated<span class="token operator">:</span> fade <span class="token punctuation">}</span><span class="token punctuation">,</span>
+    transform<span class="token operator">:</span> <span class="token punctuation">{</span> rotate<span class="token operator">:</span> <span class="token punctuation">{</span> animated<span class="token operator">:</span> angle <span class="token punctuation">}</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+  <span class="token punctuation">}</span><span class="token punctuation">}</span>
+<span class="token operator">/</span><span class="token operator">&gt;</span></code></pre><div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Position</th>
+<th>Bound value</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>opacity</code></td>
+<td><code>0</code> to <code>1</code></td>
+</tr>
+<tr>
+<td><code>transform</code>: <code>translateX</code>, <code>translateY</code></td>
+<td>Logical px</td>
+</tr>
+<tr>
+<td><code>transform</code>: <code>scale</code>, <code>scaleX</code>, <code>scaleY</code></td>
+<td>Factor</td>
+</tr>
+<tr>
+<td><code>transform</code>: <code>rotate</code></td>
+<td>Degrees</td>
+</tr>
+<tr>
+<td>Layout lengths (listed below)</td>
+<td>Logical px</td>
+</tr>
+<tr>
+<td><code>aspectRatio</code></td>
+<td>Ratio</td>
+</tr>
+<tr>
+<td><code>borderRadius</code></td>
+<td>Logical px, all four corners</td>
+</tr>
+<tr>
+<td><code>backgroundColor</code>, <code>borderColor</code>, <code>color</code></td>
+<td>An <code>interpolateColor</code> binding</td>
+</tr>
+<tr>
+<td><code>backgroundImage</code>: <code>tint</code></td>
+<td>An <code>interpolateColor</code> binding</td>
+</tr>
+<tr>
+<td><code>transform3d</code> fields</td>
+<td>See <a href="../../styling/3d-transforms/">3D transforms</a></td>
+</tr>
+<tr>
+<td><code>filter</code>, <code>backdropFilter</code>, <code>morphFilter</code> params</td>
+<td>See <a href="../../styling/filters/">Filters</a></td>
+</tr>
+<tr>
+<td>Gradient angles, stops and radii</td>
+<td>See <a href="../../styling/gradients/">Gradients</a></td>
+</tr>
+</tbody></table></div>
+<p>The layout lengths are <code>width</code>, <code>height</code>, <code>minWidth</code>, <code>minHeight</code>,
+<code>maxWidth</code>, <code>maxHeight</code>, <code>left</code>, <code>right</code>, <code>top</code>, <code>bottom</code>, <code>flexBasis</code>,
+<code>gap</code>, <code>rowGap</code> and <code>columnGap</code>.</p>
+<p>Rules:</p>
+<ul>
+<li>A bound length is always in pixels and a bound rotation in degrees,
+whatever unit the static form of the field would use.</li>
+<li>The binding is the field&#39;s only value: there is no static value under it.</li>
+<li>A color position needs an <code>interpolateColor</code> binding. A plain shared value
+or <code>interpolate</code> cannot drive a color.</li>
+<li><code>borderColor</code> and <code>borderRadius</code> bind as a whole: one value for every side
+or corner.</li>
+<li>Bindings work in the base <code>style</code> only. A binding in <code>hoverStyle</code>,
+<code>pressStyle</code> or <code>focusStyle</code> is ignored with a <code>styleBinding</code> warning. To
+react to hover, animate the value from <code>onPointerEnter</code> and
+<code>onPointerLeave</code> instead.</li>
+<li>A binding wins over a <code>transition</code> on the same property (see
+<a href="../../animations/style-transitions/">Style transitions</a>).</li>
+<li><code>seed</code> (<code>{ animated: value, seed: 16 }</code>) only matters for filter params and
+element attributes; style fields ignore it.</li>
+</ul>
+<p>Element attributes can be animated too: the numeric attributes of SVG shapes
+(see <a href="../../elements/svg/"><code>&lt;svg&gt;</code></a>) and those of your own elements
+(see <a href="../../extending/custom-elements/">Custom elements</a>).</p>
+<h2 id="cost"><a class="anchor" href="#cost" aria-hidden="true">#</a>Cost</h2>
+<p>A shared value is stepped once per Bevy frame by the frame&#39;s delta time,
+and the nodes bound to it are written only on frames where it changed. An
+idle value costs nothing. Transform, opacity and color bindings do not
+trigger a relayout. Layout bindings (sizes, positions, gaps, <code>aspectRatio</code>, <code>borderRadius</code>)
+relayout the UI on every frame they change, so prefer <code>transform</code> for pure
+motion.</p>
+<h2 id="limits"><a class="anchor" href="#limits" aria-hidden="true">#</a>Limits</h2>
+<ul>
+<li>A shared value is one number. Animate several numbers with several values.</li>
+<li>The JS side cannot read the live value, and easing is limited to the four
+named curves: a JS easing function cannot run in Bevy.</li>
+<li><code>interpolateColor</code> takes hex colors only.</li>
+<li>Padding, margin and <code>backgroundImage.scale</code> cannot be animated.</li>
+</ul>
+<p>The <strong>Animatable</strong> column of the
+<a href="../../reference/style-properties/">style reference</a> marks every property that
+accepts a binding.</p>
+
+</article>
+<footer class="page-links"><a href="../../demo/?page=animated-values">Open live demo</a>
+<a href="https://github.com/tulustul/bevy-react/blob/v0.7.0/examples/demos/ui/src/demos/animations/animatedValues/AnimatedValuesDemo.tsx">Demo source</a>
+<a href="https://github.com/tulustul/bevy-react/edit/main/docs/guide/animations/animated-values.md">Edit this page</a></footer>
+</main>
+</div>
+<footer class="site-footer">
+<p>bevy-react is dual-licensed under MIT or Apache-2.0. <a href="https://github.com/tulustul/bevy-react">Source on GitHub</a>.</p>
+</footer>
+</body>
+</html>

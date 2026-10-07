@@ -1,0 +1,355 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Style transitions · bevy-react</title>
+<meta name="description" content="Ease style changes instead of snapping them with the transition style, per channel, with timing curves or springs, including FLIP layout transitions.">
+<link rel="canonical" href="https://tulustul.github.io/bevy-react/animations/style-transitions/">
+<link rel="alternate" type="text/markdown" href="../../animations/style-transitions.md">
+<meta property="og:title" content="Style transitions · bevy-react">
+<meta property="og:description" content="Ease style changes instead of snapping them with the transition style, per channel, with timing curves or springs, including FLIP layout transitions.">
+<link rel="icon" href="../../logo.png">
+<link rel="stylesheet" href="../../style.css">
+<script src="../../docs.js" defer></script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="site-header">
+<a class="brand" href="../../"><img src="../../logo.png" alt="" width="74" height="74"> bevy-react</a>
+<span class="version">v0.7.0</span>
+<nav class="site-links" aria-label="Project">
+<a href="../../demo/">Live demo</a>
+<a href="https://github.com/tulustul/bevy-react">GitHub</a>
+<a href="https://docs.rs/bevy-react">docs.rs</a>
+<a href="https://www.npmjs.com/package/bevy-react">npm</a>
+</nav>
+</header>
+<div class="layout">
+<nav class="sidebar" aria-label="Documentation">
+<details class="nav-menu" open>
+<summary>Menu</summary>
+<ul><li><a href="../../">Introduction</a></li><li><a href="../../getting-started/">Getting started</a></li><li><a href="../../how-it-works/">How it works</a></li><li class="nav-section"><span>Elements</span><ul><li><a href="../../elements/node/">&lt;node&gt;</a></li><li><a href="../../elements/button/">&lt;button&gt;</a></li><li><a href="../../elements/text/">&lt;text&gt;</a></li><li><a href="../../elements/editable-text/">&lt;editableText&gt;</a></li><li><a href="../../elements/image/">&lt;image&gt;</a></li><li><a href="../../elements/canvas/">&lt;canvas&gt;</a></li><li><a href="../../elements/svg/">&lt;svg&gt;</a></li><li><a href="../../elements/portal/">&lt;portal&gt;</a></li><li><a href="../../elements/surface/">&lt;surface&gt;</a></li><li><a href="../../elements/root/">&lt;root&gt;</a></li><li><a href="../../elements/anchor/">&lt;anchor&gt;</a></li></ul></li><li class="nav-section"><span>Layout</span><ul><li><a href="../../layout/flexbox/">Flexbox</a></li><li><a href="../../layout/grid/">Grid</a></li><li><a href="../../layout/positioning/">Positioning</a></li></ul></li><li class="nav-section"><span>Styling</span><ul><li><a href="../../styling/units/">Units</a></li><li><a href="../../styling/colors/">Colors</a></li><li><a href="../../styling/borders/">Borders</a></li><li><a href="../../styling/spacing/">Spacing</a></li><li><a href="../../styling/sizing/">Sizing</a></li><li><a href="../../styling/layout-rounding/">Layout rounding</a></li><li><a href="../../styling/overflow/">Overflow</a></li><li><a href="../../styling/transforms/">Transforms</a></li><li><a href="../../styling/3d-transforms/">3D transforms</a></li><li><a href="../../styling/shadows/">Shadows</a></li><li><a href="../../styling/filters/">Filters</a></li><li><a href="../../styling/backdrop-filters/">Backdrop filters</a></li><li><a href="../../styling/morph-filters/">Morph filters</a></li><li><a href="../../styling/gradients/">Gradients</a></li><li><a href="../../styling/background-images/">Background images</a></li><li><a href="../../styling/image-rendering/">Image rendering</a></li><li><a href="../../styling/opacity/">Opacity</a></li><li><a href="../../styling/z-index/">Z-index</a></li><li><a href="../../styling/focus-policy/">Focus policy</a></li><li><a href="../../styling/cursors/">Cursors</a></li><li><a href="../../styling/layers/">Layers</a></li></ul></li><li class="nav-section"><span>Animations</span><ul><li><a href="../../animations/style-transitions/" aria-current="page">Style transitions</a></li><li><a href="../../animations/animated-values/">Animated values</a></li><li><a href="../../animations/interpolation/">Interpolation</a></li><li><a href="../../animations/shared-elements/">Shared elements</a></li></ul></li><li class="nav-section"><span>Communication</span><ul><li><a href="../../communication/react-to-bevy/">React to Bevy</a></li><li><a href="../../communication/bevy-to-react/">Bevy to React</a></li><li><a href="../../communication/request-response/">Request / response</a></li><li><a href="../../communication/named-nodes/">Named nodes</a></li></ul></li><li class="nav-section"><span>Events</span><ul><li><a href="../../events/mouse/">Mouse</a></li><li><a href="../../events/keyboard/">Keyboard</a></li><li><a href="../../events/gamepad/">Gamepad</a></li><li><a href="../../events/window/">Window</a></li></ul></li><li class="nav-section"><span>Extending</span><ul><li><a href="../../extending/custom-elements/">Custom elements</a></li><li><a href="../../extending/custom-styles/">Custom styles</a></li><li><a href="../../extending/custom-filters/">Custom filters</a></li></ul></li><li class="nav-section"><span>Tooling</span><ul><li><a href="../../tooling/devtools/">Devtools</a></li><li><a href="../../tooling/hot-reload/">Hot reload</a></li><li><a href="../../tooling/web/">Web builds</a></li><li><a href="../../tooling/ts-codegen/">TypeScript codegen</a></li></ul></li><li class="nav-section"><span>Reference</span><ul><li><a href="../../reference/style-properties/">Style properties</a></li><li><a href="../../reference/elements/">Elements</a></li><li><a href="../../reference/filters/">Filters</a></li></ul></li><li><a href="../../performance/">Performance</a></li></ul>
+</details>
+</nav>
+<main id="main">
+<article>
+<h1 id="style-transitions">Style transitions</h1>
+<p>The <code>transition</code> style makes a style change ease instead of snap. You list
+the channels that should animate (<code>transform</code>, <code>opacity</code>, <code>size</code>, <code>layout</code>
+and so on), each with its own timing curve or spring. Whatever changes the
+style, whether a re-render with new values or a hover, press or focus state
+taking effect, the node then glides to the new value. The easing runs on the
+Bevy side every frame, and React renders only the end state.</p>
+<h2 id="usage"><a class="anchor" href="#usage" aria-hidden="true">#</a>Usage</h2>
+<pre><code class="language-tsx"><span class="token operator">&lt;</span>button
+  style<span class="token operator">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span>
+    backgroundColor<span class="token operator">:</span> <span class="token string">&quot;#7aa2f7&quot;</span><span class="token punctuation">,</span>
+    transform<span class="token operator">:</span> <span class="token punctuation">{</span> scale<span class="token operator">:</span> <span class="token number">1</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+    transition<span class="token operator">:</span> <span class="token punctuation">{</span>
+      transform<span class="token operator">:</span> <span class="token punctuation">{</span> duration<span class="token operator">:</span> <span class="token number">120</span><span class="token punctuation">,</span> easing<span class="token operator">:</span> <span class="token string">&quot;easeOut&quot;</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+      backgroundColor<span class="token operator">:</span> <span class="token punctuation">{</span> duration<span class="token operator">:</span> <span class="token number">200</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+    <span class="token punctuation">}</span><span class="token punctuation">,</span>
+  <span class="token punctuation">}</span><span class="token punctuation">}</span>
+  hoverStyle<span class="token operator">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span> backgroundColor<span class="token operator">:</span> <span class="token string">&quot;#89b4fa&quot;</span> <span class="token punctuation">}</span><span class="token punctuation">}</span>
+  pressStyle<span class="token operator">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span> transform<span class="token operator">:</span> <span class="token punctuation">{</span> scale<span class="token operator">:</span> <span class="token number">0.92</span> <span class="token punctuation">}</span> <span class="token punctuation">}</span><span class="token punctuation">}</span>
+<span class="token operator">&gt;</span>
+  <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>text</span><span class="token punctuation">&gt;</span></span><span class="token plain-text">Press me</span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>text</span><span class="token punctuation">&gt;</span></span>
+<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>button</span><span class="token punctuation">&gt;</span></span></code></pre><p>A change from React state eases the same way. This knob springs across its
+track:</p>
+<pre><code class="language-tsx"><span class="token operator">&lt;</span>node
+  style<span class="token operator">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span>
+    transform<span class="token operator">:</span> <span class="token punctuation">{</span> translateX<span class="token operator">:</span> on <span class="token operator">?</span> <span class="token number">36</span> <span class="token operator">:</span> <span class="token number">0</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+    transition<span class="token operator">:</span> <span class="token punctuation">{</span> transform<span class="token operator">:</span> <span class="token punctuation">{</span> stiffness<span class="token operator">:</span> <span class="token number">180</span><span class="token punctuation">,</span> damping<span class="token operator">:</span> <span class="token number">14</span> <span class="token punctuation">}</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+  <span class="token punctuation">}</span><span class="token punctuation">}</span>
+<span class="token operator">/</span><span class="token operator">&gt;</span></code></pre><h2 id="timing"><a class="anchor" href="#timing" aria-hidden="true">#</a>Timing</h2>
+<p>Each channel takes one spec. A spec is a timing curve, or a spring when
+<code>stiffness</code> or <code>damping</code> is present:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Default</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>duration</code></td>
+<td><code>Time</code></td>
+<td><code>300</code></td>
+<td>Length of the curve. Ignored by springs</td>
+</tr>
+<tr>
+<td><code>easing</code></td>
+<td><code>&quot;linear&quot;</code>, <code>&quot;easeIn&quot;</code>, <code>&quot;easeOut&quot;</code>, <code>&quot;easeInOut&quot;</code></td>
+<td><code>&quot;linear&quot;</code></td>
+<td>Curve shape (cubic in, out and in-out)</td>
+</tr>
+<tr>
+<td><code>delay</code></td>
+<td><code>Time</code></td>
+<td><code>0</code></td>
+<td>Wait before easing. Timing curves only; springs ignore it</td>
+</tr>
+<tr>
+<td><code>stiffness</code></td>
+<td><code>number</code></td>
+<td><code>100</code></td>
+<td>Spring stiffness; selects a spring</td>
+</tr>
+<tr>
+<td><code>damping</code></td>
+<td><code>number</code></td>
+<td><code>10</code></td>
+<td>Spring damping; selects a spring</td>
+</tr>
+<tr>
+<td><code>mass</code></td>
+<td><code>number</code></td>
+<td><code>1</code></td>
+<td>Spring mass (does not select a spring on its own)</td>
+</tr>
+</tbody></table></div>
+<p>A <code>Time</code> is a number of milliseconds or a string with a unit (<code>&quot;200ms&quot;</code>,
+<code>&quot;0.2s&quot;</code>). The default easing is <code>&quot;linear&quot;</code>, not CSS&#39;s <code>ease</code>. A spring has
+no duration: it runs until it comes to rest, and a low <code>damping</code> overshoots
+the target before settling.</p>
+<h2 id="what-triggers-a-transition"><a class="anchor" href="#what-triggers-a-transition" aria-hidden="true">#</a>What triggers a transition</h2>
+<p>A listed channel eases whenever the value it covers changes in the style in
+effect:</p>
+<ul>
+<li>A re-render that changes the value.</li>
+<li>A <code>hoverStyle</code>, <code>pressStyle</code> or <code>focusStyle</code> starting or ending. The
+<code>transition</code> value is read from the style in effect too, so a <code>transition</code>
+inside <code>hoverStyle</code> times the ease into the hover state and the base one
+times the ease back out.</li>
+<li>A new target while a transition is running restarts the ease from the
+current on-screen value, so interrupted transitions never jump.</li>
+</ul>
+<p>Rules that are easy to trip over:</p>
+<ul>
+<li><strong>Explicit channels only.</strong> There is no <code>all</code> shorthand and no fallback:
+a channel without an entry snaps.</li>
+<li><strong>No enter animation.</strong> A node&#39;s first style is adopted as it is, even
+with a <code>transition</code>. To animate a node in, mount it with the start value
+and switch to the end value once it has been on screen for a frame (for
+example after a short <code>setTimeout</code>). A switch from a bare <code>useEffect</code> can
+reach Bevy in the same frame as the mount and snap. Unmounting is
+immediate. A <a href="../../animations/animated-values/">shared value</a> is the more robust tool
+for entrances.</li>
+<li><strong>Set the value in every state.</strong> A channel eases between two values. If
+the base style leaves a property out and a state style sets it, the way
+back snaps, and the next change can snap too. Put the resting value
+(<code>transform: { scale: 1 }</code>, <code>opacity: 1</code>) in the base style.</li>
+<li><strong>Bindings win.</strong> A property driven by an <code>{ animated }</code> binding ignores
+its transition. For the group channels (<code>transform</code>, <code>transform3d</code>,
+<code>filter</code>, <code>backdropFilter</code>, the gradients), any binding in the group
+switches off the whole channel.</li>
+</ul>
+<h2 id="channels"><a class="anchor" href="#channels" aria-hidden="true">#</a>Channels</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Channel</th>
+<th>Eases</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>transform</code></td>
+<td><code>translateX</code>, <code>translateY</code>, <code>scale</code>, <code>scaleX</code>, <code>scaleY</code>, <code>rotate</code></td>
+<td>One spec for all six. See <a href="../../styling/transforms/">Transforms</a></td>
+</tr>
+<tr>
+<td><code>opacity</code></td>
+<td><code>opacity</code></td>
+<td>See <a href="../../styling/opacity/">Opacity</a></td>
+</tr>
+<tr>
+<td><code>backgroundColor</code></td>
+<td><code>backgroundColor</code></td>
+<td>Interpolated in sRGB</td>
+</tr>
+<tr>
+<td><code>size</code></td>
+<td><code>width</code>, <code>height</code>, <code>maxWidth</code>, <code>maxHeight</code></td>
+<td>Real layout; see <a href="#size">Size</a></td>
+</tr>
+<tr>
+<td><code>borderRadius</code></td>
+<td>Each corner</td>
+<td>See <a href="../../styling/borders/">Borders</a></td>
+</tr>
+<tr>
+<td><code>backgroundGradient</code></td>
+<td><code>backgroundGradient</code> stops, angles, positions</td>
+<td>Matching structures only. See <a href="../../styling/gradients/">Gradients</a></td>
+</tr>
+<tr>
+<td><code>borderGradient</code></td>
+<td><code>borderGradient</code>, the same way</td>
+<td>Independent of <code>backgroundGradient</code></td>
+</tr>
+<tr>
+<td><code>filter</code></td>
+<td>The <code>filter</code> chain&#39;s params</td>
+<td>See <a href="../../styling/filters/">Filters</a></td>
+</tr>
+<tr>
+<td><code>backdropFilter</code></td>
+<td>The <code>backdropFilter</code> chain&#39;s params</td>
+<td>See <a href="../../styling/backdrop-filters/">Backdrop filters</a></td>
+</tr>
+<tr>
+<td><code>transform3d</code></td>
+<td>Every <code>transform3d</code> field</td>
+<td>See <a href="../../styling/3d-transforms/">3D transforms</a></td>
+</tr>
+<tr>
+<td><code>morphFilter</code></td>
+<td>The morph&#39;s progress</td>
+<td>Built-in default; see <a href="../../styling/morph-filters/">Morph filters</a></td>
+</tr>
+<tr>
+<td><code>scroll</code></td>
+<td>The scroll offset of a scroll container</td>
+<td>See <a href="#scroll">Scroll</a></td>
+</tr>
+<tr>
+<td><code>layout</code></td>
+<td>The laid-out position and size</td>
+<td>FLIP; see <a href="#layout-transitions">Layout transitions</a></td>
+</tr>
+<tr>
+<td><code>sharedElement</code></td>
+<td>A shared-element flight</td>
+<td>See <a href="../../animations/shared-elements/">Shared elements</a></td>
+</tr>
+</tbody></table></div>
+<p>How values move:</p>
+<ul>
+<li>Lengths (translations, sizes, corner radii) ease between values of the
+same unit: px to px, <code>%</code> to <code>%</code>, <code>vw</code> to <code>vw</code>. A change of unit, or to or
+from <code>&quot;auto&quot;</code>, snaps.</li>
+<li><code>rotate</code> eases numerically, so 350 to 10 degrees turns the long way
+through 180.</li>
+<li>Unsetting <code>borderRadius</code> eases to square corners, and a corner that
+changes unit snaps on its own while the others ease. The radius is part of
+layout, so every eased frame is a relayout.</li>
+<li><code>morphFilter</code> is the one channel that animates without an entry: a key
+change eases over 300 ms with <code>&quot;easeInOut&quot;</code>. An entry only changes that
+timing.</li>
+<li>Unsetting <code>filter</code>, <code>backdropFilter</code>, <code>transform3d</code> or a gradient snaps.
+The pages linked above show how to keep an identity value in the base
+style so removal can ease.</li>
+</ul>
+<p>Properties without a channel snap: text <code>color</code>, <code>borderColor</code>,
+<code>minWidth</code>/<code>minHeight</code>, positions (<code>left</code>, <code>top</code>, …), padding, margin, <code>gap</code>
+and the rest. A <code>layout</code> transition eases the moves and resizes they cause,
+and text color, border color and <code>gap</code> can be driven by an
+<a href="../../animations/animated-values/">animated value</a> instead. SVG shapes ease their numeric
+attributes with a <code>transition</code> prop of their own (see
+<a href="../../elements/svg/"><code>&lt;svg&gt;</code></a>).</p>
+<h2 id="size"><a class="anchor" href="#size" aria-hidden="true">#</a>Size</h2>
+<p><code>transition: { size }</code> eases <code>width</code>, <code>height</code>, <code>maxWidth</code> and <code>maxHeight</code>
+through real layout. Every frame lays the tree out again at the eased size,
+so the content around the node re-flows with it, as in an accordion:</p>
+<pre><code class="language-tsx"><span class="token operator">&lt;</span>node
+  style<span class="token operator">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span>
+    maxHeight<span class="token operator">:</span> open <span class="token operator">?</span> <span class="token number">240</span> <span class="token operator">:</span> <span class="token number">0</span><span class="token punctuation">,</span>
+    overflowY<span class="token operator">:</span> <span class="token string">&quot;clip&quot;</span><span class="token punctuation">,</span>
+    transition<span class="token operator">:</span> <span class="token punctuation">{</span> size<span class="token operator">:</span> <span class="token punctuation">{</span> duration<span class="token operator">:</span> <span class="token number">300</span><span class="token punctuation">,</span> easing<span class="token operator">:</span> <span class="token string">&quot;easeInOut&quot;</span> <span class="token punctuation">}</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+  <span class="token punctuation">}</span><span class="token punctuation">}</span>
+<span class="token operator">&gt;</span>
+  <span class="token punctuation">{</span>children<span class="token punctuation">}</span>
+<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>node</span><span class="token punctuation">&gt;</span></span></code></pre><p>Both ends need a value in the same unit. An <code>&quot;auto&quot;</code> height cannot ease, so
+ease <code>maxHeight</code> to a fixed value tall enough for the content instead.
+<code>minWidth</code> and <code>minHeight</code> are not part of the channel.</p>
+<p>Under Bevy&#39;s layout rounding a size eased through real layout grows in whole
+pixel steps, and everything it pushes around hops with it. Set
+<code>layoutRounding: false</code> on the parent that lays out the animated node and its
+neighbours for a smooth glide (see
+<a href="../../styling/layout-rounding/">Layout rounding</a>).</p>
+<h2 id="layout-transitions"><a class="anchor" href="#layout-transitions" aria-hidden="true">#</a>Layout transitions</h2>
+<p><code>transition: { layout }</code> eases a node from its previous laid-out rect to the
+new one whenever layout moves or resizes it, whatever the cause: a sibling
+inserted, removed or reordered, a sibling or the parent resizing, a re-wrap,
+a changed flex or grid property, a window resize.</p>
+<pre><code class="language-tsx"><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>node</span> <span class="token attr-name">style</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span> flexDirection<span class="token operator">:</span> <span class="token string">&quot;row&quot;</span><span class="token punctuation">,</span> gap<span class="token operator">:</span> <span class="token number">8</span> <span class="token punctuation">}</span><span class="token punctuation">}</span></span><span class="token punctuation">&gt;</span></span><span class="token plain-text">
+  </span><span class="token punctuation">{</span>order<span class="token punctuation">.</span><span class="token function">map</span><span class="token punctuation">(</span><span class="token punctuation">(</span>id<span class="token punctuation">)</span> <span class="token operator">=&gt;</span> <span class="token punctuation">(</span>
+    <span class="token operator">&lt;</span>node
+      key<span class="token operator">=</span><span class="token punctuation">{</span>id<span class="token punctuation">}</span>
+      style<span class="token operator">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span>
+        width<span class="token operator">:</span> <span class="token number">40</span><span class="token punctuation">,</span>
+        height<span class="token operator">:</span> <span class="token number">40</span><span class="token punctuation">,</span>
+        transition<span class="token operator">:</span> <span class="token punctuation">{</span> layout<span class="token operator">:</span> <span class="token punctuation">{</span> duration<span class="token operator">:</span> <span class="token number">400</span><span class="token punctuation">,</span> easing<span class="token operator">:</span> <span class="token string">&quot;easeInOut&quot;</span> <span class="token punctuation">}</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+      <span class="token punctuation">}</span><span class="token punctuation">}</span>
+    <span class="token operator">/</span><span class="token operator">&gt;</span>
+  <span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">}</span><span class="token plain-text">
+</span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>node</span><span class="token punctuation">&gt;</span></span></code></pre><ul>
+<li>The real layout updates at once. The node is drawn with a translation and
+a scale from its old rect that decays to nothing (the FLIP technique), so
+no frame relayouts and the cost is small.</li>
+<li>Children move with the node but are not scaled. A resizing node eases its
+own box (background, border, shadow) while its children sit at their final
+positions, crisp. A <code>&lt;text&gt;</code> or <code>&lt;image&gt;</code> node scales its own content.</li>
+<li>Only nodes with the channel ease. Siblings and the parent snap to the new
+layout unless they have their own <code>layout</code> entry, so give it to every item
+of a list whose order changes.</li>
+<li>Pointer events follow the eased position.</li>
+<li>The first layout is adopted silently, and an unmounted node disappears at
+once. A node that goes from <code>display: &quot;none&quot;</code> (or zero size) to visible
+grows in place from its final position; one that collapses to zero size
+snaps.</li>
+<li>Moves under half a physical pixel do not start an ease.</li>
+<li>Scrolling an ancestor and the node&#39;s own <code>transform</code> are not layout
+changes.</li>
+<li>An <code>{ animated }</code> binding on one of the node&#39;s layout fields (<code>width</code>,
+<code>left</code>, …) owns its rect, and the layout channel stays out of its way.</li>
+</ul>
+<h3 id="layout-and-size-together"><a class="anchor" href="#layout-and-size-together" aria-hidden="true">#</a>Layout and size together</h3>
+<p><code>layout</code> fakes the node&#39;s own box; it never pushes its neighbours. A
+container whose size change must re-flow what is around it uses <code>size</code> (with
+explicit sizes), and its children use <code>layout</code> to glide to their new slots.
+The two channels also compose on one node: the size eases through real
+layout, and a jump the size change does not explain, such as a flipped
+<code>flexDirection</code>, still glides by translation.</p>
+<h2 id="scroll"><a class="anchor" href="#scroll" aria-hidden="true">#</a>Scroll</h2>
+<p><code>transition: { scroll }</code> on a scroll container (<code>overflowX</code> or <code>overflowY</code>
+set to <code>&quot;scroll&quot;</code>) eases its scroll offset toward a new target instead of
+jumping: a controlled <code>scrollTop</code> or <code>scrollLeft</code> change, or accumulated
+mouse wheel input. It covers both axes.
+Dragging the scrollbar thumb or clicking its track bypasses the ease. Do not
+also feed <code>onScroll</code> back into the same controlled axis, or the round trip
+fights the ease: drive the target from your own state and read <code>onScroll</code>
+into a separate one. See <a href="../../styling/overflow/">Overflow</a>.</p>
+<h2 id="limits"><a class="anchor" href="#limits" aria-hidden="true">#</a>Limits</h2>
+<ul>
+<li>Channels group properties (one <code>transform</code> spec for every transform
+field), there is no <code>all</code> shorthand, and there are four easing curves (no
+cubic Bézier).</li>
+<li>No enter or exit transitions: mounting adopts, unmounting is instant.</li>
+<li>A <code>layout</code> transition on a node whose rect is moved every frame by
+something else, such as an ancestor&#39;s <code>size</code> transition or a window being
+resized by dragging, keeps restarting: the node lags behind and catches up
+when the motion stops.</li>
+<li><code>size</code> and <code>borderRadius</code> relayout on every eased frame. Prefer
+<code>transform</code> and <code>layout</code> for motion that does not need to push other
+content.</li>
+</ul>
+<p><img src="../../screenshots/layout-animations.webp" alt="Four gradient swatches in a flex container gliding to their new slots as the direction, justify and align buttons below them are switched." loading="lazy"></p>
+<p>See <a href="../../reference/style-properties/#transition"><code>transition</code></a> in the style
+reference.</p>
+
+</article>
+<footer class="page-links"><a href="../../demo/?page=style-transitions">Open live demo</a>
+<a href="https://github.com/tulustul/bevy-react/blob/v0.7.0/examples/demos/ui/src/demos/animations/TransitionDemo.tsx">Demo source</a>
+<a href="https://github.com/tulustul/bevy-react/edit/main/docs/guide/animations/style-transitions.md">Edit this page</a></footer>
+</main>
+</div>
+<footer class="site-footer">
+<p>bevy-react is dual-licensed under MIT or Apache-2.0. <a href="https://github.com/tulustul/bevy-react">Source on GitHub</a>.</p>
+</footer>
+</body>
+</html>

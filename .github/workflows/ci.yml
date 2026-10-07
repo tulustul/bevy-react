@@ -1,0 +1,86 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Cancel superseded runs on the same ref to save CPU.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  js:
+    name: JS (lint / typecheck / format)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: ESLint
+        run: npx eslint .
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Prettier
+        run: npx prettier --check .
+
+  rust:
+    name: Rust (fmt / clippy / test / bindings)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Bevy system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libasound2-dev libudev-dev libwayland-dev libxkbcommon-dev
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      # Caches ~/.cargo and target/, keyed on Cargo.lock + rustc version.
+      # Keeps the heavy Bevy build out of every run after the first.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: rust
+          cache-on-failure: "true"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Rustfmt
+        run: cargo fmt --all --check
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets
+
+      # TEMPORARILY DISABLED: linking OOMs the GitHub runner
+      # Re-enable once CI we have a fix.
+      #
+      # # Build the JS bundle so the headless `roundtrip` test runs for real
+      # # (it skips when the bundle is missing).
+      # - name: Build JS bundle
+      #   run: npm run build -w demos-app
+      #
+      # - name: Test
+      #   run: cargo test
+      #
+      # - name: Regenerate TS bindings
+      #   run: npm run gen:bindings -w demos-app
+      #
+      # - name: Verify bindings are up to date
+      #   run: git diff --exit-code -- examples/demos/ui/src/generated.ts

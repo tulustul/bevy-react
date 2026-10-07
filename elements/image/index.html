@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>&lt;image&gt; · bevy-react</title>
+<meta name="description" content="The &lt;image&gt; element draws a texture asset or an SVG file, with tint, flips, 9-slice and tiled scaling, source crops and sprite-sheet atlases.">
+<link rel="canonical" href="https://tulustul.github.io/bevy-react/elements/image/">
+<link rel="alternate" type="text/markdown" href="../../elements/image.md">
+<meta property="og:title" content="&lt;image&gt; · bevy-react">
+<meta property="og:description" content="The &lt;image&gt; element draws a texture asset or an SVG file, with tint, flips, 9-slice and tiled scaling, source crops and sprite-sheet atlases.">
+<link rel="icon" href="../../logo.png">
+<link rel="stylesheet" href="../../style.css">
+<script src="../../docs.js" defer></script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="site-header">
+<a class="brand" href="../../"><img src="../../logo.png" alt="" width="74" height="74"> bevy-react</a>
+<span class="version">v0.7.0</span>
+<nav class="site-links" aria-label="Project">
+<a href="../../demo/">Live demo</a>
+<a href="https://github.com/tulustul/bevy-react">GitHub</a>
+<a href="https://docs.rs/bevy-react">docs.rs</a>
+<a href="https://www.npmjs.com/package/bevy-react">npm</a>
+</nav>
+</header>
+<div class="layout">
+<nav class="sidebar" aria-label="Documentation">
+<details class="nav-menu" open>
+<summary>Menu</summary>
+<ul><li><a href="../../">Introduction</a></li><li><a href="../../getting-started/">Getting started</a></li><li><a href="../../how-it-works/">How it works</a></li><li class="nav-section"><span>Elements</span><ul><li><a href="../../elements/node/">&lt;node&gt;</a></li><li><a href="../../elements/button/">&lt;button&gt;</a></li><li><a href="../../elements/text/">&lt;text&gt;</a></li><li><a href="../../elements/editable-text/">&lt;editableText&gt;</a></li><li><a href="../../elements/image/" aria-current="page">&lt;image&gt;</a></li><li><a href="../../elements/canvas/">&lt;canvas&gt;</a></li><li><a href="../../elements/svg/">&lt;svg&gt;</a></li><li><a href="../../elements/portal/">&lt;portal&gt;</a></li><li><a href="../../elements/surface/">&lt;surface&gt;</a></li><li><a href="../../elements/root/">&lt;root&gt;</a></li><li><a href="../../elements/anchor/">&lt;anchor&gt;</a></li></ul></li><li class="nav-section"><span>Layout</span><ul><li><a href="../../layout/flexbox/">Flexbox</a></li><li><a href="../../layout/grid/">Grid</a></li><li><a href="../../layout/positioning/">Positioning</a></li></ul></li><li class="nav-section"><span>Styling</span><ul><li><a href="../../styling/units/">Units</a></li><li><a href="../../styling/colors/">Colors</a></li><li><a href="../../styling/borders/">Borders</a></li><li><a href="../../styling/spacing/">Spacing</a></li><li><a href="../../styling/sizing/">Sizing</a></li><li><a href="../../styling/layout-rounding/">Layout rounding</a></li><li><a href="../../styling/overflow/">Overflow</a></li><li><a href="../../styling/transforms/">Transforms</a></li><li><a href="../../styling/3d-transforms/">3D transforms</a></li><li><a href="../../styling/shadows/">Shadows</a></li><li><a href="../../styling/filters/">Filters</a></li><li><a href="../../styling/backdrop-filters/">Backdrop filters</a></li><li><a href="../../styling/morph-filters/">Morph filters</a></li><li><a href="../../styling/gradients/">Gradients</a></li><li><a href="../../styling/background-images/">Background images</a></li><li><a href="../../styling/image-rendering/">Image rendering</a></li><li><a href="../../styling/opacity/">Opacity</a></li><li><a href="../../styling/z-index/">Z-index</a></li><li><a href="../../styling/focus-policy/">Focus policy</a></li><li><a href="../../styling/cursors/">Cursors</a></li><li><a href="../../styling/layers/">Layers</a></li></ul></li><li class="nav-section"><span>Animations</span><ul><li><a href="../../animations/style-transitions/">Style transitions</a></li><li><a href="../../animations/animated-values/">Animated values</a></li><li><a href="../../animations/interpolation/">Interpolation</a></li><li><a href="../../animations/shared-elements/">Shared elements</a></li></ul></li><li class="nav-section"><span>Communication</span><ul><li><a href="../../communication/react-to-bevy/">React to Bevy</a></li><li><a href="../../communication/bevy-to-react/">Bevy to React</a></li><li><a href="../../communication/request-response/">Request / response</a></li><li><a href="../../communication/named-nodes/">Named nodes</a></li></ul></li><li class="nav-section"><span>Events</span><ul><li><a href="../../events/mouse/">Mouse</a></li><li><a href="../../events/keyboard/">Keyboard</a></li><li><a href="../../events/gamepad/">Gamepad</a></li><li><a href="../../events/window/">Window</a></li></ul></li><li class="nav-section"><span>Extending</span><ul><li><a href="../../extending/custom-elements/">Custom elements</a></li><li><a href="../../extending/custom-styles/">Custom styles</a></li><li><a href="../../extending/custom-filters/">Custom filters</a></li></ul></li><li class="nav-section"><span>Tooling</span><ul><li><a href="../../tooling/devtools/">Devtools</a></li><li><a href="../../tooling/hot-reload/">Hot reload</a></li><li><a href="../../tooling/web/">Web builds</a></li><li><a href="../../tooling/ts-codegen/">TypeScript codegen</a></li></ul></li><li class="nav-section"><span>Reference</span><ul><li><a href="../../reference/style-properties/">Style properties</a></li><li><a href="../../reference/elements/">Elements</a></li><li><a href="../../reference/filters/">Filters</a></li></ul></li><li><a href="../../performance/">Performance</a></li></ul>
+</details>
+</nav>
+<main id="main">
+<article>
+<h1 id="image"><code>&lt;image&gt;</code></h1>
+<p><code>&lt;image&gt;</code> draws a texture asset inside a UI node. It is a styled node like
+<code>&lt;node&gt;</code> (layout, background, border, pointer handlers, children) whose Bevy
+<code>ImageNode</code> the element owns. A <code>src</code> ending in <code>.svg</code> switches it to SVG
+mode: the file is parsed once and rasterized at the node&#39;s laid-out size and
+DPI.</p>
+<h2 id="usage"><a class="anchor" href="#usage" aria-hidden="true">#</a>Usage</h2>
+<pre><code class="language-tsx"><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>image</span> <span class="token attr-name">src</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">&quot;</span>logo.png<span class="token punctuation">&quot;</span></span> <span class="token attr-name">style</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span> width<span class="token operator">:</span> <span class="token number">120</span> <span class="token punctuation">}</span><span class="token punctuation">}</span></span> <span class="token punctuation">/&gt;</span></span></code></pre><p><code>src</code> is an asset path resolved by Bevy&#39;s <code>AssetServer</code>, relative to the
+app&#39;s asset folder. Any format your Bevy build can load works (enable the
+matching Bevy feature, such as <code>png</code>).</p>
+<h2 id="attributes"><a class="anchor" href="#attributes" aria-hidden="true">#</a>Attributes</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Type</th>
+<th>Default</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>src</code></td>
+<td><code>string</code></td>
+<td>none</td>
+<td>Asset path; <code>.svg</code> (any case) selects SVG mode</td>
+</tr>
+<tr>
+<td><code>tint</code></td>
+<td>CSS color string</td>
+<td>white</td>
+<td>Multiplied with every texel; the fill when <code>src</code> is absent</td>
+</tr>
+<tr>
+<td><code>flipX</code></td>
+<td><code>boolean</code></td>
+<td><code>false</code></td>
+<td>Mirror horizontally</td>
+</tr>
+<tr>
+<td><code>flipY</code></td>
+<td><code>boolean</code></td>
+<td><code>false</code></td>
+<td>Mirror vertically</td>
+</tr>
+<tr>
+<td><code>imageMode</code></td>
+<td><code>ImageMode</code></td>
+<td><code>&quot;auto&quot;</code></td>
+<td>How the texture sizes and fills the node</td>
+</tr>
+<tr>
+<td><code>sourceRect</code></td>
+<td><code>{ x, y, width, height }</code></td>
+<td>none</td>
+<td>Draw only this region, in texture pixels</td>
+</tr>
+<tr>
+<td><code>atlas</code></td>
+<td><code>AtlasSpec</code></td>
+<td>none</td>
+<td>Treat the texture as a sprite-sheet grid</td>
+</tr>
+<tr>
+<td><code>visualBox</code></td>
+<td><code>&quot;content&quot;</code>, <code>&quot;padding&quot;</code>, <code>&quot;border&quot;</code></td>
+<td><code>&quot;content&quot;</code></td>
+<td>Which box of the node the image fills</td>
+</tr>
+</tbody></table></div>
+<p>All of them are plain props: change them from React state and only the
+image is rebuilt. None of them accepts an <code>{ animated }</code> binding.</p>
+<h2 id="sizing"><a class="anchor" href="#sizing" aria-hidden="true">#</a>Sizing</h2>
+<p>The texture always fills the node&#39;s visual box. <code>imageMode</code> decides whether
+the texture also feeds layout:</p>
+<ul>
+<li><code>&quot;auto&quot;</code> (the default) gives the node the texture&#39;s size as its intrinsic
+size, one texel per logical pixel. Set one axis and the other follows the
+aspect ratio; set both and the texture stretches to that box. With a
+<code>sourceRect</code> the intrinsic size is the rectangle&#39;s, with an <code>atlas</code> the
+cell&#39;s.</li>
+<li>Every other mode (<code>&quot;stretch&quot;</code>, sliced, tiled) contributes no intrinsic
+size: size the node through <code>style</code>.</li>
+</ul>
+<p>There is no <code>object-fit: contain</code> for raster images. To keep the aspect
+ratio, constrain one axis only.</p>
+<p>Until the texture has loaded, an <code>auto</code> image measures as zero and the
+layout reflows when it arrives. Give it an explicit size if that jump
+matters. An <code>&lt;image&gt;</code> with children is laid out like any container and is
+not measured by its texture either.</p>
+<h2 id="image-modes"><a class="anchor" href="#image-modes" aria-hidden="true">#</a>Image modes</h2>
+<p><code>imageMode</code> takes <code>&quot;auto&quot;</code>, <code>&quot;stretch&quot;</code>, or an object for Bevy&#39;s 9-slice and
+tiled scaling. A 9-slice frame resizes without distorting its corners:</p>
+<pre><code class="language-tsx"><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>image</span>
+  <span class="token attr-name">src</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">&quot;</span>ui/frame.png<span class="token punctuation">&quot;</span></span>
+  <span class="token attr-name">imageMode</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span> type<span class="token operator">:</span> <span class="token string">&quot;sliced&quot;</span><span class="token punctuation">,</span> border<span class="token operator">:</span> <span class="token number">24</span><span class="token punctuation">,</span> maxCornerScale<span class="token operator">:</span> <span class="token number">0.5</span> <span class="token punctuation">}</span><span class="token punctuation">}</span></span>
+  <span class="token attr-name">style</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span> width<span class="token operator">:</span> <span class="token number">320</span><span class="token punctuation">,</span> height<span class="token operator">:</span> <span class="token number">180</span> <span class="token punctuation">}</span><span class="token punctuation">}</span></span>
+<span class="token punctuation">/&gt;</span></span></code></pre><ul>
+<li><code>{ type: &quot;sliced&quot; }</code>: <code>border</code> is the corner inset in texture pixels,
+either one number or <code>{ top, right, bottom, left }</code>. <code>centerScaleMode</code> and
+<code>sidesScaleMode</code> are <code>&quot;stretch&quot;</code> (default) or <code>{ tile: n }</code>, which repeats
+the section once it is stretched more than <code>n</code> times. <code>maxCornerScale</code>
+(default <code>1</code>) caps how much the corners scale.</li>
+<li><code>{ type: &quot;tiled&quot; }</code>: <code>tileX</code> and <code>tileY</code> (default <code>false</code>) repeat the whole
+texture along that axis once it is stretched more than <code>stretchValue</code>
+times (default <code>1</code>).</li>
+</ul>
+<p>Any string other than <code>&quot;stretch&quot;</code> is treated as <code>&quot;auto&quot;</code>.</p>
+<h2 id="crops-and-sprite-sheets"><a class="anchor" href="#crops-and-sprite-sheets" aria-hidden="true">#</a>Crops and sprite sheets</h2>
+<p><code>sourceRect</code> draws only part of the texture:</p>
+<pre><code class="language-tsx"><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>image</span> <span class="token attr-name">src</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">&quot;</span>logo.png<span class="token punctuation">&quot;</span></span> <span class="token attr-name">sourceRect</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span> x<span class="token operator">:</span> <span class="token number">0</span><span class="token punctuation">,</span> y<span class="token operator">:</span> <span class="token number">0</span><span class="token punctuation">,</span> width<span class="token operator">:</span> <span class="token number">200</span><span class="token punctuation">,</span> height<span class="token operator">:</span> <span class="token number">110</span> <span class="token punctuation">}</span><span class="token punctuation">}</span></span> <span class="token punctuation">/&gt;</span></span></code></pre><p><code>atlas</code> treats <code>src</code> as a uniform grid and selects one cell, row-major:</p>
+<pre><code class="language-tsx"><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>image</span>
+  <span class="token attr-name">src</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">&quot;</span>sprites/hero.png<span class="token punctuation">&quot;</span></span>
+  <span class="token attr-name">atlas</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span>
+    tileWidth<span class="token operator">:</span> <span class="token number">32</span><span class="token punctuation">,</span>
+    tileHeight<span class="token operator">:</span> <span class="token number">32</span><span class="token punctuation">,</span>
+    columns<span class="token operator">:</span> <span class="token number">8</span><span class="token punctuation">,</span>
+    rows<span class="token operator">:</span> <span class="token number">4</span><span class="token punctuation">,</span>
+    index<span class="token operator">:</span> frame<span class="token punctuation">,</span>
+  <span class="token punctuation">}</span><span class="token punctuation">}</span></span>
+  <span class="token attr-name">style</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span> width<span class="token operator">:</span> <span class="token number">64</span><span class="token punctuation">,</span> height<span class="token operator">:</span> <span class="token number">64</span> <span class="token punctuation">}</span><span class="token punctuation">}</span></span>
+<span class="token punctuation">/&gt;</span></span></code></pre><p><code>padding</code> (<code>[x, y]</code>, the gap between cells) and <code>offset</code> (<code>[x, y]</code>, the
+grid&#39;s origin in the texture) are optional; <code>index</code> defaults to <code>0</code>. The grid
+layout is built once per distinct grid and shared, so stepping <code>index</code> every
+frame for a sprite animation creates nothing new. With both <code>atlas</code> and
+<code>sourceRect</code>, the rectangle is relative to the selected cell&#39;s top-left
+corner.</p>
+<h2 id="tint-opacity-and-styles"><a class="anchor" href="#tint-opacity-and-styles" aria-hidden="true">#</a>Tint, opacity and styles</h2>
+<ul>
+<li><code>tint</code> multiplies every texel; an invalid color renders magenta and reports
+a <code>color</code> warning in devtools. Without <code>src</code>, the image is a solid fill of
+<code>tint</code> (white by default) with no useful intrinsic size, so give it a width
+and height.</li>
+<li><code>opacity</code> fades the image, including from <code>hoverStyle</code> and <code>pressStyle</code>.</li>
+<li><code>backgroundColor</code> paints behind the image: through transparent texels, and
+in the padding when <code>visualBox</code> is <code>&quot;content&quot;</code>.</li>
+<li><code>backgroundImage</code> is ignored on <code>&lt;image&gt;</code> (the element owns its image) and
+reports a <code>styleIgnored</code> warning.</li>
+<li>Pointer events hit the node&#39;s whole box. Transparent texels are not
+click-through.</li>
+</ul>
+<h2 id="svg-files"><a class="anchor" href="#svg-files" aria-hidden="true">#</a>SVG files</h2>
+<pre><code class="language-tsx"><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>image</span> <span class="token attr-name">src</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">&quot;</span>icons/gear.svg<span class="token punctuation">&quot;</span></span> <span class="token attr-name">style</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span> width<span class="token operator">:</span> <span class="token number">64</span> <span class="token punctuation">}</span><span class="token punctuation">}</span></span> <span class="token punctuation">/&gt;</span></span></code></pre><p>An <code>src</code> ending in <code>.svg</code> (case-insensitive) is rendered as a vector:</p>
+<ul>
+<li>The intrinsic size is the document&#39;s <code>width</code>/<code>height</code> (its <code>viewBox</code> size
+when those are absent), in logical pixels, with the same sizing rules as
+<code>&quot;auto&quot;</code>.</li>
+<li>Each node rasterizes the document at its own laid-out size times the
+display&#39;s scale factor, so it is crisp at every size. It re-rasterizes when
+that size changes and when the file is reloaded.</li>
+<li>The document is scaled uniformly and centered in the node (SVG&#39;s
+<code>xMidYMid meet</code>); it is never stretched, and the remaining space is
+transparent.</li>
+<li>While the node&#39;s size is animating (a <code>size</code> transition, a shared-element
+flight or an animated width/height), it re-rasterizes only after about 12%
+of size change and stretches the last raster in between. It re-rasterizes
+crisply when the animation settles.</li>
+<li><code>tint</code>, <code>flipX</code>/<code>flipY</code>, <code>visualBox</code> and <code>opacity</code> apply. <code>imageMode</code> is
+ignored, and <code>sourceRect</code> and <code>atlas</code> are ignored with an <code>svgImageAttrs</code>
+warning.</li>
+</ul>
+<p>SVG <code>&lt;text&gt;</code> needs the off-by-default <code>svg_text</code> cargo feature, which loads
+system fonts through fontdb. Without it, text in the file is not drawn:</p>
+<pre><code class="language-sh"><span class="token function">cargo</span> <span class="token function">add</span> bevy-react <span class="token parameter variable">--features</span> svg_text</code></pre><p>To compose vector graphics from React instead of loading files, use the
+<code>&lt;svg&gt;</code> element.</p>
+<h2 id="limits"><a class="anchor" href="#limits" aria-hidden="true">#</a>Limits</h2>
+<ul>
+<li>No <code>object-fit</code>-style fitting for raster images: the texture stretches to
+the box (SVG files are the exception).</li>
+<li><code>src</code> is an asset path only. To show a render target, use the <code>&lt;portal&gt;</code>
+element or a <code>backgroundImage</code> with a <code>{ texture }</code> source.</li>
+<li>A large texture drawn small aliases by default. The <code>imageRendering</code> style
+addresses this for raster sources; its explicit modes are not available in
+SVG mode (they report a warning).</li>
+<li>SVG rasterization runs on the CPU, once per node: each resize of each node
+showing a file costs a full raster.</li>
+<li>Bitmaps embedded in an SVG file are skipped; the vector content still
+renders.</li>
+</ul>
+<p>See <a href="../../reference/elements/#image"><code>&lt;image&gt;</code></a> in the element reference.</p>
+
+</article>
+<footer class="page-links"><a href="../../demo/?page=image">Open live demo</a>
+<a href="https://github.com/tulustul/bevy-react/blob/v0.7.0/examples/demos/ui/src/demos/elements/ImageDemo.tsx">Demo source</a>
+<a href="https://github.com/tulustul/bevy-react/edit/main/docs/guide/elements/image.md">Edit this page</a></footer>
+</main>
+</div>
+<footer class="site-footer">
+<p>bevy-react is dual-licensed under MIT or Apache-2.0. <a href="https://github.com/tulustul/bevy-react">Source on GitHub</a>.</p>
+</footer>
+</body>
+</html>

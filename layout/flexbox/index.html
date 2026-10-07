@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Flexbox · bevy-react</title>
+<meta name="description" content="Lay out children in rows and columns with flexbox, the default layout of every node, with wrapping, growing, shrinking, alignment and gaps.">
+<link rel="canonical" href="https://tulustul.github.io/bevy-react/layout/flexbox/">
+<link rel="alternate" type="text/markdown" href="../../layout/flexbox.md">
+<meta property="og:title" content="Flexbox · bevy-react">
+<meta property="og:description" content="Lay out children in rows and columns with flexbox, the default layout of every node, with wrapping, growing, shrinking, alignment and gaps.">
+<link rel="icon" href="../../logo.png">
+<link rel="stylesheet" href="../../style.css">
+<script src="../../docs.js" defer></script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="site-header">
+<a class="brand" href="../../"><img src="../../logo.png" alt="" width="74" height="74"> bevy-react</a>
+<span class="version">v0.7.0</span>
+<nav class="site-links" aria-label="Project">
+<a href="../../demo/">Live demo</a>
+<a href="https://github.com/tulustul/bevy-react">GitHub</a>
+<a href="https://docs.rs/bevy-react">docs.rs</a>
+<a href="https://www.npmjs.com/package/bevy-react">npm</a>
+</nav>
+</header>
+<div class="layout">
+<nav class="sidebar" aria-label="Documentation">
+<details class="nav-menu" open>
+<summary>Menu</summary>
+<ul><li><a href="../../">Introduction</a></li><li><a href="../../getting-started/">Getting started</a></li><li><a href="../../how-it-works/">How it works</a></li><li class="nav-section"><span>Elements</span><ul><li><a href="../../elements/node/">&lt;node&gt;</a></li><li><a href="../../elements/button/">&lt;button&gt;</a></li><li><a href="../../elements/text/">&lt;text&gt;</a></li><li><a href="../../elements/editable-text/">&lt;editableText&gt;</a></li><li><a href="../../elements/image/">&lt;image&gt;</a></li><li><a href="../../elements/canvas/">&lt;canvas&gt;</a></li><li><a href="../../elements/svg/">&lt;svg&gt;</a></li><li><a href="../../elements/portal/">&lt;portal&gt;</a></li><li><a href="../../elements/surface/">&lt;surface&gt;</a></li><li><a href="../../elements/root/">&lt;root&gt;</a></li><li><a href="../../elements/anchor/">&lt;anchor&gt;</a></li></ul></li><li class="nav-section"><span>Layout</span><ul><li><a href="../../layout/flexbox/" aria-current="page">Flexbox</a></li><li><a href="../../layout/grid/">Grid</a></li><li><a href="../../layout/positioning/">Positioning</a></li></ul></li><li class="nav-section"><span>Styling</span><ul><li><a href="../../styling/units/">Units</a></li><li><a href="../../styling/colors/">Colors</a></li><li><a href="../../styling/borders/">Borders</a></li><li><a href="../../styling/spacing/">Spacing</a></li><li><a href="../../styling/sizing/">Sizing</a></li><li><a href="../../styling/layout-rounding/">Layout rounding</a></li><li><a href="../../styling/overflow/">Overflow</a></li><li><a href="../../styling/transforms/">Transforms</a></li><li><a href="../../styling/3d-transforms/">3D transforms</a></li><li><a href="../../styling/shadows/">Shadows</a></li><li><a href="../../styling/filters/">Filters</a></li><li><a href="../../styling/backdrop-filters/">Backdrop filters</a></li><li><a href="../../styling/morph-filters/">Morph filters</a></li><li><a href="../../styling/gradients/">Gradients</a></li><li><a href="../../styling/background-images/">Background images</a></li><li><a href="../../styling/image-rendering/">Image rendering</a></li><li><a href="../../styling/opacity/">Opacity</a></li><li><a href="../../styling/z-index/">Z-index</a></li><li><a href="../../styling/focus-policy/">Focus policy</a></li><li><a href="../../styling/cursors/">Cursors</a></li><li><a href="../../styling/layers/">Layers</a></li></ul></li><li class="nav-section"><span>Animations</span><ul><li><a href="../../animations/style-transitions/">Style transitions</a></li><li><a href="../../animations/animated-values/">Animated values</a></li><li><a href="../../animations/interpolation/">Interpolation</a></li><li><a href="../../animations/shared-elements/">Shared elements</a></li></ul></li><li class="nav-section"><span>Communication</span><ul><li><a href="../../communication/react-to-bevy/">React to Bevy</a></li><li><a href="../../communication/bevy-to-react/">Bevy to React</a></li><li><a href="../../communication/request-response/">Request / response</a></li><li><a href="../../communication/named-nodes/">Named nodes</a></li></ul></li><li class="nav-section"><span>Events</span><ul><li><a href="../../events/mouse/">Mouse</a></li><li><a href="../../events/keyboard/">Keyboard</a></li><li><a href="../../events/gamepad/">Gamepad</a></li><li><a href="../../events/window/">Window</a></li></ul></li><li class="nav-section"><span>Extending</span><ul><li><a href="../../extending/custom-elements/">Custom elements</a></li><li><a href="../../extending/custom-styles/">Custom styles</a></li><li><a href="../../extending/custom-filters/">Custom filters</a></li></ul></li><li class="nav-section"><span>Tooling</span><ul><li><a href="../../tooling/devtools/">Devtools</a></li><li><a href="../../tooling/hot-reload/">Hot reload</a></li><li><a href="../../tooling/web/">Web builds</a></li><li><a href="../../tooling/ts-codegen/">TypeScript codegen</a></li></ul></li><li class="nav-section"><span>Reference</span><ul><li><a href="../../reference/style-properties/">Style properties</a></li><li><a href="../../reference/elements/">Elements</a></li><li><a href="../../reference/filters/">Filters</a></li></ul></li><li><a href="../../performance/">Performance</a></li></ul>
+</details>
+</nav>
+<main id="main">
+<article>
+<h1 id="flexbox">Flexbox</h1>
+<p>Every node lays out its children with flexbox unless its <code>display</code> says
+otherwise. The style keys map one to one onto the fields of Bevy&#39;s <code>Node</code>,
+which Bevy lays out with taffy, so the behavior follows the CSS flexbox
+spec. Keyword values are camelCase (<code>&quot;spaceBetween&quot;</code>, <code>&quot;rowReverse&quot;</code>).</p>
+<h2 id="usage"><a class="anchor" href="#usage" aria-hidden="true">#</a>Usage</h2>
+<pre><code class="language-tsx"><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>node</span> <span class="token attr-name">style</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span> flexDirection<span class="token operator">:</span> <span class="token string">&quot;row&quot;</span><span class="token punctuation">,</span> justifyContent<span class="token operator">:</span> <span class="token string">&quot;center&quot;</span><span class="token punctuation">,</span> gap<span class="token operator">:</span> <span class="token number">10</span> <span class="token punctuation">}</span><span class="token punctuation">}</span></span><span class="token punctuation">&gt;</span></span><span class="token plain-text">
+  </span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>node</span> <span class="token attr-name">style</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span> width<span class="token operator">:</span> <span class="token number">40</span><span class="token punctuation">,</span> height<span class="token operator">:</span> <span class="token number">40</span><span class="token punctuation">,</span> backgroundColor<span class="token operator">:</span> <span class="token string">&quot;#7aa2f7&quot;</span> <span class="token punctuation">}</span><span class="token punctuation">}</span></span> <span class="token punctuation">/&gt;</span></span><span class="token plain-text">
+  </span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>node</span> <span class="token attr-name">style</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span> flexGrow<span class="token operator">:</span> <span class="token number">1</span><span class="token punctuation">,</span> height<span class="token operator">:</span> <span class="token number">40</span><span class="token punctuation">,</span> backgroundColor<span class="token operator">:</span> <span class="token string">&quot;#9ece6a&quot;</span> <span class="token punctuation">}</span><span class="token punctuation">}</span></span> <span class="token punctuation">/&gt;</span></span><span class="token plain-text">
+  </span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>node</span> <span class="token attr-name">style</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span> width<span class="token operator">:</span> <span class="token number">40</span><span class="token punctuation">,</span> height<span class="token operator">:</span> <span class="token number">40</span><span class="token punctuation">,</span> backgroundColor<span class="token operator">:</span> <span class="token string">&quot;#f7768e&quot;</span> <span class="token punctuation">}</span><span class="token punctuation">}</span></span> <span class="token punctuation">/&gt;</span></span><span class="token plain-text">
+</span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>node</span><span class="token punctuation">&gt;</span></span></code></pre><h2 id="defaults"><a class="anchor" href="#defaults" aria-hidden="true">#</a>Defaults</h2>
+<p>Unset keys keep Bevy&#39;s defaults:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>display</code></td>
+<td><code>&quot;flex&quot;</code></td>
+</tr>
+<tr>
+<td><code>flexDirection</code></td>
+<td><code>&quot;row&quot;</code></td>
+</tr>
+<tr>
+<td><code>flexWrap</code></td>
+<td><code>&quot;nowrap&quot;</code></td>
+</tr>
+<tr>
+<td><code>flexGrow</code></td>
+<td><code>0</code></td>
+</tr>
+<tr>
+<td><code>flexShrink</code></td>
+<td><code>1</code></td>
+</tr>
+<tr>
+<td><code>flexBasis</code></td>
+<td><code>&quot;auto&quot;</code></td>
+</tr>
+<tr>
+<td><code>justifyContent</code></td>
+<td>behaves as <code>&quot;flexStart&quot;</code></td>
+</tr>
+<tr>
+<td><code>alignItems</code></td>
+<td>behaves as <code>&quot;stretch&quot;</code></td>
+</tr>
+<tr>
+<td><code>alignContent</code></td>
+<td>behaves as <code>&quot;stretch&quot;</code></td>
+</tr>
+<tr>
+<td><code>alignSelf</code></td>
+<td><code>&quot;auto&quot;</code></td>
+</tr>
+<tr>
+<td><code>gap</code></td>
+<td><code>0</code></td>
+</tr>
+</tbody></table></div>
+<p>Compared with a web page:</p>
+<ul>
+<li>Every node is a flex container. There is no inline layout: text is its own
+<code>&lt;text&gt;</code> element, a flex item like any other.</li>
+<li><code>boxSizing</code> defaults to <code>&quot;borderBox&quot;</code>, so <code>width</code> includes padding and
+border (see <a href="../../styling/sizing/">Sizing</a>).</li>
+<li>The elements your app renders at the top level are children of a
+window-filling column that centers them horizontally, 16px apart. Give the
+top-level node <code>width: &quot;100%&quot;</code> and <code>height: &quot;100%&quot;</code> to take the whole
+window.</li>
+</ul>
+<p>An unrecognized keyword in any key on this page falls back to the default
+and reports a devtools warning.</p>
+<h2 id="display"><a class="anchor" href="#display" aria-hidden="true">#</a>Display</h2>
+<p><code>display</code> picks the layout model for the node&#39;s children:</p>
+<ul>
+<li><code>&quot;flex&quot;</code> (the default): flexbox, as described on this page.</li>
+<li><code>&quot;grid&quot;</code>: CSS grid, see <a href="../../layout/grid/">Grid</a>.</li>
+<li><code>&quot;block&quot;</code>: children stack vertically and stretch to the container&#39;s width,
+like CSS block flow.</li>
+<li><code>&quot;none&quot;</code>: the node and its whole subtree take no space and are not drawn.
+To hide a node but keep its space, use <code>opacity: 0</code> instead.</li>
+</ul>
+<h2 id="direction-and-wrapping"><a class="anchor" href="#direction-and-wrapping" aria-hidden="true">#</a>Direction and wrapping</h2>
+<p><code>flexDirection</code> sets the main axis: <code>&quot;row&quot;</code> (left to right), <code>&quot;column&quot;</code> (top
+to bottom), <code>&quot;rowReverse&quot;</code> or <code>&quot;columnReverse&quot;</code>.</p>
+<p><code>flexWrap</code> decides what happens when the items don&#39;t fit on the main axis:</p>
+<ul>
+<li><code>&quot;nowrap&quot;</code> (also spelled <code>&quot;noWrap&quot;</code>, the default): one line; items shrink,
+then overflow.</li>
+<li><code>&quot;wrap&quot;</code>: items move onto new lines along the cross axis.</li>
+<li><code>&quot;wrapReverse&quot;</code>: like <code>&quot;wrap&quot;</code>, with new lines added before the previous
+one.</li>
+</ul>
+<pre><code class="language-tsx"><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>node</span> <span class="token attr-name">style</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span> width<span class="token operator">:</span> <span class="token number">152</span><span class="token punctuation">,</span> flexWrap<span class="token operator">:</span> <span class="token string">&quot;wrap&quot;</span><span class="token punctuation">,</span> gap<span class="token operator">:</span> <span class="token number">8</span> <span class="token punctuation">}</span><span class="token punctuation">}</span></span><span class="token punctuation">&gt;</span></span><span class="token punctuation">{</span>swatches<span class="token punctuation">}</span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>node</span><span class="token punctuation">&gt;</span></span></code></pre><h2 id="growing-and-shrinking"><a class="anchor" href="#growing-and-shrinking" aria-hidden="true">#</a>Growing and shrinking</h2>
+<ul>
+<li><code>flexGrow</code> (a number, default <code>0</code>): the item&#39;s share of the free space on
+the main axis. <code>0</code> keeps its base size.</li>
+<li><code>flexShrink</code> (a number, default <code>1</code>): the item&#39;s share of the shrinking
+when the line overflows. <code>0</code> keeps its base size.</li>
+<li><code>flexBasis</code> (a length, default <code>&quot;auto&quot;</code>): the base size before growing and
+shrinking. <code>&quot;auto&quot;</code> uses the item&#39;s <code>width</code> (in a row) or <code>height</code> (in a
+column), else its content size. A percentage is of the container&#39;s
+content box on the main axis.</li>
+</ul>
+<p>There is no <code>flex</code> shorthand; set the keys you need. Columns that split a
+row equally:</p>
+<pre><code class="language-tsx"><span class="token keyword">const</span> column<span class="token operator">:</span> BevyStyle <span class="token operator">=</span> <span class="token punctuation">{</span> flexGrow<span class="token operator">:</span> <span class="token number">1</span><span class="token punctuation">,</span> flexBasis<span class="token operator">:</span> <span class="token number">0</span> <span class="token punctuation">}</span><span class="token punctuation">;</span></code></pre><p>A flex item never shrinks below its content&#39;s minimum size, because
+<code>minWidth</code> and <code>minHeight</code> default to <code>&quot;auto&quot;</code>. Set <code>minWidth: 0</code> (or an
+<code>overflowX</code> of <code>&quot;hidden&quot;</code> or <code>&quot;scroll&quot;</code>) to let it shrink further, for
+example a row with clipped text. See <a href="../../styling/sizing/">Sizing</a> and
+<a href="../../styling/overflow/">Overflow</a>.</p>
+<h2 id="alignment"><a class="anchor" href="#alignment" aria-hidden="true">#</a>Alignment</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Set on</th>
+<th>Aligns</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>justifyContent</code></td>
+<td>container</td>
+<td>the items along the main axis</td>
+</tr>
+<tr>
+<td><code>alignItems</code></td>
+<td>container</td>
+<td>each item across its line</td>
+</tr>
+<tr>
+<td><code>alignSelf</code></td>
+<td>item</td>
+<td>this item across its line</td>
+</tr>
+<tr>
+<td><code>alignContent</code></td>
+<td>container</td>
+<td>the wrapped lines along the cross axis</td>
+</tr>
+</tbody></table></div>
+<p>Accepted values:</p>
+<ul>
+<li><code>justifyContent</code>: <code>&quot;start&quot;</code>, <code>&quot;end&quot;</code>, <code>&quot;flexStart&quot;</code>, <code>&quot;flexEnd&quot;</code>,
+<code>&quot;center&quot;</code>, <code>&quot;spaceBetween&quot;</code>, <code>&quot;spaceAround&quot;</code>, <code>&quot;spaceEvenly&quot;</code>,
+<code>&quot;stretch&quot;</code>. In flexbox, <code>&quot;stretch&quot;</code> behaves as <code>&quot;flexStart&quot;</code>.</li>
+<li><code>alignItems</code>: <code>&quot;start&quot;</code>, <code>&quot;end&quot;</code>, <code>&quot;flexStart&quot;</code>, <code>&quot;flexEnd&quot;</code>,
+<code>&quot;center&quot;</code>, <code>&quot;baseline&quot;</code>, <code>&quot;stretch&quot;</code>. With the default stretch, an item
+without its own cross size fills the line.</li>
+<li><code>alignSelf</code>: <code>&quot;auto&quot;</code> (use the container&#39;s <code>alignItems</code>) or any
+<code>alignItems</code> value.</li>
+<li><code>alignContent</code>: the same values as <code>justifyContent</code>; here <code>&quot;stretch&quot;</code>
+grows the lines to fill the container. It only has an effect when the
+items wrap onto several lines.</li>
+</ul>
+<p><code>&quot;start&quot;</code>/<code>&quot;end&quot;</code> and <code>&quot;flexStart&quot;</code>/<code>&quot;flexEnd&quot;</code> are different values.
+<code>&quot;start&quot;</code> and <code>&quot;end&quot;</code> are physical: layout is always left to right, so
+<code>&quot;start&quot;</code> is the left (or top) edge. <code>&quot;flexStart&quot;</code> and <code>&quot;flexEnd&quot;</code> follow
+<code>flexDirection</code>, so they swap sides under <code>&quot;rowReverse&quot;</code> and
+<code>&quot;columnReverse&quot;</code>.</p>
+<p><code>justifyItems</code> and <code>justifySelf</code> have no effect on flex items; they belong
+to <a href="../../layout/grid/">Grid</a>.</p>
+<h2 id="gaps"><a class="anchor" href="#gaps" aria-hidden="true">#</a>Gaps</h2>
+<p><code>gap</code> spaces the children of a flex or grid container, between items only,
+never at the container&#39;s edges. <code>rowGap</code> and <code>columnGap</code> set one axis and
+win over <code>gap</code> whatever order the keys are written in:</p>
+<pre><code class="language-tsx"><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>node</span> <span class="token attr-name">style</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span> flexWrap<span class="token operator">:</span> <span class="token string">&quot;wrap&quot;</span><span class="token punctuation">,</span> gap<span class="token operator">:</span> <span class="token number">8</span><span class="token punctuation">,</span> rowGap<span class="token operator">:</span> <span class="token number">16</span> <span class="token punctuation">}</span><span class="token punctuation">}</span></span><span class="token punctuation">&gt;</span></span><span class="token punctuation">{</span>tags<span class="token punctuation">}</span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>node</span><span class="token punctuation">&gt;</span></span></code></pre><p>In a row, <code>columnGap</code> separates the items and <code>rowGap</code> separates the wrapped
+lines; in a column it is the other way around. The value is a length: a
+percentage is of the container&#39;s own content box on that axis, and <code>&quot;auto&quot;</code>
+is <code>0</code>.</p>
+<h2 id="animating"><a class="anchor" href="#animating" aria-hidden="true">#</a>Animating</h2>
+<ul>
+<li><code>transition: { layout }</code> on the items eases every rearrangement (a
+direction or alignment change, an inserted sibling, a wrap) from the old
+position to the new one. See
+<a href="../../animations/style-transitions/">Style transitions</a>.</li>
+<li><code>flexBasis</code>, <code>gap</code>, <code>rowGap</code> and <code>columnGap</code> accept an <code>{ animated }</code>
+binding, driven in pixels every frame without re-rendering React. See
+<a href="../../animations/animated-values/">Animated values</a>.</li>
+<li><code>flexGrow</code>, <code>flexShrink</code> and the keyword keys don&#39;t animate.</li>
+</ul>
+<h2 id="limits"><a class="anchor" href="#limits" aria-hidden="true">#</a>Limits</h2>
+<ul>
+<li>No <code>order</code> and no right-to-left layout: items lay out in tree order, left
+to right.</li>
+<li>Keywords are camelCase only: <code>&quot;space-between&quot;</code> is not accepted.</li>
+</ul>
+<p>See <a href="../../reference/style-properties/#display"><code>display</code></a>,
+<a href="../../reference/style-properties/#flexDirection"><code>flexDirection</code></a>,
+<a href="../../reference/style-properties/#flexWrap"><code>flexWrap</code></a>,
+<a href="../../reference/style-properties/#flexGrow"><code>flexGrow</code></a>,
+<a href="../../reference/style-properties/#flexShrink"><code>flexShrink</code></a>,
+<a href="../../reference/style-properties/#flexBasis"><code>flexBasis</code></a>,
+<a href="../../reference/style-properties/#justifyContent"><code>justifyContent</code></a>,
+<a href="../../reference/style-properties/#alignItems"><code>alignItems</code></a>,
+<a href="../../reference/style-properties/#alignSelf"><code>alignSelf</code></a>,
+<a href="../../reference/style-properties/#alignContent"><code>alignContent</code></a>,
+<a href="../../reference/style-properties/#gap"><code>gap</code></a>,
+<a href="../../reference/style-properties/#rowGap"><code>rowGap</code></a> and
+<a href="../../reference/style-properties/#columnGap"><code>columnGap</code></a> in the style
+reference.</p>
+
+</article>
+<footer class="page-links"><a href="../../demo/?page=flexbox">Open live demo</a>
+<a href="https://github.com/tulustul/bevy-react/blob/v0.7.0/examples/demos/ui/src/demos/layout/FlexDemo.tsx">Demo source</a>
+<a href="https://github.com/tulustul/bevy-react/edit/main/docs/guide/layout/flexbox.md">Edit this page</a></footer>
+</main>
+</div>
+<footer class="site-footer">
+<p>bevy-react is dual-licensed under MIT or Apache-2.0. <a href="https://github.com/tulustul/bevy-react">Source on GitHub</a>.</p>
+</footer>
+</body>
+</html>

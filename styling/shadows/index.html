@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shadows · bevy-react</title>
+<meta name="description" content="Drop shadows behind a node's box with boxShadow - color, offsets, blur and spread, several stacked shadows - plus a pointer to textShadow.">
+<link rel="canonical" href="https://tulustul.github.io/bevy-react/styling/shadows/">
+<link rel="alternate" type="text/markdown" href="../../styling/shadows.md">
+<meta property="og:title" content="Shadows · bevy-react">
+<meta property="og:description" content="Drop shadows behind a node's box with boxShadow - color, offsets, blur and spread, several stacked shadows - plus a pointer to textShadow.">
+<link rel="icon" href="../../logo.png">
+<link rel="stylesheet" href="../../style.css">
+<script src="../../docs.js" defer></script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="site-header">
+<a class="brand" href="../../"><img src="../../logo.png" alt="" width="74" height="74"> bevy-react</a>
+<span class="version">v0.7.0</span>
+<nav class="site-links" aria-label="Project">
+<a href="../../demo/">Live demo</a>
+<a href="https://github.com/tulustul/bevy-react">GitHub</a>
+<a href="https://docs.rs/bevy-react">docs.rs</a>
+<a href="https://www.npmjs.com/package/bevy-react">npm</a>
+</nav>
+</header>
+<div class="layout">
+<nav class="sidebar" aria-label="Documentation">
+<details class="nav-menu" open>
+<summary>Menu</summary>
+<ul><li><a href="../../">Introduction</a></li><li><a href="../../getting-started/">Getting started</a></li><li><a href="../../how-it-works/">How it works</a></li><li class="nav-section"><span>Elements</span><ul><li><a href="../../elements/node/">&lt;node&gt;</a></li><li><a href="../../elements/button/">&lt;button&gt;</a></li><li><a href="../../elements/text/">&lt;text&gt;</a></li><li><a href="../../elements/editable-text/">&lt;editableText&gt;</a></li><li><a href="../../elements/image/">&lt;image&gt;</a></li><li><a href="../../elements/canvas/">&lt;canvas&gt;</a></li><li><a href="../../elements/svg/">&lt;svg&gt;</a></li><li><a href="../../elements/portal/">&lt;portal&gt;</a></li><li><a href="../../elements/surface/">&lt;surface&gt;</a></li><li><a href="../../elements/root/">&lt;root&gt;</a></li><li><a href="../../elements/anchor/">&lt;anchor&gt;</a></li></ul></li><li class="nav-section"><span>Layout</span><ul><li><a href="../../layout/flexbox/">Flexbox</a></li><li><a href="../../layout/grid/">Grid</a></li><li><a href="../../layout/positioning/">Positioning</a></li></ul></li><li class="nav-section"><span>Styling</span><ul><li><a href="../../styling/units/">Units</a></li><li><a href="../../styling/colors/">Colors</a></li><li><a href="../../styling/borders/">Borders</a></li><li><a href="../../styling/spacing/">Spacing</a></li><li><a href="../../styling/sizing/">Sizing</a></li><li><a href="../../styling/layout-rounding/">Layout rounding</a></li><li><a href="../../styling/overflow/">Overflow</a></li><li><a href="../../styling/transforms/">Transforms</a></li><li><a href="../../styling/3d-transforms/">3D transforms</a></li><li><a href="../../styling/shadows/" aria-current="page">Shadows</a></li><li><a href="../../styling/filters/">Filters</a></li><li><a href="../../styling/backdrop-filters/">Backdrop filters</a></li><li><a href="../../styling/morph-filters/">Morph filters</a></li><li><a href="../../styling/gradients/">Gradients</a></li><li><a href="../../styling/background-images/">Background images</a></li><li><a href="../../styling/image-rendering/">Image rendering</a></li><li><a href="../../styling/opacity/">Opacity</a></li><li><a href="../../styling/z-index/">Z-index</a></li><li><a href="../../styling/focus-policy/">Focus policy</a></li><li><a href="../../styling/cursors/">Cursors</a></li><li><a href="../../styling/layers/">Layers</a></li></ul></li><li class="nav-section"><span>Animations</span><ul><li><a href="../../animations/style-transitions/">Style transitions</a></li><li><a href="../../animations/animated-values/">Animated values</a></li><li><a href="../../animations/interpolation/">Interpolation</a></li><li><a href="../../animations/shared-elements/">Shared elements</a></li></ul></li><li class="nav-section"><span>Communication</span><ul><li><a href="../../communication/react-to-bevy/">React to Bevy</a></li><li><a href="../../communication/bevy-to-react/">Bevy to React</a></li><li><a href="../../communication/request-response/">Request / response</a></li><li><a href="../../communication/named-nodes/">Named nodes</a></li></ul></li><li class="nav-section"><span>Events</span><ul><li><a href="../../events/mouse/">Mouse</a></li><li><a href="../../events/keyboard/">Keyboard</a></li><li><a href="../../events/gamepad/">Gamepad</a></li><li><a href="../../events/window/">Window</a></li></ul></li><li class="nav-section"><span>Extending</span><ul><li><a href="../../extending/custom-elements/">Custom elements</a></li><li><a href="../../extending/custom-styles/">Custom styles</a></li><li><a href="../../extending/custom-filters/">Custom filters</a></li></ul></li><li class="nav-section"><span>Tooling</span><ul><li><a href="../../tooling/devtools/">Devtools</a></li><li><a href="../../tooling/hot-reload/">Hot reload</a></li><li><a href="../../tooling/web/">Web builds</a></li><li><a href="../../tooling/ts-codegen/">TypeScript codegen</a></li></ul></li><li class="nav-section"><span>Reference</span><ul><li><a href="../../reference/style-properties/">Style properties</a></li><li><a href="../../reference/elements/">Elements</a></li><li><a href="../../reference/filters/">Filters</a></li></ul></li><li><a href="../../performance/">Performance</a></li></ul>
+</details>
+</nav>
+<main id="main">
+<article>
+<h1 id="shadows">Shadows</h1>
+<p><code>boxShadow</code> draws one or more drop shadows behind a node: the node&#39;s rounded
+box, offset, grown by a spread and softened by a blur. Shadows never affect
+layout.</p>
+<h2 id="usage"><a class="anchor" href="#usage" aria-hidden="true">#</a>Usage</h2>
+<pre><code class="language-tsx"><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>node</span>
+  <span class="token attr-name">style</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span>
+    width<span class="token operator">:</span> <span class="token number">160</span><span class="token punctuation">,</span>
+    height<span class="token operator">:</span> <span class="token number">90</span><span class="token punctuation">,</span>
+    borderRadius<span class="token operator">:</span> <span class="token number">12</span><span class="token punctuation">,</span>
+    backgroundColor<span class="token operator">:</span> <span class="token string">&quot;#1a1b26&quot;</span><span class="token punctuation">,</span>
+    boxShadow<span class="token operator">:</span> <span class="token punctuation">{</span>
+      color<span class="token operator">:</span> <span class="token string">&quot;rgba(0, 0, 0, 0.5)&quot;</span><span class="token punctuation">,</span>
+      yOffset<span class="token operator">:</span> <span class="token number">6</span><span class="token punctuation">,</span>
+      blurRadius<span class="token operator">:</span> <span class="token number">16</span><span class="token punctuation">,</span>
+    <span class="token punctuation">}</span><span class="token punctuation">,</span>
+  <span class="token punctuation">}</span><span class="token punctuation">}</span></span>
+<span class="token punctuation">/&gt;</span></span></code></pre><h2 id="fields"><a class="anchor" href="#fields" aria-hidden="true">#</a>Fields</h2>
+<p>Every field is optional:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Default</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>color</code></td>
+<td>color</td>
+<td><code>&quot;black&quot;</code></td>
+<td>Shadow color (see <a href="../../styling/colors/">Colors</a>)</td>
+</tr>
+<tr>
+<td><code>xOffset</code></td>
+<td>length</td>
+<td><code>0</code></td>
+<td>Moves the shadow right (negative: left)</td>
+</tr>
+<tr>
+<td><code>yOffset</code></td>
+<td>length</td>
+<td><code>0</code></td>
+<td>Moves the shadow down (negative: up)</td>
+</tr>
+<tr>
+<td><code>blurRadius</code></td>
+<td>length</td>
+<td><code>0</code></td>
+<td>Softens the edge; <code>0</code> is a hard edge</td>
+</tr>
+<tr>
+<td><code>spreadRadius</code></td>
+<td>length</td>
+<td><code>0</code></td>
+<td>Grows the shape before blurring (negative: shrinks)</td>
+</tr>
+</tbody></table></div>
+<ul>
+<li>A bare number is pixels; strings take units (see <a href="../../styling/units/">Units</a>).
+Percentages resolve against the node&#39;s width, except <code>yOffset</code>, which
+uses its height. <code>&quot;auto&quot;</code> counts as <code>0</code>.</li>
+<li>An omitted <code>color</code> is opaque black; give the color an alpha for a soft
+shadow.</li>
+<li>The shadow follows the node&#39;s <code>borderRadius</code>, scaled with the spread.</li>
+<li>A blurred shadow reaches about three times <code>blurRadius</code> beyond its
+shape.</li>
+</ul>
+<h2 id="several-shadows"><a class="anchor" href="#several-shadows" aria-hidden="true">#</a>Several shadows</h2>
+<p>An array draws several shadows under the same node:</p>
+<pre><code class="language-tsx"><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>node</span>
+  <span class="token attr-name">style</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span>
+    boxShadow<span class="token operator">:</span> <span class="token punctuation">[</span>
+      <span class="token punctuation">{</span> color<span class="token operator">:</span> <span class="token string">&quot;#4f8cff55&quot;</span><span class="token punctuation">,</span> blurRadius<span class="token operator">:</span> <span class="token number">28</span><span class="token punctuation">,</span> spreadRadius<span class="token operator">:</span> <span class="token number">6</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+      <span class="token punctuation">{</span> color<span class="token operator">:</span> <span class="token string">&quot;#ff000066&quot;</span><span class="token punctuation">,</span> yOffset<span class="token operator">:</span> <span class="token number">4</span><span class="token punctuation">,</span> blurRadius<span class="token operator">:</span> <span class="token number">6</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+    <span class="token punctuation">]</span><span class="token punctuation">,</span>
+  <span class="token punctuation">}</span><span class="token punctuation">}</span></span>
+<span class="token punctuation">/&gt;</span></span></code></pre><p>The shadows paint in array order: the first is at the back, and each later
+one draws over the earlier ones where they overlap. This is the reverse of
+CSS, where the first shadow is on top.</p>
+<h2 id="painting-rules"><a class="anchor" href="#painting-rules" aria-hidden="true">#</a>Painting rules</h2>
+<ul>
+<li>Shadows paint under the node&#39;s background, at the node&#39;s place in the
+stacking order: siblings painted after the node cover its shadow, and an
+ancestor&#39;s overflow clipping cuts it.</li>
+<li>A shadow is a full rounded box, not a ring around the node: a translucent
+or missing <code>backgroundColor</code> lets it show through the node.</li>
+<li>A fully transparent shadow, and one whose spread shrinks it to nothing,
+are skipped.</li>
+<li>On a node without a composited layer, <code>opacity</code> does not fade the shadow
+(see <a href="../../styling/opacity/">Opacity</a>).</li>
+<li><code>boxShadow</code> has no transition channel or <code>{ animated }</code> binding: a change
+snaps. Changing it from React repaints the node without re-running
+layout.</li>
+</ul>
+<h2 id="text-shadows"><a class="anchor" href="#text-shadows" aria-hidden="true">#</a>Text shadows</h2>
+<p><code>&lt;text&gt;</code> takes a separate <code>textShadow</code> style: one hard-edged copy of the
+glyphs, offset by <code>offsetX</code>/<code>offsetY</code> pixels.</p>
+<pre><code class="language-tsx"><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>text</span> <span class="token attr-name">style</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span> textShadow<span class="token operator">:</span> <span class="token punctuation">{</span> color<span class="token operator">:</span> <span class="token string">&quot;#00000080&quot;</span><span class="token punctuation">,</span> offsetX<span class="token operator">:</span> <span class="token number">2</span><span class="token punctuation">,</span> offsetY<span class="token operator">:</span> <span class="token number">2</span> <span class="token punctuation">}</span> <span class="token punctuation">}</span><span class="token punctuation">}</span></span><span class="token punctuation">&gt;</span></span><span class="token plain-text">
+  Shadowed
+</span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>text</span><span class="token punctuation">&gt;</span></span></code></pre><p>See <a href="../../elements/text/"><code>&lt;text&gt;</code></a> for its defaults and rules.</p>
+<h2 id="limits"><a class="anchor" href="#limits" aria-hidden="true">#</a>Limits</h2>
+<ul>
+<li>There are no inset shadows.</li>
+<li>On a node promoted to a <a href="../../styling/layers/">composited layer</a> (for example
+<code>opacity</code> on a node with children, or a <code>filter</code>), the shadow is captured
+with the layer and cut off at the node&#39;s border box. Put the shadow on a
+wrapper node that is not promoted.</li>
+</ul>
+<p>See <a href="../../reference/style-properties/#boxShadow"><code>boxShadow</code></a> in the style
+reference.</p>
+
+</article>
+<footer class="page-links"><a href="../../demo/?page=shadows">Open live demo</a>
+<a href="https://github.com/tulustul/bevy-react/blob/v0.7.0/examples/demos/ui/src/demos/styling/ShadowDemo.tsx">Demo source</a>
+<a href="https://github.com/tulustul/bevy-react/edit/main/docs/guide/styling/shadows.md">Edit this page</a></footer>
+</main>
+</div>
+<footer class="site-footer">
+<p>bevy-react is dual-licensed under MIT or Apache-2.0. <a href="https://github.com/tulustul/bevy-react">Source on GitHub</a>.</p>
+</footer>
+</body>
+</html>

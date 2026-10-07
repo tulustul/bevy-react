@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Background images · bevy-react</title>
+<meta name="description" content="Paint an image asset or an app-registered texture behind a node's content with backgroundImage, stretched or tiled, tinted and animated.">
+<link rel="canonical" href="https://tulustul.github.io/bevy-react/styling/background-images/">
+<link rel="alternate" type="text/markdown" href="../../styling/background-images.md">
+<meta property="og:title" content="Background images · bevy-react">
+<meta property="og:description" content="Paint an image asset or an app-registered texture behind a node's content with backgroundImage, stretched or tiled, tinted and animated.">
+<link rel="icon" href="../../logo.png">
+<link rel="stylesheet" href="../../style.css">
+<script src="../../docs.js" defer></script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="site-header">
+<a class="brand" href="../../"><img src="../../logo.png" alt="" width="74" height="74"> bevy-react</a>
+<span class="version">v0.7.0</span>
+<nav class="site-links" aria-label="Project">
+<a href="../../demo/">Live demo</a>
+<a href="https://github.com/tulustul/bevy-react">GitHub</a>
+<a href="https://docs.rs/bevy-react">docs.rs</a>
+<a href="https://www.npmjs.com/package/bevy-react">npm</a>
+</nav>
+</header>
+<div class="layout">
+<nav class="sidebar" aria-label="Documentation">
+<details class="nav-menu" open>
+<summary>Menu</summary>
+<ul><li><a href="../../">Introduction</a></li><li><a href="../../getting-started/">Getting started</a></li><li><a href="../../how-it-works/">How it works</a></li><li class="nav-section"><span>Elements</span><ul><li><a href="../../elements/node/">&lt;node&gt;</a></li><li><a href="../../elements/button/">&lt;button&gt;</a></li><li><a href="../../elements/text/">&lt;text&gt;</a></li><li><a href="../../elements/editable-text/">&lt;editableText&gt;</a></li><li><a href="../../elements/image/">&lt;image&gt;</a></li><li><a href="../../elements/canvas/">&lt;canvas&gt;</a></li><li><a href="../../elements/svg/">&lt;svg&gt;</a></li><li><a href="../../elements/portal/">&lt;portal&gt;</a></li><li><a href="../../elements/surface/">&lt;surface&gt;</a></li><li><a href="../../elements/root/">&lt;root&gt;</a></li><li><a href="../../elements/anchor/">&lt;anchor&gt;</a></li></ul></li><li class="nav-section"><span>Layout</span><ul><li><a href="../../layout/flexbox/">Flexbox</a></li><li><a href="../../layout/grid/">Grid</a></li><li><a href="../../layout/positioning/">Positioning</a></li></ul></li><li class="nav-section"><span>Styling</span><ul><li><a href="../../styling/units/">Units</a></li><li><a href="../../styling/colors/">Colors</a></li><li><a href="../../styling/borders/">Borders</a></li><li><a href="../../styling/spacing/">Spacing</a></li><li><a href="../../styling/sizing/">Sizing</a></li><li><a href="../../styling/layout-rounding/">Layout rounding</a></li><li><a href="../../styling/overflow/">Overflow</a></li><li><a href="../../styling/transforms/">Transforms</a></li><li><a href="../../styling/3d-transforms/">3D transforms</a></li><li><a href="../../styling/shadows/">Shadows</a></li><li><a href="../../styling/filters/">Filters</a></li><li><a href="../../styling/backdrop-filters/">Backdrop filters</a></li><li><a href="../../styling/morph-filters/">Morph filters</a></li><li><a href="../../styling/gradients/">Gradients</a></li><li><a href="../../styling/background-images/" aria-current="page">Background images</a></li><li><a href="../../styling/image-rendering/">Image rendering</a></li><li><a href="../../styling/opacity/">Opacity</a></li><li><a href="../../styling/z-index/">Z-index</a></li><li><a href="../../styling/focus-policy/">Focus policy</a></li><li><a href="../../styling/cursors/">Cursors</a></li><li><a href="../../styling/layers/">Layers</a></li></ul></li><li class="nav-section"><span>Animations</span><ul><li><a href="../../animations/style-transitions/">Style transitions</a></li><li><a href="../../animations/animated-values/">Animated values</a></li><li><a href="../../animations/interpolation/">Interpolation</a></li><li><a href="../../animations/shared-elements/">Shared elements</a></li></ul></li><li class="nav-section"><span>Communication</span><ul><li><a href="../../communication/react-to-bevy/">React to Bevy</a></li><li><a href="../../communication/bevy-to-react/">Bevy to React</a></li><li><a href="../../communication/request-response/">Request / response</a></li><li><a href="../../communication/named-nodes/">Named nodes</a></li></ul></li><li class="nav-section"><span>Events</span><ul><li><a href="../../events/mouse/">Mouse</a></li><li><a href="../../events/keyboard/">Keyboard</a></li><li><a href="../../events/gamepad/">Gamepad</a></li><li><a href="../../events/window/">Window</a></li></ul></li><li class="nav-section"><span>Extending</span><ul><li><a href="../../extending/custom-elements/">Custom elements</a></li><li><a href="../../extending/custom-styles/">Custom styles</a></li><li><a href="../../extending/custom-filters/">Custom filters</a></li></ul></li><li class="nav-section"><span>Tooling</span><ul><li><a href="../../tooling/devtools/">Devtools</a></li><li><a href="../../tooling/hot-reload/">Hot reload</a></li><li><a href="../../tooling/web/">Web builds</a></li><li><a href="../../tooling/ts-codegen/">TypeScript codegen</a></li></ul></li><li class="nav-section"><span>Reference</span><ul><li><a href="../../reference/style-properties/">Style properties</a></li><li><a href="../../reference/elements/">Elements</a></li><li><a href="../../reference/filters/">Filters</a></li></ul></li><li><a href="../../performance/">Performance</a></li></ul>
+</details>
+</nav>
+<main id="main">
+<article>
+<h1 id="background-images">Background images</h1>
+<p>The <code>backgroundImage</code> style paints a texture as part of a node&#39;s own
+background: over its <code>backgroundColor</code> and gradients, under its content and
+children. The source is an asset path or a texture the app registered on the
+Rust side. A background image never affects layout.</p>
+<h2 id="usage"><a class="anchor" href="#usage" aria-hidden="true">#</a>Usage</h2>
+<pre><code class="language-tsx"><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>node</span>
+  <span class="token attr-name">style</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span>
+    width<span class="token operator">:</span> <span class="token number">150</span><span class="token punctuation">,</span>
+    height<span class="token operator">:</span> <span class="token number">96</span><span class="token punctuation">,</span>
+    borderRadius<span class="token operator">:</span> <span class="token number">10</span><span class="token punctuation">,</span>
+    backgroundColor<span class="token operator">:</span> <span class="token string">&quot;#1a1b26&quot;</span><span class="token punctuation">,</span>
+    backgroundImage<span class="token operator">:</span> <span class="token punctuation">{</span> src<span class="token operator">:</span> <span class="token string">&quot;images/parrot.png&quot;</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+  <span class="token punctuation">}</span><span class="token punctuation">}</span></span>
+<span class="token punctuation">/&gt;</span></span></code></pre><p>The value is always an object with a <code>src</code>; there is no string shorthand.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Default</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>src</code></td>
+<td><code>string</code> or <code>{ texture: string }</code></td>
+<td>required</td>
+<td>Asset path, or a registered texture name</td>
+</tr>
+<tr>
+<td><code>mode</code></td>
+<td><code>&quot;stretch&quot;</code>, <code>&quot;repeat&quot;</code>, <code>&quot;repeatX&quot;</code>, <code>&quot;repeatY&quot;</code></td>
+<td><code>&quot;stretch&quot;</code></td>
+<td>How the texture fills the node</td>
+</tr>
+<tr>
+<td><code>scale</code></td>
+<td><code>number</code></td>
+<td><code>1</code></td>
+<td>Tile size multiplier in the repeat modes</td>
+</tr>
+<tr>
+<td><code>tint</code></td>
+<td>color</td>
+<td>white</td>
+<td>Multiplied with every texel</td>
+</tr>
+</tbody></table></div>
+<p>A value without <code>src</code>, or a bare string, is ignored with a
+<code>backgroundImage</code> warning; the rest of the style still applies.</p>
+<h2 id="sources"><a class="anchor" href="#sources" aria-hidden="true">#</a>Sources</h2>
+<ul>
+<li>A string <code>src</code> is an asset path loaded by Bevy&#39;s <code>AssetServer</code>, relative
+to the app&#39;s asset folder, as for <a href="../../elements/image/"><code>&lt;image&gt;</code></a>. Any
+format your Bevy build can load works.</li>
+<li><code>{ texture: &quot;name&quot; }</code> shows a texture registered in the <code>RenderTargets</code>
+resource. Until the name is registered the node shows nothing, and it
+picks the texture up as soon as it appears.</li>
+</ul>
+<div class="tabs"><div class="tab-panel" data-lang="tsx"><p class="tab-label">TSX</p><pre><code class="language-tsx"><span class="token operator">&lt;</span>node
+  style<span class="token operator">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span>
+    width<span class="token operator">:</span> <span class="token number">190</span><span class="token punctuation">,</span>
+    height<span class="token operator">:</span> <span class="token number">130</span><span class="token punctuation">,</span>
+    backgroundImage<span class="token operator">:</span> <span class="token punctuation">{</span> src<span class="token operator">:</span> <span class="token punctuation">{</span> texture<span class="token operator">:</span> <span class="token string">&quot;checker&quot;</span> <span class="token punctuation">}</span><span class="token punctuation">,</span> mode<span class="token operator">:</span> <span class="token string">&quot;repeat&quot;</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+  <span class="token punctuation">}</span><span class="token punctuation">}</span>
+<span class="token operator">/</span><span class="token operator">&gt;</span></code></pre></div><div class="tab-panel" data-lang="rust"><p class="tab-label">Rust</p><pre><code class="language-rust"><span class="token keyword">use</span> <span class="token namespace">bevy<span class="token punctuation">::</span>asset<span class="token punctuation">::</span></span><span class="token class-name">RenderAssetUsages</span><span class="token punctuation">;</span>
+<span class="token keyword">use</span> <span class="token namespace">bevy<span class="token punctuation">::</span>prelude<span class="token punctuation">::</span></span><span class="token operator">*</span><span class="token punctuation">;</span>
+<span class="token keyword">use</span> <span class="token namespace">bevy<span class="token punctuation">::</span>render<span class="token punctuation">::</span>render_resource<span class="token punctuation">::</span></span><span class="token punctuation">{</span><span class="token class-name">Extent3d</span><span class="token punctuation">,</span> <span class="token class-name">TextureDimension</span><span class="token punctuation">,</span> <span class="token class-name">TextureFormat</span><span class="token punctuation">}</span><span class="token punctuation">;</span>
+<span class="token keyword">use</span> <span class="token namespace">bevy_react<span class="token punctuation">::</span></span><span class="token class-name">RenderTargets</span><span class="token punctuation">;</span>
+
+<span class="token keyword">fn</span> <span class="token function-definition function">register_checker</span><span class="token punctuation">(</span>
+    <span class="token keyword">mut</span> targets<span class="token punctuation">:</span> <span class="token class-name">ResMut</span><span class="token operator">&lt;</span><span class="token class-name">RenderTargets</span><span class="token operator">&gt;</span><span class="token punctuation">,</span>
+    <span class="token keyword">mut</span> images<span class="token punctuation">:</span> <span class="token class-name">ResMut</span><span class="token operator">&lt;</span><span class="token class-name">Assets</span><span class="token operator">&lt;</span><span class="token class-name">Image</span><span class="token operator">&gt;&gt;</span><span class="token punctuation">,</span>
+<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token keyword">let</span> image <span class="token operator">=</span> <span class="token class-name">Image</span><span class="token punctuation">::</span><span class="token function">new_fill</span><span class="token punctuation">(</span>
+        <span class="token class-name">Extent3d</span> <span class="token punctuation">{</span> width<span class="token punctuation">:</span> <span class="token number">2</span><span class="token punctuation">,</span> height<span class="token punctuation">:</span> <span class="token number">2</span><span class="token punctuation">,</span> depth_or_array_layers<span class="token punctuation">:</span> <span class="token number">1</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+        <span class="token class-name">TextureDimension</span><span class="token punctuation">::</span><span class="token constant">D2</span><span class="token punctuation">,</span>
+        <span class="token operator">&amp;</span><span class="token punctuation">[</span><span class="token number">122</span><span class="token punctuation">,</span> <span class="token number">162</span><span class="token punctuation">,</span> <span class="token number">247</span><span class="token punctuation">,</span> <span class="token number">255</span><span class="token punctuation">]</span><span class="token punctuation">,</span>
+        <span class="token class-name">TextureFormat</span><span class="token punctuation">::</span><span class="token class-name">Rgba8UnormSrgb</span><span class="token punctuation">,</span>
+        <span class="token class-name">RenderAssetUsages</span><span class="token punctuation">::</span><span class="token function">default</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+    <span class="token punctuation">)</span><span class="token punctuation">;</span>
+    targets<span class="token punctuation">.</span><span class="token function">register</span><span class="token punctuation">(</span><span class="token string">&quot;checker&quot;</span><span class="token punctuation">,</span> images<span class="token punctuation">.</span><span class="token function">add</span><span class="token punctuation">(</span>image<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span></code></pre></div></div>
+<p>Registered textures are meant for static content: an image you generated or
+loaded once. To show a camera&#39;s live output, use
+<a href="../../elements/portal/"><code>&lt;portal&gt;</code></a>.</p>
+<h2 id="fit-and-tiling"><a class="anchor" href="#fit-and-tiling" aria-hidden="true">#</a>Fit and tiling</h2>
+<ul>
+<li>The image fills the node&#39;s content box, inside the border and the
+padding. With padding, the <code>backgroundColor</code> shows around it.</li>
+<li><code>&quot;stretch&quot;</code> fills that box exactly, ignoring the texture&#39;s aspect ratio.</li>
+<li><code>&quot;repeat&quot;</code> tiles the texture on both axes at its own size, one texel per
+logical pixel on every display, times <code>scale</code>. <code>&quot;repeatX&quot;</code> tiles
+horizontally and stretches vertically; <code>&quot;repeatY&quot;</code> the reverse.</li>
+<li><code>scale</code> only applies to the repeat modes (<code>0.5</code> tiles at half size). Under
+<code>&quot;stretch&quot;</code> it is ignored with a <code>backgroundImage</code> warning.</li>
+<li><code>borderRadius</code> clips the image in <code>&quot;stretch&quot;</code> mode but not in the repeat
+modes.</li>
+<li>An unknown <code>mode</code> falls back to <code>&quot;stretch&quot;</code> with a <code>backgroundImage</code>
+warning.</li>
+</ul>
+<h2 id="tint-and-opacity"><a class="anchor" href="#tint-and-opacity" aria-hidden="true">#</a>Tint and opacity</h2>
+<p><code>tint</code> multiplies every texel, like an <code>&lt;image&gt;</code>&#39;s tint. <code>opacity</code> on the
+node fades the image with the rest of the node&#39;s fills (see
+<a href="../../styling/opacity/">Opacity</a>).</p>
+<p><code>tint</code> accepts an <code>{ animated }</code> <code>interpolateColor</code> binding in the base
+style, driven every frame without re-rendering React:</p>
+<pre><code class="language-tsx"><span class="token keyword">function</span> <span class="token function">Glowing</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+  <span class="token keyword">const</span> t <span class="token operator">=</span> <span class="token function">useSharedValue</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token function">useEffect</span><span class="token punctuation">(</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">=&gt;</span> <span class="token punctuation">{</span>
+    t<span class="token punctuation">.</span>value <span class="token operator">=</span> <span class="token function">withRepeat</span><span class="token punctuation">(</span><span class="token function">withTiming</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">,</span> <span class="token punctuation">{</span> duration<span class="token operator">:</span> <span class="token number">1600</span> <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">,</span> <span class="token punctuation">{</span> reverse<span class="token operator">:</span> <span class="token boolean">true</span> <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token punctuation">}</span><span class="token punctuation">,</span> <span class="token punctuation">[</span>t<span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token keyword">const</span> tint <span class="token operator">=</span> <span class="token function">interpolateColor</span><span class="token punctuation">(</span>t<span class="token punctuation">,</span> <span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">]</span><span class="token punctuation">,</span> <span class="token punctuation">[</span><span class="token string">&quot;#ffffff&quot;</span><span class="token punctuation">,</span> <span class="token string">&quot;#7aa2f7&quot;</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token keyword">return</span> <span class="token punctuation">(</span>
+    <span class="token operator">&lt;</span>node
+      style<span class="token operator">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span>
+        width<span class="token operator">:</span> <span class="token number">150</span><span class="token punctuation">,</span>
+        height<span class="token operator">:</span> <span class="token number">96</span><span class="token punctuation">,</span>
+        backgroundImage<span class="token operator">:</span> <span class="token punctuation">{</span> src<span class="token operator">:</span> <span class="token string">&quot;images/parrot.png&quot;</span><span class="token punctuation">,</span> tint<span class="token operator">:</span> <span class="token punctuation">{</span> animated<span class="token operator">:</span> tint <span class="token punctuation">}</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+      <span class="token punctuation">}</span><span class="token punctuation">}</span>
+    <span class="token operator">/</span><span class="token operator">&gt;</span>
+  <span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span></code></pre><p><code>scale</code> does not animate: an <code>{ animated }</code> wrapper on it is accepted but
+has no effect.</p>
+<h2 id="behavior"><a class="anchor" href="#behavior" aria-hidden="true">#</a>Behavior</h2>
+<ul>
+<li>While the asset loads, the node&#39;s <code>backgroundColor</code> and gradients show,
+and nothing reflows when the texture arrives.</li>
+<li>A <code>hoverStyle</code>, <code>pressStyle</code> or <code>focusStyle</code> value replaces the whole
+<code>backgroundImage</code> (all its fields) and swaps instantly; there is no
+transition.</li>
+<li><a href="../../styling/image-rendering/"><code>imageRendering</code></a> controls how an asset-path source
+is resampled when drawn smaller or larger than its own size.</li>
+<li><code>&lt;image&gt;</code>, <code>&lt;canvas&gt;</code>, <code>&lt;portal&gt;</code>, <code>&lt;surface&gt;</code> and <code>&lt;svg&gt;</code> own their
+node&#39;s image: on them <code>backgroundImage</code> is ignored with a <code>styleIgnored</code>
+warning. Wrap them in a <code>&lt;node&gt;</code> to give them a background.</li>
+</ul>
+<h2 id="limits"><a class="anchor" href="#limits" aria-hidden="true">#</a>Limits</h2>
+<ul>
+<li>No <code>object-fit</code> or position: the image either stretches to the content
+box or tiles from its top-left corner.</li>
+<li>A <code>{ texture }</code> source is not watched for changes. A texture that changes
+every frame still shows inside normal UI, but inside a cached
+<a href="../../styling/layers/">composited layer</a> it freezes on the last captured frame.</li>
+<li>A background never resizes a render target created with automatic
+resolution; give such targets a fixed resolution.</li>
+<li><code>imageRendering</code> modes are refused on a <code>{ texture }</code> source.</li>
+</ul>
+<p>See <a href="../../reference/style-properties/#backgroundImage"><code>backgroundImage</code></a> in
+the style reference.</p>
+
+</article>
+<footer class="page-links"><a href="../../demo/?page=background-images">Open live demo</a>
+<a href="https://github.com/tulustul/bevy-react/blob/v0.7.0/examples/demos/ui/src/demos/styling/BackgroundImageDemo.tsx">Demo source</a>
+<a href="https://github.com/tulustul/bevy-react/edit/main/docs/guide/styling/background-images.md">Edit this page</a></footer>
+</main>
+</div>
+<footer class="site-footer">
+<p>bevy-react is dual-licensed under MIT or Apache-2.0. <a href="https://github.com/tulustul/bevy-react">Source on GitHub</a>.</p>
+</footer>
+</body>
+</html>

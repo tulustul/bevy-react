@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Morph filters · bevy-react</title>
+<meta name="description" content="Blend a node's old appearance into its new content when a key changes with the morphFilter style - crossfades, wipes and pixel mosaics.">
+<link rel="canonical" href="https://tulustul.github.io/bevy-react/styling/morph-filters/">
+<link rel="alternate" type="text/markdown" href="../../styling/morph-filters.md">
+<meta property="og:title" content="Morph filters · bevy-react">
+<meta property="og:description" content="Blend a node's old appearance into its new content when a key changes with the morphFilter style - crossfades, wipes and pixel mosaics.">
+<link rel="icon" href="../../logo.png">
+<link rel="stylesheet" href="../../style.css">
+<script src="../../docs.js" defer></script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="site-header">
+<a class="brand" href="../../"><img src="../../logo.png" alt="" width="74" height="74"> bevy-react</a>
+<span class="version">v0.7.0</span>
+<nav class="site-links" aria-label="Project">
+<a href="../../demo/">Live demo</a>
+<a href="https://github.com/tulustul/bevy-react">GitHub</a>
+<a href="https://docs.rs/bevy-react">docs.rs</a>
+<a href="https://www.npmjs.com/package/bevy-react">npm</a>
+</nav>
+</header>
+<div class="layout">
+<nav class="sidebar" aria-label="Documentation">
+<details class="nav-menu" open>
+<summary>Menu</summary>
+<ul><li><a href="../../">Introduction</a></li><li><a href="../../getting-started/">Getting started</a></li><li><a href="../../how-it-works/">How it works</a></li><li class="nav-section"><span>Elements</span><ul><li><a href="../../elements/node/">&lt;node&gt;</a></li><li><a href="../../elements/button/">&lt;button&gt;</a></li><li><a href="../../elements/text/">&lt;text&gt;</a></li><li><a href="../../elements/editable-text/">&lt;editableText&gt;</a></li><li><a href="../../elements/image/">&lt;image&gt;</a></li><li><a href="../../elements/canvas/">&lt;canvas&gt;</a></li><li><a href="../../elements/svg/">&lt;svg&gt;</a></li><li><a href="../../elements/portal/">&lt;portal&gt;</a></li><li><a href="../../elements/surface/">&lt;surface&gt;</a></li><li><a href="../../elements/root/">&lt;root&gt;</a></li><li><a href="../../elements/anchor/">&lt;anchor&gt;</a></li></ul></li><li class="nav-section"><span>Layout</span><ul><li><a href="../../layout/flexbox/">Flexbox</a></li><li><a href="../../layout/grid/">Grid</a></li><li><a href="../../layout/positioning/">Positioning</a></li></ul></li><li class="nav-section"><span>Styling</span><ul><li><a href="../../styling/units/">Units</a></li><li><a href="../../styling/colors/">Colors</a></li><li><a href="../../styling/borders/">Borders</a></li><li><a href="../../styling/spacing/">Spacing</a></li><li><a href="../../styling/sizing/">Sizing</a></li><li><a href="../../styling/layout-rounding/">Layout rounding</a></li><li><a href="../../styling/overflow/">Overflow</a></li><li><a href="../../styling/transforms/">Transforms</a></li><li><a href="../../styling/3d-transforms/">3D transforms</a></li><li><a href="../../styling/shadows/">Shadows</a></li><li><a href="../../styling/filters/">Filters</a></li><li><a href="../../styling/backdrop-filters/">Backdrop filters</a></li><li><a href="../../styling/morph-filters/" aria-current="page">Morph filters</a></li><li><a href="../../styling/gradients/">Gradients</a></li><li><a href="../../styling/background-images/">Background images</a></li><li><a href="../../styling/image-rendering/">Image rendering</a></li><li><a href="../../styling/opacity/">Opacity</a></li><li><a href="../../styling/z-index/">Z-index</a></li><li><a href="../../styling/focus-policy/">Focus policy</a></li><li><a href="../../styling/cursors/">Cursors</a></li><li><a href="../../styling/layers/">Layers</a></li></ul></li><li class="nav-section"><span>Animations</span><ul><li><a href="../../animations/style-transitions/">Style transitions</a></li><li><a href="../../animations/animated-values/">Animated values</a></li><li><a href="../../animations/interpolation/">Interpolation</a></li><li><a href="../../animations/shared-elements/">Shared elements</a></li></ul></li><li class="nav-section"><span>Communication</span><ul><li><a href="../../communication/react-to-bevy/">React to Bevy</a></li><li><a href="../../communication/bevy-to-react/">Bevy to React</a></li><li><a href="../../communication/request-response/">Request / response</a></li><li><a href="../../communication/named-nodes/">Named nodes</a></li></ul></li><li class="nav-section"><span>Events</span><ul><li><a href="../../events/mouse/">Mouse</a></li><li><a href="../../events/keyboard/">Keyboard</a></li><li><a href="../../events/gamepad/">Gamepad</a></li><li><a href="../../events/window/">Window</a></li></ul></li><li class="nav-section"><span>Extending</span><ul><li><a href="../../extending/custom-elements/">Custom elements</a></li><li><a href="../../extending/custom-styles/">Custom styles</a></li><li><a href="../../extending/custom-filters/">Custom filters</a></li></ul></li><li class="nav-section"><span>Tooling</span><ul><li><a href="../../tooling/devtools/">Devtools</a></li><li><a href="../../tooling/hot-reload/">Hot reload</a></li><li><a href="../../tooling/web/">Web builds</a></li><li><a href="../../tooling/ts-codegen/">TypeScript codegen</a></li></ul></li><li class="nav-section"><span>Reference</span><ul><li><a href="../../reference/style-properties/">Style properties</a></li><li><a href="../../reference/elements/">Elements</a></li><li><a href="../../reference/filters/">Filters</a></li></ul></li><li><a href="../../performance/">Performance</a></li></ul>
+</details>
+</nav>
+<main id="main">
+<article>
+<h1 id="morph-filters">Morph filters</h1>
+<p>The <code>morphFilter</code> style gives a node view-transition behavior: when its
+<code>key</code> changes, the node&#39;s previous appearance is frozen and blended into the
+new content by a two-input shader, such as a crossfade or a wipe. React
+swaps the content freely in the same commit; the blend runs on the Bevy
+side.</p>
+<h2 id="usage"><a class="anchor" href="#usage" aria-hidden="true">#</a>Usage</h2>
+<pre><code class="language-tsx"><span class="token keyword">function</span> <span class="token function">Gallery</span><span class="token punctuation">(</span><span class="token punctuation">{</span> page <span class="token punctuation">}</span><span class="token operator">:</span> <span class="token punctuation">{</span> page<span class="token operator">:</span> <span class="token builtin">number</span> <span class="token punctuation">}</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+  <span class="token keyword">return</span> <span class="token punctuation">(</span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>node</span> <span class="token attr-name">style</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span> morphFilter<span class="token operator">:</span> <span class="token punctuation">{</span> key<span class="token operator">:</span> page<span class="token punctuation">,</span> name<span class="token operator">:</span> <span class="token string">&quot;crossfade&quot;</span> <span class="token punctuation">}</span> <span class="token punctuation">}</span><span class="token punctuation">}</span></span><span class="token punctuation">&gt;</span></span><span class="token plain-text">
+      </span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span><span class="token class-name">Page</span></span> <span class="token attr-name">index</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span>page<span class="token punctuation">}</span></span> <span class="token punctuation">/&gt;</span></span><span class="token plain-text">
+    </span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>node</span><span class="token punctuation">&gt;</span></span>
+  <span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span></code></pre><p>Changing <code>page</code> re-renders the content and, in the same frame, starts a
+300 ms crossfade from the old page to the new one.</p>
+<h2 id="the-key"><a class="anchor" href="#the-key" aria-hidden="true">#</a>The key</h2>
+<ul>
+<li><code>key</code> is a string or a number. Only a change of <code>key</code> starts a morph:
+re-renders, content changes and changes to <code>name</code> or <code>params</code> alone do
+not.</li>
+<li>What is frozen is the node&#39;s appearance on the last frame before the key
+changed, including its whole subtree.</li>
+<li>The first mount never animates; the key is adopted silently. The same
+holds for a key change in the same commit as the mount: the node needs at
+least one rendered frame to freeze.</li>
+<li>A key change during a morph freezes the in-flight blend, as it looks at
+that moment, and starts again from there. Interruptions stay smooth.</li>
+<li>Removing <code>morphFilter</code> stops a running morph at once and shows the live
+content.</li>
+<li>With an unknown name, or a regular filter&#39;s name, the key is adopted
+without animating and a <code>morphFilterUnknown</code> or <code>morphFilterParams</code>
+devtools warning is reported.</li>
+</ul>
+<h2 id="timing"><a class="anchor" href="#timing" aria-hidden="true">#</a>Timing</h2>
+<p>A morph eases over 300 ms with <code>easeInOut</code> by default, without any
+<code>transition</code>. <code>transition: { morphFilter }</code> replaces that timing:</p>
+<pre><code class="language-tsx"><span class="token operator">&lt;</span>node
+  style<span class="token operator">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span>
+    morphFilter<span class="token operator">:</span> <span class="token punctuation">{</span> key<span class="token operator">:</span> tab<span class="token punctuation">,</span> name<span class="token operator">:</span> <span class="token string">&quot;linearWipe&quot;</span><span class="token punctuation">,</span> params<span class="token operator">:</span> <span class="token punctuation">{</span> softness<span class="token operator">:</span> <span class="token number">24</span> <span class="token punctuation">}</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+    transition<span class="token operator">:</span> <span class="token punctuation">{</span> morphFilter<span class="token operator">:</span> <span class="token punctuation">{</span> duration<span class="token operator">:</span> <span class="token number">600</span><span class="token punctuation">,</span> easing<span class="token operator">:</span> <span class="token string">&quot;easeInOut&quot;</span> <span class="token punctuation">}</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+  <span class="token punctuation">}</span><span class="token punctuation">}</span>
+<span class="token operator">/</span><span class="token operator">&gt;</span></code></pre><p>The override is a complete timing: an omitted <code>easing</code> falls back to
+<code>linear</code>, the general transition default, not to the morph&#39;s <code>easeInOut</code>.
+<code>delay</code> holds the old appearance before the blend starts. See
+<a href="../../animations/style-transitions/">Style transitions</a> for the timing
+options.</p>
+<h2 id="built-in-morphs"><a class="anchor" href="#built-in-morphs" aria-hidden="true">#</a>Built-in morphs</h2>
+<h3 id="crossfade"><a class="anchor" href="#crossfade" aria-hidden="true">#</a><code>crossfade</code></h3>
+<p>A cross-dissolve, staggered by a smooth noise pattern so that blob-shaped
+regions change before others.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Param</th>
+<th>Default</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>spread</code></td>
+<td><code>0.6</code></td>
+<td>Stagger amount, <code>0</code> to <code>1</code>; <code>0</code> is a plain uniform crossfade</td>
+</tr>
+<tr>
+<td><code>scale</code></td>
+<td><code>56</code></td>
+<td>Size of the noise blobs, in logical pixels</td>
+</tr>
+<tr>
+<td><code>softness</code></td>
+<td><code>0.5</code></td>
+<td>How long each pixel takes to fade, as a fraction of the morph (<code>0</code> to <code>1</code>)</td>
+</tr>
+<tr>
+<td><code>seed</code></td>
+<td><code>0</code></td>
+<td>Changes the noise pattern</td>
+</tr>
+</tbody></table></div>
+<h3 id="linearwipe"><a class="anchor" href="#linearwipe" aria-hidden="true">#</a><code>linearWipe</code></h3>
+<p>The new content sweeps in across the old along a direction.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Param</th>
+<th>Default</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>angle</code></td>
+<td><code>0</code></td>
+<td>Sweep direction, clockwise from +x: <code>0</code> is left to right, <code>90</code> downward</td>
+</tr>
+<tr>
+<td><code>softness</code></td>
+<td><code>0</code></td>
+<td>Width of the soft band at the wipe edge, in logical pixels</td>
+</tr>
+</tbody></table></div>
+<h3 id="pixelize"><a class="anchor" href="#pixelize" aria-hidden="true">#</a><code>pixelize</code></h3>
+<p>Both images break into a mosaic whose cells grow until the middle of the
+morph and shrink again, crossfading underneath.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Param</th>
+<th>Default</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>squaresMin</code></td>
+<td><code>[20, 20]</code></td>
+<td>Cells across x and y at the coarsest point</td>
+</tr>
+<tr>
+<td><code>steps</code></td>
+<td><code>50</code></td>
+<td>Number of discrete cell sizes; <code>0</code> or less for a continuous ramp</td>
+</tr>
+</tbody></table></div>
+<p>Custom morphs, written in WGSL, are used the same way; see
+<a href="../../extending/custom-filters/#custom-morph-filters">Custom filters</a>.</p>
+<h2 id="layout-during-a-morph"><a class="anchor" href="#layout-during-a-morph" aria-hidden="true">#</a>Layout during a morph</h2>
+<p>The frozen image is attached to the node&#39;s box. If the node moves or
+scrolls during the morph, both images move together. If its size changes,
+the old image is stretched to the new size, so keep the size stable across
+a key change (a fixed-size slot, or the same layout for both contents)
+unless a stretch looks right.</p>
+<h2 id="morphing-from-and-to-nothing"><a class="anchor" href="#morphing-from-and-to-nothing" aria-hidden="true">#</a>Morphing from and to nothing</h2>
+<p>An empty node is a valid source and target: a mounted node that paints
+nothing freezes as transparent pixels. This makes enter and exit animations
+possible with a carrier node that stays mounted around the content:</p>
+<pre><code class="language-tsx"><span class="token keyword">import</span> <span class="token punctuation">{</span> <span class="token keyword">type</span> <span class="token class-name">ReactNode</span><span class="token punctuation">,</span> useEffect<span class="token punctuation">,</span> useState <span class="token punctuation">}</span> <span class="token keyword">from</span> <span class="token string">&quot;react&quot;</span><span class="token punctuation">;</span>
+
+<span class="token keyword">function</span> <span class="token function">FadeIn</span><span class="token punctuation">(</span><span class="token punctuation">{</span> show<span class="token punctuation">,</span> children <span class="token punctuation">}</span><span class="token operator">:</span> <span class="token punctuation">{</span> show<span class="token operator">:</span> <span class="token builtin">boolean</span><span class="token punctuation">;</span> children<span class="token operator">:</span> ReactNode <span class="token punctuation">}</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+  <span class="token keyword">const</span> <span class="token punctuation">[</span>mounted<span class="token punctuation">,</span> setMounted<span class="token punctuation">]</span> <span class="token operator">=</span> <span class="token function">useState</span><span class="token punctuation">(</span><span class="token boolean">false</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token keyword">const</span> <span class="token punctuation">[</span>armed<span class="token punctuation">,</span> setArmed<span class="token punctuation">]</span> <span class="token operator">=</span> <span class="token function">useState</span><span class="token punctuation">(</span><span class="token boolean">false</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token function">useEffect</span><span class="token punctuation">(</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">=&gt;</span> <span class="token punctuation">{</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>show<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+      <span class="token function">setMounted</span><span class="token punctuation">(</span><span class="token boolean">true</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+      <span class="token comment">// Let the empty carrier render one frame first.</span>
+      <span class="token keyword">const</span> t <span class="token operator">=</span> <span class="token function">setTimeout</span><span class="token punctuation">(</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">=&gt;</span> <span class="token function">setArmed</span><span class="token punctuation">(</span><span class="token boolean">true</span><span class="token punctuation">)</span><span class="token punctuation">,</span> <span class="token number">50</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+      <span class="token keyword">return</span> <span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">=&gt;</span> <span class="token function">clearTimeout</span><span class="token punctuation">(</span>t<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+    <span class="token function">setArmed</span><span class="token punctuation">(</span><span class="token boolean">false</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token comment">// Keep the carrier until the 300 ms blend is over.</span>
+    <span class="token keyword">const</span> t <span class="token operator">=</span> <span class="token function">setTimeout</span><span class="token punctuation">(</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">=&gt;</span> <span class="token function">setMounted</span><span class="token punctuation">(</span><span class="token boolean">false</span><span class="token punctuation">)</span><span class="token punctuation">,</span> <span class="token number">300</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">return</span> <span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">=&gt;</span> <span class="token function">clearTimeout</span><span class="token punctuation">(</span>t<span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token punctuation">}</span><span class="token punctuation">,</span> <span class="token punctuation">[</span>show<span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span>mounted<span class="token punctuation">)</span> <span class="token keyword">return</span> <span class="token keyword">null</span><span class="token punctuation">;</span>
+  <span class="token keyword">return</span> <span class="token punctuation">(</span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>node</span>
+      <span class="token attr-name">style</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span>
+        morphFilter<span class="token operator">:</span> <span class="token punctuation">{</span> key<span class="token operator">:</span> armed <span class="token operator">?</span> <span class="token string">&quot;on&quot;</span> <span class="token operator">:</span> <span class="token string">&quot;off&quot;</span><span class="token punctuation">,</span> name<span class="token operator">:</span> <span class="token string">&quot;crossfade&quot;</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+      <span class="token punctuation">}</span><span class="token punctuation">}</span></span>
+    <span class="token punctuation">&gt;</span></span><span class="token plain-text">
+      </span><span class="token punctuation">{</span>armed <span class="token operator">&amp;&amp;</span> children<span class="token punctuation">}</span><span class="token plain-text">
+    </span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>node</span><span class="token punctuation">&gt;</span></span>
+  <span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span></code></pre><ul>
+<li>Toggle the content in the same commit as the key.</li>
+<li>On entry, the carrier must have rendered at least one frame empty before
+the key changes. A <code>useEffect</code> alone is too early; a short timeout is
+enough.</li>
+<li>On exit, keep the carrier mounted until the blend has finished.</li>
+</ul>
+<h2 id="combining-with-other-styles"><a class="anchor" href="#combining-with-other-styles" aria-hidden="true">#</a>Combining with other styles</h2>
+<ul>
+<li>A <code>filter</code> on the same node applies on top of the blend: the chain filters
+what the morph produces.</li>
+<li><code>opacity</code> fades the blended result, and a <a href="../../styling/3d-transforms/"><code>transform3d</code></a>
+transforms it.</li>
+</ul>
+<h2 id="animated-params"><a class="anchor" href="#animated-params" aria-hidden="true">#</a>Animated params</h2>
+<p>Every param accepts an inline <code>{ animated }</code> binding to a shared value, in
+the param&#39;s units (pixels, degrees), in the base <code>style</code> only. The blend&#39;s
+own progress is driven by the morph and cannot be bound. Static param
+changes apply immediately and never start a morph.</p>
+<h2 id="cost"><a class="anchor" href="#cost" aria-hidden="true">#</a>Cost</h2>
+<p><code>morphFilter</code> promotes the node to a <a href="../../styling/layers/">composited layer</a>, even
+while no morph is running, so its last appearance is always cached and
+ready to freeze. During a morph, the frozen image and the blend take two
+more textures of the node&#39;s size and one blend pass runs per frame; the
+textures are released when the morph ends.</p>
+<p>The built-in morphs are compiled at startup. If you turn that off with
+<a href="../../styling/filters/#shader-compilation"><code>precompile_filters</code></a>, a morph&#39;s shader is
+compiled as soon as a node declares it; a key change that arrives before
+compilation finishes draws nothing for a few frames, a visible blink.</p>
+<h2 id="limits"><a class="anchor" href="#limits" aria-hidden="true">#</a>Limits</h2>
+<ul>
+<li>A size change across the key change stretches the old image.</li>
+<li>A node that mounts and changes its key in the same commit does not
+animate.</li>
+<li>Under a <a href="../../styling/3d-transforms/"><code>transform3d</code></a>, a morph-only layer is sampled
+without mipmaps, so a strongly tilted or shrunk blend can shimmer.</li>
+<li>The <a href="../../styling/layers/#limits">layer limits</a> apply: content painted outside the
+node&#39;s border box is cut off, and inside a <code>&lt;surface&gt;</code> the content
+switches without a blend.</li>
+</ul>
+<p><img src="../../screenshots/morphs-builtin.webp" alt="The three built-in morphs on live UI cards, each swapping between content variants on its own schedule: crossfade, linearWipe and pixelize." loading="lazy"></p>
+<p>See <a href="../../reference/style-properties/#morphFilter"><code>morphFilter</code></a> in the
+style reference, and
+<a href="../../reference/filters/#crossfade"><code>crossfade</code></a>,
+<a href="../../reference/filters/#linearWipe"><code>linearWipe</code></a> and
+<a href="../../reference/filters/#pixelize"><code>pixelize</code></a> in the filter reference.</p>
+
+</article>
+<footer class="page-links"><a href="../../demo/?page=morph-filters">Open live demo</a>
+<a href="https://github.com/tulustul/bevy-react/blob/v0.7.0/examples/demos/ui/src/demos/styling/morphFilterDemo/MorphFilterDemo.tsx">Demo source</a>
+<a href="https://github.com/tulustul/bevy-react/edit/main/docs/guide/styling/morph-filters.md">Edit this page</a></footer>
+</main>
+</div>
+<footer class="site-footer">
+<p>bevy-react is dual-licensed under MIT or Apache-2.0. <a href="https://github.com/tulustul/bevy-react">Source on GitHub</a>.</p>
+</footer>
+</body>
+</html>

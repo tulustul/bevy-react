@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Interpolation · bevy-react</title>
+<meta name="description" content="Map one shared value onto many style values with interpolate and interpolateColor, piecewise-linear curves evaluated in Bevy every frame.">
+<link rel="canonical" href="https://tulustul.github.io/bevy-react/animations/interpolation/">
+<link rel="alternate" type="text/markdown" href="../../animations/interpolation.md">
+<meta property="og:title" content="Interpolation · bevy-react">
+<meta property="og:description" content="Map one shared value onto many style values with interpolate and interpolateColor, piecewise-linear curves evaluated in Bevy every frame.">
+<link rel="icon" href="../../logo.png">
+<link rel="stylesheet" href="../../style.css">
+<script src="../../docs.js" defer></script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="site-header">
+<a class="brand" href="../../"><img src="../../logo.png" alt="" width="74" height="74"> bevy-react</a>
+<span class="version">v0.7.0</span>
+<nav class="site-links" aria-label="Project">
+<a href="../../demo/">Live demo</a>
+<a href="https://github.com/tulustul/bevy-react">GitHub</a>
+<a href="https://docs.rs/bevy-react">docs.rs</a>
+<a href="https://www.npmjs.com/package/bevy-react">npm</a>
+</nav>
+</header>
+<div class="layout">
+<nav class="sidebar" aria-label="Documentation">
+<details class="nav-menu" open>
+<summary>Menu</summary>
+<ul><li><a href="../../">Introduction</a></li><li><a href="../../getting-started/">Getting started</a></li><li><a href="../../how-it-works/">How it works</a></li><li class="nav-section"><span>Elements</span><ul><li><a href="../../elements/node/">&lt;node&gt;</a></li><li><a href="../../elements/button/">&lt;button&gt;</a></li><li><a href="../../elements/text/">&lt;text&gt;</a></li><li><a href="../../elements/editable-text/">&lt;editableText&gt;</a></li><li><a href="../../elements/image/">&lt;image&gt;</a></li><li><a href="../../elements/canvas/">&lt;canvas&gt;</a></li><li><a href="../../elements/svg/">&lt;svg&gt;</a></li><li><a href="../../elements/portal/">&lt;portal&gt;</a></li><li><a href="../../elements/surface/">&lt;surface&gt;</a></li><li><a href="../../elements/root/">&lt;root&gt;</a></li><li><a href="../../elements/anchor/">&lt;anchor&gt;</a></li></ul></li><li class="nav-section"><span>Layout</span><ul><li><a href="../../layout/flexbox/">Flexbox</a></li><li><a href="../../layout/grid/">Grid</a></li><li><a href="../../layout/positioning/">Positioning</a></li></ul></li><li class="nav-section"><span>Styling</span><ul><li><a href="../../styling/units/">Units</a></li><li><a href="../../styling/colors/">Colors</a></li><li><a href="../../styling/borders/">Borders</a></li><li><a href="../../styling/spacing/">Spacing</a></li><li><a href="../../styling/sizing/">Sizing</a></li><li><a href="../../styling/layout-rounding/">Layout rounding</a></li><li><a href="../../styling/overflow/">Overflow</a></li><li><a href="../../styling/transforms/">Transforms</a></li><li><a href="../../styling/3d-transforms/">3D transforms</a></li><li><a href="../../styling/shadows/">Shadows</a></li><li><a href="../../styling/filters/">Filters</a></li><li><a href="../../styling/backdrop-filters/">Backdrop filters</a></li><li><a href="../../styling/morph-filters/">Morph filters</a></li><li><a href="../../styling/gradients/">Gradients</a></li><li><a href="../../styling/background-images/">Background images</a></li><li><a href="../../styling/image-rendering/">Image rendering</a></li><li><a href="../../styling/opacity/">Opacity</a></li><li><a href="../../styling/z-index/">Z-index</a></li><li><a href="../../styling/focus-policy/">Focus policy</a></li><li><a href="../../styling/cursors/">Cursors</a></li><li><a href="../../styling/layers/">Layers</a></li></ul></li><li class="nav-section"><span>Animations</span><ul><li><a href="../../animations/style-transitions/">Style transitions</a></li><li><a href="../../animations/animated-values/">Animated values</a></li><li><a href="../../animations/interpolation/" aria-current="page">Interpolation</a></li><li><a href="../../animations/shared-elements/">Shared elements</a></li></ul></li><li class="nav-section"><span>Communication</span><ul><li><a href="../../communication/react-to-bevy/">React to Bevy</a></li><li><a href="../../communication/bevy-to-react/">Bevy to React</a></li><li><a href="../../communication/request-response/">Request / response</a></li><li><a href="../../communication/named-nodes/">Named nodes</a></li></ul></li><li class="nav-section"><span>Events</span><ul><li><a href="../../events/mouse/">Mouse</a></li><li><a href="../../events/keyboard/">Keyboard</a></li><li><a href="../../events/gamepad/">Gamepad</a></li><li><a href="../../events/window/">Window</a></li></ul></li><li class="nav-section"><span>Extending</span><ul><li><a href="../../extending/custom-elements/">Custom elements</a></li><li><a href="../../extending/custom-styles/">Custom styles</a></li><li><a href="../../extending/custom-filters/">Custom filters</a></li></ul></li><li class="nav-section"><span>Tooling</span><ul><li><a href="../../tooling/devtools/">Devtools</a></li><li><a href="../../tooling/hot-reload/">Hot reload</a></li><li><a href="../../tooling/web/">Web builds</a></li><li><a href="../../tooling/ts-codegen/">TypeScript codegen</a></li></ul></li><li class="nav-section"><span>Reference</span><ul><li><a href="../../reference/style-properties/">Style properties</a></li><li><a href="../../reference/elements/">Elements</a></li><li><a href="../../reference/filters/">Filters</a></li></ul></li><li><a href="../../performance/">Performance</a></li></ul>
+</details>
+</nav>
+<main id="main">
+<article>
+<h1 id="interpolation">Interpolation</h1>
+<p><code>interpolate</code> and <code>interpolateColor</code> map a <a href="../../animations/animated-values/">shared value</a>
+through a piecewise-linear curve and return a binding for an <code>{ animated }</code>
+style position. One value can then drive several properties, each over its
+own range, and the mapping is evaluated on the Bevy side every frame.</p>
+<h2 id="usage"><a class="anchor" href="#usage" aria-hidden="true">#</a>Usage</h2>
+<pre><code class="language-tsx"><span class="token keyword">import</span> <span class="token punctuation">{</span>
+  interpolate<span class="token punctuation">,</span>
+  interpolateColor<span class="token punctuation">,</span>
+  useSharedValue<span class="token punctuation">,</span>
+  withTiming<span class="token punctuation">,</span>
+<span class="token punctuation">}</span> <span class="token keyword">from</span> <span class="token string">&quot;bevy-react&quot;</span><span class="token punctuation">;</span>
+
+<span class="token keyword">function</span> <span class="token function">Card</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+  <span class="token keyword">const</span> t <span class="token operator">=</span> <span class="token function">useSharedValue</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token keyword">return</span> <span class="token punctuation">(</span>
+    <span class="token operator">&lt;</span>node
+      onPointerEnter<span class="token operator">=</span><span class="token punctuation">{</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">=&gt;</span> <span class="token punctuation">{</span>
+        t<span class="token punctuation">.</span>value <span class="token operator">=</span> <span class="token function">withTiming</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">,</span> <span class="token punctuation">{</span> duration<span class="token operator">:</span> <span class="token number">200</span> <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+      <span class="token punctuation">}</span><span class="token punctuation">}</span>
+      onPointerLeave<span class="token operator">=</span><span class="token punctuation">{</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">=&gt;</span> <span class="token punctuation">{</span>
+        t<span class="token punctuation">.</span>value <span class="token operator">=</span> <span class="token function">withTiming</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">,</span> <span class="token punctuation">{</span> duration<span class="token operator">:</span> <span class="token number">200</span> <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+      <span class="token punctuation">}</span><span class="token punctuation">}</span>
+      style<span class="token operator">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span>
+        width<span class="token operator">:</span> <span class="token number">120</span><span class="token punctuation">,</span>
+        height<span class="token operator">:</span> <span class="token number">80</span><span class="token punctuation">,</span>
+        transform<span class="token operator">:</span> <span class="token punctuation">{</span>
+          scale<span class="token operator">:</span> <span class="token punctuation">{</span> animated<span class="token operator">:</span> <span class="token function">interpolate</span><span class="token punctuation">(</span>t<span class="token punctuation">,</span> <span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">]</span><span class="token punctuation">,</span> <span class="token punctuation">[</span><span class="token number">1</span><span class="token punctuation">,</span> <span class="token number">1.1</span><span class="token punctuation">]</span><span class="token punctuation">)</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+        <span class="token punctuation">}</span><span class="token punctuation">,</span>
+        backgroundColor<span class="token operator">:</span> <span class="token punctuation">{</span>
+          animated<span class="token operator">:</span> <span class="token function">interpolateColor</span><span class="token punctuation">(</span>t<span class="token punctuation">,</span> <span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">]</span><span class="token punctuation">,</span> <span class="token punctuation">[</span><span class="token string">&quot;#7aa2f7&quot;</span><span class="token punctuation">,</span> <span class="token string">&quot;#f7768e&quot;</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+        <span class="token punctuation">}</span><span class="token punctuation">,</span>
+      <span class="token punctuation">}</span><span class="token punctuation">}</span>
+    <span class="token operator">/</span><span class="token operator">&gt;</span>
+  <span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span></code></pre><p>The shared value runs from 0 to 1, the scale from 1 to 1.1 and the color
+from blue to red. Setting the value directly (<code>t.value = 0.5</code>, from a slider
+for example) moves every binding at once, with no driver at all.</p>
+<h2 id="interpolate"><a class="anchor" href="#interpolate" aria-hidden="true">#</a><code>interpolate</code></h2>
+<p><code>interpolate(value, input, output)</code> returns a number binding:</p>
+<ul>
+<li><p><code>input</code> lists readings of the shared value in ascending order, and
+<code>output</code> the result at each of them, in the units of the position it binds:
+pixels for lengths, degrees for rotations (see
+<a href="../../animations/animated-values/#bindings">Animated values</a>).</p>
+</li>
+<li><p>Between two neighbouring stops the result is linear. Use as many stops as
+you need:</p>
+<pre><code class="language-tsx">translateY<span class="token operator">:</span> <span class="token punctuation">{</span>
+  animated<span class="token operator">:</span> <span class="token function">interpolate</span><span class="token punctuation">(</span>
+    t<span class="token punctuation">,</span>
+    <span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">,</span> <span class="token number">0.25</span><span class="token punctuation">,</span> <span class="token number">0.5</span><span class="token punctuation">,</span> <span class="token number">0.75</span><span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">]</span><span class="token punctuation">,</span>
+    <span class="token punctuation">[</span><span class="token number">34</span><span class="token punctuation">,</span> <span class="token operator">-</span><span class="token number">34</span><span class="token punctuation">,</span> <span class="token number">34</span><span class="token punctuation">,</span> <span class="token operator">-</span><span class="token number">34</span><span class="token punctuation">,</span> <span class="token number">34</span><span class="token punctuation">]</span><span class="token punctuation">,</span>
+  <span class="token punctuation">)</span><span class="token punctuation">,</span>
+<span class="token punctuation">}</span><span class="token punctuation">,</span></code></pre></li>
+<li><p>Outside the input range the result clamps to the first or last output.
+There is no extrapolation option; add stops beyond the range where you
+want the curve to continue.</p>
+</li>
+<li><p>A repeated input stop makes a step: <code>input: [0, 0.5, 0.5, 1]</code> with
+<code>output: [0, 0, 1, 1]</code> jumps from 0 to 1 at 0.5.</p>
+</li>
+<li><p>Extra stops in the longer of the two lists are ignored. A single stop
+gives a constant.</p>
+</li>
+</ul>
+<p>Clamping makes staggering easy: give each item its own window of the same
+value, and it sits at an end of its range outside that window.</p>
+<pre><code class="language-tsx">items<span class="token punctuation">.</span><span class="token function">map</span><span class="token punctuation">(</span><span class="token punctuation">(</span>item<span class="token punctuation">,</span> i<span class="token punctuation">)</span> <span class="token operator">=&gt;</span> <span class="token punctuation">(</span>
+  <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>node</span>
+    <span class="token attr-name">key</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span>item<span class="token punctuation">.</span>id<span class="token punctuation">}</span></span>
+    <span class="token attr-name">style</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span>
+      width<span class="token operator">:</span> <span class="token number">18</span><span class="token punctuation">,</span>
+      height<span class="token operator">:</span> <span class="token punctuation">{</span>
+        animated<span class="token operator">:</span> <span class="token function">interpolate</span><span class="token punctuation">(</span>t<span class="token punctuation">,</span> <span class="token punctuation">[</span>i <span class="token operator">*</span> <span class="token number">0.16</span><span class="token punctuation">,</span> i <span class="token operator">*</span> <span class="token number">0.16</span> <span class="token operator">+</span> <span class="token number">0.36</span><span class="token punctuation">]</span><span class="token punctuation">,</span> <span class="token punctuation">[</span><span class="token number">10</span><span class="token punctuation">,</span> <span class="token number">68</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+      <span class="token punctuation">}</span><span class="token punctuation">,</span>
+    <span class="token punctuation">}</span><span class="token punctuation">}</span></span>
+  <span class="token punctuation">/&gt;</span></span>
+<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span></code></pre><h2 id="interpolatecolor"><a class="anchor" href="#interpolatecolor" aria-hidden="true">#</a><code>interpolateColor</code></h2>
+<p><code>interpolateColor(value, input, colors)</code> returns a color binding, for the
+positions that take one: <code>backgroundColor</code>, <code>borderColor</code>, <code>color</code>, a
+<code>backgroundImage</code> tint, gradient stop colors and color filter params.</p>
+<ul>
+<li><code>colors</code> are hex strings: <code>#rgb</code>, <code>#rrggbb</code>, or <code>#rrggbbaa</code> with alpha.
+Other color syntaxes (<code>rgb()</code>, named colors, <code>#rgba</code>) are not understood;
+the binding is rejected with a <code>styleBinding</code> warning and does nothing.</li>
+<li>Colors are interpolated channel by channel in sRGB, alpha included.</li>
+<li>Stops, ordering and clamping work as for <code>interpolate</code>.</li>
+</ul>
+<h2 id="with-drivers"><a class="anchor" href="#with-drivers" aria-hidden="true">#</a>With drivers</h2>
+<p>The bindings follow the shared value whatever moves it, so animate one
+progress value and map it per property. Because the curve clamps, a spring
+that overshoots past the last stop holds at the last output; extend the stops
+when the overshoot should show:</p>
+<pre><code class="language-tsx">t<span class="token punctuation">.</span>value <span class="token operator">=</span> <span class="token function">withSpring</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">,</span> <span class="token punctuation">{</span> damping<span class="token operator">:</span> <span class="token number">8</span> <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+scale<span class="token operator">:</span> <span class="token punctuation">{</span> animated<span class="token operator">:</span> <span class="token function">interpolate</span><span class="token punctuation">(</span>t<span class="token punctuation">,</span> <span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">,</span> <span class="token number">2</span><span class="token punctuation">]</span><span class="token punctuation">,</span> <span class="token punctuation">[</span><span class="token number">1</span><span class="token punctuation">,</span> <span class="token number">1.1</span><span class="token punctuation">,</span> <span class="token number">1.2</span><span class="token punctuation">]</span><span class="token punctuation">)</span> <span class="token punctuation">}</span><span class="token punctuation">,</span></code></pre><p>Writing the binding inline in render costs nothing extra: an unchanged
+binding compares equal and sends no update.</p>
+<h2 id="limits"><a class="anchor" href="#limits" aria-hidden="true">#</a>Limits</h2>
+<ul>
+<li>Curves are piecewise linear only. Shape the timing with the driver&#39;s
+easing or spring instead.</li>
+<li><code>interpolateColor</code> takes hex colors only and interpolates in sRGB, which
+can pass through muddy midpoints between distant hues. Add an intermediate
+stop to steer it.</li>
+<li>Bindings, interpolated or not, work in the base <code>style</code> only.</li>
+</ul>
+<p>The <strong>Animatable</strong> column of the
+<a href="../../reference/style-properties/">style reference</a> marks every property that
+accepts a binding.</p>
+
+</article>
+<footer class="page-links"><a href="../../demo/?page=interpolation">Open live demo</a>
+<a href="https://github.com/tulustul/bevy-react/blob/v0.7.0/examples/demos/ui/src/demos/animations/InterpolateDemo.tsx">Demo source</a>
+<a href="https://github.com/tulustul/bevy-react/edit/main/docs/guide/animations/interpolation.md">Edit this page</a></footer>
+</main>
+</div>
+<footer class="site-footer">
+<p>bevy-react is dual-licensed under MIT or Apache-2.0. <a href="https://github.com/tulustul/bevy-react">Source on GitHub</a>.</p>
+</footer>
+</body>
+</html>

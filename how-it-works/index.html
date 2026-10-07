@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How it works · bevy-react</title>
+<meta name="description" content="How bevy-react works: React commits become batched ops that Bevy applies to ECS entities, with events, messages and animations crossing a bridge.">
+<link rel="canonical" href="https://tulustul.github.io/bevy-react/how-it-works/">
+<link rel="alternate" type="text/markdown" href="../how-it-works.md">
+<meta property="og:title" content="How it works · bevy-react">
+<meta property="og:description" content="How bevy-react works: React commits become batched ops that Bevy applies to ECS entities, with events, messages and animations crossing a bridge.">
+<link rel="icon" href="../logo.png">
+<link rel="stylesheet" href="../style.css">
+<script src="../docs.js" defer></script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="site-header">
+<a class="brand" href="../"><img src="../logo.png" alt="" width="74" height="74"> bevy-react</a>
+<span class="version">v0.7.0</span>
+<nav class="site-links" aria-label="Project">
+<a href="../demo/">Live demo</a>
+<a href="https://github.com/tulustul/bevy-react">GitHub</a>
+<a href="https://docs.rs/bevy-react">docs.rs</a>
+<a href="https://www.npmjs.com/package/bevy-react">npm</a>
+</nav>
+</header>
+<div class="layout">
+<nav class="sidebar" aria-label="Documentation">
+<details class="nav-menu" open>
+<summary>Menu</summary>
+<ul><li><a href="../">Introduction</a></li><li><a href="../getting-started/">Getting started</a></li><li><a href="../how-it-works/" aria-current="page">How it works</a></li><li class="nav-section"><span>Elements</span><ul><li><a href="../elements/node/">&lt;node&gt;</a></li><li><a href="../elements/button/">&lt;button&gt;</a></li><li><a href="../elements/text/">&lt;text&gt;</a></li><li><a href="../elements/editable-text/">&lt;editableText&gt;</a></li><li><a href="../elements/image/">&lt;image&gt;</a></li><li><a href="../elements/canvas/">&lt;canvas&gt;</a></li><li><a href="../elements/svg/">&lt;svg&gt;</a></li><li><a href="../elements/portal/">&lt;portal&gt;</a></li><li><a href="../elements/surface/">&lt;surface&gt;</a></li><li><a href="../elements/root/">&lt;root&gt;</a></li><li><a href="../elements/anchor/">&lt;anchor&gt;</a></li></ul></li><li class="nav-section"><span>Layout</span><ul><li><a href="../layout/flexbox/">Flexbox</a></li><li><a href="../layout/grid/">Grid</a></li><li><a href="../layout/positioning/">Positioning</a></li></ul></li><li class="nav-section"><span>Styling</span><ul><li><a href="../styling/units/">Units</a></li><li><a href="../styling/colors/">Colors</a></li><li><a href="../styling/borders/">Borders</a></li><li><a href="../styling/spacing/">Spacing</a></li><li><a href="../styling/sizing/">Sizing</a></li><li><a href="../styling/layout-rounding/">Layout rounding</a></li><li><a href="../styling/overflow/">Overflow</a></li><li><a href="../styling/transforms/">Transforms</a></li><li><a href="../styling/3d-transforms/">3D transforms</a></li><li><a href="../styling/shadows/">Shadows</a></li><li><a href="../styling/filters/">Filters</a></li><li><a href="../styling/backdrop-filters/">Backdrop filters</a></li><li><a href="../styling/morph-filters/">Morph filters</a></li><li><a href="../styling/gradients/">Gradients</a></li><li><a href="../styling/background-images/">Background images</a></li><li><a href="../styling/image-rendering/">Image rendering</a></li><li><a href="../styling/opacity/">Opacity</a></li><li><a href="../styling/z-index/">Z-index</a></li><li><a href="../styling/focus-policy/">Focus policy</a></li><li><a href="../styling/cursors/">Cursors</a></li><li><a href="../styling/layers/">Layers</a></li></ul></li><li class="nav-section"><span>Animations</span><ul><li><a href="../animations/style-transitions/">Style transitions</a></li><li><a href="../animations/animated-values/">Animated values</a></li><li><a href="../animations/interpolation/">Interpolation</a></li><li><a href="../animations/shared-elements/">Shared elements</a></li></ul></li><li class="nav-section"><span>Communication</span><ul><li><a href="../communication/react-to-bevy/">React to Bevy</a></li><li><a href="../communication/bevy-to-react/">Bevy to React</a></li><li><a href="../communication/request-response/">Request / response</a></li><li><a href="../communication/named-nodes/">Named nodes</a></li></ul></li><li class="nav-section"><span>Events</span><ul><li><a href="../events/mouse/">Mouse</a></li><li><a href="../events/keyboard/">Keyboard</a></li><li><a href="../events/gamepad/">Gamepad</a></li><li><a href="../events/window/">Window</a></li></ul></li><li class="nav-section"><span>Extending</span><ul><li><a href="../extending/custom-elements/">Custom elements</a></li><li><a href="../extending/custom-styles/">Custom styles</a></li><li><a href="../extending/custom-filters/">Custom filters</a></li></ul></li><li class="nav-section"><span>Tooling</span><ul><li><a href="../tooling/devtools/">Devtools</a></li><li><a href="../tooling/hot-reload/">Hot reload</a></li><li><a href="../tooling/web/">Web builds</a></li><li><a href="../tooling/ts-codegen/">TypeScript codegen</a></li></ul></li><li class="nav-section"><span>Reference</span><ul><li><a href="../reference/style-properties/">Style properties</a></li><li><a href="../reference/elements/">Elements</a></li><li><a href="../reference/filters/">Filters</a></li></ul></li><li><a href="../performance/">Performance</a></li></ul>
+</details>
+</nav>
+<main id="main">
+<article>
+<h1 id="how-it-works">How it works</h1>
+<p>bevy-react uses a bridge architecture, like early versions of React Native,
+with Bevy&#39;s ECS in place of native views. React runs in an embedded
+JavaScript engine and only describes the UI. A custom reconciler turns each
+React commit into a batch of small operations, and the Bevy side applies them
+to ordinary ECS entities — <code>bevy_ui</code> nodes for every built-in element. Layout,
+input, picking and rendering are plain Bevy; nothing is emulated.</p>
+<h2 id="the-two-sides"><a class="anchor" href="#the-two-sides" aria-hidden="true">#</a>The two sides</h2>
+<ul>
+<li><strong>The JS side</strong> is your React app plus bevy-react&#39;s reconciler, which
+stands in for react-dom. In a native build it runs in a V8 isolate
+(through <a href="https://crates.io/crates/deno_core"><code>deno_core</code></a>) on a dedicated
+thread, off the game loop: there is no Node and no browser. In a web build
+the same code runs in the browser&#39;s own JS engine.</li>
+<li><strong>The Bevy side</strong> is <code>ReactUiPlugin</code> (part of <code>ReactPlugins</code>). It hosts the
+JS runtime, loads your bundle, applies the operations to the ECS and sends
+events back.</li>
+</ul>
+<p>Your UI ships as two bundles built by the <code>bevy-react</code> CLI: <code>vendor.js</code>
+(React, the reconciler and the runtime) and <code>app.js</code> (your components). See
+<a href="../getting-started/">Getting started</a>.</p>
+<h2 id="from-a-render-to-entities"><a class="anchor" href="#from-a-render-to-entities" aria-hidden="true">#</a>From a render to entities</h2>
+<p>When React commits, the reconciler sends that commit&#39;s changes as one
+batch: create a node, update its props, append, insert or remove a child,
+set a text. In its next frame, Bevy drains every batch that has arrived,
+applies them in order, and then lays out and renders as usual.</p>
+<ul>
+<li>Every element becomes an entity that carries Bevy components such as
+<code>Node</code>, <code>BackgroundColor</code>, <code>Text</code> or <code>ImageNode</code>. Which ones depends on
+the element type and its props.</li>
+<li>A commit shows up in the first Bevy frame after it was sent. Natively,
+React renders on its own thread, so a slow render delays the update but
+never stalls a Bevy frame. On the web the two share the browser&#39;s main
+thread.</li>
+<li>Props cross generically. Every prop except <code>children</code>, <code>key</code> and <code>ref</code> is
+sent; a handler such as <code>onClick</code> crosses only as a flag, and the function
+stays in JS. Bevy decodes each prop against the element&#39;s registered
+attributes and the registered style properties, and reports an unknown one
+as a warning (in the log and in devtools) instead of failing.</li>
+<li>The bridge owns the components it writes. Your systems can find React
+nodes, read their layout and add components of their own (see
+<a href="../communication/named-nodes/">Named nodes</a>), but must not overwrite what
+the bridge manages.</li>
+</ul>
+<p>Elements and style properties are registered in Rust. The core elements,
+the feature elements (<code>&lt;svg&gt;</code>, <code>&lt;canvas&gt;</code>, …) and your own all go through
+the same API (see <a href="../extending/custom-elements/">Custom elements</a> and
+<a href="../extending/custom-styles/">Custom styles</a>).</p>
+<h2 id="not-only-ui"><a class="anchor" href="#not-only-ui" aria-hidden="true">#</a>Not only UI</h2>
+<p>The bridge itself manages ECS entities, not UI specifically. <code>bevy_ui</code> is
+the built-in element set, and it is where layout, <code>style</code>, picking, layers
+and transitions come from. A custom element can spawn any entity instead: a
+3D mesh, a light, a sound emitter. React then mounts, updates and unmounts it
+like any other element, driving its attributes from state, and <code>name</code> makes
+it reachable from your systems. The demos&#39; <code>&lt;cube&gt;</code> is such an element: a
+mesh in the 3D scene, rendered from a React list. What a non-UI element gets,
+and what it has to bring itself, is listed under
+<a href="../extending/custom-elements/#beyond-ui">Beyond UI</a>.</p>
+<h2 id="updates-are-deltas"><a class="anchor" href="#updates-are-deltas" aria-hidden="true">#</a>Updates are deltas</h2>
+<p>On a re-render, the reconciler compares old and new props and sends only
+the fields that changed. <code>style</code> is compared field by field, and other
+props by value, so an inline object literal that did not change sends
+nothing. A re-render that produces identical values sends no operation at
+all, which makes idiomatic React (re-render freely, let the diff sort it
+out) cheap.</p>
+<p>On the Bevy side, a change re-runs only the code that reads the changed
+properties. A color change repaints the node without a relayout; a <code>width</code>
+change triggers a relayout, as it would in <code>bevy_ui</code> itself.</p>
+<h2 id="events-flow-back"><a class="anchor" href="#events-flow-back" aria-hidden="true">#</a>Events flow back</h2>
+<p>Interactions travel the other way over a single channel. Bevy&#39;s picking
+finds what is under the pointer, and the runtime routes each event to the
+handler registered for that node and event name. Events do not bubble: the
+topmost node under the pointer that handles the event receives it (see
+<a href="../events/mouse/">Mouse</a>). The same channel carries the app&#39;s own events,
+request responses and animation completions.</p>
+<h2 id="talking-to-your-app"><a class="anchor" href="#talking-to-your-app" aria-hidden="true">#</a>Talking to your app</h2>
+<p>App-level state uses three typed channels, each defined by a Rust type and
+mirrored to TypeScript by codegen: messages from React to Bevy
+(<a href="../communication/react-to-bevy/">React to Bevy</a>), requests that Bevy
+answers (<a href="../communication/request-response/">Request / response</a>) and
+events from Bevy to React (<a href="../communication/bevy-to-react/">Bevy to React</a>).</p>
+<div class="tabs"><div class="tab-panel" data-lang="tsx"><p class="tab-label">TSX</p><pre><code class="language-tsx"><span class="token keyword">import</span> <span class="token punctuation">{</span> bevy <span class="token punctuation">}</span> <span class="token keyword">from</span> <span class="token string">&quot;./bevy&quot;</span><span class="token punctuation">;</span> <span class="token comment">// generated</span>
+
+bevy<span class="token punctuation">.</span>player<span class="token punctuation">.</span><span class="token function">setName</span><span class="token punctuation">(</span><span class="token string">&quot;Ada&quot;</span><span class="token punctuation">)</span><span class="token punctuation">;</span></code></pre></div><div class="tab-panel" data-lang="rust"><p class="tab-label">Rust</p><pre><code class="language-rust"><span class="token attribute attr-name">#[react_message(name = <span class="token string">&quot;player.setName&quot;</span>)]</span>
+<span class="token keyword">struct</span> <span class="token type-definition class-name">SetName</span><span class="token punctuation">(</span><span class="token class-name">String</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+app<span class="token punctuation">.</span><span class="token function">add_react_handler</span><span class="token punctuation">(</span><span class="token closure-params"><span class="token closure-punctuation punctuation">|</span>on<span class="token punctuation">:</span> <span class="token class-name">On</span><span class="token operator">&lt;</span><span class="token class-name">SetName</span><span class="token operator">&gt;</span><span class="token closure-punctuation punctuation">|</span></span> <span class="token punctuation">{</span>
+    <span class="token macro property">info!</span><span class="token punctuation">(</span><span class="token string">&quot;name: {}&quot;</span><span class="token punctuation">,</span> on<span class="token punctuation">.</span><span class="token function">event</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span></code></pre></div></div>
+<p>The generated <code>bevy.ts</code> is the contract: change a Rust type, regenerate,
+and the TypeScript compiler points at every call site to update (see
+<a href="../tooling/ts-codegen/">TypeScript codegen</a>).</p>
+<h2 id="animations-run-in-bevy"><a class="anchor" href="#animations-run-in-bevy" aria-hidden="true">#</a>Animations run in Bevy</h2>
+<p><a href="../animations/style-transitions/">Style transitions</a> and
+<a href="../animations/animated-values/">animated values</a> are declared from React
+once and driven by Bevy every frame. A transition is part of the style; an
+animated value is a number that lives on the Bevy side, bound into a style
+and moved by a driver such as <code>withTiming</code>. No JS runs per frame and nothing
+crosses the bridge per tick; the only message back is a completion callback
+when you ask for one. In a native build, a busy JS thread therefore never
+makes an animation stutter.</p>
+<h2 id="hot-reload"><a class="anchor" href="#hot-reload" aria-hidden="true">#</a>Hot reload</h2>
+<p>In a native build the JS runtime and the React tree survive edits. Saving a
+file rebuilds only <code>app.js</code>, which runs again in the live runtime, and React
+Fast Refresh re-renders. Components keep their <code>useState</code> and other hook
+state, and the Bevy side (entities, running animations) carries on. A
+component whose hook calls changed remounts with fresh state. See
+<a href="../tooling/hot-reload/">Hot reload</a>.</p>
+<h2 id="composited-layers"><a class="anchor" href="#composited-layers" aria-hidden="true">#</a>Composited layers</h2>
+<p>Some styles promote a subtree to a composited layer: group <code>opacity</code> on a
+node with children, a <code>filter</code> chain, a <code>backdropFilter</code>, a <code>transform3d</code>, a
+<code>morphFilter</code>, or <code>cache: &quot;always&quot;</code> or <code>&quot;never&quot;</code>. The subtree is rendered
+into an offscreen texture and drawn back as one quad.</p>
+<ul>
+<li>The capture is cached: a layer whose content did not change is not
+rendered again.</li>
+<li>Moving it, fading it and changing filter params happen when the quad is
+drawn, so animating them never re-renders the content.</li>
+<li>Promotion itself changes neither layout nor picking.</li>
+</ul>
+<p>See <a href="../styling/layers/">Layers</a>.</p>
+<h2 id="the-web-host"><a class="anchor" href="#the-web-host" aria-hidden="true">#</a>The web host</h2>
+<p>On wasm the UI is still <code>bevy_ui</code> drawn by Bevy into its canvas, not DOM.
+The page loads <code>vendor.js</code> and <code>app.js</code> next to the wasm module, the bridge
+operations are exposed to the browser&#39;s JS engine, and a Bevy system
+delivers events to JS each frame. The bundle is the same as natively. See
+<a href="../tooling/web/">Web builds</a>.</p>
+<h2 id="what-this-means-for-performance"><a class="anchor" href="#what-this-means-for-performance" aria-hidden="true">#</a>What this means for performance</h2>
+<ul>
+<li>Re-render freely: unchanged props cost nothing to send.</li>
+<li>Animate with transitions and animated values, not with a <code>setState</code> per
+frame. Each state change is a render, a diff and a batch.</li>
+<li>Prefer <code>transform</code> and <code>opacity</code> for motion. Changing sizes, positions
+and other layout properties relayouts the UI on every change.</li>
+<li>Every element is an entity, and the cost of a commit grows with the number
+of nodes it creates or changes.</li>
+<li>The devtools Bridge tab shows the operations each commit sends (see
+<a href="../tooling/devtools/">Devtools</a>), and <a href="../performance/">Performance</a> has
+benchmark numbers.</li>
+</ul>
+
+</article>
+<footer class="page-links"><a href="https://github.com/tulustul/bevy-react/edit/main/docs/guide/how-it-works.md">Edit this page</a></footer>
+</main>
+</div>
+<footer class="site-footer">
+<p>bevy-react is dual-licensed under MIT or Apache-2.0. <a href="https://github.com/tulustul/bevy-react">Source on GitHub</a>.</p>
+</footer>
+</body>
+</html>

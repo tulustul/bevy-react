@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gamepad · bevy-react</title>
+<meta name="description" content="Read gamepad connections, buttons and sticks in React with the built-in gamepad events, list connected pads and drive rumble from JavaScript.">
+<link rel="canonical" href="https://tulustul.github.io/bevy-react/events/gamepad/">
+<link rel="alternate" type="text/markdown" href="../../events/gamepad.md">
+<meta property="og:title" content="Gamepad · bevy-react">
+<meta property="og:description" content="Read gamepad connections, buttons and sticks in React with the built-in gamepad events, list connected pads and drive rumble from JavaScript.">
+<link rel="icon" href="../../logo.png">
+<link rel="stylesheet" href="../../style.css">
+<script src="../../docs.js" defer></script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="site-header">
+<a class="brand" href="../../"><img src="../../logo.png" alt="" width="74" height="74"> bevy-react</a>
+<span class="version">v0.7.0</span>
+<nav class="site-links" aria-label="Project">
+<a href="../../demo/">Live demo</a>
+<a href="https://github.com/tulustul/bevy-react">GitHub</a>
+<a href="https://docs.rs/bevy-react">docs.rs</a>
+<a href="https://www.npmjs.com/package/bevy-react">npm</a>
+</nav>
+</header>
+<div class="layout">
+<nav class="sidebar" aria-label="Documentation">
+<details class="nav-menu" open>
+<summary>Menu</summary>
+<ul><li><a href="../../">Introduction</a></li><li><a href="../../getting-started/">Getting started</a></li><li><a href="../../how-it-works/">How it works</a></li><li class="nav-section"><span>Elements</span><ul><li><a href="../../elements/node/">&lt;node&gt;</a></li><li><a href="../../elements/button/">&lt;button&gt;</a></li><li><a href="../../elements/text/">&lt;text&gt;</a></li><li><a href="../../elements/editable-text/">&lt;editableText&gt;</a></li><li><a href="../../elements/image/">&lt;image&gt;</a></li><li><a href="../../elements/canvas/">&lt;canvas&gt;</a></li><li><a href="../../elements/svg/">&lt;svg&gt;</a></li><li><a href="../../elements/portal/">&lt;portal&gt;</a></li><li><a href="../../elements/surface/">&lt;surface&gt;</a></li><li><a href="../../elements/root/">&lt;root&gt;</a></li><li><a href="../../elements/anchor/">&lt;anchor&gt;</a></li></ul></li><li class="nav-section"><span>Layout</span><ul><li><a href="../../layout/flexbox/">Flexbox</a></li><li><a href="../../layout/grid/">Grid</a></li><li><a href="../../layout/positioning/">Positioning</a></li></ul></li><li class="nav-section"><span>Styling</span><ul><li><a href="../../styling/units/">Units</a></li><li><a href="../../styling/colors/">Colors</a></li><li><a href="../../styling/borders/">Borders</a></li><li><a href="../../styling/spacing/">Spacing</a></li><li><a href="../../styling/sizing/">Sizing</a></li><li><a href="../../styling/layout-rounding/">Layout rounding</a></li><li><a href="../../styling/overflow/">Overflow</a></li><li><a href="../../styling/transforms/">Transforms</a></li><li><a href="../../styling/3d-transforms/">3D transforms</a></li><li><a href="../../styling/shadows/">Shadows</a></li><li><a href="../../styling/filters/">Filters</a></li><li><a href="../../styling/backdrop-filters/">Backdrop filters</a></li><li><a href="../../styling/morph-filters/">Morph filters</a></li><li><a href="../../styling/gradients/">Gradients</a></li><li><a href="../../styling/background-images/">Background images</a></li><li><a href="../../styling/image-rendering/">Image rendering</a></li><li><a href="../../styling/opacity/">Opacity</a></li><li><a href="../../styling/z-index/">Z-index</a></li><li><a href="../../styling/focus-policy/">Focus policy</a></li><li><a href="../../styling/cursors/">Cursors</a></li><li><a href="../../styling/layers/">Layers</a></li></ul></li><li class="nav-section"><span>Animations</span><ul><li><a href="../../animations/style-transitions/">Style transitions</a></li><li><a href="../../animations/animated-values/">Animated values</a></li><li><a href="../../animations/interpolation/">Interpolation</a></li><li><a href="../../animations/shared-elements/">Shared elements</a></li></ul></li><li class="nav-section"><span>Communication</span><ul><li><a href="../../communication/react-to-bevy/">React to Bevy</a></li><li><a href="../../communication/bevy-to-react/">Bevy to React</a></li><li><a href="../../communication/request-response/">Request / response</a></li><li><a href="../../communication/named-nodes/">Named nodes</a></li></ul></li><li class="nav-section"><span>Events</span><ul><li><a href="../../events/mouse/">Mouse</a></li><li><a href="../../events/keyboard/">Keyboard</a></li><li><a href="../../events/gamepad/" aria-current="page">Gamepad</a></li><li><a href="../../events/window/">Window</a></li></ul></li><li class="nav-section"><span>Extending</span><ul><li><a href="../../extending/custom-elements/">Custom elements</a></li><li><a href="../../extending/custom-styles/">Custom styles</a></li><li><a href="../../extending/custom-filters/">Custom filters</a></li></ul></li><li class="nav-section"><span>Tooling</span><ul><li><a href="../../tooling/devtools/">Devtools</a></li><li><a href="../../tooling/hot-reload/">Hot reload</a></li><li><a href="../../tooling/web/">Web builds</a></li><li><a href="../../tooling/ts-codegen/">TypeScript codegen</a></li></ul></li><li class="nav-section"><span>Reference</span><ul><li><a href="../../reference/style-properties/">Style properties</a></li><li><a href="../../reference/elements/">Elements</a></li><li><a href="../../reference/filters/">Filters</a></li></ul></li><li><a href="../../performance/">Performance</a></li></ul>
+</details>
+</nav>
+<main id="main">
+<article>
+<h1 id="gamepad">Gamepad</h1>
+<p>Gamepads reach React through built-ins that are typed in every generated
+<code>bevy.ts</code>, with no Rust code or registration: three
+<a href="../../communication/bevy-to-react/">events</a> (<code>gamepadConnected</code>,
+<code>gamepadDisconnected</code>, <code>gamepadInput</code>), the <code>bevy.gamepad.getAll()</code>
+<a href="../../communication/request-response/">request</a>, and the
+<code>bevy.gamepad.rumble()</code> and <code>bevy.gamepad.stopRumble()</code>
+<a href="../../communication/react-to-bevy/">messages</a>.</p>
+<h2 id="usage"><a class="anchor" href="#usage" aria-hidden="true">#</a>Usage</h2>
+<pre><code class="language-tsx"><span class="token keyword">import</span> <span class="token punctuation">{</span> useEffect <span class="token punctuation">}</span> <span class="token keyword">from</span> <span class="token string">&quot;react&quot;</span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token punctuation">{</span> bevy <span class="token punctuation">}</span> <span class="token keyword">from</span> <span class="token string">&quot;./bevy&quot;</span><span class="token punctuation">;</span> <span class="token comment">// generated</span>
+
+<span class="token keyword">function</span> <span class="token function">Menu</span><span class="token punctuation">(</span><span class="token punctuation">{</span> onConfirm <span class="token punctuation">}</span><span class="token operator">:</span> <span class="token punctuation">{</span> <span class="token function-variable function">onConfirm</span><span class="token operator">:</span> <span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">=&gt;</span> <span class="token keyword">void</span> <span class="token punctuation">}</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+  <span class="token function">useEffect</span><span class="token punctuation">(</span>
+    <span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">=&gt;</span>
+      bevy<span class="token punctuation">.</span><span class="token function">on</span><span class="token punctuation">(</span><span class="token string">&quot;gamepadInput&quot;</span><span class="token punctuation">,</span> <span class="token punctuation">(</span>batch<span class="token punctuation">)</span> <span class="token operator">=&gt;</span> <span class="token punctuation">{</span>
+        <span class="token keyword">for</span> <span class="token punctuation">(</span><span class="token keyword">const</span> b <span class="token keyword">of</span> batch<span class="token punctuation">.</span>buttons<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+          <span class="token keyword">if</span> <span class="token punctuation">(</span>b<span class="token punctuation">.</span>button <span class="token operator">===</span> <span class="token string">&quot;south&quot;</span> <span class="token operator">&amp;&amp;</span> b<span class="token punctuation">.</span>pressed<span class="token punctuation">)</span> <span class="token function">onConfirm</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+      <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+    <span class="token punctuation">[</span>onConfirm<span class="token punctuation">]</span><span class="token punctuation">,</span>
+  <span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token keyword">return</span> <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>node</span><span class="token punctuation">&gt;</span></span><span class="token punctuation">{</span><span class="token comment">/* … */</span><span class="token punctuation">}</span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>node</span><span class="token punctuation">&gt;</span></span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span></code></pre><p>Pads are detected through Bevy&#39;s gamepad backend, the <code>bevy_gilrs</code> cargo
+feature, which is part of Bevy&#39;s default features. Without it no pad ever
+connects.</p>
+<h2 id="connected-pads"><a class="anchor" href="#connected-pads" aria-hidden="true">#</a>Connected pads</h2>
+<p><code>gamepadConnected</code> carries a <code>GamepadConnectedData</code>:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>gamepad</code></td>
+<td><code>number</code></td>
+<td>The pad&#39;s id, used by every other gamepad API</td>
+</tr>
+<tr>
+<td><code>name</code></td>
+<td><code>string</code></td>
+<td>The device name the OS reports</td>
+</tr>
+<tr>
+<td><code>vendorId</code></td>
+<td><code>number | null</code></td>
+<td>USB vendor id, when known</td>
+</tr>
+<tr>
+<td><code>productId</code></td>
+<td><code>number | null</code></td>
+<td>USB product id, when known</td>
+</tr>
+</tbody></table></div>
+<p><code>gamepadDisconnected</code> carries <code>{ gamepad }</code>, the id the pad was announced
+under.</p>
+<ul>
+<li>Ids count up and are never reused: a pad that reconnects gets a new id, so
+a stale id never refers to another device.</li>
+<li>Pads connected before the app started are announced once React&#39;s first
+render has been applied, before any of their input.</li>
+<li><code>bevy.gamepad.getAll()</code> resolves with every connected pad
+(<code>GamepadConnectedData[]</code>, <code>[]</code> when none). Components that mount after a
+pad connected have missed its event; seed from the request, then follow the
+events:</li>
+</ul>
+<pre><code class="language-tsx"><span class="token keyword">import</span> <span class="token punctuation">{</span> useEffect<span class="token punctuation">,</span> useState <span class="token punctuation">}</span> <span class="token keyword">from</span> <span class="token string">&quot;react&quot;</span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token punctuation">{</span> bevy<span class="token punctuation">,</span> <span class="token keyword">type</span> <span class="token class-name">GamepadConnectedData</span> <span class="token punctuation">}</span> <span class="token keyword">from</span> <span class="token string">&quot;./bevy&quot;</span><span class="token punctuation">;</span>
+
+<span class="token keyword">function</span> <span class="token function">usePads</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+  <span class="token keyword">const</span> <span class="token punctuation">[</span>pads<span class="token punctuation">,</span> setPads<span class="token punctuation">]</span> <span class="token operator">=</span> <span class="token generic-function"><span class="token function">useState</span><span class="token generic class-name"><span class="token operator">&lt;</span>GamepadConnectedData<span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token operator">&gt;</span></span></span><span class="token punctuation">(</span><span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token function">useEffect</span><span class="token punctuation">(</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">=&gt;</span> <span class="token punctuation">{</span>
+    <span class="token keyword">void</span> bevy<span class="token punctuation">.</span>gamepad<span class="token punctuation">.</span><span class="token function">getAll</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">then</span><span class="token punctuation">(</span>setPads<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">const</span> offConnect <span class="token operator">=</span> bevy<span class="token punctuation">.</span><span class="token function">on</span><span class="token punctuation">(</span><span class="token string">&quot;gamepadConnected&quot;</span><span class="token punctuation">,</span> <span class="token punctuation">(</span>p<span class="token punctuation">)</span> <span class="token operator">=&gt;</span>
+      <span class="token function">setPads</span><span class="token punctuation">(</span><span class="token punctuation">(</span>ps<span class="token punctuation">)</span> <span class="token operator">=&gt;</span> <span class="token punctuation">[</span><span class="token operator">...</span>ps<span class="token punctuation">,</span> p<span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+    <span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">const</span> offDisconnect <span class="token operator">=</span> bevy<span class="token punctuation">.</span><span class="token function">on</span><span class="token punctuation">(</span><span class="token string">&quot;gamepadDisconnected&quot;</span><span class="token punctuation">,</span> <span class="token punctuation">(</span>p<span class="token punctuation">)</span> <span class="token operator">=&gt;</span>
+      <span class="token function">setPads</span><span class="token punctuation">(</span><span class="token punctuation">(</span>ps<span class="token punctuation">)</span> <span class="token operator">=&gt;</span> ps<span class="token punctuation">.</span><span class="token function">filter</span><span class="token punctuation">(</span><span class="token punctuation">(</span>x<span class="token punctuation">)</span> <span class="token operator">=&gt;</span> x<span class="token punctuation">.</span>gamepad <span class="token operator">!==</span> p<span class="token punctuation">.</span>gamepad<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+    <span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">return</span> <span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">=&gt;</span> <span class="token punctuation">{</span>
+      <span class="token function">offConnect</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+      <span class="token function">offDisconnect</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span><span class="token punctuation">;</span>
+  <span class="token punctuation">}</span><span class="token punctuation">,</span> <span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token keyword">return</span> pads<span class="token punctuation">;</span>
+<span class="token punctuation">}</span></code></pre><h2 id="input"><a class="anchor" href="#input" aria-hidden="true">#</a>Input</h2>
+<p><code>gamepadInput</code> fires at most once per frame, and only in frames where some
+input changed. Its <code>buttons</code> and <code>axes</code> arrays list every change of the
+frame across all pads, in order:</p>
+<ul>
+<li>A button change is <code>{ gamepad, button, pressed, value }</code>: <code>value</code> is
+<code>0..1</code> (analog triggers use the whole range), <code>pressed</code> is the digital state
+after the change.</li>
+<li>An axis change is <code>{ gamepad, axis, value }</code>, with <code>value</code> in <code>-1..1</code>.
+Sticks follow Bevy&#39;s convention, <strong>up is <code>+1</code></strong>, the inverse of the web
+Gamepad API.</li>
+<li>Changes are filtered by Bevy&#39;s <code>GamepadSettings</code> (dead zones and press
+thresholds) before they are reported. An idle pad sends nothing.</li>
+<li>Every analog change is a separate entry, and <code>pressed</code> stays <code>true</code> across
+all the changes of a held trigger. To act once per press, compare against
+the previous state yourself.</li>
+<li>Input arriving before React&#39;s first render has been applied is dropped.</li>
+</ul>
+<p>Button and axis names are Bevy&#39;s, camelCased:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Kind</th>
+<th>Names</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Buttons</td>
+<td><code>south</code>, <code>east</code>, <code>north</code>, <code>west</code>, <code>c</code>, <code>z</code>, <code>leftTrigger</code>, <code>leftTrigger2</code>, <code>rightTrigger</code>, <code>rightTrigger2</code>, <code>select</code>, <code>start</code>, <code>mode</code>, <code>leftThumb</code>, <code>rightThumb</code>, <code>dPadUp</code>, <code>dPadDown</code>, <code>dPadLeft</code>, <code>dPadRight</code></td>
+</tr>
+<tr>
+<td>Axes</td>
+<td><code>leftStickX</code>, <code>leftStickY</code>, <code>leftZ</code>, <code>rightStickX</code>, <code>rightStickY</code>, <code>rightZ</code></td>
+</tr>
+</tbody></table></div>
+<p><code>south</code> is the bottom face button (A on Xbox pads, Cross on PlayStation),
+<code>leftTrigger</code> the left bumper and <code>leftTrigger2</code> the analog left trigger;
+<code>leftThumb</code> is a stick click. Non-standard buttons and axes arrive as
+<code>{ other: n }</code>.</p>
+<h2 id="rumble"><a class="anchor" href="#rumble" aria-hidden="true">#</a>Rumble</h2>
+<pre><code class="language-tsx">bevy<span class="token punctuation">.</span>gamepad<span class="token punctuation">.</span><span class="token function">rumble</span><span class="token punctuation">(</span><span class="token punctuation">{</span>
+  gamepad<span class="token operator">:</span> pad<span class="token punctuation">.</span>gamepad<span class="token punctuation">,</span>
+  duration<span class="token operator">:</span> <span class="token number">200</span><span class="token punctuation">,</span> <span class="token comment">// milliseconds</span>
+  strongMotor<span class="token operator">:</span> <span class="token number">0.4</span><span class="token punctuation">,</span>
+  weakMotor<span class="token operator">:</span> <span class="token number">0.6</span><span class="token punctuation">,</span>
+<span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+bevy<span class="token punctuation">.</span>gamepad<span class="token punctuation">.</span><span class="token function">stopRumble</span><span class="token punctuation">(</span><span class="token punctuation">{</span> gamepad<span class="token operator">:</span> pad<span class="token punctuation">.</span>gamepad <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span></code></pre><ul>
+<li><code>duration</code> is in milliseconds; negative values count as <code>0</code>.</li>
+<li><code>strongMotor</code> (low frequency) and <code>weakMotor</code> (high frequency) are
+intensities, clamped to <code>0..1</code>. All four fields are required.</li>
+<li>Overlapping rumbles add up rather than replace each other. Call
+<code>stopRumble</code> first to replace a running effect.</li>
+<li><code>stopRumble</code> stops every rumble on the pad.</li>
+<li>An unknown id is ignored with a warning in the Bevy log. Rumble support
+varies by platform and pad.</li>
+</ul>
+<h2 id="limits"><a class="anchor" href="#limits" aria-hidden="true">#</a>Limits</h2>
+<ul>
+<li>No built-in focus navigation: moving through menus with a pad is up to
+your React code.</li>
+<li>Pad ids change on every reconnect.</li>
+<li>Rumble is best-effort and fire-and-forget: React gets no confirmation.</li>
+</ul>
+<p>The built-in types are listed in the generated
+<a href="https://github.com/tulustul/bevy-react/blob/main/docs/reference/bevy.ts"><code>bevy.ts</code></a> reference.</p>
+
+</article>
+<footer class="page-links"><a href="../../demo/?page=gamepad">Open live demo</a>
+<a href="https://github.com/tulustul/bevy-react/blob/v0.7.0/examples/demos/ui/src/demos/events/gamepadDemo/GamepadDemo.tsx">Demo source</a>
+<a href="https://github.com/tulustul/bevy-react/edit/main/docs/guide/events/gamepad.md">Edit this page</a></footer>
+</main>
+</div>
+<footer class="site-footer">
+<p>bevy-react is dual-licensed under MIT or Apache-2.0. <a href="https://github.com/tulustul/bevy-react">Source on GitHub</a>.</p>
+</footer>
+</body>
+</html>

@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shared elements · bevy-react</title>
+<meta name="description" content="Fly a node between parents or screens with sharedTag and transition.sharedElement, starting the incoming node where the outgoing one was.">
+<link rel="canonical" href="https://tulustul.github.io/bevy-react/animations/shared-elements/">
+<link rel="alternate" type="text/markdown" href="../../animations/shared-elements.md">
+<meta property="og:title" content="Shared elements · bevy-react">
+<meta property="og:description" content="Fly a node between parents or screens with sharedTag and transition.sharedElement, starting the incoming node where the outgoing one was.">
+<link rel="icon" href="../../logo.png">
+<link rel="stylesheet" href="../../style.css">
+<script src="../../docs.js" defer></script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="site-header">
+<a class="brand" href="../../"><img src="../../logo.png" alt="" width="74" height="74"> bevy-react</a>
+<span class="version">v0.7.0</span>
+<nav class="site-links" aria-label="Project">
+<a href="../../demo/">Live demo</a>
+<a href="https://github.com/tulustul/bevy-react">GitHub</a>
+<a href="https://docs.rs/bevy-react">docs.rs</a>
+<a href="https://www.npmjs.com/package/bevy-react">npm</a>
+</nav>
+</header>
+<div class="layout">
+<nav class="sidebar" aria-label="Documentation">
+<details class="nav-menu" open>
+<summary>Menu</summary>
+<ul><li><a href="../../">Introduction</a></li><li><a href="../../getting-started/">Getting started</a></li><li><a href="../../how-it-works/">How it works</a></li><li class="nav-section"><span>Elements</span><ul><li><a href="../../elements/node/">&lt;node&gt;</a></li><li><a href="../../elements/button/">&lt;button&gt;</a></li><li><a href="../../elements/text/">&lt;text&gt;</a></li><li><a href="../../elements/editable-text/">&lt;editableText&gt;</a></li><li><a href="../../elements/image/">&lt;image&gt;</a></li><li><a href="../../elements/canvas/">&lt;canvas&gt;</a></li><li><a href="../../elements/svg/">&lt;svg&gt;</a></li><li><a href="../../elements/portal/">&lt;portal&gt;</a></li><li><a href="../../elements/surface/">&lt;surface&gt;</a></li><li><a href="../../elements/root/">&lt;root&gt;</a></li><li><a href="../../elements/anchor/">&lt;anchor&gt;</a></li></ul></li><li class="nav-section"><span>Layout</span><ul><li><a href="../../layout/flexbox/">Flexbox</a></li><li><a href="../../layout/grid/">Grid</a></li><li><a href="../../layout/positioning/">Positioning</a></li></ul></li><li class="nav-section"><span>Styling</span><ul><li><a href="../../styling/units/">Units</a></li><li><a href="../../styling/colors/">Colors</a></li><li><a href="../../styling/borders/">Borders</a></li><li><a href="../../styling/spacing/">Spacing</a></li><li><a href="../../styling/sizing/">Sizing</a></li><li><a href="../../styling/layout-rounding/">Layout rounding</a></li><li><a href="../../styling/overflow/">Overflow</a></li><li><a href="../../styling/transforms/">Transforms</a></li><li><a href="../../styling/3d-transforms/">3D transforms</a></li><li><a href="../../styling/shadows/">Shadows</a></li><li><a href="../../styling/filters/">Filters</a></li><li><a href="../../styling/backdrop-filters/">Backdrop filters</a></li><li><a href="../../styling/morph-filters/">Morph filters</a></li><li><a href="../../styling/gradients/">Gradients</a></li><li><a href="../../styling/background-images/">Background images</a></li><li><a href="../../styling/image-rendering/">Image rendering</a></li><li><a href="../../styling/opacity/">Opacity</a></li><li><a href="../../styling/z-index/">Z-index</a></li><li><a href="../../styling/focus-policy/">Focus policy</a></li><li><a href="../../styling/cursors/">Cursors</a></li><li><a href="../../styling/layers/">Layers</a></li></ul></li><li class="nav-section"><span>Animations</span><ul><li><a href="../../animations/style-transitions/">Style transitions</a></li><li><a href="../../animations/animated-values/">Animated values</a></li><li><a href="../../animations/interpolation/">Interpolation</a></li><li><a href="../../animations/shared-elements/" aria-current="page">Shared elements</a></li></ul></li><li class="nav-section"><span>Communication</span><ul><li><a href="../../communication/react-to-bevy/">React to Bevy</a></li><li><a href="../../communication/bevy-to-react/">Bevy to React</a></li><li><a href="../../communication/request-response/">Request / response</a></li><li><a href="../../communication/named-nodes/">Named nodes</a></li></ul></li><li class="nav-section"><span>Events</span><ul><li><a href="../../events/mouse/">Mouse</a></li><li><a href="../../events/keyboard/">Keyboard</a></li><li><a href="../../events/gamepad/">Gamepad</a></li><li><a href="../../events/window/">Window</a></li></ul></li><li class="nav-section"><span>Extending</span><ul><li><a href="../../extending/custom-elements/">Custom elements</a></li><li><a href="../../extending/custom-styles/">Custom styles</a></li><li><a href="../../extending/custom-filters/">Custom filters</a></li></ul></li><li class="nav-section"><span>Tooling</span><ul><li><a href="../../tooling/devtools/">Devtools</a></li><li><a href="../../tooling/hot-reload/">Hot reload</a></li><li><a href="../../tooling/web/">Web builds</a></li><li><a href="../../tooling/ts-codegen/">TypeScript codegen</a></li></ul></li><li class="nav-section"><span>Reference</span><ul><li><a href="../../reference/style-properties/">Style properties</a></li><li><a href="../../reference/elements/">Elements</a></li><li><a href="../../reference/filters/">Filters</a></li></ul></li><li><a href="../../performance/">Performance</a></li></ul>
+</details>
+</nav>
+<main id="main">
+<article>
+<h1 id="shared-elements">Shared elements</h1>
+<p>React has no reparenting: moving a node to another parent or screen is
+always an unmount plus the mount of a new node. Shared elements connect the
+two. Give the outgoing and the incoming node the same <code>sharedTag</code>, and when
+one commit swaps them, the incoming node starts where the outgoing one
+visually was (its position, size, colors, opacity, transforms and filters)
+and eases to its own layout and style. The commit is the trigger: there is
+nothing to measure and nothing to start.</p>
+<h2 id="usage"><a class="anchor" href="#usage" aria-hidden="true">#</a>Usage</h2>
+<p>A thumbnail in a grid:</p>
+<pre><code class="language-tsx"><span class="token operator">&lt;</span>image
+  src<span class="token operator">=</span><span class="token punctuation">{</span>item<span class="token punctuation">.</span>src<span class="token punctuation">}</span>
+  sharedTag<span class="token operator">=</span><span class="token punctuation">{</span><span class="token template-string"><span class="token template-punctuation string">`</span><span class="token string">hero-</span><span class="token interpolation"><span class="token interpolation-punctuation punctuation">${</span>item<span class="token punctuation">.</span>id<span class="token interpolation-punctuation punctuation">}</span></span><span class="token template-punctuation string">`</span></span><span class="token punctuation">}</span>
+  onClick<span class="token operator">=</span><span class="token punctuation">{</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">=&gt;</span> <span class="token function">setOpen</span><span class="token punctuation">(</span>item<span class="token punctuation">)</span><span class="token punctuation">}</span>
+  style<span class="token operator">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span>
+    width<span class="token operator">:</span> <span class="token number">72</span><span class="token punctuation">,</span>
+    height<span class="token operator">:</span> <span class="token number">72</span><span class="token punctuation">,</span>
+    borderRadius<span class="token operator">:</span> <span class="token number">36</span><span class="token punctuation">,</span>
+    transition<span class="token operator">:</span> <span class="token punctuation">{</span> sharedElement<span class="token operator">:</span> <span class="token punctuation">{</span> duration<span class="token operator">:</span> <span class="token number">450</span><span class="token punctuation">,</span> easing<span class="token operator">:</span> <span class="token string">&quot;easeInOut&quot;</span> <span class="token punctuation">}</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+  <span class="token punctuation">}</span><span class="token punctuation">}</span>
+<span class="token operator">/</span><span class="token operator">&gt;</span></code></pre><p>The hero of the detail screen that replaces the grid:</p>
+<pre><code class="language-tsx"><span class="token operator">&lt;</span>image
+  src<span class="token operator">=</span><span class="token punctuation">{</span>item<span class="token punctuation">.</span>src<span class="token punctuation">}</span>
+  sharedTag<span class="token operator">=</span><span class="token punctuation">{</span><span class="token template-string"><span class="token template-punctuation string">`</span><span class="token string">hero-</span><span class="token interpolation"><span class="token interpolation-punctuation punctuation">${</span>item<span class="token punctuation">.</span>id<span class="token interpolation-punctuation punctuation">}</span></span><span class="token template-punctuation string">`</span></span><span class="token punctuation">}</span>
+  style<span class="token operator">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span>
+    width<span class="token operator">:</span> <span class="token number">240</span><span class="token punctuation">,</span>
+    height<span class="token operator">:</span> <span class="token number">240</span><span class="token punctuation">,</span>
+    borderRadius<span class="token operator">:</span> <span class="token number">12</span><span class="token punctuation">,</span>
+    transition<span class="token operator">:</span> <span class="token punctuation">{</span> sharedElement<span class="token operator">:</span> <span class="token punctuation">{</span> duration<span class="token operator">:</span> <span class="token number">450</span><span class="token punctuation">,</span> easing<span class="token operator">:</span> <span class="token string">&quot;easeInOut&quot;</span> <span class="token punctuation">}</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+  <span class="token punctuation">}</span><span class="token punctuation">}</span>
+<span class="token operator">/</span><span class="token operator">&gt;</span></code></pre><p>One state change (<code>open ? &lt;Detail item={open} /&gt; : &lt;Grid /&gt;</code>) unmounts the
+thumbnail and mounts the hero in the same commit, so the hero takes off from
+the thumbnail&#39;s circle and grows into place. Going back reverses it: the
+thumbnail is then the incoming node.</p>
+<h2 id="pairing"><a class="anchor" href="#pairing" aria-hidden="true">#</a>Pairing</h2>
+<p>A pair forms when a single commit unmounts a node with a tag and mounts a
+node with the same tag:</p>
+<ul>
+<li>The outgoing node may be the unmounted node itself or anywhere inside an
+unmounted subtree, such as a whole screen.</li>
+<li>Both are the same element type: <code>&lt;image&gt;</code> with <code>&lt;image&gt;</code>, <code>&lt;button&gt;</code> with
+<code>&lt;button&gt;</code>.</li>
+<li>Both are under the same UI root. A <a href="../../elements/surface/"><code>&lt;surface&gt;</code></a> or
+<a href="../../elements/root/"><code>&lt;root&gt;</code></a> subtree is a root of its own.</li>
+<li>The incoming node carries the tag when it mounts, and its base style has
+<code>transition: { sharedElement }</code>. Without that entry the pair forms but the
+node just appears.</li>
+<li>When several unmounting nodes carry the tag, the one mounted first is used,
+and it seeds every incoming node with the tag.</li>
+</ul>
+<p>A tag that matches nothing mounts normally, without a warning, and <code>&quot;&quot;</code>
+counts as no tag. Make tags unique per screen, for example <code>hero-${id}</code>.</p>
+<h2 id="what-carries-over"><a class="anchor" href="#what-carries-over" aria-hidden="true">#</a>What carries over</h2>
+<p>The incoming node starts from the outgoing node&#39;s:</p>
+<ul>
+<li>rect as it was on screen, position and size, including ancestor
+transforms and any flight or layout transition still in progress;</li>
+<li><code>transform</code>, <code>opacity</code>, <code>backgroundColor</code> and <code>borderRadius</code>;</li>
+<li><code>filter</code> and <code>backdropFilter</code> chains, <code>backgroundGradient</code>,
+<code>borderGradient</code> and <code>transform3d</code>.</li>
+</ul>
+<p>Each then eases to the incoming node&#39;s own value. Everything else (text
+color, border color, children, text, the image source) is the incoming
+node&#39;s from the first frame. If the outgoing node had no background color,
+the incoming one fades its own color in.</p>
+<p>These values are read as shown only when the outgoing node has a
+<code>transition</code> style. Without one, only its rect, transform and background
+color carry over, and the rest starts from defaults (opacity 1, square
+corners, no filter). Giving both nodes the same <code>transition</code> covers this,
+and makes the flight work in both directions.</p>
+<h2 id="the-flight"><a class="anchor" href="#the-flight" aria-hidden="true">#</a>The flight</h2>
+<ul>
+<li><strong>Size flies through real layout.</strong> The node&#39;s width and height ease in
+pixels from the outgoing size to its own, so the parent re-flows every
+frame and the children are laid out at each size: nothing is stretched.
+When the flight lands, the node&#39;s authored size is restored. While it
+flies, the node&#39;s <code>flexGrow</code> and <code>flexShrink</code> are suspended so flex
+layout does not fight the eased size.</li>
+<li><strong>Position flies by translation</strong>, in a straight line from where the
+outgoing node was to where the incoming one settles, even when its parent
+re-flows around the growing node. A scroll or a resize under the flight
+moves both ends with the content.</li>
+<li>The first frame shows the outgoing rect exactly, with no blank frame. The
+outgoing node itself is gone at once.</li>
+<li>Swapping back mid-flight starts the new flight from wherever the node is
+on screen.</li>
+<li>A tagged node inside another tagged node flies its own straight path.</li>
+<li>An <code>{ animated }</code> binding on one of the node&#39;s layout fields (<code>width</code>,
+<code>height</code>, …) owns its size: the size does not fly.</li>
+</ul>
+<h2 id="timing"><a class="anchor" href="#timing" aria-hidden="true">#</a>Timing</h2>
+<ul>
+<li>The rect (position and size) flies with the <code>sharedElement</code> spec.</li>
+<li>Every other carried value uses the node&#39;s own <code>transition</code> entry for its
+channel when it has one (<code>backgroundColor</code>, <code>opacity</code>, …), and the
+<code>sharedElement</code> spec otherwise.</li>
+<li>Once the flight has started, later changes ease with their regular
+channels: a hover in mid-flight behaves as usual.</li>
+</ul>
+<p>See <a href="../../animations/style-transitions/#timing">Style transitions</a> for the spec fields.</p>
+<h2 id="with-layout-transitions"><a class="anchor" href="#with-layout-transitions" aria-hidden="true">#</a>With layout transitions</h2>
+<p><code>sharedElement</code> and <code>layout</code> compose. On this board, a clicked ticket
+unmounts from one column and mounts in the other in the same commit. It
+takes off from where it sat, easing its width and color to the new
+column&#39;s, while the tickets left behind close the gap with their own
+<code>layout</code> transition:</p>
+<pre><code class="language-tsx"><span class="token operator">&lt;</span>button
+  key<span class="token operator">=</span><span class="token punctuation">{</span>id<span class="token punctuation">}</span>
+  sharedTag<span class="token operator">=</span><span class="token punctuation">{</span><span class="token template-string"><span class="token template-punctuation string">`</span><span class="token string">item-</span><span class="token interpolation"><span class="token interpolation-punctuation punctuation">${</span>id<span class="token interpolation-punctuation punctuation">}</span></span><span class="token template-punctuation string">`</span></span><span class="token punctuation">}</span>
+  onClick<span class="token operator">=</span><span class="token punctuation">{</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">=&gt;</span> <span class="token function">move</span><span class="token punctuation">(</span>id<span class="token punctuation">)</span><span class="token punctuation">}</span>
+  style<span class="token operator">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span>
+    width<span class="token operator">:</span> <span class="token string">&quot;100%&quot;</span><span class="token punctuation">,</span>
+    height<span class="token operator">:</span> <span class="token number">36</span><span class="token punctuation">,</span>
+    backgroundColor<span class="token operator">:</span> done <span class="token operator">?</span> <span class="token string">&quot;#9ece6a&quot;</span> <span class="token operator">:</span> <span class="token string">&quot;#7aa2f7&quot;</span><span class="token punctuation">,</span>
+    globalZIndex<span class="token operator">:</span> <span class="token number">1</span><span class="token punctuation">,</span>
+    transition<span class="token operator">:</span> <span class="token punctuation">{</span>
+      sharedElement<span class="token operator">:</span> <span class="token punctuation">{</span> duration<span class="token operator">:</span> <span class="token number">400</span><span class="token punctuation">,</span> easing<span class="token operator">:</span> <span class="token string">&quot;easeOut&quot;</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+      layout<span class="token operator">:</span> <span class="token punctuation">{</span> duration<span class="token operator">:</span> <span class="token number">400</span><span class="token punctuation">,</span> easing<span class="token operator">:</span> <span class="token string">&quot;easeOut&quot;</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+    <span class="token punctuation">}</span><span class="token punctuation">,</span>
+  <span class="token punctuation">}</span><span class="token punctuation">}</span>
+<span class="token operator">&gt;</span>
+  <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>text</span><span class="token punctuation">&gt;</span></span><span class="token punctuation">{</span>id<span class="token punctuation">}</span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>text</span><span class="token punctuation">&gt;</span></span>
+<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>button</span><span class="token punctuation">&gt;</span></span></code></pre><h2 id="fading-the-rest-of-a-screen"><a class="anchor" href="#fading-the-rest-of-a-screen" aria-hidden="true">#</a>Fading the rest of a screen</h2>
+<p>The outgoing node unmounts at once, and so does the rest of its screen. To
+fade or slide the old screen out, keep it mounted (absolutely positioned
+over or under the new one) and, in the navigation commit, replace only its
+tagged node with an untagged placeholder of the same size. That unmount
+still pairs. Unmount the old screen once its exit animation ends, from a
+<a href="../../animations/animated-values/#completion-callbacks">completion callback</a>.</p>
+<h2 id="tips"><a class="anchor" href="#tips" aria-hidden="true">#</a>Tips</h2>
+<ul>
+<li>The flight is drawn inside the new parent: that parent&#39;s <code>overflow</code> clips
+it, and it paints in the new parent&#39;s stacking order. Keep the flight path
+unclipped, and raise the node with <code>zIndex</code> or <code>globalZIndex</code> when it must
+pass over other content (see <a href="../../styling/z-index/">Z-index</a>).</li>
+<li>With Bevy&#39;s layout rounding, a size flying through real layout grows in
+whole pixel steps and its surroundings hop. Set <code>layoutRounding: false</code> on
+the container the flight re-flows (see
+<a href="../../styling/layout-rounding/">Layout rounding</a>).</li>
+<li>The flight changes the node&#39;s real size, so its ancestors re-flow too.
+Put the flying node in a parent that holds constant space, such as a
+fixed-size slot.</li>
+<li>Give the incoming node an explicit size. An <code>&lt;image&gt;</code> sized by its texture
+measures 0×0 until the texture has loaded, and that axis does not fly.</li>
+</ul>
+<h2 id="limits"><a class="anchor" href="#limits" aria-hidden="true">#</a>Limits</h2>
+<ul>
+<li>Both halves must be in one commit. A node that mounts a commit later, for
+example behind Suspense or from a state set in an effect, does not pair.</li>
+<li>There is no completion callback for a flight.</li>
+<li>The incoming node&#39;s own size and settled position are measured once, when
+the flight starts. Moves the flight did not cause (a scroll, a sibling
+inserted) are followed; a change to the node&#39;s own size during the flight
+shows when it lands.</li>
+<li>Text spans and SVG shapes have no layout box and cannot be shared.</li>
+</ul>
+<p><img src="../../screenshots/shared-element-gallery.webp" alt="A thumbnail grid opening into a detail screen: the tapped image flies from its round thumbnail to the large hero while the rest of the screen fades and scales." loading="lazy"></p>
+<p><img src="../../screenshots/shared-element-board.webp" alt="A two-column &quot;To do / Done&quot; tickets board: a clicked ticket flies to the other column and the remaining tickets slide up to close the gap." loading="lazy"></p>
+<p>See <a href="../../reference/elements/#identity"><code>sharedTag</code></a> in the element reference
+and <a href="../../reference/style-properties/#transition"><code>transition</code></a> in the style
+reference.</p>
+
+</article>
+<footer class="page-links"><a href="../../demo/?page=shared-elements">Open live demo</a>
+<a href="https://github.com/tulustul/bevy-react/blob/v0.7.0/examples/demos/ui/src/demos/animations/sharedElements/SharedElementsDemo.tsx">Demo source</a>
+<a href="https://github.com/tulustul/bevy-react/edit/main/docs/guide/animations/shared-elements.md">Edit this page</a></footer>
+</main>
+</div>
+<footer class="site-footer">
+<p>bevy-react is dual-licensed under MIT or Apache-2.0. <a href="https://github.com/tulustul/bevy-react">Source on GitHub</a>.</p>
+</footer>
+</body>
+</html>

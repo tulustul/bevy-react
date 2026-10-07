@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>bevy-react — drive Bevy UI from React</title>
+<meta name="description" content="Build bevy_ui interfaces with React. Components render to native Bevy UI entities through a bridge, with no web view and no DOM.">
+<link rel="canonical" href="https://tulustul.github.io/bevy-react/">
+<link rel="alternate" type="text/markdown" href="index.md">
+<meta property="og:title" content="bevy-react — drive Bevy UI from React">
+<meta property="og:description" content="Build bevy_ui interfaces with React. Components render to native Bevy UI entities through a bridge, with no web view and no DOM.">
+<link rel="icon" href="logo.png">
+<link rel="stylesheet" href="style.css">
+<script src="docs.js" defer></script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="site-header">
+<a class="brand" href="./"><img src="logo.png" alt="" width="74" height="74"> bevy-react</a>
+<span class="version">v0.7.0</span>
+<nav class="site-links" aria-label="Project">
+<a href="demo/">Live demo</a>
+<a href="https://github.com/tulustul/bevy-react">GitHub</a>
+<a href="https://docs.rs/bevy-react">docs.rs</a>
+<a href="https://www.npmjs.com/package/bevy-react">npm</a>
+</nav>
+</header>
+<div class="layout">
+<nav class="sidebar" aria-label="Documentation">
+<details class="nav-menu" open>
+<summary>Menu</summary>
+<ul><li><a href="./" aria-current="page">Introduction</a></li><li><a href="getting-started/">Getting started</a></li><li><a href="how-it-works/">How it works</a></li><li class="nav-section"><span>Elements</span><ul><li><a href="elements/node/">&lt;node&gt;</a></li><li><a href="elements/button/">&lt;button&gt;</a></li><li><a href="elements/text/">&lt;text&gt;</a></li><li><a href="elements/editable-text/">&lt;editableText&gt;</a></li><li><a href="elements/image/">&lt;image&gt;</a></li><li><a href="elements/canvas/">&lt;canvas&gt;</a></li><li><a href="elements/svg/">&lt;svg&gt;</a></li><li><a href="elements/portal/">&lt;portal&gt;</a></li><li><a href="elements/surface/">&lt;surface&gt;</a></li><li><a href="elements/root/">&lt;root&gt;</a></li><li><a href="elements/anchor/">&lt;anchor&gt;</a></li></ul></li><li class="nav-section"><span>Layout</span><ul><li><a href="layout/flexbox/">Flexbox</a></li><li><a href="layout/grid/">Grid</a></li><li><a href="layout/positioning/">Positioning</a></li></ul></li><li class="nav-section"><span>Styling</span><ul><li><a href="styling/units/">Units</a></li><li><a href="styling/colors/">Colors</a></li><li><a href="styling/borders/">Borders</a></li><li><a href="styling/spacing/">Spacing</a></li><li><a href="styling/sizing/">Sizing</a></li><li><a href="styling/layout-rounding/">Layout rounding</a></li><li><a href="styling/overflow/">Overflow</a></li><li><a href="styling/transforms/">Transforms</a></li><li><a href="styling/3d-transforms/">3D transforms</a></li><li><a href="styling/shadows/">Shadows</a></li><li><a href="styling/filters/">Filters</a></li><li><a href="styling/backdrop-filters/">Backdrop filters</a></li><li><a href="styling/morph-filters/">Morph filters</a></li><li><a href="styling/gradients/">Gradients</a></li><li><a href="styling/background-images/">Background images</a></li><li><a href="styling/image-rendering/">Image rendering</a></li><li><a href="styling/opacity/">Opacity</a></li><li><a href="styling/z-index/">Z-index</a></li><li><a href="styling/focus-policy/">Focus policy</a></li><li><a href="styling/cursors/">Cursors</a></li><li><a href="styling/layers/">Layers</a></li></ul></li><li class="nav-section"><span>Animations</span><ul><li><a href="animations/style-transitions/">Style transitions</a></li><li><a href="animations/animated-values/">Animated values</a></li><li><a href="animations/interpolation/">Interpolation</a></li><li><a href="animations/shared-elements/">Shared elements</a></li></ul></li><li class="nav-section"><span>Communication</span><ul><li><a href="communication/react-to-bevy/">React to Bevy</a></li><li><a href="communication/bevy-to-react/">Bevy to React</a></li><li><a href="communication/request-response/">Request / response</a></li><li><a href="communication/named-nodes/">Named nodes</a></li></ul></li><li class="nav-section"><span>Events</span><ul><li><a href="events/mouse/">Mouse</a></li><li><a href="events/keyboard/">Keyboard</a></li><li><a href="events/gamepad/">Gamepad</a></li><li><a href="events/window/">Window</a></li></ul></li><li class="nav-section"><span>Extending</span><ul><li><a href="extending/custom-elements/">Custom elements</a></li><li><a href="extending/custom-styles/">Custom styles</a></li><li><a href="extending/custom-filters/">Custom filters</a></li></ul></li><li class="nav-section"><span>Tooling</span><ul><li><a href="tooling/devtools/">Devtools</a></li><li><a href="tooling/hot-reload/">Hot reload</a></li><li><a href="tooling/web/">Web builds</a></li><li><a href="tooling/ts-codegen/">TypeScript codegen</a></li></ul></li><li class="nav-section"><span>Reference</span><ul><li><a href="reference/style-properties/">Style properties</a></li><li><a href="reference/elements/">Elements</a></li><li><a href="reference/filters/">Filters</a></li></ul></li><li><a href="performance/">Performance</a></li></ul>
+</details>
+</nav>
+<main id="main">
+<article>
+<h1 id="introduction">Introduction</h1>
+<p>bevy-react lets you build <a href="https://docs.rs/bevy/latest/bevy/ui/index.html"><code>bevy_ui</code></a>
+interfaces with <strong>React</strong>. You write components in React and TSX, and they
+render to native Bevy UI through a bridge in the style of React Native. There
+is <strong>no web view and no DOM</strong>. The JS side only describes the UI, while Rust
+and Bevy handle layout, input and rendering. State and interactions flow both
+ways between your Bevy app and React, and edits hot-reload live without
+losing component state.</p>
+<p>Try the <a href="https://tulustul.github.io/bevy-react/demo/">live demo</a>. It is the
+web (wasm) build of the demos gallery and runs in your browser. The UI there
+is still <code>bevy_ui</code>, not DOM.</p>
+<p><img src="screenshots/home.webp" alt="The bevy-react demos home page: the React and Bevy logos above six live demo cards (shared elements, layout animations, filters, morphing, hot reload and typed messages)." loading="lazy"></p>
+<pre><code class="language-tsx"><span class="token keyword">import</span> <span class="token punctuation">{</span> mount <span class="token punctuation">}</span> <span class="token keyword">from</span> <span class="token string">&quot;bevy-react&quot;</span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token punctuation">{</span> useState <span class="token punctuation">}</span> <span class="token keyword">from</span> <span class="token string">&quot;react&quot;</span><span class="token punctuation">;</span>
+
+<span class="token keyword">function</span> <span class="token function">App</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+  <span class="token keyword">const</span> <span class="token punctuation">[</span>n<span class="token punctuation">,</span> setN<span class="token punctuation">]</span> <span class="token operator">=</span> <span class="token function">useState</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token keyword">return</span> <span class="token punctuation">(</span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>node</span> <span class="token attr-name">style</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span> padding<span class="token operator">:</span> <span class="token number">20</span><span class="token punctuation">,</span> gap<span class="token operator">:</span> <span class="token number">12</span><span class="token punctuation">,</span> flexDirection<span class="token operator">:</span> <span class="token string">&quot;column&quot;</span> <span class="token punctuation">}</span><span class="token punctuation">}</span></span><span class="token punctuation">&gt;</span></span><span class="token plain-text">
+      </span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>text</span><span class="token punctuation">&gt;</span></span><span class="token punctuation">{</span><span class="token template-string"><span class="token template-punctuation string">`</span><span class="token string">Count: </span><span class="token interpolation"><span class="token interpolation-punctuation punctuation">${</span>n<span class="token interpolation-punctuation punctuation">}</span></span><span class="token template-punctuation string">`</span></span><span class="token punctuation">}</span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>text</span><span class="token punctuation">&gt;</span></span><span class="token plain-text">
+      </span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>button</span>
+        <span class="token attr-name">onClick</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">=&gt;</span> <span class="token function">setN</span><span class="token punctuation">(</span><span class="token punctuation">(</span>c<span class="token punctuation">)</span> <span class="token operator">=&gt;</span> c <span class="token operator">+</span> <span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">}</span></span>
+        <span class="token attr-name">style</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span> backgroundColor<span class="token operator">:</span> <span class="token string">&quot;#7aa2f7&quot;</span> <span class="token punctuation">}</span><span class="token punctuation">}</span></span>
+      <span class="token punctuation">&gt;</span></span><span class="token plain-text">
+        </span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>text</span><span class="token punctuation">&gt;</span></span><span class="token plain-text">+</span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>text</span><span class="token punctuation">&gt;</span></span><span class="token plain-text">
+      </span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>button</span><span class="token punctuation">&gt;</span></span><span class="token plain-text">
+    </span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>node</span><span class="token punctuation">&gt;</span></span>
+  <span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+<span class="token function">mount</span><span class="token punctuation">(</span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span><span class="token class-name">App</span></span> <span class="token punctuation">/&gt;</span></span><span class="token punctuation">)</span><span class="token punctuation">;</span></code></pre><p>This is a real component. <code>&lt;node&gt;</code> and <code>&lt;button&gt;</code> render to actual <code>bevy_ui</code>
+nodes, and <code>useState</code> works the way it does in any React app. If you save the
+file while the app is running, the UI updates and keeps the count.</p>
+<p>To set up a project, see <a href="getting-started/">Getting started</a>.</p>
+<h2 id="why-bevy-react"><a class="anchor" href="#why-bevy-react" aria-hidden="true">#</a>Why bevy-react</h2>
+<ul>
+<li><strong>React, not a custom UI DSL.</strong> You get hooks, components, conditional
+rendering and lists, all of which you already know.</li>
+<li><strong>Native Bevy UI.</strong> There is no web view and no DOM. Your UI is made of
+<code>bevy_ui</code> entities in the same world as your game.</li>
+<li><strong>Hot reload that keeps state.</strong> When you edit a component, it re-renders
+live and keeps its hook state and running animations.</li>
+<li><strong>Typed, two-way messaging.</strong> React and the ECS talk over typed channels
+generated from your Rust types.</li>
+<li><strong>Not only UI.</strong> <a href="extending/custom-elements/">Custom elements</a> put any
+ECS entity under React&#39;s control, such as a 3D mesh whose attributes come
+from component state.</li>
+</ul>
+<h2 id="project-status"><a class="anchor" href="#project-status" aria-hidden="true">#</a>Project status</h2>
+<p>bevy-react is a quick, vibe-coded proof of concept that demonstrates the
+idea. The API is unstable and will change, and the code quality is not yet
+where it should be. <strong>Do not use it in production.</strong></p>
+<h2 id="bevy-compatibility"><a class="anchor" href="#bevy-compatibility" aria-hidden="true">#</a>Bevy compatibility</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Bevy</th>
+<th>bevy-react</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>0.19</td>
+<td>0.1 – 0.6, <code>main</code></td>
+</tr>
+</tbody></table></div>
+<h2 id="performance"><a class="anchor" href="#performance" aria-hidden="true">#</a>Performance</h2>
+<p>The <a href="performance/">Performance</a> page has benchmark results for the bridge.
+They include per-operation timings for creating, updating, reordering and
+removing rows in 1k- and 10k-row tables.</p>
+<h2 id="license"><a class="anchor" href="#license" aria-hidden="true">#</a>License</h2>
+<p>bevy-react is dual-licensed under the
+<a href="https://github.com/tulustul/bevy-react/blob/main/LICENSE-APACHE">Apache License 2.0</a>
+or the <a href="https://github.com/tulustul/bevy-react/blob/main/LICENSE-MIT">MIT license</a>,
+at your option.</p>
+
+</article>
+<footer class="page-links"><a href="https://github.com/tulustul/bevy-react/edit/main/docs/guide/index.md">Edit this page</a></footer>
+</main>
+</div>
+<footer class="site-footer">
+<p>bevy-react is dual-licensed under MIT or Apache-2.0. <a href="https://github.com/tulustul/bevy-react">Source on GitHub</a>.</p>
+</footer>
+</body>
+</html>

@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Backdrop filters · bevy-react</title>
+<meta name="description" content="Filter the 3D scene behind a UI node with the backdropFilter style, for frosted glass, recolors and distortions, with transitions and animated params.">
+<link rel="canonical" href="https://tulustul.github.io/bevy-react/styling/backdrop-filters/">
+<link rel="alternate" type="text/markdown" href="../../styling/backdrop-filters.md">
+<meta property="og:title" content="Backdrop filters · bevy-react">
+<meta property="og:description" content="Filter the 3D scene behind a UI node with the backdropFilter style, for frosted glass, recolors and distortions, with transitions and animated params.">
+<link rel="icon" href="../../logo.png">
+<link rel="stylesheet" href="../../style.css">
+<script src="../../docs.js" defer></script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="site-header">
+<a class="brand" href="../../"><img src="../../logo.png" alt="" width="74" height="74"> bevy-react</a>
+<span class="version">v0.7.0</span>
+<nav class="site-links" aria-label="Project">
+<a href="../../demo/">Live demo</a>
+<a href="https://github.com/tulustul/bevy-react">GitHub</a>
+<a href="https://docs.rs/bevy-react">docs.rs</a>
+<a href="https://www.npmjs.com/package/bevy-react">npm</a>
+</nav>
+</header>
+<div class="layout">
+<nav class="sidebar" aria-label="Documentation">
+<details class="nav-menu" open>
+<summary>Menu</summary>
+<ul><li><a href="../../">Introduction</a></li><li><a href="../../getting-started/">Getting started</a></li><li><a href="../../how-it-works/">How it works</a></li><li class="nav-section"><span>Elements</span><ul><li><a href="../../elements/node/">&lt;node&gt;</a></li><li><a href="../../elements/button/">&lt;button&gt;</a></li><li><a href="../../elements/text/">&lt;text&gt;</a></li><li><a href="../../elements/editable-text/">&lt;editableText&gt;</a></li><li><a href="../../elements/image/">&lt;image&gt;</a></li><li><a href="../../elements/canvas/">&lt;canvas&gt;</a></li><li><a href="../../elements/svg/">&lt;svg&gt;</a></li><li><a href="../../elements/portal/">&lt;portal&gt;</a></li><li><a href="../../elements/surface/">&lt;surface&gt;</a></li><li><a href="../../elements/root/">&lt;root&gt;</a></li><li><a href="../../elements/anchor/">&lt;anchor&gt;</a></li></ul></li><li class="nav-section"><span>Layout</span><ul><li><a href="../../layout/flexbox/">Flexbox</a></li><li><a href="../../layout/grid/">Grid</a></li><li><a href="../../layout/positioning/">Positioning</a></li></ul></li><li class="nav-section"><span>Styling</span><ul><li><a href="../../styling/units/">Units</a></li><li><a href="../../styling/colors/">Colors</a></li><li><a href="../../styling/borders/">Borders</a></li><li><a href="../../styling/spacing/">Spacing</a></li><li><a href="../../styling/sizing/">Sizing</a></li><li><a href="../../styling/layout-rounding/">Layout rounding</a></li><li><a href="../../styling/overflow/">Overflow</a></li><li><a href="../../styling/transforms/">Transforms</a></li><li><a href="../../styling/3d-transforms/">3D transforms</a></li><li><a href="../../styling/shadows/">Shadows</a></li><li><a href="../../styling/filters/">Filters</a></li><li><a href="../../styling/backdrop-filters/" aria-current="page">Backdrop filters</a></li><li><a href="../../styling/morph-filters/">Morph filters</a></li><li><a href="../../styling/gradients/">Gradients</a></li><li><a href="../../styling/background-images/">Background images</a></li><li><a href="../../styling/image-rendering/">Image rendering</a></li><li><a href="../../styling/opacity/">Opacity</a></li><li><a href="../../styling/z-index/">Z-index</a></li><li><a href="../../styling/focus-policy/">Focus policy</a></li><li><a href="../../styling/cursors/">Cursors</a></li><li><a href="../../styling/layers/">Layers</a></li></ul></li><li class="nav-section"><span>Animations</span><ul><li><a href="../../animations/style-transitions/">Style transitions</a></li><li><a href="../../animations/animated-values/">Animated values</a></li><li><a href="../../animations/interpolation/">Interpolation</a></li><li><a href="../../animations/shared-elements/">Shared elements</a></li></ul></li><li class="nav-section"><span>Communication</span><ul><li><a href="../../communication/react-to-bevy/">React to Bevy</a></li><li><a href="../../communication/bevy-to-react/">Bevy to React</a></li><li><a href="../../communication/request-response/">Request / response</a></li><li><a href="../../communication/named-nodes/">Named nodes</a></li></ul></li><li class="nav-section"><span>Events</span><ul><li><a href="../../events/mouse/">Mouse</a></li><li><a href="../../events/keyboard/">Keyboard</a></li><li><a href="../../events/gamepad/">Gamepad</a></li><li><a href="../../events/window/">Window</a></li></ul></li><li class="nav-section"><span>Extending</span><ul><li><a href="../../extending/custom-elements/">Custom elements</a></li><li><a href="../../extending/custom-styles/">Custom styles</a></li><li><a href="../../extending/custom-filters/">Custom filters</a></li></ul></li><li class="nav-section"><span>Tooling</span><ul><li><a href="../../tooling/devtools/">Devtools</a></li><li><a href="../../tooling/hot-reload/">Hot reload</a></li><li><a href="../../tooling/web/">Web builds</a></li><li><a href="../../tooling/ts-codegen/">TypeScript codegen</a></li></ul></li><li class="nav-section"><span>Reference</span><ul><li><a href="../../reference/style-properties/">Style properties</a></li><li><a href="../../reference/elements/">Elements</a></li><li><a href="../../reference/filters/">Filters</a></li></ul></li><li><a href="../../performance/">Performance</a></li></ul>
+</details>
+</nav>
+<main id="main">
+<article>
+<h1 id="backdrop-filters">Backdrop filters</h1>
+<p>The <code>backdropFilter</code> style runs a filter chain over what is rendered behind a
+node (the camera&#39;s 3D frame) and draws the result under the node&#39;s own
+background and children. It takes the same chains as the <code>filter</code> style,
+which filters the node&#39;s own subtree instead. A blur under a translucent
+background is the classic frosted-glass panel.</p>
+<h2 id="usage"><a class="anchor" href="#usage" aria-hidden="true">#</a>Usage</h2>
+<pre><code class="language-tsx"><span class="token operator">&lt;</span>node
+  style<span class="token operator">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span>
+    padding<span class="token operator">:</span> <span class="token number">24</span><span class="token punctuation">,</span>
+    borderRadius<span class="token operator">:</span> <span class="token number">12</span><span class="token punctuation">,</span>
+    backgroundColor<span class="token operator">:</span> <span class="token string">&quot;rgba(26, 27, 38, 0.35)&quot;</span><span class="token punctuation">,</span>
+    backdropFilter<span class="token operator">:</span> <span class="token punctuation">{</span> name<span class="token operator">:</span> <span class="token string">&quot;blur&quot;</span><span class="token punctuation">,</span> params<span class="token operator">:</span> <span class="token punctuation">{</span> radius<span class="token operator">:</span> <span class="token number">8</span> <span class="token punctuation">}</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+  <span class="token punctuation">}</span><span class="token punctuation">}</span>
+<span class="token operator">&gt;</span>
+  <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>text</span><span class="token punctuation">&gt;</span></span><span class="token plain-text">frosted glass</span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>text</span><span class="token punctuation">&gt;</span></span>
+<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>node</span><span class="token punctuation">&gt;</span></span></code></pre><h2 id="chains"><a class="anchor" href="#chains" aria-hidden="true">#</a>Chains</h2>
+<p>The value is one <code>{ name, params }</code> entry or an ordered array of entries, run
+in array order:</p>
+<pre><code class="language-tsx"><span class="token keyword">const</span> glass<span class="token operator">:</span> BevyStyle <span class="token operator">=</span> <span class="token punctuation">{</span>
+  backgroundColor<span class="token operator">:</span> <span class="token string">&quot;rgba(26, 27, 38, 0.35)&quot;</span><span class="token punctuation">,</span>
+  backdropFilter<span class="token operator">:</span> <span class="token punctuation">[</span>
+    <span class="token punctuation">{</span> name<span class="token operator">:</span> <span class="token string">&quot;blur&quot;</span><span class="token punctuation">,</span> params<span class="token operator">:</span> <span class="token punctuation">{</span> radius<span class="token operator">:</span> <span class="token number">12</span> <span class="token punctuation">}</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+    <span class="token punctuation">{</span> name<span class="token operator">:</span> <span class="token string">&quot;saturate&quot;</span><span class="token punctuation">,</span> params<span class="token operator">:</span> <span class="token punctuation">{</span> amount<span class="token operator">:</span> <span class="token number">1.6</span> <span class="token punctuation">}</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+  <span class="token punctuation">]</span><span class="token punctuation">,</span>
+<span class="token punctuation">}</span><span class="token punctuation">;</span></code></pre><ul>
+<li><code>params</code> and every param in it are optional. An omitted param takes the
+filter&#39;s default, which for built-ins is a visible effect: a bare
+<code>{ name: &quot;blur&quot; }</code> is a 20px blur, a bare <code>{ name: &quot;grayscale&quot; }</code> is full
+grayscale.</li>
+<li>Names and params are typed from your generated <code>bevy.ts</code>, built-ins and
+your own <code>#[react_filter]</code> filters alike. Without generated bindings the
+field accepts no value.</li>
+<li>An entry with an unknown name or invalid params is skipped with a
+<code>backdropFilterUnknown</code> or <code>backdropFilterParams</code> devtools warning; the
+rest of the chain still runs. Morph filters (<code>crossfade</code>, <code>linearWipe</code>,
+<code>pixelize</code>) belong to <code>morphFilter</code> and are rejected the same way.</li>
+<li><code>backdropFilter</code> and <code>filter</code> are independent: one node can carry both, and
+each one resolves, transitions and animates on its own.</li>
+<li>An empty array is the same as no backdrop filter.</li>
+</ul>
+<h2 id="what-the-backdrop-is"><a class="anchor" href="#what-the-backdrop-is" aria-hidden="true">#</a>What the backdrop is</h2>
+<ul>
+<li>The source is the camera&#39;s rendered 3D frame, after tonemapping and
+post-processing, under the node&#39;s box. UI is not part of it. With no 3D
+scene behind the UI, the backdrop is the camera&#39;s clear color.</li>
+<li>The filtered result is opaque and is drawn directly under the node&#39;s
+content. A translucent <code>backgroundColor</code> tints the glass, an opaque one
+hides it, and UI painted beneath the node inside its box is covered by the
+filtered scene, not blurred.</li>
+<li>The glass fills the node&#39;s border box and follows its <code>borderRadius</code>, with
+the same antialiased edge as the background. Ancestor <code>overflow</code> clipping
+clips it like the rest of the node.</li>
+<li><code>opacity</code> on the node fades the glass together with its content.</li>
+<li>Blur-like filters sample the scene a little outside the box (a blur reaches
+three times its radius), so the edges stay clean. The glass itself never
+paints outside the box.</li>
+<li>While a filter&#39;s shader is still compiling, the node shows the unfiltered
+scene behind it. It never disappears.</li>
+</ul>
+<h2 id="built-in-filters-on-a-backdrop"><a class="anchor" href="#built-in-filters-on-a-backdrop" aria-hidden="true">#</a>Built-in filters on a backdrop</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Filter</th>
+<th>On a backdrop</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>blur</code></td>
+<td>Frosted glass</td>
+</tr>
+<tr>
+<td><code>brightness</code>, <code>contrast</code>, <code>saturate</code>, <code>grayscale</code>, <code>sepia</code>, <code>invert</code>, <code>hueRotate</code></td>
+<td>Recolor the scene behind the node</td>
+</tr>
+<tr>
+<td><code>bloom</code>, <code>chromaticAberration</code></td>
+<td>Glow and color fringing</td>
+</tr>
+<tr>
+<td><code>pinch</code></td>
+<td>Lens-like squeeze or bulge of the scene</td>
+</tr>
+<tr>
+<td><code>gradientMap</code></td>
+<td>A gradient wash; keep <code>amount</code> below 1 to see the scene</td>
+</tr>
+<tr>
+<td><code>outline</code>, <code>shadow</code></td>
+<td>Nothing visible: they draw around the content&#39;s alpha, and the backdrop is opaque</td>
+</tr>
+</tbody></table></div>
+<p>Custom <code>#[react_filter]</code> filters run on a backdrop unchanged; their shader
+receives an opaque source. The filter reference lists every built-in&#39;s
+params, for example <a href="../../reference/filters/#blur"><code>blur</code></a>.</p>
+<h2 id="transitions"><a class="anchor" href="#transitions" aria-hidden="true">#</a>Transitions</h2>
+<p><code>transition: { backdropFilter }</code> eases the chain between style states (the
+base <code>style</code>, <code>hoverStyle</code>, <code>pressStyle</code>, <code>focusStyle</code>), independently of
+<code>transition: { filter }</code>:</p>
+<ul>
+<li>Same names in the same order: the params interpolate.</li>
+<li>One chain extends the other at the end, built-in filters only: the extra
+entries fade through their identity values (a blur from radius 0).</li>
+<li>Anything else swaps at the halfway point.</li>
+<li>Easing to no chain at all, by unsetting <code>backdropFilter</code> or setting <code>[]</code>,
+snaps: the filter disappears at once.</li>
+</ul>
+<p>Keep an identity entry in the base style when the filter should fade out as
+well as in:</p>
+<pre><code class="language-tsx"><span class="token operator">&lt;</span>node
+  style<span class="token operator">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span>
+    backgroundColor<span class="token operator">:</span> <span class="token string">&quot;rgba(26, 27, 38, 0.35)&quot;</span><span class="token punctuation">,</span>
+    backdropFilter<span class="token operator">:</span> <span class="token punctuation">{</span> name<span class="token operator">:</span> <span class="token string">&quot;blur&quot;</span><span class="token punctuation">,</span> params<span class="token operator">:</span> <span class="token punctuation">{</span> radius<span class="token operator">:</span> <span class="token number">0</span> <span class="token punctuation">}</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+    transition<span class="token operator">:</span> <span class="token punctuation">{</span> backdropFilter<span class="token operator">:</span> <span class="token punctuation">{</span> duration<span class="token operator">:</span> <span class="token number">250</span> <span class="token punctuation">}</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+  <span class="token punctuation">}</span><span class="token punctuation">}</span>
+  hoverStyle<span class="token operator">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span>
+    backdropFilter<span class="token operator">:</span> <span class="token punctuation">{</span> name<span class="token operator">:</span> <span class="token string">&quot;blur&quot;</span><span class="token punctuation">,</span> params<span class="token operator">:</span> <span class="token punctuation">{</span> radius<span class="token operator">:</span> <span class="token number">12</span> <span class="token punctuation">}</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+  <span class="token punctuation">}</span><span class="token punctuation">}</span>
+<span class="token operator">/</span><span class="token operator">&gt;</span></code></pre><p>The identity entry is not free: it keeps the backdrop running every frame
+(see Limits).</p>
+<h2 id="animated-params"><a class="anchor" href="#animated-params" aria-hidden="true">#</a>Animated params</h2>
+<p>Any param accepts an inline <code>{ animated }</code> binding to a shared value, driven
+every frame on the Bevy side without re-rendering React:</p>
+<pre><code class="language-tsx"><span class="token keyword">import</span> <span class="token punctuation">{</span> useSharedValue<span class="token punctuation">,</span> withTiming <span class="token punctuation">}</span> <span class="token keyword">from</span> <span class="token string">&quot;bevy-react&quot;</span><span class="token punctuation">;</span>
+
+<span class="token keyword">function</span> <span class="token function">Glass</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+  <span class="token keyword">const</span> radius <span class="token operator">=</span> <span class="token function">useSharedValue</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token keyword">return</span> <span class="token punctuation">(</span>
+    <span class="token operator">&lt;</span>node
+      onPointerEnter<span class="token operator">=</span><span class="token punctuation">{</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">=&gt;</span> <span class="token punctuation">{</span>
+        radius<span class="token punctuation">.</span>value <span class="token operator">=</span> <span class="token function">withTiming</span><span class="token punctuation">(</span><span class="token number">16</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+      <span class="token punctuation">}</span><span class="token punctuation">}</span>
+      onPointerLeave<span class="token operator">=</span><span class="token punctuation">{</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">=&gt;</span> <span class="token punctuation">{</span>
+        radius<span class="token punctuation">.</span>value <span class="token operator">=</span> <span class="token function">withTiming</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+      <span class="token punctuation">}</span><span class="token punctuation">}</span>
+      style<span class="token operator">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span>
+        backgroundColor<span class="token operator">:</span> <span class="token string">&quot;rgba(26, 27, 38, 0.35)&quot;</span><span class="token punctuation">,</span>
+        backdropFilter<span class="token operator">:</span> <span class="token punctuation">{</span>
+          name<span class="token operator">:</span> <span class="token string">&quot;blur&quot;</span><span class="token punctuation">,</span>
+          params<span class="token operator">:</span> <span class="token punctuation">{</span> radius<span class="token operator">:</span> <span class="token punctuation">{</span> animated<span class="token operator">:</span> radius<span class="token punctuation">,</span> seed<span class="token operator">:</span> <span class="token number">16</span> <span class="token punctuation">}</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+        <span class="token punctuation">}</span><span class="token punctuation">,</span>
+      <span class="token punctuation">}</span><span class="token punctuation">}</span>
+    <span class="token operator">/</span><span class="token operator">&gt;</span>
+  <span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span></code></pre><ul>
+<li>Values are in the param&#39;s wire units: pixels for lengths, degrees for
+angles.</li>
+<li>Bindings work in the base <code>style</code> only. A binding in <code>hoverStyle</code>,
+<code>pressStyle</code> or <code>focusStyle</code> is ignored with a warning.</li>
+<li>Any binding on a backdrop param parks <code>transition: { backdropFilter }</code> for
+that node: the binding wins. Bindings on <code>filter</code> params are separate.</li>
+<li><code>seed</code> is the static value used in the binding&#39;s place for what is
+computed up front, such as how far outside the box a blur samples. Size it
+for the largest value the animation reaches. Without a seed the filter&#39;s
+default is used (20px for <code>blur</code>).</li>
+</ul>
+<h2 id="limits"><a class="anchor" href="#limits" aria-hidden="true">#</a>Limits</h2>
+<ul>
+<li>Only the 3D frame is filtered. UI beneath the node is covered by the glass,
+not blurred into it.</li>
+<li>The backdrop and every pass of its chain re-run each frame while the node
+has a chain, whether or not anything moved, identity entries included. The
+cost grows with the node&#39;s area (plus a blur&#39;s sampling margin) and the
+chain length. The node&#39;s own content is still cached.</li>
+<li><code>transform3d</code> on the same node does not transform the glass: it stays in
+the node&#39;s untransformed, axis-aligned box while the content tilts.</li>
+<li>Inside another composited layer (an ancestor with a <code>filter</code>, a
+<code>transform3d</code>, <code>opacity</code> on a node with children, or <code>cache</code>), every
+enclosing layer re-captures each frame, which defeats its caching.</li>
+<li>Only the main UI camera is supported. Inside a <code>&lt;surface&gt;</code> or under a
+second UI camera, the node renders without its backdrop filter and a
+<code>layerCamera</code> warning is reported.</li>
+</ul>
+<p><img src="../../screenshots/backdrop-filter.webp" alt="Four backdrop-filtered cards over a live 3D scene: a frosted-glass blur, a hue rotation, a filter combined with a backdrop filter, and a custom backdrop filter, each re-filtering the moving cubes behind it." loading="lazy"></p>
+<p>See <a href="../../reference/style-properties/#backdropFilter"><code>backdropFilter</code></a> in the
+style reference.</p>
+
+</article>
+<footer class="page-links"><a href="../../demo/?page=backdrop-filters">Open live demo</a>
+<a href="https://github.com/tulustul/bevy-react/blob/v0.7.0/examples/demos/ui/src/demos/styling/BackdropFilterDemo.tsx">Demo source</a>
+<a href="https://github.com/tulustul/bevy-react/edit/main/docs/guide/styling/backdrop-filters.md">Edit this page</a></footer>
+</main>
+</div>
+<footer class="site-footer">
+<p>bevy-react is dual-licensed under MIT or Apache-2.0. <a href="https://github.com/tulustul/bevy-react">Source on GitHub</a>.</p>
+</footer>
+</body>
+</html>

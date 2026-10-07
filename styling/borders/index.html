@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Borders · bevy-react</title>
+<meta name="description" content="Border widths, per-side border colors, rounded corners with transitions and animated radii, and outlines drawn outside the box.">
+<link rel="canonical" href="https://tulustul.github.io/bevy-react/styling/borders/">
+<link rel="alternate" type="text/markdown" href="../../styling/borders.md">
+<meta property="og:title" content="Borders · bevy-react">
+<meta property="og:description" content="Border widths, per-side border colors, rounded corners with transitions and animated radii, and outlines drawn outside the box.">
+<link rel="icon" href="../../logo.png">
+<link rel="stylesheet" href="../../style.css">
+<script src="../../docs.js" defer></script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="site-header">
+<a class="brand" href="../../"><img src="../../logo.png" alt="" width="74" height="74"> bevy-react</a>
+<span class="version">v0.7.0</span>
+<nav class="site-links" aria-label="Project">
+<a href="../../demo/">Live demo</a>
+<a href="https://github.com/tulustul/bevy-react">GitHub</a>
+<a href="https://docs.rs/bevy-react">docs.rs</a>
+<a href="https://www.npmjs.com/package/bevy-react">npm</a>
+</nav>
+</header>
+<div class="layout">
+<nav class="sidebar" aria-label="Documentation">
+<details class="nav-menu" open>
+<summary>Menu</summary>
+<ul><li><a href="../../">Introduction</a></li><li><a href="../../getting-started/">Getting started</a></li><li><a href="../../how-it-works/">How it works</a></li><li class="nav-section"><span>Elements</span><ul><li><a href="../../elements/node/">&lt;node&gt;</a></li><li><a href="../../elements/button/">&lt;button&gt;</a></li><li><a href="../../elements/text/">&lt;text&gt;</a></li><li><a href="../../elements/editable-text/">&lt;editableText&gt;</a></li><li><a href="../../elements/image/">&lt;image&gt;</a></li><li><a href="../../elements/canvas/">&lt;canvas&gt;</a></li><li><a href="../../elements/svg/">&lt;svg&gt;</a></li><li><a href="../../elements/portal/">&lt;portal&gt;</a></li><li><a href="../../elements/surface/">&lt;surface&gt;</a></li><li><a href="../../elements/root/">&lt;root&gt;</a></li><li><a href="../../elements/anchor/">&lt;anchor&gt;</a></li></ul></li><li class="nav-section"><span>Layout</span><ul><li><a href="../../layout/flexbox/">Flexbox</a></li><li><a href="../../layout/grid/">Grid</a></li><li><a href="../../layout/positioning/">Positioning</a></li></ul></li><li class="nav-section"><span>Styling</span><ul><li><a href="../../styling/units/">Units</a></li><li><a href="../../styling/colors/">Colors</a></li><li><a href="../../styling/borders/" aria-current="page">Borders</a></li><li><a href="../../styling/spacing/">Spacing</a></li><li><a href="../../styling/sizing/">Sizing</a></li><li><a href="../../styling/layout-rounding/">Layout rounding</a></li><li><a href="../../styling/overflow/">Overflow</a></li><li><a href="../../styling/transforms/">Transforms</a></li><li><a href="../../styling/3d-transforms/">3D transforms</a></li><li><a href="../../styling/shadows/">Shadows</a></li><li><a href="../../styling/filters/">Filters</a></li><li><a href="../../styling/backdrop-filters/">Backdrop filters</a></li><li><a href="../../styling/morph-filters/">Morph filters</a></li><li><a href="../../styling/gradients/">Gradients</a></li><li><a href="../../styling/background-images/">Background images</a></li><li><a href="../../styling/image-rendering/">Image rendering</a></li><li><a href="../../styling/opacity/">Opacity</a></li><li><a href="../../styling/z-index/">Z-index</a></li><li><a href="../../styling/focus-policy/">Focus policy</a></li><li><a href="../../styling/cursors/">Cursors</a></li><li><a href="../../styling/layers/">Layers</a></li></ul></li><li class="nav-section"><span>Animations</span><ul><li><a href="../../animations/style-transitions/">Style transitions</a></li><li><a href="../../animations/animated-values/">Animated values</a></li><li><a href="../../animations/interpolation/">Interpolation</a></li><li><a href="../../animations/shared-elements/">Shared elements</a></li></ul></li><li class="nav-section"><span>Communication</span><ul><li><a href="../../communication/react-to-bevy/">React to Bevy</a></li><li><a href="../../communication/bevy-to-react/">Bevy to React</a></li><li><a href="../../communication/request-response/">Request / response</a></li><li><a href="../../communication/named-nodes/">Named nodes</a></li></ul></li><li class="nav-section"><span>Events</span><ul><li><a href="../../events/mouse/">Mouse</a></li><li><a href="../../events/keyboard/">Keyboard</a></li><li><a href="../../events/gamepad/">Gamepad</a></li><li><a href="../../events/window/">Window</a></li></ul></li><li class="nav-section"><span>Extending</span><ul><li><a href="../../extending/custom-elements/">Custom elements</a></li><li><a href="../../extending/custom-styles/">Custom styles</a></li><li><a href="../../extending/custom-filters/">Custom filters</a></li></ul></li><li class="nav-section"><span>Tooling</span><ul><li><a href="../../tooling/devtools/">Devtools</a></li><li><a href="../../tooling/hot-reload/">Hot reload</a></li><li><a href="../../tooling/web/">Web builds</a></li><li><a href="../../tooling/ts-codegen/">TypeScript codegen</a></li></ul></li><li class="nav-section"><span>Reference</span><ul><li><a href="../../reference/style-properties/">Style properties</a></li><li><a href="../../reference/elements/">Elements</a></li><li><a href="../../reference/filters/">Filters</a></li></ul></li><li><a href="../../performance/">Performance</a></li></ul>
+</details>
+</nav>
+<main id="main">
+<article>
+<h1 id="borders">Borders</h1>
+<p>A node&#39;s border is a band inside its box: <code>border</code> sets its width per side,
+<code>borderColor</code> paints it, and <code>borderRadius</code> rounds the corners of the whole
+box. <code>outline</code> draws a separate ring outside the box that takes no space.</p>
+<h2 id="usage"><a class="anchor" href="#usage" aria-hidden="true">#</a>Usage</h2>
+<pre><code class="language-tsx"><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>node</span>
+  <span class="token attr-name">style</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span>
+    width<span class="token operator">:</span> <span class="token number">160</span><span class="token punctuation">,</span>
+    height<span class="token operator">:</span> <span class="token number">90</span><span class="token punctuation">,</span>
+    border<span class="token operator">:</span> <span class="token number">2</span><span class="token punctuation">,</span>
+    borderColor<span class="token operator">:</span> <span class="token string">&quot;#7aa2f7&quot;</span><span class="token punctuation">,</span>
+    borderRadius<span class="token operator">:</span> <span class="token number">12</span><span class="token punctuation">,</span>
+  <span class="token punctuation">}</span><span class="token punctuation">}</span></span>
+<span class="token punctuation">/&gt;</span></span></code></pre><h2 id="border-width"><a class="anchor" href="#border-width" aria-hidden="true">#</a>Border width</h2>
+<p><code>border</code> takes the four-sided value that <code>padding</code> and <code>margin</code> take:</p>
+<ul>
+<li>a number: pixels on every side (<code>border: 2</code>);</li>
+<li>a CSS shorthand string of one to four lengths, in CSS order
+(<code>&quot;2px 4px&quot;</code> is top/bottom 2, left/right 4);</li>
+<li>a per-side object <code>{ top, right, bottom, left }</code>, unset sides <code>0</code>;</li>
+<li>an axis pair <code>{ horizontal, vertical }</code>, where <code>horizontal</code> sets left and
+right. Explicit sides in the same object win over the pair.</li>
+</ul>
+<p>Each side is a length (see <a href="../../styling/units/">Units</a>). An invalid token reports a
+<code>rect</code> warning and counts as <code>0</code>.</p>
+<p>The border is part of layout, like padding: a wider border shrinks the
+content box (or grows the node, depending on <code>boxSizing</code>; see
+<a href="../../styling/sizing/">Sizing</a>). A border is invisible until it has a <code>borderColor</code> or
+a <code>borderGradient</code>.</p>
+<h2 id="border-color"><a class="anchor" href="#border-color" aria-hidden="true">#</a>Border color</h2>
+<pre><code class="language-tsx"><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>node</span>
+  <span class="token attr-name">style</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span>
+    border<span class="token operator">:</span> <span class="token punctuation">{</span> top<span class="token operator">:</span> <span class="token number">3</span><span class="token punctuation">,</span> right<span class="token operator">:</span> <span class="token number">6</span><span class="token punctuation">,</span> bottom<span class="token operator">:</span> <span class="token number">9</span><span class="token punctuation">,</span> left<span class="token operator">:</span> <span class="token number">12</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+    borderColor<span class="token operator">:</span> <span class="token punctuation">{</span> top<span class="token operator">:</span> <span class="token string">&quot;#7aa2f7&quot;</span><span class="token punctuation">,</span> left<span class="token operator">:</span> <span class="token string">&quot;#f7768e&quot;</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+  <span class="token punctuation">}</span><span class="token punctuation">}</span></span>
+<span class="token punctuation">/&gt;</span></span></code></pre><ul>
+<li>One color string paints every side. The object form colors sides
+individually, and omitted sides are transparent.</li>
+<li>A multi-color string (<code>&quot;red blue&quot;</code>) is not supported; use the object
+form. An unknown key in the object (including <code>horizontal</code>/<code>vertical</code>)
+reports a <code>borderColor</code> warning and is ignored.</li>
+<li>The default is transparent.</li>
+<li>A <code>borderGradient</code> paints over the border color (see
+<a href="../../styling/gradients/">Gradients</a>).</li>
+<li><code>borderColor</code> has no transition channel; changes snap. The single-color
+form accepts an <code>{ animated }</code> <code>interpolateColor</code> binding, which drives all
+four sides (see <a href="../../styling/colors/#animated-colors">Colors</a>).</li>
+</ul>
+<h2 id="corner-radius"><a class="anchor" href="#corner-radius" aria-hidden="true">#</a>Corner radius</h2>
+<p><code>borderRadius</code> takes the same four forms as <code>border</code>, applied to corners.
+The sides name the corners clockwise from the top-left, as in the CSS
+shorthand:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Corner(s)</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>top</code></td>
+<td>top-left</td>
+</tr>
+<tr>
+<td><code>right</code></td>
+<td>top-right</td>
+</tr>
+<tr>
+<td><code>bottom</code></td>
+<td>bottom-right</td>
+</tr>
+<tr>
+<td><code>left</code></td>
+<td>bottom-left</td>
+</tr>
+<tr>
+<td><code>horizontal</code></td>
+<td>top-right and bottom-left</td>
+</tr>
+<tr>
+<td><code>vertical</code></td>
+<td>top-left and bottom-right</td>
+</tr>
+</tbody></table></div>
+<pre><code class="language-tsx"><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>node</span> <span class="token attr-name">style</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span> borderRadius<span class="token operator">:</span> <span class="token punctuation">{</span> top<span class="token operator">:</span> <span class="token number">0</span><span class="token punctuation">,</span> right<span class="token operator">:</span> <span class="token number">10</span><span class="token punctuation">,</span> bottom<span class="token operator">:</span> <span class="token number">20</span><span class="token punctuation">,</span> left<span class="token operator">:</span> <span class="token number">60</span> <span class="token punctuation">}</span> <span class="token punctuation">}</span><span class="token punctuation">}</span></span> <span class="token punctuation">/&gt;</span></span></code></pre><ul>
+<li>Percentages resolve against the node&#39;s shorter side, and every radius is
+capped at half of it: <code>&quot;50%&quot;</code> makes a square node a circle, and a large
+pixel value such as <code>999</code> makes a pill.</li>
+<li>One radius per corner: elliptical corners are not supported.</li>
+<li>The radius rounds the background, border, gradients, <code>boxShadow</code>,
+<code>outline</code> and a <a href="../../styling/backdrop-filters/">backdrop filter</a>. It clips a
+<code>backgroundImage</code> in <code>&quot;stretch&quot;</code> mode, but not in the repeat modes.</li>
+<li>Bevy keeps the radii with the node&#39;s layout, so changing <code>borderRadius</code>
+re-runs layout.</li>
+</ul>
+<h3 id="transitions-and-animation"><a class="anchor" href="#transitions-and-animation" aria-hidden="true">#</a>Transitions and animation</h3>
+<p><code>transition: { borderRadius }</code> eases the radii between style states, one
+corner at a time:</p>
+<pre><code class="language-tsx"><span class="token operator">&lt;</span>button
+  style<span class="token operator">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span> borderRadius<span class="token operator">:</span> <span class="token number">8</span><span class="token punctuation">,</span> transition<span class="token operator">:</span> <span class="token punctuation">{</span> borderRadius<span class="token operator">:</span> <span class="token punctuation">{</span> duration<span class="token operator">:</span> <span class="token number">200</span> <span class="token punctuation">}</span> <span class="token punctuation">}</span> <span class="token punctuation">}</span><span class="token punctuation">}</span>
+  hoverStyle<span class="token operator">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span> borderRadius<span class="token operator">:</span> <span class="token number">24</span> <span class="token punctuation">}</span><span class="token punctuation">}</span>
+<span class="token operator">/</span><span class="token operator">&gt;</span></code></pre><ul>
+<li>A corner eases when both values share a unit (px to px, <code>%</code> to <code>%</code>). A
+corner that changes unit snaps on its own while the others ease.</li>
+<li>Unsetting <code>borderRadius</code> eases to square corners.</li>
+<li>Every eased frame is a relayout; prefer short transitions on large trees.</li>
+</ul>
+<p><code>borderRadius: { animated: sv }</code> binds all four corners to one shared value,
+in pixels. There are no per-corner bindings. A binding wins over the
+transition. See <a href="../../animations/animated-values/">Animated values</a>.</p>
+<h2 id="outline"><a class="anchor" href="#outline" aria-hidden="true">#</a>Outline</h2>
+<pre><code class="language-tsx"><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>node</span>
+  <span class="token attr-name">style</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span> border<span class="token operator">:</span> <span class="token number">2</span> <span class="token punctuation">}</span><span class="token punctuation">}</span></span>
+  <span class="token attr-name">hoverStyle</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span> outline<span class="token operator">:</span> <span class="token punctuation">{</span> width<span class="token operator">:</span> <span class="token number">3</span><span class="token punctuation">,</span> offset<span class="token operator">:</span> <span class="token number">4</span><span class="token punctuation">,</span> color<span class="token operator">:</span> <span class="token string">&quot;#f9e2af&quot;</span> <span class="token punctuation">}</span> <span class="token punctuation">}</span><span class="token punctuation">}</span></span>
+<span class="token punctuation">/&gt;</span></span></code></pre><p><code>outline</code> is an object with three optional fields:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Default</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>width</code></td>
+<td>length</td>
+<td><code>1</code></td>
+<td>Ring thickness</td>
+</tr>
+<tr>
+<td><code>offset</code></td>
+<td>length</td>
+<td><code>0</code></td>
+<td>Gap between the border box and the ring</td>
+</tr>
+<tr>
+<td><code>color</code></td>
+<td>color</td>
+<td><code>&quot;white&quot;</code></td>
+<td>Ring color</td>
+</tr>
+</tbody></table></div>
+<ul>
+<li>The ring is drawn outside the border box and follows its corner radii.</li>
+<li>It takes no layout space, so it can overlap neighbors, and an ancestor&#39;s
+overflow clipping cuts it like any other paint.</li>
+<li>A negative <code>offset</code> draws the ring inside the box, down to half the
+node&#39;s shorter side.</li>
+<li>Percentages in <code>width</code> and <code>offset</code> resolve against the node&#39;s width.</li>
+<li>There is one ring for all sides, and no transition or <code>{ animated }</code>
+binding.</li>
+</ul>
+<h2 id="limits"><a class="anchor" href="#limits" aria-hidden="true">#</a>Limits</h2>
+<ul>
+<li>Borders and outlines are solid: there are no dashed or dotted styles.</li>
+<li>On a node without a composited layer, <code>opacity</code> does not fade
+<code>borderColor</code> or <code>outline</code> (see <a href="../../styling/opacity/">Opacity</a>).</li>
+<li>Overflow clipping is rectangular: children are not clipped to the rounded
+corners.</li>
+</ul>
+<p>See <a href="../../reference/style-properties/#border"><code>border</code></a>,
+<a href="../../reference/style-properties/#borderColor"><code>borderColor</code></a>,
+<a href="../../reference/style-properties/#borderRadius"><code>borderRadius</code></a> and
+<a href="../../reference/style-properties/#outline"><code>outline</code></a> in the style
+reference.</p>
+
+</article>
+<footer class="page-links"><a href="../../demo/?page=borders">Open live demo</a>
+<a href="https://github.com/tulustul/bevy-react/blob/v0.7.0/examples/demos/ui/src/demos/styling/BordersDemo.tsx">Demo source</a>
+<a href="https://github.com/tulustul/bevy-react/edit/main/docs/guide/styling/borders.md">Edit this page</a></footer>
+</main>
+</div>
+<footer class="site-footer">
+<p>bevy-react is dual-licensed under MIT or Apache-2.0. <a href="https://github.com/tulustul/bevy-react">Source on GitHub</a>.</p>
+</footer>
+</body>
+</html>

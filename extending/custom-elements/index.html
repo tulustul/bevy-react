@@ -1,0 +1,526 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Custom elements · bevy-react</title>
+<meta name="description" content="Register your own JSX elements from Rust with add_react_element - attributes, writers, a spawn hook, element events and animated attributes.">
+<link rel="canonical" href="https://tulustul.github.io/bevy-react/extending/custom-elements/">
+<link rel="alternate" type="text/markdown" href="../../extending/custom-elements.md">
+<meta property="og:title" content="Custom elements · bevy-react">
+<meta property="og:description" content="Register your own JSX elements from Rust with add_react_element - attributes, writers, a spawn hook, element events and animated attributes.">
+<link rel="icon" href="../../logo.png">
+<link rel="stylesheet" href="../../style.css">
+<script src="../../docs.js" defer></script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="site-header">
+<a class="brand" href="../../"><img src="../../logo.png" alt="" width="74" height="74"> bevy-react</a>
+<span class="version">v0.7.0</span>
+<nav class="site-links" aria-label="Project">
+<a href="../../demo/">Live demo</a>
+<a href="https://github.com/tulustul/bevy-react">GitHub</a>
+<a href="https://docs.rs/bevy-react">docs.rs</a>
+<a href="https://www.npmjs.com/package/bevy-react">npm</a>
+</nav>
+</header>
+<div class="layout">
+<nav class="sidebar" aria-label="Documentation">
+<details class="nav-menu" open>
+<summary>Menu</summary>
+<ul><li><a href="../../">Introduction</a></li><li><a href="../../getting-started/">Getting started</a></li><li><a href="../../how-it-works/">How it works</a></li><li class="nav-section"><span>Elements</span><ul><li><a href="../../elements/node/">&lt;node&gt;</a></li><li><a href="../../elements/button/">&lt;button&gt;</a></li><li><a href="../../elements/text/">&lt;text&gt;</a></li><li><a href="../../elements/editable-text/">&lt;editableText&gt;</a></li><li><a href="../../elements/image/">&lt;image&gt;</a></li><li><a href="../../elements/canvas/">&lt;canvas&gt;</a></li><li><a href="../../elements/svg/">&lt;svg&gt;</a></li><li><a href="../../elements/portal/">&lt;portal&gt;</a></li><li><a href="../../elements/surface/">&lt;surface&gt;</a></li><li><a href="../../elements/root/">&lt;root&gt;</a></li><li><a href="../../elements/anchor/">&lt;anchor&gt;</a></li></ul></li><li class="nav-section"><span>Layout</span><ul><li><a href="../../layout/flexbox/">Flexbox</a></li><li><a href="../../layout/grid/">Grid</a></li><li><a href="../../layout/positioning/">Positioning</a></li></ul></li><li class="nav-section"><span>Styling</span><ul><li><a href="../../styling/units/">Units</a></li><li><a href="../../styling/colors/">Colors</a></li><li><a href="../../styling/borders/">Borders</a></li><li><a href="../../styling/spacing/">Spacing</a></li><li><a href="../../styling/sizing/">Sizing</a></li><li><a href="../../styling/layout-rounding/">Layout rounding</a></li><li><a href="../../styling/overflow/">Overflow</a></li><li><a href="../../styling/transforms/">Transforms</a></li><li><a href="../../styling/3d-transforms/">3D transforms</a></li><li><a href="../../styling/shadows/">Shadows</a></li><li><a href="../../styling/filters/">Filters</a></li><li><a href="../../styling/backdrop-filters/">Backdrop filters</a></li><li><a href="../../styling/morph-filters/">Morph filters</a></li><li><a href="../../styling/gradients/">Gradients</a></li><li><a href="../../styling/background-images/">Background images</a></li><li><a href="../../styling/image-rendering/">Image rendering</a></li><li><a href="../../styling/opacity/">Opacity</a></li><li><a href="../../styling/z-index/">Z-index</a></li><li><a href="../../styling/focus-policy/">Focus policy</a></li><li><a href="../../styling/cursors/">Cursors</a></li><li><a href="../../styling/layers/">Layers</a></li></ul></li><li class="nav-section"><span>Animations</span><ul><li><a href="../../animations/style-transitions/">Style transitions</a></li><li><a href="../../animations/animated-values/">Animated values</a></li><li><a href="../../animations/interpolation/">Interpolation</a></li><li><a href="../../animations/shared-elements/">Shared elements</a></li></ul></li><li class="nav-section"><span>Communication</span><ul><li><a href="../../communication/react-to-bevy/">React to Bevy</a></li><li><a href="../../communication/bevy-to-react/">Bevy to React</a></li><li><a href="../../communication/request-response/">Request / response</a></li><li><a href="../../communication/named-nodes/">Named nodes</a></li></ul></li><li class="nav-section"><span>Events</span><ul><li><a href="../../events/mouse/">Mouse</a></li><li><a href="../../events/keyboard/">Keyboard</a></li><li><a href="../../events/gamepad/">Gamepad</a></li><li><a href="../../events/window/">Window</a></li></ul></li><li class="nav-section"><span>Extending</span><ul><li><a href="../../extending/custom-elements/" aria-current="page">Custom elements</a></li><li><a href="../../extending/custom-styles/">Custom styles</a></li><li><a href="../../extending/custom-filters/">Custom filters</a></li></ul></li><li class="nav-section"><span>Tooling</span><ul><li><a href="../../tooling/devtools/">Devtools</a></li><li><a href="../../tooling/hot-reload/">Hot reload</a></li><li><a href="../../tooling/web/">Web builds</a></li><li><a href="../../tooling/ts-codegen/">TypeScript codegen</a></li></ul></li><li class="nav-section"><span>Reference</span><ul><li><a href="../../reference/style-properties/">Style properties</a></li><li><a href="../../reference/elements/">Elements</a></li><li><a href="../../reference/filters/">Filters</a></li></ul></li><li><a href="../../performance/">Performance</a></li></ul>
+</details>
+</nav>
+<main id="main">
+<article>
+<h1 id="custom-elements">Custom elements</h1>
+<p>An app can register its own JSX elements in Rust. The API is the one every
+built-in element uses: <code>&lt;svg&gt;</code>, <code>&lt;canvas&gt;</code>, <code>&lt;portal&gt;</code>, <code>&lt;surface&gt;</code> and
+<code>&lt;anchor&gt;</code> are each a crate registering one. An element declares its
+attributes (its own props), the writers that turn them into components, its
+events and a spawn hook. React then mounts, updates and unmounts entities of
+that kind like any other. An element doesn&#39;t have to be UI: the demos&#39;
+<code>&lt;cube&gt;</code> is a 3D mesh in the world.</p>
+<h2 id="usage"><a class="anchor" href="#usage" aria-hidden="true">#</a>Usage</h2>
+<p>Declare the attribute and the element as <code>static</code>s, register the element,
+and render it from React:</p>
+<div class="tabs"><div class="tab-panel" data-lang="tsx"><p class="tab-label">TSX</p><pre><code class="language-tsx"><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>node</span><span class="token punctuation">&gt;</span></span><span class="token plain-text">
+  </span><span class="token punctuation">{</span>cubes<span class="token punctuation">.</span><span class="token function">map</span><span class="token punctuation">(</span><span class="token punctuation">(</span>c<span class="token punctuation">)</span> <span class="token operator">=&gt;</span> <span class="token punctuation">(</span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>cube</span> <span class="token attr-name">key</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span>c<span class="token punctuation">.</span>id<span class="token punctuation">}</span></span> <span class="token attr-name">x</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span>c<span class="token punctuation">.</span>x<span class="token punctuation">}</span></span> <span class="token attr-name">size</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token number">0.4</span><span class="token punctuation">}</span></span> <span class="token punctuation">/&gt;</span></span>
+  <span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">}</span><span class="token plain-text">
+</span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>node</span><span class="token punctuation">&gt;</span></span></code></pre></div><div class="tab-panel" data-lang="rust"><p class="tab-label">Rust</p><pre><code class="language-rust"><span class="token keyword">use</span> <span class="token namespace">bevy<span class="token punctuation">::</span>prelude<span class="token punctuation">::</span></span><span class="token operator">*</span><span class="token punctuation">;</span>
+<span class="token keyword">use</span> <span class="token namespace">bevy_react<span class="token punctuation">::</span>element<span class="token punctuation">::</span></span><span class="token punctuation">{</span><span class="token class-name">Attribute</span><span class="token punctuation">,</span> <span class="token class-name">Common</span><span class="token punctuation">,</span> <span class="token class-name">Element</span><span class="token punctuation">}</span><span class="token punctuation">;</span>
+<span class="token keyword">use</span> <span class="token namespace">bevy_react<span class="token punctuation">::</span>ext<span class="token punctuation">::</span></span><span class="token class-name">ElementFlags</span><span class="token punctuation">;</span>
+<span class="token keyword">use</span> <span class="token namespace">bevy_react<span class="token punctuation">::</span>style<span class="token punctuation">::</span></span><span class="token punctuation">{</span><span class="token class-name">Writer</span><span class="token punctuation">,</span> owns<span class="token punctuation">}</span><span class="token punctuation">;</span>
+<span class="token keyword">use</span> <span class="token namespace">bevy_react<span class="token punctuation">::</span></span><span class="token punctuation">{</span><span class="token class-name">ReactAppExt</span><span class="token punctuation">,</span> <span class="token class-name">ReactApplySet</span><span class="token punctuation">}</span><span class="token punctuation">;</span>
+
+<span class="token attribute attr-name">#[derive(Component)]</span>
+<span class="token keyword">struct</span> <span class="token type-definition class-name">Cube</span><span class="token punctuation">;</span>
+
+<span class="token keyword">static</span> <span class="token class-name">X</span><span class="token punctuation">:</span> <span class="token class-name">Attribute</span><span class="token operator">&lt;</span><span class="token keyword">f32</span><span class="token operator">&gt;</span> <span class="token operator">=</span> <span class="token class-name">Attribute</span><span class="token punctuation">::</span><span class="token function">new</span><span class="token punctuation">(</span><span class="token string">&quot;x&quot;</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token keyword">static</span> <span class="token constant">SIZE</span><span class="token punctuation">:</span> <span class="token class-name">Attribute</span><span class="token operator">&lt;</span><span class="token keyword">f32</span><span class="token operator">&gt;</span> <span class="token operator">=</span> <span class="token class-name">Attribute</span><span class="token punctuation">::</span><span class="token function">new</span><span class="token punctuation">(</span><span class="token string">&quot;size&quot;</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token keyword">static</span> <span class="token constant">CUBE</span><span class="token punctuation">:</span> <span class="token class-name">Element</span> <span class="token operator">=</span> <span class="token class-name">Element</span> <span class="token punctuation">{</span>
+    <span class="token comment">// No `Node`, and never parented under its React parent.</span>
+    flags<span class="token punctuation">:</span> <span class="token class-name">ElementFlags</span> <span class="token punctuation">{</span> detached<span class="token punctuation">:</span> <span class="token boolean">true</span><span class="token punctuation">,</span> <span class="token punctuation">..</span><span class="token class-name">ElementFlags</span><span class="token punctuation">::</span><span class="token constant">NODE_LESS</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+    attrs<span class="token punctuation">:</span> <span class="token operator">&amp;</span><span class="token punctuation">[</span><span class="token operator">&amp;</span><span class="token class-name">X</span><span class="token punctuation">,</span> <span class="token operator">&amp;</span><span class="token constant">SIZE</span><span class="token punctuation">]</span><span class="token punctuation">,</span>
+    common<span class="token punctuation">:</span> <span class="token class-name">Common</span><span class="token punctuation">::</span><span class="token constant">IDENTITY</span><span class="token punctuation">,</span>
+    writers<span class="token punctuation">:</span> <span class="token operator">&amp;</span><span class="token punctuation">[</span><span class="token operator">&amp;</span><span class="token constant">CUBE_WRITER</span><span class="token punctuation">]</span><span class="token punctuation">,</span>
+    spawn<span class="token punctuation">:</span> <span class="token class-name">Some</span><span class="token punctuation">(</span><span class="token closure-params"><span class="token closure-punctuation punctuation">|</span>ctx<span class="token closure-punctuation punctuation">|</span></span> ctx<span class="token punctuation">.</span><span class="token function">spawn</span><span class="token punctuation">(</span><span class="token punctuation">(</span><span class="token class-name">Cube</span><span class="token punctuation">,</span> <span class="token class-name">Transform</span><span class="token punctuation">::</span><span class="token function">default</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+    <span class="token punctuation">..</span><span class="token class-name">Element</span><span class="token punctuation">::</span><span class="token function">new</span><span class="token punctuation">(</span><span class="token string">&quot;cube&quot;</span><span class="token punctuation">)</span>
+<span class="token punctuation">}</span><span class="token punctuation">;</span>
+
+<span class="token comment">// Attributes → components. Runs when `x` or `size` changes.</span>
+<span class="token keyword">static</span> <span class="token constant">CUBE_WRITER</span><span class="token punctuation">:</span> <span class="token class-name">Writer</span> <span class="token operator">=</span> <span class="token class-name">Writer</span> <span class="token punctuation">{</span>
+    reads<span class="token punctuation">:</span> <span class="token operator">&amp;</span><span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token punctuation">,</span>
+    attrs<span class="token punctuation">:</span> <span class="token operator">&amp;</span><span class="token punctuation">[</span><span class="token operator">&amp;</span><span class="token class-name">X</span><span class="token punctuation">,</span> <span class="token operator">&amp;</span><span class="token constant">SIZE</span><span class="token punctuation">]</span><span class="token punctuation">,</span>
+    writes<span class="token punctuation">:</span> <span class="token operator">&amp;</span><span class="token punctuation">[</span><span class="token function">owns</span><span class="token punctuation">::</span><span class="token operator">&lt;</span><span class="token class-name">Transform</span><span class="token operator">&gt;</span><span class="token punctuation">]</span><span class="token punctuation">,</span>
+    apply<span class="token punctuation">:</span> <span class="token closure-params"><span class="token closure-punctuation punctuation">|</span>ctx<span class="token punctuation">,</span> _style<span class="token punctuation">,</span> ec<span class="token closure-punctuation punctuation">|</span></span> <span class="token punctuation">{</span>
+        <span class="token keyword">let</span> x <span class="token operator">=</span> ctx<span class="token punctuation">.</span><span class="token function">attr</span><span class="token punctuation">(</span><span class="token operator">&amp;</span><span class="token class-name">X</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">copied</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">unwrap_or</span><span class="token punctuation">(</span><span class="token number">0.0</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">let</span> size <span class="token operator">=</span> ctx<span class="token punctuation">.</span><span class="token function">attr</span><span class="token punctuation">(</span><span class="token operator">&amp;</span><span class="token constant">SIZE</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">copied</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">unwrap_or</span><span class="token punctuation">(</span><span class="token number">1.0</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        ec<span class="token punctuation">.</span><span class="token function">insert</span><span class="token punctuation">(</span>
+            <span class="token class-name">Transform</span><span class="token punctuation">::</span><span class="token function">from_xyz</span><span class="token punctuation">(</span>x<span class="token punctuation">,</span> <span class="token number">0.0</span><span class="token punctuation">,</span> <span class="token number">0.0</span><span class="token punctuation">)</span>
+                <span class="token punctuation">.</span><span class="token function">with_scale</span><span class="token punctuation">(</span><span class="token class-name">Vec3</span><span class="token punctuation">::</span><span class="token function">splat</span><span class="token punctuation">(</span>size<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+        <span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span><span class="token punctuation">,</span>
+<span class="token punctuation">}</span><span class="token punctuation">;</span>
+
+<span class="token keyword">pub</span> <span class="token keyword">struct</span> <span class="token type-definition class-name">CubePlugin</span><span class="token punctuation">;</span>
+
+<span class="token keyword">impl</span> <span class="token class-name">Plugin</span> <span class="token keyword">for</span> <span class="token class-name">CubePlugin</span> <span class="token punctuation">{</span>
+    <span class="token keyword">fn</span> <span class="token function-definition function">build</span><span class="token punctuation">(</span><span class="token operator">&amp;</span><span class="token keyword">self</span><span class="token punctuation">,</span> app<span class="token punctuation">:</span> <span class="token operator">&amp;</span><span class="token keyword">mut</span> <span class="token class-name">App</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token function">register_bindings</span><span class="token punctuation">(</span>app<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        app<span class="token punctuation">.</span><span class="token function">add_systems</span><span class="token punctuation">(</span><span class="token class-name">Update</span><span class="token punctuation">,</span> add_meshes<span class="token punctuation">.</span><span class="token function">after</span><span class="token punctuation">(</span><span class="token class-name">ReactApplySet</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+
+<span class="token comment">/// Also called from the `--export-bindings` path.</span>
+<span class="token keyword">pub</span> <span class="token keyword">fn</span> <span class="token function-definition function">register_bindings</span><span class="token punctuation">(</span>app<span class="token punctuation">:</span> <span class="token operator">&amp;</span><span class="token keyword">mut</span> <span class="token class-name">App</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    app<span class="token punctuation">.</span><span class="token function">add_react_element</span><span class="token punctuation">(</span><span class="token operator">&amp;</span><span class="token constant">CUBE</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+<span class="token keyword">fn</span> <span class="token function-definition function">add_meshes</span><span class="token punctuation">(</span>
+    <span class="token keyword">mut</span> commands<span class="token punctuation">:</span> <span class="token class-name">Commands</span><span class="token punctuation">,</span>
+    cubes<span class="token punctuation">:</span> <span class="token class-name">Query</span><span class="token operator">&lt;</span><span class="token class-name">Entity</span><span class="token punctuation">,</span> <span class="token class-name">Added</span><span class="token operator">&lt;</span><span class="token class-name">Cube</span><span class="token operator">&gt;&gt;</span><span class="token punctuation">,</span>
+    <span class="token keyword">mut</span> meshes<span class="token punctuation">:</span> <span class="token class-name">ResMut</span><span class="token operator">&lt;</span><span class="token class-name">Assets</span><span class="token operator">&lt;</span><span class="token class-name">Mesh</span><span class="token operator">&gt;&gt;</span><span class="token punctuation">,</span>
+    <span class="token keyword">mut</span> materials<span class="token punctuation">:</span> <span class="token class-name">ResMut</span><span class="token operator">&lt;</span><span class="token class-name">Assets</span><span class="token operator">&lt;</span><span class="token class-name">StandardMaterial</span><span class="token operator">&gt;&gt;</span><span class="token punctuation">,</span>
+<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token keyword">for</span> entity <span class="token keyword">in</span> <span class="token operator">&amp;</span>cubes <span class="token punctuation">{</span>
+        commands<span class="token punctuation">.</span><span class="token function">entity</span><span class="token punctuation">(</span>entity<span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">insert</span><span class="token punctuation">(</span><span class="token punctuation">(</span>
+            <span class="token class-name">Mesh3d</span><span class="token punctuation">(</span>meshes<span class="token punctuation">.</span><span class="token function">add</span><span class="token punctuation">(</span><span class="token class-name">Cuboid</span><span class="token punctuation">::</span><span class="token function">from_length</span><span class="token punctuation">(</span><span class="token number">1.0</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+            <span class="token class-name">MeshMaterial3d</span><span class="token punctuation">(</span>materials<span class="token punctuation">.</span><span class="token function">add</span><span class="token punctuation">(</span><span class="token class-name">StandardMaterial</span><span class="token punctuation">::</span><span class="token function">default</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+        <span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span></code></pre></div></div>
+<p>Then regenerate <code>bevy.ts</code> (see <a href="#typing">Typing</a>) so <code>&lt;cube&gt;</code> type-checks.
+The complete element, with animated attributes and pointer events, is
+<a href="https://github.com/tulustul/bevy-react/blob/main/examples/demos/cube/mod.rs"><code>examples/demos/cube</code></a>.</p>
+<h2 id="the-element"><a class="anchor" href="#the-element" aria-hidden="true">#</a>The element</h2>
+<p><code>Element</code> is a plain struct. Start from <code>Element::new(&quot;name&quot;)</code> (a plain
+styled node with every common prop) and override fields with struct-update
+syntax:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>name</code></td>
+<td>The JSX intrinsic name</td>
+</tr>
+<tr>
+<td><code>flags</code></td>
+<td>What the entity is (see <a href="#flags">Flags</a>); default <code>ElementFlags::NODE</code></td>
+</tr>
+<tr>
+<td><code>attrs</code></td>
+<td>The element&#39;s attributes, at most 64</td>
+</tr>
+<tr>
+<td><code>required</code></td>
+<td>Attributes the generated typing marks required (must be listed in <code>attrs</code>)</td>
+</tr>
+<tr>
+<td><code>common</code></td>
+<td>Which shared prop groups apply (see below); default <code>Common::ALL</code></td>
+</tr>
+<tr>
+<td><code>writers</code></td>
+<td>The element&#39;s own writers, in apply order</td>
+</tr>
+<tr>
+<td><code>suppress</code></td>
+<td>Global style writers this element opts out of</td>
+</tr>
+<tr>
+<td><code>events</code></td>
+<td>The element&#39;s own events</td>
+</tr>
+<tr>
+<td><code>default_style</code></td>
+<td><code>fn() -&gt; Style</code>: the style the user&#39;s <code>style</code> overlays</td>
+</tr>
+<tr>
+<td><code>spawn</code></td>
+<td>The spawn hook; <code>None</code> spawns the entity with nothing extra</td>
+</tr>
+<tr>
+<td><code>ts_ref</code></td>
+<td>The TypeScript type a <code>ref</code> resolves to (only for runtime-provided handles)</td>
+</tr>
+</tbody></table></div>
+<p>The props every element shares are not attributes. <code>common</code> picks the groups
+that apply; a shared prop outside them is ignored with a <code>propIgnored</code>
+warning:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Group</th>
+<th>Props</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>Common::IDENTITY</code></td>
+<td><code>name</code>, <code>sharedTag</code></td>
+</tr>
+<tr>
+<td><code>Common::VARIANTS</code></td>
+<td><code>hoverStyle</code>, <code>pressStyle</code>, <code>focusStyle</code></td>
+</tr>
+<tr>
+<td><code>Common::POINTER</code></td>
+<td><code>onClick</code>, <code>onPointerEnter</code>, <code>onPointerLeave</code>, …</td>
+</tr>
+<tr>
+<td><code>Common::SCROLL</code></td>
+<td><code>onScroll</code>, <code>scrollTop</code>, <code>scrollLeft</code>, <code>scrollStep</code></td>
+</tr>
+<tr>
+<td><code>Common::WHEEL</code></td>
+<td><code>onWheel</code></td>
+</tr>
+</tbody></table></div>
+<p>Combine groups with <code>.with(..)</code>. <code>default_style</code> builds a <code>Style</code> with
+<code>Style::set</code> and the core property statics in <code>bevy_react::style::props</code>
+(the built-in <code>&lt;button&gt;</code> sets <code>FOCUS_POLICY</code> to block). Unsetting a property
+in JSX falls back to the default style&#39;s value.</p>
+<h2 id="attributes"><a class="anchor" href="#attributes" aria-hidden="true">#</a>Attributes</h2>
+<p>An attribute is a <code>static Attribute&lt;T&gt;</code>. The static is the declaration and
+also the typed key you read the value with: <code>ctx.attr(&amp;SIZE)</code> in a writer,
+<code>ctx.props.attrs.get(&amp;SIZE)</code> in the spawn hook. Declare attributes <code>static</code>,
+never <code>const</code>: they are identified by address.</p>
+<ul>
+<li><code>Attribute::new(name)</code> decodes through <code>T</code>&#39;s serde <code>Deserialize</code> and types
+the prop as <code>T</code>&#39;s ts-rs type, so <code>T</code> derives both (<code>serde</code> and <code>ts-rs</code> 10,
+the version bevy-react uses). <code>Attribute::with_codec(name, codec)</code> takes
+the same codecs as a style property (see
+<a href="../../extending/custom-styles/#codecs">codecs</a>).</li>
+<li>Attributes are per element. Two elements may declare the same name with
+different types, or share one static. A prop the element doesn&#39;t declare is
+dropped with an <code>unknownProp</code> warning.</li>
+<li>Names reserved for shared props, <code>children</code>, <code>key</code>, <code>ref</code>, and anything
+shaped like a handler (<code>on</code> followed by an uppercase letter) can&#39;t be
+attributes; registering one panics.</li>
+<li>Updates are deltas: a writer runs when an attribute it reads changes, and
+sees the merged value. A removed prop reads as <code>None</code>.</li>
+<li><code>event: true</code> makes an <strong>act-now</strong> attribute: a command, not state. It is
+never retained, a writer sees it only on the update that carries it
+(<code>ctx.event(&amp;ATTR)</code>), and removing it from JSX does nothing. <code>&lt;canvas&gt;</code>&#39;s
+<code>draw</code> is one.</li>
+<li><code>invalidate: Invalidation::PAINT</code> marks a change as repainting the node, so
+an enclosing cached <a href="../../styling/layers/">layer</a> re-captures. Set it on
+any attribute that changes what a UI element paints.</li>
+<li><code>typed: false</code> keeps a wire-only attribute out of the generated JSX types.</li>
+</ul>
+<p>A value that fails to deserialize fails the whole commit: the React commit
+throws a <code>TypeError</code> and Bevy never receives its ops. The generated types
+are the guard; for lenient decoding, write a custom codec that reports the
+value and returns <code>Ok(None)</code>.</p>
+<h2 id="spawn-hook-and-writers"><a class="anchor" href="#spawn-hook-and-writers" aria-hidden="true">#</a>Spawn hook and writers</h2>
+<p>The <strong>spawn hook</strong> creates the entity with the components it is born with.
+Always spawn through <code>ctx.spawn(bundle)</code>: it adds the bridge identity and,
+for an element with a box, the style components in one bundle. <code>SpawnCtx</code>
+also carries <code>commands</code>, <code>images</code>, <code>assets</code>, the create op&#39;s <code>props</code>, the
+effective <code>style</code>, <code>kind</code> and <code>id</code>; <code>ctx.blank_image()</code> makes a placeholder
+texture for an element that paints its own image.</p>
+<p><strong>Writers</strong> do everything prop-derived. A <code>Writer</code> declares what it reads
+and what it writes:</p>
+<ul>
+<li><code>reads</code> lists style properties and <code>attrs</code> lists attributes. A change to
+any of them re-runs the writer. On a freshly spawned entity
+(<code>ctx.fresh</code>), it runs only if one of them is set.</li>
+<li><code>apply</code> gets the full merged values, never a delta: an absent value means
+remove or reset.</li>
+<li><code>writes</code> lists the components it owns (<code>owns::&lt;C&gt;</code>). Two writers of one
+element writing the same component panics at registration. An element
+writer that writes a component a global style writer also writes takes
+over that component on this element; <code>suppress</code> opts out of a global
+writer explicitly, and a style property only suppressed writers read is
+ignored with a <code>styleIgnored</code> warning.</li>
+<li>Compare before you write (queue an entity command that inserts only on a
+real change) when your systems react to <code>Changed&lt;C&gt;</code>.</li>
+</ul>
+<p>There is no separate update function: creates and updates both go through
+the writers. React&#39;s own mount, update and unmount of the element are the
+only lifecycle; unmounting despawns the entity and its Bevy children.</p>
+<h2 id="flags"><a class="anchor" href="#flags" aria-hidden="true">#</a>Flags</h2>
+<p><code>ElementFlags</code> tells the core&#39;s shared systems what the entity is:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Constant</th>
+<th>Entity</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>NODE</code></td>
+<td>A styled UI node (the default)</td>
+</tr>
+<tr>
+<td><code>OWNS_IMAGE</code></td>
+<td>A styled node whose <code>ImageNode</code> the element owns (<code>backgroundImage</code> leaves it alone)</td>
+</tr>
+<tr>
+<td><code>NODE_LESS</code></td>
+<td>No <code>Node</code>: no <code>style</code>, no layout box, never a composited layer</td>
+</tr>
+<tr>
+<td><code>DETACHED_ROOT</code></td>
+<td>A styled node that becomes its own UI root, like <code>&lt;root&gt;</code> and <code>&lt;surface&gt;</code></td>
+</tr>
+</tbody></table></div>
+<p><code>detached: true</code> means the core never attaches the entity in the Bevy
+hierarchy: it records the React parent, so unmounting an ancestor still
+despawns it, and leaves the Bevy parent to you. A non-UI entity such as a
+mesh needs it, since a UI node is no transform parent for a mesh.
+<code>pick_ignore: true</code> makes the entity itself never a picking target.</p>
+<h2 id="element-events"><a class="anchor" href="#element-events" aria-hidden="true">#</a>Element events</h2>
+<p>An element can send its own events to React. Declare a
+<code>static ElementEvent&lt;T&gt;</code>, list it in <code>events</code>, and send it with the
+<code>ElementEvents</code> system param. The handler prop is <code>on</code> plus the capitalized
+name, and its argument is the payload:</p>
+<div class="tabs"><div class="tab-panel" data-lang="tsx"><p class="tab-label">TSX</p><pre><code class="language-tsx"><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>cube</span> <span class="token attr-name">onLanded</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">(</span><span class="token punctuation">{</span> speed <span class="token punctuation">}</span><span class="token punctuation">)</span> <span class="token operator">=&gt;</span> <span class="token function">setLastSpeed</span><span class="token punctuation">(</span>speed<span class="token punctuation">)</span><span class="token punctuation">}</span></span> <span class="token punctuation">/&gt;</span></span></code></pre></div><div class="tab-panel" data-lang="rust"><p class="tab-label">Rust</p><pre><code class="language-rust"><span class="token keyword">use</span> <span class="token namespace">bevy_react<span class="token punctuation">::</span>element<span class="token punctuation">::</span></span><span class="token punctuation">{</span><span class="token class-name">ElementEvent</span><span class="token punctuation">,</span> <span class="token class-name">ElementEvents</span><span class="token punctuation">}</span><span class="token punctuation">;</span>
+
+<span class="token attribute attr-name">#[derive(serde::Serialize, ts_rs::TS)]</span>
+<span class="token keyword">struct</span> <span class="token type-definition class-name">Landed</span> <span class="token punctuation">{</span>
+    speed<span class="token punctuation">:</span> <span class="token keyword">f32</span><span class="token punctuation">,</span>
+<span class="token punctuation">}</span>
+
+<span class="token keyword">static</span> <span class="token constant">LANDED</span><span class="token punctuation">:</span> <span class="token class-name">ElementEvent</span><span class="token operator">&lt;</span><span class="token class-name">Landed</span><span class="token operator">&gt;</span> <span class="token operator">=</span> <span class="token class-name">ElementEvent</span><span class="token punctuation">::</span><span class="token function">new</span><span class="token punctuation">(</span><span class="token string">&quot;landed&quot;</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token comment">// In the element: `events: &amp;[&amp;LANDED],`</span>
+
+<span class="token keyword">fn</span> <span class="token function-definition function">report_landings</span><span class="token punctuation">(</span>events<span class="token punctuation">:</span> <span class="token class-name">ElementEvents</span><span class="token punctuation">,</span> cubes<span class="token punctuation">:</span> <span class="token class-name">Query</span><span class="token operator">&lt;</span><span class="token punctuation">(</span><span class="token class-name">Entity</span><span class="token punctuation">,</span> <span class="token operator">&amp;</span><span class="token class-name">Fall</span><span class="token punctuation">)</span><span class="token operator">&gt;</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token keyword">for</span> <span class="token punctuation">(</span>entity<span class="token punctuation">,</span> fall<span class="token punctuation">)</span> <span class="token keyword">in</span> <span class="token operator">&amp;</span>cubes <span class="token punctuation">{</span>
+        <span class="token keyword">if</span> fall<span class="token punctuation">.</span>just_landed <span class="token punctuation">{</span>
+            events<span class="token punctuation">.</span><span class="token function">send</span><span class="token punctuation">(</span>entity<span class="token punctuation">,</span> <span class="token operator">&amp;</span><span class="token constant">LANDED</span><span class="token punctuation">,</span> <span class="token operator">&amp;</span><span class="token class-name">Landed</span> <span class="token punctuation">{</span> speed<span class="token punctuation">:</span> fall<span class="token punctuation">.</span>speed <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span></code></pre></div></div>
+<ul>
+<li><code>send</code> delivers only to nodes that have a handler, and returns whether it
+sent. <code>ElementEvent::new(..).unconditional()</code> sends regardless, for an
+event a runtime helper consumes itself.</li>
+<li>A <code>()</code> payload makes a handler with no argument.</li>
+<li>An event name whose handler prop collides with a shared prop (<code>onClick</code>)
+panics at registration.</li>
+</ul>
+<h2 id="animated-attributes"><a class="anchor" href="#animated-attributes" aria-hidden="true">#</a>Animated attributes</h2>
+<p>An attribute can accept an inline <code>{ animated }</code> binding to a shared value,
+driven every frame on the Bevy side without re-rendering React. Give it an
+<code>Animatable&lt;T&gt;</code> value and an <code>AttrBinding</code> naming a domain:</p>
+<div class="tabs"><div class="tab-panel" data-lang="tsx"><p class="tab-label">TSX</p><pre><code class="language-tsx"><span class="token keyword">function</span> <span class="token function">PulsingCube</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+  <span class="token keyword">const</span> t <span class="token operator">=</span> <span class="token function">useSharedValue</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token function">useEffect</span><span class="token punctuation">(</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">=&gt;</span> <span class="token punctuation">{</span>
+    t<span class="token punctuation">.</span>value <span class="token operator">=</span> <span class="token function">withRepeat</span><span class="token punctuation">(</span><span class="token function">withTiming</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">,</span> <span class="token punctuation">{</span> reverse<span class="token operator">:</span> <span class="token boolean">true</span> <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token punctuation">}</span><span class="token punctuation">,</span> <span class="token punctuation">[</span>t<span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token keyword">return</span> <span class="token punctuation">(</span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>cube</span>
+      <span class="token attr-name">size</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span> animated<span class="token operator">:</span> <span class="token function">interpolate</span><span class="token punctuation">(</span>t<span class="token punctuation">,</span> <span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">]</span><span class="token punctuation">,</span> <span class="token punctuation">[</span><span class="token number">0.6</span><span class="token punctuation">,</span> <span class="token number">1.2</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">,</span> seed<span class="token operator">:</span> <span class="token number">0.6</span> <span class="token punctuation">}</span><span class="token punctuation">}</span></span>
+      <span class="token attr-name">color</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span>
+        animated<span class="token operator">:</span> <span class="token function">interpolateColor</span><span class="token punctuation">(</span>t<span class="token punctuation">,</span> <span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">]</span><span class="token punctuation">,</span> <span class="token punctuation">[</span><span class="token string">&quot;#7aa2f7&quot;</span><span class="token punctuation">,</span> <span class="token string">&quot;#f7768e&quot;</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+      <span class="token punctuation">}</span><span class="token punctuation">}</span></span>
+    <span class="token punctuation">/&gt;</span></span>
+  <span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span></code></pre></div><div class="tab-panel" data-lang="rust"><p class="tab-label">Rust</p><pre><code class="language-rust"><span class="token keyword">use</span> <span class="token namespace">bevy_react<span class="token punctuation">::</span>animations<span class="token punctuation">::</span></span><span class="token class-name">AnimationSet</span><span class="token punctuation">;</span>
+<span class="token keyword">use</span> <span class="token namespace">bevy_react<span class="token punctuation">::</span>element<span class="token punctuation">::</span></span><span class="token punctuation">{</span><span class="token class-name">AttrBinding</span><span class="token punctuation">,</span> animatable_binding<span class="token punctuation">}</span><span class="token punctuation">;</span>
+<span class="token keyword">use</span> <span class="token namespace">bevy_react<span class="token punctuation">::</span>ext<span class="token punctuation">::</span></span><span class="token class-name">DrivenExtValues</span><span class="token punctuation">;</span>
+<span class="token keyword">use</span> <span class="token namespace">bevy_react<span class="token punctuation">::</span>protocol<span class="token punctuation">::</span>animatable<span class="token punctuation">::</span></span><span class="token class-name">Animatable</span><span class="token punctuation">;</span>
+<span class="token keyword">use</span> <span class="token namespace">bevy_react<span class="token punctuation">::</span>style<span class="token punctuation">::</span></span><span class="token class-name">Codec</span><span class="token punctuation">;</span>
+
+<span class="token keyword">static</span> <span class="token constant">SIZE</span><span class="token punctuation">:</span> <span class="token class-name">Attribute</span><span class="token operator">&lt;</span><span class="token class-name">Animatable</span><span class="token operator">&lt;</span><span class="token keyword">f32</span><span class="token operator">&gt;&gt;</span> <span class="token operator">=</span> <span class="token class-name">Attribute</span> <span class="token punctuation">{</span>
+    animated<span class="token punctuation">:</span> <span class="token class-name">Some</span><span class="token punctuation">(</span><span class="token class-name">AttrBinding</span> <span class="token punctuation">{</span>
+        domain<span class="token punctuation">:</span> <span class="token string">&quot;cube&quot;</span><span class="token punctuation">,</span>
+        binding<span class="token punctuation">:</span> <span class="token function">animatable_binding</span><span class="token punctuation">::</span><span class="token operator">&lt;</span><span class="token keyword">f32</span><span class="token operator">&gt;</span><span class="token punctuation">,</span>
+    <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+    <span class="token punctuation">..</span><span class="token class-name">Attribute</span><span class="token punctuation">::</span><span class="token function">with_codec</span><span class="token punctuation">(</span><span class="token string">&quot;size&quot;</span><span class="token punctuation">,</span> <span class="token class-name">Codec</span><span class="token punctuation">::</span><span class="token function">serde_as</span><span class="token punctuation">(</span><span class="token string">&quot;Animatable&lt;number&gt;&quot;</span><span class="token punctuation">)</span><span class="token punctuation">)</span>
+<span class="token punctuation">}</span><span class="token punctuation">;</span>
+
+<span class="token comment">// Ordered `.after(AnimationSet::Apply)`.</span>
+<span class="token keyword">fn</span> <span class="token function-definition function">drive_sizes</span><span class="token punctuation">(</span>
+    <span class="token keyword">mut</span> cubes<span class="token punctuation">:</span> <span class="token class-name">Query</span><span class="token operator">&lt;</span>
+        <span class="token punctuation">(</span><span class="token operator">&amp;</span><span class="token class-name">DrivenExtValues</span><span class="token punctuation">,</span> <span class="token operator">&amp;</span><span class="token keyword">mut</span> <span class="token class-name">Transform</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+        <span class="token class-name">Changed</span><span class="token operator">&lt;</span><span class="token class-name">DrivenExtValues</span><span class="token operator">&gt;</span><span class="token punctuation">,</span>
+    <span class="token operator">&gt;</span><span class="token punctuation">,</span>
+<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token keyword">for</span> <span class="token punctuation">(</span>driven<span class="token punctuation">,</span> <span class="token keyword">mut</span> transform<span class="token punctuation">)</span> <span class="token keyword">in</span> <span class="token operator">&amp;</span><span class="token keyword">mut</span> cubes <span class="token punctuation">{</span>
+        <span class="token keyword">if</span> <span class="token keyword">let</span> <span class="token class-name">Some</span><span class="token punctuation">(</span>size<span class="token punctuation">)</span> <span class="token operator">=</span> driven<span class="token punctuation">.</span><span class="token function">get</span><span class="token punctuation">(</span><span class="token string">&quot;cube&quot;</span><span class="token punctuation">,</span> <span class="token string">&quot;size&quot;</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            transform<span class="token punctuation">.</span>scale <span class="token operator">=</span> <span class="token class-name">Vec3</span><span class="token punctuation">::</span><span class="token function">splat</span><span class="token punctuation">(</span>size<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span></code></pre></div></div>
+<ul>
+<li>The engine evaluates each binding and publishes the result into the
+entity&#39;s <code>DrivenExtValues</code> under <code>(domain, attribute name)</code>, only when the
+value changes. Read it after <code>AnimationSet::Apply</code> to apply it the same
+frame: <code>get</code> returns a number, <code>get_color</code> an <code>Srgba</code> (from an
+<code>interpolateColor</code> binding), <code>value</code> either.</li>
+<li>The binding picks the kind, so an attribute of any type can animate.
+Checking that the kind fits the attribute is your system&#39;s job; the demo
+cube reports a mismatch as a <code>styleBinding</code> warning.</li>
+<li>While bound, <code>Animatable::value()</code> is <code>None</code> and <code>seed()</code> is the wrapper&#39;s
+<code>seed</code>: use it until the first value is published. A binding to a missing
+shared value publishes nothing.</li>
+<li>Attribute changes don&#39;t ease on their own: there is no <code>transition</code> for
+attributes unless your element implements one.</li>
+</ul>
+<h2 id="pointer-events"><a class="anchor" href="#pointer-events" aria-hidden="true">#</a>Pointer events</h2>
+<p>A styled element takes the pointer handlers like <code>&lt;node&gt;</code>. A node-less
+element needs help from your code:</p>
+<ul>
+<li><code>onClick</code> fires for any picking hit on the entity, so bring a picking
+backend that sees it (Bevy&#39;s <code>MeshPickingPlugin</code> for a mesh).</li>
+<li><code>onPointerEnter</code> and <code>onPointerLeave</code> follow the entity&#39;s <code>Interaction</code>.
+The core inserts one on a node-less element while it has pointer handlers,
+but <code>bevy_ui</code> only updates it for UI nodes: drive it yourself in a system
+in <code>InteractionSyncSet</code>, as the demo cube does from the hover map.</li>
+<li>The drag handlers (<code>onPointerDown</code>, <code>onPointerMove</code>, <code>onPointerUp</code>) are
+only delivered to UI nodes; a node-less element never receives them.</li>
+</ul>
+<h2 id="system-ordering"><a class="anchor" href="#system-ordering" aria-hidden="true">#</a>System ordering</h2>
+<p>Order your element&#39;s systems by the public sets, never by core function
+names:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Set</th>
+<th>Schedule</th>
+<th>Use it to</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>ReactApplySet</code></td>
+<td><code>Update</code></td>
+<td>Run <code>.after</code> it to see this frame&#39;s mounts and attribute changes</td>
+</tr>
+<tr>
+<td><code>AnimationSet::Apply</code></td>
+<td><code>Update</code></td>
+<td>Run <code>.after</code> it to read this frame&#39;s <code>DrivenExtValues</code></td>
+</tr>
+<tr>
+<td><code>InteractionSyncSet</code></td>
+<td><code>Update</code></td>
+<td>Write <code>Interaction</code> for entities <code>bevy_ui</code> doesn&#39;t track</td>
+</tr>
+<tr>
+<td><code>ElementOverrideSet</code></td>
+<td><code>Update</code></td>
+<td>Override this frame&#39;s animated and eased values</td>
+</tr>
+<tr>
+<td><code>ElementRasterSet</code></td>
+<td><code>Update</code></td>
+<td>Repaint an element-owned texture from this frame&#39;s final state</td>
+</tr>
+<tr>
+<td><code>PickRefineSet</code></td>
+<td><code>PreUpdate</code></td>
+<td>Refine a node&#39;s picking hit into a sub-element hit</td>
+</tr>
+<tr>
+<td><code>MeasureStampSet</code></td>
+<td><code>PostUpdate</code></td>
+<td>Re-stamp an intrinsic <code>ContentSize</code> measure before layout</td>
+</tr>
+</tbody></table></div>
+<p>The sets other than <code>ReactApplySet</code> (crate root) and <code>AnimationSet</code>
+(<code>bevy_react::animations</code>) live in <code>bevy_react::ext</code>.</p>
+<h2 id="typing"><a class="anchor" href="#typing" aria-hidden="true">#</a>Typing</h2>
+<p>The TypeScript exporter generates a props interface per registered element
+(<code>&lt;cube&gt;</code> gets <code>BevyCubeProps</code>): the shared prop groups, <code>style</code> for an
+element with a box, the typed attributes, the event handlers, and
+<code>children</code>. Your <code>bevy.ts</code> adds them to JSX by augmenting the package&#39;s
+<code>BevyIntrinsicElements</code> interface. Type names in a codec&#39;s TS literal that no
+ts-rs type declares are imported from the <code>bevy-react</code> package, so use its
+exported types there (<code>Animatable&lt;number&gt;</code>, <code>Color</code>).</p>
+<p>Register the element on both paths: in the running app and in the
+<code>--export-bindings</code> exporter. A shared <code>register_bindings(app)</code> function
+called from both keeps them in step. Then regenerate <code>bevy.ts</code>. See
+<a href="../../tooling/ts-codegen/">TypeScript codegen</a>.</p>
+<p>A kind no plugin registered mounts as a plain <code>&lt;node&gt;</code> so its children still
+attach, and its props are dropped. Only the kinds of bevy-react&#39;s own
+optional features (<code>svg</code>, <code>canvas</code>, <code>portal</code>, …) report a <code>featureMissing</code>
+warning; an unregistered app element mounts silently. A current <code>bevy.ts</code>
+catches the mistake at type-check time.</p>
+<h2 id="beyond-ui"><a class="anchor" href="#beyond-ui" aria-hidden="true">#</a>Beyond UI</h2>
+<p>A node-less, detached element is how bevy-react drives entities that aren&#39;t
+UI at all — meshes, lights, audio emitters. Such an element gets the
+React-facing half of the system:</p>
+<ul>
+<li>Mounting, updating and unmounting with React, keyed lists included. It
+despawns when its React ancestor unmounts.</li>
+<li>Attributes decoded from props, with writers re-run only for what changed.</li>
+<li><code>{ animated }</code> attributes, driven every frame in Bevy (see
+<a href="#animated-attributes">Animated attributes</a>).</li>
+<li>Element events with typed payloads.</li>
+<li><code>name</code> for lookups from your systems, when the element takes the
+identity props (see <a href="../../communication/named-nodes/">Named nodes</a>).</li>
+<li><code>onClick</code> through any picking backend that hits the entity, and
+<code>onPointerEnter</code>/<code>onPointerLeave</code> once you drive its <code>Interaction</code> (see
+<a href="#pointer-events">Pointer events</a>).</li>
+<li>Generated JSX typing.</li>
+</ul>
+<p>Everything built on <code>bevy_ui</code> stays with UI nodes:</p>
+<ul>
+<li>No <code>style</code>, so no layout, no hover, press or focus styles, no
+<a href="../../animations/style-transitions/">style transitions</a>, and no
+transforms, opacity, filters or <a href="../../styling/layers/">layers</a>. The entity
+is positioned and shaped by its attributes and your systems.</li>
+<li>No picking by default: add a backend (<code>MeshPickingPlugin</code> for meshes) and
+sync <code>Interaction</code> yourself.</li>
+<li>No drag events (<code>onPointerDown</code>/<code>Move</code>/<code>Up</code>).</li>
+<li>No <a href="../../animations/shared-elements/">shared elements</a>: those need a
+<code>transition</code> style.</li>
+<li>No easing of static attribute changes. Use <code>{ animated }</code> bindings, or
+build a channel on the core&#39;s <code>transition::Channel</code> (the <code>&lt;svg&gt;</code> shapes&#39;
+<code>transition</code> prop is made that way).</li>
+<li>The Bevy parent is yours to choose; the core never attaches a detached
+entity in the hierarchy.</li>
+</ul>
+<h2 id="limits"><a class="anchor" href="#limits" aria-hidden="true">#</a>Limits</h2>
+<ul>
+<li>At most 64 attributes, 64 writers and 64 events per element.</li>
+<li>Registering the same name twice with a different declaration panics.</li>
+<li>Attributes take static values or <code>{ animated }</code> bindings only; they have
+no hover, press or focus variants (those are style).</li>
+<li>No per-frame callback: React re-renders or a binding drive changes.
+Continuous behavior belongs in your own systems.</li>
+<li>A node-less element has no <code>style</code>, layout box or composited layer.</li>
+</ul>
+<p>See the <a href="../../reference/elements/">element reference</a> for the built-in
+elements, which are declared the same way.</p>
+
+</article>
+<footer class="page-links"><a href="../../demo/?page=custom-elements">Open live demo</a>
+<a href="https://github.com/tulustul/bevy-react/blob/v0.7.0/examples/demos/ui/src/demos/extending/CustomElementsDemo.tsx">Demo source</a>
+<a href="https://github.com/tulustul/bevy-react/edit/main/docs/guide/extending/custom-elements.md">Edit this page</a></footer>
+</main>
+</div>
+<footer class="site-footer">
+<p>bevy-react is dual-licensed under MIT or Apache-2.0. <a href="https://github.com/tulustul/bevy-react">Source on GitHub</a>.</p>
+</footer>
+</body>
+</html>

@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Image rendering · bevy-react</title>
+<meta name="description" content="Choose how an image or background image is resampled when drawn at another size - smooth mipmapped minification or crisp pixel art.">
+<link rel="canonical" href="https://tulustul.github.io/bevy-react/styling/image-rendering/">
+<link rel="alternate" type="text/markdown" href="../../styling/image-rendering.md">
+<meta property="og:title" content="Image rendering · bevy-react">
+<meta property="og:description" content="Choose how an image or background image is resampled when drawn at another size - smooth mipmapped minification or crisp pixel art.">
+<link rel="icon" href="../../logo.png">
+<link rel="stylesheet" href="../../style.css">
+<script src="../../docs.js" defer></script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="site-header">
+<a class="brand" href="../../"><img src="../../logo.png" alt="" width="74" height="74"> bevy-react</a>
+<span class="version">v0.7.0</span>
+<nav class="site-links" aria-label="Project">
+<a href="../../demo/">Live demo</a>
+<a href="https://github.com/tulustul/bevy-react">GitHub</a>
+<a href="https://docs.rs/bevy-react">docs.rs</a>
+<a href="https://www.npmjs.com/package/bevy-react">npm</a>
+</nav>
+</header>
+<div class="layout">
+<nav class="sidebar" aria-label="Documentation">
+<details class="nav-menu" open>
+<summary>Menu</summary>
+<ul><li><a href="../../">Introduction</a></li><li><a href="../../getting-started/">Getting started</a></li><li><a href="../../how-it-works/">How it works</a></li><li class="nav-section"><span>Elements</span><ul><li><a href="../../elements/node/">&lt;node&gt;</a></li><li><a href="../../elements/button/">&lt;button&gt;</a></li><li><a href="../../elements/text/">&lt;text&gt;</a></li><li><a href="../../elements/editable-text/">&lt;editableText&gt;</a></li><li><a href="../../elements/image/">&lt;image&gt;</a></li><li><a href="../../elements/canvas/">&lt;canvas&gt;</a></li><li><a href="../../elements/svg/">&lt;svg&gt;</a></li><li><a href="../../elements/portal/">&lt;portal&gt;</a></li><li><a href="../../elements/surface/">&lt;surface&gt;</a></li><li><a href="../../elements/root/">&lt;root&gt;</a></li><li><a href="../../elements/anchor/">&lt;anchor&gt;</a></li></ul></li><li class="nav-section"><span>Layout</span><ul><li><a href="../../layout/flexbox/">Flexbox</a></li><li><a href="../../layout/grid/">Grid</a></li><li><a href="../../layout/positioning/">Positioning</a></li></ul></li><li class="nav-section"><span>Styling</span><ul><li><a href="../../styling/units/">Units</a></li><li><a href="../../styling/colors/">Colors</a></li><li><a href="../../styling/borders/">Borders</a></li><li><a href="../../styling/spacing/">Spacing</a></li><li><a href="../../styling/sizing/">Sizing</a></li><li><a href="../../styling/layout-rounding/">Layout rounding</a></li><li><a href="../../styling/overflow/">Overflow</a></li><li><a href="../../styling/transforms/">Transforms</a></li><li><a href="../../styling/3d-transforms/">3D transforms</a></li><li><a href="../../styling/shadows/">Shadows</a></li><li><a href="../../styling/filters/">Filters</a></li><li><a href="../../styling/backdrop-filters/">Backdrop filters</a></li><li><a href="../../styling/morph-filters/">Morph filters</a></li><li><a href="../../styling/gradients/">Gradients</a></li><li><a href="../../styling/background-images/">Background images</a></li><li><a href="../../styling/image-rendering/" aria-current="page">Image rendering</a></li><li><a href="../../styling/opacity/">Opacity</a></li><li><a href="../../styling/z-index/">Z-index</a></li><li><a href="../../styling/focus-policy/">Focus policy</a></li><li><a href="../../styling/cursors/">Cursors</a></li><li><a href="../../styling/layers/">Layers</a></li></ul></li><li class="nav-section"><span>Animations</span><ul><li><a href="../../animations/style-transitions/">Style transitions</a></li><li><a href="../../animations/animated-values/">Animated values</a></li><li><a href="../../animations/interpolation/">Interpolation</a></li><li><a href="../../animations/shared-elements/">Shared elements</a></li></ul></li><li class="nav-section"><span>Communication</span><ul><li><a href="../../communication/react-to-bevy/">React to Bevy</a></li><li><a href="../../communication/bevy-to-react/">Bevy to React</a></li><li><a href="../../communication/request-response/">Request / response</a></li><li><a href="../../communication/named-nodes/">Named nodes</a></li></ul></li><li class="nav-section"><span>Events</span><ul><li><a href="../../events/mouse/">Mouse</a></li><li><a href="../../events/keyboard/">Keyboard</a></li><li><a href="../../events/gamepad/">Gamepad</a></li><li><a href="../../events/window/">Window</a></li></ul></li><li class="nav-section"><span>Extending</span><ul><li><a href="../../extending/custom-elements/">Custom elements</a></li><li><a href="../../extending/custom-styles/">Custom styles</a></li><li><a href="../../extending/custom-filters/">Custom filters</a></li></ul></li><li class="nav-section"><span>Tooling</span><ul><li><a href="../../tooling/devtools/">Devtools</a></li><li><a href="../../tooling/hot-reload/">Hot reload</a></li><li><a href="../../tooling/web/">Web builds</a></li><li><a href="../../tooling/ts-codegen/">TypeScript codegen</a></li></ul></li><li class="nav-section"><span>Reference</span><ul><li><a href="../../reference/style-properties/">Style properties</a></li><li><a href="../../reference/elements/">Elements</a></li><li><a href="../../reference/filters/">Filters</a></li></ul></li><li><a href="../../performance/">Performance</a></li></ul>
+</details>
+</nav>
+<main id="main">
+<article>
+<h1 id="image-rendering">Image rendering</h1>
+<p>The <code>imageRendering</code> style picks how a node&#39;s raster image is resampled when
+it is drawn at a size other than its own. Bevy loads an image with a single
+mip level, so a large image drawn small aliases and shimmers; <code>&quot;trilinear&quot;</code>
+fixes that, and <code>&quot;nearest&quot;</code> keeps pixel art crisp when scaled up.</p>
+<h2 id="usage"><a class="anchor" href="#usage" aria-hidden="true">#</a>Usage</h2>
+<pre><code class="language-tsx"><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>image</span>
+  <span class="token attr-name">src</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">&quot;</span>images/parrot.png<span class="token punctuation">&quot;</span></span>
+  <span class="token attr-name">style</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span> width<span class="token operator">:</span> <span class="token number">64</span><span class="token punctuation">,</span> imageRendering<span class="token operator">:</span> <span class="token string">&quot;trilinear&quot;</span> <span class="token punctuation">}</span><span class="token punctuation">}</span></span>
+<span class="token punctuation">/&gt;</span></span></code></pre><h2 id="modes"><a class="anchor" href="#modes" aria-hidden="true">#</a>Modes</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Value</th>
+<th>Sampling</th>
+<th>Use for</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>&quot;auto&quot;</code></td>
+<td>The engine default, unchanged (default)</td>
+<td>Images drawn near their own size</td>
+</tr>
+<tr>
+<td><code>&quot;bilinear&quot;</code></td>
+<td>Smooth, from the full-size image only</td>
+<td>Moderate scaling</td>
+</tr>
+<tr>
+<td><code>&quot;trilinear&quot;</code></td>
+<td>Smooth, across a generated mip chain</td>
+<td>Large images drawn small</td>
+</tr>
+<tr>
+<td><code>&quot;nearest&quot;</code></td>
+<td>Nearest texel, from the full-size image only</td>
+<td>Pixel art, scaled up</td>
+</tr>
+</tbody></table></div>
+<ul>
+<li><code>&quot;auto&quot;</code> never touches the image: it renders with the sampler your app
+configured in <code>ImagePlugin</code> (bilinear with Bevy&#39;s defaults, nearest under
+<code>ImagePlugin::default_nearest()</code>).</li>
+<li>An unknown value reports an <code>imageRendering</code> warning and acts as
+<code>&quot;auto&quot;</code>.</li>
+</ul>
+<h2 id="what-it-applies-to"><a class="anchor" href="#what-it-applies-to" aria-hidden="true">#</a>What it applies to</h2>
+<ul>
+<li>The style sets the mode of the node&#39;s own raster image: an <code>&lt;image&gt;</code> with
+a raster <code>src</code>, or the node&#39;s <a href="../../styling/background-images/"><code>backgroundImage</code></a>
+with an asset-path source. On a node with neither, it has no effect.</li>
+<li>It is per node and not inherited: set it on each image.</li>
+<li>The source asset is never modified. A node with an explicit mode draws a
+copy of the image with that sampling; nodes asking for the same image and
+mode share one copy, and it is freed with its last user. Two nodes can show
+one file in two modes, and a Bevy <code>Sprite</code> using the same file is
+unaffected.</li>
+<li>No copy is made when the image already samples the requested way (for
+example <code>&quot;bilinear&quot;</code> on a plain PNG in an app with the default sampler).</li>
+<li>When the file changes on disk, the copy is rebuilt.</li>
+</ul>
+<h2 id="trilinear"><a class="anchor" href="#trilinear" aria-hidden="true">#</a>Trilinear</h2>
+<p><code>&quot;trilinear&quot;</code> builds a chain of half-size levels for the image on the CPU,
+in the background. Until it is ready, the node keeps drawing the original
+image. The levels are averaged in linear light and weighted by alpha, so
+transparent edges don&#39;t darken. With its levels, the copy takes about 1.33
+times the image&#39;s memory.</p>
+<p>It needs an image in an 8-bit RGBA format (<code>Rgba8Unorm</code> or
+<code>Rgba8UnormSrgb</code>), which is how most PNG and JPEG files load; other formats
+are refused with a warning.</p>
+<h2 id="refused-sources"><a class="anchor" href="#refused-sources" aria-hidden="true">#</a>Refused sources</h2>
+<p>These sources are drawn as they are, and an explicit mode on them reports one
+<code>imageRendering</code> warning:</p>
+<ul>
+<li>live textures: <code>&lt;canvas&gt;</code>, <code>&lt;portal&gt;</code>, an <code>&lt;image&gt;</code> showing an SVG file,
+a <code>backgroundImage</code> with a <code>{ texture }</code> source, and any render target;</li>
+<li>images loaded without a CPU-side copy of their pixels (render-world-only
+asset usage);</li>
+<li><code>&quot;trilinear&quot;</code> on an image format other than 8-bit RGBA.</li>
+</ul>
+<h2 id="limits"><a class="anchor" href="#limits" aria-hidden="true">#</a>Limits</h2>
+<ul>
+<li>Composited <a href="../../styling/layers/">layers</a> are not affected: a layer draws its
+captured subtree one to one, and a layer with a <code>transform3d</code> already
+samples its capture smoothly.</li>
+<li>The copy is made per image and mode, so many large images with an
+explicit mode cost memory accordingly.</li>
+</ul>
+<p>See <a href="../../reference/style-properties/#imageRendering"><code>imageRendering</code></a> in
+the style reference.</p>
+
+</article>
+<footer class="page-links"><a href="../../demo/?page=image-rendering">Open live demo</a>
+<a href="https://github.com/tulustul/bevy-react/blob/v0.7.0/examples/demos/ui/src/demos/styling/ImageRenderingDemo.tsx">Demo source</a>
+<a href="https://github.com/tulustul/bevy-react/edit/main/docs/guide/styling/image-rendering.md">Edit this page</a></footer>
+</main>
+</div>
+<footer class="site-footer">
+<p>bevy-react is dual-licensed under MIT or Apache-2.0. <a href="https://github.com/tulustul/bevy-react">Source on GitHub</a>.</p>
+</footer>
+</body>
+</html>

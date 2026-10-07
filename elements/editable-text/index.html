@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>&lt;editableText&gt; · bevy-react</title>
+<meta name="description" content="The &lt;editableText&gt; element is a native text input with a controlled value and selection, change, select, focus and blur events, multiline, IME and clipboard.">
+<link rel="canonical" href="https://tulustul.github.io/bevy-react/elements/editable-text/">
+<link rel="alternate" type="text/markdown" href="../../elements/editable-text.md">
+<meta property="og:title" content="&lt;editableText&gt; · bevy-react">
+<meta property="og:description" content="The &lt;editableText&gt; element is a native text input with a controlled value and selection, change, select, focus and blur events, multiline, IME and clipboard.">
+<link rel="icon" href="../../logo.png">
+<link rel="stylesheet" href="../../style.css">
+<script src="../../docs.js" defer></script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="site-header">
+<a class="brand" href="../../"><img src="../../logo.png" alt="" width="74" height="74"> bevy-react</a>
+<span class="version">v0.7.0</span>
+<nav class="site-links" aria-label="Project">
+<a href="../../demo/">Live demo</a>
+<a href="https://github.com/tulustul/bevy-react">GitHub</a>
+<a href="https://docs.rs/bevy-react">docs.rs</a>
+<a href="https://www.npmjs.com/package/bevy-react">npm</a>
+</nav>
+</header>
+<div class="layout">
+<nav class="sidebar" aria-label="Documentation">
+<details class="nav-menu" open>
+<summary>Menu</summary>
+<ul><li><a href="../../">Introduction</a></li><li><a href="../../getting-started/">Getting started</a></li><li><a href="../../how-it-works/">How it works</a></li><li class="nav-section"><span>Elements</span><ul><li><a href="../../elements/node/">&lt;node&gt;</a></li><li><a href="../../elements/button/">&lt;button&gt;</a></li><li><a href="../../elements/text/">&lt;text&gt;</a></li><li><a href="../../elements/editable-text/" aria-current="page">&lt;editableText&gt;</a></li><li><a href="../../elements/image/">&lt;image&gt;</a></li><li><a href="../../elements/canvas/">&lt;canvas&gt;</a></li><li><a href="../../elements/svg/">&lt;svg&gt;</a></li><li><a href="../../elements/portal/">&lt;portal&gt;</a></li><li><a href="../../elements/surface/">&lt;surface&gt;</a></li><li><a href="../../elements/root/">&lt;root&gt;</a></li><li><a href="../../elements/anchor/">&lt;anchor&gt;</a></li></ul></li><li class="nav-section"><span>Layout</span><ul><li><a href="../../layout/flexbox/">Flexbox</a></li><li><a href="../../layout/grid/">Grid</a></li><li><a href="../../layout/positioning/">Positioning</a></li></ul></li><li class="nav-section"><span>Styling</span><ul><li><a href="../../styling/units/">Units</a></li><li><a href="../../styling/colors/">Colors</a></li><li><a href="../../styling/borders/">Borders</a></li><li><a href="../../styling/spacing/">Spacing</a></li><li><a href="../../styling/sizing/">Sizing</a></li><li><a href="../../styling/layout-rounding/">Layout rounding</a></li><li><a href="../../styling/overflow/">Overflow</a></li><li><a href="../../styling/transforms/">Transforms</a></li><li><a href="../../styling/3d-transforms/">3D transforms</a></li><li><a href="../../styling/shadows/">Shadows</a></li><li><a href="../../styling/filters/">Filters</a></li><li><a href="../../styling/backdrop-filters/">Backdrop filters</a></li><li><a href="../../styling/morph-filters/">Morph filters</a></li><li><a href="../../styling/gradients/">Gradients</a></li><li><a href="../../styling/background-images/">Background images</a></li><li><a href="../../styling/image-rendering/">Image rendering</a></li><li><a href="../../styling/opacity/">Opacity</a></li><li><a href="../../styling/z-index/">Z-index</a></li><li><a href="../../styling/focus-policy/">Focus policy</a></li><li><a href="../../styling/cursors/">Cursors</a></li><li><a href="../../styling/layers/">Layers</a></li></ul></li><li class="nav-section"><span>Animations</span><ul><li><a href="../../animations/style-transitions/">Style transitions</a></li><li><a href="../../animations/animated-values/">Animated values</a></li><li><a href="../../animations/interpolation/">Interpolation</a></li><li><a href="../../animations/shared-elements/">Shared elements</a></li></ul></li><li class="nav-section"><span>Communication</span><ul><li><a href="../../communication/react-to-bevy/">React to Bevy</a></li><li><a href="../../communication/bevy-to-react/">Bevy to React</a></li><li><a href="../../communication/request-response/">Request / response</a></li><li><a href="../../communication/named-nodes/">Named nodes</a></li></ul></li><li class="nav-section"><span>Events</span><ul><li><a href="../../events/mouse/">Mouse</a></li><li><a href="../../events/keyboard/">Keyboard</a></li><li><a href="../../events/gamepad/">Gamepad</a></li><li><a href="../../events/window/">Window</a></li></ul></li><li class="nav-section"><span>Extending</span><ul><li><a href="../../extending/custom-elements/">Custom elements</a></li><li><a href="../../extending/custom-styles/">Custom styles</a></li><li><a href="../../extending/custom-filters/">Custom filters</a></li></ul></li><li class="nav-section"><span>Tooling</span><ul><li><a href="../../tooling/devtools/">Devtools</a></li><li><a href="../../tooling/hot-reload/">Hot reload</a></li><li><a href="../../tooling/web/">Web builds</a></li><li><a href="../../tooling/ts-codegen/">TypeScript codegen</a></li></ul></li><li class="nav-section"><span>Reference</span><ul><li><a href="../../reference/style-properties/">Style properties</a></li><li><a href="../../reference/elements/">Elements</a></li><li><a href="../../reference/filters/">Filters</a></li></ul></li><li><a href="../../performance/">Performance</a></li></ul>
+</details>
+</nav>
+<main id="main">
+<article>
+<h1 id="editabletext"><code>&lt;editableText&gt;</code></h1>
+<p><code>&lt;editableText&gt;</code> is a focusable plain-text input, single- or multi-line,
+built on Bevy&#39;s <code>EditableText</code> widget. Bevy handles typing, the caret,
+selection, IME composition and the clipboard; the element follows React&#39;s
+controlled-input pattern with <code>value</code> and <code>onChange</code>. It has no look of its
+own: the box, border and focus ring are your styles.</p>
+<h2 id="usage"><a class="anchor" href="#usage" aria-hidden="true">#</a>Usage</h2>
+<pre><code class="language-tsx"><span class="token keyword">const</span> <span class="token punctuation">[</span>name<span class="token punctuation">,</span> setName<span class="token punctuation">]</span> <span class="token operator">=</span> <span class="token function">useState</span><span class="token punctuation">(</span><span class="token string">&quot;&quot;</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>editableText</span>
+  <span class="token attr-name">value</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span>name<span class="token punctuation">}</span></span>
+  <span class="token attr-name">onChange</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span>setName<span class="token punctuation">}</span></span>
+  <span class="token attr-name">maxLength</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token number">40</span><span class="token punctuation">}</span></span>
+  <span class="token attr-name">style</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span>
+    width<span class="token operator">:</span> <span class="token number">280</span><span class="token punctuation">,</span>
+    padding<span class="token operator">:</span> <span class="token punctuation">{</span> horizontal<span class="token operator">:</span> <span class="token number">12</span><span class="token punctuation">,</span> vertical<span class="token operator">:</span> <span class="token number">8</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+    border<span class="token operator">:</span> <span class="token number">1</span><span class="token punctuation">,</span>
+    borderColor<span class="token operator">:</span> <span class="token string">&quot;#414868&quot;</span><span class="token punctuation">,</span>
+    borderRadius<span class="token operator">:</span> <span class="token number">8</span><span class="token punctuation">,</span>
+    backgroundColor<span class="token operator">:</span> <span class="token string">&quot;#1a1b26&quot;</span><span class="token punctuation">,</span>
+    color<span class="token operator">:</span> <span class="token string">&quot;#c0caf5&quot;</span><span class="token punctuation">,</span>
+    cursor<span class="token operator">:</span> <span class="token string">&quot;text&quot;</span><span class="token punctuation">,</span>
+  <span class="token punctuation">}</span><span class="token punctuation">}</span></span>
+  <span class="token attr-name">focusStyle</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span> borderColor<span class="token operator">:</span> <span class="token string">&quot;#7aa2f7&quot;</span> <span class="token punctuation">}</span><span class="token punctuation">}</span></span>
+<span class="token punctuation">/&gt;</span></span><span class="token punctuation">;</span></code></pre><h2 id="attributes"><a class="anchor" href="#attributes" aria-hidden="true">#</a>Attributes</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Type</th>
+<th>Default</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>value</code></td>
+<td><code>string</code></td>
+<td><code>&quot;&quot;</code></td>
+<td>The text, pushed into the field when the prop changes</td>
+</tr>
+<tr>
+<td><code>maxLength</code></td>
+<td><code>number</code></td>
+<td>none</td>
+<td>The most characters the user can type or paste</td>
+</tr>
+<tr>
+<td><code>multiline</code></td>
+<td><code>boolean</code></td>
+<td><code>false</code></td>
+<td>Enter inserts a newline and long lines wrap</td>
+</tr>
+<tr>
+<td><code>autofocus</code></td>
+<td><code>boolean</code></td>
+<td><code>false</code></td>
+<td>Focus the field when it mounts</td>
+</tr>
+<tr>
+<td><code>selectionStart</code></td>
+<td><code>number</code></td>
+<td>none</td>
+<td>Selection anchor, a UTF-8 byte offset</td>
+</tr>
+<tr>
+<td><code>selectionEnd</code></td>
+<td><code>number</code></td>
+<td>none</td>
+<td>Selection focus (the caret end), a UTF-8 byte offset</td>
+</tr>
+<tr>
+<td><code>ariaLabel</code></td>
+<td><code>string</code></td>
+<td>none</td>
+<td>The field&#39;s accessible name</td>
+</tr>
+</tbody></table></div>
+<h2 id="events"><a class="anchor" href="#events" aria-hidden="true">#</a>Events</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Handler</th>
+<th>Argument</th>
+<th>Fires when</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>onChange</code></td>
+<td><code>string</code></td>
+<td>The user changed the text</td>
+</tr>
+<tr>
+<td><code>onSelect</code></td>
+<td><code>SelectEvent</code></td>
+<td>The caret or the selection moved</td>
+</tr>
+<tr>
+<td><code>onFocus</code></td>
+<td>none</td>
+<td>The field gained focus</td>
+</tr>
+<tr>
+<td><code>onBlur</code></td>
+<td>none</td>
+<td>The field lost focus</td>
+</tr>
+</tbody></table></div>
+<p><code>SelectEvent</code> has <code>selectionStart</code> and <code>selectionEnd</code> (UTF-8 byte offsets,
+start never greater than end), <code>selectionDirection</code> (<code>&quot;forward&quot;</code>,
+<code>&quot;backward&quot;</code>, or <code>&quot;none&quot;</code> for a collapsed caret) and <code>composing</code> (an IME
+composition is in progress).</p>
+<h2 id="controlled-value"><a class="anchor" href="#controlled-value" aria-hidden="true">#</a>Controlled value</h2>
+<ul>
+<li><code>onChange</code> receives the whole new text after each user edit. It does not
+fire for changes you make through <code>value</code>.</li>
+<li><code>value</code> reaches the field only when the prop changes. When it differs
+from what the field shows, it replaces the text and moves the caret to the
+end; when it matches (the usual echo of <code>onChange</code>), nothing happens, so
+typing is never interrupted.</li>
+<li>Without <code>value</code> the field is uncontrolled and starts empty.</li>
+<li><code>maxLength</code> limits edits only: a longer <code>value</code> from React is shown in
+full.</li>
+</ul>
+<h2 id="selection"><a class="anchor" href="#selection" aria-hidden="true">#</a>Selection</h2>
+<p><code>selectionStart</code> and <code>selectionEnd</code> select a range when either prop
+changes. <code>selectionStart</code> is the anchor and <code>selectionEnd</code> the focus, where
+the caret sits, so a backward selection has <code>selectionStart</code> greater than
+<code>selectionEnd</code>. Equal values place the caret.</p>
+<ul>
+<li>Offsets are UTF-8 byte offsets, the same unit <code>onSelect</code> reports. They
+match JavaScript string indices for ASCII text only.</li>
+<li>A range whose offsets don&#39;t fall on character boundaries is ignored.</li>
+<li><code>onSelect</code> fires only while a handler is set, and not for selections you
+set through the props.</li>
+</ul>
+<p>To control the selection while the user moves the caret, mirror <code>onSelect</code>
+into the props, swapping the ends of a backward selection:</p>
+<pre><code class="language-tsx"><span class="token keyword">const</span> <span class="token punctuation">[</span>sel<span class="token punctuation">,</span> setSel<span class="token punctuation">]</span> <span class="token operator">=</span> <span class="token function">useState</span><span class="token punctuation">(</span><span class="token punctuation">{</span> start<span class="token operator">:</span> <span class="token number">0</span><span class="token punctuation">,</span> end<span class="token operator">:</span> <span class="token number">0</span> <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>editableText</span>
+  <span class="token attr-name">value</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span>text<span class="token punctuation">}</span></span>
+  <span class="token attr-name">onChange</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span>setText<span class="token punctuation">}</span></span>
+  <span class="token attr-name">selectionStart</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span>sel<span class="token punctuation">.</span>start<span class="token punctuation">}</span></span>
+  <span class="token attr-name">selectionEnd</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span>sel<span class="token punctuation">.</span>end<span class="token punctuation">}</span></span>
+  <span class="token attr-name">onSelect</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">(</span>e<span class="token punctuation">)</span> <span class="token operator">=&gt;</span>
+    <span class="token function">setSel</span><span class="token punctuation">(</span>
+      e<span class="token punctuation">.</span>selectionDirection <span class="token operator">===</span> <span class="token string">&quot;backward&quot;</span>
+        <span class="token operator">?</span> <span class="token punctuation">{</span> start<span class="token operator">:</span> e<span class="token punctuation">.</span>selectionEnd<span class="token punctuation">,</span> end<span class="token operator">:</span> e<span class="token punctuation">.</span>selectionStart <span class="token punctuation">}</span>
+        <span class="token operator">:</span> <span class="token punctuation">{</span> start<span class="token operator">:</span> e<span class="token punctuation">.</span>selectionStart<span class="token punctuation">,</span> end<span class="token operator">:</span> e<span class="token punctuation">.</span>selectionEnd <span class="token punctuation">}</span><span class="token punctuation">,</span>
+    <span class="token punctuation">)</span>
+  <span class="token punctuation">}</span></span>
+<span class="token punctuation">/&gt;</span></span><span class="token punctuation">;</span></code></pre><h2 id="focus-and-keyboard"><a class="anchor" href="#focus-and-keyboard" aria-hidden="true">#</a>Focus and keyboard</h2>
+<ul>
+<li>A field takes focus when clicked, when it mounts with <code>autofocus</code>, or when
+your Rust code sets Bevy&#39;s <code>InputFocus</code> to it. Clicking elsewhere does not
+blur it: focus moves only to another focusable element or when Rust
+clears <code>InputFocus</code>.</li>
+<li><code>focusStyle</code> applies while the field is focused, with no React state.
+<code>hoverStyle</code> and <code>pressStyle</code> work as on a <code>&lt;node&gt;</code>.</li>
+<li>Don&#39;t rely on the order of one field&#39;s <code>onBlur</code> and the next field&#39;s
+<code>onFocus</code>. When tracking the focused field, clear it on blur only if it
+still names the field losing focus:
+<code>onBlur={() =&gt; setFocused((f) =&gt; (f === &quot;first&quot; ? null : f))}</code>.</li>
+<li>Editing keys are Bevy&#39;s: arrows, Home and End, word moves and deletes with
+Ctrl (Alt on macOS), Ctrl+A, Ctrl+C, Ctrl+X and Ctrl+V with the system
+clipboard (Cmd on macOS), and Escape to collapse the selection.
+Double-click selects a word, triple-click selects everything.</li>
+<li>The field consumes typed keys, but the global <code>keyDown</code> and <code>keyUp</code> events
+still fire. There is no submit event: handle Enter there while the field
+is focused.</li>
+</ul>
+<pre><code class="language-tsx"><span class="token keyword">import</span> <span class="token punctuation">{</span> on <span class="token punctuation">}</span> <span class="token keyword">from</span> <span class="token string">&quot;./bevy&quot;</span><span class="token punctuation">;</span>
+
+<span class="token function">useEffect</span><span class="token punctuation">(</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">=&gt;</span> <span class="token punctuation">{</span>
+  <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span>focused<span class="token punctuation">)</span> <span class="token keyword">return</span><span class="token punctuation">;</span>
+  <span class="token keyword">return</span> <span class="token function">on</span><span class="token punctuation">(</span><span class="token string">&quot;keyDown&quot;</span><span class="token punctuation">,</span> <span class="token punctuation">(</span>e<span class="token punctuation">)</span> <span class="token operator">=&gt;</span> <span class="token punctuation">{</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>e<span class="token punctuation">.</span>key <span class="token operator">===</span> <span class="token string">&quot;Enter&quot;</span><span class="token punctuation">)</span> <span class="token function">submit</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span><span class="token punctuation">,</span> <span class="token punctuation">[</span>focused<span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span></code></pre><p>See <a href="../../events/keyboard/">Keyboard</a> for the event payload.</p>
+<h2 id="layout-and-styles"><a class="anchor" href="#layout-and-styles" aria-hidden="true">#</a>Layout and styles</h2>
+<ul>
+<li>The field has no intrinsic width, and its intrinsic height is one line,
+<code>multiline</code> included. Give it a <code>width</code>, and a <code>height</code> for several lines.
+Content beyond the box scrolls to follow the caret.</li>
+<li><code>multiline</code> wraps long lines at word boundaries; a single-line field never
+wraps.</li>
+<li><code>color</code> (which also colors the caret), <code>fontSize</code>, <code>fontWeight</code>,
+<code>fontFamily</code>, <code>lineHeight</code> and <code>letterSpacing</code> style the text as on
+<a href="../../elements/text/"><code>&lt;text&gt;</code></a>. <code>textAlign</code> and <code>lineBreak</code> have no effect.</li>
+<li>A click inside the field never fires an ancestor&#39;s <code>onClick</code>. The field
+itself takes no <code>onClick</code>, <code>onPointer*</code>, scroll or wheel props.</li>
+<li>Assistive tech sees a text input (a multi-line one with <code>multiline</code>),
+named by <code>ariaLabel</code>, with the current text as its value.</li>
+</ul>
+<h2 id="limits"><a class="anchor" href="#limits" aria-hidden="true">#</a>Limits</h2>
+<ul>
+<li>Plain text with one style for the whole field.</li>
+<li>No placeholder, read-only, disabled or password mode, no undo or redo, and
+no submit event.</li>
+<li>Rejecting an edit in <code>onChange</code> doesn&#39;t revert the field: if the state
+stays at the previous <code>value</code>, the prop doesn&#39;t change and the field keeps
+the user&#39;s text.</li>
+<li>The same applies to a selection: setting the pair it already holds does
+nothing, even after the user moved the caret, unless you mirror <code>onSelect</code>
+as shown above.</li>
+<li>Changing <code>multiline</code> after mount switches Enter-to-newline but not
+wrapping. Set it when the field mounts.</li>
+<li>Tab doesn&#39;t move focus between fields by default. Each field carries a
+<code>TabIndex(0)</code>, but Tab navigation needs Bevy&#39;s <code>TabNavigationPlugin</code> and a
+<code>TabGroup</code> on an ancestor, which bevy-react does not add.</li>
+</ul>
+<p>See <a href="../../reference/elements/#editableText"><code>&lt;editableText&gt;</code></a> in the element
+reference.</p>
+
+</article>
+<footer class="page-links"><a href="../../demo/?page=editabletext">Open live demo</a>
+<a href="https://github.com/tulustul/bevy-react/blob/v0.7.0/examples/demos/ui/src/demos/elements/EditableTextDemo.tsx">Demo source</a>
+<a href="https://github.com/tulustul/bevy-react/edit/main/docs/guide/elements/editable-text.md">Edit this page</a></footer>
+</main>
+</div>
+<footer class="site-footer">
+<p>bevy-react is dual-licensed under MIT or Apache-2.0. <a href="https://github.com/tulustul/bevy-react">Source on GitHub</a>.</p>
+</footer>
+</body>
+</html>

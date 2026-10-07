@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sizing · bevy-react</title>
+<meta name="description" content="Size nodes with width and height, clamp them with min and max sizes, derive one axis with aspectRatio, and pick the box model with boxSizing.">
+<link rel="canonical" href="https://tulustul.github.io/bevy-react/styling/sizing/">
+<link rel="alternate" type="text/markdown" href="../../styling/sizing.md">
+<meta property="og:title" content="Sizing · bevy-react">
+<meta property="og:description" content="Size nodes with width and height, clamp them with min and max sizes, derive one axis with aspectRatio, and pick the box model with boxSizing.">
+<link rel="icon" href="../../logo.png">
+<link rel="stylesheet" href="../../style.css">
+<script src="../../docs.js" defer></script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="site-header">
+<a class="brand" href="../../"><img src="../../logo.png" alt="" width="74" height="74"> bevy-react</a>
+<span class="version">v0.7.0</span>
+<nav class="site-links" aria-label="Project">
+<a href="../../demo/">Live demo</a>
+<a href="https://github.com/tulustul/bevy-react">GitHub</a>
+<a href="https://docs.rs/bevy-react">docs.rs</a>
+<a href="https://www.npmjs.com/package/bevy-react">npm</a>
+</nav>
+</header>
+<div class="layout">
+<nav class="sidebar" aria-label="Documentation">
+<details class="nav-menu" open>
+<summary>Menu</summary>
+<ul><li><a href="../../">Introduction</a></li><li><a href="../../getting-started/">Getting started</a></li><li><a href="../../how-it-works/">How it works</a></li><li class="nav-section"><span>Elements</span><ul><li><a href="../../elements/node/">&lt;node&gt;</a></li><li><a href="../../elements/button/">&lt;button&gt;</a></li><li><a href="../../elements/text/">&lt;text&gt;</a></li><li><a href="../../elements/editable-text/">&lt;editableText&gt;</a></li><li><a href="../../elements/image/">&lt;image&gt;</a></li><li><a href="../../elements/canvas/">&lt;canvas&gt;</a></li><li><a href="../../elements/svg/">&lt;svg&gt;</a></li><li><a href="../../elements/portal/">&lt;portal&gt;</a></li><li><a href="../../elements/surface/">&lt;surface&gt;</a></li><li><a href="../../elements/root/">&lt;root&gt;</a></li><li><a href="../../elements/anchor/">&lt;anchor&gt;</a></li></ul></li><li class="nav-section"><span>Layout</span><ul><li><a href="../../layout/flexbox/">Flexbox</a></li><li><a href="../../layout/grid/">Grid</a></li><li><a href="../../layout/positioning/">Positioning</a></li></ul></li><li class="nav-section"><span>Styling</span><ul><li><a href="../../styling/units/">Units</a></li><li><a href="../../styling/colors/">Colors</a></li><li><a href="../../styling/borders/">Borders</a></li><li><a href="../../styling/spacing/">Spacing</a></li><li><a href="../../styling/sizing/" aria-current="page">Sizing</a></li><li><a href="../../styling/layout-rounding/">Layout rounding</a></li><li><a href="../../styling/overflow/">Overflow</a></li><li><a href="../../styling/transforms/">Transforms</a></li><li><a href="../../styling/3d-transforms/">3D transforms</a></li><li><a href="../../styling/shadows/">Shadows</a></li><li><a href="../../styling/filters/">Filters</a></li><li><a href="../../styling/backdrop-filters/">Backdrop filters</a></li><li><a href="../../styling/morph-filters/">Morph filters</a></li><li><a href="../../styling/gradients/">Gradients</a></li><li><a href="../../styling/background-images/">Background images</a></li><li><a href="../../styling/image-rendering/">Image rendering</a></li><li><a href="../../styling/opacity/">Opacity</a></li><li><a href="../../styling/z-index/">Z-index</a></li><li><a href="../../styling/focus-policy/">Focus policy</a></li><li><a href="../../styling/cursors/">Cursors</a></li><li><a href="../../styling/layers/">Layers</a></li></ul></li><li class="nav-section"><span>Animations</span><ul><li><a href="../../animations/style-transitions/">Style transitions</a></li><li><a href="../../animations/animated-values/">Animated values</a></li><li><a href="../../animations/interpolation/">Interpolation</a></li><li><a href="../../animations/shared-elements/">Shared elements</a></li></ul></li><li class="nav-section"><span>Communication</span><ul><li><a href="../../communication/react-to-bevy/">React to Bevy</a></li><li><a href="../../communication/bevy-to-react/">Bevy to React</a></li><li><a href="../../communication/request-response/">Request / response</a></li><li><a href="../../communication/named-nodes/">Named nodes</a></li></ul></li><li class="nav-section"><span>Events</span><ul><li><a href="../../events/mouse/">Mouse</a></li><li><a href="../../events/keyboard/">Keyboard</a></li><li><a href="../../events/gamepad/">Gamepad</a></li><li><a href="../../events/window/">Window</a></li></ul></li><li class="nav-section"><span>Extending</span><ul><li><a href="../../extending/custom-elements/">Custom elements</a></li><li><a href="../../extending/custom-styles/">Custom styles</a></li><li><a href="../../extending/custom-filters/">Custom filters</a></li></ul></li><li class="nav-section"><span>Tooling</span><ul><li><a href="../../tooling/devtools/">Devtools</a></li><li><a href="../../tooling/hot-reload/">Hot reload</a></li><li><a href="../../tooling/web/">Web builds</a></li><li><a href="../../tooling/ts-codegen/">TypeScript codegen</a></li></ul></li><li class="nav-section"><span>Reference</span><ul><li><a href="../../reference/style-properties/">Style properties</a></li><li><a href="../../reference/elements/">Elements</a></li><li><a href="../../reference/filters/">Filters</a></li></ul></li><li><a href="../../performance/">Performance</a></li></ul>
+</details>
+</nav>
+<main id="main">
+<article>
+<h1 id="sizing">Sizing</h1>
+<p><code>width</code> and <code>height</code> set a node&#39;s size, <code>minWidth</code>, <code>minHeight</code>, <code>maxWidth</code>
+and <code>maxHeight</code> clamp it, and <code>aspectRatio</code> derives one axis from the other.
+All the size keys take lengths (see <a href="../../styling/units/">Units</a>) and default to
+<code>&quot;auto&quot;</code>, which leaves the size to the content and the parent&#39;s
+<a href="../../layout/flexbox/">flexbox</a> or <a href="../../layout/grid/">grid</a> layout.</p>
+<h2 id="usage"><a class="anchor" href="#usage" aria-hidden="true">#</a>Usage</h2>
+<pre><code class="language-tsx"><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>node</span> <span class="token attr-name">style</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span> width<span class="token operator">:</span> <span class="token string">&quot;60%&quot;</span><span class="token punctuation">,</span> maxWidth<span class="token operator">:</span> <span class="token number">480</span><span class="token punctuation">,</span> aspectRatio<span class="token operator">:</span> <span class="token number">16</span> <span class="token operator">/</span> <span class="token number">9</span> <span class="token punctuation">}</span><span class="token punctuation">}</span></span> <span class="token punctuation">/&gt;</span></span></code></pre><h2 id="width-and-height"><a class="anchor" href="#width-and-height" aria-hidden="true">#</a>Width and height</h2>
+<ul>
+<li>A number or <code>&quot;px&quot;</code> value is a fixed size in logical pixels; <code>&quot;50%&quot;</code> is of
+the parent&#39;s content box; viewport units follow the window.</li>
+<li><code>&quot;auto&quot;</code> (the default) sizes from the content, then lets the layout
+adjust: in a flex container the item can grow or shrink along the main
+axis (<code>flexGrow</code>, <code>flexShrink</code>) and stretches across it (<code>alignItems</code>
+defaults to <code>&quot;stretch&quot;</code>).</li>
+<li>A fixed size on a flex item&#39;s main axis is only its starting size:
+<code>flexShrink</code>, which defaults to <code>1</code>, still shrinks it when the line
+overflows. Set <code>flexShrink: 0</code> (or a <code>minWidth</code>) to hold it.</li>
+<li>A percentage of a parent whose size on that axis depends on its content
+(an auto-height column, say) behaves as <code>&quot;auto&quot;</code>.</li>
+</ul>
+<h2 id="minimum-and-maximum-sizes"><a class="anchor" href="#minimum-and-maximum-sizes" aria-hidden="true">#</a>Minimum and maximum sizes</h2>
+<pre><code class="language-tsx"><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>node</span> <span class="token attr-name">style</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span> width<span class="token operator">:</span> <span class="token string">&quot;100%&quot;</span><span class="token punctuation">,</span> maxWidth<span class="token operator">:</span> <span class="token number">160</span> <span class="token punctuation">}</span><span class="token punctuation">}</span></span> <span class="token punctuation">/&gt;</span></span></code></pre><ul>
+<li><code>maxWidth</code> and <code>maxHeight</code> cap the size, <code>minWidth</code> and <code>minHeight</code> floor
+it, whatever produced it: an explicit size, flex growing or shrinking,
+stretching, or an aspect ratio. When they conflict, the minimum wins.</li>
+<li><code>maxWidth</code>/<code>maxHeight</code> <code>&quot;auto&quot;</code> (the default) means no cap.</li>
+<li><code>minWidth</code>/<code>minHeight</code> <code>&quot;auto&quot;</code> (the default) means no floor, except for
+flex and grid items: those never shrink below their content&#39;s minimum
+size (the width of their longest word, for text). Set <code>minWidth: 0</code> to
+let such an item shrink further, or give it an <code>overflowX</code> of <code>&quot;hidden&quot;</code>
+or <code>&quot;scroll&quot;</code> (see <a href="../../styling/overflow/">Overflow</a>).</li>
+</ul>
+<h2 id="aspect-ratio"><a class="anchor" href="#aspect-ratio" aria-hidden="true">#</a>Aspect ratio</h2>
+<p><code>aspectRatio</code> is a number, width divided by height. When layout knows one
+axis and the other is <code>&quot;auto&quot;</code>, it derives the missing one:</p>
+<pre><code class="language-tsx"><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>node</span> <span class="token attr-name">style</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span> height<span class="token operator">:</span> <span class="token number">50</span><span class="token punctuation">,</span> aspectRatio<span class="token operator">:</span> <span class="token number">1.6</span> <span class="token punctuation">}</span><span class="token punctuation">}</span></span> <span class="token punctuation">/&gt;</span></span> <span class="token comment">// 80 × 50</span></code></pre><p>The known axis can come from an explicit size or from layout, such as a
+stretched width. With both <code>width</code> and <code>height</code> set, <code>aspectRatio</code> has no
+effect. An <code>&lt;image&gt;</code> already keeps its texture&#39;s ratio when you set one axis
+(see <a href="../../elements/image/"><code>&lt;image&gt;</code></a>).</p>
+<h2 id="box-sizing"><a class="anchor" href="#box-sizing" aria-hidden="true">#</a>Box sizing</h2>
+<p><code>boxSizing</code> decides which box <code>width</code>, <code>height</code> and the min and max sizes
+measure:</p>
+<ul>
+<li><code>&quot;borderBox&quot;</code> (the default): the size includes padding and border.
+A <code>width: 100</code> node with <code>padding: 10</code> is 100px wide with an 80px content
+area.</li>
+<li><code>&quot;contentBox&quot;</code>: the size is the content area; padding and border are
+added outside it. The same node is 120px wide.</li>
+</ul>
+<p>Both spellings are accepted: <code>&quot;borderBox&quot;</code> or <code>&quot;border-box&quot;</code>, <code>&quot;contentBox&quot;</code>
+or <code>&quot;content-box&quot;</code>. Note that the default is the opposite of CSS&#39;s.</p>
+<h2 id="animating-sizes"><a class="anchor" href="#animating-sizes" aria-hidden="true">#</a>Animating sizes</h2>
+<ul>
+<li><p><code>transition: { size }</code> eases <code>width</code>, <code>height</code>, <code>maxWidth</code> and
+<code>maxHeight</code> between style values of the same unit (pixels to pixels,
+percentages to percentages). A change of unit, or to or from <code>&quot;auto&quot;</code>,
+snaps. Every eased frame is a real relayout, so siblings re-flow around
+the node, which makes it the tool for accordions:</p>
+<pre><code class="language-tsx"><span class="token operator">&lt;</span>node
+  style<span class="token operator">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span>
+    maxHeight<span class="token operator">:</span> open <span class="token operator">?</span> <span class="token number">300</span> <span class="token operator">:</span> <span class="token number">0</span><span class="token punctuation">,</span>
+    overflowY<span class="token operator">:</span> <span class="token string">&quot;clip&quot;</span><span class="token punctuation">,</span>
+    transition<span class="token operator">:</span> <span class="token punctuation">{</span> size<span class="token operator">:</span> <span class="token punctuation">{</span> duration<span class="token operator">:</span> <span class="token number">250</span> <span class="token punctuation">}</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+  <span class="token punctuation">}</span><span class="token punctuation">}</span>
+<span class="token operator">&gt;</span>
+  <span class="token punctuation">{</span>details<span class="token punctuation">}</span>
+<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>node</span><span class="token punctuation">&gt;</span></span></code></pre></li>
+<li><p>Every size key, <code>aspectRatio</code> included, accepts an <code>{ animated }</code>
+binding, driven in logical pixels (a plain number for <code>aspectRatio</code>)
+every frame without re-rendering React. See
+<a href="../../animations/animated-values/">Animated values</a>.</p>
+</li>
+<li><p><code>transition: { layout }</code> eases a size change visually instead, scaling
+the node&#39;s box from the old size to the new one while the real layout
+snaps. See <a href="../../animations/style-transitions/">Style transitions</a>.</p>
+</li>
+<li><p>Laid-out sizes are rounded to whole pixels, so a size animated through
+layout steps a pixel at a time and its neighbours hop. Turn rounding off
+for that subtree with <a href="../../styling/layout-rounding/">Layout rounding</a>.</p>
+</li>
+</ul>
+<p><code>minWidth</code>, <code>minHeight</code>, <code>aspectRatio</code> and <code>boxSizing</code> have no transition
+channel.</p>
+<h2 id="limits"><a class="anchor" href="#limits" aria-hidden="true">#</a>Limits</h2>
+<ul>
+<li>There are no <code>min-content</code>, <code>max-content</code> or <code>fit-content</code> size keywords;
+a size is a length or <code>&quot;auto&quot;</code>.</li>
+<li>Known issue: a node that combines a percentage <code>width</code> with <code>maxWidth</code>
+can measure wrapped text inside it at the unclamped width, so it reserves
+too little height and the content overflows. Give such a node a pixel
+width instead.</li>
+</ul>
+<p>See <a href="../../reference/style-properties/#width"><code>width</code></a>,
+<a href="../../reference/style-properties/#height"><code>height</code></a>,
+<a href="../../reference/style-properties/#minWidth"><code>minWidth</code></a>,
+<a href="../../reference/style-properties/#minHeight"><code>minHeight</code></a>,
+<a href="../../reference/style-properties/#maxWidth"><code>maxWidth</code></a>,
+<a href="../../reference/style-properties/#maxHeight"><code>maxHeight</code></a>,
+<a href="../../reference/style-properties/#aspectRatio"><code>aspectRatio</code></a> and
+<a href="../../reference/style-properties/#boxSizing"><code>boxSizing</code></a> in the style
+reference.</p>
+
+</article>
+<footer class="page-links"><a href="../../demo/?page=sizing">Open live demo</a>
+<a href="https://github.com/tulustul/bevy-react/blob/v0.7.0/examples/demos/ui/src/demos/styling/SizingDemo.tsx">Demo source</a>
+<a href="https://github.com/tulustul/bevy-react/edit/main/docs/guide/styling/sizing.md">Edit this page</a></footer>
+</main>
+</div>
+<footer class="site-footer">
+<p>bevy-react is dual-licensed under MIT or Apache-2.0. <a href="https://github.com/tulustul/bevy-react">Source on GitHub</a>.</p>
+</footer>
+</body>
+</html>

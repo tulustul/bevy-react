@@ -1,0 +1,451 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Custom filters · bevy-react</title>
+<meta name="description" content="Write your own WGSL filters and morph transitions with typed TSX params, using #[react_filter], #[react_morph_filter] and the shader prelude.">
+<link rel="canonical" href="https://tulustul.github.io/bevy-react/extending/custom-filters/">
+<link rel="alternate" type="text/markdown" href="../../extending/custom-filters.md">
+<meta property="og:title" content="Custom filters · bevy-react">
+<meta property="og:description" content="Write your own WGSL filters and morph transitions with typed TSX params, using #[react_filter], #[react_morph_filter] and the shader prelude.">
+<link rel="icon" href="../../logo.png">
+<link rel="stylesheet" href="../../style.css">
+<script src="../../docs.js" defer></script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="site-header">
+<a class="brand" href="../../"><img src="../../logo.png" alt="" width="74" height="74"> bevy-react</a>
+<span class="version">v0.7.0</span>
+<nav class="site-links" aria-label="Project">
+<a href="../../demo/">Live demo</a>
+<a href="https://github.com/tulustul/bevy-react">GitHub</a>
+<a href="https://docs.rs/bevy-react">docs.rs</a>
+<a href="https://www.npmjs.com/package/bevy-react">npm</a>
+</nav>
+</header>
+<div class="layout">
+<nav class="sidebar" aria-label="Documentation">
+<details class="nav-menu" open>
+<summary>Menu</summary>
+<ul><li><a href="../../">Introduction</a></li><li><a href="../../getting-started/">Getting started</a></li><li><a href="../../how-it-works/">How it works</a></li><li class="nav-section"><span>Elements</span><ul><li><a href="../../elements/node/">&lt;node&gt;</a></li><li><a href="../../elements/button/">&lt;button&gt;</a></li><li><a href="../../elements/text/">&lt;text&gt;</a></li><li><a href="../../elements/editable-text/">&lt;editableText&gt;</a></li><li><a href="../../elements/image/">&lt;image&gt;</a></li><li><a href="../../elements/canvas/">&lt;canvas&gt;</a></li><li><a href="../../elements/svg/">&lt;svg&gt;</a></li><li><a href="../../elements/portal/">&lt;portal&gt;</a></li><li><a href="../../elements/surface/">&lt;surface&gt;</a></li><li><a href="../../elements/root/">&lt;root&gt;</a></li><li><a href="../../elements/anchor/">&lt;anchor&gt;</a></li></ul></li><li class="nav-section"><span>Layout</span><ul><li><a href="../../layout/flexbox/">Flexbox</a></li><li><a href="../../layout/grid/">Grid</a></li><li><a href="../../layout/positioning/">Positioning</a></li></ul></li><li class="nav-section"><span>Styling</span><ul><li><a href="../../styling/units/">Units</a></li><li><a href="../../styling/colors/">Colors</a></li><li><a href="../../styling/borders/">Borders</a></li><li><a href="../../styling/spacing/">Spacing</a></li><li><a href="../../styling/sizing/">Sizing</a></li><li><a href="../../styling/layout-rounding/">Layout rounding</a></li><li><a href="../../styling/overflow/">Overflow</a></li><li><a href="../../styling/transforms/">Transforms</a></li><li><a href="../../styling/3d-transforms/">3D transforms</a></li><li><a href="../../styling/shadows/">Shadows</a></li><li><a href="../../styling/filters/">Filters</a></li><li><a href="../../styling/backdrop-filters/">Backdrop filters</a></li><li><a href="../../styling/morph-filters/">Morph filters</a></li><li><a href="../../styling/gradients/">Gradients</a></li><li><a href="../../styling/background-images/">Background images</a></li><li><a href="../../styling/image-rendering/">Image rendering</a></li><li><a href="../../styling/opacity/">Opacity</a></li><li><a href="../../styling/z-index/">Z-index</a></li><li><a href="../../styling/focus-policy/">Focus policy</a></li><li><a href="../../styling/cursors/">Cursors</a></li><li><a href="../../styling/layers/">Layers</a></li></ul></li><li class="nav-section"><span>Animations</span><ul><li><a href="../../animations/style-transitions/">Style transitions</a></li><li><a href="../../animations/animated-values/">Animated values</a></li><li><a href="../../animations/interpolation/">Interpolation</a></li><li><a href="../../animations/shared-elements/">Shared elements</a></li></ul></li><li class="nav-section"><span>Communication</span><ul><li><a href="../../communication/react-to-bevy/">React to Bevy</a></li><li><a href="../../communication/bevy-to-react/">Bevy to React</a></li><li><a href="../../communication/request-response/">Request / response</a></li><li><a href="../../communication/named-nodes/">Named nodes</a></li></ul></li><li class="nav-section"><span>Events</span><ul><li><a href="../../events/mouse/">Mouse</a></li><li><a href="../../events/keyboard/">Keyboard</a></li><li><a href="../../events/gamepad/">Gamepad</a></li><li><a href="../../events/window/">Window</a></li></ul></li><li class="nav-section"><span>Extending</span><ul><li><a href="../../extending/custom-elements/">Custom elements</a></li><li><a href="../../extending/custom-styles/">Custom styles</a></li><li><a href="../../extending/custom-filters/" aria-current="page">Custom filters</a></li></ul></li><li class="nav-section"><span>Tooling</span><ul><li><a href="../../tooling/devtools/">Devtools</a></li><li><a href="../../tooling/hot-reload/">Hot reload</a></li><li><a href="../../tooling/web/">Web builds</a></li><li><a href="../../tooling/ts-codegen/">TypeScript codegen</a></li></ul></li><li class="nav-section"><span>Reference</span><ul><li><a href="../../reference/style-properties/">Style properties</a></li><li><a href="../../reference/elements/">Elements</a></li><li><a href="../../reference/filters/">Filters</a></li></ul></li><li><a href="../../performance/">Performance</a></li></ul>
+</details>
+</nav>
+<main id="main">
+<article>
+<h1 id="custom-filters">Custom filters</h1>
+<p>A custom filter is a Rust params struct plus a WGSL fragment shader. Once
+registered, it is used by name exactly like a built-in: regular filters in
+the <code>filter</code> and <code>backdropFilter</code> chains, morph filters in <code>morphFilter</code>.
+The params struct is the single source of truth for the TSX side: the
+generated <code>bevy.ts</code> types the filter&#39;s name and params.</p>
+<h2 id="usage"><a class="anchor" href="#usage" aria-hidden="true">#</a>Usage</h2>
+<p>Declare the params struct, register it, regenerate <code>bevy.ts</code>, and use the
+name from a style:</p>
+<div class="tabs"><div class="tab-panel" data-lang="tsx"><p class="tab-label">TSX</p><pre><code class="language-tsx"><span class="token operator">&lt;</span>node
+  style<span class="token operator">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span>
+    padding<span class="token operator">:</span> <span class="token number">16</span><span class="token punctuation">,</span>
+    filter<span class="token operator">:</span> <span class="token punctuation">{</span> name<span class="token operator">:</span> <span class="token string">&quot;scanlines&quot;</span><span class="token punctuation">,</span> params<span class="token operator">:</span> <span class="token punctuation">{</span> spacing<span class="token operator">:</span> <span class="token number">3</span><span class="token punctuation">,</span> strength<span class="token operator">:</span> <span class="token number">0.4</span> <span class="token punctuation">}</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+  <span class="token punctuation">}</span><span class="token punctuation">}</span>
+<span class="token operator">&gt;</span>
+  <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>text</span><span class="token punctuation">&gt;</span></span><span class="token plain-text">INCOMING TRANSMISSION</span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>text</span><span class="token punctuation">&gt;</span></span>
+<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>node</span><span class="token punctuation">&gt;</span></span></code></pre></div><div class="tab-panel" data-lang="rust"><p class="tab-label">Rust</p><pre><code class="language-rust"><span class="token keyword">use</span> <span class="token namespace">bevy<span class="token punctuation">::</span>prelude<span class="token punctuation">::</span></span><span class="token operator">*</span><span class="token punctuation">;</span>
+<span class="token keyword">use</span> <span class="token namespace">bevy_react<span class="token punctuation">::</span>prelude<span class="token punctuation">::</span></span><span class="token operator">*</span><span class="token punctuation">;</span>
+<span class="token keyword">use</span> <span class="token namespace">bevy_react<span class="token punctuation">::</span>protocol<span class="token punctuation">::</span>units<span class="token punctuation">::</span></span><span class="token class-name">Length</span><span class="token punctuation">;</span>
+
+<span class="token comment">/// Packs as params[0].x = spacing (px), params[0].y = strength.</span>
+<span class="token attribute attr-name">#[react_filter(shader = <span class="token string">&quot;shaders/scanlines.wgsl&quot;</span>)]</span>
+<span class="token keyword">struct</span> <span class="token type-definition class-name">Scanlines</span> <span class="token punctuation">{</span>
+    <span class="token comment">/// Distance between dark rows.</span>
+    <span class="token attribute attr-name">#[serde(default = <span class="token string">&quot;default_spacing&quot;</span>)]</span>
+    spacing<span class="token punctuation">:</span> <span class="token class-name">Length</span><span class="token punctuation">,</span>
+    <span class="token comment">/// 0 = no lines, 1 = black lines.</span>
+    <span class="token attribute attr-name">#[serde(default)]</span>
+    strength<span class="token punctuation">:</span> <span class="token keyword">f32</span><span class="token punctuation">,</span>
+<span class="token punctuation">}</span>
+
+<span class="token keyword">fn</span> <span class="token function-definition function">default_spacing</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">-&gt;</span> <span class="token class-name">Length</span> <span class="token punctuation">{</span>
+    <span class="token class-name">Length</span><span class="token punctuation">::</span><span class="token class-name">Px</span><span class="token punctuation">(</span><span class="token number">4.0</span><span class="token punctuation">)</span>
+<span class="token punctuation">}</span>
+
+<span class="token keyword">pub</span> <span class="token keyword">fn</span> <span class="token function-definition function">register_bindings</span><span class="token punctuation">(</span>app<span class="token punctuation">:</span> <span class="token operator">&amp;</span><span class="token keyword">mut</span> <span class="token class-name">App</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    app<span class="token punctuation">.</span><span class="token function">add_react_filter</span><span class="token punctuation">::</span><span class="token operator">&lt;</span><span class="token class-name">Scanlines</span><span class="token operator">&gt;</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span></code></pre></div></div>
+<p>The shader lives in your assets folder (<code>assets/shaders/scanlines.wgsl</code>):</p>
+<pre><code class="language-wgsl">#import bevy_react<span class="token punctuation">:</span><span class="token punctuation">:</span>filter<span class="token punctuation">:</span><span class="token punctuation">:</span><span class="token punctuation">{</span><span class="token class-name">FullscreenVertexOutput</span><span class="token punctuation">,</span> sample_source<span class="token punctuation">,</span> uniforms<span class="token punctuation">}</span>
+
+<span class="token punctuation">@</span><span class="token attributes attr-name">fragment</span>
+<span class="token keyword">fn</span> <span class="token functions function">fragment</span><span class="token punctuation">(</span>in<span class="token punctuation">:</span> <span class="token class-name">FullscreenVertexOutput</span><span class="token punctuation">)</span> <span class="token operator">-&gt;</span> <span class="token punctuation">@</span><span class="token attributes attr-name">location</span><span class="token punctuation">(</span><span class="token int-literal number">0</span><span class="token punctuation">)</span> <span class="token builtin">vec4</span><span class="token punctuation">&lt;</span><span class="token builtin">f32</span><span class="token punctuation">&gt;</span> <span class="token punctuation">{</span>
+    <span class="token keyword">let</span> spacing <span class="token operator">=</span> <span class="token builtin">max</span><span class="token punctuation">(</span>uniforms<span class="token punctuation">.</span>params<span class="token punctuation">[</span><span class="token int-literal number">0</span><span class="token punctuation">]</span><span class="token punctuation">.</span>x<span class="token punctuation">,</span> <span class="token decimal-float-literal number">1.0</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">let</span> strength <span class="token operator">=</span> uniforms<span class="token punctuation">.</span>params<span class="token punctuation">[</span><span class="token int-literal number">0</span><span class="token punctuation">]</span><span class="token punctuation">.</span>y<span class="token punctuation">;</span>
+    <span class="token keyword">let</span> row <span class="token operator">=</span> in<span class="token punctuation">.</span>uv<span class="token punctuation">.</span>y <span class="token operator">*</span> uniforms<span class="token punctuation">.</span>resolution<span class="token punctuation">.</span>y<span class="token punctuation">;</span>
+    <span class="token keyword">let</span> dark <span class="token operator">=</span> <span class="token builtin">step</span><span class="token punctuation">(</span><span class="token decimal-float-literal number">0.5</span><span class="token punctuation">,</span> <span class="token builtin">fract</span><span class="token punctuation">(</span>row <span class="token operator">/</span> spacing<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token operator">*</span> strength<span class="token punctuation">;</span>
+    <span class="token keyword">let</span> c <span class="token operator">=</span> <span class="token function-calls function">sample_source</span><span class="token punctuation">(</span>in<span class="token punctuation">.</span>uv<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token comment">// Scaling rgb by a factor is valid on premultiplied color.</span>
+    <span class="token keyword">return</span> <span class="token builtin">vec4</span><span class="token punctuation">&lt;</span><span class="token builtin">f32</span><span class="token punctuation">&gt;</span><span class="token punctuation">(</span>c<span class="token punctuation">.</span>rgb <span class="token operator">*</span> <span class="token punctuation">(</span><span class="token decimal-float-literal number">1.0</span> <span class="token operator">-</span> dark<span class="token punctuation">)</span><span class="token punctuation">,</span> c<span class="token punctuation">.</span>a<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span></code></pre><p>Call <code>register_bindings</code> from both your app (a plugin&#39;s <code>build</code>) and your
+bindings exporter, then regenerate <code>bevy.ts</code>. A filter registered only in the
+running app works at runtime but is missing from the typing, and one
+registered only in the exporter type-checks but warns <code>filterUnknown</code> at
+runtime. See <a href="../../tooling/ts-codegen/">TypeScript codegen</a> for the exporter
+setup.</p>
+<h2 id="the-params-struct"><a class="anchor" href="#the-params-struct" aria-hidden="true">#</a>The params struct</h2>
+<p><code>#[react_filter]</code> takes a struct with named fields and these arguments:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Argument</th>
+<th>Default</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>shader</code></td>
+<td>required</td>
+<td>Asset path of the WGSL file; <code>embedded://</code> paths work too</td>
+</tr>
+<tr>
+<td><code>name</code></td>
+<td>struct name, first letter lowercased</td>
+<td>The filter&#39;s name in TSX (<code>Scanlines</code> becomes <code>&quot;scanlines&quot;</code>)</td>
+</tr>
+<tr>
+<td><code>outset</code></td>
+<td><code>0</code></td>
+<td>Logical px the effect may paint outside the node (see <a href="#outset">Outset</a>)</td>
+</tr>
+<tr>
+<td><code>time</code></td>
+<td><code>false</code></td>
+<td>Re-run the pass every frame (see <a href="#time-driven-filters">Time-driven filters</a>)</td>
+</tr>
+</tbody></table></div>
+<p>Each field is one param, named in TSX exactly as the field is written (no
+case conversion). Supported field types:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Field type</th>
+<th>TSX value</th>
+<th>In the shader</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>f32</code></td>
+<td><code>number</code></td>
+<td>1 component, as-is</td>
+</tr>
+<tr>
+<td><code>Vec2</code>, <code>Vec3</code>, <code>Vec4</code></td>
+<td><code>[number, number]</code> (…)</td>
+<td>2–4 components</td>
+</tr>
+<tr>
+<td><code>[f32; 2]</code>, <code>[f32; 3]</code>, <code>[f32; 4]</code></td>
+<td><code>[number, number]</code> (…)</td>
+<td>2–4 components</td>
+</tr>
+<tr>
+<td><code>Angle</code></td>
+<td>degrees as a number, or <code>&quot;1rad&quot;</code>, <code>&quot;0.25turn&quot;</code></td>
+<td>1 component, radians</td>
+</tr>
+<tr>
+<td><code>Length</code></td>
+<td>px as a number or <code>&quot;12px&quot;</code></td>
+<td>1 component, physical px</td>
+</tr>
+<tr>
+<td><code>FilterColor</code></td>
+<td>CSS color string</td>
+<td>4 components, linear straight-alpha RGBA</td>
+</tr>
+</tbody></table></div>
+<p><code>Angle</code> and <code>Length</code> come from <code>bevy_react::protocol::units</code>, <code>FilterColor</code>
+from <code>bevy_react::filters</code>. Any other field type is a compile error.</p>
+<ul>
+<li><strong>Packing.</strong> Fields fill <code>uniforms.params</code> (8 <code>vec4</code>s) in declaration
+order, component by component. A multi-component field that would cross a
+<code>vec4</code> boundary starts at the next <code>vec4</code> instead, leaving the skipped
+components zero. A struct that packs into more than 8 <code>vec4</code>s compiles but
+every use is rejected with a <code>filterParams</code> warning.</li>
+<li><strong>Defaults.</strong> Every param is optional in TSX, so give every field a
+<code>#[serde(default)]</code> or <code>#[serde(default = &quot;…&quot;)]</code>. Omitting a field that
+has no default rejects the whole entry with a <code>filterParams</code> warning, as do
+unknown param keys and values of the wrong type.</li>
+<li><strong>Units.</strong> A <code>Length</code> accepts px only; <code>&quot;50%&quot;</code> or <code>&quot;2vw&quot;</code> rejects the
+entry. It arrives in the shader already multiplied by the display&#39;s scale
+factor, matching <code>resolution</code>. A plain <code>f32</code> arrives unscaled.</li>
+<li><strong>Built-in names.</strong> A custom filter registered under a built-in&#39;s name
+replaces the built-in, in the app and in the generated typing alike.</li>
+</ul>
+<h2 id="writing-the-shader"><a class="anchor" href="#writing-the-shader" aria-hidden="true">#</a>Writing the shader</h2>
+<p>The shader imports the prelude with <code>#import bevy_react::filter::{…}</code> and
+names its entry point <code>fragment</code> (<code>filter</code> is a reserved word in WGSL). It
+runs once per pixel of the node&#39;s capture: <code>in.uv</code> spans the image <code>0..1</code>,
+y down, and whatever the function returns is written as-is, alpha included.</p>
+<p>The prelude provides:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Item</th>
+<th>What it is</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>FullscreenVertexOutput</code></td>
+<td>The fragment input; <code>uv</code> is the pixel&#39;s position</td>
+</tr>
+<tr>
+<td><code>uniforms.params</code></td>
+<td><code>array&lt;vec4&lt;f32&gt;, 8&gt;</code>, your packed params</td>
+</tr>
+<tr>
+<td><code>uniforms.resolution</code></td>
+<td>The image size in physical px</td>
+</tr>
+<tr>
+<td><code>uniforms.texel_size</code></td>
+<td>One pixel in UV units (<code>1.0 / resolution</code>)</td>
+</tr>
+<tr>
+<td><code>uniforms.time</code></td>
+<td>Seconds since startup, for <code>time = true</code> filters</td>
+</tr>
+<tr>
+<td><code>uniforms.content_inset</code></td>
+<td>The outset margin on each side, physical px</td>
+</tr>
+<tr>
+<td><code>sample_source(uv)</code></td>
+<td>This pass&#39;s input: the capture, or the previous chain entry&#39;s output</td>
+</tr>
+<tr>
+<td><code>sample_capture(uv)</code></td>
+<td>The node&#39;s unfiltered capture, whatever ran before</td>
+</tr>
+<tr>
+<td><code>sample_source_lod</code>, <code>sample_capture_lod</code></td>
+<td>The same at an explicit LOD, for non-uniform control flow</td>
+</tr>
+<tr>
+<td><code>content_uv(uv)</code></td>
+<td><code>uv</code> remapped to <code>0..1</code> over the node&#39;s border box</td>
+</tr>
+<tr>
+<td><code>content_rect_min()</code>, <code>content_rect_size()</code></td>
+<td>The border box inside the image, physical px</td>
+</tr>
+<tr>
+<td><code>premultiply(c)</code>, <code>unpremultiply(c)</code></td>
+<td>Alpha conversions; <code>unpremultiply</code> of a transparent pixel is zero</td>
+</tr>
+</tbody></table></div>
+<p>Sampling outside <code>0..1</code> returns the edge pixel. <code>textureSample</code> needs
+uniform control flow, so when you branch on per-pixel data before sampling,
+use the <code>_lod</code> variants.</p>
+<h3 id="premultiplied-alpha"><a class="anchor" href="#premultiplied-alpha" aria-hidden="true">#</a>Premultiplied alpha</h3>
+<p>Every input is premultiplied color, and the output must be premultiplied
+again:</p>
+<ul>
+<li><strong>Color operations</strong> (contrast, hue shifts, curves) are defined on straight
+alpha: <code>unpremultiply</code> the sample, change <code>rgb</code>, <code>premultiply</code> the result.
+Scaling <code>rgb</code> by a factor, as in the example above, is the exception: it
+gives the same result either way.</li>
+<li><strong>Resampling</strong> (blurs, distortions, any weighted average of neighboring
+pixels) must work on the premultiplied samples directly. Unpremultiplying
+first bleeds the hidden color of transparent pixels into visible fringes at
+the edges.</li>
+<li>A fully transparent pixel is <code>vec4(0.0)</code>. A <code>FilterColor</code> param is straight
+alpha: multiply its <code>rgb</code> by its <code>a</code> before writing it out.</li>
+</ul>
+<h3 id="outset"><a class="anchor" href="#outset" aria-hidden="true">#</a>Outset</h3>
+<p>By default the filter only sees and paints the node&#39;s border box. An effect
+that reaches outside it (a glow, a displacement) declares how far with
+<code>outset</code>, in logical px:</p>
+<pre><code class="language-rust"><span class="token attribute attr-name">#[react_filter(shader = <span class="token string">&quot;shaders/ripple.wgsl&quot;</span>, outset = 12.0, time = true)]</span>
+<span class="token keyword">struct</span> <span class="token type-definition class-name">Ripple</span> <span class="token punctuation">{</span>
+    <span class="token attribute attr-name">#[serde(default)]</span>
+    amplitude<span class="token punctuation">:</span> <span class="token keyword">f32</span><span class="token punctuation">,</span>
+<span class="token punctuation">}</span></code></pre><p>The image is then inflated by a margin on every side, and <code>uv</code>,
+<code>resolution</code> and the sampling helpers cover the inflated image. The margin
+is at least the outset, but it can be larger: the outsets of every entry in
+the chain add up and the total is rounded up. Read the actual margin from
+<code>uniforms.content_inset</code>, or anchor geometry to the node with
+<code>content_uv()</code>. The margin starts transparent.</p>
+<p>The <code>outset</code> argument is a constant. It cannot depend on a param value; size
+it for the largest value your UI uses, or the effect is cut off at the
+margin.</p>
+<h3 id="time-driven-filters"><a class="anchor" href="#time-driven-filters" aria-hidden="true">#</a>Time-driven filters</h3>
+<p>With <code>time = true</code> the pass re-runs every frame and <code>uniforms.time</code>
+advances, so the filter animates on its own. Only the filter re-runs: the
+node&#39;s content is captured once and reused while it does not change. Without
+<code>time = true</code>, the pass re-runs only when the content or the params change,
+so animate it from React state, a transition or an <code>{ animated }</code> binding
+instead.</p>
+<p><code>uniforms.time</code> is an <code>f32</code> that grows without bound. Avoid hashes such as
+<code>fract(sin(x) * 43758.5)</code> seeded from it: they lose precision after a few
+minutes of uptime. An integer hash of a quantized time stays exact.</p>
+<h2 id="custom-morph-filters"><a class="anchor" href="#custom-morph-filters" aria-hidden="true">#</a>Custom morph filters</h2>
+<p>A morph filter blends a node&#39;s frozen previous appearance into its live
+content when the <code>morphFilter</code> key changes (see
+<a href="../../styling/morph-filters/">Morph filters</a> for the style side). A custom
+one uses <code>#[react_morph_filter]</code> and <code>add_react_morph_filter</code>:</p>
+<div class="tabs"><div class="tab-panel" data-lang="tsx"><p class="tab-label">TSX</p><pre><code class="language-tsx"><span class="token operator">&lt;</span>node
+  style<span class="token operator">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span>
+    morphFilter<span class="token operator">:</span> <span class="token punctuation">{</span> key<span class="token operator">:</span> page<span class="token punctuation">,</span> name<span class="token operator">:</span> <span class="token string">&quot;windowslice&quot;</span><span class="token punctuation">,</span> params<span class="token operator">:</span> <span class="token punctuation">{</span> count<span class="token operator">:</span> <span class="token number">14</span> <span class="token punctuation">}</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+  <span class="token punctuation">}</span><span class="token punctuation">}</span>
+<span class="token operator">&gt;</span>
+  <span class="token punctuation">{</span>pages<span class="token punctuation">[</span>page<span class="token punctuation">]</span><span class="token punctuation">}</span>
+<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>node</span><span class="token punctuation">&gt;</span></span></code></pre></div><div class="tab-panel" data-lang="rust"><p class="tab-label">Rust</p><pre><code class="language-rust"><span class="token attribute attr-name">#[react_morph_filter(shader = <span class="token string">&quot;shaders/morphs/windowslice.wgsl&quot;</span>)]</span>
+<span class="token keyword">struct</span> <span class="token type-definition class-name">Windowslice</span> <span class="token punctuation">{</span>
+    <span class="token comment">/// Number of blinds.</span>
+    <span class="token attribute attr-name">#[serde(default = <span class="token string">&quot;default_count&quot;</span>)]</span>
+    count<span class="token punctuation">:</span> <span class="token keyword">f32</span><span class="token punctuation">,</span>
+    <span class="token comment">/// Soft lead of the sweep, as a fraction of the width.</span>
+    <span class="token attribute attr-name">#[serde(default = <span class="token string">&quot;default_smoothness&quot;</span>)]</span>
+    smoothness<span class="token punctuation">:</span> <span class="token keyword">f32</span><span class="token punctuation">,</span>
+<span class="token punctuation">}</span>
+
+app<span class="token punctuation">.</span><span class="token function">add_react_morph_filter</span><span class="token punctuation">::</span><span class="token operator">&lt;</span><span class="token class-name">Windowslice</span><span class="token operator">&gt;</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span></code></pre></div></div>
+<p>The struct follows the same rules as a regular filter&#39;s, but the macro takes
+only <code>shader</code> and <code>name</code>: a morph never paints outside the node and already
+re-runs every frame while it plays. The shader uses three prelude functions:</p>
+<ul>
+<li><code>morph_progress()</code>: the blend factor, <code>0</code> to <code>1</code>, already eased by the
+morph&#39;s timing.</li>
+<li><code>morph_sample_from(uv)</code>: the frozen previous appearance.</li>
+<li><code>morph_sample_to(uv)</code>: the live content.</li>
+</ul>
+<p><code>morph_sample_from_lod</code> and <code>morph_sample_to_lod</code> are the explicit-LOD
+variants. Both images are premultiplied; mix them directly.</p>
+<pre><code class="language-wgsl">#import bevy_react<span class="token punctuation">:</span><span class="token punctuation">:</span>filter<span class="token punctuation">:</span><span class="token punctuation">:</span><span class="token punctuation">{</span>
+    <span class="token class-name">FullscreenVertexOutput</span><span class="token punctuation">,</span>
+    morph_progress<span class="token punctuation">,</span>
+    morph_sample_from<span class="token punctuation">,</span>
+    morph_sample_to<span class="token punctuation">,</span>
+    uniforms<span class="token punctuation">,</span>
+<span class="token punctuation">}</span>
+
+<span class="token punctuation">@</span><span class="token attributes attr-name">fragment</span>
+<span class="token keyword">fn</span> <span class="token functions function">fragment</span><span class="token punctuation">(</span>in<span class="token punctuation">:</span> <span class="token class-name">FullscreenVertexOutput</span><span class="token punctuation">)</span> <span class="token operator">-&gt;</span> <span class="token punctuation">@</span><span class="token attributes attr-name">location</span><span class="token punctuation">(</span><span class="token int-literal number">0</span><span class="token punctuation">)</span> <span class="token builtin">vec4</span><span class="token punctuation">&lt;</span><span class="token builtin">f32</span><span class="token punctuation">&gt;</span> <span class="token punctuation">{</span>
+    <span class="token keyword">let</span> progress <span class="token operator">=</span> <span class="token function-calls function">morph_progress</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">if</span> progress <span class="token operator">&lt;=</span> <span class="token decimal-float-literal number">0.0</span> <span class="token punctuation">{</span> <span class="token keyword">return</span> <span class="token function-calls function">morph_sample_from</span><span class="token punctuation">(</span>in<span class="token punctuation">.</span>uv<span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token punctuation">}</span>
+    <span class="token keyword">if</span> progress <span class="token operator">&gt;=</span> <span class="token decimal-float-literal number">1.0</span> <span class="token punctuation">{</span> <span class="token keyword">return</span> <span class="token function-calls function">morph_sample_to</span><span class="token punctuation">(</span>in<span class="token punctuation">.</span>uv<span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token punctuation">}</span>
+
+    <span class="token keyword">let</span> count <span class="token operator">=</span> uniforms<span class="token punctuation">.</span>params<span class="token punctuation">[</span><span class="token int-literal number">0</span><span class="token punctuation">]</span><span class="token punctuation">.</span>x<span class="token punctuation">;</span>
+    <span class="token keyword">let</span> smoothness <span class="token operator">=</span> <span class="token builtin">max</span><span class="token punctuation">(</span>uniforms<span class="token punctuation">.</span>params<span class="token punctuation">[</span><span class="token int-literal number">0</span><span class="token punctuation">]</span><span class="token punctuation">.</span>y<span class="token punctuation">,</span> <span class="token decimal-float-literal number">1e-4</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">let</span> x <span class="token operator">=</span> in<span class="token punctuation">.</span>uv<span class="token punctuation">.</span>x <span class="token operator">-</span> progress <span class="token operator">*</span> <span class="token punctuation">(</span><span class="token decimal-float-literal number">1.0</span> <span class="token operator">+</span> smoothness<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">let</span> edge <span class="token operator">=</span> <span class="token builtin">smoothstep</span><span class="token punctuation">(</span><span class="token operator">-</span>smoothness<span class="token punctuation">,</span> <span class="token decimal-float-literal number">0.0</span><span class="token punctuation">,</span> x<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">let</span> s <span class="token operator">=</span> <span class="token builtin">step</span><span class="token punctuation">(</span>edge<span class="token punctuation">,</span> <span class="token builtin">fract</span><span class="token punctuation">(</span>count <span class="token operator">*</span> in<span class="token punctuation">.</span>uv<span class="token punctuation">.</span>x<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">return</span> <span class="token builtin">mix</span><span class="token punctuation">(</span><span class="token function-calls function">morph_sample_from</span><span class="token punctuation">(</span>in<span class="token punctuation">.</span>uv<span class="token punctuation">)</span><span class="token punctuation">,</span> <span class="token function-calls function">morph_sample_to</span><span class="token punctuation">(</span>in<span class="token punctuation">.</span>uv<span class="token punctuation">)</span><span class="token punctuation">,</span> s<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span></code></pre><p>Rules for morph shaders:</p>
+<ul>
+<li><strong>Identity contract.</strong> At progress <code>1</code> the output must be exactly
+<code>morph_sample_to(uv)</code>. The morph renders one final frame at exactly <code>1</code>
+before it ends, and any difference flashes on that frame. Returning
+exactly <code>morph_sample_from(uv)</code> at <code>0</code> keeps the start seamless the same
+way; the early returns above handle both ends.</li>
+<li><strong>One pass, at most 6 params <code>vec4</code>s.</strong> The last two of the 8 are reserved
+for the engine. A morph over the cap, or a hand-written one resolving to
+several passes, is rejected with a <code>morphFilterParams</code> warning and the
+change snaps.</li>
+<li>Both images are sampled at the same <code>uv</code>: the frozen image is stretched
+onto the node&#39;s current box, so a size change across the key change
+stretches the old appearance.</li>
+</ul>
+<p>The demos app ports a pack of <a href="https://gl-transitions.com/gallery">gl-transitions</a>
+transitions this way; their shaders, in
+<a href="https://github.com/tulustul/bevy-react/blob/main/examples/assets/shaders/morphs"><code>examples/assets/shaders/morphs/</code></a>,
+are worked examples, registered in
+<a href="https://github.com/tulustul/bevy-react/blob/main/examples/demos/filters.rs"><code>examples/demos/filters.rs</code></a>.</p>
+<p><img src="../../screenshots/morphs-custom.webp" alt="The demos' custom morph pack swapping live UI cards: window slices, a radial sweep, a polka-dot curtain, a circle crop, a curtain, a burn, a tile wave, a grid flip, a doorway, a book flip, a kaleidoscope, a datamosh glitch, a film burn, a page curl and a dust-off." loading="lazy"></p>
+<h2 id="two-families"><a class="anchor" href="#two-families" aria-hidden="true">#</a>Two families</h2>
+<p>Regular filters and morph filters are separate, in the typing and at
+runtime:</p>
+<ul>
+<li><code>#[react_filter]</code> + <code>add_react_filter</code> names land in the generated
+<code>BevyFilters</code> interface and are accepted by <code>filter</code> and <code>backdropFilter</code>.</li>
+<li><code>#[react_morph_filter]</code> + <code>add_react_morph_filter</code> names land in
+<code>BevyMorphFilters</code> and are accepted by <code>morphFilter</code> only.</li>
+</ul>
+<p>Using a name from the wrong family is a type error in TSX. At runtime the
+entry is skipped with a <code>filterParams</code> or <code>backdropFilterParams</code> warning in
+a chain, or snaps with a <code>morphFilterParams</code> warning in <code>morphFilter</code>.</p>
+<h2 id="transitions-and-animated-params"><a class="anchor" href="#transitions-and-animated-params" aria-hidden="true">#</a>Transitions and animated params</h2>
+<p>Custom filters take part in <a href="../../styling/filters/">filter transitions</a> and
+<code>{ animated }</code> param bindings like the built-ins, with two differences:</p>
+<ul>
+<li>A custom filter has no identity value. When a transition adds or removes a
+custom entry, the chains swap at the halfway point instead of fading. Keep
+the entry in the base style with a no-op param value (<code>strength: 0</code> above)
+when it should fade in and out.</li>
+<li><code>{ animated }</code> bindings drive <code>f32</code>, <code>Length</code>, <code>Angle</code> and <code>FilterColor</code>
+params. Vector and array params cannot be bound; the binding is ignored
+with a <code>filterBinding</code> warning (<code>backdropFilterBinding</code>,
+<code>morphFilterBinding</code> on those styles).</li>
+</ul>
+<h2 id="multi-pass-filters"><a class="anchor" href="#multi-pass-filters" aria-hidden="true">#</a>Multi-pass filters</h2>
+<p><code>#[react_filter]</code> always produces a single pass. For several passes, or an
+outset computed from the params, implement the <code>ReactFilter</code> trait from
+<code>bevy_react::filters</code> by hand on a struct deriving <code>serde::Deserialize</code> and
+<code>ts_rs::TS</code>. Its <code>resolve</code> returns one <code>ResolvedFilterPass</code> per pass, each
+with its own shader and packed params, and its <code>outset</code> receives the decoded
+params. Each pass&#39;s <code>sample_source</code> reads the previous pass&#39;s output, and
+<code>sample_capture</code> still reads the node&#39;s unfiltered capture. The built-in
+<a href="https://github.com/tulustul/bevy-react/blob/main/crates/core/src/filters/builtin/blur.rs"><code>blur</code></a> (two passes) and
+<a href="https://github.com/tulustul/bevy-react/blob/main/crates/core/src/filters/builtin/bloom.rs"><code>bloom</code></a> are complete
+implementations. Register it with <code>add_react_filter</code> like any other filter.</p>
+<h2 id="precompiling-shaders"><a class="anchor" href="#precompiling-shaders" aria-hidden="true">#</a>Precompiling shaders</h2>
+<p>A filter&#39;s GPU pipeline compiles in the background the first time it is
+used, and the node draws nothing until it is ready. By default every
+registered filter and morph is compiled at startup instead, so first use is
+instant. <code>precompile_filters</code> narrows that per group: <code>builtins</code> (everything
+bevy-react ships, morphs included), <code>filters</code> (your <code>add_react_filter</code>
+filters) and <code>morphs</code> (your <code>add_react_morph_filter</code> morphs), each <code>All</code>
+(the default), <code>Names(..)</code> or <code>Off</code>:</p>
+<pre><code class="language-rust"><span class="token keyword">use</span> <span class="token namespace">bevy_react<span class="token punctuation">::</span></span><span class="token punctuation">{</span><span class="token class-name">FilterSelection</span><span class="token punctuation">,</span> <span class="token class-name">PrecompileFilters</span><span class="token punctuation">}</span><span class="token punctuation">;</span>
+
+app<span class="token punctuation">.</span><span class="token function">add_plugins</span><span class="token punctuation">(</span><span class="token class-name">ReactPlugins</span><span class="token punctuation">.</span><span class="token function">set</span><span class="token punctuation">(</span>
+    <span class="token class-name">ReactUiPlugin</span><span class="token punctuation">::</span><span class="token function">default</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">precompile_filters</span><span class="token punctuation">(</span><span class="token class-name">PrecompileFilters</span> <span class="token punctuation">{</span>
+        morphs<span class="token punctuation">:</span> <span class="token class-name">FilterSelection</span><span class="token punctuation">::</span><span class="token class-name">Names</span><span class="token punctuation">(</span><span class="token macro property">vec!</span><span class="token punctuation">[</span><span class="token string">&quot;windowslice&quot;</span><span class="token punctuation">.</span><span class="token function">into</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+        <span class="token punctuation">..</span><span class="token function">default</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+    <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span></code></pre><p>A name that is unknown or belongs to another group is skipped with a
+<code>precompileFilters</code> warning at startup. A hand-written multi-pass filter
+whose params do not all have defaults precompiles its first shader only.</p>
+<h2 id="limits"><a class="anchor" href="#limits" aria-hidden="true">#</a>Limits</h2>
+<ul>
+<li>A shader that fails to compile makes the filtered node invisible until it
+is fixed. The error is logged to the terminal, naming the layer.</li>
+<li>At most 8 param <code>vec4</code>s per pass (6 for a morph).</li>
+<li>The <code>outset</code> argument is a constant; a param-dependent outset needs a
+hand-written <code>ReactFilter</code>.</li>
+<li>A <code>time = true</code> filter inside another composited layer (an ancestor with a
+<code>filter</code>, <code>transform3d</code>, <code>opacity</code> on a node with children, or <code>cache</code>)
+keeps animating in its own layer but appears frozen, because the enclosing
+layer reuses its cached capture. Set <code>cache: &quot;never&quot;</code> on the enclosing
+layer (see <a href="../../styling/layers/">Layers</a>).</li>
+<li>Custom filters cannot fade in or out through an identity value (see
+above), and vector params cannot be animated.</li>
+</ul>
+<p><img src="../../screenshots/custom-filters.webp" alt="Custom WGSL filters running on live UI: a ripple distortion, a glitch effect and an animated dissolve." loading="lazy"></p>
+<p>See the <a href="../../reference/filters/">filter reference</a> for the built-ins&#39; params,
+and <a href="../../reference/style-properties/#filter"><code>filter</code></a>,
+<a href="../../reference/style-properties/#backdropFilter"><code>backdropFilter</code></a> and
+<a href="../../reference/style-properties/#morphFilter"><code>morphFilter</code></a> in the style
+reference. Filters on a backdrop receive an opaque source; see
+<a href="../../styling/backdrop-filters/">Backdrop filters</a>.</p>
+
+</article>
+<footer class="page-links"><a href="../../demo/?page=custom-filters">Open live demo</a>
+<a href="https://github.com/tulustul/bevy-react/blob/v0.7.0/examples/demos/ui/src/demos/extending/CustomFiltersDemo.tsx">Demo source</a>
+<a href="https://github.com/tulustul/bevy-react/edit/main/docs/guide/extending/custom-filters.md">Edit this page</a></footer>
+</main>
+</div>
+<footer class="site-footer">
+<p>bevy-react is dual-licensed under MIT or Apache-2.0. <a href="https://github.com/tulustul/bevy-react">Source on GitHub</a>.</p>
+</footer>
+</body>
+</html>

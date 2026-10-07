@@ -1,0 +1,96 @@
+# bevy-react
+
+> Build bevy_ui interfaces with React. Components render to native Bevy UI entities through a bridge, with no web view and no DOM.
+
+The whole documentation in one file: https://tulustul.github.io/bevy-react/llms-full.txt
+
+## Overview
+
+- [Introduction](https://tulustul.github.io/bevy-react/index.md): Build bevy_ui interfaces with React. Components render to native Bevy UI entities through a bridge, with no web view and no DOM.
+- [Getting started](https://tulustul.github.io/bevy-react/getting-started.md): Add the bevy-react crate, scaffold the React UI with npx bevy-react init, and load the built bundle with ReactPlugins.
+- [How it works](https://tulustul.github.io/bevy-react/how-it-works.md): How bevy-react works: React commits become batched ops that Bevy applies to ECS entities, with events, messages and animations crossing a bridge.
+- [Performance](https://tulustul.github.io/bevy-react/performance.md): Benchmark results for bevy-react — op throughput, layout, and layer workloads — with the commands to reproduce them.
+
+## Elements
+
+- [<node>](https://tulustul.github.io/bevy-react/elements/node.md): The <node> element is the styled container every layout is built from, plus the props, state styles and events all styled elements share.
+- [<button>](https://tulustul.github.io/bevy-react/elements/button.md): The <button> element is a <node> that blocks the pointer by default and always owns its clicks, styled for feedback with hover and press styles.
+- [<text>](https://tulustul.github.io/bevy-react/elements/text.md): The <text> element renders text, with inline spans, fonts registered on the Rust side, and the color, font, spacing, alignment, wrapping and shadow styles.
+- [<editableText>](https://tulustul.github.io/bevy-react/elements/editable-text.md): The <editableText> element is a native text input with a controlled value and selection, change, select, focus and blur events, multiline, IME and clipboard.
+- [<image>](https://tulustul.github.io/bevy-react/elements/image.md): The <image> element draws a texture asset or an SVG file, with tint, flips, 9-slice and tiled scaling, source crops and sprite-sheet atlases.
+- [<canvas>](https://tulustul.github.io/bevy-react/elements/canvas.md): The <canvas> element is a retained drawing surface with an HTML-canvas-like path API, painted declaratively with draw or imperatively through a ref.
+- [<svg>](https://tulustul.github.io/bevy-react/elements/svg.md): The <svg> element draws vector graphics from JSX shapes, with viewBox scaling, per-shape pointer events, animated attributes and attribute transitions.
+- [<portal>](https://tulustul.github.io/bevy-react/elements/portal.md): The <portal> element shows a named render target, such as a Bevy camera rendering into a texture, inside the UI for minimaps and 3D previews.
+- [<surface>](https://tulustul.github.io/bevy-react/elements/surface.md): The <surface> element renders a React subtree into an offscreen texture for a 3D mesh, clickable in the world through SurfacePointer.
+- [<root>](https://tulustul.github.io/bevy-react/elements/root.md): The <root> element renders its children as a separate window-filling UI tree above the app, for modals, toasts and overlays declared anywhere in React.
+- [<anchor>](https://tulustul.github.io/bevy-react/elements/anchor.md): The <anchor> element pins a UI subtree to a 3D entity's projected screen position, with a world-space offset and optional distance scaling.
+
+## Layout
+
+- [Flexbox](https://tulustul.github.io/bevy-react/layout/flexbox.md): Lay out children in rows and columns with flexbox, the default layout of every node, with wrapping, growing, shrinking, alignment and gaps.
+- [Grid](https://tulustul.github.io/bevy-react/layout/grid.md): Lay out children on CSS grid tracks with display grid, the track and placement syntax bevy-react accepts, auto flow and item alignment.
+- [Positioning](https://tulustul.github.io/bevy-react/layout/positioning.md): Take a node out of the layout flow with positionType absolute, offset it with left, right, top and bottom, and know what the offsets are relative to.
+
+## Styling
+
+- [Units](https://tulustul.github.io/bevy-react/styling/units.md): The value forms style properties accept for lengths, four-sided rects, angles, durations and font sizes, and what each unit resolves against.
+- [Colors](https://tulustul.github.io/bevy-react/styling/colors.md): The CSS color strings every color style accepts (hex, named, rgb, hsl, hwb, oklab, oklch), backgroundColor, color transitions and animated colors.
+- [Borders](https://tulustul.github.io/bevy-react/styling/borders.md): Border widths, per-side border colors, rounded corners with transitions and animated radii, and outlines drawn outside the box.
+- [Spacing](https://tulustul.github.io/bevy-react/styling/spacing.md): Space nodes with padding inside their border and margin outside it, in any four-sided form, including auto margins that push items apart.
+- [Sizing](https://tulustul.github.io/bevy-react/styling/sizing.md): Size nodes with width and height, clamp them with min and max sizes, derive one axis with aspectRatio, and pick the box model with boxSizing.
+- [Layout rounding](https://tulustul.github.io/bevy-react/styling/layout-rounding.md): Turn off layout's whole-pixel rounding for a subtree with layoutRounding false, so sizes animated through layout glide instead of stepping.
+- [Overflow](https://tulustul.github.io/bevy-react/styling/overflow.md): Clip or scroll content larger than its node with overflowX and overflowY, control the scroll offset from React, and add a styled, draggable scrollbar.
+- [Transforms](https://tulustul.github.io/bevy-react/styling/transforms.md): Move, scale and rotate a node and its subtree after layout with the transform style, with transitions and animated fields.
+- [3D transforms](https://tulustul.github.io/bevy-react/styling/3d-transforms.md): Tilt, flip and project a node's rendered subtree in 3D with the transform3d style, with perspective, a pivot, transitions and picking.
+- [Shadows](https://tulustul.github.io/bevy-react/styling/shadows.md): Drop shadows behind a node's box with boxShadow - color, offsets, blur and spread, several stacked shadows - plus a pointer to textShadow.
+- [Filters](https://tulustul.github.io/bevy-react/styling/filters.md): Run GPU filter chains over a node and its subtree with the filter style - blur, color ops, bloom, shadows, outlines, gradient text and pinch.
+- [Backdrop filters](https://tulustul.github.io/bevy-react/styling/backdrop-filters.md): Filter the 3D scene behind a UI node with the backdropFilter style, for frosted glass, recolors and distortions, with transitions and animated params.
+- [Morph filters](https://tulustul.github.io/bevy-react/styling/morph-filters.md): Blend a node's old appearance into its new content when a key changes with the morphFilter style - crossfades, wipes and pixel mosaics.
+- [Gradients](https://tulustul.github.io/bevy-react/styling/gradients.md): Linear, radial and conic gradients on a node's fill and border, with stops, hints, color spaces, layered lists, transitions and animated leaves.
+- [Background images](https://tulustul.github.io/bevy-react/styling/background-images.md): Paint an image asset or an app-registered texture behind a node's content with backgroundImage, stretched or tiled, tinted and animated.
+- [Image rendering](https://tulustul.github.io/bevy-react/styling/image-rendering.md): Choose how an image or background image is resampled when drawn at another size - smooth mipmapped minification or crisp pixel art.
+- [Opacity](https://tulustul.github.io/bevy-react/styling/opacity.md): Fade a node with opacity - web-style group fading of a whole subtree through a composited layer, or per-node fading with groupAlpha false.
+- [Z-index](https://tulustul.github.io/bevy-react/styling/z-index.md): Control paint and hit-test order with zIndex among siblings and globalZIndex across the whole UI, for popovers and overlays.
+- [Focus policy](https://tulustul.github.io/bevy-react/styling/focus-policy.md): Decide whether a node stops pointer hover, clicks and 3D-scene picking from reaching what lies beneath it, with focusPolicy block or pass.
+- [Cursors](https://tulustul.github.io/bevy-react/styling/cursors.md): Set the mouse cursor per node with the cursor style - system cursor keywords and custom image cursors registered on the Rust side.
+- [Layers](https://tulustul.github.io/bevy-react/styling/layers.md): How styles promote a subtree to a cached composited layer, what re-renders it, the cache style, clipping, costs and the devtools Layers tab.
+
+## Animations
+
+- [Style transitions](https://tulustul.github.io/bevy-react/animations/style-transitions.md): Ease style changes instead of snapping them with the transition style, per channel, with timing curves or springs, including FLIP layout transitions.
+- [Animated values](https://tulustul.github.io/bevy-react/animations/animated-values.md): Drive styles every frame from Bevy with Reanimated-style shared values, timing, spring, repeat, sequence and delay drivers, and inline animated bindings.
+- [Interpolation](https://tulustul.github.io/bevy-react/animations/interpolation.md): Map one shared value onto many style values with interpolate and interpolateColor, piecewise-linear curves evaluated in Bevy every frame.
+- [Shared elements](https://tulustul.github.io/bevy-react/animations/shared-elements.md): Fly a node between parents or screens with sharedTag and transition.sharedElement, starting the incoming node where the outgoing one was.
+
+## Communication
+
+- [React to Bevy](https://tulustul.github.io/bevy-react/communication/react-to-bevy.md): Send typed fire-and-forget messages from React to Bevy observers with #[react_message], add_react_handler and the generated bevy proxy.
+- [Bevy to React](https://tulustul.github.io/bevy-react/communication/bevy-to-react.md): Push typed events from any Bevy system to React listeners with #[react_event], the ReactEvents system param and bevy.on.
+- [Request / response](https://tulustul.github.io/bevy-react/communication/request-response.md): Call Bevy from React and await a typed reply with #[react_request], Request<T> observers, deferred Responders and the nested bevy proxy.
+- [Named nodes](https://tulustul.github.io/bevy-react/communication/named-nodes.md): Give React nodes a Bevy Name with the name prop and find them from Rust through ReactNodes or ReactNode queries to read layout or add components.
+
+## Events
+
+- [Mouse](https://tulustul.github.io/bevy-react/events/mouse.md): Handle clicks, pointer drags, hover and the mouse wheel on bevy-react elements, and keep UI input away from your Bevy world systems.
+- [Keyboard](https://tulustul.github.io/bevy-react/events/keyboard.md): Listen to window-wide key presses in React with the built-in keyDown and keyUp events and their KeyboardEventData payload.
+- [Gamepad](https://tulustul.github.io/bevy-react/events/gamepad.md): Read gamepad connections, buttons and sticks in React with the built-in gamepad events, list connected pads and drive rumble from JavaScript.
+- [Window](https://tulustul.github.io/bevy-react/events/window.md): Read the UI viewport's logical size in React with the built-in resize event and the bevy.window.size() request, for responsive layouts.
+
+## Extending
+
+- [Custom elements](https://tulustul.github.io/bevy-react/extending/custom-elements.md): Register your own JSX elements from Rust with add_react_element - attributes, writers, a spawn hook, element events and animated attributes.
+- [Custom styles](https://tulustul.github.io/bevy-react/extending/custom-styles.md): Register your own style properties from Rust with add_react_style - read them as stamped StyleValue components or turn them into components with writers.
+- [Custom filters](https://tulustul.github.io/bevy-react/extending/custom-filters.md): Write your own WGSL filters and morph transitions with typed TSX params, using #[react_filter], #[react_morph_filter] and the shader prelude.
+
+## Tooling
+
+- [Devtools](https://tulustul.github.io/bevy-react/tooling/devtools.md): The built-in devtools inspector, toggled with F12 in debug builds, with a node tree, live style editing, layers, console and bridge log.
+- [Hot reload](https://tulustul.github.io/bevy-react/tooling/hot-reload.md): Edit React components while the Bevy app runs; React Fast Refresh keeps hook state, and a broken edit never takes the running UI down.
+- [Web builds](https://tulustul.github.io/bevy-react/tooling/web.md): Run a bevy-react app in the browser by compiling the Bevy app to wasm and loading the same React bundles in the page.
+- [TypeScript codegen](https://tulustul.github.io/bevy-react/tooling/ts-codegen.md): The generated bevy.ts mirrors your Rust bindings in TypeScript, with typed emit, request and on, the bevy proxy, and typings for filters, styles and elements.
+
+## Reference
+
+- [Style properties](https://tulustul.github.io/bevy-react/reference/style-properties.md): Every style property bevy-react accepts, with its type and whether it can be animated. Generated from the code.
+- [Elements](https://tulustul.github.io/bevy-react/reference/elements.md): Every bevy-react JSX element with its attributes, events, and the common props it accepts. Generated from the code.
+- [Filters](https://tulustul.github.io/bevy-react/reference/filters.md): The built-in filters and morph filters with their params. Generated from the code.

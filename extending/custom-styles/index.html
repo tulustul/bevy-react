@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Custom styles · bevy-react</title>
+<meta name="description" content="Register your own style properties from Rust with add_react_style - read them as stamped StyleValue components or turn them into components with writers.">
+<link rel="canonical" href="https://tulustul.github.io/bevy-react/extending/custom-styles/">
+<link rel="alternate" type="text/markdown" href="../../extending/custom-styles.md">
+<meta property="og:title" content="Custom styles · bevy-react">
+<meta property="og:description" content="Register your own style properties from Rust with add_react_style - read them as stamped StyleValue components or turn them into components with writers.">
+<link rel="icon" href="../../logo.png">
+<link rel="stylesheet" href="../../style.css">
+<script src="../../docs.js" defer></script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="site-header">
+<a class="brand" href="../../"><img src="../../logo.png" alt="" width="74" height="74"> bevy-react</a>
+<span class="version">v0.7.0</span>
+<nav class="site-links" aria-label="Project">
+<a href="../../demo/">Live demo</a>
+<a href="https://github.com/tulustul/bevy-react">GitHub</a>
+<a href="https://docs.rs/bevy-react">docs.rs</a>
+<a href="https://www.npmjs.com/package/bevy-react">npm</a>
+</nav>
+</header>
+<div class="layout">
+<nav class="sidebar" aria-label="Documentation">
+<details class="nav-menu" open>
+<summary>Menu</summary>
+<ul><li><a href="../../">Introduction</a></li><li><a href="../../getting-started/">Getting started</a></li><li><a href="../../how-it-works/">How it works</a></li><li class="nav-section"><span>Elements</span><ul><li><a href="../../elements/node/">&lt;node&gt;</a></li><li><a href="../../elements/button/">&lt;button&gt;</a></li><li><a href="../../elements/text/">&lt;text&gt;</a></li><li><a href="../../elements/editable-text/">&lt;editableText&gt;</a></li><li><a href="../../elements/image/">&lt;image&gt;</a></li><li><a href="../../elements/canvas/">&lt;canvas&gt;</a></li><li><a href="../../elements/svg/">&lt;svg&gt;</a></li><li><a href="../../elements/portal/">&lt;portal&gt;</a></li><li><a href="../../elements/surface/">&lt;surface&gt;</a></li><li><a href="../../elements/root/">&lt;root&gt;</a></li><li><a href="../../elements/anchor/">&lt;anchor&gt;</a></li></ul></li><li class="nav-section"><span>Layout</span><ul><li><a href="../../layout/flexbox/">Flexbox</a></li><li><a href="../../layout/grid/">Grid</a></li><li><a href="../../layout/positioning/">Positioning</a></li></ul></li><li class="nav-section"><span>Styling</span><ul><li><a href="../../styling/units/">Units</a></li><li><a href="../../styling/colors/">Colors</a></li><li><a href="../../styling/borders/">Borders</a></li><li><a href="../../styling/spacing/">Spacing</a></li><li><a href="../../styling/sizing/">Sizing</a></li><li><a href="../../styling/layout-rounding/">Layout rounding</a></li><li><a href="../../styling/overflow/">Overflow</a></li><li><a href="../../styling/transforms/">Transforms</a></li><li><a href="../../styling/3d-transforms/">3D transforms</a></li><li><a href="../../styling/shadows/">Shadows</a></li><li><a href="../../styling/filters/">Filters</a></li><li><a href="../../styling/backdrop-filters/">Backdrop filters</a></li><li><a href="../../styling/morph-filters/">Morph filters</a></li><li><a href="../../styling/gradients/">Gradients</a></li><li><a href="../../styling/background-images/">Background images</a></li><li><a href="../../styling/image-rendering/">Image rendering</a></li><li><a href="../../styling/opacity/">Opacity</a></li><li><a href="../../styling/z-index/">Z-index</a></li><li><a href="../../styling/focus-policy/">Focus policy</a></li><li><a href="../../styling/cursors/">Cursors</a></li><li><a href="../../styling/layers/">Layers</a></li></ul></li><li class="nav-section"><span>Animations</span><ul><li><a href="../../animations/style-transitions/">Style transitions</a></li><li><a href="../../animations/animated-values/">Animated values</a></li><li><a href="../../animations/interpolation/">Interpolation</a></li><li><a href="../../animations/shared-elements/">Shared elements</a></li></ul></li><li class="nav-section"><span>Communication</span><ul><li><a href="../../communication/react-to-bevy/">React to Bevy</a></li><li><a href="../../communication/bevy-to-react/">Bevy to React</a></li><li><a href="../../communication/request-response/">Request / response</a></li><li><a href="../../communication/named-nodes/">Named nodes</a></li></ul></li><li class="nav-section"><span>Events</span><ul><li><a href="../../events/mouse/">Mouse</a></li><li><a href="../../events/keyboard/">Keyboard</a></li><li><a href="../../events/gamepad/">Gamepad</a></li><li><a href="../../events/window/">Window</a></li></ul></li><li class="nav-section"><span>Extending</span><ul><li><a href="../../extending/custom-elements/">Custom elements</a></li><li><a href="../../extending/custom-styles/" aria-current="page">Custom styles</a></li><li><a href="../../extending/custom-filters/">Custom filters</a></li></ul></li><li class="nav-section"><span>Tooling</span><ul><li><a href="../../tooling/devtools/">Devtools</a></li><li><a href="../../tooling/hot-reload/">Hot reload</a></li><li><a href="../../tooling/web/">Web builds</a></li><li><a href="../../tooling/ts-codegen/">TypeScript codegen</a></li></ul></li><li class="nav-section"><span>Reference</span><ul><li><a href="../../reference/style-properties/">Style properties</a></li><li><a href="../../reference/elements/">Elements</a></li><li><a href="../../reference/filters/">Filters</a></li></ul></li><li><a href="../../performance/">Performance</a></li></ul>
+</details>
+</nav>
+<main id="main">
+<article>
+<h1 id="custom-styles">Custom styles</h1>
+<p>An app can register its own style properties in Rust. A registered property
+works like a built-in one: it is typed into <code>BevyStyle</code>, accepted in <code>style</code>
+and in the hover, press and focus variants, merged per property on updates,
+and listed in the devtools style editor. The core&#39;s own properties are
+declared through the same API.</p>
+<h2 id="usage"><a class="anchor" href="#usage" aria-hidden="true">#</a>Usage</h2>
+<p>Declare the property as a <code>static</code>, register it, and read its value as a
+component from your own systems:</p>
+<div class="tabs"><div class="tab-panel" data-lang="tsx"><p class="tab-label">TSX</p><pre><code class="language-tsx"><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>button</span>
+  <span class="token attr-name">style</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span> sparkle<span class="token operator">:</span> <span class="token punctuation">{</span> rate<span class="token operator">:</span> <span class="token number">8</span> <span class="token punctuation">}</span> <span class="token punctuation">}</span><span class="token punctuation">}</span></span>
+  <span class="token attr-name">pressStyle</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span> sparkle<span class="token operator">:</span> <span class="token punctuation">{</span> rate<span class="token operator">:</span> <span class="token number">70</span><span class="token punctuation">,</span> size<span class="token operator">:</span> <span class="token number">7</span> <span class="token punctuation">}</span> <span class="token punctuation">}</span><span class="token punctuation">}</span></span>
+<span class="token punctuation">&gt;</span></span><span class="token plain-text">
+  </span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>text</span><span class="token punctuation">&gt;</span></span><span class="token plain-text">Make a wish</span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>text</span><span class="token punctuation">&gt;</span></span><span class="token plain-text">
+</span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>button</span><span class="token punctuation">&gt;</span></span></code></pre></div><div class="tab-panel" data-lang="rust"><p class="tab-label">Rust</p><pre><code class="language-rust"><span class="token keyword">use</span> <span class="token namespace">bevy<span class="token punctuation">::</span>prelude<span class="token punctuation">::</span></span><span class="token operator">*</span><span class="token punctuation">;</span>
+<span class="token keyword">use</span> <span class="token namespace">bevy<span class="token punctuation">::</span>ui<span class="token punctuation">::</span></span><span class="token punctuation">{</span><span class="token class-name">ComputedNode</span><span class="token punctuation">,</span> <span class="token class-name">UiGlobalTransform</span><span class="token punctuation">}</span><span class="token punctuation">;</span>
+<span class="token keyword">use</span> <span class="token namespace">bevy_react<span class="token punctuation">::</span>style<span class="token punctuation">::</span></span><span class="token punctuation">{</span><span class="token class-name">StyleProperty</span><span class="token punctuation">,</span> <span class="token class-name">StyleValue</span><span class="token punctuation">}</span><span class="token punctuation">;</span>
+<span class="token keyword">use</span> <span class="token namespace">bevy_react<span class="token punctuation">::</span></span><span class="token punctuation">{</span><span class="token class-name">ReactAppExt</span><span class="token punctuation">,</span> <span class="token class-name">ReactApplySet</span><span class="token punctuation">}</span><span class="token punctuation">;</span>
+
+<span class="token attribute attr-name">#[derive(Debug, Clone, PartialEq, serde::Deserialize, ts_rs::TS)]</span>
+<span class="token keyword">pub</span> <span class="token keyword">struct</span> <span class="token type-definition class-name">Sparkle</span> <span class="token punctuation">{</span>
+    <span class="token comment">/// Particles per second.</span>
+    <span class="token keyword">pub</span> rate<span class="token punctuation">:</span> <span class="token keyword">f32</span><span class="token punctuation">,</span>
+    <span class="token comment">/// Particle size in logical px (default `6`).</span>
+    <span class="token attribute attr-name">#[ts(optional)]</span>
+    <span class="token keyword">pub</span> size<span class="token punctuation">:</span> <span class="token class-name">Option</span><span class="token operator">&lt;</span><span class="token keyword">f32</span><span class="token operator">&gt;</span><span class="token punctuation">,</span>
+<span class="token punctuation">}</span>
+
+<span class="token keyword">pub</span> <span class="token keyword">static</span> <span class="token constant">SPARKLE</span><span class="token punctuation">:</span> <span class="token class-name">StyleProperty</span><span class="token operator">&lt;</span><span class="token class-name">Sparkle</span><span class="token operator">&gt;</span> <span class="token operator">=</span> <span class="token class-name">StyleProperty</span><span class="token punctuation">::</span><span class="token function">new</span><span class="token punctuation">(</span><span class="token string">&quot;sparkle&quot;</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token keyword">pub</span> <span class="token keyword">struct</span> <span class="token type-definition class-name">SparklePlugin</span><span class="token punctuation">;</span>
+
+<span class="token keyword">impl</span> <span class="token class-name">Plugin</span> <span class="token keyword">for</span> <span class="token class-name">SparklePlugin</span> <span class="token punctuation">{</span>
+    <span class="token keyword">fn</span> <span class="token function-definition function">build</span><span class="token punctuation">(</span><span class="token operator">&amp;</span><span class="token keyword">self</span><span class="token punctuation">,</span> app<span class="token punctuation">:</span> <span class="token operator">&amp;</span><span class="token keyword">mut</span> <span class="token class-name">App</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token function">register_bindings</span><span class="token punctuation">(</span>app<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        app<span class="token punctuation">.</span><span class="token function">add_systems</span><span class="token punctuation">(</span><span class="token class-name">Update</span><span class="token punctuation">,</span> emit_sparkles<span class="token punctuation">.</span><span class="token function">after</span><span class="token punctuation">(</span><span class="token class-name">ReactApplySet</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+
+<span class="token comment">/// Also called from the `--export-bindings` path.</span>
+<span class="token keyword">pub</span> <span class="token keyword">fn</span> <span class="token function-definition function">register_bindings</span><span class="token punctuation">(</span>app<span class="token punctuation">:</span> <span class="token operator">&amp;</span><span class="token keyword">mut</span> <span class="token class-name">App</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    app<span class="token punctuation">.</span><span class="token function">add_react_style</span><span class="token punctuation">(</span><span class="token operator">&amp;</span><span class="token constant">SPARKLE</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+<span class="token comment">// No writer reads `sparkle`, so its value is stamped on the node.</span>
+<span class="token keyword">fn</span> <span class="token function-definition function">emit_sparkles</span><span class="token punctuation">(</span>
+    emitters<span class="token punctuation">:</span> <span class="token class-name">Query</span><span class="token operator">&lt;</span><span class="token punctuation">(</span>
+        <span class="token operator">&amp;</span><span class="token class-name">StyleValue</span><span class="token operator">&lt;</span><span class="token class-name">Sparkle</span><span class="token operator">&gt;</span><span class="token punctuation">,</span>
+        <span class="token operator">&amp;</span><span class="token class-name">ComputedNode</span><span class="token punctuation">,</span>
+        <span class="token operator">&amp;</span><span class="token class-name">UiGlobalTransform</span><span class="token punctuation">,</span>
+    <span class="token punctuation">)</span><span class="token operator">&gt;</span><span class="token punctuation">,</span>
+<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token keyword">for</span> <span class="token punctuation">(</span>sparkle<span class="token punctuation">,</span> node<span class="token punctuation">,</span> global<span class="token punctuation">)</span> <span class="token keyword">in</span> <span class="token operator">&amp;</span>emitters <span class="token punctuation">{</span>
+        <span class="token comment">// spawn `sparkle.0.rate` particles per second in the node's box</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span></code></pre></div></div>
+<p>Then regenerate <code>bevy.ts</code> (see <a href="#typing">Typing</a>) so <code>sparkle</code> type-checks.
+The complete property, particles included, is
+<a href="https://github.com/tulustul/bevy-react/blob/main/examples/demos/sparkle/mod.rs"><code>examples/demos/sparkle</code></a>.</p>
+<p>The light along the edge of every card in the demos app is a custom style
+too: <code>spotlight</code> is stamped the same way, and a system copies it into a
+<code>UiMaterial</code> together with the pointer position, so the light follows the
+cursor without a single React render
+(<a href="https://github.com/tulustul/bevy-react/blob/main/examples/demos/spotlight.rs"><code>examples/demos/spotlight.rs</code></a>).</p>
+<p><img src="../../screenshots/button-spotlight.webp" alt="The cursor gliding slowly across the button page: the edges of the docs card and of the two example cards catch a cyan light as it passes, and fade back to dark behind it." loading="lazy"></p>
+<h2 id="declaring-a-property"><a class="anchor" href="#declaring-a-property" aria-hidden="true">#</a>Declaring a property</h2>
+<p>A property is a <code>static StyleProperty&lt;T&gt;</code>. The static is the declaration and
+also the typed key: <code>style.get(&amp;SPARKLE)</code> reads the merged value in a
+writer. Declare it <code>static</code>, never <code>const</code>: properties are identified by
+address.</p>
+<ul>
+<li><code>StyleProperty::new(name)</code> decodes through <code>T</code>&#39;s serde <code>Deserialize</code> and
+types the field as <code>T</code>&#39;s ts-rs type. <code>T</code> derives both (<code>serde</code> and <code>ts-rs</code>
+10, the version bevy-react uses) and is <code>Clone + PartialEq + Debug</code>. Doc
+comments on its fields carry over to the generated TypeScript.</li>
+<li>Every field of the struct is public, so a declaration overrides the
+defaults with struct-update syntax:
+<code>StyleProperty { invalidate: …, ..StyleProperty::new(&quot;x&quot;) }</code>.</li>
+<li>A name already registered, a core property&#39;s included, panics at
+startup. So does registering the same static twice.</li>
+<li>The value is static: a custom property accepts no <code>{ animated }</code> binding
+and has no <code>transition</code> channel. Ease or animate in your own system if you
+need it.</li>
+</ul>
+<h3 id="codecs"><a class="anchor" href="#codecs" aria-hidden="true">#</a>Codecs</h3>
+<p>The codec decides how the wire value decodes and how TypeScript types it.
+<code>StyleProperty::with_codec(name, codec)</code> (and <code>Attribute::with_codec</code> for
+<a href="../../extending/custom-elements/#attributes">element attributes</a>) takes one of:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Codec</th>
+<th>Decodes with</th>
+<th>TypeScript type</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>Codec::serde()</code></td>
+<td><code>T</code>&#39;s <code>Deserialize</code> (what <code>new</code> uses)</td>
+<td><code>T</code>&#39;s ts-rs type</td>
+</tr>
+<tr>
+<td><code>Codec::serde_as(ts)</code></td>
+<td><code>T</code>&#39;s <code>Deserialize</code></td>
+<td>The literal expression <code>ts</code></td>
+</tr>
+<tr>
+<td><code>Codec::custom(decode, ts)</code></td>
+<td>Your <code>DecodeFn&lt;T&gt;</code> over an <code>erased_serde</code> deserializer</td>
+<td>The literal expression <code>ts</code></td>
+</tr>
+<tr>
+<td><code>Codec::keyword(&amp;TABLE)</code></td>
+<td>A <code>KeywordTable&lt;T&gt;</code>: fixed keywords to values</td>
+<td>The union of the keywords</td>
+</tr>
+</tbody></table></div>
+<p>A value that fails to deserialize fails the whole commit: the React commit
+throws a <code>TypeError</code> and Bevy never receives its ops. The generated types
+are the guard. A lenient custom decoder reports the bad value instead (with
+<code>bevy_react::protocol::decode_warn</code>, which shows it in devtools) and returns
+<code>Ok(None)</code>, which reads as the property being unset. A literal TS type is
+written into <code>bevy.ts</code> as is, so prefer a ts-rs type for an app property.</p>
+<h2 id="stamped-values"><a class="anchor" href="#stamped-values" aria-hidden="true">#</a>Stamped values</h2>
+<p>A property that no writer reads is <strong>stamped</strong>: its value lands on the node
+as a <code>StyleValue&lt;T&gt;</code> component, for your systems to query:</p>
+<ul>
+<li>It is present exactly while the merged style sets the property, hover,
+press and focus variants included, and removed when nothing sets it. Query
+<code>Without&lt;StyleValue&lt;T&gt;&gt;</code> (or use <code>RemovedComponents</code>) to notice the end.</li>
+<li>It is updated only on a real change, so <code>Changed&lt;StyleValue&lt;T&gt;&gt;</code> is
+reliable.</li>
+<li>Order your systems <code>.after(ReactApplySet)</code> to see this frame&#39;s values.</li>
+<li>Two stamped properties can&#39;t share a value type, since both would be the
+same component. Registering them panics at startup; give one a newtype
+(the demo&#39;s <code>sparkleBurst</code> is <code>struct SparkleBurst(f32)</code>).</li>
+<li>Stamped values exist on elements with a box. A nested <code>&lt;text&gt;</code> span
+ignores them.</li>
+</ul>
+<h2 id="writers"><a class="anchor" href="#writers" aria-hidden="true">#</a>Writers</h2>
+<p>When the property should become a component of your own shape, register a
+global <code>Writer</code> that reads it. The property is then no longer stamped:</p>
+<pre><code class="language-rust"><span class="token keyword">use</span> <span class="token namespace">bevy_react<span class="token punctuation">::</span>style<span class="token punctuation">::</span></span><span class="token punctuation">{</span><span class="token class-name">StyleProperty</span><span class="token punctuation">,</span> <span class="token class-name">Writer</span><span class="token punctuation">,</span> owns<span class="token punctuation">}</span><span class="token punctuation">;</span>
+
+<span class="token attribute attr-name">#[derive(Component, PartialEq)]</span>
+<span class="token keyword">struct</span> <span class="token type-definition class-name">Wobble</span><span class="token punctuation">(</span><span class="token keyword">f32</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token keyword">static</span> <span class="token constant">WOBBLE</span><span class="token punctuation">:</span> <span class="token class-name">StyleProperty</span><span class="token operator">&lt;</span><span class="token keyword">f32</span><span class="token operator">&gt;</span> <span class="token operator">=</span> <span class="token class-name">StyleProperty</span><span class="token punctuation">::</span><span class="token function">new</span><span class="token punctuation">(</span><span class="token string">&quot;wobble&quot;</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token keyword">static</span> <span class="token constant">WOBBLE_WRITER</span><span class="token punctuation">:</span> <span class="token class-name">Writer</span> <span class="token operator">=</span> <span class="token class-name">Writer</span> <span class="token punctuation">{</span>
+    reads<span class="token punctuation">:</span> <span class="token operator">&amp;</span><span class="token punctuation">[</span><span class="token operator">&amp;</span><span class="token constant">WOBBLE</span><span class="token punctuation">]</span><span class="token punctuation">,</span>
+    attrs<span class="token punctuation">:</span> <span class="token operator">&amp;</span><span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token punctuation">,</span>
+    writes<span class="token punctuation">:</span> <span class="token operator">&amp;</span><span class="token punctuation">[</span><span class="token function">owns</span><span class="token punctuation">::</span><span class="token operator">&lt;</span><span class="token class-name">Wobble</span><span class="token operator">&gt;</span><span class="token punctuation">]</span><span class="token punctuation">,</span>
+    apply<span class="token punctuation">:</span> <span class="token closure-params"><span class="token closure-punctuation punctuation">|</span>_ctx<span class="token punctuation">,</span> style<span class="token punctuation">,</span> ec<span class="token closure-punctuation punctuation">|</span></span> <span class="token keyword">match</span> style<span class="token punctuation">.</span><span class="token function">get</span><span class="token punctuation">(</span><span class="token operator">&amp;</span><span class="token constant">WOBBLE</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token class-name">Some</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>amount<span class="token punctuation">)</span> <span class="token operator">=&gt;</span> <span class="token punctuation">{</span>
+            ec<span class="token punctuation">.</span><span class="token function">insert</span><span class="token punctuation">(</span><span class="token class-name">Wobble</span><span class="token punctuation">(</span>amount<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+        <span class="token class-name">None</span> <span class="token operator">=&gt;</span> <span class="token punctuation">{</span>
+            ec<span class="token punctuation">.</span><span class="token function">remove</span><span class="token punctuation">::</span><span class="token operator">&lt;</span><span class="token class-name">Wobble</span><span class="token operator">&gt;</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span><span class="token punctuation">,</span>
+<span class="token punctuation">}</span><span class="token punctuation">;</span>
+
+app<span class="token punctuation">.</span><span class="token function">add_react_style</span><span class="token punctuation">(</span><span class="token operator">&amp;</span><span class="token constant">WOBBLE</span><span class="token punctuation">)</span>
+    <span class="token punctuation">.</span><span class="token function">add_react_style_writer</span><span class="token punctuation">(</span><span class="token operator">&amp;</span><span class="token constant">WOBBLE_WRITER</span><span class="token punctuation">)</span><span class="token punctuation">;</span></code></pre><ul>
+<li>A writer re-runs only when a property it reads changes, on any styled
+element, including on hover, press and focus changes. On a freshly
+spawned node (<code>ctx.fresh</code>) it runs only if the style sets one of its
+properties.</li>
+<li><code>apply</code> gets the full merged style, never a delta: an absent property
+means remove or reset.</li>
+<li>Each component has one writer. Claiming a component another writer
+writes, a core one such as <code>BackgroundColor</code> included, panics at
+registration. A global writer can&#39;t read element attributes; that is an
+<a href="../../extending/custom-elements/#spawn-hook-and-writers">element writer</a>.</li>
+<li>Global writers run in registration order.</li>
+<li><code>WriterCtx</code> also tells the writer the element <code>kind</code>, its <code>flags</code>, whether
+the node is a <code>promoted</code> layer root, and gives access to the <code>assets</code>
+server.</li>
+</ul>
+<h2 id="variants"><a class="anchor" href="#variants" aria-hidden="true">#</a>Variants</h2>
+<p>A property in <code>hoverStyle</code>, <code>pressStyle</code> or <code>focusStyle</code> replaces the base
+value while that state is active. The replacement is whole: a variant that
+sets <code>sparkle: { rate: 70 }</code> drops every other field of the base <code>sparkle</code>.
+Keep values that must survive a state change in a separate property; the
+demo&#39;s click-burst key is its own <code>sparkleBurst</code> property for exactly this
+reason, since it would vanish under <code>pressStyle</code> right when a click lands.</p>
+<h2 id="composited-layers"><a class="anchor" href="#composited-layers" aria-hidden="true">#</a>Composited layers</h2>
+<p>Inside a cached <a href="../../styling/layers/">composited layer</a>, a node&#39;s repaint is
+not detected from component changes. Declare what a change to the property
+invalidates:</p>
+<pre><code class="language-rust"><span class="token keyword">use</span> <span class="token namespace">bevy_react<span class="token punctuation">::</span>style<span class="token punctuation">::</span></span><span class="token punctuation">{</span><span class="token class-name">Invalidate</span><span class="token punctuation">,</span> <span class="token class-name">Invalidation</span><span class="token punctuation">}</span><span class="token punctuation">;</span>
+
+<span class="token keyword">static</span> <span class="token constant">WOBBLE</span><span class="token punctuation">:</span> <span class="token class-name">StyleProperty</span><span class="token operator">&lt;</span><span class="token keyword">f32</span><span class="token operator">&gt;</span> <span class="token operator">=</span> <span class="token class-name">StyleProperty</span> <span class="token punctuation">{</span>
+    invalidate<span class="token punctuation">:</span> <span class="token class-name">Invalidate</span><span class="token punctuation">::</span><span class="token class-name">Fixed</span><span class="token punctuation">(</span><span class="token class-name">Invalidation</span><span class="token punctuation">::</span><span class="token constant">PAINT</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+    <span class="token punctuation">..</span><span class="token class-name">StyleProperty</span><span class="token punctuation">::</span><span class="token function">new</span><span class="token punctuation">(</span><span class="token string">&quot;wobble&quot;</span><span class="token punctuation">)</span>
+<span class="token punctuation">}</span><span class="token punctuation">;</span></code></pre><p><code>Invalidation::PAINT</code> makes any enclosing cached layer re-capture when the
+value changes. <code>Invalidate::Computed(fn(old, new, &amp;NodeCtx))</code> decides per
+change. Pixels your systems change later on their own (an animation driven by
+the value) need their own signal: push the entity into
+<code>bevy_react::layer::LayerContentDirt</code> (its <code>nodes</code> list) on the frames it
+repaints.</p>
+<h2 id="typing"><a class="anchor" href="#typing" aria-hidden="true">#</a>Typing</h2>
+<p>The TypeScript exporter adds every app property to <code>BevyStyle</code> through a
+<code>declare module &quot;bevy-react&quot;</code> augmentation in your <code>bevy.ts</code>, together with
+the ts-rs declarations of the value types. Register the property on both
+paths: in the running app and in the <code>--export-bindings</code> exporter. A shared
+<code>register_bindings(app)</code> function called from both keeps them in step. Then
+regenerate <code>bevy.ts</code>. See <a href="../../tooling/ts-codegen/">TypeScript codegen</a>.</p>
+<p>A style key no plugin registered is dropped with an <code>unknownStyleField</code>
+warning; the rest of the style still applies.</p>
+<h2 id="limits"><a class="anchor" href="#limits" aria-hidden="true">#</a>Limits</h2>
+<ul>
+<li>No <code>{ animated }</code> bindings and no <code>transition</code> easing for custom
+properties.</li>
+<li>At most 256 style properties per app, 74 of them the core&#39;s, and at most
+64 global writers, 29 of them the core&#39;s.</li>
+<li>A malformed value decoded with plain serde loses the whole commit.</li>
+<li>A stamped property&#39;s value type must be unique among stamped properties.</li>
+</ul>
+<p>See the <a href="../../reference/style-properties/">style property reference</a> for the
+core properties, which are declared the same way.</p>
+
+</article>
+<footer class="page-links"><a href="../../demo/?page=custom-styles">Open live demo</a>
+<a href="https://github.com/tulustul/bevy-react/blob/v0.7.0/examples/demos/ui/src/demos/extending/CustomStylesDemo.tsx">Demo source</a>
+<a href="https://github.com/tulustul/bevy-react/edit/main/docs/guide/extending/custom-styles.md">Edit this page</a></footer>
+</main>
+</div>
+<footer class="site-footer">
+<p>bevy-react is dual-licensed under MIT or Apache-2.0. <a href="https://github.com/tulustul/bevy-react">Source on GitHub</a>.</p>
+</footer>
+</body>
+</html>

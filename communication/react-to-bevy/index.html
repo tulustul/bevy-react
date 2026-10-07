@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>React to Bevy · bevy-react</title>
+<meta name="description" content="Send typed fire-and-forget messages from React to Bevy observers with #[react_message], add_react_handler and the generated bevy proxy.">
+<link rel="canonical" href="https://tulustul.github.io/bevy-react/communication/react-to-bevy/">
+<link rel="alternate" type="text/markdown" href="../../communication/react-to-bevy.md">
+<meta property="og:title" content="React to Bevy · bevy-react">
+<meta property="og:description" content="Send typed fire-and-forget messages from React to Bevy observers with #[react_message], add_react_handler and the generated bevy proxy.">
+<link rel="icon" href="../../logo.png">
+<link rel="stylesheet" href="../../style.css">
+<script src="../../docs.js" defer></script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="site-header">
+<a class="brand" href="../../"><img src="../../logo.png" alt="" width="74" height="74"> bevy-react</a>
+<span class="version">v0.7.0</span>
+<nav class="site-links" aria-label="Project">
+<a href="../../demo/">Live demo</a>
+<a href="https://github.com/tulustul/bevy-react">GitHub</a>
+<a href="https://docs.rs/bevy-react">docs.rs</a>
+<a href="https://www.npmjs.com/package/bevy-react">npm</a>
+</nav>
+</header>
+<div class="layout">
+<nav class="sidebar" aria-label="Documentation">
+<details class="nav-menu" open>
+<summary>Menu</summary>
+<ul><li><a href="../../">Introduction</a></li><li><a href="../../getting-started/">Getting started</a></li><li><a href="../../how-it-works/">How it works</a></li><li class="nav-section"><span>Elements</span><ul><li><a href="../../elements/node/">&lt;node&gt;</a></li><li><a href="../../elements/button/">&lt;button&gt;</a></li><li><a href="../../elements/text/">&lt;text&gt;</a></li><li><a href="../../elements/editable-text/">&lt;editableText&gt;</a></li><li><a href="../../elements/image/">&lt;image&gt;</a></li><li><a href="../../elements/canvas/">&lt;canvas&gt;</a></li><li><a href="../../elements/svg/">&lt;svg&gt;</a></li><li><a href="../../elements/portal/">&lt;portal&gt;</a></li><li><a href="../../elements/surface/">&lt;surface&gt;</a></li><li><a href="../../elements/root/">&lt;root&gt;</a></li><li><a href="../../elements/anchor/">&lt;anchor&gt;</a></li></ul></li><li class="nav-section"><span>Layout</span><ul><li><a href="../../layout/flexbox/">Flexbox</a></li><li><a href="../../layout/grid/">Grid</a></li><li><a href="../../layout/positioning/">Positioning</a></li></ul></li><li class="nav-section"><span>Styling</span><ul><li><a href="../../styling/units/">Units</a></li><li><a href="../../styling/colors/">Colors</a></li><li><a href="../../styling/borders/">Borders</a></li><li><a href="../../styling/spacing/">Spacing</a></li><li><a href="../../styling/sizing/">Sizing</a></li><li><a href="../../styling/layout-rounding/">Layout rounding</a></li><li><a href="../../styling/overflow/">Overflow</a></li><li><a href="../../styling/transforms/">Transforms</a></li><li><a href="../../styling/3d-transforms/">3D transforms</a></li><li><a href="../../styling/shadows/">Shadows</a></li><li><a href="../../styling/filters/">Filters</a></li><li><a href="../../styling/backdrop-filters/">Backdrop filters</a></li><li><a href="../../styling/morph-filters/">Morph filters</a></li><li><a href="../../styling/gradients/">Gradients</a></li><li><a href="../../styling/background-images/">Background images</a></li><li><a href="../../styling/image-rendering/">Image rendering</a></li><li><a href="../../styling/opacity/">Opacity</a></li><li><a href="../../styling/z-index/">Z-index</a></li><li><a href="../../styling/focus-policy/">Focus policy</a></li><li><a href="../../styling/cursors/">Cursors</a></li><li><a href="../../styling/layers/">Layers</a></li></ul></li><li class="nav-section"><span>Animations</span><ul><li><a href="../../animations/style-transitions/">Style transitions</a></li><li><a href="../../animations/animated-values/">Animated values</a></li><li><a href="../../animations/interpolation/">Interpolation</a></li><li><a href="../../animations/shared-elements/">Shared elements</a></li></ul></li><li class="nav-section"><span>Communication</span><ul><li><a href="../../communication/react-to-bevy/" aria-current="page">React to Bevy</a></li><li><a href="../../communication/bevy-to-react/">Bevy to React</a></li><li><a href="../../communication/request-response/">Request / response</a></li><li><a href="../../communication/named-nodes/">Named nodes</a></li></ul></li><li class="nav-section"><span>Events</span><ul><li><a href="../../events/mouse/">Mouse</a></li><li><a href="../../events/keyboard/">Keyboard</a></li><li><a href="../../events/gamepad/">Gamepad</a></li><li><a href="../../events/window/">Window</a></li></ul></li><li class="nav-section"><span>Extending</span><ul><li><a href="../../extending/custom-elements/">Custom elements</a></li><li><a href="../../extending/custom-styles/">Custom styles</a></li><li><a href="../../extending/custom-filters/">Custom filters</a></li></ul></li><li class="nav-section"><span>Tooling</span><ul><li><a href="../../tooling/devtools/">Devtools</a></li><li><a href="../../tooling/hot-reload/">Hot reload</a></li><li><a href="../../tooling/web/">Web builds</a></li><li><a href="../../tooling/ts-codegen/">TypeScript codegen</a></li></ul></li><li class="nav-section"><span>Reference</span><ul><li><a href="../../reference/style-properties/">Style properties</a></li><li><a href="../../reference/elements/">Elements</a></li><li><a href="../../reference/filters/">Filters</a></li></ul></li><li><a href="../../performance/">Performance</a></li></ul>
+</details>
+</nav>
+<main id="main">
+<article>
+<h1 id="react-to-bevy">React to Bevy</h1>
+<p>A message is a typed, fire-and-forget notification from React to the Bevy
+world. You declare it as a Rust struct with <code>#[react_message]</code>, React sends it
+through the generated <code>bevy</code> proxy, and Bevy deserializes it and triggers it
+as an event for your observers. There is no reply: when React needs an answer,
+use a <a href="../../communication/request-response/">request</a>.</p>
+<h2 id="usage"><a class="anchor" href="#usage" aria-hidden="true">#</a>Usage</h2>
+<div class="tabs"><div class="tab-panel" data-lang="tsx"><p class="tab-label">TSX</p><pre><code class="language-tsx"><span class="token keyword">import</span> <span class="token punctuation">{</span> bevy <span class="token punctuation">}</span> <span class="token keyword">from</span> <span class="token string">&quot;./bevy&quot;</span><span class="token punctuation">;</span> <span class="token comment">// generated</span>
+
+<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>button</span> <span class="token attr-name">onClick</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">=&gt;</span> bevy<span class="token punctuation">.</span>game<span class="token punctuation">.</span><span class="token function">setSpeed</span><span class="token punctuation">(</span><span class="token number">2.5</span><span class="token punctuation">)</span><span class="token punctuation">}</span></span><span class="token punctuation">&gt;</span></span><span class="token plain-text">
+  </span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>text</span><span class="token punctuation">&gt;</span></span><span class="token plain-text">Faster</span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>text</span><span class="token punctuation">&gt;</span></span><span class="token plain-text">
+</span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>button</span><span class="token punctuation">&gt;</span></span><span class="token punctuation">;</span></code></pre></div><div class="tab-panel" data-lang="rust"><p class="tab-label">Rust</p><pre><code class="language-rust"><span class="token keyword">use</span> <span class="token namespace">bevy<span class="token punctuation">::</span>prelude<span class="token punctuation">::</span></span><span class="token operator">*</span><span class="token punctuation">;</span>
+<span class="token keyword">use</span> <span class="token namespace">bevy_react<span class="token punctuation">::</span>prelude<span class="token punctuation">::</span></span><span class="token operator">*</span><span class="token punctuation">;</span>
+
+<span class="token attribute attr-name">#[react_message(name = <span class="token string">&quot;game.setSpeed&quot;</span>)]</span>
+<span class="token keyword">struct</span> <span class="token type-definition class-name">SetSpeed</span><span class="token punctuation">(</span><span class="token keyword">f32</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token attribute attr-name">#[derive(Resource)]</span>
+<span class="token keyword">struct</span> <span class="token type-definition class-name">Speed</span><span class="token punctuation">(</span><span class="token keyword">f32</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token keyword">fn</span> <span class="token function-definition function">set_speed</span><span class="token punctuation">(</span>on<span class="token punctuation">:</span> <span class="token class-name">On</span><span class="token operator">&lt;</span><span class="token class-name">SetSpeed</span><span class="token operator">&gt;</span><span class="token punctuation">,</span> <span class="token keyword">mut</span> speed<span class="token punctuation">:</span> <span class="token class-name">ResMut</span><span class="token operator">&lt;</span><span class="token class-name">Speed</span><span class="token operator">&gt;</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    speed<span class="token number">.0</span> <span class="token operator">=</span> on<span class="token punctuation">.</span><span class="token function">event</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token number">0</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+app<span class="token punctuation">.</span><span class="token function">add_react_handler</span><span class="token punctuation">(</span>set_speed<span class="token punctuation">)</span><span class="token punctuation">;</span></code></pre></div></div>
+<p>After adding or changing a message, regenerate <code>bevy.ts</code> (see
+<a href="../../tooling/ts-codegen/">TypeScript codegen</a>) so the proxy method and its
+payload type exist on the React side.</p>
+<h2 id="defining-a-message"><a class="anchor" href="#defining-a-message" aria-hidden="true">#</a>Defining a message</h2>
+<p><code>#[react_message]</code> derives <code>serde::Deserialize</code> and <code>ts_rs::TS</code> on the struct
+and implements Bevy&#39;s <code>Event</code> for it, so don&#39;t derive those yourself. The
+struct&#39;s serde shape is the JSON the React side sends:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Rust</th>
+<th>React call</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>struct SetSpeed(f32);</code></td>
+<td><code>bevy.game.setSpeed(2.5)</code></td>
+</tr>
+<tr>
+<td><code>struct Move { x: f32, y: f32 }</code></td>
+<td><code>bevy.player.move({ x: 1, y: 2 })</code></td>
+</tr>
+<tr>
+<td><code>struct Reset;</code> (a unit struct)</td>
+<td><code>bevy.game.reset(null)</code></td>
+</tr>
+</tbody></table></div>
+<ul>
+<li>A unit-struct message still takes one argument, <code>null</code>. (Requests with a
+unit payload become zero-argument methods; messages do not.)</li>
+<li>Field names cross as written, so snake_case fields stay snake_case in
+TypeScript. For camelCase, add both serde&#39;s and ts-rs&#39;s <code>rename_all</code>, as the
+built-in messages do. They must agree, or the generated type and the wire
+JSON diverge:</li>
+</ul>
+<pre><code class="language-rust"><span class="token attribute attr-name">#[react_message(name = <span class="token string">&quot;player.aim&quot;</span>)]</span>
+<span class="token attribute attr-name">#[serde(rename_all = <span class="token string">&quot;camelCase&quot;</span>)]</span>
+<span class="token attribute attr-name">#[ts(rename_all = <span class="token string">&quot;camelCase&quot;</span>)]</span>
+<span class="token keyword">struct</span> <span class="token type-definition class-name">PlayerAim</span> <span class="token punctuation">{</span>
+    target_x<span class="token punctuation">:</span> <span class="token keyword">f32</span><span class="token punctuation">,</span> <span class="token comment">// `targetX` in TypeScript</span>
+    target_y<span class="token punctuation">:</span> <span class="token keyword">f32</span><span class="token punctuation">,</span>
+<span class="token punctuation">}</span></code></pre><ul>
+<li>Your crate needs no <code>serde</code> or <code>ts-rs</code> dependency for the message struct
+itself. A nested type you define (an enum field, a sub-struct) must derive
+<code>Deserialize</code> and <code>TS</code> itself, which does need both crates.</li>
+<li>Integers up to 32 bits map to TypeScript <code>number</code>. <code>i64</code>/<code>u64</code> are typed
+<code>bigint</code> but cross as JS numbers, exact only below 2^53 — see
+<a href="../../tooling/ts-codegen/">TypeScript codegen</a>.</li>
+</ul>
+<h2 id="names"><a class="anchor" href="#names" aria-hidden="true">#</a>Names</h2>
+<p>The name defaults to the struct&#39;s name with its first letter lowercased:
+<code>SetSpeed</code> is <code>&quot;setSpeed&quot;</code>, <code>PlayerScore</code> is <code>&quot;playerScore&quot;</code>. Override it
+with <code>#[react_message(name = &quot;...&quot;)]</code>.</p>
+<ul>
+<li>A dotted name nests the proxy method: <code>&quot;game.setSpeed&quot;</code> becomes
+<code>bevy.game.setSpeed(value)</code>, an undotted <code>&quot;setSpeed&quot;</code> becomes
+<code>bevy.setSpeed(value)</code>.</li>
+<li>Messages and <a href="../../communication/request-response/">requests</a> share the proxy tree. A name
+used both as a method and as a namespace (<code>&quot;game&quot;</code> and <code>&quot;game.reset&quot;</code>), or a
+top-level name of <code>emit</code>, <code>request</code>, <code>on</code>, <code>addEventListener</code> or
+<code>removeEventListener</code>, makes the TypeScript export panic.</li>
+<li>The built-in names <code>gamepad.rumble</code> and <code>gamepad.stopRumble</code> are reserved:
+an app message using one is left out of the generated file.</li>
+<li>One type per name. Registering a second type under a taken name logs a
+warning and replaces the first.</li>
+</ul>
+<h2 id="handling-messages"><a class="anchor" href="#handling-messages" aria-hidden="true">#</a>Handling messages</h2>
+<p><code>app.add_react_handler(observer)</code> registers the message type (inferred from
+the observer&#39;s <code>On&lt;T&gt;</code> parameter) and adds the observer. The observer is an
+ordinary Bevy observer system and takes any system parameters.</p>
+<ul>
+<li>Call <code>add_react_handler</code> again with another observer to handle one message
+in several places; registering the same type twice is harmless.</li>
+<li><code>app.add_react_message::&lt;T&gt;()</code> registers the type without an observer, for
+when you add the observer separately with <code>app.add_observer</code>.</li>
+<li>Bevy drains the messages React sent once per frame, in <code>PreUpdate</code>, in
+the order they were emitted. Observers run there, so your
+<code>Update</code> systems see their effects in the same frame.</li>
+<li>Messages are handled before that frame&#39;s UI changes are applied (UI ops
+apply in <code>ReactApplySet</code>, in <code>Update</code>). A message emitted in the same commit
+that mounts a <a href="../../communication/named-nodes/">named node</a> arrives before the node exists in
+Bevy. If the observer needs that node, record what to do in a resource and
+act on it in a system ordered <code>.after(ReactApplySet)</code>.</li>
+</ul>
+<h2 id="sending-from-react"><a class="anchor" href="#sending-from-react" aria-hidden="true">#</a>Sending from React</h2>
+<p>Import the typed surface from your generated <code>./bevy</code> module:</p>
+<pre><code class="language-tsx"><span class="token keyword">import</span> <span class="token punctuation">{</span> bevy<span class="token punctuation">,</span> emit <span class="token punctuation">}</span> <span class="token keyword">from</span> <span class="token string">&quot;./bevy&quot;</span><span class="token punctuation">;</span>
+
+bevy<span class="token punctuation">.</span>game<span class="token punctuation">.</span><span class="token function">setSpeed</span><span class="token punctuation">(</span><span class="token number">2.5</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token function">emit</span><span class="token punctuation">(</span><span class="token string">&quot;game.setSpeed&quot;</span><span class="token punctuation">,</span> <span class="token number">2.5</span><span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token comment">// the same message</span></code></pre><p>Both are checked against the Rust struct at compile time. <code>bevy-react</code> also
+exports an untyped <code>emit(name, value)</code> that accepts any name and value; prefer
+the generated one. Sending is synchronous and cheap, so it works from event
+handlers, effects and timers alike. The value must be plain JSON data.</p>
+<h2 id="malformed-and-unknown-messages"><a class="anchor" href="#malformed-and-unknown-messages" aria-hidden="true">#</a>Malformed and unknown messages</h2>
+<p>React gets no feedback either way:</p>
+<ul>
+<li>A name with no registered type logs a warning in the Bevy log and is
+dropped.</li>
+<li>A payload that doesn&#39;t deserialize into the registered type logs an error
+and is dropped; no observer runs.</li>
+</ul>
+<p>With a current <code>bevy.ts</code>, the TypeScript compiler rules out both. When a
+message can fail on the Bevy side and React has to know, make it a
+<a href="../../communication/request-response/">request</a> and reject it with <code>respond_err</code>.</p>
+<h2 id="registering-in-the-app-and-the-exporter"><a class="anchor" href="#registering-in-the-app-and-the-exporter" aria-hidden="true">#</a>Registering in the app and the exporter</h2>
+<p>The TypeScript exporter only knows the types registered on the <code>App</code> it
+exports. Keep every <code>add_react_handler</code> (and <code>add_react_request_handler</code>,
+<code>add_react_event</code>) call in one function that both your plugin and the
+<code>--export-bindings</code> entry point call, so a message can&#39;t work at runtime but
+be missing from <code>bevy.ts</code>, or the other way round:</p>
+<pre><code class="language-rust"><span class="token keyword">pub</span> <span class="token keyword">struct</span> <span class="token type-definition class-name">GamePlugin</span><span class="token punctuation">;</span>
+
+<span class="token keyword">impl</span> <span class="token class-name">Plugin</span> <span class="token keyword">for</span> <span class="token class-name">GamePlugin</span> <span class="token punctuation">{</span>
+    <span class="token keyword">fn</span> <span class="token function-definition function">build</span><span class="token punctuation">(</span><span class="token operator">&amp;</span><span class="token keyword">self</span><span class="token punctuation">,</span> app<span class="token punctuation">:</span> <span class="token operator">&amp;</span><span class="token keyword">mut</span> <span class="token class-name">App</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token function">register_bindings</span><span class="token punctuation">(</span>app<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        app<span class="token punctuation">.</span><span class="token function">insert_resource</span><span class="token punctuation">(</span><span class="token class-name">Speed</span><span class="token punctuation">(</span><span class="token number">1.0</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+
+<span class="token comment">/// Also called by the `--export-bindings` entry point.</span>
+<span class="token keyword">pub</span> <span class="token keyword">fn</span> <span class="token function-definition function">register_bindings</span><span class="token punctuation">(</span>app<span class="token punctuation">:</span> <span class="token operator">&amp;</span><span class="token keyword">mut</span> <span class="token class-name">App</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    app<span class="token punctuation">.</span><span class="token function">add_react_handler</span><span class="token punctuation">(</span>set_speed<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span></code></pre><p><a href="../../getting-started/">Getting started</a> shows the exporter entry point, and
+<a href="../../tooling/ts-codegen/">TypeScript codegen</a> covers the generated file.</p>
+<h2 id="limits"><a class="anchor" href="#limits" aria-hidden="true">#</a>Limits</h2>
+<ul>
+<li>No reply, no delivery confirmation. Failures only show in the Bevy log.</li>
+<li>Messages are queued until the next frame: nothing in Bevy reacts in the same
+instant <code>emit</code> returns.</li>
+<li>Messages are app-wide. To act on a specific UI node from Bevy, find it with
+a <a href="../../communication/named-nodes/">named node</a>.</li>
+</ul>
+<p>The other directions are <a href="../../communication/bevy-to-react/">Bevy to React</a> events and
+<a href="../../communication/request-response/">request / response</a> calls; the built-in messages are
+the gamepad&#39;s <a href="../../events/gamepad/#rumble">rumble</a> controls.</p>
+
+</article>
+<footer class="page-links"><a href="../../demo/?page=react-to-bevy">Open live demo</a>
+<a href="https://github.com/tulustul/bevy-react/blob/v0.7.0/examples/demos/ui/src/demos/communication/ReactToBevyDemo.tsx">Demo source</a>
+<a href="https://github.com/tulustul/bevy-react/edit/main/docs/guide/communication/react-to-bevy.md">Edit this page</a></footer>
+</main>
+</div>
+<footer class="site-footer">
+<p>bevy-react is dual-licensed under MIT or Apache-2.0. <a href="https://github.com/tulustul/bevy-react">Source on GitHub</a>.</p>
+</footer>
+</body>
+</html>

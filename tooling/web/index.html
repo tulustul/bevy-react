@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Web builds · bevy-react</title>
+<meta name="description" content="Run a bevy-react app in the browser by compiling the Bevy app to wasm and loading the same React bundles in the page.">
+<link rel="canonical" href="https://tulustul.github.io/bevy-react/tooling/web/">
+<link rel="alternate" type="text/markdown" href="../../tooling/web.md">
+<meta property="og:title" content="Web builds · bevy-react">
+<meta property="og:description" content="Run a bevy-react app in the browser by compiling the Bevy app to wasm and loading the same React bundles in the page.">
+<link rel="icon" href="../../logo.png">
+<link rel="stylesheet" href="../../style.css">
+<script src="../../docs.js" defer></script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="site-header">
+<a class="brand" href="../../"><img src="../../logo.png" alt="" width="74" height="74"> bevy-react</a>
+<span class="version">v0.7.0</span>
+<nav class="site-links" aria-label="Project">
+<a href="../../demo/">Live demo</a>
+<a href="https://github.com/tulustul/bevy-react">GitHub</a>
+<a href="https://docs.rs/bevy-react">docs.rs</a>
+<a href="https://www.npmjs.com/package/bevy-react">npm</a>
+</nav>
+</header>
+<div class="layout">
+<nav class="sidebar" aria-label="Documentation">
+<details class="nav-menu" open>
+<summary>Menu</summary>
+<ul><li><a href="../../">Introduction</a></li><li><a href="../../getting-started/">Getting started</a></li><li><a href="../../how-it-works/">How it works</a></li><li class="nav-section"><span>Elements</span><ul><li><a href="../../elements/node/">&lt;node&gt;</a></li><li><a href="../../elements/button/">&lt;button&gt;</a></li><li><a href="../../elements/text/">&lt;text&gt;</a></li><li><a href="../../elements/editable-text/">&lt;editableText&gt;</a></li><li><a href="../../elements/image/">&lt;image&gt;</a></li><li><a href="../../elements/canvas/">&lt;canvas&gt;</a></li><li><a href="../../elements/svg/">&lt;svg&gt;</a></li><li><a href="../../elements/portal/">&lt;portal&gt;</a></li><li><a href="../../elements/surface/">&lt;surface&gt;</a></li><li><a href="../../elements/root/">&lt;root&gt;</a></li><li><a href="../../elements/anchor/">&lt;anchor&gt;</a></li></ul></li><li class="nav-section"><span>Layout</span><ul><li><a href="../../layout/flexbox/">Flexbox</a></li><li><a href="../../layout/grid/">Grid</a></li><li><a href="../../layout/positioning/">Positioning</a></li></ul></li><li class="nav-section"><span>Styling</span><ul><li><a href="../../styling/units/">Units</a></li><li><a href="../../styling/colors/">Colors</a></li><li><a href="../../styling/borders/">Borders</a></li><li><a href="../../styling/spacing/">Spacing</a></li><li><a href="../../styling/sizing/">Sizing</a></li><li><a href="../../styling/layout-rounding/">Layout rounding</a></li><li><a href="../../styling/overflow/">Overflow</a></li><li><a href="../../styling/transforms/">Transforms</a></li><li><a href="../../styling/3d-transforms/">3D transforms</a></li><li><a href="../../styling/shadows/">Shadows</a></li><li><a href="../../styling/filters/">Filters</a></li><li><a href="../../styling/backdrop-filters/">Backdrop filters</a></li><li><a href="../../styling/morph-filters/">Morph filters</a></li><li><a href="../../styling/gradients/">Gradients</a></li><li><a href="../../styling/background-images/">Background images</a></li><li><a href="../../styling/image-rendering/">Image rendering</a></li><li><a href="../../styling/opacity/">Opacity</a></li><li><a href="../../styling/z-index/">Z-index</a></li><li><a href="../../styling/focus-policy/">Focus policy</a></li><li><a href="../../styling/cursors/">Cursors</a></li><li><a href="../../styling/layers/">Layers</a></li></ul></li><li class="nav-section"><span>Animations</span><ul><li><a href="../../animations/style-transitions/">Style transitions</a></li><li><a href="../../animations/animated-values/">Animated values</a></li><li><a href="../../animations/interpolation/">Interpolation</a></li><li><a href="../../animations/shared-elements/">Shared elements</a></li></ul></li><li class="nav-section"><span>Communication</span><ul><li><a href="../../communication/react-to-bevy/">React to Bevy</a></li><li><a href="../../communication/bevy-to-react/">Bevy to React</a></li><li><a href="../../communication/request-response/">Request / response</a></li><li><a href="../../communication/named-nodes/">Named nodes</a></li></ul></li><li class="nav-section"><span>Events</span><ul><li><a href="../../events/mouse/">Mouse</a></li><li><a href="../../events/keyboard/">Keyboard</a></li><li><a href="../../events/gamepad/">Gamepad</a></li><li><a href="../../events/window/">Window</a></li></ul></li><li class="nav-section"><span>Extending</span><ul><li><a href="../../extending/custom-elements/">Custom elements</a></li><li><a href="../../extending/custom-styles/">Custom styles</a></li><li><a href="../../extending/custom-filters/">Custom filters</a></li></ul></li><li class="nav-section"><span>Tooling</span><ul><li><a href="../../tooling/devtools/">Devtools</a></li><li><a href="../../tooling/hot-reload/">Hot reload</a></li><li><a href="../../tooling/web/" aria-current="page">Web builds</a></li><li><a href="../../tooling/ts-codegen/">TypeScript codegen</a></li></ul></li><li class="nav-section"><span>Reference</span><ul><li><a href="../../reference/style-properties/">Style properties</a></li><li><a href="../../reference/elements/">Elements</a></li><li><a href="../../reference/filters/">Filters</a></li></ul></li><li><a href="../../performance/">Performance</a></li></ul>
+</details>
+</nav>
+<main id="main">
+<article>
+<h1 id="web-builds">Web builds</h1>
+<p>A bevy-react app also runs in the browser. The Bevy app compiles to
+<code>wasm32-unknown-unknown</code>, and the same <code>vendor.js</code> and <code>app.js</code> bundles run in
+the browser&#39;s own JS engine instead of the embedded V8. The UI is still
+<code>bevy_ui</code> drawn into Bevy&#39;s canvas, not DOM. No code changes are needed: the
+bundles detect the browser host at startup. The
+<a href="https://tulustul.github.io/bevy-react/demo/">live demo</a> is the demos app built
+this way.</p>
+<h2 id="usage"><a class="anchor" href="#usage" aria-hidden="true">#</a>Usage</h2>
+<p>One-time setup:</p>
+<pre><code class="language-sh">rustup target <span class="token function">add</span> wasm32-unknown-unknown
+<span class="token function">cargo</span> <span class="token function">install</span> wasm-bindgen-cli</code></pre><p>Install the <code>wasm-bindgen</code> CLI at the version of the <code>wasm-bindgen</code> crate in
+your <code>Cargo.lock</code> (<code>cargo install wasm-bindgen-cli --version &lt;x.y.z&gt;</code>). A CLI
+a patch or two newer usually works; a larger gap makes <code>wasm-bindgen</code> fail.</p>
+<p>Build the three parts into one folder, here <code>ui/dist/</code> for a package whose
+binary is <code>my_game</code>:</p>
+<pre><code class="language-sh"><span class="token punctuation">(</span>cd ui <span class="token operator">&amp;&amp;</span> npx bevy-react build<span class="token punctuation">)</span>        <span class="token comment"># dist/vendor.js + dist/app.js</span>
+<span class="token function">cargo</span> build <span class="token parameter variable">--target</span> wasm32-unknown-unknown
+wasm-bindgen <span class="token parameter variable">--target</span> web --out-dir ui/dist --out-name game <span class="token punctuation">\</span>
+  target/wasm32-unknown-unknown/debug/my_game.wasm
+<span class="token function">cp</span> <span class="token parameter variable">-r</span> assets ui/dist/assets</code></pre><p><code>wasm-bindgen</code> writes <code>game.js</code> (the loader) and <code>game_bg.wasm</code>. Pick an
+<code>--out-name</code> other than <code>app</code> or <code>vendor</code>, so the loader doesn&#39;t overwrite a
+bundle.</p>
+<p>Add an <code>index.html</code> to <code>ui/dist/</code> with a <code>&lt;script type=&quot;module&quot;&gt;</code> that boots
+the parts in this order:</p>
+<pre><code class="language-tsx"><span class="token keyword">import</span> init <span class="token keyword">from</span> <span class="token string">&quot;./game.js&quot;</span><span class="token punctuation">;</span>
+<span class="token keyword">await</span> <span class="token function">init</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token comment">// runs your Rust `main`: builds the App, starts Bevy</span>
+
+<span class="token keyword">await</span> <span class="token function">loadScript</span><span class="token punctuation">(</span><span class="token string">&quot;./vendor.js&quot;</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token keyword">await</span> <span class="token function">loadScript</span><span class="token punctuation">(</span><span class="token string">&quot;./app.js&quot;</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token keyword">function</span> <span class="token function">loadScript</span><span class="token punctuation">(</span>src<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+  <span class="token keyword">return</span> <span class="token keyword">new</span> <span class="token class-name"><span class="token builtin">Promise</span></span><span class="token punctuation">(</span><span class="token punctuation">(</span>resolve<span class="token punctuation">,</span> reject<span class="token punctuation">)</span> <span class="token operator">=&gt;</span> <span class="token punctuation">{</span>
+    <span class="token keyword">const</span> s <span class="token operator">=</span> document<span class="token punctuation">.</span><span class="token function">createElement</span><span class="token punctuation">(</span><span class="token string">&quot;script&quot;</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    s<span class="token punctuation">.</span>src <span class="token operator">=</span> src<span class="token punctuation">;</span>
+    s<span class="token punctuation">.</span>onload <span class="token operator">=</span> resolve<span class="token punctuation">;</span>
+    s<span class="token punctuation">.</span><span class="token function-variable function">onerror</span> <span class="token operator">=</span> <span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">=&gt;</span> <span class="token function">reject</span><span class="token punctuation">(</span><span class="token keyword">new</span> <span class="token class-name">Error</span><span class="token punctuation">(</span><span class="token template-string"><span class="token template-punctuation string">`</span><span class="token string">failed to load </span><span class="token interpolation"><span class="token interpolation-punctuation punctuation">${</span>src<span class="token interpolation-punctuation punctuation">}</span></span><span class="token template-punctuation string">`</span></span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    document<span class="token punctuation">.</span>body<span class="token punctuation">.</span><span class="token function">appendChild</span><span class="token punctuation">(</span>s<span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span></code></pre><p>Then serve the folder over HTTP, for example with <code>npx serve ui/dist</code>.
+Browsers don&#39;t load wasm from <code>file://</code> URLs. All paths are relative, so the
+site also works from a subdirectory.</p>
+<p>For a release build, use <code>npx bevy-react build --prod</code> and
+<code>cargo build --release</code>, and point <code>wasm-bindgen</code> at
+<code>target/wasm32-unknown-unknown/release/</code>.</p>
+<h2 id="load-order"><a class="anchor" href="#load-order" aria-hidden="true">#</a>Load order</h2>
+<p>The order in the page script is required:</p>
+<ol>
+<li><strong><code>init()</code> first.</strong> It runs your <code>main</code>. While the <code>App</code> builds,
+<code>ReactUiPlugin</code> installs the browser host on <code>globalThis.__bevyHost</code>, the
+object the React runtime sends its ops to. <code>App::run</code> then schedules Bevy&#39;s
+frame loop and returns, so <code>init()</code> resolves.</li>
+<li><strong><code>vendor.js</code> next.</strong> It reads <code>__bevyHost</code> when it is evaluated. Loaded
+before <code>init()</code> resolves, it falls back to the native host and throws
+(<code>Deno is not defined</code>).</li>
+<li><strong><code>app.js</code> last.</strong> It takes React and the runtime from <code>vendor.js</code>.</li>
+</ol>
+<p>Both bundles are classic scripts, not ES modules: load them with plain
+<code>&lt;script&gt;</code> elements as above. React can render as soon as <code>app.js</code> runs. The
+first commits are held until the Bevy app has finished its asynchronous
+renderer setup, then applied in order, so there&#39;s nothing to wait for.</p>
+<h2 id="the-rust-side"><a class="anchor" href="#the-rust-side" aria-hidden="true">#</a>The Rust side</h2>
+<p>Your <code>main</code> is the wasm entry point unchanged. A few things differ:</p>
+<ul>
+<li><code>ReactUiPlugin::new(path)</code> and <code>hot_reload(..)</code> are ignored: the page loads
+the bundles, and nothing watches them.</li>
+<li>Gate native-only code with <code>#[cfg(not(target_arch = &quot;wasm32&quot;))]</code>. This
+includes the <code>--export-bindings</code> exporter from
+<a href="../../tooling/ts-codegen/">TypeScript codegen</a>: generate <code>bevy.ts</code> with a native run.</li>
+<li>Bevy&#39;s default features render through WebGL2 (the <code>webgl2</code> feature).</li>
+</ul>
+<p>To make the canvas fill the page and follow the browser window, let it track
+its parent element:</p>
+<pre><code class="language-rust"><span class="token keyword">let</span> window <span class="token operator">=</span> <span class="token class-name">Window</span> <span class="token punctuation">{</span>
+    fit_canvas_to_parent<span class="token punctuation">:</span> <span class="token boolean">true</span><span class="token punctuation">,</span>
+    <span class="token punctuation">..</span><span class="token function">default</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+<span class="token punctuation">}</span><span class="token punctuation">;</span>
+app<span class="token punctuation">.</span><span class="token function">add_plugins</span><span class="token punctuation">(</span><span class="token class-name">DefaultPlugins</span><span class="token punctuation">.</span><span class="token function">set</span><span class="token punctuation">(</span><span class="token class-name">WindowPlugin</span> <span class="token punctuation">{</span>
+    primary_window<span class="token punctuation">:</span> <span class="token class-name">Some</span><span class="token punctuation">(</span>window<span class="token punctuation">)</span><span class="token punctuation">,</span>
+    <span class="token punctuation">..</span><span class="token function">default</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+<span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span></code></pre><p>Give <code>html</code> and <code>body</code> a full height with no margin and <code>overflow: hidden</code>.
+On phones, also set <code>touch-action: none</code> on the canvas: without it the browser
+turns touch drags into page scrolling and pinch-zoom instead of passing them
+to the app.</p>
+<p>bevy-react enables the browser backend of <code>getrandom</code> for you. If the wasm
+build still fails inside <code>getrandom</code>, copy the <code>wasm32-unknown-unknown</code>
+section of the repository&#39;s <a href="https://github.com/tulustul/bevy-react/blob/main/.cargo/config.toml"><code>.cargo/config.toml</code></a>
+into your project.</p>
+<h2 id="assets"><a class="anchor" href="#assets" aria-hidden="true">#</a>Assets</h2>
+<p>Bevy&#39;s default <code>AssetPlugin</code> fetches assets over HTTP from <code>assets/</code> next to
+the page. Copy your asset folder to <code>dist/assets/</code>: textures, fonts given to
+<code>default_font(..)</code> and <code>font(..)</code>, cursor images and custom filter shaders all
+load from there. If the native build points <code>AssetPlugin</code> somewhere else (the
+demos use <code>file_path: &quot;../assets&quot;</code>), keep the default on the web.</p>
+<p>On GitHub Pages, add an empty <code>.nojekyll</code> file to the site so every file is
+served as is.</p>
+<h2 id="differences-from-native"><a class="anchor" href="#differences-from-native" aria-hidden="true">#</a>Differences from native</h2>
+<ul>
+<li><strong>No hot reload.</strong> Rebuild and reload the page: <code>npx bevy-react build --watch</code>
+still rebuilds <code>app.js</code> on change, but the page doesn&#39;t pick it up, and a
+reload resets all React state. See <a href="../../tooling/hot-reload/">Hot reload</a> for the
+native workflow.</li>
+<li><strong>One thread.</strong> React runs on the page&#39;s main thread, between Bevy frames,
+where on native it has a thread of its own. A slow render delays the next
+frame. Events from Bevy are delivered at the end of each frame, and the ops
+React commits in response apply on the next one.</li>
+<li><strong>Logs go to the browser console.</strong> That covers <code>console.*</code> from React,
+Rust panics and Bevy&#39;s log output.</li>
+<li><strong>Devtools</strong> run in debug builds with a few gaps: the panel&#39;s layout isn&#39;t
+saved between sessions, the Console tab stays empty (use the browser&#39;s
+console), and some timing columns in the Bridge tab are not measured. See
+<a href="../../tooling/devtools/">Devtools</a>.</li>
+</ul>
+<h2 id="reference-setup"><a class="anchor" href="#reference-setup" aria-hidden="true">#</a>Reference setup</h2>
+<p>The demos app builds for the web with one script,
+<a href="https://github.com/tulustul/bevy-react/blob/main/examples/demos/ui/build-web.mjs"><code>examples/demos/ui/build-web.mjs</code></a>:
+it builds both bundles with <code>buildVendor</code> and <code>buildApp</code> from
+<code>bevy-react/build-lib</code>, compiles the Bevy app to wasm, runs <code>wasm-bindgen</code>,
+copies <a href="https://github.com/tulustul/bevy-react/blob/main/examples/demos/ui/index.html"><code>index.html</code></a> and the assets
+into <code>dist/</code>, and serves it. Its <code>main</code> and window setup are in
+<a href="https://github.com/tulustul/bevy-react/blob/main/examples/demos/main.rs"><code>examples/demos/main.rs</code></a>. Run it from the
+repository root:</p>
+<pre><code class="language-sh"><span class="token function">npm</span> run build:web <span class="token parameter variable">-w</span> demos                        <span class="token comment"># debug build, then serve</span>
+<span class="token function">npm</span> run build:web:prod <span class="token parameter variable">-w</span> demos -- --build-only   <span class="token comment"># release build, no server</span></code></pre><h2 id="limits"><a class="anchor" href="#limits" aria-hidden="true">#</a>Limits</h2>
+<ul>
+<li>wasm builds need a lot of disk space: keep tens of GB free.
+<code>cargo clean --target wasm32-unknown-unknown</code> reclaims it.</li>
+<li>Integers above 2^53 in event or response payloads can&#39;t be sent to React on
+the web (they are dropped with a console error); on native they arrive as a
+<code>BigInt</code>.</li>
+</ul>
+
+</article>
+<footer class="page-links"><a href="https://github.com/tulustul/bevy-react/edit/main/docs/guide/tooling/web.md">Edit this page</a></footer>
+</main>
+</div>
+<footer class="site-footer">
+<p>bevy-react is dual-licensed under MIT or Apache-2.0. <a href="https://github.com/tulustul/bevy-react">Source on GitHub</a>.</p>
+</footer>
+</body>
+</html>

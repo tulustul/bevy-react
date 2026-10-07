@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Keyboard · bevy-react</title>
+<meta name="description" content="Listen to window-wide key presses in React with the built-in keyDown and keyUp events and their KeyboardEventData payload.">
+<link rel="canonical" href="https://tulustul.github.io/bevy-react/events/keyboard/">
+<link rel="alternate" type="text/markdown" href="../../events/keyboard.md">
+<meta property="og:title" content="Keyboard · bevy-react">
+<meta property="og:description" content="Listen to window-wide key presses in React with the built-in keyDown and keyUp events and their KeyboardEventData payload.">
+<link rel="icon" href="../../logo.png">
+<link rel="stylesheet" href="../../style.css">
+<script src="../../docs.js" defer></script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="site-header">
+<a class="brand" href="../../"><img src="../../logo.png" alt="" width="74" height="74"> bevy-react</a>
+<span class="version">v0.7.0</span>
+<nav class="site-links" aria-label="Project">
+<a href="../../demo/">Live demo</a>
+<a href="https://github.com/tulustul/bevy-react">GitHub</a>
+<a href="https://docs.rs/bevy-react">docs.rs</a>
+<a href="https://www.npmjs.com/package/bevy-react">npm</a>
+</nav>
+</header>
+<div class="layout">
+<nav class="sidebar" aria-label="Documentation">
+<details class="nav-menu" open>
+<summary>Menu</summary>
+<ul><li><a href="../../">Introduction</a></li><li><a href="../../getting-started/">Getting started</a></li><li><a href="../../how-it-works/">How it works</a></li><li class="nav-section"><span>Elements</span><ul><li><a href="../../elements/node/">&lt;node&gt;</a></li><li><a href="../../elements/button/">&lt;button&gt;</a></li><li><a href="../../elements/text/">&lt;text&gt;</a></li><li><a href="../../elements/editable-text/">&lt;editableText&gt;</a></li><li><a href="../../elements/image/">&lt;image&gt;</a></li><li><a href="../../elements/canvas/">&lt;canvas&gt;</a></li><li><a href="../../elements/svg/">&lt;svg&gt;</a></li><li><a href="../../elements/portal/">&lt;portal&gt;</a></li><li><a href="../../elements/surface/">&lt;surface&gt;</a></li><li><a href="../../elements/root/">&lt;root&gt;</a></li><li><a href="../../elements/anchor/">&lt;anchor&gt;</a></li></ul></li><li class="nav-section"><span>Layout</span><ul><li><a href="../../layout/flexbox/">Flexbox</a></li><li><a href="../../layout/grid/">Grid</a></li><li><a href="../../layout/positioning/">Positioning</a></li></ul></li><li class="nav-section"><span>Styling</span><ul><li><a href="../../styling/units/">Units</a></li><li><a href="../../styling/colors/">Colors</a></li><li><a href="../../styling/borders/">Borders</a></li><li><a href="../../styling/spacing/">Spacing</a></li><li><a href="../../styling/sizing/">Sizing</a></li><li><a href="../../styling/layout-rounding/">Layout rounding</a></li><li><a href="../../styling/overflow/">Overflow</a></li><li><a href="../../styling/transforms/">Transforms</a></li><li><a href="../../styling/3d-transforms/">3D transforms</a></li><li><a href="../../styling/shadows/">Shadows</a></li><li><a href="../../styling/filters/">Filters</a></li><li><a href="../../styling/backdrop-filters/">Backdrop filters</a></li><li><a href="../../styling/morph-filters/">Morph filters</a></li><li><a href="../../styling/gradients/">Gradients</a></li><li><a href="../../styling/background-images/">Background images</a></li><li><a href="../../styling/image-rendering/">Image rendering</a></li><li><a href="../../styling/opacity/">Opacity</a></li><li><a href="../../styling/z-index/">Z-index</a></li><li><a href="../../styling/focus-policy/">Focus policy</a></li><li><a href="../../styling/cursors/">Cursors</a></li><li><a href="../../styling/layers/">Layers</a></li></ul></li><li class="nav-section"><span>Animations</span><ul><li><a href="../../animations/style-transitions/">Style transitions</a></li><li><a href="../../animations/animated-values/">Animated values</a></li><li><a href="../../animations/interpolation/">Interpolation</a></li><li><a href="../../animations/shared-elements/">Shared elements</a></li></ul></li><li class="nav-section"><span>Communication</span><ul><li><a href="../../communication/react-to-bevy/">React to Bevy</a></li><li><a href="../../communication/bevy-to-react/">Bevy to React</a></li><li><a href="../../communication/request-response/">Request / response</a></li><li><a href="../../communication/named-nodes/">Named nodes</a></li></ul></li><li class="nav-section"><span>Events</span><ul><li><a href="../../events/mouse/">Mouse</a></li><li><a href="../../events/keyboard/" aria-current="page">Keyboard</a></li><li><a href="../../events/gamepad/">Gamepad</a></li><li><a href="../../events/window/">Window</a></li></ul></li><li class="nav-section"><span>Extending</span><ul><li><a href="../../extending/custom-elements/">Custom elements</a></li><li><a href="../../extending/custom-styles/">Custom styles</a></li><li><a href="../../extending/custom-filters/">Custom filters</a></li></ul></li><li class="nav-section"><span>Tooling</span><ul><li><a href="../../tooling/devtools/">Devtools</a></li><li><a href="../../tooling/hot-reload/">Hot reload</a></li><li><a href="../../tooling/web/">Web builds</a></li><li><a href="../../tooling/ts-codegen/">TypeScript codegen</a></li></ul></li><li class="nav-section"><span>Reference</span><ul><li><a href="../../reference/style-properties/">Style properties</a></li><li><a href="../../reference/elements/">Elements</a></li><li><a href="../../reference/filters/">Filters</a></li></ul></li><li><a href="../../performance/">Performance</a></li></ul>
+</details>
+</nav>
+<main id="main">
+<article>
+<h1 id="keyboard">Keyboard</h1>
+<p>Key presses reach React as two built-in <a href="../../communication/bevy-to-react/">events</a>,
+<code>keyDown</code> and <code>keyUp</code>. They are window-wide: they fire for every key the app
+window receives, whichever element has focus, and they are typed in every
+generated <code>bevy.ts</code> without any Rust code or registration. There are no
+per-element key handlers.</p>
+<h2 id="usage"><a class="anchor" href="#usage" aria-hidden="true">#</a>Usage</h2>
+<pre><code class="language-tsx"><span class="token keyword">import</span> <span class="token punctuation">{</span> useEffect <span class="token punctuation">}</span> <span class="token keyword">from</span> <span class="token string">&quot;react&quot;</span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token punctuation">{</span> bevy <span class="token punctuation">}</span> <span class="token keyword">from</span> <span class="token string">&quot;./bevy&quot;</span><span class="token punctuation">;</span> <span class="token comment">// generated</span>
+
+<span class="token keyword">function</span> <span class="token function">Menu</span><span class="token punctuation">(</span><span class="token punctuation">{</span> onClose <span class="token punctuation">}</span><span class="token operator">:</span> <span class="token punctuation">{</span> <span class="token function-variable function">onClose</span><span class="token operator">:</span> <span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">=&gt;</span> <span class="token keyword">void</span> <span class="token punctuation">}</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+  <span class="token function">useEffect</span><span class="token punctuation">(</span>
+    <span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">=&gt;</span>
+      bevy<span class="token punctuation">.</span><span class="token function">on</span><span class="token punctuation">(</span><span class="token string">&quot;keyDown&quot;</span><span class="token punctuation">,</span> <span class="token punctuation">(</span>e<span class="token punctuation">)</span> <span class="token operator">=&gt;</span> <span class="token punctuation">{</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>e<span class="token punctuation">.</span>key <span class="token operator">===</span> <span class="token string">&quot;Escape&quot;</span><span class="token punctuation">)</span> <span class="token function">onClose</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+      <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+    <span class="token punctuation">[</span>onClose<span class="token punctuation">]</span><span class="token punctuation">,</span>
+  <span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token keyword">return</span> <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>node</span><span class="token punctuation">&gt;</span></span><span class="token punctuation">{</span><span class="token comment">/* … */</span><span class="token punctuation">}</span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>node</span><span class="token punctuation">&gt;</span></span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span></code></pre><h2 id="the-events"><a class="anchor" href="#the-events" aria-hidden="true">#</a>The events</h2>
+<ul>
+<li><code>keyDown</code> fires when a key is pressed, and again for each OS auto-repeat
+while it is held (with <code>repeat: true</code>).</li>
+<li><code>keyUp</code> fires when the key is released.</li>
+</ul>
+<p>Both carry a <code>KeyboardEventData</code> (importable from your <code>./bevy</code> module):</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>key</code></td>
+<td><code>string</code></td>
+<td>The logical key: the typed character (<code>&quot;a&quot;</code>, <code>&quot;A&quot;</code>, <code>&quot;1&quot;</code>) or a key name</td>
+</tr>
+<tr>
+<td><code>code</code></td>
+<td><code>string</code></td>
+<td>The physical key, independent of the keyboard layout (<code>&quot;KeyA&quot;</code>, <code>&quot;Digit1&quot;</code>)</td>
+</tr>
+<tr>
+<td><code>text</code></td>
+<td><code>string | null</code></td>
+<td>The text the key produces, if any; <code>null</code> for arrows, modifiers and the like</td>
+</tr>
+<tr>
+<td><code>repeat</code></td>
+<td><code>boolean</code></td>
+<td>Whether this <code>keyDown</code> is an OS auto-repeat</td>
+</tr>
+<tr>
+<td><code>ctrlKey</code></td>
+<td><code>boolean</code></td>
+<td>A Control key is held</td>
+</tr>
+<tr>
+<td><code>shiftKey</code></td>
+<td><code>boolean</code></td>
+<td>A Shift key is held</td>
+</tr>
+<tr>
+<td><code>altKey</code></td>
+<td><code>boolean</code></td>
+<td>An Alt key is held</td>
+</tr>
+<tr>
+<td><code>metaKey</code></td>
+<td><code>boolean</code></td>
+<td>A Super key (Windows, Command) is held</td>
+</tr>
+</tbody></table></div>
+<ul>
+<li>Key names are Bevy&#39;s, which mostly match the web&#39;s: <code>&quot;Enter&quot;</code>,
+<code>&quot;Escape&quot;</code>, <code>&quot;Tab&quot;</code>, <code>&quot;Backspace&quot;</code>, <code>&quot;ArrowLeft&quot;</code>, <code>&quot;Shift&quot;</code>. The space bar
+is <code>&quot;Space&quot;</code> (the web uses <code>&quot; &quot;</code>); its <code>text</code> is <code>&quot; &quot;</code>.</li>
+<li><code>code</code> values are Bevy&#39;s <code>KeyCode</code> names, which follow the web&#39;s <code>code</code>
+values for most keys (<code>&quot;Enter&quot;</code>, <code>&quot;Space&quot;</code>, <code>&quot;ArrowLeft&quot;</code>, <code>&quot;ShiftLeft&quot;</code>).
+The Windows/Command keys are <code>&quot;SuperLeft&quot;</code> and <code>&quot;SuperRight&quot;</code>.</li>
+<li>Match shortcuts on <code>key</code> when the character matters (<code>&quot;?&quot;</code>, <code>&quot;+&quot;</code>) and on
+<code>code</code> when the position does (WASD on any layout).</li>
+<li>The modifier flags show the state at the end of the frame the key event
+arrived in: either side counts, and a modifier&#39;s own <code>keyDown</code> already has
+its flag set.</li>
+</ul>
+<p>Filter auto-repeat out when a key should act once per press:</p>
+<pre><code class="language-tsx">bevy<span class="token punctuation">.</span><span class="token function">on</span><span class="token punctuation">(</span><span class="token string">&quot;keyDown&quot;</span><span class="token punctuation">,</span> <span class="token punctuation">(</span>e<span class="token punctuation">)</span> <span class="token operator">=&gt;</span> <span class="token punctuation">{</span>
+  <span class="token keyword">if</span> <span class="token punctuation">(</span>e<span class="token punctuation">.</span>repeat<span class="token punctuation">)</span> <span class="token keyword">return</span><span class="token punctuation">;</span>
+  <span class="token keyword">if</span> <span class="token punctuation">(</span>e<span class="token punctuation">.</span>code <span class="token operator">===</span> <span class="token string">&quot;KeyS&quot;</span> <span class="token operator">&amp;&amp;</span> e<span class="token punctuation">.</span>ctrlKey<span class="token punctuation">)</span> <span class="token function">save</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span></code></pre><h2 id="text-input-and-focus"><a class="anchor" href="#text-input-and-focus" aria-hidden="true">#</a>Text input and focus</h2>
+<p>Because the events are window-wide, they also fire while the user types in an
+<a href="../../elements/editable-text/"><code>&lt;editableText&gt;</code></a>. Keep single-key shortcuts
+from firing during text entry by tracking the input&#39;s focus:</p>
+<pre><code class="language-tsx"><span class="token keyword">const</span> typing <span class="token operator">=</span> <span class="token function">useRef</span><span class="token punctuation">(</span><span class="token boolean">false</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token function">useEffect</span><span class="token punctuation">(</span>
+  <span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">=&gt;</span>
+    bevy<span class="token punctuation">.</span><span class="token function">on</span><span class="token punctuation">(</span><span class="token string">&quot;keyDown&quot;</span><span class="token punctuation">,</span> <span class="token punctuation">(</span>e<span class="token punctuation">)</span> <span class="token operator">=&gt;</span> <span class="token punctuation">{</span>
+      <span class="token keyword">if</span> <span class="token punctuation">(</span>typing<span class="token punctuation">.</span>current<span class="token punctuation">)</span> <span class="token keyword">return</span><span class="token punctuation">;</span>
+      <span class="token keyword">if</span> <span class="token punctuation">(</span>e<span class="token punctuation">.</span>key <span class="token operator">===</span> <span class="token string">&quot;m&quot;</span><span class="token punctuation">)</span> <span class="token function">toggleMap</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+  <span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token punctuation">,</span>
+<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>editableText</span>
+  <span class="token attr-name">onFocus</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">=&gt;</span> <span class="token punctuation">(</span>typing<span class="token punctuation">.</span>current <span class="token operator">=</span> <span class="token boolean">true</span><span class="token punctuation">)</span><span class="token punctuation">}</span></span>
+  <span class="token attr-name">onBlur</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">=&gt;</span> <span class="token punctuation">(</span>typing<span class="token punctuation">.</span>current <span class="token operator">=</span> <span class="token boolean">false</span><span class="token punctuation">)</span><span class="token punctuation">}</span></span>
+<span class="token punctuation">/&gt;</span></span><span class="token punctuation">;</span></code></pre><p>The same holds on the Bevy side: systems that read <code>ButtonInput&lt;KeyCode&gt;</code>
+see every keystroke, including the ones typed into an <code>&lt;editableText&gt;</code>, and
+React can&#39;t stop them. If gameplay keys must pause while the player types,
+tell Bevy with a <a href="../../communication/react-to-bevy/">message</a> from <code>onFocus</code>
+and <code>onBlur</code>.</p>
+<h2 id="limits"><a class="anchor" href="#limits" aria-hidden="true">#</a>Limits</h2>
+<ul>
+<li>No per-element <code>onKeyDown</code> and no <code>preventDefault</code>: a listener can&#39;t keep a
+key from an <code>&lt;editableText&gt;</code> or from Bevy systems.</li>
+<li>Each key event is one trip across the bridge. That suits shortcuts and
+menus; continuous input such as character movement belongs in a Bevy system
+reading <code>ButtonInput&lt;KeyCode&gt;</code>.</li>
+<li>Events are not buffered: a key pressed before a listener subscribes is
+missed.</li>
+</ul>
+<p>The built-in event types are listed in the generated
+<a href="https://github.com/tulustul/bevy-react/blob/main/docs/reference/bevy.ts"><code>bevy.ts</code></a> reference.</p>
+
+</article>
+<footer class="page-links"><a href="../../demo/?page=keyboard">Open live demo</a>
+<a href="https://github.com/tulustul/bevy-react/blob/v0.7.0/examples/demos/ui/src/demos/events/KeyboardDemo.tsx">Demo source</a>
+<a href="https://github.com/tulustul/bevy-react/edit/main/docs/guide/events/keyboard.md">Edit this page</a></footer>
+</main>
+</div>
+<footer class="site-footer">
+<p>bevy-react is dual-licensed under MIT or Apache-2.0. <a href="https://github.com/tulustul/bevy-react">Source on GitHub</a>.</p>
+</footer>
+</body>
+</html>

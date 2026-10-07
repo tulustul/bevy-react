@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>&lt;node&gt; · bevy-react</title>
+<meta name="description" content="The &lt;node&gt; element is the styled container every layout is built from, plus the props, state styles and events all styled elements share.">
+<link rel="canonical" href="https://tulustul.github.io/bevy-react/elements/node/">
+<link rel="alternate" type="text/markdown" href="../../elements/node.md">
+<meta property="og:title" content="&lt;node&gt; · bevy-react">
+<meta property="og:description" content="The &lt;node&gt; element is the styled container every layout is built from, plus the props, state styles and events all styled elements share.">
+<link rel="icon" href="../../logo.png">
+<link rel="stylesheet" href="../../style.css">
+<script src="../../docs.js" defer></script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="site-header">
+<a class="brand" href="../../"><img src="../../logo.png" alt="" width="74" height="74"> bevy-react</a>
+<span class="version">v0.7.0</span>
+<nav class="site-links" aria-label="Project">
+<a href="../../demo/">Live demo</a>
+<a href="https://github.com/tulustul/bevy-react">GitHub</a>
+<a href="https://docs.rs/bevy-react">docs.rs</a>
+<a href="https://www.npmjs.com/package/bevy-react">npm</a>
+</nav>
+</header>
+<div class="layout">
+<nav class="sidebar" aria-label="Documentation">
+<details class="nav-menu" open>
+<summary>Menu</summary>
+<ul><li><a href="../../">Introduction</a></li><li><a href="../../getting-started/">Getting started</a></li><li><a href="../../how-it-works/">How it works</a></li><li class="nav-section"><span>Elements</span><ul><li><a href="../../elements/node/" aria-current="page">&lt;node&gt;</a></li><li><a href="../../elements/button/">&lt;button&gt;</a></li><li><a href="../../elements/text/">&lt;text&gt;</a></li><li><a href="../../elements/editable-text/">&lt;editableText&gt;</a></li><li><a href="../../elements/image/">&lt;image&gt;</a></li><li><a href="../../elements/canvas/">&lt;canvas&gt;</a></li><li><a href="../../elements/svg/">&lt;svg&gt;</a></li><li><a href="../../elements/portal/">&lt;portal&gt;</a></li><li><a href="../../elements/surface/">&lt;surface&gt;</a></li><li><a href="../../elements/root/">&lt;root&gt;</a></li><li><a href="../../elements/anchor/">&lt;anchor&gt;</a></li></ul></li><li class="nav-section"><span>Layout</span><ul><li><a href="../../layout/flexbox/">Flexbox</a></li><li><a href="../../layout/grid/">Grid</a></li><li><a href="../../layout/positioning/">Positioning</a></li></ul></li><li class="nav-section"><span>Styling</span><ul><li><a href="../../styling/units/">Units</a></li><li><a href="../../styling/colors/">Colors</a></li><li><a href="../../styling/borders/">Borders</a></li><li><a href="../../styling/spacing/">Spacing</a></li><li><a href="../../styling/sizing/">Sizing</a></li><li><a href="../../styling/layout-rounding/">Layout rounding</a></li><li><a href="../../styling/overflow/">Overflow</a></li><li><a href="../../styling/transforms/">Transforms</a></li><li><a href="../../styling/3d-transforms/">3D transforms</a></li><li><a href="../../styling/shadows/">Shadows</a></li><li><a href="../../styling/filters/">Filters</a></li><li><a href="../../styling/backdrop-filters/">Backdrop filters</a></li><li><a href="../../styling/morph-filters/">Morph filters</a></li><li><a href="../../styling/gradients/">Gradients</a></li><li><a href="../../styling/background-images/">Background images</a></li><li><a href="../../styling/image-rendering/">Image rendering</a></li><li><a href="../../styling/opacity/">Opacity</a></li><li><a href="../../styling/z-index/">Z-index</a></li><li><a href="../../styling/focus-policy/">Focus policy</a></li><li><a href="../../styling/cursors/">Cursors</a></li><li><a href="../../styling/layers/">Layers</a></li></ul></li><li class="nav-section"><span>Animations</span><ul><li><a href="../../animations/style-transitions/">Style transitions</a></li><li><a href="../../animations/animated-values/">Animated values</a></li><li><a href="../../animations/interpolation/">Interpolation</a></li><li><a href="../../animations/shared-elements/">Shared elements</a></li></ul></li><li class="nav-section"><span>Communication</span><ul><li><a href="../../communication/react-to-bevy/">React to Bevy</a></li><li><a href="../../communication/bevy-to-react/">Bevy to React</a></li><li><a href="../../communication/request-response/">Request / response</a></li><li><a href="../../communication/named-nodes/">Named nodes</a></li></ul></li><li class="nav-section"><span>Events</span><ul><li><a href="../../events/mouse/">Mouse</a></li><li><a href="../../events/keyboard/">Keyboard</a></li><li><a href="../../events/gamepad/">Gamepad</a></li><li><a href="../../events/window/">Window</a></li></ul></li><li class="nav-section"><span>Extending</span><ul><li><a href="../../extending/custom-elements/">Custom elements</a></li><li><a href="../../extending/custom-styles/">Custom styles</a></li><li><a href="../../extending/custom-filters/">Custom filters</a></li></ul></li><li class="nav-section"><span>Tooling</span><ul><li><a href="../../tooling/devtools/">Devtools</a></li><li><a href="../../tooling/hot-reload/">Hot reload</a></li><li><a href="../../tooling/web/">Web builds</a></li><li><a href="../../tooling/ts-codegen/">TypeScript codegen</a></li></ul></li><li class="nav-section"><span>Reference</span><ul><li><a href="../../reference/style-properties/">Style properties</a></li><li><a href="../../reference/elements/">Elements</a></li><li><a href="../../reference/filters/">Filters</a></li></ul></li><li><a href="../../performance/">Performance</a></li></ul>
+</details>
+</nav>
+<main id="main">
+<article>
+<h1 id="node"><code>&lt;node&gt;</code></h1>
+<p><code>&lt;node&gt;</code> is the plain container: one <code>bevy_ui</code> <code>Node</code> entity that takes a
+<code>style</code>, lays out its children with flexbox or grid, and reports pointer
+events. There are no <code>div</code>s or <code>span</code>s; every layout is built from <code>&lt;node&gt;</code>.
+Most of this page (the <code>style</code> prop, state styles, events, identity props)
+applies to every styled element, <code>&lt;button&gt;</code>, <code>&lt;text&gt;</code> and <code>&lt;image&gt;</code>
+included.</p>
+<h2 id="usage"><a class="anchor" href="#usage" aria-hidden="true">#</a>Usage</h2>
+<pre><code class="language-tsx"><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>node</span> <span class="token attr-name">style</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span> flexDirection<span class="token operator">:</span> <span class="token string">&quot;row&quot;</span><span class="token punctuation">,</span> gap<span class="token operator">:</span> <span class="token number">12</span><span class="token punctuation">,</span> padding<span class="token operator">:</span> <span class="token number">16</span> <span class="token punctuation">}</span><span class="token punctuation">}</span></span><span class="token punctuation">&gt;</span></span><span class="token plain-text">
+  </span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>node</span> <span class="token attr-name">style</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span> width<span class="token operator">:</span> <span class="token number">48</span><span class="token punctuation">,</span> height<span class="token operator">:</span> <span class="token number">48</span><span class="token punctuation">,</span> backgroundColor<span class="token operator">:</span> <span class="token string">&quot;#7aa2f7&quot;</span> <span class="token punctuation">}</span><span class="token punctuation">}</span></span> <span class="token punctuation">/&gt;</span></span><span class="token plain-text">
+  </span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>node</span> <span class="token attr-name">style</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span> width<span class="token operator">:</span> <span class="token number">48</span><span class="token punctuation">,</span> height<span class="token operator">:</span> <span class="token number">48</span><span class="token punctuation">,</span> backgroundColor<span class="token operator">:</span> <span class="token string">&quot;#9ece6a&quot;</span> <span class="token punctuation">}</span><span class="token punctuation">}</span></span> <span class="token punctuation">/&gt;</span></span><span class="token plain-text">
+</span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>node</span><span class="token punctuation">&gt;</span></span></code></pre><p>A <code>&lt;node&gt;</code> starts with Bevy&#39;s defaults: a flex container laid out as a row,
+sized by its content, with a transparent background, and passing the
+pointer through to whatever is behind it. Arrange children with
+<a href="../../layout/flexbox/">flexbox</a>, <a href="../../layout/grid/">grid</a> or
+<a href="../../layout/positioning/">positioning</a>, and size and space them with
+<a href="../../styling/sizing/">sizing</a> and <a href="../../styling/spacing/">spacing</a>.</p>
+<h2 id="top-level-layout"><a class="anchor" href="#top-level-layout" aria-hidden="true">#</a>Top-level layout</h2>
+<p>Elements rendered at the top of your React tree are children of a
+window-filling flex column that centers them horizontally and spaces them
+16px apart. To lay out the whole window yourself, render a single node that
+fills it:</p>
+<pre><code class="language-tsx"><span class="token keyword">export</span> <span class="token keyword">function</span> <span class="token function">App</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+  <span class="token keyword">return</span> <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>node</span> <span class="token attr-name">style</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span> width<span class="token operator">:</span> <span class="token string">&quot;100%&quot;</span><span class="token punctuation">,</span> height<span class="token operator">:</span> <span class="token string">&quot;100%&quot;</span> <span class="token punctuation">}</span><span class="token punctuation">}</span></span><span class="token punctuation">&gt;</span></span><span class="token punctuation">{</span><span class="token comment">/* … */</span><span class="token punctuation">}</span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>node</span><span class="token punctuation">&gt;</span></span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span></code></pre><h2 id="common-props"><a class="anchor" href="#common-props" aria-hidden="true">#</a>Common props</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Prop</th>
+<th>Effect</th>
+<th>Details</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>style</code></td>
+<td>Layout and paint, as a <code>BevyStyle</code> object</td>
+<td><a href="../../reference/style-properties/">Style properties</a></td>
+</tr>
+<tr>
+<td><code>hoverStyle</code>, <code>pressStyle</code>, <code>focusStyle</code></td>
+<td>Style overlays for interaction states</td>
+<td><a href="#state-styles">State styles</a> below</td>
+</tr>
+<tr>
+<td><code>onClick</code>, <code>onPointer*</code></td>
+<td>Click, drag and hover events</td>
+<td><a href="../../events/mouse/">Mouse</a></td>
+</tr>
+<tr>
+<td><code>onWheel</code></td>
+<td>Raw wheel deltas over the element</td>
+<td><a href="../../events/mouse/">Mouse</a></td>
+</tr>
+<tr>
+<td><code>scrollTop</code>, <code>scrollLeft</code>, <code>scrollStep</code></td>
+<td>Controlled scrolling of an <code>overflow: &quot;scroll&quot;</code> container</td>
+<td><a href="../../styling/overflow/">Overflow</a></td>
+</tr>
+<tr>
+<td><code>onScroll</code></td>
+<td>The scroll offset changed</td>
+<td><a href="../../styling/overflow/">Overflow</a></td>
+</tr>
+<tr>
+<td><code>name</code></td>
+<td>Names the Bevy entity, so Rust systems can find it</td>
+<td><a href="../../communication/named-nodes/">Named nodes</a></td>
+</tr>
+<tr>
+<td><code>sharedTag</code></td>
+<td>Shared-element identity across unmount and mount</td>
+<td><a href="../../animations/shared-elements/">Shared elements</a></td>
+</tr>
+<tr>
+<td><code>key</code></td>
+<td>React&#39;s list key</td>
+<td>React</td>
+</tr>
+</tbody></table></div>
+<p>Not every element takes every group: <code>&lt;editableText&gt;</code> has no pointer, scroll
+or wheel props, <code>&lt;root&gt;</code> and nested <code>&lt;text&gt;</code> spans take only <code>style</code>, <code>name</code>,
+<code>sharedTag</code> and <code>key</code>. A prop outside an element&#39;s groups is ignored with a
+<code>propIgnored</code> devtools warning. The element reference lists the groups per
+element.</p>
+<p>Every prop crosses to Bevy only when its value changes, so re-rendering
+with the same props costs nothing on the Bevy side. Unsetting a style
+property returns it to the element&#39;s default (for example <code>focusPolicy</code>
+returns to <code>&quot;block&quot;</code> on a <code>&lt;button&gt;</code>).</p>
+<h2 id="state-styles"><a class="anchor" href="#state-styles" aria-hidden="true">#</a>State styles</h2>
+<p><code>hoverStyle</code>, <code>pressStyle</code> and <code>focusStyle</code> overlay the base <code>style</code> while
+the element is in that state. They are applied on the Bevy side: no React
+state, no re-render.</p>
+<pre><code class="language-tsx"><span class="token operator">&lt;</span>node
+  style<span class="token operator">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span>
+    padding<span class="token operator">:</span> <span class="token number">12</span><span class="token punctuation">,</span>
+    borderRadius<span class="token operator">:</span> <span class="token number">8</span><span class="token punctuation">,</span>
+    backgroundColor<span class="token operator">:</span> <span class="token string">&quot;#24283b&quot;</span><span class="token punctuation">,</span>
+    transition<span class="token operator">:</span> <span class="token punctuation">{</span> backgroundColor<span class="token operator">:</span> <span class="token punctuation">{</span> duration<span class="token operator">:</span> <span class="token number">150</span> <span class="token punctuation">}</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+  <span class="token punctuation">}</span><span class="token punctuation">}</span>
+  hoverStyle<span class="token operator">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span> backgroundColor<span class="token operator">:</span> <span class="token string">&quot;#414868&quot;</span> <span class="token punctuation">}</span><span class="token punctuation">}</span>
+  pressStyle<span class="token operator">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span> backgroundColor<span class="token operator">:</span> <span class="token string">&quot;#565f89&quot;</span> <span class="token punctuation">}</span><span class="token punctuation">}</span>
+<span class="token operator">/</span><span class="token operator">&gt;</span></code></pre><ul>
+<li>The overlays stack in order: <code>style</code>, then <code>hoverStyle</code> while hovered,
+then <code>pressStyle</code> while pressed (a pressed element is also hovered), then
+<code>focusStyle</code> while focused, so <code>focusStyle</code> wins any conflict.</li>
+<li>A state style carries any style property and only changes what it sets.
+When the state ends, those properties return to the base style.</li>
+<li>With a <code>transition</code> on the base style, state changes ease instead of
+snapping. See <a href="../../animations/style-transitions/">Style transitions</a>.</li>
+<li>Hover covers every element under the pointer, from the topmost down to the
+first one that blocks (<code>focusPolicy: &quot;block&quot;</code>). A hovered child keeps its
+pass-through ancestors hovered too, but a <code>&lt;button&gt;</code> on top un-hovers
+everything beneath it, its ancestors included.</li>
+<li><code>pressStyle</code> follows the primary mouse button or a touch. It stays applied
+from the press until the release, even if the pointer leaves the element
+meanwhile.</li>
+<li><code>{ animated }</code> bindings work in the base <code>style</code> only. A binding in a state
+style is ignored with a <code>styleBinding</code> warning.</li>
+<li>Only <code>&lt;editableText&gt;</code> takes focus on its own (by click or <code>autofocus</code>). On
+other elements, <code>focusStyle</code> applies only while your Rust code gives the
+entity Bevy&#39;s <code>InputFocus</code>.</li>
+</ul>
+<h2 id="pointer-behavior"><a class="anchor" href="#pointer-behavior" aria-hidden="true">#</a>Pointer behavior</h2>
+<ul>
+<li>A <code>&lt;node&gt;</code> passes the pointer through by default. Even with an <code>onClick</code>,
+a press also reaches what is behind it, including the 3D scene, so a
+camera drag can start under your panel. Use a
+<a href="../../elements/button/"><code>&lt;button&gt;</code></a> or <code>focusPolicy: &quot;block&quot;</code> for controls and
+panels that should catch the pointer. See
+<a href="../../styling/focus-policy/">Focus policy</a>.</li>
+<li>Clicks do not bubble. A click goes to the topmost element under the
+pointer that has an <code>onClick</code> or any <code>onPointer*</code> handler, or is a
+<code>&lt;button&gt;</code> or <code>&lt;editableText&gt;</code>, and to no other element. Clicking a
+<code>&lt;text&gt;</code> label inside a clickable node fires the node&#39;s <code>onClick</code>.</li>
+<li><code>onPointer*</code> handlers alone make an element own clicks: a child with only
+<code>onPointerEnter</code> swallows clicks meant for an <code>onClick</code> ancestor.</li>
+</ul>
+<h2 id="limits"><a class="anchor" href="#limits" aria-hidden="true">#</a>Limits</h2>
+<ul>
+<li>No CSS cascade: styles never inherit from a parent <code>&lt;node&gt;</code>, text styles
+included. Share style objects in JavaScript instead.</li>
+<li>Children are laid out by Bevy&#39;s flexbox and grid only; there is no inline
+or block flow.</li>
+</ul>
+<p>See <a href="../../reference/elements/#node"><code>&lt;node&gt;</code></a> in the element reference, and
+<a href="../../reference/elements/#common-props">Common props</a> for every shared prop&#39;s
+type.</p>
+
+</article>
+<footer class="page-links"><a href="../../demo/?page=node">Open live demo</a>
+<a href="https://github.com/tulustul/bevy-react/blob/v0.7.0/examples/demos/ui/src/demos/elements/NodeDemo.tsx">Demo source</a>
+<a href="https://github.com/tulustul/bevy-react/edit/main/docs/guide/elements/node.md">Edit this page</a></footer>
+</main>
+</div>
+<footer class="site-footer">
+<p>bevy-react is dual-licensed under MIT or Apache-2.0. <a href="https://github.com/tulustul/bevy-react">Source on GitHub</a>.</p>
+</footer>
+</body>
+</html>

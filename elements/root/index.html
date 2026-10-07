@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>&lt;root&gt; · bevy-react</title>
+<meta name="description" content="The &lt;root&gt; element renders its children as a separate window-filling UI tree above the app, for modals, toasts and overlays declared anywhere in React.">
+<link rel="canonical" href="https://tulustul.github.io/bevy-react/elements/root/">
+<link rel="alternate" type="text/markdown" href="../../elements/root.md">
+<meta property="og:title" content="&lt;root&gt; · bevy-react">
+<meta property="og:description" content="The &lt;root&gt; element renders its children as a separate window-filling UI tree above the app, for modals, toasts and overlays declared anywhere in React.">
+<link rel="icon" href="../../logo.png">
+<link rel="stylesheet" href="../../style.css">
+<script src="../../docs.js" defer></script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="site-header">
+<a class="brand" href="../../"><img src="../../logo.png" alt="" width="74" height="74"> bevy-react</a>
+<span class="version">v0.7.0</span>
+<nav class="site-links" aria-label="Project">
+<a href="../../demo/">Live demo</a>
+<a href="https://github.com/tulustul/bevy-react">GitHub</a>
+<a href="https://docs.rs/bevy-react">docs.rs</a>
+<a href="https://www.npmjs.com/package/bevy-react">npm</a>
+</nav>
+</header>
+<div class="layout">
+<nav class="sidebar" aria-label="Documentation">
+<details class="nav-menu" open>
+<summary>Menu</summary>
+<ul><li><a href="../../">Introduction</a></li><li><a href="../../getting-started/">Getting started</a></li><li><a href="../../how-it-works/">How it works</a></li><li class="nav-section"><span>Elements</span><ul><li><a href="../../elements/node/">&lt;node&gt;</a></li><li><a href="../../elements/button/">&lt;button&gt;</a></li><li><a href="../../elements/text/">&lt;text&gt;</a></li><li><a href="../../elements/editable-text/">&lt;editableText&gt;</a></li><li><a href="../../elements/image/">&lt;image&gt;</a></li><li><a href="../../elements/canvas/">&lt;canvas&gt;</a></li><li><a href="../../elements/svg/">&lt;svg&gt;</a></li><li><a href="../../elements/portal/">&lt;portal&gt;</a></li><li><a href="../../elements/surface/">&lt;surface&gt;</a></li><li><a href="../../elements/root/" aria-current="page">&lt;root&gt;</a></li><li><a href="../../elements/anchor/">&lt;anchor&gt;</a></li></ul></li><li class="nav-section"><span>Layout</span><ul><li><a href="../../layout/flexbox/">Flexbox</a></li><li><a href="../../layout/grid/">Grid</a></li><li><a href="../../layout/positioning/">Positioning</a></li></ul></li><li class="nav-section"><span>Styling</span><ul><li><a href="../../styling/units/">Units</a></li><li><a href="../../styling/colors/">Colors</a></li><li><a href="../../styling/borders/">Borders</a></li><li><a href="../../styling/spacing/">Spacing</a></li><li><a href="../../styling/sizing/">Sizing</a></li><li><a href="../../styling/layout-rounding/">Layout rounding</a></li><li><a href="../../styling/overflow/">Overflow</a></li><li><a href="../../styling/transforms/">Transforms</a></li><li><a href="../../styling/3d-transforms/">3D transforms</a></li><li><a href="../../styling/shadows/">Shadows</a></li><li><a href="../../styling/filters/">Filters</a></li><li><a href="../../styling/backdrop-filters/">Backdrop filters</a></li><li><a href="../../styling/morph-filters/">Morph filters</a></li><li><a href="../../styling/gradients/">Gradients</a></li><li><a href="../../styling/background-images/">Background images</a></li><li><a href="../../styling/image-rendering/">Image rendering</a></li><li><a href="../../styling/opacity/">Opacity</a></li><li><a href="../../styling/z-index/">Z-index</a></li><li><a href="../../styling/focus-policy/">Focus policy</a></li><li><a href="../../styling/cursors/">Cursors</a></li><li><a href="../../styling/layers/">Layers</a></li></ul></li><li class="nav-section"><span>Animations</span><ul><li><a href="../../animations/style-transitions/">Style transitions</a></li><li><a href="../../animations/animated-values/">Animated values</a></li><li><a href="../../animations/interpolation/">Interpolation</a></li><li><a href="../../animations/shared-elements/">Shared elements</a></li></ul></li><li class="nav-section"><span>Communication</span><ul><li><a href="../../communication/react-to-bevy/">React to Bevy</a></li><li><a href="../../communication/bevy-to-react/">Bevy to React</a></li><li><a href="../../communication/request-response/">Request / response</a></li><li><a href="../../communication/named-nodes/">Named nodes</a></li></ul></li><li class="nav-section"><span>Events</span><ul><li><a href="../../events/mouse/">Mouse</a></li><li><a href="../../events/keyboard/">Keyboard</a></li><li><a href="../../events/gamepad/">Gamepad</a></li><li><a href="../../events/window/">Window</a></li></ul></li><li class="nav-section"><span>Extending</span><ul><li><a href="../../extending/custom-elements/">Custom elements</a></li><li><a href="../../extending/custom-styles/">Custom styles</a></li><li><a href="../../extending/custom-filters/">Custom filters</a></li></ul></li><li class="nav-section"><span>Tooling</span><ul><li><a href="../../tooling/devtools/">Devtools</a></li><li><a href="../../tooling/hot-reload/">Hot reload</a></li><li><a href="../../tooling/web/">Web builds</a></li><li><a href="../../tooling/ts-codegen/">TypeScript codegen</a></li></ul></li><li class="nav-section"><span>Reference</span><ul><li><a href="../../reference/style-properties/">Style properties</a></li><li><a href="../../reference/elements/">Elements</a></li><li><a href="../../reference/filters/">Filters</a></li></ul></li><li><a href="../../performance/">Performance</a></li></ul>
+</details>
+</nav>
+<main id="main">
+<article>
+<h1 id="root"><code>&lt;root&gt;</code></h1>
+<p><code>&lt;root&gt;</code> renders its children as a separate top-level UI tree on the
+window, wherever it sits in your React tree. It fills the window and floats
+above the app&#39;s own UI, which makes it the place for modals, toasts and
+overlays declared next to the state that drives them. It is the on-screen
+counterpart of <a href="../../elements/surface/"><code>&lt;surface&gt;</code></a>, which renders a tree into a
+texture.</p>
+<h2 id="usage"><a class="anchor" href="#usage" aria-hidden="true">#</a>Usage</h2>
+<pre><code class="language-tsx"><span class="token keyword">const</span> <span class="token punctuation">[</span>open<span class="token punctuation">,</span> setOpen<span class="token punctuation">]</span> <span class="token operator">=</span> <span class="token function">useState</span><span class="token punctuation">(</span><span class="token boolean">false</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>node</span><span class="token punctuation">&gt;</span></span><span class="token plain-text">
+  </span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>button</span> <span class="token attr-name">onClick</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">=&gt;</span> <span class="token function">setOpen</span><span class="token punctuation">(</span><span class="token boolean">true</span><span class="token punctuation">)</span><span class="token punctuation">}</span></span><span class="token punctuation">&gt;</span></span><span class="token plain-text">
+    </span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>text</span><span class="token punctuation">&gt;</span></span><span class="token plain-text">Open</span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>text</span><span class="token punctuation">&gt;</span></span><span class="token plain-text">
+  </span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>button</span><span class="token punctuation">&gt;</span></span><span class="token plain-text">
+  </span><span class="token punctuation">{</span>open <span class="token operator">&amp;&amp;</span> <span class="token punctuation">(</span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>root</span>
+      <span class="token attr-name">name</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">&quot;</span>modal<span class="token punctuation">&quot;</span></span>
+      <span class="token attr-name">style</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span>
+        alignItems<span class="token operator">:</span> <span class="token string">&quot;center&quot;</span><span class="token punctuation">,</span>
+        justifyContent<span class="token operator">:</span> <span class="token string">&quot;center&quot;</span><span class="token punctuation">,</span>
+        backgroundColor<span class="token operator">:</span> <span class="token string">&quot;#000000aa&quot;</span><span class="token punctuation">,</span>
+      <span class="token punctuation">}</span><span class="token punctuation">}</span></span>
+    <span class="token punctuation">&gt;</span></span><span class="token plain-text">
+      </span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>node</span>
+        <span class="token attr-name">style</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span> padding<span class="token operator">:</span> <span class="token number">20</span><span class="token punctuation">,</span> borderRadius<span class="token operator">:</span> <span class="token number">12</span><span class="token punctuation">,</span> backgroundColor<span class="token operator">:</span> <span class="token string">&quot;#24283b&quot;</span> <span class="token punctuation">}</span><span class="token punctuation">}</span></span>
+      <span class="token punctuation">&gt;</span></span><span class="token plain-text">
+        </span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>text</span><span class="token punctuation">&gt;</span></span><span class="token plain-text">Hello from an overlay</span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>text</span><span class="token punctuation">&gt;</span></span><span class="token plain-text">
+        </span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>button</span> <span class="token attr-name">onClick</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">=&gt;</span> <span class="token function">setOpen</span><span class="token punctuation">(</span><span class="token boolean">false</span><span class="token punctuation">)</span><span class="token punctuation">}</span></span><span class="token punctuation">&gt;</span></span><span class="token plain-text">
+          </span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>text</span><span class="token punctuation">&gt;</span></span><span class="token plain-text">Close</span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>text</span><span class="token punctuation">&gt;</span></span><span class="token plain-text">
+        </span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>button</span><span class="token punctuation">&gt;</span></span><span class="token plain-text">
+      </span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>node</span><span class="token punctuation">&gt;</span></span><span class="token plain-text">
+    </span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>root</span><span class="token punctuation">&gt;</span></span>
+  <span class="token punctuation">)</span><span class="token punctuation">}</span><span class="token plain-text">
+</span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>node</span><span class="token punctuation">&gt;</span></span><span class="token punctuation">;</span></code></pre><p>Mounting and unmounting the <code>&lt;root&gt;</code> is the whole open and close mechanism.</p>
+<h2 id="default-style"><a class="anchor" href="#default-style" aria-hidden="true">#</a>Default style</h2>
+<p>A <code>&lt;root&gt;</code> starts with this style, which its own <code>style</code> overrides property
+by property:</p>
+<pre><code class="language-tsx"><span class="token punctuation">{</span> width<span class="token operator">:</span> <span class="token string">&quot;100%&quot;</span><span class="token punctuation">,</span> height<span class="token operator">:</span> <span class="token string">&quot;100%&quot;</span><span class="token punctuation">,</span> flexDirection<span class="token operator">:</span> <span class="token string">&quot;column&quot;</span><span class="token punctuation">,</span> globalZIndex<span class="token operator">:</span> <span class="token number">1</span> <span class="token punctuation">}</span></code></pre><p>It has no alignment or gap of its own, so its children stretch across its
+width. Center them with <code>alignItems</code> and <code>justifyContent</code>, as above. (The
+main window tree differs: it centers top-level elements and spaces them
+16px apart.)</p>
+<h2 id="how-it-behaves"><a class="anchor" href="#how-it-behaves" aria-hidden="true">#</a>How it behaves</h2>
+<ul>
+<li><strong>Detached from its parent&#39;s layout.</strong> Its React parent&#39;s size, padding,
+<code>overflow</code> clipping, transforms and opacity don&#39;t affect it. In React it is
+an ordinary child: context, state and handlers work as usual, and it
+unmounts with its parent.</li>
+<li><strong>On the window&#39;s UI camera.</strong> It renders on the default UI camera, like
+the main tree. There is no attribute to target another camera or window;
+for UI on a texture or a 3D mesh, use <code>&lt;surface&gt;</code>.</li>
+<li><strong>Stacking.</strong> Roots and the main tree (<code>globalZIndex</code> 0) are ordered by
+<code>globalZIndex</code>, so the default <code>1</code> floats above the app. Two roots with
+the same value have no defined order: give overlays that can be open
+together distinct values. See <a href="../../styling/z-index/">Z-index</a>.</li>
+<li><strong>Click-through.</strong> The root itself is never hit by the pointer, background
+included: clicks and hover on its empty area reach the app and the 3D
+scene beneath. Its children are ordinary pickable elements.</li>
+<li><strong>Props.</strong> A <code>&lt;root&gt;</code> takes <code>style</code>, <code>name</code>, <code>sharedTag</code> and <code>key</code>. State
+styles and event handlers on it are ignored with a <code>propIgnored</code> warning;
+put them on a child.</li>
+</ul>
+<h2 id="blocking-modals"><a class="anchor" href="#blocking-modals" aria-hidden="true">#</a>Blocking modals</h2>
+<p>To keep the app beneath from reacting while a modal is open, make the
+backdrop a blocking child that fills the root:</p>
+<pre><code class="language-tsx"><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>root</span><span class="token punctuation">&gt;</span></span><span class="token plain-text">
+  </span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>node</span>
+    <span class="token attr-name">style</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span>
+      flexGrow<span class="token operator">:</span> <span class="token number">1</span><span class="token punctuation">,</span>
+      alignItems<span class="token operator">:</span> <span class="token string">&quot;center&quot;</span><span class="token punctuation">,</span>
+      justifyContent<span class="token operator">:</span> <span class="token string">&quot;center&quot;</span><span class="token punctuation">,</span>
+      backgroundColor<span class="token operator">:</span> <span class="token string">&quot;#000000aa&quot;</span><span class="token punctuation">,</span>
+      focusPolicy<span class="token operator">:</span> <span class="token string">&quot;block&quot;</span><span class="token punctuation">,</span>
+    <span class="token punctuation">}</span><span class="token punctuation">}</span></span>
+  <span class="token punctuation">&gt;</span></span><span class="token plain-text">
+    </span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>node</span> <span class="token attr-name">style</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span>dialogStyle<span class="token punctuation">}</span></span><span class="token punctuation">&gt;</span></span><span class="token punctuation">{</span><span class="token comment">/* … */</span><span class="token punctuation">}</span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>node</span><span class="token punctuation">&gt;</span></span><span class="token plain-text">
+  </span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>node</span><span class="token punctuation">&gt;</span></span><span class="token plain-text">
+</span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>root</span><span class="token punctuation">&gt;</span></span></code></pre><p>To close on an outside click, give the backdrop an <code>onClick</code> and the dialog
+<code>focusPolicy: &quot;block&quot;</code>, so clicks inside the dialog don&#39;t reach the
+backdrop. See <a href="../../styling/focus-policy/">Focus policy</a>.</p>
+<h2 id="devtools"><a class="anchor" href="#devtools" aria-hidden="true">#</a>Devtools</h2>
+<p>The Nodes tab of the <a href="../../tooling/devtools/">devtools</a> shows one tree at a
+time and has a root selector: <code>main</code> for the window tree, plus one entry per
+mounted <code>&lt;root&gt;</code>, labelled with its <code>name</code> (or <code>root#N</code> without one). Name
+your roots to find them there. The devtools panel is itself a <code>&lt;root&gt;</code>,
+kept above every app overlay.</p>
+<h2 id="limits"><a class="anchor" href="#limits" aria-hidden="true">#</a>Limits</h2>
+<ul>
+<li>Window UI camera only; no target camera or window.</li>
+<li>Layer styles on the <code>&lt;root&gt;</code> itself (<code>filter</code>, <code>backdropFilter</code>,
+<code>morphFilter</code>, <code>transform3d</code>, <code>cache</code>) have no effect, and its <code>opacity</code>
+fades only its own background. Wrap the content in a full-size child and
+style that.</li>
+<li>The root is its own UI root for <a href="../../animations/shared-elements/">shared elements</a>:
+a <code>sharedTag</code> never pairs a node inside a root with one outside it.</li>
+</ul>
+<p>See <a href="../../reference/elements/#root"><code>&lt;root&gt;</code></a> in the element reference.</p>
+
+</article>
+<footer class="page-links"><a href="../../demo/?page=root">Open live demo</a>
+<a href="https://github.com/tulustul/bevy-react/blob/v0.7.0/examples/demos/ui/src/demos/elements/RootDemo.tsx">Demo source</a>
+<a href="https://github.com/tulustul/bevy-react/edit/main/docs/guide/elements/root.md">Edit this page</a></footer>
+</main>
+</div>
+<footer class="site-footer">
+<p>bevy-react is dual-licensed under MIT or Apache-2.0. <a href="https://github.com/tulustul/bevy-react">Source on GitHub</a>.</p>
+</footer>
+</body>
+</html>

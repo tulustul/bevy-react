@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Opacity · bevy-react</title>
+<meta name="description" content="Fade a node with opacity - web-style group fading of a whole subtree through a composited layer, or per-node fading with groupAlpha false.">
+<link rel="canonical" href="https://tulustul.github.io/bevy-react/styling/opacity/">
+<link rel="alternate" type="text/markdown" href="../../styling/opacity.md">
+<meta property="og:title" content="Opacity · bevy-react">
+<meta property="og:description" content="Fade a node with opacity - web-style group fading of a whole subtree through a composited layer, or per-node fading with groupAlpha false.">
+<link rel="icon" href="../../logo.png">
+<link rel="stylesheet" href="../../style.css">
+<script src="../../docs.js" defer></script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="site-header">
+<a class="brand" href="../../"><img src="../../logo.png" alt="" width="74" height="74"> bevy-react</a>
+<span class="version">v0.7.0</span>
+<nav class="site-links" aria-label="Project">
+<a href="../../demo/">Live demo</a>
+<a href="https://github.com/tulustul/bevy-react">GitHub</a>
+<a href="https://docs.rs/bevy-react">docs.rs</a>
+<a href="https://www.npmjs.com/package/bevy-react">npm</a>
+</nav>
+</header>
+<div class="layout">
+<nav class="sidebar" aria-label="Documentation">
+<details class="nav-menu" open>
+<summary>Menu</summary>
+<ul><li><a href="../../">Introduction</a></li><li><a href="../../getting-started/">Getting started</a></li><li><a href="../../how-it-works/">How it works</a></li><li class="nav-section"><span>Elements</span><ul><li><a href="../../elements/node/">&lt;node&gt;</a></li><li><a href="../../elements/button/">&lt;button&gt;</a></li><li><a href="../../elements/text/">&lt;text&gt;</a></li><li><a href="../../elements/editable-text/">&lt;editableText&gt;</a></li><li><a href="../../elements/image/">&lt;image&gt;</a></li><li><a href="../../elements/canvas/">&lt;canvas&gt;</a></li><li><a href="../../elements/svg/">&lt;svg&gt;</a></li><li><a href="../../elements/portal/">&lt;portal&gt;</a></li><li><a href="../../elements/surface/">&lt;surface&gt;</a></li><li><a href="../../elements/root/">&lt;root&gt;</a></li><li><a href="../../elements/anchor/">&lt;anchor&gt;</a></li></ul></li><li class="nav-section"><span>Layout</span><ul><li><a href="../../layout/flexbox/">Flexbox</a></li><li><a href="../../layout/grid/">Grid</a></li><li><a href="../../layout/positioning/">Positioning</a></li></ul></li><li class="nav-section"><span>Styling</span><ul><li><a href="../../styling/units/">Units</a></li><li><a href="../../styling/colors/">Colors</a></li><li><a href="../../styling/borders/">Borders</a></li><li><a href="../../styling/spacing/">Spacing</a></li><li><a href="../../styling/sizing/">Sizing</a></li><li><a href="../../styling/layout-rounding/">Layout rounding</a></li><li><a href="../../styling/overflow/">Overflow</a></li><li><a href="../../styling/transforms/">Transforms</a></li><li><a href="../../styling/3d-transforms/">3D transforms</a></li><li><a href="../../styling/shadows/">Shadows</a></li><li><a href="../../styling/filters/">Filters</a></li><li><a href="../../styling/backdrop-filters/">Backdrop filters</a></li><li><a href="../../styling/morph-filters/">Morph filters</a></li><li><a href="../../styling/gradients/">Gradients</a></li><li><a href="../../styling/background-images/">Background images</a></li><li><a href="../../styling/image-rendering/">Image rendering</a></li><li><a href="../../styling/opacity/" aria-current="page">Opacity</a></li><li><a href="../../styling/z-index/">Z-index</a></li><li><a href="../../styling/focus-policy/">Focus policy</a></li><li><a href="../../styling/cursors/">Cursors</a></li><li><a href="../../styling/layers/">Layers</a></li></ul></li><li class="nav-section"><span>Animations</span><ul><li><a href="../../animations/style-transitions/">Style transitions</a></li><li><a href="../../animations/animated-values/">Animated values</a></li><li><a href="../../animations/interpolation/">Interpolation</a></li><li><a href="../../animations/shared-elements/">Shared elements</a></li></ul></li><li class="nav-section"><span>Communication</span><ul><li><a href="../../communication/react-to-bevy/">React to Bevy</a></li><li><a href="../../communication/bevy-to-react/">Bevy to React</a></li><li><a href="../../communication/request-response/">Request / response</a></li><li><a href="../../communication/named-nodes/">Named nodes</a></li></ul></li><li class="nav-section"><span>Events</span><ul><li><a href="../../events/mouse/">Mouse</a></li><li><a href="../../events/keyboard/">Keyboard</a></li><li><a href="../../events/gamepad/">Gamepad</a></li><li><a href="../../events/window/">Window</a></li></ul></li><li class="nav-section"><span>Extending</span><ul><li><a href="../../extending/custom-elements/">Custom elements</a></li><li><a href="../../extending/custom-styles/">Custom styles</a></li><li><a href="../../extending/custom-filters/">Custom filters</a></li></ul></li><li class="nav-section"><span>Tooling</span><ul><li><a href="../../tooling/devtools/">Devtools</a></li><li><a href="../../tooling/hot-reload/">Hot reload</a></li><li><a href="../../tooling/web/">Web builds</a></li><li><a href="../../tooling/ts-codegen/">TypeScript codegen</a></li></ul></li><li class="nav-section"><span>Reference</span><ul><li><a href="../../reference/style-properties/">Style properties</a></li><li><a href="../../reference/elements/">Elements</a></li><li><a href="../../reference/filters/">Filters</a></li></ul></li><li><a href="../../performance/">Performance</a></li></ul>
+</details>
+</nav>
+<main id="main">
+<article>
+<h1 id="opacity">Opacity</h1>
+<p>The <code>opacity</code> style fades a node, from <code>0</code> (invisible) to <code>1</code> (opaque). On a
+node with children it fades the whole subtree as one image, like CSS: the
+subtree is rendered into a <a href="../../styling/layers/">composited layer</a> and blended once, so
+overlapping pieces never show through each other. <code>groupAlpha: false</code> opts
+out of the layer and fades only the node&#39;s own fills.</p>
+<h2 id="usage"><a class="anchor" href="#usage" aria-hidden="true">#</a>Usage</h2>
+<pre><code class="language-tsx"><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>node</span> <span class="token attr-name">style</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span> opacity<span class="token operator">:</span> <span class="token number">0.4</span><span class="token punctuation">,</span> padding<span class="token operator">:</span> <span class="token number">16</span><span class="token punctuation">,</span> backgroundColor<span class="token operator">:</span> <span class="token string">&quot;#24283b&quot;</span> <span class="token punctuation">}</span><span class="token punctuation">}</span></span><span class="token punctuation">&gt;</span></span><span class="token plain-text">
+  </span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>text</span><span class="token punctuation">&gt;</span></span><span class="token plain-text">Faded together</span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>text</span><span class="token punctuation">&gt;</span></span><span class="token plain-text">
+</span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>node</span><span class="token punctuation">&gt;</span></span></code></pre><h2 id="group-fading"><a class="anchor" href="#group-fading" aria-hidden="true">#</a>Group fading</h2>
+<p><code>opacity</code> promotes the node to a composited layer when all of these hold:</p>
+<ul>
+<li>the node has at least one child;</li>
+<li><code>groupAlpha</code> is not <code>false</code> in its base style or any state style;</li>
+<li>the element can be promoted: nested <code>&lt;text&gt;</code> spans, SVG shapes,
+<code>&lt;root&gt;</code> and <code>&lt;surface&gt;</code> never are.</li>
+</ul>
+<p>The node and everything under it, borders, shadows and text included, then
+fade together. Changing or animating the opacity of a layer is cheap: the
+captured image is reused and only its blend changes.</p>
+<p>Promotion depends on whether <code>opacity</code> is set, not on its value:</p>
+<ul>
+<li><code>opacity: 1</code> keeps the layer, so a fade that crosses <code>1</code> never re-creates
+it.</li>
+<li>An <code>opacity</code> in <code>hoverStyle</code>, <code>pressStyle</code> or <code>focusStyle</code> promotes the
+node from the start, and an <code>{ animated }</code> opacity promotes it too.
+Interaction never adds or removes a layer.</li>
+</ul>
+<h2 id="per-node-fading"><a class="anchor" href="#per-node-fading" aria-hidden="true">#</a>Per-node fading</h2>
+<p>Without a layer, either because the node has no children or because of
+<code>groupAlpha: false</code>, <code>opacity</code> multiplies the alpha of the node&#39;s own fills:</p>
+<ul>
+<li><code>backgroundColor</code>, <code>backgroundGradient</code> and <code>borderGradient</code>;</li>
+<li>the <code>backgroundImage</code> tint;</li>
+<li>a <code>&lt;text&gt;</code>&#39;s color and <code>textShadow</code>, and an <code>&lt;image&gt;</code>&#39;s tint.</li>
+</ul>
+<p>It does not fade the node&#39;s <code>borderColor</code>, <code>outline</code> or <code>boxShadow</code>, and it
+does not fade its children: with <code>groupAlpha: false</code> on a container, only
+the container&#39;s background fades.</p>
+<pre><code class="language-tsx"><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>node</span> <span class="token attr-name">style</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span> opacity<span class="token operator">:</span> <span class="token number">0.6</span><span class="token punctuation">,</span> groupAlpha<span class="token operator">:</span> <span class="token boolean">false</span><span class="token punctuation">,</span> backgroundColor<span class="token operator">:</span> <span class="token string">&quot;#24283b&quot;</span> <span class="token punctuation">}</span><span class="token punctuation">}</span></span><span class="token punctuation">&gt;</span></span><span class="token plain-text">
+  </span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>text</span><span class="token punctuation">&gt;</span></span><span class="token plain-text">Not faded</span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>text</span><span class="token punctuation">&gt;</span></span><span class="token plain-text">
+</span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>node</span><span class="token punctuation">&gt;</span></span></code></pre><p>Use <code>groupAlpha: false</code> where a layer would cost too much (a long list of
+faded rows) and the visual difference doesn&#39;t matter, or set <code>opacity</code> on
+each child yourself.</p>
+<h2 id="transitions-and-animation"><a class="anchor" href="#transitions-and-animation" aria-hidden="true">#</a>Transitions and animation</h2>
+<pre><code class="language-tsx"><span class="token operator">&lt;</span>node
+  style<span class="token operator">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span> opacity<span class="token operator">:</span> <span class="token number">1</span><span class="token punctuation">,</span> transition<span class="token operator">:</span> <span class="token punctuation">{</span> opacity<span class="token operator">:</span> <span class="token punctuation">{</span> duration<span class="token operator">:</span> <span class="token number">200</span> <span class="token punctuation">}</span> <span class="token punctuation">}</span> <span class="token punctuation">}</span><span class="token punctuation">}</span>
+  hoverStyle<span class="token operator">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span> opacity<span class="token operator">:</span> <span class="token number">0.7</span> <span class="token punctuation">}</span><span class="token punctuation">}</span>
+<span class="token operator">/</span><span class="token operator">&gt;</span></code></pre><ul>
+<li><code>transition: { opacity }</code> eases opacity between style states. Keep the
+resting <code>opacity: 1</code> in the base style so the way back eases too.</li>
+<li><code>opacity: { animated: sv }</code> binds it to a shared value, driven every frame
+on the Bevy side. A binding wins over the transition.</li>
+</ul>
+<p>See <a href="../../animations/style-transitions/">Style transitions</a> and
+<a href="../../animations/animated-values/">Animated values</a>.</p>
+<h2 id="behavior"><a class="anchor" href="#behavior" aria-hidden="true">#</a>Behavior</h2>
+<ul>
+<li>An invisible node is still there: at <code>opacity: 0</code> it keeps its layout
+space and still receives hover and clicks. Use <code>display: &quot;none&quot;</code> to take
+it out of layout and interaction.</li>
+<li>Opacities nest: a faded node inside a faded layer is faded twice.</li>
+<li>The value is not clamped; keep it between <code>0</code> and <code>1</code>.</li>
+</ul>
+<h2 id="limits"><a class="anchor" href="#limits" aria-hidden="true">#</a>Limits</h2>
+<ul>
+<li>A promoted node is captured within its border box: whatever the subtree
+paints outside it is cut off while the layer exists, including the node&#39;s
+own <code>boxShadow</code> and <code>outline</code> and children that overflow the box. Put the
+shadow on an unpromoted wrapper, or use <code>groupAlpha: false</code>.</li>
+<li>Each layer is an offscreen texture the size of the node; many large faded
+containers cost GPU memory and a capture whenever their content changes.
+See <a href="../../styling/layers/">Layers</a>.</li>
+<li>On a node without a layer that also has a <code>transition</code> style (for any
+channel) or an <code>{ animated }</code> opacity, the opacity replaces the alpha of
+its fills instead of multiplying it: a translucent <code>backgroundColor</code>
+becomes as opaque as the opacity value.</li>
+</ul>
+<p>See <a href="../../reference/style-properties/#opacity"><code>opacity</code></a> and
+<a href="../../reference/style-properties/#groupAlpha"><code>groupAlpha</code></a> in the style
+reference.</p>
+
+</article>
+<footer class="page-links"><a href="../../demo/?page=opacity">Open live demo</a>
+<a href="https://github.com/tulustul/bevy-react/blob/v0.7.0/examples/demos/ui/src/demos/styling/OpacityDemo.tsx">Demo source</a>
+<a href="https://github.com/tulustul/bevy-react/edit/main/docs/guide/styling/opacity.md">Edit this page</a></footer>
+</main>
+</div>
+<footer class="site-footer">
+<p>bevy-react is dual-licensed under MIT or Apache-2.0. <a href="https://github.com/tulustul/bevy-react">Source on GitHub</a>.</p>
+</footer>
+</body>
+</html>

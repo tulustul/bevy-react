@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mouse · bevy-react</title>
+<meta name="description" content="Handle clicks, pointer drags, hover and the mouse wheel on bevy-react elements, and keep UI input away from your Bevy world systems.">
+<link rel="canonical" href="https://tulustul.github.io/bevy-react/events/mouse/">
+<link rel="alternate" type="text/markdown" href="../../events/mouse.md">
+<meta property="og:title" content="Mouse · bevy-react">
+<meta property="og:description" content="Handle clicks, pointer drags, hover and the mouse wheel on bevy-react elements, and keep UI input away from your Bevy world systems.">
+<link rel="icon" href="../../logo.png">
+<link rel="stylesheet" href="../../style.css">
+<script src="../../docs.js" defer></script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="site-header">
+<a class="brand" href="../../"><img src="../../logo.png" alt="" width="74" height="74"> bevy-react</a>
+<span class="version">v0.7.0</span>
+<nav class="site-links" aria-label="Project">
+<a href="../../demo/">Live demo</a>
+<a href="https://github.com/tulustul/bevy-react">GitHub</a>
+<a href="https://docs.rs/bevy-react">docs.rs</a>
+<a href="https://www.npmjs.com/package/bevy-react">npm</a>
+</nav>
+</header>
+<div class="layout">
+<nav class="sidebar" aria-label="Documentation">
+<details class="nav-menu" open>
+<summary>Menu</summary>
+<ul><li><a href="../../">Introduction</a></li><li><a href="../../getting-started/">Getting started</a></li><li><a href="../../how-it-works/">How it works</a></li><li class="nav-section"><span>Elements</span><ul><li><a href="../../elements/node/">&lt;node&gt;</a></li><li><a href="../../elements/button/">&lt;button&gt;</a></li><li><a href="../../elements/text/">&lt;text&gt;</a></li><li><a href="../../elements/editable-text/">&lt;editableText&gt;</a></li><li><a href="../../elements/image/">&lt;image&gt;</a></li><li><a href="../../elements/canvas/">&lt;canvas&gt;</a></li><li><a href="../../elements/svg/">&lt;svg&gt;</a></li><li><a href="../../elements/portal/">&lt;portal&gt;</a></li><li><a href="../../elements/surface/">&lt;surface&gt;</a></li><li><a href="../../elements/root/">&lt;root&gt;</a></li><li><a href="../../elements/anchor/">&lt;anchor&gt;</a></li></ul></li><li class="nav-section"><span>Layout</span><ul><li><a href="../../layout/flexbox/">Flexbox</a></li><li><a href="../../layout/grid/">Grid</a></li><li><a href="../../layout/positioning/">Positioning</a></li></ul></li><li class="nav-section"><span>Styling</span><ul><li><a href="../../styling/units/">Units</a></li><li><a href="../../styling/colors/">Colors</a></li><li><a href="../../styling/borders/">Borders</a></li><li><a href="../../styling/spacing/">Spacing</a></li><li><a href="../../styling/sizing/">Sizing</a></li><li><a href="../../styling/layout-rounding/">Layout rounding</a></li><li><a href="../../styling/overflow/">Overflow</a></li><li><a href="../../styling/transforms/">Transforms</a></li><li><a href="../../styling/3d-transforms/">3D transforms</a></li><li><a href="../../styling/shadows/">Shadows</a></li><li><a href="../../styling/filters/">Filters</a></li><li><a href="../../styling/backdrop-filters/">Backdrop filters</a></li><li><a href="../../styling/morph-filters/">Morph filters</a></li><li><a href="../../styling/gradients/">Gradients</a></li><li><a href="../../styling/background-images/">Background images</a></li><li><a href="../../styling/image-rendering/">Image rendering</a></li><li><a href="../../styling/opacity/">Opacity</a></li><li><a href="../../styling/z-index/">Z-index</a></li><li><a href="../../styling/focus-policy/">Focus policy</a></li><li><a href="../../styling/cursors/">Cursors</a></li><li><a href="../../styling/layers/">Layers</a></li></ul></li><li class="nav-section"><span>Animations</span><ul><li><a href="../../animations/style-transitions/">Style transitions</a></li><li><a href="../../animations/animated-values/">Animated values</a></li><li><a href="../../animations/interpolation/">Interpolation</a></li><li><a href="../../animations/shared-elements/">Shared elements</a></li></ul></li><li class="nav-section"><span>Communication</span><ul><li><a href="../../communication/react-to-bevy/">React to Bevy</a></li><li><a href="../../communication/bevy-to-react/">Bevy to React</a></li><li><a href="../../communication/request-response/">Request / response</a></li><li><a href="../../communication/named-nodes/">Named nodes</a></li></ul></li><li class="nav-section"><span>Events</span><ul><li><a href="../../events/mouse/" aria-current="page">Mouse</a></li><li><a href="../../events/keyboard/">Keyboard</a></li><li><a href="../../events/gamepad/">Gamepad</a></li><li><a href="../../events/window/">Window</a></li></ul></li><li class="nav-section"><span>Extending</span><ul><li><a href="../../extending/custom-elements/">Custom elements</a></li><li><a href="../../extending/custom-styles/">Custom styles</a></li><li><a href="../../extending/custom-filters/">Custom filters</a></li></ul></li><li class="nav-section"><span>Tooling</span><ul><li><a href="../../tooling/devtools/">Devtools</a></li><li><a href="../../tooling/hot-reload/">Hot reload</a></li><li><a href="../../tooling/web/">Web builds</a></li><li><a href="../../tooling/ts-codegen/">TypeScript codegen</a></li></ul></li><li class="nav-section"><span>Reference</span><ul><li><a href="../../reference/style-properties/">Style properties</a></li><li><a href="../../reference/elements/">Elements</a></li><li><a href="../../reference/filters/">Filters</a></li></ul></li><li><a href="../../performance/">Performance</a></li></ul>
+</details>
+</nav>
+<main id="main">
+<article>
+<h1 id="mouse">Mouse</h1>
+<p>Elements take DOM-like pointer handlers: <code>onClick</code>, <code>onPointerDown</code>,
+<code>onPointerMove</code>, <code>onPointerUp</code>, <code>onPointerEnter</code>, <code>onPointerLeave</code> and
+<code>onWheel</code>. Bevy detects the input (through <code>bevy_ui</code>&#39;s interaction state and
+Bevy picking) and calls the React handler a moment later. The element
+reference lists which elements accept which handlers.</p>
+<h2 id="usage"><a class="anchor" href="#usage" aria-hidden="true">#</a>Usage</h2>
+<pre><code class="language-tsx"><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>node</span>
+  <span class="token attr-name">onClick</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">=&gt;</span> <span class="token function">select</span><span class="token punctuation">(</span>item<span class="token punctuation">.</span>id<span class="token punctuation">)</span><span class="token punctuation">}</span></span>
+  <span class="token attr-name">onPointerEnter</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">=&gt;</span> <span class="token function">setHovered</span><span class="token punctuation">(</span><span class="token boolean">true</span><span class="token punctuation">)</span><span class="token punctuation">}</span></span>
+  <span class="token attr-name">onPointerLeave</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">=&gt;</span> <span class="token function">setHovered</span><span class="token punctuation">(</span><span class="token boolean">false</span><span class="token punctuation">)</span><span class="token punctuation">}</span></span>
+  <span class="token attr-name">style</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span> width<span class="token operator">:</span> <span class="token number">160</span><span class="token punctuation">,</span> height<span class="token operator">:</span> <span class="token number">40</span> <span class="token punctuation">}</span><span class="token punctuation">}</span></span>
+<span class="token punctuation">/&gt;</span></span></code></pre><h2 id="clicks"><a class="anchor" href="#clicks" aria-hidden="true">#</a>Clicks</h2>
+<p><code>onClick</code> takes no argument. It fires when the primary (left) button is
+released over the same element the press landed on: press, drag off and
+release elsewhere does not click. Right and middle clicks have no <code>onClick</code>;
+use <code>onPointerDown</code>/<code>onPointerUp</code> and read <code>e.button</code>.</p>
+<p>Clicks don&#39;t bubble. One gesture clicks one element: the topmost element
+under the pointer that owns clicks.</p>
+<ul>
+<li>Elements that own clicks: any element with <code>onClick</code> or an <code>onPointer*</code>
+handler, every <code>&lt;button&gt;</code>, and every <code>&lt;editableText&gt;</code>.</li>
+<li>A press on a child that owns no clicks, such as the <code>&lt;text&gt;</code> label inside a
+button, goes to the nearest ancestor that does. A child with only
+<code>hoverStyle</code>/<code>pressStyle</code> doesn&#39;t take the click from its ancestor.</li>
+<li>A <code>&lt;button&gt;</code> inside a clickable card takes clicks on itself, even with no
+<code>onClick</code> of its own.</li>
+</ul>
+<h2 id="drags-and-pointer-events"><a class="anchor" href="#drags-and-pointer-events" aria-hidden="true">#</a>Drags and pointer events</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Handler</th>
+<th>Fires</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>onPointerDown</code></td>
+<td>A left, middle or right button goes down over the element</td>
+</tr>
+<tr>
+<td><code>onPointerMove</code></td>
+<td>While that button stays down, on each frame the pointer moved, even outside the element</td>
+</tr>
+<tr>
+<td><code>onPointerUp</code></td>
+<td>When that button is released, wherever the pointer is</td>
+</tr>
+<tr>
+<td><code>onPointerEnter</code></td>
+<td>Once when the pointer enters the element</td>
+</tr>
+<tr>
+<td><code>onPointerLeave</code></td>
+<td>Once when the pointer leaves the element</td>
+</tr>
+</tbody></table></div>
+<ul>
+<li>A press on an element with any <code>onPointer*</code> handler starts a drag on it,
+which lasts until the button that started it is released. One drag runs at
+a time: other buttons pressed during it are ignored. When several elements
+with pointer handlers overlap under the press, the topmost one gets the
+drag.</li>
+<li>There is no hover-move event: <code>onPointerMove</code> only fires during a drag. A
+held, unmoving pointer sends nothing.</li>
+<li>Enter and leave fire on the boundary only, not again when the element is
+pressed or released inside it.</li>
+</ul>
+<p>The pointer handlers receive a <code>PointerEventData</code>:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>x</code>, <code>y</code></td>
+<td>Position within the element, <code>0..1</code> from its top-left corner; clamped to the element during a drag</td>
+</tr>
+<tr>
+<td><code>clientX</code>, <code>clientY</code></td>
+<td>Position in the window, in logical pixels from its top-left corner; not clamped</td>
+</tr>
+<tr>
+<td><code>button</code></td>
+<td><code>0</code> left, <code>1</code> middle, <code>2</code> right; on down, move and up only (absent on enter and leave)</td>
+</tr>
+</tbody></table></div>
+<p>Because <code>x</code>/<code>y</code> stop at the element&#39;s edges, drag things with the
+<code>clientX</code>/<code>clientY</code> deltas:</p>
+<pre><code class="language-tsx"><span class="token keyword">import</span> <span class="token punctuation">{</span> useRef<span class="token punctuation">,</span> useState <span class="token punctuation">}</span> <span class="token keyword">from</span> <span class="token string">&quot;react&quot;</span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token keyword">type</span> <span class="token punctuation">{</span> PointerEventData <span class="token punctuation">}</span> <span class="token keyword">from</span> <span class="token string">&quot;bevy-react&quot;</span><span class="token punctuation">;</span>
+
+<span class="token keyword">function</span> <span class="token function">Draggable</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+  <span class="token keyword">const</span> <span class="token punctuation">[</span>pos<span class="token punctuation">,</span> setPos<span class="token punctuation">]</span> <span class="token operator">=</span> <span class="token function">useState</span><span class="token punctuation">(</span><span class="token punctuation">{</span> left<span class="token operator">:</span> <span class="token number">0</span><span class="token punctuation">,</span> top<span class="token operator">:</span> <span class="token number">0</span> <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token keyword">const</span> last <span class="token operator">=</span> <span class="token function">useRef</span><span class="token punctuation">(</span><span class="token punctuation">{</span> x<span class="token operator">:</span> <span class="token number">0</span><span class="token punctuation">,</span> y<span class="token operator">:</span> <span class="token number">0</span> <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token keyword">const</span> <span class="token function-variable function">down</span> <span class="token operator">=</span> <span class="token punctuation">(</span>e<span class="token operator">:</span> PointerEventData<span class="token punctuation">)</span> <span class="token operator">=&gt;</span> <span class="token punctuation">{</span>
+    last<span class="token punctuation">.</span>current <span class="token operator">=</span> <span class="token punctuation">{</span> x<span class="token operator">:</span> e<span class="token punctuation">.</span>clientX<span class="token punctuation">,</span> y<span class="token operator">:</span> e<span class="token punctuation">.</span>clientY <span class="token punctuation">}</span><span class="token punctuation">;</span>
+  <span class="token punctuation">}</span><span class="token punctuation">;</span>
+  <span class="token keyword">const</span> <span class="token function-variable function">move</span> <span class="token operator">=</span> <span class="token punctuation">(</span>e<span class="token operator">:</span> PointerEventData<span class="token punctuation">)</span> <span class="token operator">=&gt;</span> <span class="token punctuation">{</span>
+    <span class="token keyword">const</span> dx <span class="token operator">=</span> e<span class="token punctuation">.</span>clientX <span class="token operator">-</span> last<span class="token punctuation">.</span>current<span class="token punctuation">.</span>x<span class="token punctuation">;</span>
+    <span class="token keyword">const</span> dy <span class="token operator">=</span> e<span class="token punctuation">.</span>clientY <span class="token operator">-</span> last<span class="token punctuation">.</span>current<span class="token punctuation">.</span>y<span class="token punctuation">;</span>
+    last<span class="token punctuation">.</span>current <span class="token operator">=</span> <span class="token punctuation">{</span> x<span class="token operator">:</span> e<span class="token punctuation">.</span>clientX<span class="token punctuation">,</span> y<span class="token operator">:</span> e<span class="token punctuation">.</span>clientY <span class="token punctuation">}</span><span class="token punctuation">;</span>
+    <span class="token function">setPos</span><span class="token punctuation">(</span><span class="token punctuation">(</span>p<span class="token punctuation">)</span> <span class="token operator">=&gt;</span> <span class="token punctuation">(</span><span class="token punctuation">{</span> left<span class="token operator">:</span> p<span class="token punctuation">.</span>left <span class="token operator">+</span> dx<span class="token punctuation">,</span> top<span class="token operator">:</span> p<span class="token punctuation">.</span>top <span class="token operator">+</span> dy <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token punctuation">}</span><span class="token punctuation">;</span>
+  <span class="token keyword">return</span> <span class="token punctuation">(</span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>node</span>
+      <span class="token attr-name">onPointerDown</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span>down<span class="token punctuation">}</span></span>
+      <span class="token attr-name">onPointerMove</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span>move<span class="token punctuation">}</span></span>
+      <span class="token attr-name">style</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span> positionType<span class="token operator">:</span> <span class="token string">&quot;absolute&quot;</span><span class="token punctuation">,</span> <span class="token operator">...</span>pos<span class="token punctuation">,</span> width<span class="token operator">:</span> <span class="token number">80</span><span class="token punctuation">,</span> height<span class="token operator">:</span> <span class="token number">80</span> <span class="token punctuation">}</span><span class="token punctuation">}</span></span>
+    <span class="token punctuation">/&gt;</span></span>
+  <span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span></code></pre><p>On the shapes of an <a href="../../elements/svg/"><code>&lt;svg&gt;</code></a>, <code>x</code>/<code>y</code> are in the SVG&#39;s
+user space instead. Inside a <a href="../../elements/surface/"><code>&lt;surface&gt;</code></a>,
+<code>clientX</code>/<code>clientY</code> are pixels of the surface&#39;s texture.</p>
+<h2 id="hover-and-press-styles"><a class="anchor" href="#hover-and-press-styles" aria-hidden="true">#</a>Hover and press styles</h2>
+<p>For visual feedback, prefer <code>hoverStyle</code> and <code>pressStyle</code> to
+<code>onPointerEnter</code>/<code>onPointerLeave</code> plus React state: Bevy applies them itself,
+with no round trip through React (see
+<a href="../../reference/elements/#state-styles">state styles</a>). The <code>cursor</code> style
+sets the mouse cursor while the element is hovered (see
+<a href="../../styling/cursors/">Cursors</a>).</p>
+<h2 id="pass-through-and-blocking"><a class="anchor" href="#pass-through-and-blocking" aria-hidden="true">#</a>Pass-through and blocking</h2>
+<p>The <a href="../../styling/focus-policy/"><code>focusPolicy</code></a> style decides whether an
+element stops the pointer from reaching what lies beneath it. It is
+<code>&quot;pass&quot;</code> on every element except <code>&lt;button&gt;</code>, which defaults to <code>&quot;block&quot;</code>.</p>
+<ul>
+<li>With <code>&quot;pass&quot;</code>, hover and press reach every element under the pointer,
+ancestors included: moving onto a child doesn&#39;t make its parent leave, and
+both receive their enter events. An element without handlers layered over
+a button doesn&#39;t stop the button&#39;s clicks.</li>
+<li>With <code>&quot;block&quot;</code>, hover, press and clicks stop at the element; elements
+beneath it get <code>onPointerLeave</code> when the pointer moves onto it.</li>
+<li>Clicks go to one element either way (see <a href="#clicks">Clicks</a>).</li>
+</ul>
+<h2 id="wheel"><a class="anchor" href="#wheel" aria-hidden="true">#</a>Wheel</h2>
+<p><code>onWheel</code> works on any element that accepts it, scroll container or not, and
+receives the raw delta in a <code>WheelEventData</code>: <code>x</code>, <code>y</code>, <code>clientX</code> and
+<code>clientY</code> as above, plus:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>deltaX</code></td>
+<td>Horizontal delta; positive when the content should move right</td>
+</tr>
+<tr>
+<td><code>deltaY</code></td>
+<td>Vertical delta; positive when the wheel turns up, away from the user</td>
+</tr>
+<tr>
+<td><code>deltaMode</code></td>
+<td><code>&quot;line&quot;</code> (mouse wheel notches) or <code>&quot;pixel&quot;</code> (trackpads, already in pixels)</td>
+</tr>
+</tbody></table></div>
+<pre><code class="language-tsx"><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>node</span>
+  <span class="token attr-name">onWheel</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">(</span>e<span class="token punctuation">)</span> <span class="token operator">=&gt;</span> <span class="token punctuation">{</span>
+    <span class="token keyword">const</span> step <span class="token operator">=</span> e<span class="token punctuation">.</span>deltaMode <span class="token operator">===</span> <span class="token string">&quot;line&quot;</span> <span class="token operator">?</span> <span class="token number">0.1</span> <span class="token operator">:</span> <span class="token number">0.005</span><span class="token punctuation">;</span>
+    <span class="token function">setZoom</span><span class="token punctuation">(</span><span class="token punctuation">(</span>z<span class="token punctuation">)</span> <span class="token operator">=&gt;</span> Math<span class="token punctuation">.</span><span class="token function">min</span><span class="token punctuation">(</span><span class="token number">3</span><span class="token punctuation">,</span> Math<span class="token punctuation">.</span><span class="token function">max</span><span class="token punctuation">(</span><span class="token number">0.5</span><span class="token punctuation">,</span> z <span class="token operator">+</span> e<span class="token punctuation">.</span>deltaY <span class="token operator">*</span> step<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token punctuation">}</span><span class="token punctuation">}</span></span>
+<span class="token punctuation">/&gt;</span></span></code></pre><ul>
+<li>The sign follows Bevy, not the DOM: a wheel turned up gives a positive
+<code>deltaY</code>, where a DOM <code>WheelEvent</code> gives a negative one.</li>
+<li>Nothing is scaled: <code>&quot;line&quot;</code> deltas count notches, so pick your own
+distance per line.</li>
+<li>At most one event per frame, carrying the frame&#39;s accumulated delta.</li>
+<li>The topmost element with <code>onWheel</code> whose box contains the pointer gets the
+event, regardless of <code>focusPolicy</code> and of elements without <code>onWheel</code> on top
+of it.</li>
+<li>That element claims the wheel: scroll containers beneath it, its ancestors
+included, don&#39;t scroll, like a DOM <code>preventDefault</code>.</li>
+<li>Scroll containers scroll by themselves; their <code>onScroll</code> reports the new
+offset (see <a href="../../styling/overflow/">Overflow</a>).</li>
+</ul>
+<h2 id="keeping-input-away-from-the-world"><a class="anchor" href="#keeping-input-away-from-the-world" aria-hidden="true">#</a>Keeping input away from the world</h2>
+<p>The UI doesn&#39;t stop Bevy systems from reading the mouse. A camera controller
+that reads mouse input directly also reacts to a drag on a slider. The
+<code>PointerCapture</code> resource reports what the UI owns this frame; gate world
+input on it and order the system after <code>PointerCaptureSet</code>:</p>
+<pre><code class="language-rust"><span class="token keyword">use</span> <span class="token namespace">bevy<span class="token punctuation">::</span>prelude<span class="token punctuation">::</span></span><span class="token operator">*</span><span class="token punctuation">;</span>
+<span class="token keyword">use</span> <span class="token namespace">bevy_react<span class="token punctuation">::</span></span><span class="token punctuation">{</span><span class="token class-name">PointerCapture</span><span class="token punctuation">,</span> <span class="token class-name">PointerCaptureSet</span><span class="token punctuation">}</span><span class="token punctuation">;</span>
+
+<span class="token keyword">fn</span> <span class="token function-definition function">orbit_camera</span><span class="token punctuation">(</span>capture<span class="token punctuation">:</span> <span class="token class-name">Res</span><span class="token operator">&lt;</span><span class="token class-name">PointerCapture</span><span class="token operator">&gt;</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token keyword">if</span> capture<span class="token punctuation">.</span><span class="token function">is_captured</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">return</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+    <span class="token comment">// drive the camera from the mouse</span>
+<span class="token punctuation">}</span>
+
+app<span class="token punctuation">.</span><span class="token function">add_systems</span><span class="token punctuation">(</span><span class="token class-name">Update</span><span class="token punctuation">,</span> orbit_camera<span class="token punctuation">.</span><span class="token function">after</span><span class="token punctuation">(</span><span class="token class-name">PointerCaptureSet</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span></code></pre><div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Field</th>
+<th>True when</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>dragging</code></td>
+<td>A UI drag is in progress, even with the pointer outside the element</td>
+</tr>
+<tr>
+<td><code>over_ui</code></td>
+<td>The pointer hovers or presses an interactive element</td>
+</tr>
+<tr>
+<td><code>wheel_captured</code></td>
+<td>This frame&#39;s wheel scrolled a container or went to an <code>onWheel</code> element</td>
+</tr>
+</tbody></table></div>
+<p><code>is_captured()</code> is true when any of them is. Only interactive elements count
+for <code>over_ui</code>: those with a pointer handler, <code>onClick</code>, <code>hoverStyle</code> or
+<code>pressStyle</code>, and every <code>&lt;button&gt;</code> and <code>&lt;editableText&gt;</code>. Plain layout and text
+let the pointer through to the world. A scroll container whose content fits
+leaves the wheel to the world, so a wheel-zoom camera that checks only
+<code>wheel_captured</code> keeps zooming over hoverable UI.</p>
+<h2 id="touch"><a class="anchor" href="#touch" aria-hidden="true">#</a>Touch</h2>
+<p>A touch works like the left button: a tap clicks, and a touch drag sends
+<code>onPointerDown</code>, <code>onPointerMove</code> and <code>onPointerUp</code> with <code>button</code> <code>0</code> and the
+finger&#39;s position.</p>
+<ul>
+<li>Inside a scroll container, a drag that pans along a scrollable axis is
+taken over by scrolling: the element gets <code>onPointerLeave</code> instead of
+<code>onPointerUp</code>.</li>
+<li>A touch that moves more than 8 logical pixels while scrolling doesn&#39;t click.</li>
+<li>One drag runs at a time; other fingers are ignored meanwhile.</li>
+</ul>
+<h2 id="limits"><a class="anchor" href="#limits" aria-hidden="true">#</a>Limits</h2>
+<ul>
+<li>No modifier keys on pointer events. Track them with the
+<a href="../../events/keyboard/">keyboard</a> events.</li>
+<li>No hover-move events, double-click events, bubbling, capture phase or
+<code>stopPropagation</code>.</li>
+<li>Handlers run a frame or more after the input, on React&#39;s thread; for
+feedback that must be instant, use state styles.</li>
+<li><code>onClick</code> is primary-button only.</li>
+</ul>
+<p>See <a href="../../reference/elements/#pointer-events">Pointer events</a> and
+<a href="../../reference/elements/#wheel">Wheel</a> in the element reference.</p>
+
+</article>
+<footer class="page-links"><a href="../../demo/?page=mouse">Open live demo</a>
+<a href="https://github.com/tulustul/bevy-react/blob/v0.7.0/examples/demos/ui/src/demos/events/MouseDemo.tsx">Demo source</a>
+<a href="https://github.com/tulustul/bevy-react/edit/main/docs/guide/events/mouse.md">Edit this page</a></footer>
+</main>
+</div>
+<footer class="site-footer">
+<p>bevy-react is dual-licensed under MIT or Apache-2.0. <a href="https://github.com/tulustul/bevy-react">Source on GitHub</a>.</p>
+</footer>
+</body>
+</html>

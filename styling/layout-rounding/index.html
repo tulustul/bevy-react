@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Layout rounding · bevy-react</title>
+<meta name="description" content="Turn off layout's whole-pixel rounding for a subtree with layoutRounding false, so sizes animated through layout glide instead of stepping.">
+<link rel="canonical" href="https://tulustul.github.io/bevy-react/styling/layout-rounding/">
+<link rel="alternate" type="text/markdown" href="../../styling/layout-rounding.md">
+<meta property="og:title" content="Layout rounding · bevy-react">
+<meta property="og:description" content="Turn off layout's whole-pixel rounding for a subtree with layoutRounding false, so sizes animated through layout glide instead of stepping.">
+<link rel="icon" href="../../logo.png">
+<link rel="stylesheet" href="../../style.css">
+<script src="../../docs.js" defer></script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="site-header">
+<a class="brand" href="../../"><img src="../../logo.png" alt="" width="74" height="74"> bevy-react</a>
+<span class="version">v0.7.0</span>
+<nav class="site-links" aria-label="Project">
+<a href="../../demo/">Live demo</a>
+<a href="https://github.com/tulustul/bevy-react">GitHub</a>
+<a href="https://docs.rs/bevy-react">docs.rs</a>
+<a href="https://www.npmjs.com/package/bevy-react">npm</a>
+</nav>
+</header>
+<div class="layout">
+<nav class="sidebar" aria-label="Documentation">
+<details class="nav-menu" open>
+<summary>Menu</summary>
+<ul><li><a href="../../">Introduction</a></li><li><a href="../../getting-started/">Getting started</a></li><li><a href="../../how-it-works/">How it works</a></li><li class="nav-section"><span>Elements</span><ul><li><a href="../../elements/node/">&lt;node&gt;</a></li><li><a href="../../elements/button/">&lt;button&gt;</a></li><li><a href="../../elements/text/">&lt;text&gt;</a></li><li><a href="../../elements/editable-text/">&lt;editableText&gt;</a></li><li><a href="../../elements/image/">&lt;image&gt;</a></li><li><a href="../../elements/canvas/">&lt;canvas&gt;</a></li><li><a href="../../elements/svg/">&lt;svg&gt;</a></li><li><a href="../../elements/portal/">&lt;portal&gt;</a></li><li><a href="../../elements/surface/">&lt;surface&gt;</a></li><li><a href="../../elements/root/">&lt;root&gt;</a></li><li><a href="../../elements/anchor/">&lt;anchor&gt;</a></li></ul></li><li class="nav-section"><span>Layout</span><ul><li><a href="../../layout/flexbox/">Flexbox</a></li><li><a href="../../layout/grid/">Grid</a></li><li><a href="../../layout/positioning/">Positioning</a></li></ul></li><li class="nav-section"><span>Styling</span><ul><li><a href="../../styling/units/">Units</a></li><li><a href="../../styling/colors/">Colors</a></li><li><a href="../../styling/borders/">Borders</a></li><li><a href="../../styling/spacing/">Spacing</a></li><li><a href="../../styling/sizing/">Sizing</a></li><li><a href="../../styling/layout-rounding/" aria-current="page">Layout rounding</a></li><li><a href="../../styling/overflow/">Overflow</a></li><li><a href="../../styling/transforms/">Transforms</a></li><li><a href="../../styling/3d-transforms/">3D transforms</a></li><li><a href="../../styling/shadows/">Shadows</a></li><li><a href="../../styling/filters/">Filters</a></li><li><a href="../../styling/backdrop-filters/">Backdrop filters</a></li><li><a href="../../styling/morph-filters/">Morph filters</a></li><li><a href="../../styling/gradients/">Gradients</a></li><li><a href="../../styling/background-images/">Background images</a></li><li><a href="../../styling/image-rendering/">Image rendering</a></li><li><a href="../../styling/opacity/">Opacity</a></li><li><a href="../../styling/z-index/">Z-index</a></li><li><a href="../../styling/focus-policy/">Focus policy</a></li><li><a href="../../styling/cursors/">Cursors</a></li><li><a href="../../styling/layers/">Layers</a></li></ul></li><li class="nav-section"><span>Animations</span><ul><li><a href="../../animations/style-transitions/">Style transitions</a></li><li><a href="../../animations/animated-values/">Animated values</a></li><li><a href="../../animations/interpolation/">Interpolation</a></li><li><a href="../../animations/shared-elements/">Shared elements</a></li></ul></li><li class="nav-section"><span>Communication</span><ul><li><a href="../../communication/react-to-bevy/">React to Bevy</a></li><li><a href="../../communication/bevy-to-react/">Bevy to React</a></li><li><a href="../../communication/request-response/">Request / response</a></li><li><a href="../../communication/named-nodes/">Named nodes</a></li></ul></li><li class="nav-section"><span>Events</span><ul><li><a href="../../events/mouse/">Mouse</a></li><li><a href="../../events/keyboard/">Keyboard</a></li><li><a href="../../events/gamepad/">Gamepad</a></li><li><a href="../../events/window/">Window</a></li></ul></li><li class="nav-section"><span>Extending</span><ul><li><a href="../../extending/custom-elements/">Custom elements</a></li><li><a href="../../extending/custom-styles/">Custom styles</a></li><li><a href="../../extending/custom-filters/">Custom filters</a></li></ul></li><li class="nav-section"><span>Tooling</span><ul><li><a href="../../tooling/devtools/">Devtools</a></li><li><a href="../../tooling/hot-reload/">Hot reload</a></li><li><a href="../../tooling/web/">Web builds</a></li><li><a href="../../tooling/ts-codegen/">TypeScript codegen</a></li></ul></li><li class="nav-section"><span>Reference</span><ul><li><a href="../../reference/style-properties/">Style properties</a></li><li><a href="../../reference/elements/">Elements</a></li><li><a href="../../reference/filters/">Filters</a></li></ul></li><li><a href="../../performance/">Performance</a></li></ul>
+</details>
+</nav>
+<main id="main">
+<article>
+<h1 id="layout-rounding">Layout rounding</h1>
+<p>Bevy rounds every node&#39;s laid-out position and size to whole physical
+pixels, which keeps edges crisp and text sharp. The price is that a size
+animated through layout moves in one-pixel steps, and everything laid out
+around it hops along. <code>layoutRounding: false</code> turns the rounding off for a
+node and its descendants.</p>
+<h2 id="usage"><a class="anchor" href="#usage" aria-hidden="true">#</a>Usage</h2>
+<pre><code class="language-tsx"><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>node</span> <span class="token attr-name">style</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span> layoutRounding<span class="token operator">:</span> <span class="token boolean">false</span><span class="token punctuation">,</span> alignItems<span class="token operator">:</span> <span class="token string">&quot;center&quot;</span> <span class="token punctuation">}</span><span class="token punctuation">}</span></span><span class="token punctuation">&gt;</span></span><span class="token plain-text">
+  &lt;node
+    style=</span><span class="token punctuation">{</span><span class="token punctuation">{</span>
+      width<span class="token operator">:</span> <span class="token number">72</span><span class="token punctuation">,</span>
+      height<span class="token operator">:</span> open <span class="token operator">?</span> <span class="token number">120</span> <span class="token operator">:</span> <span class="token number">40</span><span class="token punctuation">,</span>
+      transition<span class="token operator">:</span> <span class="token punctuation">{</span> size<span class="token operator">:</span> <span class="token punctuation">{</span> duration<span class="token operator">:</span> <span class="token number">3000</span> <span class="token punctuation">}</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+    <span class="token punctuation">}</span><span class="token punctuation">}</span><span class="token plain-text">
+  /&gt;
+  </span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>text</span><span class="token punctuation">&gt;</span></span><span class="token plain-text">glides along</span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>text</span><span class="token punctuation">&gt;</span></span><span class="token plain-text">
+</span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>node</span><span class="token punctuation">&gt;</span></span></code></pre><h2 id="when-rounding-shows"><a class="anchor" href="#when-rounding-shows" aria-hidden="true">#</a>When rounding shows</h2>
+<p>Rounding only matters for motion that goes through layout:</p>
+<ul>
+<li><code>transition: { size }</code> easing <code>width</code>, <code>height</code> or the max sizes;</li>
+<li>an <code>{ animated }</code> binding on a size, inset, gap or other layout key;</li>
+<li>the size flight of a <a href="../../animations/shared-elements/">shared element</a>.</li>
+</ul>
+<p>Each frame of such an animation is rounded, so the node grows a pixel at a
+time, and siblings that are centered or flowed around it shift back and
+forth by a pixel as their rounding flips. Animations that never touch
+layout, such as <code>transform</code>, <code>opacity</code> and the visual easing of
+<code>transition: { layout }</code>, are smooth either way.</p>
+<h2 id="inheritance"><a class="anchor" href="#inheritance" aria-hidden="true">#</a>Inheritance</h2>
+<ul>
+<li><code>layoutRounding</code> is a boolean. <code>true</code> and <code>false</code> both apply to the node
+and its whole subtree; unset inherits the nearest ancestor&#39;s setting, and
+the default at the top is <code>true</code>.</li>
+<li>It inherits downward only. Set it on the parent that lays out both the
+animated node and the neighbours that move with it; setting it on the
+animated node alone leaves the neighbours rounded, and they still hop.</li>
+<li>A <code>true</code> deeper inside an unrounded subtree turns rounding back on for
+that branch.</li>
+<li>The setting restarts at every separate UI root: content inside
+<a href="../../elements/root/"><code>&lt;root&gt;</code></a>, <a href="../../elements/surface/"><code>&lt;surface&gt;</code></a>
+and <a href="../../elements/anchor/"><code>&lt;anchor&gt;</code></a> is rounded again unless it sets
+<code>layoutRounding</code> itself.</li>
+</ul>
+<h2 id="the-cost"><a class="anchor" href="#the-cost" aria-hidden="true">#</a>The cost</h2>
+<p>In an unrounded subtree, anything that rests on a fractional pixel renders
+soft: anti-aliased edges, slightly blurred text, and hairline seams between
+adjacent backgrounds. An odd-sized child centered in an even-sized parent
+is enough. Keep the setting as local as you can, around the part that
+animates, rather than on the whole app.</p>
+<p>Changing the setting is cheap: it does not trigger a relayout. Switching
+rounding back on after an animation settles snaps the content by up to half
+a pixel.</p>
+<p>See <a href="../../reference/style-properties/#layoutRounding"><code>layoutRounding</code></a> in
+the style reference.</p>
+
+</article>
+<footer class="page-links"><a href="../../demo/?page=layout-rounding">Open live demo</a>
+<a href="https://github.com/tulustul/bevy-react/blob/v0.7.0/examples/demos/ui/src/demos/styling/LayoutRoundingDemo.tsx">Demo source</a>
+<a href="https://github.com/tulustul/bevy-react/edit/main/docs/guide/styling/layout-rounding.md">Edit this page</a></footer>
+</main>
+</div>
+<footer class="site-footer">
+<p>bevy-react is dual-licensed under MIT or Apache-2.0. <a href="https://github.com/tulustul/bevy-react">Source on GitHub</a>.</p>
+</footer>
+</body>
+</html>

@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Colors · bevy-react</title>
+<meta name="description" content="The CSS color strings every color style accepts (hex, named, rgb, hsl, hwb, oklab, oklch), backgroundColor, color transitions and animated colors.">
+<link rel="canonical" href="https://tulustul.github.io/bevy-react/styling/colors/">
+<link rel="alternate" type="text/markdown" href="../../styling/colors.md">
+<meta property="og:title" content="Colors · bevy-react">
+<meta property="og:description" content="The CSS color strings every color style accepts (hex, named, rgb, hsl, hwb, oklab, oklch), backgroundColor, color transitions and animated colors.">
+<link rel="icon" href="../../logo.png">
+<link rel="stylesheet" href="../../style.css">
+<script src="../../docs.js" defer></script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="site-header">
+<a class="brand" href="../../"><img src="../../logo.png" alt="" width="74" height="74"> bevy-react</a>
+<span class="version">v0.7.0</span>
+<nav class="site-links" aria-label="Project">
+<a href="../../demo/">Live demo</a>
+<a href="https://github.com/tulustul/bevy-react">GitHub</a>
+<a href="https://docs.rs/bevy-react">docs.rs</a>
+<a href="https://www.npmjs.com/package/bevy-react">npm</a>
+</nav>
+</header>
+<div class="layout">
+<nav class="sidebar" aria-label="Documentation">
+<details class="nav-menu" open>
+<summary>Menu</summary>
+<ul><li><a href="../../">Introduction</a></li><li><a href="../../getting-started/">Getting started</a></li><li><a href="../../how-it-works/">How it works</a></li><li class="nav-section"><span>Elements</span><ul><li><a href="../../elements/node/">&lt;node&gt;</a></li><li><a href="../../elements/button/">&lt;button&gt;</a></li><li><a href="../../elements/text/">&lt;text&gt;</a></li><li><a href="../../elements/editable-text/">&lt;editableText&gt;</a></li><li><a href="../../elements/image/">&lt;image&gt;</a></li><li><a href="../../elements/canvas/">&lt;canvas&gt;</a></li><li><a href="../../elements/svg/">&lt;svg&gt;</a></li><li><a href="../../elements/portal/">&lt;portal&gt;</a></li><li><a href="../../elements/surface/">&lt;surface&gt;</a></li><li><a href="../../elements/root/">&lt;root&gt;</a></li><li><a href="../../elements/anchor/">&lt;anchor&gt;</a></li></ul></li><li class="nav-section"><span>Layout</span><ul><li><a href="../../layout/flexbox/">Flexbox</a></li><li><a href="../../layout/grid/">Grid</a></li><li><a href="../../layout/positioning/">Positioning</a></li></ul></li><li class="nav-section"><span>Styling</span><ul><li><a href="../../styling/units/">Units</a></li><li><a href="../../styling/colors/" aria-current="page">Colors</a></li><li><a href="../../styling/borders/">Borders</a></li><li><a href="../../styling/spacing/">Spacing</a></li><li><a href="../../styling/sizing/">Sizing</a></li><li><a href="../../styling/layout-rounding/">Layout rounding</a></li><li><a href="../../styling/overflow/">Overflow</a></li><li><a href="../../styling/transforms/">Transforms</a></li><li><a href="../../styling/3d-transforms/">3D transforms</a></li><li><a href="../../styling/shadows/">Shadows</a></li><li><a href="../../styling/filters/">Filters</a></li><li><a href="../../styling/backdrop-filters/">Backdrop filters</a></li><li><a href="../../styling/morph-filters/">Morph filters</a></li><li><a href="../../styling/gradients/">Gradients</a></li><li><a href="../../styling/background-images/">Background images</a></li><li><a href="../../styling/image-rendering/">Image rendering</a></li><li><a href="../../styling/opacity/">Opacity</a></li><li><a href="../../styling/z-index/">Z-index</a></li><li><a href="../../styling/focus-policy/">Focus policy</a></li><li><a href="../../styling/cursors/">Cursors</a></li><li><a href="../../styling/layers/">Layers</a></li></ul></li><li class="nav-section"><span>Animations</span><ul><li><a href="../../animations/style-transitions/">Style transitions</a></li><li><a href="../../animations/animated-values/">Animated values</a></li><li><a href="../../animations/interpolation/">Interpolation</a></li><li><a href="../../animations/shared-elements/">Shared elements</a></li></ul></li><li class="nav-section"><span>Communication</span><ul><li><a href="../../communication/react-to-bevy/">React to Bevy</a></li><li><a href="../../communication/bevy-to-react/">Bevy to React</a></li><li><a href="../../communication/request-response/">Request / response</a></li><li><a href="../../communication/named-nodes/">Named nodes</a></li></ul></li><li class="nav-section"><span>Events</span><ul><li><a href="../../events/mouse/">Mouse</a></li><li><a href="../../events/keyboard/">Keyboard</a></li><li><a href="../../events/gamepad/">Gamepad</a></li><li><a href="../../events/window/">Window</a></li></ul></li><li class="nav-section"><span>Extending</span><ul><li><a href="../../extending/custom-elements/">Custom elements</a></li><li><a href="../../extending/custom-styles/">Custom styles</a></li><li><a href="../../extending/custom-filters/">Custom filters</a></li></ul></li><li class="nav-section"><span>Tooling</span><ul><li><a href="../../tooling/devtools/">Devtools</a></li><li><a href="../../tooling/hot-reload/">Hot reload</a></li><li><a href="../../tooling/web/">Web builds</a></li><li><a href="../../tooling/ts-codegen/">TypeScript codegen</a></li></ul></li><li class="nav-section"><span>Reference</span><ul><li><a href="../../reference/style-properties/">Style properties</a></li><li><a href="../../reference/elements/">Elements</a></li><li><a href="../../reference/filters/">Filters</a></li></ul></li><li><a href="../../performance/">Performance</a></li></ul>
+</details>
+</nav>
+<main id="main">
+<article>
+<h1 id="colors">Colors</h1>
+<p>Every color in bevy-react is a CSS color string: hex, a named color, or
+functional notation such as <code>rgb()</code>, <code>hsl()</code> or <code>oklch()</code>. The same parser
+serves every color-valued style and attribute. <code>backgroundColor</code>, the most
+common of them, fills a node&#39;s box.</p>
+<h2 id="usage"><a class="anchor" href="#usage" aria-hidden="true">#</a>Usage</h2>
+<pre><code class="language-tsx"><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>node</span> <span class="token attr-name">style</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span> width<span class="token operator">:</span> <span class="token number">120</span><span class="token punctuation">,</span> height<span class="token operator">:</span> <span class="token number">80</span><span class="token punctuation">,</span> backgroundColor<span class="token operator">:</span> <span class="token string">&quot;#7aa2f7&quot;</span> <span class="token punctuation">}</span><span class="token punctuation">}</span></span> <span class="token punctuation">/&gt;</span></span></code></pre><h2 id="color-strings"><a class="anchor" href="#color-strings" aria-hidden="true">#</a>Color strings</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Form</th>
+<th>Examples</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Hex</td>
+<td><code>&quot;#f00&quot;</code>, <code>&quot;#f008&quot;</code>, <code>&quot;#7aa2f7&quot;</code>, <code>&quot;#7aa2f780&quot;</code></td>
+</tr>
+<tr>
+<td>Named</td>
+<td><code>&quot;tomato&quot;</code>, <code>&quot;RebeccaPurple&quot;</code>, <code>&quot;transparent&quot;</code></td>
+</tr>
+<tr>
+<td><code>rgb()</code>, <code>rgba()</code></td>
+<td><code>&quot;rgb(122 162 247)&quot;</code>, <code>&quot;rgba(122, 162, 247, 0.5)&quot;</code></td>
+</tr>
+<tr>
+<td><code>hsl()</code>, <code>hsla()</code></td>
+<td><code>&quot;hsl(140 70% 45%)&quot;</code>, <code>&quot;hsla(0, 100%, 50%, 0.5)&quot;</code></td>
+</tr>
+<tr>
+<td><code>hwb()</code></td>
+<td><code>&quot;hwb(200 10% 20%)&quot;</code></td>
+</tr>
+<tr>
+<td><code>oklab()</code></td>
+<td><code>&quot;oklab(0.7 0.1 0.05)&quot;</code></td>
+</tr>
+<tr>
+<td><code>oklch()</code></td>
+<td><code>&quot;oklch(0.7 0.15 30)&quot;</code>, <code>&quot;oklch(70% 0.15 30deg / 50%)&quot;</code></td>
+</tr>
+</tbody></table></div>
+<ul>
+<li>Hex takes 3, 4, 6 or 8 digits; the 4- and 8-digit forms end with alpha.
+The leading <code>#</code> is optional.</li>
+<li>Named colors are the CSS named colors, case-insensitive, plus
+<code>&quot;transparent&quot;</code>.</li>
+<li>Functional notation accepts commas or spaces between components. Alpha is
+a fourth component or follows a <code>/</code>, as a <code>0</code>–<code>1</code> number or a percentage;
+it defaults to opaque. Function names are case-insensitive.</li>
+<li><code>rgb()</code> channels are <code>0</code>–<code>255</code> or percentages.</li>
+<li>Hues are degrees, as a bare number or with <code>deg</code>. Other angle units
+(<code>rad</code>, <code>turn</code>) are not accepted.</li>
+<li>Saturation, lightness, whiteness and blackness, and the oklab/oklch
+lightness, take a percentage or a <code>0</code>–<code>1</code> number. oklab&#39;s <code>a</code>/<code>b</code> and
+oklch&#39;s chroma are plain numbers.</li>
+<li><code>currentColor</code>, <code>none</code> components, <code>color()</code>, <code>lab()</code>, <code>lch()</code>,
+<code>color-mix()</code> and relative colors are not supported.</li>
+<li>An unrecognized string renders magenta and reports a <code>color</code> warning in
+<a href="../../tooling/devtools/">devtools</a> (and once in the terminal). The rest of
+the style still applies.</li>
+</ul>
+<p>The same strings work everywhere a color is taken: <code>borderColor</code> and
+<code>outline</code> (<a href="../../styling/borders/">Borders</a>), <code>boxShadow</code> (<a href="../../styling/shadows/">Shadows</a>),
+gradient stops (<a href="../../styling/gradients/">Gradients</a>), the <code>backgroundImage</code> tint
+(<a href="../../styling/background-images/">Background images</a>), text <code>color</code> and <code>textShadow</code>
+(<a href="../../elements/text/"><code>&lt;text&gt;</code></a>), the <code>&lt;image&gt;</code> tint
+(<a href="../../elements/image/"><code>&lt;image&gt;</code></a>), and the paints of
+<a href="../../elements/svg/"><code>&lt;svg&gt;</code></a> and <a href="../../elements/canvas/"><code>&lt;canvas&gt;</code></a>.</p>
+<h2 id="background-color"><a class="anchor" href="#background-color" aria-hidden="true">#</a>Background color</h2>
+<ul>
+<li><code>backgroundColor</code> fills the node inside its border (the padding box),
+rounded by <code>borderRadius</code>. The default is no fill.</li>
+<li>A node paints, back to front: its <code>boxShadow</code>, <code>backgroundColor</code>, border,
+<code>backgroundGradient</code>, <code>borderGradient</code>, <code>backgroundImage</code>, its own content
+(text, an image), then its children. A gradient or image therefore covers
+the color wherever it is opaque.</li>
+<li><code>opacity</code> multiplies the color&#39;s alpha (see <a href="../../styling/opacity/">Opacity</a>).</li>
+<li>Changing it repaints the node without re-running layout, so driving it
+from React state on every change is fine.</li>
+</ul>
+<h2 id="transitions"><a class="anchor" href="#transitions" aria-hidden="true">#</a>Transitions</h2>
+<p><code>transition: { backgroundColor }</code> eases the color between style states:</p>
+<pre><code class="language-tsx"><span class="token operator">&lt;</span>button
+  style<span class="token operator">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span>
+    backgroundColor<span class="token operator">:</span> <span class="token string">&quot;#7aa2f7&quot;</span><span class="token punctuation">,</span>
+    transition<span class="token operator">:</span> <span class="token punctuation">{</span> backgroundColor<span class="token operator">:</span> <span class="token punctuation">{</span> duration<span class="token operator">:</span> <span class="token number">200</span> <span class="token punctuation">}</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+  <span class="token punctuation">}</span><span class="token punctuation">}</span>
+  hoverStyle<span class="token operator">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span> backgroundColor<span class="token operator">:</span> <span class="token string">&quot;#bb9af7&quot;</span> <span class="token punctuation">}</span><span class="token punctuation">}</span>
+<span class="token operator">/</span><span class="token operator">&gt;</span></code></pre><ul>
+<li>The color interpolates per channel in sRGB, alpha included.</li>
+<li>Removing <code>backgroundColor</code> snaps, since there is no color to ease to. To
+fade a fill out, ease to the same color at zero alpha
+(<code>&quot;rgb(122 162 247 / 0)&quot;</code>). <code>&quot;transparent&quot;</code> is transparent black, so the
+frames on the way there darken.</li>
+<li>Text <code>color</code> and <code>borderColor</code> have no transition channel: they snap.</li>
+</ul>
+<p>See <a href="../../animations/style-transitions/">Style transitions</a> for timing and
+springs.</p>
+<h2 id="animated-colors"><a class="anchor" href="#animated-colors" aria-hidden="true">#</a>Animated colors</h2>
+<p>A color accepts an inline <code>{ animated }</code> binding to an <code>interpolateColor</code>
+mapping of a shared value. Bevy evaluates it every frame without
+re-rendering React:</p>
+<pre><code class="language-tsx"><span class="token keyword">import</span> <span class="token punctuation">{</span> useEffect <span class="token punctuation">}</span> <span class="token keyword">from</span> <span class="token string">&quot;react&quot;</span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token punctuation">{</span>
+  interpolateColor<span class="token punctuation">,</span>
+  useSharedValue<span class="token punctuation">,</span>
+  withRepeat<span class="token punctuation">,</span>
+  withTiming<span class="token punctuation">,</span>
+<span class="token punctuation">}</span> <span class="token keyword">from</span> <span class="token string">&quot;bevy-react&quot;</span><span class="token punctuation">;</span>
+
+<span class="token keyword">function</span> <span class="token function">Pulse</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+  <span class="token keyword">const</span> t <span class="token operator">=</span> <span class="token function">useSharedValue</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token function">useEffect</span><span class="token punctuation">(</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">=&gt;</span> <span class="token punctuation">{</span>
+    t<span class="token punctuation">.</span>value <span class="token operator">=</span> <span class="token function">withRepeat</span><span class="token punctuation">(</span><span class="token function">withTiming</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">,</span> <span class="token punctuation">{</span> duration<span class="token operator">:</span> <span class="token number">800</span> <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">,</span> <span class="token punctuation">{</span> reverse<span class="token operator">:</span> <span class="token boolean">true</span> <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token punctuation">}</span><span class="token punctuation">,</span> <span class="token punctuation">[</span>t<span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token keyword">const</span> color <span class="token operator">=</span> <span class="token function">interpolateColor</span><span class="token punctuation">(</span>t<span class="token punctuation">,</span> <span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">]</span><span class="token punctuation">,</span> <span class="token punctuation">[</span><span class="token string">&quot;#7aa2f7&quot;</span><span class="token punctuation">,</span> <span class="token string">&quot;#f7768e&quot;</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token keyword">return</span> <span class="token punctuation">(</span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>node</span>
+      <span class="token attr-name">style</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span> width<span class="token operator">:</span> <span class="token number">80</span><span class="token punctuation">,</span> height<span class="token operator">:</span> <span class="token number">80</span><span class="token punctuation">,</span> backgroundColor<span class="token operator">:</span> <span class="token punctuation">{</span> animated<span class="token operator">:</span> color <span class="token punctuation">}</span> <span class="token punctuation">}</span><span class="token punctuation">}</span></span>
+    <span class="token punctuation">/&gt;</span></span>
+  <span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span></code></pre><ul>
+<li><code>interpolateColor</code>&#39;s output colors must be hex strings (<code>&quot;#rgb&quot;</code>,
+<code>&quot;#rrggbb&quot;</code> or <code>&quot;#rrggbbaa&quot;</code>). It interpolates per channel in sRGB and
+clamps at the ends of its input range.</li>
+<li>Color bindings work on <code>backgroundColor</code>, the single-color form of
+<code>borderColor</code> (all four sides), text <code>color</code>, the <code>backgroundImage</code> tint
+and gradient stop colors. A plain shared value can&#39;t drive a color.</li>
+<li>Bindings work in the base <code>style</code> only; one in <code>hoverStyle</code>, <code>pressStyle</code>
+or <code>focusStyle</code> is ignored with a <code>styleBinding</code> warning.</li>
+<li>A binding wins over <code>transition: { backgroundColor }</code> for that node.</li>
+</ul>
+<p>See <a href="../../animations/animated-values/">Animated values</a> and
+<a href="../../animations/interpolation/">Interpolation</a>.</p>
+<p>See <a href="../../reference/style-properties/#backgroundColor"><code>backgroundColor</code></a> in
+the style reference.</p>
+
+</article>
+<footer class="page-links"><a href="../../demo/?page=colors">Open live demo</a>
+<a href="https://github.com/tulustul/bevy-react/blob/v0.7.0/examples/demos/ui/src/demos/styling/ColorsDemo.tsx">Demo source</a>
+<a href="https://github.com/tulustul/bevy-react/edit/main/docs/guide/styling/colors.md">Edit this page</a></footer>
+</main>
+</div>
+<footer class="site-footer">
+<p>bevy-react is dual-licensed under MIT or Apache-2.0. <a href="https://github.com/tulustul/bevy-react">Source on GitHub</a>.</p>
+</footer>
+</body>
+</html>

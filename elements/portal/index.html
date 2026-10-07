@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>&lt;portal&gt; · bevy-react</title>
+<meta name="description" content="The &lt;portal&gt; element shows a named render target, such as a Bevy camera rendering into a texture, inside the UI for minimaps and 3D previews.">
+<link rel="canonical" href="https://tulustul.github.io/bevy-react/elements/portal/">
+<link rel="alternate" type="text/markdown" href="../../elements/portal.md">
+<meta property="og:title" content="&lt;portal&gt; · bevy-react">
+<meta property="og:description" content="The &lt;portal&gt; element shows a named render target, such as a Bevy camera rendering into a texture, inside the UI for minimaps and 3D previews.">
+<link rel="icon" href="../../logo.png">
+<link rel="stylesheet" href="../../style.css">
+<script src="../../docs.js" defer></script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="site-header">
+<a class="brand" href="../../"><img src="../../logo.png" alt="" width="74" height="74"> bevy-react</a>
+<span class="version">v0.7.0</span>
+<nav class="site-links" aria-label="Project">
+<a href="../../demo/">Live demo</a>
+<a href="https://github.com/tulustul/bevy-react">GitHub</a>
+<a href="https://docs.rs/bevy-react">docs.rs</a>
+<a href="https://www.npmjs.com/package/bevy-react">npm</a>
+</nav>
+</header>
+<div class="layout">
+<nav class="sidebar" aria-label="Documentation">
+<details class="nav-menu" open>
+<summary>Menu</summary>
+<ul><li><a href="../../">Introduction</a></li><li><a href="../../getting-started/">Getting started</a></li><li><a href="../../how-it-works/">How it works</a></li><li class="nav-section"><span>Elements</span><ul><li><a href="../../elements/node/">&lt;node&gt;</a></li><li><a href="../../elements/button/">&lt;button&gt;</a></li><li><a href="../../elements/text/">&lt;text&gt;</a></li><li><a href="../../elements/editable-text/">&lt;editableText&gt;</a></li><li><a href="../../elements/image/">&lt;image&gt;</a></li><li><a href="../../elements/canvas/">&lt;canvas&gt;</a></li><li><a href="../../elements/svg/">&lt;svg&gt;</a></li><li><a href="../../elements/portal/" aria-current="page">&lt;portal&gt;</a></li><li><a href="../../elements/surface/">&lt;surface&gt;</a></li><li><a href="../../elements/root/">&lt;root&gt;</a></li><li><a href="../../elements/anchor/">&lt;anchor&gt;</a></li></ul></li><li class="nav-section"><span>Layout</span><ul><li><a href="../../layout/flexbox/">Flexbox</a></li><li><a href="../../layout/grid/">Grid</a></li><li><a href="../../layout/positioning/">Positioning</a></li></ul></li><li class="nav-section"><span>Styling</span><ul><li><a href="../../styling/units/">Units</a></li><li><a href="../../styling/colors/">Colors</a></li><li><a href="../../styling/borders/">Borders</a></li><li><a href="../../styling/spacing/">Spacing</a></li><li><a href="../../styling/sizing/">Sizing</a></li><li><a href="../../styling/layout-rounding/">Layout rounding</a></li><li><a href="../../styling/overflow/">Overflow</a></li><li><a href="../../styling/transforms/">Transforms</a></li><li><a href="../../styling/3d-transforms/">3D transforms</a></li><li><a href="../../styling/shadows/">Shadows</a></li><li><a href="../../styling/filters/">Filters</a></li><li><a href="../../styling/backdrop-filters/">Backdrop filters</a></li><li><a href="../../styling/morph-filters/">Morph filters</a></li><li><a href="../../styling/gradients/">Gradients</a></li><li><a href="../../styling/background-images/">Background images</a></li><li><a href="../../styling/image-rendering/">Image rendering</a></li><li><a href="../../styling/opacity/">Opacity</a></li><li><a href="../../styling/z-index/">Z-index</a></li><li><a href="../../styling/focus-policy/">Focus policy</a></li><li><a href="../../styling/cursors/">Cursors</a></li><li><a href="../../styling/layers/">Layers</a></li></ul></li><li class="nav-section"><span>Animations</span><ul><li><a href="../../animations/style-transitions/">Style transitions</a></li><li><a href="../../animations/animated-values/">Animated values</a></li><li><a href="../../animations/interpolation/">Interpolation</a></li><li><a href="../../animations/shared-elements/">Shared elements</a></li></ul></li><li class="nav-section"><span>Communication</span><ul><li><a href="../../communication/react-to-bevy/">React to Bevy</a></li><li><a href="../../communication/bevy-to-react/">Bevy to React</a></li><li><a href="../../communication/request-response/">Request / response</a></li><li><a href="../../communication/named-nodes/">Named nodes</a></li></ul></li><li class="nav-section"><span>Events</span><ul><li><a href="../../events/mouse/">Mouse</a></li><li><a href="../../events/keyboard/">Keyboard</a></li><li><a href="../../events/gamepad/">Gamepad</a></li><li><a href="../../events/window/">Window</a></li></ul></li><li class="nav-section"><span>Extending</span><ul><li><a href="../../extending/custom-elements/">Custom elements</a></li><li><a href="../../extending/custom-styles/">Custom styles</a></li><li><a href="../../extending/custom-filters/">Custom filters</a></li></ul></li><li class="nav-section"><span>Tooling</span><ul><li><a href="../../tooling/devtools/">Devtools</a></li><li><a href="../../tooling/hot-reload/">Hot reload</a></li><li><a href="../../tooling/web/">Web builds</a></li><li><a href="../../tooling/ts-codegen/">TypeScript codegen</a></li></ul></li><li class="nav-section"><span>Reference</span><ul><li><a href="../../reference/style-properties/">Style properties</a></li><li><a href="../../reference/elements/">Elements</a></li><li><a href="../../reference/filters/">Filters</a></li></ul></li><li><a href="../../performance/">Performance</a></li></ul>
+</details>
+</nav>
+<main id="main">
+<article>
+<h1 id="portal"><code>&lt;portal&gt;</code></h1>
+<p><code>&lt;portal&gt;</code> shows a named render target inside the UI: usually the output of a
+Bevy camera that renders into a texture, for a minimap, a picture-in-picture
+view or a 3D item preview. It is a styled node like <code>&lt;node&gt;</code>, whose image is
+the target&#39;s texture stretched over the node. Your app owns the cameras and
+registers each target under a name in the <code>RenderTargets</code> resource. React
+displays a target by that name.</p>
+<h2 id="usage"><a class="anchor" href="#usage" aria-hidden="true">#</a>Usage</h2>
+<div class="tabs"><div class="tab-panel" data-lang="tsx"><p class="tab-label">TSX</p><pre><code class="language-tsx"><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>portal</span> <span class="token attr-name">target</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">&quot;</span>minimap<span class="token punctuation">&quot;</span></span> <span class="token attr-name">style</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span> width<span class="token operator">:</span> <span class="token number">160</span><span class="token punctuation">,</span> height<span class="token operator">:</span> <span class="token number">160</span> <span class="token punctuation">}</span><span class="token punctuation">}</span></span> <span class="token punctuation">/&gt;</span></span></code></pre></div><div class="tab-panel" data-lang="rust"><p class="tab-label">Rust</p><pre><code class="language-rust"><span class="token keyword">use</span> <span class="token namespace">bevy<span class="token punctuation">::</span>prelude<span class="token punctuation">::</span></span><span class="token operator">*</span><span class="token punctuation">;</span>
+<span class="token keyword">use</span> <span class="token namespace">bevy_react<span class="token punctuation">::</span></span><span class="token punctuation">{</span><span class="token class-name">PortalCamera</span><span class="token punctuation">,</span> <span class="token class-name">RenderTargetSpec</span><span class="token punctuation">,</span> <span class="token class-name">RenderTargets</span><span class="token punctuation">}</span><span class="token punctuation">;</span>
+
+<span class="token keyword">fn</span> <span class="token function-definition function">setup</span><span class="token punctuation">(</span>
+    <span class="token keyword">mut</span> commands<span class="token punctuation">:</span> <span class="token class-name">Commands</span><span class="token punctuation">,</span>
+    <span class="token keyword">mut</span> targets<span class="token punctuation">:</span> <span class="token class-name">ResMut</span><span class="token operator">&lt;</span><span class="token class-name">RenderTargets</span><span class="token operator">&gt;</span><span class="token punctuation">,</span>
+    <span class="token keyword">mut</span> images<span class="token punctuation">:</span> <span class="token class-name">ResMut</span><span class="token operator">&lt;</span><span class="token class-name">Assets</span><span class="token operator">&lt;</span><span class="token class-name">Image</span><span class="token operator">&gt;&gt;</span><span class="token punctuation">,</span>
+<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token keyword">let</span> minimap <span class="token operator">=</span> targets<span class="token punctuation">.</span><span class="token function">create</span><span class="token punctuation">(</span>
+        <span class="token operator">&amp;</span><span class="token keyword">mut</span> images<span class="token punctuation">,</span>
+        <span class="token string">&quot;minimap&quot;</span><span class="token punctuation">,</span>
+        <span class="token class-name">RenderTargetSpec</span><span class="token punctuation">::</span><span class="token function">default</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+    <span class="token punctuation">)</span><span class="token punctuation">;</span>
+    commands<span class="token punctuation">.</span><span class="token function">spawn</span><span class="token punctuation">(</span><span class="token punctuation">(</span>
+        <span class="token class-name">Camera3d</span><span class="token punctuation">::</span><span class="token function">default</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+        <span class="token class-name">Transform</span><span class="token punctuation">::</span><span class="token function">from_xyz</span><span class="token punctuation">(</span><span class="token number">0.0</span><span class="token punctuation">,</span> <span class="token number">30.0</span><span class="token punctuation">,</span> <span class="token number">0.0</span><span class="token punctuation">)</span>
+            <span class="token punctuation">.</span><span class="token function">looking_at</span><span class="token punctuation">(</span><span class="token class-name">Vec3</span><span class="token punctuation">::</span><span class="token constant">ZERO</span><span class="token punctuation">,</span> <span class="token class-name">Vec3</span><span class="token punctuation">::</span><span class="token constant">NEG_Z</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+        minimap<span class="token punctuation">.</span><span class="token function">camera_target</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+        <span class="token class-name">PortalCamera</span><span class="token punctuation">(</span><span class="token string">&quot;minimap&quot;</span><span class="token punctuation">.</span><span class="token function">into</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+    <span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span></code></pre></div></div>
+<p><code>&lt;portal&gt;</code> comes from the <code>portal</code> cargo feature, which is on by default and
+adds <code>PortalPlugin</code> to <code>ReactPlugins</code>. Without it, a <code>&lt;portal&gt;</code> mounts as a
+plain node and reports a <code>featureMissing</code> warning (see
+<a href="../../getting-started/#cargo-features">Cargo features</a>). The <code>RenderTargets</code>
+registry is part of the core and always available.</p>
+<h2 id="render-targets"><a class="anchor" href="#render-targets" aria-hidden="true">#</a>Render targets</h2>
+<p><code>RenderTargets::create(&amp;mut images, name, spec)</code> allocates a texture and
+registers it under <code>name</code>. It returns a <code>RenderTarget</code> whose
+<code>camera_target()</code> is the Bevy <code>RenderTarget</code> component that points a camera
+at the texture. Creating an existing name again replaces it.</p>
+<ul>
+<li>Tag the camera with <code>PortalCamera(name)</code> so bevy-react decides when it
+renders (see &quot;Render modes&quot;). An untagged camera renders every frame.</li>
+<li>The name is the only link between the two sides. Use a constant both sides
+know, or send it to React with an event (see
+<a href="../../communication/bevy-to-react/">Bevy to React</a>).</li>
+<li>A <code>&lt;portal&gt;</code> whose target doesn&#39;t exist yet is transparent, and shows the
+texture as soon as the target is created. Changing <code>target</code> switches
+textures.</li>
+<li><code>remove(name)</code> drops a target: its portals turn transparent again.
+Despawn the camera yourself.</li>
+<li><code>register(name, handle)</code> registers an <code>Image</code> you already have (generated
+or loaded) under a name. It is static: nothing renders into it or resizes
+it.</li>
+<li><code>get(name)</code> returns a target&#39;s texture handle.</li>
+</ul>
+<p>Use <code>RenderLayers</code> on the camera and on what it should see to give a portal
+its own scene, as a minimap camera drawing flat markers does.</p>
+<h2 id="target-options"><a class="anchor" href="#target-options" aria-hidden="true">#</a>Target options</h2>
+<p><code>RenderTargetSpec</code> configures a target:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Default</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>size</code></td>
+<td><code>Resolution::Auto</code></td>
+<td><code>Auto</code> follows the portal&#39;s size; <code>Fixed(UVec2)</code> is fixed</td>
+</tr>
+<tr>
+<td><code>mode</code></td>
+<td><code>RenderMode::Live</code></td>
+<td>When the camera renders (see below)</td>
+</tr>
+<tr>
+<td><code>format</code></td>
+<td><code>TextureFormat::Rgba8UnormSrgb</code></td>
+<td>Texture format</td>
+</tr>
+</tbody></table></div>
+<ul>
+<li><code>Resolution::Auto</code> sizes the texture to the portal&#39;s laid-out size in
+physical pixels, rounded up to a multiple of 16, so the output is crisp and
+the camera has the portal&#39;s aspect ratio. It assumes one portal per target:
+with several, the last one bound decides the size.</li>
+<li><code>Resolution::Fixed(size)</code> keeps one size whatever the layout, for a target
+shown in several places. The texture stretches to each portal&#39;s box.</li>
+<li>Both are capped at 2048 pixels per side.</li>
+<li>Use an HDR format such as <code>Rgba16Float</code> when the camera needs HDR, for
+example for bloom.</li>
+</ul>
+<h2 id="render-modes"><a class="anchor" href="#render-modes" aria-hidden="true">#</a>Render modes</h2>
+<ul>
+<li><code>RenderMode::Live</code>: the camera renders every frame while at least one
+portal showing the target is visible. A portal that is unmounted,
+<code>display: &quot;none&quot;</code> or scrolled entirely out of its clipping ancestor
+doesn&#39;t count, so a target nobody sees costs nothing. A portal
+that becomes visible shows a fresh frame at once.</li>
+<li><code>RenderMode::Snapshot</code>: the camera renders once when the target is
+created, when you call <code>invalidate(name)</code>, when an <code>Auto</code> target resizes,
+and when its mode changes, then stops. The texture keeps the last frame:
+cheap for static thumbnails. A snapshot renders even while no portal shows
+it, so it is ready when one does.</li>
+</ul>
+<p><code>set_mode(name, mode)</code> switches at runtime. Going from <code>Live</code> to <code>Snapshot</code>
+renders one last frame, then freezes. For example, a React button can
+pause a preview through a <a href="../../communication/react-to-bevy/">message</a>:</p>
+<div class="tabs"><div class="tab-panel" data-lang="tsx"><p class="tab-label">TSX</p><pre><code class="language-tsx"><span class="token keyword">import</span> <span class="token punctuation">{</span> useState <span class="token punctuation">}</span> <span class="token keyword">from</span> <span class="token string">&quot;react&quot;</span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token punctuation">{</span> bevy <span class="token punctuation">}</span> <span class="token keyword">from</span> <span class="token string">&quot;./bevy&quot;</span><span class="token punctuation">;</span>
+
+<span class="token keyword">function</span> <span class="token function">PreviewToggle</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+  <span class="token keyword">const</span> <span class="token punctuation">[</span>live<span class="token punctuation">,</span> setLive<span class="token punctuation">]</span> <span class="token operator">=</span> <span class="token function">useState</span><span class="token punctuation">(</span><span class="token boolean">true</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token keyword">const</span> <span class="token function-variable function">toggle</span> <span class="token operator">=</span> <span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">=&gt;</span> <span class="token punctuation">{</span>
+    <span class="token function">setLive</span><span class="token punctuation">(</span><span class="token operator">!</span>live<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    bevy<span class="token punctuation">.</span>preview<span class="token punctuation">.</span><span class="token function">setLive</span><span class="token punctuation">(</span><span class="token operator">!</span>live<span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token punctuation">}</span><span class="token punctuation">;</span>
+  <span class="token keyword">return</span> <span class="token punctuation">(</span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>button</span> <span class="token attr-name">onClick</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span>toggle<span class="token punctuation">}</span></span><span class="token punctuation">&gt;</span></span><span class="token plain-text">
+      </span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>text</span><span class="token punctuation">&gt;</span></span><span class="token punctuation">{</span>live <span class="token operator">?</span> <span class="token string">&quot;Pause preview&quot;</span> <span class="token operator">:</span> <span class="token string">&quot;Resume preview&quot;</span><span class="token punctuation">}</span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>text</span><span class="token punctuation">&gt;</span></span><span class="token plain-text">
+    </span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>button</span><span class="token punctuation">&gt;</span></span>
+  <span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span></code></pre></div><div class="tab-panel" data-lang="rust"><p class="tab-label">Rust</p><pre><code class="language-rust"><span class="token keyword">use</span> <span class="token namespace">bevy<span class="token punctuation">::</span>prelude<span class="token punctuation">::</span></span><span class="token operator">*</span><span class="token punctuation">;</span>
+<span class="token keyword">use</span> <span class="token namespace">bevy_react<span class="token punctuation">::</span>prelude<span class="token punctuation">::</span></span><span class="token operator">*</span><span class="token punctuation">;</span>
+<span class="token keyword">use</span> <span class="token namespace">bevy_react<span class="token punctuation">::</span></span><span class="token punctuation">{</span><span class="token class-name">RenderMode</span><span class="token punctuation">,</span> <span class="token class-name">RenderTargets</span><span class="token punctuation">}</span><span class="token punctuation">;</span>
+
+<span class="token attribute attr-name">#[react_message(name = <span class="token string">&quot;preview.setLive&quot;</span>)]</span>
+<span class="token keyword">struct</span> <span class="token type-definition class-name">SetPreviewLive</span><span class="token punctuation">(</span><span class="token keyword">bool</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token keyword">fn</span> <span class="token function-definition function">on_set_preview_live</span><span class="token punctuation">(</span>
+    ev<span class="token punctuation">:</span> <span class="token class-name">On</span><span class="token operator">&lt;</span><span class="token class-name">SetPreviewLive</span><span class="token operator">&gt;</span><span class="token punctuation">,</span>
+    <span class="token keyword">mut</span> targets<span class="token punctuation">:</span> <span class="token class-name">ResMut</span><span class="token operator">&lt;</span><span class="token class-name">RenderTargets</span><span class="token operator">&gt;</span><span class="token punctuation">,</span>
+<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token keyword">let</span> mode <span class="token operator">=</span> <span class="token keyword">if</span> ev<span class="token punctuation">.</span><span class="token function">event</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token number">0</span> <span class="token punctuation">{</span>
+        <span class="token class-name">RenderMode</span><span class="token punctuation">::</span><span class="token class-name">Live</span>
+    <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token punctuation">{</span>
+        <span class="token class-name">RenderMode</span><span class="token punctuation">::</span><span class="token class-name">Snapshot</span>
+    <span class="token punctuation">}</span><span class="token punctuation">;</span>
+    targets<span class="token punctuation">.</span><span class="token function">set_mode</span><span class="token punctuation">(</span><span class="token string">&quot;preview&quot;</span><span class="token punctuation">,</span> mode<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+<span class="token comment">// app.add_react_handler(on_set_preview_live);</span></code></pre></div></div>
+<h2 id="styles-and-events"><a class="anchor" href="#styles-and-events" aria-hidden="true">#</a>Styles and events</h2>
+<ul>
+<li><code>&lt;portal&gt;</code> takes everything <code>&lt;node&gt;</code> does: <code>style</code>, <code>hoverStyle</code>,
+<code>pressStyle</code>, <code>focusStyle</code>, pointer handlers, <code>onWheel</code> and the scroll
+props.</li>
+<li>It has no intrinsic size: give it a width and a height.</li>
+<li>Pointer events hit the portal&#39;s box like any node; they don&#39;t reach the
+scene the camera sees.</li>
+<li><code>backgroundColor</code> shows through transparent pixels of the texture, such as
+a camera clear color with alpha. <code>backgroundImage</code> is ignored with a
+<code>styleIgnored</code> warning.</li>
+<li><code>imageRendering</code> modes other than <code>&quot;auto&quot;</code> are not available on a portal
+and report an <code>imageRendering</code> warning.</li>
+<li>A live portal inside a <a href="../../styling/layers/">composited layer</a> (an
+ancestor with a <code>filter</code>, <code>backdropFilter</code>, <code>transform3d</code>, <code>morphFilter</code>
+or <code>cache</code>, or <code>opacity</code> on a node with children) freezes on the layer&#39;s
+cached frame:
+the layer can&#39;t see the camera&#39;s writes. Set <code>cache: &quot;never&quot;</code> on the node
+that creates the layer so it re-captures every frame.</li>
+</ul>
+<p>A <code>backgroundImage</code> with a <code>{ texture }</code> source shows a registered target as
+a node&#39;s background instead. It suits static textures registered with
+<code>register</code>: see <a href="../../styling/background-images/">Background images</a>.</p>
+<h2 id="limits"><a class="anchor" href="#limits" aria-hidden="true">#</a>Limits</h2>
+<ul>
+<li>Each live target is a full extra camera render per frame while it is
+visible.</li>
+<li>Only cameras tagged <code>PortalCamera</code> are switched on and off.</li>
+<li><code>Auto</code> resolution assumes one portal per target.</li>
+<li>Textures are capped at 2048 pixels per side, so very large portals render
+at a lower resolution.</li>
+</ul>
+<p><img src="../../screenshots/portal.png" alt="A &quot;follow&quot; portal showing an offscreen chase-cam view of a wandering cube and a 2D minimap of the whole field, each rendered by a Bevy camera into a texture and displayed in the React UI." loading="lazy"></p>
+<p>See <a href="../../reference/elements/#portal"><code>&lt;portal&gt;</code></a> in the element reference.</p>
+
+</article>
+<footer class="page-links"><a href="../../demo/?page=portal">Open live demo</a>
+<a href="https://github.com/tulustul/bevy-react/blob/v0.7.0/examples/demos/ui/src/demos/elements/PortalDemo.tsx">Demo source</a>
+<a href="https://github.com/tulustul/bevy-react/edit/main/docs/guide/elements/portal.md">Edit this page</a></footer>
+</main>
+</div>
+<footer class="site-footer">
+<p>bevy-react is dual-licensed under MIT or Apache-2.0. <a href="https://github.com/tulustul/bevy-react">Source on GitHub</a>.</p>
+</footer>
+</body>
+</html>

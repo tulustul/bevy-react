@@ -1,0 +1,825 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Elements · bevy-react</title>
+<meta name="description" content="Every bevy-react JSX element with its attributes, events, and the common props it accepts. Generated from the code.">
+<link rel="canonical" href="https://tulustul.github.io/bevy-react/reference/elements/">
+<link rel="alternate" type="text/markdown" href="../../reference/elements.md">
+<meta property="og:title" content="Elements · bevy-react">
+<meta property="og:description" content="Every bevy-react JSX element with its attributes, events, and the common props it accepts. Generated from the code.">
+<link rel="icon" href="../../logo.png">
+<link rel="stylesheet" href="../../style.css">
+<script src="../../docs.js" defer></script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="site-header">
+<a class="brand" href="../../"><img src="../../logo.png" alt="" width="74" height="74"> bevy-react</a>
+<span class="version">v0.7.0</span>
+<nav class="site-links" aria-label="Project">
+<a href="../../demo/">Live demo</a>
+<a href="https://github.com/tulustul/bevy-react">GitHub</a>
+<a href="https://docs.rs/bevy-react">docs.rs</a>
+<a href="https://www.npmjs.com/package/bevy-react">npm</a>
+</nav>
+</header>
+<div class="layout">
+<nav class="sidebar" aria-label="Documentation">
+<details class="nav-menu" open>
+<summary>Menu</summary>
+<ul><li><a href="../../">Introduction</a></li><li><a href="../../getting-started/">Getting started</a></li><li><a href="../../how-it-works/">How it works</a></li><li class="nav-section"><span>Elements</span><ul><li><a href="../../elements/node/">&lt;node&gt;</a></li><li><a href="../../elements/button/">&lt;button&gt;</a></li><li><a href="../../elements/text/">&lt;text&gt;</a></li><li><a href="../../elements/editable-text/">&lt;editableText&gt;</a></li><li><a href="../../elements/image/">&lt;image&gt;</a></li><li><a href="../../elements/canvas/">&lt;canvas&gt;</a></li><li><a href="../../elements/svg/">&lt;svg&gt;</a></li><li><a href="../../elements/portal/">&lt;portal&gt;</a></li><li><a href="../../elements/surface/">&lt;surface&gt;</a></li><li><a href="../../elements/root/">&lt;root&gt;</a></li><li><a href="../../elements/anchor/">&lt;anchor&gt;</a></li></ul></li><li class="nav-section"><span>Layout</span><ul><li><a href="../../layout/flexbox/">Flexbox</a></li><li><a href="../../layout/grid/">Grid</a></li><li><a href="../../layout/positioning/">Positioning</a></li></ul></li><li class="nav-section"><span>Styling</span><ul><li><a href="../../styling/units/">Units</a></li><li><a href="../../styling/colors/">Colors</a></li><li><a href="../../styling/borders/">Borders</a></li><li><a href="../../styling/spacing/">Spacing</a></li><li><a href="../../styling/sizing/">Sizing</a></li><li><a href="../../styling/layout-rounding/">Layout rounding</a></li><li><a href="../../styling/overflow/">Overflow</a></li><li><a href="../../styling/transforms/">Transforms</a></li><li><a href="../../styling/3d-transforms/">3D transforms</a></li><li><a href="../../styling/shadows/">Shadows</a></li><li><a href="../../styling/filters/">Filters</a></li><li><a href="../../styling/backdrop-filters/">Backdrop filters</a></li><li><a href="../../styling/morph-filters/">Morph filters</a></li><li><a href="../../styling/gradients/">Gradients</a></li><li><a href="../../styling/background-images/">Background images</a></li><li><a href="../../styling/image-rendering/">Image rendering</a></li><li><a href="../../styling/opacity/">Opacity</a></li><li><a href="../../styling/z-index/">Z-index</a></li><li><a href="../../styling/focus-policy/">Focus policy</a></li><li><a href="../../styling/cursors/">Cursors</a></li><li><a href="../../styling/layers/">Layers</a></li></ul></li><li class="nav-section"><span>Animations</span><ul><li><a href="../../animations/style-transitions/">Style transitions</a></li><li><a href="../../animations/animated-values/">Animated values</a></li><li><a href="../../animations/interpolation/">Interpolation</a></li><li><a href="../../animations/shared-elements/">Shared elements</a></li></ul></li><li class="nav-section"><span>Communication</span><ul><li><a href="../../communication/react-to-bevy/">React to Bevy</a></li><li><a href="../../communication/bevy-to-react/">Bevy to React</a></li><li><a href="../../communication/request-response/">Request / response</a></li><li><a href="../../communication/named-nodes/">Named nodes</a></li></ul></li><li class="nav-section"><span>Events</span><ul><li><a href="../../events/mouse/">Mouse</a></li><li><a href="../../events/keyboard/">Keyboard</a></li><li><a href="../../events/gamepad/">Gamepad</a></li><li><a href="../../events/window/">Window</a></li></ul></li><li class="nav-section"><span>Extending</span><ul><li><a href="../../extending/custom-elements/">Custom elements</a></li><li><a href="../../extending/custom-styles/">Custom styles</a></li><li><a href="../../extending/custom-filters/">Custom filters</a></li></ul></li><li class="nav-section"><span>Tooling</span><ul><li><a href="../../tooling/devtools/">Devtools</a></li><li><a href="../../tooling/hot-reload/">Hot reload</a></li><li><a href="../../tooling/web/">Web builds</a></li><li><a href="../../tooling/ts-codegen/">TypeScript codegen</a></li></ul></li><li class="nav-section"><span>Reference</span><ul><li><a href="../../reference/style-properties/">Style properties</a></li><li><a href="../../reference/elements/" aria-current="page">Elements</a></li><li><a href="../../reference/filters/">Filters</a></li></ul></li><li><a href="../../performance/">Performance</a></li></ul>
+</details>
+</nav>
+<main id="main">
+<article>
+<h1 id="elements">Elements</h1>
+<p>Every intrinsic element the library registers, generated from its element
+registry: the core elements and those of the default cargo features. Each
+element also takes <code>style</code> and <code>children</code> (unless noted) and the common
+prop groups listed below.</p>
+<h2 id="common-props"><a class="anchor" href="#common-props" aria-hidden="true">#</a>Common props</h2>
+<h3 id="identity"><a class="anchor" href="#identity" aria-hidden="true">#</a>Identity</h3>
+<p><code>BevyAttributes</code></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Prop</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>name</code></td>
+<td><code>string</code></td>
+<td>Names the element&#39;s Bevy entity: the value lands on it as a Bevy <code>Name</code> component and in the <code>ReactNodes</code> index, so app systems can find React-created entities (<code>Query&lt;(Entity, &amp;Name), With&lt;ReactNode&gt;&gt;</code> or <code>ReactNodes::get(&quot;hud&quot;)</code>) and attach their own components, read layout, or watch mount/unmount. Not unique — a list can name every card <code>&quot;card&quot;</code> (<code>ReactNodes::all</code>). Dynamic: a change renames, removing it (or <code>&quot;&quot;</code>) drops the <code>Name</code>. Bridge-owned: Rust code must not set <code>Name</code> on React nodes itself.</td>
+</tr>
+<tr>
+<td><code>sharedTag</code></td>
+<td><code>string</code></td>
+<td>Shared-element identity. When one commit unmounts a node with this tag and mounts another with the same tag — a different parent, a different screen; React has no reparenting, so a &quot;move&quot; is always unmount + mount — the incoming node starts where the outgoing one visually was: its position and size (the rect it showed, mid-flight included), its background color, opacity, transforms, filters and gradients, and eases to its own layout and style with <code>transition: { sharedElement }</code> on the incoming node (required — a tag without it pairs but snaps). Pairing rules: same tag, same element type, same UI root (a <code>&lt;surface&gt;</code>/<code>&lt;root&gt;</code> is its own), same commit; the first mounted matching outgoing node seeds every incoming node with the tag, silently. Unique tags per screen (<code>hero-${id}</code>) are the intent. Size flies in measured px through real layout (the parent re-flows each frame; children stay crisp); position by translation; the outgoing node unmounts instantly; the flight is clipped by the new parent&#39;s overflow like any layout transition. A <code>&quot;&quot;</code> is untagged.</td>
+</tr>
+</tbody></table></div>
+<h3 id="state-styles"><a class="anchor" href="#state-styles" aria-hidden="true">#</a>State styles</h3>
+<p><code>BevyVariantProps</code></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Prop</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>hoverStyle</code></td>
+<td><code>BevyStyle</code></td>
+<td>Style overlaid on <code>style</code> while the element is hovered.</td>
+</tr>
+<tr>
+<td><code>pressStyle</code></td>
+<td><code>BevyStyle</code></td>
+<td>Style overlaid on <code>style</code> (and <code>hoverStyle</code>) while the element is pressed.</td>
+</tr>
+<tr>
+<td><code>focusStyle</code></td>
+<td><code>BevyStyle</code></td>
+<td>Style overlaid on <code>style</code> while the element is focused. Applied on the Bevy side from the element&#39;s focus state, so it needs no React <code>onFocus</code> round-trip (the focus analogue of <code>hoverStyle</code>/<code>pressStyle</code>).</td>
+</tr>
+</tbody></table></div>
+<h3 id="pointer-events"><a class="anchor" href="#pointer-events" aria-hidden="true">#</a>Pointer events</h3>
+<p><code>BevyPointerProps</code></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Prop</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>onClick</code></td>
+<td><code>() =&gt; void</code></td>
+<td>Clicked with the primary (left) mouse button: fires on release over the element the press landed on (press, drag off, release elsewhere does not click — DOM <code>click</code> semantics). For right/middle interactions use <code>onPointerDown</code>/<code>onPointerUp</code> and read <code>e.button</code>.</td>
+</tr>
+<tr>
+<td><code>onPointerDown</code></td>
+<td><code>(e: PointerEventData) =&gt; void</code></td>
+<td>Pointer pressed on this element (a drag begins). Receives the cursor&#39;s normalized position within the element.</td>
+</tr>
+<tr>
+<td><code>onPointerMove</code></td>
+<td><code>(e: PointerEventData) =&gt; void</code></td>
+<td>Pointer moved while held down (a drag). Fires each frame the button stays down — even when the cursor leaves the element — until release.</td>
+</tr>
+<tr>
+<td><code>onPointerUp</code></td>
+<td><code>(e: PointerEventData) =&gt; void</code></td>
+<td>Pointer released after a press/drag that began on this element.</td>
+</tr>
+<tr>
+<td><code>onPointerEnter</code></td>
+<td><code>(e: PointerEventData) =&gt; void</code></td>
+<td>Pointer entered this element (hover begins). Fires once on the boundary crossing — not again on press/release while still inside.</td>
+</tr>
+<tr>
+<td><code>onPointerLeave</code></td>
+<td><code>(e: PointerEventData) =&gt; void</code></td>
+<td>Pointer left this element (hover ends).</td>
+</tr>
+</tbody></table></div>
+<h3 id="scrolling"><a class="anchor" href="#scrolling" aria-hidden="true">#</a>Scrolling</h3>
+<p><code>BevyScrollProps</code></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Prop</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>scrollTop</code></td>
+<td><code>number</code></td>
+<td>Controlled vertical scroll offset in logical px (maps to <code>ScrollPosition.y</code>). Meaningful on a node with <code>overflowY: &quot;scroll&quot;</code>. Pushed into the node only when it diverges from the live offset, so it never fights the user&#39;s wheel.</td>
+</tr>
+<tr>
+<td><code>scrollLeft</code></td>
+<td><code>number</code></td>
+<td>Controlled horizontal scroll offset in logical px (maps to <code>ScrollPosition.x</code>). Meaningful on a node with <code>overflowX: &quot;scroll&quot;</code>.</td>
+</tr>
+<tr>
+<td><code>scrollStep</code></td>
+<td><code>number</code></td>
+<td>Logical pixels scrolled per mouse-wheel &quot;line&quot; for this container (default 20). Only scales line-based wheels; trackpad pixel deltas are used as-is.</td>
+</tr>
+<tr>
+<td><code>onScroll</code></td>
+<td><code>(e: { scrollTop: number; scrollLeft: number }) =&gt; void</code></td>
+<td>Fires when this node&#39;s scroll offset changes (wheel or a controlled write). Receives the new offset; pair with <code>scrollTop</code>/<code>scrollLeft</code> for a controlled scroll container.</td>
+</tr>
+</tbody></table></div>
+<h3 id="wheel"><a class="anchor" href="#wheel" aria-hidden="true">#</a>Wheel</h3>
+<p><code>BevyWheelProps</code></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Prop</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>onWheel</code></td>
+<td><code>(e: WheelEventData) =&gt; void</code></td>
+<td>Mouse wheel over this node. Fires for <strong>any</strong> node (no <code>overflow: scroll</code> needed) with the raw deltas — drive a zoom, pan, or custom scroll. Handling the wheel traps it from world systems (a 3D camera behind it won&#39;t also zoom).</td>
+</tr>
+</tbody></table></div>
+<h2 id="anchor"><a class="anchor" href="#anchor" aria-hidden="true">#</a><code>&lt;anchor&gt;</code></h2>
+<p>Common props: Identity, State styles, Pointer events, Scrolling, Wheel. Guide: <a href="../../elements/anchor/"><anchor></a>.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Type</th>
+<th>Required</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>entity</code></td>
+<td><code>number | bigint</code></td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>offset</code></td>
+<td><code>Vec3</code></td>
+<td></td>
+</tr>
+<tr>
+<td><code>scale</code></td>
+<td><code>AnchorScaling</code></td>
+<td></td>
+</tr>
+</tbody></table></div>
+<h2 id="button"><a class="anchor" href="#button" aria-hidden="true">#</a><code>&lt;button&gt;</code></h2>
+<p>Common props: Identity, State styles, Pointer events, Scrolling, Wheel. Guide: <a href="../../elements/button/"><button></a>.</p>
+<p>No element-specific attributes.</p>
+<h2 id="canvas"><a class="anchor" href="#canvas" aria-hidden="true">#</a><code>&lt;canvas&gt;</code></h2>
+<p>Common props: Identity, State styles, Pointer events, Scrolling, Wheel. Guide: <a href="../../elements/canvas/"><canvas></a>.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Type</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>draw</code></td>
+<td><code>CanvasPainter | DrawCmd[]</code></td>
+</tr>
+</tbody></table></div>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Event</th>
+<th>Handler type</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>onResize</code></td>
+<td><code>(payload: CanvasSize) =&gt; void</code></td>
+</tr>
+</tbody></table></div>
+<h2 id="circle"><a class="anchor" href="#circle" aria-hidden="true">#</a><code>&lt;circle&gt;</code></h2>
+<p>Common props: Identity, Pointer events. Guide: <a href="../../elements/svg/"><svg></a>.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Type</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>cx</code></td>
+<td><code>Animatable&lt;number&gt;</code></td>
+</tr>
+<tr>
+<td><code>cy</code></td>
+<td><code>Animatable&lt;number&gt;</code></td>
+</tr>
+<tr>
+<td><code>r</code></td>
+<td><code>Animatable&lt;number&gt;</code></td>
+</tr>
+<tr>
+<td><code>fill</code></td>
+<td><code>string</code></td>
+</tr>
+<tr>
+<td><code>stroke</code></td>
+<td><code>string</code></td>
+</tr>
+<tr>
+<td><code>strokeWidth</code></td>
+<td><code>Animatable&lt;number&gt;</code></td>
+</tr>
+<tr>
+<td><code>opacity</code></td>
+<td><code>Animatable&lt;number&gt;</code></td>
+</tr>
+<tr>
+<td><code>fillRule</code></td>
+<td><code>&quot;nonzero&quot; | &quot;evenodd&quot;</code></td>
+</tr>
+<tr>
+<td><code>strokeLinecap</code></td>
+<td><code>&quot;butt&quot; | &quot;round&quot; | &quot;square&quot;</code></td>
+</tr>
+<tr>
+<td><code>strokeLinejoin</code></td>
+<td><code>&quot;miter&quot; | &quot;round&quot; | &quot;bevel&quot;</code></td>
+</tr>
+<tr>
+<td><code>transform</code></td>
+<td><code>string</code></td>
+</tr>
+<tr>
+<td><code>transition</code></td>
+<td><code>BevyShapeTransition</code></td>
+</tr>
+</tbody></table></div>
+<h2 id="editabletext"><a class="anchor" href="#editabletext" aria-hidden="true">#</a><a id="editableText"></a><code>&lt;editableText&gt;</code></h2>
+<p>Common props: Identity, State styles. Guide: <a href="../../elements/editable-text/"><editableText></a>.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Type</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>value</code></td>
+<td><code>string</code></td>
+</tr>
+<tr>
+<td><code>maxLength</code></td>
+<td><code>number</code></td>
+</tr>
+<tr>
+<td><code>multiline</code></td>
+<td><code>boolean</code></td>
+</tr>
+<tr>
+<td><code>autofocus</code></td>
+<td><code>boolean</code></td>
+</tr>
+<tr>
+<td><code>selectionStart</code></td>
+<td><code>number</code></td>
+</tr>
+<tr>
+<td><code>selectionEnd</code></td>
+<td><code>number</code></td>
+</tr>
+<tr>
+<td><code>ariaLabel</code></td>
+<td><code>string</code></td>
+</tr>
+</tbody></table></div>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Event</th>
+<th>Handler type</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>onChange</code></td>
+<td><code>(payload: string) =&gt; void</code></td>
+</tr>
+<tr>
+<td><code>onSelect</code></td>
+<td><code>(payload: SelectEvent) =&gt; void</code></td>
+</tr>
+<tr>
+<td><code>onFocus</code></td>
+<td><code>() =&gt; void</code></td>
+</tr>
+<tr>
+<td><code>onBlur</code></td>
+<td><code>() =&gt; void</code></td>
+</tr>
+</tbody></table></div>
+<h2 id="ellipse"><a class="anchor" href="#ellipse" aria-hidden="true">#</a><code>&lt;ellipse&gt;</code></h2>
+<p>Common props: Identity, Pointer events. Guide: <a href="../../elements/svg/"><svg></a>.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Type</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>cx</code></td>
+<td><code>Animatable&lt;number&gt;</code></td>
+</tr>
+<tr>
+<td><code>cy</code></td>
+<td><code>Animatable&lt;number&gt;</code></td>
+</tr>
+<tr>
+<td><code>rx</code></td>
+<td><code>Animatable&lt;number&gt;</code></td>
+</tr>
+<tr>
+<td><code>ry</code></td>
+<td><code>Animatable&lt;number&gt;</code></td>
+</tr>
+<tr>
+<td><code>fill</code></td>
+<td><code>string</code></td>
+</tr>
+<tr>
+<td><code>stroke</code></td>
+<td><code>string</code></td>
+</tr>
+<tr>
+<td><code>strokeWidth</code></td>
+<td><code>Animatable&lt;number&gt;</code></td>
+</tr>
+<tr>
+<td><code>opacity</code></td>
+<td><code>Animatable&lt;number&gt;</code></td>
+</tr>
+<tr>
+<td><code>fillRule</code></td>
+<td><code>&quot;nonzero&quot; | &quot;evenodd&quot;</code></td>
+</tr>
+<tr>
+<td><code>strokeLinecap</code></td>
+<td><code>&quot;butt&quot; | &quot;round&quot; | &quot;square&quot;</code></td>
+</tr>
+<tr>
+<td><code>strokeLinejoin</code></td>
+<td><code>&quot;miter&quot; | &quot;round&quot; | &quot;bevel&quot;</code></td>
+</tr>
+<tr>
+<td><code>transform</code></td>
+<td><code>string</code></td>
+</tr>
+<tr>
+<td><code>transition</code></td>
+<td><code>BevyShapeTransition</code></td>
+</tr>
+</tbody></table></div>
+<h2 id="g"><a class="anchor" href="#g" aria-hidden="true">#</a><code>&lt;g&gt;</code></h2>
+<p>Common props: Identity. Guide: <a href="../../elements/svg/"><svg></a>.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Type</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>transform</code></td>
+<td><code>string</code></td>
+</tr>
+<tr>
+<td><code>opacity</code></td>
+<td><code>Animatable&lt;number&gt;</code></td>
+</tr>
+<tr>
+<td><code>transition</code></td>
+<td><code>BevyShapeTransition</code></td>
+</tr>
+</tbody></table></div>
+<h2 id="image"><a class="anchor" href="#image" aria-hidden="true">#</a><code>&lt;image&gt;</code></h2>
+<p>Common props: Identity, State styles, Pointer events, Scrolling, Wheel. Guide: <a href="../../elements/image/"><image></a>.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Type</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>src</code></td>
+<td><code>string</code></td>
+</tr>
+<tr>
+<td><code>tint</code></td>
+<td><code>string</code></td>
+</tr>
+<tr>
+<td><code>flipX</code></td>
+<td><code>boolean</code></td>
+</tr>
+<tr>
+<td><code>flipY</code></td>
+<td><code>boolean</code></td>
+</tr>
+<tr>
+<td><code>imageMode</code></td>
+<td><code>ImageMode</code></td>
+</tr>
+<tr>
+<td><code>sourceRect</code></td>
+<td><code>SourceRect</code></td>
+</tr>
+<tr>
+<td><code>atlas</code></td>
+<td><code>AtlasSpec</code></td>
+</tr>
+<tr>
+<td><code>visualBox</code></td>
+<td><code>&quot;content&quot; | &quot;padding&quot; | &quot;border&quot;</code></td>
+</tr>
+</tbody></table></div>
+<h2 id="line"><a class="anchor" href="#line" aria-hidden="true">#</a><code>&lt;line&gt;</code></h2>
+<p>Common props: Identity, Pointer events. Guide: <a href="../../elements/svg/"><svg></a>.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Type</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>x1</code></td>
+<td><code>Animatable&lt;number&gt;</code></td>
+</tr>
+<tr>
+<td><code>y1</code></td>
+<td><code>Animatable&lt;number&gt;</code></td>
+</tr>
+<tr>
+<td><code>x2</code></td>
+<td><code>Animatable&lt;number&gt;</code></td>
+</tr>
+<tr>
+<td><code>y2</code></td>
+<td><code>Animatable&lt;number&gt;</code></td>
+</tr>
+<tr>
+<td><code>fill</code></td>
+<td><code>string</code></td>
+</tr>
+<tr>
+<td><code>stroke</code></td>
+<td><code>string</code></td>
+</tr>
+<tr>
+<td><code>strokeWidth</code></td>
+<td><code>Animatable&lt;number&gt;</code></td>
+</tr>
+<tr>
+<td><code>opacity</code></td>
+<td><code>Animatable&lt;number&gt;</code></td>
+</tr>
+<tr>
+<td><code>fillRule</code></td>
+<td><code>&quot;nonzero&quot; | &quot;evenodd&quot;</code></td>
+</tr>
+<tr>
+<td><code>strokeLinecap</code></td>
+<td><code>&quot;butt&quot; | &quot;round&quot; | &quot;square&quot;</code></td>
+</tr>
+<tr>
+<td><code>strokeLinejoin</code></td>
+<td><code>&quot;miter&quot; | &quot;round&quot; | &quot;bevel&quot;</code></td>
+</tr>
+<tr>
+<td><code>transform</code></td>
+<td><code>string</code></td>
+</tr>
+<tr>
+<td><code>transition</code></td>
+<td><code>BevyShapeTransition</code></td>
+</tr>
+</tbody></table></div>
+<h2 id="node"><a class="anchor" href="#node" aria-hidden="true">#</a><code>&lt;node&gt;</code></h2>
+<p>Common props: Identity, State styles, Pointer events, Scrolling, Wheel. Guide: <a href="../../elements/node/"><node></a>.</p>
+<p>No element-specific attributes.</p>
+<h2 id="path"><a class="anchor" href="#path" aria-hidden="true">#</a><code>&lt;path&gt;</code></h2>
+<p>Common props: Identity, Pointer events. Guide: <a href="../../elements/svg/"><svg></a>.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Type</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>d</code></td>
+<td><code>string</code></td>
+</tr>
+<tr>
+<td><code>fill</code></td>
+<td><code>string</code></td>
+</tr>
+<tr>
+<td><code>stroke</code></td>
+<td><code>string</code></td>
+</tr>
+<tr>
+<td><code>strokeWidth</code></td>
+<td><code>Animatable&lt;number&gt;</code></td>
+</tr>
+<tr>
+<td><code>opacity</code></td>
+<td><code>Animatable&lt;number&gt;</code></td>
+</tr>
+<tr>
+<td><code>fillRule</code></td>
+<td><code>&quot;nonzero&quot; | &quot;evenodd&quot;</code></td>
+</tr>
+<tr>
+<td><code>strokeLinecap</code></td>
+<td><code>&quot;butt&quot; | &quot;round&quot; | &quot;square&quot;</code></td>
+</tr>
+<tr>
+<td><code>strokeLinejoin</code></td>
+<td><code>&quot;miter&quot; | &quot;round&quot; | &quot;bevel&quot;</code></td>
+</tr>
+<tr>
+<td><code>transform</code></td>
+<td><code>string</code></td>
+</tr>
+<tr>
+<td><code>transition</code></td>
+<td><code>BevyShapeTransition</code></td>
+</tr>
+</tbody></table></div>
+<h2 id="polygon"><a class="anchor" href="#polygon" aria-hidden="true">#</a><code>&lt;polygon&gt;</code></h2>
+<p>Common props: Identity, Pointer events. Guide: <a href="../../elements/svg/"><svg></a>.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Type</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>points</code></td>
+<td><code>number[]</code></td>
+</tr>
+<tr>
+<td><code>fill</code></td>
+<td><code>string</code></td>
+</tr>
+<tr>
+<td><code>stroke</code></td>
+<td><code>string</code></td>
+</tr>
+<tr>
+<td><code>strokeWidth</code></td>
+<td><code>Animatable&lt;number&gt;</code></td>
+</tr>
+<tr>
+<td><code>opacity</code></td>
+<td><code>Animatable&lt;number&gt;</code></td>
+</tr>
+<tr>
+<td><code>fillRule</code></td>
+<td><code>&quot;nonzero&quot; | &quot;evenodd&quot;</code></td>
+</tr>
+<tr>
+<td><code>strokeLinecap</code></td>
+<td><code>&quot;butt&quot; | &quot;round&quot; | &quot;square&quot;</code></td>
+</tr>
+<tr>
+<td><code>strokeLinejoin</code></td>
+<td><code>&quot;miter&quot; | &quot;round&quot; | &quot;bevel&quot;</code></td>
+</tr>
+<tr>
+<td><code>transform</code></td>
+<td><code>string</code></td>
+</tr>
+<tr>
+<td><code>transition</code></td>
+<td><code>BevyShapeTransition</code></td>
+</tr>
+</tbody></table></div>
+<h2 id="polyline"><a class="anchor" href="#polyline" aria-hidden="true">#</a><code>&lt;polyline&gt;</code></h2>
+<p>Common props: Identity, Pointer events. Guide: <a href="../../elements/svg/"><svg></a>.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Type</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>points</code></td>
+<td><code>number[]</code></td>
+</tr>
+<tr>
+<td><code>fill</code></td>
+<td><code>string</code></td>
+</tr>
+<tr>
+<td><code>stroke</code></td>
+<td><code>string</code></td>
+</tr>
+<tr>
+<td><code>strokeWidth</code></td>
+<td><code>Animatable&lt;number&gt;</code></td>
+</tr>
+<tr>
+<td><code>opacity</code></td>
+<td><code>Animatable&lt;number&gt;</code></td>
+</tr>
+<tr>
+<td><code>fillRule</code></td>
+<td><code>&quot;nonzero&quot; | &quot;evenodd&quot;</code></td>
+</tr>
+<tr>
+<td><code>strokeLinecap</code></td>
+<td><code>&quot;butt&quot; | &quot;round&quot; | &quot;square&quot;</code></td>
+</tr>
+<tr>
+<td><code>strokeLinejoin</code></td>
+<td><code>&quot;miter&quot; | &quot;round&quot; | &quot;bevel&quot;</code></td>
+</tr>
+<tr>
+<td><code>transform</code></td>
+<td><code>string</code></td>
+</tr>
+<tr>
+<td><code>transition</code></td>
+<td><code>BevyShapeTransition</code></td>
+</tr>
+</tbody></table></div>
+<h2 id="portal"><a class="anchor" href="#portal" aria-hidden="true">#</a><code>&lt;portal&gt;</code></h2>
+<p>Common props: Identity, State styles, Pointer events, Scrolling, Wheel. Guide: <a href="../../elements/portal/"><portal></a>.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Type</th>
+<th>Required</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>target</code></td>
+<td><code>string</code></td>
+<td>yes</td>
+</tr>
+</tbody></table></div>
+<h2 id="rect"><a class="anchor" href="#rect" aria-hidden="true">#</a><code>&lt;rect&gt;</code></h2>
+<p>Common props: Identity, Pointer events. Guide: <a href="../../elements/svg/"><svg></a>.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Type</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>x</code></td>
+<td><code>Animatable&lt;number&gt;</code></td>
+</tr>
+<tr>
+<td><code>y</code></td>
+<td><code>Animatable&lt;number&gt;</code></td>
+</tr>
+<tr>
+<td><code>width</code></td>
+<td><code>Animatable&lt;number&gt;</code></td>
+</tr>
+<tr>
+<td><code>height</code></td>
+<td><code>Animatable&lt;number&gt;</code></td>
+</tr>
+<tr>
+<td><code>rx</code></td>
+<td><code>Animatable&lt;number&gt;</code></td>
+</tr>
+<tr>
+<td><code>ry</code></td>
+<td><code>Animatable&lt;number&gt;</code></td>
+</tr>
+<tr>
+<td><code>fill</code></td>
+<td><code>string</code></td>
+</tr>
+<tr>
+<td><code>stroke</code></td>
+<td><code>string</code></td>
+</tr>
+<tr>
+<td><code>strokeWidth</code></td>
+<td><code>Animatable&lt;number&gt;</code></td>
+</tr>
+<tr>
+<td><code>opacity</code></td>
+<td><code>Animatable&lt;number&gt;</code></td>
+</tr>
+<tr>
+<td><code>fillRule</code></td>
+<td><code>&quot;nonzero&quot; | &quot;evenodd&quot;</code></td>
+</tr>
+<tr>
+<td><code>strokeLinecap</code></td>
+<td><code>&quot;butt&quot; | &quot;round&quot; | &quot;square&quot;</code></td>
+</tr>
+<tr>
+<td><code>strokeLinejoin</code></td>
+<td><code>&quot;miter&quot; | &quot;round&quot; | &quot;bevel&quot;</code></td>
+</tr>
+<tr>
+<td><code>transform</code></td>
+<td><code>string</code></td>
+</tr>
+<tr>
+<td><code>transition</code></td>
+<td><code>BevyShapeTransition</code></td>
+</tr>
+</tbody></table></div>
+<h2 id="root"><a class="anchor" href="#root" aria-hidden="true">#</a><code>&lt;root&gt;</code></h2>
+<p>Common props: Identity. Guide: <a href="../../elements/root/"><root></a>.</p>
+<p>No element-specific attributes.</p>
+<h2 id="surface"><a class="anchor" href="#surface" aria-hidden="true">#</a><code>&lt;surface&gt;</code></h2>
+<p>Common props: Identity. Guide: <a href="../../elements/surface/"><surface></a>.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Type</th>
+<th>Required</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>target</code></td>
+<td><code>string</code></td>
+<td>yes</td>
+</tr>
+</tbody></table></div>
+<h2 id="svg"><a class="anchor" href="#svg" aria-hidden="true">#</a><code>&lt;svg&gt;</code></h2>
+<p>Common props: Identity, State styles, Pointer events, Scrolling, Wheel. Guide: <a href="../../elements/svg/"><svg></a>.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Type</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>viewBox</code></td>
+<td><code>string</code></td>
+</tr>
+</tbody></table></div>
+<h2 id="text"><a class="anchor" href="#text" aria-hidden="true">#</a><code>&lt;text&gt;</code></h2>
+<p>Common props: Identity, State styles, Pointer events, Scrolling, Wheel. Guide: <a href="../../elements/text/"><text></a>.</p>
+<p>No element-specific attributes.</p>
+
+</article>
+<footer class="page-links"><span>Generated from the code</span></footer>
+</main>
+</div>
+<footer class="site-footer">
+<p>bevy-react is dual-licensed under MIT or Apache-2.0. <a href="https://github.com/tulustul/bevy-react">Source on GitHub</a>.</p>
+</footer>
+</body>
+</html>

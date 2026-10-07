@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cursors · bevy-react</title>
+<meta name="description" content="Set the mouse cursor per node with the cursor style - system cursor keywords and custom image cursors registered on the Rust side.">
+<link rel="canonical" href="https://tulustul.github.io/bevy-react/styling/cursors/">
+<link rel="alternate" type="text/markdown" href="../../styling/cursors.md">
+<meta property="og:title" content="Cursors · bevy-react">
+<meta property="og:description" content="Set the mouse cursor per node with the cursor style - system cursor keywords and custom image cursors registered on the Rust side.">
+<link rel="icon" href="../../logo.png">
+<link rel="stylesheet" href="../../style.css">
+<script src="../../docs.js" defer></script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="site-header">
+<a class="brand" href="../../"><img src="../../logo.png" alt="" width="74" height="74"> bevy-react</a>
+<span class="version">v0.7.0</span>
+<nav class="site-links" aria-label="Project">
+<a href="../../demo/">Live demo</a>
+<a href="https://github.com/tulustul/bevy-react">GitHub</a>
+<a href="https://docs.rs/bevy-react">docs.rs</a>
+<a href="https://www.npmjs.com/package/bevy-react">npm</a>
+</nav>
+</header>
+<div class="layout">
+<nav class="sidebar" aria-label="Documentation">
+<details class="nav-menu" open>
+<summary>Menu</summary>
+<ul><li><a href="../../">Introduction</a></li><li><a href="../../getting-started/">Getting started</a></li><li><a href="../../how-it-works/">How it works</a></li><li class="nav-section"><span>Elements</span><ul><li><a href="../../elements/node/">&lt;node&gt;</a></li><li><a href="../../elements/button/">&lt;button&gt;</a></li><li><a href="../../elements/text/">&lt;text&gt;</a></li><li><a href="../../elements/editable-text/">&lt;editableText&gt;</a></li><li><a href="../../elements/image/">&lt;image&gt;</a></li><li><a href="../../elements/canvas/">&lt;canvas&gt;</a></li><li><a href="../../elements/svg/">&lt;svg&gt;</a></li><li><a href="../../elements/portal/">&lt;portal&gt;</a></li><li><a href="../../elements/surface/">&lt;surface&gt;</a></li><li><a href="../../elements/root/">&lt;root&gt;</a></li><li><a href="../../elements/anchor/">&lt;anchor&gt;</a></li></ul></li><li class="nav-section"><span>Layout</span><ul><li><a href="../../layout/flexbox/">Flexbox</a></li><li><a href="../../layout/grid/">Grid</a></li><li><a href="../../layout/positioning/">Positioning</a></li></ul></li><li class="nav-section"><span>Styling</span><ul><li><a href="../../styling/units/">Units</a></li><li><a href="../../styling/colors/">Colors</a></li><li><a href="../../styling/borders/">Borders</a></li><li><a href="../../styling/spacing/">Spacing</a></li><li><a href="../../styling/sizing/">Sizing</a></li><li><a href="../../styling/layout-rounding/">Layout rounding</a></li><li><a href="../../styling/overflow/">Overflow</a></li><li><a href="../../styling/transforms/">Transforms</a></li><li><a href="../../styling/3d-transforms/">3D transforms</a></li><li><a href="../../styling/shadows/">Shadows</a></li><li><a href="../../styling/filters/">Filters</a></li><li><a href="../../styling/backdrop-filters/">Backdrop filters</a></li><li><a href="../../styling/morph-filters/">Morph filters</a></li><li><a href="../../styling/gradients/">Gradients</a></li><li><a href="../../styling/background-images/">Background images</a></li><li><a href="../../styling/image-rendering/">Image rendering</a></li><li><a href="../../styling/opacity/">Opacity</a></li><li><a href="../../styling/z-index/">Z-index</a></li><li><a href="../../styling/focus-policy/">Focus policy</a></li><li><a href="../../styling/cursors/" aria-current="page">Cursors</a></li><li><a href="../../styling/layers/">Layers</a></li></ul></li><li class="nav-section"><span>Animations</span><ul><li><a href="../../animations/style-transitions/">Style transitions</a></li><li><a href="../../animations/animated-values/">Animated values</a></li><li><a href="../../animations/interpolation/">Interpolation</a></li><li><a href="../../animations/shared-elements/">Shared elements</a></li></ul></li><li class="nav-section"><span>Communication</span><ul><li><a href="../../communication/react-to-bevy/">React to Bevy</a></li><li><a href="../../communication/bevy-to-react/">Bevy to React</a></li><li><a href="../../communication/request-response/">Request / response</a></li><li><a href="../../communication/named-nodes/">Named nodes</a></li></ul></li><li class="nav-section"><span>Events</span><ul><li><a href="../../events/mouse/">Mouse</a></li><li><a href="../../events/keyboard/">Keyboard</a></li><li><a href="../../events/gamepad/">Gamepad</a></li><li><a href="../../events/window/">Window</a></li></ul></li><li class="nav-section"><span>Extending</span><ul><li><a href="../../extending/custom-elements/">Custom elements</a></li><li><a href="../../extending/custom-styles/">Custom styles</a></li><li><a href="../../extending/custom-filters/">Custom filters</a></li></ul></li><li class="nav-section"><span>Tooling</span><ul><li><a href="../../tooling/devtools/">Devtools</a></li><li><a href="../../tooling/hot-reload/">Hot reload</a></li><li><a href="../../tooling/web/">Web builds</a></li><li><a href="../../tooling/ts-codegen/">TypeScript codegen</a></li></ul></li><li class="nav-section"><span>Reference</span><ul><li><a href="../../reference/style-properties/">Style properties</a></li><li><a href="../../reference/elements/">Elements</a></li><li><a href="../../reference/filters/">Filters</a></li></ul></li><li><a href="../../performance/">Performance</a></li></ul>
+</details>
+</nav>
+<main id="main">
+<article>
+<h1 id="cursors">Cursors</h1>
+<p>The <code>cursor</code> style sets the mouse cursor while the pointer is over a node,
+like CSS <code>cursor</code>. It takes a system cursor keyword, or the name of a custom
+image cursor your app registered on the Rust side.</p>
+<h2 id="usage"><a class="anchor" href="#usage" aria-hidden="true">#</a>Usage</h2>
+<pre><code class="language-tsx"><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>button</span> <span class="token attr-name">style</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span> cursor<span class="token operator">:</span> <span class="token string">&quot;pointer&quot;</span> <span class="token punctuation">}</span><span class="token punctuation">}</span></span> <span class="token attr-name">onClick</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span>save<span class="token punctuation">}</span></span><span class="token punctuation">&gt;</span></span><span class="token plain-text">
+  </span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>text</span><span class="token punctuation">&gt;</span></span><span class="token plain-text">Save</span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>text</span><span class="token punctuation">&gt;</span></span><span class="token plain-text">
+</span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>button</span><span class="token punctuation">&gt;</span></span></code></pre><h2 id="which-node-sets-the-cursor"><a class="anchor" href="#which-node-sets-the-cursor" aria-hidden="true">#</a>Which node sets the cursor</h2>
+<ul>
+<li>The topmost node under the pointer that has a <code>cursor</code> style decides.
+Nodes without one are transparent to this: a child inherits its nearest
+cursor-bearing ancestor, and an overlay without a <code>cursor</code> shows the
+cursor of whatever is beneath it.</li>
+<li><code>focusPolicy</code> and event handlers play no part; any node can set a cursor.</li>
+<li>With no cursor-bearing node under the pointer, the window shows the
+<code>&quot;default&quot;</code> cursor.</li>
+<li>State styles work: <code>cursor: &quot;grab&quot;</code> in <code>style</code> with <code>cursor: &quot;grabbing&quot;</code>
+in <code>pressStyle</code> switches on press.</li>
+<li>It also works over in-world UI in a <a href="../../elements/surface/"><code>&lt;surface&gt;</code></a>
+and over nodes with a <a href="../../styling/3d-transforms/"><code>transform3d</code></a>, where it follows
+what is drawn.</li>
+</ul>
+<p>To stop cursors under a modal or a panel from showing through, give the
+overlay its own <code>cursor: &quot;default&quot;</code>.</p>
+<h2 id="system-cursors"><a class="anchor" href="#system-cursors" aria-hidden="true">#</a>System cursors</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Keyword</th>
+<th>Cursor</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>&quot;default&quot;</code> (also <code>&quot;auto&quot;</code>)</td>
+<td>The platform arrow</td>
+</tr>
+<tr>
+<td><code>&quot;pointer&quot;</code></td>
+<td>A hand, for links and buttons</td>
+</tr>
+<tr>
+<td><code>&quot;text&quot;</code>, <code>&quot;verticalText&quot;</code></td>
+<td>Text selection</td>
+</tr>
+<tr>
+<td><code>&quot;wait&quot;</code>, <code>&quot;progress&quot;</code></td>
+<td>Busy, busy but interactive</td>
+</tr>
+<tr>
+<td><code>&quot;help&quot;</code>, <code>&quot;contextMenu&quot;</code></td>
+<td>Help, context menu available</td>
+</tr>
+<tr>
+<td><code>&quot;crosshair&quot;</code>, <code>&quot;cell&quot;</code></td>
+<td>Precise selection</td>
+</tr>
+<tr>
+<td><code>&quot;move&quot;</code>, <code>&quot;allScroll&quot;</code></td>
+<td>Move, scroll in any direction</td>
+</tr>
+<tr>
+<td><code>&quot;grab&quot;</code>, <code>&quot;grabbing&quot;</code></td>
+<td>Draggable, dragging</td>
+</tr>
+<tr>
+<td><code>&quot;copy&quot;</code>, <code>&quot;alias&quot;</code>, <code>&quot;noDrop&quot;</code>, <code>&quot;notAllowed&quot;</code></td>
+<td>Drag and drop feedback</td>
+</tr>
+<tr>
+<td><code>&quot;zoomIn&quot;</code>, <code>&quot;zoomOut&quot;</code></td>
+<td>Zoom</td>
+</tr>
+<tr>
+<td><code>&quot;colResize&quot;</code>, <code>&quot;rowResize&quot;</code></td>
+<td>Column and row resizing</td>
+</tr>
+<tr>
+<td><code>&quot;nResize&quot;</code>, <code>&quot;eResize&quot;</code>, <code>&quot;sResize&quot;</code>, <code>&quot;wResize&quot;</code></td>
+<td>Edge resizing</td>
+</tr>
+<tr>
+<td><code>&quot;neResize&quot;</code>, <code>&quot;nwResize&quot;</code>, <code>&quot;seResize&quot;</code>, <code>&quot;swResize&quot;</code></td>
+<td>Corner resizing</td>
+</tr>
+<tr>
+<td><code>&quot;ewResize&quot;</code>, <code>&quot;nsResize&quot;</code>, <code>&quot;neswResize&quot;</code>, <code>&quot;nwseResize&quot;</code></td>
+<td>Two-way resizing</td>
+</tr>
+</tbody></table></div>
+<ul>
+<li>The CSS kebab-case spellings work too (<code>&quot;not-allowed&quot;</code>, <code>&quot;col-resize&quot;</code>).</li>
+<li>Names are case-sensitive.</li>
+<li>What each cursor looks like depends on the platform.</li>
+<li>A name that is neither a keyword nor a registered custom cursor shows the
+default arrow and reports a <code>cursor</code> warning in
+<a href="../../tooling/devtools/">devtools</a>.</li>
+</ul>
+<h2 id="custom-cursors"><a class="anchor" href="#custom-cursors" aria-hidden="true">#</a>Custom cursors</h2>
+<p>Register an image under a name on the <code>ReactUiPlugin</code>, then select it by
+name like a keyword:</p>
+<div class="tabs"><div class="tab-panel" data-lang="tsx"><p class="tab-label">TSX</p><pre><code class="language-tsx"><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>node</span> <span class="token attr-name">style</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span> cursor<span class="token operator">:</span> <span class="token string">&quot;hand&quot;</span> <span class="token punctuation">}</span><span class="token punctuation">}</span></span> <span class="token punctuation">/&gt;</span></span></code></pre></div><div class="tab-panel" data-lang="rust"><p class="tab-label">Rust</p><pre><code class="language-rust"><span class="token keyword">use</span> <span class="token namespace">bevy<span class="token punctuation">::</span>prelude<span class="token punctuation">::</span></span><span class="token operator">*</span><span class="token punctuation">;</span>
+<span class="token keyword">use</span> <span class="token namespace">bevy_react<span class="token punctuation">::</span>prelude<span class="token punctuation">::</span></span><span class="token operator">*</span><span class="token punctuation">;</span>
+
+<span class="token keyword">fn</span> <span class="token function-definition function">main</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token class-name">App</span><span class="token punctuation">::</span><span class="token function">new</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+        <span class="token punctuation">.</span><span class="token function">add_plugins</span><span class="token punctuation">(</span><span class="token class-name">DefaultPlugins</span><span class="token punctuation">)</span>
+        <span class="token punctuation">.</span><span class="token function">add_plugins</span><span class="token punctuation">(</span><span class="token class-name">ReactPlugins</span><span class="token punctuation">.</span><span class="token function">set</span><span class="token punctuation">(</span>
+            <span class="token comment">// name, image path in the assets folder, hotspot pixel</span>
+            <span class="token class-name">ReactUiPlugin</span><span class="token punctuation">::</span><span class="token function">default</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">cursor</span><span class="token punctuation">(</span><span class="token string">&quot;hand&quot;</span><span class="token punctuation">,</span> <span class="token string">&quot;cursors/hand.png&quot;</span><span class="token punctuation">,</span> <span class="token punctuation">(</span><span class="token number">6</span><span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+        <span class="token punctuation">)</span><span class="token punctuation">)</span>
+        <span class="token punctuation">.</span><span class="token function">run</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span></code></pre></div></div>
+<ul>
+<li>The image is loaded through the <code>AssetServer</code>, relative to the asset
+folder, at startup. The hotspot is the click point, in image pixels from
+the top-left corner.</li>
+<li>A registered name wins over a keyword: registering <code>&quot;pointer&quot;</code> replaces
+the system pointer for every node that uses it, and registering
+<code>&quot;default&quot;</code> replaces the arrow app-wide, including where no node sets a
+cursor.</li>
+<li>Custom cursors need the <code>custom_cursor</code> cargo feature, which is on by
+default (it pulls in <code>bevy_winit</code>). Without it <code>.cursor(..)</code> doesn&#39;t
+exist, keywords still work, and a custom name reports a <code>cursor</code> warning.</li>
+</ul>
+<h2 id="limits"><a class="anchor" href="#limits" aria-hidden="true">#</a>Limits</h2>
+<ul>
+<li>The cursor is set on the primary window only.</li>
+<li>bevy-react owns that window&#39;s cursor: a cursor your own systems set on the
+window is replaced on the next frame. Register it as a custom cursor and
+select it from React instead.</li>
+</ul>
+<p>See <a href="../../reference/style-properties/#cursor"><code>cursor</code></a> in the style
+reference.</p>
+
+</article>
+<footer class="page-links"><a href="../../demo/?page=cursors">Open live demo</a>
+<a href="https://github.com/tulustul/bevy-react/blob/v0.7.0/examples/demos/ui/src/demos/styling/CursorDemo.tsx">Demo source</a>
+<a href="https://github.com/tulustul/bevy-react/edit/main/docs/guide/styling/cursors.md">Edit this page</a></footer>
+</main>
+</div>
+<footer class="site-footer">
+<p>bevy-react is dual-licensed under MIT or Apache-2.0. <a href="https://github.com/tulustul/bevy-react">Source on GitHub</a>.</p>
+</footer>
+</body>
+</html>

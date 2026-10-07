@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Units · bevy-react</title>
+<meta name="description" content="The value forms style properties accept for lengths, four-sided rects, angles, durations and font sizes, and what each unit resolves against.">
+<link rel="canonical" href="https://tulustul.github.io/bevy-react/styling/units/">
+<link rel="alternate" type="text/markdown" href="../../styling/units.md">
+<meta property="og:title" content="Units · bevy-react">
+<meta property="og:description" content="The value forms style properties accept for lengths, four-sided rects, angles, durations and font sizes, and what each unit resolves against.">
+<link rel="icon" href="../../logo.png">
+<link rel="stylesheet" href="../../style.css">
+<script src="../../docs.js" defer></script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="site-header">
+<a class="brand" href="../../"><img src="../../logo.png" alt="" width="74" height="74"> bevy-react</a>
+<span class="version">v0.7.0</span>
+<nav class="site-links" aria-label="Project">
+<a href="../../demo/">Live demo</a>
+<a href="https://github.com/tulustul/bevy-react">GitHub</a>
+<a href="https://docs.rs/bevy-react">docs.rs</a>
+<a href="https://www.npmjs.com/package/bevy-react">npm</a>
+</nav>
+</header>
+<div class="layout">
+<nav class="sidebar" aria-label="Documentation">
+<details class="nav-menu" open>
+<summary>Menu</summary>
+<ul><li><a href="../../">Introduction</a></li><li><a href="../../getting-started/">Getting started</a></li><li><a href="../../how-it-works/">How it works</a></li><li class="nav-section"><span>Elements</span><ul><li><a href="../../elements/node/">&lt;node&gt;</a></li><li><a href="../../elements/button/">&lt;button&gt;</a></li><li><a href="../../elements/text/">&lt;text&gt;</a></li><li><a href="../../elements/editable-text/">&lt;editableText&gt;</a></li><li><a href="../../elements/image/">&lt;image&gt;</a></li><li><a href="../../elements/canvas/">&lt;canvas&gt;</a></li><li><a href="../../elements/svg/">&lt;svg&gt;</a></li><li><a href="../../elements/portal/">&lt;portal&gt;</a></li><li><a href="../../elements/surface/">&lt;surface&gt;</a></li><li><a href="../../elements/root/">&lt;root&gt;</a></li><li><a href="../../elements/anchor/">&lt;anchor&gt;</a></li></ul></li><li class="nav-section"><span>Layout</span><ul><li><a href="../../layout/flexbox/">Flexbox</a></li><li><a href="../../layout/grid/">Grid</a></li><li><a href="../../layout/positioning/">Positioning</a></li></ul></li><li class="nav-section"><span>Styling</span><ul><li><a href="../../styling/units/" aria-current="page">Units</a></li><li><a href="../../styling/colors/">Colors</a></li><li><a href="../../styling/borders/">Borders</a></li><li><a href="../../styling/spacing/">Spacing</a></li><li><a href="../../styling/sizing/">Sizing</a></li><li><a href="../../styling/layout-rounding/">Layout rounding</a></li><li><a href="../../styling/overflow/">Overflow</a></li><li><a href="../../styling/transforms/">Transforms</a></li><li><a href="../../styling/3d-transforms/">3D transforms</a></li><li><a href="../../styling/shadows/">Shadows</a></li><li><a href="../../styling/filters/">Filters</a></li><li><a href="../../styling/backdrop-filters/">Backdrop filters</a></li><li><a href="../../styling/morph-filters/">Morph filters</a></li><li><a href="../../styling/gradients/">Gradients</a></li><li><a href="../../styling/background-images/">Background images</a></li><li><a href="../../styling/image-rendering/">Image rendering</a></li><li><a href="../../styling/opacity/">Opacity</a></li><li><a href="../../styling/z-index/">Z-index</a></li><li><a href="../../styling/focus-policy/">Focus policy</a></li><li><a href="../../styling/cursors/">Cursors</a></li><li><a href="../../styling/layers/">Layers</a></li></ul></li><li class="nav-section"><span>Animations</span><ul><li><a href="../../animations/style-transitions/">Style transitions</a></li><li><a href="../../animations/animated-values/">Animated values</a></li><li><a href="../../animations/interpolation/">Interpolation</a></li><li><a href="../../animations/shared-elements/">Shared elements</a></li></ul></li><li class="nav-section"><span>Communication</span><ul><li><a href="../../communication/react-to-bevy/">React to Bevy</a></li><li><a href="../../communication/bevy-to-react/">Bevy to React</a></li><li><a href="../../communication/request-response/">Request / response</a></li><li><a href="../../communication/named-nodes/">Named nodes</a></li></ul></li><li class="nav-section"><span>Events</span><ul><li><a href="../../events/mouse/">Mouse</a></li><li><a href="../../events/keyboard/">Keyboard</a></li><li><a href="../../events/gamepad/">Gamepad</a></li><li><a href="../../events/window/">Window</a></li></ul></li><li class="nav-section"><span>Extending</span><ul><li><a href="../../extending/custom-elements/">Custom elements</a></li><li><a href="../../extending/custom-styles/">Custom styles</a></li><li><a href="../../extending/custom-filters/">Custom filters</a></li></ul></li><li class="nav-section"><span>Tooling</span><ul><li><a href="../../tooling/devtools/">Devtools</a></li><li><a href="../../tooling/hot-reload/">Hot reload</a></li><li><a href="../../tooling/web/">Web builds</a></li><li><a href="../../tooling/ts-codegen/">TypeScript codegen</a></li></ul></li><li class="nav-section"><span>Reference</span><ul><li><a href="../../reference/style-properties/">Style properties</a></li><li><a href="../../reference/elements/">Elements</a></li><li><a href="../../reference/filters/">Filters</a></li></ul></li><li><a href="../../performance/">Performance</a></li></ul>
+</details>
+</nav>
+<main id="main">
+<article>
+<h1 id="units">Units</h1>
+<p>Style values that carry a unit accept either a bare number, read in the
+property&#39;s default unit, or a string with an explicit unit. Lengths default
+to logical pixels, angles to degrees and durations to milliseconds. Values
+are parsed once, when the style crosses to Bevy.</p>
+<h2 id="usage"><a class="anchor" href="#usage" aria-hidden="true">#</a>Usage</h2>
+<pre><code class="language-tsx"><span class="token operator">&lt;</span>node
+  style<span class="token operator">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span>
+    width<span class="token operator">:</span> <span class="token number">240</span><span class="token punctuation">,</span> <span class="token comment">// logical px</span>
+    height<span class="token operator">:</span> <span class="token string">&quot;50vh&quot;</span><span class="token punctuation">,</span> <span class="token comment">// half the window's height</span>
+    padding<span class="token operator">:</span> <span class="token string">&quot;8px 16px&quot;</span><span class="token punctuation">,</span> <span class="token comment">// vertical, horizontal</span>
+    transform<span class="token operator">:</span> <span class="token punctuation">{</span> rotate<span class="token operator">:</span> <span class="token string">&quot;0.25turn&quot;</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+    transition<span class="token operator">:</span> <span class="token punctuation">{</span> transform<span class="token operator">:</span> <span class="token punctuation">{</span> duration<span class="token operator">:</span> <span class="token string">&quot;0.3s&quot;</span> <span class="token punctuation">}</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+  <span class="token punctuation">}</span><span class="token punctuation">}</span>
+<span class="token operator">/</span><span class="token operator">&gt;</span></code></pre><h2 id="lengths"><a class="anchor" href="#lengths" aria-hidden="true">#</a>Lengths</h2>
+<p>Layout sizes, insets, margins, padding, gaps, transform translation and
+shadow offsets are lengths:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Value</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>16</code> or <code>&quot;16px&quot;</code></td>
+<td>Logical pixels</td>
+</tr>
+<tr>
+<td><code>&quot;50%&quot;</code></td>
+<td>A percentage of a reference size (see below)</td>
+</tr>
+<tr>
+<td><code>&quot;10vw&quot;</code>, <code>&quot;10vh&quot;</code></td>
+<td>10% of the viewport&#39;s width or height</td>
+</tr>
+<tr>
+<td><code>&quot;10vmin&quot;</code>, <code>&quot;10vmax&quot;</code></td>
+<td>10% of the viewport&#39;s smaller or larger side</td>
+</tr>
+<tr>
+<td><code>&quot;auto&quot;</code></td>
+<td>Left to layout, where the property supports it</td>
+</tr>
+</tbody></table></div>
+<ul>
+<li>A logical pixel is multiplied by the window&#39;s scale factor and Bevy&#39;s
+<code>UiScale</code> resource, so the same value looks the same size on every
+display.</li>
+<li>The viewport is the target the UI draws into: the window for your app&#39;s
+UI, the texture for UI inside a <a href="../../elements/surface/"><code>&lt;surface&gt;</code></a>.
+Viewport units follow it when it resizes and ignore <code>UiScale</code>.</li>
+<li><code>&quot;auto&quot;</code> sizes from content on <code>width</code>, <code>height</code>, the min and max sizes
+and <code>flexBasis</code>; means &quot;not set&quot; on the insets; absorbs free space on
+<code>margin</code>; and is <code>0</code> on <code>padding</code>, <code>border</code> and the gaps.</li>
+<li>A numeric string without a unit (<code>&quot;16&quot;</code>) is pixels. Units are lowercase,
+except that <code>&quot;auto&quot;</code> matches in any case.</li>
+<li>Anything else (<code>&quot;1em&quot;</code>, <code>&quot;2rem&quot;</code>, <code>&quot;calc(…)&quot;</code>, <code>&quot;16pt&quot;</code>) becomes <code>0</code> and
+reports a <code>length</code> devtools warning. The rest of the style still applies.</li>
+</ul>
+<p>An <code>{ animated }</code> binding on a length property is driven in logical pixels,
+whatever unit the static value used. See
+<a href="../../animations/animated-values/">Animated values</a>.</p>
+<h3 id="what-percentages-are-of"><a class="anchor" href="#what-percentages-are-of" aria-hidden="true">#</a>What percentages are of</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Property</th>
+<th>Percentage of</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>width</code>, <code>minWidth</code>, <code>maxWidth</code>, <code>left</code>, <code>right</code></td>
+<td>The parent&#39;s width</td>
+</tr>
+<tr>
+<td><code>height</code>, <code>minHeight</code>, <code>maxHeight</code>, <code>top</code>, <code>bottom</code></td>
+<td>The parent&#39;s height</td>
+</tr>
+<tr>
+<td><code>margin</code>, <code>padding</code>, <code>border</code> (all four sides)</td>
+<td>The parent&#39;s width</td>
+</tr>
+<tr>
+<td><code>flexBasis</code></td>
+<td>The parent&#39;s size on the flex main axis</td>
+</tr>
+<tr>
+<td><code>gap</code>, <code>rowGap</code>, <code>columnGap</code></td>
+<td>The node&#39;s own size on that axis</td>
+</tr>
+<tr>
+<td>grid tracks (<code>&quot;25%&quot;</code>)</td>
+<td>The grid container&#39;s size</td>
+</tr>
+</tbody></table></div>
+<p>The parent&#39;s size here is its content box (for an absolute node, its
+padding box, see <a href="../../layout/positioning/">Positioning</a>). A percentage of a
+size that layout hasn&#39;t fixed yet, such as the height of an auto-height
+parent, behaves as <code>&quot;auto&quot;</code>. Other properties, such as <code>transform</code> and
+<code>borderRadius</code>, give their own basis on their pages.</p>
+<h2 id="four-sided-values"><a class="anchor" href="#four-sided-values" aria-hidden="true">#</a>Four-sided values</h2>
+<p><code>margin</code>, <code>padding</code>, <code>border</code> and <code>borderRadius</code> take a <code>Rect</code>, one length
+per side in any of these forms:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Value</th>
+<th>Sides</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>8</code></td>
+<td>All four</td>
+</tr>
+<tr>
+<td><code>&quot;8px&quot;</code>, <code>&quot;8px 16px&quot;</code>, …</td>
+<td>CSS shorthand: 1 to 4 lengths</td>
+</tr>
+<tr>
+<td><code>{ top: 8, left: &quot;auto&quot; }</code></td>
+<td>Per side; omitted sides are <code>0</code></td>
+</tr>
+<tr>
+<td><code>{ horizontal: 16, vertical: 8 }</code></td>
+<td><code>left</code> + <code>right</code>, <code>top</code> + <code>bottom</code></td>
+</tr>
+</tbody></table></div>
+<ul>
+<li>The shorthand follows CSS order: one value for all sides, two for
+vertical and horizontal, three for top, horizontal and bottom, four for
+top, right, bottom and left.</li>
+<li>If an object mixes the two forms, an explicit side wins over its axis.</li>
+<li>On <code>borderRadius</code> the four slots are the corners, starting top-left and
+going clockwise (see <a href="../../styling/borders/">Borders</a>).</li>
+<li>A value always replaces the whole rect. <code>hoverStyle={{ padding: { left: 20 } }}</code>
+sets the other three sides to <code>0</code> while hovered, not to the base style&#39;s
+values.</li>
+<li>A shorthand token that doesn&#39;t parse becomes <code>0</code> for its sides, more than
+four values make the whole rect <code>0</code>, and an unknown object key is
+ignored. Each reports a <code>rect</code> devtools warning.</li>
+</ul>
+<h2 id="angles"><a class="anchor" href="#angles" aria-hidden="true">#</a>Angles</h2>
+<p>Rotations (<code>transform</code>, <code>transform3d</code>) and gradient angles are angles:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Value</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>45</code></td>
+<td>Degrees</td>
+</tr>
+<tr>
+<td><code>&quot;45deg&quot;</code></td>
+<td>Degrees</td>
+</tr>
+<tr>
+<td><code>&quot;0.785rad&quot;</code></td>
+<td>Radians</td>
+</tr>
+<tr>
+<td><code>&quot;0.125turn&quot;</code></td>
+<td>Turns (1turn = 360°)</td>
+</tr>
+<tr>
+<td><code>&quot;50grad&quot;</code></td>
+<td>Gradians (400grad = 360°)</td>
+</tr>
+</tbody></table></div>
+<p>An invalid angle becomes <code>0</code> and reports an <code>angle</code> devtools warning. An
+<code>{ animated }</code> binding on an angle is driven in degrees.</p>
+<h2 id="durations"><a class="anchor" href="#durations" aria-hidden="true">#</a>Durations</h2>
+<p>A transition&#39;s <code>duration</code> and <code>delay</code> are durations: a bare number is
+milliseconds, <code>&quot;300ms&quot;</code> is milliseconds and <code>&quot;0.3s&quot;</code> is seconds. An invalid
+duration becomes <code>0</code> and reports a <code>time</code> devtools warning. See
+<a href="../../animations/style-transitions/">Style transitions</a>.</p>
+<h2 id="font-sizes"><a class="anchor" href="#font-sizes" aria-hidden="true">#</a>Font sizes</h2>
+<p><code>fontSize</code> takes a number (logical pixels), <code>&quot;px&quot;</code>, the viewport units, or
+<code>&quot;rem&quot;</code>: a multiple of Bevy&#39;s <code>RemSize</code> resource, 20px by default, which
+makes it the knob for scaling all <code>rem</code> text at once. It does not accept
+percentages or <code>em</code>. An invalid value becomes <code>0</code> and reports a <code>fontSize</code>
+devtools warning. See <a href="../../elements/text/"><code>&lt;text&gt;</code></a>.</p>
+<h2 id="limits"><a class="anchor" href="#limits" aria-hidden="true">#</a>Limits</h2>
+<ul>
+<li>No <code>calc()</code>, <code>em</code>, or unit arithmetic. Compute mixed values in
+JavaScript, for example from the window size (see
+<a href="../../events/window/">Window</a>).</li>
+<li>Colors are strings of their own; see <a href="../../styling/colors/">Colors</a>.</li>
+</ul>
+<p>Every style property&#39;s accepted type is listed in the
+<a href="../../reference/style-properties/">style reference</a>.</p>
+
+</article>
+<footer class="page-links"><a href="../../demo/?page=units">Open live demo</a>
+<a href="https://github.com/tulustul/bevy-react/blob/v0.7.0/examples/demos/ui/src/demos/styling/UnitsDemo.tsx">Demo source</a>
+<a href="https://github.com/tulustul/bevy-react/edit/main/docs/guide/styling/units.md">Edit this page</a></footer>
+</main>
+</div>
+<footer class="site-footer">
+<p>bevy-react is dual-licensed under MIT or Apache-2.0. <a href="https://github.com/tulustul/bevy-react">Source on GitHub</a>.</p>
+</footer>
+</body>
+</html>

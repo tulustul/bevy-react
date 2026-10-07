@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Overflow · bevy-react</title>
+<meta name="description" content="Clip or scroll content larger than its node with overflowX and overflowY, control the scroll offset from React, and add a styled, draggable scrollbar.">
+<link rel="canonical" href="https://tulustul.github.io/bevy-react/styling/overflow/">
+<link rel="alternate" type="text/markdown" href="../../styling/overflow.md">
+<meta property="og:title" content="Overflow · bevy-react">
+<meta property="og:description" content="Clip or scroll content larger than its node with overflowX and overflowY, control the scroll offset from React, and add a styled, draggable scrollbar.">
+<link rel="icon" href="../../logo.png">
+<link rel="stylesheet" href="../../style.css">
+<script src="../../docs.js" defer></script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="site-header">
+<a class="brand" href="../../"><img src="../../logo.png" alt="" width="74" height="74"> bevy-react</a>
+<span class="version">v0.7.0</span>
+<nav class="site-links" aria-label="Project">
+<a href="../../demo/">Live demo</a>
+<a href="https://github.com/tulustul/bevy-react">GitHub</a>
+<a href="https://docs.rs/bevy-react">docs.rs</a>
+<a href="https://www.npmjs.com/package/bevy-react">npm</a>
+</nav>
+</header>
+<div class="layout">
+<nav class="sidebar" aria-label="Documentation">
+<details class="nav-menu" open>
+<summary>Menu</summary>
+<ul><li><a href="../../">Introduction</a></li><li><a href="../../getting-started/">Getting started</a></li><li><a href="../../how-it-works/">How it works</a></li><li class="nav-section"><span>Elements</span><ul><li><a href="../../elements/node/">&lt;node&gt;</a></li><li><a href="../../elements/button/">&lt;button&gt;</a></li><li><a href="../../elements/text/">&lt;text&gt;</a></li><li><a href="../../elements/editable-text/">&lt;editableText&gt;</a></li><li><a href="../../elements/image/">&lt;image&gt;</a></li><li><a href="../../elements/canvas/">&lt;canvas&gt;</a></li><li><a href="../../elements/svg/">&lt;svg&gt;</a></li><li><a href="../../elements/portal/">&lt;portal&gt;</a></li><li><a href="../../elements/surface/">&lt;surface&gt;</a></li><li><a href="../../elements/root/">&lt;root&gt;</a></li><li><a href="../../elements/anchor/">&lt;anchor&gt;</a></li></ul></li><li class="nav-section"><span>Layout</span><ul><li><a href="../../layout/flexbox/">Flexbox</a></li><li><a href="../../layout/grid/">Grid</a></li><li><a href="../../layout/positioning/">Positioning</a></li></ul></li><li class="nav-section"><span>Styling</span><ul><li><a href="../../styling/units/">Units</a></li><li><a href="../../styling/colors/">Colors</a></li><li><a href="../../styling/borders/">Borders</a></li><li><a href="../../styling/spacing/">Spacing</a></li><li><a href="../../styling/sizing/">Sizing</a></li><li><a href="../../styling/layout-rounding/">Layout rounding</a></li><li><a href="../../styling/overflow/" aria-current="page">Overflow</a></li><li><a href="../../styling/transforms/">Transforms</a></li><li><a href="../../styling/3d-transforms/">3D transforms</a></li><li><a href="../../styling/shadows/">Shadows</a></li><li><a href="../../styling/filters/">Filters</a></li><li><a href="../../styling/backdrop-filters/">Backdrop filters</a></li><li><a href="../../styling/morph-filters/">Morph filters</a></li><li><a href="../../styling/gradients/">Gradients</a></li><li><a href="../../styling/background-images/">Background images</a></li><li><a href="../../styling/image-rendering/">Image rendering</a></li><li><a href="../../styling/opacity/">Opacity</a></li><li><a href="../../styling/z-index/">Z-index</a></li><li><a href="../../styling/focus-policy/">Focus policy</a></li><li><a href="../../styling/cursors/">Cursors</a></li><li><a href="../../styling/layers/">Layers</a></li></ul></li><li class="nav-section"><span>Animations</span><ul><li><a href="../../animations/style-transitions/">Style transitions</a></li><li><a href="../../animations/animated-values/">Animated values</a></li><li><a href="../../animations/interpolation/">Interpolation</a></li><li><a href="../../animations/shared-elements/">Shared elements</a></li></ul></li><li class="nav-section"><span>Communication</span><ul><li><a href="../../communication/react-to-bevy/">React to Bevy</a></li><li><a href="../../communication/bevy-to-react/">Bevy to React</a></li><li><a href="../../communication/request-response/">Request / response</a></li><li><a href="../../communication/named-nodes/">Named nodes</a></li></ul></li><li class="nav-section"><span>Events</span><ul><li><a href="../../events/mouse/">Mouse</a></li><li><a href="../../events/keyboard/">Keyboard</a></li><li><a href="../../events/gamepad/">Gamepad</a></li><li><a href="../../events/window/">Window</a></li></ul></li><li class="nav-section"><span>Extending</span><ul><li><a href="../../extending/custom-elements/">Custom elements</a></li><li><a href="../../extending/custom-styles/">Custom styles</a></li><li><a href="../../extending/custom-filters/">Custom filters</a></li></ul></li><li class="nav-section"><span>Tooling</span><ul><li><a href="../../tooling/devtools/">Devtools</a></li><li><a href="../../tooling/hot-reload/">Hot reload</a></li><li><a href="../../tooling/web/">Web builds</a></li><li><a href="../../tooling/ts-codegen/">TypeScript codegen</a></li></ul></li><li class="nav-section"><span>Reference</span><ul><li><a href="../../reference/style-properties/">Style properties</a></li><li><a href="../../reference/elements/">Elements</a></li><li><a href="../../reference/filters/">Filters</a></li></ul></li><li><a href="../../performance/">Performance</a></li></ul>
+</details>
+</nav>
+<main id="main">
+<article>
+<h1 id="overflow">Overflow</h1>
+<p><code>overflowX</code> and <code>overflowY</code> decide, per axis, what happens to children that
+extend past a node&#39;s box: they spill out, get clipped, or make the node a
+scroll container. A scroll container scrolls with the mouse wheel and touch
+drags, takes a controlled offset from React, and can show a draggable
+scrollbar through the <code>scrollbar</code> style.</p>
+<h2 id="usage"><a class="anchor" href="#usage" aria-hidden="true">#</a>Usage</h2>
+<pre><code class="language-tsx"><span class="token keyword">function</span> <span class="token function">Log</span><span class="token punctuation">(</span><span class="token punctuation">{</span> lines <span class="token punctuation">}</span><span class="token operator">:</span> <span class="token punctuation">{</span> lines<span class="token operator">:</span> <span class="token builtin">string</span><span class="token punctuation">[</span><span class="token punctuation">]</span> <span class="token punctuation">}</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+  <span class="token keyword">return</span> <span class="token punctuation">(</span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>node</span>
+      <span class="token attr-name">style</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span>
+        flexDirection<span class="token operator">:</span> <span class="token string">&quot;column&quot;</span><span class="token punctuation">,</span>
+        height<span class="token operator">:</span> <span class="token number">240</span><span class="token punctuation">,</span>
+        overflowY<span class="token operator">:</span> <span class="token string">&quot;scroll&quot;</span><span class="token punctuation">,</span>
+        scrollbar<span class="token operator">:</span> <span class="token string">&quot;default&quot;</span><span class="token punctuation">,</span>
+      <span class="token punctuation">}</span><span class="token punctuation">}</span></span>
+    <span class="token punctuation">&gt;</span></span><span class="token plain-text">
+      </span><span class="token punctuation">{</span>lines<span class="token punctuation">.</span><span class="token function">map</span><span class="token punctuation">(</span><span class="token punctuation">(</span>line<span class="token punctuation">,</span> i<span class="token punctuation">)</span> <span class="token operator">=&gt;</span> <span class="token punctuation">(</span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>text</span> <span class="token attr-name">key</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span>i<span class="token punctuation">}</span></span><span class="token punctuation">&gt;</span></span><span class="token punctuation">{</span>line<span class="token punctuation">}</span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>text</span><span class="token punctuation">&gt;</span></span>
+      <span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">}</span><span class="token plain-text">
+    </span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>node</span><span class="token punctuation">&gt;</span></span>
+  <span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span></code></pre><h2 id="overflow-modes"><a class="anchor" href="#overflow-modes" aria-hidden="true">#</a>Overflow modes</h2>
+<p>Each axis takes one of four values:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Value</th>
+<th>Content outside the box</th>
+<th>Minimum size as a flex or grid item</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>&quot;visible&quot;</code> (default)</td>
+<td>Drawn</td>
+<td>Its content&#39;s minimum size</td>
+</tr>
+<tr>
+<td><code>&quot;clip&quot;</code></td>
+<td>Clipped</td>
+<td>Its content&#39;s minimum size</td>
+</tr>
+<tr>
+<td><code>&quot;hidden&quot;</code></td>
+<td>Clipped</td>
+<td><code>0</code></td>
+</tr>
+<tr>
+<td><code>&quot;scroll&quot;</code></td>
+<td>Clipped and scrollable</td>
+<td><code>0</code></td>
+</tr>
+</tbody></table></div>
+<ul>
+<li>Clipping cuts at the padding box (inside the border) on that axis only:
+<code>overflowX: &quot;clip&quot;</code> lets content spill vertically.</li>
+<li>Clipped content is neither drawn nor hit by the pointer.</li>
+<li><code>&quot;clip&quot;</code> and <code>&quot;hidden&quot;</code> cut the same pixels; they differ in layout. As a
+flex or grid item, a <code>&quot;clip&quot;</code> node keeps its content&#39;s minimum size as its
+own, while a <code>&quot;hidden&quot;</code> or <code>&quot;scroll&quot;</code> node can be shrunk below it by its
+parent. A <code>&quot;hidden&quot;</code> axis is not scrollable.</li>
+<li>An unrecognized value falls back to <code>&quot;visible&quot;</code> and reports an <code>overflow</code>
+devtools warning. There is no <code>overflow</code> shorthand: set both axes.</li>
+</ul>
+<h2 id="scroll-containers"><a class="anchor" href="#scroll-containers" aria-hidden="true">#</a>Scroll containers</h2>
+<p>A <code>&quot;scroll&quot;</code> axis offsets the children by the node&#39;s scroll offset. The
+offset runs from <code>0</code> to the content&#39;s size minus the box&#39;s size and is
+clamped to that range; when the content fits, there is nothing to scroll.
+Absolutely positioned children scroll with the rest.</p>
+<h3 id="wheel-and-touch"><a class="anchor" href="#wheel-and-touch" aria-hidden="true">#</a>Wheel and touch</h3>
+<ul>
+<li>The mouse wheel scrolls the topmost scroll container under the cursor
+that has room to scroll on the wheeled axis. A container whose content
+fits lets the wheel through to the containers beneath it and, past the
+last one, to the 3D scene.</li>
+<li>A container that can scroll on that axis takes the wheel even when it is
+already at the end, so the wheel never chains to an outer container.</li>
+<li>A vertical wheel doesn&#39;t scroll a container that only scrolls
+horizontally; that needs a horizontal wheel or trackpad gesture.</li>
+<li>The <code>scrollStep</code> prop sets how many logical pixels one wheel notch
+scrolls, <code>20</code> by default. Trackpads report pixels, which are used as is.</li>
+<li>A node with an <code>onWheel</code> handler under the cursor takes the wheel: no
+container beneath it scrolls. See <a href="../../events/mouse/">Mouse events</a>.</li>
+<li>When a container scrolls, <code>PointerCapture::wheel_captured</code> is set for the
+frame, so a world system gating on it (a zoom camera) ignores that wheel.</li>
+<li>On a touch screen, dragging a finger over a container scrolls it with the
+finger. A touch that moves more than 8px becomes a scroll, and its tap no
+longer clicks.</li>
+</ul>
+<h3 id="controlled-offset"><a class="anchor" href="#controlled-offset" aria-hidden="true">#</a>Controlled offset</h3>
+<pre><code class="language-tsx"><span class="token keyword">const</span> <span class="token punctuation">[</span>scrollTop<span class="token punctuation">,</span> setScrollTop<span class="token punctuation">]</span> <span class="token operator">=</span> <span class="token function">useState</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>node</span>
+  <span class="token attr-name">style</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span> height<span class="token operator">:</span> <span class="token number">240</span><span class="token punctuation">,</span> overflowY<span class="token operator">:</span> <span class="token string">&quot;scroll&quot;</span> <span class="token punctuation">}</span><span class="token punctuation">}</span></span>
+  <span class="token attr-name">scrollTop</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span>scrollTop<span class="token punctuation">}</span></span>
+  <span class="token attr-name">onScroll</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">(</span>e<span class="token punctuation">)</span> <span class="token operator">=&gt;</span> <span class="token function">setScrollTop</span><span class="token punctuation">(</span>e<span class="token punctuation">.</span>scrollTop<span class="token punctuation">)</span><span class="token punctuation">}</span></span>
+<span class="token punctuation">&gt;</span></span><span class="token plain-text">
+  </span><span class="token punctuation">{</span>rows<span class="token punctuation">}</span><span class="token plain-text">
+</span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>node</span><span class="token punctuation">&gt;</span></span><span class="token punctuation">;</span></code></pre><ul>
+<li><code>scrollTop</code> and <code>scrollLeft</code> (logical pixels) move the offset when their
+value changes. Re-rendering with the same value does nothing, so they
+never fight the user&#39;s wheel; keep the state in sync through <code>onScroll</code>
+so the next value you set is a real change.</li>
+<li>A value past the end lands on the end once layout has run, and <code>onScroll</code>
+then reports the real offset. Setting a large <code>scrollTop</code> in the same
+render that appends rows pins a log to its bottom.</li>
+<li><code>onScroll</code> receives <code>{ scrollTop, scrollLeft }</code> whenever the offset
+changes: wheel, touch, scrollbar, or an eased scroll. A value you set
+yourself that lands in range is not echoed back.</li>
+<li>The scroll props are accepted on <code>&lt;node&gt;</code>, <code>&lt;button&gt;</code>, <code>&lt;text&gt;</code>,
+<code>&lt;image&gt;</code>, <code>&lt;canvas&gt;</code>, <code>&lt;svg&gt;</code>, <code>&lt;portal&gt;</code> and <code>&lt;anchor&gt;</code>.</li>
+</ul>
+<p><code>transition: { scroll }</code> eases the offset toward each new wheel or
+<code>scrollTop</code>/<code>scrollLeft</code> target instead of jumping (dragging the scrollbar
+still snaps). Don&#39;t also feed <code>onScroll</code> back into the same controlled axis
+then: the round trip fights the ease. See
+<a href="../../animations/style-transitions/">Style transitions</a>.</p>
+<h2 id="the-scrollbar"><a class="anchor" href="#the-scrollbar" aria-hidden="true">#</a>The scrollbar</h2>
+<p>Bevy draws no scrollbar on its own. The <code>scrollbar</code> style adds one per
+<code>&quot;scroll&quot;</code> axis, hidden while the content fits. The thumb is draggable and
+clicking the track pages.</p>
+<ul>
+<li><code>&quot;none&quot;</code> (the default): no visible bar.</li>
+<li><code>&quot;default&quot;</code>: a neutral bar, 12px thick: a faint dark track and a gray,
+rounded thumb.</li>
+<li>An object, to configure it:</li>
+</ul>
+<pre><code class="language-tsx"><span class="token keyword">const</span> bar<span class="token operator">:</span> ScrollbarStyle <span class="token operator">=</span> <span class="token punctuation">{</span>
+  track<span class="token operator">:</span> <span class="token punctuation">{</span> backgroundColor<span class="token operator">:</span> <span class="token string">&quot;#00000088&quot;</span><span class="token punctuation">,</span> borderRadius<span class="token operator">:</span> <span class="token number">8</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+  thumb<span class="token operator">:</span> <span class="token punctuation">{</span>
+    backgroundColor<span class="token operator">:</span> <span class="token string">&quot;#7aa2f7&quot;</span><span class="token punctuation">,</span>
+    borderRadius<span class="token operator">:</span> <span class="token number">8</span><span class="token punctuation">,</span>
+    hover<span class="token operator">:</span> <span class="token punctuation">{</span> backgroundColor<span class="token operator">:</span> <span class="token string">&quot;#89b4fa&quot;</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+    pressed<span class="token operator">:</span> <span class="token punctuation">{</span> backgroundColor<span class="token operator">:</span> <span class="token string">&quot;#b4befe&quot;</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+  <span class="token punctuation">}</span><span class="token punctuation">,</span>
+  thickness<span class="token operator">:</span> <span class="token number">10</span><span class="token punctuation">,</span>
+<span class="token punctuation">}</span><span class="token punctuation">;</span>
+
+<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>node</span> <span class="token attr-name">style</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span> height<span class="token operator">:</span> <span class="token number">180</span><span class="token punctuation">,</span> overflowY<span class="token operator">:</span> <span class="token string">&quot;scroll&quot;</span><span class="token punctuation">,</span> scrollbar<span class="token operator">:</span> bar <span class="token punctuation">}</span><span class="token punctuation">}</span></span> <span class="token punctuation">/&gt;</span></span><span class="token punctuation">;</span></code></pre><div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Default</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>track</code></td>
+<td>faint dark</td>
+<td>The groove&#39;s look</td>
+</tr>
+<tr>
+<td><code>thumb</code></td>
+<td>gray pill</td>
+<td>The handle&#39;s look</td>
+</tr>
+<tr>
+<td><code>thickness</code></td>
+<td><code>12</code></td>
+<td>Bar width across its axis, in logical pixels</td>
+</tr>
+<tr>
+<td><code>minThumbLength</code></td>
+<td><code>24</code></td>
+<td>The thumb never gets shorter, so it stays grabbable</td>
+</tr>
+<tr>
+<td><code>position</code></td>
+<td><code>&quot;gutter&quot;</code></td>
+<td><code>&quot;gutter&quot;</code> reserves space; <code>&quot;float&quot;</code> overlays</td>
+</tr>
+<tr>
+<td><code>verticalSide</code></td>
+<td><code>&quot;right&quot;</code></td>
+<td><code>&quot;left&quot;</code> or <code>&quot;right&quot;</code> edge for the vertical bar</td>
+</tr>
+<tr>
+<td><code>horizontalSide</code></td>
+<td><code>&quot;bottom&quot;</code></td>
+<td><code>&quot;top&quot;</code> or <code>&quot;bottom&quot;</code> edge for the horizontal bar</td>
+</tr>
+</tbody></table></div>
+<p><code>track</code> and <code>thumb</code> take only <code>backgroundColor</code>, <code>borderColor</code> (one color
+or a per-side object), <code>borderRadius</code> and <code>border</code> (both four-sided
+values), plus <code>hover</code> and <code>pressed</code> overlays of the same four fields;
+<code>pressed</code>, active while the bar is dragged, wins over <code>hover</code>. Unset fields
+keep the defaults: the thumb&#39;s radius stays half the thickness. An unknown
+field or keyword is ignored with a <code>scrollbar</code> devtools warning.</p>
+<p>The bar draws above the container and its siblings, but under anything
+with a higher <code>globalZIndex</code>.</p>
+<h3 id="gutter-and-scrollbarwidth"><a class="anchor" href="#gutter-and-scrollbarwidth" aria-hidden="true">#</a>Gutter and <code>scrollbarWidth</code></h3>
+<p><code>scrollbarWidth</code> (a number of logical pixels, default <code>0</code>) reserves a
+gutter on each <code>&quot;scroll&quot;</code> axis: on the right for <code>overflowY</code>, at the bottom
+for <code>overflowX</code>. The content lays out beside it. It draws nothing by
+itself.</p>
+<ul>
+<li>A <code>scrollbar</code> with <code>position: &quot;gutter&quot;</code> reserves its <code>thickness</code> this way,
+so content never runs under the bar. An explicit <code>scrollbarWidth</code> wins
+over it, <code>0</code> included.</li>
+<li><code>position: &quot;float&quot;</code> reserves nothing and draws the bar over the content.</li>
+<li>The gutter is always on the right or bottom edge. A bar moved to the
+left or top with <code>verticalSide</code> or <code>horizontalSide</code> covers the content&#39;s
+edge while the gutter stays empty on the other side, so use
+<code>position: &quot;float&quot;</code> there and pad the content yourself.</li>
+</ul>
+<h2 id="limits"><a class="anchor" href="#limits" aria-hidden="true">#</a>Limits</h2>
+<ul>
+<li>The wheel only reaches UI on the window: scroll containers inside a
+<code>&lt;surface&gt;</code> don&#39;t scroll with the wheel, and a UI camera with an offset
+viewport is not accounted for. Drive them with <code>scrollTop</code> and
+<code>scrollLeft</code>.</li>
+<li>No scroll chaining, overscroll, or scroll snapping.</li>
+<li>The scrollbar is placed assuming the container&#39;s parent has no border; a
+border on the parent offsets the bar by its width.</li>
+</ul>
+<p>See <a href="../../reference/style-properties/#overflowX"><code>overflowX</code></a>,
+<a href="../../reference/style-properties/#overflowY"><code>overflowY</code></a>,
+<a href="../../reference/style-properties/#scrollbarWidth"><code>scrollbarWidth</code></a> and
+<a href="../../reference/style-properties/#scrollbar"><code>scrollbar</code></a> in the style
+reference.</p>
+
+</article>
+<footer class="page-links"><a href="../../demo/?page=overflow">Open live demo</a>
+<a href="https://github.com/tulustul/bevy-react/blob/v0.7.0/examples/demos/ui/src/demos/styling/overflowDemo/OverflowDemo.tsx">Demo source</a>
+<a href="https://github.com/tulustul/bevy-react/edit/main/docs/guide/styling/overflow.md">Edit this page</a></footer>
+</main>
+</div>
+<footer class="site-footer">
+<p>bevy-react is dual-licensed under MIT or Apache-2.0. <a href="https://github.com/tulustul/bevy-react">Source on GitHub</a>.</p>
+</footer>
+</body>
+</html>

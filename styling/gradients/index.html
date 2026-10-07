@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gradients · bevy-react</title>
+<meta name="description" content="Linear, radial and conic gradients on a node's fill and border, with stops, hints, color spaces, layered lists, transitions and animated leaves.">
+<link rel="canonical" href="https://tulustul.github.io/bevy-react/styling/gradients/">
+<link rel="alternate" type="text/markdown" href="../../styling/gradients.md">
+<meta property="og:title" content="Gradients · bevy-react">
+<meta property="og:description" content="Linear, radial and conic gradients on a node's fill and border, with stops, hints, color spaces, layered lists, transitions and animated leaves.">
+<link rel="icon" href="../../logo.png">
+<link rel="stylesheet" href="../../style.css">
+<script src="../../docs.js" defer></script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="site-header">
+<a class="brand" href="../../"><img src="../../logo.png" alt="" width="74" height="74"> bevy-react</a>
+<span class="version">v0.7.0</span>
+<nav class="site-links" aria-label="Project">
+<a href="../../demo/">Live demo</a>
+<a href="https://github.com/tulustul/bevy-react">GitHub</a>
+<a href="https://docs.rs/bevy-react">docs.rs</a>
+<a href="https://www.npmjs.com/package/bevy-react">npm</a>
+</nav>
+</header>
+<div class="layout">
+<nav class="sidebar" aria-label="Documentation">
+<details class="nav-menu" open>
+<summary>Menu</summary>
+<ul><li><a href="../../">Introduction</a></li><li><a href="../../getting-started/">Getting started</a></li><li><a href="../../how-it-works/">How it works</a></li><li class="nav-section"><span>Elements</span><ul><li><a href="../../elements/node/">&lt;node&gt;</a></li><li><a href="../../elements/button/">&lt;button&gt;</a></li><li><a href="../../elements/text/">&lt;text&gt;</a></li><li><a href="../../elements/editable-text/">&lt;editableText&gt;</a></li><li><a href="../../elements/image/">&lt;image&gt;</a></li><li><a href="../../elements/canvas/">&lt;canvas&gt;</a></li><li><a href="../../elements/svg/">&lt;svg&gt;</a></li><li><a href="../../elements/portal/">&lt;portal&gt;</a></li><li><a href="../../elements/surface/">&lt;surface&gt;</a></li><li><a href="../../elements/root/">&lt;root&gt;</a></li><li><a href="../../elements/anchor/">&lt;anchor&gt;</a></li></ul></li><li class="nav-section"><span>Layout</span><ul><li><a href="../../layout/flexbox/">Flexbox</a></li><li><a href="../../layout/grid/">Grid</a></li><li><a href="../../layout/positioning/">Positioning</a></li></ul></li><li class="nav-section"><span>Styling</span><ul><li><a href="../../styling/units/">Units</a></li><li><a href="../../styling/colors/">Colors</a></li><li><a href="../../styling/borders/">Borders</a></li><li><a href="../../styling/spacing/">Spacing</a></li><li><a href="../../styling/sizing/">Sizing</a></li><li><a href="../../styling/layout-rounding/">Layout rounding</a></li><li><a href="../../styling/overflow/">Overflow</a></li><li><a href="../../styling/transforms/">Transforms</a></li><li><a href="../../styling/3d-transforms/">3D transforms</a></li><li><a href="../../styling/shadows/">Shadows</a></li><li><a href="../../styling/filters/">Filters</a></li><li><a href="../../styling/backdrop-filters/">Backdrop filters</a></li><li><a href="../../styling/morph-filters/">Morph filters</a></li><li><a href="../../styling/gradients/" aria-current="page">Gradients</a></li><li><a href="../../styling/background-images/">Background images</a></li><li><a href="../../styling/image-rendering/">Image rendering</a></li><li><a href="../../styling/opacity/">Opacity</a></li><li><a href="../../styling/z-index/">Z-index</a></li><li><a href="../../styling/focus-policy/">Focus policy</a></li><li><a href="../../styling/cursors/">Cursors</a></li><li><a href="../../styling/layers/">Layers</a></li></ul></li><li class="nav-section"><span>Animations</span><ul><li><a href="../../animations/style-transitions/">Style transitions</a></li><li><a href="../../animations/animated-values/">Animated values</a></li><li><a href="../../animations/interpolation/">Interpolation</a></li><li><a href="../../animations/shared-elements/">Shared elements</a></li></ul></li><li class="nav-section"><span>Communication</span><ul><li><a href="../../communication/react-to-bevy/">React to Bevy</a></li><li><a href="../../communication/bevy-to-react/">Bevy to React</a></li><li><a href="../../communication/request-response/">Request / response</a></li><li><a href="../../communication/named-nodes/">Named nodes</a></li></ul></li><li class="nav-section"><span>Events</span><ul><li><a href="../../events/mouse/">Mouse</a></li><li><a href="../../events/keyboard/">Keyboard</a></li><li><a href="../../events/gamepad/">Gamepad</a></li><li><a href="../../events/window/">Window</a></li></ul></li><li class="nav-section"><span>Extending</span><ul><li><a href="../../extending/custom-elements/">Custom elements</a></li><li><a href="../../extending/custom-styles/">Custom styles</a></li><li><a href="../../extending/custom-filters/">Custom filters</a></li></ul></li><li class="nav-section"><span>Tooling</span><ul><li><a href="../../tooling/devtools/">Devtools</a></li><li><a href="../../tooling/hot-reload/">Hot reload</a></li><li><a href="../../tooling/web/">Web builds</a></li><li><a href="../../tooling/ts-codegen/">TypeScript codegen</a></li></ul></li><li class="nav-section"><span>Reference</span><ul><li><a href="../../reference/style-properties/">Style properties</a></li><li><a href="../../reference/elements/">Elements</a></li><li><a href="../../reference/filters/">Filters</a></li></ul></li><li><a href="../../performance/">Performance</a></li></ul>
+</details>
+</nav>
+<main id="main">
+<article>
+<h1 id="gradients">Gradients</h1>
+<p><code>backgroundGradient</code> paints a linear, radial or conic gradient over a node&#39;s
+background color, and <code>borderGradient</code> paints one into its border. Each takes
+one gradient or an array of gradients layered on top of each other.</p>
+<h2 id="usage"><a class="anchor" href="#usage" aria-hidden="true">#</a>Usage</h2>
+<pre><code class="language-tsx"><span class="token operator">&lt;</span>node
+  style<span class="token operator">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span>
+    width<span class="token operator">:</span> <span class="token number">160</span><span class="token punctuation">,</span>
+    height<span class="token operator">:</span> <span class="token number">90</span><span class="token punctuation">,</span>
+    backgroundGradient<span class="token operator">:</span> <span class="token punctuation">{</span>
+      type<span class="token operator">:</span> <span class="token string">&quot;linear&quot;</span><span class="token punctuation">,</span>
+      angle<span class="token operator">:</span> <span class="token number">90</span><span class="token punctuation">,</span>
+      stops<span class="token operator">:</span> <span class="token punctuation">[</span><span class="token punctuation">{</span> color<span class="token operator">:</span> <span class="token string">&quot;#f7768e&quot;</span> <span class="token punctuation">}</span><span class="token punctuation">,</span> <span class="token punctuation">{</span> color<span class="token operator">:</span> <span class="token string">&quot;#7aa2f7&quot;</span> <span class="token punctuation">}</span><span class="token punctuation">]</span><span class="token punctuation">,</span>
+    <span class="token punctuation">}</span><span class="token punctuation">,</span>
+  <span class="token punctuation">}</span><span class="token punctuation">}</span>
+<span class="token operator">/</span><span class="token operator">&gt;</span></code></pre><h2 id="gradient-kinds"><a class="anchor" href="#gradient-kinds" aria-hidden="true">#</a>Gradient kinds</h2>
+<p>Every gradient has a <code>type</code>, a <code>stops</code> array and an optional <code>colorSpace</code>:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th><code>type</code></th>
+<th>Fields</th>
+<th>Shape</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>&quot;linear&quot;</code></td>
+<td><code>angle</code></td>
+<td>Along a line through the center</td>
+</tr>
+<tr>
+<td><code>&quot;radial&quot;</code></td>
+<td><code>position</code>, <code>shape</code></td>
+<td>Outward from <code>position</code></td>
+</tr>
+<tr>
+<td><code>&quot;conic&quot;</code></td>
+<td><code>start</code>, <code>position</code></td>
+<td>Around <code>position</code>, clockwise</td>
+</tr>
+</tbody></table></div>
+<ul>
+<li><code>angle</code> (linear) and <code>start</code> (conic) are angles: a bare number is degrees,
+or a unit string (<code>&quot;45deg&quot;</code>, <code>&quot;1.5rad&quot;</code>, <code>&quot;0.25turn&quot;</code>, <code>&quot;100grad&quot;</code>). <code>0</code>
+points up and angles grow clockwise, so <code>angle: 90</code> runs left to right.
+Both default to <code>0</code>.</li>
+<li><code>position</code> is a named anchor: <code>&quot;center&quot;</code> (the default), <code>&quot;top&quot;</code>,
+<code>&quot;bottom&quot;</code>, <code>&quot;left&quot;</code>, <code>&quot;right&quot;</code>, <code>&quot;topLeft&quot;</code>, <code>&quot;topRight&quot;</code>,
+<code>&quot;bottomLeft&quot;</code> or <code>&quot;bottomRight&quot;</code>. Offsets in lengths are not supported;
+an unknown name is treated as <code>&quot;center&quot;</code>.</li>
+<li><code>shape</code> sizes a radial gradient; see <a href="#radial-shapes">Radial shapes</a>.</li>
+</ul>
+<h2 id="stops"><a class="anchor" href="#stops" aria-hidden="true">#</a>Stops</h2>
+<pre><code class="language-tsx"><span class="token keyword">const</span> stops <span class="token operator">=</span> <span class="token punctuation">[</span>
+  <span class="token punctuation">{</span> color<span class="token operator">:</span> <span class="token string">&quot;#1a1b26&quot;</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+  <span class="token punctuation">{</span> color<span class="token operator">:</span> <span class="token string">&quot;#7aa2f7&quot;</span><span class="token punctuation">,</span> position<span class="token operator">:</span> <span class="token string">&quot;30%&quot;</span><span class="token punctuation">,</span> hint<span class="token operator">:</span> <span class="token number">0.2</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+  <span class="token punctuation">{</span> color<span class="token operator">:</span> <span class="token string">&quot;#f7768e&quot;</span><span class="token punctuation">,</span> position<span class="token operator">:</span> <span class="token number">120</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+<span class="token punctuation">]</span><span class="token punctuation">;</span></code></pre><ul>
+<li><code>color</code> is required and takes any color string (see <a href="../../styling/colors/">Colors</a>).</li>
+<li><code>position</code> (linear and radial stops) is a length along the gradient line:
+pixels, or a percentage of the line. Stops without one are spaced evenly
+between their neighbors, as in CSS.</li>
+<li>Conic stops take <code>angle</code> instead of <code>position</code>, as an angle.</li>
+<li><code>hint</code> (<code>0</code>–<code>1</code>, default <code>0.5</code>) moves the midpoint of the blend between
+this stop and the next.</li>
+<li>One stop paints a solid color; an empty <code>stops</code> array paints nothing.</li>
+</ul>
+<h2 id="color-spaces"><a class="anchor" href="#color-spaces" aria-hidden="true">#</a>Color spaces</h2>
+<p><code>colorSpace</code> picks the space the stops blend in: <code>&quot;oklab&quot;</code> (the default),
+<code>&quot;oklch&quot;</code>, <code>&quot;srgb&quot;</code>, <code>&quot;linearRgb&quot;</code>, <code>&quot;hsl&quot;</code> or <code>&quot;hsv&quot;</code>. The hue-based
+spaces also come as <code>&quot;oklchLong&quot;</code>, <code>&quot;hslLong&quot;</code> and <code>&quot;hsvLong&quot;</code>, which travel
+the long way around the hue circle. An unknown value falls back to
+<code>&quot;oklab&quot;</code>.</p>
+<h2 id="radial-shapes"><a class="anchor" href="#radial-shapes" aria-hidden="true">#</a>Radial shapes</h2>
+<p><code>shape</code> defaults to the <code>closestCorner</code> keyword. The forms the runtime
+accepts are:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Value</th>
+<th>Shape</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>{ keyword: &quot;closestSide&quot; }</code></td>
+<td>Circle/ellipse reaching the closest side</td>
+</tr>
+<tr>
+<td><code>{ keyword: &quot;farthestSide&quot; }</code></td>
+<td>…the farthest side</td>
+</tr>
+<tr>
+<td><code>{ keyword: &quot;closestCorner&quot; }</code></td>
+<td>…the closest corner</td>
+</tr>
+<tr>
+<td><code>{ keyword: &quot;farthestCorner&quot; }</code></td>
+<td>…the farthest corner</td>
+</tr>
+<tr>
+<td><code>{ circle: { circle: 40 } }</code></td>
+<td>Circle of radius 40</td>
+</tr>
+<tr>
+<td><code>{ ellipse: { ellipse: [60, &quot;50%&quot;] } }</code></td>
+<td>Ellipse with these x/y radii</td>
+</tr>
+</tbody></table></div>
+<p>The <code>shape</code> TypeScript type currently declares other forms (a bare
+<code>&quot;closestSide&quot;</code>, <code>{ circle: 40 }</code>), which the runtime rejects. Write the
+forms above with a cast until the two agree:</p>
+<pre><code class="language-tsx"><span class="token comment">// The `shape` type does not list this form yet.</span>
+<span class="token keyword">const</span> shape <span class="token operator">=</span> <span class="token punctuation">{</span> keyword<span class="token operator">:</span> <span class="token string">&quot;farthestCorner&quot;</span> <span class="token punctuation">}</span> <span class="token keyword">as</span> <span class="token builtin">any</span><span class="token punctuation">;</span>
+
+<span class="token operator">&lt;</span>node
+  style<span class="token operator">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span>
+    backgroundGradient<span class="token operator">:</span> <span class="token punctuation">{</span>
+      type<span class="token operator">:</span> <span class="token string">&quot;radial&quot;</span><span class="token punctuation">,</span>
+      position<span class="token operator">:</span> <span class="token string">&quot;topLeft&quot;</span><span class="token punctuation">,</span>
+      shape<span class="token punctuation">,</span>
+      stops<span class="token operator">:</span> <span class="token punctuation">[</span><span class="token punctuation">{</span> color<span class="token operator">:</span> <span class="token string">&quot;#e0af68&quot;</span> <span class="token punctuation">}</span><span class="token punctuation">,</span> <span class="token punctuation">{</span> color<span class="token operator">:</span> <span class="token string">&quot;#1a1b26&quot;</span> <span class="token punctuation">}</span><span class="token punctuation">]</span><span class="token punctuation">,</span>
+    <span class="token punctuation">}</span><span class="token punctuation">,</span>
+  <span class="token punctuation">}</span><span class="token punctuation">}</span>
+<span class="token operator">/</span><span class="token operator">&gt;</span><span class="token punctuation">;</span></code></pre><p>An unknown keyword is treated as <code>closestCorner</code>.</p>
+<h2 id="fill-and-border"><a class="anchor" href="#fill-and-border" aria-hidden="true">#</a>Fill and border</h2>
+<ul>
+<li><code>backgroundGradient</code> fills the node inside its border, rounded by
+<code>borderRadius</code>, and paints over <code>backgroundColor</code>: transparent stops let
+the color show through.</li>
+<li><code>borderGradient</code> paints only the border band, over <code>borderColor</code>. It needs
+a <code>border</code> width (see <a href="../../styling/borders/">Borders</a>).</li>
+<li>A <code>backgroundImage</code> paints over both gradients.</li>
+<li>An array layers its gradients in order: the first at the back, each later
+one on top. The two styles are independent of each other.</li>
+<li><code>opacity</code> fades every stop on a node without a composited layer (see
+<a href="../../styling/opacity/">Opacity</a>).</li>
+<li>Gradients merge through <code>hoverStyle</code>, <code>pressStyle</code> and <code>focusStyle</code> as a
+whole value: a variant&#39;s gradient replaces the base one.</li>
+</ul>
+<h2 id="transitions"><a class="anchor" href="#transitions" aria-hidden="true">#</a>Transitions</h2>
+<p><code>transition: { backgroundGradient }</code> and <code>transition: { borderGradient }</code>
+ease a gradient change, each on its own:</p>
+<pre><code class="language-tsx"><span class="token operator">&lt;</span>node
+  style<span class="token operator">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span>
+    backgroundGradient<span class="token operator">:</span> <span class="token punctuation">{</span>
+      type<span class="token operator">:</span> <span class="token string">&quot;linear&quot;</span><span class="token punctuation">,</span>
+      angle<span class="token operator">:</span> on <span class="token operator">?</span> <span class="token number">200</span> <span class="token operator">:</span> <span class="token number">20</span><span class="token punctuation">,</span>
+      stops<span class="token operator">:</span> on
+        <span class="token operator">?</span> <span class="token punctuation">[</span><span class="token punctuation">{</span> color<span class="token operator">:</span> <span class="token string">&quot;#9ece6a&quot;</span> <span class="token punctuation">}</span><span class="token punctuation">,</span> <span class="token punctuation">{</span> color<span class="token operator">:</span> <span class="token string">&quot;#e0af68&quot;</span> <span class="token punctuation">}</span><span class="token punctuation">]</span>
+        <span class="token operator">:</span> <span class="token punctuation">[</span><span class="token punctuation">{</span> color<span class="token operator">:</span> <span class="token string">&quot;#f7768e&quot;</span> <span class="token punctuation">}</span><span class="token punctuation">,</span> <span class="token punctuation">{</span> color<span class="token operator">:</span> <span class="token string">&quot;#7aa2f7&quot;</span> <span class="token punctuation">}</span><span class="token punctuation">]</span><span class="token punctuation">,</span>
+    <span class="token punctuation">}</span><span class="token punctuation">,</span>
+    transition<span class="token operator">:</span> <span class="token punctuation">{</span> backgroundGradient<span class="token operator">:</span> <span class="token punctuation">{</span> duration<span class="token operator">:</span> <span class="token number">400</span> <span class="token punctuation">}</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+  <span class="token punctuation">}</span><span class="token punctuation">}</span>
+<span class="token operator">/</span><span class="token operator">&gt;</span></code></pre><ul>
+<li>Only matching structures ease: the same number of gradients, and for each
+one the same <code>type</code>, stop count and <code>colorSpace</code>, the same <code>position</code>
+(radial, conic), and the same <code>shape</code> kind (radial: two keywords must be
+equal; two circles or two ellipses ease their radii).</li>
+<li>Any other change snaps immediately, silently. Setting or unsetting the
+gradient snaps too. To fade a gradient in or out, keep it in the base style
+and ease its stops to and from transparent colors.</li>
+<li>Within a match, stop colors interpolate per channel in sRGB (not in the
+gradient&#39;s own <code>colorSpace</code>), and positions, hints, radii and angles
+interpolate numerically. Angles take the long way: 350 to 10 degrees passes
+through 180.</li>
+<li>A position or radius that changes unit, or a stop that gains or loses its
+<code>position</code>, snaps on its own while the rest eases.</li>
+</ul>
+<h2 id="animated-leaves"><a class="anchor" href="#animated-leaves" aria-hidden="true">#</a>Animated leaves</h2>
+<p>Every numeric and color leaf accepts an inline <code>{ animated }</code> binding, driven
+every frame on the Bevy side:</p>
+<pre><code class="language-tsx"><span class="token keyword">import</span> <span class="token punctuation">{</span> useEffect <span class="token punctuation">}</span> <span class="token keyword">from</span> <span class="token string">&quot;react&quot;</span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token punctuation">{</span> useSharedValue<span class="token punctuation">,</span> withRepeat<span class="token punctuation">,</span> withTiming <span class="token punctuation">}</span> <span class="token keyword">from</span> <span class="token string">&quot;bevy-react&quot;</span><span class="token punctuation">;</span>
+
+<span class="token keyword">function</span> <span class="token function">Spinner</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+  <span class="token keyword">const</span> angle <span class="token operator">=</span> <span class="token function">useSharedValue</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token function">useEffect</span><span class="token punctuation">(</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">=&gt;</span> <span class="token punctuation">{</span>
+    angle<span class="token punctuation">.</span>value <span class="token operator">=</span> <span class="token function">withRepeat</span><span class="token punctuation">(</span><span class="token function">withTiming</span><span class="token punctuation">(</span><span class="token number">360</span><span class="token punctuation">,</span> <span class="token punctuation">{</span> duration<span class="token operator">:</span> <span class="token number">4000</span> <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token punctuation">}</span><span class="token punctuation">,</span> <span class="token punctuation">[</span>angle<span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token keyword">return</span> <span class="token punctuation">(</span>
+    <span class="token operator">&lt;</span>node
+      style<span class="token operator">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span>
+        width<span class="token operator">:</span> <span class="token number">120</span><span class="token punctuation">,</span>
+        height<span class="token operator">:</span> <span class="token number">90</span><span class="token punctuation">,</span>
+        backgroundGradient<span class="token operator">:</span> <span class="token punctuation">{</span>
+          type<span class="token operator">:</span> <span class="token string">&quot;linear&quot;</span><span class="token punctuation">,</span>
+          angle<span class="token operator">:</span> <span class="token punctuation">{</span> animated<span class="token operator">:</span> angle<span class="token punctuation">,</span> seed<span class="token operator">:</span> <span class="token number">0</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+          stops<span class="token operator">:</span> <span class="token punctuation">[</span><span class="token punctuation">{</span> color<span class="token operator">:</span> <span class="token string">&quot;#bb9af7&quot;</span> <span class="token punctuation">}</span><span class="token punctuation">,</span> <span class="token punctuation">{</span> color<span class="token operator">:</span> <span class="token string">&quot;#7dcfff&quot;</span> <span class="token punctuation">}</span><span class="token punctuation">]</span><span class="token punctuation">,</span>
+        <span class="token punctuation">}</span><span class="token punctuation">,</span>
+      <span class="token punctuation">}</span><span class="token punctuation">}</span>
+    <span class="token operator">/</span><span class="token operator">&gt;</span>
+  <span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span></code></pre><ul>
+<li>The leaves are <code>angle</code>, <code>start</code>, stop <code>color</code>, <code>position</code>, <code>hint</code> and
+conic stop <code>angle</code>, and the radii of a <code>circle</code> or <code>ellipse</code> shape.</li>
+<li>Values are in wire units: degrees for angles, pixels for positions and
+radii, <code>0</code>–<code>1</code> for hints. Stop colors take an <code>interpolateColor</code> binding
+(see <a href="../../styling/colors/#animated-colors">Colors</a>); the other leaves take a plain
+shared value or an <code>interpolate</code> mapping.</li>
+<li><code>seed</code> is the value drawn until the binding first drives the leaf.
+Without one, a bound color starts transparent and a bound number at its
+default.</li>
+<li>Bindings work in the base <code>style</code> only; one in a state style is ignored
+with a <code>styleBinding</code> warning.</li>
+<li>Any binding on a surface parks that surface&#39;s transition: a
+<code>transition: { backgroundGradient }</code> next to a <code>backgroundGradient</code> binding
+does nothing and reports a <code>gradientTransition</code> warning. The other surface
+is unaffected.</li>
+</ul>
+<p>See <a href="../../animations/animated-values/">Animated values</a> for shared values and
+drivers.</p>
+<h2 id="limits"><a class="anchor" href="#limits" aria-hidden="true">#</a>Limits</h2>
+<ul>
+<li><code>position</code> takes only the named anchors.</li>
+<li>The radial <code>shape</code> TypeScript type does not match the accepted forms (see
+<a href="#radial-shapes">Radial shapes</a>). A value in one of the declared-but-rejected
+forms makes the whole React commit fail to apply, not just the gradient.</li>
+</ul>
+<p>See <a href="../../reference/style-properties/#backgroundGradient"><code>backgroundGradient</code></a>
+and <a href="../../reference/style-properties/#borderGradient"><code>borderGradient</code></a> in the
+style reference.</p>
+
+</article>
+<footer class="page-links"><a href="../../demo/?page=gradients">Open live demo</a>
+<a href="https://github.com/tulustul/bevy-react/blob/v0.7.0/examples/demos/ui/src/demos/styling/GradientsDemo.tsx">Demo source</a>
+<a href="https://github.com/tulustul/bevy-react/edit/main/docs/guide/styling/gradients.md">Edit this page</a></footer>
+</main>
+</div>
+<footer class="site-footer">
+<p>bevy-react is dual-licensed under MIT or Apache-2.0. <a href="https://github.com/tulustul/bevy-react">Source on GitHub</a>.</p>
+</footer>
+</body>
+</html>

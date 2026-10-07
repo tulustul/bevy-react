@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>&lt;anchor&gt; · bevy-react</title>
+<meta name="description" content="The &lt;anchor&gt; element pins a UI subtree to a 3D entity's projected screen position, with a world-space offset and optional distance scaling.">
+<link rel="canonical" href="https://tulustul.github.io/bevy-react/elements/anchor/">
+<link rel="alternate" type="text/markdown" href="../../elements/anchor.md">
+<meta property="og:title" content="&lt;anchor&gt; · bevy-react">
+<meta property="og:description" content="The &lt;anchor&gt; element pins a UI subtree to a 3D entity's projected screen position, with a world-space offset and optional distance scaling.">
+<link rel="icon" href="../../logo.png">
+<link rel="stylesheet" href="../../style.css">
+<script src="../../docs.js" defer></script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="site-header">
+<a class="brand" href="../../"><img src="../../logo.png" alt="" width="74" height="74"> bevy-react</a>
+<span class="version">v0.7.0</span>
+<nav class="site-links" aria-label="Project">
+<a href="../../demo/">Live demo</a>
+<a href="https://github.com/tulustul/bevy-react">GitHub</a>
+<a href="https://docs.rs/bevy-react">docs.rs</a>
+<a href="https://www.npmjs.com/package/bevy-react">npm</a>
+</nav>
+</header>
+<div class="layout">
+<nav class="sidebar" aria-label="Documentation">
+<details class="nav-menu" open>
+<summary>Menu</summary>
+<ul><li><a href="../../">Introduction</a></li><li><a href="../../getting-started/">Getting started</a></li><li><a href="../../how-it-works/">How it works</a></li><li class="nav-section"><span>Elements</span><ul><li><a href="../../elements/node/">&lt;node&gt;</a></li><li><a href="../../elements/button/">&lt;button&gt;</a></li><li><a href="../../elements/text/">&lt;text&gt;</a></li><li><a href="../../elements/editable-text/">&lt;editableText&gt;</a></li><li><a href="../../elements/image/">&lt;image&gt;</a></li><li><a href="../../elements/canvas/">&lt;canvas&gt;</a></li><li><a href="../../elements/svg/">&lt;svg&gt;</a></li><li><a href="../../elements/portal/">&lt;portal&gt;</a></li><li><a href="../../elements/surface/">&lt;surface&gt;</a></li><li><a href="../../elements/root/">&lt;root&gt;</a></li><li><a href="../../elements/anchor/" aria-current="page">&lt;anchor&gt;</a></li></ul></li><li class="nav-section"><span>Layout</span><ul><li><a href="../../layout/flexbox/">Flexbox</a></li><li><a href="../../layout/grid/">Grid</a></li><li><a href="../../layout/positioning/">Positioning</a></li></ul></li><li class="nav-section"><span>Styling</span><ul><li><a href="../../styling/units/">Units</a></li><li><a href="../../styling/colors/">Colors</a></li><li><a href="../../styling/borders/">Borders</a></li><li><a href="../../styling/spacing/">Spacing</a></li><li><a href="../../styling/sizing/">Sizing</a></li><li><a href="../../styling/layout-rounding/">Layout rounding</a></li><li><a href="../../styling/overflow/">Overflow</a></li><li><a href="../../styling/transforms/">Transforms</a></li><li><a href="../../styling/3d-transforms/">3D transforms</a></li><li><a href="../../styling/shadows/">Shadows</a></li><li><a href="../../styling/filters/">Filters</a></li><li><a href="../../styling/backdrop-filters/">Backdrop filters</a></li><li><a href="../../styling/morph-filters/">Morph filters</a></li><li><a href="../../styling/gradients/">Gradients</a></li><li><a href="../../styling/background-images/">Background images</a></li><li><a href="../../styling/image-rendering/">Image rendering</a></li><li><a href="../../styling/opacity/">Opacity</a></li><li><a href="../../styling/z-index/">Z-index</a></li><li><a href="../../styling/focus-policy/">Focus policy</a></li><li><a href="../../styling/cursors/">Cursors</a></li><li><a href="../../styling/layers/">Layers</a></li></ul></li><li class="nav-section"><span>Animations</span><ul><li><a href="../../animations/style-transitions/">Style transitions</a></li><li><a href="../../animations/animated-values/">Animated values</a></li><li><a href="../../animations/interpolation/">Interpolation</a></li><li><a href="../../animations/shared-elements/">Shared elements</a></li></ul></li><li class="nav-section"><span>Communication</span><ul><li><a href="../../communication/react-to-bevy/">React to Bevy</a></li><li><a href="../../communication/bevy-to-react/">Bevy to React</a></li><li><a href="../../communication/request-response/">Request / response</a></li><li><a href="../../communication/named-nodes/">Named nodes</a></li></ul></li><li class="nav-section"><span>Events</span><ul><li><a href="../../events/mouse/">Mouse</a></li><li><a href="../../events/keyboard/">Keyboard</a></li><li><a href="../../events/gamepad/">Gamepad</a></li><li><a href="../../events/window/">Window</a></li></ul></li><li class="nav-section"><span>Extending</span><ul><li><a href="../../extending/custom-elements/">Custom elements</a></li><li><a href="../../extending/custom-styles/">Custom styles</a></li><li><a href="../../extending/custom-filters/">Custom filters</a></li></ul></li><li class="nav-section"><span>Tooling</span><ul><li><a href="../../tooling/devtools/">Devtools</a></li><li><a href="../../tooling/hot-reload/">Hot reload</a></li><li><a href="../../tooling/web/">Web builds</a></li><li><a href="../../tooling/ts-codegen/">TypeScript codegen</a></li></ul></li><li class="nav-section"><span>Reference</span><ul><li><a href="../../reference/style-properties/">Style properties</a></li><li><a href="../../reference/elements/">Elements</a></li><li><a href="../../reference/filters/">Filters</a></li></ul></li><li><a href="../../performance/">Performance</a></li></ul>
+</details>
+</nav>
+<main id="main">
+<article>
+<h1 id="anchor"><code>&lt;anchor&gt;</code></h1>
+<p><code>&lt;anchor&gt;</code> pins a UI subtree to a 3D entity. Every frame it projects the
+entity&#39;s world position through the UI camera and centers itself on that
+point, so labels, nameplates and health bars follow objects as they and the
+camera move. It stays an ordinary screen-space node: flat, styled like
+<code>&lt;node&gt;</code>, and fully interactive.</p>
+<h2 id="usage"><a class="anchor" href="#usage" aria-hidden="true">#</a>Usage</h2>
+<p>React needs the entity&#39;s id, <code>Entity::to_bits()</code>, from the Bevy side. Here a
+<a href="../../communication/request-response/">request</a> asks for it:</p>
+<div class="tabs"><div class="tab-panel" data-lang="tsx"><p class="tab-label">TSX</p><pre><code class="language-tsx"><span class="token keyword">import</span> <span class="token punctuation">{</span> useEffect<span class="token punctuation">,</span> useState <span class="token punctuation">}</span> <span class="token keyword">from</span> <span class="token string">&quot;react&quot;</span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token punctuation">{</span> bevy <span class="token punctuation">}</span> <span class="token keyword">from</span> <span class="token string">&quot;./bevy&quot;</span><span class="token punctuation">;</span>
+
+<span class="token keyword">function</span> <span class="token function">PlayerLabel</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+  <span class="token keyword">const</span> <span class="token punctuation">[</span>player<span class="token punctuation">,</span> setPlayer<span class="token punctuation">]</span> <span class="token operator">=</span> <span class="token generic-function"><span class="token function">useState</span><span class="token generic class-name"><span class="token operator">&lt;</span>bigint <span class="token operator">|</span> <span class="token keyword">null</span><span class="token operator">&gt;</span></span></span><span class="token punctuation">(</span><span class="token keyword">null</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token function">useEffect</span><span class="token punctuation">(</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">=&gt;</span> <span class="token punctuation">{</span>
+    bevy<span class="token punctuation">.</span>player<span class="token punctuation">.</span><span class="token function">entity</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">then</span><span class="token punctuation">(</span>setPlayer<span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token punctuation">}</span><span class="token punctuation">,</span> <span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token keyword">if</span> <span class="token punctuation">(</span>player <span class="token operator">===</span> <span class="token keyword">null</span><span class="token punctuation">)</span> <span class="token keyword">return</span> <span class="token keyword">null</span><span class="token punctuation">;</span>
+  <span class="token keyword">return</span> <span class="token punctuation">(</span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>anchor</span> <span class="token attr-name">entity</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span>player<span class="token punctuation">}</span></span> <span class="token attr-name">offset</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">,</span> <span class="token number">2</span><span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">]</span><span class="token punctuation">}</span></span><span class="token punctuation">&gt;</span></span><span class="token plain-text">
+      </span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>text</span><span class="token punctuation">&gt;</span></span><span class="token plain-text">Player 1</span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>text</span><span class="token punctuation">&gt;</span></span><span class="token plain-text">
+    </span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>anchor</span><span class="token punctuation">&gt;</span></span>
+  <span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span></code></pre></div><div class="tab-panel" data-lang="rust"><p class="tab-label">Rust</p><pre><code class="language-rust"><span class="token keyword">use</span> <span class="token namespace">bevy<span class="token punctuation">::</span>prelude<span class="token punctuation">::</span></span><span class="token operator">*</span><span class="token punctuation">;</span>
+<span class="token keyword">use</span> <span class="token namespace">bevy_react<span class="token punctuation">::</span>prelude<span class="token punctuation">::</span></span><span class="token operator">*</span><span class="token punctuation">;</span>
+
+<span class="token attribute attr-name">#[derive(Component)]</span>
+<span class="token keyword">struct</span> <span class="token type-definition class-name">Player</span><span class="token punctuation">;</span>
+
+<span class="token attribute attr-name">#[react_request(name = <span class="token string">&quot;player.entity&quot;</span>, response = u64)]</span>
+<span class="token keyword">struct</span> <span class="token type-definition class-name">PlayerEntity</span><span class="token punctuation">;</span>
+
+<span class="token keyword">fn</span> <span class="token function-definition function">player_entity</span><span class="token punctuation">(</span>
+    req<span class="token punctuation">:</span> <span class="token class-name">On</span><span class="token operator">&lt;</span><span class="token class-name">Request</span><span class="token operator">&lt;</span><span class="token class-name">PlayerEntity</span><span class="token operator">&gt;&gt;</span><span class="token punctuation">,</span>
+    player<span class="token punctuation">:</span> <span class="token class-name">Query</span><span class="token operator">&lt;</span><span class="token class-name">Entity</span><span class="token punctuation">,</span> <span class="token class-name">With</span><span class="token operator">&lt;</span><span class="token class-name">Player</span><span class="token operator">&gt;&gt;</span><span class="token punctuation">,</span>
+<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token keyword">match</span> player<span class="token punctuation">.</span><span class="token function">single</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token class-name">Ok</span><span class="token punctuation">(</span>entity<span class="token punctuation">)</span> <span class="token operator">=&gt;</span> req<span class="token punctuation">.</span><span class="token function">respond</span><span class="token punctuation">(</span>entity<span class="token punctuation">.</span><span class="token function">to_bits</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+        <span class="token class-name">Err</span><span class="token punctuation">(</span>_<span class="token punctuation">)</span> <span class="token operator">=&gt;</span> req<span class="token punctuation">.</span><span class="token function">respond_err</span><span class="token punctuation">(</span><span class="token string">&quot;no player&quot;</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+
+<span class="token comment">// app.add_react_request_handler(player_entity);</span></code></pre></div></div>
+<p>An event works as well, for example one listing every spawned unit with its
+<code>entity.to_bits()</code> (see <a href="../../communication/bevy-to-react/">Bevy to React</a>).</p>
+<p><code>&lt;anchor&gt;</code> comes from the <code>anchor</code> cargo feature, which is on by default and
+adds <code>AnchorPlugin</code> to <code>ReactPlugins</code>. Without it, an <code>&lt;anchor&gt;</code> mounts as a
+plain node and reports a <code>featureMissing</code> warning (see
+<a href="../../getting-started/#cargo-features">Cargo features</a>).</p>
+<h2 id="attributes"><a class="anchor" href="#attributes" aria-hidden="true">#</a>Attributes</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Type</th>
+<th>Default</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>entity</code></td>
+<td><code>number</code> or <code>bigint</code></td>
+<td>required</td>
+<td>The entity to follow, as <code>Entity::to_bits()</code></td>
+</tr>
+<tr>
+<td><code>offset</code></td>
+<td><code>[x, y, z]</code></td>
+<td><code>[0, 0, 0]</code></td>
+<td>World-space offset added to the entity&#39;s position</td>
+</tr>
+<tr>
+<td><code>scale</code></td>
+<td><code>AnchorScaling</code></td>
+<td>none</td>
+<td>Scale the overlay with camera distance</td>
+</tr>
+</tbody></table></div>
+<p>All three are plain props: change them from React state and the anchor
+follows the new values.</p>
+<h2 id="positioning"><a class="anchor" href="#positioning" aria-hidden="true">#</a>Positioning</h2>
+<ul>
+<li>The anchor point is the entity&#39;s <code>GlobalTransform</code> translation plus
+<code>offset</code>, in world units. Use <code>offset</code> to lift a label above a model&#39;s
+origin.</li>
+<li>The point is projected through the camera marked <code>IsDefaultUiCamera</code>, or,
+if none is marked, the first camera found. Mark your main camera when the
+app has several, including <a href="../../elements/portal/"><code>&lt;portal&gt;</code></a> cameras and
+<a href="../../elements/surface/"><code>&lt;surface&gt;</code></a> cameras.</li>
+<li>The overlay is centered on the point using its own laid-out size, and is
+positioned after animations and transitions run, so it tracks the entity in
+the same frame. Moving it never re-runs layout.</li>
+<li>The overlay is hidden while the entity doesn&#39;t exist (not spawned yet,
+despawned, or an invalid <code>entity</code> value) and while the point is behind the
+camera or beyond its far plane. A point off to the side of the screen keeps
+the overlay positioned off-screen. A new anchor is also hidden until its
+first layout, so it never flashes at the wrong place.</li>
+</ul>
+<h2 id="distance-scaling"><a class="anchor" href="#distance-scaling" aria-hidden="true">#</a>Distance scaling</h2>
+<p><code>scale</code> takes <code>{ min, max, factor, baseDistance }</code> and scales the overlay
+around its center by
+<code>clamp(1 + factor * (baseDistance / distance - 1), min, max)</code>, where
+<code>distance</code> is from the camera to the anchor point, in world units. The
+overlay is at scale 1 when the camera is <code>baseDistance</code> away, grows as the
+camera comes closer and shrinks as it moves away. A <code>factor</code> of <code>0</code> disables
+scaling, <code>1</code> is true perspective (half the size at twice the distance), and
+<code>2</code> scales twice as fast. Without <code>scale</code>, the overlay keeps its size.</p>
+<pre><code class="language-tsx"><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>anchor</span>
+  <span class="token attr-name">entity</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span>player<span class="token punctuation">}</span></span>
+  <span class="token attr-name">offset</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">,</span> <span class="token number">2</span><span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">]</span><span class="token punctuation">}</span></span>
+  <span class="token attr-name">scale</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span> min<span class="token operator">:</span> <span class="token number">0.4</span><span class="token punctuation">,</span> max<span class="token operator">:</span> <span class="token number">2</span><span class="token punctuation">,</span> factor<span class="token operator">:</span> <span class="token number">1</span><span class="token punctuation">,</span> baseDistance<span class="token operator">:</span> <span class="token number">20</span> <span class="token punctuation">}</span><span class="token punctuation">}</span></span>
+<span class="token punctuation">&gt;</span></span><span class="token plain-text">
+  </span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>text</span><span class="token punctuation">&gt;</span></span><span class="token plain-text">Player 1</span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>text</span><span class="token punctuation">&gt;</span></span><span class="token plain-text">
+</span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>anchor</span><span class="token punctuation">&gt;</span></span></code></pre><p>A non-finite field disables scaling with a log warning; a <code>min</code> greater than
+<code>max</code> is swapped.</p>
+<h2 id="layout-and-styling"><a class="anchor" href="#layout-and-styling" aria-hidden="true">#</a>Layout and styling</h2>
+<ul>
+<li><code>&lt;anchor&gt;</code> takes everything <code>&lt;node&gt;</code> does: <code>style</code>, <code>hoverStyle</code>,
+<code>pressStyle</code>, <code>focusStyle</code>, pointer handlers, <code>onWheel</code> and the scroll
+props. Its children lay out inside it as usual, and it sizes to its
+content.</li>
+<li>It doesn&#39;t take part in its React parent&#39;s layout: it takes no space
+there, isn&#39;t clipped by the parent&#39;s <code>overflow</code> and doesn&#39;t extend its
+scroll range. Write it anywhere in the tree; unmounting the parent removes
+it.</li>
+<li>Anchors live in their own UI root at the window&#39;s top-left, drawn beneath
+the app&#39;s other UI roots. Give an <code>&lt;anchor&gt;</code> a <code>globalZIndex</code> to draw it
+above them (see <a href="../../styling/z-index/">Z-index</a>).</li>
+<li>The anchor owns its position: <code>positionType</code>, <code>left</code> and <code>top</code> are
+overridden, and so are <code>translateX</code>, <code>translateY</code>, <code>scale</code>, <code>scaleX</code> and
+<code>scaleY</code> in its <code>transform</code> style, static, transitioned or animated.
+<code>rotate</code> works. Put other transforms on a child.</li>
+<li>Clicks and hover work as on any node.</li>
+</ul>
+<h2 id="limits"><a class="anchor" href="#limits" aria-hidden="true">#</a>Limits</h2>
+<ul>
+<li>No occlusion: an overlay stays visible when its entity is hidden behind
+other geometry.</li>
+<li>Only the position is followed. The overlay doesn&#39;t rotate or skew with the
+entity.</li>
+<li>Overlays follow one camera and appear only on the main screen, not in
+portals or surfaces.</li>
+<li><code>entity</code> crosses as a JS number, exact below 2^53, which covers realistic
+Bevy entity ids.</li>
+</ul>
+<p><img src="../../screenshots/anchored-nodes.png" alt="Dozens of colored cubes in a 3D scene, each with a numbered React badge anchored above it that tracks its cube as the camera moves." loading="lazy"></p>
+<p>See <a href="../../reference/elements/#anchor"><code>&lt;anchor&gt;</code></a> in the element reference.</p>
+
+</article>
+<footer class="page-links"><a href="../../demo/?page=anchor">Open live demo</a>
+<a href="https://github.com/tulustul/bevy-react/blob/v0.7.0/examples/demos/ui/src/demos/AnchorDemo.tsx">Demo source</a>
+<a href="https://github.com/tulustul/bevy-react/edit/main/docs/guide/elements/anchor.md">Edit this page</a></footer>
+</main>
+</div>
+<footer class="site-footer">
+<p>bevy-react is dual-licensed under MIT or Apache-2.0. <a href="https://github.com/tulustul/bevy-react">Source on GitHub</a>.</p>
+</footer>
+</body>
+</html>

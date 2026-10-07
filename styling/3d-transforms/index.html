@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>3D transforms · bevy-react</title>
+<meta name="description" content="Tilt, flip and project a node's rendered subtree in 3D with the transform3d style, with perspective, a pivot, transitions and picking.">
+<link rel="canonical" href="https://tulustul.github.io/bevy-react/styling/3d-transforms/">
+<link rel="alternate" type="text/markdown" href="../../styling/3d-transforms.md">
+<meta property="og:title" content="3D transforms · bevy-react">
+<meta property="og:description" content="Tilt, flip and project a node's rendered subtree in 3D with the transform3d style, with perspective, a pivot, transitions and picking.">
+<link rel="icon" href="../../logo.png">
+<link rel="stylesheet" href="../../style.css">
+<script src="../../docs.js" defer></script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="site-header">
+<a class="brand" href="../../"><img src="../../logo.png" alt="" width="74" height="74"> bevy-react</a>
+<span class="version">v0.7.0</span>
+<nav class="site-links" aria-label="Project">
+<a href="../../demo/">Live demo</a>
+<a href="https://github.com/tulustul/bevy-react">GitHub</a>
+<a href="https://docs.rs/bevy-react">docs.rs</a>
+<a href="https://www.npmjs.com/package/bevy-react">npm</a>
+</nav>
+</header>
+<div class="layout">
+<nav class="sidebar" aria-label="Documentation">
+<details class="nav-menu" open>
+<summary>Menu</summary>
+<ul><li><a href="../../">Introduction</a></li><li><a href="../../getting-started/">Getting started</a></li><li><a href="../../how-it-works/">How it works</a></li><li class="nav-section"><span>Elements</span><ul><li><a href="../../elements/node/">&lt;node&gt;</a></li><li><a href="../../elements/button/">&lt;button&gt;</a></li><li><a href="../../elements/text/">&lt;text&gt;</a></li><li><a href="../../elements/editable-text/">&lt;editableText&gt;</a></li><li><a href="../../elements/image/">&lt;image&gt;</a></li><li><a href="../../elements/canvas/">&lt;canvas&gt;</a></li><li><a href="../../elements/svg/">&lt;svg&gt;</a></li><li><a href="../../elements/portal/">&lt;portal&gt;</a></li><li><a href="../../elements/surface/">&lt;surface&gt;</a></li><li><a href="../../elements/root/">&lt;root&gt;</a></li><li><a href="../../elements/anchor/">&lt;anchor&gt;</a></li></ul></li><li class="nav-section"><span>Layout</span><ul><li><a href="../../layout/flexbox/">Flexbox</a></li><li><a href="../../layout/grid/">Grid</a></li><li><a href="../../layout/positioning/">Positioning</a></li></ul></li><li class="nav-section"><span>Styling</span><ul><li><a href="../../styling/units/">Units</a></li><li><a href="../../styling/colors/">Colors</a></li><li><a href="../../styling/borders/">Borders</a></li><li><a href="../../styling/spacing/">Spacing</a></li><li><a href="../../styling/sizing/">Sizing</a></li><li><a href="../../styling/layout-rounding/">Layout rounding</a></li><li><a href="../../styling/overflow/">Overflow</a></li><li><a href="../../styling/transforms/">Transforms</a></li><li><a href="../../styling/3d-transforms/" aria-current="page">3D transforms</a></li><li><a href="../../styling/shadows/">Shadows</a></li><li><a href="../../styling/filters/">Filters</a></li><li><a href="../../styling/backdrop-filters/">Backdrop filters</a></li><li><a href="../../styling/morph-filters/">Morph filters</a></li><li><a href="../../styling/gradients/">Gradients</a></li><li><a href="../../styling/background-images/">Background images</a></li><li><a href="../../styling/image-rendering/">Image rendering</a></li><li><a href="../../styling/opacity/">Opacity</a></li><li><a href="../../styling/z-index/">Z-index</a></li><li><a href="../../styling/focus-policy/">Focus policy</a></li><li><a href="../../styling/cursors/">Cursors</a></li><li><a href="../../styling/layers/">Layers</a></li></ul></li><li class="nav-section"><span>Animations</span><ul><li><a href="../../animations/style-transitions/">Style transitions</a></li><li><a href="../../animations/animated-values/">Animated values</a></li><li><a href="../../animations/interpolation/">Interpolation</a></li><li><a href="../../animations/shared-elements/">Shared elements</a></li></ul></li><li class="nav-section"><span>Communication</span><ul><li><a href="../../communication/react-to-bevy/">React to Bevy</a></li><li><a href="../../communication/bevy-to-react/">Bevy to React</a></li><li><a href="../../communication/request-response/">Request / response</a></li><li><a href="../../communication/named-nodes/">Named nodes</a></li></ul></li><li class="nav-section"><span>Events</span><ul><li><a href="../../events/mouse/">Mouse</a></li><li><a href="../../events/keyboard/">Keyboard</a></li><li><a href="../../events/gamepad/">Gamepad</a></li><li><a href="../../events/window/">Window</a></li></ul></li><li class="nav-section"><span>Extending</span><ul><li><a href="../../extending/custom-elements/">Custom elements</a></li><li><a href="../../extending/custom-styles/">Custom styles</a></li><li><a href="../../extending/custom-filters/">Custom filters</a></li></ul></li><li class="nav-section"><span>Tooling</span><ul><li><a href="../../tooling/devtools/">Devtools</a></li><li><a href="../../tooling/hot-reload/">Hot reload</a></li><li><a href="../../tooling/web/">Web builds</a></li><li><a href="../../tooling/ts-codegen/">TypeScript codegen</a></li></ul></li><li class="nav-section"><span>Reference</span><ul><li><a href="../../reference/style-properties/">Style properties</a></li><li><a href="../../reference/elements/">Elements</a></li><li><a href="../../reference/filters/">Filters</a></li></ul></li><li><a href="../../performance/">Performance</a></li></ul>
+</details>
+</nav>
+<main id="main">
+<article>
+<h1 id="3d-transforms">3D transforms</h1>
+<p>The <code>transform3d</code> style applies a 3D transform with optional perspective to
+a node&#39;s rendered result: the node and its subtree are drawn as one flat
+image, which is then rotated, moved and projected like a card in 3D space.
+It is the bevy-react counterpart of CSS 3D transforms on a flattened group.
+Layout is untouched, pointer input follows the transformed image, and
+animating it never re-renders the content.</p>
+<h2 id="usage"><a class="anchor" href="#usage" aria-hidden="true">#</a>Usage</h2>
+<pre><code class="language-tsx"><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>node</span>
+  <span class="token attr-name">style</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span>
+    transform3d<span class="token operator">:</span> <span class="token punctuation">{</span> perspective<span class="token operator">:</span> <span class="token number">600</span><span class="token punctuation">,</span> rotateX<span class="token operator">:</span> <span class="token number">14</span><span class="token punctuation">,</span> rotateY<span class="token operator">:</span> <span class="token number">40</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+  <span class="token punctuation">}</span><span class="token punctuation">}</span></span>
+<span class="token punctuation">&gt;</span></span><span class="token plain-text">
+  </span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>text</span><span class="token punctuation">&gt;</span></span><span class="token plain-text">Tilted card</span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>text</span><span class="token punctuation">&gt;</span></span><span class="token plain-text">
+</span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>node</span><span class="token punctuation">&gt;</span></span></code></pre><h2 id="fields"><a class="anchor" href="#fields" aria-hidden="true">#</a>Fields</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>perspective</code></td>
+<td>number (px)</td>
+<td>none (orthographic)</td>
+</tr>
+<tr>
+<td><code>translateX</code>, <code>translateY</code></td>
+<td>number (px)</td>
+<td><code>0</code></td>
+</tr>
+<tr>
+<td><code>translateZ</code></td>
+<td>number (px)</td>
+<td><code>0</code></td>
+</tr>
+<tr>
+<td><code>rotateX</code>, <code>rotateY</code>, <code>rotateZ</code></td>
+<td>number (degrees) or a unit string</td>
+<td><code>0</code></td>
+</tr>
+<tr>
+<td><code>scale</code></td>
+<td>number</td>
+<td><code>1</code></td>
+</tr>
+<tr>
+<td><code>scaleX</code>, <code>scaleY</code></td>
+<td>number</td>
+<td><code>scale</code></td>
+</tr>
+<tr>
+<td><code>origin</code></td>
+<td><code>{ x, y }</code></td>
+<td><code>{ x: &quot;50%&quot;, y: &quot;50%&quot; }</code></td>
+</tr>
+</tbody></table></div>
+<ul>
+<li>Every field is optional; an omitted field stays at its identity value.</li>
+<li>Translations and <code>perspective</code> are logical pixels. Rotations are angles: a
+bare number is degrees, and <code>&quot;1.5rad&quot;</code> or <code>&quot;0.25turn&quot;</code> also work.</li>
+<li><code>perspective</code> is the distance from the viewer to the node&#39;s plane, like
+CSS <code>perspective()</code> on the element itself. Small values exaggerate depth,
+large values approach the orthographic look. Without it, rotations
+foreshorten but parallel edges stay parallel.</li>
+<li><code>translateZ</code> moves the image toward the viewer (positive) or away from
+it, and is only visible with <code>perspective</code>.</li>
+<li><code>scaleX</code> and <code>scaleY</code> override <code>scale</code> for their axis.</li>
+<li><code>origin</code> is the pivot for scale and rotation and the vanishing point of
+the perspective. Each axis is a number (pixels from the node&#39;s top-left
+corner) or a percentage string of the node&#39;s border box. Both <code>x</code> and <code>y</code>
+are required. Another unit falls back to the center with a <code>length</code>
+warning.</li>
+</ul>
+<h2 id="order-of-operations"><a class="anchor" href="#order-of-operations" aria-hidden="true">#</a>Order of operations</h2>
+<p>The order is fixed, whatever order the fields are written in: scale, then
+<code>rotateX</code>, <code>rotateY</code>, <code>rotateZ</code>, then the translation, then the
+perspective projection, all around <code>origin</code>. To compose transforms in
+another order, nest nodes, each with its own <code>transform3d</code>.</p>
+<h2 id="how-it-renders"><a class="anchor" href="#how-it-renders" aria-hidden="true">#</a>How it renders</h2>
+<ul>
+<li>The style&#39;s presence promotes the node to a
+<a href="../../styling/layers/">composited layer</a>, even as an empty <code>{}</code>. The subtree is
+rendered once into a texture at its normal, untransformed size, and the
+texture is drawn transformed. Changing or animating the transform reuses
+that texture.</li>
+<li>The result is flat. It draws at the node&#39;s usual stacking position and
+never intersects other UI in depth. A <code>transform3d</code> inside another one is
+flattened into its parent&#39;s image, as with CSS <code>transform-style: flat</code>.</li>
+<li>The back face is visible, mirrored. There is no <code>backface-visibility</code>.</li>
+<li>Edges are antialiased. A tilted or shrunk image is sampled from
+mipmaps, so fine text and lines do not shimmer. An image scaled up (with
+<code>scale</code> above 1 or <code>translateZ</code> toward the viewer) looks soft, because the
+content is captured at its untransformed resolution.</li>
+<li>Siblings, the parent and scroll ranges do not move: like <code>transform</code>, a
+3D transform never triggers a relayout.</li>
+<li>Other layer styles on the same node apply to the captured image before
+it is transformed: a <code>filter</code> tilts with the content, and <code>opacity</code> fades
+the whole card. A <a href="../../styling/backdrop-filters/"><code>backdropFilter</code></a> is the
+exception: it stays in the node&#39;s untransformed box.</li>
+</ul>
+<h2 id="pointer-input"><a class="anchor" href="#pointer-input" aria-hidden="true">#</a>Pointer input</h2>
+<p>Hit testing follows the transformed image, not the layout box: hover and
+press styles, the cursor, clicks and pointer events all land where the node
+is drawn. The <code>x</code>/<code>y</code> of a pointer event are in the node&#39;s own,
+untransformed coordinates, so a point on the tilted card reports the same
+position it would report flat. Back faces are clickable too.</p>
+<p>Avoid hover styles that move the node out from under the cursor: hover ends,
+the node moves back, hover starts again, and it oscillates (as in CSS).</p>
+<h2 id="transitions"><a class="anchor" href="#transitions" aria-hidden="true">#</a>Transitions</h2>
+<p><code>transition: { transform3d }</code> eases the fields one by one:</p>
+<pre><code class="language-tsx"><span class="token operator">&lt;</span>node
+  style<span class="token operator">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span>
+    transform3d<span class="token operator">:</span> <span class="token punctuation">{</span> perspective<span class="token operator">:</span> <span class="token number">800</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+    transition<span class="token operator">:</span> <span class="token punctuation">{</span> transform3d<span class="token operator">:</span> <span class="token punctuation">{</span> duration<span class="token operator">:</span> <span class="token number">300</span><span class="token punctuation">,</span> easing<span class="token operator">:</span> <span class="token string">&quot;easeOut&quot;</span> <span class="token punctuation">}</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+  <span class="token punctuation">}</span><span class="token punctuation">}</span>
+  hoverStyle<span class="token operator">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span> transform3d<span class="token operator">:</span> <span class="token punctuation">{</span> perspective<span class="token operator">:</span> <span class="token number">800</span><span class="token punctuation">,</span> rotateY<span class="token operator">:</span> <span class="token number">12</span> <span class="token punctuation">}</span> <span class="token punctuation">}</span><span class="token punctuation">}</span>
+<span class="token operator">/</span><span class="token operator">&gt;</span></code></pre><ul>
+<li>A field present on one side only eases from or to its identity value.</li>
+<li><code>perspective</code> snaps when either side has none: there is no numeric
+value for &quot;orthographic&quot;. Keep the same <code>perspective</code> in every state.</li>
+<li><code>origin</code> eases between values of the same unit and snaps otherwise.</li>
+<li>A <code>transform3d</code> in <code>hoverStyle</code>, <code>pressStyle</code> or <code>focusStyle</code> replaces
+the base one as a whole; repeat the fields you want to keep.</li>
+<li>Removing <code>transform3d</code> altogether snaps and drops the layer. Keep an
+identity <code>{}</code> in the base style when the node should ease back.</li>
+</ul>
+<p>The transform is applied when the image is drawn, so an eased frame costs
+one textured quad, however large the subtree.</p>
+<h2 id="animated-fields"><a class="anchor" href="#animated-fields" aria-hidden="true">#</a>Animated fields</h2>
+<p>Every field, including <code>origin.x</code> and <code>origin.y</code>, accepts an inline
+<code>{ animated }</code> binding to a shared value:</p>
+<pre><code class="language-tsx"><span class="token keyword">import</span> <span class="token punctuation">{</span> useEffect <span class="token punctuation">}</span> <span class="token keyword">from</span> <span class="token string">&quot;react&quot;</span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token punctuation">{</span> useSharedValue<span class="token punctuation">,</span> withRepeat<span class="token punctuation">,</span> withTiming <span class="token punctuation">}</span> <span class="token keyword">from</span> <span class="token string">&quot;bevy-react&quot;</span><span class="token punctuation">;</span>
+
+<span class="token keyword">function</span> <span class="token function">FlipCard</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+  <span class="token keyword">const</span> flip <span class="token operator">=</span> <span class="token function">useSharedValue</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token function">useEffect</span><span class="token punctuation">(</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">=&gt;</span> <span class="token punctuation">{</span>
+    flip<span class="token punctuation">.</span>value <span class="token operator">=</span> <span class="token function">withRepeat</span><span class="token punctuation">(</span><span class="token function">withTiming</span><span class="token punctuation">(</span><span class="token number">180</span><span class="token punctuation">,</span> <span class="token punctuation">{</span> duration<span class="token operator">:</span> <span class="token number">600</span> <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">,</span> <span class="token punctuation">{</span>
+      reverse<span class="token operator">:</span> <span class="token boolean">true</span><span class="token punctuation">,</span>
+    <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token punctuation">}</span><span class="token punctuation">,</span> <span class="token punctuation">[</span>flip<span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token keyword">return</span> <span class="token punctuation">(</span>
+    <span class="token operator">&lt;</span>node
+      style<span class="token operator">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span>
+        transform3d<span class="token operator">:</span> <span class="token punctuation">{</span> perspective<span class="token operator">:</span> <span class="token number">700</span><span class="token punctuation">,</span> rotateY<span class="token operator">:</span> <span class="token punctuation">{</span> animated<span class="token operator">:</span> flip <span class="token punctuation">}</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+      <span class="token punctuation">}</span><span class="token punctuation">}</span>
+    <span class="token operator">/</span><span class="token operator">&gt;</span>
+  <span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span></code></pre><ul>
+<li>Bound rotations are degrees; bound translations, <code>perspective</code> and
+origin axes are pixels.</li>
+<li>Fields left static keep their values next to bound ones.</li>
+<li>Any binding parks <code>transition: { transform3d }</code> on that node.</li>
+<li>Bindings work in the base <code>style</code> only.</li>
+</ul>
+<h2 id="limits"><a class="anchor" href="#limits" aria-hidden="true">#</a>Limits</h2>
+<ul>
+<li>Hit testing follows the transformed image for the mouse only. Touch input
+still hits the node&#39;s untransformed layout box.</li>
+<li>UI that the transformed image covers still receives pointer events where
+it is covered; the image does not block them.</li>
+<li>With a <code>transform3d</code> inside another one, pointer input is mapped through
+the nearest transformed ancestor only.</li>
+<li>No depth sorting, <code>transform-style: preserve-3d</code> or
+<code>backface-visibility</code>.</li>
+<li>Content scaled up past its layout size looks soft.</li>
+<li>The layer limits apply: content painted outside the node&#39;s border box is
+cut off, and inside a <code>&lt;surface&gt;</code> the node renders untransformed. See
+<a href="../../styling/layers/">Layers</a>.</li>
+</ul>
+<p><img src="../../screenshots/transform3d.webp" alt="A gallery of 3D-transformed banners: a card tilted with perspective, the same tilt orthographic, a door swinging on its hinge, a card flipping to its mirrored back and a spinning card." loading="lazy"></p>
+<p>See <a href="../../reference/style-properties/#transform3d"><code>transform3d</code></a> in the
+style reference.</p>
+
+</article>
+<footer class="page-links"><a href="../../demo/?page=3d-transforms">Open live demo</a>
+<a href="https://github.com/tulustul/bevy-react/blob/v0.7.0/examples/demos/ui/src/demos/styling/Transform3dDemo.tsx">Demo source</a>
+<a href="https://github.com/tulustul/bevy-react/edit/main/docs/guide/styling/3d-transforms.md">Edit this page</a></footer>
+</main>
+</div>
+<footer class="site-footer">
+<p>bevy-react is dual-licensed under MIT or Apache-2.0. <a href="https://github.com/tulustul/bevy-react">Source on GitHub</a>.</p>
+</footer>
+</body>
+</html>

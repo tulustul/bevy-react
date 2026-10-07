@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Focus policy · bevy-react</title>
+<meta name="description" content="Decide whether a node stops pointer hover, clicks and 3D-scene picking from reaching what lies beneath it, with focusPolicy block or pass.">
+<link rel="canonical" href="https://tulustul.github.io/bevy-react/styling/focus-policy/">
+<link rel="alternate" type="text/markdown" href="../../styling/focus-policy.md">
+<meta property="og:title" content="Focus policy · bevy-react">
+<meta property="og:description" content="Decide whether a node stops pointer hover, clicks and 3D-scene picking from reaching what lies beneath it, with focusPolicy block or pass.">
+<link rel="icon" href="../../logo.png">
+<link rel="stylesheet" href="../../style.css">
+<script src="../../docs.js" defer></script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="site-header">
+<a class="brand" href="../../"><img src="../../logo.png" alt="" width="74" height="74"> bevy-react</a>
+<span class="version">v0.7.0</span>
+<nav class="site-links" aria-label="Project">
+<a href="../../demo/">Live demo</a>
+<a href="https://github.com/tulustul/bevy-react">GitHub</a>
+<a href="https://docs.rs/bevy-react">docs.rs</a>
+<a href="https://www.npmjs.com/package/bevy-react">npm</a>
+</nav>
+</header>
+<div class="layout">
+<nav class="sidebar" aria-label="Documentation">
+<details class="nav-menu" open>
+<summary>Menu</summary>
+<ul><li><a href="../../">Introduction</a></li><li><a href="../../getting-started/">Getting started</a></li><li><a href="../../how-it-works/">How it works</a></li><li class="nav-section"><span>Elements</span><ul><li><a href="../../elements/node/">&lt;node&gt;</a></li><li><a href="../../elements/button/">&lt;button&gt;</a></li><li><a href="../../elements/text/">&lt;text&gt;</a></li><li><a href="../../elements/editable-text/">&lt;editableText&gt;</a></li><li><a href="../../elements/image/">&lt;image&gt;</a></li><li><a href="../../elements/canvas/">&lt;canvas&gt;</a></li><li><a href="../../elements/svg/">&lt;svg&gt;</a></li><li><a href="../../elements/portal/">&lt;portal&gt;</a></li><li><a href="../../elements/surface/">&lt;surface&gt;</a></li><li><a href="../../elements/root/">&lt;root&gt;</a></li><li><a href="../../elements/anchor/">&lt;anchor&gt;</a></li></ul></li><li class="nav-section"><span>Layout</span><ul><li><a href="../../layout/flexbox/">Flexbox</a></li><li><a href="../../layout/grid/">Grid</a></li><li><a href="../../layout/positioning/">Positioning</a></li></ul></li><li class="nav-section"><span>Styling</span><ul><li><a href="../../styling/units/">Units</a></li><li><a href="../../styling/colors/">Colors</a></li><li><a href="../../styling/borders/">Borders</a></li><li><a href="../../styling/spacing/">Spacing</a></li><li><a href="../../styling/sizing/">Sizing</a></li><li><a href="../../styling/layout-rounding/">Layout rounding</a></li><li><a href="../../styling/overflow/">Overflow</a></li><li><a href="../../styling/transforms/">Transforms</a></li><li><a href="../../styling/3d-transforms/">3D transforms</a></li><li><a href="../../styling/shadows/">Shadows</a></li><li><a href="../../styling/filters/">Filters</a></li><li><a href="../../styling/backdrop-filters/">Backdrop filters</a></li><li><a href="../../styling/morph-filters/">Morph filters</a></li><li><a href="../../styling/gradients/">Gradients</a></li><li><a href="../../styling/background-images/">Background images</a></li><li><a href="../../styling/image-rendering/">Image rendering</a></li><li><a href="../../styling/opacity/">Opacity</a></li><li><a href="../../styling/z-index/">Z-index</a></li><li><a href="../../styling/focus-policy/" aria-current="page">Focus policy</a></li><li><a href="../../styling/cursors/">Cursors</a></li><li><a href="../../styling/layers/">Layers</a></li></ul></li><li class="nav-section"><span>Animations</span><ul><li><a href="../../animations/style-transitions/">Style transitions</a></li><li><a href="../../animations/animated-values/">Animated values</a></li><li><a href="../../animations/interpolation/">Interpolation</a></li><li><a href="../../animations/shared-elements/">Shared elements</a></li></ul></li><li class="nav-section"><span>Communication</span><ul><li><a href="../../communication/react-to-bevy/">React to Bevy</a></li><li><a href="../../communication/bevy-to-react/">Bevy to React</a></li><li><a href="../../communication/request-response/">Request / response</a></li><li><a href="../../communication/named-nodes/">Named nodes</a></li></ul></li><li class="nav-section"><span>Events</span><ul><li><a href="../../events/mouse/">Mouse</a></li><li><a href="../../events/keyboard/">Keyboard</a></li><li><a href="../../events/gamepad/">Gamepad</a></li><li><a href="../../events/window/">Window</a></li></ul></li><li class="nav-section"><span>Extending</span><ul><li><a href="../../extending/custom-elements/">Custom elements</a></li><li><a href="../../extending/custom-styles/">Custom styles</a></li><li><a href="../../extending/custom-filters/">Custom filters</a></li></ul></li><li class="nav-section"><span>Tooling</span><ul><li><a href="../../tooling/devtools/">Devtools</a></li><li><a href="../../tooling/hot-reload/">Hot reload</a></li><li><a href="../../tooling/web/">Web builds</a></li><li><a href="../../tooling/ts-codegen/">TypeScript codegen</a></li></ul></li><li class="nav-section"><span>Reference</span><ul><li><a href="../../reference/style-properties/">Style properties</a></li><li><a href="../../reference/elements/">Elements</a></li><li><a href="../../reference/filters/">Filters</a></li></ul></li><li><a href="../../performance/">Performance</a></li></ul>
+</details>
+</nav>
+<main id="main">
+<article>
+<h1 id="focus-policy">Focus policy</h1>
+<p>The <code>focusPolicy</code> style decides whether a node stops the pointer from
+reaching what lies beneath it: other UI nodes, and the 3D scene behind the
+UI. <code>&quot;block&quot;</code> stops it; <code>&quot;pass&quot;</code> lets it through. Despite the name (it comes
+from Bevy), it has nothing to do with keyboard focus.</p>
+<h2 id="usage"><a class="anchor" href="#usage" aria-hidden="true">#</a>Usage</h2>
+<p>A modal backdrop that keeps hover, clicks and scene picking away from
+everything behind it:</p>
+<pre><code class="language-tsx"><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>node</span>
+  <span class="token attr-name">style</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span>
+    positionType<span class="token operator">:</span> <span class="token string">&quot;absolute&quot;</span><span class="token punctuation">,</span>
+    width<span class="token operator">:</span> <span class="token string">&quot;100%&quot;</span><span class="token punctuation">,</span>
+    height<span class="token operator">:</span> <span class="token string">&quot;100%&quot;</span><span class="token punctuation">,</span>
+    backgroundColor<span class="token operator">:</span> <span class="token string">&quot;rgba(0, 0, 0, 0.5)&quot;</span><span class="token punctuation">,</span>
+    focusPolicy<span class="token operator">:</span> <span class="token string">&quot;block&quot;</span><span class="token punctuation">,</span>
+  <span class="token punctuation">}</span><span class="token punctuation">}</span></span>
+<span class="token punctuation">&gt;</span></span><span class="token plain-text">
+  </span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span><span class="token class-name">Dialog</span></span> <span class="token punctuation">/&gt;</span></span><span class="token plain-text">
+</span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>node</span><span class="token punctuation">&gt;</span></span></code></pre><h2 id="values"><a class="anchor" href="#values" aria-hidden="true">#</a>Values</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Value</th>
+<th>Effect</th>
+<th>Default for</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>&quot;pass&quot;</code></td>
+<td>Nodes and the scene beneath still see the pointer</td>
+<td>Every element but <code>&lt;button&gt;</code></td>
+</tr>
+<tr>
+<td><code>&quot;block&quot;</code></td>
+<td>Nothing beneath the node sees the pointer</td>
+<td><code>&lt;button&gt;</code></td>
+</tr>
+</tbody></table></div>
+<p>An explicit value overrides the element&#39;s default, on a <code>&lt;button&gt;</code> too. An
+unknown value reports a <code>focusPolicy</code> warning and acts as <code>&quot;pass&quot;</code>.</p>
+<h2 id="what-blocking-stops"><a class="anchor" href="#what-blocking-stops" aria-hidden="true">#</a>What blocking stops</h2>
+<p>Under the pointer, nodes are visited from the topmost down (see
+<a href="../../styling/z-index/">Z-index</a>) until the first blocking node, which is included.
+Everything beneath it is out of reach:</p>
+<ul>
+<li><strong>Hover and press.</strong> Only the visited nodes are hovered or pressed, which
+drives <code>hoverStyle</code>, <code>pressStyle</code>, <code>onPointerEnter</code> and <code>onPointerLeave</code>.
+That includes the blocking node&#39;s own ancestors, which are beneath it: a
+<code>&lt;button&gt;</code> inside a hover-styled card un-hovers the card while the pointer
+is on the button. Give the button <code>focusPolicy: &quot;pass&quot;</code> if the card should
+stay hovered; the button still gets its own clicks.</li>
+<li><strong>Clicks.</strong> One click fires one handler, chosen from the topmost visited
+node that has a click handler on itself or an ancestor (see
+<a href="../../events/mouse/">Mouse events</a>). A click on a blocking overlay without
+a handler can only reach a handler on the overlay&#39;s ancestors, never the
+nodes beneath it.</li>
+<li><strong>3D scene picking.</strong> Bevy picking on meshes and sprites behind the UI
+(for example with <code>MeshPickingPlugin</code>) only sees the pointer through
+passing nodes. A blocking node hides the scene behind it.</li>
+</ul>
+<p>With <code>&quot;pass&quot;</code> everywhere, every node under the pointer is hovered, and a
+click goes to the topmost handler among them.</p>
+<h2 id="input-your-own-systems-read"><a class="anchor" href="#input-your-own-systems-read" aria-hidden="true">#</a>Input your own systems read</h2>
+<p><code>focusPolicy</code> affects picking and hover only. Systems that read the mouse
+directly, such as a camera controller, should check the <code>PointerCapture</code>
+resource instead, which reports when the UI owns the pointer. It reports
+the pointer as over the UI while it hovers an interactive node (one with a
+click or pointer handler, a <code>hoverStyle</code> or <code>pressStyle</code>, or a <code>&lt;button&gt;</code>),
+whatever that node&#39;s focus policy. A plain panel with no handlers doesn&#39;t
+capture the pointer, even with <code>&quot;block&quot;</code>. See
+<a href="../../events/mouse/">Mouse events</a>.</p>
+<h2 id="behavior"><a class="anchor" href="#behavior" aria-hidden="true">#</a>Behavior</h2>
+<ul>
+<li>Transparency doesn&#39;t matter: a node at <code>opacity: 0</code> or with no background
+still blocks or passes by its policy. <code>display: &quot;none&quot;</code> removes it from
+hit testing.</li>
+<li>A <a href="../../elements/root/"><code>&lt;root&gt;</code></a> never takes part in hit testing itself;
+its children do, by their own policies.</li>
+<li>In a <a href="../../elements/surface/"><code>&lt;surface&gt;</code></a>, the policy applies the same
+way to the in-world pointer.</li>
+</ul>
+<p>See <a href="../../reference/style-properties/#focusPolicy"><code>focusPolicy</code></a> in the
+style reference.</p>
+
+</article>
+<footer class="page-links"><a href="../../demo/?page=focus-policy">Open live demo</a>
+<a href="https://github.com/tulustul/bevy-react/blob/v0.7.0/examples/demos/ui/src/demos/styling/FocusPolicyDemo.tsx">Demo source</a>
+<a href="https://github.com/tulustul/bevy-react/edit/main/docs/guide/styling/focus-policy.md">Edit this page</a></footer>
+</main>
+</div>
+<footer class="site-footer">
+<p>bevy-react is dual-licensed under MIT or Apache-2.0. <a href="https://github.com/tulustul/bevy-react">Source on GitHub</a>.</p>
+</footer>
+</body>
+</html>

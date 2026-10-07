@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TypeScript codegen · bevy-react</title>
+<meta name="description" content="The generated bevy.ts mirrors your Rust bindings in TypeScript, with typed emit, request and on, the bevy proxy, and typings for filters, styles and elements.">
+<link rel="canonical" href="https://tulustul.github.io/bevy-react/tooling/ts-codegen/">
+<link rel="alternate" type="text/markdown" href="../../tooling/ts-codegen.md">
+<meta property="og:title" content="TypeScript codegen · bevy-react">
+<meta property="og:description" content="The generated bevy.ts mirrors your Rust bindings in TypeScript, with typed emit, request and on, the bevy proxy, and typings for filters, styles and elements.">
+<link rel="icon" href="../../logo.png">
+<link rel="stylesheet" href="../../style.css">
+<script src="../../docs.js" defer></script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="site-header">
+<a class="brand" href="../../"><img src="../../logo.png" alt="" width="74" height="74"> bevy-react</a>
+<span class="version">v0.7.0</span>
+<nav class="site-links" aria-label="Project">
+<a href="../../demo/">Live demo</a>
+<a href="https://github.com/tulustul/bevy-react">GitHub</a>
+<a href="https://docs.rs/bevy-react">docs.rs</a>
+<a href="https://www.npmjs.com/package/bevy-react">npm</a>
+</nav>
+</header>
+<div class="layout">
+<nav class="sidebar" aria-label="Documentation">
+<details class="nav-menu" open>
+<summary>Menu</summary>
+<ul><li><a href="../../">Introduction</a></li><li><a href="../../getting-started/">Getting started</a></li><li><a href="../../how-it-works/">How it works</a></li><li class="nav-section"><span>Elements</span><ul><li><a href="../../elements/node/">&lt;node&gt;</a></li><li><a href="../../elements/button/">&lt;button&gt;</a></li><li><a href="../../elements/text/">&lt;text&gt;</a></li><li><a href="../../elements/editable-text/">&lt;editableText&gt;</a></li><li><a href="../../elements/image/">&lt;image&gt;</a></li><li><a href="../../elements/canvas/">&lt;canvas&gt;</a></li><li><a href="../../elements/svg/">&lt;svg&gt;</a></li><li><a href="../../elements/portal/">&lt;portal&gt;</a></li><li><a href="../../elements/surface/">&lt;surface&gt;</a></li><li><a href="../../elements/root/">&lt;root&gt;</a></li><li><a href="../../elements/anchor/">&lt;anchor&gt;</a></li></ul></li><li class="nav-section"><span>Layout</span><ul><li><a href="../../layout/flexbox/">Flexbox</a></li><li><a href="../../layout/grid/">Grid</a></li><li><a href="../../layout/positioning/">Positioning</a></li></ul></li><li class="nav-section"><span>Styling</span><ul><li><a href="../../styling/units/">Units</a></li><li><a href="../../styling/colors/">Colors</a></li><li><a href="../../styling/borders/">Borders</a></li><li><a href="../../styling/spacing/">Spacing</a></li><li><a href="../../styling/sizing/">Sizing</a></li><li><a href="../../styling/layout-rounding/">Layout rounding</a></li><li><a href="../../styling/overflow/">Overflow</a></li><li><a href="../../styling/transforms/">Transforms</a></li><li><a href="../../styling/3d-transforms/">3D transforms</a></li><li><a href="../../styling/shadows/">Shadows</a></li><li><a href="../../styling/filters/">Filters</a></li><li><a href="../../styling/backdrop-filters/">Backdrop filters</a></li><li><a href="../../styling/morph-filters/">Morph filters</a></li><li><a href="../../styling/gradients/">Gradients</a></li><li><a href="../../styling/background-images/">Background images</a></li><li><a href="../../styling/image-rendering/">Image rendering</a></li><li><a href="../../styling/opacity/">Opacity</a></li><li><a href="../../styling/z-index/">Z-index</a></li><li><a href="../../styling/focus-policy/">Focus policy</a></li><li><a href="../../styling/cursors/">Cursors</a></li><li><a href="../../styling/layers/">Layers</a></li></ul></li><li class="nav-section"><span>Animations</span><ul><li><a href="../../animations/style-transitions/">Style transitions</a></li><li><a href="../../animations/animated-values/">Animated values</a></li><li><a href="../../animations/interpolation/">Interpolation</a></li><li><a href="../../animations/shared-elements/">Shared elements</a></li></ul></li><li class="nav-section"><span>Communication</span><ul><li><a href="../../communication/react-to-bevy/">React to Bevy</a></li><li><a href="../../communication/bevy-to-react/">Bevy to React</a></li><li><a href="../../communication/request-response/">Request / response</a></li><li><a href="../../communication/named-nodes/">Named nodes</a></li></ul></li><li class="nav-section"><span>Events</span><ul><li><a href="../../events/mouse/">Mouse</a></li><li><a href="../../events/keyboard/">Keyboard</a></li><li><a href="../../events/gamepad/">Gamepad</a></li><li><a href="../../events/window/">Window</a></li></ul></li><li class="nav-section"><span>Extending</span><ul><li><a href="../../extending/custom-elements/">Custom elements</a></li><li><a href="../../extending/custom-styles/">Custom styles</a></li><li><a href="../../extending/custom-filters/">Custom filters</a></li></ul></li><li class="nav-section"><span>Tooling</span><ul><li><a href="../../tooling/devtools/">Devtools</a></li><li><a href="../../tooling/hot-reload/">Hot reload</a></li><li><a href="../../tooling/web/">Web builds</a></li><li><a href="../../tooling/ts-codegen/" aria-current="page">TypeScript codegen</a></li></ul></li><li class="nav-section"><span>Reference</span><ul><li><a href="../../reference/style-properties/">Style properties</a></li><li><a href="../../reference/elements/">Elements</a></li><li><a href="../../reference/filters/">Filters</a></li></ul></li><li><a href="../../performance/">Performance</a></li></ul>
+</details>
+</nav>
+<main id="main">
+<article>
+<h1 id="typescript-codegen">TypeScript codegen</h1>
+<p><code>App::export_react_typescript(path)</code> writes one self-contained TypeScript
+module, conventionally <code>src/bevy.ts</code>, from everything registered on an <code>App</code>:
+your <code>#[react_message]</code>, <code>#[react_request]</code> and <code>#[react_event]</code> types, your
+filters, style properties and elements, plus bevy-react&#39;s built-ins. The Rust
+types are the single source of truth; the file is regenerated, never edited.
+<a href="../../getting-started/#generate-the-typed-client">Getting started</a> sets up the
+<code>--export-bindings</code> flag. This page covers what the file contains and how to
+keep it in sync.</p>
+<h2 id="usage"><a class="anchor" href="#usage" aria-hidden="true">#</a>Usage</h2>
+<p>Declare the bindings in Rust, then call them through the generated <code>bevy</code>
+object:</p>
+<div class="tabs"><div class="tab-panel" data-lang="tsx"><p class="tab-label">TSX</p><pre><code class="language-tsx"><span class="token keyword">import</span> <span class="token punctuation">{</span> useEffect<span class="token punctuation">,</span> useState <span class="token punctuation">}</span> <span class="token keyword">from</span> <span class="token string">&quot;react&quot;</span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token punctuation">{</span> bevy <span class="token punctuation">}</span> <span class="token keyword">from</span> <span class="token string">&quot;./bevy&quot;</span><span class="token punctuation">;</span>
+
+<span class="token keyword">export</span> <span class="token keyword">function</span> <span class="token function">Hud</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+  <span class="token keyword">const</span> <span class="token punctuation">[</span>points<span class="token punctuation">,</span> setPoints<span class="token punctuation">]</span> <span class="token operator">=</span> <span class="token function">useState</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token function">useEffect</span><span class="token punctuation">(</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">=&gt;</span> bevy<span class="token punctuation">.</span><span class="token function">on</span><span class="token punctuation">(</span><span class="token string">&quot;game.over&quot;</span><span class="token punctuation">,</span> <span class="token punctuation">(</span>e<span class="token punctuation">)</span> <span class="token operator">=&gt;</span> <span class="token function">setPoints</span><span class="token punctuation">(</span>e<span class="token punctuation">.</span>points<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">,</span> <span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token keyword">return</span> <span class="token punctuation">(</span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>button</span>
+      <span class="token attr-name">onClick</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token keyword">async</span> <span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">=&gt;</span> <span class="token punctuation">{</span>
+        bevy<span class="token punctuation">.</span>game<span class="token punctuation">.</span><span class="token function">setSpeed</span><span class="token punctuation">(</span><span class="token number">2</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token function">setPoints</span><span class="token punctuation">(</span><span class="token punctuation">(</span><span class="token keyword">await</span> bevy<span class="token punctuation">.</span>game<span class="token punctuation">.</span><span class="token function">score</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">.</span>points<span class="token punctuation">)</span><span class="token punctuation">;</span>
+      <span class="token punctuation">}</span><span class="token punctuation">}</span></span>
+    <span class="token punctuation">&gt;</span></span><span class="token plain-text">
+      </span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>text</span><span class="token punctuation">&gt;</span></span><span class="token punctuation">{</span><span class="token template-string"><span class="token template-punctuation string">`</span><span class="token interpolation"><span class="token interpolation-punctuation punctuation">${</span>points<span class="token interpolation-punctuation punctuation">}</span></span><span class="token string"> points</span><span class="token template-punctuation string">`</span></span><span class="token punctuation">}</span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>text</span><span class="token punctuation">&gt;</span></span><span class="token plain-text">
+    </span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>button</span><span class="token punctuation">&gt;</span></span>
+  <span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span></code></pre></div><div class="tab-panel" data-lang="rust"><p class="tab-label">Rust</p><pre><code class="language-rust"><span class="token keyword">use</span> <span class="token namespace">bevy<span class="token punctuation">::</span>prelude<span class="token punctuation">::</span></span><span class="token operator">*</span><span class="token punctuation">;</span>
+<span class="token keyword">use</span> <span class="token namespace">bevy_react<span class="token punctuation">::</span>prelude<span class="token punctuation">::</span></span><span class="token operator">*</span><span class="token punctuation">;</span>
+
+<span class="token attribute attr-name">#[react_message(name = <span class="token string">&quot;game.setSpeed&quot;</span>)]</span>
+<span class="token keyword">struct</span> <span class="token type-definition class-name">SetSpeed</span><span class="token punctuation">(</span><span class="token keyword">f32</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token attribute attr-name">#[react_request(name = <span class="token string">&quot;game.score&quot;</span>, response = Score)]</span>
+<span class="token keyword">struct</span> <span class="token type-definition class-name">GetScore</span><span class="token punctuation">;</span>
+
+<span class="token attribute attr-name">#[derive(serde::Serialize, ts_rs::TS)]</span>
+<span class="token keyword">struct</span> <span class="token type-definition class-name">Score</span> <span class="token punctuation">{</span>
+    points<span class="token punctuation">:</span> <span class="token keyword">u32</span><span class="token punctuation">,</span>
+<span class="token punctuation">}</span>
+
+<span class="token attribute attr-name">#[react_event(name = <span class="token string">&quot;game.over&quot;</span>)]</span>
+<span class="token keyword">struct</span> <span class="token type-definition class-name">GameOver</span> <span class="token punctuation">{</span>
+    points<span class="token punctuation">:</span> <span class="token keyword">u32</span><span class="token punctuation">,</span>
+<span class="token punctuation">}</span>
+
+<span class="token keyword">pub</span> <span class="token keyword">fn</span> <span class="token function-definition function">register_bindings</span><span class="token punctuation">(</span>app<span class="token punctuation">:</span> <span class="token operator">&amp;</span><span class="token keyword">mut</span> <span class="token class-name">App</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    app<span class="token punctuation">.</span><span class="token function">add_react_handler</span><span class="token punctuation">(</span><span class="token closure-params"><span class="token closure-punctuation punctuation">|</span>on<span class="token punctuation">:</span> <span class="token class-name">On</span><span class="token operator">&lt;</span><span class="token class-name">SetSpeed</span><span class="token operator">&gt;</span><span class="token closure-punctuation punctuation">|</span></span> <span class="token macro property">info!</span><span class="token punctuation">(</span><span class="token string">&quot;speed {}&quot;</span><span class="token punctuation">,</span> on<span class="token punctuation">.</span><span class="token function">event</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">)</span>
+        <span class="token punctuation">.</span><span class="token function">add_react_request_handler</span><span class="token punctuation">(</span><span class="token closure-params"><span class="token closure-punctuation punctuation">|</span>req<span class="token punctuation">:</span> <span class="token class-name">On</span><span class="token operator">&lt;</span><span class="token class-name">Request</span><span class="token operator">&lt;</span><span class="token class-name">GetScore</span><span class="token operator">&gt;&gt;</span><span class="token closure-punctuation punctuation">|</span></span> <span class="token punctuation">{</span>
+            req<span class="token punctuation">.</span><span class="token function">respond</span><span class="token punctuation">(</span><span class="token class-name">Score</span> <span class="token punctuation">{</span> points<span class="token punctuation">:</span> <span class="token number">42</span> <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span><span class="token punctuation">)</span>
+        <span class="token punctuation">.</span><span class="token function">add_react_event</span><span class="token punctuation">::</span><span class="token operator">&lt;</span><span class="token class-name">GameOver</span><span class="token operator">&gt;</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span></code></pre></div></div>
+<p>Regenerate after any change to these types:</p>
+<pre><code class="language-sh"><span class="token function">cargo</span> run -- --export-bindings ui/src/bevy.ts</code></pre><p>The <code>#[react_*]</code> macros derive serde and ts-rs for the type they annotate.
+Types you define yourself, like a response or a nested field type, derive
+<code>serde::Serialize</code> or <code>Deserialize</code> and <code>ts_rs::TS</code> directly, so your crate
+needs <code>serde</code> and <code>ts-rs</code> as dependencies for them.</p>
+<h2 id="what-bevyts-contains"><a class="anchor" href="#what-bevyts-contains" aria-hidden="true">#</a>What <code>bevy.ts</code> contains</h2>
+<ul>
+<li><strong>Type declarations.</strong> One <code>export type</code> per message, request, response,
+event and filter-params type, and every named type they reference,
+each declared once. Rust doc comments on fields become JSDoc.</li>
+<li><strong>Name maps.</strong> <code>ReactMessages</code> (name to payload), <code>ReactRequests</code> (name to
+<code>{ request; response }</code>) and <code>ReactEvents</code> (name to payload).</li>
+<li><strong>Typed functions.</strong> <code>emit(name, value)</code>, <code>request(name, value)</code>,
+<code>on(name, cb)</code> and <code>removeEventListener(name, cb)</code>, checked against the
+maps. <code>on</code> returns an unsubscribe function, so it can be returned from a
+<code>useEffect</code> as is.</li>
+<li><strong>The <code>bevy</code> object.</strong> A method per message and request (see below).</li>
+<li><strong>Augmentations of the <code>bevy-react</code> package</strong> in
+<code>declare module &quot;bevy-react&quot;</code> blocks:<ul>
+<li><code>BevyFilters</code>: every regular filter and its params type, built-ins
+included. It types the <code>filter</code> and <code>backdropFilter</code> styles (see
+<a href="../../styling/filters/">Filters</a>).</li>
+<li><code>BevyMorphFilters</code>: every morph filter, for the <code>morphFilter</code> style (see
+<a href="../../styling/morph-filters/">Morph filters</a>).</li>
+<li><code>BevyStyle</code>: your own style properties (see
+<a href="../../extending/custom-styles/">Custom styles</a>). The core properties are
+typed by the package itself.</li>
+<li><code>BevyIntrinsicElements</code>: the JSX props of every non-core element,
+feature elements like <code>&lt;svg&gt;</code> or <code>&lt;portal&gt;</code> and your own (see
+<a href="../../extending/custom-elements/">Custom elements</a>).</li>
+</ul>
+</li>
+</ul>
+<p>The built-in bindings are always included, even though the exporter&#39;s <code>App</code>
+never adds <code>ReactUiPlugin</code>: the <code>keyDown</code>, <code>keyUp</code> and <code>resize</code> events, the
+gamepad events, messages and <code>gamepad.getAll</code> request, the <code>window.size</code>
+request, and every built-in filter. See <a href="../../events/keyboard/">Keyboard</a>,
+<a href="../../events/gamepad/">Gamepad</a> and <a href="../../events/window/">Window</a>. An app
+binding that reuses a built-in name is left out of the file. A custom filter
+with a built-in&#39;s name replaces the built-in, at runtime and in the file.</p>
+<p>Until the file is generated, the filter styles accept no value and the
+feature elements don&#39;t type-check. The augmentations only apply while
+<code>bevy.ts</code> is part of the TypeScript program: keep it inside the <code>include</code> of
+your <code>tsconfig.json</code> (the scaffolded <code>src/</code> is).</p>
+<h2 id="the-bevy-object"><a class="anchor" href="#the-bevy-object" aria-hidden="true">#</a>The <code>bevy</code> object</h2>
+<p>Every message and every request becomes a method. Dots in a binding&#39;s name
+nest it: <code>&quot;game.score&quot;</code> becomes <code>bevy.game.score()</code>, and a name without dots
+becomes a top-level method. Messages and requests can share a namespace.</p>
+<ul>
+<li>A message method takes the payload and returns <code>void</code>.</li>
+<li>A request method returns a <code>Promise</code> of the response. It takes the payload,
+or no argument when the request type is a unit struct (<code>struct GetScore;</code>).</li>
+<li>Events are not methods: subscribe with <code>bevy.on(name, cb)</code>.</li>
+<li><code>bevy.emit</code>, <code>bevy.request</code>, <code>bevy.on</code>, <code>bevy.addEventListener</code> (the same
+function as <code>on</code>) and <code>bevy.removeEventListener</code> are the typed functions
+above, for when the name is a variable.</li>
+</ul>
+<p>A binding&#39;s name defaults to its struct name with the first letter lowercased
+(<code>SetSpeed</code> becomes <code>&quot;setSpeed&quot;</code>); <code>name = &quot;...&quot;</code> in the attribute overrides
+it. The export panics with a message naming the binding when the names can&#39;t
+form one object:</p>
+<ul>
+<li>a top-level name equal to <code>emit</code>, <code>request</code>, <code>on</code>, <code>addEventListener</code> or
+<code>removeEventListener</code>,</li>
+<li>a name used both as a method and as a namespace (<code>&quot;game&quot;</code> and
+<code>&quot;game.score&quot;</code>),</li>
+<li>a message and a request with the same name.</li>
+</ul>
+<p>Rename the binding, for example by giving it a namespace.</p>
+<h2 id="one-registration-site"><a class="anchor" href="#one-registration-site" aria-hidden="true">#</a>One registration site</h2>
+<p>The exporter builds a bare <code>App</code>: no <code>DefaultPlugins</code>, no window, no JS
+runtime. It only sees what you register on it, so put every registration in
+one <code>register_bindings(app)</code> function that both your plugin and the exporter
+call:</p>
+<pre><code class="language-rust"><span class="token keyword">pub</span> <span class="token keyword">struct</span> <span class="token type-definition class-name">GamePlugin</span><span class="token punctuation">;</span>
+
+<span class="token keyword">impl</span> <span class="token class-name">Plugin</span> <span class="token keyword">for</span> <span class="token class-name">GamePlugin</span> <span class="token punctuation">{</span>
+    <span class="token keyword">fn</span> <span class="token function-definition function">build</span><span class="token punctuation">(</span><span class="token operator">&amp;</span><span class="token keyword">self</span><span class="token punctuation">,</span> app<span class="token punctuation">:</span> <span class="token operator">&amp;</span><span class="token keyword">mut</span> <span class="token class-name">App</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token function">register_bindings</span><span class="token punctuation">(</span>app<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token comment">// systems, resources…</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+
+<span class="token comment">// In `main`, on `--export-bindings &lt;path&gt;`:</span>
+<span class="token keyword">let</span> <span class="token keyword">mut</span> app <span class="token operator">=</span> <span class="token class-name">App</span><span class="token punctuation">::</span><span class="token function">new</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token class-name">ReactPlugins</span><span class="token punctuation">::</span><span class="token function">register_bindings</span><span class="token punctuation">(</span><span class="token operator">&amp;</span><span class="token keyword">mut</span> app<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token function">register_bindings</span><span class="token punctuation">(</span><span class="token operator">&amp;</span><span class="token keyword">mut</span> app<span class="token punctuation">)</span><span class="token punctuation">;</span>
+app<span class="token punctuation">.</span><span class="token function">export_react_typescript</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>path<span class="token punctuation">)</span><span class="token operator">?</span><span class="token punctuation">;</span></code></pre><p>The two sides drift silently when they differ. A binding registered only in
+the running app is missing from the types; one registered only in the
+exporter is typed but has no handler at runtime. The same goes for
+<code>add_react_filter</code>, <code>add_react_morph_filter</code>, <code>add_react_element</code> and
+<code>add_react_style</code>: keep those calls in the shared function too.</p>
+<p><code>ReactPlugins::register_bindings(app)</code> registers the elements of every
+compiled-in feature plugin (<code>&lt;svg&gt;</code> and its shapes, <code>&lt;anchor&gt;</code>, <code>&lt;canvas&gt;</code>,
+<code>&lt;portal&gt;</code>, <code>&lt;surface&gt;</code>) and nothing else. It follows your cargo features, so
+the generated JSX types match the build. A plugin left out with
+<code>.disable::&lt;P&gt;()</code> is still typed.</p>
+<p>The <code>--export-bindings</code> flag is a convention. <code>export_react_typescript</code> works
+from any entry point with an <code>App</code>, such as a test or a build task, and
+creates missing parent directories. The demos app shares a
+<code>register_bindings</code> per scene between each plugin and its exporter in
+<a href="https://github.com/tulustul/bevy-react/blob/main/examples/demos/main.rs"><code>examples/demos/main.rs</code></a>.</p>
+<h2 id="keeping-it-in-sync"><a class="anchor" href="#keeping-it-in-sync" aria-hidden="true">#</a>Keeping it in sync</h2>
+<p>Regenerate <code>bevy.ts</code> after you change any <code>#[react_*]</code> type, add or remove a
+registration, or change your cargo features. The output is deterministic
+(sorted by name), so commit it and let CI check that it is current:</p>
+<pre><code class="language-sh"><span class="token function">cargo</span> run -- --export-bindings ui/src/bevy.ts
+<span class="token function">git</span> <span class="token function">diff</span> --exit-code -- ui/src/bevy.ts</code></pre><p>Exclude <code>bevy.ts</code> from your formatter (<code>**/bevy.ts</code> in <code>.prettierignore</code>), or
+reformatting breaks that check.</p>
+<p>Import the typed surface from <code>./bevy</code> (<code>import { bevy, emit } from &quot;./bevy&quot;</code>),
+not the untyped <code>emit</code>, <code>request</code> and <code>addEventListener</code> from <code>&quot;bevy-react&quot;</code>.
+Calls through <code>./bevy</code> are checked against the same structs Bevy serializes.
+The scaffolded placeholder <code>bevy.ts</code> re-exports the untyped functions until
+the first generation.</p>
+<h2 id="type-mapping"><a class="anchor" href="#type-mapping" aria-hidden="true">#</a>Type mapping</h2>
+<p>Types are rendered by <a href="https://crates.io/crates/ts-rs">ts-rs</a>. The mappings
+to watch:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Rust</th>
+<th>TypeScript</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>u8</code>–<code>u32</code>, <code>i8</code>–<code>i32</code>, <code>f32</code>, <code>f64</code></td>
+<td><code>number</code></td>
+</tr>
+<tr>
+<td><code>usize</code>, <code>isize</code></td>
+<td><code>number</code>, exact only up to 2^53</td>
+</tr>
+<tr>
+<td><code>u64</code>, <code>i64</code>, <code>u128</code>, <code>i128</code></td>
+<td><code>bigint</code></td>
+</tr>
+<tr>
+<td><code>Option&lt;T&gt;</code></td>
+<td><code>T | null</code></td>
+</tr>
+<tr>
+<td><code>Vec&lt;T&gt;</code></td>
+<td><code>Array&lt;T&gt;</code></td>
+</tr>
+<tr>
+<td>newtype struct (<code>struct SetSpeed(f32)</code>)</td>
+<td>an alias of the inner type (<code>= number</code>)</td>
+</tr>
+<tr>
+<td>unit struct (<code>struct GetScore;</code>)</td>
+<td><code>null</code></td>
+</tr>
+<tr>
+<td>enum</td>
+<td>a union in serde&#39;s representation</td>
+</tr>
+</tbody></table></div>
+<ul>
+<li><strong>64-bit integers are typed <code>bigint</code> but arrive as <code>number</code>.</strong> Payloads
+cross as JSON numbers, so a <code>u64</code> from Bevy is a plain <code>number</code> at runtime
+while it fits in 2^53. Prefer <code>u32</code> or <code>f64</code> for numbers React computes
+with.</li>
+<li><strong>Field names cross unchanged.</strong> <code>points_total</code> stays <code>points_total</code>. To
+get camelCase in both the JSON and the type, set the rename for serde and
+ts-rs alike, as the built-in payloads do:</li>
+</ul>
+<pre><code class="language-rust"><span class="token attribute attr-name">#[react_event(name = <span class="token string">&quot;game.over&quot;</span>)]</span>
+<span class="token attribute attr-name">#[serde(rename_all = <span class="token string">&quot;camelCase&quot;</span>)]</span>
+<span class="token attribute attr-name">#[ts(rename_all = <span class="token string">&quot;camelCase&quot;</span>)]</span>
+<span class="token keyword">struct</span> <span class="token type-definition class-name">GameOver</span> <span class="token punctuation">{</span>
+    points_total<span class="token punctuation">:</span> <span class="token keyword">u32</span><span class="token punctuation">,</span> <span class="token comment">// `pointsTotal` in JSON and in bevy.ts</span>
+<span class="token punctuation">}</span></code></pre><p>The generated filter entries are listed with their params in the
+<a href="../../reference/filters/">filter reference</a>.</p>
+
+</article>
+<footer class="page-links"><a href="https://github.com/tulustul/bevy-react/edit/main/docs/guide/tooling/ts-codegen.md">Edit this page</a></footer>
+</main>
+</div>
+<footer class="site-footer">
+<p>bevy-react is dual-licensed under MIT or Apache-2.0. <a href="https://github.com/tulustul/bevy-react">Source on GitHub</a>.</p>
+</footer>
+</body>
+</html>

@@ -1,0 +1,366 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Getting started · bevy-react</title>
+<meta name="description" content="Add the bevy-react crate, scaffold the React UI with npx bevy-react init, and load the built bundle with ReactPlugins.">
+<link rel="canonical" href="https://tulustul.github.io/bevy-react/getting-started/">
+<link rel="alternate" type="text/markdown" href="../getting-started.md">
+<meta property="og:title" content="Getting started · bevy-react">
+<meta property="og:description" content="Add the bevy-react crate, scaffold the React UI with npx bevy-react init, and load the built bundle with ReactPlugins.">
+<link rel="icon" href="../logo.png">
+<link rel="stylesheet" href="../style.css">
+<script src="../docs.js" defer></script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="site-header">
+<a class="brand" href="../"><img src="../logo.png" alt="" width="74" height="74"> bevy-react</a>
+<span class="version">v0.7.0</span>
+<nav class="site-links" aria-label="Project">
+<a href="../demo/">Live demo</a>
+<a href="https://github.com/tulustul/bevy-react">GitHub</a>
+<a href="https://docs.rs/bevy-react">docs.rs</a>
+<a href="https://www.npmjs.com/package/bevy-react">npm</a>
+</nav>
+</header>
+<div class="layout">
+<nav class="sidebar" aria-label="Documentation">
+<details class="nav-menu" open>
+<summary>Menu</summary>
+<ul><li><a href="../">Introduction</a></li><li><a href="../getting-started/" aria-current="page">Getting started</a></li><li><a href="../how-it-works/">How it works</a></li><li class="nav-section"><span>Elements</span><ul><li><a href="../elements/node/">&lt;node&gt;</a></li><li><a href="../elements/button/">&lt;button&gt;</a></li><li><a href="../elements/text/">&lt;text&gt;</a></li><li><a href="../elements/editable-text/">&lt;editableText&gt;</a></li><li><a href="../elements/image/">&lt;image&gt;</a></li><li><a href="../elements/canvas/">&lt;canvas&gt;</a></li><li><a href="../elements/svg/">&lt;svg&gt;</a></li><li><a href="../elements/portal/">&lt;portal&gt;</a></li><li><a href="../elements/surface/">&lt;surface&gt;</a></li><li><a href="../elements/root/">&lt;root&gt;</a></li><li><a href="../elements/anchor/">&lt;anchor&gt;</a></li></ul></li><li class="nav-section"><span>Layout</span><ul><li><a href="../layout/flexbox/">Flexbox</a></li><li><a href="../layout/grid/">Grid</a></li><li><a href="../layout/positioning/">Positioning</a></li></ul></li><li class="nav-section"><span>Styling</span><ul><li><a href="../styling/units/">Units</a></li><li><a href="../styling/colors/">Colors</a></li><li><a href="../styling/borders/">Borders</a></li><li><a href="../styling/spacing/">Spacing</a></li><li><a href="../styling/sizing/">Sizing</a></li><li><a href="../styling/layout-rounding/">Layout rounding</a></li><li><a href="../styling/overflow/">Overflow</a></li><li><a href="../styling/transforms/">Transforms</a></li><li><a href="../styling/3d-transforms/">3D transforms</a></li><li><a href="../styling/shadows/">Shadows</a></li><li><a href="../styling/filters/">Filters</a></li><li><a href="../styling/backdrop-filters/">Backdrop filters</a></li><li><a href="../styling/morph-filters/">Morph filters</a></li><li><a href="../styling/gradients/">Gradients</a></li><li><a href="../styling/background-images/">Background images</a></li><li><a href="../styling/image-rendering/">Image rendering</a></li><li><a href="../styling/opacity/">Opacity</a></li><li><a href="../styling/z-index/">Z-index</a></li><li><a href="../styling/focus-policy/">Focus policy</a></li><li><a href="../styling/cursors/">Cursors</a></li><li><a href="../styling/layers/">Layers</a></li></ul></li><li class="nav-section"><span>Animations</span><ul><li><a href="../animations/style-transitions/">Style transitions</a></li><li><a href="../animations/animated-values/">Animated values</a></li><li><a href="../animations/interpolation/">Interpolation</a></li><li><a href="../animations/shared-elements/">Shared elements</a></li></ul></li><li class="nav-section"><span>Communication</span><ul><li><a href="../communication/react-to-bevy/">React to Bevy</a></li><li><a href="../communication/bevy-to-react/">Bevy to React</a></li><li><a href="../communication/request-response/">Request / response</a></li><li><a href="../communication/named-nodes/">Named nodes</a></li></ul></li><li class="nav-section"><span>Events</span><ul><li><a href="../events/mouse/">Mouse</a></li><li><a href="../events/keyboard/">Keyboard</a></li><li><a href="../events/gamepad/">Gamepad</a></li><li><a href="../events/window/">Window</a></li></ul></li><li class="nav-section"><span>Extending</span><ul><li><a href="../extending/custom-elements/">Custom elements</a></li><li><a href="../extending/custom-styles/">Custom styles</a></li><li><a href="../extending/custom-filters/">Custom filters</a></li></ul></li><li class="nav-section"><span>Tooling</span><ul><li><a href="../tooling/devtools/">Devtools</a></li><li><a href="../tooling/hot-reload/">Hot reload</a></li><li><a href="../tooling/web/">Web builds</a></li><li><a href="../tooling/ts-codegen/">TypeScript codegen</a></li></ul></li><li class="nav-section"><span>Reference</span><ul><li><a href="../reference/style-properties/">Style properties</a></li><li><a href="../reference/elements/">Elements</a></li><li><a href="../reference/filters/">Filters</a></li></ul></li><li><a href="../performance/">Performance</a></li></ul>
+</details>
+</nav>
+<main id="main">
+<article>
+<h1 id="getting-started">Getting started</h1>
+<p>A bevy-react app has two parts:</p>
+<ul>
+<li><strong>The Rust crate <code>bevy-react</code></strong> (imported as <code>bevy_react</code>). It hosts the
+JS runtime and applies the UI to the ECS.</li>
+<li><strong>The npm package <code>bevy-react</code></strong>. It provides the React renderer, the JSX
+types and a CLI. The CLI scaffolds the UI package and bundles it into two
+JS files that the Bevy app loads at startup.</li>
+</ul>
+<p>Both are released together with the same version number. Use matching
+versions of the two.</p>
+<h2 id="add-the-crate"><a class="anchor" href="#add-the-crate" aria-hidden="true">#</a>Add the crate</h2>
+<p>Run this in your Bevy app&#39;s package:</p>
+<pre><code class="language-sh"><span class="token function">cargo</span> <span class="token function">add</span> bevy-react</code></pre><p>All element features are on by default. To compile in less, see &quot;Cargo
+features&quot; below.</p>
+<h2 id="scaffold-the-ui"><a class="anchor" href="#scaffold-the-ui" aria-hidden="true">#</a>Scaffold the UI</h2>
+<p>From the same directory (the one that holds your <code>Cargo.toml</code>), run:</p>
+<pre><code class="language-sh">npx bevy-react init ui
+<span class="token builtin class-name">cd</span> ui
+<span class="token function">npm</span> <span class="token function">install</span>
+<span class="token function">npm</span> run <span class="token function">watch</span></code></pre><p><code>init</code> copies a starter package into <code>ui/</code>. If you leave out the directory
+argument, it uses <code>ui</code>. <code>npm run watch</code> builds both bundles once, then
+rebuilds the app bundle whenever a file changes. Keep it running while you
+work.</p>
+<p><code>init</code> accepts these flags:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>--name &lt;name&gt;</code></td>
+<td>npm package name (default: the target directory&#39;s name)</td>
+</tr>
+<tr>
+<td><code>--install</code></td>
+<td>run <code>npm install</code> after scaffolding</td>
+</tr>
+<tr>
+<td><code>--force</code></td>
+<td>scaffold into a directory that is not empty</td>
+</tr>
+<tr>
+<td><code>--local &lt;path&gt;</code></td>
+<td>depend on a local copy of the npm package (<code>file:&lt;path&gt;</code>)</td>
+</tr>
+</tbody></table></div>
+<p>The scaffolded package contains:</p>
+<ul>
+<li><code>src/index.tsx</code>: the entry point. It calls <code>mount(&lt;App /&gt;)</code>. <code>mount</code> never
+resolves, so don&#39;t <code>await</code> it.</li>
+<li><code>src/App.tsx</code>: a starter component, a button with hover and press styles
+that counts its clicks.</li>
+<li><code>src/bevy.ts</code>: a placeholder for the typed client generated from your Rust
+types (see &quot;Generate the typed client&quot; below).</li>
+<li><code>tsconfig.json</code>: set up with <code>&quot;jsxImportSource&quot;: &quot;bevy-react&quot;</code>, so JSX
+resolves to bevy-react&#39;s elements (<code>&lt;node&gt;</code>, <code>&lt;text&gt;</code>, <code>&lt;button&gt;</code>, …).</li>
+<li><code>package.json</code>: the dependencies and these scripts:</li>
+</ul>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Script</th>
+<th>Runs</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>npm run build</code></td>
+<td><code>bevy-react build</code>: <code>dist/vendor.js</code> + <code>dist/app.js</code></td>
+</tr>
+<tr>
+<td><code>npm run watch</code></td>
+<td><code>bevy-react build --watch</code>: rebuilds <code>app.js</code> on change</td>
+</tr>
+<tr>
+<td><code>npm run build:prod</code></td>
+<td><code>bevy-react build --prod</code>: production bundles</td>
+</tr>
+<tr>
+<td><code>npm run typecheck</code></td>
+<td><code>tsc --noEmit</code></td>
+</tr>
+<tr>
+<td><code>npm run bevy:generate</code></td>
+<td>the Rust app&#39;s <code>--export-bindings</code>, writing <code>src/bevy.ts</code></td>
+</tr>
+</tbody></table></div>
+<h2 id="add-the-plugins"><a class="anchor" href="#add-the-plugins" aria-hidden="true">#</a>Add the plugins</h2>
+<p><code>ReactPlugins</code> is bevy-react&#39;s counterpart to <code>DefaultPlugins</code>. It contains
+<code>ReactUiPlugin</code> (the bridge) plus one plugin for each element feature your
+build compiles in. Add it after Bevy&#39;s <code>DefaultPlugins</code>. It doesn&#39;t include
+them. Also add a camera: <code>bevy_ui</code> only renders through one, and bevy-react
+doesn&#39;t spawn any.</p>
+<pre><code class="language-rust"><span class="token keyword">use</span> <span class="token namespace">bevy<span class="token punctuation">::</span>prelude<span class="token punctuation">::</span></span><span class="token operator">*</span><span class="token punctuation">;</span>
+<span class="token keyword">use</span> <span class="token namespace">bevy_react<span class="token punctuation">::</span>prelude<span class="token punctuation">::</span></span><span class="token operator">*</span><span class="token punctuation">;</span>
+
+<span class="token keyword">fn</span> <span class="token function-definition function">main</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token class-name">App</span><span class="token punctuation">::</span><span class="token function">new</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+        <span class="token punctuation">.</span><span class="token function">add_plugins</span><span class="token punctuation">(</span><span class="token class-name">DefaultPlugins</span><span class="token punctuation">)</span>
+        <span class="token comment">// Loads `ui/dist/app.js` and `ui/dist/vendor.js`.</span>
+        <span class="token punctuation">.</span><span class="token function">add_plugins</span><span class="token punctuation">(</span><span class="token class-name">ReactPlugins</span><span class="token punctuation">)</span>
+        <span class="token punctuation">.</span><span class="token function">add_systems</span><span class="token punctuation">(</span><span class="token class-name">Startup</span><span class="token punctuation">,</span> <span class="token closure-params"><span class="token closure-punctuation punctuation">|</span><span class="token keyword">mut</span> commands<span class="token punctuation">:</span> <span class="token class-name">Commands</span><span class="token closure-punctuation punctuation">|</span></span> <span class="token punctuation">{</span>
+            commands<span class="token punctuation">.</span><span class="token function">spawn</span><span class="token punctuation">(</span><span class="token class-name">Camera2d</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span><span class="token punctuation">)</span>
+        <span class="token punctuation">.</span><span class="token function">run</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span></code></pre><p>Any camera that renders UI works, including the 3D camera your game already
+has. Then start the app with <code>cargo run</code>.</p>
+<p>Keep these points in mind:</p>
+<ul>
+<li><strong>The default bundle path is <code>ui/dist/app.js</code></strong>
+(<code>ReactUiPlugin::DEFAULT_BUNDLE</code>). The path is relative to the process&#39;s
+working directory, not to Bevy&#39;s asset folder, so run <code>cargo run</code> from the
+package root.</li>
+<li><strong>Both bundles must exist.</strong> <code>vendor.js</code> must sit next to <code>app.js</code>. If
+either file is missing, the app panics at startup and prints the absolute
+path it looked for. Build the UI first.</li>
+<li><strong>Hot reload is on by default.</strong> The plugin watches <code>app.js</code> and re-runs
+it when it changes. Edits follow React Fast Refresh rules: a component
+keeps its hook state unless you change its hooks.</li>
+<li><strong>Devtools.</strong> With the <code>devtools</code> feature, F12 toggles the inspector in
+debug builds. Release builds never run it.</li>
+</ul>
+<h3 id="configure-the-plugins"><a class="anchor" href="#configure-the-plugins" aria-hidden="true">#</a>Configure the plugins</h3>
+<p><code>ReactPlugins</code> is an ordinary Bevy plugin group. Use <code>.set(..)</code> to replace a
+member with a configured one, and <code>.disable::&lt;P&gt;()</code> to leave one out:</p>
+<pre><code class="language-rust">app<span class="token punctuation">.</span><span class="token function">add_plugins</span><span class="token punctuation">(</span>
+    <span class="token class-name">ReactPlugins</span>
+        <span class="token punctuation">.</span><span class="token function">set</span><span class="token punctuation">(</span><span class="token class-name">ReactUiPlugin</span><span class="token punctuation">::</span><span class="token function">new</span><span class="token punctuation">(</span><span class="token string">&quot;assets/ui/app.js&quot;</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">hot_reload</span><span class="token punctuation">(</span><span class="token boolean">false</span><span class="token punctuation">)</span><span class="token punctuation">)</span>
+        <span class="token punctuation">.</span><span class="token function">disable</span><span class="token punctuation">::</span><span class="token operator">&lt;</span><span class="token class-name">CanvasPlugin</span><span class="token operator">&gt;</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+<span class="token punctuation">)</span><span class="token punctuation">;</span></code></pre><p>A build without element features (<code>default-features = false</code>, see below)
+can add <code>ReactUiPlugin::new(..)</code> directly instead of the group. With no
+element features, the group contains only that plugin.</p>
+<p><code>ReactUiPlugin</code> has these builder methods:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>new(path)</code></td>
+<td>The app bundle to load. <code>vendor.js</code> must be next to it.</td>
+</tr>
+<tr>
+<td><code>hot_reload(bool)</code></td>
+<td>Watch the bundle and hot-reload it on change (default: <code>true</code>).</td>
+</tr>
+<tr>
+<td><code>default_font(path)</code></td>
+<td>App-wide default font (asset path).</td>
+</tr>
+<tr>
+<td><code>font(name, path)</code></td>
+<td>A named font family, selected with <code>fontFamily: name</code>.</td>
+</tr>
+<tr>
+<td><code>cursor(name, path, hotspot)</code></td>
+<td>A named image cursor, selected with <code>cursor: name</code>.</td>
+</tr>
+<tr>
+<td><code>devtools(DevtoolsConfig)</code></td>
+<td>Configure or disable the inspector.</td>
+</tr>
+<tr>
+<td><code>precompile_filters(PrecompileFilters)</code></td>
+<td>Choose which filter shaders compile at startup (default: all).</td>
+</tr>
+</tbody></table></div>
+<p>Font and cursor paths are loaded through the <code>AssetServer</code>. <code>cursor</code> needs
+the <code>custom_cursor</code> feature, and <code>devtools</code> needs the <code>devtools</code> feature.</p>
+<h2 id="build-the-ui"><a class="anchor" href="#build-the-ui" aria-hidden="true">#</a>Build the UI</h2>
+<p>Run <code>bevy-react build</code> (or <code>npx bevy-react build</code>) from the UI package. It
+bundles <code>src/index.tsx</code> into two files in <code>dist/</code>:</p>
+<ul>
+<li><strong><code>vendor.js</code></strong>: React, the reconciler and the bevy-react runtime. It is
+loaded once and never re-run.</li>
+<li><strong><code>app.js</code></strong>: your own code. It runs again on every hot reload.</li>
+</ul>
+<p>Deploy both files side by side.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>--watch</code></td>
+<td>Build <code>vendor.js</code> once, then rebuild <code>app.js</code> on every change.</td>
+</tr>
+<tr>
+<td><code>--prod</code></td>
+<td>Production React. Fast Refresh and the devtools panel are left out.</td>
+</tr>
+</tbody></table></div>
+<p><code>--watch</code> builds <code>vendor.js</code> only when it starts, so restart it after you
+upgrade React or bevy-react. For a custom build pipeline, import
+<code>buildVendor</code>, <code>buildApp</code> and <code>watchApp</code> from <code>bevy-react/build-lib</code>. The CLI
+is built on these.</p>
+<h2 id="generate-the-typed-client"><a class="anchor" href="#generate-the-typed-client" aria-hidden="true">#</a>Generate the typed client</h2>
+<p><code>src/bevy.ts</code> mirrors your Rust side in TypeScript: the typed
+<code>bevy</code> proxy for your <code>#[react_message]</code>, <code>#[react_request]</code> and
+<code>#[react_event]</code> channels, your registered filters, and the JSX types of the
+compiled-in feature elements. The scaffolded file is an untyped placeholder.
+Until you generate the real one, <code>&lt;svg&gt;</code>, <code>&lt;canvas&gt;</code>, <code>&lt;anchor&gt;</code>, <code>&lt;portal&gt;</code>
+and <code>&lt;surface&gt;</code> don&#39;t type-check. The bundles still build.</p>
+<p>The template&#39;s <code>bevy:generate</code> script runs
+<code>cargo run --manifest-path ../Cargo.toml -- --export-bindings src/bevy.ts</code>.
+That assumes the UI directory sits right inside your Cargo package; edit the
+script if your layout is different. Your <code>main</code> handles the flag by building
+a bare <code>App</code> (no window, no JS runtime), registering the bindings and
+writing the file:</p>
+<pre><code class="language-rust"><span class="token keyword">use</span> <span class="token namespace">bevy<span class="token punctuation">::</span>prelude<span class="token punctuation">::</span></span><span class="token operator">*</span><span class="token punctuation">;</span>
+<span class="token keyword">use</span> <span class="token namespace">bevy_react<span class="token punctuation">::</span>prelude<span class="token punctuation">::</span></span><span class="token operator">*</span><span class="token punctuation">;</span>
+
+<span class="token keyword">fn</span> <span class="token function-definition function">main</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token keyword">let</span> <span class="token keyword">mut</span> args <span class="token operator">=</span> <span class="token namespace">std<span class="token punctuation">::</span>env<span class="token punctuation">::</span></span><span class="token function">args</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">skip</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">if</span> args<span class="token punctuation">.</span><span class="token function">next</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">as_deref</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">==</span> <span class="token class-name">Some</span><span class="token punctuation">(</span><span class="token string">&quot;--export-bindings&quot;</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">let</span> path <span class="token operator">=</span> args<span class="token punctuation">.</span><span class="token function">next</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">expect</span><span class="token punctuation">(</span><span class="token string">&quot;--export-bindings needs a path&quot;</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">let</span> <span class="token keyword">mut</span> app <span class="token operator">=</span> <span class="token class-name">App</span><span class="token punctuation">::</span><span class="token function">new</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token comment">// The JSX elements of every compiled-in feature.</span>
+        <span class="token class-name">ReactPlugins</span><span class="token punctuation">::</span><span class="token function">register_bindings</span><span class="token punctuation">(</span><span class="token operator">&amp;</span><span class="token keyword">mut</span> app<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token comment">// Your own #[react_*] registrations go here: the same calls</span>
+        <span class="token comment">// the running app makes.</span>
+        app<span class="token punctuation">.</span><span class="token function">export_react_typescript</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>path<span class="token punctuation">)</span>
+            <span class="token punctuation">.</span><span class="token function">expect</span><span class="token punctuation">(</span><span class="token string">&quot;failed to write the TypeScript bindings&quot;</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">return</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token comment">// … the normal `App::new()` … `.run()` from above.</span>
+<span class="token punctuation">}</span></code></pre><p>Then run either of these:</p>
+<pre><code class="language-sh"><span class="token function">npm</span> run bevy:generate                          <span class="token comment"># from ui/</span>
+<span class="token function">cargo</span> run -- --export-bindings ui/src/bevy.ts  <span class="token comment"># from the package root</span></code></pre><p>The flag is only a convention that the template&#39;s script relies on. The
+underlying call is <code>App::export_react_typescript(path)</code>, so you can export
+from any other entry point instead, such as a test or a build task.</p>
+<p>Regenerate <code>bevy.ts</code> after you change any <code>#[react_*]</code> type, register a
+filter or element, or change your cargo features. Import the typed surface
+from <code>./bevy</code> (<code>import { bevy } from &quot;./bevy&quot;</code>), not the untyped functions
+from <code>&quot;bevy-react&quot;</code>. The TS codegen page covers the generated file in
+detail.</p>
+<h2 id="cargo-features"><a class="anchor" href="#cargo-features" aria-hidden="true">#</a>Cargo features</h2>
+<p>Every feature except <code>svg_text</code> is on by default:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Feature</th>
+<th>Adds</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>svg</code></td>
+<td><code>&lt;svg&gt;</code> and its shape elements (<code>SvgPlugin</code>)</td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>anchor</code></td>
+<td><code>&lt;anchor&gt;</code>, world-anchored overlays (<code>AnchorPlugin</code>)</td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>canvas</code></td>
+<td><code>&lt;canvas&gt;</code>, a retained drawing surface (<code>CanvasPlugin</code>)</td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>portal</code></td>
+<td><code>&lt;portal&gt;</code>, render-target views (<code>PortalPlugin</code>)</td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>surface</code></td>
+<td><code>&lt;surface&gt;</code>, UI rendered into offscreen textures (<code>SurfacePlugin</code>)</td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>devtools</code></td>
+<td>the F12 inspector (never runs in release builds)</td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>custom_cursor</code></td>
+<td><code>ReactUiPlugin::cursor</code>, named image cursors (pulls in <code>bevy_winit</code>)</td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>svg_text</code></td>
+<td><code>&lt;text&gt;</code> inside <code>.svg</code> files shown with <code>&lt;image&gt;</code> (pulls in fontdb)</td>
+<td>no</td>
+</tr>
+</tbody></table></div>
+<p>To compile in only what you use:</p>
+<pre><code class="language-sh"><span class="token function">cargo</span> <span class="token function">add</span> bevy-react --no-default-features <span class="token parameter variable">--features</span> svg,devtools</code></pre><p>A disabled feature isn&#39;t compiled at all. Its elements mount as plain nodes
+and log a <code>featureMissing</code> warning that names the feature and the plugin to
+add. A feature plugin left out of <code>ReactPlugins</code> with <code>.disable::&lt;P&gt;()</code>
+causes the same warning.</p>
+<p>The core elements (<code>&lt;node&gt;</code>, <code>&lt;button&gt;</code>, <code>&lt;text&gt;</code>, <code>&lt;editableText&gt;</code>,
+<code>&lt;image&gt;</code>, <code>&lt;root&gt;</code>) and the built-in
+<a href="../reference/filters/">filters</a> are always available.</p>
+<p>bevy-react depends on Bevy with Bevy&#39;s default features turned off and
+enables only what it needs: UI, its renderer, text, picking and so on. You
+can trim Bevy&#39;s own features in your app as usual. On Linux, <code>custom_cursor</code>
+needs a windowing backend (Bevy&#39;s <code>x11</code> or <code>wayland</code> feature). Bevy&#39;s
+default features include both. A crate that extends bevy-react with custom
+elements, styles or filters should depend on <code>bevy-react</code> with
+<code>default-features = false</code>, the same way a Bevy plugin crate depends on
+<code>bevy</code>.</p>
+<h2 id="next-steps"><a class="anchor" href="#next-steps" aria-hidden="true">#</a>Next steps</h2>
+<ul>
+<li>The <a href="../reference/elements/">elements</a> and
+<a href="../reference/style-properties/">style properties</a> references.</li>
+<li><a href="https://github.com/tulustul/bevy-react/tree/main/examples/minimal"><code>examples/minimal</code></a>:
+the smallest complete setup, built without default features.</li>
+<li><a href="https://github.com/tulustul/bevy-react/tree/main/examples/demos"><code>examples/demos</code></a>:
+the gallery behind the <a href="https://tulustul.github.io/bevy-react/demo/">live demo</a>.
+Each demo is a small component you can copy from.</li>
+</ul>
+
+</article>
+<footer class="page-links"><a href="https://github.com/tulustul/bevy-react/edit/main/docs/guide/getting-started.md">Edit this page</a></footer>
+</main>
+</div>
+<footer class="site-footer">
+<p>bevy-react is dual-licensed under MIT or Apache-2.0. <a href="https://github.com/tulustul/bevy-react">Source on GitHub</a>.</p>
+</footer>
+</body>
+</html>

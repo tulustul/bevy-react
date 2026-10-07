@@ -1,0 +1,431 @@
+/* The bevy-react docs site. Palette from the demos app (examples/demos/ui/src/theme.ts);
+   fonts are Latin subsets of the demos' Noto Sans / Noto Sans Mono. */
+
+@font-face {
+  font-family: "Noto Sans";
+  src: url("fonts/NotoSans.woff2") format("woff2");
+  font-weight: 400 700;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Noto Sans Mono";
+  src: url("fonts/NotoSansMono.woff2") format("woff2");
+  font-weight: 400 700;
+  font-display: swap;
+}
+
+:root {
+  color-scheme: light dark;
+  --header-h: 3.5rem;
+  --bg: #eff1f5;
+  --surface: #e6e9ef;
+  --code-bg: #f6f7fa;
+  --border: #ccd0da;
+  --text: #4c4f69;
+  --muted: #5c5f77;
+  --accent: #1e66f5;
+  --tok-keyword: #8839ef;
+  --tok-number: #c4500a;
+  --tok-string: #2f7d20;
+  --tok-comment: #6c6f85;
+  --tok-function: #1e66f5;
+  --tok-type: #137a80;
+  --tok-attr: #a5640c;
+  --tok-lifetime: #d20f39;
+  --tok-operator: #0479a8;
+  --tok-punct: #5c5f77;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1e1e2e;
+    --surface: #181825;
+    --code-bg: #11111b;
+    --border: #313244;
+    --text: #cdd6f4;
+    --muted: #a6adc8;
+    --accent: #89b4fa;
+    --tok-keyword: #bb9af7;
+    --tok-number: #ff9e64;
+    --tok-string: #9ece6a;
+    --tok-comment: #7f849c;
+    --tok-function: #89b4fa;
+    --tok-type: #73daca;
+    --tok-attr: #e0af68;
+    --tok-lifetime: #f7768e;
+    --tok-operator: #7dcfff;
+    --tok-punct: #a6adc8;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+html {
+  scroll-padding-top: calc(var(--header-h) + 1rem);
+}
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font:
+    16px/1.65 "Noto Sans",
+    system-ui,
+    sans-serif;
+}
+a {
+  color: var(--accent);
+}
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.skip-link {
+  position: absolute;
+  left: 1rem;
+  top: -3rem;
+  padding: 0.5rem 1rem;
+  background: var(--accent);
+  color: var(--bg);
+  z-index: 1;
+}
+.skip-link:focus {
+  top: 1rem;
+}
+
+.site-header {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  height: var(--header-h);
+  padding: 0 1.5rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--text);
+  font-weight: 700;
+  font-size: 1.15rem;
+  text-decoration: none;
+}
+.version {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.site-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+  margin-left: auto;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: 16rem minmax(0, 1fr);
+  max-width: 76rem;
+  margin: 0 auto;
+}
+/* The nav scrolls on its own, pinned under the header. */
+.sidebar {
+  position: sticky;
+  top: var(--header-h);
+  align-self: start;
+  max-height: calc(100vh - var(--header-h));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border-right: 1px solid var(--border);
+  padding: 1.25rem 1rem;
+}
+.nav-menu > summary {
+  display: none;
+}
+.sidebar ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.sidebar ul ul {
+  padding-left: 0.75rem;
+}
+.sidebar a {
+  display: block;
+  padding: 0.2rem 0.5rem;
+  border-radius: 6px;
+  color: var(--text);
+  text-decoration: none;
+}
+.sidebar a:hover {
+  background: var(--surface);
+}
+.sidebar a[aria-current="page"] {
+  background: var(--surface);
+  color: var(--accent);
+  font-weight: 600;
+}
+.nav-section > span {
+  display: block;
+  margin-top: 1rem;
+  padding: 0 0.5rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+main {
+  min-width: 0;
+  padding: 1.5rem 2.5rem 3rem;
+}
+article {
+  max-width: 48rem;
+}
+h1 {
+  font-size: 2.1rem;
+  line-height: 1.25;
+  margin: 0.5rem 0 1rem;
+}
+h2 {
+  font-size: 1.5rem;
+  margin-top: 2.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--border);
+}
+h3 {
+  font-size: 1.2rem;
+  margin-top: 2rem;
+}
+h2,
+h3,
+h4 {
+  position: relative;
+  line-height: 1.3;
+}
+.anchor {
+  position: absolute;
+  left: -1.1em;
+  color: var(--muted);
+  text-decoration: none;
+  opacity: 0;
+}
+h2:hover .anchor,
+h3:hover .anchor,
+h4:hover .anchor,
+.anchor:focus {
+  opacity: 1;
+}
+img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+}
+
+code,
+pre {
+  font-family: "Noto Sans Mono", ui-monospace, monospace;
+  font-size: 0.875em;
+}
+pre code {
+  font-size: inherit;
+}
+:not(pre) > code {
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+  background: var(--surface);
+}
+pre {
+  margin: 1rem 0;
+  padding: 1rem 1.15rem;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--code-bg);
+  line-height: 1.55;
+}
+
+.token.keyword {
+  color: var(--tok-keyword);
+}
+.token.boolean,
+.token.number,
+.token.constant {
+  color: var(--tok-number);
+}
+.token.string,
+.token.char,
+.token.template-string,
+.token.attr-value {
+  color: var(--tok-string);
+}
+.token.comment,
+.token.doc,
+.token.prolog {
+  color: var(--tok-comment);
+  font-style: italic;
+}
+.token.function,
+.token.tag {
+  color: var(--tok-function);
+}
+.token.class-name,
+.token.builtin,
+.token.namespace,
+.token.type-definition {
+  color: var(--tok-type);
+}
+.token.attr-name,
+.token.attribute,
+.token.macro,
+.token.property {
+  color: var(--tok-attr);
+}
+.token.lifetime {
+  color: var(--tok-lifetime);
+}
+.token.operator {
+  color: var(--tok-operator);
+}
+.token.punctuation {
+  color: var(--tok-punct);
+}
+
+.tabs {
+  margin: 1rem 0;
+}
+.tab-label {
+  margin: 1rem 0 -0.5rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+.tabs-ready .tab-label {
+  display: none;
+}
+.tabs-ready pre {
+  margin-top: 0;
+  border-top-left-radius: 0;
+}
+[role="tablist"] {
+  display: flex;
+  gap: 0.25rem;
+}
+[role="tab"] {
+  padding: 0.3rem 0.9rem;
+  border: 1px solid var(--border);
+  border-bottom: none;
+  border-radius: 8px 8px 0 0;
+  background: var(--surface);
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+[role="tab"][aria-selected="true"] {
+  position: relative;
+  margin-bottom: -1px;
+  border-bottom: 1px solid var(--code-bg);
+  background: var(--code-bg);
+  color: var(--text);
+  font-weight: 600;
+}
+
+.table-wrap {
+  overflow-x: auto;
+  margin: 1rem 0;
+}
+table {
+  border-collapse: collapse;
+  font-size: 0.925rem;
+}
+th,
+td {
+  padding: 0.45rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+th {
+  white-space: nowrap;
+}
+td:first-child,
+td:nth-child(2) {
+  min-width: 8rem;
+}
+td:last-child {
+  min-width: 14rem;
+}
+
+blockquote {
+  margin: 1rem 0;
+  padding: 0.25rem 1rem;
+  border-left: 3px solid var(--accent);
+  background: var(--surface);
+  border-radius: 0 6px 6px 0;
+}
+
+.page-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.5rem;
+  max-width: 48rem;
+  margin-top: 3rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+.site-footer {
+  padding: 1rem 1.5rem 2rem;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+@media (max-width: 719px) {
+  html {
+    scroll-padding-top: 1rem;
+  }
+  .site-header {
+    position: static;
+    height: auto;
+    padding: 0.75rem 1rem;
+  }
+  .site-links {
+    margin-left: 0;
+    width: 100%;
+  }
+  .layout {
+    display: block;
+  }
+  .sidebar {
+    position: static;
+    max-height: none;
+    overflow: visible;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    padding: 0.5rem 1rem;
+  }
+  .nav-menu > summary {
+    display: list-item;
+    padding: 0.4rem 0;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  main {
+    padding: 1rem 1rem 2rem;
+  }
+  h1 {
+    font-size: 1.7rem;
+  }
+  .anchor {
+    display: none;
+  }
+}
