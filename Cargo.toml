@@ -15,6 +15,7 @@ members = [
     "examples/layers-stress",
     "examples/arcana",
     "examples/atrium",
+    "examples/epoch",
 ]
 
 [workspace.package]

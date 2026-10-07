@@ -1,0 +1,20 @@
+[package]
+name = "epoch"
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[[bin]]
+name = "epoch"
+path = "main.rs"
+
+[dependencies]
+bevy = { workspace = true, features = ["default"] }
+# Every bevy-react feature (the defaults): `<anchor>` for the city banners,
+# unit flags and the tile tooltip, `<portal>` for the minimap, `<svg>` for
+# the icons and the charts.
+bevy-react = { workspace = true, features = ["default"] }
+# For the nested payload types (`TileInfo`, `CityInfo`, …) the macros don't
+# derive themselves.
+serde = { workspace = true }
+ts-rs = { workspace = true }

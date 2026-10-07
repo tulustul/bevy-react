@@ -71,6 +71,14 @@ shore. Every window is still React, still clickable.
 
 ![The northern lights over black mountains, mirrored in the lake: frosted-glass React windows float in front, a dotted globe turned to Iceland beside them.](https://raw.githubusercontent.com/tulustul/bevy-react/main/screenshots/atrium-aurora.webp)
 
+[**Epoch**](https://github.com/tulustul/bevy-react/tree/main/examples/epoch)
+recreates the interface of a 4X strategy game over a generated hex world: city
+banners and unit flags pinned to the 3D map, a minimap filmed by a second
+camera, a city screen, a technology tree, and reports with history graphs for
+every civilization. Every panel is React; the numbers come from the map.
+
+![A hex map of forests, farms and snowy mountains under a strategy-game interface: city banners over the towns, research and civic trackers, rival leaders, a minimap and the next-turn button.](https://raw.githubusercontent.com/tulustul/bevy-react/main/screenshots/epoch-map.webp)
+
 ## Getting started
 
 ```sh

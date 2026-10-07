@@ -276,3 +276,7 @@ elements, styles or filters should depend on `bevy-react` with
   a spatial desktop — React apps on `<surface>` windows of frosted glass in a
   3D world, a globe with `<anchor>` labels, live `<portal>` lenses with a
   shared-element flight, custom filters and morphs.
+- [`examples/epoch`](https://github.com/tulustul/bevy-react/tree/main/examples/epoch):
+  a 4X strategy game's interface over a generated hex map — `<anchor>` city
+  banners and tooltips, a `<portal>` minimap, a technology tree, and `<svg>`
+  history graphs.

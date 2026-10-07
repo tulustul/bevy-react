@@ -9,6 +9,7 @@
     "examples/layers-stress/ui",
     "examples/arcana/ui",
     "examples/atrium/ui",
+    "examples/epoch/ui",
     "docs"
   ],
   "scripts": {

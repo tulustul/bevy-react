@@ -2845,6 +2845,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "epoch"
+version = "0.7.0"
+dependencies = [
+ "bevy",
+ "bevy-react",
+ "serde",
+ "ts-rs",
+]
+
+[[package]]
 name = "equivalent"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
