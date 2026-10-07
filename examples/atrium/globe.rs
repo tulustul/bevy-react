@@ -35,7 +35,7 @@ pub struct GlobeMaterial {
 
 impl Material for GlobeMaterial {
     fn fragment_shader() -> ShaderRef {
-        "atrium/globe.wgsl".into()
+        "shaders/globe.wgsl".into()
     }
 
     // Drawn with the windows (the transmissive pass): the glass behind it
@@ -138,7 +138,7 @@ fn spawn_globe(
             Mesh3d(meshes.add(Sphere::new(RADIUS).mesh().uv(96, 48))),
             MeshMaterial3d(materials.add(GlobeMaterial {
                 globe: GlobeUniform::default(),
-                land: assets.load("atrium/land.png"),
+                land: assets.load("images/land.png"),
             })),
             Transform::from_translation(at),
             bevy::light::NotShadowCaster,

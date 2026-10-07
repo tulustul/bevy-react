@@ -1,6 +1,6 @@
 //! The world's light, as data. A [`Moment`] (an hour of the day plus the
 //! weather) becomes an [`Atmos`] — the one uniform every world shader reads
-//! (`assets/atrium/common.wgsl`). The sun follows real solar geometry for an
+//! (`assets/shaders/common.wgsl`). The sun follows real solar geometry for an
 //! alpine latitude; the colors come from keyframes over the sun's altitude
 //! (night → blue hour → sunset → golden hour → noon), and the weather
 //! desaturates, darkens and fogs them.

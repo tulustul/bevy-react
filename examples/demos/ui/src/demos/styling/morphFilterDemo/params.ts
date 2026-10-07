@@ -76,7 +76,7 @@ export const BUILTIN_TRANSITIONS: FilterEntry[] = [
 ];
 
 // The gl-transitions pack (ports registered in `examples/demos/filters.rs`,
-// shaders in `examples/assets/shaders/morphs/`). Color-only filters
+// shaders in `examples/demos/assets/shaders/morphs/`). Color-only filters
 // (circleCrop, burn0) keep their defaults — no controls.
 export const CUSTOM_MORPHS: FilterEntry[] = [
   entry({

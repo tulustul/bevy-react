@@ -241,7 +241,7 @@ fn window() -> Window {
 
 /// Build the demos `App`: DefaultPlugins (+ the React UI layer), the scene state,
 /// the shared 3D camera, and every demo scene plugin. Shared by the native run,
-/// the `--shoot` path, and the web entry — only the asset source differs by target.
+/// the `--shoot` path, and the web entry.
 fn build_app(window: Window, hot_reload: bool) -> App {
     // The bundle is built under this package (`ui/dist`), so anchor it at the
     // manifest dir rather than the default `ui/dist/app.js` (cwd-relative). Unused
@@ -276,21 +276,10 @@ fn build_app(window: Window, hot_reload: bool) -> App {
         ..default()
     };
 
-    // Native loads the example assets from disk (two levels up from the crate). On
-    // web the dev server serves them under `assets/` (Bevy's default), so the default
-    // AssetPlugin is kept there.
-    #[cfg(not(target_arch = "wasm32"))]
-    let default_plugins = DefaultPlugins
-        .set(window_plugin)
-        .set(bevy::asset::AssetPlugin {
-            file_path: "../assets".into(),
-            ..default()
-        });
-    #[cfg(target_arch = "wasm32")]
-    let default_plugins = DefaultPlugins.set(window_plugin);
-
+    // Assets load from Bevy's default `assets/`: this crate's own folder on
+    // native, the copy the web build serves next to the page on wasm.
     let mut app = App::new();
-    app.add_plugins(default_plugins)
+    app.add_plugins(DefaultPlugins.set(window_plugin))
         // Every bevy-react plugin this build compiles in (all of them: the
         // `bevy-react` default features), with our configured bridge.
         .add_plugins(ReactPlugins.set(react_plugin))

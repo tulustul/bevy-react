@@ -12,7 +12,7 @@
 //! and the swap is invisible, until you drag.
 //!
 //! Foil on the 3D card is not the UI's `holo` filter but a material
-//! extension (`arcana/foil.wgsl`): the rainbow comes from the real view
+//! extension (`shaders/foil.wgsl`): the rainbow comes from the real view
 //! angle, so it runs across the card as it turns, and a specular glint
 //! (aimed to miss the card at rest) sweeps over it.
 
@@ -67,7 +67,7 @@ struct FoilExtension {
 
 impl MaterialExtension for FoilExtension {
     fn fragment_shader() -> ShaderRef {
-        "arcana/foil.wgsl".into()
+        "shaders/foil.wgsl".into()
     }
 }
 

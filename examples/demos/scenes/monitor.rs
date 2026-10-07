@@ -21,7 +21,7 @@ use crate::scene::Scene;
 
 /// The screen material: the skinned [`StandardMaterial`] (React UI on base-color + emissive,
 /// model gloss maps on `Uv0`) extended with [`CrtExtension`] so the emissive image gets a CRT
-/// scanline + phosphor-mask treatment. See `examples/assets/shaders/crt.wgsl`.
+/// scanline + phosphor-mask treatment. See `assets/shaders/crt.wgsl`.
 type CrtMaterial = ExtendedMaterial<StandardMaterial, CrtExtension>;
 
 /// `StandardMaterial` extension that runs the CRT fragment shader (`shaders/crt.wgsl`),

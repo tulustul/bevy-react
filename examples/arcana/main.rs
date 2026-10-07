@@ -74,18 +74,10 @@ fn build_app(window: Window, hot_reload: bool) -> App {
         );
 
     let mut app = App::new();
-    app.add_plugins(
-        DefaultPlugins
-            .set(WindowPlugin {
-                primary_window: Some(window),
-                ..default()
-            })
-            // The examples share one asset folder (fonts, shaders).
-            .set(AssetPlugin {
-                file_path: "../assets".into(),
-                ..default()
-            }),
-    )
+    app.add_plugins(DefaultPlugins.set(WindowPlugin {
+        primary_window: Some(window),
+        ..default()
+    }))
     .add_plugins(ReactPlugins.set(react))
     .add_plugins((
         stage::StagePlugin,

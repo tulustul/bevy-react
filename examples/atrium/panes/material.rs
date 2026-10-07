@@ -26,7 +26,7 @@ pub struct PaneMaterial {
 
 impl Material for PaneMaterial {
     fn fragment_shader() -> ShaderRef {
-        "atrium/pane.wgsl".into()
+        "shaders/pane.wgsl".into()
     }
 
     fn reads_view_transmission_texture(&self) -> bool {

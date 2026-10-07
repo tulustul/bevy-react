@@ -127,8 +127,8 @@ into your project.
 Bevy's default `AssetPlugin` fetches assets over HTTP from `assets/` next to
 the page. Copy your asset folder to `dist/assets/`: textures, fonts given to
 `default_font(..)` and `font(..)`, cursor images and custom filter shaders all
-load from there. If the native build points `AssetPlugin` somewhere else (the
-demos use `file_path: "../assets"`), keep the default on the web.
+load from there. If the native build points `AssetPlugin` somewhere else, keep
+the default on the web.
 
 On GitHub Pages, add an empty `.nojekyll` file to the site so every file is
 served as is.

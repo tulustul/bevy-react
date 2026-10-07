@@ -60,7 +60,7 @@ pub struct GammaSettings {
 ///
 /// The gamma screen's test image, through the same curve the setting puts
 /// on the world (`rgb^(1/value)`, the curve `ColorGrading` applies).
-#[react_filter(shader = "cyberpunk/gamma.wgsl")]
+#[react_filter(shader = "shaders/gamma.wgsl")]
 struct Gamma {
     /// 1 = unchanged; above 1 brighter.
     #[serde(default = "one")]

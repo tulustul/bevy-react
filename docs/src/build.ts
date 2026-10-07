@@ -141,10 +141,6 @@ writeOut("404.html", renderPage(notFound, site, new URL(SITE_URL).pathname));
 // 4. Assets and the crawler files.
 for (const [abs, sitePath] of assets) cpSync(abs, join(dist, sitePath));
 cpSync(join(docsDir, "assets"), dist, { recursive: true });
-cpSync(
-  join(repoRoot, "examples/assets/bevy-react-logo.png"),
-  join(dist, "logo.png"),
-);
 const client = readFileSync(join(srcDir, "client.ts"), "utf8");
 writeOut(
   "docs.js",

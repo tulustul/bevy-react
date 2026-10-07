@@ -151,7 +151,7 @@ export function alpha(hex: string, a: number) {
 
 /** The faint scanlines laid over panels (a 4 px repeating texture). */
 export const SCANLINES = {
-  src: "cyberpunk/scanlines.png",
+  src: "images/scanlines.png",
   mode: "repeat",
   scale: 1,
 } as const;

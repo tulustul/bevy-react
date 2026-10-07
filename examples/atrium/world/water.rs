@@ -34,7 +34,7 @@ pub struct WaterMaterial {
 
 impl Material for WaterMaterial {
     fn fragment_shader() -> ShaderRef {
-        "atrium/water.wgsl".into()
+        "shaders/water.wgsl".into()
     }
 
     fn enable_prepass() -> bool {

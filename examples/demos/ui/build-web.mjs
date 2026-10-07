@@ -105,7 +105,7 @@ console.log("[web] demos.js + demos_bg.wasm generated");
 // 3) The page + assets. Bevy's default AssetPlugin fetches `assets/…` from the
 //    site root, so the example's assets are copied under dist/assets.
 cpSync(resolve(cwd, "index.html"), resolve(dist, "index.html"));
-cpSync(resolve(repoRoot, "examples/assets"), resolve(dist, "assets"), {
+cpSync(resolve(repoRoot, "examples/demos/assets"), resolve(dist, "assets"), {
   recursive: true,
 });
 // Disable Jekyll on GitHub Pages so it serves the files (incl. `assets/`) verbatim.

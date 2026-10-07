@@ -73,7 +73,7 @@ pub fn register_bindings(app: &mut App) {
 struct ShaderLibrary(#[allow(dead_code)] Handle<Shader>);
 
 fn load_library(mut commands: Commands, assets: Res<AssetServer>) {
-    commands.insert_resource(ShaderLibrary(assets.load("atrium/common.wgsl")));
+    commands.insert_resource(ShaderLibrary(assets.load("shaders/common.wgsl")));
 }
 
 /// The land and its props: `land.wgsl`, lit by the palette. `kind.x` picks
@@ -88,7 +88,7 @@ pub struct WorldMaterial {
 
 impl Material for WorldMaterial {
     fn fragment_shader() -> ShaderRef {
-        "atrium/land.wgsl".into()
+        "shaders/land.wgsl".into()
     }
 }
 

@@ -1,5 +1,5 @@
 //! The showcase's own WGSL effects: three filters and a morph, each a params
-//! struct + a shader under `examples/assets/arcana/`, typed into `bevy.ts` by
+//! struct + a shader under `assets/shaders/`, typed into `bevy.ts` by
 //! the same codegen as every other binding. They run over React-rendered
 //! pixels — something no web stack lets a component do.
 //!
@@ -23,7 +23,7 @@ use bevy_react::{ReactAppExt, react_filter, react_morph_filter};
 
 /// Packing: `params[0]` = (angle, strength, saturation, glitter),
 /// `params[1].x` = drift.
-#[react_filter(shader = "arcana/holo.wgsl", time = true)]
+#[react_filter(shader = "shaders/holo.wgsl", time = true)]
 struct Holo {
     /// Slides the rainbow, degrees — bind it to the card's tilt.
     #[serde(default)]
@@ -47,7 +47,7 @@ struct Holo {
 ///
 /// The bezel samples up to `refraction` px beyond the node's edge, so the
 /// capture is inflated by `outset` (sized for the showcase's strongest glass).
-#[react_filter(shader = "arcana/glass.wgsl", outset = 28.0)]
+#[react_filter(shader = "shaders/glass.wgsl", outset = 28.0)]
 struct LiquidGlass {
     /// The node's corner radius, px — keep it equal to `borderRadius`.
     #[serde(default = "default_radius")]
@@ -73,7 +73,7 @@ struct LiquidGlass {
 }
 
 /// Packing: `params[0].x` = progress.
-#[react_filter(shader = "arcana/burn.wgsl")]
+#[react_filter(shader = "shaders/burn.wgsl")]
 struct Burn {
     /// 0 = intact, 1 = burnt away.
     #[serde(default)]
@@ -81,7 +81,7 @@ struct Burn {
 }
 
 /// Packing: `params[0]` = edge color (straight linear RGBA).
-#[react_morph_filter(shader = "arcana/veil.wgsl")]
+#[react_morph_filter(shader = "shaders/veil.wgsl")]
 struct Veil {
     #[serde(default = "gold")]
     color: FilterColor,

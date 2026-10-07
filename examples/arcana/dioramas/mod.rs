@@ -69,7 +69,7 @@ struct SkyMaterial {
 
 impl Material for SkyMaterial {
     fn fragment_shader() -> ShaderRef {
-        "arcana/sky.wgsl".into()
+        "shaders/sky.wgsl".into()
     }
 }
 

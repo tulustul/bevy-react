@@ -1,5 +1,5 @@
 //! The datascape: the 3D world behind every menu. Tilted panels of
-//! scrolling dot-matrix data (`cyberpunk/datascape.wgsl`), neon bars in red
+//! scrolling dot-matrix data (`shaders/datascape.wgsl`), neon bars in red
 //! and cyan, dust drifting through it all — filmed by a slowly wandering
 //! camera through bloom, depth of field, chromatic aberration and a vignette.
 //! It is also the default UI camera, so the menus draw over it; the graphics
@@ -58,7 +58,7 @@ struct DataPanel {
 
 impl Material for DataPanel {
     fn fragment_shader() -> ShaderRef {
-        "cyberpunk/datascape.wgsl".into()
+        "shaders/datascape.wgsl".into()
     }
 }
 

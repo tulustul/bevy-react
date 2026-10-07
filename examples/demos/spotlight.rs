@@ -1,6 +1,6 @@
 //! `spotlight` — the gallery's cursor light, an app-registered style property
 //! (`style={{ spotlight: { … } }}`) drawn by a bevy [`UiMaterial`]
-//! (`examples/assets/shaders/spotlight.wgsl`). Near the pointer a node's edge
+//! (`assets/shaders/spotlight.wgsl`). Near the pointer a node's edge
 //! catches the light and its surface takes a soft wash; away from it the node
 //! shows nothing. The light follows the pointer every frame without a single
 //! React render: the pointer is read here, Bevy-side, and handed to the

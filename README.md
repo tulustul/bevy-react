@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/tulustul/bevy-react/main/examples/assets/bevy-react-logo.png" alt="bevy-react logo" width="220" />
+  <img src="https://raw.githubusercontent.com/tulustul/bevy-react/main/docs/assets/logo.png" alt="bevy-react logo" width="220" />
 </p>
 
 <h1 align="center">bevy-react</h1>

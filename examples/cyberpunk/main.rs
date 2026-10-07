@@ -85,21 +85,13 @@ fn build_app(window: Window, hot_reload: bool) -> App {
         .font("Rajdhani SemiBold", "fonts/Rajdhani-SemiBold.ttf")
         .font("Rajdhani Bold", "fonts/Rajdhani-Bold.ttf")
         .font("Mono", "fonts/JetBrainsMonoNL-VariableFont_wght.ttf")
-        .cursor("default", "cyberpunk/cursor.png", (24, 24));
+        .cursor("default", "cursor.png", (24, 24));
 
     let mut app = App::new();
-    app.add_plugins(
-        DefaultPlugins
-            .set(WindowPlugin {
-                primary_window: Some(window),
-                ..default()
-            })
-            // The examples share one asset folder (fonts, shaders).
-            .set(AssetPlugin {
-                file_path: "../assets".into(),
-                ..default()
-            }),
-    )
+    app.add_plugins(DefaultPlugins.set(WindowPlugin {
+        primary_window: Some(window),
+        ..default()
+    }))
     .add_plugins(ReactPlugins.set(react))
     .add_plugins((
         datascape::DatascapePlugin,

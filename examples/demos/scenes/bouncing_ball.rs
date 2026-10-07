@@ -133,7 +133,7 @@ impl FromWorld for RippleQuad {
     }
 }
 
-/// Draws one expanding ring (`examples/assets/shaders/bounce_ripple.wgsl`). Both
+/// Draws one expanding ring (`assets/shaders/bounce_ripple.wgsl`). Both
 /// fields share binding 0, so `AsBindGroup` combines them into the single
 /// uniform struct the shader declares.
 #[derive(Asset, AsBindGroup, Reflect, Clone, Default)]

@@ -20,10 +20,9 @@
 //!     single-pass ports of <https://gl-transitions.com/gallery>
 //!     transitions, `morphFilter`-only.
 //!
-//! Shaders live in `examples/assets/shaders/` (plain asset paths — the demos
-//! app points `AssetPlugin` at `examples/assets`; the morph pack under
-//! `morphs/`). Each shader's header comments its `params[i]` index
-//! map (declaration-order packing) and its premultiplied-alpha reasoning.
+//! Shaders live in `assets/shaders/` (the morph pack under `morphs/`). Each
+//! shader's header comments its `params[i]` index map (declaration-order
+//! packing) and its premultiplied-alpha reasoning.
 
 use bevy::prelude::*;
 use bevy_react::filters::FilterColor;
@@ -96,7 +95,7 @@ struct Dissolve {
 // gl-transitions morph pack: ports of https://gl-transitions.com/gallery
 // transitions, all single-pass (= morph-capable) with user params within the
 // 6-vec4 morph cap. Shaders live in
-// `examples/assets/shaders/morphs/*.wgsl`; each header carries the
+// `assets/shaders/morphs/*.wgsl`; each header carries the
 // upstream URL, author, license, packing map, and premultiplied-alpha notes.
 // Every shader opens with the endpoint guards from the prelude's identity
 // contract (progress <= 0 → exact "from", >= 1 → exact "to").

@@ -43,21 +43,14 @@ pub fn build_app(title: &str, hot_reload: bool, present_mode: PresentMode) -> Ap
         );
 
     let mut app = App::new();
-    app.add_plugins(
-        DefaultPlugins
-            .set(WindowPlugin {
-                primary_window: Some(Window {
-                    title: title.to_string(),
-                    present_mode,
-                    ..default()
-                }),
-                ..default()
-            })
-            .set(bevy::asset::AssetPlugin {
-                file_path: "../assets".into(),
-                ..default()
-            }),
-    )
+    app.add_plugins(DefaultPlugins.set(WindowPlugin {
+        primary_window: Some(Window {
+            title: title.to_string(),
+            present_mode,
+            ..default()
+        }),
+        ..default()
+    }))
     .add_plugins(react_plugin)
     .add_systems(Startup, |mut commands: Commands| {
         commands.spawn((Camera2d, IsDefaultUiCamera));

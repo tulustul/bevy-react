@@ -1,6 +1,6 @@
 //! The permanent full-screen backdrop: a dark studio lit by two slowly
 //! drifting gel lights — React's cyan and Bevy's ember — with dust in the
-//! beams (see `examples/assets/shaders/ambient.wgsl`, which owns all the
+//! beams (see `assets/shaders/ambient.wgsl`, which owns all the
 //! motion/color logic). It sits behind **every** scene
 //! (including the empty viewport `selectScene(null)` lands on), so each demo
 //! gets living, colorful pixels behind it — which is what makes

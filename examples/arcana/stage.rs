@@ -1,5 +1,5 @@
 //! The stage: the one 3D world behind the whole UI. A camera-locked sky
-//! quad (`arcana/cosmos.wgsl` — nebula, stars, the radiance under the
+//! quad (`shaders/cosmos.wgsl` — nebula, stars, the radiance under the
 //! table), a giant golden astrolabe turning behind the cards, and motes of
 //! light drifting up through it. The camera sways a little, so the world
 //! has depth against the flat UI in front of it.
@@ -79,7 +79,7 @@ struct CosmosMaterial {
 
 impl Material for CosmosMaterial {
     fn fragment_shader() -> ShaderRef {
-        "arcana/cosmos.wgsl".into()
+        "shaders/cosmos.wgsl".into()
     }
 }
 

@@ -30,11 +30,11 @@ pub struct ParticleMaterial {
 
 impl Material for ParticleMaterial {
     fn vertex_shader() -> ShaderRef {
-        "atrium/particles.wgsl".into()
+        "shaders/particles.wgsl".into()
     }
 
     fn fragment_shader() -> ShaderRef {
-        "atrium/particles.wgsl".into()
+        "shaders/particles.wgsl".into()
     }
 
     fn alpha_mode(&self) -> AlphaMode {

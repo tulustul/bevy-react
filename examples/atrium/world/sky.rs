@@ -23,7 +23,7 @@ pub struct SkyMaterial {
 
 impl Material for SkyMaterial {
     fn fragment_shader() -> ShaderRef {
-        "atrium/sky.wgsl".into()
+        "shaders/sky.wgsl".into()
     }
 
     fn enable_prepass() -> bool {

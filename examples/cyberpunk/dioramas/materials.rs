@@ -2,7 +2,7 @@
 //! over a lit `StandardMaterial` — window grids, neon glyph signs, wet
 //! asphalt, marble, the Tenkai mark, a car's sheen) and the particles (fire,
 //! smoke, embers, rain, dust: each emitter one mesh of quads animated in its
-//! vertex shader, one draw call). Shaders: `assets/cyberpunk/diorama_*.wgsl`.
+//! vertex shader, one draw call). Shaders: `assets/shaders/diorama_*.wgsl`.
 
 use bevy::asset::RenderAssetUsages;
 use bevy::mesh::{Indices, MeshVertexBufferLayoutRef, PrimitiveTopology};
@@ -40,7 +40,7 @@ pub struct SkyMaterial {
 
 impl Material for SkyMaterial {
     fn fragment_shader() -> ShaderRef {
-        "cyberpunk/diorama_sky.wgsl".into()
+        "shaders/diorama_sky.wgsl".into()
     }
 
     fn enable_prepass() -> bool {
@@ -81,7 +81,7 @@ pub struct Paint {
 
 impl MaterialExtension for Paint {
     fn fragment_shader() -> ShaderRef {
-        "cyberpunk/diorama_paint.wgsl".into()
+        "shaders/diorama_paint.wgsl".into()
     }
 }
 
@@ -116,11 +116,11 @@ pub struct ParticleMaterial {
 
 impl Material for ParticleMaterial {
     fn vertex_shader() -> ShaderRef {
-        "cyberpunk/diorama_particles.wgsl".into()
+        "shaders/diorama_particles.wgsl".into()
     }
 
     fn fragment_shader() -> ShaderRef {
-        "cyberpunk/diorama_particles.wgsl".into()
+        "shaders/diorama_particles.wgsl".into()
     }
 
     fn alpha_mode(&self) -> AlphaMode {

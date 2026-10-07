@@ -283,7 +283,7 @@ Rules for morph shaders:
 
 The demos app ports a pack of [gl-transitions](https://gl-transitions.com/gallery)
 transitions this way; their shaders, in
-[`examples/assets/shaders/morphs/`](../../../examples/assets/shaders/morphs/),
+[`examples/demos/assets/shaders/morphs/`](../../../examples/demos/assets/shaders/morphs/),
 are worked examples, registered in
 [`examples/demos/filters.rs`](../../../examples/demos/filters.rs).
 

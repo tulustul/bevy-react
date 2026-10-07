@@ -335,12 +335,12 @@ mod tests {
             &["fragment"],
         );
 
-        // The demos' app-side passes (every `examples/assets/shaders` WGSL
+        // The demos' app-side passes (every `examples/demos/assets/shaders` WGSL
         // that imports the prelude) get the same check — their only pre-GPU
         // coverage: at runtime a broken pass only gates its layer and warns.
         // Skipped when the examples tree isn't present (a packaged crate).
-        let examples =
-            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../examples/assets/shaders");
+        let examples = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../examples/demos/assets/shaders");
         let mut dirs = vec![examples.clone()];
         let mut checked = 0;
         while let Some(dir) = dirs.pop() {
