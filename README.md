@@ -71,13 +71,14 @@ shore. Every window is still React, still clickable.
 
 ![The northern lights over black mountains, mirrored in the lake: frosted-glass React windows float in front, a dotted globe turned to Iceland beside them.](https://raw.githubusercontent.com/tulustul/bevy-react/main/screenshots/atrium-aurora.webp)
 
-[**Epoch**](https://github.com/tulustul/bevy-react/tree/main/examples/epoch)
+[**Civilization**](https://github.com/tulustul/bevy-react/tree/main/examples/civilization)
 recreates the interface of a 4X strategy game over a generated hex world: city
 banners and unit flags pinned to the 3D map, a minimap filmed by a second
 camera, a city screen, a technology tree, and reports with history graphs for
 every civilization. Every panel is React; the numbers come from the map.
+[Play it in your browser](https://tulustul.github.io/bevy-react/civilization/).
 
-![A hex map of forests, farms and snowy mountains under a strategy-game interface: city banners over the towns, research and civic trackers, rival leaders, a minimap and the next-turn button.](https://raw.githubusercontent.com/tulustul/bevy-react/main/screenshots/epoch-map.webp)
+![A hex map of forests, farms and snowy mountains under a strategy-game interface: city banners over the towns, research and civic trackers, rival leaders, a minimap and the next-turn button.](https://raw.githubusercontent.com/tulustul/bevy-react/main/screenshots/civilization-map.webp)
 
 [**Cyberpunk**](https://github.com/tulustul/bevy-react/tree/main/examples/cyberpunk)
 is a homage to the front end of a famous open-world RPG: the title screen,
@@ -85,6 +86,7 @@ the main menu, a six-step character creation, saves, eight tabs of settings
 that really change the camera, the window and the sound, and the pause
 menu over your lifepath's world. Every screen is React and glitches into the
 next through a custom morph shader; the worlds on the cards are live 3D.
+[Play it in your browser](https://tulustul.github.io/bevy-react/cyberpunk/).
 
 ![The main menu of the homage: a slashed yellow CYBERPUNK wordmark and five menu items on a translucent red band, glowing cyan and red bars and walls of magenta data blurred behind it.](https://raw.githubusercontent.com/tulustul/bevy-react/main/screenshots/cyberpunk-menu.webp)
 

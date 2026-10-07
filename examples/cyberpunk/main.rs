@@ -62,6 +62,8 @@ fn main() {
         title: "Cyberpunk · bevy-react".into(),
         // Starts at the scale `fit_ui_to_1080p` keeps (no first-frame jump).
         resolution: WindowResolution::new(1600, 900).with_scale_factor_override(900.0 / UI_HEIGHT),
+        // The web build's canvas fills the page (`ui/index.html`).
+        fit_canvas_to_parent: true,
         ..default()
     };
     if let Some(cfg) = &shoot {
@@ -134,6 +136,10 @@ fn quit(_: On<Quit>, mut exit: MessageWriter<AppExit>) {
 /// follows the physical height, so the menus keep their proportions (and
 /// stay crisp) at any resolution. Compare-before-write, so a settled window
 /// is never touched.
+///
+/// bevy_winit answers an override change by resizing the window to keep its
+/// logical size. On the web that resize would fix the canvas at a px size,
+/// so `ui/index.html` pins the canvas to the page with `!important`.
 fn fit_ui_to_1080p(mut windows: Query<&mut Window, With<PrimaryWindow>>) {
     for mut window in &mut windows {
         let height = window.resolution.physical_height();

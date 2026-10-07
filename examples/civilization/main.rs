@@ -1,4 +1,4 @@
-//! **Epoch** — a 4X strategy game's interface, built with bevy-react.
+//! **Civilization** — a 4X strategy game's interface, built with bevy-react.
 //!
 //! No game is played: the world is a generated hex map, the empire's
 //! numbers are made up, and every screen of the interface is React:
@@ -12,8 +12,8 @@
 //!
 //! Run (from the repo root):
 //!
-//!   npm install && npm run build -w epoch
-//!   cargo run -p epoch
+//!   npm install && npm run build -w civilization
+//!   cargo run -p civilization
 
 mod camera;
 mod map;
@@ -44,8 +44,10 @@ fn main() {
 
     let shoot = shoot::parse(&args);
     let mut window = Window {
-        title: "Epoch · bevy-react".into(),
+        title: "Civilization · bevy-react".into(),
         resolution: WindowResolution::new(1440, 900),
+        // The web build's canvas fills the page (`ui/index.html`).
+        fit_canvas_to_parent: true,
         ..default()
     };
     if let Some(cfg) = &shoot {

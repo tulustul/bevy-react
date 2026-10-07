@@ -15,7 +15,7 @@ import { REPORT_TABS, Reports } from "./screens/Reports";
 import { Screen } from "./screens/Screen";
 import { TechTree } from "./screens/TechTree";
 
-/** Epoch: the world comes from Bevy once; everything else on screen is
+/** Civilization: the world comes from Bevy once; everything else on screen is
  *  React over it. */
 export function App() {
   const win = useWindowSize();
@@ -24,7 +24,7 @@ export function App() {
     bevy.map.world().then(setWorld);
   }, []);
   if (!world || win.width === 0) return null;
-  return <Epoch world={world} width={win.width} height={win.height} />;
+  return <Civilization world={world} width={win.width} height={win.height} />;
 }
 
 const TITLES: Record<ScreenId, string> = {
@@ -33,7 +33,7 @@ const TITLES: Record<ScreenId, string> = {
   rankings: "World Rankings",
 };
 
-function Epoch({
+function Civilization({
   world,
   width,
   height,

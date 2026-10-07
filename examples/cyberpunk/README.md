@@ -16,6 +16,11 @@ cargo run -p cyberpunk
 `npm run watch -w cyberpunk` rebuilds on save; edits hot-reload with
 component state intact.
 
+It also runs in the browser:
+[play it on GitHub Pages](https://tulustul.github.io/bevy-react/cyberpunk/), or
+build the wasm version yourself with `npm run build:web -w cyberpunk` (it serves
+the result; see [Web builds](../../docs/guide/tooling/web.md)).
+
 ## Try
 
 - **The title screen**: Space (or a click) starts BREACHING… and the main
@@ -61,6 +66,8 @@ React code is a 1080p pixel and the text stays crisp.
 ![The lifepath step: three tall cards with live 3D worlds in them, a dusky badlands, a rainy neon alley and a corporate lobby with a glowing emblem; the hovered card glows red over its story.](../../screenshots/cyberpunk-lifepath.webp)
 
 ![Attribute points: a resident ID card with a scanned SVG portrait and an attribute radar between the hovered attribute's description and the five attribute plates.](../../screenshots/cyberpunk-attributes.webp)
+
+![The graphics settings tab: eight tabs across the top, rows of selectors, a field-of-view slider and on/off switches for film grain, chromatic aberration, depth of field and lens flare, with Gamma Correction and Control Scheme buttons on the right.](../../screenshots/cyberpunk-settings.webp)
 
 ## Performance
 

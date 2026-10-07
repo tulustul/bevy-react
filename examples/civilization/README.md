@@ -1,20 +1,25 @@
-# Epoch
+# Civilization
 
 The interface of a 4X strategy game, after the great turn-based empire
 builders, built with bevy-react. A generated hex world is Bevy; every panel,
 banner, tooltip, tree and graph over it is React. No game is played: the
 empire's numbers are made up, but they come from the map.
 
-![A hex map of forests, farms and snowy mountains: city banners float over the towns, the research and civic trackers sit top left, rival leaders top right, the minimap and the next-turn button bottom right.](../../screenshots/epoch-map.webp)
+![A hex map of forests, farms and snowy mountains: city banners float over the towns, the research and civic trackers sit top left, rival leaders top right, the minimap and the next-turn button bottom right.](../../screenshots/civilization-map.webp)
 
 ```sh
-npm install                 # once, from the repo root
-npm run build -w epoch      # build the React bundles
-cargo run -p epoch
+npm install                     # once, from the repo root
+npm run build -w civilization   # build the React bundles
+cargo run -p civilization
 ```
 
-`npm run watch -w epoch` rebuilds on save; edits hot-reload with component
-state intact.
+`npm run watch -w civilization` rebuilds on save; edits hot-reload with
+component state intact.
+
+It also runs in the browser:
+[play it on GitHub Pages](https://tulustul.github.io/bevy-react/civilization/),
+or build the wasm version yourself with `npm run build:web -w civilization`
+(it serves the result; see [Web builds](../../docs/guide/tooling/web.md)).
 
 ## Try
 
@@ -32,7 +37,7 @@ state intact.
 - **The political lens**, above the minimap, paints every civilization's
   territory in its color.
 
-![The reports screen: score by turn for five civilizations as colored lines, a stacked chart of the player's yields below.](../../screenshots/epoch-reports.webp)
+![The reports screen: score by turn for five civilizations as colored lines, a stacked chart of the player's yields below.](../../screenshots/civilization-reports.webp)
 
 ## What you're looking at
 
@@ -51,7 +56,7 @@ state intact.
 Every message, request and event between React and Bevy is a Rust struct,
 generated into `ui/src/bevy.ts`.
 
-![The technology tree: eras left to right, researched techs in gold, the current research glowing blue, wires between prerequisites.](../../screenshots/epoch-tech.webp)
+![The technology tree: eras left to right, researched techs in gold, the current research glowing blue, wires between prerequisites.](../../screenshots/civilization-tech.webp)
 
 ## Performance
 
@@ -64,12 +69,12 @@ the map and 11 ms with a screen open.
 average frame time:
 
 ```sh
-cargo run -p epoch -- --shoot out.png 5 --scale 1.5 \
+cargo run -p civilization -- --shoot out.png 5 --scale 1.5 \
   --do "1 turn" --do "1.5 hover 20 20"
 ```
 
 The steps are listed in `shoot.rs`. Run the binary directly with
-`BEVY_ASSET_ROOT=examples/epoch`, or assets resolve against `target/`.
+`BEVY_ASSET_ROOT=examples/civilization`, or assets resolve against `target/`.
 
 The headings are set in [Cinzel](https://github.com/NDISCOVER/Cinzel)
 (SIL Open Font License).

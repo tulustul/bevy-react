@@ -81,11 +81,9 @@ git tag v<version>
 git push origin v<version>
 ```
 
-### 12. Deploy the docs site + web demo to Github Pages
-
-From the tagged commit. One push replaces the whole `gh-pages` branch: the
-docs at the site root, the wasm demo under `/demo/`.
+### 12. Deploy the docs site + web demos to Github Pages
 
 ```sh
-npm run deploy:site
+npm run deploy:docs
+npm run deploy:demos
 ```

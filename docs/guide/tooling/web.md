@@ -149,15 +149,24 @@ served as is.
   saved between sessions, the Console tab stays empty (use the browser's
   console), and some timing columns in the Bridge tab are not measured. See
   [Devtools](devtools.md).
+- **WebGL2 shaders.** Custom WGSL (filters, materials) is translated to GLSL
+  ES 3.00, so it can't use storage buffers, compute, or the bit-counting
+  built-ins such as `countOneBits`. A shader that fails to compile there can
+  stop the whole app. Bevy also turns some effects off, depth of field among
+  them.
 
 ## Reference setup
 
-The demos app builds for the web with one script,
-[`examples/demos/ui/build-web.mjs`](../../../examples/demos/ui/build-web.mjs):
-it builds both bundles with `buildVendor` and `buildApp` from
-`bevy-react/build-lib`, compiles the Bevy app to wasm, runs `wasm-bindgen`,
-copies [`index.html`](../../../examples/demos/ui/index.html) and the assets
-into `dist/`, and serves it. Its `main` and window setup are in
+The demos app and the
+[Cyberpunk](https://tulustul.github.io/bevy-react/cyberpunk/) and
+[Civilization](https://tulustul.github.io/bevy-react/civilization/) showcases
+build for the web with one script,
+[`examples/build-web.mjs`](../../../examples/build-web.mjs): it builds both
+bundles with `buildVendor` and `buildApp` from `bevy-react/build-lib`,
+compiles the Bevy app to wasm, runs `wasm-bindgen`, copies the example's
+page (for the demos,
+[`examples/demos/ui/index.html`](../../../examples/demos/ui/index.html)) and
+its assets into `dist/`, and serves it. The demos' `main` and window setup are in
 [`examples/demos/main.rs`](../../../examples/demos/main.rs). Run it from the
 repository root:
 

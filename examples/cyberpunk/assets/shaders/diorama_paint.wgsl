@@ -135,7 +135,12 @@ fn glyph(q: vec2<f32>, seed: f32) -> f32 {
         vec4<f32>(0.0, 1.0, 0.5, 0.5), vec4<f32>(1.0, 1.0, 0.5, 0.5),
     );
     var bits = u32(hash12(vec2<f32>(seed, seed * 0.37 + 3.1)) * 16383.0);
-    if countOneBits(bits) < 4u {
+    // Counted by hand: `countOneBits` has no WebGL2 (GLSL ES 3.00) form.
+    var strokes_on = 0u;
+    for (var i = 0u; i < 14u; i++) {
+        strokes_on += (bits >> i) & 1u;
+    }
+    if strokes_on < 4u {
         bits = bits | 0x1A5u;
     }
     var d = 10.0;

@@ -27,8 +27,8 @@ cargo install wasm-bindgen-cli                # once, for web (need not be on PA
 the Bevy app to wasm (`wasm-bindgen`), writes a static site to `ui/dist/`, and serves it
 with `npx serve`. Add `-- --build-only` to build without serving. wasm builds are
 disk-heavy — keep tens of GB free (`cargo clean --target wasm32-unknown-unknown` reclaims it).
-The web build is deployed together with the docs site (`npm run deploy:site` from the repo
-root), under `/demo/`; `?page=<slug>` opens a demo directly (`?page=backdrop-filters`).
+The web build is deployed with `npm run deploy:demos` (from the repo root), under `/demo/`
+beside the docs site; `?page=<slug>` opens a demo directly (`?page=backdrop-filters`).
 
 ## Other
 

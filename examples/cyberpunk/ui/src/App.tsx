@@ -143,7 +143,11 @@ export function App() {
       case "quit":
         return setDialog({
           text: "Are you sure you want to quit the game?",
-          onConfirm: () => bevy.app.quit(null),
+          // In the browser an exited app is a frozen page: start over.
+          onConfirm: () =>
+            typeof location === "undefined"
+              ? bevy.app.quit(null)
+              : location.reload(),
         });
     }
   };

@@ -11,7 +11,8 @@
 //   npm run docs -- --uncovered    also list reference keys no page covers
 //   npm run docs -- --out <dir>    build into <dir> instead of docs/dist/
 //
-// Deploying (`npm run deploy:site`) adds the wasm demo under docs/dist/demo/.
+// `npm run deploy:docs` publishes docs/dist/ to the gh-pages root, keeping
+// the web apps' folders (each app's own `deploy:*` script replaces those).
 
 import { execFileSync } from "node:child_process";
 import {

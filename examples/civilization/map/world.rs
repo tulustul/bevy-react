@@ -600,7 +600,7 @@ fn fbm(mut p: Vec2, seed: u32) -> f32 {
 mod tests {
     use super::*;
 
-    /// `cargo test -p epoch -- --nocapture` prints the map.
+    /// `cargo test -p civilization -- --nocapture` prints the map.
     #[test]
     fn the_world_is_settled() {
         let world = World::generate();

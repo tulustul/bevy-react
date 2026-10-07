@@ -166,7 +166,13 @@ fn video(ev: On<VideoSettings>, mut window: Query<&mut Window, With<PrimaryWindo
     }
     let size = (ev.width, ev.height);
     let current = (window.physical_width(), window.physical_height());
-    if mode == WindowMode::Windowed && size.0 > 0 && size.1 > 0 && size != current {
+    // The web build's canvas follows the page instead (`ui/index.html`).
+    if !cfg!(target_arch = "wasm32")
+        && mode == WindowMode::Windowed
+        && size.0 > 0
+        && size.1 > 0
+        && size != current
+    {
         window.resolution.set_physical_resolution(size.0, size.1);
     }
     let present = if ev.vsync {

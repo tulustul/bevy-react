@@ -1,6 +1,6 @@
 import type { BevyStyle } from "bevy-react";
 
-/** Epoch's look, after the great 4X interfaces: deep navy panels in fine
+/** Civilization's look, after the great 4X interfaces: deep navy panels in fine
  *  gold frames, parchment-white type, carved capitals for titles, and one
  *  color per kind of yield. */
 export const C = {

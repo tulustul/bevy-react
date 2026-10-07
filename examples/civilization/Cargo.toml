@@ -1,11 +1,11 @@
 [package]
-name = "epoch"
+name = "civilization"
 version.workspace = true
 edition.workspace = true
 publish = false
 
 [[bin]]
-name = "epoch"
+name = "civilization"
 path = "main.rs"
 
 [dependencies]
