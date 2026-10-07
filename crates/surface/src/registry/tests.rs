@@ -217,3 +217,34 @@ fn bind_surfaces_binds_registered_and_hides_unregistered() {
         "a bound surface root is shown"
     );
 }
+
+/// The surface camera renders at the spec's scale factor (the UI lays out in
+/// `size / scale` logical px); a non-positive one falls back to `1.0`.
+#[test]
+fn surface_camera_carries_the_scale_factor() {
+    let mut app = test_app();
+    app.add_systems(Update, bind_surfaces);
+    app.world_mut()
+        .resource_scope(|world, mut surfaces: Mut<Surfaces>| {
+            let mut images = world.resource_mut::<Assets<Image>>();
+            for (name, scale_factor) in [("crisp", 2.0), ("broken", -1.0)] {
+                let spec = SurfaceSpec {
+                    scale_factor,
+                    ..default()
+                };
+                surfaces.create(&mut images, name, spec);
+            }
+        });
+    app.update();
+    let scale = |app: &App, name: &str| {
+        let cam = app.world().resource::<Surfaces>().entries[name]
+            .camera
+            .expect("bind_surfaces spawned the camera");
+        match app.world().entity(cam).get::<BevyRenderTarget>() {
+            Some(BevyRenderTarget::Image(target)) => target.scale_factor,
+            other => panic!("surface camera renders to its image, got {other:?}"),
+        }
+    };
+    assert_eq!(scale(&app, "crisp"), 2.0);
+    assert_eq!(scale(&app, "broken"), 1.0);
+}

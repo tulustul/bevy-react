@@ -369,6 +369,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "atrium"
+version = "0.7.0"
+dependencies = [
+ "bevy",
+ "bevy-react",
+ "serde",
+ "ts-rs",
+]
+
+[[package]]
 name = "autocfg"
 version = "1.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

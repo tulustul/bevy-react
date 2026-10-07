@@ -74,11 +74,12 @@ never a frame behind. Creating an existing name again replaces the surface.
 
 `SurfaceSpec` configures it:
 
-| Field         | Default            | Meaning                                                 |
-| ------------- | ------------------ | ------------------------------------------------------- |
-| `size`        | 512 × 512          | Texture size in pixels, at most 4096 per side           |
-| `clear_color` | `Color::BLACK`     | Fills the texture under the UI; transparent for a decal |
-| `mode`        | `RenderMode::Live` | When the UI renders (see "Render modes")                |
+| Field          | Default            | Meaning                                                 |
+| -------------- | ------------------ | ------------------------------------------------------- |
+| `size`         | 512 × 512          | Texture size in pixels, at most 4096 per side           |
+| `clear_color`  | `Color::BLACK`     | Fills the texture under the UI; transparent for a decal |
+| `mode`         | `RenderMode::Live` | When the UI renders (see "Render modes")                |
+| `scale_factor` | `1.0`              | Texture pixels per UI pixel, like a window's DPI scale  |
 
 `get(name)` returns the texture handle, and `invalidate`, `set_mode` and
 `remove` work as on render targets. `remove(name)` despawns the surface's
@@ -90,8 +91,11 @@ Changing `target` moves the subtree to another surface.
 
 ## Layout
 
-- The subtree lays out in the texture's pixel space: one logical pixel is
-  one texture pixel, whatever the window's scale factor.
+- The subtree lays out in `size / scale_factor` logical pixels, whatever the
+  window's scale factor. At the default `1.0` one logical pixel is one
+  texture pixel; at `2.0` an 800 × 600 texture holds a 400 × 300 layout whose
+  text and shapes rasterize at twice the resolution, the way a HiDPI window
+  does. Raise it for a mesh that fills much of the screen.
 - The `<surface>` element fills the texture by default (`width` and `height`
   `"100%"`). Its `style` overrides that and styles the root like a node.
 - The `<surface>` takes no space where you write it in the React tree. Put it
@@ -120,6 +124,10 @@ UvChannel::Uv1`), match it with
 - Several meshes can display and pick the same surface.
 - Only `SurfacePointer` meshes are ray-cast: another mesh in front of the
   screen doesn't block clicks.
+- Screen UI covers the world: while the cursor is on an interactive on-screen
+  element (a button, a node with pointer handlers), the surface behind it
+  gets no hover or clicks. A press that started on the surface keeps it
+  through the drag.
 
 ## Render modes
 

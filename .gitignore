@@ -6,6 +6,7 @@ examples/demos/ui/dist/
 examples/stress/ui/dist/
 examples/layers-stress/ui/dist/
 examples/arcana/ui/dist/
+examples/atrium/ui/dist/
 docs/dist/
 
 benchmark_results

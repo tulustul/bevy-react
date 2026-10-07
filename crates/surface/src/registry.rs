@@ -24,7 +24,8 @@ pub use bevy_react_core::render_target::RenderMode;
 /// Parameters for [`Surfaces::create`].
 #[derive(Clone, Copy, Debug)]
 pub struct SurfaceSpec {
-    /// The texture resolution in pixels. The UI subtree lays out in this space.
+    /// The texture resolution in pixels. The UI subtree lays out in this
+    /// space divided by [`scale_factor`](Self::scale_factor).
     pub size: UVec2,
     /// The color the UI camera clears the texture to before drawing the subtree.
     /// Opaque (`Color::BLACK`) by default — a screen; use a translucent/`NONE`
@@ -32,6 +33,12 @@ pub struct SurfaceSpec {
     pub clear_color: Color,
     /// Render model (default [`RenderMode::Live`]).
     pub mode: RenderMode,
+    /// Texture pixels per logical UI pixel, like a window's DPI scale
+    /// (default `1.0`): the subtree lays out in `size / scale_factor` logical
+    /// px and text rasterizes at the texture's full resolution. Raise it to
+    /// keep a UI designed at a fixed logical size crisp on a large or
+    /// close-up mesh.
+    pub scale_factor: f32,
 }
 
 impl Default for SurfaceSpec {
@@ -40,6 +47,7 @@ impl Default for SurfaceSpec {
             size: UVec2::new(512, 512),
             clear_color: Color::BLACK,
             mode: RenderMode::Live,
+            scale_factor: 1.0,
         }
     }
 }
@@ -48,6 +56,8 @@ impl Default for SurfaceSpec {
 pub(crate) struct Entry {
     handle: Handle<Image>,
     pub(crate) size: UVec2,
+    /// Texture px per logical px ([`SurfaceSpec::scale_factor`]).
+    pub(crate) scale_factor: f32,
     clear_color: Color,
     mode: RenderMode,
     /// The UI camera drawing this surface, spawned lazily by [`bind_surfaces`].
@@ -87,6 +97,7 @@ impl Surfaces {
             Entry {
                 handle: handle.clone(),
                 size,
+                scale_factor: sanitized_scale(spec.scale_factor),
                 clear_color: spec.clear_color,
                 mode: spec.mode,
                 camera: None,
@@ -125,6 +136,16 @@ impl Surfaces {
     /// is re-registered.
     pub fn remove(&mut self, name: &str) {
         self.entries.remove(name);
+    }
+}
+
+/// A usable scale factor: a non-finite or non-positive one (a layout of
+/// infinite or negative size) falls back to `1.0`, as `create` clamps `size`.
+fn sanitized_scale(scale: f32) -> f32 {
+    if scale.is_finite() && scale > 0.0 {
+        scale
+    } else {
+        1.0
     }
 }
 
@@ -187,7 +208,7 @@ pub fn bind_surfaces(
                 },
                 BevyRenderTarget::Image(ImageRenderTarget {
                     handle: entry.handle.clone(),
-                    scale_factor: 1.0,
+                    scale_factor: entry.scale_factor,
                 }),
                 SurfaceCamera(name.clone()),
             ))

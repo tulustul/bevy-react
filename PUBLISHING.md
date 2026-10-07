@@ -31,6 +31,9 @@ cargo run --release -p minimal
 
 npm run build:prod -w arcana
 cargo run --release -p arcana
+
+npm run build:prod -w atrium
+cargo run --release -p atrium
 ```
 
 ### 4. Verify the web build works

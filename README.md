@@ -62,6 +62,15 @@ can turn over — still React, still clickable.
 
 ![A tarot card held as a real 3D object: turned in perspective, its foil running in rainbow bands, a live black hole spinning in its art window.](https://raw.githubusercontent.com/tulustul/bevy-react/main/screenshots/arcana-card.webp)
 
+[**Atrium**](https://github.com/tulustul/bevy-react/tree/main/examples/atrium)
+is a spatial desktop: React apps on windows of frosted glass floating over an
+alpine lake. You drag them around you in 3D, borrow the sky of any place on a
+globe (the northern lights come out over your lake), watch your windows
+reflected in the water, and find yourself through live cameras around the
+shore. Every window is still React, still clickable.
+
+![The northern lights over black mountains, mirrored in the lake: frosted-glass React windows float in front, a dotted globe turned to Iceland beside them.](https://raw.githubusercontent.com/tulustul/bevy-react/main/screenshots/atrium-aurora.webp)
+
 ## Getting started
 
 ```sh

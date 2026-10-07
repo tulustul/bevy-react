@@ -1131,6 +1131,7 @@ pub fn resolve_layer_repaints(
     membership: Res<LayerMembership>,
     mut registry: ResMut<LayersRegistry>,
     reshaped: Query<Entity, Changed<bevy::text::TextLayoutInfo>>,
+    revealed: Query<Entity, Changed<InheritedVisibility>>,
     focused_inputs: Query<(Entity, &crate::bridge::FocusState), With<bevy::text::EditableText>>,
     alphas: Query<&LayerGroupAlpha>,
 ) {
@@ -1155,6 +1156,15 @@ pub fn resolve_layer_repaints(
     // 3. Text reshape (font load, re-wrap, edits): Bevy's own text systems
     //    write `TextLayoutInfo` — there is no bevy-react write site to tap.
     for e in &reshaped {
+        if let Some(&layer) = membership.node_to_layer.get(&e) {
+            state.dirty.insert(layer);
+        }
+    }
+    // 3b. Visibility flips: a subtree hidden at capture time captured
+    //     nothing (hidden nodes aren't extracted), so showing it must
+    //     re-capture — an `<anchor>` overlay hides until its first layout,
+    //     exactly when a fresh layer takes its first capture.
+    for e in &revealed {
         if let Some(&layer) = membership.node_to_layer.get(&e) {
             state.dirty.insert(layer);
         }
@@ -1880,6 +1890,38 @@ mod tests {
             .push(outer_member);
         let dirty = run(&mut world);
         assert!(dirty.contains(&outer) && !dirty.contains(&inner));
+    }
+
+    /// A layer captured while its subtree was hidden captured nothing:
+    /// revealing it (the member's `InheritedVisibility` flipping) re-captures
+    /// it once, and a steady visibility leaves it cached.
+    #[test]
+    fn revealing_a_hidden_member_repaints_its_layer() {
+        let mut world = World::new();
+        world.init_resource::<LayerContentDirt>();
+        world.init_resource::<LayerRepaintState>();
+        world.init_resource::<LayersRegistry>();
+
+        let root = world.spawn(InheritedVisibility::HIDDEN).id();
+        let member = world.spawn(InheritedVisibility::HIDDEN).id();
+        let mut membership = LayerMembership::default();
+        membership.node_to_layer.insert(root, root);
+        membership.node_to_layer.insert(member, root);
+        membership.enclosing.insert(root, None);
+        world.insert_resource(membership);
+
+        let mut schedule = Schedule::default();
+        schedule.add_systems(resolve_layer_repaints);
+        let mut run = |world: &mut World| {
+            schedule.run(world);
+            world.resource::<LayerRepaintState>().dirty.clone()
+        };
+        run(&mut world); // first sight (the components were just added)
+        assert!(run(&mut world).is_empty(), "hidden and unchanged → cached");
+
+        *world.get_mut::<InheritedVisibility>(member).unwrap() = InheritedVisibility::VISIBLE;
+        assert!(run(&mut world).contains(&root), "revealed → re-captured");
+        assert!(run(&mut world).is_empty(), "then cached again");
     }
 
     /// A `cache: "never"` layer is dirty every frame with no other dirt —

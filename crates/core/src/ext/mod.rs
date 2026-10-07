@@ -210,6 +210,12 @@ impl VirtualButtons {
         ),
     ];
 
+    /// Whether a press this pointer forwarded is still held (a drag in
+    /// progress keeps its target).
+    pub fn any_pressed(&self) -> bool {
+        self.pressed.iter().any(|p| *p)
+    }
+
     /// Forward this frame's presses and owed releases at `location`.
     pub fn forward(
         &mut self,

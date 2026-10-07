@@ -74,6 +74,8 @@ Re-renders the layer:
 - text changes, images loading or changing, `<canvas>` and `<svg>`
   repaints;
 - nodes inside it being added, removed, moved or resized;
+- nodes inside it being shown or hidden (Bevy `Visibility`, such as an
+  `<anchor>` that stays hidden until its first layout);
 - animations and transitions of nodes inside it;
 - a focused `editableText` inside it, every frame while its caret blinks;
 - a change in a nested layer, which re-renders every layer around it.

@@ -1,0 +1,19 @@
+[package]
+name = "atrium"
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[[bin]]
+name = "atrium"
+path = "main.rs"
+
+[dependencies]
+bevy = { workspace = true, features = ["default"] }
+# Every bevy-react feature (the defaults): `<surface>` for the windows,
+# `<portal>` for the lenses, `<anchor>` for the globe's labels.
+bevy-react = { workspace = true, features = ["default"] }
+# For the nested payload types (`PlaceInfo`, `LensInfo`) the macros don't
+# derive themselves.
+serde = { workspace = true }
+ts-rs = { workspace = true }

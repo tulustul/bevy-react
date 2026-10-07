@@ -5,6 +5,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`SurfaceSpec::scale_factor`.** A `<surface>` can render at a DPI scale
+  like a window: the subtree lays out in `size / scale_factor` logical px and
+  rasterizes at the texture's full resolution, so a UI designed at a fixed
+  size stays crisp on a large mesh. In-world picking maps hits to logical px.
+
+### Fixed
+
+- A composited layer captured while its subtree was hidden stayed empty once
+  shown: a `morphFilter` or `opacity` group inside an `<anchor>` (which
+  hides until its first layout) drew nothing until something else
+  re-rendered it. Showing or hiding a layer's member now re-renders it.
+- A click on screen-space UI also clicked the `<surface>` mesh behind it.
+  Interactive on-screen UI under the cursor now covers in-world surfaces; a
+  press already held on a surface keeps its target.
+
 ## [0.7.0] - 2026-10-05
 
 ### Added

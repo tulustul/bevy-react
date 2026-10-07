@@ -272,3 +272,7 @@ elements, styles or filters should depend on `bevy-react` with
 - [`examples/arcana`](https://github.com/tulustul/bevy-react/tree/main/examples/arcana):
   the showcase — a card-pack game that combines custom filters, live `<portal>`
   art, `transform3d` and a `<surface>` card you can turn over in 3D.
+- [`examples/atrium`](https://github.com/tulustul/bevy-react/tree/main/examples/atrium):
+  a spatial desktop — React apps on `<surface>` windows of frosted glass in a
+  3D world, a globe with `<anchor>` labels, live `<portal>` lenses with a
+  shared-element flight, custom filters and morphs.

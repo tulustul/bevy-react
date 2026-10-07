@@ -13,6 +13,7 @@ use bevy::mesh::{Indices, VertexAttributeValues};
 use bevy::picking::mesh_picking::ray_cast::{MeshRayCast, MeshRayCastSettings, RayMeshHit};
 use bevy::picking::pointer::{Location, PointerAction, PointerId, PointerInput};
 use bevy::prelude::*;
+use bevy_react_core::PointerCapture;
 use bevy_react_core::ext::{VirtualButtons, VirtualPointers};
 
 use crate::registry::Surfaces;
@@ -70,12 +71,12 @@ pub struct SurfaceVirtualPointer {
     /// The custom pointer id. Picking events carrying this id originated from a
     /// surface mesh hit.
     pub id: PointerId,
-    /// Last UV-derived position (texture pixels) we drove the pointer to.
+    /// Last UV-derived position (logical px) we drove the pointer to.
     last_pos: Vec2,
     /// The image render target the pointer currently sits on (the surface under the
-    /// cursor), so we can move it off-bounds to generate `Out`/release when the
-    /// cursor leaves every surface mesh.
-    over_target: Option<Handle<Image>>,
+    /// cursor) and its scale factor, so we can move it off-bounds to generate
+    /// `Out`/release when the cursor leaves every surface mesh.
+    over_target: Option<(Handle<Image>, f32)>,
     /// Press bookkeeping (owed releases).
     buttons: VirtualButtons,
 }
@@ -101,6 +102,8 @@ pub fn init_surface_pointer(mut commands: Commands, mut pointers: ResMut<Virtual
 /// drive the virtual pointer to the hit UV (mapped into the surface's texture
 /// pixels), so Bevy's UI picking backend hit-tests the offscreen subtree. Emits
 /// `PointerInput` move/press/release events for the [`SurfaceVirtualPointer`].
+/// Interactive screen UI under the cursor ([`PointerCapture::over_ui`]) covers
+/// the surfaces behind it, except during a press already held on one.
 ///
 /// Scheduled before `bevy_picking`'s input processing so the pointer's new location
 /// is consumed the same frame.
@@ -114,35 +117,49 @@ pub fn drive_surface_pointer(
     mesh3ds: Query<&Mesh3d>,
     meshes: Res<Assets<Mesh>>,
     buttons: Res<ButtonInput<MouseButton>>,
+    capture: Option<Res<PointerCapture>>,
     mut ray_cast: MeshRayCast,
     mut input: MessageWriter<PointerInput>,
 ) {
     let pointer_id = state.id;
 
+    // Screen-space UI draws over the world: a cursor on an interactive
+    // on-screen control is not on the surface behind it — unless a press on
+    // a surface is already held, which keeps its target (a drag crossing a
+    // button). Last frame's capture: this runs before `PointerCaptureSet`.
+    let covered = capture.is_some_and(|c| c.over_ui) && !state.buttons.any_pressed();
+
     // Nearest `SurfacePointer` mesh under the cursor (cloned out of the cast borrow).
-    let hit = cursor_ray(&windows, &cameras).and_then(|ray| {
-        let filter = |entity: Entity| pointer_meshes.contains(entity);
-        let settings = MeshRayCastSettings::default().with_filter(&filter);
-        ray_cast
-            .cast_ray(ray, &settings)
-            .first()
-            .map(|(entity, hit)| (*entity, hit.clone()))
-    });
+    let hit = cursor_ray(&windows, &cameras)
+        .filter(|_| !covered)
+        .and_then(|ray| {
+            let filter = |entity: Entity| pointer_meshes.contains(entity);
+            let settings = MeshRayCastSettings::default().with_filter(&filter);
+            ray_cast
+                .cast_ray(ray, &settings)
+                .first()
+                .map(|(entity, hit)| (*entity, hit.clone()))
+        });
 
     if let Some((entity, hit)) = hit
         && let Ok(pointer) = pointer_meshes.get(entity)
         && let Some(handle) = surfaces.get(&pointer.surface)
-        && let Some(size) = surfaces.entries.get(&pointer.surface).map(|e| e.size)
+        && let Some((size, scale)) = surfaces
+            .entries
+            .get(&pointer.surface)
+            .map(|e| (e.size, e.scale_factor))
         && let Some(uv) = hit_uv(&pointer.uv_channel, &hit, entity, &mesh3ds, &meshes)
     {
         // UV (0,0)=top-left of the texture, matching the UI's pixel origin.
-        let position = Vec2::new(uv.x * size.x as f32, uv.y * size.y as f32);
-        let location = image_location(&handle, position);
+        // Picking reads pointer positions in logical px (it multiplies by the
+        // target's scale factor), so texture px divide by it.
+        let position = uv * size.as_vec2() / scale;
+        let location = image_location(&handle, scale, position);
         let delta = position - state.last_pos;
         // A zero-delta move carries no information (picking drops it before any
         // `Pointer<Move>`/`Drag` dispatch) — unless the target image changed,
         // where the move is what retargets `PointerLocation` to the new surface.
-        if delta != Vec2::ZERO || state.over_target.as_ref() != Some(&handle) {
+        if delta != Vec2::ZERO || state.over_target.as_ref().map(|(h, _)| h) != Some(&handle) {
             input.write(PointerInput::new(
                 pointer_id,
                 location.clone(),
@@ -150,7 +167,7 @@ pub fn drive_surface_pointer(
             ));
         }
         state.last_pos = position;
-        state.over_target = Some(handle);
+        state.over_target = Some((handle, scale));
 
         state
             .buttons
@@ -160,8 +177,8 @@ pub fn drive_surface_pointer(
 
     // No surface under the cursor: move the pointer off-bounds so picking fires an
     // `Out`, and release every press we still owe so a control never sticks.
-    if let Some(handle) = state.over_target.clone() {
-        let location = image_location(&handle, Vec2::splat(-1.0));
+    if let Some((handle, scale)) = state.over_target.clone() {
+        let location = image_location(&handle, scale, Vec2::splat(-1.0));
         state.buttons.leave(pointer_id, location, &mut input);
         state.over_target = None;
     }
@@ -202,12 +219,14 @@ fn hit_uv(
     }
 }
 
-/// A pointer [`Location`] on a surface's image render target at `position` pixels.
-fn image_location(handle: &Handle<Image>, position: Vec2) -> Location {
+/// A pointer [`Location`] on a surface's image render target at `position`
+/// logical px. The target must equal the surface camera's (scale factor
+/// included) for picking to match the pointer to it.
+fn image_location(handle: &Handle<Image>, scale_factor: f32, position: Vec2) -> Location {
     Location {
         target: NormalizedRenderTarget::Image(ImageRenderTarget {
             handle: handle.clone(),
-            scale_factor: 1.0,
+            scale_factor,
         }),
         position,
     }
