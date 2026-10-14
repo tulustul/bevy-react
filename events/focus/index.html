@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Focus · bevy-react</title>
+<meta name="description" content="Make any element focusable with tabIndex, react to onFocus and onBlur, style the focused element, and turn on Tab navigation and keyboard activation.">
+<link rel="canonical" href="https://tulustul.github.io/bevy-react/events/focus/">
+<link rel="alternate" type="text/markdown" href="../../events/focus.md">
+<meta property="og:title" content="Focus · bevy-react">
+<meta property="og:description" content="Make any element focusable with tabIndex, react to onFocus and onBlur, style the focused element, and turn on Tab navigation and keyboard activation.">
+<link rel="icon" href="../../logo.png">
+<link rel="stylesheet" href="../../style.css">
+<script src="../../docs.js" defer></script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="site-header">
+<a class="brand" href="../../"><img src="../../logo.png" alt="" width="74" height="74"> bevy-react</a>
+<span class="version">v0.8.1</span>
+<nav class="site-links" aria-label="Project">
+<a href="../../demo/">Live demo</a>
+<a href="https://github.com/tulustul/bevy-react">GitHub</a>
+<a href="https://docs.rs/bevy-react">docs.rs</a>
+<a href="https://www.npmjs.com/package/bevy-react">npm</a>
+</nav>
+</header>
+<div class="layout">
+<nav class="sidebar" aria-label="Documentation">
+<details class="nav-menu" open>
+<summary>Menu</summary>
+<ul><li><a href="../../">Introduction</a></li><li><a href="../../getting-started/">Getting started</a></li><li><a href="../../how-it-works/">How it works</a></li><li class="nav-section"><span>Elements</span><ul><li><a href="../../elements/node/">&lt;node&gt;</a></li><li><a href="../../elements/button/">&lt;button&gt;</a></li><li><a href="../../elements/text/">&lt;text&gt;</a></li><li><a href="../../elements/editable-text/">&lt;editableText&gt;</a></li><li><a href="../../elements/image/">&lt;image&gt;</a></li><li><a href="../../elements/canvas/">&lt;canvas&gt;</a></li><li><a href="../../elements/svg/">&lt;svg&gt;</a></li><li><a href="../../elements/portal/">&lt;portal&gt;</a></li><li><a href="../../elements/surface/">&lt;surface&gt;</a></li><li><a href="../../elements/root/">&lt;root&gt;</a></li><li><a href="../../elements/anchor/">&lt;anchor&gt;</a></li></ul></li><li class="nav-section"><span>Layout</span><ul><li><a href="../../layout/flexbox/">Flexbox</a></li><li><a href="../../layout/grid/">Grid</a></li><li><a href="../../layout/positioning/">Positioning</a></li></ul></li><li class="nav-section"><span>Styling</span><ul><li><a href="../../styling/units/">Units</a></li><li><a href="../../styling/colors/">Colors</a></li><li><a href="../../styling/borders/">Borders</a></li><li><a href="../../styling/spacing/">Spacing</a></li><li><a href="../../styling/sizing/">Sizing</a></li><li><a href="../../styling/layout-rounding/">Layout rounding</a></li><li><a href="../../styling/overflow/">Overflow</a></li><li><a href="../../styling/transforms/">Transforms</a></li><li><a href="../../styling/3d-transforms/">3D transforms</a></li><li><a href="../../styling/shadows/">Shadows</a></li><li><a href="../../styling/filters/">Filters</a></li><li><a href="../../styling/backdrop-filters/">Backdrop filters</a></li><li><a href="../../styling/morph-filters/">Morph filters</a></li><li><a href="../../styling/gradients/">Gradients</a></li><li><a href="../../styling/background-images/">Background images</a></li><li><a href="../../styling/image-rendering/">Image rendering</a></li><li><a href="../../styling/opacity/">Opacity</a></li><li><a href="../../styling/z-index/">Z-index</a></li><li><a href="../../styling/focus-policy/">Focus policy</a></li><li><a href="../../styling/cursors/">Cursors</a></li><li><a href="../../styling/layers/">Layers</a></li></ul></li><li class="nav-section"><span>Animations</span><ul><li><a href="../../animations/style-transitions/">Style transitions</a></li><li><a href="../../animations/animated-values/">Animated values</a></li><li><a href="../../animations/interpolation/">Interpolation</a></li><li><a href="../../animations/shared-elements/">Shared elements</a></li></ul></li><li class="nav-section"><span>Communication</span><ul><li><a href="../../communication/react-to-bevy/">React to Bevy</a></li><li><a href="../../communication/bevy-to-react/">Bevy to React</a></li><li><a href="../../communication/request-response/">Request / response</a></li><li><a href="../../communication/named-nodes/">Named nodes</a></li></ul></li><li class="nav-section"><span>Events</span><ul><li><a href="../../events/mouse/">Mouse</a></li><li><a href="../../events/keyboard/">Keyboard</a></li><li><a href="../../events/focus/" aria-current="page">Focus</a></li><li><a href="../../events/gamepad/">Gamepad</a></li><li><a href="../../events/window/">Window</a></li></ul></li><li class="nav-section"><span>Extending</span><ul><li><a href="../../extending/custom-elements/">Custom elements</a></li><li><a href="../../extending/custom-styles/">Custom styles</a></li><li><a href="../../extending/custom-filters/">Custom filters</a></li></ul></li><li class="nav-section"><span>Tooling</span><ul><li><a href="../../tooling/devtools/">Devtools</a></li><li><a href="../../tooling/hot-reload/">Hot reload</a></li><li><a href="../../tooling/web/">Web builds</a></li><li><a href="../../tooling/ts-codegen/">TypeScript codegen</a></li></ul></li><li class="nav-section"><span>Reference</span><ul><li><a href="../../reference/style-properties/">Style properties</a></li><li><a href="../../reference/elements/">Elements</a></li><li><a href="../../reference/filters/">Filters</a></li></ul></li><li><a href="../../performance/">Performance</a></li></ul>
+</details>
+</nav>
+<main id="main">
+<article>
+<h1 id="focus">Focus</h1>
+<p>One element at a time holds the keyboard focus (Bevy&#39;s <code>InputFocus</code>). It is
+the element typed keys go to, the one <code>focusStyle</code> applies to, and the one
+Tab moves on from. An <a href="../../elements/editable-text/"><code>&lt;editableText&gt;</code></a> can
+take the focus on its own; any other element can with a <code>tabIndex</code>.</p>
+<h2 id="usage"><a class="anchor" href="#usage" aria-hidden="true">#</a>Usage</h2>
+<pre><code class="language-tsx"><span class="token keyword">const</span> <span class="token punctuation">[</span>focused<span class="token punctuation">,</span> setFocused<span class="token punctuation">]</span> <span class="token operator">=</span> <span class="token function">useState</span><span class="token punctuation">(</span><span class="token boolean">false</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>node</span>
+  <span class="token attr-name">tabIndex</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token number">0</span><span class="token punctuation">}</span></span>
+  <span class="token attr-name">onFocus</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">=&gt;</span> <span class="token function">setFocused</span><span class="token punctuation">(</span><span class="token boolean">true</span><span class="token punctuation">)</span><span class="token punctuation">}</span></span>
+  <span class="token attr-name">onBlur</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">=&gt;</span> <span class="token function">setFocused</span><span class="token punctuation">(</span><span class="token boolean">false</span><span class="token punctuation">)</span><span class="token punctuation">}</span></span>
+  <span class="token attr-name">style</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span> padding<span class="token operator">:</span> <span class="token number">12</span><span class="token punctuation">,</span> border<span class="token operator">:</span> <span class="token number">2</span><span class="token punctuation">,</span> borderColor<span class="token operator">:</span> <span class="token string">&quot;#414868&quot;</span> <span class="token punctuation">}</span><span class="token punctuation">}</span></span>
+  <span class="token attr-name">focusStyle</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span> borderColor<span class="token operator">:</span> <span class="token string">&quot;#7aa2f7&quot;</span> <span class="token punctuation">}</span><span class="token punctuation">}</span></span>
+<span class="token punctuation">&gt;</span></span><span class="token plain-text">
+  </span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>text</span><span class="token punctuation">&gt;</span></span><span class="token punctuation">{</span>focused <span class="token operator">?</span> <span class="token string">&quot;Focused&quot;</span> <span class="token operator">:</span> <span class="token string">&quot;Click me&quot;</span><span class="token punctuation">}</span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>text</span><span class="token punctuation">&gt;</span></span><span class="token plain-text">
+</span><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>node</span><span class="token punctuation">&gt;</span></span><span class="token punctuation">;</span></code></pre><h2 id="what-can-take-the-focus"><a class="anchor" href="#what-can-take-the-focus" aria-hidden="true">#</a>What can take the focus</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Element</th>
+<th>Focusable</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>&lt;editableText&gt;</code></td>
+<td>Always (as if <code>tabIndex={0}</code>)</td>
+</tr>
+<tr>
+<td><code>&lt;node&gt;</code>, <code>&lt;button&gt;</code>, <code>&lt;text&gt;</code>, <code>&lt;image&gt;</code> and the like</td>
+<td>With a <code>tabIndex</code></td>
+</tr>
+<tr>
+<td><code>&lt;root&gt;</code>, <code>&lt;surface&gt;</code>, nested <code>&lt;text&gt;</code> runs, SVG shapes</td>
+<td>Never (<code>tabIndex</code> warns and is ignored)</td>
+</tr>
+</tbody></table></div>
+<p>A <code>&lt;button&gt;</code> is not focusable by default: a focused button takes Enter and
+Space (see <a href="#keyboard-activation">Keyboard activation</a>), which a game may
+have bound to something else. Give the buttons of a menu a <code>tabIndex</code>.</p>
+<p><code>tabIndex</code> is Bevy&#39;s <code>TabIndex</code>:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Value</th>
+<th>By click or from Rust</th>
+<th>By Tab</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>0</code></td>
+<td>Yes</td>
+<td>Yes, in tree order</td>
+</tr>
+<tr>
+<td>Negative</td>
+<td>Yes</td>
+<td>No</td>
+</tr>
+<tr>
+<td>Positive</td>
+<td>Yes</td>
+<td>Yes, <strong>after</strong> every <code>0</code>, ascending</td>
+</tr>
+</tbody></table></div>
+<p>Positive values sort after <code>0</code>, the opposite of HTML. Use <code>0</code> and <code>-1</code>.</p>
+<h2 id="focusing-with-the-pointer"><a class="anchor" href="#focusing-with-the-pointer" aria-hidden="true">#</a>Focusing with the pointer</h2>
+<p>A press focuses the topmost element under the pointer that is focusable or
+has a focusable ancestor; a press that finds none clears the focus, so
+clicking anywhere else blurs. It is the same rule that picks the element a
+<a href="../../events/mouse/#clicks">click</a> goes to:</p>
+<ul>
+<li>A press on a child, such as the <code>&lt;text&gt;</code> label of a focusable button,
+focuses the nearest focusable ancestor.</li>
+<li>Of nested focusables, the innermost under the pointer wins.</li>
+<li>A pass-through element drawn over a focusable one doesn&#39;t take the focus
+away from it. <code>focusPolicy: &quot;block&quot;</code> on the element above does: nothing
+beneath it is pressed. See <a href="../../styling/focus-policy/">Focus policy</a>.</li>
+<li>Any mouse button focuses, and so does a touch.</li>
+<li>Pressing the element that already has the focus changes nothing.</li>
+</ul>
+<p>Focusability never changes hit testing: a <code>tabIndex</code> doesn&#39;t make an element
+block the pointer or own clicks.</p>
+<h2 id="events"><a class="anchor" href="#events" aria-hidden="true">#</a>Events</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Handler</th>
+<th>Argument</th>
+<th>Fires when</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>onFocus</code></td>
+<td>none</td>
+<td>The element gained the focus</td>
+</tr>
+<tr>
+<td><code>onBlur</code></td>
+<td>none</td>
+<td>The element lost the focus</td>
+</tr>
+</tbody></table></div>
+<ul>
+<li>They fire on the element itself and don&#39;t bubble: a container isn&#39;t told
+about its children&#39;s focus.</li>
+<li>When the focus moves from one element to another, the old one&#39;s <code>onBlur</code>
+fires before the new one&#39;s <code>onFocus</code>.</li>
+<li>Each fires at most once per frame. Focus that leaves and returns within
+one frame fires nothing.</li>
+<li>A key that takes the focus away reaches <a href="../../events/keyboard/"><code>keyDown</code></a> listeners
+before the <code>onBlur</code> it causes, as in the DOM. A field can tell Escape (a
+cancel) from a click elsewhere (a commit) that way.</li>
+<li>An element that unmounts while focused gives the focus up; its <code>onBlur</code>
+doesn&#39;t fire, like any handler of an unmounted element.</li>
+</ul>
+<h2 id="focus-styles"><a class="anchor" href="#focus-styles" aria-hidden="true">#</a>Focus styles</h2>
+<p><code>focusStyle</code> overlays the element&#39;s <code>style</code> while it holds the focus, and
+<code>focusVisibleStyle</code> overlays that while the focus indicator shows. Both are
+applied on the Bevy side, in the frame the focus moves, with no React state.
+See <a href="../../elements/node/#state-styles">State styles</a>.</p>
+<pre><code class="language-tsx"><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>button</span>
+  <span class="token attr-name">tabIndex</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token number">0</span><span class="token punctuation">}</span></span>
+  <span class="token attr-name">focusStyle</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span> backgroundColor<span class="token operator">:</span> <span class="token string">&quot;#2a2e42&quot;</span> <span class="token punctuation">}</span><span class="token punctuation">}</span></span>
+  <span class="token attr-name">focusVisibleStyle</span><span class="token script language-javascript"><span class="token script-punctuation punctuation">=</span><span class="token punctuation">{</span><span class="token punctuation">{</span> outline<span class="token operator">:</span> <span class="token punctuation">{</span> width<span class="token operator">:</span> <span class="token number">2</span><span class="token punctuation">,</span> color<span class="token operator">:</span> <span class="token string">&quot;#7aa2f7&quot;</span> <span class="token punctuation">}</span> <span class="token punctuation">}</span><span class="token punctuation">}</span></span>
+<span class="token punctuation">/&gt;</span></span></code></pre><p>The indicator follows Bevy&#39;s <code>InputFocusVisible</code>, like CSS <code>:focus-visible</code>:</p>
+<ul>
+<li>Tab navigation turns it on, a pointer press turns it off. A button focused
+by a click gets <code>focusStyle</code> only; reached with Tab it gets both.</li>
+<li>A focused <code>&lt;editableText&gt;</code> always shows it, however it was focused.</li>
+<li>Without Tab navigation (below) nothing turns it on, so outside text fields
+<code>focusVisibleStyle</code> never applies unless your Rust code sets
+<code>InputFocusVisible</code> (a gamepad menu would keep it <code>true</code>).</li>
+</ul>
+<h2 id="tab-navigation"><a class="anchor" href="#tab-navigation" aria-hidden="true">#</a>Tab navigation</h2>
+<p>Tab and Shift+Tab move the focus once the app adds Bevy&#39;s
+<code>TabNavigationPlugin</code>. bevy-react doesn&#39;t add it, because a game may use Tab
+for something else, but it marks its UI roots as Bevy tab groups so that
+this line is all it takes:</p>
+<pre><code class="language-rust"><span class="token keyword">use</span> <span class="token namespace">bevy<span class="token punctuation">::</span>input_focus<span class="token punctuation">::</span>tab_navigation<span class="token punctuation">::</span></span><span class="token class-name">TabNavigationPlugin</span><span class="token punctuation">;</span>
+
+app<span class="token punctuation">.</span><span class="token function">add_plugins</span><span class="token punctuation">(</span><span class="token class-name">TabNavigationPlugin</span><span class="token punctuation">)</span><span class="token punctuation">;</span></code></pre><ul>
+<li>The order is the tree order of the elements with <code>tabIndex &gt;= 0</code>, then
+positive values ascending. Tab wraps around.</li>
+<li>The window&#39;s UI comes first, then each <a href="../../elements/root/"><code>&lt;root&gt;</code></a> and
+the <a href="../../elements/anchor/"><code>&lt;anchor&gt;</code></a> overlays.</li>
+<li>A <a href="../../elements/surface/"><code>&lt;surface&gt;</code></a> is its own scope: Tab never
+enters it from the screen, and cycles among the surface&#39;s own elements
+once a click has put the focus inside.</li>
+<li>Hidden subtrees (<code>visibility: &quot;hidden&quot;</code>) are skipped. A <code>display: &quot;none&quot;</code>
+subtree is not: unmount it, or hide it with <code>visibility</code>.</li>
+<li>Tab also reaches React as a <code>keyDown</code>, like every key (see
+<a href="../../events/keyboard/">Keyboard</a>).</li>
+<li>Bevy logs a warning for the first Tab after startup (the window itself
+holds the focus and belongs to no group), and one per Tab press while no
+element is focusable.</li>
+</ul>
+<h2 id="keyboard-activation"><a class="anchor" href="#keyboard-activation" aria-hidden="true">#</a>Keyboard activation</h2>
+<p>Enter and Space click a focused <code>&lt;button&gt;</code>: its <code>onClick</code> fires, once per
+key press (not on auto-repeat). Only a <code>&lt;button&gt;</code> is activated this way; a
+focused <code>&lt;node onClick&gt;</code> is not, as on the web. The keys still arrive as
+<code>keyDown</code> events.</p>
+<h2 id="disabled-controls"><a class="anchor" href="#disabled-controls" aria-hidden="true">#</a>Disabled controls</h2>
+<p><code>disabled</code> on a <a href="../../elements/button/#disabled"><code>&lt;button&gt;</code></a> or an
+<a href="../../elements/editable-text/#read-only-and-disabled"><code>&lt;editableText&gt;</code></a>
+takes the element out of focus altogether: a press doesn&#39;t focus it, Tab
+skips it, and it gives the focus up when it becomes disabled while focused.
+A press on a disabled control inside a focusable container focuses the
+container.</p>
+<h2 id="focus-from-rust"><a class="anchor" href="#focus-from-rust" aria-hidden="true">#</a>Focus from Rust</h2>
+<p><code>InputFocus</code> is an ordinary Bevy resource: set it to a React entity (found
+by <a href="../../communication/named-nodes/">name</a>) to focus it, clear it to blur.
+<code>focusStyle</code>, <code>onFocus</code> and <code>onBlur</code> follow whoever changes it.</p>
+<pre><code class="language-rust"><span class="token keyword">use</span> <span class="token namespace">bevy<span class="token punctuation">::</span>input_focus<span class="token punctuation">::</span></span><span class="token punctuation">{</span><span class="token class-name">FocusCause</span><span class="token punctuation">,</span> <span class="token class-name">InputFocus</span><span class="token punctuation">}</span><span class="token punctuation">;</span>
+<span class="token keyword">use</span> <span class="token namespace">bevy_react<span class="token punctuation">::</span></span><span class="token class-name">ReactNodes</span><span class="token punctuation">;</span>
+
+<span class="token keyword">fn</span> <span class="token function-definition function">focus_search</span><span class="token punctuation">(</span>nodes<span class="token punctuation">:</span> <span class="token class-name">ReactNodes</span><span class="token punctuation">,</span> <span class="token keyword">mut</span> focus<span class="token punctuation">:</span> <span class="token class-name">ResMut</span><span class="token operator">&lt;</span><span class="token class-name">InputFocus</span><span class="token operator">&gt;</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token keyword">if</span> <span class="token keyword">let</span> <span class="token class-name">Some</span><span class="token punctuation">(</span>entity<span class="token punctuation">)</span> <span class="token operator">=</span> nodes<span class="token punctuation">.</span><span class="token function">get</span><span class="token punctuation">(</span><span class="token string">&quot;search&quot;</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        focus<span class="token punctuation">.</span><span class="token function">set</span><span class="token punctuation">(</span>entity<span class="token punctuation">,</span> <span class="token class-name">FocusCause</span><span class="token punctuation">::</span><span class="token class-name">Navigated</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span></code></pre><p><code>TabIndex</code> on a React entity is written by bevy-react (from <code>tabIndex</code>):
+set the prop, not the component.</p>
+<h2 id="limits"><a class="anchor" href="#limits" aria-hidden="true">#</a>Limits</h2>
+<ul>
+<li>No <code>focus()</code> or <code>blur()</code> from React: use <code>autofocus</code> on an
+<code>&lt;editableText&gt;</code>, a click, Tab, or Rust.</li>
+<li><code>autofocus</code> exists on <code>&lt;editableText&gt;</code> only.</li>
+<li>No per-element key handlers: keys are the window-wide <code>keyDown</code>/<code>keyUp</code>.</li>
+<li>A <code>tabIndex</code> alone doesn&#39;t make an element interactive for
+<a href="../../events/mouse/#keeping-input-away-from-the-world"><code>PointerCapture</code></a>: a press on
+it can still start a camera drag. A <code>&lt;button&gt;</code>, or any pointer handler or
+<code>hoverStyle</code> on the element, claims the pointer.</li>
+<li>No focus trap for dialogs, and no arrow-key or gamepad navigation: both
+are available from Rust (<code>TabGroup::modal</code>, Bevy&#39;s directional
+navigation).</li>
+<li>A focusable element that is not a <code>&lt;button&gt;</code> or an <code>&lt;editableText&gt;</code> is
+announced to assistive tech as a plain container; there is no <code>ariaLabel</code>
+for it.</li>
+<li>In a <code>&lt;surface&gt;</code>, the IME candidate window is placed for the window, not
+for the point on the mesh.</li>
+</ul>
+
+</article>
+<footer class="page-links"><a href="../../demo/?page=focus">Open live demo</a>
+<a href="https://github.com/tulustul/bevy-react/blob/v0.8.1/examples/demos/ui/src/demos/events/FocusDemo.tsx">Demo source</a>
+<a href="https://github.com/tulustul/bevy-react/edit/main/docs/guide/events/focus.md">Edit this page</a></footer>
+</main>
+</div>
+<footer class="site-footer">
+<p>bevy-react is dual-licensed under MIT or Apache-2.0. <a href="https://github.com/tulustul/bevy-react">Source on GitHub</a>.</p>
+</footer>
+</body>
+</html>
