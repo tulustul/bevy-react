@@ -1,0 +1,558 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Performance · bevy-react</title>
+<meta name="description" content="Benchmark results for bevy-react — op throughput, layout, and layer workloads — with the commands to reproduce them.">
+<link rel="canonical" href="https://tulustul.github.io/bevy-react/performance/">
+<link rel="alternate" type="text/markdown" href="../performance.md">
+<meta property="og:title" content="Performance · bevy-react">
+<meta property="og:description" content="Benchmark results for bevy-react — op throughput, layout, and layer workloads — with the commands to reproduce them.">
+<link rel="icon" href="../logo.png">
+<link rel="stylesheet" href="../style.css">
+<script src="../docs.js" defer></script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="site-header">
+<a class="brand" href="../"><img src="../logo.png" alt="" width="74" height="74"> bevy-react</a>
+<span class="version">v0.8.1</span>
+<nav class="site-links" aria-label="Project">
+<a href="../demo/">Live demo</a>
+<a href="https://github.com/tulustul/bevy-react">GitHub</a>
+<a href="https://docs.rs/bevy-react">docs.rs</a>
+<a href="https://www.npmjs.com/package/bevy-react">npm</a>
+</nav>
+</header>
+<div class="layout">
+<nav class="sidebar" aria-label="Documentation">
+<details class="nav-menu" open>
+<summary>Menu</summary>
+<ul><li><a href="../">Introduction</a></li><li><a href="../getting-started/">Getting started</a></li><li><a href="../how-it-works/">How it works</a></li><li class="nav-section"><span>Elements</span><ul><li><a href="../elements/node/">&lt;node&gt;</a></li><li><a href="../elements/button/">&lt;button&gt;</a></li><li><a href="../elements/text/">&lt;text&gt;</a></li><li><a href="../elements/editable-text/">&lt;editableText&gt;</a></li><li><a href="../elements/image/">&lt;image&gt;</a></li><li><a href="../elements/canvas/">&lt;canvas&gt;</a></li><li><a href="../elements/svg/">&lt;svg&gt;</a></li><li><a href="../elements/portal/">&lt;portal&gt;</a></li><li><a href="../elements/surface/">&lt;surface&gt;</a></li><li><a href="../elements/root/">&lt;root&gt;</a></li><li><a href="../elements/anchor/">&lt;anchor&gt;</a></li></ul></li><li class="nav-section"><span>Layout</span><ul><li><a href="../layout/flexbox/">Flexbox</a></li><li><a href="../layout/grid/">Grid</a></li><li><a href="../layout/positioning/">Positioning</a></li></ul></li><li class="nav-section"><span>Styling</span><ul><li><a href="../styling/units/">Units</a></li><li><a href="../styling/colors/">Colors</a></li><li><a href="../styling/borders/">Borders</a></li><li><a href="../styling/spacing/">Spacing</a></li><li><a href="../styling/sizing/">Sizing</a></li><li><a href="../styling/layout-rounding/">Layout rounding</a></li><li><a href="../styling/overflow/">Overflow</a></li><li><a href="../styling/transforms/">Transforms</a></li><li><a href="../styling/3d-transforms/">3D transforms</a></li><li><a href="../styling/shadows/">Shadows</a></li><li><a href="../styling/filters/">Filters</a></li><li><a href="../styling/backdrop-filters/">Backdrop filters</a></li><li><a href="../styling/morph-filters/">Morph filters</a></li><li><a href="../styling/gradients/">Gradients</a></li><li><a href="../styling/background-images/">Background images</a></li><li><a href="../styling/image-rendering/">Image rendering</a></li><li><a href="../styling/opacity/">Opacity</a></li><li><a href="../styling/z-index/">Z-index</a></li><li><a href="../styling/focus-policy/">Focus policy</a></li><li><a href="../styling/cursors/">Cursors</a></li><li><a href="../styling/layers/">Layers</a></li></ul></li><li class="nav-section"><span>Animations</span><ul><li><a href="../animations/style-transitions/">Style transitions</a></li><li><a href="../animations/animated-values/">Animated values</a></li><li><a href="../animations/interpolation/">Interpolation</a></li><li><a href="../animations/shared-elements/">Shared elements</a></li></ul></li><li class="nav-section"><span>Communication</span><ul><li><a href="../communication/react-to-bevy/">React to Bevy</a></li><li><a href="../communication/bevy-to-react/">Bevy to React</a></li><li><a href="../communication/request-response/">Request / response</a></li><li><a href="../communication/named-nodes/">Named nodes</a></li></ul></li><li class="nav-section"><span>Events</span><ul><li><a href="../events/mouse/">Mouse</a></li><li><a href="../events/keyboard/">Keyboard</a></li><li><a href="../events/focus/">Focus</a></li><li><a href="../events/gamepad/">Gamepad</a></li><li><a href="../events/window/">Window</a></li></ul></li><li class="nav-section"><span>Extending</span><ul><li><a href="../extending/custom-elements/">Custom elements</a></li><li><a href="../extending/custom-styles/">Custom styles</a></li><li><a href="../extending/custom-filters/">Custom filters</a></li></ul></li><li class="nav-section"><span>Tooling</span><ul><li><a href="../tooling/devtools/">Devtools</a></li><li><a href="../tooling/hot-reload/">Hot reload</a></li><li><a href="../tooling/web/">Web builds</a></li><li><a href="../tooling/ts-codegen/">TypeScript codegen</a></li></ul></li><li class="nav-section"><span>Reference</span><ul><li><a href="../reference/style-properties/">Style properties</a></li><li><a href="../reference/elements/">Elements</a></li><li><a href="../reference/filters/">Filters</a></li></ul></li><li><a href="../performance/" aria-current="page">Performance</a></li></ul>
+</details>
+</nav>
+<main id="main">
+<article>
+<h1 id="performance">Performance</h1>
+<p>Executed against commit 00ec3f927c7084b211192b24c8f4f034dfdf8de4</p>
+<p>Spec: AMD Ryzen 7 5800X 8-Core, 32GB, GeForce RTX 3070</p>
+<p>Rows manipulations benchmark:</p>
+<p><code>npm run build:prod -w stress-app</code></p>
+<p><code>cargo run --release -p stress -- --run table-ops --out benchmark_results/results.json</code></p>
+<h2 id="median-per-op--1k-table-p50-ms"><a class="anchor" href="#median-per-op--1k-table-p50-ms" aria-hidden="true">#</a>Median per op — 1k table (p50, ms)</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Op</th>
+<th align="right">Rows</th>
+<th align="right">Ops Emitted</th>
+<th align="right">Total</th>
+<th align="right">Pre-apply</th>
+<th align="right">JS</th>
+<th align="right">Flush</th>
+<th align="right">Translate</th>
+<th align="right">Command</th>
+<th align="right">Layout</th>
+<th align="right">Bevy</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>create</td>
+<td align="right">0</td>
+<td align="right">4001</td>
+<td align="right">36.262</td>
+<td align="right">6.620</td>
+<td align="right">5.877</td>
+<td align="right">2.268</td>
+<td align="right">1.570</td>
+<td align="right">17.769</td>
+<td align="right">10.555</td>
+<td align="right">28.522</td>
+</tr>
+<tr>
+<td>append1</td>
+<td align="right">1000</td>
+<td align="right">5</td>
+<td align="right">3.708</td>
+<td align="right">1.522</td>
+<td align="right">0.488</td>
+<td align="right">0.028</td>
+<td align="right">0.014</td>
+<td align="right">0.560</td>
+<td align="right">1.667</td>
+<td align="right">2.282</td>
+</tr>
+<tr>
+<td>append1k</td>
+<td align="right">1001</td>
+<td align="right">4001</td>
+<td align="right">39.270</td>
+<td align="right">7.008</td>
+<td align="right">5.334</td>
+<td align="right">1.962</td>
+<td align="right">1.532</td>
+<td align="right">18.226</td>
+<td align="right">12.737</td>
+<td align="right">30.926</td>
+</tr>
+<tr>
+<td>insert1</td>
+<td align="right">1000</td>
+<td align="right">5</td>
+<td align="right">3.859</td>
+<td align="right">1.543</td>
+<td align="right">0.544</td>
+<td align="right">0.027</td>
+<td align="right">0.016</td>
+<td align="right">0.582</td>
+<td align="right">1.590</td>
+<td align="right">2.196</td>
+</tr>
+<tr>
+<td>insertEvery2nd</td>
+<td align="right">1001</td>
+<td align="right">2001</td>
+<td align="right">22.365</td>
+<td align="right">4.362</td>
+<td align="right">2.742</td>
+<td align="right">1.004</td>
+<td align="right">1.024</td>
+<td align="right">9.376</td>
+<td align="right">7.627</td>
+<td align="right">16.842</td>
+</tr>
+<tr>
+<td>updateText1</td>
+<td align="right">1000</td>
+<td align="right">1</td>
+<td align="right">3.537</td>
+<td align="right">1.568</td>
+<td align="right">0.547</td>
+<td align="right">0.015</td>
+<td align="right">0.002</td>
+<td align="right">0.418</td>
+<td align="right">1.578</td>
+<td align="right">2.042</td>
+</tr>
+<tr>
+<td>updateTextEvery2nd</td>
+<td align="right">1000</td>
+<td align="right">500</td>
+<td align="right">15.012</td>
+<td align="right">1.956</td>
+<td align="right">1.347</td>
+<td align="right">0.232</td>
+<td align="right">0.052</td>
+<td align="right">7.294</td>
+<td align="right">5.460</td>
+<td align="right">12.845</td>
+</tr>
+<tr>
+<td>updateColor1</td>
+<td align="right">1000</td>
+<td align="right">1</td>
+<td align="right">2.990</td>
+<td align="right">1.796</td>
+<td align="right">0.671</td>
+<td align="right">0.018</td>
+<td align="right">0.011</td>
+<td align="right">0.364</td>
+<td align="right">0.692</td>
+<td align="right">1.091</td>
+</tr>
+<tr>
+<td>updateColorEvery2nd</td>
+<td align="right">1000</td>
+<td align="right">500</td>
+<td align="right">6.080</td>
+<td align="right">4.506</td>
+<td align="right">2.169</td>
+<td align="right">0.457</td>
+<td align="right">0.438</td>
+<td align="right">0.395</td>
+<td align="right">0.635</td>
+<td align="right">1.044</td>
+</tr>
+<tr>
+<td>updateTextColor1</td>
+<td align="right">1000</td>
+<td align="right">1</td>
+<td align="right">2.892</td>
+<td align="right">1.776</td>
+<td align="right">0.581</td>
+<td align="right">0.015</td>
+<td align="right">0.009</td>
+<td align="right">0.374</td>
+<td align="right">0.704</td>
+<td align="right">1.095</td>
+</tr>
+<tr>
+<td>updateTextColorEvery2nd</td>
+<td align="right">1000</td>
+<td align="right">500</td>
+<td align="right">6.239</td>
+<td align="right">4.664</td>
+<td align="right">2.106</td>
+<td align="right">0.380</td>
+<td align="right">0.519</td>
+<td align="right">0.366</td>
+<td align="right">0.674</td>
+<td align="right">1.047</td>
+</tr>
+<tr>
+<td>swap1</td>
+<td align="right">1000</td>
+<td align="right">997</td>
+<td align="right">6.968</td>
+<td align="right">4.839</td>
+<td align="right">3.988</td>
+<td align="right">0.244</td>
+<td align="right">0.339</td>
+<td align="right">0.402</td>
+<td align="right">1.589</td>
+<td align="right">2.039</td>
+</tr>
+<tr>
+<td>swapEvery2nd</td>
+<td align="right">1000</td>
+<td align="right">500</td>
+<td align="right">4.154</td>
+<td align="right">1.810</td>
+<td align="right">0.800</td>
+<td align="right">0.116</td>
+<td align="right">0.205</td>
+<td align="right">0.434</td>
+<td align="right">1.699</td>
+<td align="right">2.141</td>
+</tr>
+<tr>
+<td>remove1</td>
+<td align="right">1000</td>
+<td align="right">2</td>
+<td align="right">3.587</td>
+<td align="right">1.477</td>
+<td align="right">0.553</td>
+<td align="right">0.012</td>
+<td align="right">0.008</td>
+<td align="right">0.524</td>
+<td align="right">1.529</td>
+<td align="right">2.050</td>
+</tr>
+<tr>
+<td>removeEvery2nd</td>
+<td align="right">999</td>
+<td align="right">500</td>
+<td align="right">6.126</td>
+<td align="right">1.500</td>
+<td align="right">0.697</td>
+<td align="right">0.105</td>
+<td align="right">0.583</td>
+<td align="right">2.611</td>
+<td align="right">1.369</td>
+<td align="right">4.053</td>
+</tr>
+<tr>
+<td>clear</td>
+<td align="right">1000</td>
+<td align="right">1001</td>
+<td align="right">7.366</td>
+<td align="right">1.828</td>
+<td align="right">0.888</td>
+<td align="right">0.183</td>
+<td align="right">1.050</td>
+<td align="right">3.697</td>
+<td align="right">0.620</td>
+<td align="right">4.346</td>
+</tr>
+</tbody></table></div>
+<h2 id="median-per-op--10k-table-p50-ms"><a class="anchor" href="#median-per-op--10k-table-p50-ms" aria-hidden="true">#</a>Median per op — 10k table (p50, ms)</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Op</th>
+<th align="right">Rows</th>
+<th align="right">Ops Emitted</th>
+<th align="right">Total</th>
+<th align="right">Pre-apply</th>
+<th align="right">JS</th>
+<th align="right">Flush</th>
+<th align="right">Translate</th>
+<th align="right">Command</th>
+<th align="right">Layout</th>
+<th align="right">Bevy</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>create</td>
+<td align="right">0</td>
+<td align="right">40001</td>
+<td align="right">589.450</td>
+<td align="right">257.961</td>
+<td align="right">257.043</td>
+<td align="right">18.469</td>
+<td align="right">12.116</td>
+<td align="right">183.074</td>
+<td align="right">135.874</td>
+<td align="right">319.234</td>
+</tr>
+<tr>
+<td>append1</td>
+<td align="right">10000</td>
+<td align="right">5</td>
+<td align="right">33.458</td>
+<td align="right">9.540</td>
+<td align="right">3.678</td>
+<td align="right">0.029</td>
+<td align="right">0.016</td>
+<td align="right">2.599</td>
+<td align="right">21.331</td>
+<td align="right">24.009</td>
+</tr>
+<tr>
+<td>append1k</td>
+<td align="right">10001</td>
+<td align="right">4001</td>
+<td align="right">80.882</td>
+<td align="right">29.466</td>
+<td align="right">10.141</td>
+<td align="right">1.989</td>
+<td align="right">1.665</td>
+<td align="right">20.201</td>
+<td align="right">29.239</td>
+<td align="right">50.093</td>
+</tr>
+<tr>
+<td>insert1</td>
+<td align="right">10000</td>
+<td align="right">5</td>
+<td align="right">32.902</td>
+<td align="right">9.845</td>
+<td align="right">5.084</td>
+<td align="right">0.029</td>
+<td align="right">0.019</td>
+<td align="right">2.669</td>
+<td align="right">20.608</td>
+<td align="right">23.309</td>
+</tr>
+<tr>
+<td>insertEvery2nd</td>
+<td align="right">10001</td>
+<td align="right">20001</td>
+<td align="right">247.329</td>
+<td align="right">51.068</td>
+<td align="right">35.933</td>
+<td align="right">9.195</td>
+<td align="right">8.617</td>
+<td align="right">92.942</td>
+<td align="right">95.609</td>
+<td align="right">188.100</td>
+</tr>
+<tr>
+<td>updateText1</td>
+<td align="right">10000</td>
+<td align="right">1</td>
+<td align="right">32.277</td>
+<td align="right">10.040</td>
+<td align="right">3.935</td>
+<td align="right">0.016</td>
+<td align="right">0.003</td>
+<td align="right">1.796</td>
+<td align="right">20.380</td>
+<td align="right">22.170</td>
+</tr>
+<tr>
+<td>updateTextEvery2nd</td>
+<td align="right">10000</td>
+<td align="right">5000</td>
+<td align="right">167.710</td>
+<td align="right">29.546</td>
+<td align="right">14.427</td>
+<td align="right">1.826</td>
+<td align="right">0.271</td>
+<td align="right">68.269</td>
+<td align="right">69.434</td>
+<td align="right">137.666</td>
+</tr>
+<tr>
+<td>updateColor1</td>
+<td align="right">10000</td>
+<td align="right">1</td>
+<td align="right">21.942</td>
+<td align="right">10.743</td>
+<td align="right">3.963</td>
+<td align="right">0.019</td>
+<td align="right">0.012</td>
+<td align="right">1.557</td>
+<td align="right">9.896</td>
+<td align="right">11.391</td>
+</tr>
+<tr>
+<td>updateColorEvery2nd</td>
+<td align="right">10000</td>
+<td align="right">5000</td>
+<td align="right">49.776</td>
+<td align="right">32.718</td>
+<td align="right">20.394</td>
+<td align="right">3.269</td>
+<td align="right">3.781</td>
+<td align="right">2.231</td>
+<td align="right">9.885</td>
+<td align="right">12.243</td>
+</tr>
+<tr>
+<td>updateTextColor1</td>
+<td align="right">10000</td>
+<td align="right">1</td>
+<td align="right">24.128</td>
+<td align="right">12.535</td>
+<td align="right">4.256</td>
+<td align="right">0.019</td>
+<td align="right">0.013</td>
+<td align="right">1.521</td>
+<td align="right">10.233</td>
+<td align="right">11.808</td>
+</tr>
+<tr>
+<td>updateTextColorEvery2nd</td>
+<td align="right">10000</td>
+<td align="right">5000</td>
+<td align="right">52.616</td>
+<td align="right">36.475</td>
+<td align="right">18.460</td>
+<td align="right">2.987</td>
+<td align="right">4.001</td>
+<td align="right">1.831</td>
+<td align="right">10.086</td>
+<td align="right">11.932</td>
+</tr>
+<tr>
+<td>swap1</td>
+<td align="right">10000</td>
+<td align="right">9997</td>
+<td align="right">383.129</td>
+<td align="right">358.694</td>
+<td align="right">349.851</td>
+<td align="right">2.294</td>
+<td align="right">2.330</td>
+<td align="right">2.192</td>
+<td align="right">21.369</td>
+<td align="right">23.646</td>
+</tr>
+<tr>
+<td>swapEvery2nd</td>
+<td align="right">10000</td>
+<td align="right">5000</td>
+<td align="right">40.272</td>
+<td align="right">13.907</td>
+<td align="right">8.048</td>
+<td align="right">1.153</td>
+<td align="right">1.646</td>
+<td align="right">2.669</td>
+<td align="right">22.719</td>
+<td align="right">25.371</td>
+</tr>
+<tr>
+<td>remove1</td>
+<td align="right">10000</td>
+<td align="right">2</td>
+<td align="right">33.519</td>
+<td align="right">9.994</td>
+<td align="right">4.747</td>
+<td align="right">0.013</td>
+<td align="right">0.009</td>
+<td align="right">2.532</td>
+<td align="right">20.886</td>
+<td align="right">23.424</td>
+</tr>
+<tr>
+<td>removeEvery2nd</td>
+<td align="right">9999</td>
+<td align="right">5000</td>
+<td align="right">54.059</td>
+<td align="right">9.524</td>
+<td align="right">8.835</td>
+<td align="right">0.862</td>
+<td align="right">4.337</td>
+<td align="right">24.509</td>
+<td align="right">15.562</td>
+<td align="right">40.423</td>
+</tr>
+<tr>
+<td>clear</td>
+<td align="right">10000</td>
+<td align="right">10001</td>
+<td align="right">61.935</td>
+<td align="right">11.872</td>
+<td align="right">7.003</td>
+<td align="right">1.728</td>
+<td align="right">8.166</td>
+<td align="right">36.309</td>
+<td align="right">5.366</td>
+<td align="right">41.818</td>
+</tr>
+</tbody></table></div>
+<h3 id="legend"><a class="anchor" href="#legend" aria-hidden="true">#</a>Legend</h3>
+<p>All timings are the <strong>median (p50)</strong> over the samples, in <strong>milliseconds</strong>.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Op</strong></td>
+<td>The operation under test (create, swap1, removeEvery2nd, …).</td>
+</tr>
+<tr>
+<td><strong>Rows</strong></td>
+<td>Table row count when the op ran (its precondition).</td>
+</tr>
+<tr>
+<td><strong>Ops Emitted</strong></td>
+<td>Size of the flushed op batch React produced for one occurrence of this op.</td>
+</tr>
+<tr>
+<td><strong>Total</strong></td>
+<td>End-to-end wall time, event trigger → post-layout on the frame the batch applied. Equals <code>Pre-apply + Translate + Bevy</code>.</td>
+</tr>
+<tr>
+<td><strong>Pre-apply</strong></td>
+<td>Trigger → Bevy starts applying the batch. Covers the JS round-trip + inter-thread scheduling. Contains <strong>JS</strong>.</td>
+</tr>
+<tr>
+<td><strong>JS</strong></td>
+<td>React reconcile + build the op batch + the <code>op_flush</code> call (measured on the JS thread). Subset of <strong>Pre-apply</strong>; contains <strong>Flush</strong>.</td>
+</tr>
+<tr>
+<td><strong>Flush</strong></td>
+<td>The <code>op_flush</code> native call alone = <code>JSON.stringify</code> of the batch + its <code>serde_json</code> decode. Subset of <strong>JS</strong>.</td>
+</tr>
+<tr>
+<td><strong>Translate</strong></td>
+<td><code>apply_js_ops</code> walks the op batch → queues ECS commands (Bevy side).</td>
+</tr>
+<tr>
+<td><strong>Command</strong></td>
+<td>Execute the queued ECS commands + UI prepare/content, before layout.</td>
+</tr>
+<tr>
+<td><strong>Layout</strong></td>
+<td><code>bevy_ui</code> layout: taffy solve + transform/clip propagation.</td>
+</tr>
+<tr>
+<td><strong>Bevy</strong></td>
+<td>Apply done → post-layout, same frame. Full post-translate Bevy wall time; ≈ <code>Command + Layout</code>.</td>
+</tr>
+</tbody></table></div>
+
+</article>
+<footer class="page-links"><a href="https://github.com/tulustul/bevy-react/edit/main/docs/guide/performance.md">Edit this page</a></footer>
+</main>
+</div>
+<footer class="site-footer">
+<p>bevy-react is dual-licensed under MIT or Apache-2.0. <a href="https://github.com/tulustul/bevy-react">Source on GitHub</a>.</p>
+</footer>
+</body>
+</html>

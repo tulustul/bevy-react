@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://tulustul.github.io/bevy-react/sitemap.xml
