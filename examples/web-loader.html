@@ -1,0 +1,49 @@
+<!--
+  The loading spinner of every web build: build-web.mjs puts this first in
+  the page's <body>. It sits UNDER the canvas, which stays transparent until
+  Bevy presents its first frame, so the app's first frame covers it with no
+  script deciding when. The spin is a transform, which the browser animates
+  off the main thread: it keeps turning while the wasm compiles and Bevy
+  builds the app.
+-->
+<style>
+  #loader {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 28px;
+    color: rgb(255 255 255 / 0.5);
+    font:
+      36px/1 system-ui,
+      sans-serif;
+    letter-spacing: 0.08em;
+  }
+  #loader::before {
+    content: "";
+    width: 64px;
+    height: 64px;
+    border: 5px solid rgb(255 255 255 / 0.12);
+    border-top-color: rgb(255 255 255 / 0.7);
+    border-radius: 50%;
+    animation: loader-spin 0.9s linear infinite;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    #loader::before {
+      animation-duration: 3s;
+    }
+  }
+  @keyframes loader-spin {
+    to {
+      transform: rotate(1turn);
+    }
+  }
+  /* Bevy appends its canvas after the loader: positioned, it paints above. */
+  canvas {
+    position: relative;
+    z-index: 1;
+  }
+</style>
+<div id="loader" role="status">Loading…</div>

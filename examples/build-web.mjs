@@ -119,7 +119,15 @@ console.log(`[web] ${name}.js + ${name}_bg.wasm generated`);
 
 // 3) The page + assets. Bevy's default AssetPlugin fetches `assets/…` relative
 //    to the page, so the example's assets are copied under dist/assets.
-cpSync(resolve(cwd, "index.html"), resolve(dist, "index.html"));
+//    The page gets the shared loading spinner first in its <body>: the wasm is
+//    ~70 MB, and the page is blank until Bevy draws.
+const page = readFileSync(resolve(cwd, "index.html"), "utf8");
+if (!page.includes("<body>")) throw new Error("index.html has no <body> tag");
+const loader = readFileSync(resolve(repoRoot, "examples/web-loader.html"));
+writeFileSync(
+  resolve(dist, "index.html"),
+  page.replace("<body>", `<body>\n${loader}`),
+);
 cpSync(resolve(cwd, "../assets"), resolve(dist, "assets"), {
   recursive: true,
 });
