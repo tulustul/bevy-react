@@ -540,6 +540,25 @@ mod tests {
         assert_eq!(seed.translate_x_current(), Length::Rem(2.0));
     }
 
+    /// A mirrored outgoing node (`scaleX: -1`) seeds a positive size.
+    #[test]
+    fn mirrored_outgoing_node_seeds_a_positive_size() {
+        let mut world = World::new();
+        let flip = Vec2::new(-1.0, 1.0);
+        let old = world
+            .spawn((
+                ComputedNode {
+                    size: Vec2::new(40.0, 20.0),
+                    ..default()
+                },
+                UiGlobalTransform::from_scale(flip),
+                UiTransform::from_scale(flip),
+            ))
+            .id();
+        let seed = crate::transition::shared::snapshot(&world, old).expect("seed");
+        assert_eq!(seed.rect.size, Vec2::new(40.0, 20.0));
+    }
+
     /// An incoming node that dies within the same batch leaves no parked
     /// seed behind; a `Reset` clears the parked seeds too.
     #[test]

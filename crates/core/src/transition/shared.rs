@@ -268,10 +268,12 @@ pub(crate) fn snapshot(world: &World, outgoing: Entity) -> Option<SharedSeed> {
     // The node's own `UiTransform` scale is composed into its global; the
     // seed rect is the LAYOUT rect as shown by everything above the node
     // (the incoming node's own scale channel is seeded separately below —
-    // baking it in here too would apply it twice).
+    // baking it in here too would apply it twice). Unsigned: the axis
+    // lengths above are, so a mirrored node (`scaleX: -1`) keeps a positive
+    // size.
     let own_scale = entity
         .get::<UiTransform>()
-        .map(|t| t.scale)
+        .map(|t| t.scale.abs())
         .filter(|s| s.x.abs() > f32::EPSILON && s.y.abs() > f32::EPSILON)
         .unwrap_or(Vec2::ONE);
     let rect = SharedRect {
