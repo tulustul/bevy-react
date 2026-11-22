@@ -8,12 +8,22 @@ publish = false
 name = "cyberpunk"
 path = "main.rs"
 
+[features]
+# The JS engine, chosen at compile time: V8 by default; QuickJS-only (no V8
+# downloaded or linked) with `cargo run -p cyberpunk --no-default-features
+# --features quickjs`.
+default = ["v8"]
+v8 = ["bevy-react/v8"]
+quickjs = ["bevy-react/quickjs"]
+
 [dependencies]
 bevy = { workspace = true, features = ["default"] }
-# Every bevy-react feature (the defaults): `<svg>` for the wordmark, the
+# Every bevy-react feature but the engine: `<svg>` for the wordmark, the
 # icons and the ID card, `<portal>` for the dioramas and the world, the
 # custom cursor.
-bevy-react = { workspace = true, features = ["default"] }
+bevy-react = { workspace = true, features = [
+    "svg", "anchor", "canvas", "portal", "surface", "devtools", "custom_cursor",
+] }
 # For the nested payload types the macros don't derive themselves.
 serde = { workspace = true }
 ts-rs = { workspace = true }
