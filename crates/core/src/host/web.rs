@@ -128,7 +128,9 @@ fn install_host_object() -> Object {
     // decoding the most recent op_flush batch (same thread — wasm is
     // single-threaded). Called by the dev-only devtools bridge tap.
     let take_warnings = Closure::<dyn Fn() -> JsValue>::new(|| {
-        serde_wasm_bindgen::to_value(&crate::diag::take_decode_warnings()).unwrap_or(JsValue::NULL)
+        crate::diag::take_decode_warnings()
+            .serialize(&serde_wasm_bindgen::Serializer::json_compatible())
+            .unwrap_or(JsValue::NULL)
     });
     set_method(&host, "op_take_decode_warnings", take_warnings.as_ref());
     take_warnings.forget();
@@ -254,9 +256,10 @@ struct OutboundDrain(Receiver<Outbound>);
 /// resulting `op_flush` lands next frame) — no re-entrancy into the host borrow.
 fn drain_outbound(drain: Res<OutboundDrain>) {
     while let Ok(ev) = drain.0.try_recv() {
-        // serde_json `Value`s inside `Outbound` must become plain JS objects, not JS
-        // `Map`s, or the bridge can't read them; u64 ids stay JS numbers (default).
-        let serializer = serde_wasm_bindgen::Serializer::new().serialize_maps_as_objects(true);
+        // What the native host's JSON gives: plain JS objects (not `Map`s, or the
+        // bridge can't read serde_json `Value`s), `None`/unit as `null` (not
+        // `undefined`, which slips past an `x !== null` check), u64 ids as numbers.
+        let serializer = serde_wasm_bindgen::Serializer::json_compatible();
         let js = match ev.serialize(&serializer) {
             Ok(v) => v,
             Err(e) => {
