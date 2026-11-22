@@ -13,6 +13,8 @@
 
 use std::time::Duration;
 
+use bevy_react_core::JsEngine;
+
 mod common;
 use common::Js;
 
@@ -21,7 +23,7 @@ use common::Js;
 const GOOD_APP: &[u8] = br#"
 (function () {
   if (globalThis.__started) {
-    Deno.core.ops.op_emit("phase", "update:" + globalThis.__n);
+    __bevyHost.op_emit("phase", "update:" + globalThis.__n);
     globalThis.__loop();
     return;
   }
@@ -29,16 +31,16 @@ const GOOD_APP: &[u8] = br#"
   globalThis.__n = 41;
   globalThis.__loop = () => (async () => {
     for (;;) {
-      const m = await Deno.core.ops.op_next_event();
+      const m = await __bevyHost.op_next_event();
       if (m == null) return;        // shutdown
       if (m.t === "reload") return; // yield to Rust so it can re-exec the app
       if (m.t === "uiEvent") {
         globalThis.__n++;
-        Deno.core.ops.op_emit("phase", "click:" + globalThis.__n);
+        __bevyHost.op_emit("phase", "click:" + globalThis.__n);
       }
     }
   })();
-  Deno.core.ops.op_emit("phase", "init:" + globalThis.__n);
+  __bevyHost.op_emit("phase", "init:" + globalThis.__n);
   globalThis.__loop();
 })();
 "#;
@@ -49,7 +51,11 @@ const BROKEN_APP: &[u8] = b"aa16;\n";
 
 #[test]
 fn broken_reload_is_rejected_and_recovers() {
-    let js = Js::spawn("broken_reload", GOOD_APP);
+    common::each_engine(broken_reload_is_rejected_and_recovers_on);
+}
+
+fn broken_reload_is_rejected_and_recovers_on(engine: JsEngine) {
+    let js = Js::spawn(engine, "broken_reload", GOOD_APP);
 
     // Receive the next emit whose phase has `prefix`, skipping any others. A real
     // wedge surfaces as a 10s timeout ("no emit"); we drain duplicate `update:`

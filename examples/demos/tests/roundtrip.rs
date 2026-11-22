@@ -13,12 +13,18 @@ use crossbeam_channel::RecvTimeoutError;
 use bevy_react::animations::AnimationCommand;
 use bevy_react::protocol::{op::Op, outbound::Outbound, outbound::UiEvent};
 
+use bevy_react::JsEngine;
+
 mod common;
 use common::Harness;
 
 #[test]
 fn bridge_round_trip() {
-    let Some(mut h) = Harness::start("bridge_round_trip") else {
+    common::each_engine(bridge_round_trip_on);
+}
+
+fn bridge_round_trip_on(engine: JsEngine) {
+    let Some(mut h) = Harness::start("bridge_round_trip", engine) else {
         return;
     };
 
@@ -100,7 +106,11 @@ fn bridge_round_trip() {
 /// `AnimationFinished` settlement, asserting the callback's re-render lands.
 #[test]
 fn animation_callback_round_trip() {
-    let Some(mut h) = Harness::start("animation_callback_round_trip") else {
+    common::each_engine(animation_callback_round_trip_on);
+}
+
+fn animation_callback_round_trip_on(engine: JsEngine) {
+    let Some(mut h) = Harness::start("animation_callback_round_trip", engine) else {
         return;
     };
 
@@ -159,9 +169,13 @@ fn animation_callback_round_trip() {
 /// change freely.
 #[test]
 fn canvas_resize_replay_round_trip() {
+    common::each_engine(canvas_resize_replay_round_trip_on);
+}
+
+fn canvas_resize_replay_round_trip_on(engine: JsEngine) {
     use bevy_react::canvas::{DRAW_APPEND, DrawCmd};
 
-    let Some(mut h) = Harness::start("canvas_resize_replay_round_trip") else {
+    let Some(mut h) = Harness::start("canvas_resize_replay_round_trip", engine) else {
         return;
     };
 
@@ -209,7 +223,11 @@ fn canvas_resize_replay_round_trip() {
 /// only a real render exercises.
 #[test]
 fn inline_image_kind_round_trip() {
-    let Some(mut h) = Harness::start("inline_image_kind_round_trip") else {
+    common::each_engine(inline_image_kind_round_trip_on);
+}
+
+fn inline_image_kind_round_trip_on(engine: JsEngine) {
+    let Some(mut h) = Harness::start("inline_image_kind_round_trip", engine) else {
         return;
     };
 
@@ -243,7 +261,11 @@ fn inline_image_kind_round_trip() {
 /// the detached-root machinery outside the devtools panel.
 #[test]
 fn root_demo_modal_round_trip() {
-    let Some(mut h) = Harness::start("root_demo_modal_round_trip") else {
+    common::each_engine(root_demo_modal_round_trip_on);
+}
+
+fn root_demo_modal_round_trip_on(engine: JsEngine) {
+    let Some(mut h) = Harness::start("root_demo_modal_round_trip", engine) else {
         return;
     };
 
@@ -302,9 +324,13 @@ fn root_demo_modal_round_trip() {
 /// empty update ops** (the delta-diff invariant, end-to-end).
 #[test]
 fn svg_jsx_render_round_trip() {
+    common::each_engine(svg_jsx_render_round_trip_on);
+}
+
+fn svg_jsx_render_round_trip_on(engine: JsEngine) {
     use bevy_react::protocol::props::Props;
 
-    let Some(mut h) = Harness::start("svg_jsx_render_round_trip") else {
+    let Some(mut h) = Harness::start("svg_jsx_render_round_trip", engine) else {
         return;
     };
 
@@ -407,7 +433,11 @@ fn svg_jsx_render_round_trip() {
 /// text — never on op order.
 #[test]
 fn svg_shape_click_round_trip() {
-    let Some(mut h) = Harness::start("svg_shape_click_round_trip") else {
+    common::each_engine(svg_shape_click_round_trip_on);
+}
+
+fn svg_shape_click_round_trip_on(engine: JsEngine) {
+    let Some(mut h) = Harness::start("svg_shape_click_round_trip", engine) else {
         return;
     };
 
@@ -498,7 +528,11 @@ fn svg_shape_click_round_trip() {
 /// `target` alias) on the create ops, one per card.
 #[test]
 fn named_nodes_round_trip() {
-    let Some(mut h) = Harness::start("named_nodes_round_trip") else {
+    common::each_engine(named_nodes_round_trip_on);
+}
+
+fn named_nodes_round_trip_on(engine: JsEngine) {
+    let Some(mut h) = Harness::start("named_nodes_round_trip", engine) else {
         return;
     };
 

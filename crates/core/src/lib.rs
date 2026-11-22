@@ -3,8 +3,8 @@
 // into private internals; those links resolve under
 // `cargo doc --document-private-items`.
 #![allow(rustdoc::private_intra_doc_links)]
-//! Drive `bevy_ui` from a React app running on an embedded V8 (deno_core)
-//! runtime. The bridge is deliberately tiny: two channels and two ops connect a
+//! Drive `bevy_ui` from a React app running on an embedded JS engine (V8 via
+//! deno_core, or QuickJS — the `v8` / `quickjs` features, see [`JsEngine`]). The bridge is deliberately tiny: two channels and two ops connect a
 //! dedicated JS thread to Bevy.
 //!
 //! The public entry point is [`ReactUiPlugin`]: add it to your Bevy `App`,
@@ -87,7 +87,7 @@ mod ts_codegen;
 mod ui_map;
 mod window;
 
-// The native JS host (embedded V8 / deno_core on a dedicated thread). Exposed for
+// The native JS host (an embedded V8 or QuickJS on a dedicated thread). Exposed for
 // advanced use (custom integrations, headless tests). The web target has no such
 // thread — React runs in the browser's own engine — so this module is absent there.
 #[cfg(not(target_arch = "wasm32"))]
@@ -174,6 +174,8 @@ pub use bridge::{ReactInteraction, ReactNode};
 pub use devtools::DevtoolsConfig;
 pub use event::{ReactEvent, ReactEvents};
 pub use filters::{ReactFilter, ReactMorphFilter};
+#[cfg(not(target_arch = "wasm32"))]
+pub use js_thread::JsEngine;
 pub use message::{ReactAppExt, ReactMessage, ReactPayload};
 pub use names::ReactNodes;
 pub use plugin::{

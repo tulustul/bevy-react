@@ -5,8 +5,9 @@
 //! request / event registries, the JS bundle itself) is shared. Only *where the
 //! React app runs* and *how Bevy events reach it* changes:
 //!
-//! - **native** ([`native`]): an embedded V8 isolate (deno_core) on a dedicated
-//!   thread, fed from the filesystem, with mtime-based hot reload.
+//! - **native** ([`native`]): an embedded JS engine (V8 or QuickJS, see
+//!   [`JsEngine`](crate::js_thread::JsEngine)) on a dedicated thread, fed from
+//!   the filesystem, with mtime-based hot reload.
 //! - **web** (`web`, wasm builds only): the browser's own JS engine. The page
 //!   loads the bundle;
 //!   wasm-bindgen exposes the ops; a per-frame system drains Bevy→JS events.
@@ -71,6 +72,9 @@ pub(crate) struct HostConfig {
     /// (the dev server / browser owns reloading there).
     #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     pub hot_reload: bool,
+    /// The JS engine to run the bundle on; `None` = the build's default.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub engine: Option<crate::js_thread::JsEngine>,
 }
 
 #[cfg(not(target_arch = "wasm32"))]

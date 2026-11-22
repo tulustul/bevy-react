@@ -6,7 +6,7 @@ description: Run a bevy-react app in the browser by compiling the Bevy app to wa
 
 A bevy-react app also runs in the browser. The Bevy app compiles to
 `wasm32-unknown-unknown`, and the same `vendor.js` and `app.js` bundles run in
-the browser's own JS engine instead of the embedded V8. The UI is still
+the browser's own JS engine instead of the embedded one. The UI is still
 `bevy_ui` drawn into Bevy's canvas, not DOM. No code changes are needed: the
 bundles detect the browser host at startup. The
 [live demo](https://tulustul.github.io/bevy-react/demo/) is the demos app built
@@ -81,8 +81,8 @@ The order in the page script is required:
    object the React runtime sends its ops to. `App::run` then schedules Bevy's
    frame loop and returns, so `init()` resolves.
 2. **`vendor.js` next.** It reads `__bevyHost` when it is evaluated. Loaded
-   before `init()` resolves, it falls back to the native host and throws
-   (`Deno is not defined`).
+   before `init()` resolves, it finds no host and throws
+   (`bevy-react: no host installed on globalThis.__bevyHost`).
 3. **`app.js` last.** It takes React and the runtime from `vendor.js`.
 
 Both bundles are classic scripts, not ES modules: load them with plain

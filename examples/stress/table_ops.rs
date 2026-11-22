@@ -566,6 +566,8 @@ fn advance(driver: &mut BenchDriver, exit: &mut MessageWriter<AppExit>) {
 #[serde(rename_all = "camelCase")]
 struct Report {
     scenario: &'static str,
+    /// The JS engine the bundle ran on (`--engine`).
+    engine: String,
     iterations: u32,
     ops: Vec<OpReport>,
 }
@@ -635,6 +637,7 @@ fn finalize(driver: &BenchDriver) {
 
     let report = Report {
         scenario: "table-ops",
+        engine: format!("{:?}", crate::bench_app::engine()),
         iterations: driver.iterations,
         ops,
     };
@@ -694,6 +697,7 @@ fn render_markdown(report: &Report) -> String {
     let mut out = String::new();
     let _ = writeln!(out, "# {} benchmark", report.scenario);
     let _ = writeln!(out);
+    let _ = writeln!(out, "Engine: {}", report.engine);
     let _ = writeln!(out, "Iterations: {}", report.iterations);
     let _ = writeln!(out);
 

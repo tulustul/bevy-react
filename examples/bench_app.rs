@@ -1,13 +1,14 @@
 //! The benchmark apps' shared shell (`stress`, `layers-stress` — each
 //! includes this file with `#[path]`): the `--export-bindings` exit and the
-//! pure-UI `App` (no 3D scene, a plain 2D UI camera).
+//! pure-UI `App` (no 3D scene, a plain 2D UI camera), on the JS engine
+//! `--engine v8|quickjs` names (both are compiled in; V8 by default).
 
 use std::path::PathBuf;
 
 use bevy::prelude::*;
 use bevy::ui::IsDefaultUiCamera;
 use bevy::window::PresentMode;
-use bevy_react::{ReactAppExt, ReactUiPlugin};
+use bevy_react::{JsEngine, ReactAppExt, ReactUiPlugin};
 
 /// `--export-bindings <path>` (the first arg) writes the TypeScript bindings
 /// `register` declares, keeping `ui/src/bevy.ts` in sync with the Rust
@@ -29,12 +30,29 @@ pub fn export_bindings(args: &[String], register: fn(&mut App)) -> bool {
     true
 }
 
+/// The engine `--engine v8|quickjs` (anywhere in the args) names; V8 when absent.
+pub fn engine() -> JsEngine {
+    let args: Vec<String> = std::env::args().collect();
+    let name = args
+        .iter()
+        .position(|a| a == "--engine")
+        .map(|i| args.get(i + 1).expect("--engine requires v8 or quickjs"));
+    match name.map(String::as_str) {
+        None | Some("v8") => JsEngine::V8,
+        Some("quickjs") => JsEngine::QuickJs,
+        Some(other) => panic!("unknown --engine {other:?} (v8 | quickjs)"),
+    }
+}
+
 /// DefaultPlugins with a `title`d window, the React UI layer over this
 /// package's `ui/dist/app.js`, and a 2D camera marked as the default UI
 /// camera (`bevy_ui` needs one to render).
 pub fn build_app(title: &str, hot_reload: bool, present_mode: PresentMode) -> App {
     let bundle = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("ui/dist/app.js");
+    let engine = engine();
+    println!("JS engine: {engine:?}");
     let react_plugin = ReactUiPlugin::new(bundle)
+        .engine(engine)
         .hot_reload(hot_reload)
         .default_font("fonts/NotoSans-VariableFont_wdth,wght.ttf")
         .font(

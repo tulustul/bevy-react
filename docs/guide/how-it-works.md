@@ -14,9 +14,9 @@ input, picking and rendering are plain Bevy; nothing is emulated.
 ## The two sides
 
 - **The JS side** is your React app plus bevy-react's reconciler, which
-  stands in for react-dom. In a native build it runs in a V8 isolate
-  (through [`deno_core`](https://crates.io/crates/deno_core)) on a dedicated
-  thread, off the game loop: there is no Node and no browser. In a web build
+  stands in for react-dom. In a native build it runs in an embedded JS
+  engine, V8 or QuickJS (see [JS engines](tooling/js-engines.md)), on a
+  dedicated thread, off the game loop: there is no Node and no browser. In a web build
   the same code runs in the browser's own JS engine.
 - **The Bevy side** is `ReactUiPlugin` (part of `ReactPlugins`). It hosts the
   JS runtime, loads your bundle, applies the operations to the ECS and sends

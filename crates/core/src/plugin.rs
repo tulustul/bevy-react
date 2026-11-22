@@ -107,6 +107,8 @@ pub struct ReactUiPlugin {
     #[cfg(feature = "devtools")]
     devtools: crate::devtools::DevtoolsConfig,
     precompile_filters: PrecompileFilters,
+    #[cfg(not(target_arch = "wasm32"))]
+    engine: Option<crate::js_thread::JsEngine>,
 }
 
 /// One partition's selection for [`PrecompileFilters`].
@@ -158,6 +160,8 @@ impl ReactUiPlugin {
             #[cfg(feature = "devtools")]
             devtools: Default::default(),
             precompile_filters: Default::default(),
+            #[cfg(not(target_arch = "wasm32"))]
+            engine: None,
         }
     }
 
@@ -235,6 +239,25 @@ impl ReactUiPlugin {
     /// ```
     pub fn precompile_filters(mut self, config: PrecompileFilters) -> Self {
         self.precompile_filters = config;
+        self
+    }
+
+    /// Choose the JS engine the bundle runs on, among those compiled in (the
+    /// `v8` and `quickjs` cargo features; a variant the build lacks does not
+    /// exist). Only needed when several are: the default is V8 when it is
+    /// compiled in, else the one that is. Native only — on the web the
+    /// browser's engine runs the bundle.
+    ///
+    /// ```no_run
+    /// # use bevy::prelude::*;
+    /// # use bevy_react_core::{JsEngine, ReactUiPlugin};
+    /// # let mut app = App::new();
+    /// # #[cfg(feature = "quickjs")]
+    /// app.add_plugins(ReactUiPlugin::new("ui/dist/app.js").engine(JsEngine::QuickJs));
+    /// ```
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn engine(mut self, engine: crate::js_thread::JsEngine) -> Self {
+        self.engine = Some(engine);
         self
     }
 
@@ -598,6 +621,8 @@ impl Plugin for ReactUiPlugin {
                 ext: ext_slot,
                 bundle: self.bundle.clone(),
                 hot_reload: self.hot_reload,
+                #[cfg(not(target_arch = "wasm32"))]
+                engine: self.engine,
             },
             HostSenders {
                 ops: ops_tx,

@@ -64,6 +64,7 @@
 - Tooling
   - [Devtools](tooling/devtools.md)
   - [Hot reload](tooling/hot-reload.md)
+  - [JS engines](tooling/js-engines.md)
   - [Web builds](tooling/web.md)
   - [TypeScript codegen](tooling/ts-codegen.md)
 - Reference

@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use bevy_react_core::animations::AnimationCommand;
-use bevy_react_core::js_thread::{FlushInfo, HostSenders, spawn_js_thread};
+use bevy_react_core::js_thread::{FlushInfo, HostSenders, JsEngine, spawn_js_thread};
 use bevy_react_core::protocol::op::Op;
 use bevy_react_core::protocol::outbound::{Outbound, UiEvent};
 use bevy_react_core::{RawRequest, ReactMessage};
@@ -32,9 +32,12 @@ pub struct Js {
 
 impl Js {
     /// Write `app` into a fresh temp dir named after `test` and spawn the JS
-    /// thread on it, with the core's built-in registry.
-    pub fn spawn(test: &str, app: impl AsRef<[u8]>) -> Self {
-        let dir = std::env::temp_dir().join(format!("bevy-react-{test}-{}", std::process::id()));
+    /// thread on it, running `engine`, with the core's built-in registry.
+    pub fn spawn(engine: JsEngine, test: &str, app: impl AsRef<[u8]>) -> Self {
+        let dir = std::env::temp_dir().join(format!(
+            "bevy-react-{test}-{engine:?}-{}",
+            std::process::id()
+        ));
         std::fs::create_dir_all(&dir).expect("create temp bundle dir");
         let vendor = dir.join("vendor.js");
         let app_path = dir.join("app.js");
@@ -56,6 +59,7 @@ impl Js {
             anim: anim_tx,
         };
         spawn_js_thread(
+            engine,
             bevy_react_core::ext::ExtRegistrySlot::ready(bevy_react_core::ext::builtin_registry()),
             vendor,
             app_path.clone(),
@@ -100,6 +104,17 @@ impl Js {
                 Err(RecvTimeoutError::Timeout) => panic!("no {name:?} emit within {timeout:?}"),
                 Err(RecvTimeoutError::Disconnected) => panic!("JS thread died before {name:?}"),
             }
+        }
+    }
+}
+
+/// Run `test` once per JS engine compiled into this build, naming the engine
+/// when it fails.
+pub fn each_engine(test: fn(JsEngine)) {
+    for &engine in JsEngine::COMPILED {
+        if let Err(panic) = std::panic::catch_unwind(|| test(engine)) {
+            eprintln!("^ failed on the {engine:?} engine");
+            std::panic::resume_unwind(panic);
         }
     }
 }

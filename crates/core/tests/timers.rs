@@ -8,22 +8,29 @@
 
 use std::time::{Duration, Instant};
 
+use bevy_react_core::JsEngine;
+
 mod common;
 use common::Js;
 
 #[test]
 fn set_timeout_honors_delay() {
+    common::each_engine(set_timeout_honors_delay_on);
+}
+
+fn set_timeout_honors_delay_on(engine: JsEngine) {
     // Emit "early" synchronously, schedule "late" 300ms out, then park on
     // op_next_event so the runtime's event loop stays alive to pump the timer.
     // The app bundle is a classic script (no top-level await), so the body runs
     // in an async IIFE.
     let js = Js::spawn(
+        engine,
         "timers",
         r#"
         (async () => {
-          Deno.core.ops.op_emit("early", null);
-          setTimeout(() => { Deno.core.ops.op_emit("late", null); }, 300);
-          for (;;) { const m = await Deno.core.ops.op_next_event(); if (m == null) break; }
+          __bevyHost.op_emit("early", null);
+          setTimeout(() => { __bevyHost.op_emit("late", null); }, 300);
+          for (;;) { const m = await __bevyHost.op_next_event(); if (m == null) break; }
         })();
         "#,
     );

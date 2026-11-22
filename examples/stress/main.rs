@@ -18,6 +18,8 @@
 //!     records per-op timing (p50/p99 over N iterations), writes JSON, and exits:
 //!     `cargo run -p stress -- --run table-ops --out results.json [--iterations N]`
 //!
+//! Either mode takes `--engine v8|quickjs` (V8 by default).
+//!
 //! Like `--shoot` in the demos app, capture still needs an X11 display present.
 //!
 //! Build the bundle first: `npm run build -w stress-app`.

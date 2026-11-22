@@ -12,7 +12,7 @@ use std::time::{Duration, Instant};
 use bevy_react::RawRequest;
 use bevy_react::ReactMessage;
 use bevy_react::animations::AnimationCommand;
-use bevy_react::js_thread::{FlushInfo, HostSenders, spawn_js_thread};
+use bevy_react::js_thread::{FlushInfo, HostSenders, JsEngine, spawn_js_thread};
 use bevy_react::protocol::op::Op;
 use bevy_react::protocol::outbound::{Outbound, ResponseResult, UiEvent};
 use crossbeam_channel::{Receiver, RecvTimeoutError};
@@ -132,7 +132,7 @@ pub struct Harness {
 impl Harness {
     /// Spawn the JS thread on the built bundle — `None` (after a skip notice
     /// naming `test`) when the bundle isn't built.
-    pub fn start(test: &str) -> Option<Self> {
+    pub fn start(test: &str, engine: JsEngine) -> Option<Self> {
         let bundle = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("ui/dist/app.js");
         if !bundle.exists() {
             eprintln!(
@@ -157,6 +157,7 @@ impl Harness {
             anim: anim_tx,
         };
         spawn_js_thread(
+            engine,
             bevy_react::ext::ExtRegistrySlot::ready(ext_registry()),
             bundle.with_file_name("vendor.js"),
             bundle,
@@ -320,4 +321,15 @@ fn ext_registry() -> bevy_react::ext::ExtRegistry {
     app.add_react_elements(bevy_react::elements::CORE_ELEMENTS);
     bevy_react::ReactPlugins::register_bindings(&mut app);
     bevy_react::ext::ExtRegistry::from_app(&app)
+}
+
+/// Run `test` once per JS engine compiled into this build, naming the engine
+/// when it fails.
+pub fn each_engine(test: fn(JsEngine)) {
+    for &engine in JsEngine::COMPILED {
+        if let Err(panic) = std::panic::catch_unwind(|| test(engine)) {
+            eprintln!("^ failed on the {engine:?} engine");
+            std::panic::resume_unwind(panic);
+        }
+    }
 }

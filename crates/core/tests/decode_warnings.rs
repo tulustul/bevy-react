@@ -14,6 +14,8 @@
 
 use std::time::Duration;
 
+use bevy_react_core::JsEngine;
+
 mod common;
 use common::Js;
 
@@ -24,7 +26,7 @@ use common::Js;
 /// `op_take_decode_warnings` drains back over the emit channel. Update ops
 /// carry their `kind` before `props`, as the runtime emits them.
 const APP: &str = r#"
-const ops = Deno.core.ops;
+const ops = __bevyHost;
 ops.op_flush(JSON.stringify([
   { op: "create", id: 1, kind: "node", props: { style: { width: "aa16" } } },
   { op: "append", parent: 0, child: 1 },
@@ -38,7 +40,11 @@ ops.op_emit("decodeWarnings", ops.op_take_decode_warnings());
 
 #[test]
 fn decode_warnings_round_trip() {
-    let js = Js::spawn("decode_warnings", APP);
+    common::each_engine(decode_warnings_round_trip_on);
+}
+
+fn decode_warnings_round_trip_on(engine: JsEngine) {
+    let js = Js::spawn(engine, "decode_warnings", APP);
 
     // The invalid values must not cost any ops: the whole batch arrives.
     let batch = js

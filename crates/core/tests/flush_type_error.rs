@@ -16,6 +16,8 @@ use std::time::Duration;
 
 use bevy_react_core::protocol::op::Op;
 
+use bevy_react_core::JsEngine;
+
 mod common;
 use common::Js;
 
@@ -23,7 +25,7 @@ use common::Js;
 /// (each must throw a `TypeError` and ship nothing), then a valid two-op batch
 /// (must arrive). The observations go back over the emit channel.
 const APP: &str = r#"
-const ops = Deno.core.ops;
+const ops = __bevyHost;
 function attempt(batch) {
   try {
     ops.op_flush(JSON.stringify(batch), false);
@@ -47,7 +49,11 @@ ops.op_emit("flushErrors", { notArray, badTag });
 
 #[test]
 fn invalid_batch_throws_type_error_and_next_batch_arrives() {
-    let js = Js::spawn("flush_type_error", APP);
+    common::each_engine(invalid_batch_throws_type_error_and_next_batch_arrives_on);
+}
+
+fn invalid_batch_throws_type_error_and_next_batch_arrives_on(engine: JsEngine) {
+    let js = Js::spawn(engine, "flush_type_error", APP);
 
     // The observations arrive after all three flushes ran on the JS thread.
     let report = js.emitted("flushErrors", Duration::from_secs(15));

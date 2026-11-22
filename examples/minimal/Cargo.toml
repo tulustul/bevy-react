@@ -10,6 +10,7 @@ path = "main.rs"
 
 [dependencies]
 bevy = { workspace = true, features = ["default"] }
-# Core only — no feature elements, no devtools: the smallest bevy-react build.
-bevy-react = { workspace = true }
+# Core only on QuickJS — no feature elements, no devtools, no V8: the smallest
+# bevy-react build (CI checks no V8 crate is in its tree).
+bevy-react = { workspace = true, features = ["quickjs"] }
 

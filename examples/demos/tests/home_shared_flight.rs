@@ -17,6 +17,8 @@ use std::time::{Duration, Instant};
 
 use bevy_react::protocol::op::Op;
 
+use bevy_react::JsEngine;
+
 mod common;
 use common::{Harness, Tree};
 
@@ -92,7 +94,12 @@ fn tagged_id(tagged: &HashSet<u32>) -> u32 {
 
 #[test]
 fn tile_expand_and_collapse_each_pair_in_one_commit() {
-    let Some(mut h) = Harness::start("tile_expand_and_collapse_each_pair_in_one_commit") else {
+    common::each_engine(tile_expand_and_collapse_each_pair_in_one_commit_on);
+}
+
+fn tile_expand_and_collapse_each_pair_in_one_commit_on(engine: JsEngine) {
+    let Some(mut h) = Harness::start("tile_expand_and_collapse_each_pair_in_one_commit", engine)
+    else {
         return;
     };
     let mut tagged = HashSet::new();

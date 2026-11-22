@@ -15,12 +15,18 @@ use bevy_react::protocol::animatable::Animatable;
 use bevy_react::protocol::op::Op;
 use bevy_react::style::props::TRANSFORM;
 
+use bevy_react::JsEngine;
+
 mod common;
 use common::Harness;
 
 #[test]
 fn devtools_panel_round_trip() {
-    let Some(mut h) = Harness::start("devtools_panel_round_trip") else {
+    common::each_engine(devtools_panel_round_trip_on);
+}
+
+fn devtools_panel_round_trip_on(engine: JsEngine) {
+    let Some(mut h) = Harness::start("devtools_panel_round_trip", engine) else {
         return;
     };
 

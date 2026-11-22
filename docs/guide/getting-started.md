@@ -169,6 +169,7 @@ element features, the group contains only that plugin.
 | `cursor(name, path, hotspot)`           | A named image cursor, selected with `cursor: name`.             |
 | `devtools(DevtoolsConfig)`              | Configure or disable the inspector.                             |
 | `precompile_filters(PrecompileFilters)` | Choose which filter shaders compile at startup (default: all).  |
+| `engine(JsEngine)`                      | The JS engine, when both are compiled in (default: V8).         |
 
 Font and cursor paths are loaded through the `AssetServer`. `cursor` needs
 the `custom_cursor` feature, and `devtools` needs the `devtools` feature.
@@ -251,10 +252,12 @@ detail.
 
 ## Cargo features
 
-Every feature except `svg_text` is on by default:
+Every feature except `svg_text` and `quickjs` is on by default:
 
 | Feature         | Adds                                                                 | Default |
 | --------------- | -------------------------------------------------------------------- | ------- |
+| `v8`            | the V8 JS engine (see [JS engines](tooling/js-engines.md))           | yes     |
+| `quickjs`       | the QuickJS JS engine, a small alternative to V8                     | no      |
 | `svg`           | `<svg>` and its shape elements (`SvgPlugin`)                         | yes     |
 | `anchor`        | `<anchor>`, world-anchored overlays (`AnchorPlugin`)                 | yes     |
 | `canvas`        | `<canvas>`, a retained drawing surface (`CanvasPlugin`)              | yes     |
@@ -267,8 +270,11 @@ Every feature except `svg_text` is on by default:
 To compile in only what you use:
 
 ```sh
-cargo add bevy-react --no-default-features --features svg,devtools
+cargo add bevy-react --no-default-features --features v8,svg,devtools
 ```
+
+A native app needs a JS engine: keep `v8` or enable `quickjs`. Without one,
+`ReactUiPlugin` panics at startup.
 
 A disabled feature isn't compiled at all. Its elements mount as plain nodes
 and log a `featureMissing` warning that names the feature and the plugin to

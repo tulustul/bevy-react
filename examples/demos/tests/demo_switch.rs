@@ -10,12 +10,18 @@
 
 use std::time::{Duration, Instant};
 
+use bevy_react::JsEngine;
+
 mod common;
 use common::Harness;
 
 #[test]
 fn demo_switch_anchored_survives() {
-    let Some(mut h) = Harness::start("demo_switch_anchored_survives") else {
+    common::each_engine(demo_switch_anchored_survives_on);
+}
+
+fn demo_switch_anchored_survives_on(engine: JsEngine) {
+    let Some(mut h) = Harness::start("demo_switch_anchored_survives", engine) else {
         return;
     };
 

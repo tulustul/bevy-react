@@ -11,7 +11,7 @@ path = "main.rs"
 [dependencies]
 bevy = { workspace = true, features = ["default"] }
 # `<svg>` for the node previews and knobs; devtools for F12.
-bevy-react = { workspace = true, features = ["svg", "devtools"] }
+bevy-react = { workspace = true, features = ["v8", "svg", "devtools"] }
 # For the nested payload types (`Wire`, `Drag`) the macros don't derive
 # themselves.
 serde = { workspace = true }

@@ -2,7 +2,7 @@
 name = "bevy_react_core"
 version.workspace = true
 edition.workspace = true
-description = "The core bridge of bevy-react (drive bevy_ui from React over an embedded V8 runtime). Apps depend on the `bevy-react` crate."
+description = "The core bridge of bevy-react (drive bevy_ui from React over an embedded JS engine, V8 or QuickJS). Apps depend on the `bevy-react` crate."
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
@@ -27,7 +27,15 @@ path = "src/lib.rs"
 # setup (the plugin is inert in `--release` builds); size-conscious release
 # builds compile it out with `default-features = false`.
 [features]
-default = ["devtools"]
+default = ["devtools", "v8"]
+# The JS engines the native host can run the React bundle on (ignored on wasm,
+# where the browser's own engine runs it). Additive: an app compiles in only the
+# ones it enables — an engine left out is neither downloaded nor linked — and,
+# with several, picks one with `ReactUiPlugin::engine` (V8 by default).
+# V8 through deno_core: a JIT, the fastest; a ~40 MB prebuilt static library.
+v8 = ["dep:deno_core", "dep:deno_error"]
+# QuickJS (quickjs-ng through rquickjs): an interpreter compiled from C, ~1 MB.
+quickjs = ["dep:rquickjs"]
 devtools = []
 # Named custom image cursors (`ReactUiPlugin::cursor`). Turns on
 # `bevy/custom_cursor`, which pulls in `bevy_winit` — so a build with it needs
@@ -106,12 +114,15 @@ tracing = { workspace = true }
 # expansion. ts-rs 12 parses it silently — drop the feature on upgrade.
 ts-rs = { workspace = true, features = ["no-serde-warnings"] }
 
-# Native host: the embedded V8 isolate (deno_core) on a dedicated thread, driven by
-# a tokio current-thread runtime. Neither builds for wasm.
+# Native host: the JS engine (V8 through deno_core, or QuickJS — see the `v8` /
+# `quickjs` features) on a dedicated thread, driven by a tokio current-thread
+# runtime. None of it builds for wasm.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-deno_core = { workspace = true }
-deno_error = { workspace = true }
-tokio = { workspace = true }
+deno_core = { workspace = true, optional = true }
+deno_error = { workspace = true, optional = true }
+rquickjs = { workspace = true, optional = true }
+# `time`: the prelude's timers (`op_sleep`).
+tokio = { workspace = true, features = ["time"] }
 
 # Web host: React runs in the browser's own engine, reached over wasm-bindgen.
 [target.'cfg(target_arch = "wasm32")'.dependencies]

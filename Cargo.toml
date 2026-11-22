@@ -40,6 +40,11 @@ deno_core = "0.404.0"
 # The `JsErrorClass` types deno_core throws into JS (`JsErrorBox`); the version
 # deno_core 0.404 itself depends on.
 deno_error = "0.7"
+# The QuickJS engine (quickjs-ng, compiled from C by `cc`): the `quickjs`
+# feature's alternative to deno_core/V8. `futures` = Rust futures as JS
+# promises; `disable-assertions` = `NDEBUG` (rquickjs leaves QuickJS's C
+# `assert`s on otherwise, a release build included).
+rquickjs = { version = "0.14", features = ["futures", "disable-assertions"] }
 # Type-erased serde: the style registry decodes each property's value
 # straight into its registered type (`crates/core/src/style/codec.rs`). The
 # version bevy_reflect already pulls, so it adds nothing to the tree.

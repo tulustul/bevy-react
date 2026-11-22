@@ -1,10 +1,16 @@
-//! Native JS host: creates the Bevy→JS tokio channels, spawns the V8 JS thread
+//! Native JS host: creates the Bevy→JS tokio channels, spawns the JS thread
 //! (see [`crate::js_thread`]), and watches the bundle on disk for hot reload.
+
+// No engine compiled in: see the note atop `crate::js_thread`.
+#![cfg_attr(
+    not(any(feature = "v8", feature = "quickjs")),
+    allow(unused_variables, unreachable_code)
+)]
 
 use bevy::prelude::*;
 
 use crate::bridge::OutboundSender;
-use crate::js_thread::spawn_js_thread;
+use crate::js_thread::{JsEngine, spawn_js_thread};
 use crate::protocol::outbound::Outbound;
 
 use super::{HostConfig, HostSenders};
@@ -37,7 +43,11 @@ pub(crate) fn spawn(app: &mut App, config: HostConfig, senders: HostSenders) -> 
         }
     }
 
+    let engine = config.engine.or_else(JsEngine::default_engine).expect(
+        "bevy-react has no JS engine compiled in: enable the `v8` or `quickjs` cargo feature",
+    );
     spawn_js_thread(
+        engine,
         config.ext,
         vendor,
         bundle.clone(),

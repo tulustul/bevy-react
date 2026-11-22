@@ -12,6 +12,8 @@ use std::time::{Duration, Instant};
 
 use bevy_react::animations::AnimationCommand;
 
+use bevy_react::JsEngine;
+
 mod common;
 use common::Harness;
 
@@ -46,7 +48,12 @@ fn declared(c: &AnimationCommand) -> Option<u32> {
 
 #[test]
 fn shared_values_live_as_long_as_their_component() {
-    let Some(mut h) = Harness::start("shared_values_live_as_long_as_their_component") else {
+    common::each_engine(shared_values_live_as_long_as_their_component_on);
+}
+
+fn shared_values_live_as_long_as_their_component_on(engine: JsEngine) {
+    let Some(mut h) = Harness::start("shared_values_live_as_long_as_their_component", engine)
+    else {
         return;
     };
     let events = h

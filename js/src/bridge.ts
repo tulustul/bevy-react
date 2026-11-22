@@ -5,12 +5,12 @@
 import { BevyCanvasElement, recordDrawing } from "./canvas";
 import type { CanvasPainter, DrawCmd } from "./canvas";
 
-// The whole Rust<->JS op surface. The same bundle runs under two hosts:
-//   - Native: an embedded V8 isolate (deno_core) exposes these under `Deno.core.ops`.
-//   - Web: the Bevy wasm module installs the identical methods on
-//     `globalThis.__bevyHost` (backed by `#[wasm_bindgen]` exports) before this
-//     bundle runs.
-// Same names and signatures both ways, so everything below is host-agnostic.
+// The whole Rust<->JS op surface, installed on `globalThis.__bevyHost` before
+// this bundle runs by every host:
+//   - Native: the embedded engine's adapter (V8's `Deno.core.ops`, or QuickJS's
+//     glue over its Rust functions — `crates/core/src/js_thread/`).
+//   - Web: the Bevy wasm module (backed by `#[wasm_bindgen]` exports).
+// Same names and signatures everywhere, so everything below is host-agnostic.
 interface BevyHost {
   /** The op batch, `JSON.stringify`ed (see `flushRaw`). */
   op_flush(json: string, devtools: boolean): void;
@@ -37,11 +37,11 @@ export interface DecodeWarning {
   message: string;
 }
 
-// Resolved at module load. On native `Deno.core.ops` is read; on web the injected
-// host short-circuits the `??`, so `Deno` (undefined in a browser) is never touched.
-declare const Deno: { core: { ops: BevyHost } };
-const ops: BevyHost =
-  (globalThis as { __bevyHost?: BevyHost }).__bevyHost ?? Deno.core.ops;
+// Resolved at module load (on the web, `vendor.js` must load after `init()`).
+const host = (globalThis as { __bevyHost?: BevyHost }).__bevyHost;
+if (!host)
+  throw new Error("bevy-react: no host installed on globalThis.__bevyHost");
+const ops: BevyHost = host;
 
 // Mirrors `bevy_react::animations::protocol::AnimationCommand` (tag = "kind").
 // `token` correlates a completion callback: Bevy reports the driver's settlement

@@ -11,6 +11,8 @@
 
 use std::time::Duration;
 
+use bevy_react_core::JsEngine;
+
 mod common;
 use common::Js;
 
@@ -19,7 +21,7 @@ const APP: &[u8] = br#"
   // Re-execution (hot update): the isolate is alive, so __n is preserved. Report
   // it and re-park the event loop (the previous loop returned on the reload).
   if (globalThis.__started) {
-    Deno.core.ops.op_emit("phase", "update:" + globalThis.__n);
+    __bevyHost.op_emit("phase", "update:" + globalThis.__n);
     globalThis.__loop();
     return;
   }
@@ -28,23 +30,27 @@ const APP: &[u8] = br#"
   globalThis.__n = 41;
   globalThis.__loop = () => (async () => {
     for (;;) {
-      const m = await Deno.core.ops.op_next_event();
+      const m = await __bevyHost.op_next_event();
       if (m == null) return;        // shutdown
       if (m.t === "reload") return; // yield to Rust so it can re-exec the app
       if (m.t === "uiEvent") {
         globalThis.__n++;
-        Deno.core.ops.op_emit("phase", "click:" + globalThis.__n);
+        __bevyHost.op_emit("phase", "click:" + globalThis.__n);
       }
     }
   })();
-  Deno.core.ops.op_emit("phase", "init:" + globalThis.__n);
+  __bevyHost.op_emit("phase", "init:" + globalThis.__n);
   globalThis.__loop();
 })();
 "#;
 
 #[test]
 fn hot_reload_preserves_isolate_state() {
-    let js = Js::spawn("hot_reload", APP);
+    common::each_engine(hot_reload_preserves_isolate_state_on);
+}
+
+fn hot_reload_preserves_isolate_state_on(engine: JsEngine) {
+    let js = Js::spawn(engine, "hot_reload", APP);
     let recv = || {
         js.emitted("phase", Duration::from_secs(10))
             .as_str()

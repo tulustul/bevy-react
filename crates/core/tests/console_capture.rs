@@ -16,6 +16,8 @@ use std::time::{Duration, Instant};
 
 use bevy_react_core::console_log::{self, Level, Source};
 
+use bevy_react_core::JsEngine;
+
 mod common;
 use common::Js;
 
@@ -27,13 +29,17 @@ console.debug("cap-dbg");
 console.warn("cap-warn");
 console.error(new Error("cap-boom"));
 Promise.reject(new Error("cap-lost"));
-Deno.core.ops.op_next_event();
+__bevyHost.op_next_event();
 "#;
 
 #[test]
 fn console_capture_round_trip() {
+    common::each_engine(console_capture_round_trip_on);
+}
+
+fn console_capture_round_trip_on(engine: JsEngine) {
     // Held for the test: the parked `op_next_event` keeps the runtime alive.
-    let _js = Js::spawn("console_capture", APP);
+    let _js = Js::spawn(engine, "console_capture", APP);
 
     // Poll the ring until every expected entry landed (the rejection is
     // processed asynchronously by the event loop, so it can trail the

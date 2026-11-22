@@ -94,6 +94,14 @@ jobs:
       - name: Feature combinations
         run: cargo hack check -p bevy-react --each-feature --no-dev-deps --features bevy/x11
 
+      # An app gets only the JS engine it enables: the QuickJS-only `minimal`
+      # must not pull V8 (deno_core + the ~40 MB prebuilt), nor a V8-only app
+      # QuickJS. (`cargo tree -p` resolves features for that package alone.)
+      - name: JS engine isolation
+        run: |
+          ! cargo tree -p minimal -e normal --prefix none | grep -E '^(deno_core|v8) '
+          ! cargo tree -p synth -e normal --prefix none | grep -E '^rquickjs '
+
       # The heavy Bevy links below OOM'd the 7 GB runner with the default linker.
       # `mold -run` swaps in the low-memory linker for the child cargo across the
       # whole process tree (debug info is already dropped job-wide above), keeping
@@ -104,6 +112,8 @@ jobs:
       - name: Build JS bundle
         run: npm run build -w demos
 
+      # Every JS-thread test runs on each engine compiled in, and the
+      # workspace build has both (`stress` enables `v8` and `quickjs`).
       - name: Test
         run: mold -run cargo test
 
