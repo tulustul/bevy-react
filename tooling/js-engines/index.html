@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JS engines · bevy-react</title>
+<meta name="description" content="Run the React bundle on V8 or on QuickJS — a JIT that is fastest at JavaScript, or a small interpreter that keeps the binary ~48 MB lighter.">
+<link rel="canonical" href="https://tulustul.github.io/bevy-react/tooling/js-engines/">
+<link rel="alternate" type="text/markdown" href="../../tooling/js-engines.md">
+<meta property="og:title" content="JS engines · bevy-react">
+<meta property="og:description" content="Run the React bundle on V8 or on QuickJS — a JIT that is fastest at JavaScript, or a small interpreter that keeps the binary ~48 MB lighter.">
+<link rel="icon" href="../../logo.png">
+<link rel="stylesheet" href="../../style.css">
+<script src="../../docs.js" defer></script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="site-header">
+<a class="brand" href="../../"><img src="../../logo.png" alt="" width="74" height="74"> bevy-react</a>
+<span class="version">v0.9.0</span>
+<nav class="site-links" aria-label="Project">
+<a href="../../demo/">Live demo</a>
+<a href="https://github.com/tulustul/bevy-react">GitHub</a>
+<a href="https://docs.rs/bevy-react">docs.rs</a>
+<a href="https://www.npmjs.com/package/bevy-react">npm</a>
+</nav>
+</header>
+<div class="layout">
+<nav class="sidebar" aria-label="Documentation">
+<details class="nav-menu" open>
+<summary>Menu</summary>
+<ul><li><a href="../../">Introduction</a></li><li><a href="../../getting-started/">Getting started</a></li><li><a href="../../how-it-works/">How it works</a></li><li class="nav-section"><span>Elements</span><ul><li><a href="../../elements/node/">&lt;node&gt;</a></li><li><a href="../../elements/button/">&lt;button&gt;</a></li><li><a href="../../elements/text/">&lt;text&gt;</a></li><li><a href="../../elements/editable-text/">&lt;editableText&gt;</a></li><li><a href="../../elements/image/">&lt;image&gt;</a></li><li><a href="../../elements/canvas/">&lt;canvas&gt;</a></li><li><a href="../../elements/svg/">&lt;svg&gt;</a></li><li><a href="../../elements/portal/">&lt;portal&gt;</a></li><li><a href="../../elements/surface/">&lt;surface&gt;</a></li><li><a href="../../elements/root/">&lt;root&gt;</a></li><li><a href="../../elements/anchor/">&lt;anchor&gt;</a></li></ul></li><li class="nav-section"><span>Layout</span><ul><li><a href="../../layout/flexbox/">Flexbox</a></li><li><a href="../../layout/grid/">Grid</a></li><li><a href="../../layout/positioning/">Positioning</a></li></ul></li><li class="nav-section"><span>Styling</span><ul><li><a href="../../styling/units/">Units</a></li><li><a href="../../styling/colors/">Colors</a></li><li><a href="../../styling/borders/">Borders</a></li><li><a href="../../styling/spacing/">Spacing</a></li><li><a href="../../styling/sizing/">Sizing</a></li><li><a href="../../styling/layout-rounding/">Layout rounding</a></li><li><a href="../../styling/overflow/">Overflow</a></li><li><a href="../../styling/transforms/">Transforms</a></li><li><a href="../../styling/3d-transforms/">3D transforms</a></li><li><a href="../../styling/shadows/">Shadows</a></li><li><a href="../../styling/filters/">Filters</a></li><li><a href="../../styling/backdrop-filters/">Backdrop filters</a></li><li><a href="../../styling/morph-filters/">Morph filters</a></li><li><a href="../../styling/gradients/">Gradients</a></li><li><a href="../../styling/background-images/">Background images</a></li><li><a href="../../styling/image-rendering/">Image rendering</a></li><li><a href="../../styling/opacity/">Opacity</a></li><li><a href="../../styling/z-index/">Z-index</a></li><li><a href="../../styling/focus-policy/">Focus policy</a></li><li><a href="../../styling/cursors/">Cursors</a></li><li><a href="../../styling/layers/">Layers</a></li></ul></li><li class="nav-section"><span>Animations</span><ul><li><a href="../../animations/style-transitions/">Style transitions</a></li><li><a href="../../animations/animated-values/">Animated values</a></li><li><a href="../../animations/interpolation/">Interpolation</a></li><li><a href="../../animations/shared-elements/">Shared elements</a></li></ul></li><li class="nav-section"><span>Communication</span><ul><li><a href="../../communication/react-to-bevy/">React to Bevy</a></li><li><a href="../../communication/bevy-to-react/">Bevy to React</a></li><li><a href="../../communication/request-response/">Request / response</a></li><li><a href="../../communication/named-nodes/">Named nodes</a></li></ul></li><li class="nav-section"><span>Events</span><ul><li><a href="../../events/mouse/">Mouse</a></li><li><a href="../../events/keyboard/">Keyboard</a></li><li><a href="../../events/focus/">Focus</a></li><li><a href="../../events/gamepad/">Gamepad</a></li><li><a href="../../events/window/">Window</a></li></ul></li><li class="nav-section"><span>Extending</span><ul><li><a href="../../extending/custom-elements/">Custom elements</a></li><li><a href="../../extending/custom-styles/">Custom styles</a></li><li><a href="../../extending/custom-filters/">Custom filters</a></li></ul></li><li class="nav-section"><span>Tooling</span><ul><li><a href="../../tooling/devtools/">Devtools</a></li><li><a href="../../tooling/hot-reload/">Hot reload</a></li><li><a href="../../tooling/js-engines/" aria-current="page">JS engines</a></li><li><a href="../../tooling/web/">Web builds</a></li><li><a href="../../tooling/ts-codegen/">TypeScript codegen</a></li></ul></li><li class="nav-section"><span>Reference</span><ul><li><a href="../../reference/style-properties/">Style properties</a></li><li><a href="../../reference/elements/">Elements</a></li><li><a href="../../reference/filters/">Filters</a></li></ul></li><li><a href="../../performance/">Performance</a></li></ul>
+</details>
+</nav>
+<main id="main">
+<article>
+<h1 id="js-engines">JS engines</h1>
+<p>In a native build, bevy-react runs your React bundle in an embedded JS
+engine. There are two, each behind a cargo feature:</p>
+<ul>
+<li><strong><code>v8</code></strong> (the default): V8 through
+<a href="https://crates.io/crates/deno_core"><code>deno_core</code></a>. It is a JIT, so it runs
+JavaScript fastest. It adds about 49 MB to a stripped binary, and its build
+script downloads a prebuilt ~40 MB static library.</li>
+<li><strong><code>quickjs</code></strong>: <a href="https://github.com/quickjs-ng/quickjs">QuickJS</a> through
+<a href="https://crates.io/crates/rquickjs"><code>rquickjs</code></a>. It is an interpreter that
+starts faster and uses less memory, and it adds about 1.3 MB. It compiles
+from C, so the build needs a C compiler, and it downloads nothing.</li>
+</ul>
+<p>An engine you don&#39;t enable is neither downloaded nor linked. A web build
+ignores both features, because the browser&#39;s own engine runs the bundle
+there.</p>
+<h2 id="usage"><a class="anchor" href="#usage" aria-hidden="true">#</a>Usage</h2>
+<p>To use QuickJS instead of V8, turn the default features off and list what
+you use:</p>
+<pre><code class="language-toml"><span class="token punctuation">[</span><span class="token table class-name">dependencies</span><span class="token punctuation">]</span>
+<span class="token key property">bevy-react</span> <span class="token punctuation">=</span> <span class="token punctuation">{</span> <span class="token key property">version</span> <span class="token punctuation">=</span> <span class="token string">&quot;0.8&quot;</span><span class="token punctuation">,</span> <span class="token key property">default-features</span> <span class="token punctuation">=</span> <span class="token boolean">false</span><span class="token punctuation">,</span> <span class="token key property">features</span> <span class="token punctuation">=</span> <span class="token punctuation">[</span>
+    <span class="token string">&quot;quickjs&quot;</span><span class="token punctuation">,</span> <span class="token string">&quot;svg&quot;</span><span class="token punctuation">,</span> <span class="token string">&quot;anchor&quot;</span><span class="token punctuation">,</span> <span class="token string">&quot;canvas&quot;</span><span class="token punctuation">,</span> <span class="token string">&quot;portal&quot;</span><span class="token punctuation">,</span> <span class="token string">&quot;surface&quot;</span><span class="token punctuation">,</span> <span class="token string">&quot;devtools&quot;</span><span class="token punctuation">,</span>
+    <span class="token string">&quot;custom_cursor&quot;</span><span class="token punctuation">,</span>
+<span class="token punctuation">]</span> <span class="token punctuation">}</span></code></pre><p>Nothing else changes. The same bundle runs on either engine, and hot
+reload, devtools and timers behave the same way.</p>
+<p>The features are additive. With both compiled in, choose one at startup
+(V8 is the default):</p>
+<pre><code class="language-rust"><span class="token keyword">use</span> <span class="token namespace">bevy_react<span class="token punctuation">::</span></span><span class="token class-name">JsEngine</span><span class="token punctuation">;</span>
+
+app<span class="token punctuation">.</span><span class="token function">add_plugins</span><span class="token punctuation">(</span>
+    <span class="token class-name">ReactPlugins</span><span class="token punctuation">.</span><span class="token function">set</span><span class="token punctuation">(</span><span class="token class-name">ReactUiPlugin</span><span class="token punctuation">::</span><span class="token function">default</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">engine</span><span class="token punctuation">(</span><span class="token class-name">JsEngine</span><span class="token punctuation">::</span><span class="token class-name">QuickJs</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+<span class="token punctuation">)</span><span class="token punctuation">;</span></code></pre><p>At startup the log names the engine, its version and how long it took to
+run the bundle and render the first frame of UI:</p>
+<pre><code class="language-text">INFO bevy_react_core::js: QuickJS-ng 0.16.2 ready in 50.8 ms</code></pre><p><code>JsEngine</code> only has variants for the engines compiled in, so naming a
+missing one is a compile error. A native build with neither feature panics
+at startup.</p>
+<h2 id="choosing"><a class="anchor" href="#choosing" aria-hidden="true">#</a>Choosing</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Measured</th>
+<th>V8</th>
+<th>QuickJS</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Added to a stripped binary</td>
+<td>49 MB</td>
+<td>1.3 MB</td>
+</tr>
+<tr>
+<td>Startup with a 145 KB production bundle</td>
+<td>~37 ms</td>
+<td>~20 ms</td>
+</tr>
+<tr>
+<td>React work (reconcile + build the op batch)</td>
+<td>1×</td>
+<td>10–30× slower</td>
+</tr>
+<tr>
+<td>Re-rendering a 1,000-row list, JS time</td>
+<td>~0.6 ms</td>
+<td>~10 ms</td>
+</tr>
+<tr>
+<td>Peak memory in the 10,000-row benchmark</td>
+<td>1.39 GB</td>
+<td>1.21 GB</td>
+</tr>
+</tbody></table></div>
+<p>QuickJS suits most game UIs. Menus, HUDs and panels of tens to hundreds of
+nodes re-render in about a millisecond of JS. Bevy-side animation
+(<a href="../../animations/animated-values/">animated values</a>,
+<a href="../../animations/style-transitions/">style transitions</a>) does not involve the
+engine, so it runs equally smoothly on both. Choose V8 when a single commit
+re-renders thousands of nodes, or when JavaScript drives a large tree every
+frame.</p>
+<p>The full comparison, with the commands to reproduce it, is in
+<a href="https://github.com/tulustul/bevy-react/blob/main/examples/stress/ENGINES.md"><code>examples/stress/ENGINES.md</code></a>.</p>
+<h2 id="quickjs-limits"><a class="anchor" href="#quickjs-limits" aria-hidden="true">#</a>QuickJS limits</h2>
+<ul>
+<li><strong>No <code>Intl</code>.</strong> <code>Intl.NumberFormat</code>, <code>Intl.DateTimeFormat</code> and the locale
+arguments of <code>toLocaleString</code> are missing. Format numbers and dates
+yourself or with a library that doesn&#39;t need <code>Intl</code>.</li>
+<li><strong>No JIT.</strong> This is why it is slower. It is also why it can run on
+platforms that forbid generating executable code at runtime.</li>
+<li><strong>Mobile.</strong> <code>rquickjs</code> ships prebuilt bindings for desktop targets only.
+Android and iOS need its <code>bindgen</code> feature, which needs libclang. bevy-react
+doesn&#39;t build for mobile yet.</li>
+</ul>
+
+</article>
+<footer class="page-links"><a href="https://github.com/tulustul/bevy-react/edit/main/docs/guide/tooling/js-engines.md">Edit this page</a></footer>
+</main>
+</div>
+<footer class="site-footer">
+<p>bevy-react is dual-licensed under MIT or Apache-2.0. <a href="https://github.com/tulustul/bevy-react">Source on GitHub</a>.</p>
+</footer>
+</body>
+</html>
