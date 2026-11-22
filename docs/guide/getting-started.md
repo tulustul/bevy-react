@@ -98,6 +98,34 @@ fn main() {
 Any camera that renders UI works, including the 3D camera your game already
 has. Then start the app with `cargo run`.
 
+For split screen (several cameras, each with a `Viewport`), give the UI a
+camera of its own, ordered above the others. Don't leave that overlay at
+`ClearColorConfig::None`: Bevy shares a render texture only between cameras
+with the same HDR and MSAA settings, so an overlay that differs from the
+cameras beneath it draws into a texture nothing clears, and the UI piles up
+frame after frame (translucent panels turn opaque, removed nodes stay on
+screen). Clear it to transparent and blend it over the window instead:
+
+```rust
+use bevy::camera::CameraOutputMode;
+use bevy::render::render_resource::BlendState;
+
+commands.spawn((
+    Camera2d,
+    IsDefaultUiCamera,
+    Camera {
+        order: 10,
+        clear_color: ClearColorConfig::Custom(Color::NONE),
+        output_mode: CameraOutputMode::Write {
+            blend_state: Some(BlendState::PREMULTIPLIED_ALPHA_BLENDING),
+            clear_color: ClearColorConfig::None,
+        },
+        ..default()
+    },
+    Msaa::Off,
+));
+```
+
 Keep these points in mind:
 
 - **The default bundle path is `ui/dist/app.js`**
