@@ -39,11 +39,13 @@ pub struct BoxShadowSpec {
 }
 
 /// A `boxShadow` value: one shadow or a stacked list (CSS `box-shadow: a, b, …`).
+/// `Many` comes first: serde decodes a struct from a sequence too, so an
+/// all-defaults `BoxShadowSpec` would take `[]` as one black shadow.
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(untagged)]
 pub enum BoxShadowList {
-    One(BoxShadowSpec),
     Many(Vec<BoxShadowSpec>),
+    One(BoxShadowSpec),
 }
 
 /// Line height for a `<text>`. A bare number is a multiple of the font size
@@ -360,6 +362,22 @@ mod tests {
     use crate::protocol::animatable::AnimatableField;
     use crate::style::Style;
     use crate::style::props::{BORDER_COLOR, BORDER_RADIUS, WIDTH};
+
+    /// `boxShadow: []` is no shadow, not one default (black) shadow.
+    #[test]
+    fn empty_box_shadow_list_is_no_shadow() {
+        use super::BoxShadowList;
+        let list = |v| serde_json::from_value::<BoxShadowList>(v).expect("decodes");
+        assert_eq!(list(serde_json::json!([])), BoxShadowList::Many(vec![]));
+        assert!(matches!(
+            list(serde_json::json!({ "color": "red" })),
+            BoxShadowList::One(_)
+        ));
+        assert!(matches!(
+            list(serde_json::json!([{ "color": "red" }, {}])),
+            BoxShadowList::Many(v) if v.len() == 2
+        ));
+    }
 
     /// `borderRadius`: a slash in the string form splits horizontal from
     /// vertical radii, each half a rect shorthand of its own; every form
