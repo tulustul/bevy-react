@@ -93,36 +93,28 @@ brightness stays even along the way.
 
 ## Radial shapes
 
-`shape` defaults to the `closestCorner` keyword. The forms the runtime
-accepts are:
+`shape` defaults to the `closestCorner` keyword. It takes:
 
-| Value                                   | Shape                                    |
-| --------------------------------------- | ---------------------------------------- |
-| `{ keyword: "closestSide" }`            | Circle/ellipse reaching the closest side |
-| `{ keyword: "farthestSide" }`           | …the farthest side                       |
-| `{ keyword: "closestCorner" }`          | …the closest corner                      |
-| `{ keyword: "farthestCorner" }`         | …the farthest corner                     |
-| `{ circle: { circle: 40 } }`            | Circle of radius 40                      |
-| `{ ellipse: { ellipse: [60, "50%"] } }` | Ellipse with these x/y radii             |
-
-The `shape` TypeScript type currently declares other forms (a bare
-`"closestSide"`, `{ circle: 40 }`), which the runtime rejects. Write the
-forms above with a cast until the two agree:
+| Value                      | Shape                                    |
+| -------------------------- | ---------------------------------------- |
+| `"closestSide"`            | Circle/ellipse reaching the closest side |
+| `"farthestSide"`           | …the farthest side                       |
+| `"closestCorner"`          | …the closest corner                      |
+| `"farthestCorner"`         | …the farthest corner                     |
+| `{ circle: 40 }`           | Circle of radius 40                      |
+| `{ ellipse: [60, "50%"] }` | Ellipse with these x/y radii             |
 
 ```tsx
-// The `shape` type does not list this form yet.
-const shape = { keyword: "farthestCorner" } as any;
-
 <node
   style={{
     backgroundGradient: {
       type: "radial",
       position: "topLeft",
-      shape,
+      shape: "farthestCorner",
       stops: [{ color: "#e0af68" }, { color: "#1a1b26" }],
     },
   }}
-/>;
+/>
 ```
 
 An unknown keyword is treated as `closestCorner`.
@@ -228,9 +220,6 @@ drivers.
 ## Limits
 
 - `position` takes only the named anchors.
-- The radial `shape` TypeScript type does not match the accepted forms (see
-  [Radial shapes](#radial-shapes)). A value in one of the declared-but-rejected
-  forms makes the whole React commit fail to apply, not just the gradient.
 
 See [`backgroundGradient`](../reference/style-properties.md#backgroundGradient)
 and [`borderGradient`](../reference/style-properties.md#borderGradient) in the

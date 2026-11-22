@@ -121,19 +121,47 @@ pub type GradientPosition = String;
 /// `"hsvLong"`, `"okhsl"`, `"okhslLong"`).
 pub type ColorSpace = String;
 
-/// The size/shape of a radial gradient. Externally tagged on the wire:
-/// `{ keyword: "closestSide" | "farthestSide" | "closestCorner" |
-/// "farthestCorner" }` (default `closestCorner`), `{ circle: { circle:
-/// <Length> } }`, or `{ ellipse: { ellipse: [<Length>, <Length>] } }` —
-/// pinned by `radial_shape_wire_forms_preserved`. NOTE: `jsx.d.ts`'s
-/// `RadialShape` declares flat forms that have never decoded (tracked in
-/// `TODO`). The circle/ellipse radii accept `{ animated }` wrappers.
+/// The size/shape of a radial gradient: a keyword (`"closestSide"` |
+/// `"farthestSide"` | `"closestCorner"` | `"farthestCorner"`, default
+/// `closestCorner`), `{ circle: <Length> }`, or `{ ellipse: [<Length>,
+/// <Length>] }` — `RadialShape` in `jsx.d.ts`. The externally tagged forms
+/// this type decoded before (`{ keyword: "…" }`, `{ circle: { circle } }`,
+/// `{ ellipse: { ellipse } }`) still decode. The circle/ellipse radii accept
+/// `{ animated }` wrappers.
 #[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(from = "RadialShapeWire")]
 pub enum RadialShapeSpec {
     Keyword(String),
     Circle { circle: Animatable<Length> },
     Ellipse { ellipse: [Animatable<Length>; 2] },
+}
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum RadialShapeWire {
+    Keyword(String),
+    Circle { circle: Animatable<Length> },
+    Ellipse { ellipse: [Animatable<Length>; 2] },
+    Tagged(TaggedRadialShape),
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+enum TaggedRadialShape {
+    Keyword(String),
+    Circle { circle: Animatable<Length> },
+    Ellipse { ellipse: [Animatable<Length>; 2] },
+}
+
+impl From<RadialShapeWire> for RadialShapeSpec {
+    fn from(wire: RadialShapeWire) -> Self {
+        use {RadialShapeWire as W, TaggedRadialShape as T};
+        match wire {
+            W::Keyword(k) | W::Tagged(T::Keyword(k)) => Self::Keyword(k),
+            W::Circle { circle } | W::Tagged(T::Circle { circle }) => Self::Circle { circle },
+            W::Ellipse { ellipse } | W::Tagged(T::Ellipse { ellipse }) => Self::Ellipse { ellipse },
+        }
+    }
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Deserialize)]
@@ -496,47 +524,44 @@ mod tests {
         assert_eq!(g.clone(), g, "PartialEq derived");
     }
 
-    /// Pins the [`super::RadialShapeSpec`] wire forms of the externally-tagged
-    /// derive (`{ keyword }` / `{ circle: { circle } }` /
-    /// `{ ellipse: { ellipse } }`; the flat forms are rejected) — behavior
-    /// that predates the `Animatable` leaves and must survive them.
+    /// [`super::RadialShapeSpec`] decodes the forms `RadialShape` in
+    /// `jsx.d.ts` declares, and still the externally tagged ones it used to.
     #[test]
-    fn radial_shape_wire_forms_preserved() {
-        use super::RadialShapeSpec;
-        use crate::protocol::animatable::Animatable;
-        use crate::protocol::units::Length;
-
-        let k: RadialShapeSpec =
-            serde_json::from_value(serde_json::json!({ "keyword": "closestSide" })).unwrap();
-        assert!(matches!(k, RadialShapeSpec::Keyword(ref s) if s == "closestSide"));
-
-        let c: RadialShapeSpec =
-            serde_json::from_value(serde_json::json!({ "circle": { "circle": 40 } })).unwrap();
-        let RadialShapeSpec::Circle { circle } = c else {
-            panic!("expected Circle, got {c:?}");
+    fn radial_shape_wire_forms() {
+        use super::RadialShapeSpec::{self, *};
+        use crate::protocol::animatable::Animatable::Static;
+        use crate::protocol::units::Length::{Percent, Px};
+        let shape = |v| serde_json::from_value::<RadialShapeSpec>(v).expect("decodes");
+        let keyword = Keyword("closestSide".into());
+        let circle = Circle {
+            circle: Static(Px(40.0)),
         };
-        assert_eq!(circle, Animatable::Static(Length::Px(40.0)));
-
-        let e: RadialShapeSpec =
-            serde_json::from_value(serde_json::json!({ "ellipse": { "ellipse": [10, "50%"] } }))
-                .unwrap();
-        let RadialShapeSpec::Ellipse { ellipse } = e else {
-            panic!("expected Ellipse, got {e:?}");
+        let ellipse = Ellipse {
+            ellipse: [Static(Px(10.0)), Static(Percent(50.0))],
         };
-        assert_eq!(ellipse[0], Animatable::Static(Length::Px(10.0)));
-        assert_eq!(ellipse[1], Animatable::Static(Length::Percent(50.0)));
 
-        // The flat forms have never decoded — keep rejecting them.
-        for v in [
-            serde_json::json!("closestSide"),
-            serde_json::json!({ "circle": 40 }),
-            serde_json::json!({ "ellipse": [10, 20] }),
-        ] {
-            assert!(
-                serde_json::from_value::<RadialShapeSpec>(v.clone()).is_err(),
-                "{v} unexpectedly decoded"
-            );
-        }
+        assert_eq!(shape(serde_json::json!("closestSide")), keyword);
+        assert_eq!(shape(serde_json::json!({ "circle": 40 })), circle);
+        assert_eq!(
+            shape(serde_json::json!({ "ellipse": [10, "50%"] })),
+            ellipse
+        );
+
+        assert_eq!(
+            shape(serde_json::json!({ "keyword": "closestSide" })),
+            keyword
+        );
+        assert_eq!(
+            shape(serde_json::json!({ "circle": { "circle": 40 } })),
+            circle
+        );
+        assert_eq!(
+            shape(serde_json::json!({ "ellipse": { "ellipse": [10, "50%"] } })),
+            ellipse
+        );
+
+        let animated = shape(serde_json::json!({ "circle": { "animated": { "id": 1 } } }));
+        assert!(matches!(animated, Circle { circle } if circle.binding().is_some()));
     }
 
     /// `borderColor` decodes from a scalar (uniform, back-compat) or a per-side
