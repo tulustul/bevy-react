@@ -112,6 +112,10 @@ impl Engine for V8 {
         Ok(engine)
     }
 
+    fn version() -> String {
+        format!("V8 {}", deno_core::v8::VERSION_STRING)
+    }
+
     async fn execute(&mut self, name: &'static str, code: String) -> Result<(), String> {
         self.0
             .execute_script(name, code)

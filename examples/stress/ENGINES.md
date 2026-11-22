@@ -45,10 +45,10 @@ release twice, once with `quickjs` and once with `v8`, then stripped.
 
 ## Startup
 
-The time is the debug log line `<engine> ready in …`
-(`RUST_LOG=bevy_react_core::js=debug`). It covers creating the runtime,
-parsing and evaluating `vendor.js` and `app.js`, and the first synchronous
-render with its flush. Three runs of the `layers-stress` UI (20 items):
+The time is the startup log line
+`INFO bevy_react_core::js: <engine> <version> ready in …`. It covers creating
+the runtime, parsing and evaluating `vendor.js` and `app.js`, and the first
+synchronous render with its flush. Three runs of the `layers-stress` UI (20 items):
 
 | Bundle                      | V8            | QuickJS       |
 | --------------------------- | ------------- | ------------- |
@@ -181,7 +181,7 @@ cargo run --release -p layers-stress -- --measure 15 --engine quickjs
 npm run build -w layers-stress-app   # restore the committed preset
 
 # startup
-RUST_LOG=warn,bevy_react_core::js=debug cargo run --release -p stress -- --engine quickjs
+cargo run --release -p stress -- --engine quickjs   # logs "QuickJS-ng … ready in … ms"
 ```
 
 Run each capture twice, as the frame floor can pin a run (see the README).

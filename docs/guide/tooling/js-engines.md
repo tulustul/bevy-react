@@ -47,6 +47,13 @@ app.add_plugins(
 );
 ```
 
+At startup the log names the engine, its version and how long it took to
+run the bundle and render the first frame of UI:
+
+```text
+INFO bevy_react_core::js: QuickJS-ng 0.16.2 ready in 50.8 ms
+```
+
 `JsEngine` only has variants for the engines compiled in, so naming a
 missing one is a compile error. A native build with neither feature panics
 at startup.

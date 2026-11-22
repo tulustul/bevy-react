@@ -83,6 +83,8 @@ trait Engine: Sized {
     /// A fresh runtime with the ops installed on `globalThis.__bevyHost` and
     /// unhandled promise rejections logged (not fatal).
     async fn new(host: Host) -> Result<Self, String>;
+    /// The engine's name and version, for the startup log line.
+    fn version() -> String;
     /// Run a classic (non-module, sloppy-mode) script in the live context.
     async fn execute(&mut self, name: &'static str, code: String) -> Result<(), String>;
     /// Drive timers, op futures and microtasks until nothing is pending.
@@ -125,14 +127,11 @@ pub fn spawn_js_thread(
             };
             match engine {
                 #[cfg(feature = "v8")]
-                JsEngine::V8 => rt.block_on(run::<v8::V8>(engine, host, &vendor_path, &app_path)),
+                JsEngine::V8 => rt.block_on(run::<v8::V8>(host, &vendor_path, &app_path)),
                 #[cfg(feature = "quickjs")]
-                JsEngine::QuickJs => rt.block_on(run::<quickjs::QuickJs>(
-                    engine,
-                    host,
-                    &vendor_path,
-                    &app_path,
-                )),
+                JsEngine::QuickJs => {
+                    rt.block_on(run::<quickjs::QuickJs>(host, &vendor_path, &app_path))
+                }
             }
         })
         .expect("spawn js-runtime thread");
@@ -140,7 +139,7 @@ pub fn spawn_js_thread(
 
 /// The JS thread's life on engine `E`: build, then pump the event loop,
 /// re-executing the app on each reload until shutdown.
-async fn run<E: Engine>(engine: JsEngine, host: Host, vendor_path: &Path, app_path: &Path) {
+async fn run<E: Engine>(host: Host, vendor_path: &Path, app_path: &Path) {
     let started = std::time::Instant::now();
     let event_loop = host.event_loop.clone();
     // The last app bundle that executed WITHOUT throwing. A reload that throws
@@ -157,13 +156,14 @@ async fn run<E: Engine>(engine: JsEngine, host: Host, vendor_path: &Path, app_pa
 
     let mut runtime = match build_runtime::<E>(host, vendor_path, &last_good_app).await {
         Ok(rt) => {
-            // The engine's startup cost: runtime creation, the bundles'
-            // parse + evaluation and the first (synchronous) render's flush.
-            tracing::debug!(target: "bevy_react_core::js", "{engine:?} ready in {:.1} ms", started.elapsed().as_secs_f64() * 1000.0);
+            // Which engine runs the app, and its startup cost: runtime
+            // creation, the bundles' parse + evaluation and the first
+            // (synchronous) render's flush.
+            tracing::info!(target: "bevy_react_core::js", "{} ready in {:.1} ms", E::version(), started.elapsed().as_secs_f64() * 1000.0);
             rt
         }
         Err(e) => {
-            tracing::error!(target: "bevy_react_core::js", "initial runtime build failed: {e}");
+            tracing::error!(target: "bevy_react_core::js", "{}: initial runtime build failed: {e}", E::version());
             return;
         }
     };

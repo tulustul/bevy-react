@@ -169,6 +169,12 @@ impl Engine for QuickJs {
         Ok(engine)
     }
 
+    fn version() -> String {
+        // SAFETY: a pointer to a static NUL-terminated string.
+        let version = unsafe { std::ffi::CStr::from_ptr(rquickjs::qjs::JS_GetVersion()) };
+        format!("QuickJS-ng {}", version.to_string_lossy())
+    }
+
     async fn execute(&mut self, name: &'static str, code: String) -> Result<(), String> {
         self.context
             .with(|ctx| {
