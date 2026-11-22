@@ -1,6 +1,6 @@
 {
   "name": "bevy-react",
-  "version": "0.8.1",
+  "version": "0.9.0",
   "description": "Drive bevy_ui from React via a custom reconciler over an embedded JS engine (V8 or QuickJS).",
   "license": "MIT OR Apache-2.0",
   "author": "Mateusz Tomczyk <mateusz.tomczyk.tul@gmail.com>",

@@ -3,7 +3,66 @@
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.9.0] - 2026-11-23
+
+### Added
+
+- **QuickJS as an alternative JS engine.** The `quickjs` cargo feature runs
+  your React bundle on QuickJS ([quickjs-ng](https://github.com/quickjs-ng/quickjs)
+  through `rquickjs`) instead of V8. The stripped binary is ~48 MB smaller
+  (V8's 49 MB against QuickJS's 1.3 MB), startup is faster (~20 ms against
+  ~37 ms on a production bundle) and nothing is downloaded at build time.
+  The build needs a C compiler instead. React work runs 10–30× slower, which
+  is fine for typical game UIs and not for re-rendering thousands of nodes
+  per commit; there is no `Intl`. The engines are additive: an engine you
+  don't enable is neither downloaded nor linked, and with both compiled in
+  `ReactUiPlugin::engine(JsEngine::QuickJs)` picks (V8 by default). Hot
+  reload, devtools and timers behave the same on both. See the new
+  [JS engines](https://tulustul.github.io/bevy-react/tooling/js-engines/)
+  guide page; the measurements are in `examples/stress/ENGINES.md`.
+- **The engine and its version in the log.** Each startup logs one INFO
+  line such as `QuickJS-ng 0.16.2 ready in 50.8 ms`.
+- **Examples pick their engine at compile time.** `demos`, `civilization`,
+  `cyberpunk`, `coldwake` and `synth` run on QuickJS alone with
+  `cargo run -p <example> --no-default-features --features quickjs`;
+  `minimal` is QuickJS-only, and the `stress` / `layers-stress` benchmarks
+  take `--engine v8|quickjs`.
+- Every web build of the examples shows a loading spinner until Bevy's
+  first frame.
+
+### Changed
+
+- **A native app needs a JS engine feature** (breaking for
+  `default-features = false` builds). `v8` is a new default feature of
+  `bevy-react`; a build that turns the defaults off must list `v8` or
+  `quickjs`, or `ReactUiPlugin` panics at startup.
+- **`js_thread::spawn_js_thread` takes the engine** as its first argument
+  (breaking for custom hosts and headless harnesses), and every host now
+  installs its ops on `globalThis.__bevyHost`, the only object the JS
+  runtime reads (`Deno.core.ops` is no longer consulted directly).
+- **Production bundles are minified and drop their source maps.**
+  `bevy-react build --prod` used to keep readable code and an inline map:
+  the stress example's `vendor.js` goes from 1.5 MB to 145 KB. Dev builds
+  keep the map.
+- **Performance.** Unchanged on V8 from 0.8.1: the table-ops benchmark,
+  run against v0.8.1 on the same machine, is within noise.
+
+### Fixed
+
+- An `{ animated }` or transitioned `opacity` on a node that isn't
+  promoted to a layer replaced its colors' own alpha: a `<text>` got a
+  dark box behind its glyphs and a translucent color went opaque. The
+  opacity now multiplies into each color's alpha.
+- A radial gradient's `shape` in the forms its TypeScript type declares
+  (`"closestSide"`, `{ circle: 40 }`, `{ ellipse: [a, b] }`) failed to
+  decode and dropped the whole commit. Both those and the old forms work.
+- `boxShadow: []` drew one black shadow instead of none.
+- A shared-element flight from a mirrored node (`scaleX: -1`) started from
+  a negative size.
+- On the web, `None` and unit values reached JS as `undefined` instead of
+  `null` as on native, so an `x !== null` check passed on the web only.
+- The `init` template installs `@types/react-reconciler`, without which a
+  standalone app's typecheck failed.
 
 ## [0.8.1] - 2026-10-15
 

@@ -472,7 +472,7 @@ dependencies = [
 
 [[package]]
 name = "bevy-react"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "bevy",
  "bevy_react_anchor",
@@ -485,7 +485,7 @@ dependencies = [
 
 [[package]]
 name = "bevy-react-macros"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "proc-macro-crate",
  "proc-macro2",
@@ -1494,7 +1494,7 @@ checksum = "41935a00c02004753bd7ed5094754397800b3f673bf15553bb007b06216872d5"
 
 [[package]]
 name = "bevy_react_anchor"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "bevy",
  "bevy_react_core",
@@ -1506,7 +1506,7 @@ dependencies = [
 
 [[package]]
 name = "bevy_react_canvas"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "bevy",
  "bevy_react_core",
@@ -1518,7 +1518,7 @@ dependencies = [
 
 [[package]]
 name = "bevy_react_core"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "accesskit",
  "bevy",
@@ -1550,7 +1550,7 @@ dependencies = [
 
 [[package]]
 name = "bevy_react_portal"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "bevy",
  "bevy_react_core",
@@ -1559,7 +1559,7 @@ dependencies = [
 
 [[package]]
 name = "bevy_react_surface"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "bevy",
  "bevy_react_core",
@@ -1568,7 +1568,7 @@ dependencies = [
 
 [[package]]
 name = "bevy_react_svg"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "bevy",
  "bevy_react_core",
@@ -2404,7 +2404,7 @@ checksum = "f079e83a288787bcd14a6aea84cee5c87a67c5a3e660c30f557a3d24761b3527"
 
 [[package]]
 name = "civilization"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "bevy",
  "bevy-react",
@@ -2443,7 +2443,7 @@ dependencies = [
 
 [[package]]
 name = "coldwake"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "bevy",
  "bevy-react",
@@ -2704,7 +2704,7 @@ checksum = "f27ae1dd37df86211c42e150270f82743308803d90a6f6e6651cd730d5e1732f"
 
 [[package]]
 name = "cyberpunk"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "bevy",
  "bevy-react",
@@ -2742,7 +2742,7 @@ dependencies = [
 
 [[package]]
 name = "demos"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "bevy",
  "bevy-react",
@@ -4088,7 +4088,7 @@ dependencies = [
 
 [[package]]
 name = "layers-stress"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "bevy",
  "bevy-react",
@@ -4333,7 +4333,7 @@ dependencies = [
 
 [[package]]
 name = "minimal"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "bevy",
  "bevy-react",
@@ -6006,7 +6006,7 @@ dependencies = [
 
 [[package]]
 name = "stress"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "bevy",
  "bevy-react",
@@ -6118,7 +6118,7 @@ dependencies = [
 
 [[package]]
 name = "synth"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "bevy",
  "bevy-react",
