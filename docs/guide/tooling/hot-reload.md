@@ -100,7 +100,8 @@ apply only after a restart.
 ## Production bundles
 
 Fast Refresh is a development feature. `bevy-react build --prod` leaves the
-refresh runtime and the component instrumentation out of the bundles. Hot
+refresh runtime and the component instrumentation out of the bundles, and
+minifies them without source maps. Hot
 reload still works with a production bundle, but every change remounts the
 whole app with fresh state.
 

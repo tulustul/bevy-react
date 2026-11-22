@@ -37,7 +37,10 @@ function sharedOptions(prod) {
         prod ? "production" : "development",
       ),
     },
-    sourcemap: "inline",
+    // Prod ships minified and map-less: nothing on the native host reads a
+    // source map, and on the web an inline one hands every visitor the sources.
+    minify: prod,
+    sourcemap: prod ? false : "inline",
     logLevel: "info",
   };
 }
