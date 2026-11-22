@@ -644,6 +644,58 @@ fn settled_transition_does_not_dirty_components() {
     );
 }
 
+/// The transitioned opacity multiplies the colors' own alphas: a node with
+/// no background keeps none (no transparent-black box), a translucent text
+/// color and an easing background keep their share.
+#[test]
+fn transitioned_opacity_multiplies_the_colors_own_alpha() {
+    let (mut world, mut schedule) = drive_world();
+    let spec = || Transition {
+        opacity: Some(timing(0.2, Easing::Linear)),
+        background_color: Some(timing(0.2, Easing::Linear)),
+        ..Default::default()
+    };
+    let base = crate::ui_map::OpacityBase {
+        bg: 0.0,
+        text: 0.8,
+        image: 1.0,
+    };
+    let bare = world
+        .spawn((
+            TransitionInput {
+                spec: spec(),
+                opacity: Some(0.5),
+                ..Default::default()
+            },
+            TransitionState::default(),
+            UiTransform::default(),
+            BackgroundColor(Color::NONE),
+            TextColor(Color::WHITE),
+            base,
+        ))
+        .id();
+    let tinted = world
+        .spawn((
+            TransitionInput {
+                spec: spec(),
+                opacity: Some(0.5),
+                background_color: Some([1.0, 0.0, 0.0, 0.4]),
+                ..Default::default()
+            },
+            TransitionState::default(),
+            UiTransform::default(),
+            BackgroundColor(Color::WHITE),
+            crate::ui_map::OpacityBase { bg: 0.4, ..base },
+        ))
+        .id();
+    schedule.run(&mut world);
+    let alpha = |e: Entity| world.entity(e).get::<BackgroundColor>().unwrap().0.alpha();
+    assert_eq!(alpha(bare), 0.0, "no background stays none");
+    assert!((alpha(tinted) - 0.2).abs() < 1e-5, "0.4 × 0.5");
+    let text = world.entity(bare).get::<TextColor>().unwrap().0.alpha();
+    assert!((text - 0.4).abs() < 1e-5, "0.8 × 0.5, got {text}");
+}
+
 #[test]
 fn lerp_length_same_unit_else_snaps() {
     assert_eq!(Length::Px(0.0).lerp(Length::Px(10.0), 0.5), Length::Px(5.0));

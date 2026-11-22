@@ -98,10 +98,8 @@ See [Style transitions](../animations/style-transitions.md) and
 - Each layer is an offscreen texture the size of the node; many large faded
   containers cost GPU memory and a capture whenever their content changes.
   See [Layers](layers.md).
-- On a node without a layer that also has a `transition` style (for any
-  channel) or an `{ animated }` opacity, the opacity replaces the alpha of
-  its fills instead of multiplying it: a translucent `backgroundColor`
-  becomes as opaque as the opacity value.
+- On a node without a layer, a transitioned or `{ animated }` opacity
+  replaces the alpha of a `backgroundImage` tint instead of multiplying it.
 
 See [`opacity`](../reference/style-properties.md#opacity) and
 [`groupAlpha`](../reference/style-properties.md#groupAlpha) in the style

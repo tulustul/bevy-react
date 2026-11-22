@@ -61,6 +61,27 @@ pub fn apply_opacity(color: Color, opacity: Option<f32>) -> Color {
     }
 }
 
+/// The alphas a dynamic `opacity` (an `{ animated }` binding, the transition
+/// channel) multiplies on a node it doesn't promote: the background, text and
+/// image colors' own alphas before the fold, which the folded components no
+/// longer show. Stamped while the style has `opacity`; absent reads as opaque.
+#[derive(Component, Debug, Clone, Copy, PartialEq)]
+pub struct OpacityBase {
+    pub bg: f32,
+    pub text: f32,
+    pub image: f32,
+}
+
+impl Default for OpacityBase {
+    fn default() -> Self {
+        Self {
+            bg: 1.0,
+            text: 1.0,
+            image: 1.0,
+        }
+    }
+}
+
 /// Convert a wire [`Length`] into a `bevy_ui::Val`.
 pub fn length_to_val(length: Length) -> Val {
     match length {

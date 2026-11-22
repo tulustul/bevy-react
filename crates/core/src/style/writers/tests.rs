@@ -305,3 +305,38 @@ fn position_fixed_writer_stamps_and_clears() {
     assert!(!marked(&app, 1));
     assert_eq!(position(&app, 1), PositionType::Relative);
 }
+
+/// An `{ animated }` opacity multiplies the colors' own alphas instead of
+/// replacing them: a `<text>` with no background stays without one (it used
+/// to get a dark box — transparent black at the opacity's alpha), and a
+/// translucent text color keeps its share.
+#[test]
+fn animated_opacity_multiplies_the_colors_own_alpha() {
+    use crate::animations::SharedValues;
+    let (mut app, ops_tx) = crate::reconcile::test_util::op_app_with(|app| {
+        app.init_resource::<LayerContentDirt>();
+        let mut values = SharedValues::default();
+        values.set(1, 0.5);
+        app.insert_resource(values);
+        app.add_systems(
+            Update,
+            crate::animations::apply_animated_nodes.after(crate::reconcile::apply_js_ops),
+        );
+    });
+    ops_tx
+        .send(vec![create(
+            1,
+            "text",
+            serde_json::json!({ "style": {
+                "color": "rgba(255, 255, 255, 0.8)",
+                "opacity": { "animated": { "id": 1 } },
+            } }),
+        )])
+        .unwrap();
+    app.update();
+    app.update();
+    let text = app.world().entity(ent(&app, 1));
+    assert_eq!(text.get::<BackgroundColor>().unwrap().0.alpha(), 0.0);
+    let alpha = text.get::<TextColor>().unwrap().0.alpha();
+    assert!((alpha - 0.4).abs() < 1e-5, "0.8 × 0.5, got {alpha}");
+}

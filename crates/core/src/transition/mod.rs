@@ -113,6 +113,8 @@ pub struct TransitionTargets {
     text: Option<&'static mut TextColor>,
     image: Option<&'static mut ImageNode>,
     node: Option<&'static mut Node>,
+    /// The colors' own alphas the eased opacity multiplies.
+    opacity_base: Option<&'static crate::ui_map::OpacityBase>,
     /// The node's derived animation bindings; any channel they drive is skipped.
     anim: Option<&'static AnimatedNode>,
     // On a promoted layer root (see `crate::layer`) a transitioned `opacity`
@@ -201,6 +203,7 @@ type AnyTargetChanged = Or<(
         Changed<BackgroundGradient>,
         Changed<BorderGradient>,
         Changed<shared::SharedSeed>,
+        Changed<crate::ui_map::OpacityBase>,
     )>,
 )>;
 
@@ -231,6 +234,7 @@ pub struct RemovedTargets<'w, 's> {
     gradient_input: RemovedComponents<'w, 's, crate::ui_map::GradientTargets>,
     bg_gradient: RemovedComponents<'w, 's, BackgroundGradient>,
     border_gradient: RemovedComponents<'w, 's, BorderGradient>,
+    opacity_base: RemovedComponents<'w, 's, crate::ui_map::OpacityBase>,
 }
 
 impl RemovedTargets<'_, '_> {
@@ -253,7 +257,8 @@ impl RemovedTargets<'_, '_> {
         transform3d,
         gradient_input,
         bg_gradient,
-        border_gradient
+        border_gradient,
+        opacity_base
     );
 }
 
@@ -561,7 +566,7 @@ pub fn drive_transitions(
             if let Some(a) = alpha
                 && !promoted
             {
-                rgba[3] = a;
+                rgba[3] *= a;
             }
             let color = rgba_to_color(rgba);
             match &mut targets.bg {
@@ -580,15 +585,25 @@ pub fn drive_transitions(
         // Opacity always applies when set (even with no opacity transition: it then
         // snaps), so a transitioning background color doesn't clobber the alpha.
         // Promoted → the group alpha is the single target instead.
+        // The colors something else drives keep their own alpha: the
+        // background channel above baked it in; a bound color is the
+        // animation side's.
         if let Some(alpha) = alpha {
+            use crate::animations::protocol::AnimatableProperty as P;
+            let bg_free = !skip_bg && input.background_color.is_none();
+            let unbound = |p| targets.anim.is_none_or(|a| a.0.get(p).is_none());
             crate::animations::write_final_alpha(
                 entity,
                 alpha,
                 promoted,
+                targets.opacity_base.copied().unwrap_or_default(),
                 targets.layer_alpha.as_mut(),
-                targets.bg.as_mut(),
-                targets.text.as_mut(),
-                targets.image.as_mut(),
+                targets.bg.as_mut().filter(|_| bg_free),
+                targets.text.as_mut().filter(|_| unbound(P::Color)),
+                targets
+                    .image
+                    .as_mut()
+                    .filter(|_| unbound(P::BackgroundImageTint)),
                 &mut dirt,
             );
         }

@@ -14,8 +14,9 @@ use crate::style::Style;
 use crate::style::props::*;
 use crate::style::{Writer, WriterCtx, owns};
 use crate::ui_map::{
-    GradientTargets, apply_opacity, background_color, border_color, build_box_shadows,
-    build_gradients, length_to_val, parse_color, remove_unless_fresh, set_if_neq_or_insert,
+    GradientTargets, OpacityBase, apply_opacity, background_color, border_color, build_box_shadows,
+    build_gradients, length_to_val, parse_color, remove_unless_fresh, resolve_text_color,
+    set_if_neq_or_insert,
 };
 
 /// `BackgroundColor` (the folded static color) — `Node`-required: never
@@ -31,6 +32,36 @@ pub static BACKGROUND_COLOR_WRITER: Writer = Writer {
         )));
     },
 };
+
+/// [`OpacityBase`] while the style has `opacity` (an `<image>` stamps its
+/// own, with its `tint`).
+// ponytail: a `backgroundImage` tint counts as opaque — reading
+// `backgroundImage` here would un-ignore it where its writer is suppressed;
+// stamp from `BACKGROUND_IMAGE_WRITER` if a translucent tint must fade right.
+pub static OPACITY_BASE_WRITER: Writer = Writer {
+    reads: &[&OPACITY, &BACKGROUND_COLOR, &COLOR],
+    attrs: &[],
+    writes: &[owns::<OpacityBase>],
+    apply: |ctx, s, ec| stamp_opacity_base(ctx, s, ec, None),
+};
+
+/// Stamp (or drop) [`OpacityBase`]: the unfolded background and text colors'
+/// alphas, and `tint`'s (white when absent).
+pub(crate) fn stamp_opacity_base(
+    ctx: &WriterCtx,
+    s: &Style,
+    ec: &mut EntityCommands,
+    tint: Option<&str>,
+) {
+    if s.get(&OPACITY).is_none() {
+        return remove_unless_fresh::<OpacityBase>(ec, ctx.fresh);
+    }
+    ec.queue(set_if_neq_or_insert(OpacityBase {
+        bg: background_color(Some(s), None).0.alpha(),
+        text: resolve_text_color(Some(s), true).0.alpha(),
+        image: tint.map_or(1.0, |t| parse_color(t).alpha()),
+    }));
+}
 
 /// `BorderColor` — `Node`-required, like `BackgroundColor`.
 pub static BORDER_COLOR_WRITER: Writer = Writer {

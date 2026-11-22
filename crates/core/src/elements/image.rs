@@ -9,9 +9,9 @@ use crate::element::{Attribute, Element};
 use crate::ext::ElementFlags;
 use crate::protocol::animatable::AnimatableField;
 use crate::protocol::background_image::{AtlasSpec, ImageMode, SourceRect};
-use crate::style::props::OPACITY;
+use crate::style::props::{BACKGROUND_COLOR, COLOR, OPACITY};
 use crate::style::{Codec, Invalidation, Writer, WriterCtx, owns};
-use crate::ui_map::{AtlasLayoutCache, apply_atlas, image_node, svg_image_node};
+use crate::ui_map::{AtlasLayoutCache, OpacityBase, apply_atlas, image_node, svg_image_node};
 
 /// Asset path, resolved by Bevy's `AssetServer` (relative to the app's
 /// `assets/` folder). Absent → a solid-color image (see [`TINT`]). An `.svg`
@@ -77,8 +77,19 @@ pub static IMAGE: Element = Element {
         &ATLAS,
         &VISUAL_BOX,
     ],
-    writers: &[&IMAGE_WRITER],
+    writers: &[&IMAGE_WRITER, &IMAGE_OPACITY_BASE_WRITER],
     ..Element::new("image")
+};
+
+/// The `<image>`'s [`OpacityBase`]: the image alpha is its `tint`'s.
+pub static IMAGE_OPACITY_BASE_WRITER: Writer = Writer {
+    reads: &[&OPACITY, &BACKGROUND_COLOR, &COLOR],
+    attrs: &[&TINT],
+    writes: &[owns::<OpacityBase>],
+    apply: |ctx, s, ec| {
+        let tint = ctx.attrs.get(&TINT).map(String::as_str);
+        crate::style::writers::stamp_opacity_base(ctx, s, ec, tint);
+    },
 };
 
 /// The `<image>`'s `ImageNode`: rebuilt from the attributes and the merged

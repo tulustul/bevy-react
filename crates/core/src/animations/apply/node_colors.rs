@@ -50,7 +50,7 @@ pub(super) fn stage_node_and_colors(
                     && !promoted
                     && let Some(alpha) = opacity_alpha
                 {
-                    rgba[3] = alpha;
+                    rgba[3] *= alpha;
                 }
                 Color::srgba(rgba[0], rgba[1], rgba[2], rgba[3])
             };

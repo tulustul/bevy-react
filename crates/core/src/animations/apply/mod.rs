@@ -39,6 +39,8 @@ pub(crate) struct AnimTargets {
     text: Option<&'static mut TextColor>,
     image: Option<&'static mut ImageNode>,
     node: Option<&'static mut Node>,
+    /// The colors' own alphas the final opacity multiplies.
+    opacity_base: Option<&'static crate::ui_map::OpacityBase>,
     // On a promoted layer root (see `crate::layer`) an animated `opacity`
     // drives the composite-time group alpha instead of the color folds.
     promoted: Option<&'static crate::layer::PromotedLayer>,
@@ -95,6 +97,7 @@ type AnyTargetChanged = Or<(
         Changed<crate::ui_map::GradientTargets>,
         Changed<bevy::ui::BackgroundGradient>,
         Changed<bevy::ui::BorderGradient>,
+        Changed<crate::ui_map::OpacityBase>,
     )>,
 )>;
 
@@ -118,6 +121,7 @@ pub(crate) struct RemovedTargets<'w, 's> {
     gradient_input: RemovedComponents<'w, 's, crate::ui_map::GradientTargets>,
     bg_gradient: RemovedComponents<'w, 's, bevy::ui::BackgroundGradient>,
     border_gradient: RemovedComponents<'w, 's, bevy::ui::BorderGradient>,
+    opacity_base: RemovedComponents<'w, 's, crate::ui_map::OpacityBase>,
 }
 
 impl RemovedTargets<'_, '_> {
@@ -137,7 +141,8 @@ impl RemovedTargets<'_, '_> {
         ext,
         gradient_input,
         bg_gradient,
-        border_gradient
+        border_gradient,
+        opacity_base
     );
 }
 
@@ -262,16 +267,20 @@ pub(crate) fn apply_animated_nodes(
             &mut dirt,
             &mut t,
         );
-        // Stage 3 — opacity owns the final alpha.
+        // Stage 3 — opacity multiplies the final alpha of every color
+        // stage 2 didn't write (those baked it in).
         if let Some(alpha) = opacity_alpha {
+            use AnimatableProperty as P;
+            let unbound = |p| b.get(p).is_none();
             write_final_alpha(
                 entity,
                 alpha,
                 promoted,
+                t.opacity_base.copied().unwrap_or_default(),
                 t.layer_alpha.as_mut(),
-                t.bg.as_mut(),
-                t.text.as_mut(),
-                t.image.as_mut(),
+                t.bg.as_mut().filter(|_| unbound(P::BackgroundColor)),
+                t.text.as_mut().filter(|_| unbound(P::Color)),
+                t.image.as_mut().filter(|_| unbound(P::BackgroundImageTint)),
                 &mut dirt,
             );
         }
@@ -326,8 +335,9 @@ pub(crate) fn push_transform_dirt(
 
 /// Land the final opacity `alpha`: the group alpha on a promoted layer root
 /// (composite-only dirt — it multiplies the cached texture at composite time;
-/// it IS content of an enclosing layer, if any), else the alpha of the
-/// background/text/image colors (content dirt). Compare-before-write through
+/// it IS content of an enclosing layer, if any), else `alpha` × each
+/// background/text/image color's own alpha in `base` (content dirt) — a
+/// transparent background stays transparent. Compare-before-write through
 /// `Deref`, so a settled alpha marks nothing changed. Shared by stage 3 here
 /// and the transition engine's opacity channel: the two final-alpha writers
 /// must agree.
@@ -336,6 +346,7 @@ pub(crate) fn write_final_alpha(
     entity: Entity,
     alpha: f32,
     promoted: bool,
+    base: crate::ui_map::OpacityBase,
     layer_alpha: Option<&mut Mut<crate::layer::LayerGroupAlpha>>,
     bg: Option<&mut Mut<BackgroundColor>>,
     text: Option<&mut Mut<TextColor>>,
@@ -353,21 +364,21 @@ pub(crate) fn write_final_alpha(
     }
     let mut wrote = false;
     if let Some(c) = bg
-        && c.0.alpha() != alpha
+        && c.0.alpha() != base.bg * alpha
     {
-        c.0 = c.0.with_alpha(alpha);
+        c.0 = c.0.with_alpha(base.bg * alpha);
         wrote = true;
     }
     if let Some(tc) = text
-        && tc.0.alpha() != alpha
+        && tc.0.alpha() != base.text * alpha
     {
-        tc.0 = tc.0.with_alpha(alpha);
+        tc.0 = tc.0.with_alpha(base.text * alpha);
         wrote = true;
     }
     if let Some(img) = image
-        && img.color.alpha() != alpha
+        && img.color.alpha() != base.image * alpha
     {
-        img.color = img.color.with_alpha(alpha);
+        img.color = img.color.with_alpha(base.image * alpha);
         wrote = true;
     }
     if wrote {
