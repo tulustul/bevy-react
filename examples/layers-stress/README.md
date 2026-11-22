@@ -50,6 +50,10 @@ cargo run -p layers-stress
 npm run watch -w layers-stress-app   # rebuild on edit → Fast Refresh
 ```
 
+Both JS engines are compiled in: `--engine v8|quickjs` picks one (V8 when
+absent). A frame JS doesn't touch costs the same on both — see
+[`../stress/ENGINES.md`](../stress/ENGINES.md).
+
 After changing the Rust `#[react_event]` bindings, regenerate the typed
 surface: `npm run bevy:generate -w layers-stress-app`.
 

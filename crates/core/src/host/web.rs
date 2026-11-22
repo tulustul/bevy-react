@@ -1,5 +1,5 @@
-//! Web JS host: React runs in the browser's own JS engine, so there is no V8
-//! isolate, no thread, and no filesystem. We instead expose the op surface on
+//! Web JS host: React runs in the browser's own JS engine, so there is no
+//! embedded engine, no thread, and no filesystem. We instead expose the op surface on
 //! `globalThis.__bevyHost` (the same methods `bridge.ts` calls), back the JS→Bevy
 //! ops with the shared crossbeam channels, and push Bevy→JS events from a per-frame
 //! Bevy system.

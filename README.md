@@ -126,6 +126,10 @@ fn main() {
 The [Getting started](https://tulustul.github.io/bevy-react/getting-started/)
 guide covers configuration, cargo features, and the typed client.
 
+React runs on an embedded V8 by default. For a binary ~48 MB smaller, use
+QuickJS instead (`--no-default-features --features quickjs,…`), see
+[JS engines](https://tulustul.github.io/bevy-react/tooling/js-engines/).
+
 ## Bevy compatibility
 
 | bevy | bevy-react |

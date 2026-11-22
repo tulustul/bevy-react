@@ -598,7 +598,7 @@ impl Plugin for ReactUiPlugin {
         let (request_tx, request_rx) = crossbeam_channel::unbounded::<RawRequest>();
         let (anim_tx, anim_rx) = crossbeam_channel::unbounded::<AnimationCommand>();
 
-        // Spawn/install the target's JS host: native runs an embedded V8 isolate on
+        // Spawn/install the target's JS host: native runs an embedded JS engine on
         // a dedicated thread (fed from disk, with hot reload); web runs React in the
         // browser's own engine. The host owns the Bevy->JS transport and returns the
         // sender every outbound producer writes to. It starts before `setup` builds

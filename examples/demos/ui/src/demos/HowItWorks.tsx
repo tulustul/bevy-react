@@ -15,12 +15,12 @@ const PAGE: ExplanationData = {
     <>
       <H2>The big picture</H2>
       <Paragraph>
-        Your React app runs in an embedded V8 isolate on its own thread. A
-        custom reconciler (instead of react-dom) turns each React commit into a
-        batch of small UI operations — create node, set props, move child — and
-        the Bevy side applies them to real <InlineCode>bevy_ui</InlineCode>{" "}
-        entities in the ECS. Nothing is emulated: layout, rendering, and picking
-        are plain Bevy.
+        Your React app runs in an embedded JS engine (V8 or QuickJS) on its own
+        thread. A custom reconciler (instead of react-dom) turns each React
+        commit into a batch of small UI operations — create node, set props,
+        move child — and the Bevy side applies them to real{" "}
+        <InlineCode>bevy_ui</InlineCode> entities in the ECS. Nothing is
+        emulated: layout, rendering, and picking are plain Bevy.
       </Paragraph>
 
       <H2>Updates are deltas</H2>
@@ -84,8 +84,8 @@ app.add_react_handler(
 
       <H2>Hot reload</H2>
       <Paragraph>
-        The V8 isolate and the React tree survive edits. Saving a file rebuilds
-        only your app bundle, re-executes it in the live isolate, and React Fast
+        The JS runtime and the React tree survive edits. Saving a file rebuilds
+        only your app bundle, re-executes it in the live runtime, and React Fast
         Refresh re-renders — components keep their{" "}
         <InlineCode>useState</InlineCode> and running animations. Only a syntax
         error or a non-component change falls back to a full reload.

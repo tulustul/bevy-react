@@ -75,6 +75,10 @@ cargo run --release -p stress -- --run table-ops --out results.json [--iteration
 
 Results are written to `benchmark_results/` (gitignored).
 
+Both JS engines are compiled in: `--engine v8|quickjs` picks one (V8 when
+absent), in either mode, and the report names it. The two compared:
+[ENGINES.md](ENGINES.md).
+
 Each op reports `totalMs` (event trigger → post-layout on the frame the op's
 batch applied, the end-to-end number; the React-side `stepDone` report can
 arrive a frame later, but the timings are frozen when the batch lands so that

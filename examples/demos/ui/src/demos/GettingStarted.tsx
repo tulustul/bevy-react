@@ -9,7 +9,7 @@ const PAGE: ExplanationData = {
     <>
       <Paragraph>
         bevy-react drives <InlineCode>bevy_ui</InlineCode> from a React app: a
-        custom reconciler runs your components in an embedded V8 runtime and
+        custom reconciler runs your components in an embedded JS engine and
         applies the result to real Bevy UI nodes. You write JSX; Bevy renders
         it. This page sets up a fresh project — the rest of the gallery shows
         what you can do with it.

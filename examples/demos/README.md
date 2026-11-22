@@ -1,8 +1,9 @@
 # `demos` example
 
 A gallery showing `bevy-react` driving `bevy_ui` from a React app over a live 3D
-scene. It runs on two targets from one codebase: **native** (embedded V8) and **web**
-(React in the browser's engine, Bevy as wasm).
+scene. It runs on two targets from one codebase: **native** (embedded V8, or
+QuickJS with `--no-default-features --features quickjs`) and **web** (React in
+the browser's engine, Bevy as wasm).
 
 The app is two halves: the **React UI** (`demos` npm workspace → `ui/dist/*.js`)
 and the **Bevy app** (the `demos` example). Run everything from the repo root.

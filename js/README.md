@@ -8,7 +8,8 @@ The JavaScript half of [**bevy-react**](https://github.com/tulustul/bevy-react):
 a custom React reconciler and runtime that renders your components to native
 [`bevy_ui`](https://docs.rs/bevy/latest/bevy/ui/index.html) — no web view, no DOM.
 
-This package does nothing on its own. It runs inside a V8 isolate embedded by the
+This package does nothing on its own. It runs inside a JS engine (V8 or
+QuickJS) embedded by the
 [`bevy-react` Rust crate](https://crates.io/crates/bevy-react), which owns the
 Bevy side of the bridge.
 

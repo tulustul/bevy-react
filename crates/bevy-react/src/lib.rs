@@ -1,5 +1,6 @@
 #![cfg_attr(docsrs, feature(doc_cfg))]
-//! Drive `bevy_ui` from a React app running on an embedded V8 runtime.
+//! Drive `bevy_ui` from a React app running on an embedded JS engine (V8 or
+//! QuickJS, the `v8` / `quickjs` features — see [`JsEngine`]).
 //!
 //! This is the crate an app depends on: the core bridge
 //! ([`bevy_react_core`], re-exported at this crate's root) plus the optional
